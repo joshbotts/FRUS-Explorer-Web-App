@@ -4,8 +4,6 @@ FRUS Explorer Light is a self-hosted web edition of [FRUS Explorer](https://gith
 
 **Status:** planning. There is no code yet. Session 0, the repository scaffold, is next; see [`docs/PLAN.md`](docs/PLAN.md).
 
-> FRUS Explorer Light is an independent project. It is not a product of the Office of the Historian or the U.S. Department of State. FRUS text is in the public domain.
-
 ## Goals
 
 - **Keep the research tools.** Browse, full-text search with the app's query language, the reader with highlights and notes, collections and their exports, citation tools, Source Explorer and analytics all stay. Search by meaning follows in a later phase.
@@ -69,4 +67,4 @@ The diagram shows the AWS deployment. Self-hosted, the same image runs under Doc
 
 ## License
 
-Apache License 2.0; see [`LICENSE`](LICENSE). EmbeddingGemma is never bundled with the image: an admin downloads it only after accepting the Gemma Terms of Use.
+Apache License 2.0; see [`LICENSE`](LICENSE). The FRUS text itself is in the public domain. EmbeddingGemma is never bundled with the image: an admin downloads it only after accepting the Gemma Terms of Use.
