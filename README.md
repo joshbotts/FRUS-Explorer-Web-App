@@ -62,7 +62,8 @@ The diagram shows the AWS deployment. Self-hosted, the same image runs under Doc
 ## Documents
 
 - [`docs/PLAN.md`](docs/PLAN.md): the development plan. It covers the owner's setup, the rules every session follows, thirteen sessions to phase 1 on AWS, the AWS resources, owner checkpoints and risks.
-- The [specification](https://claude.ai/code/artifact/b4714a33-dd0c-4205-a78f-6839a718afca) and the living copy of the [plan](https://claude.ai/code/artifact/14a2723a-7662-496d-b7c4-1aa33678233e) are shared documents; ask the owner for access.
+- [`docs/SPEC.md`](docs/SPEC.md): the specification. It covers what the web edition keeps, its architecture, data and operating modes, the HTTP API, deployment and runtime options, the managed-platform variant, verification and the delivery plan.
+- Both files have living copies in shared documents, the [specification](https://claude.ai/code/artifact/b4714a33-dd0c-4205-a78f-6839a718afca) and the [plan](https://claude.ai/code/artifact/14a2723a-7662-496d-b7c4-1aa33678233e); ask the owner for access.
 - The FRUS volumes come from the Office of the Historian's public [HistoryAtState/frus](https://github.com/HistoryAtState/frus) repository.
 
 ## License
