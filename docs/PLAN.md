@@ -84,6 +84,7 @@ The web repository compiles the Mac app's shared Swift files straight from a pin
 FRUS-Explorer-Web-App/
 ├── CLAUDE.md                  session rules, kept short
 ├── docs/PLAN.md               this plan and its checklist
+├── docs/SPEC.md               the specification
 ├── docs/DEVLOG.md             one entry per session
 ├── Package.swift              the server, plus Linux builds of the shared kits
 ├── upstream/FRUS-Explorer/    git submodule, pinned to a merged commit
@@ -141,7 +142,7 @@ S0 comes first, and the core track starts after it. The tracks join at session 9
 
 | Session | Track | Delivers | Done when |
 | --- | --- | --- | --- |
-| S0 | Both | The scaffold: the submodule pinned to `FRUS-Explorer`'s current `main`, `Package.swift` with the Linux-ready kits and `CSQLite`, both scripts, `CLAUDE.md`, the plan, the log and `ci.yml` | CI runs SourceNoteKit's 219, CrossRefKit's 10 and GeneratorKit's 7 tests, plus an FTS5 check, and passes |
+| S0 | Both | The scaffold: the submodule pinned to `FRUS-Explorer`'s current `main`, `Package.swift` with the Linux-ready kits and `CSQLite`, both scripts, `CLAUDE.md`, the log and `ci.yml` | CI runs SourceNoteKit's 219, CrossRefKit's 10 and GeneratorKit's 7 tests, plus an FTS5 check, and passes |
 | S1 | Core | An upstream pull request with Linux guards: `FoundationXML` in TEIHeaderKit, swift-crypto in SemanticVectorsKit, and `CSQLite` plus a logging shim in FTS5Store | All six portable kits build on Linux and their tests pass: the spec's check 1 |
 | S2 | Server | The Hummingbird 2 server: configuration, `/healthz`, `/readyz` and `/api/v1/status`; snapshot mode's loader, hash check, `immutable=1` open and overlay; the spec's five v1 interfaces | Tests start the server on a snapshot they build, and walk `/readyz` through every step |
 | S3 | Core | `FRUSCoreKit`, part 1: the TEI parser, AST, render conversion, HTML serializer and Citation, compiled from the app's own files | The renderer turns the three fixture volumes into HTML on Linux, and the citation fixtures pass |
@@ -251,10 +252,10 @@ Start a cloud session with both repositories selected, and paste this as its fir
 This is session 0 of FRUS Explorer Light, the self-hosted web edition of FRUS Explorer.
 Repositories: joshbotts/FRUS-Explorer-Web-App, where you work, and joshbotts/FRUS-Explorer, read-only this session.
 
-Read first:
-- The development plan: https://claude.ai/code/artifact/14a2723a-7662-496d-b7c4-1aa33678233e
-- The specification: https://claude.ai/code/artifact/b4714a33-dd0c-4205-a78f-6839a718afca
-If you cannot open them, stop and ask me to paste the plan.
+Read first: docs/PLAN.md, the development plan, and docs/SPEC.md, the specification. Their living copies are shared documents:
+- Plan: https://claude.ai/code/artifact/14a2723a-7662-496d-b7c4-1aa33678233e
+- Specification: https://claude.ai/code/artifact/b4714a33-dd0c-4205-a78f-6839a718afca
+If a shared document and its file disagree, tell me before you act on either.
 
 Goal: the scaffold, with CI green. Do not change FRUS-Explorer in this session.
 
@@ -264,7 +265,7 @@ Goal: the scaffold, with CI green. Do not change FRUS-Explorer in this session.
 4. Write Package.swift (swift-tools-version 6.0): a CSQLite system library target; SourceNoteKit, CrossRefKit and GeneratorKit and their test targets, compiled from the submodule's own directories; and an FRUSLightServer executable that prints its version.
 5. Add an FTS5 test that creates frus_documents with the DDL that FTS5Store/FTS5Types.swift builds (porter unicode61), inserts two rows, and matches a stemmed prefix inside a NEAR group.
 6. Add .github/workflows/ci.yml: check out with submodules, then run swift build and swift test in a swift:6.4-noble container with libsqlite3-dev installed.
-7. Write CLAUDE.md with the plan's seven session rules, docs/PLAN.md with its session table and owner checkpoints, and docs/DEVLOG.md with this session's entry.
+7. Write CLAUDE.md with the seven session rules from docs/PLAN.md, and docs/DEVLOG.md with this session's entry.
 8. Add the three fixture volumes to fixtures/tei/ from HistoryAtState/frus (branch master, volumes/<id>.xml): frus1894Nicaragua, frus1961-63v06 and frus1969-76ve09p1.
 
 Done when CI passes on your pull request, running SourceNoteKit's 219, CrossRefKit's 10 and GeneratorKit's 7 tests plus the FTS5 test. End by naming S1 as the next session in docs/DEVLOG.md.
