@@ -148,7 +148,7 @@ S0 comes first, and the core track starts after it. The tracks join at session 9
 | S4 | Core | The parity harness: a script that summarizes any `frus.db` (row counts and a content hash per table, ordered by natural key), the query list, and the tests for checks 2–4 | The tests run against golden files as soon as the owner commits them |
 | S5 | Server | `docker/Dockerfile`, a container smoke test, and `image.yml` | CI builds the image, starts it on a fixture snapshot, and gets 200 from `/readyz` |
 | S6 | Core | `FRUSCoreKit`, part 2: `IndexingPipeline` and `SearchService` on Linux | Checks 2–4 pass on the three fixture volumes, with indexing speed and memory recorded: phase 0's exit |
-| S7 | AWS | `infra/terraform` and `terraform.yml`: network, S3, ECR, ECS, the load balancer, IAM and logs | `validate` passes in the session, and `plan` in CI |
+| S7 | AWS | `infra/terraform` and `terraform.yml`: the network and its NAT gateway, S3, ECR, ECS, the load balancer, IAM and logs | `validate` passes in the session, and `plan` in CI |
 | S8 | AWS | The first deploy of the skeleton, and a cold-start test with a 9.3 GB synthetic snapshot | The HTTPS address answers; time to ready is measured and the grace period is set from it |
 | S9 | Both | Search, browse and document-render endpoints over the snapshot | Check 3 passes through the API |
 | S10 | Both | The SPA for phase 1: Browse, Search, the reader and Cite | Playwright on Chromium searches, opens a document and copies a citation |
@@ -163,7 +163,7 @@ One Terraform root, `infra/terraform`, creates the whole deployment in one accou
 
 | Piece | Setting |
 | --- | --- |
-| Network | A VPC across two Availability Zones. The task runs in public subnets with a public IP and accepts traffic only from the load balancer's security group, so no NAT gateway is needed. An S3 gateway endpoint keeps snapshot copies on the AWS network |
+| Network | A VPC across two Availability Zones. The task runs in private subnets with no public IP, so only the load balancer is reachable from the internet, and the service passes Security Hub's ECS.2 check. Outbound traffic leaves through one NAT gateway with a fixed Elastic IP. An S3 gateway endpoint carries snapshot copies and image layers, so they skip the NAT gateway's per-gigabyte charge |
 | S3 | One bucket with `snapshots/`, `tei/`, `litestream/` and `backups/`. Versioning on, public access blocked, SSE-S3 encryption, noncurrent versions expired after 30 days |
 | ECR | One repository: immutable tags, scan on push, the last 20 images kept |
 | Task definition | Fargate on Linux x86-64; 2 vCPU and 8 GB to start, since the spec's sizing is an estimate; 50 GiB of ephemeral storage; `stopTimeout` 120; logs to CloudWatch |
@@ -193,13 +193,15 @@ The outage is the stop plus one cold start: about one to three minutes by the sp
 | --- | --- |
 | Fargate task, 2 vCPU and 8 GB, always on | $85 |
 | Ephemeral storage beyond the free 20 GiB | $3 |
+| NAT gateway, one, with the traffic it carries | $33–36 |
 | Application Load Balancer | $20–25 |
+| Public IPv4 addresses: two for the load balancer, one for the NAT gateway | $11 |
 | S3, about 15 GB including old versions | Under $1 |
 | Route 53 zone and queries | About $1 |
 | CloudWatch logs and alarms | $2–5 |
-| **Total** | **About $110–120** |
+| **Total** | **About $155–170** |
 
-These are us-east-1 list prices from memory; AWS pricing pages were unreachable from this session, so check them in the AWS Pricing Calculator. Fargate on Graviton costs about a fifth less, and the image targets both architectures, so the task can move once CI builds arm64.
+These are us-east-1 list prices from memory; AWS pricing pages were unreachable from this session, so check them in the AWS Pricing Calculator. The NAT gateway is the price of private subnets, and a second one, for resilience across zones, would add about $33. Fargate on Graviton costs about a fifth less, and the image targets both architectures, so the task can move once CI builds arm64.
 
 ## Owner checkpoints
 
@@ -230,8 +232,9 @@ The largest risk is session 6. The indexer is one 11,568-line file inside the ap
 | Foundation differs on Linux | XML parsing, regular expressions, dates and Unicode can differ without an error | Golden files from the same code on macOS, and checks 2–4 before feature work |
 | Session disk | About 30 GB was free here, shared by the Swift image, build caches and fixtures; a 9 GB export does not fit comfortably | Fixtures only in sessions; the full corpus runs on AWS, in S8 and S12 |
 | Upstream churn | `FRUS-Explorer`'s index version went from 49 to 54 in 19 days | Move the pin in its own pull request; `publish` refuses a snapshot whose index version the server does not support |
-| Account constraints | A government account may restrict regions, public IPs or Cognito | Confirm the account type before S7, and keep a NAT-gateway variant of the network ready |
+| Account constraints | A government account may restrict regions or Cognito | Confirm the account type and region before S7 |
 | Litestream's new format | Version 0.5 changed the replica format, and a replica is only as good as its last restore | Pin 0.5.17, and restore the replica in CI and in phase 5's drill |
+| One NAT gateway | It sits in one Availability Zone. If that zone fails, a replacement task cannot pull its image, and calls to GitHub, NARA and Zotero stop | Accept it for one task that already takes deploy outages; add a second NAT gateway, about $33 a month, if uptime starts to matter |
 
 Open questions for the owner:
 
