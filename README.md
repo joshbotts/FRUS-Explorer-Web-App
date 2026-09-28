@@ -9,7 +9,7 @@ FRUS Explorer Light is a self-hosted web edition of [FRUS Explorer](https://gith
 - **Keep the research tools.** Browse, full-text search with the app's query language, the reader with highlights and notes, collections and their exports, citation tools, Source Explorer and analytics all stay. Search by meaning follows in a later phase.
 - **Match the Mac app's results.** On the same inputs, the web edition must produce the same index rows, the same search results in the same order, and the same document HTML.
 - **Serve a researcher or a small group.** One person on a laptop or a home server, or a class or team sharing one instance. It is not designed as a public, high-traffic site.
-- **Deploy simply.** Docker Compose on any Linux host, and a managed deployment on AWS as the first cloud target.
+- **Deploy simply.** Docker Compose on a Mac or a Linux host first; a managed deployment on AWS follows in phase 6.
 
 "Light" leaves out what depends on Apple-only frameworks: summary generation, iCloud sync, widgets and Live Activities, Spotlight, Handoff, TipKit tips, Audio Graphs and native multi-window scenes. Browser tabs replace windows, and data tables replace Audio Graphs. Summaries imported from the app are shown with their authorship labels, and people can write their own.
 
@@ -19,20 +19,17 @@ A Swift 6 server owns two SQLite files: `frus.db`, the corpus index, and `app.db
 
 ```mermaid
 flowchart LR
-  B[Browser<br/>TypeScript SPA] -->|HTTPS| L[Load balancer<br/>with sign-in]
-  subgraph T[ECS task on Fargate, private subnet]
-    S[frus-light server<br/>Swift 6, Hummingbird] --- I[(frus.db<br/>read-only snapshot)]
+  B[Browser] -->|localhost:8080| S
+  subgraph C[Docker Compose on a Mac or a Linux host]
+    S[frus-light server<br/>Swift 6, Hummingbird] --- I[(frus.db<br/>imported Mac export)]
     S --- U[(app.db<br/>users and their data)]
-    U -.- LS[Litestream]
+    S -.-> P[Gotenberg<br/>optional PDF]
   end
-  L --> S
-  S3[(S3<br/>snapshots, TEI,<br/>replica, backups)] -->|copied at start| I
-  LS -->|replicates| S3
-  J[Build job<br/>from phase 3] -->|publishes snapshots| S3
-  S -.->|through NAT| X[GitHub, NARA, Zotero]
+  T[/Mac app's TEI folder<br/>mounted read-only/] --> S
+  S -.-> X[GitHub, NARA, Zotero]
 ```
 
-The diagram shows the AWS deployment. Self-hosted, the same image runs under Docker Compose, with both databases on a local disk.
+The diagram shows the Docker Compose install that ships first, with both databases in the `/data` volume. From phase 6, the same image also runs on AWS as one ECS task, with the index copied from S3.
 
 | Part | Technology | Role |
 | --- | --- | --- |
@@ -56,12 +53,12 @@ The diagram shows the AWS deployment. Self-hosted, the same image runs under Doc
 
 ## Deployment
 
-- **Self-hosted:** one Docker image under Docker Compose on any Linux host, with `/data` on a local disk. SQLite's write-ahead log needs every process on one host, so `/data` never sits on object storage or a network share.
-- **AWS, the first target:** one ECS task on Fargate, in private subnets behind an Application Load Balancer that handles sign-in. At start the task copies a read-only snapshot of the index from S3 and opens it with SQLite's `immutable=1`. User data stays in SQLite, replicated to S3 by Litestream. A deploy stops the old task before starting the new one, trading a short outage for a single writer and no database service. The estimate is about $155–170 a month.
+- **Docker Compose, first:** one image and one Compose file on a Mac or a Linux host, listening on 127.0.0.1. Everything the server keeps lives in a named volume at `/data`, because SQLite's write-ahead log needs a local filesystem, and on a Mac a folder shared from macOS into Docker's virtual machine is not one. The Mac app's TEI folder is mounted read-only, and a Mac export is imported with `docker compose cp`. CI publishes the image to GitHub Container Registry for amd64 and arm64.
+- **AWS, in phase 6:** one ECS task on Fargate, in private subnets behind an Application Load Balancer that handles sign-in. At start the task copies a read-only snapshot of the index from S3 and opens it with SQLite's `immutable=1`. User data stays in SQLite, replicated to S3 by Litestream. A deploy stops the old task before starting the new one, trading a short outage for a single writer and no database service. The estimate is about $155–170 a month.
 
 ## Documents
 
-- [`docs/PLAN.md`](docs/PLAN.md): the development plan. It covers the owner's setup, the rules every session follows, thirteen sessions to phase 1 on AWS, the AWS resources, owner checkpoints and risks.
+- [`docs/PLAN.md`](docs/PLAN.md): the development plan. It covers the owner's setup, the rules every session follows, eleven sessions to phase 1 as a Compose install, the Compose install itself, the deferred AWS design, owner checkpoints and risks.
 - [`docs/SPEC.md`](docs/SPEC.md): the specification. It covers what the web edition keeps, its architecture, data and operating modes, the HTTP API, deployment and runtime options, the managed-platform variant, verification and the delivery plan.
 - Both files have living copies in shared documents, the [specification](https://claude.ai/code/artifact/b4714a33-dd0c-4205-a78f-6839a718afca) and the [plan](https://claude.ai/code/artifact/14a2723a-7662-496d-b7c4-1aa33678233e); ask the owner for access.
 - The FRUS volumes come from the Office of the Historian's public [HistoryAtState/frus](https://github.com/HistoryAtState/frus) repository.
