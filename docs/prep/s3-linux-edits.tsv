@@ -1,0 +1,13 @@
+import-guard	TEI/ASTToRenderNodeConverter.swift	CryptoKit
+stub	DocumentHighlight.Color, ExportHighlight, IndexingPipeline.normalizeSourceNoteWrapper, FRUSURLSchemeHandler.figureURL
+move	IndexingPipeline.swift:12482-12712 (FRUSASTNode printed text, PrintedText, normalizedWhitespace) -> portable file
+import-guard	TEI/FRUSDocumentParser.swift	FoundationXML
+import-guard	Browser/VolumeStructure.swift	SwiftUI
+code-guard	Browser/VolumeStructure.swift:221-231	canImport(SwiftUI)
+shim	autoreleasepool (FRUSDocumentParser.swift:234,314)
+import-guard	Citation/PageRangeStore.swift	SQLite3
+dropped	Citation/RISExporter.swift (needs ZoteroJSONExporter, SwiftData) — not in S3 scope
+dropped	Citation/BibtexExporter.swift (needs ZoteroJSONExporter, SwiftData) — not in S3 scope
+excluded	Citation/CitationMatchingEngine.swift (needs SearchService + ManifestStore = S6 closure), Citation/CitationBlockSplitter.swift (needs the matcher)
+move	SettingsView.swift:2081-2172 SettingsKeys -> portable file
+code-guard	Citation/CitationFormatter.swift:624-627	canImport(Darwin)

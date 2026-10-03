@@ -1,0 +1,67 @@
+import-guard	TEI/ASTToRenderNodeConverter.swift	CryptoKit
+import-guard	TEI/FRUSDocumentParser.swift	FoundationXML
+import-guard	Browser/VolumeStructure.swift	SwiftUI
+code-guard	Browser/VolumeStructure.swift:221-231	canImport(SwiftUI)
+shim	autoreleasepool (FRUSDocumentParser.swift:234,314)
+import-guard	Citation/PageRangeStore.swift	SQLite3
+dropped	Citation/RISExporter.swift (needs ZoteroJSONExporter, SwiftData) — not in S3 scope
+dropped	Citation/BibtexExporter.swift (needs ZoteroJSONExporter, SwiftData) — not in S3 scope
+stub	(S6) DocumentHighlight.Color, ExportHighlight, FRUSURLSchemeHandler.figureURL/resolveCrossRefTarget, CrossRefDestination
+import-guard	Search/IndexingPipeline.swift	CryptoKit
+import-guard	Search/IndexingPipeline.swift	SQLite3
+import-guard	Search/IndexingPipeline.swift	OSLog
+import-guard	Search/IndexingPipeline.swift	CoreSpotlight
+import-guard	Models/Manifest/ManifestStore.swift	FoundationNetworking
+move	SettingsView.swift:2081-2172 SettingsKeys -> portable file
+code-guard	Citation/CitationFormatter.swift:624-627	canImport(Darwin)
+import-guard	Models/AnnotationReview.swift	CryptoKit
+import-guard	RelatedDocuments/DocumentSubjectStore.swift	CryptoKit
+import-guard	Models/PersonMentionStore.swift	SQLite3
+import-guard	Analytics/WordCloud/WordCloudModels.swift	SwiftUI
+import-guard	Models/AnnotationReview.swift	SwiftData
+import-guard	Models/DocumentClassificationOverride.swift	SwiftData
+import-guard	Models/GeneratedSummary.swift	SwiftData
+import-guard	Models/PersonClusterOverride.swift	SwiftData
+import-guard	Models/Collection.swift	SwiftData
+dropped	Collections/CollectionExporter.swift (pulled only via Collection @Model)
+model-guard	Models/AnnotationReview.swift:108-202	canImport(SwiftData)
+model-guard	Models/Collection.swift:32-337	canImport(SwiftData)
+model-guard	Models/Collection.swift:441-773	canImport(SwiftData)
+model-guard	Models/Collection.swift:777-801	canImport(SwiftData)
+model-guard	Models/Collection.swift:805-835	canImport(SwiftData)
+model-guard	Models/Collection.swift:839-921	canImport(SwiftData)
+model-guard	Models/DocumentClassificationOverride.swift:69-119	canImport(SwiftData)
+model-guard	Models/GeneratedSummary.swift:58-221	canImport(SwiftData)
+model-guard	Models/GeneratedSummary.swift:240-292	canImport(SwiftData)
+model-guard	Models/GeneratedSummary.swift:296-347	canImport(SwiftData)
+model-guard	Models/PersonClusterOverride.swift:72-126	canImport(SwiftData)
+move	WordCloudModels.swift:150-164 WordCloudDocumentKey -> portable file (rest of file needs WordCloudKit+SwiftUI)
+code-guard	Search/SearchService.swift:744-844	FRUS_APP
+dropped	Search/CollocationService.swift, Search/Collocation.swift (collocation needs WordCloudKit/NaturalLanguage)
+code-guard	Models/AnnotationReview.swift:253-352	canImport(SwiftData)
+code-guard	Models/DocumentClassificationOverride.swift:155-251	canImport(SwiftData)
+dropped	Models/Collection.swift (needed only by @Model code once guarded)
+import-guard	App/AppState.swift	FoundationNetworking
+import-guard	App/AppState.swift	Network
+import-guard	App/AppState.swift	SwiftData
+code-guard	RelatedDocuments/SemanticSimilarityGenerator.swift:457-489	FRUS_APP	^    static func offIndexSection\(
+code-guard	RelatedDocuments/SemanticSimilarityGenerator.swift:82-609	FRUS_APP	^struct SemanticSimilarityGenerator: SimilarityGenerator
+code-guard	RelatedDocuments/SimilarityModel.swift:545-554	FRUS_APP	^@MainActor protocol SimilarityGenerator
+code-guard	RelatedDocuments/SimilarityModel.swift:598-605	FRUS_APP	^@MainActor protocol SimilarityScorer
+code-guard	Search/IndexingPipeline.swift:2568-2574	canImport(SwiftData)	^    func updateSummary\(_ summary: GeneratedSummary\)
+code-guard	Search/IndexingPipeline.swift:2643-2652	canImport(CoreSpotlight)	^    private func submitSpotlightItems\(for data: VolumeIndexData\)
+code-guard	Search/IndexingPipeline.swift:2674-2692	canImport(CoreSpotlight)	^    static func makeSearchableItem\($
+code-guard	Search/IndexingPipeline.swift:2738-2777	canImport(CoreSpotlight)	^    public func rebuildSpotlightIndex\(\)
+code-guard	Search/IndexingPipeline.swift:2064-2064	canImport(CoreSpotlight)
+code-guard	Search/IndexingPipeline.swift:2276-2276	canImport(CoreSpotlight)
+import-guard	SourceExplorer/NARACatalogClient.swift	FoundationNetworking
+import-guard	Models/KeychainStore.swift	Security
+import-guard	SourceExplorer/NARAAPIKeyStore.swift	Security
+code-guard	SourceExplorer/NARAAPIKeyStore.swift:34-162	canImport(Security)	^public final class NARAAPIKeyStore
+code-guard	SourceExplorer/NARACatalogClient.swift:752-752	canImport(Security)
+code-guard	Models/KeychainStore.swift:54-219	canImport(Security)	^public actor KeychainStore
+code-guard	Models/KeychainStore.swift:24-24	canImport(Security)
+shim	KeychainStore (Linux actor stand-in)
+code-guard	Search/IndexingPipeline.swift:2725-2731	canImport(CoreSpotlight)	^    public func rebuildSpotlightIndexIfNeeded\(\)
+move	CollectionAddDocumentsSheet.swift:110-300 CollectionCitationLineResolver -> portable file (for the matcher tests)
+move	CitationLookupView.swift:659-795 CitationLookupFocus+CitationLookupFields -> portable file (matcher tests)
