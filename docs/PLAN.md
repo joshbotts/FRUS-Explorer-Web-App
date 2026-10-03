@@ -61,6 +61,7 @@ Each step was run in this session on 28 September. The session had 4 vCPUs, 15 G
 **Mac** (the owner's machine)
 
 - [ ] Install a container runtime that runs Compose files: Docker Desktop, Podman Desktop or Colima. Docker Desktop needs a paid subscription in larger organisations, so check what yours allows.
+- [ ] After session 0 pins the submodule, build FRUS Explorer in Xcode 27 from the pinned commit, which `git submodule status` names. Make the golden files after S4 and the export before S10 with this build. Golden files from other code test the wrong thing, and the server rejects an export from another index version. When the pin moves, rebuild and refresh the golden files.
 - [ ] Download three small fixture volumes in the Mac app, before session 4: `frus1894Nicaragua` (1.27 MB), `frus1961-63v06` (1.65 MB) and `frus1969-76ve09p1` (1.89 MB). They span three eras and both print and electronic-only volumes.
 
 ## Repository layout and session rules
@@ -128,7 +129,7 @@ S0 comes first, and the core track starts after it. The tracks join at session 8
 
 | Session | Track | Delivers | Done when |
 | --- | --- | --- | --- |
-| S0 | Both | The scaffold: the submodule pinned to `FRUS-Explorer`'s current `main`, `Package.swift` with the Linux-ready kits and `CSQLite`, both scripts, `CLAUDE.md`, the log and `ci.yml` | CI runs SourceNoteKit's 219, CrossRefKit's 10 and GeneratorKit's 7 tests, plus an FTS5 check, and passes |
+| S0 | Both | The scaffold: the submodule pinned to the current head of `FRUS-Explorer`'s `v2` branch, `Package.swift` with the Linux-ready kits and `CSQLite`, both scripts, `CLAUDE.md`, the log and `ci.yml` | CI runs SourceNoteKit's 219, CrossRefKit's 10 and GeneratorKit's 7 tests, plus an FTS5 check, and passes |
 | S1 | Core | An upstream pull request with Linux guards: `FoundationXML` in TEIHeaderKit, swift-crypto in SemanticVectorsKit, and `CSQLite` plus a logging shim in FTS5Store | All six portable kits build on Linux and their tests pass: the spec's check 1 |
 | S2 | Server | The Hummingbird 2 server: configuration, `/healthz`, `/readyz` and `/api/v1/status`; Import mode, which validates a Mac export and opens it with `immutable=1`; the spec's five v1 interfaces | Tests import a synthetic export they build, and walk `/readyz` through every step |
 | S3 | Core | `FRUSCoreKit`, part 1: the TEI parser, AST, render conversion, HTML serializer and Citation, compiled from the app's own files | The renderer turns the three fixture volumes into HTML on Linux, and the citation fixtures pass |
@@ -238,10 +239,10 @@ Eight steps need the owner, because a cloud session has no Mac and no Xcode. Ses
 | Settings | Before S0 | The GitHub and environment items under Before the first session, and a container runtime on the Mac | To do |
 | Mac check 1 | After S1 | Check out the upstream pull request in `FRUS-Explorer`, build both schemes in Xcode, run the unit tests, and merge if they pass | To do |
 | Mac check 2 | After S3 | The same for the TEI and Citation guards | To do |
-| Golden files | After S4 | Download the three fixture volumes in the Mac app, export the research database, run the harness's summary script on the export and its render and query tool on the Mac, and commit `fixtures/golden/` | To do |
+| Golden files | After S4 | Download the three fixture volumes in the pinned build of the Mac app, export the research database, run the harness's summary script on the export and its render and query tool on the Mac, and commit `fixtures/golden/` | To do |
 | Mac check 3 | After S6 | The same as Mac check 1, for the indexer and search guards | To do |
 | Mac trial | After S7 | Install from the published image by following `docs/INSTALL.md`, and report anything the guide gets wrong | To do |
-| Mac export | Before S10 | Export the full research database on the Mac, about 9 GB, for the Compose install to import | To do |
+| Mac export | Before S10 | Export the full research database from the pinned build, about 9 GB, for the Compose install to import | To do |
 | Phase 1 sign-off | After S10 | Use the site, and confirm checks 3–5 on the real export | To do |
 
 The Mac checks are cheap on purpose. Every Linux change to a shared file is a `#if canImport` guard, so the Apple build should compile exactly what it compiled before; the check proves it.
@@ -284,7 +285,7 @@ If a shared document and its file disagree, tell me before you act on either.
 Goal: the scaffold, with CI green. Do not change FRUS-Explorer in this session.
 
 1. Check prerequisites: Docker running with the Compose plugin, and the swift:6.4-noble image present. If the environment's setup script did not run, run its steps yourself and tell me which failed.
-2. Add FRUS-Explorer as a git submodule at upstream/FRUS-Explorer, pinned to its current main.
+2. Add FRUS-Explorer as a git submodule at upstream/FRUS-Explorer, pinned to the current head of its default branch, v2.
 3. Write scripts/swift, which runs swift inside swift:6.4-noble with the repository mounted, --network host, and the session's proxy variables and CA bundle. Write scripts/doctor, which checks everything in step 1.
 4. Write Package.swift (swift-tools-version 6.0): a CSQLite system library target; SourceNoteKit, CrossRefKit and GeneratorKit and their test targets, compiled from the submodule's own directories; and an FRUSLightServer executable that prints its version.
 5. Add an FTS5 test that creates frus_documents with the DDL that FTS5Store/FTS5Types.swift builds (porter unicode61), inserts two rows, and matches a stemmed prefix inside a NEAR group.
