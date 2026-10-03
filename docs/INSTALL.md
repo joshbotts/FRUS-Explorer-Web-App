@@ -83,7 +83,7 @@ The server waits until the copy has finished, then checks the export and install
 curl -s -w '  %{http_code}\n' http://localhost:8080/readyz
 ```
 
-`/readyz` names each step as it goes, then answers `200` when the index is open. On an Apple silicon Mac, the full corpus was ready about 40 seconds after the copy began.
+`/readyz` names each step as it goes, then answers `200` when the index is open, saying how many documents and volumes it serves. On an Apple silicon Mac, the full corpus was ready about 40 seconds after the copy began.
 
 | Step | What the server is doing |
 | --- | --- |

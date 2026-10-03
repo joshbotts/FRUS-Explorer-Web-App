@@ -28,10 +28,10 @@ The owner makes these one-time settings before session 0. None takes more than a
 **GitHub**
 
 - [x] Use `joshbotts/FRUS-Explorer-Web-App` for the web edition. It holds the README, this plan and the specification.
-- [ ] Make the web repository public. On GitHub Free, branch protection and native arm64 runners are offered only for public repositories, and their Actions minutes are free.
+- [x] Make the web repository public. On GitHub Free, branch protection and native arm64 runners are offered only for public repositories, and their Actions minutes are free.
 - [ ] Select two repositories when starting each session: `FRUS-Explorer-Web-App`, where the work lands, and `FRUS-Explorer`, for the upstream pull requests phase 0 needs. A session's repositories are fixed when it starts.
 - [ ] Confirm the Claude GitHub App is installed on both, from [claude.ai/connect-github](https://claude.ai/connect-github).
-- [ ] After S0's first CI run, protect `main` on the web repository: changes arrive by pull request, with no required approvals, since you merge your own, and the CI job is a required check. GitHub offers a check only after it has run once. `FRUS-Explorer` is public, so CI can fetch it as a submodule without a token.
+- [x] After S0's first CI run, protect `main` on the web repository: changes arrive by pull request, with no required approvals, since you merge your own, and CI's `swift` job is a required check. After S5, `compose` is required too. GitHub offers a check only after it has run once. `FRUS-Explorer` is public, so CI can fetch it as a submodule without a token.
 - [x] Before S7, let GitHub Actions publish packages. `image.yml` asks for `packages: write`; if your account restricts workflow permissions, allow it.
 
 **Cloud environment** (the cloud environment menu in the session's title bar, then Edit)
@@ -249,7 +249,7 @@ Eight steps need the owner, because a cloud session has no Mac and no Xcode. Ses
 | Mac check 2 | After S3 | The same for the TEI and Citation guards | To do |
 | Golden files | After S4 | Download the three fixture volumes in the pinned build of the Mac app, export the research database, run the harness's summary script on the export and its render and query tool on the Mac, and commit `fixtures/golden/` | To do |
 | Mac check 3 | After S6 | The same as Mac check 1, for the indexer and search guards | To do |
-| Mac trial | After S7 | Install from the published image by following `docs/INSTALL.md`, and report anything the guide gets wrong | To do |
+| Mac trial | After S7 | Install from the published image by following `docs/INSTALL.md`, and report anything the guide gets wrong | Done |
 | Mac export | Before S10 | Export the full research database from the pinned build, about 2.8 GB, for the Compose install to import | To do |
 | Phase 1 sign-off | After S10 | Use the site, and confirm checks 3–5 on the real export | To do |
 
