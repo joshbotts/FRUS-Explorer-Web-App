@@ -1,0 +1,272 @@
+diff --git a/FTS5Store/FTS5Connection.swift b/FTS5Store/FTS5Connection.swift
+index db24816d..08712952 100644
+--- a/FTS5Store/FTS5Connection.swift
++++ b/FTS5Store/FTS5Connection.swift
+@@ -7,7 +7,11 @@
+ //     http://www.apache.org/licenses/LICENSE-2.0
+ 
+ import Foundation
++#if canImport(SQLite3)
+ import SQLite3
++#else
++import CSQLite
++#endif
+ 
+ // MARK: - FTS5Connection
+ //
+diff --git a/FTS5Store/FTS5Store.swift b/FTS5Store/FTS5Store.swift
+index f6ab2550..540f3ab5 100644
+--- a/FTS5Store/FTS5Store.swift
++++ b/FTS5Store/FTS5Store.swift
+@@ -7,8 +7,14 @@
+ //     http://www.apache.org/licenses/LICENSE-2.0
+ 
+ import Foundation
++#if canImport(OSLog)
+ import OSLog
++#endif
++#if canImport(SQLite3)
+ import SQLite3
++#else
++import CSQLite
++#endif
+ 
+ // SQLITE_TRANSIENT is a C macro ((sqlite3_destructor_type)-1) not exposed in Swift's
+ // SQLite3 module. It tells SQLite to copy the string immediately rather than hold a
+diff --git a/FTS5Store/FTS5Vocabulary.swift b/FTS5Store/FTS5Vocabulary.swift
+index b0b94a62..77b9c6d9 100644
+--- a/FTS5Store/FTS5Vocabulary.swift
++++ b/FTS5Store/FTS5Vocabulary.swift
+@@ -7,7 +7,11 @@
+ //     http://www.apache.org/licenses/LICENSE-2.0
+ 
+ import Foundation
++#if canImport(SQLite3)
+ import SQLite3
++#else
++import CSQLite
++#endif
+ 
+ // MARK: - FTS5Store + Vocabulary
+ 
+diff --git a/FTS5Store/LinuxLogger.swift b/FTS5Store/LinuxLogger.swift
+new file mode 100644
+index 00000000..9a127339
+--- /dev/null
++++ b/FTS5Store/LinuxLogger.swift
+@@ -0,0 +1,31 @@
++// Linux stand-in for os.Logger: same call shape (including `privacy:`), prints to stderr.
++#if !canImport(OSLog)
++import Foundation
++
++enum OSLogPrivacy: Sendable { case `public`, `private`, auto }
++
++struct OSLogMessage: ExpressibleByStringInterpolation, Sendable {
++    struct StringInterpolation: StringInterpolationProtocol {
++        var text = ""
++        init(literalCapacity: Int, interpolationCount: Int) {}
++        mutating func appendLiteral(_ literal: String) { text += literal }
++        mutating func appendInterpolation<T>(_ value: T, privacy: OSLogPrivacy = .auto) { text += "\(value)" }
++    }
++    let text: String
++    init(stringLiteral value: String) { text = value }
++    init(stringInterpolation: StringInterpolation) { text = stringInterpolation.text }
++}
++
++struct Logger: Sendable {
++    let subsystem: String, category: String
++    init(subsystem: String, category: String) { self.subsystem = subsystem; self.category = category }
++    private func emit(_ level: String, _ m: OSLogMessage) {
++        FileHandle.standardError.write(Data("[\(level)] \(category): \(m.text)\n".utf8))
++    }
++    func debug(_ m: OSLogMessage) { emit("debug", m) }
++    func info(_ m: OSLogMessage) { emit("info", m) }
++    func notice(_ m: OSLogMessage) { emit("notice", m) }
++    func warning(_ m: OSLogMessage) { emit("warning", m) }
++    func error(_ m: OSLogMessage) { emit("error", m) }
++}
++#endif
+diff --git a/FTS5StoreTests/ExactWordMatcherTests.swift b/FTS5StoreTests/ExactWordMatcherTests.swift
+index 29799fd3..0171d867 100644
+--- a/FTS5StoreTests/ExactWordMatcherTests.swift
++++ b/FTS5StoreTests/ExactWordMatcherTests.swift
+@@ -8,7 +8,11 @@
+ 
+ import Testing
+ import Foundation
++#if canImport(SQLite3)
+ import SQLite3
++#else
++import CSQLite
++#endif
+ @testable import FTS5Store
+ 
+ // MARK: - ExactWordMatcherTests
+diff --git a/FTS5StoreTests/FTS5InlineQueryParserTests.swift b/FTS5StoreTests/FTS5InlineQueryParserTests.swift
+index 9560b30c..1d2c48f8 100644
+--- a/FTS5StoreTests/FTS5InlineQueryParserTests.swift
++++ b/FTS5StoreTests/FTS5InlineQueryParserTests.swift
+@@ -7,7 +7,11 @@
+ //     http://www.apache.org/licenses/LICENSE-2.0
+ 
+ import Testing
++#if canImport(SQLite3)
+ import SQLite3
++#else
++import CSQLite
++#endif
+ @testable import FTS5Store
+ 
+ // MARK: - FTS5InlineQueryParserTests
+diff --git a/FTS5StoreTests/FTS5QueryCombinationTests.swift b/FTS5StoreTests/FTS5QueryCombinationTests.swift
+index b5cfbf14..7bb2d184 100644
+--- a/FTS5StoreTests/FTS5QueryCombinationTests.swift
++++ b/FTS5StoreTests/FTS5QueryCombinationTests.swift
+@@ -7,7 +7,11 @@
+ //     http://www.apache.org/licenses/LICENSE-2.0
+ 
+ import Testing
++#if canImport(SQLite3)
+ import SQLite3
++#else
++import CSQLite
++#endif
+ @testable import FTS5Store
+ 
+ // MARK: - FTS5QueryCombinationTests
+diff --git a/FTS5StoreTests/FTS5StoreTests.swift b/FTS5StoreTests/FTS5StoreTests.swift
+index 617565e1..d1c7e6b1 100644
+--- a/FTS5StoreTests/FTS5StoreTests.swift
++++ b/FTS5StoreTests/FTS5StoreTests.swift
+@@ -8,7 +8,11 @@
+ 
+ import Testing
+ import Foundation
++#if canImport(SQLite3)
+ import SQLite3
++#else
++import CSQLite
++#endif
+ @testable import FTS5Store
+ 
+ // MARK: - Test Helpers
+diff --git a/FTS5StoreTests/FTS5VocabularyTests.swift b/FTS5StoreTests/FTS5VocabularyTests.swift
+index 05633cd2..46dc5088 100644
+--- a/FTS5StoreTests/FTS5VocabularyTests.swift
++++ b/FTS5StoreTests/FTS5VocabularyTests.swift
+@@ -8,7 +8,11 @@
+ 
+ import Testing
+ import Foundation
++#if canImport(SQLite3)
+ import SQLite3
++#else
++import CSQLite
++#endif
+ @testable import FTS5Store
+ 
+ // MARK: - FTS5VocabularyTests
+diff --git a/FTS5StoreTests/Issue1297StructuredPartsTests.swift b/FTS5StoreTests/Issue1297StructuredPartsTests.swift
+index 3a793b4b..1ee6e500 100644
+--- a/FTS5StoreTests/Issue1297StructuredPartsTests.swift
++++ b/FTS5StoreTests/Issue1297StructuredPartsTests.swift
+@@ -7,7 +7,11 @@
+ //     http://www.apache.org/licenses/LICENSE-2.0
+ 
+ import Testing
++#if canImport(SQLite3)
+ import SQLite3
++#else
++import CSQLite
++#endif
+ @testable import FTS5Store
+ 
+ // MARK: - #1297: typed exclusions beside the structured fields
+diff --git a/FTS5StoreTests/Issue1297Tests.swift b/FTS5StoreTests/Issue1297Tests.swift
+index 18499e29..99e42f60 100644
+--- a/FTS5StoreTests/Issue1297Tests.swift
++++ b/FTS5StoreTests/Issue1297Tests.swift
+@@ -8,7 +8,11 @@
+ 
+ import Foundation
+ import Testing
++#if canImport(SQLite3)
+ import SQLite3
++#else
++import CSQLite
++#endif
+ @testable import FTS5Store
+ 
+ // MARK: - #1297: exclusions FTS5 rejected
+diff --git a/ManifestGeneratorCore/GitHubClient.swift b/ManifestGeneratorCore/GitHubClient.swift
+index 3c4a9d71..44447d04 100644
+--- a/ManifestGeneratorCore/GitHubClient.swift
++++ b/ManifestGeneratorCore/GitHubClient.swift
+@@ -7,6 +7,9 @@
+ //     http://www.apache.org/licenses/LICENSE-2.0
+ 
+ import Foundation
++#if canImport(FoundationNetworking)
++import FoundationNetworking
++#endif
+ 
+ /// Errors thrown by `GitHubClient`.
+ public enum GitHubClientError: Error, Sendable {
+diff --git a/ManifestGeneratorCore/TEIHeaderFetcher.swift b/ManifestGeneratorCore/TEIHeaderFetcher.swift
+index 0a0a3d47..86f857f0 100644
+--- a/ManifestGeneratorCore/TEIHeaderFetcher.swift
++++ b/ManifestGeneratorCore/TEIHeaderFetcher.swift
+@@ -7,6 +7,9 @@
+ //     http://www.apache.org/licenses/LICENSE-2.0
+ 
+ import Foundation
++#if canImport(FoundationNetworking)
++import FoundationNetworking
++#endif
+ 
+ /// Errors thrown by `TEIHeaderFetcher`.
+ public enum TEIHeaderFetcherError: Error, Sendable {
+@@ -50,7 +53,13 @@ public struct TEIHeaderFetcher {
+         var request = URLRequest(url: url)
+         request.setValue("FRUSExplorer/ManifestGenerator 2.0", forHTTPHeaderField: "User-Agent")
+ 
++        #if canImport(FoundationNetworking)
++        // URLSession.bytes(for:) does not exist in swift-corelibs-foundation.
++        let (fullData, response) = try await session.data(for: request)
++        let asyncBytes = AsyncStream<UInt8> { c in for b in fullData { c.yield(b) }; c.finish() }
++        #else
+         let (asyncBytes, response) = try await session.bytes(for: request)
++        #endif
+ 
+         guard let http = response as? HTTPURLResponse else {
+             throw TEIHeaderFetcherError.unexpectedResponseType
+diff --git a/SemanticVectorsKit/SemanticVectorsArtifacts.swift b/SemanticVectorsKit/SemanticVectorsArtifacts.swift
+index a60b3704..7fe4d42c 100644
+--- a/SemanticVectorsKit/SemanticVectorsArtifacts.swift
++++ b/SemanticVectorsKit/SemanticVectorsArtifacts.swift
+@@ -12,7 +12,11 @@
+ // See the License for the specific language governing permissions and
+ // limitations under the License.
+ 
++#if canImport(CryptoKit)
+ import CryptoKit
++#else
++import Crypto
++#endif
+ import Foundation
+ 
+ /// The artifact shapes the packer emits, and the binary layouts that go with them.
+diff --git a/TEIHeaderKit/TEIHeaderParser.swift b/TEIHeaderKit/TEIHeaderParser.swift
+index e4f9013f..8d83dc3c 100644
+--- a/TEIHeaderKit/TEIHeaderParser.swift
++++ b/TEIHeaderKit/TEIHeaderParser.swift
+@@ -7,6 +7,9 @@
+ //     http://www.apache.org/licenses/LICENSE-2.0
+ 
+ import Foundation
++#if canImport(FoundationXML)
++import FoundationXML
++#endif
+ 
+ /// Errors thrown by `TEIHeaderParser`.
+ /// Parses the `<teiHeader>` of a FRUS TEI XML file into a `ParsedTEIHeader`.

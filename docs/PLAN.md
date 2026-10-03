@@ -27,11 +27,12 @@ The owner makes these one-time settings before session 0. None takes more than a
 
 **GitHub**
 
-- [ ] Use `joshbotts/FRUS-Explorer-Web-App` for the web edition. It holds the README, this plan and the specification.
+- [x] Use `joshbotts/FRUS-Explorer-Web-App` for the web edition. It holds the README, this plan and the specification.
+- [ ] Make the web repository public. On GitHub Free, branch protection and native arm64 runners are offered only for public repositories, and their Actions minutes are free.
 - [ ] Select two repositories when starting each session: `FRUS-Explorer-Web-App`, where the work lands, and `FRUS-Explorer`, for the upstream pull requests phase 0 needs. A session's repositories are fixed when it starts.
 - [ ] Confirm the Claude GitHub App is installed on both, from [claude.ai/connect-github](https://claude.ai/connect-github).
-- [ ] Protect `main` on the web repository: changes arrive by pull request, and CI must pass. `FRUS-Explorer` is public, so CI can fetch it as a submodule without a token.
-- [ ] Let GitHub Actions publish packages. `image.yml` asks for `packages: write`; if your account restricts workflow permissions, allow it.
+- [ ] After S0's first CI run, protect `main` on the web repository: changes arrive by pull request, with no required approvals, since you merge your own, and the CI job is a required check. GitHub offers a check only after it has run once. `FRUS-Explorer` is public, so CI can fetch it as a submodule without a token.
+- [ ] Before S7, let GitHub Actions publish packages. `image.yml` asks for `packages: write`; if your account restricts workflow permissions, allow it.
 
 **Cloud environment** (the cloud environment menu in the session's title bar, then Edit)
 
@@ -60,15 +61,15 @@ Each step was run in this session on 28 September. The session had 4 vCPUs, 15 G
 
 **Mac** (the owner's machine)
 
-- [ ] Install a container runtime that runs Compose files: Docker Desktop, Podman Desktop or Colima. Docker Desktop needs a paid subscription in larger organisations, so check what yours allows.
+- [x] Install a container runtime that runs Compose files: Docker Desktop, Podman Desktop or Colima. Docker Desktop needs a paid subscription in larger organisations, so check what yours allows.
 - [ ] After session 0 pins the submodule, build FRUS Explorer in Xcode 27 from the pinned commit, which `git submodule status` names. Make the golden files after S4 and the export before S10 with this build. Golden files from other code test the wrong thing, and the server rejects an export from another index version. When the pin moves, rebuild and refresh the golden files.
-- [ ] Download three small fixture volumes in the Mac app, before session 4: `frus1894Nicaragua` (1.27 MB), `frus1961-63v06` (1.65 MB) and `frus1969-76ve09p1` (1.89 MB). They span three eras and both print and electronic-only volumes.
+- [x] Download three small fixture volumes in the Mac app, before session 4: `frus1894Nicaragua` (1.27 MB), `frus1961-63v06` (1.65 MB) and `frus1969-76ve09p1` (1.89 MB). They span three eras and both print and electronic-only volumes. The Mac's copies are byte-identical to HistoryAtState/frus commit `8e5da08`.
 
 `scripts/mac-check` checks these items, plus macOS 26 or later and Xcode 27, and marks anything due later. It changes nothing. If macOS asks, let Terminal access data from other apps.
 
 ## Repository layout and session rules
 
-The web repository compiles the Mac app's shared Swift files straight from a pinned `FRUS-Explorer` submodule, so parity comes from the build rather than from copying. Both halves of that were tested here. A target whose path points into the nested checkout compiled SourceNoteKit and passed its 219 tests on Linux. A `CSQLite` system module linked SQLite 3.45.1 with FTS5.
+The web repository compiles the Mac app's shared Swift files straight from a pinned `FRUS-Explorer` submodule, so parity comes from the build rather than from copying. Both halves of that were tested here. A target whose path points into the nested checkout compiled SourceNoteKit and passed its tests on Linux. A `CSQLite` system module linked SQLite 3.45.1 with FTS5. On 3 October, at `34a5120`, a dry run of the whole S0 package passed SourceNoteKit's 292 tests, CrossRefKit's 10 and GeneratorKit's 7, and the FTS5 check, in `swift:6.4-noble` with no warnings. `docs/prep/` records what that run found for later sessions.
 
 ```text
 FRUS-Explorer-Web-App/
@@ -78,6 +79,7 @@ FRUS-Explorer-Web-App/
 ├── docs/SPEC.md               the specification
 ├── docs/INSTALL.md            install, import, upgrade and backup, from session 7
 ├── docs/DEVLOG.md             one entry per session
+├── docs/prep/                 readiness notes and Linux change lists for S1–S6
 ├── Package.swift              the server, plus Linux builds of the shared kits
 ├── upstream/FRUS-Explorer/    git submodule, pinned to a merged commit
 ├── Sources/CSQLite/           system module for SQLite on Linux
@@ -132,7 +134,7 @@ S0 comes first, and the core track starts after it. The tracks join at session 8
 
 | Session | Track | Delivers | Done when |
 | --- | --- | --- | --- |
-| S0 | Both | The scaffold: the submodule pinned to the current head of `FRUS-Explorer`'s `v2` branch, `Package.swift` with the Linux-ready kits and `CSQLite`, both scripts, `CLAUDE.md`, the log and `ci.yml` | CI runs SourceNoteKit's 219, CrossRefKit's 10 and GeneratorKit's 7 tests, plus an FTS5 check, and passes |
+| S0 | Both | The scaffold: the submodule pinned to `34a5120` on `FRUS-Explorer`'s `v2` branch, which matches the owner's Mac build and export (index version 65); `Package.swift` with the Linux-ready kits and `CSQLite`; both scripts, `CLAUDE.md`, the log and `ci.yml`; the fixtures, with their SHA-256 sums | CI runs every test in SourceNoteKit, CrossRefKit and GeneratorKit at the pin, none skipped (292, 10 and 7 at `34a5120`), plus an FTS5 check, and passes |
 | S1 | Core | An upstream pull request with Linux guards: `FoundationXML` in TEIHeaderKit, swift-crypto in SemanticVectorsKit, and `CSQLite` plus a logging shim in FTS5Store | All six portable kits build on Linux and their tests pass: the spec's check 1 |
 | S2 | Server | The Hummingbird 2 server: configuration, `/healthz`, `/readyz` and `/api/v1/status`; Import mode, which validates a Mac export and opens it with `immutable=1`; the spec's five v1 interfaces | Tests import a synthetic export they build, and walk `/readyz` through every step |
 | S3 | Core | `FRUSCoreKit`, part 1: the TEI parser, AST, render conversion, HTML serializer and Citation, compiled from the app's own files | The renderer turns the three fixture volumes into HTML on Linux, and the citation fixtures pass |
@@ -143,6 +145,8 @@ S0 comes first, and the core track starts after it. The tracks join at session 8
 | S8 | Both | Search, browse and document-render endpoints over the imported index | Check 3 passes through the API |
 | S9 | Both | The SPA for phase 1: Browse, Search, the reader and Cite | Playwright on Chromium searches, opens a document and copies a citation |
 | S10 | Both | The owner's real export imported into Compose, with the Mac app's TEI folder mounted read-only | Checks 3–5 pass on the real export: phase 1's exit |
+
+Before writing the S1, S2, S3 and S4 prompts, read `docs/prep/README.md`. A dry run on 3 October found what each of those sessions needs beyond this table, and recorded the Linux changes for S1, S3 and S6.
 
 After phase 1, sessions follow the spec's phases 2–5. Phase 2 adds user data and its nightly backup. Phase 3 adds Standalone indexing, local accounts and a reverse-proxy recipe for sharing beyond localhost. AWS returns as phase 6.
 
@@ -248,29 +252,30 @@ Eight steps need the owner, because a cloud session has no Mac and no Xcode. Ses
 | Mac export | Before S10 | Export the full research database from the pinned build, about 9 GB, for the Compose install to import | To do |
 | Phase 1 sign-off | After S10 | Use the site, and confirm checks 3–5 on the real export | To do |
 
-The Mac checks are cheap on purpose. Every Linux change to a shared file is a `#if canImport` guard, so the Apple build should compile exactly what it compiled before; the check proves it.
+The Mac checks are cheap on purpose. Every Linux change to a shared file is a `#if canImport` guard, so the Apple build should compile exactly what it compiled before; the check proves it. That holds for S1; S3 and S6 also need declarations moved out of Apple-only files, as `docs/prep/README.md` records.
 
 ## Risks and open questions
 
-The largest risk is session 6. The indexer is one 11,568-line file inside the app target, and it imports UIKit, CoreSpotlight, SwiftData, OSLog, SQLite3 and CryptoKit.
+The largest risk is session 6. The indexer is one 12,724-line file inside the app target, at `34a5120`. It imports CryptoKit, OSLog, SQLite3, CoreSpotlight and, on iOS, UIKit, and SwiftData reaches it through one parameter.
 
 | Risk | Why it matters | Mitigation |
 | --- | --- | --- |
-| The indexer is tied to the app | `IndexingPipeline.swift` uses six Apple modules, with 35 logging lines alone. The TEI directory adds WebKit, SwiftUI and UIKit, though only in its view files | Compile the app's files by name from the submodule; guard each Apple-only use upstream; budget S6 as two sessions |
+| The indexer is tied to the app | `IndexingPipeline.swift` uses five Apple modules and SwiftData, with 35 logging lines alone. The TEI directory adds WebKit, SwiftUI and UIKit in its view files, and its model files need declarations that live in those view files. A dry run compiled the indexer and search on Linux with 48 app files | Compile the app's files by name from the submodule; move declarations out of Apple-only files and guard each Apple-only use upstream, as listed in `docs/prep/`; budget S6 as two sessions |
 | Mac checks are the bottleneck | Three upstream pull requests wait on the owner's Xcode run | Alternate the tracks, and keep each upstream change to guards only |
 | Foundation differs on Linux | XML parsing, regular expressions, dates and Unicode can differ without an error | Golden files from the same code on macOS, and checks 2–4 before feature work |
 | Session disk | About 30 GB was free here, shared by the Swift image, build caches and fixtures; a 9 GB export does not fit comfortably | Fixtures only in sessions; the full corpus runs on the owner's Mac, in S10 |
-| Upstream churn | `FRUS-Explorer`'s index version went from 49 to 54 in 19 days | Move the pin in its own pull request; the server refuses an export whose index version it does not support |
-| arm64 builds | Most Macs run Apple silicon, and building Swift for arm64 under emulation in CI is slow | Use a native arm64 runner if the GitHub plan offers one; otherwise build arm64 only on `main`, or locally on the Mac |
+| Upstream churn | `FRUS-Explorer`'s index version went from 47 to 65 in the 30 days to 2 October, with about eight pull requests merged a day until its public release | Hold the pin until the release where possible, and move it in its own pull request; the server refuses an export whose index version it does not support |
+| arm64 builds | Most Macs run Apple silicon, and building Swift for arm64 under emulation in CI is slow | Use GitHub's native arm64 runner, free for public repositories; otherwise build arm64 only on `main`, or locally on the Mac |
 | SQLite on a Mac | Docker on macOS runs Linux in a virtual machine, and a folder shared from macOS is not a local filesystem to SQLite | Keep `/data` in a named volume, and bind-mount only the read-only TEI folder |
 | Container runtime licence | Docker Desktop needs a paid subscription in larger organisations | Podman Desktop and Colima run the same Compose file |
 
 Open questions for the owner:
 
 - Which container runtime does your organisation allow on Macs?
-- Does your GitHub plan include native arm64 runners for private repositories?
 - Should the published image stay private to the repository, or be public so anyone can pull it without signing in?
-- May sessions open pull requests on `FRUS-Explorer` for you to verify and merge? The spec work left that repository untouched.
+- May sessions open pull requests on `FRUS-Explorer` for you to verify and merge? The spec work left that repository untouched. S1 needs the answer.
+
+Answered on 3 October: the web repository goes public, which brings branch protection and native arm64 runners on GitHub Free.
 
 ## Session 0 kickoff prompt
 
@@ -283,18 +288,21 @@ Repositories: joshbotts/FRUS-Explorer-Web-App, where you work, and joshbotts/FRU
 Read first: docs/PLAN.md, the development plan, and docs/SPEC.md, the specification. Their living copies are shared documents:
 - Plan: https://claude.ai/code/artifact/14a2723a-7662-496d-b7c4-1aa33678233e
 - Specification: https://claude.ai/code/artifact/b4714a33-dd0c-4205-a78f-6839a718afca
-If a shared document and its file disagree, tell me before you act on either.
+If a shared document and its file disagree, tell me before you act on either. If you cannot open the shared documents, work from the files and say so in docs/DEVLOG.md.
 
 Goal: the scaffold, with CI green. Do not change FRUS-Explorer in this session.
 
 1. Check prerequisites: Docker running with the Compose plugin, and the swift:6.4-noble image present. If the environment's setup script did not run, run its steps yourself and tell me which failed.
-2. Add FRUS-Explorer as a git submodule at upstream/FRUS-Explorer, pinned to the current head of its default branch, v2.
-3. Write scripts/swift, which runs swift inside swift:6.4-noble with the repository mounted, --network host, and the session's proxy variables and CA bundle. Write scripts/doctor, which checks everything in step 1.
-4. Write Package.swift (swift-tools-version 6.0): a CSQLite system library target; SourceNoteKit, CrossRefKit and GeneratorKit and their test targets, compiled from the submodule's own directories; and an FRUSLightServer executable that prints its version.
-5. Add an FTS5 test that creates frus_documents with the DDL that FTS5Store/FTS5Types.swift builds (porter unicode61), inserts two rows, and matches a stemmed prefix inside a NEAR group.
-6. Add .github/workflows/ci.yml: check out with submodules, then run swift build and swift test in a swift:6.4-noble container with libsqlite3-dev installed.
-7. Write CLAUDE.md with the seven session rules from docs/PLAN.md, and docs/DEVLOG.md with this session's entry.
-8. Add the three fixture volumes to fixtures/tei/ from HistoryAtState/frus (branch master, volumes/<id>.xml): frus1894Nicaragua, frus1961-63v06 and frus1969-76ve09p1.
+2. Add FRUS-Explorer as a git submodule at upstream/FRUS-Explorer, with the URL https://github.com/joshbotts/FRUS-Explorer.git, pinned to commit 34a5120507a4d7d2095217e29200229f0cda5c6a on its v2 branch. That commit matches the owner's Mac build and research export (index version 65). Check out the whole submodule: a SourceNoteKit test reads a file from FRUSExplorer/Resources.
+3. Write scripts/swift, which runs swift inside swift:6.4-noble with the repository mounted, --network host, and the session's proxy variables and CA bundle when they are set. The image has no SQLite headers, so scripts/swift must provide libsqlite3-dev inside the container, through a small derived image or an apt step. Keep its build output apart from a Mac's own, for example with --scratch-path .build/linux. Write scripts/doctor, which checks everything in step 1, initialises the submodule if it is empty, and confirms it sits at the pin.
+4. Write Package.swift (swift-tools-version 6.0): a CSQLite system library target; SourceNoteKit, CrossRefKit and GeneratorKit and their test targets, compiled from the submodule's own directories with the settings upstream's Package.swift gives them (Swift 6 language mode; SourceNoteKit excludes eval-baseline.txt and eval-report.txt); and an FRUSLightServer executable that prints its version. Add a .gitignore for .build/.
+5. Add an FTS5 test. Compile FTS5Store/FTS5Types.swift from the submodule as a target of its own, excluding the directory's other files, and create frus_documents with FTS5Schema.frusDocuments.createTableSQL. It is an external-content table, so also create its content table, document_cache, and insert two rows into both. Assert that a stemmed prefix inside a NEAR group matches. Prefix terms are not stemmed, so NEAR(negoti* treaty, 2) must match "negotiating treaties", and NEAR(negotiat* treaty, 2) must not.
+6. Add .github/workflows/ci.yml: check out with submodules, then run swift build and swift test in a swift:6.4-noble container with libsqlite3-dev installed, the same way scripts/swift does. Print the test count per target, for example with swift test list | cut -d. -f1 | sort | uniq -c.
+7. Write CLAUDE.md with the seven session rules from docs/PLAN.md, plus one line: upstream/FRUS-Explorer/CLAUDE.md is the Mac app's guide, and it governs only pull requests on that repository. Write docs/DEVLOG.md with this session's entry.
+8. Add the three fixture volumes to fixtures/tei/ from HistoryAtState/frus at commit 8e5da08c1d99bbcdf69c34cef8c15dff91f95cf9 (volumes/<id>.xml): frus1894Nicaragua, frus1961-63v06 and frus1969-76ve09p1. They are the same bytes the owner's Mac app downloaded. Record the commit in fixtures/tei/SOURCE and the SHA-256 sums in fixtures/tei/SHA256SUMS, and check them against:
+   c36aa079477928672a8f9cb98b37757a428452824ce15500db62e0636dd2c4cc  frus1894Nicaragua.xml
+   48d571c05cad26e51d645c7a5fe7d5ea8b1d42e3f9a2c78ae97bf59a0e5c6f3f  frus1961-63v06.xml
+   6f88c7c3078d374797db1cbf2ec2999e92c489170d4ce5df0cdcc5c22a612df8  frus1969-76ve09p1.xml
 
-Done when CI passes on your pull request, running SourceNoteKit's 219, CrossRefKit's 10 and GeneratorKit's 7 tests plus the FTS5 test. End by naming S1 as the next session in docs/DEVLOG.md.
+Done when CI passes on your pull request, running every test in SourceNoteKitTests, CrossRefKitTests and GeneratorKitTests at the pin, none skipped (292, 10 and 7 at 34a5120), plus the FTS5 test, with the count per target in its log. End by naming S1 as the next session in docs/DEVLOG.md.
 ```
