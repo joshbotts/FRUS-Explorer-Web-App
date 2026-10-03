@@ -27,10 +27,11 @@ One entry per session, newest first.
 
 **After merge**
 
-1. `image.yml` publishes the first image. It starts private, as every new package on GitHub does.
-2. The package is made public in its settings, as the owner asked on 3 October; GitHub allows no way back.
-3. An anonymous pull is checked.
-4. Then the owner's Mac trial follows the guide and reports anything it gets wrong. That trial is S7's done-criterion.
+- **The first publish.** `image.yml`'s run on `main` passed all six jobs in under six minutes: both builds, the join, the smoke test on both architectures, then `edge`. `edge` and `sha-7ecf0c9` name the same image index, for amd64 and arm64.
+- **Public from the start.** The package came out public and linked to the repository. The settings change planned here was not needed.
+- **An anonymous pull.** The `edge` manifest was fetched with an anonymous registry token. `docker pull` then ran with an empty Docker config on the owner's Mac. It got the arm64 image, 251 MB, labelled with revision `7ecf0c9`; `--version` answers `frus-light 0.1.0-dev`.
+- **The macOS setting.** `INSTALL.md` now names the exact macOS setting, from the owner's screenshot on macOS 27. It also says what to do if Docker is not listed there yet.
+- **Still to do.** The owner's Mac trial follows the guide and reports anything it gets wrong. That trial is S7's done-criterion.
 
 **Next.** S8, the search, browse and document endpoints, joins both tracks: it needs the Linux indexer and search (S6), which wait for upstream pull requests. S4, the parity harness, needs no upstream changes. S9, the browser app, depends on S8.
 
