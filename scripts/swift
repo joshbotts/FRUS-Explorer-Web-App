@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# FRUS Explorer Light: runs swift inside swift:6.4-noble, with this repository mounted at /src.
+#   scripts/swift build | test | run | package ...   any swift arguments
+#   scripts/swift --exec <command> ...                any other command in the same container
+# Works in a cloud session and on a Mac (macOS ships bash 3.2, so no newer bash features).
+#
+# - The image has no SQLite headers, so a small derived image adds libsqlite3-dev. It is built
+#   the first time, and again whenever swift:6.4-noble or the package list changes.
+# - SwiftPM output goes to .build/linux, apart from a Mac's own .build.
+# - The container shares the host's network. Proxy variables and a CA bundle are passed in
+#   when they are set, as a cloud session needs.
+set -euo pipefail
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+base=swift:6.4-noble
+image=frus-light-swift:6.4-noble
+packages="libsqlite3-dev"
+
+# Docker Desktop installs its CLI here; a non-interactive shell may not have it on PATH.
+if ! command -v docker >/dev/null 2>&1 && [ -x "$HOME/.docker/bin/docker" ]; then
+  PATH="$HOME/.docker/bin:$PATH"
+fi
+if ! docker info >/dev/null 2>&1; then
+  echo "scripts/swift: Docker is not running or not installed; scripts/doctor says which" >&2
+  exit 1
+fi
+
+proxy_vars="HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy"
+
+# Build the derived image if it is missing, or was built from another base or package list.
+base_id=$(docker image inspect --format '{{.Id}}' "$base" 2>/dev/null) || {
+  echo "scripts/swift: $base is not present; run: docker pull $base" >&2
+  exit 1
+}
+recipe="$base_id $packages"
+built_from=$(docker image inspect --format '{{index .Config.Labels "frus.recipe"}}' "$image" 2>/dev/null || true)
+if [ "$built_from" != "$recipe" ]; then
+  build_args=()
+  for v in $proxy_vars; do
+    if [ -n "${!v:-}" ]; then build_args+=(--build-arg "$v"); fi
+  done
+  echo "scripts/swift: building $image from $base" >&2
+  docker build --quiet --network host --tag "$image" ${build_args[@]+"${build_args[@]}"} - >/dev/null <<EOF
+FROM $base
+LABEL frus.recipe="$recipe"
+RUN apt-get update -qq \\
+ && apt-get install -y -qq --no-install-recommends $packages \\
+ && rm -rf /var/lib/apt/lists/*
+EOF
+fi
+
+# --init forwards Ctrl-C and other signals to the command.
+run_args=(--rm --init --network host -v "$root:/src" -w /src)
+if [ -t 0 ] && [ -t 1 ]; then run_args+=(-it); fi
+for v in $proxy_vars; do
+  if [ -n "${!v:-}" ]; then run_args+=(-e "$v"); fi
+done
+
+# A session CA bundle may hold only the proxy's certificate, so add it to the image's own bundle.
+ca=""
+for v in SSL_CERT_FILE CURL_CA_BUNDLE REQUESTS_CA_BUNDLE GIT_SSL_CAINFO NODE_EXTRA_CA_CERTS; do
+  if [ -n "${!v:-}" ] && [ -f "${!v}" ]; then ca=${!v}; break; fi
+done
+
+if [ "${1:-}" = "--exec" ]; then
+  shift
+  if [ $# -eq 0 ]; then echo "usage: scripts/swift --exec <command> ..." >&2; exit 2; fi
+  cmd=("$@")
+else
+  case "${1:-}" in
+    build | test | run | package) cmd=(swift "$1" --scratch-path .build/linux "${@:2}") ;;
+    *) cmd=(swift "$@") ;;
+  esac
+fi
+
+if [ -n "$ca" ]; then
+  # Docker treats a relative path as a volume name, so mount the file by its absolute path.
+  ca="$(CDPATH='' cd -- "$(dirname -- "$ca")" && pwd)/$(basename -- "$ca")"
+  run_args+=(-v "$ca:/run/session-ca.pem:ro")
+  exec docker run "${run_args[@]}" "$image" bash -c '
+    set -e
+    cat /etc/ssl/certs/ca-certificates.crt /run/session-ca.pem > /tmp/ca.pem
+    export SSL_CERT_FILE=/tmp/ca.pem GIT_SSL_CAINFO=/tmp/ca.pem CURL_CA_BUNDLE=/tmp/ca.pem
+    exec "$@"' bash "${cmd[@]}"
+fi
+exec docker run "${run_args[@]}" "$image" "${cmd[@]}"

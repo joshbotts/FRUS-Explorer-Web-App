@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# FRUS Explorer Light: checks a session's prerequisites before any build (CLAUDE.md, rule 1).
+# The only thing it changes is the submodule: it checks out the pinned commit if the folder is empty.
+# Works in a cloud session and on a Mac.  Usage: scripts/doctor
+
+set -u
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$root" || exit 1
+
+fixes=0
+ok()  { printf '  ok     %s\n' "$*"; }
+fix() { printf '  FIX    %s\n' "$*"; fixes=$((fixes + 1)); }
+
+if ! command -v docker >/dev/null 2>&1 && [ -x "$HOME/.docker/bin/docker" ]; then
+  PATH="$HOME/.docker/bin:$PATH"
+fi
+
+echo "Docker"
+docker_up=""
+if ! command -v docker >/dev/null 2>&1; then
+  fix "docker is not installed"
+elif ! docker info >/dev/null 2>&1; then
+  fix "the Docker engine is not running. In a cloud session: nohup dockerd >/var/log/dockerd.log 2>&1 &"
+else
+  docker_up=1
+  ok "engine $(docker version --format '{{.Server.Version}}') on $(docker info --format '{{.OperatingSystem}}, {{.Architecture}}')"
+  if docker compose version >/dev/null 2>&1; then ok "$(docker compose version | head -1)"
+  else fix "the Docker Compose plugin is missing"; fi
+  if docker image inspect swift:6.4-noble >/dev/null 2>&1; then ok "swift:6.4-noble present"
+  else fix "swift:6.4-noble is missing: docker pull swift:6.4-noble"; fi
+fi
+
+echo "Submodule"
+# The index holds the pin as committed, or as staged by a pin-move pull request.
+pin=$(git ls-files --stage upstream/FRUS-Explorer 2>/dev/null | awk '$1 == "160000" {print $2}')
+if [ -z "$pin" ]; then
+  fix "no pin for upstream/FRUS-Explorer"
+else
+  if [ ! -e upstream/FRUS-Explorer/.git ]; then
+    echo "  ...    checking out upstream/FRUS-Explorer"
+    git submodule update --init upstream/FRUS-Explorer 2>&1 | sed 's/^/         /'
+  fi
+  # Read HEAD only from the submodule's own repository; in an empty folder git would
+  # walk up and report this repository's commit instead.
+  head=""
+  if [ -e upstream/FRUS-Explorer/.git ]; then
+    head=$(git -C upstream/FRUS-Explorer rev-parse HEAD 2>/dev/null || true)
+  fi
+  if [ "$head" = "$pin" ]; then ok "upstream/FRUS-Explorer at the pin ${pin:0:7}"
+  elif [ -z "$head" ]; then fix "upstream/FRUS-Explorer did not check out: git submodule update --init"
+  else fix "upstream/FRUS-Explorer is at ${head:0:7}, the pin is ${pin:0:7}: git submodule update --init"; fi
+  # One SourceNoteKit test reads an app resource, so a sparse or partial checkout fails it.
+  if [ -f upstream/FRUS-Explorer/FRUSExplorer/Resources/subject-numeric-labels.json ]; then
+    ok "the whole submodule is checked out"
+  elif [ -n "$head" ]; then fix "the submodule checkout is partial: FRUSExplorer/Resources is missing"; fi
+fi
+
+echo "Container"
+if [ -n "$docker_up" ] && docker image inspect swift:6.4-noble >/dev/null 2>&1; then
+  if v=$(scripts/swift --version 2>/dev/null | head -1) && [ -n "$v" ]; then ok "$v"
+  else fix "scripts/swift could not run swift; run it directly to see why"; fi
+  if scripts/swift --exec test -f /usr/include/sqlite3.h >/dev/null 2>&1; then ok "SQLite headers in the build image"
+  else fix "the build image has no sqlite3.h"; fi
+  # Run from /tmp: in a git worktree, /src/.git points outside the mount and git refuses to start.
+  if scripts/swift --exec git -C /tmp ls-remote https://github.com/joshbotts/FRUS-Explorer.git HEAD >/dev/null 2>&1; then
+    ok "the container reaches github.com"
+  else fix "the container cannot reach github.com: check the proxy variables and CA bundle scripts/swift passes"; fi
+else
+  echo "  skip   Docker is not ready"
+fi
+
+echo
+if [ "$fixes" -eq 0 ]; then echo "Ready."; else echo "$fixes item(s) need fixing, marked FIX above."; fi
+[ "$fixes" -eq 0 ]

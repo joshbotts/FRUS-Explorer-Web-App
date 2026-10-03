@@ -2,7 +2,7 @@
 
 FRUS Explorer Light is a self-hosted web edition of [FRUS Explorer](https://github.com/joshbotts/FRUS-Explorer), the iOS, iPadOS and macOS app for researching the *Foreign Relations of the United States* series. One container serves the corpus, its full-text index, and each researcher's notes and highlights to any modern browser.
 
-**Status:** planning. There is no code yet. Session 0, the repository scaffold, is next; see [`docs/PLAN.md`](docs/PLAN.md).
+**Status:** early development. Session 0 built the scaffold: the pinned `FRUS-Explorer` submodule, the build scripts and CI. Session 1, Linux guards for the shared kits, is next; see [`docs/PLAN.md`](docs/PLAN.md) and [`docs/DEVLOG.md`](docs/DEVLOG.md).
 
 ## Goals
 
