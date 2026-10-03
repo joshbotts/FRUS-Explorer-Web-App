@@ -19,4 +19,5 @@ The self-hosted web edition of FRUS Explorer. `docs/PLAN.md` is the plan, `docs/
 - `scripts/swift build`, `scripts/swift test`, `scripts/swift run FRUSLightServer`: SwiftPM in `swift:6.4-noble`, with output in `.build/linux`.
 - `scripts/swift test list | cut -d. -f1 | sort | uniq -c` counts tests per target, as CI prints them.
 - `scripts/swift --exec <command>` runs anything else in the same container.
-- `scripts/compose-smoke` builds the image and runs the Compose smoke test, as CI does; `scripts/synthetic-export <file>` writes a small valid export.
+- `scripts/compose-smoke` builds the image and runs the Compose smoke test, as CI does; with `FRUS_IMAGE=<image>` it tests that image instead. `scripts/synthetic-export <file>` writes a small valid export.
+- `docs/INSTALL.md` is the user's guide: keep it true when the server, `compose.yaml` or the image change.

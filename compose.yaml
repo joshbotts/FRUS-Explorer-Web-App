@@ -4,19 +4,16 @@
 #   docker compose cp <export file> frus:/data/import/
 #   curl http://localhost:8080/readyz          # 503 naming the step until the index is open, then 200
 #
-# Until the image is published (session 7), build it under the default name first:
-#   docker build -f docker/Dockerfile -t ghcr.io/joshbotts/frus-explorer-light:edge .
-#
-# Everything the server keeps lives in the named volume frus-data. A folder of TEI volumes is
-# mounted read-only, ./tei beside this file by default; the reader uses it from session 8.
-# FRUS Explorer's own folder (~/Library/Containers/bottsywattsy.FRUS-Explorer/...) cannot be the
-# default: macOS keeps other apps out of an app's container, and Docker Desktop is refused.
-# A clone of HistoryAtState/frus holds the same TEI XML in its volumes/ folder, though not the
-# figure images the app also downloads.
+# docs/INSTALL.md is the full guide. Everything the server keeps lives in the named volume
+# frus-data. A folder of TEI volumes is mounted read-only, ./tei beside this file by default; the
+# reader uses it from session 8. On a Mac, FRUS Explorer's own folder works once Docker Desktop
+# may read other apps' data (macOS refuses it until then); anywhere, a clone of HistoryAtState/frus
+# works, with the same TEI XML in its volumes/ folder but not the app's figure images.
 # Optional settings, from the environment or a .env file beside this one:
 #   FRUS_TEI_DIR     folder of TEI volumes, ./tei by default
 #   FRUS_HOST_PORT   port on this machine's 127.0.0.1, 8080 by default
 #   FRUS_IMAGE       image to run, ghcr.io/joshbotts/frus-explorer-light:edge by default
+#   COMPOSE_PROFILES set to pdf to start Gotenberg, for PDF export when it arrives (phase 3)
 
 services:
   frus:
@@ -30,7 +27,7 @@ services:
       FRUS_MODE: import
       FRUS_AUTH: none
       FRUS_PUBLIC_URL: http://localhost:${FRUS_HOST_PORT:-8080}
-      FRUS_PDF_URL: http://pdf:3000
+      FRUS_PDF_URL: http://pdf:3000   # the optional pdf service below
     read_only: true          # the server writes only to /data and /tmp
     tmpfs:
       - /tmp
@@ -39,8 +36,9 @@ services:
       - no-new-privileges:true
     restart: unless-stopped
 
-  pdf:                       # optional; remove it to hide PDF export
+  pdf:                       # optional, and off unless COMPOSE_PROFILES=pdf: a 700 MB download
     image: gotenberg/gotenberg:8
+    profiles: [pdf]
     restart: unless-stopped
 
 volumes:

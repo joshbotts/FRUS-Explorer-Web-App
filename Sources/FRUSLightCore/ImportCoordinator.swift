@@ -118,7 +118,7 @@ public actor ImportCoordinator {
     /// changing its permissions does not change its size or modification time.
     private func reportUnreadable(_ file: URL, signature: Signature) async {
         let name = file.lastPathComponent
-        let problem = ImportProblem(.copyingExport, "The server cannot read \(name): its permissions keep it from the server's user. Copy it with docker compose cp -a, or make it readable, for example: docker compose exec -u 0 frus chmod 644 /data/import/\(name)")
+        let problem = ImportProblem(.copyingExport, "The server cannot read \(name): its permissions keep it from the server's user. Copy it again with docker compose cp -a, which gives it to that user; it is tried again within a minute")
         await state.importFailed(file: name, error: problem)
         retryAfter[file.path] = (signature, now().addingTimeInterval(Self.seconds(retryDelay)))
     }

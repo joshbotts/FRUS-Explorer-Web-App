@@ -2,7 +2,7 @@
 
 FRUS Explorer Light is a self-hosted web edition of [FRUS Explorer](https://github.com/joshbotts/FRUS-Explorer), the iOS, iPadOS and macOS app for researching the *Foreign Relations of the United States* series. One container serves the corpus, its full-text index, and each researcher's notes and highlights to any modern browser.
 
-**Status:** early development. Session 0 built the scaffold: the pinned `FRUS-Explorer` submodule, the build scripts and CI. Session 2 added the server and Import mode, which checks a Mac export copied into `/data/import`, installs it and serves it read-only. Session 5 added the image and `compose.yaml`, with a Compose smoke test in CI. Session 7, the published image and the install guide, is next; see [`docs/PLAN.md`](docs/PLAN.md) and [`docs/DEVLOG.md`](docs/DEVLOG.md).
+**Status:** early development. Session 0 built the scaffold: the pinned `FRUS-Explorer` submodule, the build scripts and CI. Session 2 added the server and Import mode, which checks a Mac export copied into `/data/import`, installs it and serves it read-only. Session 5 added the image and `compose.yaml`, with a Compose smoke test in CI. Session 7 publishes the image to GitHub Container Registry and adds the install guide, [`docs/INSTALL.md`](docs/INSTALL.md); see [`docs/PLAN.md`](docs/PLAN.md) and [`docs/DEVLOG.md`](docs/DEVLOG.md).
 
 ## Goals
 
@@ -58,6 +58,7 @@ The diagram shows the Docker Compose install that ships first, with both databas
 
 ## Documents
 
+- [`docs/INSTALL.md`](docs/INSTALL.md): installing the server with Docker Compose on a Mac or a Linux host, and importing a FRUS Explorer export.
 - [`docs/PLAN.md`](docs/PLAN.md): the development plan. It covers the owner's setup, the rules every session follows, eleven sessions to phase 1 as a Compose install, the Compose install itself, the deferred AWS design, owner checkpoints and risks.
 - [`docs/SPEC.md`](docs/SPEC.md): the specification. It covers what the web edition keeps, its architecture, data and operating modes, the HTTP API, deployment and runtime options, the managed-platform variant, verification and the delivery plan.
 - [`docs/prep/`](docs/prep/README.md): readiness notes from a Linux dry run on 3 October, with the changes sessions 1–6 will need in the shared Swift files.

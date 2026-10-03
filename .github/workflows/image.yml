@@ -1,0 +1,188 @@
+# FRUS Explorer Light: publishes the image to GitHub Container Registry from main.
+#   ghcr.io/joshbotts/frus-explorer-light:sha-<commit>  each build of main (first 7 characters)
+#   ghcr.io/joshbotts/frus-explorer-light:edge          the newest build that passed its smoke test
+# Each architecture builds natively, amd64 and arm64 side by side, and pushes by digest. The
+# publish job joins them under the commit's tag; verify runs the Compose smoke test against that
+# tag on both architectures; only then does promote move edge.
+# A pull request that changes the image or the server builds both architectures and pushes
+# nothing, and so does a manual run on any branch but main: sessions never publish (rule 7).
+name: image
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - docker/**
+      - .dockerignore
+      - .github/workflows/image.yml
+      - Package.swift
+      - Package.resolved
+      - Sources/**
+      - upstream/**
+      - .gitmodules
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE: ghcr.io/joshbotts/frus-explorer-light
+  PUSH: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+
+jobs:
+  build:
+    name: build (${{ matrix.arch }})
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - name: Version
+        id: version
+        run: echo "version=$(grep -oE 'string = "[^"]+"' Sources/FRUSLightCore/Compatibility.swift | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        if: env.PUSH == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build${{ env.PUSH == 'true' && ' and push by digest' || '' }}
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            REVISION=${{ github.sha }}
+          outputs: ${{ env.PUSH == 'true' && format('type=image,name={0},push-by-digest=true,name-canonical=true,push=true', env.IMAGE) || 'type=cacheonly' }}
+          cache-from: type=gha,scope=image-${{ matrix.arch }}
+          cache-to: type=gha,scope=image-${{ matrix.arch }},mode=max,ignore-error=true
+
+      - name: Keep the digest
+        if: env.PUSH == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+
+      - uses: actions/upload-artifact@v7
+        if: env.PUSH == 'true'
+        with:
+          name: digest-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: publish
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.tags.outputs.commit }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tags
+        id: tags
+        run: echo "commit=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Join the architectures under the commit's tag
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create \
+            --tag "$IMAGE:${{ steps.tags.outputs.commit }}" \
+            $(printf "$IMAGE@sha256:%s " *)
+          docker buildx imagetools inspect "$IMAGE:${{ steps.tags.outputs.commit }}"
+
+  verify:
+    name: verify (${{ matrix.arch }})
+    needs: publish
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install sqlite3 for the synthetic export
+        run: command -v sqlite3 || (sudo apt-get update -qq && sudo apt-get install -y -qq sqlite3)
+
+      - name: Compose smoke test against the published image
+        run: FRUS_IMAGE="$IMAGE:${{ needs.publish.outputs.tag }}" scripts/compose-smoke
+
+  promote:
+    name: promote to edge
+    needs: [publish, verify]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Move edge to the verified build
+        run: |
+          docker buildx imagetools create --tag "$IMAGE:edge" "$IMAGE:${{ needs.publish.outputs.tag }}"
+          docker buildx imagetools inspect "$IMAGE:edge"

@@ -2,6 +2,38 @@
 
 One entry per session, newest first.
 
+## Session 7: the published image and the install guide
+
+3 October 2026 · branch `claude/s7-image-install`
+
+**Delivered**
+
+- **`.github/workflows/image.yml`.** On every push to `main` it publishes `ghcr.io/joshbotts/frus-explorer-light` in four jobs:
+  1. Each architecture builds natively and in parallel: amd64 on `ubuntu-24.04`, arm64 on `ubuntu-24.04-arm`, free for public repositories. Each pushes by digest.
+  2. A second job joins them under `sha-<commit>`, the commit's first 7 characters.
+  3. A third pulls that tag and runs the Compose smoke test on both architectures.
+  4. Only then does a fourth move `edge` to it.
+
+  Rule 7 holds in two places: on a pull request that changes the image, the server or the submodule, both architectures build and nothing is pushed; a manual run publishes only from `main`. Each job gets only the permissions it needs, the actions are their Node 24 releases (as are `ci.yml`'s), and the image carries version and revision labels.
+- **`docs/INSTALL.md`** covers a Mac and a Linux host: getting `compose.yaml`, the TEI folder (FRUS Explorer's own on a Mac once Docker Desktop may read it; a shallow HistoryAtState/frus clone on Linux), starting, exporting with the app's exact menu and option names, importing, what each `/readyz` step means, each kind of refusal and its fix, clearing the drop zone, upgrading, removing, and the settings.
+- **`compose.yaml`.** Gotenberg is now behind a `pdf` profile. Nothing uses it before phase 3, and it is a 700 MB download.
+- **The owner's decisions,** recorded in `PLAN.md` (and its shared copy, rev 51): the image is public, and the TEI sources are as above.
+
+**A rehearsal of the guide on the owner's Mac.** It used the image built locally under the published name, which was removed afterwards so that it cannot shadow the real one:
+- `compose.yaml` in its own folder, with `FRUS_TEI_DIR` in `.env` pointing at FRUS Explorer's folder: 553 TEI files and 96 figure folders, read-only;
+- `docker compose up -d` started the server alone;
+- the owner's real export was ready 37 seconds after `docker compose cp` began;
+- memory peaked at 128 MiB, against SPEC's estimate of 4 GB, and the index takes 2.8 GB (2.7 GiB) in the volume.
+
+**After merge**
+
+1. `image.yml` publishes the first image. It starts private, as every new package on GitHub does.
+2. The package is made public in its settings, as the owner asked on 3 October; GitHub allows no way back.
+3. An anonymous pull is checked.
+4. Then the owner's Mac trial follows the guide and reports anything it gets wrong. That trial is S7's done-criterion.
+
+**Next.** S8, the search, browse and document endpoints, joins both tracks: it needs the Linux indexer and search (S6), which wait for upstream pull requests. S4, the parity harness, needs no upstream changes. S9, the browser app, depends on S8.
+
 ## Session 5: the image and a Compose smoke test
 
 3 October 2026 · branch `claude/s5-image-compose`
