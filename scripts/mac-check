@@ -1,0 +1,125 @@
+#!/bin/bash
+# FRUS Explorer Light: checks the owner's Mac against docs/PLAN.md.
+# Read-only; it changes nothing. From a clone of this repository, run:  scripts/mac-check
+# A copy on its own also works:  bash mac-check
+#
+# Run from a clone, it checks that clone and looks for FRUS-Explorer beside it. Run on its
+# own, it looks for both in ~/Development. Point elsewhere with
+#   FRUS_APP_REPO=/path/to/FRUS-Explorer FRUS_WEB_REPO=/path/to/FRUS-Explorer-Web-App
+# macOS may ask whether Terminal can access data from other apps. Allow it, or the
+# FRUS Explorer checks cannot read the app's folder.
+
+fixes=0
+ok()    { printf '  ok     %s\n' "$*"; }
+later() { printf '  later  %s\n' "$*"; }
+fix()   { printf '  FIX    %s\n' "$*"; fixes=$((fixes + 1)); }
+
+APP_ID=bottsywattsy.FRUS-Explorer
+DATA="$HOME/Library/Containers/$APP_ID/Data"
+VOLUMES="$DATA/Library/Application Support/FRUSExplorer/Volumes"
+PREFS="$DATA/Library/Preferences/$APP_ID"
+here=$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)
+if [ -z "$FRUS_WEB_REPO" ] && [ -f "$here/docs/PLAN.md" ] && git -C "$here" rev-parse --git-dir >/dev/null 2>&1; then
+  WEB_REPO=$here
+else
+  WEB_REPO=${FRUS_WEB_REPO:-$HOME/Development/FRUS-Explorer-Web-App}
+fi
+APP_REPO=${FRUS_APP_REPO:-$(dirname "$WEB_REPO")/FRUS-Explorer}
+
+echo "macOS and Xcode"
+os=$(sw_vers -productVersion)
+if [ "${os%%.*}" -ge 26 ]; then ok "macOS $os on $(uname -m)"
+else fix "macOS $os: FRUS Explorer needs macOS 26 or later"; fi
+
+if xc=$(xcodebuild -version 2>/dev/null | head -1) && [ -n "$xc" ]; then
+  xv=${xc#Xcode }
+  if [ "${xv%%.*}" -ge 27 ]; then ok "$xc"
+  else fix "$xc: the plan builds with Xcode 27, whose Swift 6.4 matches the server image"; fi
+else
+  fix "Xcode: xcodebuild failed. Install Xcode 27, then: sudo xcode-select -s /Applications/Xcode.app"
+fi
+
+sw=$(xcrun swift --version 2>/dev/null | head -1 | sed -E 's/.*Swift version ([0-9.]+).*/\1/')
+case "$sw" in
+  6.4*|6.[5-9]*|[7-9].*) ok "Swift $sw" ;;
+  "") fix "Swift: xcrun swift --version failed" ;;
+  *) fix "Swift $sw: the server image uses Swift 6.4" ;;
+esac
+
+if git --version >/dev/null 2>&1; then ok "$(git --version)"; else fix "git is missing"; fi
+
+echo "FRUS Explorer"
+installed=""
+if [ -d "$DATA" ]; then
+  ok "app data in ~/Library/Containers/$APP_ID"
+  # The app records this only when a full re-index at launch finishes
+  # (IndexingPipeline.markDateReindexComplete), so a missing value has three causes.
+  if installed=$(defaults read "$PREFS" frusExplorer.dateIndexVersion 2>/dev/null); then
+    ok "library index version $installed"
+  elif [ ! -e "$PREFS.plist" ]; then
+    installed=""; later "the app has saved no preferences yet: open FRUS Explorer once"
+  elif ! head -c 1 "$PREFS.plist" >/dev/null 2>&1; then
+    installed=""; fix "macOS blocked reading the app's preferences: allow Terminal to access data from other apps, or give it Full Disk Access, in System Settings > Privacy & Security"
+  else
+    installed=""; later "no index version recorded: the app records one when a full re-index finishes, so open it and leave it running until indexing ends"
+  fi
+  for v in frus1894Nicaragua frus1961-63v06 frus1969-76ve09p1; do
+    if [ -f "$VOLUMES/$v.xml" ]; then ok "fixture volume $v downloaded"
+    else later "fixture volume $v: download it in the app before session 4"; fi
+  done
+else
+  fix "no app data: run FRUS Explorer once, or allow Terminal to access data from other apps"
+fi
+
+echo "Repositories"
+app_head=""
+if git -C "$APP_REPO" rev-parse --git-dir >/dev/null 2>&1; then
+  app_head=$(git -C "$APP_REPO" rev-parse HEAD)
+  branch=$(git -C "$APP_REPO" rev-parse --abbrev-ref HEAD)
+  v2=$(git -C "$APP_REPO" ls-remote origin refs/heads/v2 2>/dev/null | cut -c1-7)
+  ok "FRUS-Explorer: $branch at ${app_head:0:7}; v2 on GitHub is at ${v2:-unknown}"
+  src=$(grep -Eo 'currentDateIndexVersion: Int = [0-9]+' \
+        "$APP_REPO/FRUSExplorer/Search/IndexingPipeline.swift" 2>/dev/null | grep -Eo '[0-9]+$')
+  if [ -n "$installed" ] && [ -n "$src" ]; then
+    if [ "$installed" = "$src" ]; then ok "the library's index version matches this checkout ($src)"
+    else later "the library is at index version $installed, this checkout declares $src: build this checkout and let it re-index before the golden files or an export"; fi
+  fi
+else
+  fix "FRUS-Explorer clone not found at $APP_REPO; set FRUS_APP_REPO. Mac check 1 needs it after S1"
+fi
+
+if git -C "$WEB_REPO" rev-parse --git-dir >/dev/null 2>&1; then
+  ok "FRUS-Explorer-Web-App cloned at $WEB_REPO"
+  pin=$(git -C "$WEB_REPO" ls-tree HEAD upstream/FRUS-Explorer 2>/dev/null | awk '$2 == "commit" {print $3}')
+  if [ -z "$pin" ]; then later "no submodule pin yet: session 0 adds it"
+  elif [ "$pin" = "$app_head" ]; then ok "your FRUS-Explorer checkout is at the pinned commit ${pin:0:7}"
+  else later "the pin is ${pin:0:7} but your FRUS-Explorer checkout is at ${app_head:0:7}: check out the pin and rebuild before the golden files or an export"; fi
+else
+  later "FRUS-Explorer-Web-App not cloned at $WEB_REPO: clone it with --recurse-submodules before the golden files after S4"
+fi
+
+echo "Container runtime"
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+  ok "$(docker info --format '{{.OperatingSystem}}'), engine $(docker version --format '{{.Server.Version}}')"
+  if docker compose version >/dev/null 2>&1; then ok "$(docker compose version | head -1)"
+  else fix "docker compose is missing; with Colima, also install Homebrew's docker-compose"; fi
+  gib=$(( $(docker info --format '{{.MemTotal}}') / 1073741824 ))
+  if [ "$gib" -ge 4 ]; then ok "${gib} GiB of memory for containers"
+  else fix "${gib} GiB of memory for containers: give the runtime at least 4"; fi
+elif command -v podman >/dev/null 2>&1; then
+  ok "$(podman --version)"
+  if podman compose version >/dev/null 2>&1; then ok "podman compose works"
+  else fix "podman compose does not work; install a Compose provider in Podman Desktop"; fi
+elif command -v docker >/dev/null 2>&1; then
+  later "docker is installed but no engine is running: start Docker Desktop or run: colima start"
+else
+  later "no container runtime: install Docker Desktop, Podman Desktop or Colima before the Mac trial after S7"
+fi
+
+free_gb=$(( $(df -Pk "$HOME" | awk 'NR==2 {print $4}') / 1048576 ))
+if [ "$free_gb" -ge 35 ]; then ok "${free_gb} GB free on this disk"
+else later "${free_gb} GB free: the S10 import needs about 35 GB, the 9.3 GB export plus 25 GB for the runtime"; fi
+
+echo
+if [ "$fixes" -eq 0 ]; then echo "Nothing needs fixing now. Items marked 'later' are due at the session named."
+else echo "$fixes item(s) need fixing now, marked FIX above."; fi

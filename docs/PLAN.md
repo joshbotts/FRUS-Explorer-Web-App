@@ -64,6 +64,8 @@ Each step was run in this session on 28 September. The session had 4 vCPUs, 15 G
 - [ ] After session 0 pins the submodule, build FRUS Explorer in Xcode 27 from the pinned commit, which `git submodule status` names. Make the golden files after S4 and the export before S10 with this build. Golden files from other code test the wrong thing, and the server rejects an export from another index version. When the pin moves, rebuild and refresh the golden files.
 - [ ] Download three small fixture volumes in the Mac app, before session 4: `frus1894Nicaragua` (1.27 MB), `frus1961-63v06` (1.65 MB) and `frus1969-76ve09p1` (1.89 MB). They span three eras and both print and electronic-only volumes.
 
+`scripts/mac-check` checks these items, plus macOS 26 or later and Xcode 27, and marks anything due later. It changes nothing. If macOS asks, let Terminal access data from other apps.
+
 ## Repository layout and session rules
 
 The web repository compiles the Mac app's shared Swift files straight from a pinned `FRUS-Explorer` submodule, so parity comes from the build rather than from copying. Both halves of that were tested here. A target whose path points into the nested checkout compiled SourceNoteKit and passed its 219 tests on Linux. A `CSQLite` system module linked SQLite 3.45.1 with FTS5.
@@ -88,6 +90,7 @@ FRUS-Explorer-Web-App/
 ├── docker/Dockerfile          multi-stage image
 ├── scripts/swift              runs swift in swift:6.4-noble with the session proxy
 ├── scripts/doctor             checks the session's prerequisites
+├── scripts/mac-check          checks the owner's Mac against this plan
 └── .github/workflows/         ci and image; terraform and deploy arrive in phase 6
 ```
 
