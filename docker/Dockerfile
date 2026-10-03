@@ -38,8 +38,10 @@ COPY --from=build /out/frus-light /usr/local/bin/frus-light
 COPY LICENSE /usr/share/doc/frus-light/LICENSE
 
 ARG VERSION=0.1.0-dev
+ARG REVISION=unknown
 LABEL org.opencontainers.image.title="FRUS Explorer Light" \
       org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}" \
       org.opencontainers.image.description="Self-hosted web edition of FRUS Explorer" \
       org.opencontainers.image.source="https://github.com/joshbotts/FRUS-Explorer-Web-App" \
       org.opencontainers.image.licenses="Apache-2.0"

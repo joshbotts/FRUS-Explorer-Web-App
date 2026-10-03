@@ -49,13 +49,15 @@ S2 settled these; its DEVLOG entry says how.
 
 ## Before the S7 and S8 prompts
 
+Settled on 3 October: on a Mac, FRUS Explorer's own folder once Docker Desktop is allowed to read it (tested: 553 TEI files and 96 figure folders, read-only); on Linux, a shallow clone of HistoryAtState/frus. The published image is public. The rest stays for S8.
+
 - **Where the TEI files come from.** Docker Desktop cannot mount FRUS Explorer's own folder (`~/Library/Containers/bottsywattsy.FRUS-Explorer/...`): macOS refuses it ("operation not permitted") because it keeps other apps out of an app's container. So `compose.yaml` mounts `./tei` by default, with `FRUS_TEI_DIR` to override. The install guide (S7) and the reader (S8) need one of these:
   - a clone of HistoryAtState/frus, whose `volumes/` folder holds TEI XML byte-identical to the app's for all 553 volumes. That worked in session 5 with the owner's real export. It lacks the figure images: the app saves them in 96 `<volume>.figures/` folders, fetched from static.history.state.gov (upstream `DownloadManager.swift`), so the reader needs another source for those;
-  - the app's folder, if the owner grants Docker Desktop access to other apps' data in System Settings. This is untested;
+  - the app's folder, once the owner grants Docker Desktop access to other apps' data in System Settings. Tested on 3 October: it works, figures included;
   - the server fetching each volume from GitHub on first open, with a local cache. SPEC allows this in Import mode ("or fetched from GitHub without indexing"); it is new work, and an option for S8.
 
   Whatever the source, TEI can drift from the index: the app and a clone both follow HistoryAtState's `master`, so a volume corrected after the Mac indexed it differs from what the index holds. SPEC's import step 5, comparing each document's hashes with its TEI, catches that; it waits for S6.
-- **The published image's visibility** is still an open question in the plan. A public repository suggests a public image, which pulls without signing in.
+- **The published image's visibility:** public, decided on 3 October.
 
 ## Before the S3, S4 and S6 prompts
 

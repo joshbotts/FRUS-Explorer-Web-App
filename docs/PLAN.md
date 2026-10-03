@@ -32,7 +32,7 @@ The owner makes these one-time settings before session 0. None takes more than a
 - [ ] Select two repositories when starting each session: `FRUS-Explorer-Web-App`, where the work lands, and `FRUS-Explorer`, for the upstream pull requests phase 0 needs. A session's repositories are fixed when it starts.
 - [ ] Confirm the Claude GitHub App is installed on both, from [claude.ai/connect-github](https://claude.ai/connect-github).
 - [ ] After S0's first CI run, protect `main` on the web repository: changes arrive by pull request, with no required approvals, since you merge your own, and the CI job is a required check. GitHub offers a check only after it has run once. `FRUS-Explorer` is public, so CI can fetch it as a submodule without a token.
-- [ ] Before S7, let GitHub Actions publish packages. `image.yml` asks for `packages: write`; if your account restricts workflow permissions, allow it.
+- [x] Before S7, let GitHub Actions publish packages. `image.yml` asks for `packages: write`; if your account restricts workflow permissions, allow it.
 
 **Cloud environment** (the cloud environment menu in the session's title bar, then Edit)
 
@@ -109,7 +109,7 @@ These rules go into `CLAUDE.md` in session 0:
 | Workflow | Runs on | Does |
 | --- | --- | --- |
 | `ci.yml` | Every pull request | Swift build and test in `swift:6.4-noble`; SPA lint, test and build; the image build and a Compose smoke test |
-| `image.yml` | `main` | Builds amd64 and arm64 images and pushes them to GitHub Container Registry, tagged with the commit and `edge` |
+| `image.yml` | `main` | Builds amd64 and arm64 images natively and pushes them to GitHub Container Registry under the commit's tag; after a Compose smoke test on both, moves `edge` to that build |
 
 ## Session plan
 
@@ -152,7 +152,7 @@ After phase 1, sessions follow the spec's phases 2–5. Phase 2 adds user data a
 
 ## Docker Compose install
 
-Phase 1 ships as one image and one Compose file. Everything the server keeps lives in a named volume at `/data`, and a folder of TEI volumes is mounted read-only. Session 5 built both; the repository's `compose.yaml` is the working version of the sketch below.
+Phase 1 ships as one image and one Compose file. Everything the server keeps lives in a named volume at `/data`, and a folder of TEI volumes is mounted read-only. Session 5 built both; the repository's `compose.yaml` is the working version of the sketch below. It adds hardening and settings, and puts Gotenberg behind a `pdf` profile, off by default.
 
 ```yaml
 services:
@@ -181,17 +181,17 @@ volumes:
 
 Importing a Mac export takes three steps:
 
-1. On the Mac, use Settings ▸ Data & Recovery ▸ Export Research Database…. The full corpus is about 9 GB.
+1. On the Mac, use Settings ▸ Data & Recovery ▸ Export Research Database…. The full corpus is about 2.8 GB, measured on 3 October.
 2. Copy the file into the volume with `docker compose cp <export file> frus:/data/import/`.
 3. The server runs the Import checks, moves the file into place and opens it read-only. `/readyz` reports each step.
 
 - **`/data` stays a named volume.** On a Mac, Docker runs Linux in a virtual machine, and a folder shared from macOS is not a local filesystem to it, while SQLite's WAL needs one. Only the TEI folder is a bind mount, and it is read-only.
-- **The TEI folder cannot be FRUS Explorer's own.** Session 5 found that Docker Desktop is refused the app's folder under `~/Library/Containers`, because macOS keeps other apps out of an app's container. A clone of HistoryAtState/frus works: its `volumes/` folder holds the same TEI XML the app downloads, though not the figure images the app fetches from static.history.state.gov. Before session 7, the owner chooses what the install guide recommends (`docs/prep/README.md`).
+- **FRUS Explorer's TEI folder needs Docker Desktop's permission.** Session 5 found that Docker Desktop is refused the app's folder under `~/Library/Containers`, because macOS keeps other apps out of an app's container. A clone of HistoryAtState/frus works: its `volumes/` folder holds the same TEI XML the app downloads, though not the figure images the app fetches from static.history.state.gov. Allowing Docker Desktop to read FRUS Explorer's data in System Settings fixes this, and gives the figure images too; `docs/INSTALL.md` uses that on a Mac and the clone on Linux.
 - **The port listens on 127.0.0.1**, so nothing else on the network can reach it. Sharing beyond localhost waits for phase 3's local accounts, behind a TLS reverse proxy such as Caddy.
 - **Upgrades** are `docker compose pull` and then `docker compose up -d`. The index already sits in the volume, so a restart copies nothing. The server refuses an index whose version it does not support; export again from the Mac. `edge` tracks `main`; from the first release, tags follow the app build, such as `:48`.
 - **Backups** start in phase 2, when user data exists: a nightly SQLite backup of `app.db` to `/data/backups`.
-- **Disk:** a full export needs about 9.3 GB in the volume, and another 9.3 GB while an import is checked, so allow 25 GB free.
-- **Memory:** the spec estimates 4 GB for serving, so give Docker's virtual machine at least that on a Mac.
+- **Disk:** a full export is about 2.8 GB. A re-import holds the export, its checked copy, the live index and the previous one, so allow about 15 GB free.
+- **Memory:** importing and serving the full corpus used about 130 MB in session 7's rehearsal, well under the spec's 4 GB estimate. Search, from session 8, will need more.
 - **Apple silicon:** the published image includes arm64, so it runs natively.
 
 There is no hosting cost; the install runs on hardware the owner already has.
@@ -250,7 +250,7 @@ Eight steps need the owner, because a cloud session has no Mac and no Xcode. Ses
 | Golden files | After S4 | Download the three fixture volumes in the pinned build of the Mac app, export the research database, run the harness's summary script on the export and its render and query tool on the Mac, and commit `fixtures/golden/` | To do |
 | Mac check 3 | After S6 | The same as Mac check 1, for the indexer and search guards | To do |
 | Mac trial | After S7 | Install from the published image by following `docs/INSTALL.md`, and report anything the guide gets wrong | To do |
-| Mac export | Before S10 | Export the full research database from the pinned build, about 9 GB, for the Compose install to import | To do |
+| Mac export | Before S10 | Export the full research database from the pinned build, about 2.8 GB, for the Compose install to import | To do |
 | Phase 1 sign-off | After S10 | Use the site, and confirm checks 3–5 on the real export | To do |
 
 The Mac checks are cheap on purpose. Every Linux change to a shared file is a `#if canImport` guard, so the Apple build should compile exactly what it compiled before; the check proves it. That holds for S1; S3 and S6 also need declarations moved out of Apple-only files, as `docs/prep/README.md` records.
@@ -264,7 +264,7 @@ The largest risk is session 6. The indexer is one 12,724-line file inside the ap
 | The indexer is tied to the app | `IndexingPipeline.swift` uses five Apple modules and SwiftData, with 35 logging lines alone. The TEI directory adds WebKit, SwiftUI and UIKit in its view files, and its model files need declarations that live in those view files. A dry run compiled the indexer and search on Linux with 48 app files | Compile the app's files by name from the submodule; move declarations out of Apple-only files and guard each Apple-only use upstream, as listed in `docs/prep/`; budget S6 as two sessions |
 | Mac checks are the bottleneck | Three upstream pull requests wait on the owner's Xcode run | Alternate the tracks, and keep each upstream change to guards only |
 | Foundation differs on Linux | XML parsing, regular expressions, dates and Unicode can differ without an error | Golden files from the same code on macOS, and checks 2–4 before feature work |
-| Session disk | About 30 GB was free here, shared by the Swift image, build caches and fixtures; a 9 GB export does not fit comfortably | Fixtures only in sessions; the full corpus runs on the owner's Mac, in S10 |
+| Session disk | About 30 GB was free here, shared by the Swift image, build caches and fixtures; the full export is 2.8 GB | Fixtures only in sessions; the full corpus runs on the owner's Mac, in S10 |
 | Upstream churn | `FRUS-Explorer`'s index version went from 47 to 65 in the 30 days to 2 October, with about eight pull requests merged a day until its public release | Hold the pin until the release where possible, and move it in its own pull request; the server refuses an export whose index version it does not support |
 | arm64 builds | Most Macs run Apple silicon, and building Swift for arm64 under emulation in CI is slow | Use GitHub's native arm64 runner, free for public repositories; otherwise build arm64 only on `main`, or locally on the Mac |
 | SQLite on a Mac | Docker on macOS runs Linux in a virtual machine, and a folder shared from macOS is not a local filesystem to SQLite | Keep `/data` in a named volume, and bind-mount only the read-only TEI folder |
@@ -273,11 +273,12 @@ The largest risk is session 6. The indexer is one 12,724-line file inside the ap
 Open questions for the owner:
 
 - Which container runtime does your organisation allow on Macs?
-- Should the published image stay private to the repository, or be public so anyone can pull it without signing in?
 
 Answered on 3 October:
 
 - The web repository goes public, which brings branch protection and native arm64 runners on GitHub Free.
+- The published image is public too, so it pulls without signing in.
+- TEI volumes: on a Mac, FRUS Explorer's own folder, once Docker Desktop is allowed to read it; on Linux, a shallow clone of HistoryAtState/frus. `docs/INSTALL.md` gives both.
 - Sessions do not open pull requests on `FRUS-Explorer` for now. The core track (S1, S3, S6) waits, and the server track (S2, S5, S7) goes ahead. When S1 runs, it builds and tests the six kits against its upstream pull request's head in the session and records the result in `docs/DEVLOG.md`; after the owner's Mac check and merge, a separate pull request moves the pin and adds the kits to CI.
 - A session's `docs/DEVLOG.md` entry is the record that it is done (rule 3).
 
