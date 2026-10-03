@@ -18,7 +18,11 @@ struct ServerComponents: Sendable {
 
     static func make(configuration: ServerConfiguration, logger: Logger) async throws -> ServerComponents {
         let files = DataDirectory(root: configuration.dataDirectory)
-        try files.prepare()
+        do {
+            try files.prepare()
+        } catch {
+            throw DataDirectoryError(path: files.root.path, underlying: error)
+        }
         let state = ServerState(configuration: configuration) { logger.info("\($0)") }
         // The watcher opens it once the server is listening, so /healthz answers at once.
         await state.prepareToOpenExistingIndex(files: files)
@@ -61,6 +65,17 @@ func buildRouter(state: ServerState) -> Router<BasicRequestContext> {
     }
     router.get("/api/v1/status") { _, _ in await state.status() }
     return router
+}
+
+/// The data directory exists but the server cannot write to it, as with a bind mount owned by
+/// another user.
+struct DataDirectoryError: Error, CustomStringConvertible {
+    let path: String
+    let underlying: any Error
+
+    var description: String {
+        "cannot write to \(path) (\(underlying.localizedDescription)). It must be writable by the server's user, UID \(getuid()). A named Docker volume is; for a host folder, run: chown -R \(getuid()):\(getgid()) <folder>"
+    }
 }
 
 struct Health: ResponseEncodable {

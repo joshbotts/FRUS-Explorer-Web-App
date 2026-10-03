@@ -15,7 +15,7 @@ Work starts in `joshbotts/FRUS-Explorer-Web-App` and ships a Docker Compose inst
 
 What this changes from the previous plan:
 
-- **Phase 1 ships as a Compose install.** Import mode serves a Mac export from the `/data` volume, and the reader uses the Mac app's own TEI files, mounted read-only.
+- **Phase 1 ships as a Compose install.** Import mode serves a Mac export from the `/data` volume, and the reader uses TEI files mounted read-only.
 - **Sign-in waits for phase 3.** Phase 1 listens on 127.0.0.1 with no accounts, as the spec's phase 1 does. Local accounts arrive with multi-user support.
 - **No cloud account is needed before phase 6.** CI publishes the image with the repository's own token, so there is no AWS setup, Terraform or NAT gateway until then.
 
@@ -144,7 +144,7 @@ S0 comes first, and the core track starts after it. The tracks join at session 8
 | S7 | Server | `image.yml`, publishing amd64 and arm64 images, and `docs/INSTALL.md` for a Mac and a Linux host | The owner installs from the published image by following the guide |
 | S8 | Both | Search, browse and document-render endpoints over the imported index | Check 3 passes through the API |
 | S9 | Both | The SPA for phase 1: Browse, Search, the reader and Cite | Playwright on Chromium searches, opens a document and copies a citation |
-| S10 | Both | The owner's real export imported into Compose, with the Mac app's TEI folder mounted read-only | Checks 3–5 pass on the real export: phase 1's exit |
+| S10 | Both | The owner's real export imported into Compose, with a TEI folder mounted read-only, as chosen before S7 | Checks 3–5 pass on the real export: phase 1's exit |
 
 Before writing the S1, S2, S3 and S4 prompts, read `docs/prep/README.md`. A dry run on 3 October found what each of those sessions needs beyond this table, and recorded the Linux changes for S1, S3 and S6.
 
@@ -152,7 +152,7 @@ After phase 1, sessions follow the spec's phases 2–5. Phase 2 adds user data a
 
 ## Docker Compose install
 
-Phase 1 ships as one image and one Compose file. Everything the server keeps lives in a named volume at `/data`, and the Mac app's TEI folder is mounted read-only.
+Phase 1 ships as one image and one Compose file. Everything the server keeps lives in a named volume at `/data`, and a folder of TEI volumes is mounted read-only. Session 5 built both; the repository's `compose.yaml` is the working version of the sketch below.
 
 ```yaml
 services:
@@ -162,8 +162,8 @@ services:
       - "127.0.0.1:8080:8080"
     volumes:
       - frus-data:/data
-      # The Mac app's own TEI files, read-only (macOS path shown)
-      - "${HOME}/Library/Containers/bottsywattsy.FRUS-Explorer/Data/Library/Application Support/FRUSExplorer/Volumes:/data/volumes:ro"
+      # TEI volumes, read-only: ./tei by default, or FRUS_TEI_DIR
+      - "${FRUS_TEI_DIR:-./tei}:/data/volumes:ro"
     environment:
       FRUS_MODE: import
       FRUS_AUTH: none
@@ -186,6 +186,7 @@ Importing a Mac export takes three steps:
 3. The server runs the Import checks, moves the file into place and opens it read-only. `/readyz` reports each step.
 
 - **`/data` stays a named volume.** On a Mac, Docker runs Linux in a virtual machine, and a folder shared from macOS is not a local filesystem to it, while SQLite's WAL needs one. Only the TEI folder is a bind mount, and it is read-only.
+- **The TEI folder cannot be FRUS Explorer's own.** Session 5 found that Docker Desktop is refused the app's folder under `~/Library/Containers`, because macOS keeps other apps out of an app's container. A clone of HistoryAtState/frus works: its `volumes/` folder holds the same TEI XML the app downloads, though not the figure images the app fetches from static.history.state.gov. Before session 7, the owner chooses what the install guide recommends (`docs/prep/README.md`).
 - **The port listens on 127.0.0.1**, so nothing else on the network can reach it. Sharing beyond localhost waits for phase 3's local accounts, behind a TLS reverse proxy such as Caddy.
 - **Upgrades** are `docker compose pull` and then `docker compose up -d`. The index already sits in the volume, so a restart copies nothing. The server refuses an index whose version it does not support; export again from the Mac. `edge` tracks `main`; from the first release, tags follow the app build, such as `:48`.
 - **Backups** start in phase 2, when user data exists: a nightly SQLite backup of `app.db` to `/data/backups`.

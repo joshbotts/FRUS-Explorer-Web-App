@@ -14,7 +14,8 @@ struct WatchFixture {
     let coordinator: ImportCoordinator
 
     init(store: ((DataDirectory) -> any FileStore)? = nil, retryDelay: Duration = .seconds(60),
-         removeFile: (@Sendable (URL) throws -> Void)? = nil) throws {
+         removeFile: (@Sendable (URL) throws -> Void)? = nil,
+         isReadable: (@Sendable (String) -> Bool)? = nil) throws {
         directory = try TemporaryDirectory()
         files = DataDirectory(root: directory.url.appendingPathComponent("data"))
         try files.prepare()
@@ -24,7 +25,8 @@ struct WatchFixture {
         coordinator = ImportCoordinator(
             files: used, importer: IndexImporter(files: used, writer: LocalIndexWriter(files: used)),
             state: state, jobs: jobs, retryDelay: retryDelay,
-            removeFile: removeFile ?? { try FileManager.default.removeItem(at: $0) })
+            removeFile: removeFile ?? { try FileManager.default.removeItem(at: $0) },
+            isReadable: isReadable ?? { FileManager.default.isReadableFile(atPath: $0) })
     }
 
     /// Writes an export into the drop zone with a modification time of its own.
@@ -146,6 +148,20 @@ struct WatchFixture {
         #expect(await fixture.state.readiness().ready)
     }
 
+    @Test func anUnreadableFileIsReportedAndTriedAgain() async throws {
+        let readable = Switch(false)
+        let fixture = try WatchFixture(retryDelay: .zero, isReadable: { _ in readable.value })
+        _ = try fixture.drop(SyntheticExport())
+        #expect(await fixture.scanUntilImported() == nil)
+        let readiness = await fixture.state.readiness()
+        #expect(readiness.detail.contains("cannot read export.sqlite") && readiness.detail.contains("docker compose cp -a"))
+        #expect(!readiness.detail.contains("finish copying"), "it is not reported as still arriving")
+
+        readable.value = true  // the owner fixes its permissions
+        #expect(await fixture.scanUntilImported() != nil)
+        #expect(await fixture.state.readiness().ready)
+    }
+
     @Test func readinessNamesAFileStillBeingCopied() async throws {
         let fixture = try WatchFixture()
         let complete = fixture.directory.url.appendingPathComponent("complete.sqlite")
@@ -180,5 +196,18 @@ struct WatchFixture {
         let readiness = await fixture.state.readiness()
         #expect(readiness.step == .indexVersionMismatch)
         #expect(readiness.detail.contains("index version 64; this server serves index version 65"))
+    }
+}
+
+/// A flag a test flips while the code under test reads it.
+final class Switch: @unchecked Sendable {
+    private let lock = NSLock()
+    private var current: Bool
+
+    init(_ value: Bool) { current = value }
+
+    var value: Bool {
+        get { lock.withLock { current } }
+        set { lock.withLock { current = newValue } }
     }
 }

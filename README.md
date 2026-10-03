@@ -2,7 +2,7 @@
 
 FRUS Explorer Light is a self-hosted web edition of [FRUS Explorer](https://github.com/joshbotts/FRUS-Explorer), the iOS, iPadOS and macOS app for researching the *Foreign Relations of the United States* series. One container serves the corpus, its full-text index, and each researcher's notes and highlights to any modern browser.
 
-**Status:** early development. Session 0 built the scaffold: the pinned `FRUS-Explorer` submodule, the build scripts and CI. Session 2 added the server and Import mode, which checks a Mac export copied into `/data/import`, installs it and serves it read-only. Session 5, the image and a Compose smoke test, is next; see [`docs/PLAN.md`](docs/PLAN.md) and [`docs/DEVLOG.md`](docs/DEVLOG.md).
+**Status:** early development. Session 0 built the scaffold: the pinned `FRUS-Explorer` submodule, the build scripts and CI. Session 2 added the server and Import mode, which checks a Mac export copied into `/data/import`, installs it and serves it read-only. Session 5 added the image and `compose.yaml`, with a Compose smoke test in CI. Session 7, the published image and the install guide, is next; see [`docs/PLAN.md`](docs/PLAN.md) and [`docs/DEVLOG.md`](docs/DEVLOG.md).
 
 ## Goals
 
@@ -25,7 +25,7 @@ flowchart LR
     S --- U[(app.db<br/>users and their data)]
     S -.-> P[Gotenberg<br/>optional PDF]
   end
-  T[/Mac app's TEI folder<br/>mounted read-only/] --> S
+  T[/TEI volumes folder<br/>mounted read-only/] --> S
   S -.-> X[GitHub, NARA, Zotero]
 ```
 
@@ -53,7 +53,7 @@ The diagram shows the Docker Compose install that ships first, with both databas
 
 ## Deployment
 
-- **Docker Compose, first:** one image and one Compose file on a Mac or a Linux host, listening on 127.0.0.1. Everything the server keeps lives in a named volume at `/data`, because SQLite's write-ahead log needs a local filesystem, and on a Mac a folder shared from macOS into Docker's virtual machine is not one. The Mac app's TEI folder is mounted read-only, and a Mac export is imported with `docker compose cp`. CI publishes the image to GitHub Container Registry for amd64 and arm64.
+- **Docker Compose, first:** one image and one Compose file on a Mac or a Linux host, listening on 127.0.0.1. Everything the server keeps lives in a named volume at `/data`, because SQLite's write-ahead log needs a local filesystem, and on a Mac a folder shared from macOS into Docker's virtual machine is not one. A folder of TEI volumes is mounted read-only, and a Mac export is imported with `docker compose cp`. CI publishes the image to GitHub Container Registry for amd64 and arm64.
 - **AWS, in phase 6:** one ECS task on Fargate, in private subnets behind an Application Load Balancer that handles sign-in. At start the task copies a read-only snapshot of the index from S3 and opens it with SQLite's `immutable=1`. User data stays in SQLite, replicated to S3 by Litestream. A deploy stops the old task before starting the new one, trading a short outage for a single writer and no database service. The estimate is about $155–170 a month.
 
 ## Documents

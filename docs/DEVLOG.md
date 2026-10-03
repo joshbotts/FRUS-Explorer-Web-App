@@ -2,6 +2,56 @@
 
 One entry per session, newest first.
 
+## Session 5: the image and a Compose smoke test
+
+3 October 2026 · branch `claude/s5-image-compose`
+
+**Delivered**
+
+- **`docker/Dockerfile`.** Two stages:
+  - The build stage makes a release build in `swift:6.4-noble` with the Swift runtime linked in (`--static-swift-stdlib`). It uses SwiftPM's native build system, which SwiftPM marks deprecated, because with Swift 6.4's default (swiftbuild) that link leaves Foundation's CoreFoundation and ICU symbols unresolved. Explicit linker flags did not help. Revisit with the next Swift release.
+  - Its SwiftPM cache mount, which speeds up local rebuilds, is one per architecture and locked, so concurrent or two-platform builds cannot share a build database. `.dockerignore` keeps docs, scripts, CI and the submodule's `Planning`, `Docs` and `Vendor` folders out of the build context.
+  - The runtime stage is Ubuntu 24.04 with `libsqlite3-0` (3.45.1, FTS5), `libstdc++6`, CA certificates and `tini`. The server runs as UID 10001, and `/data` belongs to that user, so a new named volume starts with that ownership. The image is 251 MB.
+  - A `HEALTHCHECK` runs `frus-light --check-health`, which asks the server's own `/healthz` over a socket, since the image has no curl. It tries 127.0.0.1, then ::1 when nothing listens on IPv4, and prints the status line or the error for Docker's health log. A listener that never answers costs one 3-second timeout, inside Docker's 5 seconds, and a reset connection cannot kill it with SIGPIPE.
+  - A server that cannot write its data directory, such as a host folder owned by another user, now says it must be writable by its UID.
+  - The encoder (phase 4), the web client (S9), `FRUSExplorer/Resources` (S8) and `rclone` (runtime options) arrive with the work that needs them.
+- **`compose.yaml`.** The plan's file, with these additions:
+  - `read_only: true` and a `/tmp` tmpfs, as SPEC's Security section asks;
+  - every Linux capability dropped, and `no-new-privileges`;
+  - `FRUS_IMAGE`, to run another image;
+  - `FRUS_TEI_DIR`, defaulting to `./tei`;
+  - `FRUS_HOST_PORT`, defaulting to 8080.
+
+  It leaves out SPEC's `FRUS_ENCODER` (phase 4) and the secret key file, since phase 1 stores no keys. Until S7 publishes the image, its header shows how to build it under the default name. SPEC's Licensing asks for a `NOTICE` in the image; the repository has none yet, so only `LICENSE` ships.
+- **`scripts/synthetic-export`.** It writes a small valid export from the real schema with the host's `sqlite3`, reading the index and FTS schema versions from `Compatibility.swift`.
+- **`scripts/compose-smoke`.** It starts the Compose server and checks that:
+  - it runs as UID 10001;
+  - the root filesystem and the TEI folder are read-only, tested as root so that the mounts are tested rather than the server user's permissions, while `/data` and `/tmp` are writable;
+  - the port is published on 127.0.0.1 only;
+  - `/readyz` answers 503 before an import;
+  - after `docker compose cp` of a synthetic export, `/readyz` answers 200 and the status reports 3 documents;
+  - the container reports healthy;
+  - after a restart, the index is still served.
+
+  It runs the same locally and in CI.
+- **`ci.yml`.** A `compose` job builds the image with Buildx, caching layers between runs, and runs the smoke test.
+
+**Import mode, one addition.** `docker compose cp` keeps a file's mode, so an export saved 0600 arrives unreadable to UID 10001. It used to sit in `/readyz` as "still copying" forever. Now `/readyz` says the server cannot read it, names the fix (`docker compose cp -a`, or a `chmod`), and the file is tried again every minute.
+
+**Results.** The smoke test passed locally against the arm64 image, and in review against an amd64 build made under emulation. The Swift targets pass on Linux and macOS with no warnings: FRUSLightCoreTests 37, and FRUSLightServerTests 9, with a test of the health check against a live server. The owner's real 2.83 GB export, copied in through Compose with `FRUS_TEI_DIR` pointing at the HistoryAtState/frus clone, was ready 37 seconds after the copy began, with all 744 TEI files visible read-only and the container healthy.
+
+**A finding that changes the plan.** Docker Desktop cannot mount FRUS Explorer's own TEI folder. macOS refuses it with "operation not permitted", because it keeps other apps out of an app's container, so the plan's Compose sketch failed at `docker compose up`. `compose.yaml` now mounts `./tei` by default; nothing reads TEI files until the reader in S8. `docs/PLAN.md` (and its shared copy, rev 50) and `docs/prep/README.md` record the options for the owner to choose before S7:
+- a HistoryAtState/frus clone, with the same TEI XML but not the 96 folders of figure images the app downloads;
+- the app's folder, once Docker Desktop is allowed access to other apps' data;
+- fetching from GitHub on first open, which SPEC allows.
+
+**Notes**
+
+- The `compose` check is not yet required on `main`; the owner can add it once it has run.
+- The health check tries 127.0.0.1, then ::1, so a server bound to either answers.
+
+**Next: S7.** The published image and `docs/INSTALL.md`. It needs two decisions from the owner: where TEI files come from, and whether the image is public. S4, the parity harness, can run first.
+
 ## Session 2: the server and Import mode
 
 3 October 2026 · branch `claude/s2-server-import`

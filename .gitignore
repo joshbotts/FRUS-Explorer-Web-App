@@ -4,3 +4,6 @@
 # The web app, from session 9
 node_modules/
 .DS_Store
+# compose.yaml's default TEI folder and its settings
+/tei/
+.env

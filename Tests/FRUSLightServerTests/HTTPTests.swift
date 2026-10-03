@@ -176,6 +176,18 @@ func decode<T: Decodable>(_ type: T.Type, _ response: TestResponse) throws -> T 
         }
     }
 
+    /// `frus-light --check-health`, the image's HEALTHCHECK, against a server on a real port.
+    @Test func healthCheckAsksTheServersOwnPort() async throws {
+        let fixture = try await ServerFixture()
+        let app = Application(router: buildRouter(state: fixture.state), configuration: .init(address: .hostname("127.0.0.1", port: 0)))
+        try await app.test(.live) { client in
+            let port = try #require(client.port)
+            #expect(HealthCheck.isHealthy(port: port), "\(HealthCheck.probe(port: port))")
+            #expect(!HealthCheck.isHealthy(port: port, path: "/readyz"), "/readyz is 503 before an import")
+        }
+        #expect(!HealthCheck.isHealthy(port: 1, timeout: 1), "nothing listens on port 1")
+    }
+
     @Test func serverStartsFromConfiguration() async throws {
         let directory = try TemporaryDirectory()
         let config = ServerConfiguration(dataDirectory: directory.url.appendingPathComponent("data"), port: 0)
