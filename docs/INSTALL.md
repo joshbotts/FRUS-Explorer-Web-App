@@ -34,7 +34,7 @@ The server mounts a folder of TEI volumes read-only. Settings go in a file named
 
 **On a Mac with FRUS Explorer,** use the app's own folder, which holds the TEI files and the figure images:
 
-1. Allow Docker Desktop to read FRUS Explorer's data. macOS keeps other apps out of an app's folder: allow it when macOS asks whether Docker may access data from other apps, or turn it on later under **System Settings ▸ Privacy & Security**. Without it, `docker compose up -d` fails with "operation not permitted" on the `Volumes` path.
+1. Let Docker Desktop read FRUS Explorer's data, which macOS keeps from other apps. In **System Settings ▸ Privacy & Security ▸ Files & Folders** (macOS 27), find **Docker** and turn on **FRUS Explorer** beneath it. Docker is listed there only after it has tried to read the folder. If it is missing, carry on to step 3. If macOS asks, allow it. If `docker compose up -d` fails with "operation not permitted" on the `Volumes` path, turn the setting on here and run the command again.
 2. Write the path into `.env`:
 
 ```bash
