@@ -1,0 +1,50 @@
+# FRUS Explorer Light CI, on every pull request and on main.
+# Swift build and test in swift:6.4-noble with libsqlite3-dev, the way scripts/swift runs them.
+# Session 5 adds the image build and a Compose smoke test; session 9 adds the web app.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A new push to a pull request cancels its older run; every run on main completes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  swift:
+    name: swift
+    runs-on: ubuntu-24.04
+    container: swift:6.4-noble
+    timeout-minutes: 30
+    steps:
+      - name: Install SQLite headers
+        run: apt-get update -qq && apt-get install -y -qq --no-install-recommends libsqlite3-dev
+
+      # The submodule is public, and checked out whole: a SourceNoteKit test reads an app resource.
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - name: Build
+        run: swift build --build-tests --scratch-path .build/linux
+
+      - name: Test
+        run: |
+          swift test --skip-build --scratch-path .build/linux 2>&1 | tee test.log
+          if grep -E '(Test|Suite) .* skipped' test.log; then
+            echo "::error::A test was skipped. Every test at the pin must run."
+            exit 1
+          fi
+
+      - name: Test count per target
+        run: swift test list --skip-build --scratch-path .build/linux | cut -d. -f1 | sort | uniq -c

@@ -9,7 +9,7 @@ Session 0 is ready to start. `docs/PLAN.md`'s S0 row and kickoff prompt now carr
 | Claim | Result |
 | --- | --- |
 | S0's three kits build and pass on Linux | Yes, in `swift:6.4-noble` on arm64: SourceNoteKit 292 tests, CrossRefKit 10, GeneratorKit 7, no warnings. The plan's 219 was the count on 22 September |
-| FTS5 works with the app's own DDL | Yes, on SQLite 3.45.1. `FTS5Types.swift` compiles on its own, since it imports only Foundation. `frus_documents` is an external-content table over `document_cache`, and prefix terms are not stemmed: `negoti*` matches "negotiating", `negotiat*` does not |
+| FTS5 works with the app's own DDL | Yes, on SQLite 3.45.1. `FTS5Types.swift` compiles on its own, since it imports only Foundation. `frus_documents` is an external-content table over `document_cache`. The porter tokenizer stems a prefix term as if it were a whole word: `negotiating*` and `negoti*` match "negotiating", but `negotiat*` stays `negotiat*`, which no stored term begins with |
 | Hummingbird 2 builds | Yes: 2.27.0 with Swift 6.4 on Linux. It resolves swift-crypto 5.0.0 |
 | The owner's export matches the pin | Yes. `~/Documents/frus-index.sqlite`, exported on 3 October from build 49: index version 65, FTS schema 4, 553 volumes and 316,768 documents, the whole manifest |
 | The fixtures match the Mac's copies | Yes. HistoryAtState/frus commit `8e5da08` and the Mac app's downloads are byte-identical, for the three fixtures and for all 553 volumes. The app downloads from `master` and saves the bytes unchanged |
@@ -25,6 +25,7 @@ Session 0 is ready to start. `docs/PLAN.md`'s S0 row and kickoff prompt now carr
   - TEIHeaderKit has no test target. Its 22 tests live in ManifestGeneratorTests, which needs FoundationNetworking and a stand-in for `URLSession.bytes(for:)`. The patch does both, and all 60 of those tests pass.
 - **Dependencies live in the web repository.** Upstream's `Package.swift` declares none, so swift-crypto and `CSQLite` are declared Linux-only in this repository's `Package.swift`. Use a swift-crypto range that admits Hummingbird's 5.x, such as `"3.12.3"..<"6.0.0"`.
 - **The owner answers the open question on pull requests to `FRUS-Explorer`.** Upstream already has a `Mac` label for rule 4.
+- **Rule 3 has nothing to tick.** It ends each session with "its task ticked in `docs/PLAN.md`", but the session table has no checkbox or status column, so S0 ticked nothing. Decide where a session records that it is done: a status column in the session table, or the DEVLOG alone. Any change to `PLAN.md` also goes into its shared copy.
 
 ## Before the S2 prompt
 

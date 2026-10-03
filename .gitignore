@@ -1,0 +1,6 @@
+# SwiftPM: .build/linux from scripts/swift, .build from a native Mac build
+.build/
+.swiftpm/
+# The web app, from session 9
+node_modules/
+.DS_Store

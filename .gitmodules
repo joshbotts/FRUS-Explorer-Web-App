@@ -1,0 +1,3 @@
+[submodule "upstream/FRUS-Explorer"]
+	path = upstream/FRUS-Explorer
+	url = https://github.com/joshbotts/FRUS-Explorer.git
