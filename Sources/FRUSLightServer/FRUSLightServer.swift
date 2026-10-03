@@ -12,6 +12,14 @@ struct FRUSLightServer {
             print("frus-light \(FRUSLightVersion.string)")
             return
         }
+        if CommandLine.arguments.contains("--check-health") {
+            // Docker's HEALTHCHECK: the process answers on its own port.
+            let raw = ProcessInfo.processInfo.environment["FRUS_PORT"]?.trimmingCharacters(in: .whitespaces)
+            let port = raw.flatMap(Int.init) ?? 8080
+            let status = HealthCheck.probe(port: port)
+            print(status)
+            exit(status.hasPrefix("HTTP/1.1 200") ? 0 : 1)
+        }
         let configuration: ServerConfiguration
         do {
             configuration = try ServerConfiguration.fromEnvironment()

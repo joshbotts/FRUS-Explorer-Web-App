@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# FRUS Explorer Light: the Compose smoke test (session 5).
+# Starts compose.yaml's server, imports a synthetic export with docker compose cp, and waits for
+# /readyz to answer 200; then checks the user, the read-only root, the health check and a restart.
+#   scripts/compose-smoke                       builds the image as frus-light:smoke first
+#   FRUS_IMAGE=<image> scripts/compose-smoke    tests an image already built
+# It uses its own Compose project and host port, and removes its containers and volume afterwards.
+set -euo pipefail
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$root"
+if ! command -v docker >/dev/null 2>&1 && [ -x "$HOME/.docker/bin/docker" ]; then
+  PATH="$HOME/.docker/bin:$PATH"
+fi
+
+export COMPOSE_PROJECT_NAME="frus-smoke-$$"
+export FRUS_HOST_PORT="${FRUS_HOST_PORT:-18080}"
+export FRUS_TEI_DIR="$root/fixtures/tei"
+if [ -z "${FRUS_IMAGE:-}" ]; then
+  export FRUS_IMAGE=frus-light:smoke
+  echo "== building $FRUS_IMAGE"
+  docker build -f docker/Dockerfile -t "$FRUS_IMAGE" .
+fi
+base="http://127.0.0.1:$FRUS_HOST_PORT"
+work=$(mktemp -d)
+passed=""
+
+cleanup() {
+  if [ -z "$passed" ]; then
+    echo "== the smoke test failed; the server's log:"
+    docker compose logs --no-color frus 2>&1 | tail -50 || true
+  fi
+  docker compose down --volumes --remove-orphans >/dev/null 2>&1 || true
+  rm -rf "$work"
+}
+trap cleanup EXIT
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+# Waits up to $2 seconds for $1 to answer 200, printing each new readiness step it sees.
+wait_for_200() {
+  local url=$1 seconds=$2 last="" code body step
+  for _ in $(seq 1 $((seconds * 4))); do
+    body=$(curl -s --max-time 5 -w '\n%{http_code}' "$url" 2>/dev/null || true)
+    code=${body##*$'\n'}
+    step=$(printf '%s' "${body%$'\n'*}" | sed -nE 's/.*"step":"([a-z_]+)".*/\1/p')
+    if [ -n "$step" ] && [ "$step" != "$last" ]; then echo "   $code $step"; last=$step; fi
+    [ "$code" = 200 ] && return 0
+    sleep 0.25
+  done
+  return 1
+}
+
+echo "== synthetic export"
+scripts/synthetic-export "$work/export.sqlite"
+
+echo "== docker compose up (image $FRUS_IMAGE)"
+docker compose up -d frus   # the optional pdf service needs no test
+wait_for_200 "$base/healthz" 30 || fail "/healthz did not answer 200"
+
+echo "== user, filesystem and network"
+container=$(docker compose ps -q frus)
+uid=$(docker compose exec -T frus id -u)
+[ "$uid" = 10001 ] || fail "the server runs as UID $uid, not 10001"
+# As root, so the checks test the mounts rather than the server user's permissions.
+[ "$(docker inspect --format '{{.HostConfig.ReadonlyRootfs}}' "$container")" = true ] || fail "the root filesystem is not read-only"
+if docker compose exec -T -u 0 frus touch /probe 2>/dev/null; then fail "root can write to the root filesystem"; fi
+docker compose exec -T frus sh -c 'touch /data/probe && rm /data/probe && touch /tmp/probe' || fail "/data or /tmp is not writable"
+docker compose exec -T frus test -r /data/volumes/frus1894Nicaragua.xml || fail "the TEI folder is not mounted"
+if docker compose exec -T -u 0 frus touch /data/volumes/probe 2>/dev/null; then fail "the TEI folder is writable"; fi
+published=$(docker compose port frus 8080)
+[ "${published%:*}" = 127.0.0.1 ] || fail "the port is published on $published, not 127.0.0.1"
+echo "   UID 10001; root read-only; /data and /tmp writable; TEI read-only; port on 127.0.0.1"
+
+echo "== before an import"
+code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "$base/readyz" || true)
+[ "$code" = 503 ] || fail "/readyz answered $code before any import"
+echo "   503 waiting_for_export"
+
+echo "== docker compose cp the export, then /readyz"
+docker compose cp "$work/export.sqlite" frus:/data/import/export.sqlite
+wait_for_200 "$base/readyz" 120 || fail "/readyz did not reach 200"
+status=$(curl -s --max-time 5 "$base/api/v1/status") || fail "/api/v1/status did not answer"
+printf '%s' "$status" | grep -q '"documents":3' || fail "status does not report 3 documents: $status"
+echo "   status: $(printf '%s' "$status" | sed -nE 's/.*"sqliteVersion":"([^"]+)".*/SQLite \1/p'), 3 documents"
+
+echo "== health check"
+health=""
+for _ in $(seq 1 60); do
+  health=$(docker inspect --format '{{.State.Health.Status}}' "$container")
+  [ "$health" = healthy ] && break
+  sleep 1
+done
+[ "$health" = healthy ] || fail "the container's health is $health"
+echo "   healthy"
+
+echo "== restart: the index stays in the volume"
+docker compose restart frus >/dev/null
+wait_for_200 "$base/readyz" 60 || fail "/readyz did not reach 200 after a restart"
+
+passed=1
+echo "PASS: compose smoke test"

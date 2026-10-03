@@ -25,6 +25,7 @@ public actor ImportCoordinator {
     private let retryDelay: Duration
     private let now: @Sendable () -> Date
     private let removeFile: @Sendable (URL) throws -> Void
+    private let isReadable: @Sendable (String) -> Bool
     private var lastLook: [String: Signature] = [:]
     /// Installed or refused, and unchanged since.
     private var settled: [String: Signature] = [:]
@@ -33,11 +34,12 @@ public actor ImportCoordinator {
     private var busy = false
 
     /// `alsoNotify` hears each import step after the server state has, so a test can see what
-    /// `/readyz` reports at every step. `removeFile` and `now` are replaceable for tests.
+    /// `/readyz` reports at every step. `removeFile`, `isReadable` and `now` are replaceable for tests.
     public init(files: any FileStore, importer: IndexImporter, state: ServerState, jobs: any JobQueue,
                 alsoNotify: (any ImportObserver)? = nil, retryDelay: Duration = .seconds(60),
                 now: @escaping @Sendable () -> Date = Date.init,
-                removeFile: @escaping @Sendable (URL) throws -> Void = { try FileManager.default.removeItem(at: $0) }) {
+                removeFile: @escaping @Sendable (URL) throws -> Void = { try FileManager.default.removeItem(at: $0) },
+                isReadable: @escaping @Sendable (String) -> Bool = { FileManager.default.isReadableFile(atPath: $0) }) {
         self.files = files
         self.importer = importer
         self.state = state
@@ -46,6 +48,7 @@ public actor ImportCoordinator {
         self.retryDelay = retryDelay
         self.now = now
         self.removeFile = removeFile
+        self.isReadable = isReadable
     }
 
     /// Looks once, and starts an import if a file is ready. Returns the job id it started.
@@ -64,6 +67,11 @@ public actor ImportCoordinator {
             if settled[path] == signature { continue }
             if let retry = retryAfter[path], now() < retry.1 { continue }
             let url = URL(fileURLWithPath: path)
+            // `docker compose cp` keeps the file's mode, so a 0600 export arrives unreadable.
+            guard isReadable(path) else {
+                await reportUnreadable(url, signature: signature)
+                continue
+            }
             guard lastLook[path] == signature, Self.isComplete(url, size: signature.size) else {
                 stillCopying.append(url.lastPathComponent)
                 continue
@@ -104,6 +112,15 @@ public actor ImportCoordinator {
                 throw error
             }
         }
+    }
+
+    /// Reports a file the server cannot read, as a server-side problem tried again later:
+    /// changing its permissions does not change its size or modification time.
+    private func reportUnreadable(_ file: URL, signature: Signature) async {
+        let name = file.lastPathComponent
+        let problem = ImportProblem(.copyingExport, "The server cannot read \(name): its permissions keep it from the server's user. Copy it with docker compose cp -a, or make it readable, for example: docker compose exec -u 0 frus chmod 644 /data/import/\(name)")
+        await state.importFailed(file: name, error: problem)
+        retryAfter[file.path] = (signature, now().addingTimeInterval(Self.seconds(retryDelay)))
     }
 
     private func finished(file: URL, signature: Signature, retry: Bool) {

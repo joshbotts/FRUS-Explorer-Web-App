@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# FRUS Explorer Light: writes a small synthetic FRUS Explorer research export.
+#   scripts/synthetic-export <output.sqlite>
+# It has the schema of a real export (Tests/FRUSLightTestSupport/Fixtures/export-v65-schema.sql),
+# the index and FTS schema versions this build serves (Sources/FRUSLightCore/Compatibility.swift),
+# three documents and an export stamp without the owner's writing. Needs the sqlite3 command.
+set -euo pipefail
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+out=${1:?usage: scripts/synthetic-export <output.sqlite>}
+command -v sqlite3 >/dev/null || { echo "scripts/synthetic-export: needs the sqlite3 command" >&2; exit 1; }
+
+constant() { grep -oE "$1 = [0-9]+" "$root/Sources/FRUSLightCore/Compatibility.swift" | grep -oE '[0-9]+$'; }
+version=$(constant supportedIndexVersion)
+fts=$(constant ftsSchemaVersion)
+schema="$root/Tests/FRUSLightTestSupport/Fixtures/export-v65-schema.sql"
+
+rm -f "$out" "$out-journal" "$out-wal" "$out-shm"
+sqlite3 "$out" <<SQL
+.bail on
+.read '$schema'
+INSERT INTO document_cache (volume_id, document_id, header, body_text) VALUES
+  ('frus1961-63v06', 'd1', '1. Telegram From the Embassy in the Soviet Union',
+   'The ambassador was negotiating treaties with the minister.'),
+  ('frus1961-63v06', 'd2', '2. Memorandum of Conversation',
+   'Negotiating began in May, and after many long weeks of talks the treaties came.'),
+  ('frus1894Nicaragua', 'd1', 'No. 1. Mr. Baker to Mr. Gresham',
+   'The canal concession and the Mosquito Reservation.');
+INSERT INTO document_revisions (volume_id, document_id, content_hash, body_hash, index_version)
+  SELECT volume_id, document_id, printf('%064d', 0), printf('%016d', 0), $version FROM document_cache;
+INSERT INTO research_provenance (key, value) VALUES
+  ('exported_at', strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  ('my_writing_included', '0'),
+  ('app_version', 'synthetic'),
+  ('app_build', '0'),
+  ('installed_index_version', '$version'),
+  ('current_index_version', '$version'),
+  ('installed_fts_schema_version', '$fts'),
+  ('current_fts_schema_version', '$fts');
+PRAGMA user_version = $fts;
+.output /dev/null
+PRAGMA journal_mode = DELETE;
+SQL
+echo "$out: synthetic export, index version $version, FTS schema $fts, 3 documents"
