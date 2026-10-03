@@ -100,7 +100,7 @@ These rules go into `CLAUDE.md` in session 0:
 
 1. Start with `scripts/doctor`. Build and test only through `scripts/swift`, `npm --prefix web` and `docker compose`.
 2. One session, one pull request, on the branch the session is given. Push before the session ends, and never push to `main`.
-3. A session ends with CI green on its pull request, an entry in `docs/DEVLOG.md`, and its task ticked in `docs/PLAN.md`, with the next task named.
+3. A session ends with CI green on its pull request and an entry in `docs/DEVLOG.md` that records what it delivered and names the next task.
 4. Shared behaviour is compiled from the submodule, never reimplemented. A fix to a shared file is a pull request on `FRUS-Explorer`, labelled for Mac verification; a session never merges it.
 5. The submodule pin moves only to a merged `FRUS-Explorer` commit, in a pull request of its own.
 6. Never commit Mac exports, TEI beyond `fixtures/`, EmbeddingGemma, credentials, `.build/` or `node_modules/`.
@@ -273,9 +273,12 @@ Open questions for the owner:
 
 - Which container runtime does your organisation allow on Macs?
 - Should the published image stay private to the repository, or be public so anyone can pull it without signing in?
-- May sessions open pull requests on `FRUS-Explorer` for you to verify and merge? The spec work left that repository untouched. S1 needs the answer.
 
-Answered on 3 October: the web repository goes public, which brings branch protection and native arm64 runners on GitHub Free.
+Answered on 3 October:
+
+- The web repository goes public, which brings branch protection and native arm64 runners on GitHub Free.
+- Sessions do not open pull requests on `FRUS-Explorer` for now. The core track (S1, S3, S6) waits, and the server track (S2, S5, S7) goes ahead. When S1 runs, it builds and tests the six kits against its upstream pull request's head in the session and records the result in `docs/DEVLOG.md`; after the owner's Mac check and merge, a separate pull request moves the pin and adds the kits to CI.
+- A session's `docs/DEVLOG.md` entry is the record that it is done (rule 3).
 
 ## Session 0 kickoff prompt
 

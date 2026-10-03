@@ -13,6 +13,11 @@ let swift6: [SwiftSetting] = [.swiftLanguageMode(.v6)]
 let package = Package(
     name: "FRUSLight",
     platforms: [.macOS(.v15)],
+    dependencies: [
+        .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0"),
+        .package(url: "https://github.com/swift-server/swift-service-lifecycle.git", from: "2.0.0"),
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
+    ],
     targets: [
         // SQLite with FTS5: the system library. On Linux its header comes from libsqlite3-dev,
         // which scripts/swift and ci.yml install; on macOS, from the SDK. Neither needs pkg-config.
@@ -76,9 +81,50 @@ let package = Package(
             swiftSettings: swift6
         ),
 
+        // Web-only logic: configuration, Import mode, readiness, and the five v1 interfaces.
+        .target(
+            name: "FRUSLightCore",
+            dependencies: ["CSQLite"],
+            path: "Sources/FRUSLightCore",
+            swiftSettings: swift6
+        ),
         .executableTarget(
             name: "FRUSLightServer",
+            dependencies: [
+                "FRUSLightCore",
+                .product(name: "Hummingbird", package: "hummingbird"),
+                .product(name: "ServiceLifecycle", package: "swift-service-lifecycle"),
+                .product(name: "Logging", package: "swift-log"),
+            ],
             path: "Sources/FRUSLightServer",
+            swiftSettings: swift6
+        ),
+
+        // Builds synthetic Mac exports from the schema of a real one, for the tests below.
+        .target(
+            name: "FRUSLightTestSupport",
+            dependencies: ["FRUSLightCore", "CSQLite"],
+            path: "Tests/FRUSLightTestSupport",
+            resources: [.copy("Fixtures")],
+            swiftSettings: swift6
+        ),
+        .testTarget(
+            name: "FRUSLightCoreTests",
+            dependencies: ["FRUSLightCore", "FRUSLightTestSupport", "FTS5Schema"],
+            path: "Tests/FRUSLightCoreTests",
+            swiftSettings: swift6
+        ),
+        .testTarget(
+            name: "FRUSLightServerTests",
+            dependencies: [
+                "FRUSLightServer",
+                "FRUSLightCore",
+                "FRUSLightTestSupport",
+                .product(name: "HummingbirdTesting", package: "hummingbird"),
+                .product(name: "ServiceLifecycle", package: "swift-service-lifecycle"),
+                .product(name: "Logging", package: "swift-log"),
+            ],
+            path: "Tests/FRUSLightServerTests",
             swiftSettings: swift6
         ),
     ]

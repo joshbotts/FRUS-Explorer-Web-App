@@ -2,7 +2,7 @@
 
 3 October 2026 · at `FRUS-Explorer` commit `34a5120` (index version 65, app build 49)
 
-Session 0 is ready to start. `docs/PLAN.md`'s S0 row and kickoff prompt now carry what a dry run on Linux found. This folder keeps what the same run found for later sessions, so their prompts can start from evidence rather than estimates.
+Sessions 0 and 2 are done; see `docs/DEVLOG.md`. S1 waits, because the owner asked that sessions not open pull requests on `FRUS-Explorer` for now. This folder keeps what a dry run on Linux found for later sessions, so their prompts can start from evidence rather than estimates.
 
 ## What was verified
 
@@ -18,16 +18,19 @@ Session 0 is ready to start. `docs/PLAN.md`'s S0 row and kickoff prompt now carr
 
 ## Before the S1 prompt
 
-- **Rules 2, 3 and 5 collide.** S1 needs two pull requests: the guards upstream, and the web repository's DEVLOG entry and `Package.swift`. Upstream has no CI and squash-merges, so a pull request's head never reaches `v2`, and the pin can move only after the owner merges. Decide how S1 shows its done-criterion; the simplest is to build against the pull request's head through `scripts/swift` and record the output in DEVLOG. Say who opens the pin-move pull request after Mac check 1.
+- **Rules 2, 3 and 5 collide.** S1 needs two pull requests: the guards upstream, and the web repository's DEVLOG entry and `Package.swift`. Upstream has no CI and squash-merges, so a pull request's head never reaches `v2`, and the pin can move only after the owner merges. Decided on 3 October: S1 builds and tests the six kits against its pull request's head in the session and records the output in DEVLOG; after Mac check 1 and the merge, a separate pull request moves the pin and adds the kits to CI.
 - **The library guards the plan names are enough.** `s1-linux-guards.patch` has them. The test side needs more:
   - FTS5StoreTests imports SQLite3 in 7 files. With guards, 208 of its 209 tests pass. The failure is the backup-exclusion test (`FTS5StoreTests.swift:523-529`): excluding a file from backup is a silent no-op on Linux, so the test needs a named Linux skip, as check 1 asks.
   - The logging shim must accept `os.Logger`'s `privacy:` interpolation, which FTS5Store uses 12 times. The patch's `LinuxLogger.swift` does.
   - TEIHeaderKit has no test target. Its 22 tests live in ManifestGeneratorTests, which needs FoundationNetworking and a stand-in for `URLSession.bytes(for:)`. The patch does both, and all 60 of those tests pass.
 - **Dependencies live in the web repository.** Upstream's `Package.swift` declares none, so swift-crypto and `CSQLite` are declared Linux-only in this repository's `Package.swift`. Use a swift-crypto range that admits Hummingbird's 5.x, such as `"3.12.3"..<"6.0.0"`.
-- **The owner answers the open question on pull requests to `FRUS-Explorer`.** Upstream already has a `Mac` label for rule 4.
-- **Rule 3 has nothing to tick.** It ends each session with "its task ticked in `docs/PLAN.md`", but the session table has no checkbox or status column, so S0 ticked nothing. Decide where a session records that it is done: a status column in the session table, or the DEVLOG alone. Any change to `PLAN.md` also goes into its shared copy.
+- **Pull requests on `FRUS-Explorer`.** Answered on 3 October: not for now, so S1, S3 and S6 wait. Upstream already has a `Mac` label for rule 4.
+- **Rule 3 has nothing to tick.** It ends each session with "its task ticked in `docs/PLAN.md`", but the session table has no checkbox or status column, so S0 ticked nothing. Decided on 3 October: the DEVLOG entry is the record, and rule 3 now says so.
 
 ## Before the S2 prompt
+
+S2 settled these; its DEVLOG entry says how.
+
 
 - **SPEC's first Import step cannot run as written.** SQLite refuses the rank-1 FTS5 integrity check on a read-only or immutable connection, and `quick_check` misses an FTS index that no longer matches its content. Copy the export with the backup API to a writable `/data/index/frus.db.new`, check it there, rename it into place and serve it with `immutable=1`. On the full export, `quick_check` took 28 seconds and the rank-1 check 13 seconds.
 - **List the Import steps in the S2 row.** A workable list:
