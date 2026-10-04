@@ -9,7 +9,7 @@ The web edition does not reimplement the app. It compiles some of the app's own 
 
 ## The division of labour
 
-**Sessions working on the app follow four rules (section 4) and do nothing else for the web edition.** The rules protect the parts of the app's architecture the web edition stands on. Once #1569 merges, a test in the app's normal Xcode run checks rules 1 and 2 for `FRUSCoreKit/`. For everything else, the web side's daily Linux build catches what gets through. App sessions do not label, notify, run Linux builds or write web code. When app work and the web edition pull different ways, the app's work goes ahead, and the web side adapts.
+**Sessions working on the app follow four rules (section 4) and do nothing else for the web edition.** The rules protect the parts of the app's architecture the web edition stands on. Since #1569, a test in the app's normal Xcode run checks rules 1 and 2 for `FRUSCoreKit/`. For everything else, the web side's daily Linux build catches what gets through. App sessions do not label, notify, run Linux builds or write web code. When app work and the web edition pull different ways, the app's work goes ahead, and the web side adapts.
 
 **Sessions working on the web edition carry the rest, at their own token cost:**
 - they watch the app's repository and repair what stops building on Linux;
@@ -39,7 +39,7 @@ The web edition does not reimplement the app. It compiles some of the app's own 
 | FTS5Store | Whole kit since the pin move after S1 (web pull request #15). Its schema file was compiled from S0 and its query compiler from S4 | The parity harness compares its parse of 482 queries with the app's. The server will use it for search |
 | TEIHeaderKit, with ManifestGeneratorCore and ManifestGeneratorTests for its tests | Since the pin move after S1 | Tests only, for now |
 | SemanticVectorsKit | Since the pin move after S1 | Semantic search, from phase 4 |
-| FRUSCoreKit, part 1 | After #1569 merges and the pin moves (S3) | The reader's HTML, and Cite |
+| FRUSCoreKit, part 1 | Once the pin moves to #1569's merge (S3) | The reader's HTML, and Cite |
 | FRUSCoreKit, part 2 | S6 | Indexing and search on the server |
 | WordCloudKit | Not compiled | Built on Apple's NaturalLanguage framework. Phase 4 plans a separate Linux lemmatizer |
 
@@ -70,7 +70,7 @@ Web sessions did this work, as pull requests on the app's repository.
 
 The Mac app built with identical warnings, and its debug library defined the same symbols as before (233,494 unique; #1567 reported 238,006, a count that included duplicates).
 
-**#1569 (session S3): FRUSCoreKit part 1, awaiting the owner's Mac check.** The renderer and citation code lived in the app module, among SwiftUI, WebKit and SwiftData code. The pull request moves them into a new top-level `FRUSCoreKit/` folder, compiled two ways like FTS5Store and TEIHeaderKit: as source in both app targets, and as an SPM library.
+**#1569 (session S3): FRUSCoreKit part 1, merged as `f102fa4d`.** The renderer and citation code lived in the app module, among SwiftUI, WebKit and SwiftData code. The pull request moves them into a new top-level `FRUSCoreKit/` folder, compiled two ways like FTS5Store and TEIHeaderKit: as source in both app targets, and as an SPM library.
 - **Moved with `git mv`,** 13 files and 10 test suites, each a 100% rename in the pull request's first commit. Later commits edit some of them, so the squash-merged commit shows them as 84–100% similar.
   - the TEI parser, AST and render nodes, the AST-to-render converter and the HTML serializer;
   - the citation formatter, parser and models, and the canonical URL;
@@ -119,7 +119,7 @@ These structures let the two codebases share code without app sessions having to
 - **A boundary test in the normal Xcode run.** `FRUSCoreKitBoundaryTests` fails when a `FRUSCoreKit/` file:
   - imports anything but Foundation, except FoundationXML, CryptoKit, swift-crypto's `Crypto` and SourceNoteKit, each inside the `canImport` branch that selects it (any other import fails, guarded or not);
   - reads `Bundle.main` or `UserDefaults`;
-  - names a type, function, constant or variable that only the app declares. It skips members after a `.`, argument labels, and any name the kit declares for itself. So a change that touches no kit file fails it only by giving an app declaration a Foundation or standard-library name the kit uses, such as `URL` or `max`; renaming the app's declaration fixes that.
+  - names a type, function, constant or variable that only the app declares. With #1571, a follow-up in review, it skips members after a `.`, argument labels, and any name the kit declares for itself. So a change that touches no kit file fails it only by giving an app declaration a Foundation or standard-library name the kit uses, such as `URL` or `max`; renaming the app's declaration fixes that.
 
   It also fails on Linux stand-ins that Apple platforms would compile, and on a kit test that names the app outside Xcode's branches. Xcode's build alone cannot catch any of this, because it compiles the kit into the app module. Web sessions can extend the test to the other kits.
 - **Forwarders and typealiases.** Code moved into a kit keeps its old name in the app, so moving it changes no call site.
@@ -129,7 +129,7 @@ These structures let the two codebases share code without app sessions having to
 
 ## 4. The rules for sessions working on the app
 
-The whole of the app side's part. Each rule costs little or nothing. Once #1569 merges, the boundary test checks rules 1 and 2 for `FRUSCoreKit/`.
+The whole of the app side's part. Each rule costs little or nothing. The boundary test checks rules 1 and 2 for `FRUSCoreKit/`.
 
 1. **Shared code stays free of UI and app frameworks.** "Shared code" means FTS5Store, SourceNoteKit, CrossRefKit, GeneratorKit, TEIHeaderKit, SemanticVectorsKit, ManifestGeneratorCore and `FRUSCoreKit/`, with their test folders. In them:
    - never import SwiftUI, UIKit, AppKit, WebKit, SwiftData, CoreSpotlight, TipKit or NaturalLanguage;
@@ -193,7 +193,7 @@ The whole of the app side's part. Each rule costs little or nothing. Once #1569 
 
 ## 6. For the owner
 
-1. **Adopt sections 4 and 5 as the arrangement.** A web session will open a pull request adding the appendix block to the app's `CLAUDE.md`, after #1569 merges. That block replaces the `CLAUDE.md` line offered as an owner item in #1567. #1569 adds a FRUSCoreKit entry to `CLAUDE.md`'s list of package targets; the block points to that entry rather than repeating it.
+1. **Adopt sections 4 and 5 as the arrangement.** A web session will open a pull request adding the appendix block to the app's `CLAUDE.md`. That block replaces the `CLAUDE.md` line offered as an owner item in #1567. #1569 adds a FRUSCoreKit entry to `CLAUDE.md`'s list of package targets; the block points to that entry rather than repeating it.
 2. **Allow the daily watch.** It runs in the web repository's GitHub Actions and needs nothing from the app's repository, which is public.
 3. **Expect these requests from web sessions:**
    - a Mac check and merge for each web-authored pull request;
