@@ -248,7 +248,7 @@ Eight steps need the owner, because a cloud session has no Mac and no Xcode. Ses
 | Checkpoint | When | What the owner does | Status |
 | --- | --- | --- | --- |
 | Settings | Before S0 | The GitHub and environment items under Before the first session, and a container runtime on the Mac | To do |
-| Mac check 1 | After S1 | Check out the upstream pull request in `FRUS-Explorer`, in a clone at a real path (not `/tmp`). Build both schemes in Xcode, run the unit tests and `swift test`, which alone runs the kits' own suites, and merge if they pass. The pull request lists the commands | To do |
+| Mac check 1 | After S1 | Check out the upstream pull request in `FRUS-Explorer`, in a clone at a real path (not `/tmp`). Build both schemes in Xcode, run the unit tests and `swift test`, which alone runs the kits' own suites, and merge if they pass. The pull request lists the commands | Done |
 | Mac check 2 | After S3 | The same for the TEI and Citation guards | To do |
 | Golden files | After S4 | In the pinned build of the Mac app, make a library holding exactly the three fixture volumes, for example under a second macOS user. Export its research database, run `scripts/make-golden --export` on the export, and commit `fixtures/golden/`. S4 made the golden files that need only the app's source | To do |
 | Mac check 3 | After S6 | The same as Mac check 1, for the indexer and search guards | To do |
