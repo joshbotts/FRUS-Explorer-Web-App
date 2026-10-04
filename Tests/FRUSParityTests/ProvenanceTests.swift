@@ -7,7 +7,7 @@ import ParityFormat
 import Testing
 
 @Suite struct ProvenanceTests {
-    /// Every regular file under the six directories counts, resources too, whatever its name;
+    /// Every regular file under the listed directories counts, resources too, whatever its name;
     /// hidden files do not, and a symbolic link counts by the path it holds. A fixed vector, so
     /// Linux and macOS agree.
     @Test func upstreamDigestCoversEveryResourceAndNoHiddenFile() throws {
@@ -50,10 +50,74 @@ import Testing
             // A bundled resource changes it.
             try write("FRUSExplorer/Resources/broken-refs-index.json", "{\"degradableTargets\":[{}]}\n")
             #expect(try UpstreamDigest.compute(upstream: upstream) != digest)
+        }
+    }
 
-            // A missing directory is an error, not an empty one.
-            try FileManager.default.removeItem(at: upstream.appendingPathComponent("WordCloudKit"))
+    /// FRUSCoreKit is listed before the pin reaches upstream's FRUSCoreKit, part 1. A listed
+    /// directory the submodule lacks contributes nothing, as an empty one does, so the digest at an
+    /// older pin, and the golden files made there, stay as they were. Once the directory exists,
+    /// its files count, and moving a file into it changes the digest, as that pin move will.
+    @Test func upstreamDigestSkipsAListedDirectoryThePinLacks() throws {
+        #expect(UpstreamDigest.directories.contains("FRUSCoreKit"))
+        let directory = try TemporaryDirectory()
+        try withExtendedLifetime(directory) {
+            let manager = FileManager.default
+            let upstream = directory.url.appendingPathComponent("upstream", isDirectory: true)
+            let kit = upstream.appendingPathComponent("FRUSCoreKit", isDirectory: true)
+            func write(_ path: String, _ text: String) throws {
+                let url = upstream.appendingPathComponent(path)
+                try manager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try Data(text.utf8).write(to: url)
+            }
+            func line(_ path: String, _ text: String) -> String { "\(path)\t\(Digest.sha256(text))" }
+
+            // A submodule as at cfc0d3c: the app's directories, and no FRUSCoreKit.
+            try write("FRUSExplorer/App.swift", "struct App {}\n")
+            try write("FRUSExplorer/TEI/FRUSDocumentParser.swift", "struct Parser {}\n")
+            try write("FTS5Store/FTS5Types.swift", "enum FTS5 {}\n")
+            let before = try UpstreamDigest.compute(upstream: upstream)
+            #expect(before == Digest.sha256([
+                line("FRUSExplorer/App.swift", "struct App {}\n"),
+                line("FRUSExplorer/TEI/FRUSDocumentParser.swift", "struct Parser {}\n"),
+                line("FTS5Store/FTS5Types.swift", "enum FTS5 {}\n"),
+            ].joined(separator: "\n")))
+
+            // Every other listed directory present but empty gives the same digest.
+            for name in UpstreamDigest.directories {
+                try manager.createDirectory(at: upstream.appendingPathComponent(name), withIntermediateDirectories: true)
+            }
+            #expect(try UpstreamDigest.compute(upstream: upstream) == before)
+            try manager.removeItem(at: kit)
+            #expect(try UpstreamDigest.compute(upstream: upstream) == before)
+
+            // The pin move: the parser moves into FRUSCoreKit, and its new path counts.
+            try manager.removeItem(at: upstream.appendingPathComponent("FRUSExplorer/TEI"))
+            try write("FRUSCoreKit/TEI/FRUSDocumentParser.swift", "struct Parser {}\n")
+            let after = try UpstreamDigest.compute(upstream: upstream)
+            #expect(after == Digest.sha256([
+                line("FRUSCoreKit/TEI/FRUSDocumentParser.swift", "struct Parser {}\n"),
+                line("FRUSExplorer/App.swift", "struct App {}\n"),
+                line("FTS5Store/FTS5Types.swift", "enum FTS5 {}\n"),
+            ].joined(separator: "\n")))
+            #expect(after != before)
+
+            // Something at a listed path that is not a directory is an error, never skipped: a
+            // file, or a symbolic link pointing nowhere.
+            try manager.removeItem(at: kit)
+            try Data("not a directory".utf8).write(to: kit)
             #expect(throws: (any Error).self) { try UpstreamDigest.compute(upstream: upstream) }
+            try manager.removeItem(at: kit)
+            try manager.createSymbolicLink(atPath: kit.path, withDestinationPath: "nowhere")
+            #expect(throws: (any Error).self) { try UpstreamDigest.compute(upstream: upstream) }
+
+            // A submodule holding none of the directories, as an uninitialized one is, is an error,
+            // and so is one that is not there.
+            let empty = directory.url.appendingPathComponent("empty", isDirectory: true)
+            try manager.createDirectory(at: empty, withIntermediateDirectories: true)
+            #expect(throws: GoldenError.self) { try UpstreamDigest.compute(upstream: empty) }
+            #expect(throws: GoldenError.self) {
+                try UpstreamDigest.compute(upstream: directory.url.appendingPathComponent("absent", isDirectory: true))
+            }
         }
     }
 
