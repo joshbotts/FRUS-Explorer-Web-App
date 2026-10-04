@@ -138,14 +138,29 @@ public struct Platform: Codable, Equatable, Sendable {
 /// reader's HTML and the indexer's output.
 public enum UpstreamDigest {
     /// The submodule directories the Mac golden tool compiles, and whose resources the app bundles.
+    /// `FRUSCoreKit` arrives with upstream's FRUSCoreKit, part 1, which moves the TEI pipeline and
+    /// the citation code out of `FRUSExplorer`. It is listed before the pin reaches it: a listed
+    /// directory the submodule does not have contributes nothing, so the digest at an older pin is
+    /// unchanged.
     public static let directories = [
-        "FRUSExplorer", "FTS5Store", "SemanticVectorsKit", "SourceNoteKit", "TEIHeaderKit", "WordCloudKit",
+        "FRUSCoreKit", "FRUSExplorer", "FTS5Store", "SemanticVectorsKit", "SourceNoteKit", "TEIHeaderKit", "WordCloudKit",
     ]
 
-    /// The digest of `directories` under `upstream`, the submodule's root.
+    /// The digest of `directories` under `upstream`, the submodule's root. A listed directory with
+    /// nothing at its path is skipped. Whatever is at a listed path must be a directory that can be
+    /// read, so a file or a symbolic link pointing nowhere is an error, and so is a submodule
+    /// holding none of the directories, as an uninitialized one does.
     public static func compute(upstream: URL) throws -> String {
+        let present = directories.filter { directory in
+            // Not followed, so a symbolic link pointing nowhere is present, and fails below rather
+            // than being skipped.
+            (try? FileManager.default.attributesOfItem(atPath: upstream.appendingPathComponent(directory).path)) != nil
+        }
+        guard !present.isEmpty else {
+            throw GoldenError.malformed(upstream.path, "it holds none of \(directories.joined(separator: ", ")): is the submodule checked out?")
+        }
         var lines: [String] = []
-        for directory in directories {
+        for directory in present {
             let root = upstream.appendingPathComponent(directory, isDirectory: true)
             for file in try files(under: root) {
                 let path = root.appendingPathComponent(file.path).path
