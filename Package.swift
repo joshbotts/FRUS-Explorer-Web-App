@@ -2,10 +2,11 @@
 // FRUS Explorer Light: the server, plus Linux builds of the Mac app's shared kits.
 //
 // The shared kits are compiled from the pinned FRUS-Explorer submodule, never copied
-// (CLAUDE.md, rule 4). Each kit keeps the settings upstream's Package.swift gives it. Six kits so
-// far, each with upstream's tests: SourceNoteKit, CrossRefKit and GeneratorKit since session 0,
-// and TEIHeaderKit, SemanticVectorsKit and FTS5Store since session 1's Linux guards, with
-// ManifestGeneratorCore, whose tests hold TEIHeaderKit's. The server depends on none of them yet.
+// (CLAUDE.md, rule 4). Each kit keeps the settings upstream's Package.swift gives it. Seven kits so
+// far, each with upstream's tests: SourceNoteKit, CrossRefKit and GeneratorKit since session 0;
+// TEIHeaderKit, SemanticVectorsKit and FTS5Store since session 1's Linux guards, with
+// ManifestGeneratorCore, whose tests hold TEIHeaderKit's; and FRUSCoreKit, part 1, since session 3.
+// The server depends on none of them yet: only the parity harness and the tests do.
 // Build and test through scripts/swift, which runs this package in swift:6.4-noble.
 
 import PackageDescription
@@ -19,7 +20,7 @@ let package = Package(
     products: [
         // The golden-file formats, for tools/mac-golden, the Mac-only tool that writes them.
         .library(name: "ParityFormat", targets: ["ParityFormat"]),
-        // The parity harness's command line: swift run frus-parity summarize | compare-summary | parse | check-golden.
+        // The parity harness's command line: swift run frus-parity summarize | compare-summary | parse | render | check-golden.
         .executable(name: "frus-parity", targets: ["FRUSParityTool"]),
     ],
     dependencies: [
@@ -131,6 +132,28 @@ let package = Package(
             swiftSettings: swift6
         ),
 
+        // FRUSCoreKit, part 1 (session 3, upstream #1569): the TEI parser, the AST, the render
+        // conversion and HTML serializer, and the citation formatter, parser and models. Upstream's
+        // Package.swift gives it SourceNoteKit; its CryptoKit guard needs swift-crypto's Crypto,
+        // declared here for Linux only, as SemanticVectorsKit's is.
+        .target(
+            name: "FRUSCoreKit",
+            dependencies: [
+                "SourceNoteKit",
+                .product(name: "Crypto", package: "swift-crypto", condition: .when(platforms: [.linux])),
+            ],
+            path: "\(upstream)/FRUSCoreKit",
+            swiftSettings: swift6
+        ),
+        // The app's own suites for the kit, which live in its test folder: under SwiftPM each
+        // imports FRUSCoreKit alone, and whatever needs the app is inside `#if !SWIFT_PACKAGE`.
+        .testTarget(
+            name: "FRUSCoreKitTests",
+            dependencies: ["FRUSCoreKit"],
+            path: "\(upstream)/FRUSExplorerTests/FRUSCoreKit",
+            swiftSettings: swift6
+        ),
+
         // Web-only logic: configuration, Import mode, readiness, and the five v1 interfaces.
         .target(
             name: "FRUSLightCore",
@@ -157,12 +180,13 @@ let package = Package(
             path: "Tests/ParityFormat",
             swiftSettings: swift6
         ),
-        // The harness itself: the index summary (check 2), the parse comparison (check 3) and the
-        // golden files' validation. Crypto stays here, out of FRUSLightCore and the server.
+        // The harness itself: the index summary (check 2), the parse comparison (check 3), the
+        // render comparison (check 4) and the golden files' validation. Crypto and FRUSCoreKit stay
+        // here, out of FRUSLightCore and the server.
         .target(
             name: "FRUSParity",
             dependencies: [
-                "ParityFormat", "FTS5Store", "CSQLite", "FRUSLightCore",
+                "ParityFormat", "FTS5Store", "FRUSCoreKit", "CSQLite", "FRUSLightCore",
                 .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "Tests/FRUSParity",

@@ -3,6 +3,7 @@
 //   frus-parity summarize <db> [--any-volumes] [--golden <out.json>] [--upstream-commit <sha>] [--repo <root>]
 //   frus-parity compare-summary <golden.json> <candidate.json>
 //   frus-parity parse <queries.jsonl>
+//   frus-parity render [<volume> <document> [--full-parse] [--out <file>]] [--repo <root>]
 //   frus-parity check-golden [--repo <root>]
 //
 // The repository is found from the current directory unless --repo names it. Exit status: 0 when
@@ -16,6 +17,7 @@ let usage = """
     usage: frus-parity summarize <db> [--any-volumes] [--golden <out.json>] [--upstream-commit <sha>] [--repo <root>]
            frus-parity compare-summary <golden.json> <candidate.json>
            frus-parity parse <queries.jsonl>
+           frus-parity render [<volume> <document> [--full-parse] [--out <file>]] [--repo <root>]
            frus-parity check-golden [--repo <root>]
     """
 
@@ -109,6 +111,75 @@ func parse(_ arguments: Arguments) throws {
     }
 }
 
+/// Check 4 on this machine. With no document, renders every row of the golden manifest along the
+/// reader's path and again from one full parse per volume, compares that parse's persons and terms
+/// with the reader's, and reports each difference. With a
+/// volume and a document, renders that document along the reader's path, or from a full parse with
+/// --full-parse, says whether it is the golden file's HTML, and writes it to --out's file. The HTML
+/// never goes to standard output, where a debug build of the kit prints its parser's log.
+func render(_ arguments: Arguments) async throws {
+    let layout = try repository(arguments)
+    let renderer = try ReaderRenderer(layout: layout)
+    let (golden, stale) = try RenderParity.golden(layout)
+    let directory = layout.golden.appendingPathComponent(GoldenFile.render.rawValue).deletingLastPathComponent()
+    var problems = stale
+    switch arguments.positional.count {
+    case 0:
+        guard !arguments.flags.contains("--full-parse"), arguments.options["--out"] == nil else {
+            throw UsageError("--full-parse and --out need a volume and a document")
+        }
+        let clock = ContinuousClock()
+        var start = clock.now
+        let reader = try await renderer.readerPass(golden.rows.map { ($0.volume, $0.document) })
+        let readerTime = clock.now - start
+        start = clock.now
+        let volumes = ParityFixtures.volumes.sorted()
+        let (full, fullLists) = try await renderer.fullParsePass(volumes)
+        let fullTime = clock.now - start
+        for (pass, rendered, time) in [("the reader's path", reader, readerTime), ("one full parse per volume", full, fullTime)] {
+            let mismatches = RenderParity.mismatches(rendered, golden: golden, directory: directory)
+            print("\(pass): \(rendered.count - mismatches.count) of \(golden.rows.count) rows identical, in \(milliseconds(time)) ms")
+            problems += mismatches.map { "\(pass): \($0)" }
+        }
+        if full.map({ "\($0.volume)/\($0.document)" }) != golden.rows.map({ "\($0.volume)/\($0.document)" }) {
+            problems.append("one full parse per volume yields \(full.count) rows, not the golden manifest's \(golden.rows.count) in its order")
+        }
+        // The HTML would be the same with other persons and terms, so the full parse's are compared
+        // with the reader's.
+        let readerLists = try await renderer.readerLists(volumes)
+        for volume in volumes where fullLists[volume] != readerLists[volume] {
+            problems.append("one full parse of \(volume) gives other persons or terms than parsePersons and parseTerms")
+        }
+    case 2:
+        let (volume, document) = (arguments.positional[0], arguments.positional[1])
+        let rendered: RenderedDocument
+        if arguments.flags.contains("--full-parse") {
+            rendered = try await renderer.fullParsePass([volume]).documents.first { $0.document == document }
+                ?? RenderedDocument(volume: volume, document: document, html: nil)
+        } else {
+            rendered = try await renderer.readerPass([(volume, document)])[0]
+        }
+        if let html = rendered.html, let out = arguments.options["--out"] {
+            try Data(html.utf8).write(to: URL(fileURLWithPath: out))
+            print("wrote \(out)")
+        }
+        let mismatches = RenderParity.mismatches([rendered], golden: golden, directory: directory)
+        if mismatches.isEmpty { print("\(volume)/\(document) is the golden file's HTML, byte for byte") }
+        problems += mismatches.map(\.description)
+    default:
+        throw UsageError("render takes no arguments, or a volume and a document")
+    }
+    guard problems.isEmpty else {
+        for problem in problems { print("problem  \(problem)") }
+        fail("check 4 fails: \(problems.count) problem(s)")
+    }
+    print("check 4 passes")
+}
+
+func milliseconds(_ duration: Duration) -> Int64 {
+    duration.components.seconds * 1000 + duration.components.attoseconds / 1_000_000_000_000_000
+}
+
 func checkGolden(_ arguments: Arguments) throws {
     guard arguments.positional.isEmpty else { throw UsageError("check-golden takes no arguments") }
     let layout = try repository(arguments)
@@ -149,6 +220,8 @@ do {
         try compareSummary(Arguments(arguments.dropFirst()))
     case "parse":
         try parse(Arguments(arguments.dropFirst()))
+    case "render":
+        try await render(Arguments(arguments.dropFirst(), flags: ["--full-parse"], options: ["--out", "--repo"]))
     case "check-golden":
         try checkGolden(Arguments(arguments.dropFirst(), options: ["--repo"]))
     default:

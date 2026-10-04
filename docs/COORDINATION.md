@@ -1,6 +1,6 @@
 # FRUS Explorer and FRUS Explorer Light: working across the two repositories
 
-A proposal for the owner, and for Claude Code sessions in either repository. Drafted 4 October 2026, when the web edition was pinned to the app's commit `cfc0d3c` (build 49, index version 65).
+A proposal for the owner, and for Claude Code sessions in either repository. Drafted 4 October 2026, when the web edition was pinned to the app's commit `cfc0d3c` (build 49, index version 65). Updated the same day, when S3's pin move took the pin to `af8bedab`, with FRUSCoreKit part 1; the build and index version are unchanged.
 
 - **The app:** FRUS Explorer, for Mac and iOS, in [`joshbotts/FRUS-Explorer`](https://github.com/joshbotts/FRUS-Explorer).
 - **The web edition:** FRUS Explorer Light, a self-hosted server, in [`joshbotts/FRUS-Explorer-Web-App`](https://github.com/joshbotts/FRUS-Explorer-Web-App).
@@ -39,7 +39,7 @@ The web edition does not reimplement the app. It compiles some of the app's own 
 | FTS5Store | Whole kit since the pin move after S1 (web pull request #15). Its schema file was compiled from S0 and its query compiler from S4 | The parity harness compares its parse of 482 queries with the app's. The server will use it for search |
 | TEIHeaderKit, with ManifestGeneratorCore and ManifestGeneratorTests for its tests | Since the pin move after S1 | Tests only, for now |
 | SemanticVectorsKit | Since the pin move after S1 | Semantic search, from phase 4 |
-| FRUSCoreKit, part 1 | Once the pin moves to #1569's merge (S3) | The reader's HTML, and Cite |
+| FRUSCoreKit, part 1 | Since S3's pin move, to `af8bedab` | The reader's HTML, and Cite. The web CI runs its tests, and renders the 392 golden rows with it |
 | FRUSCoreKit, part 2 | S6 | Indexing and search on the server |
 | WordCloudKit | Not compiled | Built on Apple's NaturalLanguage framework. Phase 4 plans a separate Linux lemmatizer |
 
@@ -53,9 +53,13 @@ The server itself links none of these yet. On a Mac only, the web repository's `
 
 Two more will come from an export of a Mac library holding exactly those three volumes: a summary of the index, and each query's count and first 50 results. They are pending.
 
-Today the web CI compares one of these: its Linux parse of all 482 queries matches the app's, byte for byte, and so do the compiled expressions of the 457 queries in the default scope. Render parity starts when FRUSCoreKit part 1 is pinned. Index and results parity start with S6 and the owner's export: results may differ in the order of exactly tied scores, and the index summary leaves out what depends on indexing history.
+Today the web CI compares the two made from the app's source:
+- its Linux parse of all 482 queries matches the app's, byte for byte, and so do the compiled expressions of the 457 queries in the default scope;
+- FRUSCoreKit renders all 392 rows on Linux, through its public API alone, byte-identical to the app's reader. It does so along the reader's path, and again from one full parse per volume, the path the server will serve.
 
-Each golden file records a digest of the app's `FRUSExplorer`, `FTS5Store`, `SemanticVectorsKit`, `SourceNoteKit`, `TEIHeaderKit` and `WordCloudKit` folders, and of `FRUSCoreKit` once it exists. Nearly every merge on the app's side changes it, so at a pin move a web session remakes the golden files on a Mac.
+Index and results parity start with S6 and the owner's export: results may differ in the order of exactly tied scores, and the index summary leaves out what depends on indexing history.
+
+Each golden file records a digest of the app's `FRUSCoreKit`, `FRUSExplorer`, `FTS5Store`, `SemanticVectorsKit`, `SourceNoteKit`, `TEIHeaderKit` and `WordCloudKit` folders. Nearly every merge on the app's side changes it, so at a pin move a web session remakes the golden files on a Mac.
 
 ## 2. How the app's code was made portable
 
@@ -102,7 +106,7 @@ At the pull request's head:
 
 The app computes the same results. One timing changes: the broken-references index is now read when the reader's converter is built, rather than at the first cross-reference.
 
-**Part 2 (session S6): planned, after S3's pin move and the golden files; not yet dated.** The indexing pipeline, the search service, the citation matcher and splitter, and `PageRangeStore`.
+**Part 2 (session S6): planned, after the golden files from the owner's three-volume export; not yet dated.** The indexing pipeline, the search service, the citation matcher and splitter, and `PageRangeStore`.
 - `IndexingPipeline.swift` is the app's largest and busiest file. CoreSpotlight is imported there, and SwiftData reaches it through one `@Model` parameter.
 - Across part 2's files, eight JSON resources are read from `Bundle.main`. Part 2 will pass them in.
 - It will also move the steps that run after indexing, the person rollup and the broken-reference flags, to where the server can call them.
@@ -119,7 +123,7 @@ These structures let the two codebases share code without app sessions having to
 - **A boundary test in the normal Xcode run.** `FRUSCoreKitBoundaryTests` fails when a `FRUSCoreKit/` file:
   - imports anything but Foundation, except FoundationXML, CryptoKit, swift-crypto's `Crypto` and SourceNoteKit, each inside the `canImport` branch that selects it (any other import fails, guarded or not);
   - reads `Bundle.main` or `UserDefaults`;
-  - names a type, function, constant or variable that only the app declares. With #1571, a follow-up in review, it skips members after a `.`, argument labels, and any name the kit declares for itself. So a change that touches no kit file fails it only by giving an app declaration a Foundation or standard-library name the kit uses, such as `URL` or `max`; renaming the app's declaration fixes that.
+  - names a type, function, constant or variable that only the app declares. Since #1571, a follow-up merged as `2a4df13`, it skips members after a `.`, argument labels, and any name the kit declares for itself. So a change that touches no kit file fails it only by giving an app declaration a Foundation or standard-library name the kit uses, such as `URL` or `max`; renaming the app's declaration fixes that.
 
   It also fails on Linux stand-ins that Apple platforms would compile, and on a kit test that names the app outside Xcode's branches. Xcode's build alone cannot catch any of this, because it compiles the kit into the app module. Web sessions can extend the test to the other kits.
 - **Forwarders and typealiases.** Code moved into a kit keeps its old name in the app, so moving it changes no call site.
@@ -193,13 +197,13 @@ The whole of the app side's part. Each rule costs little or nothing. The boundar
 
 ## 6. For the owner
 
-1. **Adopt sections 4 and 5 as the arrangement.** A web session will open a pull request adding the appendix block to the app's `CLAUDE.md`. That block replaces the `CLAUDE.md` line offered as an owner item in #1567. #1569 adds a FRUSCoreKit entry to `CLAUDE.md`'s list of package targets; the block points to that entry rather than repeating it.
+1. **Sections 4 and 5 are the arrangement.** #1572 added the appendix block to the app's `CLAUDE.md`. That block replaces the `CLAUDE.md` line offered as an owner item in #1567. #1569 added a FRUSCoreKit entry to `CLAUDE.md`'s list of package targets; the block points to that entry rather than repeating it.
 2. **Allow the daily watch.** It runs in the web repository's GitHub Actions and needs nothing from the app's repository, which is public.
 3. **Expect these requests from web sessions:**
    - a Mac check and merge for each web-authored pull request;
    - now and then, an export from the pinned app build: three volumes for the golden files, or any export when the schema changes;
    - the full-corpus export before S10, as the owner checkpoints in `PLAN.md` list.
-4. **Hold the three-volume export until after FRUSCoreKit part 1 is pinned.** Golden files made before that pin move would be stale at once.
+4. **Make the three-volume export from a build of `af8bedab`.** FRUSCoreKit part 1 is pinned there, so golden files made from it stay current until the next pin move.
 
 ## Appendix: a section for the app's `CLAUDE.md`
 

@@ -41,7 +41,7 @@ import Testing
     }
 
     /// Check 4's golden HTML is whole. It comes from the app's source alone, so it is never
-    /// pending. The comparison with Linux's own rendering waits for the renderer (session 3).
+    /// pending. RenderParityTests compares it with FRUSCoreKit's rendering.
     @Test func renderGoldenIsWhole() throws {
         let status = try GoldenStatus(directory: Repository.layout.golden)
         switch status.states[.render] {

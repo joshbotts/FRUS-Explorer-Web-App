@@ -2,7 +2,7 @@
 
 3 October 2026 · at `FRUS-Explorer` commit `34a5120` (index version 65, app build 49)
 
-Sessions 0, 1, 2, 4, 5 and 7 are done, and S3's upstream pull request waits for Mac check 2; see `docs/DEVLOG.md`. S1, S3 and S6 waited while the owner asked that sessions not open pull requests on `FRUS-Explorer`; the owner lifted that hold on 4 October. This folder keeps what a dry run on Linux found for later sessions, so their prompts can start from evidence rather than estimates.
+Sessions 0 to 5 and 7 are done: S3's upstream pull request merged as `f102fa4d`, and its pin move builds and tests FRUSCoreKit on Linux in CI; see `docs/DEVLOG.md`. S1, S3 and S6 waited while the owner asked that sessions not open pull requests on `FRUS-Explorer`; the owner lifted that hold on 4 October. This folder keeps what a dry run on Linux found for later sessions, so their prompts can start from evidence rather than estimates.
 
 ## What was verified
 
@@ -80,7 +80,7 @@ A full export is 2.83 GB, not 9.3 GB. The larger figure came from an index overh
 
 ## Pinning until the public release
 
-`FRUS-Explorer` merges about eight pull requests a day until its public release, and its index version went from 47 to 65 in 30 days. Each pin move means a new Mac build, a new export and new golden files. Hold the pin (at `cfc0d3c` since S1's guards merged) until the release unless a merged pull request for this project needs it, as S3's will, and batch upstream pull requests so the pin moves as few times as possible. Make the golden files and the S10 export once, against a pin from after the release.
+`FRUS-Explorer` merges about eight pull requests a day until its public release, and its index version went from 47 to 65 in 30 days. Each pin move means a new Mac build, a new export and new golden files. Hold the pin (at `af8bedab` since S3's pin move) until the release unless a merged pull request for this project needs it, as S3's did, and batch upstream pull requests so the pin moves as few times as possible. Each pin move remakes the golden files made from the app's source. The owner's three-volume export, from a build of `af8bedab`, makes the rest, and after that each move also needs a new three-volume export from the pinned build (`COORDINATION.md`, section 5). The full-corpus export for S10 comes from the build pinned at S10.
 
 ## Files
 
