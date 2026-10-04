@@ -187,6 +187,51 @@ struct ImportFixture {
         }
     }
 
+    /// A journal whose first byte is not zero holds a transaction to roll back, which
+    /// `immutable=1` would never do. Its first bytes here are a rollback journal's magic number.
+    @Test func refusesACopyThatArrivedWithAnUnfinishedJournal() async throws {
+        let fixture = try ImportFixture()
+        let source = try fixture.drop(SyntheticExport())
+        var journal = Data([0xd9, 0xd5, 0x05, 0xf9, 0x20, 0xa1, 0x63, 0xd7])
+        journal.append(Data(repeating: 1, count: 504))
+        try journal.write(to: URL(fileURLWithPath: source.path + "-journal"))
+        await #expect {
+            _ = try await fixture.importer.importExport(at: source, observer: StepRecorder())
+        } throws: { error in
+            guard let refusal = error as? ImportRefusal else { return false }
+            return refusal.step == .copyingExport && refusal.reason.contains("unfinished transaction")
+        }
+        #expect(!fixture.exists(fixture.files.liveIndex))
+    }
+
+    /// An empty journal, or one whose header was zeroed, holds nothing to roll back.
+    @Test(arguments: [0, 512])
+    func acceptsAJournalWithNothingToRollBack(_ bytes: Int) async throws {
+        let fixture = try ImportFixture()
+        let source = try fixture.drop(SyntheticExport())
+        try Data(repeating: 0, count: bytes).write(to: URL(fileURLWithPath: source.path + "-journal"))
+        let index = try await fixture.importer.importExport(at: source, observer: StepRecorder())
+        #expect(index.summary.documents == SyntheticExport.documents.count)
+    }
+
+    /// A link is refused without being followed, whether it points at an export or at nothing.
+    @Test(arguments: [true, false])
+    func refusesASymbolicLink(toAnExport: Bool) async throws {
+        let fixture = try ImportFixture()
+        let target = fixture.directory.url.appendingPathComponent("elsewhere.sqlite")
+        if toAnExport { try SyntheticExport().write(to: target) }
+        let link = fixture.files.importDirectory.appendingPathComponent("export.sqlite")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+        await #expect {
+            _ = try await fixture.importer.importExport(at: link, observer: StepRecorder())
+        } throws: { error in
+            guard let refusal = error as? ImportRefusal else { return false }
+            return refusal.step == .copyingExport && refusal.reason.contains("is a symbolic link")
+                && refusal.reason.contains("docker compose cp -L")
+        }
+        #expect(!fixture.exists(fixture.files.liveIndex))
+    }
+
     @Test func tooLittleDiskSpaceIsTheServersProblem() async throws {
         let fixture = try ImportFixture()
         let tight = TightFileStore(base: fixture.files, free: 1_000)

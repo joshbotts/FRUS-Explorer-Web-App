@@ -162,6 +162,35 @@ struct WatchFixture {
         #expect(await fixture.state.readiness().ready)
     }
 
+    /// `docker compose cp` copies a link as a link, usually to a path that exists only on the
+    /// host. It is refused, not read as unreadable or still copying, and not tried again unchanged.
+    @Test(arguments: [true, false])
+    func aSymbolicLinkIsRefusedWithoutBeingFollowed(toAnExport: Bool) async throws {
+        let fixture = try WatchFixture(retryDelay: .zero)
+        let target = fixture.directory.url.appendingPathComponent("elsewhere.sqlite")
+        if toAnExport { try SyntheticExport().write(to: target) }
+        let link = fixture.files.importDirectory.appendingPathComponent("export.sqlite")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+
+        #expect(await fixture.scanUntilImported() == nil, "no import starts")
+        let report = await fixture.state.status().lastImport
+        #expect(report?.outcome == .refused && report?.step == .copyingExport)
+        #expect(report?.message.contains("export.sqlite is a symbolic link") == true)
+        let readiness = await fixture.state.readiness()
+        #expect(!readiness.ready && !readiness.detail.contains("cannot read") && !readiness.detail.contains("finish copying"))
+
+        let first = report?.finishedAt
+        #expect(await fixture.scanUntilImported(limit: 4) == nil)
+        #expect(await fixture.state.status().lastImport?.finishedAt == first, "unchanged, it is not reported again")
+        #expect((try? FileManager.default.destinationOfSymbolicLink(atPath: link.path)) == target.path, "the link stays")
+
+        // The export itself, copied in place of the link, is imported.
+        try FileManager.default.removeItem(at: link)
+        _ = try fixture.drop(SyntheticExport())
+        #expect(await fixture.scanUntilImported() != nil)
+        #expect(await fixture.state.readiness().ready)
+    }
+
     @Test func readinessNamesAFileStillBeingCopied() async throws {
         let fixture = try WatchFixture()
         let complete = fixture.directory.url.appendingPathComponent("complete.sqlite")

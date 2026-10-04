@@ -67,6 +67,12 @@ public actor ImportCoordinator {
             if settled[path] == signature { continue }
             if let retry = retryAfter[path], now() < retry.1 { continue }
             let url = URL(fileURLWithPath: path)
+            // Refused before anything follows the link: a dangling one would read as unreadable.
+            if ExportChecks.isSymbolicLink(url) {
+                settled[path] = signature
+                await state.importFailed(file: url.lastPathComponent, error: ExportChecks.linkRefusal(url.lastPathComponent))
+                continue
+            }
             // `docker compose cp` keeps the file's mode, so a 0600 export arrives unreadable.
             guard isReadable(path) else {
                 await reportUnreadable(url, signature: signature)
@@ -145,20 +151,22 @@ public actor ImportCoordinator {
         return exportedAt == liveExportedAt
     }
 
-    /// Regular, visible files in the import directory, other than SQLite's side files.
+    /// Regular files and symbolic links in the import directory, visible and other than SQLite's
+    /// side files. Their attributes are their own, never a link's target's, so a link is seen as
+    /// a link (and refused) on Linux and macOS alike.
     private func candidates() -> [String: Signature] {
         let directory = files.importDirectory
-        let keys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
         guard let urls = try? FileManager.default.contentsOfDirectory(
-            at: directory, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles]) else { return [:] }
+            at: directory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) else { return [:] }
         var found: [String: Signature] = [:]
         for url in urls {
             let name = url.lastPathComponent
             guard !["-journal", "-wal", "-shm"].contains(where: name.hasSuffix),
-                  let values = try? url.resourceValues(forKeys: Set(keys)),
-                  values.isRegularFile == true,
-                  let size = values.fileSize, size > 0 else { continue }
-            found[url.standardizedFileURL.path] = Signature(size: Int64(size), modified: values.contentModificationDate ?? .distantPast)
+                  let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+                  let type = attributes[.type] as? FileAttributeType,
+                  type == .typeRegular || type == .typeSymbolicLink,
+                  let size = (attributes[.size] as? NSNumber)?.int64Value, size > 0 else { continue }
+            found[url.standardizedFileURL.path] = Signature(size: size, modified: attributes[.modificationDate] as? Date ?? .distantPast)
         }
         return found
     }

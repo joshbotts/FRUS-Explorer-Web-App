@@ -106,6 +106,8 @@ public struct IndexImporter: Sendable {
         }
 
         await observer.importDidReach(.copyingExport, detail: "Copying \(name)", progress: 0)
+        // Checked before anything reads the file, since every read would follow the link.
+        if ExportChecks.isSymbolicLink(source) { throw ExportChecks.linkRefusal(name) }
         guard ExportChecks.hasSQLiteHeader(source) else {
             throw ImportRefusal(.copyingExport, "\(name) is not a SQLite database. Use Export Research Database… in FRUS Explorer's settings.")
         }
@@ -113,6 +115,10 @@ public struct IndexImporter: Sendable {
         let wal = URL(fileURLWithPath: source.path + "-wal")
         if let walSize = Self.size(of: wal), walSize > 0 {
             throw ImportRefusal(.copyingExport, "\(name) arrived with a \(wal.lastPathComponent) file, so it is a copy of a database in use. Use Export Research Database… in FRUS Explorer's settings instead.")
+        }
+        // Nor does it roll back an unfinished transaction, so the copy would be half-written.
+        if ExportChecks.hasHotJournal(beside: source) {
+            throw ImportRefusal(.copyingExport, "\(name) arrived with a \(name)-journal file holding an unfinished transaction, so it is a copy of a database in use. Use Export Research Database… in FRUS Explorer's settings instead.")
         }
         let needed = (Self.size(of: source) ?? 0) + 64 * 1_048_576
         if let free = try? files.availableCapacity(), free < needed {
@@ -200,6 +206,31 @@ public struct IndexImporter: Sendable {
 enum ExportChecks {
     /// Tables Import mode relies on.
     static let requiredTables = ["document_cache", "frus_documents", "user_content", "document_revisions"]
+
+    /// Whether `url` is a symbolic link, not following it.
+    static func isSymbolicLink(_ url: URL) -> Bool {
+        (try? FileManager.default.attributesOfItem(atPath: url.path)[.type] as? FileAttributeType) == .typeSymbolicLink
+    }
+
+    /// The refusal for a link in the drop zone. `docker compose cp` copies a link as a link, so
+    /// it usually points at a path that exists only on the host; one that resolves would be
+    /// imported from outside the drop zone. Either way, the export itself should be copied.
+    static func linkRefusal(_ name: String) -> ImportRefusal {
+        ImportRefusal(.copyingExport, "\(name) is a symbolic link, not an export. Copy the export itself with docker compose cp -L, which follows the link.")
+    }
+
+    /// Whether a rollback journal beside the database holds an unfinished transaction, by SQLite's
+    /// own test (`hasHotJournal` in pager.c): it is not empty and its first byte is not zero.
+    /// `immutable=1` never rolls such a journal back. A link in the journal's place counts too,
+    /// since what it points at cannot be judged here.
+    static func hasHotJournal(beside url: URL) -> Bool {
+        let journal = url.path + "-journal"
+        if isSymbolicLink(URL(fileURLWithPath: journal)) { return true }
+        guard let handle = FileHandle(forReadingAtPath: journal) else { return false }
+        defer { try? handle.close() }
+        guard let first = try? handle.read(upToCount: 1), let byte = first.first else { return false }
+        return byte != 0
+    }
 
     /// Whether the file starts with SQLite's 16-byte header string.
     static func hasSQLiteHeader(_ url: URL) -> Bool {

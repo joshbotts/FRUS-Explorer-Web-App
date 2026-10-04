@@ -2,6 +2,30 @@
 
 One entry per session, newest first.
 
+## Import mode: unfinished journals and symbolic links
+
+4 October 2026 · branch `claude/import-journal-symlinks`
+
+Session 4's review found two gaps in its index summary, both fixed there. Import mode had the same two:
+- It opens an export with `immutable=1`, which never rolls back a hot rollback journal, so a copy left mid-transaction would have been imported half-written.
+- It took a symbolic link in `/data/import` for the file it points at, or, when the link pointed nowhere, reported it as unreadable.
+
+**Delivered**
+
+- **Unfinished transactions.** An export arriving with a `-journal` file that holds an unfinished transaction is refused, like one with a `-wal` file. The test is SQLite's own: the journal is not empty and its first byte is not zero. An empty or zeroed journal holds nothing to roll back and is accepted.
+- **Symbolic links.** A link in the drop zone is refused before anything reads through it, and not tried again until it changes. `docker compose cp` copies a link as a link, usually to a path that exists only on the host. The message says to copy the export itself with `docker compose cp -L`. The importer refuses a link too, in case anything else hands it one.
+- **The drop zone's files are seen as they are.** The scanner reads each file's own attributes, never a link's target's, so a link is seen as a link on Linux and macOS alike.
+- **`docs/INSTALL.md`.** Its table of refusals has both new messages.
+
+**Results.** FRUSLightCoreTests has 4 new tests, 41 in all, covering:
+- a journal holding an unfinished transaction;
+- an empty journal and a zeroed one;
+- a link to an export, and a link pointing nowhere, both in the importer and in the drop zone.
+
+All pass on Linux arm64 and natively on macOS, with none skipped. Against `main`'s code, the journal test and the drop-zone link test fail.
+
+**Next.** Unchanged: the owner's Golden files checkpoint. S1, S3 and S6 wait for upstream pull requests.
+
 ## Session 4: the parity harness
 
 3 October 2026 · branch `claude/s4-parity-harness`
