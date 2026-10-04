@@ -15,7 +15,7 @@
     },
     "sourceDigest" : "39d9aed13a9cf106904e80a714bdb7b45f8b4df2c3a325d4ae087fc1cd768df7",
     "tool" : "tools/mac-golden expressions",
-    "upstreamCommit" : "2a4df13c7bd8f3fb90b6fb948a9ce19c1e06e4d3"
+    "upstreamCommit" : "af8bedab7acf7efb0fd08f4eb924840d0275d2e1"
   },
   "queries" : [
     {

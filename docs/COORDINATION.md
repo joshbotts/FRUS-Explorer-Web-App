@@ -1,6 +1,6 @@
 # FRUS Explorer and FRUS Explorer Light: working across the two repositories
 
-A proposal for the owner, and for Claude Code sessions in either repository. Drafted 4 October 2026, when the web edition was pinned to the app's commit `cfc0d3c` (build 49, index version 65). Updated the same day, when S3's pin move took the pin to `2a4df13`, with FRUSCoreKit part 1; the build and index version are unchanged.
+A proposal for the owner, and for Claude Code sessions in either repository. Drafted 4 October 2026, when the web edition was pinned to the app's commit `cfc0d3c` (build 49, index version 65). Updated the same day, when S3's pin move took the pin to `af8bedab`, with FRUSCoreKit part 1; the build and index version are unchanged.
 
 - **The app:** FRUS Explorer, for Mac and iOS, in [`joshbotts/FRUS-Explorer`](https://github.com/joshbotts/FRUS-Explorer).
 - **The web edition:** FRUS Explorer Light, a self-hosted server, in [`joshbotts/FRUS-Explorer-Web-App`](https://github.com/joshbotts/FRUS-Explorer-Web-App).
@@ -39,7 +39,7 @@ The web edition does not reimplement the app. It compiles some of the app's own 
 | FTS5Store | Whole kit since the pin move after S1 (web pull request #15). Its schema file was compiled from S0 and its query compiler from S4 | The parity harness compares its parse of 482 queries with the app's. The server will use it for search |
 | TEIHeaderKit, with ManifestGeneratorCore and ManifestGeneratorTests for its tests | Since the pin move after S1 | Tests only, for now |
 | SemanticVectorsKit | Since the pin move after S1 | Semantic search, from phase 4 |
-| FRUSCoreKit, part 1 | Since S3's pin move, to `2a4df13` | The reader's HTML, and Cite. The web CI runs its tests, and renders the 392 golden rows with it |
+| FRUSCoreKit, part 1 | Since S3's pin move, to `af8bedab` | The reader's HTML, and Cite. The web CI runs its tests, and renders the 392 golden rows with it |
 | FRUSCoreKit, part 2 | S6 | Indexing and search on the server |
 | WordCloudKit | Not compiled | Built on Apple's NaturalLanguage framework. Phase 4 plans a separate Linux lemmatizer |
 
@@ -197,13 +197,13 @@ The whole of the app side's part. Each rule costs little or nothing. The boundar
 
 ## 6. For the owner
 
-1. **Adopt sections 4 and 5 as the arrangement.** A web session will open a pull request adding the appendix block to the app's `CLAUDE.md`. That block replaces the `CLAUDE.md` line offered as an owner item in #1567. #1569 adds a FRUSCoreKit entry to `CLAUDE.md`'s list of package targets; the block points to that entry rather than repeating it.
+1. **Sections 4 and 5 are the arrangement.** #1572 added the appendix block to the app's `CLAUDE.md`. That block replaces the `CLAUDE.md` line offered as an owner item in #1567. #1569 added a FRUSCoreKit entry to `CLAUDE.md`'s list of package targets; the block points to that entry rather than repeating it.
 2. **Allow the daily watch.** It runs in the web repository's GitHub Actions and needs nothing from the app's repository, which is public.
 3. **Expect these requests from web sessions:**
    - a Mac check and merge for each web-authored pull request;
    - now and then, an export from the pinned app build: three volumes for the golden files, or any export when the schema changes;
    - the full-corpus export before S10, as the owner checkpoints in `PLAN.md` list.
-4. **Make the three-volume export from a build of `2a4df13`.** FRUSCoreKit part 1 is pinned there, so golden files made from it stay current until the next pin move.
+4. **Make the three-volume export from a build of `af8bedab`.** FRUSCoreKit part 1 is pinned there, so golden files made from it stay current until the next pin move.
 
 ## Appendix: a section for the app's `CLAUDE.md`
 

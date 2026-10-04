@@ -4,13 +4,13 @@ One entry per session, newest first.
 
 ## Pin move: FRUSCoreKit on Linux in CI
 
-4 October 2026 · branch `claude/pin-2a4df13` · upstream [joshbotts/FRUS-Explorer#1569](https://github.com/joshbotts/FRUS-Explorer/pull/1569), merged as `f102fa4d`, and [#1571](https://github.com/joshbotts/FRUS-Explorer/pull/1571), merged as `2a4df13c`
+4 October 2026 · branch `claude/pin-2a4df13` · upstream [joshbotts/FRUS-Explorer#1569](https://github.com/joshbotts/FRUS-Explorer/pull/1569), merged as `f102fa4d`, [#1571](https://github.com/joshbotts/FRUS-Explorer/pull/1571), merged as `2a4df13c`, and [#1572](https://github.com/joshbotts/FRUS-Explorer/pull/1572), merged as `af8bedab`
 
-The owner ran Mac check 2 and squash-merged #1569 as `f102fa4d`, then #1571, which narrows the boundary test, as `2a4df13c`. They are the only commits on `v2` after `cfc0d3c`. This is the pull request Session 3's entry describes: it moves the pin, compiles FRUSCoreKit and its suites, and runs check 4 on Linux in CI. The index version stays 65, the FTS schema 4 and the app build 49, so `Compatibility.swift`, `docs/INSTALL.md` and the export's schema fixture are unchanged.
+The owner ran Mac check 2 and squash-merged #1569 as `f102fa4d`, then #1571, which narrows the boundary test, as `2a4df13c`, and #1572, the app's `CLAUDE.md` section for the web edition, as `af8bedab`. They are the only commits on `v2` after `cfc0d3c`. This is the pull request Session 3's entry describes: it moves the pin, compiles FRUSCoreKit and its suites, and runs check 4 on Linux in CI. The index version stays 65, the FTS schema 4 and the app build 49, so `Compatibility.swift`, `docs/INSTALL.md` and the export's schema fixture are unchanged.
 
 **Delivered**
 
-- **The pin** moves from `cfc0d3c` to `2a4df13` (rule 5). The submodule has no local changes.
+- **The pin** moves from `cfc0d3c` to `af8bedab` (rule 5). #1572, the last of the three, changes only `CLAUDE.md` and the app's session log, which no golden file digests. The submodule has no local changes.
 - **`Package.swift`,** with the targets of the working manifest in #1569's description:
   - `FRUSCoreKit`, from the submodule's `FRUSCoreKit/`. It depends on SourceNoteKit, as upstream's manifest declares, and on swift-crypto's `Crypto` for Linux only, which its `CryptoKit` guard falls back to.
   - `FRUSCoreKitTests`, the kit's eleven suites from `FRUSExplorerTests/FRUSCoreKit/`, depending on the kit alone: under SwiftPM each suite imports FRUSCoreKit and nothing else.
@@ -35,7 +35,7 @@ The owner ran Mac check 2 and squash-merged #1569 as `f102fa4d`, then #1571, whi
   - The eight suites `CitationFormatterTests.swift` compiles under `swift test`: 32 tests.
   - CitationParserTests: 26.
   - The three suites in `PageSpanResolverTests.swift`: 23.
-- **Golden files.** `scripts/make-golden` ran at `2a4df13` on the owner's Mac, in 89 seconds.
+- **Golden files.** `scripts/make-golden` ran on the owner's Mac at `2a4df13`, and again at `af8bedab`, where only the recorded commit changed, in 89 seconds.
   - `tools/mac-golden` compiled 529 app files and the stub, all 18 of FRUSCoreKit's among them.
   - The HTML of all 392 rows (3,554,115 bytes) and the expressions of all 482 queries are byte-identical to `cfc0d3c`'s.
   - Only the provenance changed, in four lines: `upstreamCommit` and `sourceDigest`, in `render/manifest.json` and `queries.expressions.json`. `check-golden` passes.
@@ -80,14 +80,14 @@ The owner ran Mac check 2 and squash-merged #1569 as `f102fa4d`, then #1571, whi
 - **The parser's debug log.** A debug build of the kit prints `[TEIParser]` lines, so the Linux test log now holds about 1,000 of them, about 580 from the renders. Most are "Warning: unparseable <pb n=…>", for two bracketed page numbers that every parse of their volume meets. They match neither guard pattern.
 - **The golden HTML cannot show the lookups.** The serializer writes a person's or a term's link from its ref alone, and drops the entry the lookup found. The one link a lookup decides, an `<abbr>` whose text names a term, occurs in none of the three fixture volumes. So the 392 rows would match with empty lists, or another volume's, as review showed by rendering with empty lookups. The full-parse test therefore compares the lists themselves, and the `<abbr>` test covers the one lookup that changes the HTML.
 - **For S8.** `parseVolumeFull`'s persons and terms are `parsePersons`' and `parseTerms`', field for field, in all three volumes (none in the 1894 volume, 58 persons and 19 terms, and 63 and 79). Rendering from its ASTs gives the same bytes. So one XML pass per volume gives the server everything the reader's HTML needs.
-- **The owner's next Mac build comes from `2a4df13`,** for the Golden files checkpoint, as `PLAN.md` says for a pin move. The S10 export will come from the build pinned at S10, after S6's pin move.
+- **The owner's next Mac build comes from `af8bedab`,** for the Golden files checkpoint, as `PLAN.md` says for a pin move. The S10 export will come from the build pinned at S10, after S6's pin move.
 - **Mac check 2 is Done** in `PLAN.md`'s owner checkpoints. `docs/COORDINATION.md` records that FRUSCoreKit is compiled, that the CI compares both golden files made from the app's source, and that #1571 has merged.
 
-**The owner's next step.** The three-volume export for the Golden files checkpoint can now be made, from a Mac build of `2a4df13`, in a library holding exactly the three fixture volumes. `scripts/make-golden --export <file>` then writes `index-summary.json` and `queries.results.json`. The top of the script says how to make the export.
+**The owner's next step.** The three-volume export for the Golden files checkpoint can now be made, from a Mac build of `af8bedab`, in a library holding exactly the three fixture volumes. `scripts/make-golden --export <file>` then writes `index-summary.json` and `queries.results.json`. The top of the script says how to make the export.
 
 **Next.**
 - After the export, S6: FRUSCoreKit part 2, the indexer and search on Linux, and check 7's matcher and splitter half.
-- Alongside it, a web session opens the pull request that adds `docs/COORDINATION.md`'s appendix block to the app's `CLAUDE.md`. Its merge closes [joshbotts/FRUS-Explorer#1570](https://github.com/joshbotts/FRUS-Explorer/issues/1570).
+- Done alongside: #1572 added `docs/COORDINATION.md`'s appendix block to the app's `CLAUDE.md`, closing [joshbotts/FRUS-Explorer#1570](https://github.com/joshbotts/FRUS-Explorer/issues/1570).
 - A web session adds the daily watch of the app's `v2`, as section 5 of `docs/COORDINATION.md` describes.
 
 ## Coordination with the app's repository
