@@ -13,9 +13,9 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "a5bd78c2bd07754cf28fc7a4cf718d1de8c615f376ff8e4d24d0efe1b138b371",
+    "sourceDigest" : "39d9aed13a9cf106904e80a714bdb7b45f8b4df2c3a325d4ae087fc1cd768df7",
     "tool" : "tools/mac-golden expressions",
-    "upstreamCommit" : "cfc0d3c654799aa95ea749d867b4535ef98b8b2b"
+    "upstreamCommit" : "2a4df13c7bd8f3fb90b6fb948a9ce19c1e06e4d3"
   },
   "queries" : [
     {
