@@ -2,6 +2,91 @@
 
 One entry per session, newest first.
 
+## Pin move: FRUSCoreKit on Linux in CI
+
+4 October 2026 · branch `claude/pin-2a4df13` · upstream [joshbotts/FRUS-Explorer#1569](https://github.com/joshbotts/FRUS-Explorer/pull/1569), merged as `f102fa4d`, and [#1571](https://github.com/joshbotts/FRUS-Explorer/pull/1571), merged as `2a4df13c`
+
+The owner ran Mac check 2 and squash-merged #1569 as `f102fa4d`, then #1571, which narrows the boundary test, as `2a4df13c`. They are the only commits on `v2` after `cfc0d3c`. This is the pull request Session 3's entry describes: it moves the pin, compiles FRUSCoreKit and its suites, and runs check 4 on Linux in CI. The index version stays 65, the FTS schema 4 and the app build 49, so `Compatibility.swift`, `docs/INSTALL.md` and the export's schema fixture are unchanged.
+
+**Delivered**
+
+- **The pin** moves from `cfc0d3c` to `2a4df13` (rule 5). The submodule has no local changes.
+- **`Package.swift`,** with the targets of the working manifest in #1569's description:
+  - `FRUSCoreKit`, from the submodule's `FRUSCoreKit/`. It depends on SourceNoteKit, as upstream's manifest declares, and on swift-crypto's `Crypto` for Linux only, which its `CryptoKit` guard falls back to.
+  - `FRUSCoreKitTests`, the kit's eleven suites from `FRUSExplorerTests/FRUSCoreKit/`, depending on the kit alone: under SwiftPM each suite imports FRUSCoreKit and nothing else.
+  - FRUSParity depends on the kit, for check 4. FRUSLightCore and the server depend on neither target, and `Package.resolved` is unchanged.
+- **Check 4 on Linux.** `Tests/FRUSParity/RenderParity.swift` renders the fixtures through the kit's public API alone. It imports the kit without `@testable`, as the server will. `RenderParityTests`, in FRUSParityTests, has three tests:
+  - **The reader's path,** for each of the 392 rows of `fixtures/golden/render/manifest.json`:
+    1. a new parser's `parseDocument`;
+    2. `ReaderLookups` from the volume's `parsePersons` and `parseTerms`;
+    3. `ASTToRenderNodeConverter(readerOf:lookups:brokenRefs:)`, with the submodule's `FRUSExplorer/Resources/broken-refs-index.json` decoded as `BrokenRefsIndex`;
+    4. `FRUSRenderNodeHTMLSerializer.reader`.
+
+    Each row's UTF-8 bytes must be the committed file's, and their size and SHA-256 the manifest row's. A difference reports both, and `RenderDiff.firstDifference`.
+  - **One full parse per volume,** the path S8 will serve, without a parse per document. `parseVolumeFull` must yield exactly the golden rows, in their order. Rendering from its ASTs, with its own persons and terms, must give the same bytes.
+  - **The comparison itself,** on golden files the test writes. Identical HTML passes. Canonically equivalent text, a missing document, an unlisted row and a manifest that disagrees with its file are each reported.
+
+  Both renders first require the golden manifest to be current at the pin, by `GoldenValidation`'s staleness check. One made from other app sources would test other code, so it fails as stale instead.
+  - The persons and terms are parsed once per volume. The reader parses them for each document it opens, but `FRUSDocumentParser` keeps no state between calls: each reads the file with a new `XMLParser`.
+  - Rows render concurrently, as many at once as the machine has processors.
+- **`frus-parity render`** runs check 4 on any machine, both passes, and prints their timings. Given a volume and a document, it renders that one, along the reader's path or with `--full-parse`, and `--out` saves its HTML. The HTML never goes to standard output, where a debug build of the kit prints its parser's log.
+- **Check 7's formatter and parser half** runs in CI, inside FRUSCoreKitTests: 81 tests in all.
+  - The eight suites `CitationFormatterTests.swift` compiles under `swift test`: 32 tests.
+  - CitationParserTests: 26.
+  - The three suites in `PageSpanResolverTests.swift`: 23.
+- **Golden files.** `scripts/make-golden` ran at `2a4df13` on the owner's Mac, in 89 seconds.
+  - `tools/mac-golden` compiled 529 app files and the stub, all 18 of FRUSCoreKit's among them.
+  - The HTML of all 392 rows (3,554,115 bytes) and the expressions of all 482 queries are byte-identical to `cfc0d3c`'s.
+  - Only the provenance changed, in four lines: `upstreamCommit` and `sourceDigest`, in `render/manifest.json` and `queries.expressions.json`. `check-golden` passes.
+  - The new digest, `39d9aed1…`, is the one S3 rehearsed at #1569's head. A Python recomputation gives the same over 612 files. Without `FRUSCoreKit`, the other 594 files give `b425aaa1…`.
+- **CI needs no change.** The kit's suites skip nothing on Linux, none calls `Test.cancel`, and no line of their log matches the skip guard's pattern.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64.** A clean build with tests: "Build complete! (59.52 secs)", 86 seconds with the dependencies' checkout, and no warnings. Of the 1,121 tests, 1,120 pass, and the one skip is the named one:
+
+  | Target | Tests |
+  | --- | --- |
+  | FRUSCoreKitTests | 393 |
+  | SourceNoteKitTests | 292 |
+  | FTS5StoreTests | 209 |
+  | ManifestGeneratorTests | 60 |
+  | SemanticVectorsKitTests | 35 |
+  | CrossRefKitTests | 10 |
+  | GeneratorKitTests | 7 |
+  | FRUSParityTests | 61 |
+  | FRUSLightCoreTests | 42 |
+  | FRUSLightServerTests | 9 |
+  | FTS5CheckTests | 3 |
+
+  - The seven kits hold 1,006 of them: S1's 613, and FRUSCoreKitTests' "✔ Test run with 393 tests in 49 suites passed after 0.100 seconds.", the count #1569 states.
+  - FRUSParityTests has three tests more than before. The renders print "check 4, the reader's path: 392 of 392 rows identical" and "check 4, one full parse per volume: 392 of 392 rows identical".
+- **macOS, natively.** The same 1,121 tests, with the same counts per target, all pass with none skipped. A clean build: "Build complete! (46.40 sec)", with no warnings. FRUSCoreKitTests: "✔ Test run with 393 tests in 49 suites passed after 0.066 seconds." Both renders give 392 of 392.
+- **The guard.** The Test step's script and No runtime skips, read from `ci.yml`, ran in the swift image under `bash -eo pipefail`, with `LANG` unset and set to `C.UTF-8`, against this branch's real Linux log.
+  - Both pass, and the named skip appears once.
+  - No runtime skips searched 27 directories, the kit's two among them. It fails when `Test.cancel` is planted in a kit suite.
+- **A difference, planted.** One character added to a golden file made both renders fail on that row alone. Each named the row and printed the first differing piece, ending "February 13, 1961.X</p></div>" in the golden file and "February 13, 1961.</p></div>" in the render.
+- **Timing.** Testing took 113 seconds on Linux arm64 with 10 CPUs, 98 of them in FTS5StoreTests.
+  - The test targets run one after another, so FRUSParityTests' time adds to the step's: 7.1 seconds, up from 3.9 at `cfc0d3c`.
+  - Within that run, the reader's path took 7.1 seconds and the full-parse pass 3.2. Run alone, they took 4.0 and 0.6, and with Docker limited to 4 CPUs the reader's path took 7.5.
+  - At PR #15, GitHub's amd64 runner ran FTS5StoreTests 3.9 times slower than this Mac (372 seconds against 96). At that ratio, the reader's path should take about 30 seconds there, and FRUSCoreKitTests well under one.
+  - macOS took 87 seconds to test.
+- **The image is unaffected.** `scripts/compose-smoke` passes. The image's build compiled FRUSLightCore and the server and no kit, and the stripped server binary was byte-identical to the previous build's: its layer came from the cache. The image is still 251 MB.
+
+**Notes**
+
+- **The parser's debug log.** A debug build of the kit prints `[TEIParser]` lines, so the Linux test log now holds about 990 of them, 570 from the renders. Most are "Warning: unparseable <pb n=…>", for two bracketed page numbers that every parse of their volume meets. They match neither guard pattern.
+- **For S8.** The full-parse pass renders with `parseVolumeFull`'s own persons and terms, not `parsePersons` and `parseTerms`, and gives the same bytes. So one XML pass per volume gives the server everything the reader's HTML needs.
+- **The owner's next Mac build comes from `2a4df13`,** for the Golden files checkpoint and the S10 export, as `PLAN.md` says for a pin move.
+- **Mac check 2 is Done** in `PLAN.md`'s owner checkpoints. `docs/COORDINATION.md` records that FRUSCoreKit is compiled, that the CI compares both golden files made from the app's source, and that #1571 has merged.
+
+**The owner's next step.** The three-volume export for the Golden files checkpoint can now be made, from a Mac build of `2a4df13`, in a library holding exactly the three fixture volumes. `scripts/make-golden --export <file>` then writes `index-summary.json` and `queries.results.json`. The top of the script says how to make the export.
+
+**Next.**
+- After the export, S6: FRUSCoreKit part 2, the indexer and search on Linux, and check 7's matcher and splitter half.
+- Alongside it, a web session opens the pull request that adds `docs/COORDINATION.md`'s appendix block to the app's `CLAUDE.md`. Its merge closes [joshbotts/FRUS-Explorer#1570](https://github.com/joshbotts/FRUS-Explorer/issues/1570).
+- A web session adds the daily watch of the app's `v2`, as section 5 of `docs/COORDINATION.md` describes.
+
 ## Coordination with the app's repository
 
 4 October 2026 · branch `claude/coordination`
