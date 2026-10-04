@@ -62,7 +62,7 @@ Each step was run in this session on 28 September. The session had 4 vCPUs, 15 G
 **Mac** (the owner's machine)
 
 - [x] Install a container runtime that runs Compose files: Docker Desktop, Podman Desktop or Colima. Docker Desktop needs a paid subscription in larger organisations, so check what yours allows.
-- [ ] After session 0 pins the submodule, build FRUS Explorer in Xcode 27 from the pinned commit, which `git submodule status` names. Make the golden files after S4 and the export before S10 with this build. Golden files from other code test the wrong thing, and the server rejects an export from another index version. When the pin moves, rebuild and refresh the golden files.
+- [ ] After session 0 pins the submodule, build FRUS Explorer in Xcode 27 from the pinned commit, which `git submodule status` names. Make the golden files after S4 and the export before S10 with this build. Golden files from other code test the wrong thing, and the server rejects an export from another index version. When the pin moves, rebuild, and refresh the golden files with `scripts/make-golden` in the pull request that moves the pin: its `swift` check fails on golden files made from other app sources or resources.
 - [x] Download three small fixture volumes in the Mac app, before session 4: `frus1894Nicaragua` (1.27 MB), `frus1961-63v06` (1.65 MB) and `frus1969-76ve09p1` (1.89 MB). They span three eras and both print and electronic-only volumes. The Mac's copies are byte-identical to HistoryAtState/frus commit `8e5da08`.
 
 `scripts/mac-check` checks these items, plus macOS 26 or later and Xcode 27, and marks anything due later. It changes nothing. If macOS asks, let Terminal access data from other apps.
@@ -282,7 +282,7 @@ Answered on 3 October:
 - The web repository goes public, which brings branch protection and native arm64 runners on GitHub Free.
 - The published image is public too, so it pulls without signing in.
 - TEI volumes: on a Mac, FRUS Explorer's own folder, once Docker Desktop is allowed to read it; on Linux, a shallow clone of HistoryAtState/frus. `docs/INSTALL.md` gives both.
-- Sessions do not open pull requests on `FRUS-Explorer` for now. The core track (S1, S3, S6) waits, and the server track (S2, S5, S7) goes ahead. When S1 runs, it builds and tests the six kits against its upstream pull request's head in the session and records the result in `docs/DEVLOG.md`; after the owner's Mac check and merge, a separate pull request moves the pin and adds the kits to CI.
+- Sessions do not open pull requests on `FRUS-Explorer` for now. The core track (S1, S3, S6) waits, and the server track (S2, S5, S7) goes ahead. When S1 runs, it builds and tests the six kits against its upstream pull request's head in the session and records the result in `docs/DEVLOG.md`; after the owner's Mac check and merge, a separate pull request moves the pin and adds the kits to CI. That pull request also carries the golden files, made again at the new pin on the owner's Mac by `scripts/make-golden`.
 - A session's `docs/DEVLOG.md` entry is the record that it is done (rule 3).
 - S4 copies no upstream code, so renderer parity on Linux waits for S3.
 - Check 3 passes when results differ only in the order of documents whose Mac scores are exactly equal. Each such group is reported.
