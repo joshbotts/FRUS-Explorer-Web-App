@@ -87,12 +87,15 @@ FRUS-Explorer-Web-App/
 ├── Sources/FRUSLightServer/   Hummingbird 2 executable
 ├── Tests/                     unit tests and the parity harness
 ├── fixtures/tei/              the three fixture volumes, about 4.8 MB
-├── fixtures/golden/           Mac-generated golden outputs, as JSON
+├── fixtures/parity/           the check-3 query list and its rules
+├── fixtures/golden/           Mac-generated golden outputs, as JSON and HTML
 ├── web/                       the TypeScript SPA (React, Vite)
 ├── docker/Dockerfile          multi-stage image
 ├── scripts/swift              runs swift in swift:6.4-noble with the session proxy
 ├── scripts/doctor             checks the session's prerequisites
 ├── scripts/mac-check          checks the owner's Mac against this plan
+├── scripts/make-golden        writes the golden files on the owner's Mac
+├── tools/mac-golden/          Mac-only: runs the app's own code for the golden files
 └── .github/workflows/         ci and image; terraform and deploy arrive in phase 6
 ```
 
@@ -138,7 +141,7 @@ S0 comes first, and the core track starts after it. The tracks join at session 8
 | S1 | Core | An upstream pull request with Linux guards: `FoundationXML` in TEIHeaderKit, swift-crypto in SemanticVectorsKit, and `CSQLite` plus a logging shim in FTS5Store | All six portable kits build on Linux and their tests pass: the spec's check 1 |
 | S2 | Server | The Hummingbird 2 server: configuration, `/healthz`, `/readyz` and `/api/v1/status`; Import mode, which validates a Mac export and opens it with `immutable=1`; the spec's five v1 interfaces | Tests import a synthetic export they build, and walk `/readyz` through every step |
 | S3 | Core | `FRUSCoreKit`, part 1: the TEI parser, AST, render conversion, HTML serializer and Citation, compiled from the app's own files | The renderer turns the three fixture volumes into HTML on Linux, and the citation fixtures pass |
-| S4 | Core | The parity harness: a script that summarizes any `frus.db` (row counts and a content hash per table, ordered by natural key), the query list, and the tests for checks 2–4 | The tests run against golden files as soon as the owner commits them |
+| S4 | Core | The parity harness: `frus-parity`, which summarizes any `frus.db` (row counts and a content hash per table, ordered by natural key); the query list; `tools/mac-golden`, which runs the app's own code on the Mac to write the golden files; and the tests for checks 2–4 | The tests run against golden files as soon as the owner commits them |
 | S5 | Server | `docker/Dockerfile`, `compose.yaml` with the optional Gotenberg service, and a Compose smoke test in `ci.yml` | CI runs `docker compose up` on a synthetic export and gets 200 from `/readyz` |
 | S6 | Core | `FRUSCoreKit`, part 2: `IndexingPipeline` and `SearchService` on Linux | Checks 2–4 pass on the three fixture volumes, with indexing speed and memory recorded: phase 0's exit |
 | S7 | Server | `image.yml`, publishing amd64 and arm64 images, and `docs/INSTALL.md` for a Mac and a Linux host | The owner installs from the published image by following the guide |
@@ -247,7 +250,7 @@ Eight steps need the owner, because a cloud session has no Mac and no Xcode. Ses
 | Settings | Before S0 | The GitHub and environment items under Before the first session, and a container runtime on the Mac | To do |
 | Mac check 1 | After S1 | Check out the upstream pull request in `FRUS-Explorer`, build both schemes in Xcode, run the unit tests, and merge if they pass | To do |
 | Mac check 2 | After S3 | The same for the TEI and Citation guards | To do |
-| Golden files | After S4 | Download the three fixture volumes in the pinned build of the Mac app, export the research database, run the harness's summary script on the export and its render and query tool on the Mac, and commit `fixtures/golden/` | To do |
+| Golden files | After S4 | In the pinned build of the Mac app, make a library holding exactly the three fixture volumes, for example under a second macOS user. Export its research database, run `scripts/make-golden --export` on the export, and commit `fixtures/golden/`. S4 made the golden files that need only the app's source | To do |
 | Mac check 3 | After S6 | The same as Mac check 1, for the indexer and search guards | To do |
 | Mac trial | After S7 | Install from the published image by following `docs/INSTALL.md`, and report anything the guide gets wrong | Done |
 | Mac export | Before S10 | Export the full research database from the pinned build, about 2.8 GB, for the Compose install to import | To do |
@@ -281,6 +284,9 @@ Answered on 3 October:
 - TEI volumes: on a Mac, FRUS Explorer's own folder, once Docker Desktop is allowed to read it; on Linux, a shallow clone of HistoryAtState/frus. `docs/INSTALL.md` gives both.
 - Sessions do not open pull requests on `FRUS-Explorer` for now. The core track (S1, S3, S6) waits, and the server track (S2, S5, S7) goes ahead. When S1 runs, it builds and tests the six kits against its upstream pull request's head in the session and records the result in `docs/DEVLOG.md`; after the owner's Mac check and merge, a separate pull request moves the pin and adds the kits to CI.
 - A session's `docs/DEVLOG.md` entry is the record that it is done (rule 3).
+- S4 copies no upstream code, so renderer parity on Linux waits for S3.
+- Check 3 passes when results differ only in the order of documents whose Mac scores are exactly equal. Each such group is reported.
+- The golden files that depend only on the app's source are made in a session on the owner's Mac. The owner makes the two that need an export.
 
 ## Session 0 kickoff prompt
 

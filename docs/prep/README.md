@@ -2,7 +2,7 @@
 
 3 October 2026 · at `FRUS-Explorer` commit `34a5120` (index version 65, app build 49)
 
-Sessions 0 and 2 are done; see `docs/DEVLOG.md`. S1 waits, because the owner asked that sessions not open pull requests on `FRUS-Explorer` for now. This folder keeps what a dry run on Linux found for later sessions, so their prompts can start from evidence rather than estimates.
+Sessions 0, 2, 4, 5 and 7 are done; see `docs/DEVLOG.md`. S1 waits, because the owner asked that sessions not open pull requests on `FRUS-Explorer` for now. This folder keeps what a dry run on Linux found for later sessions, so their prompts can start from evidence rather than estimates.
 
 ## What was verified
 
@@ -60,6 +60,8 @@ Settled on 3 October: on a Mac, FRUS Explorer's own folder once Docker Desktop i
 - **The published image's visibility:** public, decided on 3 October.
 
 ## Before the S3, S4 and S6 prompts
+
+S4 settled what concerns it here: its golden files come from a library holding only the three fixture volumes, and its summary refuses any other export. Its DEVLOG entry says how.
 
 - **"Every Linux change to a shared file is a guard" holds only for S1.** S3's 15 app files and S6's 48 (36,861 lines, 19 of them edited) also need declarations moved out of Apple-only files: WebKit, SwiftUI, AppKit or UIKit, and SwiftData `@Model` files. That is an upstream refactor pull request, best landed after the public release. `s3-linux-edits.tsv` and `s6-linux-edits.tsv` list every change.
 - **`String(localized:)` has no Linux form.** The S3 files use it 46 times. `shims/StringLocalizedShim.swift` covers the forms they use, including `format:`.
