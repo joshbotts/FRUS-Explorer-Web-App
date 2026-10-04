@@ -1,0 +1,177 @@
+#!/bin/bash
+# FRUS Explorer Light: makes the parity harness's golden files in fixtures/golden on the owner's Mac.
+#   scripts/make-golden                                  the files made from the app's source alone
+#   scripts/make-golden --export <three-volume-export>   those, and the files made from an export
+# It writes fixtures/golden and updates fixtures/golden/PENDING. It never commits: review the
+# changes it lists at the end, then commit them in the session's pull request.
+#
+# From the app's source, with tools/mac-golden (the app module, compiled from the submodule):
+#   render/                    each fixture document as the reader renders it (check 4)
+#   queries.expressions.json   each query's parse and MATCH expressions (check 3)
+# From an export, with frus-parity and tools/mac-golden:
+#   index-summary.json         each table's row count and content hash (check 2)
+#   queries.results.json       each query's count and first 50 results (check 3)
+#
+# The export must come from a library holding exactly the three fixture volumes, since BM25 ranks
+# with whole-index statistics and person rollups span volumes. To make it:
+#   1. Build FRUS Explorer in Xcode 27 from the pinned commit (git submodule status names it).
+#   2. Run it with a library of its own, such as under a second macOS user, and download only
+#      frus1894Nicaragua, frus1961-63v06 and frus1969-76ve09p1. The app downloads from
+#      HistoryAtState's master: the three files in its Volumes folder must match
+#      fixtures/tei/SHA256SUMS (shasum -a 256).
+#   3. Leave it running until indexing finishes and the person rollup has run.
+#   4. Export Research Database…, with Include My Notes, Summaries, and Tags turned off, and save it
+#      outside ~/Documents, such as /Users/Shared/frus-golden.sqlite.
+# The script copies the export to a new temporary folder and works on the copy only.
+#
+# Needs macOS 26 or later, Xcode 27 and the submodule. The first run builds the app module, which
+# takes a minute or two.
+
+fixes=0
+ok()    { printf '  ok     %s\n' "$*"; }
+later() { printf '  later  %s\n' "$*"; }
+fix()   { printf '  FIX    %s\n' "$*"; fixes=$((fixes + 1)); }
+usage() { echo "usage: scripts/make-golden [--export <three-volume-export.sqlite>]" >&2; exit 2; }
+
+export_file=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --export) [ $# -ge 2 ] || usage; export_file=$2; shift 2 ;;
+    *) usage ;;
+  esac
+done
+
+case "$export_file" in
+  ''|/*) ;;
+  *) export_file="$PWD/$export_file" ;;
+esac
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$root" || exit 1
+golden=fixtures/golden
+work=$(mktemp -d) || exit 1
+trap 'rm -rf "$work"' EXIT
+
+# Runs a step, keeping its output in $work. On failure, prints the output's last lines.
+step() {
+  local name=$1; shift
+  if "$@" >"$work/$name.log" 2>&1; then return 0; fi
+  tail -15 "$work/$name.log" | sed 's/^/         /'
+  return 1
+}
+
+echo "Mac"
+os=$(sw_vers -productVersion)
+if [ "${os%%.*}" -ge 26 ]; then ok "macOS $os"
+else fix "macOS $os: the app module needs macOS 26 or later"; fi
+if xc=$(xcodebuild -version 2>/dev/null | head -1) && [ -n "$xc" ]; then
+  xv=${xc#Xcode }
+  if [ "${xv%%.*}" -ge 27 ]; then ok "$xc"
+  else fix "$xc: the golden files are made with Xcode 27, whose Swift 6.4 matches the server image"; fi
+else
+  fix "Xcode: xcodebuild failed. Install Xcode 27, then: sudo xcode-select -s /Applications/Xcode.app"
+fi
+
+echo "Submodule"
+pin=$(git ls-files --stage upstream/FRUS-Explorer 2>/dev/null | awk '$1 == "160000" {print $2}')
+head=""
+if [ -e upstream/FRUS-Explorer/.git ]; then head=$(git -C upstream/FRUS-Explorer rev-parse HEAD 2>/dev/null); fi
+if [ -z "$head" ]; then fix "upstream/FRUS-Explorer is not checked out: scripts/doctor checks it out"
+elif [ "$head" != "$pin" ]; then fix "upstream/FRUS-Explorer is at ${head:0:7}, the pin is ${pin:0:7}: git submodule update --init"
+elif [ -n "$(git -C upstream/FRUS-Explorer status --porcelain 2>/dev/null)" ]; then
+  fix "upstream/FRUS-Explorer has local changes: the golden files must come from the pin unmodified"
+else ok "upstream/FRUS-Explorer at the pin ${pin:0:7}, unmodified"; fi
+
+if [ -n "$export_file" ]; then
+  echo "Export"
+  if [ ! -f "$export_file" ]; then fix "$export_file does not exist"
+  elif [ -e "$export_file-wal" ] || [ -e "$export_file-journal" ]; then
+    fix "$export_file has a -wal or -journal beside it, so it may be open: use a file Export Research Database… wrote"
+  elif cp "$export_file" "$work/export.sqlite"; then ok "copied $export_file to a temporary folder"
+  else fix "could not copy $export_file"; fi
+fi
+
+if [ "$fixes" -ne 0 ]; then
+  echo
+  echo "$fixes item(s) need fixing first, marked FIX above. Nothing was written."
+  exit 1
+fi
+
+echo "From the app's source"
+tool=""
+# Without the manifest cache, the build's list of the submodule's non-Swift files is current.
+if step mac-golden-build swift build --package-path tools/mac-golden --manifest-cache none; then
+  tool="$(swift build --package-path tools/mac-golden --show-bin-path)/mac-golden"
+  ok "built tools/mac-golden"
+else
+  fix "tools/mac-golden did not build (above)"
+fi
+
+# Runs a mac-golden command. Its messages are on standard error; the app's own logging, on
+# standard output, goes to $work.
+golden_tool() {
+  local name=$1; shift
+  local messages
+  if messages=$("$tool" "$@" --repo "$root" 2>&1 >"$work/$name.log"); then
+    printf '%s\n' "$messages" | tail -1 | sed 's/^/  ok     /'
+  else
+    printf '%s\n' "$messages" | sed 's/^/         /'
+    fix "mac-golden $1 failed (above)"
+  fi
+}
+
+if [ -n "$tool" ]; then
+  golden_tool render render
+  if [ -f fixtures/parity/queries.jsonl ] && [ -f fixtures/parity/rules.tsv ]; then
+    golden_tool expressions expressions
+  else
+    fix "fixtures/parity/queries.jsonl or rules.tsv is missing, so the expressions cannot be made"
+  fi
+fi
+
+echo "From the export"
+if [ -z "$export_file" ]; then
+  later "index-summary.json and queries.results.json: run again with --export <file>, made as the top of this script says"
+else
+  if step frus-parity-summarize swift run -c release frus-parity summarize "$work/export.sqlite" \
+       --golden "$golden/index-summary.json"; then
+    ok "$golden/index-summary.json"
+  else
+    fix "frus-parity summarize failed (above)"
+  fi
+  if [ -n "$tool" ]; then
+    golden_tool results results --db "$work/export.sqlite"
+  fi
+fi
+
+echo "Golden files"
+# A golden file that now exists is no longer pending.
+if [ -f "$golden/PENDING" ]; then
+  : >"$work/PENDING"
+  made=""
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      '#'*|'') ;;
+      *) file=${line%%$'\t'*}
+         if [ -f "$golden/$file" ]; then made="$made $file"; continue; fi ;;
+    esac
+    printf '%s\n' "$line" >>"$work/PENDING"
+  done <"$golden/PENDING"
+  if [ -z "$made" ]; then ok "$golden/PENDING unchanged"
+  elif cp "$work/PENDING" "$golden/PENDING"; then ok "$golden/PENDING no longer lists$made"
+  else fix "could not update $golden/PENDING"; fi
+fi
+if step check-golden swift run -c release frus-parity check-golden; then
+  ok "frus-parity check-golden passes"
+else
+  fix "frus-parity check-golden failed (above)"
+fi
+
+echo
+git status --short -- "$golden" | sed 's/^/  /'
+echo
+if [ "$fixes" -eq 0 ]; then
+  echo "Review the changes to $golden listed above, then commit them. This script commits nothing."
+else
+  echo "$fixes item(s) failed, marked FIX above. Review $golden before committing anything."
+  exit 1
+fi
