@@ -1,0 +1,75 @@
+# The search rules check 3 covers, one per line: id, source, summary, separated by tabs.
+# R01-R46 are every rule upstream Docs/macOS-User-Manual.md section 7.2 states, in its order; R47-R69 are
+# behaviours beyond 7.2 that queries.jsonl also covers. "07-Search-and-Browse.md" is upstream
+# Docs/EditableContent/07-Search-and-Browse.md, whose section 7.13 is the Search Tips text.
+# Not covered: 7.2's Tips paragraph on Meaning mode, where none of these marks has an effect. A meaning
+# search is semantic, so check 9 covers it.
+R01-implicit-and	macOS-User-Manual.md §7.2, syntax table: Plain keywords; 07-Search-and-Browse.md §7.13 tip 1	Words typed side by side are all required, as if joined by AND.
+R02-phrase	macOS-User-Manual.md §7.2, syntax table: Quoted phrase; 07-Search-and-Browse.md §7.13 tip 3	Words in quotation marks must appear together and in the order typed.
+R03-and	macOS-User-Manual.md §7.2, syntax table: Boolean AND / OR / NOT	AND, in any case, requires the terms on both sides of it.
+R04-or	macOS-User-Manual.md §7.2, syntax table: Boolean AND / OR / NOT; 07-Search-and-Browse.md §7.13 tip 4	OR, in any case, finds documents that match either side of it.
+R05-not	macOS-User-Manual.md §7.2, syntax table: Boolean AND / OR / NOT	NOT, in any case, leaves out documents containing the term after it.
+R06-quoted-operator	macOS-User-Manual.md §7.2, syntax table: Boolean AND / OR / NOT; 07-Search-and-Browse.md §7.13 tip 5	A quoted and, or or not is searched as the word itself.
+R07-or-precedence	macOS-User-Manual.md §7.2, syntax table: Boolean AND / OR / NOT; 07-Search-and-Browse.md §7.13 tip 4	Words side by side bind tighter than OR, so cold war OR peace finds cold with war, or peace.
+R08-exclusion-in-run	macOS-User-Manual.md §7.2, syntax table: Exclusion; 07-Search-and-Browse.md §7.13 tip 6	A minus sign touching a word excludes it from the terms typed with it, wherever it sits among them.
+R09-minus-equals-not	macOS-User-Manual.md §7.2, syntax table: Exclusion; paragraph Exclusions and OR	-word, NOT word and AND NOT word are the same exclusion.
+R10-minus-before-near	macOS-User-Manual.md §7.2, syntax table: Exclusion; paragraph Proximity (NEAR)	Only NOT NEAR(…) excludes a proximity; a minus sign before NEAR does not.
+R11-grouping	macOS-User-Manual.md §7.2, syntax table: Grouping; 07-Search-and-Browse.md §7.13 tip 8	Parentheses group alternatives, and the group must match along with the words beside it.
+R12-group-depth	macOS-User-Manual.md §7.2, syntax table: Grouping; paragraph A search needs a word	Parentheses nest up to 32 deep, and a query nested deeper is not run.
+R13-exclude-group	macOS-User-Manual.md §7.2, syntax table: Excluding a group; 07-Search-and-Browse.md §7.13 tip 9	A minus sign touching the parenthesis, or NOT, excludes everything the group matches.
+R14-detached-minus	macOS-User-Manual.md §7.2, syntax table: Excluding a group; 07-Search-and-Browse.md §7.13 tip 9	A minus sign that does not touch the parenthesis is ignored, so the group is searched for.
+R15-prefix	macOS-User-Manual.md §7.2, syntax table: Prefix wildcard; 07-Search-and-Browse.md §7.13 tip 10	A trailing star finds the words that begin with the letters before it.
+R16-no-suffix-wildcard	macOS-User-Manual.md §7.2, syntax table: Prefix wildcard	A star anywhere but the end of a word is no wildcard: *tion searches the word tion.
+R17-prefix-stems	macOS-User-Manual.md §7.2, syntax table: Prefix wildcard; 07-Search-and-Browse.md §7.13 tip 10	A prefix is matched against word stems, so negotiat* misses negotiations, which negoti* finds.
+R18-near	macOS-User-Manual.md §7.2, syntax table: Proximity; paragraph Proximity (NEAR)	NEAR(a b, N) finds its operands within N words of each other in either order; they may be words, phrases or prefixes.
+R19-near-default-distance	macOS-User-Manual.md §7.2, paragraph Proximity (NEAR); 07-Search-and-Browse.md §7.13 tip 11	A NEAR with no distance uses a distance of 10.
+R20-near-spellings	macOS-User-Manual.md §7.2, paragraph Proximity (NEAR)	NEAR works in any case, and NEAR/20(a b) is accepted for NEAR(a b, 20).
+R21-near-combined	macOS-User-Manual.md §7.2, paragraph Proximity (NEAR)	A NEAR combines with OR and with other terms outside its parentheses, as in NEAR(a b, 20) OR NEAR(c d, 20).
+R22-near-refused	macOS-User-Manual.md §7.2, paragraphs Proximity (NEAR) and A search needs a word; 07-Search-and-Browse.md §7.13 tip 11	A NEAR holding OR, AND, NOT, a minus sign, parentheses or a distance that is not a whole number is refused, and nothing is searched.
+R23-exact-word	macOS-User-Manual.md §7.2, syntax table: Exact word; paragraph Exact word; 07-Search-and-Browse.md §7.13 tip 12	=word turns off stemming for that word while capitalization still does not matter, and the count narrows with it.
+R24-quotation-marks	macOS-User-Manual.md §7.2, paragraph Quotation marks	Straight, curly, low-high and guillemet quotation marks all make a phrase.
+R25-no-quotes-in-phrase	macOS-User-Manual.md §7.2, paragraph Quotation marks	Every quotation mark opens or closes a phrase, so a phrase cannot hold quotation marks of its own.
+R26-phrase-printed-quotes	macOS-User-Manual.md §7.2, paragraph Quotation marks	A phrase typed without inner quotation marks still matches a document that prints them.
+R27-exclusion-stops-at-or	macOS-User-Manual.md §7.2, paragraph Exclusions and OR; 07-Search-and-Browse.md §7.13 tip 7	An exclusion applies to the terms it is typed with and does not reach across OR.
+R28-exclude-from-group	macOS-User-Manual.md §7.2, paragraph Exclusions and OR; 07-Search-and-Browse.md §7.13 tip 7	Grouping the alternatives excludes the word from every one of them.
+R29-doubled-marks	macOS-User-Manual.md §7.2, paragraph Exclusions and OR	A doubled negation, such as NOT -korea, still excludes the word once.
+R30-dropped-alternative	macOS-User-Manual.md §7.2, paragraph Exclusions and OR; 07-Search-and-Browse.md §7.13 tip 13	An OR alternative made only of exclusions is left out, and the search runs on the rest.
+R31-anchored-alternative	macOS-User-Manual.md §7.2, paragraph Exclusions and OR; 07-Search-and-Browse.md §7.13 tip 13	In parentheses beside a word to search for, such an alternative is searched exactly and nothing is left out.
+R32-structured-anchor	macOS-User-Manual.md §7.2, paragraph Exclusions and OR	A phrase or prefix restored with a saved search lets the typed exclusions beside it be searched exactly.
+R33-excluded-group-reverses	macOS-User-Manual.md §7.2, paragraph Exclusions and OR	Excluding a group reverses its marks: the words it searches for are excluded, and the words it excludes are searched for.
+R34-reversal-with-drop	macOS-User-Manual.md §7.2, paragraph Exclusions and OR	cold OR -(war -korea) runs as cold OR korea, and only war is left out.
+R35-group-of-exclusions	macOS-User-Manual.md §7.2, paragraph Exclusions and OR	A group made only of exclusions just excludes them, so cold -(-korea) is cold -korea.
+R36-needs-a-word	macOS-User-Manual.md §7.2, paragraph A search needs a word; 07-Search-and-Browse.md §7.13 tip 13	A query made only of exclusions, or with nothing in it, has nothing to search for and is refused.
+R37-empty-scope	macOS-User-Manual.md §7.2, paragraph A search needs a word	A search with every Search in switch turned off fails.
+R38-exact-per-term	macOS-User-Manual.md §7.2, paragraph Exact word	The = mark works per term, so marked and stemmed terms mix in one query.
+R39-exact-required	macOS-User-Manual.md §7.2, paragraph Exact word	A mark applies only where every match must contain the word: a required word, or one that every OR alternative marks.
+R40-exact-applies-everywhere	macOS-User-Manual.md §7.2, paragraph Exact word	Once a word's mark applies, it applies wherever the query searches for that word with a mark.
+R41-exact-word-identity	macOS-User-Manual.md §7.2, paragraph Exact word; 07-Search-and-Browse.md §7.13 tip 12	Capitalization, punctuation at either end and a single accent do not make a marked word another word.
+R42-exact-distinct-letters	macOS-User-Manual.md §7.2, paragraph Exact word	Letters such as ø, ł and đ are different letters, so =Gomułka and =Gomulka mark two words.
+R43-exact-ignored-optional	macOS-User-Manual.md §7.2, paragraph Exact word	Where a match need not contain the marked word, the mark is ignored and the word is stemmed.
+R44-exact-unmarked-copy	macOS-User-Manual.md §7.2, paragraph Exact word	An unmarked copy of a marked word matches by its stem and does not make the mark apply.
+R45-exact-via-excluded-group	macOS-User-Manual.md §7.2, paragraph Exact word	Excluding a group can make a mark apply, so NOT (war OR -=cold) finds the literal cold without war.
+R46-exact-ignored-forms	macOS-User-Manual.md §7.2, paragraph Exact word; 07-Search-and-Browse.md §7.13 tip 12	The mark is always ignored on a prefix, inside NEAR(…), and on a word the index splits into several terms.
+R47-stemming	macOS-User-Manual.md §7 (introduction); 07-Search-and-Browse.md §7.13 tip 2	Each word also matches its other forms by English stemming, whether it is searched for or excluded.
+R48-relevance-ranking	macOS-User-Manual.md §7 (introduction)	Results are ranked by BM25 relevance, and broad terms give long lists whose scores tie exactly.
+R49-case-folding	FTS5Types.swift: the porter unicode61 tokenizer	A term matches whatever its capitalization.
+R50-unpaired-quote	FTS5InlineQueryParser.swift; macOS-User-Manual.md §7.3	An unpaired quotation mark closes its phrase at the end of the query, and an empty phrase adds nothing.
+R51-demoted-operator	FTS5InlineQueryParser.swift header; macOS-User-Manual.md §7.3	An AND, OR or NOT that cannot bind to an operand is searched as a word.
+R52-unbalanced-parentheses	FTS5InlineQueryParser.swift, Grouping and A dash before a group; macOS-User-Manual.md §7.3	An unmatched parenthesis is punctuation, and an empty group is dropped.
+R53-approximation-refused	FTS5InlineQueryParser.swift, Exclusions	An approximated query proved to match nothing is refused, while an exact one that matches nothing still runs.
+R54-structured-fields	macOS-User-Manual.md §7.3 (ADVANCED) and §7.4; FTS5InlineQueryParser.swift, Structured parts	A restored phrase, prefix and excluded terms join the typed query; an excluded term applies to every column and anchors nothing.
+R55-scope-document-text	macOS-User-Manual.md §7.1 (Search in) and §7.4 (Search scope); SearchService.swift, matchExpressions	With document text off there is no corpus expression, and only summaries and notes are searched.
+R56-scope-user-content	macOS-User-Manual.md §7.1 (Search in) and §7.4 (Search scope); SearchService.swift, matchExpressions	With only one of summaries and notes on, the user-content expression is scoped to that column.
+R57-scope-corpus-only	macOS-User-Manual.md §7.1 (Search in) and §7.4 (Search scope); SearchService.swift, matchExpressions	With summaries and notes both off, only the corpus expression runs.
+R58-volume-filter	macOS-User-Manual.md §7.4, Volume / Subseries scope; SearchModels.swift, SearchParameters.volumeIds	volumeIds keeps the documents of the listed volumes, and an empty list is no filter.
+R59-year-filter	macOS-User-Manual.md §7.5, Years; SearchModels.swift, SearchParameters.yearKeys	yearKeys keeps the documents whose start year is listed, and an empty list matches nothing.
+R60-date-range-overlap	07-Search-and-Browse.md §7.13, Dates note; macOS-User-Manual.md §7.4 and §7.5	A date range keeps documents whose dates overlap it, and either end of the range may be open.
+R61-date-range-undated	07-Search-and-Browse.md §7.13, Dates note	A date range leaves out documents with no date.
+R62-document-type	macOS-User-Manual.md §7.4, Type	The type filter keeps primary documents, editorial notes, or both.
+R63-front-matter	macOS-User-Manual.md §7.4, Front matter	Excluding front matter leaves out prefaces, introductions, lists of abbreviations and the like.
+R64-tokenizer-apostrophe	FTS5Types.swift: the porter unicode61 tokenizer	An apostrophe splits a word, so Khrushchev's is searched as the phrase khrushchev s.
+R65-tokenizer-hyphen	FTS5Types.swift: the porter unicode61 tokenizer	A hyphen inside a word splits it into a phrase of its parts.
+R66-tokenizer-dotted	FTS5Types.swift: the porter unicode61 tokenizer	A dotted abbreviation is a phrase of its letters, so U.S.S.R. does not find ussr.
+R67-tokenizer-digits	FTS5Types.swift: the porter unicode61 tokenizer; FTS5InlineQueryParser.swift, stemBareWord	Numbers are words, but a token of digits and punctuation with no letter is dropped.
+R68-tokenizer-diacritics	FTS5Types.swift: the porter unicode61 tokenizer	Accents are folded, so Argüello finds Arguello; letters such as ł are not folded.
+R69-sanitized-characters	FTS5InlineQueryParser.swift, sanitizeBareToken and stemPhrase	The characters : ^ { } / + are stripped from a word and < > from a phrase, so typed text cannot become FTS5 syntax.
