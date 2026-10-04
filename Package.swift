@@ -2,7 +2,10 @@
 // FRUS Explorer Light: the server, plus Linux builds of the Mac app's shared kits.
 //
 // The shared kits are compiled from the pinned FRUS-Explorer submodule, never copied
-// (CLAUDE.md, rule 4). Each kit keeps the settings upstream's Package.swift gives it.
+// (CLAUDE.md, rule 4). Each kit keeps the settings upstream's Package.swift gives it. Six kits so
+// far, each with upstream's tests: SourceNoteKit, CrossRefKit and GeneratorKit since session 0,
+// and TEIHeaderKit, SemanticVectorsKit and FTS5Store since session 1's Linux guards, with
+// ManifestGeneratorCore, whose tests hold TEIHeaderKit's. The server depends on none of them yet.
 // Build and test through scripts/swift, which runs this package in swift:6.4-noble.
 
 import PackageDescription
@@ -67,24 +70,63 @@ let package = Package(
             swiftSettings: swift6
         ),
 
-        // FTS5Store's pure-Swift files: the app's FTS5 DDL (FTS5Types.swift), for the FTS5 check,
-        // and its query compiler (the parser, FTS5Query and ExactWordMatcher), for check 3. They
-        // import only Foundation, so they need none of FTS5Store's sqlite3 linking. The rest of
-        // FTS5Store needs Linux guards upstream first (session 1). If a pin move changes the
-        // directory's files, SwiftPM warns ("unhandled" or "Invalid Exclude"): update the list.
+        // The session 1 kits. Upstream's Package.swift declares no dependencies for them, so the two
+        // their Linux guards need are declared here, for Linux only: CSQLite where the SDK's SQLite3
+        // module is missing, and swift-crypto's Crypto where CryptoKit is.
         .target(
-            name: "FTS5Schema",
+            name: "TEIHeaderKit",
+            path: "\(upstream)/TEIHeaderKit",
+            swiftSettings: swift6
+        ),
+        // TEIHeaderKit has no test target upstream: its tests live in ManifestGeneratorTests,
+        // which needs ManifestGeneratorCore.
+        .target(
+            name: "ManifestGeneratorCore",
+            dependencies: ["TEIHeaderKit"],
+            path: "\(upstream)/ManifestGeneratorCore",
+            swiftSettings: swift6
+        ),
+        .testTarget(
+            name: "ManifestGeneratorTests",
+            dependencies: ["ManifestGeneratorCore", "TEIHeaderKit"],
+            path: "\(upstream)/ManifestGeneratorTests",
+            swiftSettings: swift6
+        ),
+        .target(
+            name: "SemanticVectorsKit",
+            dependencies: [.product(name: "Crypto", package: "swift-crypto", condition: .when(platforms: [.linux]))],
+            path: "\(upstream)/SemanticVectorsKit",
+            swiftSettings: swift6
+        ),
+        .testTarget(
+            name: "SemanticVectorsKitTests",
+            dependencies: ["SemanticVectorsKit"],
+            path: "\(upstream)/SemanticVectorsKitTests",
+            swiftSettings: swift6
+        ),
+        // The whole of FTS5Store. It replaces session 0's FTS5Schema target, which compiled only its
+        // pure-Swift files: two targets cannot compile the same files, and upstream's tests import
+        // the module as FTS5Store. sqlite3 is linked from one place on each platform: on Linux by
+        // CSQLite's module map, and on macOS, whose SDK SQLite3 module links nothing, by the linker
+        // setting upstream gives the kit, here for macOS only.
+        .target(
+            name: "FTS5Store",
+            dependencies: [.target(name: "CSQLite", condition: .when(platforms: [.linux]))],
             path: "\(upstream)/FTS5Store",
-            exclude: [
-                "FTS5Connection.swift", "FTS5Errors.swift", "FTS5Store.swift", "FTS5Tokenizer.swift",
-                "FTS5Vocabulary.swift",
-            ],
-            sources: ["FTS5Types.swift", "FTS5InlineQueryParser.swift", "FTS5Query.swift", "ExactWordMatcher.swift"],
+            swiftSettings: swift6,
+            linkerSettings: [.linkedLibrary("sqlite3", .when(platforms: [.macOS]))]
+        ),
+        // On Linux one test is skipped by name: swift-corelibs-foundation keeps no backup attribute.
+        // ci.yml allows that skip alone (SPEC, check 1).
+        .testTarget(
+            name: "FTS5StoreTests",
+            dependencies: ["FTS5Store", .target(name: "CSQLite", condition: .when(platforms: [.linux]))],
+            path: "\(upstream)/FTS5StoreTests",
             swiftSettings: swift6
         ),
         .testTarget(
             name: "FTS5CheckTests",
-            dependencies: ["CSQLite", "FTS5Schema"],
+            dependencies: ["CSQLite", "FTS5Store"],
             path: "Tests/FTS5CheckTests",
             swiftSettings: swift6
         ),
@@ -120,7 +162,7 @@ let package = Package(
         .target(
             name: "FRUSParity",
             dependencies: [
-                "ParityFormat", "FTS5Schema", "CSQLite", "FRUSLightCore",
+                "ParityFormat", "FTS5Store", "CSQLite", "FRUSLightCore",
                 .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "Tests/FRUSParity",
@@ -143,7 +185,7 @@ let package = Package(
         ),
         .testTarget(
             name: "FRUSLightCoreTests",
-            dependencies: ["FRUSLightCore", "FRUSLightTestSupport", "FTS5Schema"],
+            dependencies: ["FRUSLightCore", "FRUSLightTestSupport", "FTS5Store"],
             path: "Tests/FRUSLightCoreTests",
             swiftSettings: swift6
         ),
@@ -162,7 +204,7 @@ let package = Package(
         ),
         .testTarget(
             name: "FRUSParityTests",
-            dependencies: ["FRUSParity", "ParityFormat", "FTS5Schema", "FRUSLightTestSupport", "FRUSLightCore", "CSQLite"],
+            dependencies: ["FRUSParity", "ParityFormat", "FTS5Store", "FRUSLightTestSupport", "FRUSLightCore", "CSQLite"],
             path: "Tests/FRUSParityTests",
             swiftSettings: swift6
         ),

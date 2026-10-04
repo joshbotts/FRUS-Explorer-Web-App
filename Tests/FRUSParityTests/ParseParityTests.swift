@@ -3,7 +3,7 @@
 import FRUSLightCore
 import FRUSLightTestSupport
 @testable import FRUSParity
-import FTS5Schema
+import FTS5Store
 import Foundation
 import ParityFormat
 import Testing

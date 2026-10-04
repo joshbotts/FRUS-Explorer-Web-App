@@ -1,7 +1,7 @@
 // The corpus index's full-text table works on this platform's SQLite, built with the app's own DDL.
 
 import CSQLite
-import FTS5Schema
+import FTS5Store
 import Testing
 
 /// An in-memory database holding `frus_documents` exactly as `FTS5Schema.frusDocuments` builds it.

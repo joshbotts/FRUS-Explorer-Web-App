@@ -27,7 +27,9 @@ jobs:
     name: swift
     runs-on: ubuntu-24.04
     container: swift:6.4-noble
-    timeout-minutes: 30
+    # Under amd64 emulation with 4 CPUs, a build with no cache took 12 minutes and FTS5StoreTests
+    # alone 5, so the job has the compose job's headroom.
+    timeout-minutes: 45
     steps:
       - name: Install SQLite headers
         run: apt-get update -qq && apt-get install -y -qq --no-install-recommends libsqlite3-dev
@@ -47,16 +49,54 @@ jobs:
             swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Package.resolved', 'Package.swift') }}-
             swiftpm-${{ runner.os }}-${{ runner.arch }}-
 
+      # Test.cancel is Swift Testing's runtime skip, and the Test step cannot always see it: a
+      # cancelled case of a parameterized test leaves no line in the log, and its test is reported as
+      # passed. So no target this package builds may call it. A Linux-only skip uses a trait,
+      # .disabled or .enabled(if:), whose skip the Test step sees.
+      - name: No runtime skips
+        run: |
+          set --
+          for d in $(swift package dump-package --scratch-path .build/linux | grep -o '"path" *: *"[^"]*"' | cut -d'"' -f4); do
+            if [ -d "$d" ]; then set -- "$@" "$d"; fi
+          done
+          if [ $# -eq 0 ]; then
+            echo "::error::swift package dump-package gave no target directory to search."
+            exit 1
+          fi
+          rc=0
+          grep -rnw --include='*.swift' 'Test\.cancel' "$@" || rc=$?
+          if [ "$rc" -eq 0 ]; then
+            echo "::error::A target calls Test.cancel, a skip the log cannot always show. SPEC's check 1 allows a Linux-only skip only if it is named: use a .disabled or .enabled(if:) trait, and name it in the Test step."
+            exit 1
+          fi
+          [ "$rc" -eq 1 ] || exit "$rc"
+          echo "No target calls Test.cancel ($# directories searched)."
+
       - name: Build
         run: swift build --build-tests --scratch-path .build/linux
 
+      # Every test at the pin must run, and a skip fails the job. SPEC's check 1 allows a Linux-only
+      # skip only if it is named, and there is one, allowed here by its name: FTS5StoreTests'
+      # backup-exclusion test, which upstream disables where Darwin is missing, with a reason that
+      # begins "Linux: ". Any other skip fails the job, from a trait or XCTSkip, and so does a test or
+      # suite that cancels itself, or this test skipped for another reason. The named skip must
+      # appear exactly once: twice means another test shares its name, since the log shows no suite,
+      # and not at all means it now runs or the log's format has changed. grep -a reads the log as
+      # text even if a test prints a NUL byte.
       - name: Test
         run: |
           swift test --skip-build --scratch-path .build/linux 2>&1 | tee test.log
-          if grep -E '(Test|Suite) .* skipped' test.log; then
-            echo "::error::A test was skipped. Every test at the pin must run."
+          named='Test "Database file has isExcludedFromBackupKey set after creation" skipped: "Linux: '
+          if grep -aE '(Test|Suite) .* (skipped|was cancelled)' test.log | grep -avF -e "$named"; then
+            echo "::error::A test was skipped or cancelled. Every test at the pin must run, except the Linux-only skip SPEC's check 1 names."
             exit 1
           fi
+          count=$(grep -acF -e "$named" test.log || true)
+          if [ "$count" -ne 1 ]; then
+            echo "::error::The named Linux-only skip appeared $count times, not once. More than once means another test shares its name; never means it now runs, or the log's format has changed. Either way this step must follow."
+            exit 1
+          fi
+          echo "Named Linux-only skips (SPEC, check 1): $count"
 
       - name: Test count per target
         run: swift test list --skip-build --scratch-path .build/linux | cut -d. -f1 | sort | uniq -c

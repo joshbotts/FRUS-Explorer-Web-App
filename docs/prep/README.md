@@ -2,7 +2,7 @@
 
 3 October 2026 · at `FRUS-Explorer` commit `34a5120` (index version 65, app build 49)
 
-Sessions 0, 2, 4, 5 and 7 are done; see `docs/DEVLOG.md`. S1, S3 and S6 waited while the owner asked that sessions not open pull requests on `FRUS-Explorer`; the owner lifted that hold on 4 October. This folder keeps what a dry run on Linux found for later sessions, so their prompts can start from evidence rather than estimates.
+Sessions 0, 1, 2, 4, 5 and 7 are done; see `docs/DEVLOG.md`. S1, S3 and S6 waited while the owner asked that sessions not open pull requests on `FRUS-Explorer`; the owner lifted that hold on 4 October. This folder keeps what a dry run on Linux found for later sessions, so their prompts can start from evidence rather than estimates.
 
 ## What was verified
 
@@ -17,6 +17,8 @@ Sessions 0, 2, 4, 5 and 7 are done; see `docs/DEVLOG.md`. S1, S3 and S6 waited w
 | The indexer and search run on Linux | Yes, after the S6 edits listed below. The three fixture volumes index in 0.2–0.4 seconds each, in a debug build on arm64 |
 
 ## Before the S1 prompt
+
+S1 is done: upstream #1567 merged as `cfc0d3c`, and the pin-move pull request builds and tests the six kits on Linux in CI. Their DEVLOG entries say how.
 
 - **Rules 2, 3 and 5 collide.** S1 needs two pull requests: the guards upstream, and the web repository's DEVLOG entry. `Package.swift` cannot add the kits until the pin moves, since they do not build on Linux without the guards, so the pin-move pull request adds them. Upstream has no CI and squash-merges, so a pull request's head never reaches `v2`, and the pin can move only after the owner merges. Decided on 3 October: S1 builds and tests the six kits against its pull request's head in the session and records the output in DEVLOG; after Mac check 1 and the merge, a separate pull request moves the pin and adds the kits to CI. Since S4, that pull request also carries golden files made again at the new pin on the owner's Mac (`scripts/make-golden`), or its `swift` check fails.
 - **The library guards the plan names are enough.** `s1-linux-guards.patch` has them. The test side needs more:
@@ -78,7 +80,7 @@ A full export is 2.83 GB, not 9.3 GB. The larger figure came from an index overh
 
 ## Pinning until the public release
 
-`FRUS-Explorer` merges about eight pull requests a day until its public release, and its index version went from 47 to 65 in 30 days. Each pin move means a new Mac build, a new export and new golden files. Hold the pin at `34a5120` until the release unless a merged guard pull request needs it, and batch upstream pull requests so the pin moves as few times as possible. Make the golden files and the S10 export once, against a pin from after the release.
+`FRUS-Explorer` merges about eight pull requests a day until its public release, and its index version went from 47 to 65 in 30 days. Each pin move means a new Mac build, a new export and new golden files. Hold the pin (at `cfc0d3c` since S1's guards merged) until the release unless a merged guard pull request needs it, and batch upstream pull requests so the pin moves as few times as possible. Make the golden files and the S10 export once, against a pin from after the release.
 
 ## Files
 

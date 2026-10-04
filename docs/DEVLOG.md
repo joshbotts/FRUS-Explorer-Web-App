@@ -2,6 +2,64 @@
 
 One entry per session, newest first.
 
+## Pin move: the six kits on Linux in CI
+
+4 October 2026 · branch `claude/pin-cfc0d3c` · upstream [joshbotts/FRUS-Explorer#1567](https://github.com/joshbotts/FRUS-Explorer/pull/1567), merged as `cfc0d3c`
+
+The owner ran Mac check 1 and squash-merged #1567 as `cfc0d3c`, the only commit on `v2` after `34a5120`. This is the pull request Session 1's entry describes: it moves the pin, adds the three kits the guards made portable, and lets CI allow the one named skip. The index version stays 65, the FTS schema 4 and the app build 49.
+
+**Delivered**
+
+- **The pin** moves from `34a5120` to `cfc0d3c` (rule 5). The submodule has no local changes.
+- **`Package.swift`.**
+  - The whole of FTS5Store replaces the `FTS5Schema` target, which compiled only its four pure-Swift files. Every dependency on that target, and the four files that imported it, now name `FTS5Store`. The module still holds a type called `FTS5Schema`, so `FTS5Schema.frusDocuments` reads as before.
+  - New targets: TEIHeaderKit; ManifestGeneratorCore and ManifestGeneratorTests, which hold TEIHeaderKit's tests; SemanticVectorsKit and its tests; and FTS5StoreTests.
+  - The guards' dependencies are Linux-only: `CSQLite` for FTS5Store and its tests, and swift-crypto's `Crypto` for SemanticVectorsKit. swift-crypto was already a dependency, so `Package.resolved` is unchanged.
+  - sqlite3 is linked from one place on each platform. On Linux, `CSQLite`'s module map links it. The SDK's `SQLite3` module links nothing, so upstream's `linkedLibrary("sqlite3")` stays, for macOS only. Each test binary that uses SQLite depends on `libsqlite3` once, on both platforms.
+  - The server and FRUSLightCore depend on none of the kits.
+- **`ci.yml`.**
+  - The Test step's skip guard allows one skip by name: FTS5StoreTests' "Database file has isExcludedFromBackupKey set after creation", skipped with a reason that begins "Linux: ". It is the named Linux-only skip SPEC's check 1 allows. Any other skip fails the job, from a trait or XCTSkip, and so does a test or suite that cancels itself with `Test.cancel`, or this test skipped for another reason. The named skip must appear exactly once. The log names no suite, so a second test with the same name would otherwise pass, and its absence means the test now runs or the log's format has changed. The guard reads the log with `grep -a`, so a NUL byte in a test's output cannot hide the lines after it.
+  - A new step, No runtime skips, fails if any target in `Package.swift` calls `Test.cancel`. When it cancels one case of a parameterized test, the log has no line for it and the test is reported as passed, so the Test step cannot see it. No target calls it at `cfc0d3c`. The step reads the targets' directories from `swift package dump-package`.
+  - The `swift` job's time limit is 45 minutes, as the `compose` job's is, up from 30 (see Timing).
+- **Golden files.** `scripts/make-golden` ran at `cfc0d3c` on the owner's Mac, in 71 seconds. The HTML of all 392 rows (3,554,115 bytes) and the expressions of all 482 queries are byte-identical to `34a5120`'s. Only the provenance changed, in `render/manifest.json` and `queries.expressions.json`: `upstreamCommit`, and `sourceDigest`, since the guards change files inside the digest. `check-golden` passes. `PENDING` still lists the two files that wait for the owner's export.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64.** A clean build with tests took 77 seconds, with no warnings. Of the 724 tests, 723 pass, and the one skip is the named one:
+
+  | Target | Tests |
+  | --- | --- |
+  | SourceNoteKitTests | 292 |
+  | FTS5StoreTests | 209 |
+  | ManifestGeneratorTests | 60 |
+  | SemanticVectorsKitTests | 35 |
+  | CrossRefKitTests | 10 |
+  | GeneratorKitTests | 7 |
+  | FRUSParityTests | 57 |
+  | FRUSLightCoreTests | 42 |
+  | FRUSLightServerTests | 9 |
+  | FTS5CheckTests | 3 |
+
+  The six kits hold 613 of them, as S1 counted at the pull request's head.
+- **macOS, natively.** The same 724 tests, with the same counts per target, all pass with none skipped. The backup-exclusion test runs there, and passes. A clean build took 52 seconds, with no warnings.
+- **The guard, tested.** The Test step's script, read from `ci.yml`, ran in the swift image under `bash -eo pipefail`, as Actions runs a step, with `LANG` unset and set to `C.UTF-8`. It ran against the real Linux logs from arm64 and amd64, and against altered copies of them. A probe package in the image printed the real line for each kind of skip and cancellation.
+  - It passes on both real logs, where the named skip appears once.
+  - It fails with no skip at all. It fails when an extra skip sits beside the named one: a test with a "Linux: " reason, a test with no reason, a suite, or an XCTest case. It fails on a test or suite cancelled at runtime, with a reason or without, and on an extra skip after a NUL byte or after invalid UTF-8.
+  - It fails when the named test is skipped for another reason, and when a skipped test's name is the named one with a prefix or a suffix. It fails on a second skipped test with the same name, and on two skips torn onto one line.
+  - An earlier draft of the guard, without `-a`, the cancelled form or the count, passed with a cancelled test or suite, a second test of the same name, two skips on one line, or a skip after a NUL byte.
+  - No runtime skips passes on this branch. It fails when `Test.cancel` is added to a kit's tests, to the web tests or to a library, and when `Package.swift` does not compile. It passes when the call is in a target this package does not build.
+- **Timing.** Testing took 111 seconds on Linux arm64, 96 of them in FTS5StoreTests, whose exhaustive query-combination suites dominate; macOS took 102. GitHub's `ubuntu-24.04` runner is amd64 with 4 vCPUs, so the suite was also measured on amd64: in linux/amd64 `swift:6.4-noble` under Rosetta on this Mac, limited to 4 CPUs, a build with tests and no cache took 709 seconds, with no warnings, and testing took 331, 309 of them in FTS5StoreTests. All 724 tests ran there, with the same counts per target, and the guard passes on that log. A runner's vCPU is probably no faster than Rosetta on this Mac, so a run with no cache could come near the old 30-minute limit, and the limit is now 45.
+- **The image is unaffected.** `scripts/compose-smoke` passes. The image's build compiles FRUSLightCore and the server and no kit, and the image is still 251 MB.
+
+**Notes**
+
+- **swift-build crashed once on Linux,** with signal 11 while planning the build, in its target-triple parsing on a worker thread. The same command then built. If CI's Build step ever fails that way, run it again.
+- **The guard matches text.** A passing test whose display name contains "skipped" also matches `(Test|Suite) .* (skipped|was cancelled)`. No target built here has one, but upstream has 32 in 23 files at `cfc0d3c`. Nine are in its package's generator tests: RefHarvesterTests, POCOMIndexBuilderTests, and the LotClaimants, RecordGroupCatalog and SourceNoteEval generators' tests. The other 23 are in FRUSExplorerTests, among them IndexingPipelineTests, which S6 may compile. A session that adds such a target will see the guard fail, which errs the safe way. It must then narrow the pattern, for example to the forms Swift Testing prints: `skipped: "`, a closing `skipped.`, and `was cancelled after`.
+- **The owner's next Mac build comes from `cfc0d3c`,** for the Golden files checkpoint and the S10 export, as `PLAN.md` says for a pin move. The guards change no code on Apple platforms, and the index version is still 65.
+- **Mac check 1 is Done** in `PLAN.md`'s owner checkpoints.
+
+**Next.** S3, the TEI renderer and Citation, is under way alongside: its upstream refactor is larger, and `docs/prep/README.md` lists what it needs. The owner's Golden files checkpoint still waits for a three-volume export.
+
 ## Session 1: the shared kits on Linux
 
 4 October 2026 · branch `claude/s1-linux-guards` · upstream [joshbotts/FRUS-Explorer#1567](https://github.com/joshbotts/FRUS-Explorer/pull/1567)
