@@ -106,13 +106,19 @@ public struct IndexImporter: Sendable {
         }
 
         await observer.importDidReach(.copyingExport, detail: "Copying \(name)", progress: 0)
+        // Checked before anything reads the file, since every read would follow the link.
+        if ExportChecks.isSymbolicLink(source) { throw ExportChecks.linkRefusal(name) }
         guard ExportChecks.hasSQLiteHeader(source) else {
             throw ImportRefusal(.copyingExport, "\(name) is not a SQLite database. Use Export Research Database… in FRUS Explorer's settings.")
         }
         // immutable=1 never reads a -wal file, so a copy of a live database would lose its newest data.
         let wal = URL(fileURLWithPath: source.path + "-wal")
         if let walSize = Self.size(of: wal), walSize > 0 {
-            throw ImportRefusal(.copyingExport, "\(name) arrived with a \(wal.lastPathComponent) file, so it is a copy of a database in use. Use Export Research Database… in FRUS Explorer's settings instead.")
+            throw ImportRefusal(.copyingExport, "\(name) arrived with a \(wal.lastPathComponent) file, so it is a copy of a database in use. Remove \(wal.lastPathComponent) from /data/import, then copy in an export made with Export Research Database… in FRUS Explorer's settings.")
+        }
+        // Nor does it roll back an unfinished transaction, so the copy would be half-written.
+        if ExportChecks.hasHotJournal(beside: source) {
+            throw ImportRefusal(.copyingExport, "\(name) arrived with a \(name)-journal file that may hold an unfinished transaction, so it is a copy of a database in use. Remove \(name)-journal from /data/import, then copy in an export made with Export Research Database… in FRUS Explorer's settings.")
         }
         let needed = (Self.size(of: source) ?? 0) + 64 * 1_048_576
         if let free = try? files.availableCapacity(), free < needed {
@@ -200,6 +206,36 @@ public struct IndexImporter: Sendable {
 enum ExportChecks {
     /// Tables Import mode relies on.
     static let requiredTables = ["document_cache", "frus_documents", "user_content", "document_revisions"]
+
+    /// Whether `url` is a symbolic link, not following it.
+    static func isSymbolicLink(_ url: URL) -> Bool {
+        (try? FileManager.default.attributesOfItem(atPath: url.path)[.type] as? FileAttributeType) == .typeSymbolicLink
+    }
+
+    /// The refusal for a link in the drop zone. `docker compose cp` copies a link as a link, so
+    /// it usually points at a path that exists only on the host; one that resolves would be
+    /// imported from outside the drop zone. Either way, the export itself should be copied.
+    static func linkRefusal(_ name: String) -> ImportRefusal {
+        ImportRefusal(.copyingExport, "\(name) is a symbolic link, not an export. Copy the export itself with docker compose cp -L, which follows the link.")
+    }
+
+    /// Whether a rollback journal beside the database holds, or may hold, an unfinished
+    /// transaction, by SQLite's own test (`hasHotJournal` in pager.c): it is not empty and its
+    /// first byte is not zero, and one that cannot be opened or read counts as hot, as SQLite
+    /// assumes. Anything but a regular file in the journal's place, such as a link or a FIFO,
+    /// counts too, and is never opened: opening a FIFO would block. `immutable=1` never rolls a
+    /// journal back. `open` is replaceable for tests, which run as root in CI.
+    static func hasHotJournal(beside url: URL,
+                              open: (String) -> FileHandle? = { FileHandle(forReadingAtPath: $0) }) -> Bool {
+        let journal = url.path + "-journal"
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: journal) else { return false }
+        guard attributes[.type] as? FileAttributeType == .typeRegular else { return true }
+        guard (attributes[.size] as? NSNumber)?.int64Value != 0 else { return false }
+        guard let handle = open(journal) else { return true }
+        defer { try? handle.close() }
+        guard let first = try? handle.read(upToCount: 1) else { return true }
+        return first.first.map { $0 != 0 } ?? false
+    }
 
     /// Whether the file starts with SQLite's 16-byte header string.
     static func hasSQLiteHeader(_ url: URL) -> Bool {

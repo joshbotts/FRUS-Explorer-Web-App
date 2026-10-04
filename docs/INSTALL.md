@@ -113,7 +113,8 @@ A refused file stays in the drop zone. `/api/v1/status` says why, under `lastImp
 | "The server cannot read …" | The file kept permissions only you can read. Copy it again with `docker compose cp -a`, which gives it to the server's user; it is tried again within a minute |
 | "needs about N GB free beside the index" | Free space for Docker; the import is tried again by itself |
 | "… is not a SQLite database" or "… is damaged" | Export again with Export Research Database… |
-| "… arrived with a -wal file" | This is a copy of a database in use. Export with Export Research Database… instead |
+| "… arrived with a -wal file", or "a -journal file that may hold an unfinished transaction" | This is a copy of a database in use. First remove that file, with `docker compose exec frus rm /data/import/<file>-wal` (or `-journal`). Then export with Export Research Database… and copy the new export in. Keep that order: a new export copied while the side file is there is refused too, and removing the side file afterwards does not try it again |
+| "… is a symbolic link, not an export" | `docker compose cp` copied the link, not the file. Run the same copy again with `docker compose cp -L`, which follows the link: the export replaces the link of the same name and is imported |
 
 ## Upgrading
 
