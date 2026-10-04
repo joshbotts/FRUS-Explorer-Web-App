@@ -3,7 +3,7 @@
 // The parse depends on the query text and the structured fields alone, not on any index or scope,
 // so Linux compares it for every query before SearchService runs there (session 6).
 
-import FTS5Schema
+import FTS5Store
 import Foundation
 import ParityFormat
 

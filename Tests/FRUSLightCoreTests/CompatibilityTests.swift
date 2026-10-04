@@ -2,7 +2,7 @@
 
 import FRUSLightCore
 import FRUSLightTestSupport
-import FTS5Schema
+import FTS5Store
 import Foundation
 import Testing
 
