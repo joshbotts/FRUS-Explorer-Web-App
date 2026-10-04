@@ -50,13 +50,19 @@ jobs:
       - name: Build
         run: swift build --build-tests --scratch-path .build/linux
 
+      # Every test at the pin must run, and a skip fails the job. SPEC's check 1 allows a Linux-only
+      # skip only if it is named, and there is one, allowed here by its name: FTS5StoreTests'
+      # backup-exclusion test, which upstream disables where Darwin is missing, with a reason that
+      # begins "Linux: ". Any other skip, or this one with another reason, still fails.
       - name: Test
         run: |
           swift test --skip-build --scratch-path .build/linux 2>&1 | tee test.log
-          if grep -E '(Test|Suite) .* skipped' test.log; then
-            echo "::error::A test was skipped. Every test at the pin must run."
+          named='Test "Database file has isExcludedFromBackupKey set after creation" skipped: "Linux: '
+          if grep -E '(Test|Suite) .* skipped' test.log | grep -vF -e "$named"; then
+            echo "::error::A test was skipped. Every test at the pin must run, except the Linux-only skip SPEC's check 1 names."
             exit 1
           fi
+          echo "Named Linux-only skips (SPEC, check 1): $(grep -cF -e "$named" test.log)"
 
       - name: Test count per target
         run: swift test list --skip-build --scratch-path .build/linux | cut -d. -f1 | sort | uniq -c
