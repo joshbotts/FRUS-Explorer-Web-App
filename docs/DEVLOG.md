@@ -15,7 +15,7 @@ The owner ran Mac check 2 and squash-merged #1569 as `f102fa4d`, then #1571, whi
   - `FRUSCoreKit`, from the submodule's `FRUSCoreKit/`. It depends on SourceNoteKit, as upstream's manifest declares, and on swift-crypto's `Crypto` for Linux only, which its `CryptoKit` guard falls back to.
   - `FRUSCoreKitTests`, the kit's eleven suites from `FRUSExplorerTests/FRUSCoreKit/`, depending on the kit alone: under SwiftPM each suite imports FRUSCoreKit and nothing else.
   - FRUSParity depends on the kit, for check 4. FRUSLightCore and the server depend on neither target, and `Package.resolved` is unchanged.
-- **Check 4 on Linux.** `Tests/FRUSParity/RenderParity.swift` renders the fixtures through the kit's public API alone. It imports the kit without `@testable`, as the server will. `RenderParityTests`, in FRUSParityTests, has three tests:
+- **Check 4 on Linux.** `Tests/FRUSParity/RenderParity.swift` renders the fixtures through the kit's public API alone. It imports the kit without `@testable`, as the server will. `RenderParityTests`, in FRUSParityTests, has four tests:
   - **The reader's path,** for each of the 392 rows of `fixtures/golden/render/manifest.json`:
     1. a new parser's `parseDocument`;
     2. `ReaderLookups` from the volume's `parsePersons` and `parseTerms`;
@@ -23,13 +23,14 @@ The owner ran Mac check 2 and squash-merged #1569 as `f102fa4d`, then #1571, whi
     4. `FRUSRenderNodeHTMLSerializer.reader`.
 
     Each row's UTF-8 bytes must be the committed file's, and their size and SHA-256 the manifest row's. A difference reports both, and `RenderDiff.firstDifference`.
-  - **One full parse per volume,** the path S8 will serve, without a parse per document. `parseVolumeFull` must yield exactly the golden rows, in their order. Rendering from its ASTs, with its own persons and terms, must give the same bytes.
+  - **One full parse per volume,** the path S8 will serve, without a parse per document. `parseVolumeFull` must yield exactly the golden rows, in their order. Rendering from its ASTs, with its own persons and terms, must give the same bytes. Its persons and terms must also equal `parsePersons` and `parseTerms`, field for field, since the bytes cannot show them (see the notes).
+  - **An `<abbr>` naming a glossary term,** in a volume the test writes. Along both paths it renders as the term's link whatever its case, and an `<abbr>` that names no term stays text.
   - **The comparison itself,** on golden files the test writes. Identical HTML passes. Canonically equivalent text, a missing document, an unlisted row and a manifest that disagrees with its file are each reported.
 
   Both renders first require the golden manifest to be current at the pin, by `GoldenValidation`'s staleness check. One made from other app sources would test other code, so it fails as stale instead.
   - The persons and terms are parsed once per volume. The reader parses them for each document it opens, but `FRUSDocumentParser` keeps no state between calls: each reads the file with a new `XMLParser`.
   - Rows render concurrently, as many at once as the machine has processors.
-- **`frus-parity render`** runs check 4 on any machine, both passes, and prints their timings. Given a volume and a document, it renders that one, along the reader's path or with `--full-parse`, and `--out` saves its HTML. The HTML never goes to standard output, where a debug build of the kit prints its parser's log.
+- **`frus-parity render`** runs check 4 on any machine, both passes, and prints their timings. It also compares the full parse's persons and terms with the reader's. Given a volume and a document, it renders that one, along the reader's path or with `--full-parse`, and `--out` saves its HTML. The HTML never goes to standard output, where a debug build of the kit prints its parser's log.
 - **Check 7's formatter and parser half** runs in CI, inside FRUSCoreKitTests: 81 tests in all.
   - The eight suites `CitationFormatterTests.swift` compiles under `swift test`: 32 tests.
   - CitationParserTests: 26.
@@ -43,7 +44,7 @@ The owner ran Mac check 2 and squash-merged #1569 as `f102fa4d`, then #1571, whi
 
 **Results**
 
-- **Linux, `swift:6.4-noble`, arm64.** A clean build with tests: "Build complete! (59.52 secs)", 86 seconds with the dependencies' checkout, and no warnings. Of the 1,121 tests, 1,120 pass, and the one skip is the named one:
+- **Linux, `swift:6.4-noble`, arm64.** A clean build with tests: "Build complete! (59.52 secs)", 86 seconds with the dependencies' checkout, and no warnings. Of the 1,122 tests, 1,121 pass, and the one skip is the named one:
 
   | Target | Tests |
   | --- | --- |
@@ -54,20 +55,21 @@ The owner ran Mac check 2 and squash-merged #1569 as `f102fa4d`, then #1571, whi
   | SemanticVectorsKitTests | 35 |
   | CrossRefKitTests | 10 |
   | GeneratorKitTests | 7 |
-  | FRUSParityTests | 61 |
+  | FRUSParityTests | 62 |
   | FRUSLightCoreTests | 42 |
   | FRUSLightServerTests | 9 |
   | FTS5CheckTests | 3 |
 
   - The seven kits hold 1,006 of them: S1's 613, and FRUSCoreKitTests' "✔ Test run with 393 tests in 49 suites passed after 0.100 seconds.", the count #1569 states.
-  - FRUSParityTests has three tests more than before. The renders print "check 4, the reader's path: 392 of 392 rows identical" and "check 4, one full parse per volume: 392 of 392 rows identical".
-- **macOS, natively.** The same 1,121 tests, with the same counts per target, all pass with none skipped. A clean build: "Build complete! (46.40 sec)", with no warnings. FRUSCoreKitTests: "✔ Test run with 393 tests in 49 suites passed after 0.066 seconds." Both renders give 392 of 392.
+  - FRUSParityTests has four tests more than before. The renders print "check 4, the reader's path: 392 of 392 rows identical" and "check 4, one full parse per volume: 392 of 392 rows identical, and its persons and terms are the reader's: 0 and 0, 58 and 19, 63 and 79".
+- **macOS, natively.** The same 1,122 tests, with the same counts per target, all pass with none skipped. A clean build: "Build complete! (46.40 sec)", with no warnings. FRUSCoreKitTests: "✔ Test run with 393 tests in 49 suites passed after 0.066 seconds." Both renders give 392 of 392.
 - **The guard.** The Test step's script and No runtime skips, read from `ci.yml`, ran in the swift image under `bash -eo pipefail`, with `LANG` unset and set to `C.UTF-8`, against this branch's real Linux log.
   - Both pass, and the named skip appears once.
   - No runtime skips searched 27 directories, the kit's two among them. It fails when `Test.cancel` is planted in a kit suite.
 - **A difference, planted.** One character added to a golden file made both renders fail on that row alone. Each named the row and printed the first differing piece, ending "February 13, 1961.X</p></div>" in the golden file and "February 13, 1961.</p></div>" in the render.
+- **The lookups, broken on purpose.** Rendering with empty lookups, along either path, fails the `<abbr>` test for that path while the 392 rows still match. A full parse that loses its last person, or one volume's terms, fails the list comparison.
 - **Timing.** Testing took 113 seconds on Linux arm64 with 10 CPUs, 98 of them in FTS5StoreTests.
-  - The test targets run one after another, so FRUSParityTests' time adds to the step's: 7.1 seconds, up from 3.9 at `cfc0d3c`.
+  - The test targets run one after another, so FRUSParityTests' time adds to the step's: 7.4 seconds, up from 3.9 at `cfc0d3c`.
   - Within that run, the reader's path took 7.1 seconds and the full-parse pass 3.2. Run alone, they took 4.0 and 0.6, and with Docker limited to 4 CPUs the reader's path took 7.5.
   - At PR #15, GitHub's amd64 runner ran FTS5StoreTests 3.9 times slower than this Mac (372 seconds against 96). At that ratio, the reader's path should take about 30 seconds there, and FRUSCoreKitTests well under one.
   - macOS took 87 seconds to test.
@@ -75,9 +77,10 @@ The owner ran Mac check 2 and squash-merged #1569 as `f102fa4d`, then #1571, whi
 
 **Notes**
 
-- **The parser's debug log.** A debug build of the kit prints `[TEIParser]` lines, so the Linux test log now holds about 990 of them, 570 from the renders. Most are "Warning: unparseable <pb n=…>", for two bracketed page numbers that every parse of their volume meets. They match neither guard pattern.
-- **For S8.** The full-parse pass renders with `parseVolumeFull`'s own persons and terms, not `parsePersons` and `parseTerms`, and gives the same bytes. So one XML pass per volume gives the server everything the reader's HTML needs.
-- **The owner's next Mac build comes from `2a4df13`,** for the Golden files checkpoint and the S10 export, as `PLAN.md` says for a pin move.
+- **The parser's debug log.** A debug build of the kit prints `[TEIParser]` lines, so the Linux test log now holds about 1,000 of them, about 580 from the renders. Most are "Warning: unparseable <pb n=…>", for two bracketed page numbers that every parse of their volume meets. They match neither guard pattern.
+- **The golden HTML cannot show the lookups.** The serializer writes a person's or a term's link from its ref alone, and drops the entry the lookup found. The one link a lookup decides, an `<abbr>` whose text names a term, occurs in none of the three fixture volumes. So the 392 rows would match with empty lists, or another volume's, as review showed by rendering with empty lookups. The full-parse test therefore compares the lists themselves, and the `<abbr>` test covers the one lookup that changes the HTML.
+- **For S8.** `parseVolumeFull`'s persons and terms are `parsePersons`' and `parseTerms`', field for field, in all three volumes (none in the 1894 volume, 58 persons and 19 terms, and 63 and 79). Rendering from its ASTs gives the same bytes. So one XML pass per volume gives the server everything the reader's HTML needs.
+- **The owner's next Mac build comes from `2a4df13`,** for the Golden files checkpoint, as `PLAN.md` says for a pin move. The S10 export will come from the build pinned at S10, after S6's pin move.
 - **Mac check 2 is Done** in `PLAN.md`'s owner checkpoints. `docs/COORDINATION.md` records that FRUSCoreKit is compiled, that the CI compares both golden files made from the app's source, and that #1571 has merged.
 
 **The owner's next step.** The three-volume export for the Golden files checkpoint can now be made, from a Mac build of `2a4df13`, in a library holding exactly the three fixture volumes. `scripts/make-golden --export <file>` then writes `index-summary.json` and `queries.results.json`. The top of the script says how to make the export.

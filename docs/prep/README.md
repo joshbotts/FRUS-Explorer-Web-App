@@ -80,7 +80,7 @@ A full export is 2.83 GB, not 9.3 GB. The larger figure came from an index overh
 
 ## Pinning until the public release
 
-`FRUS-Explorer` merges about eight pull requests a day until its public release, and its index version went from 47 to 65 in 30 days. Each pin move means a new Mac build, a new export and new golden files. Hold the pin (at `2a4df13` since S3's pin move) until the release unless a merged pull request for this project needs it, as S3's did, and batch upstream pull requests so the pin moves as few times as possible. Make the golden files and the S10 export once, against a pin from after the release.
+`FRUS-Explorer` merges about eight pull requests a day until its public release, and its index version went from 47 to 65 in 30 days. Each pin move means a new Mac build, a new export and new golden files. Hold the pin (at `2a4df13` since S3's pin move) until the release unless a merged pull request for this project needs it, as S3's did, and batch upstream pull requests so the pin moves as few times as possible. Each pin move remakes the golden files made from the app's source. The owner's three-volume export, from a build of `2a4df13`, makes the rest, and after that each move also needs a new three-volume export from the pinned build (`COORDINATION.md`, section 5). The full-corpus export for S10 comes from the build pinned at S10.
 
 ## Files
 
