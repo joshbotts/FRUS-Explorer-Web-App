@@ -14,7 +14,7 @@ One entry per session, newest first.
 - assigns the rest to web sessions: a daily Linux watch of the app's `v2` (to be built), repairs, every web-only app change, pin moves and conflicts;
 - includes a block for the app's `CLAUDE.md`.
 
-It was filed for the app's sessions as an issue on the app's repository. Three review rounds checked it against both repositories, and fixed several overstatements. Two of them led to fixes in #1569 itself:
+It is filed for the app's sessions as [joshbotts/FRUS-Explorer#1570](https://github.com/joshbotts/FRUS-Explorer/issues/1570), which closes when the `CLAUDE.md` pull request merges. Three review rounds checked it against both repositories, and fixed several overstatements. Two of them led to fixes in #1569 itself:
 - `public` does not mark web use, because most kit declarations were already public;
 - the boundary test could trip on an app-only change, so its name check was narrowed.
 
