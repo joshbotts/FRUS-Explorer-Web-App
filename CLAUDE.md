@@ -1,6 +1,6 @@
 # FRUS Explorer Light
 
-The self-hosted web edition of FRUS Explorer. `docs/PLAN.md` is the plan, `docs/SPEC.md` the specification, `docs/DEVLOG.md` the log of sessions, and `docs/prep/` holds notes for later sessions.
+The self-hosted web edition of FRUS Explorer. `docs/PLAN.md` is the plan, `docs/SPEC.md` the specification, `docs/DEVLOG.md` the log of sessions, `docs/COORDINATION.md` the arrangement with the app's repository, and `docs/prep/` holds notes for later sessions.
 
 ## Session rules
 
@@ -12,7 +12,7 @@ The self-hosted web edition of FRUS Explorer. `docs/PLAN.md` is the plan, `docs/
 6. Never commit Mac exports, TEI beyond `fixtures/`, EmbeddingGemma, credentials, `.build/` or `node_modules/`.
 7. Sessions never publish images. CI publishes from `main`.
 
-`upstream/FRUS-Explorer/CLAUDE.md` is the Mac app's guide, and it governs only pull requests on that repository.
+`upstream/FRUS-Explorer/CLAUDE.md` is the Mac app's guide, and it governs only pull requests on that repository. Synchronization with the app is this repository's work, at its sessions' cost: `docs/COORDINATION.md` says what web sessions take on and the four rules app sessions follow.
 
 ## Building
 

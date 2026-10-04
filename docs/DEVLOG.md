@@ -2,6 +2,27 @@
 
 One entry per session, newest first.
 
+## Coordination with the app's repository
+
+4 October 2026 · branch `claude/coordination`
+
+**Delivered:** `docs/COORDINATION.md`, a proposal the owner asked for, for Claude Code sessions in both repositories. The owner directed that synchronization work, and its token cost, fall on this repository's sessions. The app's sessions are not to be diverted beyond a few agreed rules, and app changes only the web edition needs are this repository's to write. The document:
+- explains how the web edition uses the app's code: the pin, the shared kits, the index and export contract, and the golden files;
+- explains how #1567 and #1569 made that code portable, and what part 2 will move;
+- describes the app architecture that protects the arrangement: kit folders compiled twice, the FRUSCoreKit boundary test, forwarders, and single entry points;
+- sets four rules for app sessions, and lists what they are not asked to do;
+- assigns the rest to web sessions: a daily Linux watch of the app's `v2` (to be built), repairs, every web-only app change, pin moves and conflicts;
+- includes a block for the app's `CLAUDE.md`.
+
+It is filed for the app's sessions as [joshbotts/FRUS-Explorer#1570](https://github.com/joshbotts/FRUS-Explorer/issues/1570), which closes when the `CLAUDE.md` pull request merges. Three review rounds checked it against both repositories, and fixed several overstatements. Two of them needed fixes upstream. #1569 had merged by then, so they went in a follow-up, [joshbotts/FRUS-Explorer#1571](https://github.com/joshbotts/FRUS-Explorer/pull/1571):
+- `public` does not mark web use, because most kit declarations were already public;
+- the boundary test could trip on an app-only change, so its name check was narrowed.
+
+**Next.** #1569 has merged. A web session:
+- moves the pin to it (S3's pin move);
+- opens the pull request adding the `CLAUDE.md` block to the app's repository;
+- adds the daily watch.
+
 ## Session 3: FRUSCoreKit, part 1, upstream
 
 4 October 2026 · branch `claude/s3-fruscorekit` · upstream [joshbotts/FRUS-Explorer#1569](https://github.com/joshbotts/FRUS-Explorer/pull/1569)
