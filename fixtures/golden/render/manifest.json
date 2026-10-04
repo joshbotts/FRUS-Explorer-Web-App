@@ -1,0 +1,2378 @@
+{
+  "configuration" : "The Mac reader's own path, without an index. For each row, DocumentViewModel(entry:volumeEntry:parser:) with an entry naming only the volume and the document (its other fields do not reach the HTML; mac-golden checks that on every 25th row), no volume entry, a new FRUSDocumentParser, no person-mention store, no AST cache and no classification override. load(volumeURL:) on the main actor then parses the document alone and takes persons and glossary terms from the volume's TEI. broken-refs-index.json lists no reference in the fixture volumes, so no cross-reference is degraded. Then HTMLTemplate.build(model:colorScheme: .light), keeping the body: the fragment FRUSRenderNodeHTMLSerializer(annotateSourceClassification: true, figureImages: .reader) writes. Rows are every document a full parse of each volume yields, in parse order, volumes sorted. A debug build of the app module, compiled from the submodule unmodified.",
+  "format" : 1,
+  "provenance" : {
+    "appBuild" : 49,
+    "indexVersion" : 65,
+    "inputs" : {
+      "fixtures/tei/SHA256SUMS" : "41609437167f6e54228471ac8f6638d3fe3db6d55045dbcd242b006c7301ae87",
+      "fixtures/tei/frus1894Nicaragua.xml" : "c36aa079477928672a8f9cb98b37757a428452824ce15500db62e0636dd2c4cc",
+      "fixtures/tei/frus1961-63v06.xml" : "48d571c05cad26e51d645c7a5fe7d5ea8b1d42e3f9a2c78ae97bf59a0e5c6f3f",
+      "fixtures/tei/frus1969-76ve09p1.xml" : "6f88c7c3078d374797db1cbf2ec2999e92c489170d4ce5df0cdcc5c22a612df8"
+    },
+    "platform" : {
+      "arch" : "arm64",
+      "locale" : "en_US",
+      "os" : "macOS 27.0.1",
+      "sqlite" : "3.54.0",
+      "timeZone" : "America/New_York"
+    },
+    "sourceDigest" : "9c69935cc53a7df14324db8224d766504910fcf189a2b85768b4da96e9533349",
+    "tool" : "tools/mac-golden render",
+    "upstreamCommit" : "34a5120507a4d7d2095217e29200229f0cda5c6a"
+  },
+  "rows" : [
+    {
+      "bytes" : 9267,
+      "document" : "message-of-the-president",
+      "sha256" : "007000d2c6829fb9108458356e3ee08bdb742f47c2d11d34520acc6ea79c0d18",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 844,
+      "document" : "d1",
+      "sha256" : "b0f85cdf915a3413d77a5f40558fe8cd5d7d3eabbc71cbb4cd3437d36e9e890c",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 3101,
+      "document" : "d2",
+      "sha256" : "1aab7f94cfce2f634d1f50c6eed802feee2a8938aa9ca7c8864b07033c4519df",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 8176,
+      "document" : "d3",
+      "sha256" : "d7fb6b03c2385cd4cdc7537b09383c2e400e1faa347d3b8e9846c8eacde9b08d",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 2741,
+      "document" : "d4",
+      "sha256" : "11fea8789d9607f8df0bf178124cc2c9eb7d0da2da981255667253def5a1c994",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 2358,
+      "document" : "d5",
+      "sha256" : "b7b7e77b0b23fa285fabeae8bd23c44f57aae45b7da886afbe8888e6f154f889",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 3970,
+      "document" : "d6",
+      "sha256" : "ba9b00e0d02bac96fa6d4cc3576dcacd7dd9cb3c43fd0ba44772910d2fe84102",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1720,
+      "document" : "d7",
+      "sha256" : "d28f00a2604b959aa43497d4b5e8b45d4c722f00a1f394d94aec9291384718ad",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 613,
+      "document" : "d8",
+      "sha256" : "f3dc1867310e1c4bb861f60ed32996a71d624c859c2171dfdc72c612495e8ddd",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 575,
+      "document" : "d9",
+      "sha256" : "4b9bf172a0038b530f62a24b4c5205b4177ee3a59f12170d72d4099f4b50dd0a",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 6665,
+      "document" : "d10",
+      "sha256" : "068a63bf94b9d4c28e1b1f1afe196e240d15a426f16d862728616d5a65e5f194",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 808,
+      "document" : "d11",
+      "sha256" : "76ecb2b7e4c08165657bdb5589eea8b0b7c6d58d2adbe6307f8a5363c1b9887f",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 33930,
+      "document" : "d12",
+      "sha256" : "e6b1eb4aaba26ee489837f2aba9330ec2a08d50f70bce0f6547a504bb42048c6",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 723,
+      "document" : "d13",
+      "sha256" : "1a6e45d08a72250cfe15ce6ac0f6c942e2a716589d10006b0ce921f6fdea7c03",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 621,
+      "document" : "d14",
+      "sha256" : "d4e7c8ac1aa10d44de6d5eadd0ac9963ce47fa7ac0da02dcaa61a8c263995518",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1663,
+      "document" : "d15",
+      "sha256" : "4de9d37563ec4f88d6b65d552c82543cc81d42de48a12d2842abb5b0396ce9cd",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 7141,
+      "document" : "d16",
+      "sha256" : "0112e200876da9a2987b89f7107b0e28bf39b66664027410f4820928f1e50ac0",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 8299,
+      "document" : "d17",
+      "sha256" : "f9fe351a714b2677e3694d11afb372cf22a43b6a30a0d08235f8f547f9a98890",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 2157,
+      "document" : "d18",
+      "sha256" : "9eb4714d4303cb7eb1292788d3aa0b5e95734779971a30d480af94dd984b5aa5",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 3385,
+      "document" : "d19",
+      "sha256" : "9ca07ef1512aea5bc852cdf2b538df3151fc8c10a8d4582ec2fb71866b097110",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 6934,
+      "document" : "d20",
+      "sha256" : "bc58e68854a47c95cc7de192d3fc865a5531c9e888e2b6e8dc44bbf1a171843f",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 2037,
+      "document" : "d21",
+      "sha256" : "4a8586094e84c43b65b02cdebfe4c1a291d19b01fee5d5faebb473a69a3b083c",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 627,
+      "document" : "d22",
+      "sha256" : "bbfca2f8f9cb6ac992238d978961fa01300011da783df67d0917e68748a8c1ba",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 22806,
+      "document" : "d23",
+      "sha256" : "64d41b6a95ec355671aa3fcf9e0fc082856aa4106a7b730c0ca878384da690fd",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 12621,
+      "document" : "d24",
+      "sha256" : "efa66803ceb6722d4edc6e7b35615c22176f650c157d5f1b155c83fdd67280da",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 3265,
+      "document" : "d25",
+      "sha256" : "cde1b0f787cad96eeac85206531388c6abe819f329ffc59c046d43df3c2c8b0f",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 582,
+      "document" : "d26",
+      "sha256" : "15045c288433c4ff4c3f1941f70cfbeab0e11fd19136970996604400d36d3ef7",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1090,
+      "document" : "d27",
+      "sha256" : "d047dce496700f0681816eaeb3a5e01fb88013020a0398bb48c3dae1a24a7d20",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 862,
+      "document" : "d28",
+      "sha256" : "23cd53c224e0f8b333fc4bdef3dea8c520a50a75bb247ca24edeba26d99e00c2",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1082,
+      "document" : "d29",
+      "sha256" : "432af1d9923eb4567834cc80629350619e8644a514e9069a40fb3791e0c9f924",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 603,
+      "document" : "d30",
+      "sha256" : "0de5a537cf1a71f3e91ccdbef3f56a818a0edf2a5fae994ab8b2a2561c0e8b6b",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 6297,
+      "document" : "d31",
+      "sha256" : "799bd1d7146aaf53037bb4228e97f6d29b795db4dd4de3bf2b342dcc40f50ced",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 5796,
+      "document" : "d32",
+      "sha256" : "71b1a52fed8a2cf0253438073272f6d8d5e96bf8f9c115a244479d97c23e7b0f",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 2969,
+      "document" : "d33",
+      "sha256" : "4ac136fd33dab60012507270c1212ad4bfe3fff635dc53fa15d37410062aceae",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 785,
+      "document" : "d34",
+      "sha256" : "5439868ce41f1ee05900f27a76296f191794eab4b4c3387ea217dc46e392b3ea",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 2549,
+      "document" : "d35",
+      "sha256" : "f1c0ee1b466e6d2d4b1b61b6c11a0ae6ced94c3962ed6bddf42c6e15c98aaf55",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 2792,
+      "document" : "d36",
+      "sha256" : "62ebc572b805dfff7fd5b9697c71cc290d82ebddaf86393b9c7a50c9a9923a61",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 3152,
+      "document" : "d37",
+      "sha256" : "cca1b02e30276a8be56c19431f017e5774c4c2f148e5d2caea65417a61f9be10",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 71531,
+      "document" : "d38",
+      "sha256" : "17f22332f666be644c0ab028bb4a86fbc3eca0ea4e46fd354dc06f55bc122c84",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 2959,
+      "document" : "d39",
+      "sha256" : "7656a2d6b83b12615e617a4e02a5ff59109921402119970dae72fddcf20f1fb9",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 6394,
+      "document" : "d40",
+      "sha256" : "0d92b615635eb9be99ca6ce45f3b15556348632ff5bb89685b1e9b56f574a37e",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1925,
+      "document" : "d41",
+      "sha256" : "3a66d6117711801fb0c45172461893acaea71335ef021547e316c41329b23ca5",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 54773,
+      "document" : "d42",
+      "sha256" : "cc1206476505d39f74d7a79db71a972ed9a7765181047be5829106bba15015b6",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1080,
+      "document" : "d43",
+      "sha256" : "4f231214667afaafeed0fd014b08f553b95ed1717c23775e199644b1a6f141e9",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 12717,
+      "document" : "d44",
+      "sha256" : "75cd6402680068a876c227cda306b81dade5f8afdbae73d5cd1367de6783c8d8",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 4408,
+      "document" : "d45",
+      "sha256" : "cc53bc3c94c547a6ec61a59d64697a4daaafd24deb5cd57ce6fa583f7b2aa497",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 4055,
+      "document" : "d46",
+      "sha256" : "630248232993202f2b89d7a01b0994cff6473e0811cc500d96d0cda2b96bbe3c",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1214,
+      "document" : "d47",
+      "sha256" : "999a79dbdedee64f4900ac350666bab2e8eca03b75a14c815a5883f4d26ec673",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 999,
+      "document" : "d48",
+      "sha256" : "d13da469d0fc890e4dcb789423cf6a66eec86afb8e9eebbf8e4f6047dc297fb7",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1656,
+      "document" : "d49",
+      "sha256" : "50a13842d5582de2abcbd14f21195e608a27a8f9f73e366ae15cc80c94205d2d",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 2124,
+      "document" : "d50",
+      "sha256" : "597b022583645b25f2360f5350f4009ebe7b8d0efdbd897a00a6bbadb9cda576",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 736,
+      "document" : "d51",
+      "sha256" : "d014f5c02c1250efa57d1648d86233591783b92536ed05f4759031c112fc5d59",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1275,
+      "document" : "d52",
+      "sha256" : "d8f810366f7f7e8d14365c4b44242ebbc961d813596245da19f2b63e9ce0a909",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 4497,
+      "document" : "d53",
+      "sha256" : "f392ce54b19b71d485a6e6879956ae1d27aa6c2f3a46285b9cab8f6d78dba84c",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 5332,
+      "document" : "d54",
+      "sha256" : "0d5b4d8fa715495b4e465ca4a5b9459bedb1fe9b7775fa926c46b0d289e383f3",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1257,
+      "document" : "d55",
+      "sha256" : "eb538127bf7a77d32df5aa9e14d643540946ef6f72e9f06801595003a6473f4f",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 8575,
+      "document" : "d56",
+      "sha256" : "927e3bc1bd0b1a3b1e3adbae4ae4b300fd4efaa7927c95ac5f00cd82e312d8ca",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 2714,
+      "document" : "d57",
+      "sha256" : "41a8bb7058c102c966c874297b424581eb6e856bc675321204d4ee39ff5b2d21",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 3042,
+      "document" : "d58",
+      "sha256" : "7368870b8fc1036d0aeeccb739528545d55c7a101acc529347baea4573831449",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 12346,
+      "document" : "d59",
+      "sha256" : "345ba99bed8500aa288aaf191642beb0219e53f7618249ea2ece52e3589eb1d1",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1324,
+      "document" : "d60",
+      "sha256" : "9e2aaebb129de3f2412c193381a97fbeb2deb12ee8d8fb0ba4afd553cde0c371",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 5035,
+      "document" : "d61",
+      "sha256" : "2d8c87b370270888991faaf9e5c55cad731367d8ead965854e9ec8373228dbff",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 16448,
+      "document" : "d62",
+      "sha256" : "fd18e22faaa998ea44db2fb8acb591c418d031e6014571c77ffd73a9d8bd2a7b",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 2072,
+      "document" : "d63",
+      "sha256" : "0880cf2e5726b2eaeefbfb71c24af39267cd1dda9c6800dfe5d537acabd6ca7e",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1299,
+      "document" : "d64",
+      "sha256" : "b72be413f07aa85b41ff6ed7b37b44d30cc4014322b27caec03338dcaacb6829",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 3093,
+      "document" : "d65",
+      "sha256" : "ed07e59c108773598185c505eade451d7431d8e78a9217b2ab6afc960c2ffe2f",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 24648,
+      "document" : "d66",
+      "sha256" : "b8155a164a69677bcc3b7a0f1949d9711adc9d36f8d5814bd9c6ceb1d8601c1b",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 4815,
+      "document" : "d67",
+      "sha256" : "db39a73527685e331c7db677afafaeec5235631c9c105680cd2078eab30d5970",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1979,
+      "document" : "d68",
+      "sha256" : "86449208f837c775c94e27c08ea4bd080820ef0842e4e3d051b313bd4f648450",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 3100,
+      "document" : "d69",
+      "sha256" : "8d19de9dd5abdcbd46fe87b4b550ea01dccd373fc58376f77fe7d80a522b8bac",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 12731,
+      "document" : "d70",
+      "sha256" : "a8f4ed7374967675395e48e668b533c9fc489afce76febb4df1cfc324db4e275",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 633,
+      "document" : "d71",
+      "sha256" : "e7dd640fab88b5aa6f130c70e465064078813158bdab2656f61463c3e8181d09",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1763,
+      "document" : "d72",
+      "sha256" : "4a9d47f06a1e5d78dee2b40643b8cd348d32019a161fc59d745e871ce647355a",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 9540,
+      "document" : "d73",
+      "sha256" : "553f23487eb1fbb7593557f339b9cb97b975844ecc889e0b2063b1321a98cd87",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 4879,
+      "document" : "d74",
+      "sha256" : "a3f13f1d4d5ef49b9fb2f76045452cd7e457df374b7f0ca01bbb1c5300439b66",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1919,
+      "document" : "d75",
+      "sha256" : "1f26bef5cc63076bc2289e9916ac3affa5e03a7dbad62b9ca97e5aa155dd519c",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 4074,
+      "document" : "d76",
+      "sha256" : "a893552012f89f09e144444ed8ed164d04f7a7f4dd248eb317c70544c22ba511",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1897,
+      "document" : "d77",
+      "sha256" : "8b24bc984c52df4ff30dd009b369a15c557c9c1896f645c7a6604b81b4372e3c",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 5207,
+      "document" : "d78",
+      "sha256" : "63e9021817c6854318664d5aa149d944383a229d5ac1b2962cecd4b539c557fc",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 843,
+      "document" : "d79",
+      "sha256" : "d8dab2a2c0a1ac49ddca3683ede0ef866cee458b8a04cdfa228dc46921a32825",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 3414,
+      "document" : "d80",
+      "sha256" : "6aaef93606fd5724fadfa5820512e8d9ff6b9c55539d63d002a8f3d6dac728c7",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 13688,
+      "document" : "d81",
+      "sha256" : "51709b997f32801a6f5dd0f0e09e2e7e2256c085abd51d21f56d6f625b86f40c",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 10409,
+      "document" : "d82",
+      "sha256" : "5313dd1ecd46b61e7679c0d1c760246bf20364b9e92a6452500e9cc653fdcefb",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 62034,
+      "document" : "d83",
+      "sha256" : "4c16da87492eedba1f9fe803b031fb7f94f5f33963a5b9945d2bc21422c94a4c",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 6242,
+      "document" : "d84",
+      "sha256" : "91382c73dae987e9f8530927073e3eae465925ae6329f1dc83ec2bbdfe332f8d",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 2428,
+      "document" : "d85",
+      "sha256" : "be0b39b3a09411546846bd1532bc4e60b5c8fa94de4b19d3dcc8cb0da08d782f",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 2137,
+      "document" : "d86",
+      "sha256" : "ccc40a4eade4cacfd179d6fe32036d11e59c538060b8d3eb6b932f89963c39d6",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 2130,
+      "document" : "d87",
+      "sha256" : "d4a0607d93c0af28772fd53e479fd2db2e1c277c030b9eee9cf480fec2205d1f",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 5240,
+      "document" : "d88",
+      "sha256" : "75c951017d349ed9677894a7b043e32003842626c17f89f50b8fcd325ee5bd72",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 6455,
+      "document" : "d89",
+      "sha256" : "de4a9cb5a977dd35c05e9fd3b4d5512ee02592b27b57e6af01c83f454a14a0b4",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 9614,
+      "document" : "d90",
+      "sha256" : "c55e20efcd8e9402a5bb389124db71eb0ba0c16b933fb798907ded544e93148a",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 38673,
+      "document" : "d91",
+      "sha256" : "4e1896db5b3247f69f0d061d1dc597b135055dc701b2bea9d569b1e451362560",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 656,
+      "document" : "d92",
+      "sha256" : "c5e4ee1b40800fa7a99b5afd5f06445162088e8452a2d23c15c068bcd58a562f",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 3363,
+      "document" : "d93",
+      "sha256" : "0ec2daefd830dca1e3168c7d28a99f7d056a33510c6ca9d753a83c32577fd82f",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 3450,
+      "document" : "d94",
+      "sha256" : "f3cdc1a4026fa56cace17dbb7e93871271af65b505be477d850f5d34de309199",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1282,
+      "document" : "d95",
+      "sha256" : "12f82a4c041f81f36f5375751b3413d5ab5abd9f8a302a14fc4126272fd44d34",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1848,
+      "document" : "d96",
+      "sha256" : "75a0e3855f9c5a3d2d0f3abf880c81eb7bc9076ef642857bce68b23cfbcc0f80",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 6928,
+      "document" : "d97",
+      "sha256" : "8cbf2dd8d60363f9636fc7ec29fcf3d3009ff5508686cc2087effa3e4e5b9cfd",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1783,
+      "document" : "d98",
+      "sha256" : "c7f841f823d5ab9c5a18fb60332dcb4be092fb2f35ef8d2431662a4dcdfc2aff",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 5936,
+      "document" : "d99",
+      "sha256" : "19db6d3096ca9b48da6a0111fd698b10ee548ddcb837fe4044881c4c6624544a",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1177,
+      "document" : "d100",
+      "sha256" : "0a693552d4fb02f3c3506f49438d04e19427d705fab0e11c3bc092d21adca213",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 4128,
+      "document" : "d101",
+      "sha256" : "994add19e654b444821ed39e96ee85c060f5fd4a2de80992b881dab4d6939ce1",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 7786,
+      "document" : "d102",
+      "sha256" : "a531119715b68ef5fd1b7b19f87d75915937b8833beb23b7c2be567421c73aad",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 735,
+      "document" : "d103",
+      "sha256" : "1987b6487c235533c7205c0baf9f5fd3c7d8d3beddc8e320ee4360ffe91b819b",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 5390,
+      "document" : "d104",
+      "sha256" : "a6a80d587d63c18a788a810b15cf335d2a1acb482bc4df52027df7228d2ec463",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 878,
+      "document" : "d105",
+      "sha256" : "e497cbeb72bc31338e37db22474e11b06c1fd1d49a4d1984e1a52c965d66b85e",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 17241,
+      "document" : "d106",
+      "sha256" : "1fe124f94df9ecfa192789d6e932c8e6bf67de8aecbf8e4ebcf84cdd55e169e9",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 2396,
+      "document" : "d107",
+      "sha256" : "21862eaa41f1d022f0da1aec737cc6e1281cd7b8c636066cf778d1081431497f",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 2575,
+      "document" : "d108",
+      "sha256" : "1cbe75de1b16b04f3024e3473fcb3dca5561912c575a73dc3b94519ad5a1fe7a",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 751,
+      "document" : "d109",
+      "sha256" : "dd96b3aefa10674840c9d3e11caa5bfe49da311277be35f3be15c8033f8112e5",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 9523,
+      "document" : "d110",
+      "sha256" : "3c163a53513f5ef6c0d0bf1fad106c0b47f6f4e713d25f6a857cd5da254ab28c",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 5006,
+      "document" : "d111",
+      "sha256" : "8b7d631e4fa97294661d5a276a0049123b8c800121561d6e720d76c9707c4711",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 2036,
+      "document" : "d112",
+      "sha256" : "8bfa70a07124f35de66ab0915ab6bb5c914b38792c4c95e59cf39d0799de9931",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 4220,
+      "document" : "d113",
+      "sha256" : "c895a484d84f4d81b74089f269cde0d496026bd95319f4377dc9e4585a3ed996",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 5121,
+      "document" : "d114",
+      "sha256" : "0b2ef34c0206eae2daaa97bd41fdeb7b0637f371173c8397e2266682abc7f6e9",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 661,
+      "document" : "d115",
+      "sha256" : "51dcbcd030abbc176716c0df5229bad9d73e7ea6c1818db194d041d4df2acd9e",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 5056,
+      "document" : "d116",
+      "sha256" : "3472ed2565608dab02d3e8a7efdf510621b91fa650be5a86d1689099c0f65a4c",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 2356,
+      "document" : "d117",
+      "sha256" : "ef873e7f93d92672a82026e61763d697bcb8be090fdff287ecb26b33d5859421",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1837,
+      "document" : "d118",
+      "sha256" : "86c3b575c629ccc4f8f3387ff613ae64d57f3ebb4dc98961aef891b0d86c8cbb",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1949,
+      "document" : "d119",
+      "sha256" : "639dbd7360c4a05046f9bbcdb76a4abd572e6f59635b5abe77744e119835a037",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 3885,
+      "document" : "d120",
+      "sha256" : "9e730b3139d8e5f033ecb61e79ed019cee9e2918c3b79454afa70283ed851aca",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1565,
+      "document" : "d121",
+      "sha256" : "243fabef59ed581f1a7544e98023de0c6703c6d20608c376746d58396a275023",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 850,
+      "document" : "d122",
+      "sha256" : "53e31def4f991415ddf17757fbc606df68c914a8fc26850375d0df491438249b",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 4446,
+      "document" : "d123",
+      "sha256" : "a0439c15981d44f238d2e7509a0de051d71d462a41236247dc2f230f7fb144ab",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 815,
+      "document" : "d124",
+      "sha256" : "7831f98afe79a3e1093404fee8d0b6e379dd580390eca4130737f7d5c47788eb",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 833,
+      "document" : "d125",
+      "sha256" : "656e331c765d41476898ddd79c32f40c20ebe660bc3a98b3913c0514738fa37d",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 5581,
+      "document" : "d126",
+      "sha256" : "82eb23d8e06f9252a732cd27485d2e11aeb32ccc0ece30264e9dadb906aa44b7",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 628,
+      "document" : "d127",
+      "sha256" : "d7a5fcc9a451013a950af484a0b91a499ed933b769ce0c998281a08f11a145ae",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1911,
+      "document" : "d128",
+      "sha256" : "c229b1882c688195e37a3450c640b369ecdb114f1beef8b8edad95d175fc2f35",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 603,
+      "document" : "d129",
+      "sha256" : "603e820f71837a5847394e00ef0e56f61d777f7ef052173243c7a92a7dc0b0a1",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 633,
+      "document" : "d130",
+      "sha256" : "381b273b2b0412e9d00545e4a5b7dff5e01746f857bc1d73b3a305a37eaad741",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 772,
+      "document" : "d131",
+      "sha256" : "d3128c814b4d6dbf91d0d0de81b8b978ca1633388adb0603e63206db1564a025",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 843,
+      "document" : "d132",
+      "sha256" : "d117c4bda1d48075cf0f0c70589759f4c2c431a21fe6cdabfdc9c701a04e80d3",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 763,
+      "document" : "d133",
+      "sha256" : "b075dfc38bc034adac0e44f1be1aff0860c380bc6bdfd6624e47dda49ba734f5",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 5706,
+      "document" : "d134",
+      "sha256" : "96c54d98725b0e520d22fee0c5824c02b5a49e6180eb1990f05814cc5caf7905",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 6514,
+      "document" : "d135",
+      "sha256" : "294d6408a2dcc2fddf81a30dc4b4436d5a04a906047053cd57d9a02e1ad4c2ce",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 8177,
+      "document" : "d136",
+      "sha256" : "fcb860fc714cd331a953c7baabaa71d1c3e413a06b3446a8b0499b100afc78b2",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 2897,
+      "document" : "d137",
+      "sha256" : "1a9f0876c6bb62fbd6654386bfed564bede80b001d249a07e0bc5a79cbfb2284",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 1354,
+      "document" : "d138",
+      "sha256" : "ef71d32b0fe2198fedda1f8066c16e0b3c9ef124ad6d12abc1645d9a81116ba0",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
+      "bytes" : 17304,
+      "document" : "preface",
+      "sha256" : "cc344c533d89e02f3ab65ee119f8ac872c3e47321a0c9940ff10ba0adb2f9dfc",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 11739,
+      "document" : "intro1",
+      "sha256" : "617d26996df63741c379e9aa6c5da5111f40394f128ddc3caae903ab4eff0bfc",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 2131,
+      "document" : "terms",
+      "sha256" : "53098e698201611e6462f4c4da76dc2320d6158006790ab1bc32d5f87cc3a2c8",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 4023,
+      "document" : "d1",
+      "sha256" : "19e51955421628c3a372cbab180200b895c8781d28359c57a2fc6f346a4c857b",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 2835,
+      "document" : "d2",
+      "sha256" : "e4bed381641929e77bcd134704e6352ec3a2f43a69028ceccd00200fed996dd0",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 4402,
+      "document" : "d3",
+      "sha256" : "dd79035f22a19121bcac24286e420f92dc52d107ed0014ef2e57c6ba5c560276",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 5636,
+      "document" : "d4",
+      "sha256" : "df5230fc7ed498be48a3b874a031a2e98359ef17893959883fb84dfcccca168f",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 3127,
+      "document" : "d5",
+      "sha256" : "dee46328ca62e72a025b144ba10888b4aad0115de97f8eedeba257fc77ec54f9",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 5248,
+      "document" : "d6",
+      "sha256" : "914db4709a98ca31551c1b1ae457e3e3248883c33dd501b7fca3c378c30761b5",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 9672,
+      "document" : "d7",
+      "sha256" : "b75f5f9bee487b5c510983e92f08da920ca76c34eff60c64958475f9a6ee6d06",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 3027,
+      "document" : "d8",
+      "sha256" : "9559a91fe533f460717f735d7ee464330c966b4090a927043a0940d8f7ab7d05",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 6163,
+      "document" : "d9",
+      "sha256" : "7fc76b8944d7e69bd85317e4de4815e6d87ef5101778043320853c061e9fb0e1",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 7588,
+      "document" : "d10",
+      "sha256" : "22e302dd7ef2822586b9789cfd4b3c05c0f4767377e8220795e801dc5d2c30e4",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 24261,
+      "document" : "d11",
+      "sha256" : "df79d5feda29cc94d718b92b7aeeecab6323c2a6077d811664f112e2e8ea0214",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 3215,
+      "document" : "d12",
+      "sha256" : "848eb8d71237d4f4175f8d82d7b33fb277830a1ce509e5b42392eb9c0f6c10a1",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 3327,
+      "document" : "d13",
+      "sha256" : "d1a8be1ced8aabe7383b04cfe107151fe6f035fca9213db014f1d34d6cf124cb",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 4528,
+      "document" : "d14",
+      "sha256" : "0ef837b770c0072ef03827259bfb9d05f26c8b5768c0d56957ef55c2dae8bf37",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 13549,
+      "document" : "d15",
+      "sha256" : "cd956d11290402370a1672155c4a39055c84877dc5ce035b860efe00afc65629",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 3978,
+      "document" : "d16",
+      "sha256" : "12d5eb089909df009e52b1077f36602e183236d45d0ef023c31b31b3dbed83e3",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 2729,
+      "document" : "d17",
+      "sha256" : "bc53e5ea1683fecbac7f9f548bf248c2c856a7985c3016ec07087e04f9a10104",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 5317,
+      "document" : "d18",
+      "sha256" : "1f8aa964bf150b9dde03f7e68b4ea3e18a86adb4de345d3ee28e53ff87b39f0f",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 4687,
+      "document" : "d19",
+      "sha256" : "3544e665831a48ae1bd5a109d26acc59dbd7a68f4724b247db6590312639c549",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 1751,
+      "document" : "d20",
+      "sha256" : "401c0e8ffadcfbeeeae6acb40a2572033d4c1aebc58be6526b7b24bd54377fdb",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 47971,
+      "document" : "d21",
+      "sha256" : "bd4f6ca0e5e503b06645f48c2c58cb40e82352dfade1f8709528f0b7ee81ae23",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 23940,
+      "document" : "d22",
+      "sha256" : "6097385ad7c4c73bbebf52b2e9f96ed14b17398569b3345f569b91adc10776b0",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 45972,
+      "document" : "d23",
+      "sha256" : "469c51dbc4da17beb05e511091c6a5a18ae058633e1f77457b9098ee8b4a71e9",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 14283,
+      "document" : "d24",
+      "sha256" : "63a79899e81aa5337f9d362e644c81d08bbd2f6524304b308800103114c3847c",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 13446,
+      "document" : "d25",
+      "sha256" : "3d4849484ce8860b65fcb33c6bec3f7d84e02fd3305519ce4e0bb2f000193771",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 14699,
+      "document" : "d26",
+      "sha256" : "1bffb337456d71a9d4594255227504209b63710a066bc8822db1f04ef06f7c83",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 35965,
+      "document" : "d27",
+      "sha256" : "3af15bf186aa64c7247c630d436e7dc37dfa8df3cafe532513e5519c1fafa170",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 4848,
+      "document" : "d28",
+      "sha256" : "54d3199651ff4dbb9014fda16593f06c73de578e8d1c2a5fc4712ebb058be8c9",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 4760,
+      "document" : "d29",
+      "sha256" : "0a4e321d7c47d4a4434401d868d5c61833564f53096f9b39d8b7cd4e13d7872c",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 16883,
+      "document" : "d30",
+      "sha256" : "f38cedb9b503a582454eab31309b52a730a1047686d41006f65fdebc17bc212a",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 8672,
+      "document" : "d31",
+      "sha256" : "b9faf81f4b04bfc699e549526872cba000cf70ab86eb295332a9b8eb0f43567b",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 13978,
+      "document" : "d32",
+      "sha256" : "afe9129f2a625474de3110f85ffa8a3848befc2d27046a40ea0b7111d86c0515",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 8658,
+      "document" : "d33",
+      "sha256" : "f18c84ea6a70b3d0585fa7f80267c8539b8a805fed0e15c1f4f22e274374ba81",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 15055,
+      "document" : "d34",
+      "sha256" : "62561ceaee9cd4e6bd853252a96c35fd7262466003e768e5aa6ee56774aaad06",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 4862,
+      "document" : "d35",
+      "sha256" : "d8d4040508b0d03a73f1996a322cdd2df204e20fcf5b185a34700a7337e81c50",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 4699,
+      "document" : "d36",
+      "sha256" : "e95ddefe1495a578c0fbfdf2b99510997ea3fd60dc48979b3536cd3349d2dc04",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 29833,
+      "document" : "d37",
+      "sha256" : "d23ff962ab6f88b1a5a48fcf2a3a36d7d661741652f7ece10406dfccb4e06763",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 11791,
+      "document" : "d38",
+      "sha256" : "9b826bfe160d5dd1122a5f6b72dd1263eebf291156d78987b76479b7ae75a334",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 21143,
+      "document" : "d39",
+      "sha256" : "6d650e172ebe9d4a22f9ab7cde56ded758c2a6be5245842b7fa0ef9442f4fe5c",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 5272,
+      "document" : "d40",
+      "sha256" : "17dcde09b914d796e6c9ebdd82f73427de8b67d7d4d8bdd748552e05b9c22347",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 11327,
+      "document" : "d41",
+      "sha256" : "ee8843560e0eeb12c1fee6b1f7f203af41403f32fb113196a7e8b777eb300607",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 31503,
+      "document" : "d42",
+      "sha256" : "c1c4f5c3a2d842bd578d0d8e0f73b7f09f1571b91420647388ebe074646dedd5",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 16328,
+      "document" : "d43",
+      "sha256" : "524118930e3d8ce5872e7f84d9e4de12593076457753f5e8a0cca75730000d90",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 8842,
+      "document" : "d44",
+      "sha256" : "259af25ecd959fd2975de01d9a51d9eae85ed37b4b9f3bf81970e325a057a2f7",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 5890,
+      "document" : "d45",
+      "sha256" : "64ac18194bbf5e81d98397519d84b2c8a84d797124e88238892b955fbe914213",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 5308,
+      "document" : "d46",
+      "sha256" : "7097e2cbdce918c6f4bb82ca1cf7ae969ba8a881b70b72d4f17b922d3383b1a0",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 4809,
+      "document" : "d47",
+      "sha256" : "96c2c63345fa9d6b668918a8f24b0e87a64f5e6ba1717c61fc34a4b0b1ce6ea7",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 3793,
+      "document" : "d48",
+      "sha256" : "0b1bd2352b18dd16316f8415ca8ec655bcf2368dff126a27d3493c435cc060f0",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 18996,
+      "document" : "d49",
+      "sha256" : "c262ae62b22b159b81e2cb103152511f8f077fff005195f2d566c5075c746c74",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 3471,
+      "document" : "d50",
+      "sha256" : "2596c42c3182701944d5e26945eedf291cab9933883b3d912e926124b27d916e",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 20076,
+      "document" : "d51",
+      "sha256" : "c29f30debbcad372137c0b1bfd9805f11206bf2c52c1b49e4ac588e2ac8ac147",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 3364,
+      "document" : "d52",
+      "sha256" : "7dfacca159a4ee409f2fafe38f116b71262e56f6c12e5f51a36891aa959771b5",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 8057,
+      "document" : "d53",
+      "sha256" : "49d33a75b5579560d02d5b2483793f1432449bf9b8e31c64e19032020af87c0f",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 4183,
+      "document" : "d54",
+      "sha256" : "ef0a2295fb08a7ccd8b7ba8138319868ed2311aa2e3c225bf804290c8551046d",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 8486,
+      "document" : "d55",
+      "sha256" : "6ba3559f5ac8ebdbcf359f54368ab42cf3d6490447182131ff3dc7382bc4706e",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 33431,
+      "document" : "d56",
+      "sha256" : "81fe0476b7becf1e10b0871545a1142d01a8c593b6a717ef8f8c7aacff25fe47",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 3743,
+      "document" : "d57",
+      "sha256" : "fd8d4a2b747e6348480da9d7da20942fd40737444a74caf8e68d7d5b2de9f17e",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 4292,
+      "document" : "d58",
+      "sha256" : "130287c664edcc1ddd845c967c3a0f32f1ee9547d00212880aa8bb34cc01b664",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 7627,
+      "document" : "d59",
+      "sha256" : "98f8dadbf40e36879734498dd8c4c6a45bd0e725f6b7664108b17d989e3b6d3c",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 9219,
+      "document" : "d60",
+      "sha256" : "eb7f91d9c7a3049cfad5c4929b21df7d09382014598b6f848131e8d522a5fbd7",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 6568,
+      "document" : "d61",
+      "sha256" : "97f8a044e66b1a76b6657e5c638ec7f379eb7d49ce861bc9235e78e8339424dd",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 4980,
+      "document" : "d62",
+      "sha256" : "e564f5513fae757215b28396e2662a683d988d9aff61715ce3839bb336d0f81b",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 8784,
+      "document" : "d63",
+      "sha256" : "5fe5aa27e6ae53af215c9291cd99d321f9c42908d0aeece53e91bd7c8850c708",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 5727,
+      "document" : "d64",
+      "sha256" : "0730b4ad39332ff8da56635a5739d012160d70a584da9243f07e57ef01b90f62",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 21565,
+      "document" : "d65",
+      "sha256" : "dd9f891b5dced965611fb1d5b5ad73e944fcbd1c3e3d6602c71e45e8bee66f2a",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 14451,
+      "document" : "d66",
+      "sha256" : "f6e50b9bf94c76cc0999a206f781ef5e7140371223d1e4a89753327ba36152ec",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 7428,
+      "document" : "d67",
+      "sha256" : "b6dba6a46908a4e47f36f66360b1d3d8caaed552546add15874588a47f672ecb",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 16934,
+      "document" : "d68",
+      "sha256" : "a322f04131bfc0ea731464f86e6a50268bee6e92b83afc86fa37b1cb7f140e18",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 7773,
+      "document" : "d69",
+      "sha256" : "959159d1a499e768310d76994f4ca7094a6cd8898935f78f059d6757ab1bacdf",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 8746,
+      "document" : "d70",
+      "sha256" : "6c1000ae0f8734f959916dfd9bf669aaedef795bab85110d6cb11851f2623501",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 26991,
+      "document" : "d71",
+      "sha256" : "776f098d1efaf4a22072a6d513ff60985c3750e769e05456567ad33c5382fd9d",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 4965,
+      "document" : "d72",
+      "sha256" : "b67a28880402f23a2f57aa7a523e79ff25d4cebfe7f81673dff35e784f82f5bc",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 7972,
+      "document" : "d73",
+      "sha256" : "300ae5f53d695aea5a748b02bfdd83280eb1fab7563092e0f8d4d19646df776f",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 15376,
+      "document" : "d74",
+      "sha256" : "4b228282ea920a68f1cd113b0ffccfeb967880541c29d8f03f5a447bef2d83d8",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 15215,
+      "document" : "d75",
+      "sha256" : "f6cab6703f0a0e47abe14fae19c5dc518c414bf53bcf00d05bcee304340538f2",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 2444,
+      "document" : "d76",
+      "sha256" : "f508ae819659bef51690e3f5b7c319416cc015a641f080d42b4ae9ab86f89b85",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 13429,
+      "document" : "d77",
+      "sha256" : "c56f84bcc248ae39f04ac39b6988292d6d5a5da21d28eec26d8768c4f5527f68",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 13116,
+      "document" : "d78",
+      "sha256" : "f21f26af3ac87765060988058fb8dc99c2e891aab672ee88b3966a2492a44bc9",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 27078,
+      "document" : "d79",
+      "sha256" : "2410b6491b3a4d36b88eb444d158462d04494b707d234b985a5c55d292ba8397",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 983,
+      "document" : "d80",
+      "sha256" : "971639ae523104804d0fa7ec124fdba8c1bcb55cb066828b1b008bcc92a6d28b",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 4933,
+      "document" : "d81",
+      "sha256" : "ca7c241705891f1edcd07042a344f235e00df4c8dfc8d19fb3045bf6807fedfb",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 10061,
+      "document" : "d82",
+      "sha256" : "54f7c7d7026a7e2ce7257283954f0fdc52b1cf085bc996d4fd2fd106f53c9551",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 17288,
+      "document" : "d83",
+      "sha256" : "e36e7eefd1107ef32b15a574d637668da230960594992ea0121e0cc50e93fe23",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 11666,
+      "document" : "d84",
+      "sha256" : "3f4f280ca797dcb02a16675db040f9e0cbe19c974e72e3872b8e31215b0f5ef3",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 12750,
+      "document" : "d85",
+      "sha256" : "69aeb6b8609314d3b7fb16aa68d49c25facbde8d3307201028119dfd2587c7f1",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 3272,
+      "document" : "d86",
+      "sha256" : "263957c2a8305f611aa8937d28c567efb45866fae0c45cca1ffcab4f873ad041",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 11645,
+      "document" : "d87",
+      "sha256" : "d0ca83317f9d9fc58047702ac4d9e7ea8bf23d4da655df888ee7788d74f3550e",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 6622,
+      "document" : "d88",
+      "sha256" : "88e1aee4321f89aa90d9a984c3b733984144f54b1c8f39e45dbb34f580e56ec1",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 4720,
+      "document" : "d89",
+      "sha256" : "6319cec19d5f8534adde4685a93febcea273d34b71fa755a9fda282c5a14493a",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 3428,
+      "document" : "d90",
+      "sha256" : "9a5ca1ca832184b70442fae379e9e4efb185275ba497895a1c62b726a850e27c",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 11121,
+      "document" : "d91",
+      "sha256" : "2e5081261a1dd9dcb7f9ae17de25f6cba220c725d2d4f50164e1317980748294",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 12609,
+      "document" : "d92",
+      "sha256" : "0917ae46ceac5f610f974ed9db3e044f2dcb1e7d498fd9e36527d1b04081a5c1",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 46570,
+      "document" : "d93",
+      "sha256" : "374fd064f50cec9c8505061ffa3857dd50084e3ed71ec32e5da43ad352f3ff64",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 13788,
+      "document" : "d94",
+      "sha256" : "9e5806daee458c779c310d5f05e60d561bf3fb6e6f6a5dcd79229165ec692049",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 10824,
+      "document" : "d95",
+      "sha256" : "70debf53c3a32421b114a795aa9ab1c187e3026bedd3e822284c4af440e05e75",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 11539,
+      "document" : "d96",
+      "sha256" : "c31227d9735f209128d4dc966fb20e2c57d6b2a70b9bea9d4ec7ad8819e14c8c",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 5117,
+      "document" : "d97",
+      "sha256" : "1e374e3da8ab89fc6ffd34f10fe92bbff469253a4573e3a93db4e286c10c314c",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 30100,
+      "document" : "d98",
+      "sha256" : "8a66fc11f609347da461e73f1e10ba8c64bd27d2f3499a428022af6c5903815a",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 25862,
+      "document" : "d99",
+      "sha256" : "840126094e5f6139647a82aa64db18e5e66be329314957b15433cc6f0209d437",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 5415,
+      "document" : "d100",
+      "sha256" : "32d587cc54977c61a9ab0524b7c1071e1c856a1b0c78d256a5302d6380e24699",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 4532,
+      "document" : "d101",
+      "sha256" : "0e3c2cc0839565a217f5d50cb70b9bdd16157437a87acdde2d49419aa6358c80",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 3423,
+      "document" : "d102",
+      "sha256" : "8b5821f26c0fc79c9f7b4d4d923cf2aca610a00d43641b2a07526729f147bdb5",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 5770,
+      "document" : "d103",
+      "sha256" : "3dde48bccd6ec65b7dfc49c58308fb5d4ea94b71870235a09d1dee7a4b5d3d5a",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 3225,
+      "document" : "d104",
+      "sha256" : "a04ded7cb2c2a718e487672d9f91b953e0c1d2a2bda4c3641eeedd9ee9868b37",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 10190,
+      "document" : "d105",
+      "sha256" : "67e45555383fb3f8a2bc5e2d751247478c72cd96f0983bd60179015a475bb027",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 18396,
+      "document" : "d106",
+      "sha256" : "600adfb1acf5556070d25e9c992f22c5cfbc8aa7ed4af231e13c38009c5299db",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 3524,
+      "document" : "d107",
+      "sha256" : "24fa5c8aefeaa30dca41a8e98a41318ea525500d049c89c555d106c3164ab4c7",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 4220,
+      "document" : "d108",
+      "sha256" : "3c07d4baa82a606e7b1aeb63503c5512bc8ff1f3ae04e211f3979657019d4a0c",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 4424,
+      "document" : "d109",
+      "sha256" : "3e09cfc3ad25f5d7f604553a5176e909aac4525e8273e6454ea41b9b7db22f2e",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 4095,
+      "document" : "d110",
+      "sha256" : "e07dd2b603b2a8dedc7e905aac63e0f5984bc38a686f0f96e9256e8cdf86dd2c",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 6922,
+      "document" : "d111",
+      "sha256" : "f11e393fdd8db5dff6e5871215973662edd787900628f990c60ac472a18564a9",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 12731,
+      "document" : "d112",
+      "sha256" : "3c12abb52c868cadd6395b4c78d2467f027def4445cd2c558aba25c5a858610e",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 2767,
+      "document" : "d113",
+      "sha256" : "89525a22535441120f4b78c25372aeacb0795f6fd805f833a22499ef7b8f0314",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 2781,
+      "document" : "d114",
+      "sha256" : "775479f84dd81fdc80452410a7a160edc47f1e3a233ec57dc33e979abb436a24",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 8915,
+      "document" : "d115",
+      "sha256" : "8b0a2e9a4ab198b0d92a6437ac3f79856c803a6e96d5447667cf7e2286d05131",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 5954,
+      "document" : "d116",
+      "sha256" : "a584e99f9b24c2ec6330870995dec63d60dc576f2a02738fa8544f751fd1f283",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 8239,
+      "document" : "d117",
+      "sha256" : "e01512dd07a4f2b17e42d6d20b0f55bb2da9af9d9da074696d12296854ed4620",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 7620,
+      "document" : "d118",
+      "sha256" : "a2fd6319bde8e15e5ae44c41497f4df3759adbdc50eb053744186b80fcf9c52a",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 10509,
+      "document" : "d119",
+      "sha256" : "bed7973a46990e3dcddf21c91a4188e58d63df0417b6365ba9acbfb590c517b1",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 7700,
+      "document" : "d120",
+      "sha256" : "b6dafdb8b58ebd9c1969040e22e16eedc54b372aff81786f662e7388e528746c",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 18595,
+      "document" : "preface",
+      "sha256" : "370e561308262bf9348f04015b55db1c5eb908e44f571a2ffd58a174aa7719a6",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 7034,
+      "document" : "terms",
+      "sha256" : "0e563382921bca247fa6677aa48289164f37d350467941bdffe87104ab11f6a4",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 6622,
+      "document" : "d1",
+      "sha256" : "d195ebfb2c93f062a7fb19f9c4e3ec2e12c398b69b8702d2deda6c1321cbf38e",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 3914,
+      "document" : "d2",
+      "sha256" : "403ac13e1d9d61a4b194480911aa27ca41dc77f1c4e2ada563d4ce1f389972a8",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 5796,
+      "document" : "d3",
+      "sha256" : "241768f09066ff32fba7a9164df3edb40d7f544cbcc1787f800190affcbb6611",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 8736,
+      "document" : "d4",
+      "sha256" : "78743ec43b5226419819cd0ef5954f3663a77523b40608a2337dca1181c2f5e2",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 4958,
+      "document" : "d5",
+      "sha256" : "45ff24254052c4a424badd1228c15a64dd692d4376ef94f58e385d4083704d1b",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 4286,
+      "document" : "d6",
+      "sha256" : "31624c548750e4335f4477b392315e39d233495e8bddda76f8144b1c04ba749d",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 9662,
+      "document" : "d7",
+      "sha256" : "9d75819633c8d1d83f25af549bdb7d13afe026046f8883d97a013170decbcf3d",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 4559,
+      "document" : "d8",
+      "sha256" : "8ffa70faf12546875afe041da878c2695c4fa1e78c62342916b665a4a3f2568d",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 8707,
+      "document" : "d9",
+      "sha256" : "283b906e423d431d6475d056d9f2882d2c28af5fe8161f9717e3920b9f7edd2d",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 5340,
+      "document" : "d10",
+      "sha256" : "e7f900b3d1f45e7ad622a8c33070a6caf8ad7d1b4257db9bcaac1c5ebe2a4c96",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 8440,
+      "document" : "d11",
+      "sha256" : "222000b9e7d99a6e97310bd6fcc0b35f2ac1344b5128725e4d994d309828b452",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 8183,
+      "document" : "d12",
+      "sha256" : "af93c82b4714bbfca65ad60511998a8ef69bc541a1a62637301da32b292d2a60",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 28182,
+      "document" : "d13",
+      "sha256" : "d7e881291a03a60e4adabeb81661234474eeb891da370cbddf05512f4a8385ab",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 9588,
+      "document" : "d14",
+      "sha256" : "5d7e8a127dc0c993d95ffeface8b6c77a39c7dd113c50133e383f40c27fbbde2",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 8986,
+      "document" : "d15",
+      "sha256" : "ab308374c2d0584dcd1969b6192f2294fbe722448e04cb54ed42d40df31799b4",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 1701,
+      "document" : "d16",
+      "sha256" : "213996a25df3939445c800a93de65dd0ff4af41e4c7c63d7ceee929878b31314",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 9881,
+      "document" : "d17",
+      "sha256" : "d73bd12e1bd954283432a7fd6c9064c44f74735a59b4d7135591e569bdb0462e",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 12711,
+      "document" : "d18",
+      "sha256" : "48e56bda69bf75301717a42119051c2f0ca2735c5da4a134e15af083eaa4c8aa",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 4771,
+      "document" : "d19",
+      "sha256" : "8fb8ef501fdf3b54cd65ce42127ecf40d5d932ef6ae1eb208a77d679c639973b",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 6581,
+      "document" : "d20",
+      "sha256" : "8bcfe2ebba3fe4e1fbc31251f80ea2dabd5e42eae41f07e2c1a522a55a8cbde5",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 86714,
+      "document" : "d21",
+      "sha256" : "7625e0d0acd28c484e7cc04bf76a038fa535779b1f256bd4232720e0a8f92a03",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 34282,
+      "document" : "d22",
+      "sha256" : "86a57cacabba28f37d10fa03f0259eeaea16cebcacb06fb990dba2399ffc46a8",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 5314,
+      "document" : "d23",
+      "sha256" : "890bd9218b55ba2b33372591eac5090c667d944cc64cdf7a35c9e0ac0863c86f",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 11952,
+      "document" : "d24",
+      "sha256" : "49fea2f21f6ded1da98cb3f2ed5d2e8870264a8760847609cd0189042c60634f",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 20731,
+      "document" : "d25",
+      "sha256" : "9dbf4b37d3eec2c77e94319f1e7b3104cb8e2789a64f02a114980743535f0814",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 5901,
+      "document" : "d26",
+      "sha256" : "157691b6f4cc6c72f43cfa33c20a421402065ba5d9fdb8a7dec67e1c6ca8b2fd",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 5965,
+      "document" : "d27",
+      "sha256" : "6c0a3397a5603ee8e733970e3270bb120ffa101e8af168b328206ffc689d64b1",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 6287,
+      "document" : "d28",
+      "sha256" : "fcd3d50cb124bf147199e131ff9abf571a723cd7d1d95862f10e6cac7be7321e",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 8556,
+      "document" : "d29",
+      "sha256" : "0d14d38f0550dd8efa2888cc865e77616cf53a7e217b9f901a0b18e0b196d56e",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 5289,
+      "document" : "d30",
+      "sha256" : "5981ca3d7a504d83617b03c2de1f596b96b1dd3ea6600b80d5be49d1253e75e1",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 4664,
+      "document" : "d31",
+      "sha256" : "47bc31b457477d65c8258bb558936a2802190d2bbfedf4217305aa653b395343",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 27688,
+      "document" : "d32",
+      "sha256" : "d2c816bb4cb2680d548b5fad555cbf3c3d1792bb6d76d16586540603fe7a2548",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 3740,
+      "document" : "d33",
+      "sha256" : "c8d57a8b80e3f11672c6ecdcd4504b34ff02009e0e0418163636628324d2b4a0",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 7953,
+      "document" : "d34",
+      "sha256" : "28bb51e4eaef36a26a1eb0e5fb697a153c4c466611d966ac31429f0d0b2a961c",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 6610,
+      "document" : "d35",
+      "sha256" : "faeff9a4b311af59670f2a9dfc7dbef646f0dbc634e1c6a488640fab50616fe6",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 7256,
+      "document" : "d36",
+      "sha256" : "f92b8b993d087c223f25bb557d6ff3d1cf750e30a00d81d5c7efaf5d01e1b428",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 5306,
+      "document" : "d37",
+      "sha256" : "ee4d1e7269a690c08048d7b49e2e7cf295fafe37980ae3a728b623f86209232f",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 5200,
+      "document" : "d38",
+      "sha256" : "34904b54332d7cc2701414c8edeb6d0ca627268f19373edcd85b703e3f8449ff",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 3681,
+      "document" : "d39",
+      "sha256" : "9d602c1c88fb7abbdcda5a5dd5f0d280deff76a446bfe573b970bd8d88a96d60",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 7471,
+      "document" : "d40",
+      "sha256" : "83175fff8dfcb37d2ff92515fd77c76e2315260cce6bc89f448d182e843137aa",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 8730,
+      "document" : "d41",
+      "sha256" : "862cde490cb042da6d7c9af5224d194690ceb4b1dcb6d80cf59ea547a9f1eb11",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 4750,
+      "document" : "d42",
+      "sha256" : "aa80dfbe92c0d0b40a63577490bf6bcd9f5615f959501494deb2b84c811385d9",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 14203,
+      "document" : "d43",
+      "sha256" : "604d8b90b7287a35207bef563fffe2562f68e32c1117691cf380b87395f15d68",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 14606,
+      "document" : "d44",
+      "sha256" : "fbca4bf80884a7bbffd2715ba37812bf8ca7526ca1ef5b0a67fbe0d41840bd49",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 10610,
+      "document" : "d45",
+      "sha256" : "739225efb4efa8c6ad6b7452e4fb214b3edb26e781eeeeff64d92c0cbb226680",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 5535,
+      "document" : "d46",
+      "sha256" : "c013ac77fc122bfcbd3f398f671d130b2e070edfbcef885ff3e0f43933006088",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 6507,
+      "document" : "d47",
+      "sha256" : "53fb06cb50b6c77be84bf6c890a127e1243dad279eb9705b66087d05a157af8e",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 4635,
+      "document" : "d48",
+      "sha256" : "872c25ecd30a2eda2dbcd52c49c251fe729a35c4514213bebd1e72ab11c8f8ef",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 7915,
+      "document" : "d49",
+      "sha256" : "0e73e229a7786838398dbc7dbba38b40d0a36cfc8d49eeec5f21a83073cf7bf0",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 7810,
+      "document" : "d50",
+      "sha256" : "8ebf6de2dd1cae82d126d54529576f0ee321ddf0e120b02cbf5e9a21a3215e84",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 6847,
+      "document" : "d51",
+      "sha256" : "4b14ddf7e9bf32cd29e6f413a0c280b8787b79476972fecae4397a4c715a5837",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 3458,
+      "document" : "d52",
+      "sha256" : "8a6c45c7e934b37fbf137a146d5e9da4c6e9e1d3bb84422f9db500a900a5106f",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 33318,
+      "document" : "d53",
+      "sha256" : "be8a47c4afb0a17ab0684d7898a6a212c53e61608a7731b5a3d4cba6cb747cd3",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 29249,
+      "document" : "d54",
+      "sha256" : "15fa4bd57836cddbe24d7a31474608424b7168e11e5be531c6f1c7bb68d45159",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 4261,
+      "document" : "d55",
+      "sha256" : "c88d89b20fb6284c8432368c4381c1a754d0fe2165267cff4b457ea961807414",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 3476,
+      "document" : "d56",
+      "sha256" : "3d6d8bf431cc430a76a4380a42fe90bdc192d76d107aab052d3750d1beef447b",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 14330,
+      "document" : "d57",
+      "sha256" : "7d5790051bebca3e499dbe20bf6c07e5ff97abc0ed6749d980639b2f83cf591a",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 4474,
+      "document" : "d58",
+      "sha256" : "6bf96816df68608cbc3a59d87525839bb3924d53afc12ca3e23766a8bf1f147f",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 7885,
+      "document" : "d59",
+      "sha256" : "69135152d9b389a50c8207ab942fab089095f270b64bae1a01cf7c4336f17130",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 14440,
+      "document" : "d60",
+      "sha256" : "ae33570e713767af88da83c042ecff19305a1dda4c5bc9cd3fba49070a5be65d",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 1640,
+      "document" : "d61",
+      "sha256" : "fec928fa9d64c3ecf98b1d4f1b69d3962affabe208f8b3524154b55b270ea18e",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 12542,
+      "document" : "d62",
+      "sha256" : "8e0923d303efb057a3c91015c0e9ff301931314817b8f6bf29bfc107b35ee335",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 11971,
+      "document" : "d63",
+      "sha256" : "611a63e5f49d09795fd66c2d4b3eceadb1fb2106f3c034dab7610302cf5de677",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 14856,
+      "document" : "d64",
+      "sha256" : "46532870ce99624bfc0f366c4b83f6035bda5be663d919e061215eaa36033849",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 3453,
+      "document" : "d65",
+      "sha256" : "89c56d32f58cdef1c336b7f18a20deb8377d69c4659dce758e4ae326decb3605",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 6790,
+      "document" : "d66",
+      "sha256" : "ab721e4d1e5187d8c82fdeb4e04b7f5428fda6469d34938d05503953b08edeaa",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 12614,
+      "document" : "d67",
+      "sha256" : "ba8fa073ed78d131fbbc06a26621c8a5172d7b7b766324c680d4f5775824d420",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 1638,
+      "document" : "d68",
+      "sha256" : "e8c54dc267e38cbacbd1f61b51dbcb1de1dba42a530bb46828584cebf677d500",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 10055,
+      "document" : "d69",
+      "sha256" : "1c60d01cd77a6f0c881d176c6576ab4a95ae1f87ad255596026dcff99ce344c3",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 18725,
+      "document" : "d70",
+      "sha256" : "1dad27e71ef37b6cada61ab7716616050da1c79911b325b953c005dbb64f7aad",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 3829,
+      "document" : "d71",
+      "sha256" : "73abddbeb21763563b0dfaade063765bf704a859c742c9bb2a1d4be82c8e0d43",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 8175,
+      "document" : "d72",
+      "sha256" : "f960075d864494fef7e31961194e445844f141ce113d80c878a19a2d299cd2f3",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 3983,
+      "document" : "d73",
+      "sha256" : "158722f5575b6e7aabfa030c972dde3d19bb11755d50134c7551167d0ca9aec1",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 11759,
+      "document" : "d74",
+      "sha256" : "9776ef1e501608ffbb6b9dffdf6e10fa2fa45bd7729d9445162748de50ed00a5",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 5565,
+      "document" : "d75",
+      "sha256" : "f7de868a33e3df7d2b63a5fcd05a71b875bbc1b0cad29d4a6c010661e25c7ac9",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 8058,
+      "document" : "d76",
+      "sha256" : "885c38486cd6bd0237f776835dbc5303baa08d14683122a037474daea32fe25b",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 5590,
+      "document" : "d77",
+      "sha256" : "6d2842d8b0c7856fc971e9908e581d12132521e61975659f64f4a187e9ce3f02",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 31491,
+      "document" : "d78",
+      "sha256" : "0bc6eb4400dbb52f3dd86deada67f3f909b398c9ee28d30bf23f41672b6cdcdc",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 14974,
+      "document" : "d79",
+      "sha256" : "9488040e08380feb3696ad49bb7d18c1ef93385dd1a4d2f5bc69c572860e67ac",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 11995,
+      "document" : "d80",
+      "sha256" : "750ab42c9bd98d5fffa54c5315f263251a2afb3658a9769ab98094056968740f",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 13358,
+      "document" : "d81",
+      "sha256" : "96d1789a2de9e3d9aeaf893e6ba9f04a5cb5ae4d4abe06b2beb3c08ce7b91b58",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 6983,
+      "document" : "d82",
+      "sha256" : "ea5607b074865c12e4d3bf27c3c3c32fa4b8135b84a56152d317d4eef4a04aec",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 14237,
+      "document" : "d83",
+      "sha256" : "3c3005d0701518f5554d66db151ce8387c63cd1de0e9d3eeade7386b02648c1a",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 10181,
+      "document" : "d84",
+      "sha256" : "13ebaf9444c3c761c7c0cd111e06a648d753a2446ee3f78edb9f5ad6666e4589",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 18150,
+      "document" : "d85",
+      "sha256" : "13de04b6efc77985eb20f23839d4370ec864e8683280421cdc881cc1d89f9ec6",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 21225,
+      "document" : "d86",
+      "sha256" : "77d0722c786e6ebc3caa10d6482952e9e4df3fa3f08306bfcb2a77a6aaf60634",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 50836,
+      "document" : "d87",
+      "sha256" : "3bb5e69aecd96c4295bd1d8832ff2a0689a53ab770360f81337e343974c82926",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 8229,
+      "document" : "d88",
+      "sha256" : "378287cba67a1bc575a19f9b5a1bf1be5fbb0aef6ee2cdfa2e8332b9ea9c7335",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 8900,
+      "document" : "d89",
+      "sha256" : "9c8df71b2c1230e7594ce39a5d1832012f14d136492f5330be35f82810ac31a6",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 11348,
+      "document" : "d90",
+      "sha256" : "0ee129048331c21282bd171589297a41ce361507d1a62079488d7372b96baa46",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 7265,
+      "document" : "d91",
+      "sha256" : "b1d40caf8bf2ea03003d05ee1911d8ada8262ebf5a9c680b63d9e88b860218aa",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 9624,
+      "document" : "d92",
+      "sha256" : "4425eaca69f7d2c016e2ddb5e23a15212e14ef60946b0901ecbacaddbc1b414d",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 10549,
+      "document" : "d93",
+      "sha256" : "86f4669bf45b6ddfe3cb4153347b4ae1469bd8b25b8e67d83eaa82d4742c93be",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 6963,
+      "document" : "d94",
+      "sha256" : "48a3bb9e0678d9e7631b460238674ece87796de346730cd670109643badb7848",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 5849,
+      "document" : "d95",
+      "sha256" : "1a46d89ab415363d2dc2af1d8285f993390755e5cef460acea1abb86c1a4fb67",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 10749,
+      "document" : "d96",
+      "sha256" : "80f8192185f597c31b006efaa66359012aade9a3ef9f09be33c68cb07da68a37",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 6511,
+      "document" : "d97",
+      "sha256" : "c1777a55ae0b4955d6d8f62f6ad7d356facedae5a8e980ae78781dda19dd2fbe",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 7434,
+      "document" : "d98",
+      "sha256" : "cdcefd2523e0d4cd2f0d34a9911d8ffa5e6726c537fa15b26f5fdcbfcf73e8c2",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 8901,
+      "document" : "d99",
+      "sha256" : "07293c1d2bad5a1080583b97ae7a21e9441174360bbf3be7e50db2f8ac8f4e68",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 8773,
+      "document" : "d100",
+      "sha256" : "52044f42292492a21b9f7f7ec29243c936cfe10056cc9d4e76a5b2328380a3aa",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 5559,
+      "document" : "d101",
+      "sha256" : "e9cb9ff8493270821998ac1479a0a944f101aa1bc5997e3aa23e26d381f5e50e",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 11451,
+      "document" : "d102",
+      "sha256" : "1ca6cbe895aa4507ed3aa16cbea1836dbfd8c01a70ab4451894165cc3e726923",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 6830,
+      "document" : "d103",
+      "sha256" : "382fcdb40dc77301a907d2d22d0b5a731bbb58e99ec7f227395ab56337887860",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 6553,
+      "document" : "d104",
+      "sha256" : "f7c3a965af9326e60cce75951a5c3bb480d23f22338411af6c0d7874a8d2111a",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 4510,
+      "document" : "d105",
+      "sha256" : "532c412c7e535ed46c6b40b7b8c757c50924a1706bb9f433c1dca50740443596",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 2969,
+      "document" : "d106",
+      "sha256" : "233c78b6334a2753889b03b46a13a2ba27d6da224c284f71c9642babc1823fb7",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 10485,
+      "document" : "d107",
+      "sha256" : "5d928754b128f89e39bfb33d2e6d7089d2eda3c8b5b8c1c4ab2d67c7ed3e5669",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 6729,
+      "document" : "d108",
+      "sha256" : "c6410944fde473c53cb3ab312077510f0860adbc0af346850ddd57d2679d47ee",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 8314,
+      "document" : "d109",
+      "sha256" : "5c7d984838ef254f1eb3a02932db0d524899b06a11c1700443a9afe6fe2e5724",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 20502,
+      "document" : "d110",
+      "sha256" : "4d1571ae8789bc32d951e359e11ba509c8b95ad6812e51363452e6d7a893df41",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 16184,
+      "document" : "d111",
+      "sha256" : "0953fdd6f26e7c33efbc56334a81f1abca70fb4b9b9a0f29b1b27bb2ca04a6bc",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 19350,
+      "document" : "d112",
+      "sha256" : "9268ba28e206f65f1270d4e2409461adcbf57ac15ad563ce7f64147456c7af6c",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 3856,
+      "document" : "d113",
+      "sha256" : "643499b9b68833930d49a509be4f5d63aab618e6e8bcd7623a4053d441a4297a",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 17120,
+      "document" : "d114",
+      "sha256" : "bcbb7a348d4edcb53d793c95ed63a7c4b08e97b3b3908459d287fdc56a348c6b",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 4850,
+      "document" : "d115",
+      "sha256" : "377242e39913e65c74005de050fa018fdc4d8eb21c289ac2d2ed059e1a49b947",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 31655,
+      "document" : "d116",
+      "sha256" : "7724525ddcfc661e8f1e96e9157cb3a807677235da04f1529e5f4957072131a9",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 7635,
+      "document" : "d117",
+      "sha256" : "b737fb3f5a534ac69309a5be3ef6500c0905cd37c6d0c71b08a702a0ad5c45fd",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 12516,
+      "document" : "d118",
+      "sha256" : "f096c52a68ff441eac13a41d5c1d782c4e5fb6e0325e511b2f4bad78f2bdde33",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 15128,
+      "document" : "d119",
+      "sha256" : "2c95ca7dd17b5592da3ad942eccab9acab7720e5b957c54465f07acb81444ec8",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 4638,
+      "document" : "d120",
+      "sha256" : "1c3017ba14396f884bd24d1bdc115af07b219dbb055a68223a8432dced6eef0e",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 13763,
+      "document" : "d121",
+      "sha256" : "5c6736427cc07657ce4fc6d4e96b9430321f764e838a5c4db9b482485ee20ec6",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 9416,
+      "document" : "d122",
+      "sha256" : "ed43b5d4a0aeadc43d85ce1bfc4f2c21a70e4b97ec44529e4a6c9afd15f947e9",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 13384,
+      "document" : "d123",
+      "sha256" : "2f31a49a6a3aa05027e32b90c6b1c314320a1569503029c07648d5d72839fcb2",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 9634,
+      "document" : "d124",
+      "sha256" : "049863e8fdb5f5be02735dab51e339676f1721b85feda2c93fb6f0068f81abe4",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 7560,
+      "document" : "d125",
+      "sha256" : "c43bd56ff1aaf6a94b2308d2694411d480b7f7743285701bc325d6e30313a178",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 14305,
+      "document" : "d126",
+      "sha256" : "771153d11a1576f751cbe9279da52361c476d059c41faad1d553c005863a5267",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 8662,
+      "document" : "d127",
+      "sha256" : "03e77c07e26435477392167e1f790c2715efbd6df6cd4306d186824091ba529d",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 8631,
+      "document" : "d128",
+      "sha256" : "5875d80624f3197f929a8d2e29151693f594af1ec290181562c64d8381ff44af",
+      "volume" : "frus1969-76ve09p1"
+    }
+  ]
+}

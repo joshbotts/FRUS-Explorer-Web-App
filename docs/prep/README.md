@@ -2,7 +2,7 @@
 
 3 October 2026 · at `FRUS-Explorer` commit `34a5120` (index version 65, app build 49)
 
-Sessions 0 and 2 are done; see `docs/DEVLOG.md`. S1 waits, because the owner asked that sessions not open pull requests on `FRUS-Explorer` for now. This folder keeps what a dry run on Linux found for later sessions, so their prompts can start from evidence rather than estimates.
+Sessions 0, 2, 4, 5 and 7 are done; see `docs/DEVLOG.md`. S1 waits, because the owner asked that sessions not open pull requests on `FRUS-Explorer` for now. This folder keeps what a dry run on Linux found for later sessions, so their prompts can start from evidence rather than estimates.
 
 ## What was verified
 
@@ -18,7 +18,7 @@ Sessions 0 and 2 are done; see `docs/DEVLOG.md`. S1 waits, because the owner ask
 
 ## Before the S1 prompt
 
-- **Rules 2, 3 and 5 collide.** S1 needs two pull requests: the guards upstream, and the web repository's DEVLOG entry and `Package.swift`. Upstream has no CI and squash-merges, so a pull request's head never reaches `v2`, and the pin can move only after the owner merges. Decided on 3 October: S1 builds and tests the six kits against its pull request's head in the session and records the output in DEVLOG; after Mac check 1 and the merge, a separate pull request moves the pin and adds the kits to CI.
+- **Rules 2, 3 and 5 collide.** S1 needs two pull requests: the guards upstream, and the web repository's DEVLOG entry and `Package.swift`. Upstream has no CI and squash-merges, so a pull request's head never reaches `v2`, and the pin can move only after the owner merges. Decided on 3 October: S1 builds and tests the six kits against its pull request's head in the session and records the output in DEVLOG; after Mac check 1 and the merge, a separate pull request moves the pin and adds the kits to CI. Since S4, that pull request also carries golden files made again at the new pin on the owner's Mac (`scripts/make-golden`), or its `swift` check fails.
 - **The library guards the plan names are enough.** `s1-linux-guards.patch` has them. The test side needs more:
   - FTS5StoreTests imports SQLite3 in 7 files. With guards, 208 of its 209 tests pass. The failure is the backup-exclusion test (`FTS5StoreTests.swift:523-529`): excluding a file from backup is a silent no-op on Linux, so the test needs a named Linux skip, as check 1 asks.
   - The logging shim must accept `os.Logger`'s `privacy:` interpolation, which FTS5Store uses 12 times. The patch's `LinuxLogger.swift` does.
@@ -60,6 +60,8 @@ Settled on 3 October: on a Mac, FRUS Explorer's own folder once Docker Desktop i
 - **The published image's visibility:** public, decided on 3 October.
 
 ## Before the S3, S4 and S6 prompts
+
+S4 settled what concerns it here: its golden files come from a library holding only the three fixture volumes, and its summary refuses any other export. Its DEVLOG entry says how.
 
 - **"Every Linux change to a shared file is a guard" holds only for S1.** S3's 15 app files and S6's 48 (36,861 lines, 19 of them edited) also need declarations moved out of Apple-only files: WebKit, SwiftUI, AppKit or UIKit, and SwiftData `@Model` files. That is an upstream refactor pull request, best landed after the public release. `s3-linux-edits.tsv` and `s6-linux-edits.tsv` list every change.
 - **`String(localized:)` has no Linux form.** The S3 files use it 46 times. `shims/StringLocalizedShim.swift` covers the forms they use, including `format:`.

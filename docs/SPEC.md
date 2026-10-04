@@ -292,7 +292,7 @@ The corpus index keeps the Mac schema exactly: same tables, columns, tokenizer a
 | Subjects | `document_subjects`, `document_subject_refs`, `document_subject_volumes` | integer positions resolved through `document-subject-index.json` |
 | Export only | `research_provenance`; views `research_documents`, `research_cross_references`, `research_suppressed_volumes` | written by the Mac exporter; the web exporter writes the same |
 
-The table definitions live in `Search/IndexingPipeline.swift` (lines 5987–6556); the FTS5 definitions come from `FTS5Store/FTS5Types.swift`. `Docs/Agentic-Analysis-Guide.md` §4 documents every column and its traps.
+The table definitions live in `Search/IndexingPipeline.swift` (lines 6622–7265 at 34a5120); the FTS5 definitions come from `FTS5Store/FTS5Types.swift`. `Docs/Agentic-Analysis-Guide.md` §4 documents every column and its traps.
 
 ### Verified on this review's host
 
@@ -300,7 +300,7 @@ The Mac's `document_cache`, `frus_documents`, `frus_documents_vocab`, `user_cont
 
 ### Compatibility contract
 
-1. `SUPPORTED_INDEX_VERSION` is a build constant equal to `IndexingPipeline.currentDateIndexVersion` at the image's commit, 54 today. The server serves no other version.
+1. `SUPPORTED_INDEX_VERSION` is a build constant equal to `IndexingPipeline.currentDateIndexVersion` at the image's commit, 65 at 34a5120. The server serves no other version.
 2. The FTS schema generation is 4, stored in `PRAGMA user_version` (`FTS5Connection.currentSchemaGeneration`).
 3. Identity is `(volume_id, document_id)`. `document_cache.rowid` is never persisted, exposed or compared across copies; `VACUUM` may renumber it.
 4. Copies use the SQLite backup API. A WAL database is never copied with `cp`.
@@ -905,8 +905,8 @@ The web edition is accepted when it reproduces the Mac app's results on the same
 | # | Check | Method | Pass |
 | --- | --- | --- | --- |
 | 1 | Kits on Linux | `swift test` for FTS5Store, SourceNoteKit, TEIHeaderKit, SemanticVectorsKit, CrossRefKit, GeneratorKit and the new FRUSCoreKit | All green; any Linux-only skip is named |
-| 2 | Index parity | Index the same fixture volumes on the Mac and in the container. Compare each table's row count and a content hash ordered by natural key, excluding `rowid` | Identical |
-| 3 | Search parity | Run 200 or more queries covering every rule in manual §7.2. Compare the compiled expression, the total count and the top 50 `(volume_id, document_id)` | Identical, in order |
+| 2 | Index parity | Index the same fixture volumes on the Mac and in the container. Compare each table's row count and a content hash ordered by natural key, excluding `rowid` and the other ids that depend on indexing order. Also compare the order of rows within each volume for the tables the app reads in that order | Identical |
+| 3 | Search parity | Run 200 or more queries covering every rule in manual §7.2. Compare the compiled expression, the total count and the top 50 `(volume_id, document_id)` | Identical, in order. Documents whose Mac scores are exactly equal may come in any order among themselves; each such group is reported |
 | 4 | Renderer parity | Serialize 500 or more documents from every era with both builds | Byte-identical HTML |
 | 5 | Import acceptance | Load real exports with and without writing. Plant a known note string before a stripped export, then search the file's raw pages for it | Validation passes; the planted string is absent |
 | 6 | Highlight round-trip | Import a Mac JSON export. Compare each highlight's selected text with the web DOM text between its offsets | 100% where the TEI matches; the rest go to review and none move |

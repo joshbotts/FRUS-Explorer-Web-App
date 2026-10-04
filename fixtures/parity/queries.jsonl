@@ -1,0 +1,482 @@
+{"id": "q001", "rule": "R01-implicit-and", "query": "berlin crisis", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q002", "rule": "R01-implicit-and", "query": "khrushchev kennedy", "filters": {}, "notes": null}
+{"id": "q003", "rule": "R01-implicit-and", "query": "bluefields mosquito", "filters": {}, "notes": null}
+{"id": "q004", "rule": "R01-implicit-and", "query": "qadhafi libya", "filters": {}, "notes": null}
+{"id": "q005", "rule": "R01-implicit-and", "query": "treaty canal", "filters": {}, "notes": null}
+{"id": "q006", "rule": "R01-implicit-and", "query": "test ban inspection", "filters": {}, "notes": null}
+{"id": "q007", "rule": "R01-implicit-and", "query": "hassan rabat sahara", "filters": {}, "notes": null}
+{"id": "q008", "rule": "R01-implicit-and", "query": "gresham baker", "filters": {}, "notes": null}
+{"id": "q009", "rule": "R01-implicit-and", "query": "soviet union nuclear", "filters": {}, "notes": null}
+{"id": "q010", "rule": "R01-implicit-and", "query": "oil price", "filters": {}, "notes": null}
+{"id": "q011", "rule": "R01-implicit-and", "query": "embassy cable", "filters": {}, "notes": null}
+{"id": "q012", "rule": "R02-phrase", "query": "\"cold war\"", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q013", "rule": "R02-phrase", "query": "\"test ban\"", "filters": {}, "notes": null}
+{"id": "q014", "rule": "R02-phrase", "query": "\"nuclear test\"", "filters": {}, "notes": null}
+{"id": "q015", "rule": "R02-phrase", "query": "\"Mosquito Reservation\"", "filters": {}, "notes": null}
+{"id": "q016", "rule": "R02-phrase", "query": "\"Western Sahara\"", "filters": {}, "notes": null}
+{"id": "q017", "rule": "R02-phrase", "query": "\"foreign minister\"", "filters": {}, "notes": null}
+{"id": "q018", "rule": "R02-phrase", "query": "\"Interests Section\"", "filters": {}, "notes": null}
+{"id": "q019", "rule": "R02-phrase", "query": "\"Secretary of State\"", "filters": {}, "notes": null}
+{"id": "q020", "rule": "R02-phrase", "query": "\"general and complete disarmament\"", "filters": {}, "notes": null}
+{"id": "q021", "rule": "R02-phrase", "query": "\"nuclear weapons\"", "filters": {}, "notes": null}
+{"id": "q022", "rule": "R02-phrase", "query": "\"Bluefields\" \"Mosquito Reservation\"", "filters": {}, "notes": "Two phrases side by side, both required."}
+{"id": "q023", "rule": "R02-phrase", "query": "\"Soviet Union\" disarmament", "filters": {}, "notes": "A phrase beside a word."}
+{"id": "q024", "rule": "R02-phrase", "query": "\"war cold\"", "filters": {}, "notes": "Word order matters: zero on the fixtures, where 'cold war' is never reversed."}
+{"id": "q025", "rule": "R02-phrase", "query": "\"test-ban treaty\"", "filters": {}, "notes": "A hyphen inside a phrase."}
+{"id": "q026", "rule": "R03-and", "query": "kissinger AND détente", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q027", "rule": "R03-and", "query": "khrushchev AND kennedy", "filters": {}, "notes": null}
+{"id": "q028", "rule": "R03-and", "query": "khrushchev and kennedy", "filters": {}, "notes": "Lower case."}
+{"id": "q029", "rule": "R03-and", "query": "khrushchev And kennedy", "filters": {}, "notes": "Mixed case."}
+{"id": "q030", "rule": "R03-and", "query": "(libya OR egypt) AND oil", "filters": {}, "notes": null}
+{"id": "q031", "rule": "R03-and", "query": "cold AND -korea", "filters": {}, "notes": "An AND before an exclusion adds nothing: cold -korea."}
+{"id": "q032", "rule": "R04-or", "query": "rusk OR bundy", "filters": {}, "notes": "Search Tips example (07-Search-and-Browse.md §7.13)."}
+{"id": "q033", "rule": "R04-or", "query": "rusk or bundy", "filters": {}, "notes": "Lower case."}
+{"id": "q034", "rule": "R04-or", "query": "rusk Or bundy", "filters": {}, "notes": "Mixed case."}
+{"id": "q035", "rule": "R04-or", "query": "\"test ban\" OR \"Mosquito Reservation\"", "filters": {}, "notes": null}
+{"id": "q036", "rule": "R04-or", "query": "libya OR morocco OR algeria OR tunisia", "filters": {}, "notes": null}
+{"id": "q037", "rule": "R04-or", "query": "canal OR nicaragua", "filters": {}, "notes": null}
+{"id": "q038", "rule": "R05-not", "query": "vietnam NOT laos", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q039", "rule": "R05-not", "query": "nicaragua NOT bluefields", "filters": {}, "notes": null}
+{"id": "q040", "rule": "R05-not", "query": "nicaragua not bluefields", "filters": {}, "notes": "Lower case."}
+{"id": "q041", "rule": "R05-not", "query": "nicaragua Not bluefields", "filters": {}, "notes": "Mixed case."}
+{"id": "q042", "rule": "R05-not", "query": "libya NOT oil", "filters": {}, "notes": null}
+{"id": "q043", "rule": "R05-not", "query": "NOT laos vietnam", "filters": {}, "notes": "A leading NOT excludes from the run after it."}
+{"id": "q044", "rule": "R06-quoted-operator", "query": "\"and\"", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q045", "rule": "R06-quoted-operator", "query": "\"will not intervene\"", "filters": {}, "notes": "Search Tips example (07-Search-and-Browse.md §7.13). Zero on the fixtures; the next query is a fixture variant."}
+{"id": "q046", "rule": "R06-quoted-operator", "query": "\"will not be\"", "filters": {}, "notes": "Fixture variant of the tip."}
+{"id": "q047", "rule": "R06-quoted-operator", "query": "\"war and peace\"", "filters": {}, "notes": null}
+{"id": "q048", "rule": "R06-quoted-operator", "query": "\"customs and regulations\"", "filters": {}, "notes": null}
+{"id": "q049", "rule": "R06-quoted-operator", "query": "\"or not\"", "filters": {}, "notes": null}
+{"id": "q050", "rule": "R06-quoted-operator", "query": "\"or\"", "filters": {}, "notes": null}
+{"id": "q051", "rule": "R06-quoted-operator", "query": "\"not\"", "filters": {}, "notes": null}
+{"id": "q052", "rule": "R06-quoted-operator", "query": "khrushchev \"and\" kennedy", "filters": {}, "notes": "A quoted operator between two words is a third required word."}
+{"id": "q053", "rule": "R07-or-precedence", "query": "cold war OR peace", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q054", "rule": "R07-or-precedence", "query": "\"cold war\" OR peace", "filters": {}, "notes": "The phrase form, for comparison."}
+{"id": "q055", "rule": "R07-or-precedence", "query": "gresham baker OR khrushchev", "filters": {}, "notes": null}
+{"id": "q056", "rule": "R07-or-precedence", "query": "qadhafi OR boumediene hassan", "filters": {}, "notes": null}
+{"id": "q057", "rule": "R07-or-precedence", "query": "khrushchev kennedy OR bluefields mosquito", "filters": {}, "notes": null}
+{"id": "q058", "rule": "R08-exclusion-in-run", "query": "-laos vietnam", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q059", "rule": "R08-exclusion-in-run", "query": "vietnam -laos", "filters": {}, "notes": "Search Tips example (07-Search-and-Browse.md §7.13)."}
+{"id": "q060", "rule": "R08-exclusion-in-run", "query": "khrushchev -berlin", "filters": {}, "notes": null}
+{"id": "q061", "rule": "R08-exclusion-in-run", "query": "-berlin khrushchev", "filters": {}, "notes": null}
+{"id": "q062", "rule": "R08-exclusion-in-run", "query": "nicaragua -bluefields managua", "filters": {}, "notes": "The exclusion between two required words."}
+{"id": "q063", "rule": "R08-exclusion-in-run", "query": "libya -oil -qadhafi", "filters": {}, "notes": "Two exclusions."}
+{"id": "q064", "rule": "R08-exclusion-in-run", "query": "morocco -sahara", "filters": {}, "notes": null}
+{"id": "q065", "rule": "R08-exclusion-in-run", "query": "sahara -morocco", "filters": {}, "notes": null}
+{"id": "q066", "rule": "R08-exclusion-in-run", "query": "-\"test ban\" nuclear", "filters": {}, "notes": "An excluded phrase."}
+{"id": "q067", "rule": "R08-exclusion-in-run", "query": "nicaragua -bluef*", "filters": {}, "notes": "An excluded prefix."}
+{"id": "q068", "rule": "R08-exclusion-in-run", "query": "mosquito -\"Mosquito Reservation\"", "filters": {}, "notes": "The phrase excluded from one of its own words."}
+{"id": "q069", "rule": "R09-minus-equals-not", "query": "vietnam AND NOT laos", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q070", "rule": "R09-minus-equals-not", "query": "cold AND NOT korea", "filters": {}, "notes": "Manual §7.2: AND NOT korea means the same as -korea."}
+{"id": "q071", "rule": "R09-minus-equals-not", "query": "cold -korea", "filters": {}, "notes": "Manual §7.2, for comparison with the line before."}
+{"id": "q072", "rule": "R09-minus-equals-not", "query": "khrushchev NOT berlin", "filters": {}, "notes": null}
+{"id": "q073", "rule": "R09-minus-equals-not", "query": "khrushchev AND NOT berlin", "filters": {}, "notes": null}
+{"id": "q074", "rule": "R09-minus-equals-not", "query": "khrushchev -berlin", "filters": {}, "notes": null}
+{"id": "q075", "rule": "R09-minus-equals-not", "query": "negoti* NOT treaty", "filters": {}, "notes": null}
+{"id": "q076", "rule": "R09-minus-equals-not", "query": "negoti* -treaty", "filters": {}, "notes": null}
+{"id": "q077", "rule": "R10-minus-before-near", "query": "aid NOT NEAR(military europe, 5)", "filters": {}, "notes": "Example from FTS5InlineQueryParser.swift's documentation."}
+{"id": "q078", "rule": "R10-minus-before-near", "query": "aid -NEAR(military europe, 5)", "filters": {}, "notes": "Example from FTS5InlineQueryParser.swift's documentation. The word near is excluded and the group searched."}
+{"id": "q079", "rule": "R10-minus-before-near", "query": "nicaragua NOT NEAR(mosquito reservation, 3)", "filters": {}, "notes": null}
+{"id": "q080", "rule": "R10-minus-before-near", "query": "nicaragua -NEAR(mosquito reservation, 3)", "filters": {}, "notes": null}
+{"id": "q081", "rule": "R10-minus-before-near", "query": "nicaragua NOT NEAR(bluefields mosquito, 5)", "filters": {}, "notes": null}
+{"id": "q082", "rule": "R10-minus-before-near", "query": "nicaragua -NEAR(bluefields mosquito, 5)", "filters": {}, "notes": null}
+{"id": "q083", "rule": "R11-grouping", "query": "(aqaba OR tiran) AND navig*", "filters": {}, "notes": "Manual §7.2 example. Zero on the fixtures, which never mention aqaba or tiran."}
+{"id": "q084", "rule": "R11-grouping", "query": "(aqaba OR tiran) navig*", "filters": {}, "notes": "Search Tips example (07-Search-and-Browse.md §7.13). Zero on the fixtures."}
+{"id": "q085", "rule": "R11-grouping", "query": "(canal OR river) navig*", "filters": {}, "notes": "Fixture variant of the tip."}
+{"id": "q086", "rule": "R11-grouping", "query": "(managua OR bluefields) AND navig*", "filters": {}, "notes": null}
+{"id": "q087", "rule": "R11-grouping", "query": "(libya OR algeria) (oil OR gas)", "filters": {}, "notes": "Two groups side by side, joined by AND."}
+{"id": "q088", "rule": "R11-grouping", "query": "(libya OR algeria) AND (oil OR gas)", "filters": {}, "notes": null}
+{"id": "q089", "rule": "R11-grouping", "query": "((khrushchev OR kennedy) AND (berlin OR cuba)) -laos", "filters": {}, "notes": "Nested groups."}
+{"id": "q090", "rule": "R11-grouping", "query": "((aqaba OR tiran) AND navig*) OR (suez NOT canal)", "filters": {}, "notes": "Example from FTS5InlineQueryParser.swift's documentation."}
+{"id": "q091", "rule": "R11-grouping", "query": "((canal OR river) AND navig*) OR (managua NOT bluefields)", "filters": {}, "notes": "Fixture variant of the parser example."}
+{"id": "q092", "rule": "R12-group-depth", "query": "((((((((((((((((((((((((((((((((khrushchev))))))))))))))))))))))))))))))))", "filters": {}, "notes": "32 levels: runs."}
+{"id": "q093", "rule": "R12-group-depth", "query": "(((((((((((((((((((((((((((((((((khrushchev)))))))))))))))))))))))))))))))))", "filters": {}, "notes": "33 levels: refused."}
+{"id": "q094", "rule": "R12-group-depth", "query": "(((((((((((((((((((((((((((((((NEAR(khrushchev kennedy, 5))))))))))))))))))))))))))))))))", "filters": {}, "notes": "31 groups and the NEAR's own parentheses make 32 levels: runs."}
+{"id": "q095", "rule": "R12-group-depth", "query": "((((((((((((((((((((((((((((((((NEAR(khrushchev kennedy, 5)))))))))))))))))))))))))))))))))", "filters": {}, "notes": "32 groups and the NEAR's own parentheses make 33 levels: refused."}
+{"id": "q096", "rule": "R12-group-depth", "query": "(((((((((((((((((((((((((((((((((\"khrushchev (((((\")))))))))))))))))))))))))))))))))", "filters": {}, "notes": "33 levels: refused, though the parentheses inside the phrase are text and no level."}
+{"id": "q097", "rule": "R12-group-depth", "query": "((((((((((((((((((((((((((((((((\"khrushchev (((((\"))))))))))))))))))))))))))))))))", "filters": {}, "notes": "32 levels: runs; the parentheses inside the phrase are text."}
+{"id": "q098", "rule": "R13-exclude-group", "query": "vietnam -(laos OR cambodia)", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q099", "rule": "R13-exclude-group", "query": "vietnam NOT (laos OR cambodia)", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q100", "rule": "R13-exclude-group", "query": "khrushchev -(berlin OR cuba)", "filters": {}, "notes": null}
+{"id": "q101", "rule": "R13-exclude-group", "query": "-(berlin OR cuba) khrushchev", "filters": {}, "notes": null}
+{"id": "q102", "rule": "R13-exclude-group", "query": "khrushchev NOT (berlin OR cuba)", "filters": {}, "notes": null}
+{"id": "q103", "rule": "R13-exclude-group", "query": "not (korea OR vietnam) cold", "filters": {}, "notes": "Example from FTS5InlineQueryParser.swift's documentation."}
+{"id": "q104", "rule": "R14-detached-minus", "query": "vietnam - (laos OR cambodia)", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q105", "rule": "R14-detached-minus", "query": "khrushchev - (berlin OR cuba)", "filters": {}, "notes": null}
+{"id": "q106", "rule": "R14-detached-minus", "query": "khrushchev --(berlin)", "filters": {}, "notes": "A dash that is not the first character of its token: the group is searched for."}
+{"id": "q107", "rule": "R15-prefix", "query": "negoti*", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q108", "rule": "R15-prefix", "query": "inspect*", "filters": {}, "notes": null}
+{"id": "q109", "rule": "R15-prefix", "query": "khrush*", "filters": {}, "notes": null}
+{"id": "q110", "rule": "R15-prefix", "query": "bluef*", "filters": {}, "notes": null}
+{"id": "q111", "rule": "R15-prefix", "query": "qadh*", "filters": {}, "notes": null}
+{"id": "q112", "rule": "R15-prefix", "query": "nicaragu*", "filters": {}, "notes": null}
+{"id": "q113", "rule": "R15-prefix", "query": "n*", "filters": {}, "notes": "A one-letter prefix."}
+{"id": "q114", "rule": "R15-prefix", "query": "militar* europ*", "filters": {}, "notes": "Two prefixes."}
+{"id": "q115", "rule": "R16-no-suffix-wildcard", "query": "*tion", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q116", "rule": "R16-no-suffix-wildcard", "query": "U*S", "filters": {}, "notes": "A star inside a word splits it: the phrase u s, as U.S. is indexed."}
+{"id": "q117", "rule": "R17-prefix-stems", "query": "negotiat*", "filters": {}, "notes": "Manual §7.2 example. Zero on the fixtures: no stored stem begins with negotiat."}
+{"id": "q118", "rule": "R17-prefix-stems", "query": "negotiating*", "filters": {}, "notes": "The prefix is stemmed as a whole word, to negoti."}
+{"id": "q119", "rule": "R17-prefix-stems", "query": "negotiations*", "filters": {}, "notes": null}
+{"id": "q120", "rule": "R17-prefix-stems", "query": "inspection*", "filters": {}, "notes": null}
+{"id": "q121", "rule": "R18-near", "query": "NEAR(\"military guarantee\" Europe, 30)", "filters": {}, "notes": "Manual §7.2 example. Zero on the fixtures; fixture variants follow."}
+{"id": "q122", "rule": "R18-near", "query": "NEAR(\"Mosquito Reservation\" Bluefields, 30)", "filters": {}, "notes": "Fixture variant of the manual example."}
+{"id": "q123", "rule": "R18-near", "query": "NEAR(\"test ban\" treaty, 10)", "filters": {}, "notes": null}
+{"id": "q124", "rule": "R18-near", "query": "NEAR(\"nuclear test\" ban, 5)", "filters": {}, "notes": null}
+{"id": "q125", "rule": "R18-near", "query": "NEAR(militar* europ*, 20)", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q126", "rule": "R18-near", "query": "NEAR(khrushchev kennedy, 5)", "filters": {}, "notes": null}
+{"id": "q127", "rule": "R18-near", "query": "NEAR(kennedy khrushchev, 5)", "filters": {}, "notes": "Either order."}
+{"id": "q128", "rule": "R18-near", "query": "NEAR(bluefields mosquito, 0)", "filters": {}, "notes": "Distance 0."}
+{"id": "q129", "rule": "R18-near", "query": "NEAR(hassan sahara rabat, 15)", "filters": {}, "notes": "Three operands."}
+{"id": "q130", "rule": "R18-near", "query": "NEAR(military assistance, 3)", "filters": {}, "notes": null}
+{"id": "q131", "rule": "R18-near", "query": "NEAR(nicaragua canal, 10)", "filters": {}, "notes": null}
+{"id": "q132", "rule": "R18-near", "query": "NEAR(bluefields \"Mosquito Reservation\" protect*, 30)", "filters": {}, "notes": "A word, a phrase and a prefix."}
+{"id": "q133", "rule": "R18-near", "query": "NEAR(khrushchev)", "filters": {}, "notes": "One operand."}
+{"id": "q134", "rule": "R18-near", "query": "NEAR(khrushchev kennedy, 5, 6)", "filters": {}, "notes": "Only the last item is the distance: 5 is searched as a word."}
+{"id": "q135", "rule": "R19-near-default-distance", "query": "NEAR(military europe, 5)", "filters": {}, "notes": "Search Tips example (07-Search-and-Browse.md §7.13)."}
+{"id": "q136", "rule": "R19-near-default-distance", "query": "NEAR(khrushchev kennedy)", "filters": {}, "notes": null}
+{"id": "q137", "rule": "R19-near-default-distance", "query": "NEAR(khrushchev kennedy, 10)", "filters": {}, "notes": "The default, spelled out."}
+{"id": "q138", "rule": "R19-near-default-distance", "query": "NEAR(military europe)", "filters": {}, "notes": null}
+{"id": "q139", "rule": "R20-near-spellings", "query": "NEAR/20(a b)", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q140", "rule": "R20-near-spellings", "query": "near(khrushchev kennedy, 5)", "filters": {}, "notes": null}
+{"id": "q141", "rule": "R20-near-spellings", "query": "NEAR/5(khrushchev kennedy)", "filters": {}, "notes": null}
+{"id": "q142", "rule": "R20-near-spellings", "query": "Near/20(military europe)", "filters": {}, "notes": null}
+{"id": "q143", "rule": "R21-near-combined", "query": "NEAR(a b, 20) OR NEAR(c d, 20)", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q144", "rule": "R21-near-combined", "query": "NEAR(khrushchev kennedy, 5) OR NEAR(bluefields mosquito, 5)", "filters": {}, "notes": null}
+{"id": "q145", "rule": "R21-near-combined", "query": "NEAR(a b, 20) OR NEAR(khrushchev kennedy, 20)", "filters": {}, "notes": null}
+{"id": "q146", "rule": "R21-near-combined", "query": "soviet NEAR(missile cuba, 5)", "filters": {}, "notes": null}
+{"id": "q147", "rule": "R21-near-combined", "query": "(NEAR(khrushchev kennedy, 5) OR NEAR(qadhafi libya, 5)) -berlin", "filters": {}, "notes": null}
+{"id": "q148", "rule": "R22-near-refused", "query": "NEAR(military OR europe, 5)", "filters": {}, "notes": "Example from 07-Search-and-Browse.md §7.13, A NEAR that cannot be searched as written. Refused: nothing is searched."}
+{"id": "q149", "rule": "R22-near-refused", "query": "NEAR(military -europe, 5)", "filters": {}, "notes": "Example from 07-Search-and-Browse.md §7.13, A NEAR that cannot be searched as written. Refused: nothing is searched."}
+{"id": "q150", "rule": "R22-near-refused", "query": "NEAR(military europe, 3.5)", "filters": {}, "notes": "Example from 07-Search-and-Browse.md §7.13, A NEAR that cannot be searched as written. Refused: nothing is searched."}
+{"id": "q151", "rule": "R22-near-refused", "query": "NEAR(khrushchev AND kennedy)", "filters": {}, "notes": "Refused: nothing is searched."}
+{"id": "q152", "rule": "R22-near-refused", "query": "NEAR(khrushchev NOT kennedy)", "filters": {}, "notes": "Refused: nothing is searched."}
+{"id": "q153", "rule": "R22-near-refused", "query": "NEAR((khrushchev) kennedy, 5)", "filters": {}, "notes": "Refused: nothing is searched."}
+{"id": "q154", "rule": "R22-near-refused", "query": "NEAR(khrushchev (kennedy))", "filters": {}, "notes": "Refused: nothing is searched."}
+{"id": "q155", "rule": "R22-near-refused", "query": "NEAR(-khrushchev kennedy)", "filters": {}, "notes": "Refused: nothing is searched."}
+{"id": "q156", "rule": "R22-near-refused", "query": "NEAR(khrushchev kennedy, -5)", "filters": {}, "notes": "A negative distance. Refused: nothing is searched."}
+{"id": "q157", "rule": "R22-near-refused", "query": "NEAR(khrushchev kennedy, +5)", "filters": {}, "notes": "A signed distance. Refused: nothing is searched."}
+{"id": "q158", "rule": "R22-near-refused", "query": "NEAR(khrushchev kennedy, five)", "filters": {}, "notes": "A distance in words. Refused: nothing is searched."}
+{"id": "q159", "rule": "R22-near-refused", "query": "NEAR(khrushchev kennedy, )", "filters": {}, "notes": "An empty distance. Refused: nothing is searched."}
+{"id": "q160", "rule": "R22-near-refused", "query": "NEAR/5(khrushchev kennedy, 7)", "filters": {}, "notes": "Two distances. Refused: nothing is searched."}
+{"id": "q161", "rule": "R22-near-refused", "query": "NEAR()", "filters": {}, "notes": "Refused: nothing is searched."}
+{"id": "q162", "rule": "R22-near-refused", "query": "khrushchev OR NEAR(military OR europe, 5)", "filters": {}, "notes": "A refused NEAR refuses the whole query."}
+{"id": "q163", "rule": "R23-exact-word", "query": "=containment", "filters": {}, "notes": "Manual §7.2 example. Zero on the fixtures, which print contain but not containment."}
+{"id": "q164", "rule": "R23-exact-word", "query": "containment", "filters": {}, "notes": "Unmarked, for comparison: searched as contain."}
+{"id": "q165", "rule": "R23-exact-word", "query": "=contain", "filters": {}, "notes": null}
+{"id": "q166", "rule": "R23-exact-word", "query": "contain", "filters": {}, "notes": null}
+{"id": "q167", "rule": "R23-exact-word", "query": "=contains", "filters": {}, "notes": null}
+{"id": "q168", "rule": "R23-exact-word", "query": "=contained", "filters": {}, "notes": null}
+{"id": "q169", "rule": "R23-exact-word", "query": "=containing", "filters": {}, "notes": null}
+{"id": "q170", "rule": "R23-exact-word", "query": "=negotiations", "filters": {}, "notes": null}
+{"id": "q171", "rule": "R23-exact-word", "query": "negotiations", "filters": {}, "notes": null}
+{"id": "q172", "rule": "R23-exact-word", "query": "=negotiation", "filters": {}, "notes": null}
+{"id": "q173", "rule": "R23-exact-word", "query": "=negotiators", "filters": {}, "notes": null}
+{"id": "q174", "rule": "R23-exact-word", "query": "=treaty", "filters": {}, "notes": null}
+{"id": "q175", "rule": "R23-exact-word", "query": "=treaties", "filters": {}, "notes": null}
+{"id": "q176", "rule": "R23-exact-word", "query": "=Soviet", "filters": {}, "notes": null}
+{"id": "q177", "rule": "R23-exact-word", "query": "=soviets", "filters": {}, "notes": null}
+{"id": "q178", "rule": "R23-exact-word", "query": "=protection", "filters": {}, "notes": null}
+{"id": "q179", "rule": "R23-exact-word", "query": "=CONTAIN", "filters": {}, "notes": "Capitalization still does not matter."}
+{"id": "q180", "rule": "R24-quotation-marks", "query": "“cold war”", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q181", "rule": "R24-quotation-marks", "query": "„cold war“", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q182", "rule": "R24-quotation-marks", "query": "«cold war»", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q183", "rule": "R24-quotation-marks", "query": "＂test ban＂", "filters": {}, "notes": "Fullwidth quotation marks."}
+{"id": "q184", "rule": "R24-quotation-marks", "query": "“Mosquito Reservation”", "filters": {}, "notes": null}
+{"id": "q185", "rule": "R24-quotation-marks", "query": "“test ban\"", "filters": {}, "notes": "A mixed pair."}
+{"id": "q186", "rule": "R24-quotation-marks", "query": "“test ban", "filters": {}, "notes": "An unpaired curly mark."}
+{"id": "q187", "rule": "R25-no-quotes-in-phrase", "query": "\"the “iron curtain” speech\"", "filters": {}, "notes": "Manual §7.2 example. Four separate words; zero on the fixtures."}
+{"id": "q188", "rule": "R25-no-quotes-in-phrase", "query": "\"the “status quo” pending\"", "filters": {}, "notes": "Fixture variant: four separate words."}
+{"id": "q189", "rule": "R25-no-quotes-in-phrase", "query": "\"general “and” complete\"", "filters": {}, "notes": "Read as three phrases: general, and, complete."}
+{"id": "q190", "rule": "R25-no-quotes-in-phrase", "query": "\"retaining “special privileges” in\"", "filters": {}, "notes": null}
+{"id": "q191", "rule": "R25-no-quotes-in-phrase", "query": "‘test ban’", "filters": {}, "notes": "Single marks are not quotation marks."}
+{"id": "q192", "rule": "R25-no-quotes-in-phrase", "query": "cold″war", "filters": {}, "notes": "A double prime is not a quotation mark."}
+{"id": "q193", "rule": "R26-phrase-printed-quotes", "query": "\"the iron curtain speech\"", "filters": {}, "notes": "Manual §7.2 example. Zero on the fixtures."}
+{"id": "q194", "rule": "R26-phrase-printed-quotes", "query": "\"the status quo pending\"", "filters": {}, "notes": "Fixture variant: the document prints “status quo”."}
+{"id": "q195", "rule": "R26-phrase-printed-quotes", "query": "\"retaining special privileges\"", "filters": {}, "notes": "A front-matter document prints “special privileges”."}
+{"id": "q196", "rule": "R26-phrase-printed-quotes", "query": "\"such customs and regulations alone\"", "filters": {}, "notes": null}
+{"id": "q197", "rule": "R26-phrase-printed-quotes", "query": "\"Agent of the Interoceanic Canal Company\"", "filters": {}, "notes": null}
+{"id": "q198", "rule": "R27-exclusion-stops-at-or", "query": "cold -korea OR war", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q199", "rule": "R27-exclusion-stops-at-or", "query": "-korea cold OR war", "filters": {}, "notes": "Example from FTS5InlineQueryParser.swift's documentation."}
+{"id": "q200", "rule": "R27-exclusion-stops-at-or", "query": "khrushchev -berlin OR rusk", "filters": {}, "notes": null}
+{"id": "q201", "rule": "R27-exclusion-stops-at-or", "query": "libya OR egypt -sadat", "filters": {}, "notes": null}
+{"id": "q202", "rule": "R27-exclusion-stops-at-or", "query": "bluefields -mosquito OR managua", "filters": {}, "notes": null}
+{"id": "q203", "rule": "R28-exclude-from-group", "query": "(cold OR war) -korea", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q204", "rule": "R28-exclude-from-group", "query": "(khrushchev OR rusk) -berlin", "filters": {}, "notes": null}
+{"id": "q205", "rule": "R28-exclude-from-group", "query": "(libya OR egypt) -sadat", "filters": {}, "notes": null}
+{"id": "q206", "rule": "R28-exclude-from-group", "query": "(bluefields OR managua) -mosquito", "filters": {}, "notes": null}
+{"id": "q207", "rule": "R29-doubled-marks", "query": "NOT -korea", "filters": {}, "notes": "Manual §7.2 example. Alone it has nothing to search for, so it is refused."}
+{"id": "q208", "rule": "R29-doubled-marks", "query": "cold NOT -korea", "filters": {}, "notes": "Example from FTS5InlineQueryParser.swift's documentation."}
+{"id": "q209", "rule": "R29-doubled-marks", "query": "cold NOT NOT korea", "filters": {}, "notes": "Example from FTS5InlineQueryParser.swift's documentation."}
+{"id": "q210", "rule": "R29-doubled-marks", "query": "khrushchev NOT -berlin", "filters": {}, "notes": null}
+{"id": "q211", "rule": "R29-doubled-marks", "query": "khrushchev NOT NOT berlin", "filters": {}, "notes": null}
+{"id": "q212", "rule": "R29-doubled-marks", "query": "NOT NOT berlin khrushchev", "filters": {}, "notes": null}
+{"id": "q213", "rule": "R29-doubled-marks", "query": "khrushchev --berlin", "filters": {}, "notes": "Two dashes: the term -berlin is excluded."}
+{"id": "q214", "rule": "R29-doubled-marks", "query": "NOT NOT cold", "filters": {}, "notes": "Example from FTS5InlineQueryParser.swift's documentation. No positive term: refused."}
+{"id": "q215", "rule": "R30-dropped-alternative", "query": "cold OR -korea", "filters": {}, "notes": "Manual §7.2 example. Runs as cold; korea is not applied."}
+{"id": "q216", "rule": "R30-dropped-alternative", "query": "cold", "filters": {}, "notes": "Manual §7.2: what cold OR -korea runs as."}
+{"id": "q217", "rule": "R30-dropped-alternative", "query": "(cold OR -korea)", "filters": {}, "notes": "Search Tips note (07-Search-and-Browse.md §7.13 tip 13)."}
+{"id": "q218", "rule": "R30-dropped-alternative", "query": "war OR (cold OR -korea)", "filters": {}, "notes": "Search Tips note (07-Search-and-Browse.md §7.13 tip 13)."}
+{"id": "q219", "rule": "R30-dropped-alternative", "query": "khrushchev OR -berlin", "filters": {}, "notes": null}
+{"id": "q220", "rule": "R30-dropped-alternative", "query": "(khrushchev OR -berlin)", "filters": {}, "notes": null}
+{"id": "q221", "rule": "R30-dropped-alternative", "query": "libya OR NOT oil", "filters": {}, "notes": null}
+{"id": "q222", "rule": "R30-dropped-alternative", "query": "khrushchev OR -berlin OR qadhafi", "filters": {}, "notes": "The middle alternative is left out."}
+{"id": "q223", "rule": "R31-anchored-alternative", "query": "war (cold OR -korea)", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q224", "rule": "R31-anchored-alternative", "query": "khrushchev (cuba OR -berlin)", "filters": {}, "notes": null}
+{"id": "q225", "rule": "R31-anchored-alternative", "query": "libya (oil OR -qadhafi)", "filters": {}, "notes": null}
+{"id": "q226", "rule": "R32-structured-anchor", "query": "cold OR -korea", "filters": {"phrase": "cold war"}, "notes": "Manual §7.2 example. Beside a restored phrase."}
+{"id": "q227", "rule": "R32-structured-anchor", "query": "-korea", "filters": {"phrase": "cold war"}, "notes": "Manual §7.2 example. Alone beside a restored phrase."}
+{"id": "q228", "rule": "R32-structured-anchor", "query": "cold OR -korea", "filters": {"prefixWildcard": "viet"}, "notes": "Example from FTS5InlineQueryParser.swift's documentation."}
+{"id": "q229", "rule": "R32-structured-anchor", "query": "cold OR -korea", "filters": {"phrase": "test ban"}, "notes": "Beside a restored phrase."}
+{"id": "q230", "rule": "R32-structured-anchor", "query": "-berlin", "filters": {"prefixWildcard": "khrush"}, "notes": "Beside a restored prefix."}
+{"id": "q231", "rule": "R32-structured-anchor", "query": "libya OR -oil", "filters": {"prefixWildcard": "qadh"}, "notes": "Beside a restored prefix."}
+{"id": "q232", "rule": "R33-excluded-group-reverses", "query": "NOT (cold OR -korea)", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q233", "rule": "R33-excluded-group-reverses", "query": "NOT (berlin OR -khrushchev)", "filters": {}, "notes": null}
+{"id": "q234", "rule": "R33-excluded-group-reverses", "query": "-(oil OR -libya)", "filters": {}, "notes": null}
+{"id": "q235", "rule": "R34-reversal-with-drop", "query": "cold OR -(war -korea)", "filters": {}, "notes": "Manual §7.2 example. Runs as cold OR korea; war is not applied."}
+{"id": "q236", "rule": "R34-reversal-with-drop", "query": "cold OR korea", "filters": {}, "notes": "Manual §7.2: what cold OR -(war -korea) runs as."}
+{"id": "q237", "rule": "R34-reversal-with-drop", "query": "khrushchev OR -(cuba -berlin)", "filters": {}, "notes": null}
+{"id": "q238", "rule": "R34-reversal-with-drop", "query": "-(war -korea)", "filters": {}, "notes": "Example from FTS5InlineQueryParser.swift's documentation. Runs as korea."}
+{"id": "q239", "rule": "R35-group-of-exclusions", "query": "cold -(-korea)", "filters": {}, "notes": "Manual §7.2 example. The same search as cold -korea."}
+{"id": "q240", "rule": "R35-group-of-exclusions", "query": "khrushchev -(-berlin)", "filters": {}, "notes": null}
+{"id": "q241", "rule": "R35-group-of-exclusions", "query": "libya -(-oil -qadhafi)", "filters": {}, "notes": null}
+{"id": "q242", "rule": "R35-group-of-exclusions", "query": "cold (-korea)", "filters": {}, "notes": "Example from FTS5InlineQueryParser.swift's documentation."}
+{"id": "q243", "rule": "R35-group-of-exclusions", "query": "cold (-korea -vietnam)", "filters": {}, "notes": "Example from FTS5InlineQueryParser.swift's documentation."}
+{"id": "q244", "rule": "R36-needs-a-word", "query": "-korea", "filters": {}, "notes": "Manual §7.2 example. Refused."}
+{"id": "q245", "rule": "R36-needs-a-word", "query": "NOT korea", "filters": {}, "notes": "Manual §7.2 example. Refused."}
+{"id": "q246", "rule": "R36-needs-a-word", "query": "-khrushchev -kennedy", "filters": {}, "notes": "Refused."}
+{"id": "q247", "rule": "R36-needs-a-word", "query": "NOT (khrushchev OR kennedy)", "filters": {}, "notes": "Refused."}
+{"id": "q248", "rule": "R36-needs-a-word", "query": "-\"cold war\"", "filters": {}, "notes": "Refused."}
+{"id": "q249", "rule": "R36-needs-a-word", "query": "-negoti*", "filters": {}, "notes": "Refused."}
+{"id": "q250", "rule": "R36-needs-a-word", "query": "\"", "filters": {}, "notes": "Manual §7.3: a lone quotation mark has nothing to search for."}
+{"id": "q251", "rule": "R36-needs-a-word", "query": "", "filters": {}, "notes": "Nothing typed and no filter that searches on its own."}
+{"id": "q252", "rule": "R36-needs-a-word", "query": "   ", "filters": {}, "notes": "Only spaces."}
+{"id": "q253", "rule": "R37-empty-scope", "query": "khrushchev", "filters": {"includeDocumentText": false, "includeSummaries": false, "includeNotes": false}, "notes": "Every Search in switch off."}
+{"id": "q254", "rule": "R37-empty-scope", "query": "\"cold war\" OR peace", "filters": {"includeDocumentText": false, "includeSummaries": false, "includeNotes": false}, "notes": "Every Search in switch off."}
+{"id": "q255", "rule": "R37-empty-scope", "query": "-korea", "filters": {"includeDocumentText": false, "includeSummaries": false, "includeNotes": false}, "notes": "Every Search in switch off, and nothing to search for."}
+{"id": "q256", "rule": "R38-exact-per-term", "query": "=containment polic*", "filters": {}, "notes": "Manual §7.2 example. Zero on the fixtures."}
+{"id": "q257", "rule": "R38-exact-per-term", "query": "=negotiations polic*", "filters": {}, "notes": "Fixture variant of the manual example."}
+{"id": "q258", "rule": "R38-exact-per-term", "query": "=contain treaty", "filters": {}, "notes": null}
+{"id": "q259", "rule": "R38-exact-per-term", "query": "=negotiations nuclear", "filters": {}, "notes": null}
+{"id": "q260", "rule": "R38-exact-per-term", "query": "=protection protect", "filters": {}, "notes": "The same stem marked and unmarked."}
+{"id": "q261", "rule": "R38-exact-per-term", "query": "=treaties treaty", "filters": {}, "notes": null}
+{"id": "q262", "rule": "R39-exact-required", "query": "=cold war OR =cold peace", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q263", "rule": "R39-exact-required", "query": "=treaty canal OR =treaty nicaragua", "filters": {}, "notes": null}
+{"id": "q264", "rule": "R39-exact-required", "query": "=negotiation soviet OR =negotiation libya", "filters": {}, "notes": null}
+{"id": "q265", "rule": "R40-exact-applies-everywhere", "query": "(=cold OR war) =cold", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q266", "rule": "R40-exact-applies-everywhere", "query": "(=treaty OR canal) =treaty", "filters": {}, "notes": null}
+{"id": "q267", "rule": "R41-exact-word-identity", "query": "=Cold war OR =cold. peace", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q268", "rule": "R41-exact-word-identity", "query": "=Treaty canal OR =treaty, nicaragua", "filters": {}, "notes": null}
+{"id": "q269", "rule": "R41-exact-word-identity", "query": "=Argüello", "filters": {}, "notes": null}
+{"id": "q270", "rule": "R41-exact-word-identity", "query": "=Arguello", "filters": {}, "notes": null}
+{"id": "q271", "rule": "R41-exact-word-identity", "query": "=Arguello =Argüello", "filters": {}, "notes": "One word, marked twice."}
+{"id": "q272", "rule": "R41-exact-word-identity", "query": "=argüello managua", "filters": {}, "notes": null}
+{"id": "q273", "rule": "R41-exact-word-identity", "query": "=Chargé", "filters": {}, "notes": null}
+{"id": "q274", "rule": "R41-exact-word-identity", "query": "=charge", "filters": {}, "notes": null}
+{"id": "q275", "rule": "R41-exact-word-identity", "query": "=détente", "filters": {}, "notes": null}
+{"id": "q276", "rule": "R41-exact-word-identity", "query": "=detente", "filters": {}, "notes": null}
+{"id": "q277", "rule": "R41-exact-word-identity", "query": "=Soviet =soviet", "filters": {}, "notes": null}
+{"id": "q278", "rule": "R42-exact-distinct-letters", "query": "=Gomułka", "filters": {}, "notes": "Manual §7.2 example. Zero: no fixture prints ł, ø or đ, so only the marks can differ."}
+{"id": "q279", "rule": "R42-exact-distinct-letters", "query": "=Gomulka", "filters": {}, "notes": "Manual §7.2 example. Zero on the fixtures."}
+{"id": "q280", "rule": "R42-exact-distinct-letters", "query": "=Gomułka =Gomulka", "filters": {}, "notes": "Two marked words, where =Arguello =Argüello is one. Zero on the fixtures."}
+{"id": "q281", "rule": "R43-exact-ignored-optional", "query": "=cold OR war", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q282", "rule": "R43-exact-ignored-optional", "query": "=treaty OR canal", "filters": {}, "notes": null}
+{"id": "q283", "rule": "R43-exact-ignored-optional", "query": "khrushchev -(cuba -=berlin)", "filters": {}, "notes": "A word an excluded group leaves optional."}
+{"id": "q284", "rule": "R44-exact-unmarked-copy", "query": "(=cold OR war) cold", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q285", "rule": "R44-exact-unmarked-copy", "query": "=cold war OR cold peace", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q286", "rule": "R44-exact-unmarked-copy", "query": "(=treaty OR canal) treaty", "filters": {}, "notes": null}
+{"id": "q287", "rule": "R45-exact-via-excluded-group", "query": "NOT (war OR -=cold)", "filters": {}, "notes": "Manual §7.2 example. Zero on the fixtures, whose cold documents all mention war."}
+{"id": "q288", "rule": "R45-exact-via-excluded-group", "query": "NOT (war OR -=soviet)", "filters": {}, "notes": "Fixture variant of the manual example."}
+{"id": "q289", "rule": "R46-exact-ignored-forms", "query": "=U.S.S.R.", "filters": {}, "notes": "Manual §7.2 example."}
+{"id": "q290", "rule": "R46-exact-ignored-forms", "query": "=negoti*", "filters": {}, "notes": "A prefix."}
+{"id": "q291", "rule": "R46-exact-ignored-forms", "query": "NEAR(=containment policy, 5)", "filters": {}, "notes": "Search Tips note (07-Search-and-Browse.md §7.13 tip 12)."}
+{"id": "q292", "rule": "R46-exact-ignored-forms", "query": "NEAR(=nicaragua canal, 10)", "filters": {}, "notes": null}
+{"id": "q293", "rule": "R46-exact-ignored-forms", "query": "=anti-Communist", "filters": {}, "notes": "Search Tips example (07-Search-and-Browse.md §7.13 tip 12)."}
+{"id": "q294", "rule": "R46-exact-ignored-forms", "query": "=U.S.", "filters": {}, "notes": null}
+{"id": "q295", "rule": "R46-exact-ignored-forms", "query": "=test-ban", "filters": {}, "notes": null}
+{"id": "q296", "rule": "R46-exact-ignored-forms", "query": "=Khrushchev's", "filters": {}, "notes": null}
+{"id": "q297", "rule": "R47-stemming", "query": "negotiate", "filters": {}, "notes": null}
+{"id": "q298", "rule": "R47-stemming", "query": "negotiated", "filters": {}, "notes": null}
+{"id": "q299", "rule": "R47-stemming", "query": "negotiating", "filters": {}, "notes": null}
+{"id": "q300", "rule": "R47-stemming", "query": "negotiations", "filters": {}, "notes": null}
+{"id": "q301", "rule": "R47-stemming", "query": "inspect", "filters": {}, "notes": null}
+{"id": "q302", "rule": "R47-stemming", "query": "inspections", "filters": {}, "notes": null}
+{"id": "q303", "rule": "R47-stemming", "query": "protect", "filters": {}, "notes": null}
+{"id": "q304", "rule": "R47-stemming", "query": "protectorate", "filters": {}, "notes": null}
+{"id": "q305", "rule": "R47-stemming", "query": "guarantee", "filters": {}, "notes": null}
+{"id": "q306", "rule": "R47-stemming", "query": "guaranties", "filters": {}, "notes": null}
+{"id": "q307", "rule": "R47-stemming", "query": "peaceful", "filters": {}, "notes": null}
+{"id": "q308", "rule": "R47-stemming", "query": "militarily", "filters": {}, "notes": null}
+{"id": "q309", "rule": "R47-stemming", "query": "protect* -protection", "filters": {}, "notes": "An excluded word is stemmed too: protected and protecting go with it."}
+{"id": "q310", "rule": "R47-stemming", "query": "treaty -treaties", "filters": {}, "notes": "Zero by design: treaties stems to treati, the stem of treaty."}
+{"id": "q311", "rule": "R48-relevance-ranking", "query": "state", "filters": {}, "notes": "Broad: many results."}
+{"id": "q312", "rule": "R48-relevance-ranking", "query": "the", "filters": {}, "notes": "Broad: many results."}
+{"id": "q313", "rule": "R48-relevance-ranking", "query": "department", "filters": {}, "notes": "Broad: many results."}
+{"id": "q314", "rule": "R48-relevance-ranking", "query": "government", "filters": {}, "notes": "Broad: many results."}
+{"id": "q315", "rule": "R48-relevance-ranking", "query": "washington", "filters": {}, "notes": "Broad: many results."}
+{"id": "q316", "rule": "R48-relevance-ranking", "query": "telegram", "filters": {}, "notes": "Broad: many results."}
+{"id": "q317", "rule": "R48-relevance-ranking", "query": "secretary", "filters": {}, "notes": "Broad: many results."}
+{"id": "q318", "rule": "R48-relevance-ranking", "query": "president", "filters": {}, "notes": "Broad: many results."}
+{"id": "q319", "rule": "R48-relevance-ranking", "query": "embassy", "filters": {}, "notes": "Broad: many results."}
+{"id": "q320", "rule": "R48-relevance-ranking", "query": "soviet", "filters": {}, "notes": "Broad: many results."}
+{"id": "q321", "rule": "R48-relevance-ranking", "query": "united states", "filters": {}, "notes": "Broad: many results."}
+{"id": "q322", "rule": "R48-relevance-ranking", "query": "foreign", "filters": {}, "notes": "Broad: many results."}
+{"id": "q323", "rule": "R48-relevance-ranking", "query": "1894", "filters": {}, "notes": "A tie group crosses position 50."}
+{"id": "q324", "rule": "R48-relevance-ranking", "query": "see", "filters": {}, "notes": "A tie group crosses position 50."}
+{"id": "q325", "rule": "R48-relevance-ranking", "query": "desire", "filters": {}, "notes": "A tie group crosses position 50."}
+{"id": "q326", "rule": "R49-case-folding", "query": "KHRUSHCHEV", "filters": {}, "notes": null}
+{"id": "q327", "rule": "R49-case-folding", "query": "Khrushchev", "filters": {}, "notes": null}
+{"id": "q328", "rule": "R49-case-folding", "query": "kHrUsHcHeV", "filters": {}, "notes": null}
+{"id": "q329", "rule": "R49-case-folding", "query": "BLUEFIELDS", "filters": {}, "notes": null}
+{"id": "q330", "rule": "R49-case-folding", "query": "Qadhafi", "filters": {}, "notes": null}
+{"id": "q331", "rule": "R49-case-folding", "query": "\"COLD WAR\"", "filters": {}, "notes": null}
+{"id": "q332", "rule": "R49-case-folding", "query": "NEGOTI*", "filters": {}, "notes": "A prefix keeps its capitals in the expression; FTS5 folds them."}
+{"id": "q333", "rule": "R49-case-folding", "query": "DÉTENTE", "filters": {}, "notes": null}
+{"id": "q334", "rule": "R50-unpaired-quote", "query": "\"test ban", "filters": {}, "notes": "An unpaired mark closes at the end of the query."}
+{"id": "q335", "rule": "R50-unpaired-quote", "query": "khrushchev \"test ban", "filters": {}, "notes": null}
+{"id": "q336", "rule": "R50-unpaired-quote", "query": "\"cold war\" \"test", "filters": {}, "notes": null}
+{"id": "q337", "rule": "R50-unpaired-quote", "query": "\"\"", "filters": {}, "notes": "An empty phrase: nothing to search for."}
+{"id": "q338", "rule": "R50-unpaired-quote", "query": "\"\" khrushchev", "filters": {}, "notes": "An empty phrase adds nothing."}
+{"id": "q339", "rule": "R51-demoted-operator", "query": "OR khrushchev", "filters": {}, "notes": "A leading OR is the word or."}
+{"id": "q340", "rule": "R51-demoted-operator", "query": "khrushchev OR", "filters": {}, "notes": "A trailing OR is the word or."}
+{"id": "q341", "rule": "R51-demoted-operator", "query": "khrushchev OR OR kennedy", "filters": {}, "notes": "The first of two ORs is the word or."}
+{"id": "q342", "rule": "R51-demoted-operator", "query": "treaty AND", "filters": {}, "notes": null}
+{"id": "q343", "rule": "R51-demoted-operator", "query": "NOT", "filters": {}, "notes": "A lone NOT is the word not."}
+{"id": "q344", "rule": "R51-demoted-operator", "query": "AND OR NOT", "filters": {}, "notes": null}
+{"id": "q345", "rule": "R51-demoted-operator", "query": "khrushchev NOT", "filters": {}, "notes": "A trailing NOT is the word not."}
+{"id": "q346", "rule": "R51-demoted-operator", "query": "cold NOT ()", "filters": {}, "notes": "Example from FTS5InlineQueryParser.swift's documentation. A NOT stranded by an empty group is the word not."}
+{"id": "q347", "rule": "R52-unbalanced-parentheses", "query": "((treaty)", "filters": {}, "notes": "The unmatched parenthesis is punctuation."}
+{"id": "q348", "rule": "R52-unbalanced-parentheses", "query": "treaty)", "filters": {}, "notes": null}
+{"id": "q349", "rule": "R52-unbalanced-parentheses", "query": "(", "filters": {}, "notes": "Manual §7.3: a lone parenthesis has nothing to search for."}
+{"id": "q350", "rule": "R52-unbalanced-parentheses", "query": "()", "filters": {}, "notes": "An empty group: nothing to search for."}
+{"id": "q351", "rule": "R52-unbalanced-parentheses", "query": "cold -()", "filters": {}, "notes": "Example from FTS5InlineQueryParser.swift's documentation. An empty group is dropped with its dash."}
+{"id": "q352", "rule": "R52-unbalanced-parentheses", "query": "khrushchev -(berlin", "filters": {}, "notes": "The dash goes with the unmatched parenthesis: khrushchev AND berlin."}
+{"id": "q353", "rule": "R52-unbalanced-parentheses", "query": "cold NOT (korea", "filters": {}, "notes": "Example from FTS5InlineQueryParser.swift's documentation. NOT before an unmatched parenthesis still excludes."}
+{"id": "q354", "rule": "R52-unbalanced-parentheses", "query": "NEAR(khrushchev kennedy", "filters": {}, "notes": "An unclosed NEAR is no NEAR: the word near beside the others."}
+{"id": "q355", "rule": "R53-approximation-refused", "query": "-(war -korea) -korea", "filters": {}, "notes": "Example from FTS5InlineQueryParser.swift's documentation. Refused: it could only search korea NOT korea."}
+{"id": "q356", "rule": "R53-approximation-refused", "query": "korea -korea OR -korea", "filters": {}, "notes": "Example from FTS5InlineQueryParser.swift's documentation. Refused."}
+{"id": "q357", "rule": "R53-approximation-refused", "query": "-(war -korea)", "filters": {"excludedTerms": ["korea"]}, "notes": "Example from FTS5InlineQueryParser.swift's documentation. Refused beside the excluded term korea."}
+{"id": "q358", "rule": "R53-approximation-refused", "query": "korea -korea", "filters": {}, "notes": "Example from FTS5InlineQueryParser.swift's documentation. An exact render is never refused; it matches nothing."}
+{"id": "q359", "rule": "R53-approximation-refused", "query": "cold OR -(war -korea) -korea", "filters": {}, "notes": "An approximation that matches something beside its empty part still runs."}
+{"id": "q360", "rule": "R54-structured-fields", "query": "", "filters": {"phrase": "Mosquito Reservation"}, "notes": "A restored phrase alone."}
+{"id": "q361", "rule": "R54-structured-fields", "query": "", "filters": {"prefixWildcard": "negoti"}, "notes": "A restored prefix alone."}
+{"id": "q362", "rule": "R54-structured-fields", "query": "", "filters": {"excludedTerms": ["korea"]}, "notes": "Restored excluded terms alone: nothing to search for."}
+{"id": "q363", "rule": "R54-structured-fields", "query": "khrushchev", "filters": {"excludedTerms": ["berlin", "cuba"]}, "notes": "Restored excluded terms beside a typed word."}
+{"id": "q364", "rule": "R54-structured-fields", "query": "=nuclear", "filters": {"phrase": "test ban"}, "notes": "A typed mark beside a restored phrase."}
+{"id": "q365", "rule": "R54-structured-fields", "query": "nuclear", "filters": {"phrase": "test ban", "excludedTerms": ["berlin"]}, "notes": "Phrase and excluded term beside a typed word."}
+{"id": "q366", "rule": "R54-structured-fields", "query": "", "filters": {"phrase": "test ban", "prefixWildcard": "inspect", "excludedTerms": ["berlin"]}, "notes": "All three restored fields."}
+{"id": "q367", "rule": "R54-structured-fields", "query": "-korea", "filters": {"excludedTerms": ["vietnam"]}, "notes": "Example from FTS5InlineQueryParser.swift's documentation. An excluded term anchors nothing: refused."}
+{"id": "q368", "rule": "R54-structured-fields", "query": "khrushchev OR qadhafi", "filters": {"excludedTerms": ["berlin"]}, "notes": "Restored excluded terms apply to every alternative."}
+{"id": "q369", "rule": "R55-scope-document-text", "query": "khrushchev", "filters": {"includeDocumentText": false}, "notes": "Document text off: no corpus expression. The index holds no notes or summaries."}
+{"id": "q370", "rule": "R55-scope-document-text", "query": "\"cold war\" -korea", "filters": {"includeDocumentText": false}, "notes": "Document text off."}
+{"id": "q371", "rule": "R55-scope-document-text", "query": "=contain treaty", "filters": {"includeDocumentText": false}, "notes": "Document text off: the exact term may only be found in summaries and notes."}
+{"id": "q372", "rule": "R55-scope-document-text", "query": "khrushchev OR", "filters": {"includeDocumentText": false, "includeSummaries": false}, "notes": "Only notes on: the demoted word carries the column prefix."}
+{"id": "q373", "rule": "R55-scope-document-text", "query": "\"cold war\" -korea negoti* NEAR(khrushchev kennedy, 5)", "filters": {"includeDocumentText": false, "includeNotes": false}, "notes": "Only summaries on."}
+{"id": "q374", "rule": "R55-scope-document-text", "query": "-(war -korea) -korea", "filters": {"includeDocumentText": false, "includeNotes": false}, "notes": "Only summaries on, and refused: the unscoped parse refuses it."}
+{"id": "q375", "rule": "R56-scope-user-content", "query": "khrushchev", "filters": {"includeSummaries": false}, "notes": "Summaries off: the user-content expression is scoped to notes."}
+{"id": "q376", "rule": "R56-scope-user-content", "query": "khrushchev", "filters": {"includeNotes": false}, "notes": "Notes off: the user-content expression is scoped to summaries."}
+{"id": "q377", "rule": "R56-scope-user-content", "query": "\"cold war\" -korea negoti* NEAR(khrushchev kennedy, 5)", "filters": {"includeSummaries": false}, "notes": "Summaries off. A typed phrase spans every column; the rest carries the prefix."}
+{"id": "q378", "rule": "R56-scope-user-content", "query": "\"cold war\" -korea negoti* NEAR(khrushchev kennedy, 5)", "filters": {"includeNotes": false}, "notes": "Notes off."}
+{"id": "q379", "rule": "R56-scope-user-content", "query": "khrushchev OR", "filters": {"includeSummaries": false}, "notes": "Summaries off."}
+{"id": "q380", "rule": "R56-scope-user-content", "query": "cold OR -korea", "filters": {"includeSummaries": false}, "notes": "Summaries off: the left-out alternative in a scoped parse."}
+{"id": "q381", "rule": "R56-scope-user-content", "query": "war (cold OR -korea)", "filters": {"includeNotes": false}, "notes": "Notes off."}
+{"id": "q382", "rule": "R56-scope-user-content", "query": "(libya OR algeria) AND (oil OR gas)", "filters": {"includeSummaries": false}, "notes": "Summaries off."}
+{"id": "q383", "rule": "R56-scope-user-content", "query": "cold OR -korea", "filters": {"prefixWildcard": "viet", "includeNotes": false}, "notes": "Notes off: the restored prefix carries the column prefix."}
+{"id": "q384", "rule": "R56-scope-user-content", "query": "-korea", "filters": {"phrase": "cold war", "includeNotes": false}, "notes": "Notes off: the restored phrase spans every column."}
+{"id": "q385", "rule": "R56-scope-user-content", "query": "khrushchev", "filters": {"excludedTerms": ["berlin"], "includeSummaries": false}, "notes": "Summaries off: a restored excluded term spans every column."}
+{"id": "q386", "rule": "R56-scope-user-content", "query": "=contain treaty", "filters": {"includeSummaries": false}, "notes": "Summaries off: the exact term is checked in document text and notes."}
+{"id": "q387", "rule": "R57-scope-corpus-only", "query": "khrushchev", "filters": {"includeSummaries": false, "includeNotes": false}, "notes": "Summaries and notes off."}
+{"id": "q388", "rule": "R57-scope-corpus-only", "query": "=contain treaty", "filters": {"includeSummaries": false, "includeNotes": false}, "notes": "Summaries and notes off."}
+{"id": "q389", "rule": "R57-scope-corpus-only", "query": "NEAR(khrushchev kennedy, 5) -berlin", "filters": {"includeSummaries": false, "includeNotes": false}, "notes": "Summaries and notes off."}
+{"id": "q390", "rule": "R57-scope-corpus-only", "query": "cold OR -korea", "filters": {"includeSummaries": false, "includeNotes": false}, "notes": "Summaries and notes off."}
+{"id": "q391", "rule": "R58-volume-filter", "query": "treaty", "filters": {"volumeIds": ["frus1894Nicaragua"]}, "notes": "One volume. Tied scores, whose order depends on the query plan."}
+{"id": "q392", "rule": "R58-volume-filter", "query": "1894", "filters": {"volumeIds": ["frus1894Nicaragua"]}, "notes": "One volume. A tie group crosses position 50."}
+{"id": "q393", "rule": "R58-volume-filter", "query": "mr", "filters": {"volumeIds": ["frus1961-63v06"]}, "notes": "One volume. A tie group crosses position 50."}
+{"id": "q394", "rule": "R58-volume-filter", "query": "action", "filters": {"volumeIds": ["frus1969-76ve09p1"]}, "notes": "One volume. A tie group crosses position 50."}
+{"id": "q395", "rule": "R58-volume-filter", "query": "want", "filters": {"volumeIds": ["frus1961-63v06", "frus1969-76ve09p1"]}, "notes": "Two volumes. A tie group crosses position 50."}
+{"id": "q396", "rule": "R58-volume-filter", "query": "peace", "filters": {"volumeIds": ["frus1894Nicaragua", "frus1961-63v06"]}, "notes": "Two volumes. A tie group crosses position 50."}
+{"id": "q397", "rule": "R58-volume-filter", "query": "soviet", "filters": {"volumeIds": ["frus1961-63v06", "frus1969-76ve09p1"]}, "notes": "Two volumes."}
+{"id": "q398", "rule": "R58-volume-filter", "query": "washington", "filters": {"volumeIds": ["frus1894Nicaragua", "frus1961-63v06", "frus1969-76ve09p1"]}, "notes": "All three volumes. Tied scores, whose order depends on the query plan."}
+{"id": "q399", "rule": "R58-volume-filter", "query": "president:kennedy", "filters": {"volumeIds": ["frus1961-63v06"]}, "notes": "One volume. Tied scores, whose order depends on the query plan."}
+{"id": "q400", "rule": "R58-volume-filter", "query": "khrushchev", "filters": {"volumeIds": ["frus1961-63v06"]}, "notes": "One volume. Tied scores, whose order depends on the query plan."}
+{"id": "q401", "rule": "R58-volume-filter", "query": "khrushchev", "filters": {"volumeIds": ["frus1969-76ve09p1"]}, "notes": "A volume that never mentions him: zero by design."}
+{"id": "q402", "rule": "R58-volume-filter", "query": "the", "filters": {"volumeIds": ["frus1969-76ve09p1"]}, "notes": "One volume."}
+{"id": "q403", "rule": "R58-volume-filter", "query": "president", "filters": {"volumeIds": []}, "notes": "An empty list is no filter."}
+{"id": "q404", "rule": "R58-volume-filter", "query": "government OR secretary", "filters": {"volumeIds": ["frus1894Nicaragua", "frus1969-76ve09p1"]}, "notes": "Two volumes."}
+{"id": "q405", "rule": "R59-year-filter", "query": "libya", "filters": {"yearKeys": ["1975", "1976"]}, "notes": "Two start years."}
+{"id": "q406", "rule": "R59-year-filter", "query": "libya", "filters": {"yearKeys": []}, "notes": "An empty list matches nothing: zero by design."}
+{"id": "q407", "rule": "R59-year-filter", "query": "khrushchev", "filters": {"yearKeys": ["1962"]}, "notes": null}
+{"id": "q408", "rule": "R59-year-filter", "query": "khrushchev", "filters": {"yearKeys": ["1960"]}, "notes": "Start year 1960, which the editorial notes dated across the volume share."}
+{"id": "q409", "rule": "R59-year-filter", "query": "treaty", "filters": {"yearKeys": ["1894", "1895"]}, "notes": null}
+{"id": "q410", "rule": "R59-year-filter", "query": "1894", "filters": {"yearKeys": ["1894"]}, "notes": "A tie group crosses position 50."}
+{"id": "q411", "rule": "R59-year-filter", "query": "preface OR introduction OR abbreviations", "filters": {"yearKeys": ["1962", "1974"]}, "notes": "Undated front matter has no start year."}
+{"id": "q412", "rule": "R60-date-range-overlap", "query": "treaty", "filters": {"dateRange": {"earliest": "1894-01-01", "latest": "1894-12-31"}}, "notes": "A whole year."}
+{"id": "q413", "rule": "R60-date-range-overlap", "query": "khrushchev", "filters": {"dateRange": {"earliest": "1962-10-01", "latest": "1962-11-30"}}, "notes": null}
+{"id": "q414", "rule": "R60-date-range-overlap", "query": "khrushchev", "filters": {"dateRange": {"earliest": "1962-10-28", "latest": "1962-10-28"}}, "notes": "A single day."}
+{"id": "q415", "rule": "R60-date-range-overlap", "query": "khrushchev", "filters": {"dateRange": {"earliest": "1962-01-10", "latest": "1962-01-12"}}, "notes": "Overlap: a message dated 30 December 1961 to 18 January 1962, and editorial notes dated across the volume."}
+{"id": "q416", "rule": "R60-date-range-overlap", "query": "khrushchev", "filters": {"dateRange": {"earliest": "1963-06-01", "latest": "1963-06-30"}}, "notes": "Overlap: editorial notes dated across the whole volume."}
+{"id": "q417", "rule": "R60-date-range-overlap", "query": "gresham", "filters": {"dateRange": {"earliest": "1894-04-01", "latest": "1894-04-01"}}, "notes": "Overlap: a document dated 31 March to 1 April 1894."}
+{"id": "q418", "rule": "R60-date-range-overlap", "query": "libya", "filters": {"dateRange": {"earliest": "1975-01-01"}}, "notes": "Open end."}
+{"id": "q419", "rule": "R60-date-range-overlap", "query": "khrushchev", "filters": {"dateRange": {"latest": "1961-12-31"}}, "notes": "Open start."}
+{"id": "q420", "rule": "R60-date-range-overlap", "query": "khrushchev", "filters": {"volumeIds": ["frus1961-63v06"], "dateRange": {"earliest": "1962-01-01", "latest": "1962-12-31"}, "documentType": "documentsOnly", "includeFrontMatter": false}, "notes": "Combined with every other filter."}
+{"id": "q421", "rule": "R61-date-range-undated", "query": "state", "filters": {"dateRange": {"earliest": "1800-01-01", "latest": "2100-12-31"}}, "notes": "Undated front matter drops out."}
+{"id": "q422", "rule": "R61-date-range-undated", "query": "khrushchev", "filters": {"dateRange": {"earliest": "1800-01-01", "latest": "2100-12-31"}}, "notes": "Undated front matter drops out."}
+{"id": "q423", "rule": "R61-date-range-undated", "query": "preface OR introduction OR abbreviations", "filters": {"dateRange": {"earliest": "1800-01-01", "latest": "2100-12-31"}}, "notes": "Undated front matter drops out."}
+{"id": "q424", "rule": "R61-date-range-undated", "query": "preface OR introduction OR abbreviations", "filters": {"dateRange": {"earliest": "1800-01-01"}}, "notes": "An open range still drops undated documents."}
+{"id": "q425", "rule": "R62-document-type", "query": "khrushchev", "filters": {"documentType": "editorialNotesOnly"}, "notes": "Editorial notes only."}
+{"id": "q426", "rule": "R62-document-type", "query": "khrushchev", "filters": {"documentType": "documentsOnly"}, "notes": "Primary documents only."}
+{"id": "q427", "rule": "R62-document-type", "query": "khrushchev", "filters": {"documentType": "all"}, "notes": "Both, spelled out."}
+{"id": "q428", "rule": "R62-document-type", "query": "nuclear", "filters": {"documentType": "documentsOnly"}, "notes": "Primary documents only."}
+{"id": "q429", "rule": "R62-document-type", "query": "president", "filters": {"documentType": "editorialNotesOnly"}, "notes": "Editorial notes only."}
+{"id": "q430", "rule": "R62-document-type", "query": "see", "filters": {"documentType": "documentsOnly"}, "notes": "Primary documents only. A tie group crosses position 50."}
+{"id": "q431", "rule": "R63-front-matter", "query": "preface OR volume", "filters": {"includeFrontMatter": false}, "notes": "Front matter excluded."}
+{"id": "q432", "rule": "R63-front-matter", "query": "khrushchev", "filters": {"includeFrontMatter": false}, "notes": "Front matter excluded."}
+{"id": "q433", "rule": "R63-front-matter", "query": "message president", "filters": {"includeFrontMatter": false}, "notes": "Front matter excluded, dated or not."}
+{"id": "q434", "rule": "R63-front-matter", "query": "message president", "filters": {"includeFrontMatter": true}, "notes": "Front matter included, spelled out."}
+{"id": "q435", "rule": "R63-front-matter", "query": "abbreviations", "filters": {"includeFrontMatter": false}, "notes": "Front matter excluded: zero by design, as only front matter mentions it."}
+{"id": "q436", "rule": "R63-front-matter", "query": "present", "filters": {"includeFrontMatter": false}, "notes": "Front matter excluded. A tie group crosses position 50."}
+{"id": "q437", "rule": "R63-front-matter", "query": "year", "filters": {"includeFrontMatter": false}, "notes": "Front matter excluded. A tie group crosses position 50."}
+{"id": "q438", "rule": "R64-tokenizer-apostrophe", "query": "Khrushchev's", "filters": {}, "notes": "Searched as the phrase khrushchev s."}
+{"id": "q439", "rule": "R64-tokenizer-apostrophe", "query": "Khrushchev’s", "filters": {}, "notes": "A typographic apostrophe."}
+{"id": "q440", "rule": "R64-tokenizer-apostrophe", "query": "khrushchev s", "filters": {}, "notes": "The two words, not as a phrase."}
+{"id": "q441", "rule": "R64-tokenizer-apostrophe", "query": "Gresham's", "filters": {}, "notes": null}
+{"id": "q442", "rule": "R64-tokenizer-apostrophe", "query": "o'clock", "filters": {}, "notes": null}
+{"id": "q443", "rule": "R64-tokenizer-apostrophe", "query": "Soviet's", "filters": {}, "notes": null}
+{"id": "q444", "rule": "R65-tokenizer-hyphen", "query": "test-ban", "filters": {}, "notes": "Searched as the phrase test ban."}
+{"id": "q445", "rule": "R65-tokenizer-hyphen", "query": "anti-Communist", "filters": {}, "notes": null}
+{"id": "q446", "rule": "R65-tokenizer-hyphen", "query": "self-determination", "filters": {}, "notes": null}
+{"id": "q447", "rule": "R65-tokenizer-hyphen", "query": "U.S.-Soviet", "filters": {}, "notes": null}
+{"id": "q448", "rule": "R65-tokenizer-hyphen", "query": "nuclear -test-ban", "filters": {}, "notes": "A leading dash excludes; the inner one splits."}
+{"id": "q449", "rule": "R66-tokenizer-dotted", "query": "U.S.", "filters": {}, "notes": null}
+{"id": "q450", "rule": "R66-tokenizer-dotted", "query": "U.S.S.R.", "filters": {}, "notes": "The phrase u s s r."}
+{"id": "q451", "rule": "R66-tokenizer-dotted", "query": "u.s.s.r.", "filters": {}, "notes": null}
+{"id": "q452", "rule": "R66-tokenizer-dotted", "query": "ussr", "filters": {}, "notes": "One word, unlike U.S.S.R."}
+{"id": "q453", "rule": "R66-tokenizer-dotted", "query": "D.C.", "filters": {}, "notes": null}
+{"id": "q454", "rule": "R66-tokenizer-dotted", "query": "No. 27", "filters": {}, "notes": null}
+{"id": "q455", "rule": "R67-tokenizer-digits", "query": "1962", "filters": {}, "notes": null}
+{"id": "q456", "rule": "R67-tokenizer-digits", "query": "204", "filters": {}, "notes": null}
+{"id": "q457", "rule": "R67-tokenizer-digits", "query": "telegram 828", "filters": {}, "notes": null}
+{"id": "q458", "rule": "R67-tokenizer-digits", "query": "Secto 574", "filters": {}, "notes": null}
+{"id": "q459", "rule": "R67-tokenizer-digits", "query": "1½", "filters": {}, "notes": null}
+{"id": "q460", "rule": "R67-tokenizer-digits", "query": "1962-63", "filters": {}, "notes": "Digits and punctuation with no letter: dropped, so nothing to search for."}
+{"id": "q461", "rule": "R67-tokenizer-digits", "query": "5,000", "filters": {}, "notes": "Dropped: nothing to search for."}
+{"id": "q462", "rule": "R67-tokenizer-digits", "query": "khrushchev 1962-63", "filters": {}, "notes": "The number is dropped and khrushchev searched."}
+{"id": "q463", "rule": "R68-tokenizer-diacritics", "query": "Argüello", "filters": {}, "notes": null}
+{"id": "q464", "rule": "R68-tokenizer-diacritics", "query": "Arguello", "filters": {}, "notes": null}
+{"id": "q465", "rule": "R68-tokenizer-diacritics", "query": "chargé", "filters": {}, "notes": null}
+{"id": "q466", "rule": "R68-tokenizer-diacritics", "query": "charge", "filters": {}, "notes": null}
+{"id": "q467", "rule": "R68-tokenizer-diacritics", "query": "détente", "filters": {}, "notes": null}
+{"id": "q468", "rule": "R68-tokenizer-diacritics", "query": "detente", "filters": {}, "notes": null}
+{"id": "q469", "rule": "R68-tokenizer-diacritics", "query": "Señor", "filters": {}, "notes": null}
+{"id": "q470", "rule": "R68-tokenizer-diacritics", "query": "senor", "filters": {}, "notes": null}
+{"id": "q471", "rule": "R68-tokenizer-diacritics", "query": "démarche", "filters": {}, "notes": null}
+{"id": "q472", "rule": "R68-tokenizer-diacritics", "query": "demarche", "filters": {}, "notes": null}
+{"id": "q473", "rule": "R68-tokenizer-diacritics", "query": "łibya", "filters": {}, "notes": "ł is not folded to l: zero by design, though libya matches."}
+{"id": "q474", "rule": "R69-sanitized-characters", "query": "header:khrushchev", "filters": {}, "notes": "The colon is no column filter: the phrase header khrushchev, which no fixture prints."}
+{"id": "q475", "rule": "R69-sanitized-characters", "query": "{header}:khrushchev", "filters": {}, "notes": "Braces are stripped too: zero on the fixtures."}
+{"id": "q476", "rule": "R69-sanitized-characters", "query": "president:kennedy", "filters": {}, "notes": "Fixture variant: the phrase president kennedy."}
+{"id": "q477", "rule": "R69-sanitized-characters", "query": "{secretary}:rusk", "filters": {}, "notes": null}
+{"id": "q478", "rule": "R69-sanitized-characters", "query": "article^2", "filters": {}, "notes": "The caret is no boost: the phrase article 2."}
+{"id": "q479", "rule": "R69-sanitized-characters", "query": "article+2", "filters": {}, "notes": null}
+{"id": "q480", "rule": "R69-sanitized-characters", "query": "managua/nicaragua", "filters": {}, "notes": null}
+{"id": "q481", "rule": "R69-sanitized-characters", "query": "c++", "filters": {}, "notes": "Only the letter c is left."}
+{"id": "q482", "rule": "R69-sanitized-characters", "query": "\"<cold> war\"", "filters": {}, "notes": "Angle brackets are stripped from a phrase."}
