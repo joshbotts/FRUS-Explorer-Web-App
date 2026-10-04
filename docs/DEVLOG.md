@@ -2,6 +2,24 @@
 
 One entry per session, newest first.
 
+## Coordination with the app's repository
+
+4 October 2026 · branch `claude/coordination`
+
+**Delivered:** `docs/COORDINATION.md`, a proposal the owner asked for, for Claude Code sessions in both repositories. The owner directed that synchronization work, and its token cost, fall on this repository's sessions. The app's sessions are not to be diverted beyond a few agreed rules, and app changes only the web edition needs are this repository's to write. The document:
+- explains how the web edition uses the app's code: the pin, the shared kits, the index and export contract, and the golden files;
+- explains how #1567 and #1569 made that code portable, and what part 2 will move;
+- describes the app architecture that protects the arrangement: kit folders compiled twice, the FRUSCoreKit boundary test, forwarders, and single entry points;
+- sets four rules for app sessions, and lists what they are not asked to do;
+- assigns the rest to web sessions: a daily Linux watch of the app's `v2` (to be built), repairs, every web-only app change, pin moves and conflicts;
+- includes a block for the app's `CLAUDE.md`.
+
+It was filed for the app's sessions as an issue on the app's repository. Three review rounds checked it against both repositories, and fixed several overstatements. Two of them led to fixes in #1569 itself:
+- `public` does not mark web use, because most kit declarations were already public;
+- the boundary test could trip on an app-only change, so its name check was narrowed.
+
+**Next.** A web session adds the daily watch. After #1569 merges, a web session opens the pull request adding the `CLAUDE.md` block to the app's repository.
+
 ## Pin move: the six kits on Linux in CI
 
 4 October 2026 · branch `claude/pin-cfc0d3c` · upstream [joshbotts/FRUS-Explorer#1567](https://github.com/joshbotts/FRUS-Explorer/pull/1567), merged as `cfc0d3c`
