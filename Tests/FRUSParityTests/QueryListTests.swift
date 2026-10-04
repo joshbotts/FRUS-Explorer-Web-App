@@ -70,6 +70,17 @@ import Testing
         #expect(QueryListValidation.isDate(text) == valid)
     }
 
+    /// `recordText` lists the fields by hand: a field added to `QueryFilters` or `ParityQuery`
+    /// fails here until it is added there, or, like the rule and the notes, ruled out.
+    @Test func recordTextCoversEveryField() {
+        let filterFields = Mirror(reflecting: QueryFilters()).children.compactMap(\.label)
+        #expect(filterFields == ["phrase", "prefixWildcard", "excludedTerms", "volumeIds", "yearKeys", "dateRange",
+                                 "documentType", "includeFrontMatter", "includeDocumentText", "includeSummaries",
+                                 "includeNotes"], "QueryFilters changed: update QueryList.recordText")
+        let queryFields = Mirror(reflecting: ParityQuery(id: "", rule: "", query: "")).children.compactMap(\.label)
+        #expect(queryFields == ["id", "rule", "query", "filters", "notes"], "ParityQuery changed: update QueryList.recordText")
+    }
+
     /// A fixed vector: the same digest on Linux and macOS, from text built by hand.
     @Test func recordDigestIsAFixedVector() {
         var filters = QueryFilters()

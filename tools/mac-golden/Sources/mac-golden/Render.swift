@@ -24,7 +24,7 @@ func renderGolden(repo: Repository, out: URL) async throws {
     let manager = FileManager.default
     let html = out.appendingPathComponent("html"), manifest = out.appendingPathComponent("manifest.json")
     if itemType(html.path) != nil || itemType(manifest.path) != nil,
-       (try? GoldenJSON.read(RenderGolden.self, from: manifest)) == nil {
+       (try? GoldenJSON.read(RenderManifestMarker.self, from: manifest)) == nil {
         throw ToolError("\(repo.relativePath(out)) holds html or manifest.json but no render manifest: choose a new or empty --out")
     }
     let tei = repo.url(ParityFixtures.teiPath)
@@ -113,5 +113,18 @@ func checkBrokenRefs(_ repo: Repository) throws {
     let fixtures = Set(ParityFixtures.volumes)
     if let listed = index.degradableTargets.first(where: { fixtures.contains($0.sourceVolume) }) {
         throw ToolError("broken-refs-index.json degrades \(listed.rawTarget) in \(listed.sourceVolume): the render needs the app's bundle")
+    }
+}
+
+/// Enough of a render manifest to recognise one of any format version, so that a format change
+/// does not make render refuse the folder it wrote.
+private struct RenderManifestMarker: Decodable {
+    let format: Int
+    let configuration: String
+    let rows: [Row]
+
+    struct Row: Decodable {
+        let volume: String
+        let document: String
     }
 }

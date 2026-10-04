@@ -162,7 +162,10 @@ public enum ParseParity {
     }
 
     /// A value as compact JSON, so strings show their quotes and nil shows as null.
+    /// A value as JSON, with each non-ASCII scalar escaped, so that `é` and `e` with a combining
+    /// accent print differently.
     static func show<T: Encodable>(_ value: T) -> String {
-        json(value).map { String(decoding: $0, as: UTF8.self) } ?? String(describing: value)
+        let text = json(value).map { String(decoding: $0, as: UTF8.self) } ?? String(describing: value)
+        return text.unicodeScalars.map { $0.isASCII ? String($0) : "\\u{\(String($0.value, radix: 16))}" }.joined()
     }
 }

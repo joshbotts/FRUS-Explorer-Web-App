@@ -112,7 +112,7 @@ func parse(_ arguments: Arguments) throws {
 func checkGolden(_ arguments: Arguments) throws {
     guard arguments.positional.isEmpty else { throw UsageError("check-golden takes no arguments") }
     let layout = try repository(arguments)
-    let report = GoldenValidation.validate(layout)
+    let report = GoldenValidation.validate(layout, sourceFilesRequired: true)
     var problems = report.problems
     for file in GoldenFile.allCases {
         if report.present.contains(file) { print("present  \(file.rawValue)") }

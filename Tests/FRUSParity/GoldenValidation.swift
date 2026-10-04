@@ -19,8 +19,10 @@ public enum GoldenValidation {
     /// Validates every golden file under `layout.golden`: each is present or pending; each present
     /// one was made from the pinned app's sources, at its index version, from the current inputs,
     /// which it records in full; each is whole; and the two made from an export come from the
-    /// same one. `sourceDigest` defaults to the submodule's.
-    public static func validate(_ layout: RepositoryLayout, sourceDigest: String? = nil) -> GoldenReport {
+    /// same one. `sourceDigest` defaults to the submodule's. With `sourceFilesRequired`, a file made
+    /// from the app's source alone may not be pending, as in the committed repository.
+    public static func validate(_ layout: RepositoryLayout, sourceDigest: String? = nil,
+                                sourceFilesRequired: Bool = false) -> GoldenReport {
         var report = GoldenReport()
         let status: GoldenStatus
         do {
@@ -34,7 +36,12 @@ public enum GoldenValidation {
         var exports: [GoldenFile: Provenance] = [:]
         for file in GoldenFile.allCases {
             guard case .present = status.states[file] else {
-                if case .pending(let reason)? = status.states[file] { report.pending[file] = reason }
+                if case .pending(let reason)? = status.states[file] {
+                    report.pending[file] = reason
+                    if sourceFilesRequired, !file.needsExport {
+                        report.problems.append("\(file.rawValue) is made from the app's source alone and must be committed, not pending: run scripts/make-golden")
+                    }
+                }
                 continue
             }
             report.present.append(file)
