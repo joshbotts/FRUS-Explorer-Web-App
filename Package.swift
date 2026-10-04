@@ -6,7 +6,7 @@
 // far, each with upstream's tests: SourceNoteKit, CrossRefKit and GeneratorKit since session 0;
 // TEIHeaderKit, SemanticVectorsKit and FTS5Store since session 1's Linux guards, with
 // ManifestGeneratorCore, whose tests hold TEIHeaderKit's; and FRUSCoreKit, part 1, since session 3.
-// The server depends on none of them yet.
+// The server depends on none of them yet: only the parity harness and the tests do.
 // Build and test through scripts/swift, which runs this package in swift:6.4-noble.
 
 import PackageDescription
@@ -20,7 +20,7 @@ let package = Package(
     products: [
         // The golden-file formats, for tools/mac-golden, the Mac-only tool that writes them.
         .library(name: "ParityFormat", targets: ["ParityFormat"]),
-        // The parity harness's command line: swift run frus-parity summarize | compare-summary | parse | check-golden.
+        // The parity harness's command line: swift run frus-parity summarize | compare-summary | parse | render | check-golden.
         .executable(name: "frus-parity", targets: ["FRUSParityTool"]),
     ],
     dependencies: [
@@ -180,12 +180,13 @@ let package = Package(
             path: "Tests/ParityFormat",
             swiftSettings: swift6
         ),
-        // The harness itself: the index summary (check 2), the parse comparison (check 3) and the
-        // golden files' validation. Crypto stays here, out of FRUSLightCore and the server.
+        // The harness itself: the index summary (check 2), the parse comparison (check 3), the
+        // render comparison (check 4) and the golden files' validation. Crypto and FRUSCoreKit stay
+        // here, out of FRUSLightCore and the server.
         .target(
             name: "FRUSParity",
             dependencies: [
-                "ParityFormat", "FTS5Store", "CSQLite", "FRUSLightCore",
+                "ParityFormat", "FTS5Store", "FRUSCoreKit", "CSQLite", "FRUSLightCore",
                 .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "Tests/FRUSParity",
