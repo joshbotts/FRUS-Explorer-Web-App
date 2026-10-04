@@ -2,7 +2,7 @@
 
 3 October 2026 · at `FRUS-Explorer` commit `34a5120` (index version 65, app build 49)
 
-Sessions 0, 2, 4, 5 and 7 are done; see `docs/DEVLOG.md`. S1 waits, because the owner asked that sessions not open pull requests on `FRUS-Explorer` for now. This folder keeps what a dry run on Linux found for later sessions, so their prompts can start from evidence rather than estimates.
+Sessions 0, 2, 4, 5 and 7 are done; see `docs/DEVLOG.md`. S1, S3 and S6 waited while the owner asked that sessions not open pull requests on `FRUS-Explorer`; the owner lifted that hold on 4 October. This folder keeps what a dry run on Linux found for later sessions, so their prompts can start from evidence rather than estimates.
 
 ## What was verified
 
@@ -18,13 +18,13 @@ Sessions 0, 2, 4, 5 and 7 are done; see `docs/DEVLOG.md`. S1 waits, because the 
 
 ## Before the S1 prompt
 
-- **Rules 2, 3 and 5 collide.** S1 needs two pull requests: the guards upstream, and the web repository's DEVLOG entry and `Package.swift`. Upstream has no CI and squash-merges, so a pull request's head never reaches `v2`, and the pin can move only after the owner merges. Decided on 3 October: S1 builds and tests the six kits against its pull request's head in the session and records the output in DEVLOG; after Mac check 1 and the merge, a separate pull request moves the pin and adds the kits to CI. Since S4, that pull request also carries golden files made again at the new pin on the owner's Mac (`scripts/make-golden`), or its `swift` check fails.
+- **Rules 2, 3 and 5 collide.** S1 needs two pull requests: the guards upstream, and the web repository's DEVLOG entry. `Package.swift` cannot add the kits until the pin moves, since they do not build on Linux without the guards, so the pin-move pull request adds them. Upstream has no CI and squash-merges, so a pull request's head never reaches `v2`, and the pin can move only after the owner merges. Decided on 3 October: S1 builds and tests the six kits against its pull request's head in the session and records the output in DEVLOG; after Mac check 1 and the merge, a separate pull request moves the pin and adds the kits to CI. Since S4, that pull request also carries golden files made again at the new pin on the owner's Mac (`scripts/make-golden`), or its `swift` check fails.
 - **The library guards the plan names are enough.** `s1-linux-guards.patch` has them. The test side needs more:
   - FTS5StoreTests imports SQLite3 in 7 files. With guards, 208 of its 209 tests pass. The failure is the backup-exclusion test (`FTS5StoreTests.swift:523-529`): excluding a file from backup is a silent no-op on Linux, so the test needs a named Linux skip, as check 1 asks.
   - The logging shim must accept `os.Logger`'s `privacy:` interpolation, which FTS5Store uses 12 times. The patch's `LinuxLogger.swift` does.
   - TEIHeaderKit has no test target. Its 22 tests live in ManifestGeneratorTests, which needs FoundationNetworking and a stand-in for `URLSession.bytes(for:)`. The patch does both, and all 60 of those tests pass.
 - **Dependencies live in the web repository.** Upstream's `Package.swift` declares none, so swift-crypto and `CSQLite` are declared Linux-only in this repository's `Package.swift`. Use a swift-crypto range that admits Hummingbird's 5.x, such as `"3.12.3"..<"6.0.0"`.
-- **Pull requests on `FRUS-Explorer`.** Answered on 3 October: not for now, so S1, S3 and S6 wait. Upstream already has a `Mac` label for rule 4.
+- **Pull requests on `FRUS-Explorer`.** Answered on 3 October: not for now, so S1, S3 and S6 waited. The owner lifted the hold on 4 October. Upstream already has a `Mac` label for rule 4.
 - **Rule 3 has nothing to tick.** It ends each session with "its task ticked in `docs/PLAN.md`", but the session table has no checkbox or status column, so S0 ticked nothing. Decided on 3 October: the DEVLOG entry is the record, and rule 3 now says so.
 
 ## Before the S2 prompt

@@ -2,6 +2,51 @@
 
 One entry per session, newest first.
 
+## Session 1: the shared kits on Linux
+
+4 October 2026 · branch `claude/s1-linux-guards` · upstream [joshbotts/FRUS-Explorer#1567](https://github.com/joshbotts/FRUS-Explorer/pull/1567)
+
+The owner lifted the hold on upstream pull requests on 4 October. S1 opened the first one, as decided on 3 October: this session builds and tests the six kits against that pull request's head, and records the result here. After the owner's Mac check and merge, a separate pull request moves the pin and adds the kits to CI.
+
+**Delivered**
+
+- **The upstream pull request**, from `v2` at `34a5120`, which is still the pin: `v2` had not moved since 3 October. It contains:
+  - **Import guards in 14 files.** `SQLite3` falls back to this repository's `CSQLite`, `CryptoKit` to swift-crypto's `Crypto`, and `OSLog` is imported only where it exists. `FoundationXML` and `FoundationNetworking` are imported only where they exist, which is not on Apple platforms.
+  - **`URLSession.bytes(for:)` on Linux.** swift-corelibs-foundation lacks it, so on Linux `TEIHeaderFetcher` reads the response whole and replays it into the same scan.
+  - **`FTS5Store/LinuxLogger.swift`**, a stand-in for `os.Logger`, compiled only where `OSLog` is missing, with upstream's licence header. Without the header, upstream's coding-standards audit would have failed the Mac check: the prepared patch in `docs/prep/` lacked it.
+  - **Six `project.pbxproj` lines** from `xcodegen` for the new file, in both app targets.
+  - **One named Linux-only skip.** FTS5StoreTests' backup-exclusion test is disabled where Darwin is missing, with the reason "Linux: swift-corelibs-foundation keeps no backup attribute, so excluding a file from backup is a silent no-op". It still runs on Apple platforms. This is the skip SPEC's check 1 asks to be named.
+  - **Upstream's records:** version-history lines and a session entry in its `Planning/DEVELOPMENT-PLAN.md`.
+
+**Results at the pull request's head**
+
+- **Linux, `swift:6.4-noble`, arm64.** A local copy of this package, with the six kits' targets added and the submodule at the pull request, built with no warnings. All six kits' tests pass: SourceNoteKitTests 292, FTS5StoreTests 209, ManifestGeneratorTests 60 (which hold TEIHeaderKit's 22), SemanticVectorsKitTests 35, CrossRefKitTests 10, GeneratorKitTests 7. That is 613 tests. The one skip is the named one. At `34a5120`, each of the three kits stops at its first Apple-only import.
+- **macOS, the same package:** 613 tests pass, none skipped.
+- **Apple platforms compile what they did before.**
+  - A `canImport` probe shows each guard taking its old code on the macOS, iOS Simulator and iOS SDKs.
+  - A clean `FRUSExplorerMac` build gives the same warnings as `v2`, and a debug library defining the same 238,006 symbols.
+  - The iOS unit target passes 6,470 tests in 760 suites, with the same 17 skips as `v2`.
+  - Upstream's whole package passes under `swift test`: 1,663 tests in 37 runs.
+  - One reader test fails from a cold simulator on `v2` too; the pull request leaves it for the owner to file.
+
+**The pin-move pull request, after the merge**
+
+- **`Package.swift`.**
+  - FTS5Store replaces the `FTS5Schema` target, since two targets cannot compile the same files, and the four files that import `FTS5Schema` import `FTS5Store`.
+  - Add TEIHeaderKit, ManifestGeneratorCore and its tests, and SemanticVectorsKit and its tests.
+  - `CSQLite` and swift-crypto are Linux-only dependencies of the kits that need them.
+  - The working manifest is in the upstream pull request's description. None of this can land before the pin moves: at `34a5120` FTS5Store does not build on Linux.
+- **`ci.yml`.** Its skip guard allows the one named skip by name. As it stands, the guard fails on that line.
+- **Golden files.** `scripts/make-golden` on the Mac at the merged commit: the guards change files inside the digest. A trial run gave byte-identical HTML and expressions, so only their provenance changes.
+
+**Notes**
+
+- **Mac check 1** now runs `swift test` too, from a clone at a real path. Xcode's schemes never run the kits' own test suites, and under `/tmp` six of upstream's source-scan tests fail falsely. The pull request lists the commands.
+- **Nothing upstream keeps the guards alive.** Upstream has no CI, so a new unguarded Apple-only import in one of these kits would break the web build unseen, until the next pin move. The pull request offers the owner a line for upstream's `CLAUDE.md`.
+- **On Linux, the logging shim prints every level to standard error,** debug included: FTS5StoreTests prints about 200 debug lines. S6 may want to quiet it.
+
+**Next.** The owner's Mac check 1 and merge of #1567, then the pin-move pull request. S3 can start alongside: its upstream refactor is larger, and `docs/prep/README.md` lists what it needs.
+
 ## Import mode: unfinished journals and symbolic links
 
 4 October 2026 · branch `claude/import-journal-symlinks`

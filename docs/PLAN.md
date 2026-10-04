@@ -248,7 +248,7 @@ Eight steps need the owner, because a cloud session has no Mac and no Xcode. Ses
 | Checkpoint | When | What the owner does | Status |
 | --- | --- | --- | --- |
 | Settings | Before S0 | The GitHub and environment items under Before the first session, and a container runtime on the Mac | To do |
-| Mac check 1 | After S1 | Check out the upstream pull request in `FRUS-Explorer`, build both schemes in Xcode, run the unit tests, and merge if they pass | To do |
+| Mac check 1 | After S1 | Check out the upstream pull request in `FRUS-Explorer`, in a clone at a real path (not `/tmp`). Build both schemes in Xcode, run the unit tests and `swift test`, which alone runs the kits' own suites, and merge if they pass. The pull request lists the commands | To do |
 | Mac check 2 | After S3 | The same for the TEI and Citation guards | To do |
 | Golden files | After S4 | In the pinned build of the Mac app, make a library holding exactly the three fixture volumes, for example under a second macOS user. Export its research database, run `scripts/make-golden --export` on the export, and commit `fixtures/golden/`. S4 made the golden files that need only the app's source | To do |
 | Mac check 3 | After S6 | The same as Mac check 1, for the indexer and search guards | To do |
@@ -282,7 +282,7 @@ Answered on 3 October:
 - The web repository goes public, which brings branch protection and native arm64 runners on GitHub Free.
 - The published image is public too, so it pulls without signing in.
 - TEI volumes: on a Mac, FRUS Explorer's own folder, once Docker Desktop is allowed to read it; on Linux, a shallow clone of HistoryAtState/frus. `docs/INSTALL.md` gives both.
-- Sessions do not open pull requests on `FRUS-Explorer` for now. The core track (S1, S3, S6) waits, and the server track (S2, S5, S7) goes ahead. When S1 runs, it builds and tests the six kits against its upstream pull request's head in the session and records the result in `docs/DEVLOG.md`; after the owner's Mac check and merge, a separate pull request moves the pin and adds the kits to CI. That pull request also carries the golden files, made again at the new pin on the owner's Mac by `scripts/make-golden`.
+- Sessions did not open pull requests on `FRUS-Explorer` while its public release was being prepared, so the core track (S1, S3, S6) waited and the server track (S2, S4, S5, S7) went ahead. The owner lifted that hold on 4 October. When S1 runs, it builds and tests the six kits against its upstream pull request's head in the session and records the result in `docs/DEVLOG.md`; after the owner's Mac check and merge, a separate pull request moves the pin and adds the kits to CI. That pull request also carries the golden files, made again at the new pin on the owner's Mac by `scripts/make-golden`.
 - A session's `docs/DEVLOG.md` entry is the record that it is done (rule 3).
 - S4 copies no upstream code, so renderer parity on Linux waits for S3.
 - Check 3 passes when results differ only in the order of documents whose Mac scores are exactly equal. Each such group is reported.
