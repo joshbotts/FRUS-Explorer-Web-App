@@ -16,6 +16,8 @@ let package = Package(
     products: [
         // The golden-file formats, for tools/mac-golden, the Mac-only tool that writes them.
         .library(name: "ParityFormat", targets: ["ParityFormat"]),
+        // The parity harness's command line: swift run frus-parity summarize | compare-summary | parse | check-golden.
+        .executable(name: "frus-parity", targets: ["FRUSParityTool"]),
     ],
     dependencies: [
         .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0"),
@@ -113,6 +115,23 @@ let package = Package(
             path: "Tests/ParityFormat",
             swiftSettings: swift6
         ),
+        // The harness itself: the index summary (check 2), the parse comparison (check 3) and the
+        // golden files' validation. Crypto stays here, out of FRUSLightCore and the server.
+        .target(
+            name: "FRUSParity",
+            dependencies: [
+                "ParityFormat", "FTS5Schema", "CSQLite", "FRUSLightCore",
+                .product(name: "Crypto", package: "swift-crypto"),
+            ],
+            path: "Tests/FRUSParity",
+            swiftSettings: swift6
+        ),
+        .executableTarget(
+            name: "FRUSParityTool",
+            dependencies: ["FRUSParity", "ParityFormat"],
+            path: "Tests/FRUSParityTool",
+            swiftSettings: swift6
+        ),
 
         // Builds synthetic Mac exports from the schema of a real one, for the tests below.
         .target(
@@ -139,6 +158,12 @@ let package = Package(
                 .product(name: "Logging", package: "swift-log"),
             ],
             path: "Tests/FRUSLightServerTests",
+            swiftSettings: swift6
+        ),
+        .testTarget(
+            name: "FRUSParityTests",
+            dependencies: ["FRUSParity", "ParityFormat", "FTS5Schema", "FRUSLightTestSupport", "FRUSLightCore", "CSQLite"],
+            path: "Tests/FRUSParityTests",
             swiftSettings: swift6
         ),
     ]
