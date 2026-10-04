@@ -4,6 +4,9 @@ import CSQLite
 @testable import FRUSLightCore
 import FRUSLightTestSupport
 import Foundation
+#if canImport(Glibc)
+import Glibc
+#endif
 import Testing
 
 /// Records each step an import reaches, once per step.
@@ -200,8 +203,33 @@ struct ImportFixture {
         } throws: { error in
             guard let refusal = error as? ImportRefusal else { return false }
             return refusal.step == .copyingExport && refusal.reason.contains("unfinished transaction")
+                && refusal.reason.contains("Remove export.sqlite-journal from /data/import")
         }
         #expect(!fixture.exists(fixture.files.liveIndex))
+    }
+
+    /// A journal that cannot be judged counts as hot, as SQLite assumes: a link in its place, to
+    /// nowhere or to a zeroed journal, a FIFO, which is never opened, and one that cannot be read.
+    @Test(arguments: ["link to nowhere", "link to a zeroed journal", "fifo", "unreadable"])
+    func aJournalThatCannotBeJudgedCountsAsHot(_ kind: String) throws {
+        let fixture = try ImportFixture()
+        let source = try fixture.drop(SyntheticExport())
+        let journal = URL(fileURLWithPath: source.path + "-journal")
+        let elsewhere = fixture.directory.url.appendingPathComponent("elsewhere-journal")
+        var open: (String) -> FileHandle? = { FileHandle(forReadingAtPath: $0) }
+        switch kind {
+        case "link to nowhere":
+            try FileManager.default.createSymbolicLink(at: journal, withDestinationURL: elsewhere)
+        case "link to a zeroed journal":
+            try Data(repeating: 0, count: 512).write(to: elsewhere)
+            try FileManager.default.createSymbolicLink(at: journal, withDestinationURL: elsewhere)
+        case "fifo":
+            #expect(mkfifo(journal.path, 0o600) == 0)
+        default:
+            try Data([0xd9, 0xd5, 0x05, 0xf9]).write(to: journal)
+            open = { _ in nil }  // as for the server's user when the journal is another's 0600 file
+        }
+        #expect(ExportChecks.hasHotJournal(beside: source, open: open))
     }
 
     /// An empty journal, or one whose header was zeroed, holds nothing to roll back.

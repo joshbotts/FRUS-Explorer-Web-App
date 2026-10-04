@@ -114,11 +114,11 @@ public struct IndexImporter: Sendable {
         // immutable=1 never reads a -wal file, so a copy of a live database would lose its newest data.
         let wal = URL(fileURLWithPath: source.path + "-wal")
         if let walSize = Self.size(of: wal), walSize > 0 {
-            throw ImportRefusal(.copyingExport, "\(name) arrived with a \(wal.lastPathComponent) file, so it is a copy of a database in use. Use Export Research Database… in FRUS Explorer's settings instead.")
+            throw ImportRefusal(.copyingExport, "\(name) arrived with a \(wal.lastPathComponent) file, so it is a copy of a database in use. Remove \(wal.lastPathComponent) from /data/import, then copy in an export made with Export Research Database… in FRUS Explorer's settings.")
         }
         // Nor does it roll back an unfinished transaction, so the copy would be half-written.
         if ExportChecks.hasHotJournal(beside: source) {
-            throw ImportRefusal(.copyingExport, "\(name) arrived with a \(name)-journal file holding an unfinished transaction, so it is a copy of a database in use. Use Export Research Database… in FRUS Explorer's settings instead.")
+            throw ImportRefusal(.copyingExport, "\(name) arrived with a \(name)-journal file that may hold an unfinished transaction, so it is a copy of a database in use. Remove \(name)-journal from /data/import, then copy in an export made with Export Research Database… in FRUS Explorer's settings.")
         }
         let needed = (Self.size(of: source) ?? 0) + 64 * 1_048_576
         if let free = try? files.availableCapacity(), free < needed {
@@ -219,17 +219,22 @@ enum ExportChecks {
         ImportRefusal(.copyingExport, "\(name) is a symbolic link, not an export. Copy the export itself with docker compose cp -L, which follows the link.")
     }
 
-    /// Whether a rollback journal beside the database holds an unfinished transaction, by SQLite's
-    /// own test (`hasHotJournal` in pager.c): it is not empty and its first byte is not zero.
-    /// `immutable=1` never rolls such a journal back. A link in the journal's place counts too,
-    /// since what it points at cannot be judged here.
-    static func hasHotJournal(beside url: URL) -> Bool {
+    /// Whether a rollback journal beside the database holds, or may hold, an unfinished
+    /// transaction, by SQLite's own test (`hasHotJournal` in pager.c): it is not empty and its
+    /// first byte is not zero, and one that cannot be opened or read counts as hot, as SQLite
+    /// assumes. Anything but a regular file in the journal's place, such as a link or a FIFO,
+    /// counts too, and is never opened: opening a FIFO would block. `immutable=1` never rolls a
+    /// journal back. `open` is replaceable for tests, which run as root in CI.
+    static func hasHotJournal(beside url: URL,
+                              open: (String) -> FileHandle? = { FileHandle(forReadingAtPath: $0) }) -> Bool {
         let journal = url.path + "-journal"
-        if isSymbolicLink(URL(fileURLWithPath: journal)) { return true }
-        guard let handle = FileHandle(forReadingAtPath: journal) else { return false }
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: journal) else { return false }
+        guard attributes[.type] as? FileAttributeType == .typeRegular else { return true }
+        guard (attributes[.size] as? NSNumber)?.int64Value != 0 else { return false }
+        guard let handle = open(journal) else { return true }
         defer { try? handle.close() }
-        guard let first = try? handle.read(upToCount: 1), let byte = first.first else { return false }
-        return byte != 0
+        guard let first = try? handle.read(upToCount: 1) else { return true }
+        return first.first.map { $0 != 0 } ?? false
     }
 
     /// Whether the file starts with SQLite's 16-byte header string.
