@@ -2,7 +2,7 @@
 
 3 October 2026 · at `FRUS-Explorer` commit `34a5120` (index version 65, app build 49)
 
-Sessions 0, 1, 2, 4, 5 and 7 are done; see `docs/DEVLOG.md`. S1, S3 and S6 waited while the owner asked that sessions not open pull requests on `FRUS-Explorer`; the owner lifted that hold on 4 October. This folder keeps what a dry run on Linux found for later sessions, so their prompts can start from evidence rather than estimates.
+Sessions 0, 1, 2, 4, 5 and 7 are done, and S3's upstream pull request waits for Mac check 2; see `docs/DEVLOG.md`. S1, S3 and S6 waited while the owner asked that sessions not open pull requests on `FRUS-Explorer`; the owner lifted that hold on 4 October. This folder keeps what a dry run on Linux found for later sessions, so their prompts can start from evidence rather than estimates.
 
 ## What was verified
 
@@ -63,12 +63,12 @@ Settled on 3 October: on a Mac, FRUS Explorer's own folder once Docker Desktop i
 
 ## Before the S3, S4 and S6 prompts
 
-S4 settled what concerns it here: its golden files come from a library holding only the three fixture volumes, and its summary refuses any other export. Its DEVLOG entry says how.
+S4 settled what concerns it here: its golden files come from a library holding only the three fixture volumes, and its summary refuses any other export. Its DEVLOG entry says how. S3 settled the four items marked as settled below, in its upstream pull request and in the owner's decisions of 4 October; its DEVLOG entry says how.
 
-- **"Every Linux change to a shared file is a guard" holds only for S1.** S3's 15 app files and S6's 48 (36,861 lines, 19 of them edited) also need declarations moved out of Apple-only files: WebKit, SwiftUI, AppKit or UIKit, and SwiftData `@Model` files. That is an upstream refactor pull request, best landed after the public release. `s3-linux-edits.tsv` and `s6-linux-edits.tsv` list every change.
-- **`String(localized:)` has no Linux form.** The S3 files use it 46 times. `shims/StringLocalizedShim.swift` covers the forms they use, including `format:`.
-- **S3's citation matcher needs SearchService and ManifestStore,** which are S6's work. Either limit S3 to the TEI files and the citation formatter, or move the matcher to S6.
-- **The S3 row names no upstream pull request.** The session diagram has no Mac check between S3 and S4, though the owner checkpoints list Mac check 2 there.
+- **"Every Linux change to a shared file is a guard" holds only for S1.** S3's 15 app files and S6's 48 (36,861 lines, 19 of them edited) also need declarations moved out of Apple-only files: WebKit, SwiftUI, AppKit or UIKit, and SwiftData `@Model` files. `s3-linux-edits.tsv` and `s6-linux-edits.tsv` list every change. Settled for S3: its upstream pull request moves the files into `FRUSCoreKit/` and keeps every old name, and the owner chose to land it now, while `v2` is quiet, rather than after the public release. S6 needs the same kind of pull request.
+- **`String(localized:)` has no Linux form.** The S3 files use it 46 times. Settled for S3: the kit's own `Linux/LinuxFoundationShims.swift` declares it, and `autoreleasepool`, where Darwin is missing, so nothing from `shims/` enters this repository's code.
+- **S3's citation matcher needs SearchService and ManifestStore,** which are S6's work. Settled: the matcher, the block splitter and `PageRangeStore` move with S6.
+- **The S3 row names no upstream pull request.** Settled: `PLAN.md`'s S3 row now names it, and the session diagram has a Mac check between S3 and S4.
 - **Golden files cannot come from the owner's 553-volume library.** BM25 ranks with whole-index statistics, so 5 of 7 test queries ordered differently against a three-volume index, and person rollups span volumes. The procedure needs a Mac library holding exactly the three fixture volumes, for example under a second macOS user. The S4 summary script should refuse any other export.
 - **Check 4 asks for 500 or more documents.** The fixtures hold 383 documents in 392 rows. Define check 4 on the fixtures for phase 0, and run the full check on the real TEI at S10.
 - **The S6 file set reads 8 JSON resources through `Bundle.main`.** On Linux they must sit beside the executable or the test runner, or indexing degrades without an error.
@@ -80,12 +80,12 @@ A full export is 2.83 GB, not 9.3 GB. The larger figure came from an index overh
 
 ## Pinning until the public release
 
-`FRUS-Explorer` merges about eight pull requests a day until its public release, and its index version went from 47 to 65 in 30 days. Each pin move means a new Mac build, a new export and new golden files. Hold the pin (at `cfc0d3c` since S1's guards merged) until the release unless a merged guard pull request needs it, and batch upstream pull requests so the pin moves as few times as possible. Make the golden files and the S10 export once, against a pin from after the release.
+`FRUS-Explorer` merges about eight pull requests a day until its public release, and its index version went from 47 to 65 in 30 days. Each pin move means a new Mac build, a new export and new golden files. Hold the pin (at `cfc0d3c` since S1's guards merged) until the release unless a merged pull request for this project needs it, as S3's will, and batch upstream pull requests so the pin moves as few times as possible. Make the golden files and the S10 export once, against a pin from after the release.
 
 ## Files
 
 | File | What it holds |
 | --- | --- |
 | `s1-linux-guards.patch` | The S1 guards. It applies with `git apply` to `FRUS-Explorer` at `34a5120`: 15 files and 92 added lines, each inside a `#if canImport` guard, plus a new Linux-only `FTS5Store/LinuxLogger.swift`. With swift-crypto and `CSQLite` declared Linux-only, TEIHeaderKit, SemanticVectorsKit and FTS5Store build on Linux with no warnings. SemanticVectorsKitTests (35) and ManifestGeneratorTests (60) pass, and FTS5StoreTests passes 208 of 209 |
-| `s3-linux-edits.tsv`, `s6-linux-edits.tsv` | Every change it took to compile the S3 and S6 file sets on Linux, one per line: the kind (import-guard, code-guard, model-guard, move, shim, stub or dropped), the file and the detail |
-| `shims/` | Linux stand-ins for `autoreleasepool`, `String(localized:)` and the Keychain store, from that build. They are scratch work, to review before use |
+| `s3-linux-edits.tsv`, `s6-linux-edits.tsv` | Every change it took to compile the S3 and S6 file sets on Linux, one per line: the kind (import-guard, code-guard, model-guard, move, shim, stub or dropped), the file and the detail. `s3-linux-edits.tsv` is superseded by S3's upstream pull request, which makes those changes upstream; it stays as a record |
+| `shims/` | Linux stand-ins for `autoreleasepool`, `String(localized:)` and the Keychain store, from that build. They are scratch work, superseded by S3's upstream pull request, which declares the stand-ins it needs inside `FRUSCoreKit/`. None of them goes into this repository's code: a stand-in belongs upstream, beside the code it serves |

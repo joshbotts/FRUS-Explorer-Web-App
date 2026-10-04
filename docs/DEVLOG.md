@@ -2,6 +2,168 @@
 
 One entry per session, newest first.
 
+## Session 3: FRUSCoreKit, part 1, upstream
+
+4 October 2026 · branch `claude/s3-fruscorekit` · upstream [joshbotts/FRUS-Explorer#TBD](https://github.com/joshbotts/FRUS-Explorer/pull/TBD)
+
+S3's upstream pull request, the second, moves the TEI pipeline and the citation code out of `FRUSExplorer/` into `FRUSCoreKit/`, a Foundation-only directory that both app targets compile and upstream's `Package.swift` builds as a target of its own. It branches from `v2` at `cfc0d3c`, which is still the pin; nothing has merged on `v2` since. As with S1, this entry records the results at the pull request's head, and the kit reaches CI in the pin-move pull request after the owner's Mac check 2 and merge. This pull request makes the parity tools ready for that pin, and passes CI at `cfc0d3c`, where `FRUSCoreKit` does not exist yet.
+
+**The owner's decisions, 4 October**
+
+- **Land it now,** while `v2` is quiet, rather than after the public release.
+- **All of part 1:**
+  - the TEI pipeline;
+  - the citation formatter, parser and models, and `PageSpanResolver`;
+  - the reader's path as the kit's API, which `DocumentViewModel.load` and `HTMLTemplate.build` call: `ReaderLookups`, `ASTToRenderNodeConverter.init(readerOf:lookups:brokenRefs:)` and `FRUSRenderNodeHTMLSerializer.reader`;
+  - public access for the types S8 and S9 will need, provided each is what they need and making it public changes nothing for the app.
+
+  The citation matcher, the block splitter and `PageRangeStore` stay in the app for S6, which brings the SearchService and ManifestStore they need.
+- **The kit's suites are compiled twice,** by Xcode and by `swift test`, in `FRUSExplorerTests/FRUSCoreKit/`. Whatever needs the app sits behind `#if !SWIFT_PACKAGE`. Three more parser suites join them. A source audit guards the kit's boundary, and the tree-walking audits read `FRUSCoreKit/` wherever their rules apply.
+- **Mac check 2:**
+  - clean builds of both schemes;
+  - the full iOS unit run, signed, with `v2`'s skips;
+  - `swift test`, with the `FRUSCoreKitTests` count the pull request states;
+  - a normalized symbol diff that shows only the names the pull request expects.
+- **The three-volume export waits.** The owner's export for the Golden files checkpoint comes after the S3 pin move. That move changes the source digest, so golden files made from an export at `cfc0d3c` would go stale with it.
+- **Left to the session:**
+  - the trial's names: `FRUSURLScheme`, `HighlightColor`, `StoredSourceNote`, `ReaderLookups`, `FRUSASTNode+PrintedText.swift` and `ReaderRendering.swift`;
+  - the old names stay as permanent forwarders;
+  - what S8 needs beyond this, figure URLs for the web and the page shell, waits for pull requests of its own.
+
+**The upstream pull request**
+
+Branch `claude/fruscorekit-part1`: eight commits in review order, 67 files, 1,881 lines added and 694 removed. There is no index-version bump, no CloudKit schema change and no new dependency.
+
+- **Moves.** 13 files and 10 suites move with `git mv` and no line changed, so each reads as a 100% rename. They come from `FRUSExplorer/TEI/`, `Citation/`, `CrossReference/`, `Browser/` and `Models/Manifest/`. `project.yml` compiles `FRUSCoreKit/` in both app targets.
+- **Splits.** What the kit used from Apple-only files moves in, verbatim:
+  - `FRUSURLScheme`: the cross-reference grammar and the figure URL, from the WebKit scheme handler;
+  - `HighlightColor`: from the SwiftData highlight model;
+  - `FRUSASTNode+PrintedText.swift`, with `StoredSourceNote`: from `IndexingPipeline.swift`.
+
+  Three kit files lose their Apple-only halves to new app files: `VolumeStructure`'s `NavigationPath` overload, `CitationStyle.current`'s `UserDefaults` read and `BrokenRefsIndexStore`'s `Bundle.main` read. Every old name forwards.
+- **Guards.** Each takes the old code on an Apple platform:
+  - `CryptoKit` falls back to swift-crypto's `Crypto`;
+  - `FoundationXML` is imported where it exists;
+  - `SourceNoteKit` is imported where it is a module of its own;
+  - `CitationPlainText` parses Markdown only where Darwin exists.
+
+  `Linux/LinuxFoundationShims.swift` declares `String(localized:)` and `autoreleasepool` where Darwin is missing, and compiles to nothing on Apple platforms.
+- **The reader's path** is public, in `TEI/ReaderRendering.swift`, and the app's reader calls it. The web reader will render through the app's own path, not a copy of it.
+- **Public for S8 and S9:**
+  - `CrossRefDestination`, stated `Sendable`, since a public enum is not inferred to be;
+  - `FRUSURLScheme.resolveCrossRefTarget`;
+  - `FRUSCanonicalURL`;
+  - `CitationPlainText.plain` and `CitationPunctuation.withoutTerminalPeriod`;
+  - every member of `CitableDocumentNumber`.
+
+  The figure URL stays internal, for S8.
+- **Ten dual-compiled suites:** the seven the kit's files had, plus FootnoteLabelTests, PersonsListEncodingTests and FlushLeftSourcesParseTests.
+  - Each imports the kit under `swift test` and the app in Xcode.
+  - 30 `#if !SWIFT_PACKAGE` guards, each with its reason, keep the app's half in Xcode: 4 around the seven suites whose subject is the app, 15 around tests and 11 around statements.
+  - Under `swift test` they make `FRUSCoreKitTests`: 390 tests in 47 suites.
+- **Audits.** `FRUSCoreKitBoundaryTests` (8 tests) reads the kit's source: the app compiles the kit into its own module, so it would build even if a kit file named an app type. The audit fails on:
+  - an import other than Foundation outside its `canImport` branch;
+  - `Bundle.main` or `UserDefaults`;
+  - an app type named outside comments and strings;
+  - unguarded code under `Linux/`;
+  - a suite importing the app outside Xcode's branch;
+  - `project.yml` or `Package.swift` dropping the kit.
+
+  Ten tree-walking audits whose rules a kit file can break now read `FRUSCoreKit/` too.
+- **Records:**
+  - upstream's `CLAUDE.md`, with a rule: after editing the kit, run `swift build --target FRUSCoreKit` and `swift test --filter FRUSCoreKitTests`;
+  - the editable-content pointers and the stale paths;
+  - version-history entries and a session entry.
+
+**Results at the pull request's head**
+
+- **Linux, `swift:6.4-noble`, arm64**, in a scratch package that declares the kit as this repository will:
+  - A clean build with tests took 19.8 s: "Build complete! (17.32 secs)", with no warning or error line.
+  - `swift test list` lists 390 FRUSCoreKitTests. "✔ Test run with 390 tests in 47 suites passed after 0.124 seconds.", with no skips.
+- **The renderer on Linux.** A command-line reader that uses only the kit's public API rendered the rows of `fixtures/golden/render/manifest.json`.
+  - Debug and release each printed "rows: 392, golden: 392, identical: 392, differ: 0, missing: 0, same order: true".
+  - A pass from one `parseVolumeFull` per volume gave "identical 392 of 392" (590 ms debug, 456 ms release).
+  - The release build took 21.3 s. Rendering took 39.6 ms per row at the median, 15.9 s in all, with a 38.1 MB peak.
+- **The citation rules.** Every newly public citation rule ran over 553 volumes, 3 styles and 4 number shapes: 7,220 lines. The Linux and macOS outputs are byte-identical (sha256 `b2c3dc33…`).
+- **macOS, upstream's whole package,** from a clean `.build`:
+  - `swift build --build-tests` took 41 s: "Build complete! (39.22 sec)", with 12 warning lines, the same six generator warnings S1 recorded and none from the kit.
+  - `swift test` exited 0 in 94 s: 38 runs and 2,053 tests, all passed, none skipped. FRUSCoreKitTests: "✔ Test run with 390 tests in 47 suites passed after 0.061 seconds." 2,053 − 390 = 1,663, S1's count.
+- **`FRUSExplorerMac`**, clean, unsigned, Debug: "** BUILD SUCCEEDED **" in 44 s at the head and at `cfc0d3c`, with identical warning lines (5 lines, the two known residues). The debug dylib defines 233,540 symbols at the head and 233,494 on `v2`.
+- **iOS**, clean, unsigned `build-for-testing`: "** TEST BUILD SUCCEEDED **" in 142 s at the head and 145 s at `cfc0d3c`, with 7 warning lines each, the two known residues.
+- **The full iOS unit run**, unsigned, with the TEI mirror:
+  - Head: "✘ Test run with 6481 tests in 762 suites failed after 374.309 seconds with 8 issues."
+  - `cfc0d3c`: "✘ Test run with 6470 tests in 760 suites failed after 338.166 seconds with 8 issues."
+  - The same 8 tests fail on both, all Keychain `.securityError(-34018)`, since an unsigned test host has no keychain: KeychainStoreTests 5, SettingsTests 2, SourceExplorerTests 1.
+  - Both runs skip the same 17 tests and 2 suites.
+  - The 11 extra tests are ReaderRenderingTests' 3 and FRUSCoreKitBoundaryTests' 8.
+- **The boundary audit, mutated.** `import SwiftUI`, `IndexingPipeline.self` and `UserDefaults.standard` were added to `FRUSCanonicalURL.swift`, with an unguarded file under `Linux/`. The app's build still succeeded, and 4 boundary tests failed, each naming the file and line.
+- **The symbol diff** of the two Mac dylibs printed "raw: removed 522 added 568", then "normalized: removed 56 added 105". Every remaining name is expected:
+  - the new kit types and members;
+  - `normalizedWhitespace`, private before and internal now;
+  - the closures of moved bodies;
+  - two renumbered thunks;
+  - SwiftUI generic metadata over `HighlightColor`, renumbered.
+- **Which commit was measured.** The full runs are of `c1130740`; the head, `2df9ad1d`, differs from it only by upstream's session entry and four lines of the boundary audit's doc comment. The Linux run and `tools/mac-golden` were repeated at `c635317e`, whose code is the head's, with the same results. At the head itself, the source audits and ReaderRenderingTests passed on iOS: "✔ Test run with 97 tests in 6 suites passed after 80.998 seconds."
+
+**Delivered here**
+
+- **The source digest takes in `FRUSCoreKit` once the pin has it.** `UpstreamDigest.directories` lists `FRUSCoreKit`, and a listed directory with nothing at its path contributes nothing. So the digest at `cfc0d3c` is unchanged, and the committed golden files stay current. Anything else at a listed path must be a directory that can be read: a file, or a link pointing nowhere, is an error, never skipped. A submodule holding none of the directories, as an uninitialized one does, is an error too.
+- **`tools/mac-golden` compiles `FRUSCoreKit` once the pin has it.** Its manifest lists the kit and compiles only the listed directories the submodule has.
+  - A committed link to `FRUSCoreKit` would point nowhere until the pin moves, and SwiftPM warns about a link that points nowhere ("ignoring broken symlink"), even when it is excluded ("Invalid Exclude … File not found").
+  - So the six per-directory links in `Sources/FRUSExplorer` become one, `upstream`, to the submodule, which exists at every pin. The manifest excludes the submodule's other top-level entries, as well as everything in the compiled directories that is not Swift.
+- **Tests.** A new ProvenanceTests test covers the missing directory:
+  - an absent `FRUSCoreKit` leaves the digest unchanged, and so does an empty one;
+  - moving a file into it changes the digest, as the pin move will;
+  - a file or a dangling link in its place is an error, and so is an empty or absent submodule.
+
+  The old test's last step, which held that a missing directory is an error, gave way to it. With the skip removed, 18 of FRUSParityTests' 58 tests fail at `cfc0d3c`: this one, the check of the committed golden files, and the tests that summarize a database or validate golden files, since both compute the digest.
+
+**Results here**
+
+- **Linux, `swift:6.4-noble`, arm64.** A clean build with tests: "Build complete! (43.63 secs)", with no warnings. 725 tests: 724 pass, and the one skip is the named one. FRUSParityTests has 58, one more than before. CI's Test-step guard, run from `ci.yml` in the container, passes, and so does No runtime skips.
+- **macOS, natively.** The same 725 tests pass, none skipped.
+- **At `cfc0d3c`, in this worktree:**
+  - `frus-parity check-golden` passes.
+  - The digest is `a5bd78c2…`, the committed `sourceDigest` of both golden files. A Python recomputation gives the same, over 604 files.
+  - A clean `tools/mac-golden` build: "Build complete! (40.47 sec)", with one warning, the app's known `GeneratedSummary` residue. The app module compiles the same 521 files as before, plus the stub.
+  - `render` printed "render: 392 rows, 3554115 bytes of HTML". The HTML is byte-identical to the committed files, the rows match in order, and every provenance field is equal.
+  - `expressions` wrote a byte-identical `queries.expressions.json`.
+- **At the upstream head `2df9ad1d`, in a scratch clone of this branch:**
+  - The same manifest compiles 529 app files, 18 of them in `FRUSCoreKit`: "Build complete! (41.04 sec)", with the same one warning.
+  - The HTML of all 392 rows is byte-identical to the committed files.
+  - `scripts/make-golden`, with the head recorded as the pin, took 98 s and passed `check-golden`. Only provenance changed: `upstreamCommit` and `sourceDigest`, in `render/manifest.json` and `queries.expressions.json`, four lines.
+  - The digest there, `0f29ff09…`, covers 612 files. Without `FRUSCoreKit` in the list it would have covered 594, missing the kit's 18.
+
+**The pin-move pull request, after the merge**
+
+- **`Package.swift`.** `FRUSCoreKit` (depending on SourceNoteKit, and on swift-crypto's `Crypto` for Linux only) and `FRUSCoreKitTests`, from the working manifest in the upstream pull request's description.
+- **A check 4 test.** It renders all 392 golden rows on Linux through the kit's public API alone, and compares each byte for byte with `fixtures/golden/render`:
+  1. `parseDocument`;
+  2. `ReaderLookups` from the volume's persons and terms;
+  3. `init(readerOf:lookups:brokenRefs:)` with the bundled broken-refs index;
+  4. `FRUSRenderNodeHTMLSerializer.reader`.
+
+  The upstream pull request's command-line reader did exactly that, for 392 of 392.
+- **Check 7's formatter and parser half in CI**, inside FRUSCoreKitTests: the six suites in `CitationFormatterTests.swift` (29 tests), CitationParserTests (26) and the three suites in `PageSpanResolverTests.swift` (23), 78 in all.
+- **CI.** The count per target gains FRUSCoreKitTests, 390. The skip guard needs no change: the kit's suites skip nothing on Linux, no line of their log matches its pattern, and none calls `Test.cancel`.
+- **Golden files.** `scripts/make-golden` on the owner's Mac at the merged commit. Only provenance may change, as rehearsed above. `tools/mac-golden` and the digest need no edit.
+
+**Notes**
+
+- **CI time, from PR #15** on GitHub's amd64 runner:
+  - the `swift` job took 568 s, the Test step 384 s, and FTS5StoreTests 372 s of that;
+  - the Build step took 71 s, from a restored cache, and the `compose` job 271 s.
+
+  The scratch package with the kit, SourceNoteKit and swift-crypto built clean in 19.8 s on Linux arm64, and the kit's tests take well under a second, so the job stays far inside its 45-minute limit.
+- **Two older issues** are listed in the upstream pull request for the owner to file:
+  - CrossRefKit's grammar predates #988: its hard-coded parity fixtures expect `.document` for `#d100fn2`, where the app returns `.footnote`. S8 should resolve cross-references with `FRUSURLScheme.resolveCrossRefTarget`, the app's own, now public.
+  - `CitationPlainText` parses Markdown on Apple platforms and strips the paired markers on Linux. The two agree on all 7,220 lines above, but a title with other Markdown syntax could print differently in S9's Cite.
+- **One behaviour moves:** `BrokenRefsIndexStore.shared` is read when the reader's converter is built, not at the first cross-reference. It loads once per launch either way.
+- **What was not run upstream:** a signed iOS run, since every run in the session was unsigned. The intermediate commits were not built one by one; upstream squash-merges.
+- **`docs/prep/`.** `s3-linux-edits.tsv` and `shims/` are superseded by the upstream pull request, which makes those changes upstream. The shims never enter this repository's code. `PLAN.md` records the owner's decisions and Mac check 2. It now has a Mac check between S3 and S4, and splits check 7 between S3 and S6.
+
+**Next.** The owner's Mac check 2 and merge of the upstream pull request, then the S3 pin-move pull request above. After it, the owner's three-volume export for the Golden files checkpoint. S6 follows, with the indexer, search and check 7's matcher half.
+
 ## Pin move: the six kits on Linux in CI
 
 4 October 2026 · branch `claude/pin-cfc0d3c` · upstream [joshbotts/FRUS-Explorer#1567](https://github.com/joshbotts/FRUS-Explorer/pull/1567), merged as `cfc0d3c`
