@@ -263,15 +263,35 @@ struct ParityExport {
     private func text(_ value: String?) -> SQLiteValue { value.map(SQLiteValue.text) ?? .null }
 }
 
-/// Writes `export` to a temporary file and summarizes it.
+/// Writes `export` to a temporary file and summarizes it, or, when `linked`, a symbolic link to
+/// it beside it.
 func summarize(_ export: ParityExport, anyVolumes: Bool = false, fullCheckLimit: Int64 = IndexSummarizer.defaultFullCheckLimit,
+               linked: Bool = false, layout: RepositoryLayout = Repository.layout,
                prepare: (URL) throws -> Void = { _ in }) throws -> IndexSummaryGolden {
     let directory = try TemporaryDirectory()
     return try withExtendedLifetime(directory) {
         let url = directory.url.appendingPathComponent("export.sqlite")
         try export.write(to: url)
         try prepare(url)
-        return try IndexSummarizer(upstream: Repository.layout.upstream, anyVolumes: anyVolumes, fullCheckLimit: fullCheckLimit)
-            .summarize(url)
+        var summarized = url
+        if linked {
+            summarized = directory.url.appendingPathComponent("link.sqlite")
+            try FileManager.default.createSymbolicLink(atPath: summarized.path, withDestinationPath: url.lastPathComponent)
+        }
+        return try IndexSummarizer(layout: layout, anyVolumes: anyVolumes, fullCheckLimit: fullCheckLimit)
+            .summarize(summarized)
     }
+}
+
+/// Writes three small stand-ins for the fixture volumes to `tei`, with their SHA256SUMS, so a
+/// test can change one without touching the repository's.
+func writeTEIFixtures(to tei: URL) throws {
+    try FileManager.default.createDirectory(at: tei, withIntermediateDirectories: true)
+    var sums = ""
+    for volume in ParityFixtures.volumes {
+        let data = Data("<TEI xml:id=\"\(volume)\"/>\n".utf8)
+        try data.write(to: tei.appendingPathComponent("\(volume).xml"))
+        sums += "\(Digest.sha256(data))  \(volume).xml\n"
+    }
+    try Data(sums.utf8).write(to: tei.appendingPathComponent("SHA256SUMS"))
 }

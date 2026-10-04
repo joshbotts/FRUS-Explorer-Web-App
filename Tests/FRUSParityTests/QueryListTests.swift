@@ -70,6 +70,53 @@ import Testing
         #expect(QueryListValidation.isDate(text) == valid)
     }
 
+    /// A fixed vector: the same digest on Linux and macOS, from text built by hand.
+    @Test func recordDigestIsAFixedVector() {
+        var filters = QueryFilters()
+        filters.phrase = "cold war"
+        filters.prefixWildcard = "negoti"
+        filters.excludedTerms = ["korea", "vietnam"]
+        filters.volumeIds = []
+        filters.yearKeys = ["1961"]
+        filters.dateRange = DateRangeFilter(earliest: "1961-01-01", latest: nil)
+        filters.documentType = "telegram"
+        filters.includeFrontMatter = false
+        filters.includeDocumentText = true
+        filters.includeNotes = false
+        var emptyRange = QueryFilters()
+        emptyRange.dateRange = DateRangeFilter(earliest: nil, latest: nil)
+        let queries = [
+            ParityQuery(id: "q001", rule: "R01", query: "berlin crisis", notes: "The manual's example."),
+            ParityQuery(id: "q002", rule: "R20", query: "caf\u{E9} \"cold\nwar\"", filters: filters),
+            ParityQuery(id: "q003", rule: "R42", query: "cafe\u{301}", filters: emptyRange),
+        ]
+        let text = """
+            4:q001 13:berlin crisis - - - - - - - - - - -
+            4:q002 16:caf\u{E9} "cold
+            war" 8:cold war 6:negoti 2 5:korea 7:vietnam 0 1 4:1961 + 10:1961-01-01 - 8:telegram 0 1 - 0
+            4:q003 6:cafe\u{301} - - - - - + - - - - - - -
+
+            """
+        #expect(Array(QueryList.recordText(queries).utf8) == Array(text.utf8))
+        #expect(QueryList.recordDigest(queries) == "de7a897c169b023a50cabbbee21bdcf29c5e92cef1e6acd13e318d77aa2ff8b0")
+
+        // The rule and the notes do not change it; the text, by its bytes, and the filters do.
+        var renoted = queries
+        renoted[0].rule = "R02"
+        renoted[1].notes = "A note."
+        #expect(QueryList.recordDigest(renoted) == QueryList.recordDigest(queries))
+        var composed = queries
+        composed[2].query = "caf\u{E9}"
+        #expect(composed == queries)
+        #expect(QueryList.recordDigest(composed) == "3308129c9a6753fedb13aca8aa93d2ba05aba6631d5e8b0c668343d10c49ad77")
+        var unranged = queries
+        unranged[2].filters.dateRange = nil
+        #expect(QueryList.recordDigest(unranged) != QueryList.recordDigest(queries))
+        var reordered = queries
+        reordered.swapAt(0, 1)
+        #expect(QueryList.recordDigest(reordered) != QueryList.recordDigest(queries))
+    }
+
     @Test func idsAreQAndDigits() {
         #expect(QueryListValidation.isQueryId("q001"))
         #expect(QueryListValidation.isQueryId("q1200"))

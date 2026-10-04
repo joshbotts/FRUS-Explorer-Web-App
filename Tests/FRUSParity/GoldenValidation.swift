@@ -17,8 +17,9 @@ public struct GoldenReport: Sendable {
 
 public enum GoldenValidation {
     /// Validates every golden file under `layout.golden`: each is present or pending; each present
-    /// one was made from the pinned app's sources, at its index version, from the current inputs;
-    /// and each is whole. `sourceDigest` defaults to the submodule's.
+    /// one was made from the pinned app's sources, at its index version, from the current inputs,
+    /// which it records in full; each is whole; and the two made from an export come from the
+    /// same one. `sourceDigest` defaults to the submodule's.
     public static func validate(_ layout: RepositoryLayout, sourceDigest: String? = nil) -> GoldenReport {
         var report = GoldenReport()
         let status: GoldenStatus
@@ -30,6 +31,7 @@ public enum GoldenValidation {
         }
         var digest = sourceDigest
         var queries: [ParityQuery]?
+        var exports: [GoldenFile: Provenance] = [:]
         for file in GoldenFile.allCases {
             guard case .present = status.states[file] else {
                 if case .pending(let reason)? = status.states[file] { report.pending[file] = reason }
@@ -64,18 +66,23 @@ public enum GoldenValidation {
                     problems = format(golden.format, IndexSummaryGolden.currentFormat, file) + indexSummaryProblems(golden)
                 }
                 report.problems += staleness(of: provenance, file: file.rawValue, layout: layout, sourceDigest: digest ?? "")
+                report.problems += inputProblems(of: provenance, file: file)
                 report.problems += problems
+                if file.needsExport { exports[file] = provenance }
             } catch {
                 report.problems.append("\(file.rawValue): \(error)")
             }
+        }
+        if let results = exports[.results], let summary = exports[.indexSummary] {
+            report.problems += sameExportProblems(results: results, indexSummary: summary)
         }
         return report
     }
 
     /// Why a golden file is stale: made from other app sources, at another index version, or from
-    /// inputs that have changed. An input whose key holds a `/` is a file, by its path from the
-    /// repository root, and must still hash the same; any other key is information, such as an
-    /// export's `research_provenance` values.
+    /// inputs that have changed. Its inputs are keyed as `Provenance.inputs` says: a file must
+    /// still hash the same, and a query list's records must still digest the same; a key without
+    /// a `/` is information, such as an export's `research_provenance` values.
     public static func staleness(of provenance: Provenance, file: String, layout: RepositoryLayout, sourceDigest: String) -> [String] {
         var problems: [String] = []
         if provenance.sourceDigest != sourceDigest {
@@ -85,6 +92,22 @@ public enum GoldenValidation {
             problems.append(GoldenError.stale(file, "it was made at index version \(provenance.indexVersion); the pin's is \(IndexCompatibility.supportedIndexVersion)").description)
         }
         for key in provenance.inputs.keys.sorted() where key.contains("/") {
+            if key.hasSuffix(Provenance.recordsSuffix) {
+                let path = String(key.dropLast(Provenance.recordsSuffix.count))
+                let url = layout.root.appendingPathComponent(path)
+                guard FileManager.default.fileExists(atPath: url.path) else {
+                    problems.append(GoldenError.stale(file, "its input \(path) no longer exists").description)
+                    continue
+                }
+                do {
+                    if QueryList.recordDigest(try QueryList.load(url)) != provenance.inputs[key] {
+                        problems.append(GoldenError.stale(file, "the queries of its input \(path) have changed").description)
+                    }
+                } catch {
+                    problems.append("\(file): its input \(path) cannot be read: \(error)")
+                }
+                continue
+            }
             let url = layout.root.appendingPathComponent(key)
             guard let current = try? ParityFormat.Digest.sha256(contentsOf: url) else {
                 problems.append(GoldenError.stale(file, "its input \(key) no longer exists").description)
@@ -95,6 +118,57 @@ public enum GoldenValidation {
             }
         }
         return problems
+    }
+
+    /// The `research_provenance` values a golden file made from an export must record: those that
+    /// say which export it was and which build made it.
+    public static let requiredStampKeys = [
+        "app_build", "current_index_version", "exported_at", "installed_index_version", "my_writing_included",
+    ].map { "research_provenance.\($0)" }
+
+    /// The input keys each golden file must record, so that a change to any of its inputs makes
+    /// it stale: the fixtures for whatever an index or a render was made from, the query list's
+    /// records for whatever was made from queries, and the export's stamp.
+    public static func requiredInputs(_ file: GoldenFile) -> [String] {
+        let records = Provenance.recordsKey(RepositoryLayout.queriesPath)
+        switch file {
+        case .render: return ParityFixtures.teiInputKeys
+        case .expressions: return [records]
+        case .results: return [records] + ParityFixtures.teiInputKeys + requiredStampKeys
+        case .indexSummary: return ParityFixtures.teiInputKeys + requiredStampKeys
+        }
+    }
+
+    /// Each required input a golden file does not record and, for one made from an export, each
+    /// stamp value that contradicts the provenance: an export from another build, or at another
+    /// index version.
+    public static func inputProblems(of provenance: Provenance, file: GoldenFile) -> [String] {
+        var problems: [String] = []
+        let missing = requiredInputs(file).filter { provenance.inputs[$0] == nil }
+        if !missing.isEmpty {
+            problems.append("\(file.rawValue): it was made without recording \(missing.joined(separator: ", ")). Run scripts/make-golden")
+        }
+        guard file.needsExport else { return problems }
+        let build = provenance.appBuild.map(String.init) ?? "none"
+        if let stamped = provenance.inputs["research_provenance.app_build"], stamped != build {
+            problems.append("\(file.rawValue): its export was made by app build \(stamped), but it records the pin's build as \(build): export from the pinned build")
+        }
+        for key in ["research_provenance.installed_index_version", "research_provenance.current_index_version"] {
+            if let stamped = provenance.inputs[key], stamped != String(provenance.indexVersion) {
+                problems.append("\(file.rawValue): its export's \(key) is \(stamped), but it was made at index version \(provenance.indexVersion)")
+            }
+        }
+        return problems
+    }
+
+    /// The results and the index summary must come from one export: every `research_provenance`
+    /// value both record must be the same.
+    public static func sameExportProblems(results: Provenance, indexSummary: Provenance) -> [String] {
+        let keys = Set(results.inputs.keys).intersection(indexSummary.inputs.keys).filter { $0.hasPrefix("research_provenance.") }
+        let differing = keys.sorted().filter { results.inputs[$0] != indexSummary.inputs[$0] }
+        guard !differing.isEmpty else { return [] }
+        let detail = differing.map { "\($0) is \(results.inputs[$0]!) in one and \(indexSummary.inputs[$0]!) in the other" }
+        return ["\(GoldenFile.results.rawValue) and \(GoldenFile.indexSummary.rawValue) come from different exports: \(detail.joined(separator: "; ")). Make both from one export with scripts/make-golden --export"]
     }
 
     /// Check 4's golden HTML: each row's file is there with the manifest's size and SHA-256, no

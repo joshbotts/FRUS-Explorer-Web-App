@@ -11,13 +11,24 @@ import Testing
 @Suite struct GoldenTests {
     // MARK: - The committed golden files
 
+    /// Only a file made from the owner's export may wait. One made from the app's source alone is
+    /// made in the session that changes what it depends on.
     @Test func committedGoldenFilesAreCurrentAndWhole() throws {
         let report = GoldenValidation.validate(Repository.layout)
         #expect(report.problems.isEmpty, "\(report.problems.joined(separator: "\n"))")
         #expect(report.present.count + report.pending.count == GoldenFile.allCases.count)
         for file in GoldenFile.allCases {
-            if let reason = report.pending[file] { print("\(file.rawValue) is pending: it waits for \(reason)") }
+            guard let reason = report.pending[file] else { continue }
+            if file.needsExport {
+                print("\(file.rawValue) is pending: it waits for \(reason)")
+            } else {
+                Issue.record(Self.mustNotWait(file))
+            }
         }
+    }
+
+    static func mustNotWait(_ file: GoldenFile) -> Comment {
+        "\(file.rawValue) is made from the app's source alone and must be committed, not pending: run scripts/make-golden"
     }
 
     @Test func eachPendingFileSaysWhatItWaitsFor() throws {
@@ -29,8 +40,8 @@ import Testing
         }
     }
 
-    /// Check 4's golden HTML is whole, once `scripts/make-golden` has made it. The comparison
-    /// with Linux's own rendering waits for the renderer (session 3).
+    /// Check 4's golden HTML is whole. It comes from the app's source alone, so it is never
+    /// pending. The comparison with Linux's own rendering waits for the renderer (session 3).
     @Test func renderGoldenIsWhole() throws {
         let status = try GoldenStatus(directory: Repository.layout.golden)
         switch status.states[.render] {
@@ -39,8 +50,8 @@ import Testing
             let problems = GoldenValidation.renderProblems(golden, directory: status.url(.render).deletingLastPathComponent())
             #expect(problems.isEmpty, "\(problems.joined(separator: "\n"))")
             print("\(GoldenFile.render.rawValue): \(golden.rows.count) documents, each present and matching its manifest row")
-        case .pending(let reason):
-            print("\(GoldenFile.render.rawValue) is pending: it waits for \(reason)")
+        case .pending:
+            Issue.record(Self.mustNotWait(.render))
         case nil:
             Issue.record("GoldenStatus has no state for \(GoldenFile.render.rawValue)")
         }
@@ -171,7 +182,149 @@ import Testing
         #expect(GoldenValidation.indexSummaryProblems(failing) == ["index-summary.json: frus_documents.docsize_orphans: is 2, expected 0"])
     }
 
+    // MARK: - Required inputs
+
+    /// Each golden file records every input it depends on; without one it could not go stale.
+    @Test(arguments: GoldenFile.allCases)
+    func eachRequiredInputMustBeRecorded(_ file: GoldenFile) throws {
+        let repository = try GoldenRepository()
+        try writePending(in: repository.layout.golden, except: .render, .expressions, .results, .indexSummary)
+        for each in GoldenFile.allCases { try repository.write(each) }
+        #expect(GoldenValidation.validate(repository.layout, sourceDigest: "current").problems == [])
+
+        let required = GoldenValidation.requiredInputs(file)
+        #expect(Set(required).isSubset(of: try repository.inputs(file).keys))
+        for key in required {
+            try repository.write(file) { $0.inputs[key] = nil }
+            #expect(GoldenValidation.validate(repository.layout, sourceDigest: "current").problems
+                == ["\(file.rawValue): it was made without recording \(key). Run scripts/make-golden"])
+        }
+    }
+
+    @Test func requiredInputsNameTheFixturesTheQueriesAndTheStamp() {
+        let tei = ["fixtures/tei/frus1894Nicaragua.xml", "fixtures/tei/frus1961-63v06.xml",
+                   "fixtures/tei/frus1969-76ve09p1.xml", "fixtures/tei/SHA256SUMS"]
+        let stamp = ["app_build", "current_index_version", "exported_at", "installed_index_version", "my_writing_included"]
+            .map { "research_provenance.\($0)" }
+        #expect(GoldenValidation.requiredInputs(.render) == tei)
+        #expect(GoldenValidation.requiredInputs(.expressions) == ["fixtures/parity/queries.jsonl#records"])
+        #expect(GoldenValidation.requiredInputs(.results) == ["fixtures/parity/queries.jsonl#records"] + tei + stamp)
+        #expect(GoldenValidation.requiredInputs(.indexSummary) == tei + stamp)
+    }
+
+    /// A file made from an export must come from the pinned build, at the pin's index version.
+    @Test(arguments: [GoldenFile.results, .indexSummary])
+    func anExportFromAnotherBuildIsReported(_ file: GoldenFile) throws {
+        let repository = try GoldenRepository()
+        try writePending(in: repository.layout.golden, except: file)
+        try repository.write(file)
+        #expect(GoldenValidation.validate(repository.layout, sourceDigest: "current").problems == [])
+
+        try repository.write(file) { $0.inputs["research_provenance.app_build"] = "48" }
+        #expect(GoldenValidation.validate(repository.layout, sourceDigest: "current").problems
+            == ["\(file.rawValue): its export was made by app build 48, but it records the pin's build as 49: export from the pinned build"])
+
+        try repository.write(file) { $0.appBuild = nil }
+        #expect(GoldenValidation.validate(repository.layout, sourceDigest: "current").problems
+            == ["\(file.rawValue): its export was made by app build 49, but it records the pin's build as none: export from the pinned build"])
+
+        try repository.write(file) {
+            $0.inputs["research_provenance.installed_index_version"] = "64"
+            $0.inputs["research_provenance.current_index_version"] = "66"
+        }
+        #expect(GoldenValidation.validate(repository.layout, sourceDigest: "current").problems == [
+            "\(file.rawValue): its export's research_provenance.installed_index_version is 64, but it was made at index version 65",
+            "\(file.rawValue): its export's research_provenance.current_index_version is 66, but it was made at index version 65",
+        ])
+    }
+
+    /// The results and the index summary must come from one export.
+    @Test func theTwoExportFilesMustComeFromOneExport() throws {
+        let repository = try GoldenRepository()
+        try writePending(in: repository.layout.golden, except: .results, .indexSummary)
+        try repository.write(.results)
+        try repository.write(.indexSummary)
+        #expect(GoldenValidation.validate(repository.layout, sourceDigest: "current").problems == [])
+
+        try repository.write(.indexSummary) {
+            $0.inputs["research_provenance.exported_at"] = "2026-11-01T09:00:00Z"
+            $0.inputs["research_provenance.semantic_provenance_digest"] = "only in one"
+        }
+        #expect(GoldenValidation.validate(repository.layout, sourceDigest: "current").problems == [
+            "queries.results.json and index-summary.json come from different exports: research_provenance.exported_at is 2026-10-03T15:14:19Z in one and 2026-11-01T09:00:00Z in the other. Make both from one export with scripts/make-golden --export",
+        ])
+    }
+
     static let provenance = Provenance(tool: "frus-parity tests", upstreamCommit: nil, appBuild: 49,
                                        indexVersion: IndexCompatibility.supportedIndexVersion, sourceDigest: "",
                                        inputs: [:], platform: .current())
+}
+
+/// A repository of its own in a temporary directory: stand-in fixtures, a query list, and the
+/// golden files a test writes, each made from them with every input recorded.
+struct GoldenRepository {
+    let directory: TemporaryDirectory
+    let layout: RepositoryLayout
+
+    static let queries = [ParityQuery(id: "q001", rule: "R01", query: "treaty"), ParityQuery(id: "q002", rule: "R01", query: "canal")]
+    static let stamp = [
+        "app_build": "49", "app_version": "0.2", "current_index_version": "65", "exported_at": "2026-10-03T15:14:19Z",
+        "installed_index_version": "65", "my_writing_included": "0",
+    ]
+
+    init() throws {
+        directory = try TemporaryDirectory()
+        layout = RepositoryLayout(root: directory.url)
+        try writeTEIFixtures(to: layout.tei)
+        try writeQueries(try Self.queries.map(ParseParityTests.line), to: layout.queries)
+    }
+
+    /// What the tools record for `file`: the fixtures, the query list's records and the stamp, as
+    /// it depends on them.
+    func inputs(_ file: GoldenFile) throws -> [String: String] {
+        let tei = try ParityFixtures.verifiedInputs(tei: layout.tei)
+        let records = [Provenance.recordsKey(RepositoryLayout.queriesPath): QueryList.recordDigest(Self.queries)]
+        var inputs: [String: String]
+        switch file {
+        case .render, .indexSummary: inputs = tei
+        case .expressions: inputs = records
+        case .results: inputs = tei.merging(records) { a, _ in a }
+        }
+        if file.needsExport {
+            for (key, value) in Self.stamp { inputs["research_provenance.\(key)"] = value }
+        }
+        return inputs
+    }
+
+    /// Writes `file`, whole, made from this repository's inputs, with `edit` applied to its provenance.
+    func write(_ file: GoldenFile, _ edit: (inout Provenance) -> Void = { _ in }) throws {
+        var provenance = Provenance(tool: "frus-parity tests", upstreamCommit: nil, appBuild: 49,
+                                    indexVersion: IndexCompatibility.supportedIndexVersion, sourceDigest: "current",
+                                    inputs: try inputs(file), platform: .current())
+        edit(&provenance)
+        let url = layout.golden.appendingPathComponent(file.rawValue)
+        switch file {
+        case .render:
+            var rows: [RenderRow] = []
+            for volume in ParityFixtures.volumes {
+                let html = "<p class=\"doc\">\(volume) d1</p>"
+                let path = url.deletingLastPathComponent().appendingPathComponent(RenderGolden.htmlPath(volume: volume, document: "d1"))
+                try FileManager.default.createDirectory(at: path.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try Data(html.utf8).write(to: path)
+                rows.append(RenderRow(volume: volume, document: "d1", html: html))
+            }
+            try GoldenJSON.write(RenderGolden(provenance: provenance, configuration: "tests", rows: rows), to: url)
+        case .expressions:
+            var golden = ParseParityTests.golden(for: Self.queries, sourceDigest: "current")
+            golden.provenance = provenance
+            try GoldenJSON.write(golden, to: url)
+        case .results:
+            let records = Self.queries.map { ResultRecord(id: $0.id, count: 0, top: [], scoreBits: []) }
+            try GoldenJSON.write(ResultsGolden(provenance: provenance, queries: records), to: url)
+        case .indexSummary:
+            var summary = try summarize(ParityExport())
+            summary.provenance = provenance
+            try GoldenJSON.write(summary, to: url)
+        }
+    }
 }

@@ -83,6 +83,12 @@ public enum ParseParity {
 
     /// Every field where Linux parses a query differently from the golden file, and every query
     /// the golden file lacks or holds twice. Empty when check 3's parse comparison passes.
+    ///
+    /// Besides the parse, it checks what the parse decides of the golden search record: the exact
+    /// terms of every query, and for a query in the default scope, its MATCH expressions, which
+    /// are the unscoped parse's for both tables, and whether the search refused it, which it does
+    /// when the parse has no expression. A query outside the default scope compiles
+    /// column-scoped expressions inside SearchService, so Linux compares those in session 6.
     public static func mismatches(queries: [ParityQuery], golden: ExpressionsGolden) -> [ParseMismatch] {
         var records: [String: ExpressionRecord] = [:]
         var mismatches: [ParseMismatch] = []
@@ -97,45 +103,66 @@ public enum ParseParity {
                 mismatches.append(ParseMismatch(id: query.id, field: "record", golden: "missing", linux: "parsed"))
                 continue
             }
-            mismatches += differences(id: query.id, golden: record.parse, linux: parse(query))
+            let linux = parse(query)
+            mismatches += differences(id: query.id, golden: record.parse, linux: linux)
+            let search = record.search
+            mismatches += compare(id: query.id, field: "search.exactTerms", search.exactTerms, linux.exactTerms)
+            if query.filters.isDefaultScope {
+                mismatches += compare(id: query.id, field: "search.corpus", search.corpus, linux.expression)
+                mismatches += compare(id: query.id, field: "search.userContent", search.userContent, linux.expression)
+                if (search.error != nil) != (linux.expression == nil) {
+                    mismatches.append(ParseMismatch(
+                        id: query.id, field: "search.error", golden: show(search.error),
+                        linux: linux.expression == nil ? "no expression, so a refusal" : "an expression, so no refusal"))
+                }
+            }
         }
         return mismatches
     }
 
-    /// The fields of two parse records that differ.
+    /// The fields of two parse records that differ. Values are compared as their JSON bytes,
+    /// never by Swift's `==`, which takes canonically equivalent strings, such as `é` and `e`
+    /// with a combining accent, as equal.
     public static func differences(id: String, golden: ParseRecord, linux: ParseRecord) -> [ParseMismatch] {
         var mismatches: [ParseMismatch] = []
-        func compare<T: Encodable & Equatable>(_ field: String, _ a: T, _ b: T) {
-            if a != b { mismatches.append(ParseMismatch(id: id, field: field, golden: show(a), linux: show(b))) }
-        }
-        compare("expression", golden.expression, linux.expression)
-        compare("exactTerms", golden.exactTerms, linux.exactTerms)
-        compare("isApproximate", golden.isApproximate, linux.isApproximate)
-        compare("malformedProximity", golden.malformedProximity, linux.malformedProximity)
+        mismatches += compare(id: id, field: "expression", golden.expression, linux.expression)
+        mismatches += compare(id: id, field: "exactTerms", golden.exactTerms, linux.exactTerms)
+        mismatches += compare(id: id, field: "isApproximate", golden.isApproximate, linux.isApproximate)
+        mismatches += compare(id: id, field: "malformedProximity", golden.malformedProximity, linux.malformedProximity)
         for (field, a, b) in [("operands", golden.operands, linux.operands),
                               ("droppedOperands", golden.droppedOperands, linux.droppedOperands)] {
             guard a.count == b.count else {
-                compare(field, a, b)
+                mismatches += compare(id: id, field: field, a, b)
                 continue
             }
-            for (index, (x, y)) in zip(a, b).enumerated() where x != y {
+            for (index, (x, y)) in zip(a, b).enumerated() where json(x) != json(y) {
                 let name = "\(field)[\(index)]"
-                compare("\(name).text", x.text, y.text)
-                compare("\(name).rendered", x.rendered, y.rendered)
-                compare("\(name).kind", x.kind, y.kind)
-                compare("\(name).isNegated", x.isNegated, y.isNegated)
-                compare("\(name).isExact", x.isExact, y.isExact)
-                compare("\(name).isExactApplied", x.isExactApplied, y.isExactApplied)
-                compare("\(name).source", x.source, y.source)
+                mismatches += compare(id: id, field: "\(name).text", x.text, y.text)
+                mismatches += compare(id: id, field: "\(name).rendered", x.rendered, y.rendered)
+                mismatches += compare(id: id, field: "\(name).kind", x.kind, y.kind)
+                mismatches += compare(id: id, field: "\(name).isNegated", x.isNegated, y.isNegated)
+                mismatches += compare(id: id, field: "\(name).isExact", x.isExact, y.isExact)
+                mismatches += compare(id: id, field: "\(name).isExactApplied", x.isExactApplied, y.isExactApplied)
+                mismatches += compare(id: id, field: "\(name).source", x.source, y.source)
             }
         }
         return mismatches
+    }
+
+    /// One mismatch when the two values' JSON bytes differ, or none.
+    static func compare<T: Encodable>(id: String, field: String, _ golden: T, _ linux: T) -> [ParseMismatch] {
+        json(golden) == json(linux) ? [] : [ParseMismatch(id: id, field: field, golden: show(golden), linux: show(linux))]
+    }
+
+    /// A value as compact JSON with sorted keys, the bytes `compare` compares.
+    static func json<T: Encodable>(_ value: T) -> Data? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return try? encoder.encode(value)
     }
 
     /// A value as compact JSON, so strings show their quotes and nil shows as null.
     static func show<T: Encodable>(_ value: T) -> String {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        return (try? encoder.encode(value)).map { String(decoding: $0, as: UTF8.self) } ?? String(describing: value)
+        json(value).map { String(decoding: $0, as: UTF8.self) } ?? String(describing: value)
     }
 }

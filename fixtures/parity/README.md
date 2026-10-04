@@ -6,12 +6,12 @@ Every rule has at least one query, and a query with a non-zero count on the thre
 
 ## Ids
 
-The golden files key their records by id and record the SHA-256 of `queries.jsonl`, so ids stay stable:
+The golden files key their records by id and record a digest of every query's id, text and filters (`QueryList.recordDigest`), so ids stay stable:
 
 - Never renumber, reorder or reuse an id. Ids increase down `queries.jsonl`, and a gap is a retired id.
 - Add a query by appending it with the next unused id.
 - Change a query by appending the new version under a new id and removing the old line, which retires its id.
-- After any change, regenerate the golden files with `scripts/make-golden`: the expressions on the Mac, and the counts and results from a three-volume export.
+- After any change but to a note or a rule, regenerate the golden files with `scripts/make-golden`: the expressions on the Mac, and the counts and results from a three-volume export.
 
 ## Counts
 

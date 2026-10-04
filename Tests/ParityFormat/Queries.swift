@@ -99,6 +99,42 @@ public enum QueryList {
         }
         return rules
     }
+
+    /// SHA-256 of `recordText(queries)`: what a golden file made from the list records under
+    /// `Provenance.recordsKey`, so that a changed note or rule leaves it current.
+    public static func recordDigest(_ queries: [ParityQuery]) -> String {
+        Digest.sha256(recordText(queries))
+    }
+
+    /// The fields that decide a query's results, as text built by hand, so that it is the same
+    /// bytes on every platform (JSONEncoder escapes differently on Linux and macOS). One line per
+    /// query, in list order: its id, its text, then each `QueryFilters` field in declaration order,
+    /// separated by spaces. A string is its length in UTF-8 bytes, a colon and its bytes; an absent
+    /// value is `-`; a list is its count, then its strings; a switch is `0` or `1`. A date range is
+    /// `-` when absent, and otherwise `+` and its two bounds: an empty range is not an absent one,
+    /// since an active range leaves out undated documents (IndexingPipeline.swift:4351-4354). The
+    /// rule and the notes are left out: they do not change what the app returns.
+    public static func recordText(_ queries: [ParityQuery]) -> String {
+        func string(_ value: String?) -> String { value.map { "\($0.utf8.count):\($0)" } ?? "-" }
+        func list(_ values: [String]?) -> String {
+            values.map { ([String($0.count)] + $0.map(string)).joined(separator: " ") } ?? "-"
+        }
+        func flag(_ value: Bool?) -> String { value.map { $0 ? "1" : "0" } ?? "-" }
+        var text = ""
+        for query in queries {
+            let filters = query.filters
+            let fields = [
+                string(query.id), string(query.query),
+                string(filters.phrase), string(filters.prefixWildcard), list(filters.excludedTerms),
+                list(filters.volumeIds), list(filters.yearKeys),
+                filters.dateRange.map { "+ \(string($0.earliest)) \(string($0.latest))" } ?? "-",
+                string(filters.documentType), flag(filters.includeFrontMatter),
+                flag(filters.includeDocumentText), flag(filters.includeSummaries), flag(filters.includeNotes),
+            ]
+            text += fields.joined(separator: " ") + "\n"
+        }
+        return text
+    }
 }
 
 // MARK: - Parse records
@@ -268,14 +304,17 @@ public enum ResultComparison: Equatable, Sendable {
         return true
     }
 
+    /// Compares ids and errors by their UTF-8 bytes, never by Swift's `==`, which takes canonically
+    /// equivalent strings, such as `é` and `e` with a combining accent, as equal.
     public static func compare(golden: ResultRecord, candidate: ResultRecord) -> ResultComparison {
-        if golden.error != candidate.error {
+        if !sameBytes(golden.error, candidate.error) {
             return .different("error: golden \(golden.error ?? "none"), candidate \(candidate.error ?? "none")")
         }
         if golden.count != candidate.count {
             return .different("count: golden \(golden.count.map(String.init) ?? "none"), candidate \(candidate.count.map(String.init) ?? "none")")
         }
-        if golden.top == candidate.top { return .identical }
+        let goldenTop = golden.top.map(bytes), candidateTop = candidate.top.map(bytes)
+        if goldenTop == candidateTop { return .identical }
         if golden.top.count != candidate.top.count {
             return .different("top: golden has \(golden.top.count) results, candidate \(candidate.top.count)")
         }
@@ -293,21 +332,31 @@ public enum ResultComparison: Equatable, Sendable {
 
         var permuted: [ClosedRange<Int>] = []
         for group in groups {
-            let expected = Array(golden.top[group])
-            let actual = Array(candidate.top[group])
+            let expected = Array(goldenTop[group])
+            let actual = Array(candidateTop[group])
             if expected == actual { continue }
             // The last group may continue past position 50: any of its tail may fill it.
             let isLast = group.upperBound == golden.top.count - 1
             let lastScore = golden.scoreBits.last
-            let tail = isLast ? zip(golden.tieTail, golden.tieTailScoreBits).filter { $0.1 == lastScore }.map(\.0) : []
+            let tail = isLast ? zip(golden.tieTail, golden.tieTailScoreBits).filter { $0.1 == lastScore }.map { bytes($0.0) } : []
             let allowed = Set(expected + tail)
             guard Set(actual).count == actual.count, Set(actual).isSubset(of: allowed),
                   isLast || Set(actual) == Set(expected) else {
-                let first = group.first { golden.top[$0] != candidate.top[$0] } ?? group.lowerBound
+                let first = group.first { goldenTop[$0] != candidateTop[$0] } ?? group.lowerBound
                 return .different("top: position \(first + 1) is \(candidate.top[first]), golden \(golden.top[first])")
             }
             permuted.append(group)
         }
         return permuted.isEmpty ? .identical : .tiePermutation(groups: permuted)
+    }
+
+    private static func bytes(_ string: String) -> [UInt8] { Array(string.utf8) }
+
+    private static func sameBytes(_ a: String?, _ b: String?) -> Bool {
+        switch (a, b) {
+        case (nil, nil): true
+        case (let a?, let b?): a.utf8.elementsEqual(b.utf8)
+        default: false
+        }
     }
 }

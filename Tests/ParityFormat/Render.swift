@@ -49,12 +49,14 @@ public struct RenderRow: Codable, Equatable, Sendable {
 public enum RenderDiff {
     /// Where two HTML fragments first differ, for a failure message. The serializer writes one
     /// line, so this splits at tag boundaries and reports the first differing piece with a
-    /// little context.
+    /// little context. Fragments and pieces are compared by their UTF-8 bytes, never by Swift's
+    /// `==`, which takes canonically equivalent text, such as `é` and `e` with a combining accent,
+    /// as equal.
     public static func firstDifference(golden: String, candidate: String, context: Int = 2) -> String? {
-        if golden == candidate { return nil }
+        if golden.utf8.elementsEqual(candidate.utf8) { return nil }
         let a = pieces(golden)
         let b = pieces(candidate)
-        let index = (0..<min(a.count, b.count)).first { a[$0] != b[$0] } ?? min(a.count, b.count)
+        let index = (0..<min(a.count, b.count)).first { !a[$0].utf8.elementsEqual(b[$0].utf8) } ?? min(a.count, b.count)
         let from = max(0, index - context)
         func excerpt(_ p: [String]) -> String {
             p.indices.contains(index) ? p[from...min(p.count - 1, index + context)].joined(separator: "") : "(ends)"
@@ -62,17 +64,18 @@ public enum RenderDiff {
         return "piece \(index + 1) of \(a.count) golden, \(b.count) candidate\n  golden:    \(excerpt(a))\n  candidate: \(excerpt(b))"
     }
 
+    /// The fragment split before each `<`, scalar by scalar, so the pieces hold its exact bytes.
     static func pieces(_ html: String) -> [String] {
         var result: [String] = []
-        var current = ""
-        for character in html {
-            if character == "<", !current.isEmpty {
-                result.append(current)
-                current = ""
+        var current = String.UnicodeScalarView()
+        for scalar in html.unicodeScalars {
+            if scalar == "<", !current.isEmpty {
+                result.append(String(current))
+                current = String.UnicodeScalarView()
             }
-            current.append(character)
+            current.append(scalar)
         }
-        if !current.isEmpty { result.append(current) }
+        if !current.isEmpty { result.append(String(current)) }
         return result
     }
 }

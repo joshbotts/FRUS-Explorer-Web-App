@@ -39,7 +39,7 @@ enum RefusalCase: String, CaseIterable, Sendable {
     case userVersion, revisionIndexVersion, stampIndexVersion, stampFTSVersion
     case rollupMemberMissing, personWithoutMember, rollupEmpty
     case extraTable, extraView, extraFullTextTable, extraColumn, missingTable
-    case walInUse, notADatabase
+    case walInUse, hotJournal, notADatabase
 
     var kind: SummaryRefusal.Kind {
         switch self {
@@ -48,7 +48,7 @@ enum RefusalCase: String, CaseIterable, Sendable {
         case .userVersion, .revisionIndexVersion, .stampIndexVersion, .stampFTSVersion: .versions
         case .rollupMemberMissing, .personWithoutMember, .rollupEmpty: .staleRollup
         case .extraTable, .extraView, .extraFullTextTable, .extraColumn, .missingTable: .schema
-        case .walInUse: .inUse
+        case .walInUse, .hotJournal: .inUse
         case .notADatabase: .notADatabase
         }
     }
@@ -75,7 +75,7 @@ enum RefusalCase: String, CaseIterable, Sendable {
         case .extraColumn: export.edits = ["ALTER TABLE terms ADD COLUMN source TEXT"]
         case .missingTable: export.edits = ["DROP TABLE terms"]
         case .walInUse: export.walMode = true
-        case .notADatabase: break
+        case .hotJournal, .notADatabase: break
         }
         return export
     }
@@ -84,9 +84,18 @@ enum RefusalCase: String, CaseIterable, Sendable {
     func prepare(_ url: URL) throws {
         switch self {
         case .walInUse: try Data("an uncheckpointed page".utf8).write(to: URL(fileURLWithPath: url.path + "-wal"))
+        // A rollback journal's header starts with its magic number, so its first byte is not zero.
+        case .hotJournal: try Self.journal(first: 0xD9).write(to: URL(fileURLWithPath: url.path + "-journal"))
         case .notADatabase: try Data(repeating: 0x41, count: 4_096).write(to: url)
         default: break
         }
+    }
+
+    /// A rollback journal of one 512-byte header: SQLite's magic number, or zeros once committed.
+    static func journal(first: UInt8) -> Data {
+        var data = Data(count: 512)
+        if first != 0 { data.replaceSubrange(0..<8, with: [first, 0xD5, 0x05, 0xF9, 0x20, 0xA1, 0x63, 0xD7]) }
+        return data
     }
 }
 
@@ -166,6 +175,56 @@ enum RefusalCase: String, CaseIterable, Sendable {
         #expect(error?.kind == refusal.kind, "\(error?.reason ?? "no refusal")")
     }
 
+    /// What a committed transaction leaves, an empty or zeroed journal, is no refusal.
+    @Test func aZeroedOrEmptyJournalIsAccepted() throws {
+        let base = try summarize(ParityExport())
+        for journal in [Data(), RefusalCase.journal(first: 0)] {
+            let summary = try summarize(ParityExport()) { url in
+                try journal.write(to: URL(fileURLWithPath: url.path + "-journal"))
+            }
+            #expect(IndexSummaryComparison.differences(golden: base, candidate: summary).isEmpty)
+        }
+    }
+
+    /// A link is resolved first: the files beside it and its size are the database's own.
+    @Test func aSymbolicLinkIsSummarizedAsItsDatabase() throws {
+        let refusal = #expect(throws: SummaryRefusal.self) {
+            _ = try summarize(RefusalCase.walInUse.export, linked: true, prepare: RefusalCase.walInUse.prepare)
+        }
+        #expect(refusal?.kind == .inUse, "\(refusal?.reason ?? "no refusal")")
+        let hot = #expect(throws: SummaryRefusal.self) {
+            _ = try summarize(RefusalCase.hotJournal.export, linked: true, prepare: RefusalCase.hotJournal.prepare)
+        }
+        #expect(hot?.kind == .inUse, "\(hot?.reason ?? "no refusal")")
+
+        // A link is a few bytes, the database many pages: the size limit applies to the database.
+        let summary = try summarize(ParityExport(), fullCheckLimit: 4_096, linked: true)
+        #expect(summary.information.fileBytes > 4_096)
+        #expect(summary.information.notes.contains("The file is above 4096 bytes, so the instance-mode vocabularies and the integrity checks were left out."))
+        #expect(summary.gating.digests.keys.filter { $0.hasSuffix(".vocab_instance") }.isEmpty)
+        #expect(summary.gating.checks["integrity"] == nil)
+        let direct = try summarize(ParityExport(), fullCheckLimit: 4_096)
+        #expect(IndexSummaryComparison.differences(golden: direct, candidate: summary).isEmpty)
+    }
+
+    /// The summary records the fixtures it stands for, so it refuses fixtures that do not match
+    /// their sums. A summary of any volumes stands for no fixtures.
+    @Test func fixturesMustMatchTheirSums() throws {
+        let directory = try TemporaryDirectory()
+        try withExtendedLifetime(directory) {
+            let layout = RepositoryLayout(root: directory.url)
+            try writeTEIFixtures(to: layout.tei)
+            try Data("<TEI>changed</TEI>".utf8).write(to: layout.tei.appendingPathComponent("frus1894Nicaragua.xml"))
+            let refusal = #expect(throws: SummaryRefusal.self) { _ = try summarize(ParityExport(), layout: layout) }
+            #expect(refusal?.kind == .fixtures)
+            #expect(refusal?.reason.hasPrefix("fixtures/tei: frus1894Nicaragua.xml does not match SHA256SUMS.") == true)
+        }
+        var export = ParityExport()
+        export.volumes = ["frus1894Nicaragua", "frus1961-63v06"]
+        let any = try summarize(export, anyVolumes: true)
+        #expect(any.provenance.inputs.keys.filter { $0.contains("/") }.isEmpty)
+    }
+
     @Test func anyVolumesSummarizesAnotherSet() throws {
         var export = ParityExport()
         export.volumes = ["frus1894Nicaragua", "frus1961-63v06"]
@@ -207,6 +266,10 @@ enum RefusalCase: String, CaseIterable, Sendable {
         #expect(summary.provenance.appBuild == 49)
         #expect(summary.provenance.sourceDigest == (try UpstreamDigest.compute(upstream: Repository.layout.upstream)))
         #expect(summary.provenance.inputs["research_provenance.exported_at"] == "2026-10-03T15:14:19Z")
+        for (key, digest) in try ParityFixtures.verifiedInputs(tei: Repository.layout.tei) {
+            #expect(summary.provenance.inputs[key] == digest, "\(key)")
+        }
+        #expect(GoldenValidation.inputProblems(of: summary.provenance, file: .indexSummary).isEmpty)
         #expect(summary.gating.volumes == ParityFixtures.volumes)
         #expect(summary.gating.checks == IndexGating.expectedChecks)
         // Every hashed statement records its SQL, and its volumes' rows add up to its own.

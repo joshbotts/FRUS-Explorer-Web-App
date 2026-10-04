@@ -6,6 +6,46 @@ import Foundation
 /// The three fixture volumes every parity check runs on (`fixtures/tei`).
 public enum ParityFixtures {
     public static let volumes = ["frus1894Nicaragua", "frus1961-63v06", "frus1969-76ve09p1"]
+
+    /// The fixtures' folder, from the repository root.
+    public static let teiPath = "fixtures/tei"
+
+    /// The input keys of the fixture files, as a golden file made from them records them: each
+    /// volume's TEI, then `SHA256SUMS`.
+    public static var teiInputKeys: [String] {
+        volumes.map { "\(teiPath)/\($0).xml" } + ["\(teiPath)/SHA256SUMS"]
+    }
+
+    /// Checks `tei`, the fixtures' folder, against its `SHA256SUMS`: it lists exactly the fixture
+    /// volumes, the folder holds no other TEI, and each file matches its line. Returns the SHA-256
+    /// of each of `teiInputKeys`, by key. Throws `GoldenError.malformed` otherwise.
+    public static func verifiedInputs(tei: URL) throws -> [String: String] {
+        let sums: Data
+        do {
+            sums = try Data(contentsOf: tei.appendingPathComponent("SHA256SUMS"))
+        } catch {
+            throw GoldenError.malformed(teiPath, "SHA256SUMS could not be read: \(error.localizedDescription)")
+        }
+        var listed: [String: String] = [:]
+        for line in String(decoding: sums, as: UTF8.self).split(separator: "\n") {
+            let fields = line.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+            guard fields.count == 2 else { throw GoldenError.malformed(teiPath, "SHA256SUMS cannot read \"\(line)\"") }
+            listed[fields[1]] = fields[0]
+        }
+        let expected = Set(volumes.map { "\($0).xml" })
+        let present = Set((try? FileManager.default.contentsOfDirectory(atPath: tei.path)) ?? []).filter { $0.hasSuffix(".xml") }
+        guard Set(listed.keys) == expected, present == expected else {
+            throw GoldenError.malformed(teiPath, "it must hold exactly \(expected.sorted().joined(separator: ", ")), each listed in SHA256SUMS")
+        }
+        var inputs: [String: String] = [:]
+        for file in expected.sorted() {
+            let digest = try Digest.sha256(contentsOf: tei.appendingPathComponent(file))
+            guard digest == listed[file] else { throw GoldenError.malformed(teiPath, "\(file) does not match SHA256SUMS") }
+            inputs["\(teiPath)/\(file)"] = digest
+        }
+        inputs["\(teiPath)/SHA256SUMS"] = Digest.sha256(sums)
+        return inputs
+    }
 }
 
 /// What made a golden file, and from which inputs. A test compares `sourceDigest` and the input
@@ -21,9 +61,16 @@ public struct Provenance: Codable, Equatable, Sendable {
     public var appBuild: Int?
     /// `IndexingPipeline.currentDateIndexVersion` at the pin.
     public var indexVersion: Int
-    /// `UpstreamDigest` over the submodule's Swift sources.
+    /// `UpstreamDigest` over the app's sources and resources in the submodule.
     public var sourceDigest: String
-    /// SHA-256 of each input file, keyed by its path from the repository root.
+    /// What the file was made from, by key:
+    /// - a key holding a `/` is a file's path from the repository root, and its value is that
+    ///   file's SHA-256;
+    /// - a key `<path>#records` (`recordsKey(_:)`) names the query list at `<path>`, and its value
+    ///   is `QueryList.recordDigest` of its queries, which leaves out what cannot change a result;
+    /// - any other key is information only, such as an export's `research_provenance.app_build`.
+    ///
+    /// The validation compares the first two with the checkout.
     public var inputs: [String: String]
     public var platform: Platform
 
@@ -37,6 +84,12 @@ public struct Provenance: Codable, Equatable, Sendable {
         self.inputs = inputs
         self.platform = platform
     }
+
+    /// The suffix of an input key that records a query list's records rather than its bytes.
+    public static let recordsSuffix = "#records"
+
+    /// The input key for the records of the query list at `path`, from the repository root.
+    public static func recordsKey(_ path: String) -> String { path + recordsSuffix }
 }
 
 /// The machine a golden file was made on. Recorded so a difference can be traced to a platform;
@@ -79,10 +132,12 @@ public struct Platform: Codable, Equatable, Sendable {
     }
 }
 
-/// A digest of the submodule's Swift sources: SHA-256 over each file's path and SHA-256, in
-/// path order. Any change to those files, as a pin move makes, changes it.
+/// A digest of the app's sources and resources in the submodule: SHA-256 over each file's path and
+/// SHA-256, in path order. Any change to those files, as a pin move makes, changes it. The bundled
+/// resources count as much as the Swift files: `broken-refs-index.json`, for one, changes the
+/// reader's HTML and the indexer's output.
 public enum UpstreamDigest {
-    /// The submodule directories whose Swift files the Mac golden tool compiles.
+    /// The submodule directories the Mac golden tool compiles, and whose resources the app bundles.
     public static let directories = [
         "FRUSExplorer", "FTS5Store", "SemanticVectorsKit", "SourceNoteKit", "TEIHeaderKit", "WordCloudKit",
     ]
@@ -92,24 +147,44 @@ public enum UpstreamDigest {
         var lines: [String] = []
         for directory in directories {
             let root = upstream.appendingPathComponent(directory, isDirectory: true)
-            for path in try swiftFiles(under: root) {
-                let data = try Data(contentsOf: root.appendingPathComponent(path))
-                lines.append("\(directory)/\(path)\t\(Digest.sha256(data))")
+            for file in try files(under: root) {
+                let path = root.appendingPathComponent(file.path).path
+                let data: Data
+                if file.isLink {
+                    data = Data(try FileManager.default.destinationOfSymbolicLink(atPath: path).utf8)
+                } else {
+                    data = try Data(contentsOf: URL(fileURLWithPath: path))
+                }
+                lines.append("\(directory)/\(file.path)\t\(Digest.sha256(data))")
             }
         }
-        return Digest.sha256(Data(lines.sorted().joined(separator: "\n").utf8))
+        lines.sort { $0.utf8.lexicographicallyPrecedes($1.utf8) }
+        return Digest.sha256(Data(lines.joined(separator: "\n").utf8))
     }
 
-    /// Relative paths of the `.swift` files under `root`, sorted.
-    static func swiftFiles(under root: URL) throws -> [String] {
-        guard let enumerator = FileManager.default.enumerator(atPath: root.path) else {
-            throw CocoaError(.fileReadNoSuchFile, userInfo: [NSFilePathErrorKey: root.path])
+    /// Every regular file and symbolic link under `root`, by its relative path, sorted by the
+    /// path's UTF-8 bytes so that Linux and macOS agree. A name starting with `.`, such as
+    /// `.DS_Store`, is left out with everything under it. A symbolic link is not followed: it is
+    /// listed with `isLink`, and `compute` hashes the path it holds.
+    static func files(under root: URL) throws -> [(path: String, isLink: Bool)] {
+        let manager = FileManager.default
+        var files: [(path: String, isLink: Bool)] = []
+        func walk(_ relative: String) throws {
+            let directory = relative.isEmpty ? root.path : root.appendingPathComponent(relative).path
+            for name in try manager.contentsOfDirectory(atPath: directory) where !name.hasPrefix(".") {
+                let path = relative.isEmpty ? name : "\(relative)/\(name)"
+                // Not followed: the attributes of a symbolic link are its own.
+                let type = try manager.attributesOfItem(atPath: "\(directory)/\(name)")[.type] as? FileAttributeType
+                switch type {
+                case .typeDirectory?: try walk(path)
+                case .typeRegular?: files.append((path, false))
+                case .typeSymbolicLink?: files.append((path, true))
+                default: continue
+                }
+            }
         }
-        var paths: [String] = []
-        while let path = enumerator.nextObject() as? String {
-            if path.hasSuffix(".swift") { paths.append(path) }
-        }
-        return paths.sorted()
+        try walk("")
+        return files.sorted { $0.path.utf8.lexicographicallyPrecedes($1.path.utf8) }
     }
 }
 

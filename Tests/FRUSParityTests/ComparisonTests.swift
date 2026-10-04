@@ -67,6 +67,39 @@ import Testing
         candidate.top.removeLast()
         #expect(ResultComparison.compare(golden: golden, candidate: candidate) == .different("top: golden has 50 results, candidate 49"))
     }
+
+    /// Ids and errors are compared as bytes: canonically equivalent text, which Swift's `==`
+    /// takes as equal, is a difference.
+    @Test func canonicallyEquivalentTextIsADifference() {
+        let (nfc, nfd) = ("caf\u{E9}", "cafe\u{301}")
+        #expect(nfc == nfd)
+        var top = Self.fifty
+        top[0] = "frus1961-63v06/\(nfc)"
+        let golden = Self.record(top, ties: [10...13])
+        var candidate = golden
+        candidate.top[0] = "frus1961-63v06/\(nfd)"
+        #expect(golden.top == candidate.top)
+        #expect(ResultComparison.compare(golden: golden, candidate: candidate)
+            == .different("top: position 1 is frus1961-63v06/\(nfd), golden frus1961-63v06/\(nfc)"))
+
+        // Within a tie, too: the same ids in another order pass, an equivalent id does not.
+        var tied = Self.fifty
+        tied[12] = "frus1961-63v06/\(nfc)"
+        let tiedGolden = Self.record(tied, ties: [10...13])
+        candidate = tiedGolden
+        candidate.top.swapAt(11, 12)
+        #expect(ResultComparison.compare(golden: tiedGolden, candidate: candidate) == .tiePermutation(groups: [10...13]))
+        candidate.top[11] = "frus1961-63v06/\(nfd)"
+        #expect(!ResultComparison.compare(golden: tiedGolden, candidate: candidate).passes)
+
+        candidate = golden
+        candidate.error = "malformedQuery(\(nfd))"
+        var erring = golden
+        erring.error = "malformedQuery(\(nfc))"
+        #expect(ResultComparison.compare(golden: erring, candidate: candidate)
+            == .different("error: golden malformedQuery(\(nfc)), candidate malformedQuery(\(nfd))"))
+        #expect(ResultComparison.compare(golden: erring, candidate: erring) == .identical)
+    }
 }
 
 @Suite struct RenderDiffTests {
@@ -83,6 +116,17 @@ import Testing
               golden:    </p><p>Two</p>
               candidate: </p><p>Too</p>
             """)
+    }
+
+    /// HTML is compared as bytes: canonically equivalent text, which Swift's `==` takes as equal,
+    /// is a difference, and the piece holding it is named.
+    @Test func canonicallyEquivalentTextIsADifference() {
+        let golden = "<p>Caf\u{E9}</p><p>Two</p>"
+        let candidate = "<p>Cafe\u{301}</p><p>Two</p>"
+        #expect(golden == candidate)
+        let difference = RenderDiff.firstDifference(golden: golden, candidate: candidate, context: 0)
+        #expect(difference.map { Array($0.utf8) }
+            == Array("piece 1 of 4 golden, 4 candidate\n  golden:    <p>Caf\u{E9}\n  candidate: <p>Cafe\u{301}".utf8))
     }
 
     @Test func aShorterCandidateEnds() {

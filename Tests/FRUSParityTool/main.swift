@@ -61,8 +61,11 @@ func summarize(_ arguments: Arguments) throws {
     guard arguments.positional.count == 1 else { throw UsageError("summarize takes one database") }
     let layout = try repository(arguments)
     let url = URL(fileURLWithPath: arguments.positional[0])
-    let summarizer = IndexSummarizer(upstream: layout.upstream, anyVolumes: arguments.flags.contains("--any-volumes"),
-                                     upstreamCommit: arguments.options["--upstream-commit"])
+    // A golden summary names the submodule's commit, as tools/mac-golden's files do.
+    var commit = arguments.options["--upstream-commit"]
+    if commit == nil, arguments.options["--golden"] != nil { commit = layout.upstreamCommit() }
+    let summarizer = IndexSummarizer(layout: layout, anyVolumes: arguments.flags.contains("--any-volumes"),
+                                     upstreamCommit: commit)
     let summary: IndexSummaryGolden
     do {
         summary = try summarizer.summarize(url)

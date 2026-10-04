@@ -16,7 +16,8 @@ public struct SummaryRefusal: Error, CustomStringConvertible, Equatable, Sendabl
     public enum Kind: String, Sendable {
         /// Missing, or not a SQLite database.
         case notADatabase
-        /// In write-ahead-log mode with a `-wal` file beside it: a copy of a database in use.
+        /// In write-ahead-log mode with a `-wal` file beside it, a copy of a database in use; or
+        /// with a hot `-journal` beside it, a transaction left unfinished.
         case inUse
         /// An object the summary does not know, or a table whose columns changed.
         case schema
@@ -28,6 +29,9 @@ public struct SummaryRefusal: Error, CustomStringConvertible, Equatable, Sendabl
         case writing
         /// A person rollup the app would rebuild on its next launch.
         case staleRollup
+        /// The repository's `fixtures/tei` does not match its `SHA256SUMS`, so the summary could
+        /// not record which fixtures it stands for.
+        case fixtures
     }
 
     public let kind: Kind
@@ -49,27 +53,30 @@ public struct IndexSummarizer: Sendable {
     public static let defaultFullCheckLimit: Int64 = 64 * 1_048_576
     public static let tool = "frus-parity summarize"
 
-    /// The submodule's root, for the provenance's source digest and app build.
-    public var upstream: URL
+    /// The repository: its submodule, for the provenance's source digest and app build, and its
+    /// `fixtures/tei`, whose digests the provenance records.
+    public var layout: RepositoryLayout
     /// Summarizes any set of volumes, not only the three fixtures. Such a summary is for
-    /// diagnosis: it can never stand as the golden file.
+    /// diagnosis: it can never stand as the golden file, so it records no fixtures.
     public var anyVolumes: Bool
     public var upstreamCommit: String?
     public var fullCheckLimit: Int64
 
-    public init(upstream: URL, anyVolumes: Bool = false, upstreamCommit: String? = nil,
+    public init(layout: RepositoryLayout, anyVolumes: Bool = false, upstreamCommit: String? = nil,
                 fullCheckLimit: Int64 = IndexSummarizer.defaultFullCheckLimit) {
-        self.upstream = upstream
+        self.layout = layout
         self.anyVolumes = anyVolumes
         self.upstreamCommit = upstreamCommit
         self.fullCheckLimit = fullCheckLimit
     }
 
     /// Summarizes the database at `url`, which it opens read-only with `immutable=1`. Throws
-    /// `SummaryRefusal` for a database the summary cannot stand for.
+    /// `SummaryRefusal` for a database the summary cannot stand for. A symbolic link is resolved
+    /// first, so the size, the header and the files beside it are the database's own.
     public func summarize(_ url: URL) throws -> IndexSummaryGolden {
         let clock = ContinuousClock()
         let started = clock.now
+        let url = url.resolvingSymlinksInPath()
         let fileBytes = try Self.checkFile(url)
         let db: ParityDatabase
         do {
@@ -84,11 +91,20 @@ public struct IndexSummarizer: Sendable {
         let volumes = try checkVolumes(db)
         try Self.checkWriting(db, stamp: stamp)
         try Self.checkRollup(db)
+        var inputs: [String: String] = [:]
+        if !anyVolumes {
+            do {
+                inputs = try ParityFixtures.verifiedInputs(tei: layout.tei)
+            } catch {
+                throw SummaryRefusal(.fixtures, "\(error). A golden summary records the fixtures it stands for, so they must be the ones SHA256SUMS lists.")
+            }
+        }
 
         let full = fileBytes <= fullCheckLimit
         var notes: [String] = []
         if !full {
-            notes.append("The file is above \(fullCheckLimit / 1_048_576) MB, so the instance-mode vocabularies and the integrity checks were left out.")
+            let limit = fullCheckLimit >= 1_048_576 ? "\(fullCheckLimit / 1_048_576) MB" : "\(fullCheckLimit) bytes"
+            notes.append("The file is above \(limit), so the instance-mode vocabularies and the integrity checks were left out.")
         }
         if stamp == nil { notes.append("No research_provenance: the exporter did not stamp this index.") }
 
@@ -152,11 +168,10 @@ public struct IndexSummarizer: Sendable {
             notes: notes,
             timings: timings)
 
-        var inputs: [String: String] = [:]
         for (key, value) in stamp ?? [:] { inputs["research_provenance.\(key)"] = value }
         let provenance = Provenance(
-            tool: Self.tool, upstreamCommit: upstreamCommit, appBuild: Upstream.appBuild(upstream),
-            indexVersion: IndexCompatibility.supportedIndexVersion, sourceDigest: try Upstream.sourceDigest(upstream),
+            tool: Self.tool, upstreamCommit: upstreamCommit, appBuild: Upstream.appBuild(layout.upstream),
+            indexVersion: IndexCompatibility.supportedIndexVersion, sourceDigest: try Upstream.sourceDigest(layout.upstream),
             inputs: inputs, platform: .current(sqlite: sqlite))
         return IndexSummaryGolden(
             provenance: provenance,
@@ -218,9 +233,11 @@ public struct IndexSummarizer: Sendable {
 
     // MARK: - Refusals
 
-    /// The file's size. Refuses a missing file, one that is not SQLite, and a write-ahead-log
-    /// database with a `-wal` file beside it: `immutable=1` never reads that file, so its newest
-    /// pages would be missing from the summary.
+    /// The file's size. Refuses a missing file, one that is not SQLite, a write-ahead-log
+    /// database with a `-wal` file beside it, and one with a hot rollback journal beside it.
+    /// `immutable=1` never reads either file: the summary would miss a `-wal` file's newest pages,
+    /// and read the pages a hot journal's transaction left half written, which SQLite would
+    /// otherwise roll back. `url` must be the database itself, not a link to it.
     static func checkFile(_ url: URL) throws -> Int64 {
         guard let size = fileSize(url.path) else {
             throw SummaryRefusal(.notADatabase, "\(url.path) does not exist.")
@@ -240,6 +257,22 @@ public struct IndexSummarizer: Sendable {
         let wal = url.path + "-wal"
         if header[header.startIndex + 18] == 2 || header[header.startIndex + 19] == 2, let walSize = fileSize(wal), walSize > 0 {
             throw SummaryRefusal(.inUse, "\(url.lastPathComponent) is in write-ahead-log mode with a \(walSize)-byte -wal file beside it, so it is a database in use. Summarize an export, or let the app close the database first.")
+        }
+        // A journal is hot when it is not empty and its first byte is not zero (pager.c,
+        // hasHotJournal). A zeroed or empty one is what a committed transaction leaves.
+        let journal = url.path + "-journal"
+        if let journalSize = fileSize(journal), journalSize > 0 {
+            let first: Data
+            do {
+                let handle = try FileHandle(forReadingFrom: URL(fileURLWithPath: journal))
+                defer { try? handle.close() }
+                first = try handle.read(upToCount: 1) ?? Data()
+            } catch {
+                throw SummaryRefusal(.inUse, "\(url.lastPathComponent) has a \(journalSize)-byte -journal beside it that could not be read: \(error.localizedDescription)")
+            }
+            if first.first.map({ $0 != 0 }) ?? false {
+                throw SummaryRefusal(.inUse, "\(url.lastPathComponent) has a hot \(journalSize)-byte -journal beside it: a transaction was left unfinished, and immutable=1 would read its half-written pages. Let FRUS Explorer open the database to roll it back, or summarize a fresh export.")
+            }
         }
         return size
     }

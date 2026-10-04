@@ -12,6 +12,15 @@ public enum GoldenFile: String, CaseIterable, Sendable {
     case results = "queries.results.json"
     /// Check 2, made from the owner's three-volume export.
     case indexSummary = "index-summary.json"
+
+    /// True for a file made from the owner's export, which may wait for it. One made from the
+    /// app's source alone is made in the session and committed, never left pending.
+    public var needsExport: Bool {
+        switch self {
+        case .render, .expressions: false
+        case .results, .indexSummary: true
+        }
+    }
 }
 
 /// Which golden files exist and which wait, from `fixtures/golden/PENDING`. That file lists one
