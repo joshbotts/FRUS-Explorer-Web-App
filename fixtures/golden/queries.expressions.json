@@ -4,8 +4,7 @@
     "appBuild" : 49,
     "indexVersion" : 65,
     "inputs" : {
-      "fixtures/parity/queries.jsonl" : "662a60c72f8c75299a080d75dff534787baf9128db9ecde95a56d237df9c2d23",
-      "fixtures/parity/rules.tsv" : "d17588df7a8cce8e9d337809fd60db84a11cdf67fc8745b1e7191c26ff74767f"
+      "fixtures/parity/queries.jsonl#records" : "f75bc7b9e75cf052af539d4c10a9fabef152f0d7f3ff750a4816d18ae0e04189"
     },
     "platform" : {
       "arch" : "arm64",
@@ -14,7 +13,7 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "67aaa6f3c3103ab335f2b13f0ab8135118281d2b420569e9d424fac0a906e529",
+    "sourceDigest" : "9c69935cc53a7df14324db8224d766504910fcf189a2b85768b4da96e9533349",
     "tool" : "tools/mac-golden expressions",
     "upstreamCommit" : "34a5120507a4d7d2095217e29200229f0cda5c6a"
   },

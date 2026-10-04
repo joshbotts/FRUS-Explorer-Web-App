@@ -27,8 +27,10 @@ func expressionsGolden(repo: Repository, queries queriesURL: URL, rules: URL, ou
         records.append(ExpressionRecord(id: query.id, parse: ParseRecord(SearchService.parsedQuery(for: parameters)),
                                         search: search))
     }
+    // The query list's records alone: its notes and the rules file do not change what the app
+    // compiles, so a change to them leaves the file current. The rules are checked above.
     let golden = ExpressionsGolden(
-        provenance: try repo.provenance(tool: "tools/mac-golden expressions", inputs: [queriesURL, rules]),
+        provenance: try repo.provenance(tool: "tools/mac-golden expressions", inputs: repo.records(queriesURL, queries)),
         queries: records
     )
     try GoldenJSON.write(golden, to: out)

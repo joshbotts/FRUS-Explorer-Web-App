@@ -83,11 +83,16 @@ else ok "upstream/FRUS-Explorer at the pin ${pin:0:7}, unmodified"; fi
 
 if [ -n "$export_file" ]; then
   echo "Export"
-  if [ ! -f "$export_file" ]; then fix "$export_file does not exist"
-  elif [ -e "$export_file-wal" ] || [ -e "$export_file-journal" ]; then
-    fix "$export_file has a -wal or -journal beside it, so it may be open: use a file Export Research Database… wrote"
-  elif cp "$export_file" "$work/export.sqlite"; then ok "copied $export_file to a temporary folder"
-  else fix "could not copy $export_file"; fi
+  # A symbolic link is resolved first, so the checks and the copy are the database's own.
+  if [ ! -e "$export_file" ]; then fix "$export_file does not exist"
+  elif ! resolved=$(realpath "$export_file" 2>/dev/null) || [ -z "$resolved" ]; then
+    fix "could not resolve $export_file"
+  elif [ ! -f "$resolved" ] || [ -L "$resolved" ]; then fix "$export_file is not a regular file"
+  elif [ -e "$resolved-wal" ] || [ -L "$resolved-wal" ] || [ -e "$resolved-journal" ] || [ -L "$resolved-journal" ]; then
+    fix "$resolved has a -wal or -journal beside it, so it may be open: use a file Export Research Database… wrote"
+  elif cp "$resolved" "$work/export.sqlite" && [ -f "$work/export.sqlite" ] && [ ! -L "$work/export.sqlite" ]; then
+    ok "copied $resolved to a temporary folder"
+  else fix "could not copy $resolved"; fi
 fi
 
 if [ "$fixes" -ne 0 ]; then
@@ -132,8 +137,9 @@ echo "From the export"
 if [ -z "$export_file" ]; then
   later "index-summary.json and queries.results.json: run again with --export <file>, made as the top of this script says"
 else
+  # --repo names the root, whose fixtures and submodule the summary records.
   if step frus-parity-summarize swift run -c release frus-parity summarize "$work/export.sqlite" \
-       --golden "$golden/index-summary.json"; then
+       --golden "$golden/index-summary.json" --upstream-commit "$head" --repo "$root"; then
     ok "$golden/index-summary.json"
   else
     fix "frus-parity summarize failed (above)"
@@ -160,7 +166,7 @@ if [ -f "$golden/PENDING" ]; then
   elif cp "$work/PENDING" "$golden/PENDING"; then ok "$golden/PENDING no longer lists$made"
   else fix "could not update $golden/PENDING"; fi
 fi
-if step check-golden swift run -c release frus-parity check-golden; then
+if step check-golden swift run -c release frus-parity check-golden --repo "$root"; then
   ok "frus-parity check-golden passes"
 else
   fix "frus-parity check-golden failed (above)"

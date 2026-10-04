@@ -11,6 +11,7 @@ let usage = """
            mac-golden results     --db <export> [--repo <root>] [--queries <jsonl>] [--out <json>]
 
       render       the reader's HTML of every fixture document    (default out: fixtures/golden/render)
+                   it replaces <dir>/html and <dir>/manifest.json, and refuses a <dir> holding either without a render manifest
       expressions  the parse and MATCH expressions of each query  (default out: fixtures/golden/queries.expressions.json)
                    --db compiles against a copy of that database instead of an empty one
       results      each query's count and first 50 results, over a copy of a three-volume export

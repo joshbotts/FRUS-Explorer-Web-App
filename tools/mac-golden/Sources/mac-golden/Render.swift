@@ -19,8 +19,16 @@ let renderConfiguration = """
 
 @MainActor
 func renderGolden(repo: Repository, out: URL) async throws {
-    let tei = repo.url("fixtures/tei")
-    let inputs = try verifyFixtures(tei)
+    // The command replaces out/html and out/manifest.json, so it never deletes what it did not
+    // write: a folder holding either must hold a render manifest too.
+    let manager = FileManager.default
+    let html = out.appendingPathComponent("html"), manifest = out.appendingPathComponent("manifest.json")
+    if itemType(html.path) != nil || itemType(manifest.path) != nil,
+       (try? GoldenJSON.read(RenderGolden.self, from: manifest)) == nil {
+        throw ToolError("\(repo.relativePath(out)) holds html or manifest.json but no render manifest: choose a new or empty --out")
+    }
+    let tei = repo.url(ParityFixtures.teiPath)
+    let inputs = try verifyFixtures(repo)
     try checkBrokenRefs(repo)
 
     var rows: [RenderRow] = []
@@ -54,9 +62,9 @@ func renderGolden(repo: Repository, out: URL) async throws {
         note("render: \(volume), \(documents.count) rows")
     }
 
-    // Everything rendered, so replace the old files: any html file not written now is stale.
-    let manager = FileManager.default
-    try? manager.removeItem(at: out.appendingPathComponent("html"))
+    // Everything rendered, so replace the old files: any html file not written now is stale. A
+    // failed removal stops the command, since stale files would stay beside the new ones.
+    if itemType(html.path) != nil { try manager.removeItem(at: html) }
     for page in pages {
         let url = out.appendingPathComponent(page.path)
         try manager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -67,7 +75,7 @@ func renderGolden(repo: Repository, out: URL) async throws {
         configuration: renderConfiguration,
         rows: rows
     )
-    try GoldenJSON.write(golden, to: out.appendingPathComponent("manifest.json"))
+    try GoldenJSON.write(golden, to: manifest)
     let bytes = rows.reduce(0) { $0 + $1.bytes }
     note("render: \(rows.count) rows, \(bytes) bytes of HTML, in \(repo.relativePath(out))")
 }
@@ -90,26 +98,10 @@ func readerHTML(_ entry: DocumentBrowserEntry, volumeURL: URL) async throws -> S
 }
 
 /// Checks `fixtures/tei` against its SHA256SUMS: exactly the fixture volumes, unchanged. Returns
-/// the files a render reads, for its provenance.
-func verifyFixtures(_ tei: URL) throws -> [URL] {
-    let sums = tei.appendingPathComponent("SHA256SUMS")
-    var listed: [String: String] = [:]
-    for line in try String(contentsOf: sums, encoding: .utf8).split(separator: "\n") {
-        let fields = line.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
-        guard fields.count == 2 else { throw ToolError("SHA256SUMS: cannot read \"\(line)\"") }
-        listed[fields[1]] = fields[0]
-    }
-    let expected = Set(ParityFixtures.volumes.map { "\($0).xml" })
-    let present = Set(try FileManager.default.contentsOfDirectory(atPath: tei.path).filter { $0.hasSuffix(".xml") })
-    guard Set(listed.keys) == expected, present == expected else {
-        throw ToolError("fixtures/tei must hold exactly \(expected.sorted()), each listed in SHA256SUMS")
-    }
-    for (file, sum) in listed.sorted(by: { $0.key < $1.key }) {
-        guard try Digest.sha256(contentsOf: tei.appendingPathComponent(file)) == sum else {
-            throw ToolError("fixtures/tei/\(file) does not match SHA256SUMS")
-        }
-    }
-    return expected.sorted().map { tei.appendingPathComponent($0) } + [sums]
+/// the digests a golden file made from them records, by their paths from the root
+/// (`ParityFixtures.verifiedInputs`, which frus-parity's summary runs too).
+func verifyFixtures(_ repo: Repository) throws -> [String: String] {
+    try ParityFixtures.verifiedInputs(tei: repo.url(ParityFixtures.teiPath))
 }
 
 /// The reader degrades a cross-reference that the bundled broken-refs-index.json lists. This tool
