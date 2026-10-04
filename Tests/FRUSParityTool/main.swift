@@ -112,7 +112,8 @@ func parse(_ arguments: Arguments) throws {
 }
 
 /// Check 4 on this machine. With no document, renders every row of the golden manifest along the
-/// reader's path and again from one full parse per volume, and reports each difference. With a
+/// reader's path and again from one full parse per volume, compares that parse's persons and terms
+/// with the reader's, and reports each difference. With a
 /// volume and a document, renders that document along the reader's path, or from a full parse with
 /// --full-parse, says whether it is the golden file's HTML, and writes it to --out's file. The HTML
 /// never goes to standard output, where a debug build of the kit prints its parser's log.
@@ -132,7 +133,8 @@ func render(_ arguments: Arguments) async throws {
         let reader = try await renderer.readerPass(golden.rows.map { ($0.volume, $0.document) })
         let readerTime = clock.now - start
         start = clock.now
-        let full = try await renderer.fullParsePass(ParityFixtures.volumes.sorted())
+        let volumes = ParityFixtures.volumes.sorted()
+        let (full, fullLists) = try await renderer.fullParsePass(volumes)
         let fullTime = clock.now - start
         for (pass, rendered, time) in [("the reader's path", reader, readerTime), ("one full parse per volume", full, fullTime)] {
             let mismatches = RenderParity.mismatches(rendered, golden: golden, directory: directory)
@@ -142,11 +144,17 @@ func render(_ arguments: Arguments) async throws {
         if full.map({ "\($0.volume)/\($0.document)" }) != golden.rows.map({ "\($0.volume)/\($0.document)" }) {
             problems.append("one full parse per volume yields \(full.count) rows, not the golden manifest's \(golden.rows.count) in its order")
         }
+        // The HTML would be the same with other persons and terms, so the full parse's are compared
+        // with the reader's.
+        let readerLists = try await renderer.readerLists(volumes)
+        for volume in volumes where fullLists[volume] != readerLists[volume] {
+            problems.append("one full parse of \(volume) gives other persons or terms than parsePersons and parseTerms")
+        }
     case 2:
         let (volume, document) = (arguments.positional[0], arguments.positional[1])
         let rendered: RenderedDocument
         if arguments.flags.contains("--full-parse") {
-            rendered = try await renderer.fullParsePass([volume]).first { $0.document == document }
+            rendered = try await renderer.fullParsePass([volume]).documents.first { $0.document == document }
                 ?? RenderedDocument(volume: volume, document: document, html: nil)
         } else {
             rendered = try await renderer.readerPass([(volume, document)])[0]

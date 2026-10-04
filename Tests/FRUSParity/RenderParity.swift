@@ -8,6 +8,11 @@
 // through the kit's public API alone, with a plain import, as the server will. It chooses only what
 // the app chooses: persons and terms from the TEI, no classification override, and the app's
 // bundled broken-refs index.
+//
+// The golden HTML cannot show where the persons and terms came from. The serializer writes a
+// person's or a term's link from its ref alone, and the one link a lookup decides, an <abbr> whose
+// text names a term, occurs in none of the three fixture volumes. So the passes also return the
+// lists they rendered with, for the tests to compare, and a synthetic volume tests the <abbr> link.
 
 import FRUSCoreKit
 import Foundation
@@ -41,6 +46,60 @@ public struct RenderMismatch: Equatable, Sendable, CustomStringConvertible {
     public var description: String { "\(volume)/\(document): \(detail)" }
 }
 
+/// A volume's persons and glossary terms, field by field, with the reader's lookups made from them.
+/// The kit's entries are not `Equatable`, so their fields are copied out for two parses to be
+/// compared; the lookups are made from the entries themselves.
+public struct LookupLists: Equatable, Sendable {
+    public struct Person: Equatable, Sendable {
+        public var ref: String
+        public var name: String
+        public var description: String?
+        public var role: String?
+        public var startYear: Int?
+        public var endYear: Int?
+
+        public init(ref: String, name: String, description: String?, role: String?, startYear: Int?, endYear: Int?) {
+            self.ref = ref
+            self.name = name
+            self.description = description
+            self.role = role
+            self.startYear = startYear
+            self.endYear = endYear
+        }
+    }
+
+    public struct Term: Equatable, Sendable {
+        public var ref: String
+        public var term: String
+        public var definition: String?
+
+        public init(ref: String, term: String, definition: String?) {
+            self.ref = ref
+            self.term = term
+            self.definition = definition
+        }
+    }
+
+    public let persons: [Person]
+    public let terms: [Term]
+    let lookups: ReaderLookups
+
+    init(persons: [PersonEntry], terms: [GlossEntry]) {
+        self.persons = persons.map {
+            Person(ref: $0.ref, name: $0.name, description: $0.description, role: $0.role,
+                   startYear: $0.startYear, endYear: $0.endYear)
+        }
+        self.terms = terms.map { Term(ref: $0.ref, term: $0.term, definition: $0.definition) }
+        lookups = ReaderLookups(persons: persons, terms: terms)
+    }
+
+    /// Equal when the persons and terms are, field for field and in order. The lookups are made
+    /// from them, so they are equal too.
+    public static func == (lhs: LookupLists, rhs: LookupLists) -> Bool {
+        lhs.persons == rhs.persons && lhs.terms == rhs.terms
+    }
+}
+
 /// Renders the fixture volumes' documents as the Mac reader does, through FRUSCoreKit's public API.
 public struct ReaderRenderer: Sendable {
     /// The broken-refs index the app bundles, from the submodule's root.
@@ -49,51 +108,61 @@ public struct ReaderRenderer: Sendable {
     let tei: URL
     let brokenRefs: BrokenRefsIndex
 
-    /// A renderer for the fixtures in `layout`, with the broken-refs index the pinned app bundles.
-    public init(layout: RepositoryLayout) throws {
-        tei = layout.tei
+    /// A renderer for the volumes in `tei`, by default `layout`'s fixtures, with the broken-refs
+    /// index the pinned app bundles. A volume is the file `<volume>.xml` in that folder.
+    public init(layout: RepositoryLayout, tei: URL? = nil) throws {
+        self.tei = tei ?? layout.tei
         let url = layout.upstream.appendingPathComponent(Self.brokenRefsPath)
         brokenRefs = try JSONDecoder().decode(BrokenRefsIndex.self, from: Data(contentsOf: url))
     }
 
+    /// The persons and terms the reader takes from each of `volumes`' TEI when no person store has
+    /// them: `parsePersons` and `parseTerms`, each with a new parser. As in the reader, a list that
+    /// cannot be parsed is empty.
+    public func readerLists(_ volumes: [String]) async throws -> [String: LookupLists] {
+        let volumes = Array(Set(volumes))
+        let lists = try await Self.map(volumes.count) { index in
+            let url = self.volumeURL(volumes[index])
+            return LookupLists(persons: (try? await FRUSDocumentParser().parsePersons(volumeURL: url)) ?? [],
+                               terms: (try? await FRUSDocumentParser().parseTerms(volumeURL: url)) ?? [])
+        }
+        return Dictionary(uniqueKeysWithValues: zip(volumes, lists))
+    }
+
     /// The reader's path, for each of `rows` in order: a new parser's `parseDocument`, then
     /// `ASTToRenderNodeConverter(readerOf:lookups:brokenRefs:)` with `ReaderLookups` from the
-    /// volume's persons and terms, then `FRUSRenderNodeHTMLSerializer.reader`. Rows render
+    /// volume's `readerLists`, then `FRUSRenderNodeHTMLSerializer.reader`. Rows render
     /// concurrently, each with its own parser, as many at once as the machine has processors.
     ///
     /// The persons and terms are parsed once per volume. The reader parses them for each document
     /// it opens, but `FRUSDocumentParser` keeps no state between calls: each reads the file with a
-    /// new `XMLParser`, so they are the same every time. As in the reader, a list that cannot be
-    /// parsed is empty.
+    /// new `XMLParser`, so they are the same every time.
     public func readerPass(_ rows: [(volume: String, document: String)]) async throws -> [RenderedDocument] {
-        let volumes = Array(Set(rows.map(\.volume)))
-        let lookups = try await Self.map(volumes.count) { index in
-            let url = self.volumeURL(volumes[index])
-            return ReaderLookups(persons: (try? await FRUSDocumentParser().parsePersons(volumeURL: url)) ?? [],
-                                 terms: (try? await FRUSDocumentParser().parseTerms(volumeURL: url)) ?? [])
-        }
-        let byVolume = Dictionary(uniqueKeysWithValues: zip(volumes, lookups))
+        let lists = try await readerLists(rows.map(\.volume))
         return try await Self.map(rows.count) { index in
             let (volume, document) = rows[index]
             let ast = try await FRUSDocumentParser().parseDocument(documentId: document, volumeURL: self.volumeURL(volume))
             return RenderedDocument(volume: volume, document: document,
-                                    html: ast.map { self.html($0, volume: volume, lookups: byVolume[volume]!) })
+                                    html: ast.map { self.html($0, volume: volume, lookups: lists[volume]!.lookups) })
         }
     }
 
     /// The path the server will serve (session 8): one `parseVolumeFull` of each volume, whose
     /// persons and terms make the lookups, then every document it yields, in parse order, with the
-    /// reader's converter and serializer. Volumes render concurrently, in the order given.
-    public func fullParsePass(_ volumes: [String]) async throws -> [RenderedDocument] {
-        try await Self.map(volumes.count) { index in
+    /// reader's converter and serializer. Volumes render concurrently, in the order given. Each
+    /// volume's persons and terms are returned too, to be compared with `readerLists`.
+    public func fullParsePass(_ volumes: [String]) async throws -> (documents: [RenderedDocument], lists: [String: LookupLists]) {
+        let passes = try await Self.map(volumes.count) { index in
             let volume = volumes[index]
             let parse = try await FRUSDocumentParser().parseVolumeFull(volumeURL: self.volumeURL(volume))
-            let lookups = ReaderLookups(persons: parse.persons, terms: parse.terms)
-            return parse.documents.map { ast in
+            let lists = LookupLists(persons: parse.persons, terms: parse.terms)
+            let documents = parse.documents.map { ast in
                 RenderedDocument(volume: volume, document: ast.documentId,
-                                 html: self.html(ast, volume: volume, lookups: lookups))
+                                 html: self.html(ast, volume: volume, lookups: lists.lookups))
             }
-        }.flatMap { $0 }
+            return (documents, lists)
+        }
+        return (passes.flatMap(\.0), Dictionary(zip(volumes, passes.map(\.1)), uniquingKeysWith: { first, _ in first }))
     }
 
     func volumeURL(_ volume: String) -> URL { tei.appendingPathComponent("\(volume).xml") }

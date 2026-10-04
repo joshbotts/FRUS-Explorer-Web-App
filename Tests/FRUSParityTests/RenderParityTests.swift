@@ -22,7 +22,9 @@ import Testing
 
     /// Check 4 along the reader's own path: each row of the golden manifest, parsed alone by a new
     /// parser and rendered with the reader's lookups, converter and serializer, is the golden
-    /// file's bytes.
+    /// file's bytes. The bytes cannot show which persons and terms a row was rendered with: the
+    /// fixtures' HTML does not depend on them, as `RenderParity.swift` says. The next two tests
+    /// check those.
     @Test func everyGoldenRowRendersAsTheReaderDoes() async throws {
         let (golden, directory) = try Self.currentGolden()
         #expect(golden.rows.count >= ParityFixtures.volumes.count)
@@ -36,15 +38,76 @@ import Testing
 
     /// The rows are exactly the documents one full parse of each volume yields, in its order,
     /// volumes sorted. Rendering each from that parse, with its own persons and terms, is the path
-    /// the server will serve, without a parse per document, and it gives the same bytes.
+    /// the server will serve, without a parse per document, and it gives the same bytes. Since the
+    /// bytes would be the same with any lists, the parse's persons and terms are compared with
+    /// those the reader parses, field for field.
     @Test func aFullParseYieldsTheRowsAndRendersThemTheSame() async throws {
         let (golden, directory) = try Self.currentGolden()
-        let rendered = try await ReaderRenderer(layout: Repository.layout).fullParsePass(ParityFixtures.volumes.sorted())
+        let renderer = try ReaderRenderer(layout: Repository.layout)
+        let volumes = ParityFixtures.volumes.sorted()
+        let (rendered, lists) = try await renderer.fullParsePass(volumes)
         let goldenRows = golden.rows.map { "\($0.volume)/\($0.document)" }
         #expect(rendered.map { "\($0.volume)/\($0.document)" } == goldenRows)
         let mismatches = RenderParity.mismatches(rendered, golden: golden, directory: directory)
         #expect(mismatches.isEmpty, "\(mismatches.count) of \(rendered.count) rows differ:\n\(mismatches.map(\.description).joined(separator: "\n"))")
-        print("check 4, one full parse per volume: \(rendered.count - mismatches.count) of \(goldenRows.count) rows identical")
+
+        let readerLists = try await renderer.readerLists(volumes)
+        #expect(lists.keys.sorted() == volumes)
+        #expect(readerLists.keys.sorted() == volumes)
+        for volume in volumes {
+            #expect(lists[volume]?.persons == readerLists[volume]?.persons, "\(volume)'s persons")
+            #expect(lists[volume]?.terms == readerLists[volume]?.terms, "\(volume)'s terms")
+        }
+        // Not only empty lists: the two modern volumes list both persons and terms.
+        #expect(lists.values.filter { !$0.persons.isEmpty && !$0.terms.isEmpty }.count >= 2)
+        print("check 4, one full parse per volume: \(rendered.count - mismatches.count) of \(goldenRows.count) rows identical, "
+              + "and its persons and terms are the reader's: "
+              + volumes.map { "\(lists[$0]?.persons.count ?? 0) and \(lists[$0]?.terms.count ?? 0)" }.joined(separator: ", "))
+    }
+
+    /// The one link a lookup decides: an `<abbr>` whose text names a glossary term, in any case,
+    /// renders as that term's link along both paths, and one that names no term stays text. None
+    /// of the fixture volumes has an `<abbr>`, so a volume written here holds two.
+    @Test func anAbbreviationNamingATermRendersAsItsLink() async throws {
+        let directory = try TemporaryDirectory()
+        defer { withExtendedLifetime(directory) {} }
+        let volume = "frus-synthetic-abbr"
+        try Data("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <TEI xmlns="http://www.tei-c.org/ns/1.0" xml:id="\(volume)">
+              <teiHeader><fileDesc><titleStmt><title>Abbreviations</title></titleStmt>
+                <publicationStmt><p/></publicationStmt><sourceDesc><p/></sourceDesc></fileDesc></teiHeader>
+              <text>
+                <front>
+                  <div type="section" xml:id="terms">
+                    <head>List of Abbreviations</head>
+                    <list type="terms">
+                      <item><hi rend="strong"><term xml:id="t_NATO1">NATO</term>,</hi> North Atlantic Treaty Organization</item>
+                    </list>
+                  </div>
+                </front>
+                <body>
+                  <div type="document" xml:id="d1" n="1">
+                    <head>1. Memorandum</head>
+                    <p>The <abbr>nato</abbr> ministers met; <abbr>SEATO</abbr> did not.</p>
+                  </div>
+                </body>
+              </text>
+            </TEI>
+            """.utf8).write(to: directory.url.appendingPathComponent("\(volume).xml"))
+
+        let renderer = try ReaderRenderer(layout: Repository.layout, tei: directory.url)
+        let reader = try await renderer.readerPass([(volume, "d1")])
+        let full = try await renderer.fullParsePass([volume])
+        #expect(full.lists[volume]?.terms == [LookupLists.Term(ref: "t_NATO1", term: "NATO", definition: "North Atlantic Treaty Organization")])
+        let readerLists = try await renderer.readerLists([volume])
+        #expect(full.lists == readerLists)
+        let link = "<a class=\"gloss\" href=\"frusexplorer://gloss/t_NATO1\">nato</a>"
+        for (pass, html) in [("the reader's path", reader.first?.html), ("one full parse", full.documents.first { $0.document == "d1" }?.html)] {
+            let html = try #require(html, "\(pass) renders d1")
+            #expect(html.contains("The \(link) ministers met; SEATO did not."), "\(pass): \(html)")
+            #expect(html.components(separatedBy: "class=\"gloss\"").count == 2, "\(pass): \(html)")
+        }
     }
 
     /// The comparison, on golden files written here: identical HTML passes, and each difference
