@@ -4,7 +4,7 @@
 /// commit; `CompatibilityTests` reads them from the submodule's sources, so a pin move that
 /// changes either one fails until this file follows.
 public enum IndexCompatibility {
-    /// `IndexingPipeline.currentDateIndexVersion` at the pin (34a5120, build 49).
+    /// `IndexingPipeline.currentDateIndexVersion` at the pinned commit.
     public static let supportedIndexVersion = 65
     /// `FTS5Connection.currentSchemaGeneration`, stored in `PRAGMA user_version`.
     public static let ftsSchemaVersion = 4

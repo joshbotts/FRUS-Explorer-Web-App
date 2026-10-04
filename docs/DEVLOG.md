@@ -25,7 +25,7 @@ The owner ran Mac check 1 and squash-merged #1567 as `cfc0d3c`, the only commit 
 
 **Results**
 
-- **Linux, `swift:6.4-noble`, arm64.** A clean build with tests took 77 seconds, with no warnings. All 724 tests pass, and the one skip is the named one:
+- **Linux, `swift:6.4-noble`, arm64.** A clean build with tests took 77 seconds, with no warnings. Of the 724 tests, 723 pass, and the one skip is the named one:
 
   | Target | Tests |
   | --- | --- |
