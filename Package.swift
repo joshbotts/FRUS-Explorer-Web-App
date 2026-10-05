@@ -5,8 +5,9 @@
 // (CLAUDE.md, rule 4). Each kit keeps the settings upstream's Package.swift gives it. Seven kits so
 // far, each with upstream's tests: SourceNoteKit, CrossRefKit and GeneratorKit since session 0;
 // TEIHeaderKit, SemanticVectorsKit and FTS5Store since session 1's Linux guards, with
-// ManifestGeneratorCore, whose tests hold TEIHeaderKit's; and FRUSCoreKit, part 1, since session 3.
-// The server depends on none of them yet: only the parity harness and the tests do.
+// ManifestGeneratorCore, whose tests hold TEIHeaderKit's; and FRUSCoreKit, part 1 since session 3
+// and part 2 since session 6's pin move. The server depends on none of them yet: only the parity
+// harness and the tests do.
 // Build and test through scripts/swift, which runs this package in swift:6.4-noble.
 
 import PackageDescription
@@ -20,7 +21,7 @@ let package = Package(
     products: [
         // The golden-file formats, for tools/mac-golden, the Mac-only tool that writes them.
         .library(name: "ParityFormat", targets: ["ParityFormat"]),
-        // The parity harness's command line: swift run frus-parity summarize | compare-summary | compare-results | parse | render | check-golden.
+        // The parity harness's command line: swift run frus-parity summarize | compare-summary | compare-results | parse | render | index | check-golden.
         .executable(name: "frus-parity", targets: ["FRUSParityTool"]),
     ],
     dependencies: [
@@ -133,23 +134,32 @@ let package = Package(
         ),
 
         // FRUSCoreKit, part 1 (session 3, upstream #1569): the TEI parser, the AST, the render
-        // conversion and HTML serializer, and the citation formatter, parser and models. Upstream's
-        // Package.swift gives it SourceNoteKit; its CryptoKit guard needs swift-crypto's Crypto,
-        // declared here for Linux only, as SemanticVectorsKit's is.
+        // conversion and HTML serializer, and the citation formatter, parser and models; part 2
+        // (session 6, upstream #1573 and #1574): the indexing pipeline, the search service and
+        // Citation Lookup's matcher. Upstream's Package.swift gives it SourceNoteKit and FTS5Store,
+        // and links sqlite3, here for macOS only as for FTS5Store; its CryptoKit and SQLite3 guards
+        // need swift-crypto's Crypto and CSQLite, declared here for Linux only.
         .target(
             name: "FRUSCoreKit",
             dependencies: [
-                "SourceNoteKit",
+                "SourceNoteKit", "FTS5Store",
                 .product(name: "Crypto", package: "swift-crypto", condition: .when(platforms: [.linux])),
+                .target(name: "CSQLite", condition: .when(platforms: [.linux])),
             ],
             path: "\(upstream)/FRUSCoreKit",
-            swiftSettings: swift6
+            swiftSettings: swift6,
+            linkerSettings: [.linkedLibrary("sqlite3", .when(platforms: [.macOS]))]
         ),
-        // The app's own suites for the kit, which live in its test folder: under SwiftPM each
-        // imports FRUSCoreKit alone, and whatever needs the app is inside `#if !SWIFT_PACKAGE`.
+        // The app's own suites for the kit, which live in its test folder: under SwiftPM they import
+        // FRUSCoreKit, and FTS5Store, SourceNoteKit and SQLite behind `canImport`, never the app;
+        // whatever needs the app is inside `#if !SWIFT_PACKAGE`. They read the app's data files and
+        // manifest from the submodule's FRUSExplorer/Resources by #filePath.
         .testTarget(
             name: "FRUSCoreKitTests",
-            dependencies: ["FRUSCoreKit"],
+            dependencies: [
+                "FRUSCoreKit", "FTS5Store", "SourceNoteKit",
+                .target(name: "CSQLite", condition: .when(platforms: [.linux])),
+            ],
             path: "\(upstream)/FRUSExplorerTests/FRUSCoreKit",
             swiftSettings: swift6
         ),
