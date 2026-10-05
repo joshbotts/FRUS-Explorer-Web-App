@@ -2,6 +2,58 @@
 
 One entry per session, newest first.
 
+## Golden files from the owner's three-volume export
+
+4 October 2026 · branch `claude/golden-export`
+
+The owner built FRUS Explorer from `af8bedab`, the pin, as build 49. Their Apple ID held no FRUS Explorer data, so instead of setting up a second macOS user they emptied the app's own 553-volume library with Settings ▸ Data & Recovery ▸ Erase Everything…. They then downloaded the three fixture volumes, let indexing and the person rollup finish, and exported the research database with Include My Notes, Summaries, and Tags turned off, to `/Users/Shared/frus-golden.sqlite`. This pull request commits the two golden files made from that export, which completes the Golden files checkpoint. The server, the image and `compose.yaml` are unchanged.
+
+**Delivered**
+
+- **`fixtures/golden/index-summary.json`,** check 2's golden summary, 32,682 bytes: 36 gating digests and 7 checks over exactly the three fixture volumes.
+  - Among its tables: 392 `document_cache` rows, 121 persons, 1,018 person mentions, 1,130 page ranges, 208 cross-references, 98 terms, 1,242 document subjects and 9 external citations.
+  - Every check has its right value: `integrity` ok, no `docsize` orphans in either full-text table, no revision history, `user_version` 4.
+- **`fixtures/golden/queries.results.json`,** check 3's counts and first 50 results, 844,004 bytes, one record for each of the 482 queries:
+  - 439 have a count, and 178 exceed 50. 27 are zero, each by design. For 22 of them, the query's note in `fixtures/parity/queries.jsonl` says so. The other five are R55's queries, which search with document text off over an index that holds no notes or summaries, as `fixtures/parity/README.md` says.
+  - 12 have one result after the 50th that ties with it, kept in the record's tie tail.
+  - 43 are refused as `emptyQuery`: the same 43 the expressions file refuses.
+- **`fixtures/golden/PENDING`** lists nothing, so `GoldenTests` validates all four golden files and none waits.
+- **The other two golden files** were made again at `af8bedab` in the same run, byte-identical to the committed ones.
+- **`scripts/make-golden`'s header** names the route the owner took, and says why Reset This Device does not do (see the notes).
+- **The docs.**
+  - In `PLAN.md` and its shared copy (rev 74), the Golden files checkpoint is Done. The Mac item for a pin move now asks for a new three-volume export and `scripts/make-golden --export`.
+  - `docs/COORDINATION.md` says the export-based golden files exist, and that a pin move remakes them from a new export, in sections 1, 2, 5 and 6.
+  - `docs/prep/README.md`'s pinning note says each pin move remakes them from a new export.
+
+**Results**
+
+- **The export.** Index version 65, FTS schema 4, `user_version` 4, app build 49, `my_writing_included` 0. It holds the three fixture volumes alone: 392 `document_cache` rows, and 392 `document_revisions` rows, all at index version 65. The app's three downloads match `fixtures/tei/SHA256SUMS`, and HistoryAtState's `master` is still `8e5da08`.
+- **`scripts/make-golden --export`** on the owner's Mac, macOS 27.0.1 with Xcode 27.0: every step ok. "results: 482 queries, 43 refused, 12 with ties past the 50th", and `frus-parity check-golden` passes.
+- **A cross-check against a new index.** Emptying a library that had held 553 volumes might leave something behind. To test that, a throwaway `mac-golden` command, not committed, built a new `frus.db` from the three fixtures with the app's own code:
+  1. `FTS5Store` and `IndexingPipeline`, constructed as `mac-golden results` constructs them, with the app's 36 JSON resources beside the tool;
+  2. `indexVolume` for each fixture;
+  3. `consolidatePersonRollupIfNeeded` with no overrides, then `applyBrokenRefsIndexIfNeeded` and `applyDocumentSubjectsIfNeeded`, the passes the app runs after indexing;
+  4. `IndexDatabaseExporter.export`, with the writing left out, as Export Research Database… does, but with a stamp the command built itself.
+
+  `frus-parity compare-summary` of the golden summary against it: "check 2 passes: 36 digests and 7 checks are identical". `mac-golden results` over it gave all 482 records identical to the golden file. So the golden files describe the index a new library makes. The two summaries differ only in information they do not compare. Besides the export time and the timings, the differences are:
+  - `sqlite_sequence`. The emptied library's counters continue from the 553-volume library's: `page_ranges` is at 766,807 against 1,130. The summary leaves those surrogate ids out of every hash. They also account for the file sizes and page counts: 5,111,808 bytes in 1,248 pages, against 5,099,520 in 1,245.
+  - `volume_structures.json`. Each process encodes the structure JSON with its keys in another order; the two are equal as JSON.
+  - The stamp's `semantic_provenance_digest`. The app stamps its bundled vectors' digest, `a726ca60…`. The throwaway command loaded no vectors, so its stamp has none.
+- **The same index without the resources.** With no JSON resources beside the tool, check 2 fails with 15 gating differences, in five tables. `document_subjects`, `document_subject_refs` and `document_subject_volumes` are empty, `external_citations` has 4 rows instead of 9, and the `person_rollup` content differs. So the check catches an index made without them.
+- **Linux, `swift:6.4-noble`, arm64.** All 1,122 tests pass, with the one named skip, in 1 minute 50 seconds with an incremental build. `committedGoldenFilesAreCurrentAndWhole` finds nothing pending, and `frus-parity check-golden` prints "golden files: 4 present and valid, 0 pending".
+- **macOS, natively.** FRUSParityTests' 62 tests pass, both renders giving 392 of 392.
+
+**Notes**
+
+- **Erase Everything, not Reset This Device.** Both delete the volumes, their figures and the search index. Reset This Device keeps `document_revisions`, the per-document change log, since it promises that annotations come back; only Erase Everything clears it. After Reset This Device, an export would still name every volume the library held in that table, and `frus-parity summarize` refuses an export whose tables name volumes `document_cache` does not hold. Erase Everything also deletes every note, collection and project, on the device and in iCloud, so it suits only an account with nothing to keep, as the owner's was.
+- **The owner's library now holds the three fixtures alone.** `~/Documents/frus-index.sqlite`, the 553-volume export of 3 October from build 49, is unchanged. It stays the input for local Import trials while the pin holds. The S10 export needs a full library again, from the build pinned at S10.
+- **For S6.** The cross-check shows the app's own code making, from scratch, the index the golden summary describes. It needs the indexing calls and the three passes above, and the bundle's JSON resources. A Linux index made the same way should pass check 2; one made without the resources fails it in those five tables. S6's upstream pull request only moves code, so in the session its Linux index can be compared with these files by `frus-parity compare-summary`, which compares no provenance. Its pin move changes the source digest, so that pull request remakes all four golden files, the two from an export with a new three-volume export from the newly pinned build.
+- **The platform recorded** in both files: macOS 27.0.1, SQLite 3.54.0, `en_US`, America/New_York. Check 2 compares no platform field.
+
+**Next.**
+- S6: FRUSCoreKit part 2, an upstream pull request that moves the indexer, search, the citation matcher and splitter, and `PageRangeStore` into the kit. Its pin move remakes the golden files from a new three-volume export, as the note above says, and runs checks 2 and 3 on Linux against them, with check 7's matcher and splitter half.
+- A web session adds the daily watch of the app's `v2`, as section 5 of `docs/COORDINATION.md` describes.
+
 ## Pin move: FRUSCoreKit on Linux in CI
 
 4 October 2026 · branch `claude/pin-2a4df13` · upstream [joshbotts/FRUS-Explorer#1569](https://github.com/joshbotts/FRUS-Explorer/pull/1569), merged as `f102fa4d`, [#1571](https://github.com/joshbotts/FRUS-Explorer/pull/1571), merged as `2a4df13c`, and [#1572](https://github.com/joshbotts/FRUS-Explorer/pull/1572), merged as `af8bedab`
