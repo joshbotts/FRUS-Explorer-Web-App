@@ -16,8 +16,23 @@ import Testing
         return Int(source[range.upperBound...].prefix { $0.isNumber })
     }
 
+    /// Where the pinned app keeps IndexingPipeline.swift: in the app's folder until FRUSCoreKit,
+    /// part 2 (session 6) moves it into the kit's. Exactly one of the two must hold it.
+    static let indexingPipelinePaths = ["FRUSExplorer/Search/IndexingPipeline.swift", "FRUSCoreKit/Search/IndexingPipeline.swift"]
+
+    static func indexingPipelinePath() throws -> String {
+        let found = indexingPipelinePaths.filter {
+            FileManager.default.fileExists(atPath: repository.appendingPathComponent("upstream/FRUS-Explorer/\($0)").path)
+        }
+        try #require(found.count == 1, """
+            the submodule must hold IndexingPipeline.swift at exactly one of \(indexingPipelinePaths.joined(separator: " and ")), \
+            but holds it at \(found.isEmpty ? "neither" : "both")
+            """)
+        return found[0]
+    }
+
     @Test func supportedIndexVersionMatchesThePin() throws {
-        let pinned = try Self.upstreamNumber(in: "FRUSExplorer/Search/IndexingPipeline.swift",
+        let pinned = try Self.upstreamNumber(in: Self.indexingPipelinePath(),
                                              after: "static let currentDateIndexVersion: Int = ")
         #expect(pinned == IndexCompatibility.supportedIndexVersion,
                 "the pin moved: update IndexCompatibility.supportedIndexVersion")

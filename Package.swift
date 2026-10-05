@@ -20,7 +20,7 @@ let package = Package(
     products: [
         // The golden-file formats, for tools/mac-golden, the Mac-only tool that writes them.
         .library(name: "ParityFormat", targets: ["ParityFormat"]),
-        // The parity harness's command line: swift run frus-parity summarize | compare-summary | parse | render | check-golden.
+        // The parity harness's command line: swift run frus-parity summarize | compare-summary | compare-results | parse | render | check-golden.
         .executable(name: "frus-parity", targets: ["FRUSParityTool"]),
     ],
     dependencies: [
@@ -180,9 +180,9 @@ let package = Package(
             path: "Tests/ParityFormat",
             swiftSettings: swift6
         ),
-        // The harness itself: the index summary (check 2), the parse comparison (check 3), the
-        // render comparison (check 4) and the golden files' validation. Crypto and FRUSCoreKit stay
-        // here, out of FRUSLightCore and the server.
+        // The harness itself: the index summary (check 2), the parse and results comparisons
+        // (check 3), the render comparison (check 4), the golden files' validation, and the
+        // indexing metrics. Crypto and FRUSCoreKit stay here, out of FRUSLightCore and the server.
         .target(
             name: "FRUSParity",
             dependencies: [

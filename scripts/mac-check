@@ -78,8 +78,20 @@ if git -C "$APP_REPO" rev-parse --git-dir >/dev/null 2>&1; then
   branch=$(git -C "$APP_REPO" rev-parse --abbrev-ref HEAD)
   v2=$(git -C "$APP_REPO" ls-remote origin refs/heads/v2 2>/dev/null | cut -c1-7)
   ok "FRUS-Explorer: $branch at ${app_head:0:7}; v2 on GitHub is at ${v2:-unknown}"
-  src=$(grep -Eo 'currentDateIndexVersion: Int = [0-9]+' \
-        "$APP_REPO/FRUSExplorer/Search/IndexingPipeline.swift" 2>/dev/null | grep -Eo '[0-9]+$')
+  # IndexingPipeline.swift moves from the app's folder into FRUSCoreKit's with the kit's part 2
+  # (S6), so exactly one of the two must hold it.
+  pipeline=""; found=0
+  for dir in FRUSExplorer/Search FRUSCoreKit/Search; do
+    if [ -f "$APP_REPO/$dir/IndexingPipeline.swift" ]; then pipeline="$APP_REPO/$dir/IndexingPipeline.swift"; found=$((found + 1)); fi
+  done
+  src=""
+  if [ "$found" -eq 1 ]; then
+    src=$(grep -Eo 'currentDateIndexVersion: Int = [0-9]+' "$pipeline" 2>/dev/null | grep -Eo '[0-9]+$')
+  elif [ "$found" -eq 0 ]; then
+    fix "IndexingPipeline.swift is in neither FRUSExplorer/Search nor FRUSCoreKit/Search of $APP_REPO"
+  else
+    fix "IndexingPipeline.swift is in both FRUSExplorer/Search and FRUSCoreKit/Search of $APP_REPO: check out a commit that has only one"
+  fi
   if [ -n "$installed" ] && [ -n "$src" ]; then
     if [ "$installed" = "$src" ]; then ok "the library's index version matches this checkout ($src)"
     else later "the library is at index version $installed, this checkout declares $src: build this checkout and let it re-index before the golden files or an export"; fi
