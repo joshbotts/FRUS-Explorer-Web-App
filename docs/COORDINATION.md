@@ -40,7 +40,7 @@ The web edition does not reimplement the app. It compiles some of the app's own 
 | TEIHeaderKit, with ManifestGeneratorCore and ManifestGeneratorTests for its tests | Since the pin move after S1 | Tests only, for now |
 | SemanticVectorsKit | Since the pin move after S1 | Semantic search, from phase 4 |
 | FRUSCoreKit, part 1 | Since S3's pin move, to `af8bedab` | The reader's HTML, and Cite. The web CI runs its tests, and renders the 392 golden rows with it |
-| FRUSCoreKit, part 2 | S6 | Indexing and search on the server |
+| FRUSCoreKit, part 2 | From S6's pin move | Indexing and search on the server, and Citation Lookup's matcher in phase 2. The web CI will run their tests |
 | WordCloudKit | Not compiled | Built on Apple's NaturalLanguage framework. Phase 4 plans a separate Linux lemmatizer |
 
 The server itself links none of these yet. On a Mac only, the web repository's `tools/mac-golden` compiles the whole app module, unmodified, to make golden files.
@@ -106,11 +106,12 @@ At the pull request's head:
 
 The app computes the same results. One timing changes: the broken-references index is now read when the reader's converter is built, rather than at the first cross-reference.
 
-**Part 2 (session S6): two pull requests.** A, the indexing pipeline and the search service, is open as [joshbotts/FRUS-Explorer#1573](https://github.com/joshbotts/FRUS-Explorer/pull/1573). B, the citation matcher and splitter and `PageRangeStore`, branches from `v2` after A merges.
+**Part 2 (session S6): two pull requests.** A, the indexing pipeline and the search service, [joshbotts/FRUS-Explorer#1573](https://github.com/joshbotts/FRUS-Explorer/pull/1573), merged on `v2` as `2d216f4c` after the owner's Mac check. B, the citation matcher and splitter and `PageRangeStore`, branched from that merge, is open as [joshbotts/FRUS-Explorer#1574](https://github.com/joshbotts/FRUS-Explorer/pull/1574).
 - `IndexingPipeline.swift` is the app's largest and busiest file. A moves it into the kit with the Foundation-only types it and the search service use, all but its Spotlight section and its SwiftData summary method, which stay in the app's `IndexingPipeline+App.swift` beside the initialiser every app call site uses.
-- The code A moves reads five of the app's JSON files. The host passes them in (`IndexingResources`), four of which change what an index holds; the server will load them from the submodule's `FRUSExplorer/Resources`. B adds the manifest, which the citation matcher reads.
+- The code A moves reads five of the app's JSON files. The host passes them in (`IndexingResources`), four of which change what an index holds; the server will load them from the submodule's `FRUSExplorer/Resources`. B adds the manifest, which the citation matcher reads through `CitableVolumeCatalogue`: the app's `ManifestStore` conforms to it, and the server will pass a `FixedVolumeCatalogue` decoded from the submodule's `manifest.json`.
 - The indexer's stamps go through a stamp store (`IndexingStampStore`), which `UserDefaults` satisfies in the app and an in-memory store on the server.
 - A adds `runPostIndexPasses`, the steps after indexing (the person rollup, the broken-reference flags, the subjects), which the app's launch calls and the server's indexer will.
+- B leaves Batch and Structured Entry's types (the block splitter, the batch outcome and row, the lookup form's fields) internal, since only the seam is needed for S6's checks. The web edition's citation lookup, in phase 2, makes them public in its own pull request.
 - The pin move after both changes the source digest, so it remakes the golden files, the two from an export with a new three-volume export from the newly pinned build.
 
 Web sessions will write all of part 2.
@@ -123,7 +124,7 @@ These structures let the two codebases share code without app sessions having to
   - The SPM build compiles a kit alone, so it is where a kit naming an app declaration first fails.
   - A Linux-only break, such as an unguarded Apple import, shows only in a Linux build: the web CI and its daily watch.
 - **A boundary test in the normal Xcode run.** `FRUSCoreKitBoundaryTests` fails when a `FRUSCoreKit/` file:
-  - imports anything but Foundation, except FoundationXML, CryptoKit, swift-crypto's `Crypto` and SourceNoteKit, and once #1573 merges OSLog, SQLite3 (`CSQLite` on Linux) and FTS5Store, each inside the `canImport` branch that selects it (any other import fails, guarded or not);
+  - imports anything but Foundation, except FoundationXML, CryptoKit, swift-crypto's `Crypto` and SourceNoteKit, and since #1573 OSLog, SQLite3 (`CSQLite` on Linux) and FTS5Store, each inside the `canImport` branch that selects it (any other import fails, guarded or not);
   - reads `Bundle.main` or `UserDefaults`;
   - names a type, function, constant or variable that only the app declares. Since #1571, a follow-up merged as `2a4df13`, it skips members after a `.`, argument labels, and any name the kit declares for itself. So a change that touches no kit file fails it only by giving an app declaration a Foundation or standard-library name the kit uses, such as `URL` or `max`; renaming the app's declaration fixes that.
 

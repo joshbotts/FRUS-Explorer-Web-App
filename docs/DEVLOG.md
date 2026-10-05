@@ -2,6 +2,104 @@
 
 One entry per session, newest first.
 
+## Session 6b: FRUSCoreKit, part 2, upstream pull request B
+
+5 October 2026 · branch `claude/s6b-citation-lookup` · upstream [joshbotts/FRUS-Explorer#1574](https://github.com/joshbotts/FRUS-Explorer/pull/1574)
+
+The owner's Mac check 3 passed for #1573, and it merged on `v2` as `2d216f4c`. S6's second upstream pull request branches from that merge. It moves Citation Lookup's matcher into `FRUSCoreKit/`, with its block splitter, its page-range store and what their suites use, so check 7's matcher half can run on Linux. As with S6a, this entry records the results at the pull request's head. The pin stays at `af8bedab` until the pin move that follows this merge. This repository's pull request is records only, and passes CI at that pin.
+
+**Decided in the session**
+
+The owner's 4 October answers covered this pull request's shape. Two smaller decisions were the session's:
+- **Check 7's matcher count is 70, not 74.** `PLAN.md` took 74 from the whole file `CitationMatchingEngineTests.swift`. Four of its tests can run only in the app. One builds the app's `AppState`, one dispatches through the WebKit link handler, and two read the app's views' source. They stay Xcode's, guarded with their reasons. Rewriting the handler test for Linux would copy the handler's code, which rule 4 forbids. `PLAN.md` now says 70 of 74.
+- **Only the seam is new public API.** The engine and `PageRangeStore` were already public. Batch and Structured Entry's types (the splitter, the batch outcome and row, the form's fields) stay internal until the web edition's citation lookup needs them, in phase 2, under the owner's rule that only what S6's checks need becomes public.
+
+**How the session got there**
+
+- **A map first.** Three readers mapped the source closure, the tests, and the scans and records at `2d216f4c`, and a fourth synthesized the plan. The one app name the moved code used was `ManifestStore`, read for one property, `citableEntries`. None of the files had changed since `af8bedab`, so the S6 map's line numbers held.
+- **A review before the pull request opened.** Five reviewers looked at five things: behaviour preservation, the tests, the records, the source scans and audits, and this repository's side. A skeptic checked each finding. Three of the reviewers found nothing. One finding held: a commit message said the page-range store bound page numbers as text, when it binds only volume ids. The message was corrected before the first push. The four findings about this repository were real, but none is a defect of the upstream pull request. They are this pull request's records and the pin move's work, both below.
+
+**The upstream pull request**
+
+Branch `claude/fruscorekit-part2b`: eight commits in review order. Its description lists them and holds the Mac check 3 commands, the expected results and the symbol-diff script. This time the script is written to `/tmp/symdiff.py` by the command block itself, and `v2` is built from a worktree beside the checkout, so the checkout never leaves the branch. Both changes answer what went wrong in #1573's check.
+
+- **Moves.**
+  - Four files by `git mv`:
+    - `CitationMatchingEngine`, with `ConfidenceLabels`;
+    - `CitationBlockSplitter`, with the batch outcome, row and runner;
+    - `PageRangeStore`;
+    - `CountCopy`, with `StatusBarCopy`.
+  - `CitationLookupFields` and `CollectionCitationLineResolver` moved verbatim out of their SwiftUI files.
+  - The kit goes from 29,223 lines in 40 files to 31,887 in 47.
+- **The seam** (`FRUSCoreKit/Citation/CitableVolumeCatalogue.swift`):
+  - `CitableVolumeCatalogue` has one requirement, `var citableEntries: [VolumeManifestEntry] { get async }`, and the engine holds `any CitableVolumeCatalogue`.
+  - The app conforms `ManifestStore` with an empty extension. Its main-actor getter witnesses the requirement, so each read still hops to the main actor.
+  - `FixedVolumeCatalogue(contentsOf:)` decodes a `manifest.json`. The server will pass one made from the submodule's `FRUSExplorer/Resources/manifest.json`.
+  - The initialisers keep the label `manifestStore:`, so no caller changed.
+- **Linux.** `PageRangeStore` imports SQLite3 behind `canImport`, else `CSQLite`. It binds text with `SQLITE_TRANSIENT` where it bound a temporary `NSString`'s buffer as static, which only Apple's autorelease pool kept alive.
+- **Tests.** Three suites dual-compiled, and `CitationTestSupport.swift`. It reads the bundled manifest from the repository in the package, and builds a `FixedVolumeCatalogue` where Xcode builds a `ManifestStore`.
+  - Three guards are lifted: `CitationLookupFieldsTests`, the manifest-backed punctuation test, and `matchSurvivesNoisyVolume`.
+  - A new suite, `CitableVolumeCatalogueTests`.
+  - `FRUSCoreKitTests` goes from 765 tests in 108 suites to 878 in 116.
+- **Audits and docs.**
+  - The boundary audit is unchanged.
+  - Four path reads, and one count-scan baseline key.
+  - The app's `CLAUDE.md`.
+  - 16 editable-content paths and 12 ranges.
+  - Version histories.
+  - The session entry.
+
+**Results at the pull request's head**
+
+- **Check 7's matcher half on Linux.** Check 7's three parts, in the same setup as S6a (a scratch checkout of this repository, the branch copied into its submodule folder, `Package.swift` patched as the pin move will patch it):
+  - CitationMatchingEngineTests' 70: 27 in its first suite and 43 in `CitationLookupIndexedTests`;
+  - CitationBlockSplitterTests' 18;
+  - the punctuation test, which reads the bundled manifest.
+
+  All pass, inside "✔ Test run with 878 tests in 116 suites passed", none skipped, in 24 s. With S3's formatter and parser half, 81 tests, check 7 runs 170 tests on Linux.
+- **The matcher on both platforms.** In Debug, the engine's suites print 3,732 log lines: each lookup's strategy and verdict, and the round trip of the app's own citation of all 553 bundled volumes in three formats, marked and plain. In each of the six forms, 551 of 553 resolve first to their own volume. The lines are identical on macOS and on Linux.
+- **The whole Linux suite** passes, except the three tests that check the golden files' provenance. Those fail only on the source digest, as they must until the pin move remakes the golden files, and their row comparisons pass.
+- **Checks 2 and 3, unchanged.** The S6a probe, rerun at this head:
+  - check 2: "check 2 passes: 36 digests and 7 checks";
+  - check 3: "check 3's results pass: 482 queries, 482 identical and 0 reordered only within Mac tie groups".
+
+  Xcode was building at the same time, so this run's timings are not measurements.
+- **Check 4 at the head.** `tools/mac-golden`, built against the branch, wrote all 392 rows' HTML and all 482 queries' expressions byte-identical to the committed golden files. Only their provenance changed.
+- **macOS and iOS**, which the upstream description gives in full:
+  - **Builds and symbols.**
+    - Clean unsigned builds of `FRUSExplorerMac` succeed beside `v2`'s, with the same five warning lines.
+    - The normalized symbol diff is 29 removed and 59 added, each name explained.
+  - **The full unit run:** "✘ Test run with 6498 tests in 765 suites failed after 479.912 seconds with 8 issues."
+    - The 8 are the Keychain tests that an unsigned build fails.
+    - The 4 extra tests are the new suite's.
+    - The run skips the same 17 tests and 2 suites as `v2`.
+  - **`swift test`, whole:** 38 runs and 2,541 tests, all passed.
+  - **The audit, mutated:** four of its twelve tests failed on four planted violations, each naming its line.
+
+**Delivered here**
+
+- **`PLAN.md`** and its shared copy (rev 78):
+  - the S6 row's check 7 count, 70 of 74;
+  - Mac check 3: A done, B awaiting the owner.
+- **`docs/COORDINATION.md`** section 2: A merged; B open, with the catalogue seam and how the server will pass the manifest. Section 3: the imports the audit allows since #1573.
+- **`docs/prep/README.md`:** what B settled.
+
+**Results here**
+
+No code changed. CI runs the suite at `af8bedab` as before, 1,136 tests.
+
+**The pin-move pull request, after #1574 merges**
+
+As S6a listed, and also:
+- **Check 7 in CI.** `FRUSCoreKitTests` at the new pin includes check 7's matcher half, 89 tests, with no change to this repository beyond the pin and `Package.swift`.
+- **CI's skip check** (`.github/workflows/ci.yml`, the Test step) matches any log line with `Test`, then `skipped` after a space. At the new pin, one passing test's name contains the word: "A Lot File(s) prefix is skipped, never captured into the key". The pattern needs to require the verb right after the test's name, keeping XCTest's `Test Case '…' skipped` form. The scratch checkout's full Linux log has no other such name.
+- **`docs/SPEC.md` and `PLAN.md`** name no moved citation file by path, so nothing else moves.
+
+**Next.**
+- The owner: Mac check 3 on #1574, with the commands in its description, and then the merge.
+- Then the pin move after both, with a new three-volume export from the newly pinned build.
+- A web session adds the daily watch of the app's `v2`, as section 5 of `docs/COORDINATION.md` describes.
+
 ## Session 6a: FRUSCoreKit, part 2, upstream pull request A
 
 4–5 October 2026 · branch `claude/s6-fruscorekit-part2` · upstream [joshbotts/FRUS-Explorer#1573](https://github.com/joshbotts/FRUS-Explorer/pull/1573)
