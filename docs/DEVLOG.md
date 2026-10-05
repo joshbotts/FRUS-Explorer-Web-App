@@ -2,6 +2,160 @@
 
 One entry per session, newest first.
 
+## Session 6a: FRUSCoreKit, part 2, upstream pull request A
+
+4–5 October 2026 · branch `claude/s6-fruscorekit-part2` · upstream [joshbotts/FRUS-Explorer#1573](https://github.com/joshbotts/FRUS-Explorer/pull/1573)
+
+S6's first upstream pull request moves the app's indexing pipeline and search service into `FRUSCoreKit/`, so that this repository can index and search on Linux with the app's own code. It branches from `v2` at `af8bedab`, which is still the pin; nothing has merged on `v2` since. As with S3, this entry records the results at the pull request's head. The indexer and search reach this repository's CI in the pin move that follows both of S6's pull requests. This pull request makes the parity tools ready for that, and passes CI at `af8bedab`.
+
+**The owner's decisions, 4 October**
+
+- **Two upstream pull requests and one pin move.** A moves the indexer and search, which brings checks 2 and 3 to Linux. B, branched from `v2` after A merges, moves the citation matcher, the block splitter and `PageRangeStore`, which brings check 7's matcher half. One pin move follows both, so the owner makes one new three-volume export.
+- **All of `IndexingPipeline.swift`, and the core suites.** A moves the whole file and the Foundation-only types it uses, and about 370 of the indexer's and search's tests compile twice, under Xcode and against the kit alone.
+- **No `UserDefaults` or `Bundle.main` in the kit.** The stamps go through a stamp-store interface that `UserDefaults` already satisfies. The data files go through providers the app passes, so nothing loads earlier than before. The boundary audit lets the kit import logging, SQLite (`CSQLite` on Linux) and FTS5Store, each behind the `canImport` that selects it.
+- **Mac check 3 takes Mac check 2's form,** once for each pull request.
+- **Left to the session, as recommended:**
+  - one kit call runs the passes after indexing, and the app's launch calls it too;
+  - the iOS memory-warning observer stays where it is, matched by the notification's name;
+  - only what S6's checks need becomes public;
+  - indexing is measured on the fixtures and on a sample of 20 to 30 volumes;
+  - check 3 keeps to exact ties.
+
+**How the session got there**
+
+- **A map first.** Six readers mapped the code's dependencies at `af8bedab`: the indexer, search, the citation matcher, the stores, the tests and this repository's side. A seventh synthesized the plan and the decisions above. `docs/prep/s6-linux-edits.tsv`, from the dry run at `34a5120`, was a list of guards. The map showed that moves avoid most of them:
+  - the pipeline needs kit internals, so it lives in `FRUSCoreKit` itself;
+  - six data files are read, not eight;
+  - the Keychain and NARA shims are unneeded.
+- **Two audits before the pull request opened.**
+  - **The tree walks.** A scan of the test target's 50 walks of `FRUSExplorer/` judged whether each could stop reading code that moved, and each change it proposed was checked again independently: nine path reads, four walks widened to `FRUSCoreKit/`, and one repository path in a moved suite.
+  - **The whole change.** Five reviewers looked at behaviour preservation, the seams, the tests, the records and this repository's tools, and each finding was checked by a skeptic. 20 of the 28 findings held, some found twice, and all were fixed before the pull request opened. Among them:
+    - `runPostIndexPasses` held the pipeline's actor across all three passes where the launch had released it between them; it is `nonisolated` now;
+    - one sanity set no longer proved that the walk reads the test target's free functions;
+    - several guard reasons, counts, commit-message details and doc sentences were wrong.
+  - **And one the session found itself.** The pipeline's comment said a test pinned the memory-warning notification's name, and none did. `IndexingSeamsTests` now does, and also checks that `IndexingResources.bundled` serves the app's stores and tests the seams under both compilers.
+
+**The upstream pull request**
+
+Branch `claude/fruscorekit-part2`: ten commits in review order. Its description lists them and holds the Mac check 3 commands, the expected results and the symbol-diff script.
+
+- **Moves.** Fourteen files by `git mv`:
+  - `IndexingPipeline`, `SearchService`, `KWICLine`, `PersonClusterer`, `ResultSetFacets`, `DecimalFileSegment` and `IndexingStateTracker`;
+  - `ChronologyModels`, `DocumentKey`, `PersonMentionStore`, `PersonAuthorityIndex` and `VolumeSubjectProfiles`;
+  - two renamed: `DocumentSubjectIndex` and `DecimalClassLabelTable`.
+
+  Fourteen Foundation-only value types moved verbatim into six new kit files, `SearchParameters.swift` among them. The kit goes from 10,183 lines in 18 files to 29,219 in 40.
+- **The seams** (`FRUSCoreKit/Search/IndexingSeams.swift`):
+  - `IndexingResources`, with `.none` and `loading(fromDirectory:)`, which refuses a folder lacking one of the four files that change an index;
+  - `IndexingStampStore`, whose requirements are `UserDefaults`' own methods, and `InMemoryIndexingStampStore`;
+  - `IndexedDocumentDonor` and `DonatedDocument`;
+  - `runPostIndexPasses(overrides:afterRollupRebuild:)`.
+- **The app's half** (`IndexingPipeline+App.swift`): the old initialiser, passing `.bundled`, `UserDefaults` and the Spotlight donor; the Spotlight section; `updateSummary(_:)`. The app's three launch branches call `runPostIndexPasses`.
+- **Linux.** Guarded imports, and the kit's own copy of FTS5Store's logging stand-in. The kit depends on FTS5Store.
+- **Tests.** Thirteen suites dual-compiled, and `IndexingTestSupport.swift`, which gives the package's pipelines the app's data files and one shared stamp store. `FRUSCoreKitTests` goes from 393 tests to 765.
+- **Audits and docs.**
+  - `FRUSCoreKitBoundaryTests` 1.2.
+  - Nine path reads, and four tree walks widened to `FRUSCoreKit/`.
+  - The app's `CLAUDE.md`.
+  - 35 editable-content ranges, the API spec and version histories.
+  - The session entry.
+
+**Results at the pull request's head**
+
+- **Linux, `swift:6.4-noble`, arm64.** The setup: a scratch checkout of this repository, with the branch copied into its submodule folder and `Package.swift` patched as the pin move will patch it (FTS5Store and `CSQLite` for the kit and its tests).
+  - `FRUSCoreKit` builds with no warning.
+  - "✔ Test run with 765 tests in 108 suites passed", none skipped. The other kit targets pass.
+  - This repository's own harness fails only where it must until the pin move. The golden files' provenance names `af8bedab`'s sources. `CompatibilityTests` on `main` reads `IndexingPipeline.swift` at its old path, which this pull request's path tolerance fixes.
+- **Checks 2 and 3 on Linux.** A throwaway probe in the scratch checkout, not committed, used the kit's public API alone, as the server will:
+  1. `FTS5Store` and `IndexingPipeline(resources: .loading(fromDirectory:), defaults: InMemoryIndexingStampStore())`, with the submodule's `FRUSExplorer/Resources`;
+  2. `indexVolume` for the three fixtures;
+  3. `runPostIndexPasses()`;
+  4. a page-for-page copy in rollback-journal mode through SQLite's backup API, then `IndexSummarizer`;
+  5. `SearchService`, with `tools/mac-golden`'s results loop.
+
+  The results:
+  - **Check 2:** "check 2 passes: 36 digests and 7 checks", against the golden summary of the owner's three-volume export. So a raw Linux index, copied without the app's exporter, equals the Mac's export.
+  - **Check 3:** `frus-parity compare-results` printed "check 3's results pass: 482 queries, 482 identical and 0 reordered only within Mac tie groups".
+    - 359 passing queries have other score bits than the Mac's: 1,349 scores in all, each 1 to 3 ulp away (1,165 one, 182 two, 2 three), the largest relative difference 4.3 × 10⁻¹⁶.
+    - The smallest gap between two distinct adjacent Mac scores is 4.6 × 10⁻⁸. So rounding cannot reorder results, and exact ties stay the right rule.
+  - **Speed and memory,** release, an idle Mac with 10 CPUs:
+    - the three volumes index in 0.53, 0.28 and 0.30 s;
+    - the passes after indexing take 0.05 s, so 1.18 s in all;
+    - the 482 queries take 10.7 s, counting the paging of tie tails;
+    - the peak resident memory is 130 MiB (VmHWM 133,228 KiB).
+- **Check 4 at the head.** `tools/mac-golden`, built against the branch in the scratch checkout, wrote the HTML of all 392 rows and the expressions of all 482 queries byte-identical to the committed golden files. Only their provenance changed. The Linux renders against those files: "check 4, the reader's path: 392 of 392 rows identical", and so along the full-parse path.
+- **macOS and iOS**, which the upstream description gives in full:
+  - Clean unsigned builds of `FRUSExplorerMac` succeed beside `v2`'s, with the same five warning lines.
+  - The normalized symbol diff is 97 removed and 389 added, each name explained.
+  - A clean iOS `build-for-testing` takes 144 s, with the 7 known warning lines.
+  - **The full unit run:** "✘ Test run with 6494 tests in 764 suites failed after 373.887 seconds with 8 issues." `v2`: "✘ Test run with 6486 tests in 763 suites failed after 389.226 seconds with 9 issues."
+    - Both fail the 8 Keychain tests an unsigned build fails; `v2` also had the late-image flake.
+    - Both skip the same 17 tests and 2 suites.
+    - The 8 extra tests are the new seams suite's.
+  - **`swift test`, whole:** 38 runs and 2,428 tests, all passed.
+  - **The audit, mutated:** five of its twelve tests failed on seven planted violations, each naming its lines.
+
+**Delivered here**
+
+- **Check 3's results comparison.**
+  - `Tests/FRUSParity/SearchParity.swift` compares a candidate results file with `fixtures/golden/queries.results.json`. It uses ParityFormat's tie-aware `ResultComparison` for each query and reports four things:
+    - each permutation inside a Mac tie group;
+    - each difference: a count, a missing or extra document, an order outside a tie, an error string, or a missing, extra or repeated record;
+    - which passing queries have other score bits, as information.
+  - `frus-parity compare-results <golden> <candidate>` prints "check 3's results pass" or "fail": the compiled expressions are the rest of check 3, and ParseParity's.
+- **`Tests/FRUSParity/IndexingMetrics.swift`:** step timing with `ContinuousClock`, documents per second, and the process's peak resident memory (VmHWM on Linux, `ru_maxrss` on macOS), for the pin move's indexing measurements.
+- **Path tolerance for the move.** `CompatibilityTests` and `scripts/mac-check` read the index version from whichever of `FRUSExplorer/Search/` and `FRUSCoreKit/Search/` holds `IndexingPipeline.swift`, and fail if both or neither do.
+- **Tests:** 14 new in FRUSParityTests (11 for the comparison, among them the committed results file against itself, and 3 for the metrics), so 76.
+- **The docs.**
+  - `PLAN.md` and its shared copy (rev 75): the S6 row (two pull requests, one pin move), Mac check 3, the owner's decisions, and two risk rows.
+  - `docs/COORDINATION.md` section 2: part 2's two pull requests, A's seams, and the guarded imports the audit will allow.
+  - `docs/prep/README.md`: what A settled, and what remains of `s6-linux-edits.tsv` and `shims/`.
+
+**Results here**
+
+- **Linux, `swift:6.4-noble`, arm64.** All 1,136 tests pass, with the one named skip:
+
+  | Target | Tests |
+  | --- | --- |
+  | FRUSCoreKitTests | 393 |
+  | SourceNoteKitTests | 292 |
+  | FTS5StoreTests | 209 |
+  | FRUSParityTests | 76 |
+  | ManifestGeneratorTests | 60 |
+  | FRUSLightCoreTests | 42 |
+  | SemanticVectorsKitTests | 35 |
+  | CrossRefKitTests | 10 |
+  | FRUSLightServerTests | 9 |
+  | GeneratorKitTests | 7 |
+  | FTS5CheckTests | 3 |
+
+- `frus-parity compare-results` passes the committed results file against itself, and the probe's Linux results from the head as above.
+
+**The pin-move pull request, after both merges**
+
+- **`Package.swift`.** `FRUSCoreKit` gains FTS5Store and `CSQLite` on Linux; `FRUSCoreKitTests` gains FTS5Store, SourceNoteKit and `CSQLite`, as the scratch package had them.
+- **The indexer and search in CI,** with the probe's steps as tests. They index the fixtures once per process with `IndexingResources.loading(fromDirectory:)` over the submodule's resources and an in-memory stamp store, then run the passes:
+  - check 2: copy the index with the backup API into rollback-journal mode, summarize it and compare;
+  - check 3: run the 482 queries with `tools/mac-golden`'s loop and compare with SearchParity;
+  - a test that the four index files are present and decode;
+  - `frus-parity index --metrics`.
+
+  Check 3's expressions for the queries outside the default scope still need a Linux comparison.
+- **Golden files.** All four, remade by `scripts/make-golden --export` from a new three-volume export by the newly pinned build. The source digest changes with the move.
+- **Paths.** `docs/SPEC.md` and the comments citing `IndexingPipeline.swift` by line move with it.
+
+**Notes**
+
+- **For S8.** The pipeline's initialiser opens its database read-write, runs its schema setup and sets WAL mode, which does not suit an immutable export. S8's own upstream pull request needs a read-only open, with the figure URLs and the page shell it already needs.
+- **On Linux,** `IndexingResources.loading(fromDirectory:)` answers nothing for the collection authority's alias fallback, which only related-documents queries use. It changes no index.
+- **The probe and the scratch checkout** are not committed. The pin move's tests replace the probe.
+- **The owner's next steps:** Mac check 3 on #1573, from a clone at a real path, with the commands in its description, and then the merge.
+
+**Next.**
+- S6b: the second upstream pull request, the citation matcher, the block splitter and `PageRangeStore`, with check 7's matcher half, branched from `v2` after #1573 merges.
+- Then the pin move after both, with a new three-volume export from the owner.
+- A web session adds the daily watch of the app's `v2`, as section 5 of `docs/COORDINATION.md` describes.
+
 ## Golden files from the owner's three-volume export
 
 4 October 2026 · branch `claude/golden-export`

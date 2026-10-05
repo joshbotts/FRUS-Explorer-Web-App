@@ -2,6 +2,7 @@
 //
 //   frus-parity summarize <db> [--any-volumes] [--golden <out.json>] [--upstream-commit <sha>] [--repo <root>]
 //   frus-parity compare-summary <golden.json> <candidate.json>
+//   frus-parity compare-results <golden.json> <candidate.json>
 //   frus-parity parse <queries.jsonl>
 //   frus-parity render [<volume> <document> [--full-parse] [--out <file>]] [--repo <root>]
 //   frus-parity check-golden [--repo <root>]
@@ -16,6 +17,7 @@ import ParityFormat
 let usage = """
     usage: frus-parity summarize <db> [--any-volumes] [--golden <out.json>] [--upstream-commit <sha>] [--repo <root>]
            frus-parity compare-summary <golden.json> <candidate.json>
+           frus-parity compare-results <golden.json> <candidate.json>
            frus-parity parse <queries.jsonl>
            frus-parity render [<volume> <document> [--full-parse] [--out <file>]] [--repo <root>]
            frus-parity check-golden [--repo <root>]
@@ -96,6 +98,37 @@ func compareSummary(_ arguments: Arguments) throws {
         fail("check 2 fails: \(differences.count) gating difference(s)")
     }
     print("check 2 passes: \(golden.gating.digests.count) digests and \(golden.gating.checks.count) checks are identical")
+}
+
+/// Check 3's results: each query's count and first 50 results in a candidate, such as a file
+/// `mac-golden results` writes or one from the Linux index, against the golden file's. Each tie
+/// group the candidate reorders is listed, and passes.
+func compareResults(_ arguments: Arguments) throws {
+    guard arguments.positional.count == 2 else { throw UsageError("compare-results takes golden results and a candidate") }
+    let golden = try GoldenJSON.read(ResultsGolden.self, from: URL(fileURLWithPath: arguments.positional[0]))
+    let candidate = try GoldenJSON.read(ResultsGolden.self, from: URL(fileURLWithPath: arguments.positional[1]))
+    func made(_ provenance: Provenance) -> String {
+        "\(provenance.tool) on \(provenance.platform.os), SQLite \(provenance.platform.sqlite ?? "unknown")"
+    }
+    print("information, not compared: golden by \(made(golden.provenance)); candidate by \(made(candidate.provenance))")
+    let report = SearchParity.compare(golden: golden, candidate: candidate)
+    for permutation in report.permutations { print("tie      \(permutation)") }
+    if !report.otherScores.isEmpty {
+        let queries = report.otherScores.count == 1 ? "1 passing query has" : "\(report.otherScores.count) passing queries have"
+        print("information, not compared: \(queries) other score bits than the golden file's: \(report.otherScores.joined(separator: ", "))")
+    }
+    let groups = switch report.permutations.count {
+    case 0: ""
+    case 1: " (1 group, listed)"
+    default: " (\(report.permutations.count) groups, each listed)"
+    }
+    let counts = "\(report.identical.count) identical and \(report.permuted.count) reordered only within Mac tie groups\(groups)"
+    guard report.passes else {
+        for difference in report.differences { print("differs  \(difference)") }
+        let format = report.differences.count > report.differing.count ? "the format and " : ""
+        fail("check 3's results fail: \(format)\(report.differing.count) of \(report.queryCount) queries differ; \(counts)")
+    }
+    print("check 3's results pass: \(report.queryCount) queries, \(counts)")
 }
 
 func parse(_ arguments: Arguments) throws {
@@ -218,6 +251,8 @@ do {
         try summarize(Arguments(arguments.dropFirst(), flags: ["--any-volumes"], options: ["--golden", "--upstream-commit", "--repo"]))
     case "compare-summary":
         try compareSummary(Arguments(arguments.dropFirst()))
+    case "compare-results":
+        try compareResults(Arguments(arguments.dropFirst()))
     case "parse":
         try parse(Arguments(arguments.dropFirst()))
     case "render":
