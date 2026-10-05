@@ -51,7 +51,7 @@ The server itself links none of these yet. On a Mac only, the web repository's `
 - the reader's HTML for all 392 rows of three small fixture volumes;
 - what SearchService compiles for each of 482 queries, covering every search rule in the user manual's §7.2.
 
-Two more will come from an export of a Mac library holding exactly those three volumes: a summary of the index, and each query's count and first 50 results. They are pending.
+Two more come from an export of a Mac library holding exactly those three volumes: a summary of the index, and each query's count and first 50 results. The owner made the export on 4 October, from a build of `af8bedab`. Linux has nothing to compare them with until S6 indexes and searches there, so until then the web CI checks only that they are current at the pin and whole.
 
 Today the web CI compares the two made from the app's source:
 - its Linux parse of all 482 queries matches the app's, byte for byte, and so do the compiled expressions of the 457 queries in the default scope;
@@ -106,10 +106,11 @@ At the pull request's head:
 
 The app computes the same results. One timing changes: the broken-references index is now read when the reader's converter is built, rather than at the first cross-reference.
 
-**Part 2 (session S6): planned, after the golden files from the owner's three-volume export; not yet dated.** The indexing pipeline, the search service, the citation matcher and splitter, and `PageRangeStore`.
+**Part 2 (session S6): planned, not yet dated.** The indexing pipeline, the search service, the citation matcher and splitter, and `PageRangeStore`.
 - `IndexingPipeline.swift` is the app's largest and busiest file. CoreSpotlight is imported there, and SwiftData reaches it through one `@Model` parameter.
 - Across part 2's files, eight JSON resources are read from `Bundle.main`. Part 2 will pass them in.
 - It will also move the steps that run after indexing, the person rollup and the broken-reference flags, to where the server can call them.
+- Its pin move changes the source digest, so it remakes the golden files, the two from an export with a new three-volume export from the newly pinned build.
 
 Web sessions will write all of part 2.
 
@@ -193,7 +194,7 @@ The whole of the app side's part. Each rule costs little or nothing. The boundar
 - If the export's schema changed: a new `Tests/FRUSLightTestSupport/Fixtures/export-v<N>-schema.sql` from a real export by the pinned build (the owner is asked for one), the paths that name it, and the table list in `Tests/FRUSParity/IndexSchema.swift`.
 - `UpstreamDigest.directories` and `appDirectories` in `tools/mac-golden/Package.swift`, which must stay the same list, if the app targets gained a source folder (`project.yml`).
 - The CI's allow-list, if a kit test gained or lost a Linux-only skip. The web CI fails on any other skip, and on `Test.cancel`.
-- The golden files, remade with `scripts/make-golden` on a Mac. Once the export-based golden files exist, this also needs a three-volume export from the pinned app build, so the owner is asked for one.
+- The golden files, remade with `scripts/make-golden --export` on a Mac. The export must come from the pinned app build, in a library holding exactly the three fixture volumes, so the owner is asked for one.
 
 ## 6. For the owner
 
@@ -203,7 +204,7 @@ The whole of the app side's part. Each rule costs little or nothing. The boundar
    - a Mac check and merge for each web-authored pull request;
    - now and then, an export from the pinned app build: three volumes for the golden files, or any export when the schema changes;
    - the full-corpus export before S10, as the owner checkpoints in `PLAN.md` list.
-4. **Make the three-volume export from a build of `af8bedab`.** FRUSCoreKit part 1 is pinned there, so golden files made from it stay current until the next pin move.
+4. **The three-volume export is done.** The owner made it on 4 October, from a build of `af8bedab`, where FRUSCoreKit part 1 is pinned. Its golden files stay current until the next pin move, which needs a new export from the build it pins.
 
 ## Appendix: a section for the app's `CLAUDE.md`
 

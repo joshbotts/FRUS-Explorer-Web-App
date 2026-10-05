@@ -18,7 +18,11 @@
 #   2. Run it with a library of its own, such as under a second macOS user, and download only
 #      frus1894Nicaragua, frus1961-63v06 and frus1969-76ve09p1. The app downloads from
 #      HistoryAtState's master: the three files in its Volumes folder must match
-#      fixtures/tei/SHA256SUMS (shasum -a 256).
+#      fixtures/tei/SHA256SUMS (shasum -a 256). Or empty the app's own library first with
+#      Settings ▸ Data & Recovery ▸ Erase Everything…, which also deletes every note, collection
+#      and project in its iCloud account, so only when there is nothing there to keep. Reset This
+#      Device is not enough: it keeps document_revisions rows for every volume the library held,
+#      and the summary refuses an export with rows for volumes it does not hold.
 #   3. Leave it running until indexing finishes and the person rollup has run.
 #   4. Export Research Database…, with Include My Notes, Summaries, and Tags turned off, and save it
 #      outside ~/Documents, such as /Users/Shared/frus-golden.sqlite.
