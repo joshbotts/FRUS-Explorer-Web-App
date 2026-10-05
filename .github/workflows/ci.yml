@@ -34,7 +34,8 @@ jobs:
       - name: Install SQLite headers
         run: apt-get update -qq && apt-get install -y -qq --no-install-recommends libsqlite3-dev
 
-      # The submodule is public, and checked out whole: a SourceNoteKit test reads an app resource.
+      # The submodule is public, and checked out whole: a SourceNoteKit test reads an app resource,
+      # and FRUSCoreKitTests reads the app's data files and manifest in FRUSExplorer/Resources.
       - uses: actions/checkout@v5
         with:
           submodules: true
@@ -81,13 +82,17 @@ jobs:
       # begins "Linux: ". Any other skip fails the job, from a trait or XCTSkip, and so does a test or
       # suite that cancels itself, or this test skipped for another reason. The named skip must
       # appear exactly once: twice means another test shares its name, since the log shows no suite,
-      # and not at all means it now runs or the log's format has changed. grep -a reads the log as
-      # text even if a test prints a NUL byte.
+      # and not at all means it now runs or the log's format has changed. A skip is matched by its
+      # verb right after the test's or suite's name, quoted (greedily, so a name holding quotes still
+      # matches) or bare, and by XCTest's "Test Case '…' skipped (" line: upstream has a passing test
+      # named "A Lot File(s) prefix is skipped, never captured into the key", whose lines a looser
+      # pattern took for a skip. grep -a reads the log as text even if a test prints a NUL byte.
       - name: Test
         run: |
           swift test --skip-build --scratch-path .build/linux 2>&1 | tee test.log
           named='Test "Database file has isExcludedFromBackupKey set after creation" skipped: "Linux: '
-          if grep -aE '(Test|Suite) .* (skipped|was cancelled)' test.log | grep -avF -e "$named"; then
+          skips='(Test|Suite) (".*"|[^ "]+) skipped([.:]|$)|(Test|Suite) .* was cancelled|Test Case .* skipped \('
+          if grep -aE "$skips" test.log | grep -avF -e "$named"; then
             echo "::error::A test was skipped or cancelled. Every test at the pin must run, except the Linux-only skip SPEC's check 1 names."
             exit 1
           fi
