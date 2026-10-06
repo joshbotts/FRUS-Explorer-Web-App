@@ -17,9 +17,9 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "39d9aed13a9cf106904e80a714bdb7b45f8b4df2c3a325d4ae087fc1cd768df7",
+    "sourceDigest" : "a7d47120d6f267d8c6a2c49b6020bdf96db212563cb78db468a9d12312d4eae7",
     "tool" : "tools/mac-golden render",
-    "upstreamCommit" : "af8bedab7acf7efb0fd08f4eb924840d0275d2e1"
+    "upstreamCommit" : "f69b4a0a68b68ce2306e08ac67f8819580284f3c"
   },
   "rows" : [
     {

@@ -16,32 +16,17 @@ func resultsGolden(repo: Repository, export: URL, queries queriesURL: URL, out: 
     let stamp = try checkExport(copy, appBuild: repo.appBuild())
     let service = try scratch.searchService(database: copy)
 
+    // ParityFormat's loop, which the harness runs over FRUSCoreKit's SearchService on Linux too.
     var records: [ResultRecord] = []
     for query in queries {
         let parameters = try searchParameters(query)
-        do {
-            let count = try await service.searchCount(parameters: parameters)
-            let top = try await service.search(parameters: parameters, limit: 50, offset: 0)
-            // The results after the 50th that tie with it, page by page until the score changes.
-            var tail: [SearchResult] = []
-            if top.count == 50, let last = top.last?.bm25Score.bitPattern {
-                var offset = 50
-                paging: while true {
-                    let page = try await service.search(parameters: parameters, limit: 50, offset: offset)
-                    for result in page {
-                        guard result.bm25Score.bitPattern == last else { break paging }
-                        tail.append(result)
-                    }
-                    if page.count < 50 { break }
-                    offset += 50
-                }
-            }
-            records.append(ResultRecord(id: query.id, count: count, top: top.map(key), scoreBits: top.map(scoreBits),
-                                        tieTail: tail.map(key), tieTailScoreBits: tail.map(scoreBits)))
-        } catch {
-            records.append(ResultRecord(id: query.id, count: nil, top: [], scoreBits: [],
-                                        error: String(describing: error)))
-        }
+        records.append(await ResultsLoop.record(
+            id: query.id,
+            count: { try await service.searchCount(parameters: parameters) },
+            page: { limit, offset in
+                try await service.search(parameters: parameters, limit: limit, offset: offset)
+                    .map { SearchHit(volume: $0.volumeId, document: $0.documentId, score: $0.bm25Score) }
+            }))
     }
     // The query list's records, the fixtures, and the export's stamp, which names the export and
     // must match the index summary's (GoldenValidation.requiredInputs).
@@ -56,11 +41,6 @@ func resultsGolden(repo: Repository, export: URL, queries queriesURL: URL, out: 
     let tails = records.filter { !$0.tieTail.isEmpty }.count
     note("results: \(records.count) queries, \(errors) refused, \(tails) with ties past the 50th, in \(repo.relativePath(out))")
 }
-
-private func key(_ result: SearchResult) -> String { "\(result.volumeId)/\(result.documentId)" }
-
-/// A score's IEEE-754 bit pattern, in lowercase hex without leading zeros.
-private func scoreBits(_ result: SearchResult) -> String { String(result.bm25Score.bitPattern, radix: 16) }
 
 /// Opens the copy read-only and refuses anything but an export of exactly the fixture volumes,
 /// without the owner's writing, from the pin's build at its index version. Returns the export's

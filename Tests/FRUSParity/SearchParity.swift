@@ -1,8 +1,8 @@
 // Check 3's results over a whole file: a candidate's counts and first 50 results against the golden
 // file's, query by query.
 //
-// The candidate is a file in the golden format: one `tools/mac-golden results` writes, or, once
-// SearchService runs on Linux (session 6), one written from the Linux index. ParityFormat's
+// The candidate is a file in the golden format: one `tools/mac-golden results` writes, or the
+// records `LinuxSearch.results` makes over FRUSCoreKit's index of the fixtures. ParityFormat's
 // `ResultComparison` compares each query, and allows any order among documents whose Mac scores
 // are exactly equal. Check 3's results pass when every query passes, and each such reordering is
 // reported (docs/PLAN.md, decided 3 October 2026). The rest of check 3, the compiled expressions,

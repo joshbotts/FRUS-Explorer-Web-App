@@ -4,8 +4,8 @@ import Foundation
 import ParityFormat
 
 /// `fixtures/golden/index-summary.json`: check 2's summary of the owner's three-volume export, which
-/// `frus-parity summarize` writes. The Linux indexer's database (session 6) is summarized the same
-/// way and compared with it by `IndexSummaryComparison`: only `gating` is compared.
+/// `frus-parity summarize` writes. FRUSCoreKit's index of the fixtures (`ParityIndex`) is summarized
+/// the same way and compared with it by `IndexSummaryComparison`: only `gating` is compared.
 public struct IndexSummaryGolden: Codable, Equatable, Sendable {
     public var format: Int
     public var provenance: Provenance

@@ -22,4 +22,5 @@ The self-hosted web edition of FRUS Explorer. `docs/PLAN.md` is the plan, `docs/
 - `scripts/compose-smoke` builds the image and runs the Compose smoke test, as CI does; with `FRUS_IMAGE=<image>` it tests that image instead. `scripts/synthetic-export <file>` writes a small valid export.
 - `docs/INSTALL.md` is the user's guide: keep it true when the server, `compose.yaml` or the image change.
 - `scripts/swift run frus-parity check-golden` validates `fixtures/golden`; `frus-parity summarize <db>` writes check 2's summary of an index.
+- `scripts/swift run -c release frus-parity index [--tei <dir>] --metrics` indexes the fixtures, or a folder of volumes such as `fixtures/sample`'s, with FRUSCoreKit, and times it with its peak memory.
 - `tools/mac-golden` runs the Mac app's own code to make golden files. It builds only natively on a Mac with Xcode 27, never in CI: `scripts/make-golden` builds and runs it, and refreshes the golden files after a pin move.

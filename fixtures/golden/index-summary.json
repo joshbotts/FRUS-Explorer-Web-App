@@ -603,20 +603,20 @@
       },
       "volume_structures.json" : {
         "rows" : 3,
-        "sha256" : "0b8d67f0e82d4da9416bd7b63a7af29994844546a5272bac75f14d65e7d2b8fb",
+        "sha256" : "5f4870f7e801fa39b2f949bd431f20a7a29f2a0ecfe85195bedb438e2426a57a",
         "sql" : "SELECT volume_id, structure_json FROM volume_structures ORDER BY volume_id",
         "volumes" : {
           "frus1894Nicaragua" : {
             "rows" : 1,
-            "sha256" : "df394384afb18a492463a9b1111d610980806af4dc82b9af66329408b3b2a48f"
+            "sha256" : "115b3147e1e352340ffb83bbd67b0f5fe6396ee549a644f2236615190e744885"
           },
           "frus1961-63v06" : {
             "rows" : 1,
-            "sha256" : "de37dadd69176a0b357e8afde73e3f48ae096ab93a2b992edffde3a3188fbfc5"
+            "sha256" : "060971e11afbf2fdfff6e22be846118117ac424ee15741c990c97fe4c632a031"
           },
           "frus1969-76ve09p1" : {
             "rows" : 1,
-            "sha256" : "3373e836eec3581894463e497de2a515416f473d964310cef622839b43705d7c"
+            "sha256" : "0f53c8ea1f123ec1bda548c4feb13a7ca5124ce65188ecfe6a136dee604a6a84"
           }
         }
       }
@@ -627,7 +627,7 @@
       "current_fts_schema_version" : "4",
       "current_index_version" : "65",
       "documentation" : "https://github.com/joshbotts/FRUS-Explorer/blob/v2/Docs/Agentic-Analysis-Guide.md",
-      "exported_at" : "2026-10-04T23:54:06Z",
+      "exported_at" : "2026-10-06T01:34:52Z",
       "installed_fts_schema_version" : "4",
       "installed_index_version" : "65",
       "my_writing_included" : "0",
@@ -650,15 +650,15 @@
       "CREATE VIRTUAL TABLE temp.parity_user_content_instance USING fts5vocab(main, user_content, instance)"
     ],
     "sqliteSequence" : {
-      "cross_references" : 185847,
-      "page_ranges" : 766807,
-      "person_mentions" : 612325
+      "cross_references" : 186055,
+      "page_ranges" : 767937,
+      "person_mentions" : 613343
     },
     "sqliteVersion" : "3.54.0",
     "timings" : {
       "cross_references" : 0.001,
       "cross_references.sequence" : 0,
-      "document_cache" : 0.005,
+      "document_cache" : 0.006,
       "document_cache.sequence" : 0,
       "document_dates" : 0.001,
       "document_dates.sequence" : 0,
@@ -668,17 +668,17 @@
       "document_sources.sequence" : 0,
       "document_subject_refs" : 0.001,
       "document_subject_volumes" : 0,
-      "document_subjects" : 0,
+      "document_subjects" : 0.001,
       "external_citations" : 0,
       "external_citations.sequence" : 0,
       "frus_documents.averages" : 0,
       "frus_documents.config" : 0,
       "frus_documents.docsize" : 0,
-      "frus_documents.vocab_col" : 0.007,
-      "frus_documents.vocab_instance" : 0.407,
-      "frus_documents.vocab_row" : 0.011,
-      "integrity" : 0.029,
-      "page_ranges" : 0.001,
+      "frus_documents.vocab_col" : 0.008,
+      "frus_documents.vocab_instance" : 0.435,
+      "frus_documents.vocab_row" : 0.012,
+      "integrity" : 0.027,
+      "page_ranges" : 0.002,
       "page_ranges.sequence" : 0.001,
       "person_cluster_candidate" : 0,
       "person_list_sources" : 0,
@@ -692,7 +692,7 @@
       "schema.export_only" : 0,
       "terms" : 0,
       "terms.sequence" : 0,
-      "total" : 0.487,
+      "total" : 0.523,
       "user_content.averages" : 0,
       "user_content.config" : 0,
       "user_content.docsize" : 0,
@@ -702,7 +702,7 @@
       "user_tags" : 0,
       "volume_sources" : 0,
       "volume_sources.sequence" : 0,
-      "volume_structures" : 0,
+      "volume_structures" : 0.001,
       "volume_structures.json" : 0
     },
     "volumeOrder" : [
@@ -724,7 +724,7 @@
       "research_provenance.current_fts_schema_version" : "4",
       "research_provenance.current_index_version" : "65",
       "research_provenance.documentation" : "https://github.com/joshbotts/FRUS-Explorer/blob/v2/Docs/Agentic-Analysis-Guide.md",
-      "research_provenance.exported_at" : "2026-10-04T23:54:06Z",
+      "research_provenance.exported_at" : "2026-10-06T01:34:52Z",
       "research_provenance.installed_fts_schema_version" : "4",
       "research_provenance.installed_index_version" : "65",
       "research_provenance.my_writing_included" : "0",
@@ -737,8 +737,8 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "39d9aed13a9cf106904e80a714bdb7b45f8b4df2c3a325d4ae087fc1cd768df7",
+    "sourceDigest" : "a7d47120d6f267d8c6a2c49b6020bdf96db212563cb78db468a9d12312d4eae7",
     "tool" : "frus-parity summarize",
-    "upstreamCommit" : "af8bedab7acf7efb0fd08f4eb924840d0275d2e1"
+    "upstreamCommit" : "f69b4a0a68b68ce2306e08ac67f8819580284f3c"
   }
 }

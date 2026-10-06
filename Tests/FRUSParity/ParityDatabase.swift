@@ -43,7 +43,8 @@ enum ParityValue: Equatable, Sendable {
 }
 
 /// A connection the summary reads through: the index itself, opened read-only and immutable,
-/// or an in-memory copy of it for the checks an immutable connection cannot run.
+/// or an in-memory copy of it for the checks an immutable connection cannot run. `IndexCopy` also
+/// opens a live index read-only, and the file it copies it into.
 final class ParityDatabase {
     let handle: OpaquePointer
 
@@ -69,6 +70,17 @@ final class ParityDatabase {
     /// An empty in-memory database.
     static func memory() throws -> ParityDatabase {
         try ParityDatabase(":memory:", flags: SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE)
+    }
+
+    /// Opens `url` read-only through SQLite's normal pager, which reads a write-ahead log beside it:
+    /// for an index another connection may still be writing, which `immutable` would misread.
+    static func readOnly(_ url: URL) throws -> ParityDatabase {
+        try ParityDatabase(url.path, flags: SQLITE_OPEN_READONLY)
+    }
+
+    /// Opens `url` read-write, creating it if it does not exist.
+    static func create(_ url: URL) throws -> ParityDatabase {
+        try ParityDatabase(url.path, flags: SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE)
     }
 
     /// Runs statements that return no rows.

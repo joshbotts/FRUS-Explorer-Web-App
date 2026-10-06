@@ -5,8 +5,8 @@
 // - SQLite refuses the rank-1 FTS5 integrity check on a read-only connection, so the checks
 //   run on a writable copy, made with the backup API, which then becomes the live index.
 // - Phase 1 serves the corpus only, so an export that includes the owner's writing is refused.
-// - Comparing each document's hashes with its TEI needs the Linux indexer (session 6), so
-//   that step waits.
+// - Comparing each document's hashes with its TEI needs FRUSCoreKit's indexer, which the server
+//   does not link yet, so that step waits.
 
 import CSQLite
 import Foundation
