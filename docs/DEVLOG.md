@@ -2,6 +2,85 @@
 
 One entry per session, newest first.
 
+## Pin move: FRUSCoreKit, part 2, on Linux in CI
+
+5 October 2026 · branch `claude/pin-f69b4a0` · upstream [joshbotts/FRUS-Explorer#1573](https://github.com/joshbotts/FRUS-Explorer/pull/1573) (merged as `2d216f4c`) and [joshbotts/FRUS-Explorer#1574](https://github.com/joshbotts/FRUS-Explorer/pull/1574) (merged as `f69b4a0a`)
+
+Both of S6's upstream pull requests merged after the owner's Mac checks. This pull request moves the pin from `af8bedab` to `f69b4a0a`, `v2`'s head. That puts FRUSCoreKit's indexer, search and citation matcher into this repository's build. CI now runs checks 2 and 3 on the fixtures through the kit's public API alone, as the server will use it. The index version (65), the FTS generation (4) and the app's build (49) are unchanged, so the server, the image, `compose.yaml` and `docs/INSTALL.md` are too.
+
+**How the session got there**
+
+- **A map first.** Three readers mapped the build and CI, checks 2 and 3 as tests, and the records and the export. A fourth synthesized the plan.
+- **Two findings shaped the work:**
+  - **CI's skip check.** It would have failed at the new pin on the passing test "A Lot File(s) prefix is skipped, never captured into the key".
+  - **The export.** The owner's export must be made again after Erase Everything…. With the index version unchanged, a build of the new pin does not re-index the three volumes an earlier build indexed, so an export taken without erasing would still hold the old build's index.
+
+**Delivered**
+
+- **The pin and `Package.swift`.**
+  - FRUSCoreKit depends on FTS5Store, with CSQLite on Linux and upstream's sqlite3 link on macOS.
+  - FRUSCoreKitTests adds FTS5Store, SourceNoteKit and CSQLite.
+  - FRUSParityTests adds FRUSCoreKit.
+- **CI's skip check** now matches a skip by its verb right after the test's name, and still matches XCTest's `Test Case '…' skipped (` line. I ran the step itself with GNU grep in the container, with `LANG` unset and set to `C.UTF-8`. It passes the full Linux log, with the named skip once, and fails a log with seven planted skip and cancel lines, all seven reported.
+- **The harness** (`Tests/FRUSParity`):
+  - `ParityIndex` indexes TEI volumes with the kit's pipeline. It loads the data files with `IndexingResources.loading(fromDirectory:)` over the submodule's `FRUSExplorer/Resources`, keeps stamps in memory, and runs `runPostIndexPasses`.
+  - `IndexCopy` copies a live index with the backup API, reading it through the normal pager, then takes the copy out of write-ahead-log mode for the summary.
+  - `LinuxSearch` runs the query list's results and compiled expressions.
+  - `ResultsLoop`, in ParityFormat, is the results loop. `tools/mac-golden` now runs the same code.
+  - `ParseParity.recordMismatches` compares the compiled expressions in every scope.
+  - `GoldenValidation.load` reads one golden file for a check.
+- **The CI tests** (FRUSParityTests, 76 → 86 tests in 14 suites). The fixtures are indexed once per test process, from a copy of `fixtures/tei`.
+  - **Check 2:** the summary of the kit's index against the golden summary. While that file is pending, the test still checks that:
+    - every check is at its right value;
+    - the person rollup is rebuilt;
+    - each volume's documents match the render golden's (139, 123 and 130).
+  - **Check 3's results:** all 482 queries against the golden results.
+  - **Check 3's expressions:** every query, the 25 outside the default scope among them. Until now Linux compared only the default scope's expressions, by inference from the parse.
+  - **The four data files:** present, and each decodes. Check 2 cannot show the broken-references index, since it flags nothing in the fixtures.
+  - **The copied mapping** from query to search parameters, field by field.
+  - **The results loop**, `measureDocuments` and `recordMismatches`.
+- **`frus-parity index`** indexes the fixtures, or any folder of volumes, with the kit. With `--metrics` it prints the timings and peak memory; with `--out` it keeps a copy for `summarize`.
+- **The golden files.**
+  - `scripts/make-golden`, run without an export, rebuilt `tools/mac-golden` against the new pin. Only the provenance of the render manifest and the expressions changed: all 392 rows' HTML and all 482 queries' expressions are byte for byte as before.
+  - The index summary and the results wait in `fixtures/golden/PENDING` for the owner's new export. `check-golden` prints "2 present and valid, 2 pending", as between S3's pin move and the 4 October export.
+- **`fixtures/sample`:** 24 volumes' names and SHA-256 sums at HistoryAtState/frus `8e5da08c`, for measuring. No TEI is committed.
+- **Docs.**
+  - `SPEC.md`: the table definitions' new place, and the measurements under Sizing.
+  - `PLAN.md` and its shared copy: Mac check 3 done, the risk rows, the export note.
+  - `COORDINATION.md`, the prep notes, the README, `CLAUDE.md` and `scripts/make-golden`'s export steps.
+  - The comments that waited for session 6, and four line citations of `IndexingPipeline.swift`.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64:** all 1,631 tests pass, with the one named skip. FRUSCoreKitTests runs 878, up from 393, and FRUSParityTests 86, up from 76; the other targets are unchanged.
+- **Checks 2 and 3 against the golden files.** The new tests' comparisons pass when they run against the 4 October files (made from a build of `af8bedab`, restored for the run and then removed); only their staleness checks fail. The S6 probe found the same at both upstream heads.
+- **Check 3's expressions:** "482 of 482 queries compile as the golden file says, 25 of them outside the default scope; 43 refused".
+- **The refactored `tools/mac-golden`** runs the shared loop. Built against the new pin and run over the 4 October export, which its checks still accept at an unchanged build and index version, it writes all 482 records identical to the committed results, score bits included.
+- **Indexing, a release build:**
+  - **Setup:** Docker Desktop with 10 CPUs and 7.7 GiB.
+  - **Fixtures:** three runs. The three volumes and the passes after indexing take 1.06, 1.07 and 1.10 s, at a peak of 128–130 MiB.
+  - **Sample:** the 24 volumes (165 MB, 13,425 documents) index in 24.5 s, about 550 documents a second, at a peak of 136 MiB, into a 141 MB index. The passes after indexing take 0.6 s of that.
+  - **Limited to 4 CPUs:** 24.6 s, peaking at 140 MiB, because volumes are indexed one at a time.
+  - **Scaled by size:** the 3.34 GB corpus would take about 8 minutes and make about 2.9 GB, which is the Mac's full export's size.
+  - **Caveats:** the first volume's time includes decoding the data files; the peak is the whole process's; the rollup's cost at full size is not known.
+
+**The owner's export**
+
+The PR stays a draft until the export arrives. The owner builds `f69b4a0a`, runs Erase Everything…, downloads only the three fixture volumes, waits for indexing and the person rollup, and exports with notes, summaries and tags off. `scripts/make-golden --export <file>` then writes both files and empties `PENDING`. Checks 2 and 3 then compare with the Mac's files made by the pinned build.
+
+**Notes**
+
+- **The tools cannot tell an `af8bedab` export from an `f69b4a0a` one,** because the build and index version are the same. Only the procedure, and `exported_at`, distinguish them.
+- **The query mapping stays copied** between `tools/mac-golden` (the app's `SearchParameters`) and `LinuxSearch` (the kit's). A Linux test pins the Linux side, field by field.
+- **Not changed:**
+  - the Settings row in `PLAN.md` and its open question about the container runtime, which are the owner's to close;
+  - `docs/INSTALL.md`, since the image compiles no kit.
+
+**Next.**
+- The owner's three-volume export from a build of `f69b4a0a`, then `scripts/make-golden --export` in this pull request.
+- S8: search, browse and document-render endpoints over the imported index. It needs its own upstream pull request first, for a read-only pipeline open, the figure URLs and the page shell.
+- A web session adds the daily watch of the app's `v2`.
+
 ## Session 6b: FRUSCoreKit, part 2, upstream pull request B
 
 5 October 2026 · branch `claude/s6b-citation-lookup` · upstream [joshbotts/FRUS-Explorer#1574](https://github.com/joshbotts/FRUS-Explorer/pull/1574)
