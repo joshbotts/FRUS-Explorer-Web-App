@@ -1,4 +1,5 @@
-// The routes: health, readiness and status, then the API under /api/v1 (docs/SPEC.md, HTTP API).
+// The routes: health, readiness and status, the API under /api/v1 (docs/SPEC.md, HTTP API), and the
+// reader's host script.
 
 import FRUSLightCore
 import Foundation
@@ -6,7 +7,9 @@ import Hummingbird
 import Logging
 
 func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderService,
+                 provider: ServedIndexProvider? = nil,
                  logger: Logger = Logger(label: "frus-light")) -> Router<BasicRequestContext> {
+    let provider = provider ?? ServedIndexProvider(state: state, resources: resources, volumesDirectory: reader.volumesDirectory)
     let router = Router()
     // First, so it covers every route, and the paths no route matches.
     router.add(middleware: ProblemMiddleware(logger: logger))
@@ -21,8 +24,9 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
         try FormQuery(request.uri.query).refuseUnknown([])
         return await state.status()
     }
-    CatalogRoutes.add(to: router, state: state, resources: resources, volumesDirectory: reader.volumesDirectory)
-    ReaderRoutes.add(to: router, reader: reader)
+    CatalogRoutes.add(to: router, state: state, provider: provider, resources: resources, volumesDirectory: reader.volumesDirectory)
+    SearchRoutes.add(to: router, provider: provider, resources: resources)
+    ReaderRoutes.add(to: router, reader: reader, provider: provider, resources: resources)
     return router
 }
 

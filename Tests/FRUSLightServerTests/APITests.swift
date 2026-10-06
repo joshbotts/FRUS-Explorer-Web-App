@@ -208,7 +208,6 @@ func problem(_ response: TestResponse, _ status: HTTPResponse.Status, sourceLoca
             let notMounted = try await body(Self.uri("frus1961-63v06", "d1"), .notFound)
             #expect(notMounted.code == "TEI_NOT_AVAILABLE" && notMounted.detail.contains("frus1961-63v06.xml"))
             #expect(try await body(Self.uri("frus1894Nicaragua", "d9999"), .notFound).code == "DOCUMENT_NOT_FOUND")
-            #expect(try await body(Self.uri("frus1894Nicaragua", "d1", ""), .notImplemented).code == "PAGE_NOT_AVAILABLE")
             #expect(try await body(Self.uri("frus1894Nicaragua", "d1", "part=head"), .badRequest).code == "INVALID_PARAMETER")
             #expect(try await body(Self.uri("frus1894Nicaragua", "d1", "part=body&textSize=huge"), .badRequest).code == "INVALID_PARAMETER")
             #expect(try await body(Self.uri("frus1894Nicaragua", "d1", "part=body&theme=dark"), .badRequest).code == "UNKNOWN_PARAMETER")

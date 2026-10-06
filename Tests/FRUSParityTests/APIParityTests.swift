@@ -1,13 +1,9 @@
-// Checks 3 and 4 through the API: the search request decoder on every parity query, and the
-// reader's HTML for every golden row, fetched from the server's route.
+// Check 3 through the API, the request half: the search request decoder on every parity query.
+// ServedAPIParityTests runs the queries, and check 4, through the routes.
 
 import FRUSCoreKit
-import FRUSLightCore
-import FRUSLightTestSupport
 import FRUSParity
 import Foundation
-import Hummingbird
-import HummingbirdTesting
 import ParityFormat
 import Testing
 
@@ -54,41 +50,5 @@ import Testing
         #expect(try decoded("q157").keywords?.contains("+5") == true)
         #expect(try decoded("q418").dateRange == DateRange(earliest: "1975-01-01", latest: nil))
         #expect(try decoded("q419").dateRange == DateRange(earliest: nil, latest: "1961-12-31"))
-    }
-
-    /// Check 4 through the API: each golden row, fetched from
-    /// `/api/v1/volumes/{v}/documents/{d}/html?part=body` with the fixture volumes in the TEI
-    /// folder, is the golden file's bytes. The server renders with the reader's figure URLs, as the
-    /// golden was made, so no row needs a rewrite.
-    @Test func everyGoldenRowIsServedAsTheReaderRendersIt() async throws {
-        let (golden, directory) = try RenderParityTests.currentGolden()
-        let temporary = try TemporaryDirectory()
-        let files = DataDirectory(root: temporary.url.appendingPathComponent("data"))
-        try files.prepare()
-        try RepositoryFiles.mountTEI(ParityFixtures.volumes, at: files.volumesDirectory)
-        let resources = try ServerResources.load(from: Repository.layout.upstream.appendingPathComponent("FRUSExplorer/Resources"))
-        let state = ServerState(configuration: ServerConfiguration(dataDirectory: files.root))
-        let reader = ReaderService(volumesDirectory: files.volumesDirectory, resources: resources)
-        let app = Application(router: buildRouter(state: state, resources: resources, reader: reader))
-
-        let (rendered, failures) = try await app.test(.router) { client in
-            var rendered: [RenderedDocument] = []
-            var failures: [String] = []
-            for row in golden.rows {
-                let response = try await client.execute(
-                    uri: "/api/v1/volumes/\(row.volume)/documents/\(row.document)/html?part=body", method: .get)
-                guard response.status == .ok, response.headers[.contentType] == "text/html; charset=utf-8" else {
-                    failures.append("\(row.volume)/\(row.document): \(response.status.code) \(String(buffer: response.body).prefix(200))")
-                    continue
-                }
-                rendered.append(RenderedDocument(volume: row.volume, document: row.document, html: String(buffer: response.body)))
-            }
-            return (rendered, failures)
-        }
-        #expect(failures.isEmpty, "\(failures.joined(separator: "\n"))")
-        let mismatches = RenderParity.mismatches(rendered, golden: golden, directory: directory)
-        #expect(mismatches.isEmpty, "\(mismatches.count) of \(golden.rows.count) rows differ:\n\(mismatches.map(\.description).joined(separator: "\n"))")
-        #expect(await reader.parseCount == ParityFixtures.volumes.count, "one parse per volume")
-        print("check 4 through the API: \(rendered.count - mismatches.count) of \(golden.rows.count) rows identical")
     }
 }

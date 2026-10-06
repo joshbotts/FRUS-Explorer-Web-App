@@ -36,14 +36,14 @@ The web edition does not reimplement the app. It compiles some of the app's own 
 | App folder | Compiled on Linux | Web use |
 | --- | --- | --- |
 | SourceNoteKit, CrossRefKit, GeneratorKit | Since S0 | Tests run in the web CI. SourceNoteKit serves the reader through FRUSCoreKit since S8a, and will serve Source Explorer. CrossRefKit has drifted from the app's own cross-reference rules, so the reader will use FRUSCoreKit's `FRUSURLScheme.resolveCrossRefTarget` instead |
-| FTS5Store | Whole kit since the pin move after S1 (web pull request #15). Its schema file was compiled from S0 and its query compiler from S4 | The parity harness compares its parse of 482 queries with the app's. The server will use it for search |
+| FTS5Store | Whole kit since the pin move after S1 (web pull request #15). Its schema file was compiled from S0 and its query compiler from S4 | The parity harness compares its parse of 482 queries with the app's. The server searches with it since S8c, through its read-only open |
 | TEIHeaderKit, with ManifestGeneratorCore and ManifestGeneratorTests for its tests | Since the pin move after S1 | Tests only, for now |
 | SemanticVectorsKit | Since the pin move after S1 | Semantic search, from phase 4 |
-| FRUSCoreKit, part 1 | Since S3's pin move, to `af8bedab` | The reader's HTML, which the server serves since S8a, and Cite. The web CI runs its tests, and renders the 392 golden rows with it |
+| FRUSCoreKit, part 1 | Since S3's pin move, to `af8bedab` | The reader's page, which the server serves since S8a (the body) and S8c (the page, with the kit's `ReaderPage`), and Cite. The web CI runs its tests, and renders the 392 golden rows with it |
 | FRUSCoreKit, part 2 | Since S6's pin move, to `f69b4a0a` | Indexing and search on the server, and Citation Lookup's matcher in phase 2. The web CI runs the kit's tests (878 at `f69b4a0a`, 884 since S8b's pin move), check 7's matcher half among them, and indexes and searches the fixtures with it for checks 2 and 3 |
 | WordCloudKit | Not compiled | Built on Apple's NaturalLanguage framework. Phase 4 plans a separate Linux lemmatizer |
 
-The server links FRUSCoreKit, FTS5Store and SourceNoteKit since S8a, through its `FRUSLightAPI` target. It renders the reader's HTML with the kit and reads the manifest with `FixedVolumeCatalogue`. Since S8b's pin move, to `101e17d7`, the kit can open an index read-only and immutable, where every opener before it wrote to the database it opened; the web CI opens the fixture index that way and finds it answers as the writable index does. S8c serves search through it. On a Mac only, the web repository's `tools/mac-golden` compiles the whole app module, unmodified, to make golden files.
+The server links FRUSCoreKit, FTS5Store and SourceNoteKit since S8a, through its `FRUSLightAPI` target. It renders the reader's HTML with the kit and reads the manifest with `FixedVolumeCatalogue`. Since S8b's pin move, to `101e17d7`, the kit can open an index read-only and immutable, where every opener before it wrote to the database it opened; the web CI opens the fixture index that way and finds it answers as the writable index does. Since S8c the server searches and browses the live index through that open, and the web CI runs check 3 through its API, on the fixture index imported as an export is. On a Mac only, the web repository's `tools/mac-golden` compiles the whole app module, unmodified, to make golden files.
 
 **The index and export contract.** In phase 1, the server serves a database the app exports with Settings ▸ Data & Recovery ▸ Export Research Database…. It serves one index version and one FTS schema generation: `IndexingPipeline.currentDateIndexVersion` (65) and `FTS5Connection.currentSchemaGeneration` (4) at the pin. A web test reads both declaration lines from the submodule. The server reads the export's `research_provenance` stamp. It refuses an export from another index version or FTS generation, one taken while the app was still re-indexing, one that includes the owner's writing, and one in use (a `-wal` or unfinished `-journal` beside it).
 
@@ -53,7 +53,7 @@ The server links FRUSCoreKit, FTS5Store and SourceNoteKit since S8a, through its
 
 Two more come from an export of a Mac library holding exactly those three volumes: a summary of the index, and each query's count and first 50 results. Each pin move needs a new export from the build it pins, made after Erase Everything…, since a build at the same index version does not re-index what an earlier build indexed.
 
-Since S6's pin move the web CI compares all four, through FRUSCoreKit's public API alone, as the server will use it:
+Since S6's pin move the web CI compares all four, through FRUSCoreKit's public API alone, as the server uses it:
 - check 2: the kit indexes the three volumes, and the summary of its index is the export's;
 - check 3: the kit's SearchService returns each query's count and first 50 results as the app does, and compiles each query, in every scope, as the app does;
 - check 4: the kit renders all 392 rows byte-identical to the app's reader, along the reader's path and again from one full parse per volume, the path the server serves. Since S8a the CI also fetches every row through the server's reader route.

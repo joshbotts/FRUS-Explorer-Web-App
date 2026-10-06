@@ -180,11 +180,11 @@ Solid arrows stay on the host. Dotted arrows leave it, and all are optional in I
 ### Reader rendering
 
 1. The SPA requests `/api/v1/volumes/{volumeId}/documents/{documentId}/html`.
-2. The server parses the TEI with `FRUSDocumentParser`, caches the AST, and serializes it with `FRUSRenderNodeHTMLSerializer` and `HTMLTemplate`.
-3. The page loads in a same-origin, sandboxed iframe with the app's `frus-offset-engine.js`, `frus-highlights.js`, `frus-selection.js` and `frus-print.css`.
-4. One delegated click handler intercepts the reader's `frusexplorer://` links: `person/{ref}`, `gloss/{ref}`, `doc/{target}[/{vol}]` and `brokenref/{target}`.
-5. The three WebKit message handlers (`selectionChanged`, `selectionScrolled`, `highlightTapped`) become `postMessage` calls. The parent page draws the floating selection bar.
-6. Light and dark palettes and text size become plain CSS variables. They replace `FRUSTheme.cssVariables(colorScheme:)`, which takes a SwiftUI type today.
+2. The server parses the volume's TEI with `FRUSDocumentParser`, keeps the parse, applies the index's effective classification as the app's reader does, and writes the page with the kit's `ReaderPage.build`, which the app's `HTMLTemplate.build` forwards to, and `FRUSRenderNodeHTMLSerializer.reader(figureURL:)`, which names figure images by the server's own address.
+3. The page loads in a same-origin, sandboxed iframe with the server's `/reader/host.js`. The app's reader scripts (`kOffsetEngineJS`, `kHighlightsJS`, `kSelectionJS` in `FRUSWebViewConfiguration.swift`) join it when they move into the kit. Of the copies in `FRUSExplorer/Resources`, `frus-highlights.js` has drifted from `kHighlightsJS` (it lacks the `highlightTapped` click handler), `frus-offset-engine.js` differs in formatting only, and a test keeps `frus-selection.js` identical. `frus-print.css` belongs to collection exports, and the reader does not load it: it would print each footnote twice.
+4. One delegated click handler, in `/reader/host.js`, intercepts the reader's `frusexplorer://` links (`person/{ref}`, `gloss/{ref}`, `doc/{target}[/{vol}]` and `brokenref/{target}`) and posts each to the parent page.
+5. The three WebKit message handlers (`selectionChanged`, `selectionScrolled`, `highlightTapped`) are stand-ins in `/reader/host.js` that become `postMessage` calls. The parent page draws the floating selection bar.
+6. Light and dark palettes and text size are the kit's `ReaderPage.cssVariables(appearance:textSize:)`, which the app's `FRUSTheme.cssVariables(colorScheme:textSize:)` forwards to.
 
 ### Process and concurrency
 
@@ -344,7 +344,7 @@ Each surface below states what the web edition must do. Behaviour matches the Ma
 - Filters are tokens: volume or subseries, volume scopes, detected topics, date range, tags, person, project, document type and front matter. "Search in" chips choose Documents, Notes and Summaries.
 - Facets compute per section, on demand, over the whole match: year, volume, person, type, provenance and subject. Include, exclude and Apply work as on the Mac.
 - Readings: List (10, 20, 50 or 100 per page; relevance or date sort), Timeline, Concordance, and Collocates from phase 4. Each names the set it counted.
-- The result ceiling is 7,500, as on the Mac, and a capped count reads "at least 7,500".
+- The Mac keeps 7,500 results of a search and counts every match exactly. The API does the same: its count is exact, and a page reaches no further than the 7,500th result.
 - Checklist mode, saved searches with "+N since last run", and Save as Working Corpus behave as on the Mac.
 - Meaning mode (phase 4) intersects and discloses filters, and lists matches in volumes not on the server separately.
 
@@ -496,7 +496,6 @@ The server exposes one versioned JSON API under `/api/v1`, shared by the web cli
 | --- | --- | --- |
 | Catalog | `GET /volumes`, `/volumes/{volumeId}`, `/volumes/{volumeId}/documents`, `/volumes/{volumeId}/download` | draft |
 | Documents | `GET /volumes/{v}/documents/{d}`, `…/html`, `…/cross-references`; `GET /volumes/{v}/page-ranges`, `/persons`, `/terms`, `/source-notes` | draft |
-| Subjects | `GET /subjects`, `/subjects/appearances/{volumeId}` | draft |
 | Search | `GET /search` (with `facets`), `/search/concordance`; `POST /search/inspect` | draft; `inspect` new |
 | Citation | `GET /citation-lookup`; `POST /citation-lookup/batch`; `GET /volumes/{v}/documents/{d}/citation?style=` | draft; batch and citation new |
 | Corpus analysis | `GET /corpus/vocabulary`, `/analysis/term-distribution`; `POST /corpus/term-statistics`, `/analysis/term-ranking`, `/analysis/collocates` | draft |
@@ -510,11 +509,18 @@ The server exposes one versioned JSON API under `/api/v1`, shared by the web cli
 ### Conventions
 
 - Paths name documents by `volumeId` and `documentId`. No response carries a `rowid`.
-- Counts use the Mac's ceilings. A capped count returns `countBasis: "atLeast"`, the same distinction the method appendix's `count_basis` column draws.
+- Counts are exact, as the Mac's `searchCount` is, and say so with `countBasis: "exact"`. `"atLeast"` is kept for a count that could not be made, the method appendix's `floor`. A search keeps the Mac's 7,500 results, so `offset` and `limit` reach no further.
 - Every count-bearing response includes `coverage`: indexed volumes, manifest volumes (553) and the index version.
 - Browsers authenticate with a session cookie (`Secure`, `HttpOnly`, `SameSite=Lax`) plus a CSRF token. Scripts use personal access tokens. A read-only scope suits AI agents, the audience of `Docs/Agentic-Analysis-Guide.md`.
 - Errors use RFC 9457 `application/problem+json`, with `type` `about:blank`. A `code` member carries the draft's SCREAMING_SNAKE_CASE identity, such as `VOLUME_NOT_FOUND`, and a refused search carries the kit's refusal as `searchError`, such as `emptyQuery`. Every path under `/api/` answers this way, including those no route matches.
 - Query strings have HTML form semantics, as a browser's `URLSearchParams` writes them: `+` is a space and `%2B` a plus, a list repeats its name, and one empty value is the empty list. The server reads the raw query itself: Hummingbird's query parameters leave `+` and names undecoded, and its form decoder takes a repeated name only as `name[]=`. The empty list keeps apart filters the Mac treats differently: no `yearKeys` filters nothing, and the empty list matches nothing. A parameter the endpoint does not take is refused, not ignored.
+- Where the API departs from the draft:
+  - `GET /search` also takes the three filters the Mac has and the draft lacks (`yearKeys`, `includeDocumentText`, `includeFrontMatter`), and its items add the kit's `isFrontMatter`. A query with nothing left to search is `EMPTY_QUERY`.
+  - `/volumes` and `/volumes/{v}/documents` page up to 1,000, so one request lists the catalogue or a volume.
+  - `/volumes/{v}/documents` lists the volume's reading order, front and back matter included and marked by `inIndex`, and its `total` counts them.
+  - `/volumes/{v}/documents/{d}` returns the document's metadata, its neighbours in reading order and its canonical URL rather than the draft's render model, which the kit cannot encode.
+  - `…/html` returns the page by default and its body with `part=body`. Its ETag is weak, the rendering version with a hash of the page, and the rendering version also comes alone in `X-FRUS-Rendering-Version`.
+  - The draft's `/subjects` endpoints, which it retired itself, are left out.
 - The server publishes its own OpenAPI document at `/api/v1/openapi.json`, reusing the draft's schemas such as `CitationMatch`.
 - The draft names `api.history.state.gov` as a future server. A self-hosted instance serves under its own origin, and only an instance the Office runs presents itself as an Office of the Historian service.
 
@@ -625,7 +631,7 @@ Memory figures are estimates until phase 0 measures them. Phase 0's first measur
 
 - Binds to 127.0.0.1 by default. Anything wider goes behind a TLS reverse proxy.
 - Cookies are `Secure`, `HttpOnly` and `SameSite=Lax`, and every state-changing request needs a CSRF token.
-- Content Security Policy: `default-src 'self'`. The reader iframe runs only the app's three bundled scripts.
+- Content Security Policy: the SPA uses `default-src 'self'`. The reader's page has its own, stricter policy: `default-src 'none'`, its inline styles, same-origin and `data:` images, and `frame-ancestors 'self'`. It runs only same-origin scripts, the server's `/reader/host.js` and, once they move into the kit, the app's three reader scripts. Its one inline handler, the figure image's `onerror`, is allowed by its SHA-256 through `script-src-attr 'unsafe-hashes'`. The `part=body` fragment runs no script.
 - The Swift serializer escapes TEI text. Notes and prose HTML are sanitized against an allowlist on write.
 - XML uploads, such as sideloaded volumes, are size-capped and parsed with external entities disabled.
 - Outbound traffic is limited to `raw.githubusercontent.com`, `api.github.com`, `github.com` and its release-asset host, `catalog.archives.gov` and `api.zotero.org`.

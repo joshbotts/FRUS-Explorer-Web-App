@@ -39,9 +39,27 @@ public struct IndexSummary: Sendable, Equatable, Codable {
     }
 }
 
+/// Which file a path named when it was looked at: its device and inode. An import renames a new
+/// file over `frus.db`, so the path alone does not say which index a connection opened.
+public struct FileIdentity: Equatable, Sendable {
+    let device: UInt64
+    let inode: UInt64
+
+    /// The identity of the file at `url` now, or nil when it cannot be read.
+    public init?(_ url: URL) {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let device = (attributes[.systemNumber] as? NSNumber)?.uint64Value,
+              let inode = (attributes[.systemFileNumber] as? NSNumber)?.uint64Value else { return nil }
+        self.device = device
+        self.inode = inode
+    }
+}
+
 /// The live corpus index, open read-only with `immutable=1`.
 public final class CorpusIndex: Sendable {
     public let url: URL
+    /// The file this index's connection opened, as it was just after opening.
+    public let file: FileIdentity?
     public let summary: IndexSummary
     /// How many documents each volume has in `document_cache`, by volume id. It is not part of
     /// the status: the volume endpoints report it per volume.
@@ -53,6 +71,7 @@ public final class CorpusIndex: Sendable {
     /// cannot serve, such as one from before an upgrade.
     public static func open(_ url: URL) throws -> CorpusIndex {
         let db = try SQLiteConnection.immutable(url)
+        let file = FileIdentity(url)
         try ExportChecks.checkFormat(db)
         let provenance = try ExportChecks.provenance(db)
         let version: Int
@@ -74,11 +93,12 @@ public final class CorpusIndex: Sendable {
             exportedAt: provenance?["exported_at"],
             appVersion: provenance?["app_version"],
             appBuild: provenance?["app_build"])
-        return CorpusIndex(url: url, summary: summary, documentsByVolume: documentsByVolume, connection: db)
+        return CorpusIndex(url: url, file: file, summary: summary, documentsByVolume: documentsByVolume, connection: db)
     }
 
-    private init(url: URL, summary: IndexSummary, documentsByVolume: [String: Int], connection: SQLiteConnection) {
+    private init(url: URL, file: FileIdentity?, summary: IndexSummary, documentsByVolume: [String: Int], connection: SQLiteConnection) {
         self.url = url
+        self.file = file
         self.summary = summary
         self.documentsByVolume = documentsByVolume
         self.connection = connection

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # FRUS Explorer Light: the Compose smoke test (session 5).
 # Starts compose.yaml's server, checks the catalogue and the reader before any import, imports a
-# synthetic export with docker compose cp, and waits for /readyz to answer 200; then checks the
-# user, the read-only root, the health check and a restart.
+# synthetic export with docker compose cp, and waits for /readyz to answer 200; then searches it,
+# reads a document's page, and checks the user, the read-only root, the health check and a restart.
 #   scripts/compose-smoke                       builds the image as frus-light:smoke first
 #   FRUS_IMAGE=<image> scripts/compose-smoke    tests an image already built
 # It uses its own Compose project and host port, and removes its containers and volume afterwards.
@@ -94,6 +94,20 @@ wait_for_200 "$base/readyz" 120 || fail "/readyz did not reach 200"
 status=$(curl -s --max-time 5 "$base/api/v1/status") || fail "/api/v1/status did not answer"
 printf '%s' "$status" | grep -q '"documents":3' || fail "status does not report 3 documents: $status"
 echo "   status: $(printf '%s' "$status" | sed -nE 's/.*"sqliteVersion":"([^"]+)".*/SQLite \1/p'), 3 documents"
+
+echo "== search and the reader's page over the imported index"
+# The kit's read-only stack over the live index: two documents mention treaties.
+search=$(curl -s --max-time 30 "$base/api/v1/search?keywords=treaties") || fail "/api/v1/search did not answer"
+# The keys come in no fixed order, so the count may end the object.
+printf '%s' "$search" | grep -Eq '"total":2[,}]' || fail "the search did not find 2 documents: $search"
+page=$(curl -s --max-time 30 -D "$work/page.headers" -o "$work/page.html" -w '%{http_code} %{content_type}' \
+  "$base/api/v1/volumes/frus1961-63v06/documents/d1/html" || true)
+[ "$page" = "200 text/html; charset=utf-8" ] || fail "the reader's page answered $page: $(head -c 300 "$work/page.html")"
+grep -q '<script src="/reader/host.js" defer></script>' "$work/page.html" || fail "the page does not load the host script"
+grep -qi "^content-security-policy: default-src 'none'" "$work/page.headers" || fail "the page has no content security policy"
+host=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "$base/reader/host.js" || true)
+[ "$host" = 200 ] || fail "/reader/host.js answered $host"
+echo "   2 documents found; frus1961-63v06 d1's page, $(wc -c < "$work/page.html" | tr -d ' ') bytes, with its host script and policy"
 
 echo "== health check"
 health=""
