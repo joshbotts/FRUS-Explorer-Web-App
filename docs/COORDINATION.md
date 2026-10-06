@@ -207,7 +207,7 @@ The whole of the app side's part. Each rule costs little or nothing. The boundar
    - a Mac check and merge for each web-authored pull request;
    - now and then, an export from the pinned app build: three volumes for the golden files, or any export when the schema changes;
    - the full-corpus export before S10, as the owner checkpoints in `PLAN.md` list.
-4. **The three-volume export, at each pin move.** The owner made the first on 4 October, from a build of `af8bedab`. S6's pin move to `f69b4a0a` needs a new one from a build of that commit, and each later pin move another.
+4. **The three-volume export, at each pin move.** The owner made the first on 4 October, from a build of `af8bedab`, and the second on 5 October, from a build of `f69b4a0a`, for S6's pin move. Each later pin move needs another.
 
 ## Appendix: a section for the app's `CLAUDE.md`
 

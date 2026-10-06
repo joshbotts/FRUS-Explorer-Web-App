@@ -52,18 +52,18 @@ Both of S6's upstream pull requests merged after the owner's Mac checks. This pu
 - **`frus-parity index`** indexes the fixtures, or any folder of volumes, with the kit. With `--metrics` it prints the timings and peak memory; with `--out` it keeps a copy for `summarize`.
 - **The golden files.**
   - `scripts/make-golden`, run without an export, rebuilt `tools/mac-golden` against the new pin. Only the provenance of the render manifest and the expressions changed: all 392 rows' HTML and all 482 queries' expressions are byte for byte as before.
-  - The index summary and the results wait in `fixtures/golden/PENDING` for the owner's new export. `check-golden` prints "2 present and valid, 2 pending", as between S3's pin move and the 4 October export.
+  - The index summary and the results, from the owner's new export (below). Until it arrived they waited in `fixtures/golden/PENDING`, and the pull request stayed a draft.
 - **`fixtures/sample`:** 24 volumes' names and SHA-256 sums at HistoryAtState/frus `8e5da08c`, for measuring. No TEI is committed.
 - **Docs.**
   - `SPEC.md`: the table definitions' new place, and the measurements under Sizing.
-  - `PLAN.md` and its shared copy (rev 86): Mac check 3 done, the Golden files checkpoint back to To do until the export, the risk rows, the export note.
+  - `PLAN.md` and its shared copy (rev 89): Mac check 3 and the Golden files checkpoint done, the risk rows, the export note.
   - `COORDINATION.md`, the prep notes, the README, `CLAUDE.md` and `scripts/make-golden`'s export steps.
   - The comments that waited for session 6, and four line citations of `IndexingPipeline.swift`.
 
 **Results**
 
 - **Linux, `swift:6.4-noble`, arm64:** all 1,631 tests pass, with the one named skip. FRUSCoreKitTests runs 878, up from 393, and FRUSParityTests 86, up from 76; the other targets are unchanged.
-- **Checks 2 and 3 against the golden files.** The new tests' comparisons pass when they run against the 4 October files (made from a build of `af8bedab`, restored for the run and then removed); only their staleness checks fail. The S6 probe found the same at both upstream heads.
+- **Checks 2 and 3,** against the new export's golden files: both pass (below). Before the export arrived, the comparisons also passed against the 4 October files (made from a build of `af8bedab`, restored for that run), and only their staleness checks failed.
 - **Check 3's expressions:** "482 of 482 queries compile as the golden file says, 25 of them outside the default scope; 43 refused".
 - **The refactored `tools/mac-golden`** runs the shared loop. Built against the new pin and run over the 4 October export, which its checks still accept at an unchanged build and index version, it writes all 482 records identical to the committed results, score bits included.
 - **Indexing, a release build:**
@@ -76,7 +76,24 @@ Both of S6's upstream pull requests merged after the owner's Mac checks. This pu
 
 **The owner's export**
 
-The PR stays a draft until the export arrives. The owner builds `f69b4a0a`, runs Erase Everything…, downloads only the three fixture volumes, waits for indexing and the person rollup, and exports with notes, summaries and tags off. `scripts/make-golden --export <file>` then writes both files and empties `PENDING`. Checks 2 and 3 then compare with the Mac's files made by the pinned build.
+The owner built `f69b4a0a`, ran Erase Everything…, downloaded only the three fixture volumes, waited for indexing and the person rollup, and exported with notes, summaries and tags off. Its stamp, read through SQLite's immutable mode:
+- `exported_at` is 2026-10-06T01:34:52Z, after the pin's commit (2026-10-05T10:46:10Z);
+- build 49, index version 65 and FTS generation 4, with none of the owner's writing;
+- exactly the three fixtures, 139, 123 and 130 documents;
+- no log or journal beside it.
+
+`scripts/make-golden --export` wrote both files and emptied `PENDING`, and `check-golden` passes. Against the 4 October export's files, the new export changes nothing that is compared:
+- all 36 gating digests and 7 checks are the same;
+- all 482 result records are the same, score bits included;
+- only the provenance, the export date and the history-dependent information fields differ.
+
+The full Linux suite then printed:
+- "check 2 passes: 36 digests and 7 checks are the Mac's";
+- "check 3's results pass: 482 queries, 482 identical and 0 reordered only within Mac tie groups; 359 with other score bits (information)";
+- "check 3's expressions: 482 of 482 queries compile as the golden file says, 25 of them outside the default scope; 43 refused";
+- "check 4, the reader's path: 392 of 392 rows identical", and so along the full-parse path.
+
+Checks 2 to 4 pass on the three fixture volumes, with indexing speed and memory recorded: phase 0's exit.
 
 **Notes**
 
@@ -87,7 +104,6 @@ The PR stays a draft until the export arrives. The owner builds `f69b4a0a`, runs
   - `docs/INSTALL.md`, since the image compiles no kit.
 
 **Next.**
-- The owner's three-volume export from a build of `f69b4a0a`, then `scripts/make-golden --export` in this pull request.
 - S8: search, browse and document-render endpoints over the imported index. It needs its own upstream pull request first, for a read-only pipeline open, the figure URLs and the page shell.
 - A web session adds the daily watch of the app's `v2`.
 
