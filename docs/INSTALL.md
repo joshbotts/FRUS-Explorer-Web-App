@@ -2,7 +2,7 @@
 
 FRUS Explorer Light runs as one container on a Mac or a Linux host, serving a research database exported from FRUS Explorer on a Mac. This guide covers phase 1: one person on one machine. The server listens on this machine's 127.0.0.1 only, and has no sign-in.
 
-**What phase 1 offers so far:** the server imports an export, checks it and serves it, lists the published catalogue, and renders a document's text from the TEI volumes. Search follows later in session 8, and the browser interface in session 9. Until then the server answers `/healthz`, `/readyz`, `/api/v1/status`, `/api/v1/volumes` and the reader's HTML (step 6).
+**What phase 1 offers so far:** the server imports an export, checks it and serves it: it searches the index with the app's query language, lists the published catalogue and each volume's documents, and renders a document's page from the TEI volumes. The browser interface arrives in session 9. Until then `curl` reaches it all through the API (step 6).
 
 ## What you need
 
@@ -101,21 +101,35 @@ curl -s -w '  %{http_code}\n' http://localhost:8080/readyz
 
 The installed export is removed from the drop zone, so you can delete your own copy or keep it. Restarting the server copies nothing: the index stays in the volume.
 
-## 6. Read a document
+## 6. Search and read
 
-Until the browser interface arrives, `curl` shows what the reader will. The catalogue lists all 553 volumes, saying which the index holds and which have TEI in your folder:
+Until the browser interface arrives, `curl` shows what it will. A search takes the search box's text in `keywords`, with the app's query language, and answers with the exact count and the first page of results, best first:
+
+```bash
+curl -s 'http://localhost:8080/api/v1/search?keywords=NEAR(khrushchev+berlin,+10)&limit=5'
+```
+
+`curl -G --data-urlencode 'keywords=…'` writes the text safely. Each result's `snippet` marks the matches with `<b>` and is otherwise plain text. `/api/v1/search/inspect` takes the same parameters and shows what the query compiles to.
+
+The catalogue lists all 553 volumes, saying which the index holds and which have TEI in your folder, and each volume lists its documents in reading order:
 
 ```bash
 curl -s 'http://localhost:8080/api/v1/volumes?subseries=1961-63&limit=3'
 ```
 
-A document's text, as the reader renders it, from the TEI folder:
-
 ```bash
-curl -s 'http://localhost:8080/api/v1/volumes/frus1961-63v06/documents/d1/html?part=body'
+curl -s 'http://localhost:8080/api/v1/volumes/frus1961-63v06/documents?limit=5'
 ```
 
-The first document of a volume takes about half a second while the server parses the volume; the rest are immediate. The reader works without an index. An error names its cause in a `code`: `TEI_NOT_AVAILABLE` when the volume is not in your TEI folder, `DOCUMENT_NOT_FOUND` or `VOLUME_NOT_FOUND` for an id the volume or the catalogue lacks.
+A document's page, as the reader renders it from the TEI folder, in `colorScheme` `light` or `dark` and `textSize` `small`, `medium`, `large` or `extraLarge`:
+
+```bash
+curl -s 'http://localhost:8080/api/v1/volumes/frus1961-63v06/documents/d1/html?colorScheme=dark' -o d1.html
+```
+
+The first document of a volume takes about half a second while the server parses the volume; the rest are immediate. The reader works without an index. Figure images come from FRUS Explorer's own folder of volumes, which holds them; with a clone of HistoryAtState/frus, figures show a placeholder.
+
+An error names its cause in a `code`: `INDEX_NOT_READY` for a search before an import has finished, `EMPTY_QUERY` for a query with nothing left to search, `TEI_NOT_AVAILABLE` when the volume is not in your TEI folder, and `DOCUMENT_NOT_FOUND` or `VOLUME_NOT_FOUND` for an id the volume or the catalogue lacks.
 
 ## If an import is refused
 

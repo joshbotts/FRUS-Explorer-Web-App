@@ -2,6 +2,88 @@
 
 One entry per session, newest first.
 
+## Session 8c: search, browse and the reader's page over the imported index
+
+6 October 2026 · branch `claude/s8c-search-browse-reader`
+
+S8's last pull request serves the endpoints over the kit's read-only stack, which S8b's pin move brought in, and runs check 3 through the API on the real Import path. That is S8's exit. The pin stays at `101e17d7`, and nothing upstream changed.
+
+**How the session got there**
+
+- **No new map.** S8's map at the start of S8a had designed these endpoints. S8b had confirmed every kit call they make at the pin: the read-only opens, the search service, the browse calls, `ReaderPage`, `reader(figureURL:)` and `FRUSURLScheme`. This session checked the rest against the source: the search result's fields, `document(forDocumentId:inVolume:)`, `datesByDocumentKey`, `effectiveIsEditorialNote` with `applyingClassificationOverride`, `FRUSCanonicalURL` and the parser's detailed result.
+- **A review before the pull request opened.** Five reviewers and a skeptic per finding; 12 findings held, some found more than once, and all were fixed:
+  - **A stack opened between an import's rename and the switch:** it could have opened the new file over the path and been kept as the old index's stack. `CorpusIndex` now records the file it opened (device and inode), and a stack whose path names another file is refused with a 503, which the next request retries.
+  - **The smoke test's search check** depended on the JSON's key order, which varies from run to run.
+  - **Two gaps in the tests:** the browse test now holds each list to the kit's reading order, and a synthetic test shows the index's classification reshaping a page.
+  - **The records:** INSTALL's example `NEAR` was no proximity search; SPEC's security bullet still described three app scripts; the list of departures from the draft was incomplete; the claim of drift covered one script, not three; and a few sentences, here and in comments, were in the future tense or gave a wrong code.
+
+  The six refuted points include a weak `If-None-Match` comparison, which this route's own weak tags make unnecessary, and links followed inside a figure folder, which the owner's own mounted folder holds.
+
+**Delivered**
+
+- **The served stack** (`ServedIndex`, `ServedIndexProvider`):
+  - for each installed index, `FTS5Store(readingDatabaseAt:)`, `IndexingPipeline(readingIndexAt:…)` over the TEI folder, and a `SearchService`, opened off Swift's pool with `Blocking.run`;
+  - built on the first request that needs it, shared by the requests after, and built again when an import installs a new index. Requests already holding the old stack finish on the file they opened, whose immutable connections keep reading it.
+  - A route that needs an index answers 503 `INDEX_NOT_READY` until one is served, naming the readiness step.
+  - A stack is refused, with a 503 the next request retries, when the path no longer names the file its `CorpusIndex` opened, as between an import's rename and the switch to the new index. `CorpusIndex` now records that file's device and inode.
+- **`GET /api/v1/search`:** S8a's decoder, then the kit's exact `searchCount` and one page of `search`.
+  - It returns `{total, countBasis: "exact", limit, offset, retainedLimit: 7500, items, coverage}`.
+  - Each item has the draft's `SearchResult` fields, `bm25Score` among them, whose bits survive the JSON, and the kit's `isFrontMatter`, which the draft lacks.
+  - A query with nothing left to search is 400 `EMPTY_QUERY`, carrying the kit's refusal, `emptyQuery`, as `searchError`.
+  - Snippets keep the kit's `<b>` markers and are not escaped; a client escapes them.
+- **`GET` and `POST /api/v1/search/inspect`:** what the kit compiles for the same parameters, the parse of the typed text with the structured fields, then each table's MATCH expression, in the keys of the parity harness's expression records.
+  - A refused query is a 200 naming the refusal.
+  - Before an import it compiles on a scratch index in the temporary folder, since compiling reads no index.
+- **Browse:**
+  - `GET /api/v1/volumes/{v}` adds the volume's structure, its front matter, chapters and back matter, when the index holds it.
+  - `GET /api/v1/volumes/{v}/documents` lists the volume in reading order (`readingSequence`), with each entry's date and whether the index holds it, in pages of up to 1,000.
+  - `GET /api/v1/volumes/{v}/documents/{d}` gives the document's metadata in place of the draft's render model, which the kit cannot encode: its effective classification, its canonical URL on history.state.gov, and its neighbours in reading order.
+- **The reader's page,** by default from `…/html`, with `part=body` for the fragment alone:
+  - `ReaderPage.build` in the draft's `colorScheme` and `textSize`, with `<script src="/reader/host.js" defer>` in its head;
+  - figure images named by the server's address, through `reader(figureURL:)`;
+  - when an index is served, its effective classification of the document reshapes the parse first, as the app's reader does;
+  - a weak ETag of the rendering version and the page's bytes, with 304 for `If-None-Match`;
+  - a policy that loads nothing from elsewhere and runs only the host script and the figure handler, which it allows by its SHA-256.
+- **`GET /api/v1/volumes/{v}/figures/{file}`:** a `.png` from `<volume>.figures/` beside the TEI, where FRUS Explorer keeps a volume's figures. A volume outside the manifest is 404 `VOLUME_NOT_FOUND`. A name that is not a single safe path component (`FRUSURLScheme.isSafeComponent`), or not a `.png`, or a missing file, is 404 `FIGURE_NOT_FOUND`.
+- **`GET /reader/host.js`:** the web's stand-in for the app's WebKit host. It gives the three message handlers the app's reader scripts post to, and handles the reader's `frusexplorer://` links. Each becomes a message to the parent page.
+- **`scripts/compose-smoke`,** after the import: a search finding the synthetic export's two documents, a document's page with its host script and policy, and the host script.
+- **Docs:**
+  - `INSTALL.md`: what phase 1 offers, and step 6, search and read;
+  - `SPEC.md`:
+    - Reader rendering's steps, among them that `frus-print.css` is for collection exports, and that the Resources copy of `frus-highlights.js` has drifted from the script the app injects;
+    - the reader page's own content security policy;
+    - the exact count with the 7,500 retained;
+    - the draft's retired `/subjects` struck from the API table;
+    - where the API departs from the draft;
+  - `COORDINATION.md` and the README.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64:** all 1,693 tests pass, up from 1,675, with the one named skip, which CI's skip check allows. FRUSLightServerTests runs 53, up from 38, and FRUSParityTests 98, up from 95. The run printed:
+  - "check 3 through the API: 482 queries, 482 identical and 0 reordered only within Mac tie groups, every record the kit's own; 482 compiled as the golden file says, 43 refused; the live index unchanged";
+  - "check 4 through the page: 392 of 392 rows identical, 8 figure images in 2 rows named by the server; one head for every page";
+  - "browse through the API: 3 volumes of 553 indexed, 139 of 140, 123 of 128, 130 of 134 entries in reading order held by the index", each list the kit's reading order;
+  - checks 2 to 4 in process, as at the pin move.
+
+  The kit's fixture index is dropped into the drop zone as a copy, imported, checked and installed. It is then served through the read-only open, and every query is read over HTTP with the golden tool's results loop. Check 3 passes through the API: S8's exit.
+- **The Compose smoke test** passes on the local arm64 image: after the import, a search finds the synthetic export's two documents, and frus1961-63v06 d1's page, 21,837 bytes, comes with its host script and policy.
+
+**Notes**
+
+- **One stack for every request.** The pipeline is one actor on one connection, so searches, counts and browse calls take turns, and its SQLite runs on Swift's cooperative pool, as a volume's parse does (S8a). That suits one user. Check 12's load target needs a pool of stacks over the same immutable file, and parsing moved off the pool.
+- **Not yet:**
+  - **Facets, date sort and the full inspector:** the kit's facets are internal, and the app's date order and Query Inspector are app code.
+  - **The reader's own scripts:** `kOffsetEngineJS` and the others are app constants.
+  - **The publication year a citation takes from the TEI:** app code.
+
+  All of these wait for the phase-1 features' upstream pull request. Persons, terms and cross-references wait for S9 or later.
+- **The fixtures cannot show the classification override.** Every fixture document's classification in the index is its TEI's, so check 4 through the page shows only that the override changes nothing where nothing is overridden. A synthetic server test marks a document as an editorial note in the served index and finds its page reshaped as one.
+
+**Next.**
+- S9: the browser app for phase 1, Browse, Search, the reader and Cite, over these endpoints. Cite needs a citation endpoint (the kit's formatter is public; the TEI's publication year is app code).
+- The phase-1 features' upstream pull request: the reader's scripts, the publication year, facets, the inspector, date order, display titles, and BibTeX and RIS. It is timed so its pin move comes just before the full export for S10.
+- A web session adds the daily watch of the app's `v2`.
+
 ## Session 8b: pin move to the read-only open and the reader's page
 
 6 October 2026 · branch `claude/pin-101e17d` · upstream [joshbotts/FRUS-Explorer#1575](https://github.com/joshbotts/FRUS-Explorer/pull/1575) (merged as `101e17d7`)
