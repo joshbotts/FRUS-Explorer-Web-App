@@ -4,8 +4,8 @@
 # Each architecture builds natively, amd64 and arm64 side by side, and pushes by digest. The
 # publish job joins them under the commit's tag; verify runs the Compose smoke test against that
 # tag on both architectures; only then does promote move edge.
-# A pull request that changes the image or the server builds both architectures and pushes
-# nothing, and so does a manual run on any branch but main: sessions never publish (rule 7).
+# A pull request that changes the image, the server or the browser app builds both architectures
+# and pushes nothing, and so does a manual run on any branch but main: sessions never publish (rule 7).
 name: image
 
 on:
@@ -20,6 +20,7 @@ on:
       - Package.resolved
       - Sources/**
       - upstream/**
+      - web/**
       - .gitmodules
   workflow_dispatch:
 

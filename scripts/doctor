@@ -10,6 +10,7 @@ cd "$root" || exit 1
 fixes=0
 ok()  { printf '  ok     %s\n' "$*"; }
 fix() { printf '  FIX    %s\n' "$*"; fixes=$((fixes + 1)); }
+note() { printf '  note   %s\n' "$*"; }
 
 if ! command -v docker >/dev/null 2>&1 && [ -x "$HOME/.docker/bin/docker" ]; then
   PATH="$HOME/.docker/bin:$PATH"
@@ -67,6 +68,40 @@ if [ -n "$docker_up" ] && docker image inspect swift:6.4-noble >/dev/null 2>&1; 
   else fix "the container cannot reach github.com: check the proxy variables and CA bundle scripts/swift passes"; fi
 else
   echo "  skip   Docker is not ready"
+fi
+
+echo "Web"
+# scripts/npm runs npm natively on Linux with Node at web/.node-version's major, else in Docker.
+major=$(tr -d '[:space:]' < web/.node-version 2>/dev/null)
+native=""
+if [ "$(uname -s)" = Linux ] && command -v node >/dev/null 2>&1 \
+   && [ "$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null)" = "$major" ]; then
+  native=1
+  ok "Node $(node --version) on PATH, so scripts/npm runs natively"
+elif [ -n "$docker_up" ]; then
+  if docker image inspect "node:$major-bookworm-slim" >/dev/null 2>&1; then ok "node:$major-bookworm-slim present"
+  else fix "node:$major-bookworm-slim is missing: docker pull node:$major-bookworm-slim"; fi
+else
+  echo "  skip   Docker is not ready"
+fi
+# npm ci writes .package-lock.json last, so a missing one means no install or an interrupted one.
+installed=""
+if [ "$(uname -s)" = Darwin ] && [ -z "$native" ]; then
+  # On a Mac, web/node_modules is a Docker volume: look inside it.
+  key=$(printf '%s' "$root" | shasum | cut -c1-12)
+  if [ -n "$docker_up" ] && docker image inspect "node:$major-bookworm-slim" >/dev/null 2>&1 \
+     && docker volume inspect "frus-light-node-modules-$key" >/dev/null 2>&1 \
+     && docker run --rm -v "frus-light-node-modules-$key:/m:ro" "node:$major-bookworm-slim" \
+          test -f /m/.package-lock.json >/dev/null 2>&1; then
+    installed=1
+  fi
+elif [ -f web/node_modules/.package-lock.json ]; then installed=1; fi
+if [ -n "$installed" ]; then ok "web/node_modules installed"
+else note "web/node_modules is not installed: scripts/npm ci"; fi
+# Only scripts/compose-smoke --e2e needs the browser image, and it is large, so it is a note.
+if [ -n "$docker_up" ] && playwright=$(scripts/npm --playwright-image 2>/dev/null); then
+  if docker image inspect "$playwright" >/dev/null 2>&1; then ok "$playwright present"
+  else note "$playwright is missing, for scripts/compose-smoke --e2e: docker pull $playwright"; fi
 fi
 
 echo

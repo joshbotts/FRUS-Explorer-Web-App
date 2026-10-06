@@ -1,10 +1,12 @@
 # syntax=docker/dockerfile:1
 # FRUS Explorer Light: the image (docs/SPEC.md, Deployment > Image).
-# Phase 1 builds the server, with the app's data files beside it since session 8. The encoder stage
-# (phase 4), the web client (session 9) and rclone (runtime options) arrive later.
+# Phase 1 builds the server, with the app's data files beside it since session 8 and the browser
+# app since session 9. The encoder stage (phase 4) and rclone (runtime options) arrive later.
 #   docker build -f docker/Dockerfile -t frus-explorer-light .
 
 ARG SWIFT_IMAGE=swift:6.4-noble
+# web/.node-version names the major; ci.yml's web job checks this line.
+ARG NODE_IMAGE=node:22-bookworm-slim
 ARG RUNTIME_IMAGE=ubuntu:24.04
 
 # Server stage: a release build with the Swift runtime linked in, so the runtime image
@@ -17,7 +19,12 @@ RUN apt-get update -qq \
  && apt-get install -y -qq --no-install-recommends libsqlite3-dev \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
-COPY . .
+# What SwiftPM reads, which checks every target's path, tests included; so an edit to the browser
+# app leaves this stage cached.
+COPY Package.swift Package.resolved ./
+COPY Sources/ Sources/
+COPY Tests/ Tests/
+COPY upstream/ upstream/
 # The cache mount speeds up local rebuilds; GitHub's runners do not keep it. One per architecture,
 # locked, so a two-platform or concurrent build cannot share SwiftPM's build database.
 RUN --mount=type=cache,id=frus-light-swiftpm-${TARGETARCH},target=/src/.build,sharing=locked \
@@ -28,6 +35,16 @@ RUN --mount=type=cache,id=frus-light-swiftpm-${TARGETARCH},target=/src/.build,sh
 # modes can be made readable by the server's user whatever the checkout's umask was.
 RUN cp -R upstream/FRUS-Explorer/FRUSExplorer/Resources /out/resources \
  && chmod -R a+rX /out/resources
+
+# Client stage: Node runs the Vite production build of the browser app (SPEC, Deployment > Image).
+# Its output is the same on every architecture, so it runs on the builder's own, even when the
+# image is built for another.
+FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS client
+WORKDIR /web
+COPY web/package.json web/package-lock.json web/.npmrc ./
+RUN --mount=type=cache,id=frus-light-npm,target=/root/.npm,sharing=locked npm ci --no-audit --no-fund
+COPY web/ ./
+RUN npm run build && chmod -R a+rX dist
 
 # Runtime stage: Ubuntu 24.04's SQLite 3.45.1 (with FTS5), libxml2 for FoundationXML, whose parser
 # FRUSCoreKit reads TEI with and which the static Swift runtime links dynamically, the C++ runtime
@@ -44,6 +61,8 @@ COPY LICENSE /usr/share/doc/frus-light/LICENSE
 # The manifest, the broken-refs index, the indexing resources and the rest, at the server's
 # default FRUS_RESOURCES_DIR.
 COPY --from=build /out/resources/ /usr/share/frus-light/resources/
+# The browser app, at the server's default FRUS_WEB_DIR.
+COPY --from=client /web/dist/ /usr/share/frus-light/web/
 
 ARG VERSION=0.1.0-dev
 ARG REVISION=unknown

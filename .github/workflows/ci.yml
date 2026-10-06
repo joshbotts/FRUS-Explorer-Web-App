@@ -1,8 +1,10 @@
 # FRUS Explorer Light CI, on every pull request and on main.
 # - swift: build and test in swift:6.4-noble with libsqlite3-dev, the way scripts/swift runs them.
-# - compose: build the image, then scripts/compose-smoke checks the catalogue and the reader,
-#   imports a synthetic export with docker compose cp and waits for /readyz to answer 200.
-# Session 9 adds the web app.
+# - web: the browser app in web/, typechecked, linted, unit-tested and built with Node at
+#   web/.node-version, as scripts/npm runs it.
+# - compose: build the image, then scripts/compose-smoke --e2e checks the browser app, the catalogue
+#   and the reader, imports a synthetic export with docker compose cp, waits for /readyz to answer
+#   200, and runs web/e2e, Playwright on Chromium, against it.
 name: ci
 
 on:
@@ -107,6 +109,45 @@ jobs:
       - name: Test count per target
         run: swift test list --skip-build --scratch-path .build/linux | cut -d. -f1 | sort | uniq -c
 
+  web:
+    name: web
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      # scripts/npm runs npm natively when Node at web/.node-version's major is on PATH.
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: web/.node-version
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: scripts/npm ci
+
+      - name: Typecheck
+        run: scripts/npm run typecheck
+
+      - name: Lint
+        run: scripts/npm run lint
+
+      - name: Unit tests
+        run: scripts/npm test
+
+      - name: Build
+        run: scripts/npm run build
+
+      # The image builds the app with its own Node, which must be the one tested here.
+      - name: The image's Node is web/.node-version's
+        run: |
+          want="ARG NODE_IMAGE=node:$(tr -d '[:space:]' < web/.node-version)-bookworm-slim"
+          if ! grep -qxF -e "$want" docker/Dockerfile; then
+            echo "::error file=docker/Dockerfile::docker/Dockerfile must say '$want', to build the app with the Node web/.node-version names."
+            exit 1
+          fi
+          echo "$want"
+
   compose:
     name: compose
     runs-on: ubuntu-24.04
@@ -132,5 +173,30 @@ jobs:
       - name: Install sqlite3 for the synthetic export
         run: command -v sqlite3 || (sudo apt-get update -qq && sudo apt-get install -y -qq sqlite3)
 
-      - name: Compose smoke test
-        run: FRUS_IMAGE=frus-light:ci scripts/compose-smoke
+      # The browser suite runs from web/ in mcr.microsoft.com/playwright at the version the
+      # lockfile holds, inside the server's network namespace.
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: web/.node-version
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install the browser suite
+        run: scripts/npm ci
+
+      - name: Pull the Playwright image
+        run: docker pull "$(scripts/npm --playwright-image)"
+
+      - name: Compose smoke test and the browser suite
+        run: FRUS_IMAGE=frus-light:ci scripts/compose-smoke --e2e
+
+      - name: Upload the browser suite's report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            web/playwright-report
+            web/test-results
+          retention-days: 7
+          if-no-files-found: ignore
