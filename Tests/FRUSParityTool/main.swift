@@ -5,6 +5,7 @@
 //   frus-parity compare-results <golden.json> <candidate.json>
 //   frus-parity parse <queries.jsonl>
 //   frus-parity render [<volume> <document> [--full-parse] [--out <file>]] [--repo <root>]
+//   frus-parity index [<volume>...] [--tei <dir>] [--resources <dir>] [--out <db>] [--metrics] [--repo <root>]
 //   frus-parity check-golden [--repo <root>]
 //
 // The repository is found from the current directory unless --repo names it. Exit status: 0 when
@@ -20,6 +21,7 @@ let usage = """
            frus-parity compare-results <golden.json> <candidate.json>
            frus-parity parse <queries.jsonl>
            frus-parity render [<volume> <document> [--full-parse] [--out <file>]] [--repo <root>]
+           frus-parity index [<volume>...] [--tei <dir>] [--resources <dir>] [--out <db>] [--metrics] [--repo <root>]
            frus-parity check-golden [--repo <root>]
     """
 
@@ -209,6 +211,59 @@ func render(_ arguments: Arguments) async throws {
     print("check 4 passes")
 }
 
+/// Indexes TEI volumes with FRUSCoreKit, as checks 2 and 3 do, and says how it went: the fixtures
+/// by default, or the volumes named, from --tei's folder, every .xml in it when none is named. The
+/// data files come from the submodule's FRUSExplorer/Resources unless --resources names a folder.
+/// It builds in a new temporary folder, which it removes, and prints each volume's documents; with
+/// --metrics, each step's time, its documents per second and the peak memory, which session 6
+/// records (build with -c release to measure); with --out, it keeps a copy of the index out of
+/// write-ahead-log mode, which `summarize --any-volumes` reads.
+func index(_ arguments: Arguments) async throws {
+    let layout = try repository(arguments)
+    let tei = arguments.options["--tei"].map { URL(fileURLWithPath: $0, isDirectory: true) } ?? layout.tei
+    var volumes = arguments.positional
+    if volumes.isEmpty {
+        if arguments.options["--tei"] == nil {
+            volumes = ParityFixtures.volumes
+        } else {
+            volumes = try FileManager.default.contentsOfDirectory(atPath: tei.path)
+                .filter { $0.hasSuffix(".xml") }.map { String($0.dropLast(".xml".count)) }.sorted()
+        }
+    }
+    guard !volumes.isEmpty else { throw UsageError("\(tei.path) holds no .xml file") }
+    for volume in volumes {
+        guard volume.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil else {
+            throw UsageError("\(volume) is not a volume id")
+        }
+        guard FileManager.default.fileExists(atPath: tei.appendingPathComponent("\(volume).xml").path) else {
+            fail("\(tei.path) has no \(volume).xml")
+        }
+    }
+    let resources = arguments.options["--resources"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+        ?? layout.upstream.appendingPathComponent(ParityIndex.resourcesPath)
+    let out = arguments.options["--out"].map { URL(fileURLWithPath: $0) }
+    if let out, FileManager.default.fileExists(atPath: out.path) { fail("\(out.path) exists") }
+    let scratch = FileManager.default.temporaryDirectory
+        .appendingPathComponent("frus-parity-index-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: scratch) }
+
+    let index = try await ParityIndex.build(volumes: volumes, tei: tei, resources: resources,
+                                            database: scratch.appendingPathComponent("frus.db"))
+    for volume in volumes { print("\(volume): \(index.documents[volume] ?? 0) documents") }
+    print("\(volumes.count) volumes, \(index.documents.values.reduce(0, +)) documents, "
+          + "\(ProcessInfo.processInfo.activeProcessorCount) processors; person rollup rebuilt: \(index.rollupRebuilt)")
+    #if DEBUG
+    print("a debug build: its timings are not measurements; build with -c release")
+    #endif
+    if arguments.flags.contains("--metrics") { print(index.metrics.report()) }
+    if let out {
+        try IndexCopy.rollbackJournal(of: index.database, to: out)
+        let bytes = (try? FileManager.default.attributesOfItem(atPath: out.path)[.size] as? Int64) ?? nil
+        print("wrote \(out.path)\(bytes.map { ", \($0) bytes" } ?? "")")
+    }
+}
+
 func milliseconds(_ duration: Duration) -> Int64 {
     duration.components.seconds * 1000 + duration.components.attoseconds / 1_000_000_000_000_000
 }
@@ -257,6 +312,8 @@ do {
         try parse(Arguments(arguments.dropFirst()))
     case "render":
         try await render(Arguments(arguments.dropFirst(), flags: ["--full-parse"], options: ["--out", "--repo"]))
+    case "index":
+        try await index(Arguments(arguments.dropFirst(), flags: ["--metrics"], options: ["--tei", "--resources", "--out", "--repo"]))
     case "check-golden":
         try checkGolden(Arguments(arguments.dropFirst(), options: ["--repo"]))
     default:
