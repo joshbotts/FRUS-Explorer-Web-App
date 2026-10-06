@@ -2,6 +2,115 @@
 
 One entry per session, newest first.
 
+## Session 9a: the browser app's foundation, and a citation copied in Chromium
+
+6 October 2026 · branch `claude/s9-web-client`
+
+S9 became two pull requests at the start, by the owner's choice: S9a meets S9's done-when first, and S9b completes the phase-1 SPA. The owner also chose three things before any code:
+- npm through a Docker wrapper, `scripts/npm`, as Swift goes through `scripts/swift`;
+- the publication year from the manifest now, rather than waiting for the app's TEI rule upstream;
+- the citation endpoint in the kit and the server only, with no upstream pull request.
+
+The pin stays at `101e17d7`, and nothing upstream changed.
+
+**How the session got there**
+
+- **A map first.** The map read the kit's citation API at the pin (`CitationStyle`, `makeFormatter`, `FRUSDocumentMetadata(citing:printedNumber:)`, `FRUSVolumeMetadata(entry)`, `CitationPlainText`, `CitableDocumentNumber`, `FRUSCanonicalURL`) and Hummingbird 2.27's middleware.
+  - Router middleware applies only to routes added after it, and the not-found responder runs all of it.
+  - `FileMiddleware` serves files only where a route has answered 404, and has no fallback for an SPA's client routes.
+  - `ContentSecurityMiddleware` adds a second policy header, which would have doubled the reader page's.
+  - The manifest's publication year equals the year the app reads from the TEI header for all 553 published volumes, so the manifest's year changes no citation.
+- **A review before the pull request opened.** Five reviewers each had a skeptic check their findings. 26 of 32 findings held, about 20 once duplicates are merged, and all were fixed:
+  - **HEAD /readyz answered 200 with the app's page** before any import. The router made no HEAD responder for its GET routes, so a HEAD fell through to the app's fallback. Every GET route now answers HEAD itself. The fallback's own HEAD had sent a length of 0; it now sends GET's headers.
+  - **The router lays a route's checked search over the raw one,** so a field the check dropped kept the URL's string. A URL with `limit=20` paged to `offset=020`, then `2020`, and `offset=-5` or an empty date reached the server. The check now returns every field.
+  - **Focus:**
+    - focus did not reach a new screen's heading, because the shell moved it before the screen rendered; it now waits for the router's `onRendered`;
+    - changing the citation style or the page unmounted the control that had focus. The previous citation (for the same document only) and the previous page of results now stay while the next loads, and Copy Citation waits for its own style.
+  - **The reader and Cite:**
+    - the page check refetched when the tab regained focus, and a failure then replaced an open document with an error;
+    - the Cite toggle was a link, announced as the current page. It is now a button with `aria-expanded` that toggles in place, without a history entry;
+    - below 900 px the rail sat below the frame, off screen. It is now a sheet over the text, with Close, and takes focus.
+  - **Search:**
+    - the same search could not be asked again after a refusal, and nothing was asked again once an index became ready;
+    - a page past the end said both "2 documents match" and "No documents match.", with "Page 61 of 1".
+  - **Preferences:** with storage blocked, a choice was lost on the next remount. Every reader now shares this page's choices.
+  - **Strings:** `copy.ts` claimed the Mac's wording where it had a string, but differed. It now uses Copy URL, Document type with All, and Text Size, and claims no more than that.
+  - **The citation endpoint:**
+    - `numberSource` said `index` for a number the id spelled. It now says `documentId`, and is absent when there is no number;
+    - the docs had described only `_…_`, but Chicago and Turabian write `*…*` around the whole title.
+  - **Tests:**
+    - the fallback test's reader path had an extension, so it never tested the `/reader/` exclusion;
+    - the precedence test could not tell the index's number from the id's. The index now says 7 where the TEI and the id say 1.
+  - **Scripts:**
+    - `vite preview` listened on 4173 while `scripts/npm` published 5173;
+    - on Linux without Node, `run dev` sent the API to `host.docker.internal`; it now shares the host's network;
+    - the doctor took an empty `node_modules` volume for an install, and now looks inside it.
+
+  The six refuted points:
+  - the app's error pages lack its policy, but they are Hummingbird's plain 404s, with no page to protect;
+  - client routes serve an `index.html` read at start, which differs only when `web/dist` is rebuilt under a running server, never in the image;
+  - INSTALL's "History at State" is the kit's own name for the style;
+  - PLAN's copy of the session rules records session 0's;
+  - the missing log entry, which is this one.
+
+**Delivered**
+
+- **`scripts/npm`:** npm for `web/`.
+  - It runs natively on Linux when Node at `web/.node-version`'s major is on PATH, as in CI after `setup-node` and in a cloud session. Otherwise, and always on a Mac, it runs in `node:22-bookworm-slim`, with `web/node_modules` in a Docker volume per checkout, since Linux builds of esbuild and Rollup cannot run on macOS.
+  - `--playwright` runs `npx playwright test` in `mcr.microsoft.com/playwright` at the version the lockfile holds, and `--playwright-image` prints that image.
+- **The server serves the SPA** (`WebClient`, `WebClientMiddleware`), from `FRUS_WEB_DIR`, which defaults to the image's `/usr/share/frus-light/web`.
+  - A GET or HEAD outside `/api/` and `/reader/` gets a file of the build when there is one. Any other path whose last segment has no extension gets `index.html`, so a client route survives a reload. A missing script stays a 404, and an unknown API path keeps its problem details.
+  - Every response of the app's carries its own policy: `default-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`, with `nosniff` and `Referrer-Policy: no-referrer`.
+  - Files under `/assets/` are cached as immutable for a year; everything else is `no-cache`.
+  - Without a build at the default the server serves the API alone. A folder that `FRUS_WEB_DIR` names must hold one, or the server exits with status 2.
+- **`GET /api/v1/volumes/{v}/documents/{d}/citation`:** the kit's formatter, as the app's Cite uses it, in `historyAtState` (the default), `chicago` or `turabian`.
+  - It returns `citation` with the formatter's Markdown emphasis, and `plainText`, which is what Copy writes.
+  - It also returns the canonical URL, the document number and label, and the styles with the kit's names for them.
+  - The number is the index's; for a row with none, or with no index, it is the TEI's printed number. The response names its sources: `numberSource` for the number and `publicationYearSource: "manifest"` for the year.
+- **`web/`:** React 19.3, TanStack Router 1.170 (code-based routes) and Query 5.104, Vite 8.3, TypeScript 6.0, Vitest 5 with jsdom, ESLint 10, and Playwright 1.63, with exact versions and a lockfile.
+  - **The shell:** a skip link, the appearance (System, Light or Dark), a banner while no index is served, focus on each screen's heading, and the footer's notice that an instance is not an Office of the Historian service.
+  - **Search:** the query box with a summary of the syntax; the document-type, date and front-matter filters, and volume chips; the exact count with its coverage; snippets whose `<b>` markers become `<mark>`, never markup from a string; and pages of 10 to 100, as far as the 7,500th result. Every search is a URL, in the server's form encoding.
+  - **The reader:** a check of the page before the frame loads it, so an error shows as a notice; the server's page in an iframe sandboxed with `allow-scripts` alone; Previous and Next; text size; and Open on history.state.gov. A link inside the page shows a notice until S9b.
+  - **The Cite rail:** the three styles, from the server, with the choice remembered; Copy Citation and Copy URL; and Close. Beside the text from 900 px wide, a sheet over it below that. Where the browser refuses the clipboard, the text is selected in a field.
+  - `copy.ts` holds every string. ESLint forbids `dangerouslySetInnerHTML` and assignments to `innerHTML`.
+- **The image:** a client stage on the build platform runs `npm ci` and `vite build`, and the runtime copies `dist` to `/usr/share/frus-light/web`. The server stage now copies only what it builds, and `.dockerignore` keeps everything else out.
+- **`scripts/compose-smoke`:**
+  - before the import, it checks that `/` and two client routes give the same `index.html` with the app's policy, that the app's script is immutable, and that a missing asset and an unknown API path are 404s;
+  - `--e2e` runs `web/e2e` in the server's network namespace, so the app is at `http://localhost:8080`, a secure context, which the clipboard needs.
+- **CI:**
+  - a `web` job: `setup-node` at `web/.node-version`, then typecheck, lint, unit tests and the build, and a check that the Dockerfile's Node image is the same major;
+  - the compose job runs `scripts/compose-smoke --e2e` and uploads Playwright's report when it fails;
+  - `image.yml` builds on pull requests that touch `web/`.
+- **`scripts/doctor`:** a Web section for the Node image, `web/node_modules` and the Playwright image. A missing Playwright image is a note, not a fix, since only `--e2e` needs it.
+- **Docs:**
+  - `INSTALL.md`: what phase 1 offers, and step 6, which becomes search, read and cite in the browser, with the API after it;
+  - `SPEC.md`: the citation endpoint, how the SPA is served and cached, its policy, `FRUS_WEB_DIR`, and the reader frame's sandbox;
+  - `PLAN.md` and its shared copy (rev 105): S9a and S9b;
+  - `CLAUDE.md`: **rule 1 now names `scripts/npm` in place of `npm --prefix web`**, and the building notes add it and `--e2e`.
+  - the README's status.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64:** all 1,701 tests pass, up from 1,693, with the one named skip, which CI's skip check allows. FRUSLightServerTests runs 61, up from 53: the citation route in each style, the number's three sources, the printer's name either side of 2014, and the app's files, client routes, policy, caching and HEAD, with what the fallback must leave alone.
+- **The web app:** typecheck, lint, 26 unit tests in 7 files, and the build: `index.html` 0.5 KB, CSS 4.5 KB, and one script of 348 KB, 111 KB compressed, with no inline script and no source map.
+- **The Compose smoke test with `--e2e`** passes on the local arm64 image, still 400 MB, since the app adds 364 KB:
+  - before the import, `/` and two client routes give the same page with the app's policy, its script is immutable, and a missing asset and an unknown API path are 404s;
+  - after it, Playwright 1.63 on Chromium, in `mcr.microsoft.com/playwright:v1.63.0-noble`, searches "treaties" and finds the two documents, their matches marked;
+  - it opens frus1961-63v06 d1, focused at its heading, finds the document's text in the frame and the host script running there under the sandbox and the page's policy;
+  - it opens Cite, which takes focus, chooses Chicago and copies the citation. The clipboard holds the API's `plainText`, which is the same text the Swift test holds;
+  - Close hands focus back to the toggle, and Back returns to the results, focused at their heading. No console error or policy violation occurred in the page or the frame.
+
+  That is S9's done-when.
+
+**Notes**
+
+- **The frame's origin.** The sandbox without `allow-same-origin` gives the reader's page an opaque origin, yet its policy's `'self'` still admits `/reader/host.js`, since `'self'` is the page's URL's origin. The browser suite checks that the host script ran inside the frame. The page's messages arrive with origin `null`, so the app accepts them by their source, the frame's window.
+- **The clipboard** needs a secure context. `http://localhost` is one, but another machine's address over plain http is not, so the panel's fallback selects the text there. Phase 3's TLS proxy makes the clipboard work for a shared instance.
+- **On a Mac,** `web/node_modules` lives in a Docker volume, so an editor's TypeScript service cannot see the packages. Running `npm ci` natively as well would give it a copy.
+- **Not yet, for S9b:** Browse, the reader's links and the person and gloss cards, a keyboard-only path, and an axe check. Display titles, BibTeX and RIS wait for the phase-1 features' upstream pull request.
+
+**Next: S9b.** Browse (the catalogue and a volume's reading order), the reader's links (`doc/` navigates, `person/` and `gloss/` open cards, `brokenref/` the Unresolved Reference sheet), a full keyboard path, and an axe check in the browser suite. Its done-when: Playwright browses to a volume, opens a document, follows a link inside it and opens a person card, by keyboard alone, with no axe violations.
+
 ## Session 8c: search, browse and the reader's page over the imported index
 
 6 October 2026 · branch `claude/s8c-search-browse-reader`
