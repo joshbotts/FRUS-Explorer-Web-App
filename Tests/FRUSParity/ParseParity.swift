@@ -1,7 +1,9 @@
 // Check 3 on Linux: the app's query parser, compiled from the submodule, against the golden parse.
 //
 // The parse depends on the query text and the structured fields alone, not on any index or scope,
-// so Linux compares it for every query before SearchService runs there (session 6).
+// so it is compared for every query without a search service: `mismatches(queries:golden:)`, which
+// `frus-parity check-golden` runs. Since session 6's pin move SearchService runs on Linux, and
+// `recordMismatches(queries:golden:linux:)` compares what it compiles too, in every scope.
 
 import FTS5Store
 import Foundation
@@ -88,7 +90,7 @@ public enum ParseParity {
     /// terms of every query, and for a query in the default scope, its MATCH expressions, which
     /// are the unscoped parse's for both tables, and whether the search refused it, which it does
     /// when the parse has no expression. A query outside the default scope compiles
-    /// column-scoped expressions inside SearchService, so Linux compares those in session 6.
+    /// column-scoped expressions inside SearchService, which `recordMismatches` compares.
     public static func mismatches(queries: [ParityQuery], golden: ExpressionsGolden) -> [ParseMismatch] {
         var records: [String: ExpressionRecord] = [:]
         var mismatches: [ParseMismatch] = []
@@ -115,6 +117,48 @@ public enum ParseParity {
                         id: query.id, field: "search.error", golden: show(search.error),
                         linux: linux.expression == nil ? "no expression, so a refusal" : "an expression, so no refusal"))
                 }
+            }
+        }
+        return mismatches
+    }
+
+    /// Every field where the expressions Linux compiled differ from the golden file's, for every
+    /// query whatever its scope, and every query either lacks or holds twice: the parse, and the
+    /// search record SearchService made from it, the MATCH expression for each table, the exact
+    /// terms and the error. `linux` is `LinuxSearch.expressions`' records. Empty when check 3's
+    /// expressions comparison passes. `mismatches(queries:golden:)` checks what the parse alone
+    /// decides, for `frus-parity check-golden`, which runs no search service.
+    public static func recordMismatches(queries: [ParityQuery], golden: ExpressionsGolden,
+                                        linux: [ExpressionRecord]) -> [ParseMismatch] {
+        var mismatches: [ParseMismatch] = []
+        func index(_ records: [ExpressionRecord], side: String) -> [String: ExpressionRecord] {
+            var byID: [String: ExpressionRecord] = [:]
+            for record in records {
+                if byID[record.id] != nil {
+                    mismatches.append(ParseMismatch(id: record.id, field: "id",
+                                                    golden: side == "golden" ? "listed twice" : "-",
+                                                    linux: side == "Linux" ? "listed twice" : "-"))
+                }
+                byID[record.id] = record
+            }
+            return byID
+        }
+        let goldenRecords = index(golden.queries, side: "golden")
+        let linuxRecords = index(linux, side: "Linux")
+        for query in queries {
+            switch (goldenRecords[query.id], linuxRecords[query.id]) {
+            case (nil, nil):
+                mismatches.append(ParseMismatch(id: query.id, field: "record", golden: "missing", linux: "missing"))
+            case (nil, _?):
+                mismatches.append(ParseMismatch(id: query.id, field: "record", golden: "missing", linux: "compiled"))
+            case (_?, nil):
+                mismatches.append(ParseMismatch(id: query.id, field: "record", golden: "compiled", linux: "missing"))
+            case (let golden?, let linux?):
+                mismatches += differences(id: query.id, golden: golden.parse, linux: linux.parse)
+                mismatches += compare(id: query.id, field: "search.corpus", golden.search.corpus, linux.search.corpus)
+                mismatches += compare(id: query.id, field: "search.userContent", golden.search.userContent, linux.search.userContent)
+                mismatches += compare(id: query.id, field: "search.exactTerms", golden.search.exactTerms, linux.search.exactTerms)
+                mismatches += compare(id: query.id, field: "search.error", golden.search.error, linux.search.error)
             }
         }
         return mismatches

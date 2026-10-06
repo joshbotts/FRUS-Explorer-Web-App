@@ -44,6 +44,17 @@ public struct IndexingMetrics: Sendable {
         return value
     }
 
+    /// Runs `body` as the step `name`, as `measure` does, and records it with the documents `body`
+    /// returns: for a step whose count is known only once it has run, such as indexing a volume.
+    @discardableResult
+    public mutating func measureDocuments(_ name: String, _ body: () async throws -> Int) async rethrows -> Int {
+        let clock = ContinuousClock()
+        let start = clock.now
+        let documents = try await body()
+        steps.append(Step(name: name, duration: clock.now - start, documents: documents, peakBytes: Self.peakResidentBytes()))
+        return documents
+    }
+
     /// The time of every step together.
     public var total: Duration { steps.reduce(.zero) { $0 + $1.duration } }
 

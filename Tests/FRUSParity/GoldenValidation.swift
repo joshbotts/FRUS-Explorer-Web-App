@@ -367,3 +367,44 @@ public enum QueryListValidation {
         return (1...days[month - 1]).contains(day)
     }
 }
+
+// MARK: - Reading one golden file for a check
+
+/// A golden file that records how it was made.
+public protocol GoldenDocument: Decodable, Sendable {
+    var provenance: Provenance { get }
+}
+
+extension RenderGolden: GoldenDocument {}
+extension ExpressionsGolden: GoldenDocument {}
+extension ResultsGolden: GoldenDocument {}
+extension IndexSummaryGolden: GoldenDocument {}
+
+/// A golden file as a check reads it: present, with each way it is stale at this pin, or pending,
+/// with what it waits for.
+public enum LoadedGolden<Golden: GoldenDocument>: Sendable {
+    case present(Golden, stale: [String])
+    case pending(String)
+}
+
+extension GoldenValidation {
+    /// Reads `file` from `layout.golden`, as `RenderParity.golden` reads the render manifest: its
+    /// state in `PENDING`, then, when present, the file and each way it is stale against the
+    /// submodule. A check compares with it only when nothing is stale, since a golden file made from
+    /// other app sources tests other code than the pin's.
+    public static func load<Golden: GoldenDocument>(_ file: GoldenFile, as type: Golden.Type,
+                                                    layout: RepositoryLayout) throws -> LoadedGolden<Golden> {
+        let status = try GoldenStatus(directory: layout.golden)
+        switch status.states[file] {
+        case .present?:
+            let golden = try GoldenJSON.read(type, from: status.url(file))
+            let stale = staleness(of: golden.provenance, file: file.rawValue, layout: layout,
+                                  sourceDigest: try Upstream.sourceDigest(layout.upstream))
+            return .present(golden, stale: stale)
+        case .pending(let reason)?:
+            return .pending(reason)
+        case nil:
+            throw GoldenError.malformed(GoldenStatus.pendingFile, "no state for \(file.rawValue)")
+        }
+    }
+}
