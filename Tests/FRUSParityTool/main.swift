@@ -231,6 +231,7 @@ func index(_ arguments: Arguments) async throws {
         }
     }
     guard !volumes.isEmpty else { throw UsageError("\(tei.path) holds no .xml file") }
+    guard Set(volumes).count == volumes.count else { throw UsageError("a volume is named twice") }
     for volume in volumes {
         guard volume.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil else {
             throw UsageError("\(volume) is not a volume id")

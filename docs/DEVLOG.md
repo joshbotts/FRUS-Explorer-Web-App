@@ -11,6 +11,13 @@ Both of S6's upstream pull requests merged after the owner's Mac checks. This pu
 **How the session got there**
 
 - **A map first.** Three readers mapped the build and CI, checks 2 and 3 as tests, and the records and the export. A fourth synthesized the plan.
+- **A review after the draft opened.** Five reviewers looked at five things: correctness, CI and the build, the parity rules and the golden files, the records, and the Mac-side tools. A skeptic checked each finding. Four of the twelve held, all fixed before the export:
+  - `COORDINATION.md` still called #1574 open;
+  - `PLAN.md`'s Golden files checkpoint still said Done;
+  - two prep notes still said the TEI hash comparison waits for S6;
+  - the skip check anchored skips but not cancellations.
+
+  Three refuted points were cheap enough to take anyway: a citation's line order, `frus-parity index` naming a volume twice, and `IndexCopy` leaving a partial file behind.
 - **Two findings shaped the work:**
   - **CI's skip check.** It would have failed at the new pin on the passing test "A Lot File(s) prefix is skipped, never captured into the key".
   - **The export.** The owner's export must be made again after Erase Everything…. With the index version unchanged, a build of the new pin does not re-index the three volumes an earlier build indexed, so an export taken without erasing would still hold the old build's index.
@@ -21,7 +28,10 @@ Both of S6's upstream pull requests merged after the owner's Mac checks. This pu
   - FRUSCoreKit depends on FTS5Store, with CSQLite on Linux and upstream's sqlite3 link on macOS.
   - FRUSCoreKitTests adds FTS5Store, SourceNoteKit and CSQLite.
   - FRUSParityTests adds FRUSCoreKit.
-- **CI's skip check** now matches a skip by its verb right after the test's name, and still matches XCTest's `Test Case '…' skipped (` line. I ran the step itself with GNU grep in the container, with `LANG` unset and set to `C.UTF-8`. It passes the full Linux log, with the named skip once, and fails a log with seven planted skip and cancel lines, all seven reported.
+- **CI's skip check** now matches a skip or a cancellation by its verb right after the test's or suite's name, and still matches XCTest's `Test Case '…' skipped (` line. I ran the step itself with GNU grep in the container, with `LANG` unset and set to `C.UTF-8`:
+  - it passes the full Linux log, with the named skip once;
+  - it passes that log with passing tests whose names say "skipped" or "was cancelled";
+  - it fails a log with nine planted skip and cancel lines, all nine reported.
 - **The harness** (`Tests/FRUSParity`):
   - `ParityIndex` indexes TEI volumes with the kit's pipeline. It loads the data files with `IndexingResources.loading(fromDirectory:)` over the submodule's `FRUSExplorer/Resources`, keeps stamps in memory, and runs `runPostIndexPasses`.
   - `IndexCopy` copies a live index with the backup API, reading it through the normal pager, then takes the copy out of write-ahead-log mode for the summary.
@@ -46,7 +56,7 @@ Both of S6's upstream pull requests merged after the owner's Mac checks. This pu
 - **`fixtures/sample`:** 24 volumes' names and SHA-256 sums at HistoryAtState/frus `8e5da08c`, for measuring. No TEI is committed.
 - **Docs.**
   - `SPEC.md`: the table definitions' new place, and the measurements under Sizing.
-  - `PLAN.md` and its shared copy: Mac check 3 done, the risk rows, the export note.
+  - `PLAN.md` and its shared copy (rev 86): Mac check 3 done, the Golden files checkpoint back to To do until the export, the risk rows, the export note.
   - `COORDINATION.md`, the prep notes, the README, `CLAUDE.md` and `scripts/make-golden`'s export steps.
   - The comments that waited for session 6, and four line citations of `IndexingPipeline.swift`.
 

@@ -45,7 +45,7 @@ S2 settled these; its DEVLOG entry says how.
   7. a `content_hash` self-check from `document_cache` (it matched 392 of 392 fixture rows);
   8. the rename, keeping `frus.db.prev`, and an immutable reopen.
 
-  The TEI hash comparison needs S3 and S6, so it waits.
+  The TEI hash comparison needs FRUSCoreKit's indexer, which the server does not link yet, so it waits.
 - **The trigger cannot be a file appearing.** A file copied in with `docker compose cp` is visible under its final name while it is still copying.
 - **The owner's export is a real input for local Import trials** while the pin stays at index version 65.
 
@@ -58,7 +58,7 @@ Settled on 3 October: on a Mac, FRUS Explorer's own folder once Docker Desktop i
   - the app's folder, once the owner grants Docker Desktop access to other apps' data in System Settings. Tested on 3 October: it works, figures included;
   - the server fetching each volume from GitHub on first open, with a local cache. SPEC allows this in Import mode ("or fetched from GitHub without indexing"); it is new work, and an option for S8.
 
-  Whatever the source, TEI can drift from the index: the app and a clone both follow HistoryAtState's `master`, so a volume corrected after the Mac indexed it differs from what the index holds. SPEC's import step 5, comparing each document's hashes with its TEI, catches that; it waits for S6.
+  Whatever the source, TEI can drift from the index: the app and a clone both follow HistoryAtState's `master`, so a volume corrected after the Mac indexed it differs from what the index holds. SPEC's import step 5, comparing each document's hashes with its TEI, catches that; it waits until the server links FRUSCoreKit's indexer, which S6 put in the kit.
 - **The published image's visibility:** public, decided on 3 October.
 
 ## Before the S3, S4 and S6 prompts

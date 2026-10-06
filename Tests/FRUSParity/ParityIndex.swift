@@ -63,17 +63,23 @@ public enum IndexCopy {
     /// backup API, and takes the copy out of write-ahead-log mode: what `IndexSummarizer` reads,
     /// since it refuses an index whose log may hold pages. The source is opened read-only through
     /// the normal pager, which reads its log, never with `immutable=1`, which would not. Both
-    /// connections close before it returns.
+    /// connections close before it returns, and a copy that fails is removed.
     public static func rollbackJournal(of source: URL, to destination: URL) throws {
         guard !FileManager.default.fileExists(atPath: destination.path) else {
             throw IndexBuildError("\(destination.path) exists; the copy is made into a new file")
         }
-        let target = try ParityDatabase.create(destination)
-        try ParityDatabase.readOnly(source).backup(into: target)
-        try target.execute("PRAGMA journal_mode=DELETE")
-        let mode = try target.scalar("PRAGMA journal_mode")?.text
-        guard mode == "delete" else {
-            throw IndexBuildError("the copy's journal mode is \(mode ?? "unknown"), not delete")
+        do {
+            let target = try ParityDatabase.create(destination)
+            try ParityDatabase.readOnly(source).backup(into: target)
+            try target.execute("PRAGMA journal_mode=DELETE")
+            let mode = try target.scalar("PRAGMA journal_mode")?.text
+            guard mode == "delete" else {
+                throw IndexBuildError("the copy's journal mode is \(mode ?? "unknown"), not delete")
+            }
+        } catch {
+            // A failed copy leaves nothing behind that would refuse the next attempt.
+            for suffix in ["", "-journal", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: destination.path + suffix) }
+            throw error
         }
     }
 }

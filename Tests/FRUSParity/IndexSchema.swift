@@ -81,8 +81,8 @@ enum IndexSchema {
     //   ORDER BY rowid);
     // - cross_references: a document's edges (CrossReferenceStore.swift:627-643, `outboundEdges`,
     //   no ORDER BY, so rowid order within the index's key).
-    // person_mentions and person_list_sources are written from Swift Sets (IndexingPipeline.swift:4858
-    // and 4906), so their rowid order is not stable between runs: set hashes only.
+    // person_mentions and person_list_sources are written from Swift Sets (IndexingPipeline.swift:4906
+    // and 4858), so their rowid order is not stable between runs: set hashes only.
     static let corpusTables: [CorpusTable] = [
         CorpusTable(
             name: "cross_references",
