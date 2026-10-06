@@ -238,7 +238,7 @@ let package = Package(
         ),
         .testTarget(
             name: "FRUSParityTests",
-            dependencies: ["FRUSParity", "ParityFormat", "FTS5Store", "FRUSLightTestSupport", "FRUSLightCore", "CSQLite"],
+            dependencies: ["FRUSParity", "ParityFormat", "FTS5Store", "FRUSCoreKit", "FRUSLightTestSupport", "FRUSLightCore", "CSQLite"],
             path: "Tests/FRUSParityTests",
             swiftSettings: swift6
         ),

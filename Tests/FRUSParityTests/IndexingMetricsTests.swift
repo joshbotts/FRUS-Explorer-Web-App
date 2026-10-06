@@ -40,6 +40,20 @@ import Testing
         #expect(lines[4].hasPrefix("  peak resident memory ") && lines[4].hasSuffix(" MiB"))
     }
 
+    /// A step whose count is known only once it has run, such as indexing a volume, records the
+    /// count its body returns; one that throws is not recorded.
+    @Test func aStepCanRecordTheDocumentsItReturns() async throws {
+        var metrics = IndexingMetrics()
+        let documents = await metrics.measureDocuments("index frus1894Nicaragua") { 139 }
+        #expect(documents == 139)
+        #expect(metrics.steps.map(\.name) == ["index frus1894Nicaragua"])
+        #expect(metrics.steps[0].documents == 139)
+        #expect(metrics.steps[0].peakBytes != nil || IndexingMetrics.peakResidentBytes() == nil)
+        struct Failure: Error {}
+        await #expect(throws: Failure.self) { try await metrics.measureDocuments("broken") { throw Failure() } }
+        #expect(metrics.steps.count == 1)
+    }
+
     @Test func documentsPerSecondDividesTheCountByTheTime() {
         #expect(IndexingMetrics.Step(name: "index", duration: .seconds(2), documents: 392).documentsPerSecond == 196)
         #expect(IndexingMetrics.Step(name: "index", duration: .milliseconds(250), documents: 10).documentsPerSecond == 40)

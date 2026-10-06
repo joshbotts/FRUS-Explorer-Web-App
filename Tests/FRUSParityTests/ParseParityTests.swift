@@ -81,6 +81,28 @@ import Testing
         ])
     }
 
+    /// The comparison with the expressions SearchService compiled checks every field of every
+    /// record, in every scope: here a query outside the default scope, whose search record is not
+    /// the parse's, and a refusal.
+    @Test func compiledRecordsAreComparedInEveryScope() {
+        let golden = Self.golden(for: Self.queries, sourceDigest: "digest")
+        #expect(ParseParity.recordMismatches(queries: Self.queries, golden: golden, linux: golden.queries).isEmpty)
+        var linux = golden.queries
+        linux[5].search.corpus = nil                       // q006 searches notes alone
+        linux[5].search.userContent = "{note_text}: \"treaty\""
+        linux[0].search.error = "emptyQuery"               // q001 now refused
+        linux[0].search.corpus = nil
+        linux.remove(at: 1)                                // q002 not compiled
+        #expect(ParseParity.recordMismatches(queries: Self.queries, golden: golden, linux: linux) == [
+            ParseMismatch(id: "q001", field: "search.corpus", golden: ParseParity.show(golden.queries[0].search.corpus), linux: "null"),
+            ParseMismatch(id: "q001", field: "search.error", golden: "null", linux: "\"emptyQuery\""),
+            ParseMismatch(id: "q002", field: "record", golden: "compiled", linux: "missing"),
+            ParseMismatch(id: "q006", field: "search.corpus", golden: ParseParity.show(golden.queries[5].search.corpus), linux: "null"),
+            ParseMismatch(id: "q006", field: "search.userContent", golden: ParseParity.show(golden.queries[5].search.userContent),
+                          linux: ParseParity.show(linux[4].search.userContent)),
+        ])
+    }
+
     /// Values are compared as bytes: canonically equivalent text, which Swift's `==` takes as
     /// equal, is a difference.
     @Test func canonicallyEquivalentTextIsADifference() {
