@@ -2,7 +2,7 @@
 
 3 October 2026 · at `FRUS-Explorer` commit `34a5120` (index version 65, app build 49)
 
-Sessions 0 to 5 and 7 are done: S3's upstream pull request merged as `f102fa4d`, and its pin move builds and tests FRUSCoreKit on Linux in CI; see `docs/DEVLOG.md`. S1, S3 and S6 waited while the owner asked that sessions not open pull requests on `FRUS-Explorer`; the owner lifted that hold on 4 October. This folder keeps what a dry run on Linux found for later sessions, so their prompts can start from evidence rather than estimates.
+Sessions 0 to 7 are done: S3's upstream pull request merged as `f102fa4d`, S6's two as `2d216f4c` and `f69b4a0a`, and their pin moves build and test FRUSCoreKit on Linux in CI, with checks 2 to 4 on the fixtures; see `docs/DEVLOG.md`. S1, S3 and S6 waited while the owner asked that sessions not open pull requests on `FRUS-Explorer`; the owner lifted that hold on 4 October. This folder keeps what a dry run on Linux found for later sessions, so their prompts can start from evidence rather than estimates.
 
 ## What was verified
 
@@ -14,7 +14,7 @@ Sessions 0 to 5 and 7 are done: S3's upstream pull request merged as `f102fa4d`,
 | The owner's export matches the pin | Yes. `~/Documents/frus-index.sqlite`, exported on 3 October from build 49: index version 65, FTS schema 4, 553 volumes and 316,768 documents, the whole manifest |
 | The fixtures match the Mac's copies | Yes. HistoryAtState/frus commit `8e5da08` and the Mac app's downloads are byte-identical, for the three fixtures and for all 553 volumes. The app downloads from `master` and saves the bytes unchanged |
 | TEI rendering matches on Linux | Yes. All 392 fixture documents render to byte-identical HTML on Linux and macOS, in a command-line build with the serializer's default options |
-| The indexer and search run on Linux | Yes, after the S6 edits listed below. The three fixture volumes index in 0.2–0.4 seconds each, in a debug build on arm64 |
+| The indexer and search run on Linux | Yes, since S6's pin move, compiled from the app's own files in FRUSCoreKit. The three fixture volumes index in 1.07 s together in a release build on arm64, and a 24-volume sample in 24.5 s (SPEC, Sizing) |
 
 ## Before the S1 prompt
 
@@ -80,7 +80,7 @@ A full export is 2.83 GB, not 9.3 GB. The larger figure came from an index overh
 
 ## Pinning until the public release
 
-`FRUS-Explorer` merges about eight pull requests a day until its public release, and its index version went from 47 to 65 in 30 days. Each pin move means a new Mac build, a new export and new golden files. Hold the pin (at `af8bedab` since S3's pin move) until the release unless a merged pull request for this project needs it, as S3's did, and batch upstream pull requests so the pin moves as few times as possible. Each pin move remakes all the golden files: those made from the app's source, and those made from the owner's three-volume export, which needs a new export from the pinned build (`COORDINATION.md`, section 5). The first such export came from a build of `af8bedab`, on 4 October. The full-corpus export for S10 comes from the build pinned at S10.
+`FRUS-Explorer` merges about eight pull requests a day until its public release, and its index version went from 47 to 65 in 30 days. Each pin move means a new Mac build, a new export and new golden files. Hold the pin (at `f69b4a0a` since S6's pin move) until the release unless a merged pull request for this project needs it, as S3's did, and batch upstream pull requests so the pin moves as few times as possible. Each pin move remakes all the golden files: those made from the app's source, and those made from the owner's three-volume export, which needs a new export from the pinned build (`COORDINATION.md`, section 5). The first such export came from a build of `af8bedab`, on 4 October. The full-corpus export for S10 comes from the build pinned at S10.
 
 ## Files
 

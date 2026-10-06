@@ -292,7 +292,7 @@ The corpus index keeps the Mac schema exactly: same tables, columns, tokenizer a
 | Subjects | `document_subjects`, `document_subject_refs`, `document_subject_volumes` | integer positions resolved through `document-subject-index.json` |
 | Export only | `research_provenance`; views `research_documents`, `research_cross_references`, `research_suppressed_volumes` | written by the Mac exporter; the web exporter writes the same |
 
-The table definitions live in `Search/IndexingPipeline.swift` (lines 6622–7265 at 34a5120); the FTS5 definitions come from `FTS5Store/FTS5Types.swift`. `Docs/Agentic-Analysis-Guide.md` §4 documents every column and its traps.
+The table definitions live in `FRUSCoreKit/Search/IndexingPipeline.swift` (`setupDatabase(_:)`, lines 6559–7202 at f69b4a0a, where they are as at 34a5120); the FTS5 definitions come from `FTS5Store/FTS5Types.swift`. `Docs/Agentic-Analysis-Guide.md` §4 documents every column and its traps.
 
 ### Verified on this review's host
 
@@ -300,7 +300,7 @@ The Mac's `document_cache`, `frus_documents`, `frus_documents_vocab`, `user_cont
 
 ### Compatibility contract
 
-1. `SUPPORTED_INDEX_VERSION` is a build constant equal to `IndexingPipeline.currentDateIndexVersion` at the image's commit, 65 at 34a5120. The server serves no other version.
+1. `SUPPORTED_INDEX_VERSION` is a build constant equal to `IndexingPipeline.currentDateIndexVersion` at the image's commit, 65 at 34a5120 and at f69b4a0a. The server serves no other version.
 2. The FTS schema generation is 4, stored in `PRAGMA user_version` (`FTS5Connection.currentSchemaGeneration`).
 3. Identity is `(volume_id, document_id)`. `document_cache.rowid` is never persisted, exposed or compared across copies; `VACUUM` may renumber it.
 4. Copies use the SQLite backup API. A WAL database is never copied with `cp`.
@@ -604,7 +604,7 @@ volumes:
 | Import, 50 volumes | about 1.2 GB | 1 GB (estimate) | 1 vCPU |
 | Full corpus, Standalone | about 13 GB: 3.34 GB XML, about 9.3 GB index, 162 MB shards, 229 MB encoder | 4 GB serving, 8 GB while indexing (estimates) | 2–4 vCPU |
 
-Memory figures are estimates until phase 0 measures them.
+Memory figures are estimates until phase 0 measures them. Phase 0's first measurements (5 October 2026, FRUSCoreKit's indexer in a release build, Docker Desktop on an Apple-silicon Mac, arm64): the three fixture volumes index in 1.07 s with the passes after indexing, at a peak of 130 MiB; a sample of 24 volumes, 165 MB of XML and 13,425 documents (`fixtures/sample`), in 24.5 s, about 550 documents a second, at a peak of 136 MiB, into a 141 MB index. Limited to 4 CPUs the sample takes the same time: volumes are indexed one at a time. Scaled by size, the 3.34 GB corpus would index in about 8 minutes into about 2.9 GB, the size of the Mac's full export, before whatever the cross-volume person rollup adds at full size.
 
 ### Upgrades
 

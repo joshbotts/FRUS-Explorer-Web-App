@@ -22,7 +22,9 @@
 #      Settings ▸ Data & Recovery ▸ Erase Everything…, which also deletes every note, collection
 #      and project in its iCloud account, so only when there is nothing there to keep. Reset This
 #      Device is not enough: it keeps document_revisions rows for every volume the library held,
-#      and the summary refuses an export with rows for volumes it does not hold.
+#      and the summary refuses an export with rows for volumes it does not hold. At a pin move,
+#      erase and download again even if the library already holds only the three: a build at the
+#      same index version does not re-index what an earlier build indexed.
 #   3. Leave it running until indexing finishes and the person rollup has run.
 #   4. Export Research Database…, with Include My Notes, Summaries, and Tags turned off, and save it
 #      outside ~/Documents, such as /Users/Shared/frus-golden.sqlite.
