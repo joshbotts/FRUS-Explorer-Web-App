@@ -1,0 +1,400 @@
+/* FRUS Explorer Light's browser app. The system font stack, as the reader's page uses, so nothing
+   loads from elsewhere; light and dark tokens set on <html data-theme>. */
+
+:root {
+  color-scheme: light;
+  --bg: #ffffff;
+  --surface: #f5f5f7;
+  --text: #1d1d1f;
+  --text-secondary: #555559;
+  --border: #d2d2d7;
+  /* Darker than the reader page's accent, for 4.5:1 on white. */
+  --accent: #0a58b8;
+  --mark: #fff1a8;
+  --error: #b3261e;
+  --focus: #0a58b8;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #1c1c1e;
+  --surface: #2c2c2e;
+  --text: #f5f5f7;
+  --text-secondary: #b8b8bd;
+  --border: #48484a;
+  --accent: #6cb2ff;
+  --mark: #5c4d00;
+  --error: #ff8a80;
+  --focus: #6cb2ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+a {
+  color: var(--accent);
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+button,
+select,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  display: inline-block;
+  min-height: 2rem;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+input[type='search'],
+input[type='date'],
+select,
+textarea {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -3rem;
+  padding: 0.5rem 1rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  z-index: 10;
+}
+
+.skip-link:focus {
+  top: 0.5rem;
+}
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.brand {
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.app-header nav a {
+  margin-right: 0.75rem;
+}
+
+.app-header nav a[aria-current='page'] {
+  font-weight: 600;
+}
+
+.appearance {
+  margin-left: auto;
+}
+
+.banner {
+  margin: 0;
+  padding: 0.5rem 1rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+main {
+  flex: 1;
+  padding: 1rem;
+}
+
+main:focus {
+  outline: none;
+}
+
+h1:focus {
+  outline: none;
+}
+
+.screen {
+  max-width: 60rem;
+  margin: 0 auto;
+}
+
+.app-footer {
+  padding: 1rem;
+  border-top: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+/* Search */
+
+.search-form label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.search-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.search-row input {
+  flex: 1;
+  min-width: 0;
+  font-size: 1.125rem;
+}
+
+.syntax {
+  margin: 0.5rem 0 1rem;
+  color: var(--text-secondary);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 1rem 0.75rem;
+}
+
+.note {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chip {
+  border-radius: 999px;
+}
+
+.count {
+  color: var(--text-secondary);
+}
+
+.result-list {
+  padding-left: 1.75rem;
+}
+
+.result {
+  margin-bottom: 1.25rem;
+}
+
+.result h3 {
+  font-size: 1.0625rem;
+  margin: 0 0 0.125rem;
+}
+
+.meta {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+}
+
+.badge {
+  margin-left: 0.5rem;
+  padding: 0 0.375rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.8125rem;
+}
+
+.snippet {
+  margin: 0.25rem 0 0;
+}
+
+mark {
+  background: var(--mark);
+  color: inherit;
+  font-weight: 600;
+}
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.error {
+  color: var(--error);
+}
+
+/* Reader */
+
+.reader {
+  display: grid;
+  gap: 1rem;
+  max-width: 80rem;
+  margin: 0 auto;
+}
+
+.reader.with-rail {
+  grid-template-columns: minmax(0, 1fr) 22rem;
+}
+
+/* SPEC, Shell and navigation: the rail sits beside the text from 900 px wide; narrower, it is a
+   sheet over the text, which Close or the Cite toggle dismisses. */
+@media (max-width: 899.98px) {
+  .reader.with-rail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reader.with-rail .rail {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 10;
+    max-height: 70vh;
+    overflow-y: auto;
+    border-radius: 12px 12px 0 0;
+    box-shadow: 0 -4px 24px rgb(0 0 0 / 25%);
+  }
+}
+
+.document-header .volume {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.document-header h1 {
+  margin: 0.25rem 0;
+  font-size: 1.5rem;
+}
+
+.dateline {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin: 0.75rem 0;
+}
+
+.notice {
+  min-height: 1.5em;
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.reader-frame {
+  width: 100%;
+  height: 75vh;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.rail {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  align-self: start;
+}
+
+.rail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.rail h2 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.rail fieldset {
+  border: none;
+  padding: 0;
+  margin: 0 0 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.citation {
+  line-height: 1.6;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.copy-status {
+  min-height: 1.5em;
+}
+
+.rail textarea {
+  width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
+}

@@ -4,7 +4,7 @@ The self-hosted web edition of FRUS Explorer. `docs/PLAN.md` is the plan, `docs/
 
 ## Session rules
 
-1. Start with `scripts/doctor`. Build and test only through `scripts/swift`, `npm --prefix web` and `docker compose`.
+1. Start with `scripts/doctor`. Build and test only through `scripts/swift`, `scripts/npm` and `docker compose`.
 2. One session, one pull request, on the branch the session is given. Push before the session ends, and never push to `main`.
 3. A session ends with CI green on its pull request and an entry in `docs/DEVLOG.md` that records what it delivered and names the next task.
 4. Shared behaviour is compiled from the submodule, never reimplemented. A fix to a shared file is a pull request on `FRUS-Explorer`, labelled for Mac verification; a session never merges it.
@@ -19,7 +19,8 @@ The self-hosted web edition of FRUS Explorer. `docs/PLAN.md` is the plan, `docs/
 - `scripts/swift build`, `scripts/swift test`, `scripts/swift run FRUSLightServer`: SwiftPM in `swift:6.4-noble`, with output in `.build/linux`.
 - `scripts/swift test list | cut -d. -f1 | sort | uniq -c` counts tests per target, as CI prints them.
 - `scripts/swift --exec <command>` runs anything else in the same container.
-- `scripts/compose-smoke` builds the image and runs the Compose smoke test, as CI does; with `FRUS_IMAGE=<image>` it tests that image instead. `scripts/synthetic-export <file>` writes a small valid export.
+- `scripts/npm ci`, `scripts/npm run typecheck`, `scripts/npm run lint`, `scripts/npm test`, `scripts/npm run build`: npm for the browser app in `web/`, as CI's web job runs it. It runs natively on Linux with Node at `web/.node-version`'s major, and otherwise in `node:22-bookworm-slim`, with `web/node_modules` in a Docker volume on a Mac. `scripts/swift run FRUSLightServer` serves `web/dist` when it is built, and `scripts/npm run dev` serves the app on 127.0.0.1:5173, sending the API to `FRUS_API_ORIGIN`.
+- `scripts/compose-smoke` builds the image and runs the Compose smoke test, as CI does; with `FRUS_IMAGE=<image>` it tests that image instead, and with `--e2e` it also runs `web/e2e`, Playwright on Chromium, in `$(scripts/npm --playwright-image)`. `scripts/synthetic-export <file>` writes a small valid export.
 - `docs/INSTALL.md` is the user's guide: keep it true when the server, `compose.yaml` or the image change.
 - `scripts/swift run frus-parity check-golden` validates `fixtures/golden`; `frus-parity summarize <db>` writes check 2's summary of an index.
 - `scripts/swift run -c release frus-parity index [--tei <dir>] --metrics` indexes the fixtures, or a folder of volumes such as `fixtures/sample`'s, with FRUSCoreKit, and times it with its peak memory.

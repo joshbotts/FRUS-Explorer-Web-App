@@ -1,12 +1,22 @@
 #!/usr/bin/env bash
 # FRUS Explorer Light: the Compose smoke test (session 5).
-# Starts compose.yaml's server, checks the catalogue and the reader before any import, imports a
-# synthetic export with docker compose cp, and waits for /readyz to answer 200; then searches it,
-# reads a document's page, and checks the user, the read-only root, the health check and a restart.
+# Starts compose.yaml's server, checks the browser app, the catalogue and the reader before any
+# import, imports a synthetic export with docker compose cp, and waits for /readyz to answer 200;
+# then searches it, reads a document's page, and checks the user, the read-only root, the health
+# check and a restart.
 #   scripts/compose-smoke                       builds the image as frus-light:smoke first
 #   FRUS_IMAGE=<image> scripts/compose-smoke    tests an image already built
+#   scripts/compose-smoke --e2e                 also runs web/e2e, Playwright on Chromium, against the
+#                                               imported server (scripts/npm ci first)
 # It uses its own Compose project and host port, and removes its containers and volume afterwards.
 set -euo pipefail
+
+e2e=""
+case "${1:-}" in
+  --e2e) e2e=1 ;;
+  "") ;;
+  *) echo "usage: scripts/compose-smoke [--e2e]" >&2; exit 2 ;;
+esac
 
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$root"
@@ -73,6 +83,28 @@ published=$(docker compose port frus 8080)
 [ "${published%:*}" = 127.0.0.1 ] || fail "the port is published on $published, not 127.0.0.1"
 echo "   UID 10001; root read-only; /data and /tmp writable; TEI read-only; port on 127.0.0.1"
 
+echo "== the browser app"
+# The app's page and every client route answer with the same index.html and the app's policy; a
+# missing file and an unknown API path do not.
+app=$(curl -s --max-time 5 -D "$work/app.headers" -o "$work/app.html" -w '%{http_code} %{content_type}' "$base/" || true)
+[ "$app" = "200 text/html; charset=utf-8" ] || fail "/ answered $app"
+grep -qi "^content-security-policy: default-src 'self'" "$work/app.headers" || fail "/ has no content security policy"
+grep -qi '^cache-control: no-cache' "$work/app.headers" || fail "/ may be cached"
+grep -Eq '<script type="module"[^>]* src="/assets/[^"]+\.js"' "$work/app.html" || fail "/ does not load the app's script"
+if grep -Eq '<script( type="module")?>' "$work/app.html"; then fail "/ has an inline script the policy would block"; fi
+for path in "/search?keywords=treaties" "/doc/frus1961-63v06/d1"; do
+  curl -s --max-time 5 -o "$work/route.html" "$base$path" || fail "$path did not answer"
+  cmp -s "$work/app.html" "$work/route.html" || fail "$path is not the app's page"
+done
+script=$(sed -nE 's/.*<script type="module"[^>]* src="([^"]+)".*/\1/p' "$work/app.html" | head -1)
+curl -s --max-time 5 -D "$work/script.headers" -o /dev/null "$base$script" || fail "$script did not answer"
+grep -qi '^cache-control: public, max-age=31536000, immutable' "$work/script.headers" || fail "$script is not cached as immutable"
+code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "$base/assets/no-such-file.js" || true)
+[ "$code" = 404 ] || fail "a missing asset answered $code"
+unknown=$(curl -s --max-time 5 -o /dev/null -w '%{http_code} %{content_type}' "$base/api/v1/no-such-endpoint" || true)
+[ "$unknown" = "404 application/problem+json" ] || fail "an unknown API path answered $unknown"
+echo "   / and two client routes give index.html with the app's policy; $script immutable; 404s for a missing asset and an unknown API path"
+
 echo "== before an import"
 code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "$base/readyz" || true)
 [ "$code" = 503 ] || fail "/readyz answered $code before any import"
@@ -108,6 +140,13 @@ grep -qi "^content-security-policy: default-src 'none'" "$work/page.headers" || 
 host=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "$base/reader/host.js" || true)
 [ "$host" = 200 ] || fail "/reader/host.js answered $host"
 echo "   2 documents found; frus1961-63v06 d1's page, $(wc -c < "$work/page.html" | tr -d ' ') bytes, with its host script and policy"
+
+if [ -n "$e2e" ]; then
+  echo "== the browser suite: Playwright on Chromium"
+  # In the server's network namespace, so the app is http://localhost:8080, a secure context.
+  FRUS_E2E_NETWORK="container:$container" FRUS_E2E_BASE_URL=http://localhost:8080 scripts/npm --playwright \
+    || fail "the browser suite failed; web/playwright-report has its report"
+fi
 
 echo "== health check"
 health=""

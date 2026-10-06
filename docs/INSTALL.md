@@ -2,7 +2,7 @@
 
 FRUS Explorer Light runs as one container on a Mac or a Linux host, serving a research database exported from FRUS Explorer on a Mac. This guide covers phase 1: one person on one machine. The server listens on this machine's 127.0.0.1 only, and has no sign-in.
 
-**What phase 1 offers so far:** the server imports an export, checks it and serves it: it searches the index with the app's query language, lists the published catalogue and each volume's documents, and renders a document's page from the TEI volumes. The browser interface arrives in session 9. Until then `curl` reaches it all through the API (step 6).
+**What phase 1 offers so far:** the server imports an export, checks it and serves it, with a browser interface at http://localhost:8080. It searches the index with the app's query language, opens a document in the reader, rendered from the TEI volumes, and copies its citation. Browsing the catalogue, following links inside a document and the cards for people and terms come next; until then the API lists the catalogue and each volume's documents (step 6).
 
 ## What you need
 
@@ -101,9 +101,19 @@ curl -s -w '  %{http_code}\n' http://localhost:8080/readyz
 
 The installed export is removed from the drop zone, so you can delete your own copy or keep it. Restarting the server copies nothing: the index stays in the volume.
 
-## 6. Search and read
+## 6. Search, read and cite
 
-Until the browser interface arrives, `curl` shows what it will. A search takes the search box's text in `keywords`, with the app's query language, and answers with the exact count and the first page of results, best first:
+Open http://localhost:8080 in a browser.
+
+- **Search** takes the app's query language: **Search syntax**, under the box, sums it up. The results come best first, with the exact count, and the filters narrow them by kind of document, date and front matter.
+- **A result** opens the document in the reader, with **Previous** and **Next** for its neighbours in the volume, a text size, and **Open on history.state.gov**. **Appearance**, at the top, follows the system or stays light or dark.
+- **Cite** opens the citation beside the document, in the History at State, Chicago or Turabian style. **Copy Citation** copies it as plain text, and **Copy URL** the document's address on history.state.gov. The browser allows copying at http://localhost but not at another machine's address over plain http, so the panel then selects the text for you to copy.
+
+The address of every search and document can be bookmarked or shared with another browser on this machine.
+
+### The API
+
+Everything the browser shows comes from the API, which `curl` reaches too. A search takes the search box's text in `keywords`, with the app's query language, and answers with the exact count and the first page of results, best first:
 
 ```bash
 curl -s 'http://localhost:8080/api/v1/search?keywords=NEAR(khrushchev+berlin,+10)&limit=5'
@@ -128,6 +138,12 @@ curl -s 'http://localhost:8080/api/v1/volumes/frus1961-63v06/documents/d1/html?c
 ```
 
 The first document of a volume takes about half a second while the server parses the volume; the rest are immediate. The reader works without an index. Figure images come from FRUS Explorer's own folder of volumes, which holds them; with a clone of HistoryAtState/frus, figures show a placeholder.
+
+A document's citation, in `style` `historyAtState` (the default), `chicago` or `turabian`, as Markdown in `citation` and as plain text in `plainText`:
+
+```bash
+curl -s 'http://localhost:8080/api/v1/volumes/frus1961-63v06/documents/d1/citation?style=chicago'
+```
 
 An error names its cause in a `code`: `INDEX_NOT_READY` for a search before an import has finished, `EMPTY_QUERY` for a query with nothing left to search, `TEI_NOT_AVAILABLE` when the volume is not in your TEI folder, and `DOCUMENT_NOT_FOUND` or `VOLUME_NOT_FOUND` for an id the volume or the catalogue lacks.
 

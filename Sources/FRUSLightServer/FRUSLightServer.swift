@@ -33,6 +33,8 @@ struct FRUSLightServer {
         } catch let error as ServerResourcesError {
             // A configuration problem, like those above: FRUS_RESOURCES_DIR names the wrong folder.
             fail("\(error)", status: 2)
+        } catch let error as WebClientError {
+            fail("\(error)", status: 2)
         } catch {
             fail("\(error)", status: 1)
         }

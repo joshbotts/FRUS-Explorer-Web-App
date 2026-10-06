@@ -12,6 +12,7 @@ struct ServerComponents: Sendable {
     let state: ServerState
     let resources: ServerResources
     let reader: ReaderService
+    let webClient: WebClient?
     let userStore: SQLiteUserStore
     let sessions: InMemorySessionStore
     let jobs: InProcessJobQueue
@@ -21,6 +22,7 @@ struct ServerComponents: Sendable {
     static func make(configuration: ServerConfiguration, logger: Logger) async throws -> ServerComponents {
         // Before anything is written: a server without its data files cannot serve the reader.
         let resources = try await Blocking.run { try ServerResources.load(from: configuration.resourcesDirectory) }
+        let webClient = try WebClient.load(configuration)
         let files = DataDirectory(root: configuration.dataDirectory)
         do {
             try files.prepare()
@@ -37,6 +39,7 @@ struct ServerComponents: Sendable {
             state: state,
             resources: resources,
             reader: ReaderService(volumesDirectory: files.volumesDirectory, resources: resources),
+            webClient: webClient,
             userStore: try SQLiteUserStore(url: files.userStore),
             sessions: InMemorySessionStore(),
             jobs: jobs,
@@ -47,15 +50,22 @@ struct ServerComponents: Sendable {
 }
 
 /// The server for `configuration`, with its import watcher as a service. Throws
-/// `ServerResourcesError` when the app's data files are missing, and `DataDirectoryError` when
-/// the data directory cannot be written.
+/// `ServerResourcesError` when the app's data files are missing, `WebClientError` when
+/// `FRUS_WEB_DIR` names a folder without the browser app, and `DataDirectoryError` when the data
+/// directory cannot be written.
 public func buildApplication(configuration: ServerConfiguration) async throws -> some ApplicationProtocol {
     var logger = Logger(label: "frus-light")
     logger.logLevel = ProcessInfo.processInfo.environment["LOG_LEVEL"].flatMap(Logger.Level.init(rawValue:)) ?? .info
     let components = try await ServerComponents.make(configuration: configuration, logger: logger)
     logger.info("frus-light \(FRUSLightVersion.string): \(configuration.mode.rawValue) mode, data in \(configuration.dataDirectory.path), \(components.resources.manifest.count) volumes in the manifest from \(configuration.resourcesDirectory.path)")
+    if let webClient = components.webClient {
+        logger.info("Serving the browser app from \(webClient.directory.path)")
+    } else {
+        logger.info("No browser app at \(configuration.webDirectory.path): serving the API alone")
+    }
     var app = Application(
-        router: buildRouter(state: components.state, resources: components.resources, reader: components.reader, logger: logger),
+        router: buildRouter(state: components.state, resources: components.resources, reader: components.reader,
+                            webClient: components.webClient, logger: logger),
         configuration: .init(address: .hostname(configuration.host, port: configuration.port), serverName: "frus-light"),
         logger: logger)
     app.addServices(ImportWatcher(files: components.files, state: components.state,

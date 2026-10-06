@@ -1,11 +1,13 @@
-# The build needs the package, its sources and tests (SwiftPM checks every target's path),
-# the submodule's source folders, and LICENSE. Everything else stays out, so edits to docs,
-# scripts, the Mac-only tools or CI do not invalidate the build layer.
+# The server stage needs the package, its sources and tests (SwiftPM checks every target's path) and
+# the submodule's source folders; the client stage needs web/, with web/e2e because Vite reads
+# every project tsconfig.json names; the runtime needs LICENSE. Everything else stays out, so edits
+# to docs, scripts, the Mac-only tools or CI do not invalidate a build layer.
 .build
 .swiftpm
+.claude
 **/.git
 **/.DS_Store
-node_modules
+**/node_modules
 .env
 tei
 docs
@@ -19,3 +21,6 @@ compose.yaml
 upstream/FRUS-Explorer/Planning
 upstream/FRUS-Explorer/Docs
 upstream/FRUS-Explorer/Vendor
+web/dist
+web/test-results
+web/playwright-report

@@ -133,7 +133,7 @@ flowchart TB
   S8 --> S9["S9 Browser app for phase 1"] --> G6(["Mac export"]) --> S10["S10 Real export in Compose"] --> M(["Phase 1 in Docker Compose"])
 ```
 
-S0 comes first, and the core track starts after it. The tracks join at session 8, whose search and reader endpoints need both the Linux indexer and the server. Each row below is one pull request, except S8, which became three rows on 6 October; the larger ones, S6 and S9, may take two sessions.
+S0 comes first, and the core track starts after it. The tracks join at session 8, whose search and reader endpoints need both the Linux indexer and the server. Each row below is one pull request. S8 became three rows on 6 October, and S9 two the same day: S9a meets S9's done-when first, and S9b completes the phase-1 SPA.
 
 | Session | Track | Delivers | Done when |
 | --- | --- | --- | --- |
@@ -148,7 +148,8 @@ S0 comes first, and the core track starts after it. The tracks join at session 8
 | S8a | Both | An upstream pull request ([FRUS-Explorer#1575](https://github.com/joshbotts/FRUS-Explorer/pull/1575), merged 6 October as `101e17d7`): the kit opens an exported index read-only and immutable, names a host's figure addresses, and holds the reader's page. Beside it, web groundwork at the old pin: the server links FRUSCoreKit through `FRUSLightAPI`; the app's data files are in the image (`FRUS_RESOURCES_DIR`); errors are problem details; `/volumes` lists the catalogue; the reader serves a document's body from the TEI; and a decoder turns a search's query string into the kit's `SearchParameters` | Check 4 passes through the reader's route, and all 482 parity queries decode into the Mac's `SearchParameters` |
 | S8b | Core | The pin move to `101e17d7`, with golden files from a new three-volume export, and tests of the read-only open on the fixture index | The golden HTML and expressions change only in provenance, and the read-only open answers as the writable index does |
 | S8c | Both | Search, browse and the reader's full page over the imported index, opened read-only, with figures and the reader's host script | Check 3 passes through the API, on the real Import path |
-| S9 | Both | The SPA for phase 1: Browse, Search, the reader and Cite | Playwright on Chromium searches, opens a document and copies a citation |
+| S9a | Both | The SPA's foundation, served by the server with its own policy: `scripts/npm`, React 19 with TanStack Router and Query in `web/`, the shell, Search, the reader and the Cite rail; the citation endpoint, from the kit's formatter; the image's client stage; and the browser suite in CI's compose job | Playwright on Chromium searches, opens a document and copies a citation |
+| S9b | Both | The rest of the phase-1 SPA: Browse (the catalogue and a volume's reading order), the reader's links (`doc/` navigates, `person/` and `gloss/` open cards, `brokenref/` the Unresolved Reference sheet), a full keyboard path and an axe check in the browser suite | Playwright browses to a volume, opens a document, follows a link inside it and opens a person card, by keyboard alone, with no axe violations |
 | S10 | Both | The owner's real export imported into Compose, with a TEI folder mounted read-only, as chosen before S7 | Checks 3–5 pass on the real export: phase 1's exit |
 
 Before writing the S1, S2, S3 and S4 prompts, read `docs/prep/README.md`. A dry run on 3 October found what each of those sessions needs beyond this table, and recorded the Linux changes for S1, S3 and S6.

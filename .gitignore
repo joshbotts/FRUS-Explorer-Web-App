@@ -1,8 +1,12 @@
 # SwiftPM: .build/linux from scripts/swift, .build from a native Mac build
 .build/
 .swiftpm/
-# The web app, from session 9
+# The browser app's packages, build and test output
 node_modules/
+web/dist/
+web/test-results/
+web/playwright-report/
+*.tsbuildinfo
 .DS_Store
 # compose.yaml's default TEI folder and its settings
 /tei/
