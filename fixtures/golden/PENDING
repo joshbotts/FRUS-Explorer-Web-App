@@ -1,2 +1,2 @@
-# Golden files still to be made: one per line, the file, a tab, and what it waits for.
-# Remove a line when its file is committed (GoldenStatus fails a file that is both, or neither).
+index-summary.json	the owner's three-volume export from a build of f69b4a0a, then scripts/make-golden --export <file>
+queries.results.json	the owner's three-volume export from a build of f69b4a0a, then scripts/make-golden --export <file>
