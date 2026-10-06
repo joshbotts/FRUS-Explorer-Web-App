@@ -16,8 +16,8 @@ import Testing
         return Int(source[range.upperBound...].prefix { $0.isNumber })
     }
 
-    /// Where the pinned app keeps IndexingPipeline.swift: in the app's folder until FRUSCoreKit,
-    /// part 2 (session 6) moves it into the kit's. Exactly one of the two must hold it.
+    /// Where the pinned app keeps IndexingPipeline.swift: in the kit's folder since FRUSCoreKit,
+    /// part 2 (session 6's pin), and in the app's before. Exactly one of the two must hold it.
     static let indexingPipelinePaths = ["FRUSExplorer/Search/IndexingPipeline.swift", "FRUSCoreKit/Search/IndexingPipeline.swift"]
 
     static func indexingPipelinePath() throws -> String {

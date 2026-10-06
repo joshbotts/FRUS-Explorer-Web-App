@@ -372,7 +372,7 @@ public struct IndexSummarizer: Sendable {
         }
     }
 
-    /// Refuses a person rollup that the app's own rule calls stale (IndexingPipeline.swift:1441-1452,
+    /// Refuses a person rollup that the app's own rule calls stale (IndexingPipeline.swift:1474-1484,
     /// `consolidatePersonRollupIfNeeded`): its members no longer match `persons`, so the app would
     /// rebuild and renumber it on its next launch.
     static func checkRollup(_ db: ParityDatabase) throws {

@@ -78,8 +78,9 @@ if git -C "$APP_REPO" rev-parse --git-dir >/dev/null 2>&1; then
   branch=$(git -C "$APP_REPO" rev-parse --abbrev-ref HEAD)
   v2=$(git -C "$APP_REPO" ls-remote origin refs/heads/v2 2>/dev/null | cut -c1-7)
   ok "FRUS-Explorer: $branch at ${app_head:0:7}; v2 on GitHub is at ${v2:-unknown}"
-  # IndexingPipeline.swift moves from the app's folder into FRUSCoreKit's with the kit's part 2
-  # (S6), so exactly one of the two must hold it.
+  # IndexingPipeline.swift is in FRUSCoreKit's folder since the kit's part 2 (#1573, at the pin
+  # since S6), and in the app's before it; the owner's clone may be at either, but exactly one of
+  # the two must hold it.
   pipeline=""; found=0
   for dir in FRUSExplorer/Search FRUSCoreKit/Search; do
     if [ -f "$APP_REPO/$dir/IndexingPipeline.swift" ]; then pipeline="$APP_REPO/$dir/IndexingPipeline.swift"; found=$((found + 1)); fi
