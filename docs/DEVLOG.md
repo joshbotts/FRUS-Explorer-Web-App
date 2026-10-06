@@ -2,6 +2,78 @@
 
 One entry per session, newest first.
 
+## Session 8b: pin move to the read-only open and the reader's page
+
+6 October 2026 · branch `claude/pin-101e17d` · upstream [joshbotts/FRUS-Explorer#1575](https://github.com/joshbotts/FRUS-Explorer/pull/1575) (merged as `101e17d7`)
+
+S8a's upstream pull request merged on `v2` as `101e17d7`, directly after the old pin. This pull request moves the pin there (rule 5). That brings the kit's read-only open, a host's figure addresses and the reader's page into this repository's build. It remakes the golden files from the owner's new export, and tests the read-only open on the fixture index on Linux. The index version (65), the FTS generation (4) and the app's build (49) are unchanged, so the server, the image, `compose.yaml` and `docs/INSTALL.md` are too.
+
+**How the session got there**
+
+- **A map first.** Three readers mapped the records and line citations the move makes stale, the build and the Mac-side tools, and the tests. The build side needed one change. #1575's two new suites hash with CryptoKit, which is swift-crypto's Crypto on Linux. `tools/mac-golden`, `CompatibilityTests` and CI's skip check needed nothing. The app's `HTMLTemplate.build` keeps its signature and forwards to the kit's page, and the new suites have no skip traits.
+- **A review before the pull request opened.** Four reviewers and a skeptic per finding; three findings held, one found twice, and all were fixed:
+  - the read-only tests took the file's baseline after opening it, so a write made while opening would have passed; the baseline is now the file as copied, checked again once the connections close;
+  - the tests compared the compiled expressions, which read no index, as evidence about the read-only connection; that comparison is gone;
+  - one sentence of this entry.
+
+  The map also found that the writable index's 482 queries ran twice per process; `FixtureIndex.results()` now runs them once, for check 3 and the read-only comparison.
+
+**Delivered**
+
+- **The pin, `101e17d7`,** and `Package.swift`: FRUSCoreKitTests gains Crypto on Linux. FRUSCoreKitTests runs 884 tests in 118 suites, up from 878 in 116.
+- **The golden files,** remade by `scripts/make-golden --export` from the owner's export (below):
+  - **All 392 rows' HTML** are byte for byte as before, and so are the expressions and the results. Only the provenance changed.
+  - **The index summary's 36 gating digests and 7 checks** are the same. Four information fields changed, none of them compared:
+    - the export's stamp;
+    - the timings;
+    - `volume_structures`' JSON key order, already information because the app writes those keys unsorted;
+    - the AUTOINCREMENT counters, which about doubled because the library's tables were emptied and filled again.
+
+  So the reader's page moving into the kit, and the figure case beside `.reader`, changed nothing the app writes.
+- **The read-only open on the fixture index** (`ReadOnlyOpenTests`, 3 tests). A copy of the kit's fixture index in rollback-journal mode, alone in a folder as `/data/index/frus.db` is, is opened through `FTS5Store(readingDatabaseAt:)` and `IndexingPipeline(readingIndexAt:fts5Store:resources:volumesDirectory:)`:
+  - **Search:** all 482 queries' counts, first 50 results and tie tails, score bits included, are the writable index's. So the read-only connection runs every query as the writable one does, the `=exact` queries among them, which need `frus_exact_word` registered on it.
+  - **Browse:** each volume's documents, reading order and cached structure are the writable index's.
+  - **Writes:** a write is refused by SQLite as read-only, code 8, with the fixtures' TEI in reach, so the refusal is not a missing volume's.
+  - **The file:** it is as it was copied, before anything opened it: the same SHA-256, only `frus.db` in its folder, and header bytes 18 and 19 still 1. Each test checks that after its connections close, and the search test while they are open too.
+- **What #1575 gives the reader** (`ReaderPageParityTests`, 3 tests), on all 392 golden rows along the server's full-parse path:
+  - `reader(figureURL:)` given the app's own addresses writes `.reader`'s bytes.
+  - A host's addresses change exactly the 8 image sources, 7 in frus1969-76ve09p1's d87 and 1 in d116. Mapped back, every row is the golden file's.
+  - `ReaderPage.build` holds each row's golden fragment between its one `<body>\n` and `\n</body>\n</html>`, after one head shared by every document. Dark and extra large change the head only.
+- **The harness:** `ReaderRenderer.fullParsePass` takes what writes each document, the reader's fragment by default.
+- **Records:**
+  - five line citations of `IndexingPipeline.swift`, which #1575 moved: four in the harness's comments and SPEC's `setupDatabase` range;
+  - `COORDINATION.md`: the pin, the test counts, the read-only open and #1575's pin move;
+  - `PLAN.md` and its shared copy (rev 104): the Golden files checkpoint and the risk row;
+  - `SPEC.md`'s compatibility contract;
+  - the prep note;
+  - `Package.swift`'s comments.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64:** all 1,675 tests pass, up from 1,663, with the one named skip, which CI's skip check allows. FRUSCoreKitTests runs 884, and FRUSParityTests 95, up from 89; the other targets are unchanged. Against the new golden files the run printed:
+  - "check 2 passes: 36 digests and 7 checks are the Mac's";
+  - "check 3's results pass: 482 queries, 482 identical and 0 reordered only within Mac tie groups; 359 with other score bits (information)";
+  - "check 3's expressions: 482 of 482 queries compile as the golden file says, 25 of them outside the default scope; 43 refused";
+  - "check 4, the reader's path: 392 of 392 rows identical", and so along the full-parse path and through the API;
+  - "the read-only open: 482 queries' results are the writable index's, score bits included; 43 refused by both; the file is as it was copied";
+  - "a host's figure addresses: 8 images in 2 rows; mapped back, 392 of 392 rows identical";
+  - "the reader's page: 392 of 392 rows' bodies identical, one head for every document".
+- **The Compose smoke test** passes on the local arm64 image, built at the new pin.
+- **The first run at the new pin** overlapped `make-golden`. Its only failures were three staleness checks on the files made from the export, which had not been rewritten yet, and FRUSCoreKitTests' 884 tests passed, none skipped.
+
+**The owner's export**
+
+Made on 6 October from a build of `101e17d7` after Erase Everything…, and checked in S8a's entry: build 49, index version 65 and FTS generation 4, with none of the owner's writing, the three fixtures only, and no log or journal beside it. `make-golden` copied it to a temporary folder and worked on the copy alone.
+
+**Notes**
+
+- **The tools still cannot tell exports of `f69b4a0a` and `101e17d7` apart:** their build and index version are the same. Only the procedure, and `exported_at`, distinguish them.
+- **Left to S8c,** which serves the full page: SPEC's Reader rendering steps 2 and 6, which still name `HTMLTemplate` and `FRUSTheme.cssVariables`, now the app's forwarders to `ReaderPage`.
+
+**Next.**
+- S8c: search, browse and the reader's full page over the read-only stack, with figures by the server's own address, and check 3 through the API on the real Import path.
+- A web session adds the daily watch of the app's `v2`.
+
 ## Session 8a: the read-only open upstream, and the server links the kit
 
 6 October 2026 · branch `claude/s8-search-reader-api` · upstream [joshbotts/FRUS-Explorer#1575](https://github.com/joshbotts/FRUS-Explorer/pull/1575) (merged as `101e17d7`)
