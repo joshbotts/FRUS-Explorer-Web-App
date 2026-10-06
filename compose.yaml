@@ -6,7 +6,7 @@
 #
 # docs/INSTALL.md is the full guide. Everything the server keeps lives in the named volume
 # frus-data. A folder of TEI volumes is mounted read-only, ./tei beside this file by default; the
-# reader uses it from session 8. On a Mac, FRUS Explorer's own folder works once Docker Desktop
+# reader renders documents from it. On a Mac, FRUS Explorer's own folder works once Docker Desktop
 # may read other apps' data (macOS refuses it until then); anywhere, a clone of HistoryAtState/frus
 # works, with the same TEI XML in its volumes/ folder but not the app's figure images.
 # Optional settings, from the environment or a .env file beside this one:
