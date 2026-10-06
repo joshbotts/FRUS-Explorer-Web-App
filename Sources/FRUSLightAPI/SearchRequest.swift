@@ -1,4 +1,4 @@
-// A search's query string, decoded into the kit's SearchParameters: what GET /api/v1/search will read.
+// A search's query string, decoded into the kit's SearchParameters: what GET /api/v1/search reads.
 
 import FRUSCoreKit
 import Foundation
