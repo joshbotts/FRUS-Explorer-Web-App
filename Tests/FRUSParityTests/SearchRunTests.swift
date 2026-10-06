@@ -17,8 +17,7 @@ import Testing
     /// the ones the app refuses are refused.
     @Test func everyQueryReturnsTheGoldenResults() async throws {
         let queries = try QueryList.load(Repository.layout.queries)
-        let built = try await FixtureIndex.value()
-        let records = try await LinuxSearch.results(queries, service: built.index.service)
+        let records = try await FixtureIndex.results()
         #expect(records.map(\.id) == queries.map(\.id))
         let expressions = try Self.expressionsGolden()
         let refused = Set(expressions.queries.filter { $0.search.error != nil }.map(\.id))

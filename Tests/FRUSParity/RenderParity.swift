@@ -3,9 +3,10 @@
 // The Mac reader renders a document in two steps, and since upstream #1569 the kit holds what both
 // call. DocumentViewModel.load parses the document alone, takes the volume's persons and glossary
 // terms from its TEI when no person store has them, and converts the document with the reader's
-// lookups and the bundled broken-refs index; HTMLTemplate.build then writes the serializer's
-// fragment. tools/mac-golden ran that path to make the golden files. This file makes the same calls
-// through the kit's public API alone, with a plain import, as the server will. It chooses only what
+// lookups and the bundled broken-refs index; HTMLTemplate.build, which forwards to the kit's
+// ReaderPage.build since upstream #1575, then writes the serializer's fragment in the page's body.
+// tools/mac-golden ran that path to make the golden files. This file makes the same calls through
+// the kit's public API alone, with a plain import, as the server does. It chooses only what
 // the app chooses: persons and terms from the TEI, no classification override, and the app's
 // bundled broken-refs index.
 //
@@ -105,6 +106,12 @@ public struct ReaderRenderer: Sendable {
     /// The broken-refs index the app bundles, from the submodule's root.
     public static let brokenRefsPath = "FRUSExplorer/Resources/broken-refs-index.json"
 
+    /// What a pass writes for each document's render model.
+    public typealias Writer = @Sendable (FRUSDocumentRenderModel) -> String
+
+    /// The reader's fragment, which the golden files hold: `FRUSRenderNodeHTMLSerializer.reader`.
+    public static let readerFragment: Writer = { FRUSRenderNodeHTMLSerializer.reader.serialize($0) }
+
     let tei: URL
     let brokenRefs: BrokenRefsIndex
 
@@ -149,16 +156,18 @@ public struct ReaderRenderer: Sendable {
 
     /// The path the server serves (FRUSLightAPI's `ReaderService`): one `parseVolumeFull` of each volume, whose
     /// persons and terms make the lookups, then every document it yields, in parse order, with the
-    /// reader's converter and serializer. Volumes render concurrently, in the order given. Each
-    /// volume's persons and terms are returned too, to be compared with `readerLists`.
-    public func fullParsePass(_ volumes: [String]) async throws -> (documents: [RenderedDocument], lists: [String: LookupLists]) {
+    /// reader's converter, written by `write`: the reader's serializer unless a test passes another,
+    /// such as one with a host's figure addresses or the whole page. Volumes render concurrently, in
+    /// the order given. Each volume's persons and terms are returned too, to be compared with
+    /// `readerLists`.
+    public func fullParsePass(_ volumes: [String], write: @escaping Writer = ReaderRenderer.readerFragment) async throws -> (documents: [RenderedDocument], lists: [String: LookupLists]) {
         let passes = try await Self.map(volumes.count) { index in
             let volume = volumes[index]
             let parse = try await FRUSDocumentParser().parseVolumeFull(volumeURL: self.volumeURL(volume))
             let lists = LookupLists(persons: parse.persons, terms: parse.terms)
             let documents = parse.documents.map { ast in
                 RenderedDocument(volume: volume, document: ast.documentId,
-                                 html: self.html(ast, volume: volume, lookups: lists.lookups))
+                                 html: self.html(ast, volume: volume, lookups: lists.lookups, write: write))
             }
             return (documents, lists)
         }
@@ -167,10 +176,11 @@ public struct ReaderRenderer: Sendable {
 
     func volumeURL(_ volume: String) -> URL { tei.appendingPathComponent("\(volume).xml") }
 
-    /// The reader's HTML for a parsed document: the fragment `HTMLTemplate.build` writes in the page's body.
-    func html(_ ast: FRUSDocumentAST, volume: String, lookups: ReaderLookups) -> String {
+    /// The reader's HTML for a parsed document: by default the fragment `ReaderPage.build` writes in
+    /// the page's body, which the app's `HTMLTemplate.build` forwards to.
+    func html(_ ast: FRUSDocumentAST, volume: String, lookups: ReaderLookups, write: Writer = ReaderRenderer.readerFragment) -> String {
         var converter = ASTToRenderNodeConverter(readerOf: volume, lookups: lookups, brokenRefs: brokenRefs)
-        return FRUSRenderNodeHTMLSerializer.reader.serialize(converter.convert(ast))
+        return write(converter.convert(ast))
     }
 
     /// `body` of each index below `count`, in index order, run as many at once as the machine has
