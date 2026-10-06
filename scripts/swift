@@ -60,6 +60,8 @@ for v in $proxy_vars; do
 done
 # The server reads the app's data files from the submodule, the folder the image copies (session 8).
 run_args+=(-e FRUS_RESOURCES_DIR=/src/upstream/FRUS-Explorer/FRUSExplorer/Resources)
+# And the browser app from web/dist, when scripts/npm run build has made it.
+if [ -f "$root/web/dist/index.html" ]; then run_args+=(-e FRUS_WEB_DIR=/src/web/dist); fi
 
 # A session CA bundle may hold only the proxy's certificate, so add it to the image's own bundle.
 ca=""

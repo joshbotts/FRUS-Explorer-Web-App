@@ -27,15 +27,23 @@ public struct ServerConfiguration: Sendable, Equatable {
     /// (`FRUS_RESOURCES_DIR`). The image copies them to the default; `scripts/swift` points at
     /// the submodule's folder.
     public var resourcesDirectory: URL
+    /// The browser app's build, web/dist (`FRUS_WEB_DIR`). The image copies it to the default;
+    /// without it the server serves the API alone, unless the variable names it explicitly.
+    public var webDirectory: URL
+    /// Set when `FRUS_WEB_DIR` names the folder, so a server without the app refuses to start.
+    public var requiresWebDirectory: Bool
 
     /// Where the image puts the app's data files.
     public static let imageResourcesDirectory = URL(fileURLWithPath: "/usr/share/frus-light/resources", isDirectory: true)
+    /// Where the image puts the browser app.
+    public static let imageWebDirectory = URL(fileURLWithPath: "/usr/share/frus-light/web", isDirectory: true)
 
     public init(
         mode: Mode = .import, auth: Auth = .none, dataDirectory: URL = URL(fileURLWithPath: "/data"),
         publicURL: String = "http://localhost:8080", pdfURL: String? = nil, offline: Bool = false,
         host: String = "127.0.0.1", port: Int = 8080, importPollInterval: Duration = .seconds(2),
-        resourcesDirectory: URL = ServerConfiguration.imageResourcesDirectory
+        resourcesDirectory: URL = ServerConfiguration.imageResourcesDirectory,
+        webDirectory: URL = ServerConfiguration.imageWebDirectory, requiresWebDirectory: Bool = false
     ) {
         self.mode = mode
         self.auth = auth
@@ -47,6 +55,8 @@ public struct ServerConfiguration: Sendable, Equatable {
         self.port = port
         self.importPollInterval = importPollInterval
         self.resourcesDirectory = resourcesDirectory
+        self.webDirectory = webDirectory
+        self.requiresWebDirectory = requiresWebDirectory
     }
 
     /// Reads the configuration, reporting every problem at once.
@@ -112,6 +122,10 @@ public struct ServerConfiguration: Sendable, Equatable {
 
         if let raw = value("FRUS_RESOURCES_DIR") {
             config.resourcesDirectory = URL(fileURLWithPath: raw, isDirectory: true)
+        }
+        if let raw = value("FRUS_WEB_DIR") {
+            config.webDirectory = URL(fileURLWithPath: raw, isDirectory: true)
+            config.requiresWebDirectory = true
         }
 
         if !problems.isEmpty { throw ConfigurationError(problems: problems) }

@@ -1,5 +1,5 @@
-// The routes: health, readiness and status, the API under /api/v1 (docs/SPEC.md, HTTP API), and the
-// reader's host script.
+// The routes: health, readiness and status, the API under /api/v1 (docs/SPEC.md, HTTP API), the
+// reader's host script, and the browser app.
 
 import FRUSLightCore
 import Foundation
@@ -7,10 +7,12 @@ import Hummingbird
 import Logging
 
 func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderService,
-                 provider: ServedIndexProvider? = nil,
+                 provider: ServedIndexProvider? = nil, webClient: WebClient? = nil,
                  logger: Logger = Logger(label: "frus-light")) -> Router<BasicRequestContext> {
     let provider = provider ?? ServedIndexProvider(state: state, resources: resources, volumesDirectory: reader.volumesDirectory)
-    let router = Router()
+    // Every GET route answers HEAD too, so HEAD /readyz says what GET says rather than falling to
+    // the browser app's fallback.
+    let router = Router(options: .autoGenerateHeadEndpoints)
     // First, so it covers every route, and the paths no route matches.
     router.add(middleware: ProblemMiddleware(logger: logger))
     // The process is up. It says nothing about the index; /readyz does.
@@ -27,6 +29,9 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     CatalogRoutes.add(to: router, state: state, provider: provider, resources: resources, volumesDirectory: reader.volumesDirectory)
     SearchRoutes.add(to: router, provider: provider, resources: resources)
     ReaderRoutes.add(to: router, reader: reader, provider: provider, resources: resources)
+    CitationRoutes.add(to: router, reader: reader, provider: provider, resources: resources)
+    // Last, so it wraps only the requests no route answers.
+    if let webClient { router.add(middleware: WebClientMiddleware(webClient, logger: logger)) }
     return router
 }
 
