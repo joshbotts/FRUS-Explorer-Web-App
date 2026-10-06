@@ -9,6 +9,7 @@ import Logging
 import ServiceLifecycle
 import Testing
 
+@testable import FRUSLightAPI
 @testable import FRUSLightServer
 
 /// Asks `/readyz` what it reports at each import step, through the test client.
@@ -26,20 +27,41 @@ actor ReadinessProbe: ImportObserver {
     }
 }
 
+/// The submodule's data files, read once per test process.
+enum TestResources {
+    static let loaded = Result { try ServerResources.load(from: RepositoryFiles.resources) }
+    static func value() throws -> ServerResources { try loaded.get() }
+}
+
 struct ServerFixture {
     let directory: TemporaryDirectory
     let files: DataDirectory
     let state: ServerState
+    let resources: ServerResources
+    let reader: ReaderService
 
-    init() async throws {
+    /// A server with no index, and `volumes` from fixtures/tei in its TEI folder.
+    init(volumes: [String] = []) async throws {
         directory = try TemporaryDirectory()
         files = DataDirectory(root: directory.url.appendingPathComponent("data"))
         try files.prepare()
+        if !volumes.isEmpty { try RepositoryFiles.mountTEI(volumes, at: files.volumesDirectory) }
         state = ServerState(configuration: ServerConfiguration(dataDirectory: files.root))
         await state.openExistingIndex(files: files)
+        resources = try TestResources.value()
+        reader = ReaderService(volumesDirectory: files.volumesDirectory, resources: resources)
     }
 
-    var app: some ApplicationProtocol { Application(router: buildRouter(state: state)) }
+    var router: Router<BasicRequestContext> { buildRouter(state: state, resources: resources, reader: reader) }
+    var app: some ApplicationProtocol { Application(router: router) }
+}
+
+extension ServerConfiguration {
+    /// A test server's settings: its data in `directory`, the submodule's data files.
+    static func testing(_ directory: URL, port: Int = 8080, poll: Duration = .milliseconds(50)) -> ServerConfiguration {
+        ServerConfiguration(dataDirectory: directory, port: port, importPollInterval: poll,
+                            resourcesDirectory: RepositoryFiles.resources)
+    }
 }
 
 func decode<T: Decodable>(_ type: T.Type, _ response: TestResponse) throws -> T {
@@ -129,8 +151,7 @@ func decode<T: Decodable>(_ type: T.Type, _ response: TestResponse) throws -> T 
 
     @Test func aRestartServesTheInstalledIndex() async throws {
         let directory = try TemporaryDirectory()
-        let config = ServerConfiguration(dataDirectory: directory.url.appendingPathComponent("data"),
-                                         importPollInterval: .milliseconds(50))
+        let config = ServerConfiguration.testing(directory.url.appendingPathComponent("data"))
         let files = DataDirectory(root: config.dataDirectory)
         try files.prepare()
         try SyntheticExport().write(to: files.liveIndex)
@@ -143,8 +164,7 @@ func decode<T: Decodable>(_ type: T.Type, _ response: TestResponse) throws -> T 
 
     @Test func theWatcherImportsADroppedExport() async throws {
         let directory = try TemporaryDirectory()
-        let config = ServerConfiguration(dataDirectory: directory.url.appendingPathComponent("data"),
-                                         importPollInterval: .milliseconds(50))
+        let config = ServerConfiguration.testing(directory.url.appendingPathComponent("data"))
         let app = try await buildApplication(configuration: config)
         try await app.test(.router) { client in
             // Built outside the drop zone, then moved in whole.
@@ -179,7 +199,7 @@ func decode<T: Decodable>(_ type: T.Type, _ response: TestResponse) throws -> T 
     /// `frus-light --check-health`, the image's HEALTHCHECK, against a server on a real port.
     @Test func healthCheckAsksTheServersOwnPort() async throws {
         let fixture = try await ServerFixture()
-        let app = Application(router: buildRouter(state: fixture.state), configuration: .init(address: .hostname("127.0.0.1", port: 0)))
+        let app = Application(router: fixture.router, configuration: .init(address: .hostname("127.0.0.1", port: 0)))
         try await app.test(.live) { client in
             let port = try #require(client.port)
             #expect(HealthCheck.isHealthy(port: port), "\(HealthCheck.probe(port: port))")
@@ -190,7 +210,7 @@ func decode<T: Decodable>(_ type: T.Type, _ response: TestResponse) throws -> T 
 
     @Test func serverStartsFromConfiguration() async throws {
         let directory = try TemporaryDirectory()
-        let config = ServerConfiguration(dataDirectory: directory.url.appendingPathComponent("data"), port: 0)
+        let config = ServerConfiguration.testing(directory.url.appendingPathComponent("data"), port: 0)
         let app = try await buildApplication(configuration: config)
         try await app.test(.router) { client in
             let response = try await client.execute(uri: "/healthz", method: .get)

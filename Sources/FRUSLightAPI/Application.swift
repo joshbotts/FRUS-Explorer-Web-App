@@ -1,4 +1,4 @@
-// The Hummingbird application: health, readiness and status, plus the import watcher.
+// The Hummingbird application: the routes, the app's data files, the reader, and the import watcher.
 
 import FRUSLightCore
 import Foundation
@@ -10,6 +10,8 @@ import ServiceLifecycle
 struct ServerComponents: Sendable {
     let files: DataDirectory
     let state: ServerState
+    let resources: ServerResources
+    let reader: ReaderService
     let userStore: SQLiteUserStore
     let sessions: InMemorySessionStore
     let jobs: InProcessJobQueue
@@ -17,6 +19,8 @@ struct ServerComponents: Sendable {
     let imports: ImportCoordinator
 
     static func make(configuration: ServerConfiguration, logger: Logger) async throws -> ServerComponents {
+        // Before anything is written: a server without its data files cannot serve the reader.
+        let resources = try await Blocking.run { try ServerResources.load(from: configuration.resourcesDirectory) }
         let files = DataDirectory(root: configuration.dataDirectory)
         do {
             try files.prepare()
@@ -31,6 +35,8 @@ struct ServerComponents: Sendable {
         return ServerComponents(
             files: files,
             state: state,
+            resources: resources,
+            reader: ReaderService(volumesDirectory: files.volumesDirectory, resources: resources),
             userStore: try SQLiteUserStore(url: files.userStore),
             sessions: InMemorySessionStore(),
             jobs: jobs,
@@ -40,31 +46,21 @@ struct ServerComponents: Sendable {
     }
 }
 
-func buildApplication(configuration: ServerConfiguration) async throws -> some ApplicationProtocol {
+/// The server for `configuration`, with its import watcher as a service. Throws
+/// `ServerResourcesError` when the app's data files are missing, and `DataDirectoryError` when
+/// the data directory cannot be written.
+public func buildApplication(configuration: ServerConfiguration) async throws -> some ApplicationProtocol {
     var logger = Logger(label: "frus-light")
     logger.logLevel = ProcessInfo.processInfo.environment["LOG_LEVEL"].flatMap(Logger.Level.init(rawValue:)) ?? .info
     let components = try await ServerComponents.make(configuration: configuration, logger: logger)
-    logger.info("frus-light \(FRUSLightVersion.string): \(configuration.mode.rawValue) mode, data in \(configuration.dataDirectory.path)")
+    logger.info("frus-light \(FRUSLightVersion.string): \(configuration.mode.rawValue) mode, data in \(configuration.dataDirectory.path), \(components.resources.manifest.count) volumes in the manifest from \(configuration.resourcesDirectory.path)")
     var app = Application(
-        router: buildRouter(state: components.state),
+        router: buildRouter(state: components.state, resources: components.resources, reader: components.reader, logger: logger),
         configuration: .init(address: .hostname(configuration.host, port: configuration.port), serverName: "frus-light"),
         logger: logger)
     app.addServices(ImportWatcher(files: components.files, state: components.state,
                                   coordinator: components.imports, interval: configuration.importPollInterval))
     return app
-}
-
-func buildRouter(state: ServerState) -> Router<BasicRequestContext> {
-    let router = Router()
-    // The process is up. It says nothing about the index; /readyz does.
-    router.get("/healthz") { _, _ in Health(status: "ok") }
-    // 200 once an index is open and searchable; until then 503, naming the current step.
-    router.get("/readyz") { _, _ in
-        let readiness = await state.readiness()
-        return EditedResponse(status: readiness.ready ? .ok : .serviceUnavailable, response: readiness)
-    }
-    router.get("/api/v1/status") { _, _ in await state.status() }
-    return router
 }
 
 /// The data directory exists but the server cannot write to it, as with a bind mount owned by
@@ -77,13 +73,6 @@ struct DataDirectoryError: Error, CustomStringConvertible {
         "cannot write to \(path) (\(underlying.localizedDescription)). It must be writable by the server's user, UID \(getuid()). A named Docker volume is; for a host folder, run: chown -R \(getuid()):\(getgid()) <folder>"
     }
 }
-
-struct Health: ResponseEncodable {
-    let status: String
-}
-
-extension Readiness: ResponseEncodable {}
-extension ServerStatus: ResponseEncodable {}
 
 /// Opens the index found at start, then looks for a new export in /data/import every
 /// `interval`, until the server shuts down.
