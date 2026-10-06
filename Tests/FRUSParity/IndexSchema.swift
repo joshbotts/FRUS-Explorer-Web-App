@@ -75,14 +75,14 @@ enum IndexSchema {
 
     // Sequence rules. The app reads three tables in rowid order, so their order within a volume
     // is part of what it shows:
-    // - document_cache: a volume's document list (FRUSCoreKit/Search/IndexingPipeline.swift:2710-2715,
+    // - document_cache: a volume's document list (FRUSCoreKit/Search/IndexingPipeline.swift:2789-2794,
     //   `documents(forVolume:)`, ORDER BY rowid);
     // - page_ranges: citation page spans (PageSpanResolver.swift:342-347, `arabicPageRowsSQL`,
     //   ORDER BY rowid);
     // - cross_references: a document's edges (CrossReferenceStore.swift:627-643, `outboundEdges`,
     //   no ORDER BY, so rowid order within the index's key).
-    // person_mentions and person_list_sources are written from Swift Sets (IndexingPipeline.swift:4906
-    // and 4858), so their rowid order is not stable between runs: set hashes only.
+    // person_mentions and person_list_sources are written from Swift Sets (IndexingPipeline.swift:4985
+    // and 4937), so their rowid order is not stable between runs: set hashes only.
     static let corpusTables: [CorpusTable] = [
         CorpusTable(
             name: "cross_references",

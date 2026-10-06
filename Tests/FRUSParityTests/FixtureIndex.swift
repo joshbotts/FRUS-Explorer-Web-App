@@ -21,6 +21,14 @@ enum FixtureIndex {
 
     static func value() async throws -> Built { try await shared.value }
 
+    /// Check 3's results over the writable index, every query of the list in order, run once per
+    /// process: the golden comparison and the read-only open's both read them.
+    static func results() async throws -> [ResultRecord] { try await searched.value }
+
+    private static let searched = Task<[ResultRecord], any Error> {
+        try await LinuxSearch.results(try QueryList.load(Repository.layout.queries), service: try await shared.value.index.service)
+    }
+
     private static let shared = Task<Built, any Error> {
         let directory = try TemporaryDirectory()
         let layout = Repository.layout

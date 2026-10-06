@@ -136,7 +136,9 @@ let package = Package(
         // FRUSCoreKit, part 1 (session 3, upstream #1569): the TEI parser, the AST, the render
         // conversion and HTML serializer, and the citation formatter, parser and models; part 2
         // (session 6, upstream #1573 and #1574): the indexing pipeline, the search service and
-        // Citation Lookup's matcher. Upstream's Package.swift gives it SourceNoteKit and FTS5Store,
+        // Citation Lookup's matcher; and since session 8b's pin move (upstream #1575), the read-only
+        // open of an index, a host's figure addresses and the reader's page. Upstream's Package.swift
+        // gives it SourceNoteKit and FTS5Store,
         // and links sqlite3, here for macOS only as for FTS5Store; its CryptoKit and SQLite3 guards
         // need swift-crypto's Crypto and CSQLite, declared here for Linux only.
         .target(
@@ -152,13 +154,15 @@ let package = Package(
         ),
         // The app's own suites for the kit, which live in its test folder: under SwiftPM they import
         // FRUSCoreKit, and FTS5Store, SourceNoteKit and SQLite behind `canImport`, never the app;
-        // whatever needs the app is inside `#if !SWIFT_PACKAGE`. They read the app's data files and
-        // manifest from the submodule's FRUSExplorer/Resources by #filePath.
+        // whatever needs the app is inside `#if !SWIFT_PACKAGE`. Since upstream #1575 two of them hash
+        // with CryptoKit, swift-crypto's Crypto on Linux. They read the app's data files and manifest
+        // from the submodule's FRUSExplorer/Resources by #filePath.
         .testTarget(
             name: "FRUSCoreKitTests",
             dependencies: [
                 "FRUSCoreKit", "FTS5Store", "SourceNoteKit",
                 .target(name: "CSQLite", condition: .when(platforms: [.linux])),
+                .product(name: "Crypto", package: "swift-crypto", condition: .when(platforms: [.linux])),
             ],
             path: "\(upstream)/FRUSExplorerTests/FRUSCoreKit",
             swiftSettings: swift6

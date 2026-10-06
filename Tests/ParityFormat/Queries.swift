@@ -112,7 +112,7 @@ public enum QueryList {
     /// separated by spaces. A string is its length in UTF-8 bytes, a colon and its bytes; an absent
     /// value is `-`; a list is its count, then its strings; a switch is `0` or `1`. A date range is
     /// `-` when absent, and otherwise `+` and its two bounds: an empty range is not an absent one,
-    /// since an active range leaves out undated documents (IndexingPipeline.swift:4290-4294). The
+    /// since an active range leaves out undated documents (IndexingPipeline.swift:4369-4373). The
     /// rule and the notes are left out: they do not change what the app returns.
     public static func recordText(_ queries: [ParityQuery]) -> String {
         func string(_ value: String?) -> String { value.map { "\($0.utf8.count):\($0)" } ?? "-" }
