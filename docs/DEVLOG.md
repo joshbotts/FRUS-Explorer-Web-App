@@ -56,7 +56,7 @@ Both of S6's upstream pull requests merged after the owner's Mac checks. This pu
 - **`fixtures/sample`:** 24 volumes' names and SHA-256 sums at HistoryAtState/frus `8e5da08c`, for measuring. No TEI is committed.
 - **Docs.**
   - `SPEC.md`: the table definitions' new place, and the measurements under Sizing.
-  - `PLAN.md` and its shared copy (rev 89): Mac check 3 and the Golden files checkpoint done, the risk rows, the export note.
+  - `PLAN.md` and its shared copy (rev 90): Mac check 3 and the Golden files checkpoint done, the risk rows, the export note.
   - `COORDINATION.md`, the prep notes, the README, `CLAUDE.md` and `scripts/make-golden`'s export steps.
   - The comments that waited for session 6, and four line citations of `IndexingPipeline.swift`.
 
