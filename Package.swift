@@ -6,8 +6,8 @@
 // far, each with upstream's tests: SourceNoteKit, CrossRefKit and GeneratorKit since session 0;
 // TEIHeaderKit, SemanticVectorsKit and FTS5Store since session 1's Linux guards, with
 // ManifestGeneratorCore, whose tests hold TEIHeaderKit's; and FRUSCoreKit, part 1 since session 3
-// and part 2 since session 6's pin move. The server depends on none of them yet: only the parity
-// harness and the tests do.
+// and part 2 since session 6's pin move. The server links FRUSCoreKit and FTS5Store since session 8,
+// through FRUSLightAPI.
 // Build and test through scripts/swift, which runs this package in swift:6.4-noble.
 
 import PackageDescription
@@ -164,19 +164,33 @@ let package = Package(
             swiftSettings: swift6
         ),
 
-        // Web-only logic: configuration, Import mode, readiness, and the five v1 interfaces.
+        // Web-only logic: configuration, Import mode, readiness, and the five v1 interfaces. It
+        // links no shared kit, only SQLite.
         .target(
             name: "FRUSLightCore",
             dependencies: ["CSQLite"],
             path: "Sources/FRUSLightCore",
             swiftSettings: swift6
         ),
+        // The HTTP application (session 8): the routes, problem details, the app's data files, the
+        // catalogue, the reader and the search request, over FRUSLightCore and the shared kits.
+        .target(
+            name: "FRUSLightAPI",
+            dependencies: [
+                "FRUSLightCore", "FRUSCoreKit", "FTS5Store",
+                .product(name: "Hummingbird", package: "hummingbird"),
+                .product(name: "ServiceLifecycle", package: "swift-service-lifecycle"),
+                .product(name: "Logging", package: "swift-log"),
+            ],
+            path: "Sources/FRUSLightAPI",
+            swiftSettings: swift6
+        ),
+        // The process: its command line, configuration from the environment, and the health check.
         .executableTarget(
             name: "FRUSLightServer",
             dependencies: [
-                "FRUSLightCore",
+                "FRUSLightAPI", "FRUSLightCore",
                 .product(name: "Hummingbird", package: "hummingbird"),
-                .product(name: "ServiceLifecycle", package: "swift-service-lifecycle"),
                 .product(name: "Logging", package: "swift-log"),
             ],
             path: "Sources/FRUSLightServer",
@@ -192,7 +206,7 @@ let package = Package(
         ),
         // The harness itself: the index summary (check 2), the parse and results comparisons
         // (check 3), the render comparison (check 4), the golden files' validation, and the
-        // indexing metrics. Crypto and FRUSCoreKit stay here, out of FRUSLightCore and the server.
+        // indexing metrics.
         .target(
             name: "FRUSParity",
             dependencies: [
@@ -227,6 +241,7 @@ let package = Package(
             name: "FRUSLightServerTests",
             dependencies: [
                 "FRUSLightServer",
+                "FRUSLightAPI",
                 "FRUSLightCore",
                 "FRUSLightTestSupport",
                 .product(name: "HummingbirdTesting", package: "hummingbird"),
@@ -238,7 +253,10 @@ let package = Package(
         ),
         .testTarget(
             name: "FRUSParityTests",
-            dependencies: ["FRUSParity", "ParityFormat", "FTS5Store", "FRUSCoreKit", "FRUSLightTestSupport", "FRUSLightCore", "CSQLite"],
+            dependencies: [
+                "FRUSParity", "ParityFormat", "FTS5Store", "FRUSCoreKit", "FRUSLightTestSupport", "FRUSLightCore", "CSQLite",
+                "FRUSLightAPI", .product(name: "HummingbirdTesting", package: "hummingbird"),
+            ],
             path: "Tests/FRUSParityTests",
             swiftSettings: swift6
         ),

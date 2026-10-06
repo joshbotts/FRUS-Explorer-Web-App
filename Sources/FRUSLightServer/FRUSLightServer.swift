@@ -1,5 +1,6 @@
 // FRUS Explorer Light server. Configuration comes from FRUS_* environment variables (docs/SPEC.md).
 
+import FRUSLightAPI
 import FRUSLightCore
 import Foundation
 import Hummingbird
@@ -29,6 +30,9 @@ struct FRUSLightServer {
         do {
             let app = try await buildApplication(configuration: configuration)
             try await app.runService()
+        } catch let error as ServerResourcesError {
+            // A configuration problem, like those above: FRUS_RESOURCES_DIR names the wrong folder.
+            fail("\(error)", status: 2)
         } catch {
             fail("\(error)", status: 1)
         }

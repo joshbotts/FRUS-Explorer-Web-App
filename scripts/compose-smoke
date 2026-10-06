@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # FRUS Explorer Light: the Compose smoke test (session 5).
-# Starts compose.yaml's server, imports a synthetic export with docker compose cp, and waits for
-# /readyz to answer 200; then checks the user, the read-only root, the health check and a restart.
+# Starts compose.yaml's server, checks the catalogue and the reader before any import, imports a
+# synthetic export with docker compose cp, and waits for /readyz to answer 200; then checks the
+# user, the read-only root, the health check and a restart.
 #   scripts/compose-smoke                       builds the image as frus-light:smoke first
 #   FRUS_IMAGE=<image> scripts/compose-smoke    tests an image already built
 # It uses its own Compose project and host port, and removes its containers and volume afterwards.
@@ -76,6 +77,16 @@ echo "== before an import"
 code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "$base/readyz" || true)
 [ "$code" = 503 ] || fail "/readyz answered $code before any import"
 echo "   503 waiting_for_export"
+# The catalogue comes from the image's copy of the app's data files, and the reader from the
+# mounted TEI; neither needs an index.
+volumes=$(curl -s --max-time 5 "$base/api/v1/volumes?limit=1") || fail "/api/v1/volumes did not answer"
+printf '%s' "$volumes" | grep -q '"total":553' || fail "the catalogue does not list 553 volumes: $volumes"
+reader=$(curl -s --max-time 30 -o "$work/d1.html" -w '%{http_code} %{content_type}' \
+  "$base/api/v1/volumes/frus1894Nicaragua/documents/d1/html?part=body" || true)
+[ "$reader" = "200 text/html; charset=utf-8" ] || fail "the reader answered $reader: $(head -c 300 "$work/d1.html")"
+missing=$(curl -s --max-time 5 -w ' %{http_code}' "$base/api/v1/volumes/frus1961-63v99" || true)
+case "$missing" in *'"code":"VOLUME_NOT_FOUND"'*' 404') ;; *) fail "an unknown volume answered $missing" ;; esac
+echo "   catalogue of 553 volumes; frus1894Nicaragua d1 rendered, $(wc -c < "$work/d1.html" | tr -d ' ') bytes; problem details for an unknown volume"
 
 echo "== docker compose cp the export, then /readyz"
 docker compose cp "$work/export.sqlite" frus:/data/import/export.sqlite

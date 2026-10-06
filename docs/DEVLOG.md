@@ -2,6 +2,148 @@
 
 One entry per session, newest first.
 
+## Session 8a: the read-only open upstream, and the server links the kit
+
+6 October 2026 · branch `claude/s8-search-reader-api` · upstream [joshbotts/FRUS-Explorer#1575](https://github.com/joshbotts/FRUS-Explorer/pull/1575) (merged as `101e17d7`)
+
+S8 serves search, browse and the reader over the imported index. A map at the start found that it cannot do so at the pin: every kit opener writes to the database it opens. `FTS5Connection` switches the file to write-ahead logging, and `IndexingPipeline`'s set-up runs schema statements and four writes that throw on a read-only connection. Pointed at `/data/index/frus.db`, the kit would rewrite the file under the server's immutable reader and leave `-wal` and `-shm` files beside it. So S8 became three pull requests. This session opened S8a's upstream pull request, which the owner checked and merged. It also built the web groundwork that needs no new upstream API, at the old pin `f69b4a0a`.
+
+**The owner's decisions, 6 October**
+
+- **Split:** S8a (the upstream pull request, plus web groundwork at the old pin), S8b (the pin move, with a new three-volume export) and S8c (the endpoints, with check 3 through the API).
+- **Upstream scope:** the read-only opens, the reader's page and the host's figure addresses. The reader's scripts, the publication year, facets, the inspector, date order, display titles and BibTeX and RIS wait for a later upstream pull request of phase-1 features.
+- **API shape:** the draft, extended where the Mac needs more (`PLAN.md`, Answered on 6 October).
+- **Check 3:** through the real Import path. The kit's fixture index goes in as an unstamped copy, and is searched through the read-only open.
+
+**How the session got there**
+
+- **A map first.** Five readers mapped the API contract, the server, the kit's search and browse, the rendering, and parity through the API, and a sixth synthesized the plan and the four decisions above. Three of their claims did not hold:
+  - **`+` in a query string.** Hummingbird's `uri.queryParameters` leaves `+` as it is, but a browser's `URLSearchParams` writes a space as `+`. The server reads the raw query with form semantics instead.
+  - **`frus-print.css`.** The app loads it for collection exports only, not in the reader, as SPEC's Reader rendering step 3 says.
+  - **The 7,500 cap.** It limits only how many results the app keeps. The count is exact, so SPEC's "at least 7,500" does not match the Mac.
+
+  S8c corrects SPEC for the last two.
+- **A review before the upstream pull request opened.** Four reviewers and a skeptic per finding; 11 findings held and all were fixed. Among them:
+  - the test of the pipeline's refusal of a missing file passed without reaching the pipeline;
+  - one refusal message was wrong;
+  - three doc sentences claimed more than the code does.
+- **A review before this pull request opened.** Four reviewers and a skeptic per finding; 12 of 21 findings held, all fixed:
+  - the log named `Blocking.run` as the way to move parses off Swift's pool, which it cannot do (Notes);
+  - the date check took a digit carrying a combining mark as a digit;
+  - `/api/v1/status` took parameters it ignores;
+  - the image copied the data files with the checkout's modes, which a strict umask would make unreadable to the server's user;
+  - no test reached the route's lookups, the cache's order, an unparseable volume, or the middleware's 500;
+  - six sentences in the records and comments.
+- **One mistake.** Text holding backticks went through an unquoted heredoc, and the shell ran the backticked commands, among them a Linux build and test run in this worktree. The session stopped them, confirmed that both checkouts were clean and that nothing was left running, and wrote the pull request's description with a file instead. Text with backticks now goes only through quoted heredocs or files.
+
+**The upstream pull request**
+
+Branch `claude/web-readonly-reader-page`, from `v2` at `f69b4a0a`: seven commits in review order. Its description holds the Mac check's commands and expected results.
+
+- **`FTS5Store(readingDatabaseAt:)`** opens `file:…?mode=ro&immutable=1` read-only. It checks the FTS generation and both tables, and sets only the busy timeout, in-memory temporary tables and the cache sizes. It never sets the journal mode.
+- **`IndexingPipeline(readingIndexAt:fts5Store:resources:volumesDirectory:)`** opens the same way. It skips `setupDatabase`, the cache-insert statement and the iOS memory observer, and still registers `frus_exact_word`, without which every `=exact` query breaks. `isReadOnly` says which open made a pipeline.
+- **Figures:** `FigureImages.linked(url:)` writes the reader's markup with the host's address, and `FRUSRenderNodeHTMLSerializer.reader(figureURL:)` wraps it. `FRUSURLScheme.figureURL(for:)` and `isSafeComponent(_:)` are public.
+- **The reader's page** moved into `FRUSCoreKit/TEI/ReaderPage.swift`: `ReaderPage.build(model:appearance:textSize:serializer:head:)`, its CSS, and `ReaderAppearance`. `TextSizePreference` moved too, keeping its name. `HTMLTemplate` and `FRUSTheme` forward to them.
+- **Tests:**
+  - `IndexReadOnlyOpenTests`: nine queries answer read-only exactly as read-write, score bits included. The index browses, refuses a write, and keeps the same bytes with nothing beside it.
+  - `ReaderPageTests` pins the SHA-256 of the page's head for both appearances and all four text sizes, recorded from `v2`'s `HTMLTemplate.build` before the move.
+  - FRUSCoreKitTests goes from 878 tests in 116 suites to 884 in 118.
+
+**Results at its head**
+
+- **Linux,** in a scratch checkout with the branch in its submodule folder:
+  - "✔ Test run with 884 tests in 118 suites passed", none skipped;
+  - the read-only open answers as the writable one, on macOS too;
+  - this repository's harness failed only its staleness checks.
+- **`tools/mac-golden`,** built against the branch, wrote the HTML of all 392 rows and the expressions of all 482 queries byte-identical to the committed golden files. Only their provenance changed.
+- **macOS and iOS**, which the upstream description gives in full:
+  - both Mac builds have the same five warning lines;
+  - the normalized symbol diff is 14 removed and 92 added, each name explained;
+  - the full unit run gives 6,505 tests in 767 suites, failing only the 8 Keychain tests an unsigned build fails, against `v2`'s 6,498 in 765;
+  - `swift test` gives 38 runs and 2,547 tests, all passed.
+
+The owner ran the Mac check, and #1575 merged on `v2` as `101e17d7`, directly after `f69b4a0a`.
+
+**Delivered in this repository** (at `f69b4a0a`)
+
+- **`FRUSLightAPI`,** a new library target, holds the HTTP application. It depends on FRUSLightCore, FRUSCoreKit, FTS5Store, Hummingbird, swift-service-lifecycle and swift-log. FRUSLightServer keeps the command line, the configuration from the environment and the health check, and FRUSLightCore still links no kit.
+- **The app's data files.**
+  - **The setting:** `FRUS_RESOURCES_DIR`, by default `/usr/share/frus-light/resources`, where the image copies `FRUSExplorer/Resources` whole. `scripts/swift` points it at the submodule's folder.
+  - **The load:** `ServerResources` reads the manifest through the kit's `FixedVolumeCatalogue`, the broken-refs index and `IndexingResources.loading(fromDirectory:)`, once at start. A folder lacking any of the five files it needs stops the server with exit status 2, naming them, before anything is written.
+- **Problem details.** `APIProblem` answers RFC 9457 `application/problem+json`: `{type: "about:blank", title, status, detail, instance, code, searchError?}`. A middleware gives every error under `/api/` that shape, including a path no route matches; an unexpected error is logged and answered as a 500 that names nothing internal.
+- **The catalogue.** `GET /api/v1/volumes` takes the draft's `status`, `subseries`, `limit` and `offset`, with pages of up to 1,000 so one request lists all 553. `GET /api/v1/volumes/{v}` returns the draft's fields, written by the server rather than by the kit's `Encodable`, which would add the app's `provenance`. Each volume says whether the index holds it, how many of its documents, and whether its TEI is in the mounted folder. The list carries `coverage`: indexed volumes and documents, the 553 manifest volumes and the index version. `CorpusIndex` now counts documents per volume when it opens.
+- **The reader's body.** `GET /api/v1/volumes/{v}/documents/{d}/html?part=body` renders through check 4's full-parse path:
+  - `ReaderService`, an actor, parses each volume once with `parseVolumeFull` and keeps the four most recent. A volume whose file changes size or modification time is parsed again, and requests for a volume being parsed wait for that parse.
+  - Each document renders with the reader's lookups, the converter with the bundled broken-refs index, and the `.reader` serializer.
+  - It needs no index, so it answers before an import. Only a manifest id is ever joined into a path.
+  - A volume that will not parse is a 500 `TEI_UNREADABLE`, and is not kept, so the repaired file renders.
+  - The response is `text/html; charset=utf-8`, with `X-FRUS-Rendering-Version`, a content security policy that runs no script, `nosniff` and `no-referrer`.
+  - The errors are 404 `VOLUME_NOT_FOUND`, `TEI_NOT_AVAILABLE` and `DOCUMENT_NOT_FOUND`. Without `part=body` the answer is 501 `PAGE_NOT_AVAILABLE`, since the full page needs #1575's `ReaderPage`.
+- **The search request.** `SearchRequest(formEncoded:)` turns a query string into the kit's `SearchParameters`, a limit and an offset, for S8c's `GET /search`:
+  - form semantics, through `FormQuery`, refusing malformed escapes and bytes that are not UTF-8;
+  - thirteen names for twelve fields, `keywords` passed on exactly as typed;
+  - a list is its name repeated, and one empty value is the empty list, which keeps `yearKeys: []` (matches nothing) apart from no filter;
+  - a date bound may be empty, so an open range has a form;
+  - `limit` 1 to 100, and `offset + limit` within 7,500;
+  - the draft's `facets`, `booleanMode`, `subjectTagIds` and `personRef` are refused until they arrive, and so is any unknown name.
+- **The image.**
+  - The runtime stage installs `libxml2`: the static binary links FoundationXML's libxml2 dynamically, and the first smoke run failed at start without it.
+  - It copies the data files and sets `MALLOC_ARENA_MAX=2` (Notes).
+  - The image is 399 MB on arm64, up from 251 MB:
+    - the data files are 52 MB;
+    - libxml2 and ICU are about 38 MB;
+    - the stripped binary is 73 MB.
+- **`scripts/compose-smoke`,** before the import, checks:
+  - the catalogue's 553 volumes;
+  - a document rendered from the mounted fixtures;
+  - problem details for an unknown volume.
+- **Docs:**
+  - `INSTALL.md`: what phase 1 offers, the image size, memory, the TEI folder, and a new step 6 to read a document;
+  - `SPEC.md`: the setting, and two conventions, problem details and query strings;
+  - `PLAN.md` and its shared copy (rev 102): S8's three rows, Mac check 4, the decisions, the risk and memory rows;
+  - `COORDINATION.md`: the server links the kit, and #1575's part;
+  - `compose.yaml`, the prep note and three comments.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64:** all 1,663 tests pass, up from 1,631, with the one named skip, which CI's skip check allows. Checks 2 to 4 pass as at the pin move.
+  - FRUSLightServerTests runs 38 tests, up from 9. FRUSParityTests runs 89, up from 86.
+  - "check 4 through the API: 392 of 392 rows identical": every golden row, fetched from the reader's route with the fixtures in the TEI folder, is the golden file's bytes. The three volumes are parsed once each.
+  - "check 3 through the API: all 482 queries decode into the Mac's SearchParameters, in both encodings". Every parity query is written as a strict client and as `URLSearchParams` would write it. Each decodes into exactly what `LinuxSearch.parameters` builds, which mirrors `tools/mac-golden`, and its text keeps the same UTF-8 bytes. Since `matchExpressions(for:)` depends on those parameters alone, the search S8c serves compiles every query as the golden file says.
+- **The Compose smoke test** passes on the local arm64 image.
+- **The reader on real volumes,** from a HistoryAtState clone mounted read-only into the image:
+  - the first document of a 12 MB volume takes about 0.55 s, the parse;
+  - another document of a parsed volume takes 6 ms.
+- **PR #22's CI, on amd64,** for the record: check 2 passes; check 3's results show 482 identical, with 366 queries' scores in other bits than the Mac's, where arm64 had 359.
+
+**The owner's export for S8b**
+
+The owner built `101e17d7`, ran Erase Everything…, downloaded the three fixture volumes and exported with notes, summaries and tags off. Its stamp, read through SQLite's immutable mode:
+- `exported_at` 2026-10-06T04:31:35Z, after the merge (04:15:56Z);
+- build 49, index version 65 and FTS generation 4, with none of the owner's writing;
+- exactly the three fixtures, 139, 123 and 130 documents, with every revision at index version 65;
+- no log or journal beside it.
+
+**Notes**
+
+- **Memory.** Reading across the 16 largest manifest volumes, about 11–13 MB each:
+  - With glibc's default arenas, the process grew from 7 MB to 221 MB in one pass, and to 303 MB in three.
+  - With `MALLOC_ARENA_MAX=2` it reached 127 MB in one pass, and held near 142 MB and then 166 MB over eight.
+  - That is the allocator keeping freed parses in per-thread arenas, not a leak: the cache keeps four volumes, and a test shows it parses an evicted volume again. The image sets two arenas.
+- **A parse blocks one of Swift's cooperative threads** for about half a second on a large volume, since `XMLParser` runs synchronously inside the kit's parser actor. That is acceptable for one user. Before check 12's load target, parsing should leave the pool. `Blocking.run` cannot move it, since it takes a synchronous closure and the kit's parse entry points are all async methods of that actor. Two ways can:
+  - run the parse under `withTaskExecutorPreference` with an executor the server owns, which a default actor follows (SE-0417);
+  - or have upstream add a synchronous parse entry point.
+
+  Either way the server should then limit parses in flight to one or two. Today the pool's width is the only limit, and the cache bounds only finished volumes.
+- **The body's figure images** keep the reader's `frusexplorer://figure/` addresses, as the golden files do. S8c serves them by the server's own address, through #1575's `.linked` case.
+- **A TEI file cut short** rendered its first document with no error on Linux, where the kit's parser does not report the early end. A file still being copied into the TEI folder is parsed again when its size changes, so this matters only for a file left cut short.
+- **Not changed:** the index version and the app build, so `Compatibility.swift` and the export contract are unchanged.
+
+**Next.**
+- S8b: the pin move to `101e17d7`, with golden files from the owner's export above, the Crypto dependency FRUSCoreKitTests gains on Linux, and the read-only open tested on the fixture index.
+- S8c: search, browse and the reader's full page over the read-only stack, with check 3 through the API on the real Import path.
+- A web session adds the daily watch of the app's `v2`.
+
 ## Pin move: FRUSCoreKit, part 2, on Linux in CI
 
 5 October 2026 · branch `claude/pin-f69b4a0` · upstream [joshbotts/FRUS-Explorer#1573](https://github.com/joshbotts/FRUS-Explorer/pull/1573) (merged as `2d216f4c`) and [joshbotts/FRUS-Explorer#1574](https://github.com/joshbotts/FRUS-Explorer/pull/1574) (merged as `f69b4a0a`)

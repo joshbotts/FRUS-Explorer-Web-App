@@ -116,7 +116,7 @@ These rules go into `CLAUDE.md` in session 0:
 
 ## Session plan
 
-Eleven sessions take the project to phase 1 as a Compose install. They alternate between two tracks, so work continues while the owner verifies on the Mac.
+Eleven sessions take the project to phase 1 as a Compose install; S8 has since become three. They alternate between two tracks, so work continues while the owner verifies on the Mac.
 
 ```mermaid
 flowchart TB
@@ -133,7 +133,7 @@ flowchart TB
   S8 --> S9["S9 Browser app for phase 1"] --> G6(["Mac export"]) --> S10["S10 Real export in Compose"] --> M(["Phase 1 in Docker Compose"])
 ```
 
-S0 comes first, and the core track starts after it. The tracks join at session 8, whose search and reader endpoints need both the Linux indexer and the server. Each row below is one pull request; the larger ones, S6 and S9, may take two sessions.
+S0 comes first, and the core track starts after it. The tracks join at session 8, whose search and reader endpoints need both the Linux indexer and the server. Each row below is one pull request, except S8, which became three rows on 6 October; the larger ones, S6 and S9, may take two sessions.
 
 | Session | Track | Delivers | Done when |
 | --- | --- | --- | --- |
@@ -145,7 +145,9 @@ S0 comes first, and the core track starts after it. The tracks join at session 8
 | S5 | Server | `docker/Dockerfile`, `compose.yaml` with the optional Gotenberg service, and a Compose smoke test in `ci.yml` | CI runs `docker compose up` on a synthetic export and gets 200 from `/readyz` |
 | S6 | Core | `FRUSCoreKit`, part 2, in two upstream pull requests: A, `IndexingPipeline` and `SearchService` on Linux; then B, the citation matcher, block splitter and `PageRangeStore`, which need them. One pin move follows both | Checks 2–4 pass on the three fixture volumes, with indexing speed and memory recorded: phase 0's exit. Check 7's matcher and splitter half passes: 70 of CitationMatchingEngineTests' 74 (the other four need `AppState`, the WebKit link handler or the app's views' source, and stay Xcode's), CitationBlockSplitterTests (18) and the manifest-backed formatter test |
 | S7 | Server | `image.yml`, publishing amd64 and arm64 images, and `docs/INSTALL.md` for a Mac and a Linux host | The owner installs from the published image by following the guide |
-| S8 | Both | Search, browse and document-render endpoints over the imported index | Check 3 passes through the API |
+| S8a | Both | An upstream pull request ([FRUS-Explorer#1575](https://github.com/joshbotts/FRUS-Explorer/pull/1575), merged 6 October as `101e17d7`): the kit opens an exported index read-only and immutable, names a host's figure addresses, and holds the reader's page. Beside it, web groundwork at the old pin: the server links FRUSCoreKit through `FRUSLightAPI`; the app's data files are in the image (`FRUS_RESOURCES_DIR`); errors are problem details; `/volumes` lists the catalogue; the reader serves a document's body from the TEI; and a decoder turns a search's query string into the kit's `SearchParameters` | Check 4 passes through the reader's route, and all 482 parity queries decode into the Mac's `SearchParameters` |
+| S8b | Core | The pin move to `101e17d7`, with golden files from a new three-volume export, and tests of the read-only open on the fixture index | The golden HTML and expressions change only in provenance, and the read-only open answers as the writable index does |
+| S8c | Both | Search, browse and the reader's full page over the imported index, opened read-only, with figures and the reader's host script | Check 3 passes through the API, on the real Import path |
 | S9 | Both | The SPA for phase 1: Browse, Search, the reader and Cite | Playwright on Chromium searches, opens a document and copies a citation |
 | S10 | Both | The owner's real export imported into Compose, with a TEI folder mounted read-only, as chosen before S7 | Checks 3–5 pass on the real export: phase 1's exit |
 
@@ -194,7 +196,7 @@ Importing a Mac export takes three steps:
 - **Upgrades** are `docker compose pull` and then `docker compose up -d`. The index already sits in the volume, so a restart copies nothing. The server refuses an index whose version it does not support; export again from the Mac. `edge` tracks `main`; from the first release, tags follow the app build, such as `:48`.
 - **Backups** start in phase 2, when user data exists: a nightly SQLite backup of `app.db` to `/data/backups`.
 - **Disk:** a full export is about 2.8 GB. A re-import holds the export, its checked copy, the live index and the previous one, so allow about 15 GB free.
-- **Memory:** importing and serving the full corpus used about 130 MB in session 7's rehearsal, well under the spec's 4 GB estimate. Search, from session 8, will need more. Indexing, which Standalone mode will do, peaked at 136 MiB over a 24-volume sample at S6's pin move (SPEC, Sizing).
+- **Memory:** importing and serving the full corpus used about 130 MB in session 7's rehearsal, well under the spec's 4 GB estimate. The reader keeps the four volumes it parsed last: reading across the 16 largest volumes, eight times over, levelled off at about 170 MB (S8a). Search, from S8c, will need more. Indexing, which Standalone mode will do, peaked at 136 MiB over a 24-volume sample at S6's pin move (SPEC, Sizing).
 - **Apple silicon:** the published image includes arm64, so it runs natively.
 
 There is no hosting cost; the install runs on hardware the owner already has.
@@ -243,15 +245,16 @@ These are us-east-1 list prices from memory; AWS pricing pages were unreachable 
 
 ## Owner checkpoints
 
-Eight steps need the owner, because a cloud session has no Mac and no Xcode. Sessions keep working on the other track while each one waits.
+Nine steps need the owner, because a cloud session has no Mac and no Xcode. Sessions keep working on the other track while each one waits.
 
 | Checkpoint | When | What the owner does | Status |
 | --- | --- | --- | --- |
 | Settings | Before S0 | The GitHub and environment items under Before the first session, and a container runtime on the Mac | To do |
 | Mac check 1 | After S1 | Check out the upstream pull request in `FRUS-Explorer`, in a clone at a real path (not `/tmp`). Build both schemes in Xcode, run the unit tests and `swift test`, which alone runs the kits' own suites, and merge if they pass. The pull request lists the commands | Done |
 | Mac check 2 | After S3 | Check out the upstream pull request in a clone at a real path. Clean builds of both schemes; the full iOS unit run, signed, with the same skips as on `v2`; `swift test`, with the `FRUSCoreKitTests` count the pull request states; and a normalized symbol diff of the two Mac debug libraries that shows only the names the pull request expects. Merge if they pass. The pull request lists the commands and the expected results | Done |
-| Golden files | After S4, and after each pin move (S3's, S6's) | In the pinned build of the Mac app, make a library holding exactly the three fixture volumes, for example under a second macOS user, or emptied with Erase Everything…. Export its research database, run `scripts/make-golden --export` on the export, and commit `fixtures/golden/`. S4 made the golden files that need only the app's source. Done on 4 October from a build of `af8bedab`, and on 5 October from a build of `f69b4a0a` for S6's pin move; each later pin move needs a new export | Done |
+| Golden files | After S4, and after each pin move (S3's, S6's, S8b's) | In the pinned build of the Mac app, make a library holding exactly the three fixture volumes, for example under a second macOS user, or emptied with Erase Everything…. Export its research database, run `scripts/make-golden --export` on the export, and commit `fixtures/golden/`. S4 made the golden files that need only the app's source. Done on 4 October from a build of `af8bedab`, and on 5 October from a build of `f69b4a0a` for S6's pin move. The export for S8b's pin move was made on 6 October from a build of `101e17d7`; each later pin move needs a new export | Done; S8b's export made |
 | Mac check 3 | After each of S6's two pull requests | The same as Mac check 2: for A, the indexer and search; for B, the citation lookup. Each pull request lists the commands and the expected results | Done: A ([FRUS-Explorer#1573](https://github.com/joshbotts/FRUS-Explorer/pull/1573), merged 5 October as `2d216f4c`) and B ([FRUS-Explorer#1574](https://github.com/joshbotts/FRUS-Explorer/pull/1574), merged 5 October as `f69b4a0a`) |
+| Mac check 4 | After S8a's upstream pull request | The same as Mac check 2, for the read-only open and the reader's page, plus the web repository's `tools/mac-golden` at the branch's head | Done: [FRUS-Explorer#1575](https://github.com/joshbotts/FRUS-Explorer/pull/1575), merged 6 October as `101e17d7` |
 | Mac trial | After S7 | Install from the published image by following `docs/INSTALL.md`, and report anything the guide gets wrong | Done |
 | Mac export | Before S10 | Export the full research database from the pinned build, about 2.8 GB, for the Compose install to import | To do |
 | Phase 1 sign-off | After S10 | Use the site, and confirm checks 3–5 on the real export | To do |
@@ -265,7 +268,7 @@ The largest risk was session 6, done on 5 October. The indexer was one 12,724-li
 | Risk | Why it matters | Mitigation |
 | --- | --- | --- |
 | The indexer is tied to the app | `IndexingPipeline.swift` uses five Apple modules and SwiftData, with 35 logging lines alone. The TEI directory adds WebKit, SwiftUI and UIKit in its view files, and its model files need declarations that live in those view files. A dry run compiled the indexer and search on Linux with 48 app files | Move the indexer and search into `FRUSCoreKit/` as S3 moved the renderer, keeping every old name: CryptoKit, OSLog and SQLite3 go behind `canImport`, and Spotlight and the SwiftData method stay in app extensions (`docs/prep/README.md` says how). The web package compiles the kit from the submodule. Budget S6 as two sessions, one for each upstream pull request. Done: #1573 and #1574 merged, and since the pin move to `f69b4a0a` the web CI runs the kit's 878 tests and checks 2 and 3 |
-| Mac checks are the bottleneck | Four upstream pull requests waited on the owner's Xcode run: S1's, S3's, and S6's two, all merged by 5 October. Later upstream pull requests (S8's read-only open, phase 2's citation API) will wait the same way | Alternate the tracks, and keep each upstream change to guards and moves that change nothing on Apple platforms |
+| Mac checks are the bottleneck | Five upstream pull requests waited on the owner's Xcode run: S1's, S3's, S6's two and S8a's, all merged by 6 October. Later upstream pull requests (the phase-1 features S9 and S10 need, phase 2's citation API) will wait the same way | Alternate the tracks, and keep each upstream change to guards and moves that change nothing on Apple platforms |
 | Foundation differs on Linux | XML parsing, regular expressions, dates and Unicode can differ without an error | Golden files from the same code on macOS, and checks 2–4 before feature work |
 | Session disk | About 30 GB was free here, shared by the Swift image, build caches and fixtures; the full export is 2.8 GB | Fixtures only in sessions; the full corpus runs on the owner's Mac, in S10 |
 | Upstream churn | `FRUS-Explorer`'s index version went from 47 to 65 in the 30 days to 2 October, with about eight pull requests merged a day until its public release | Hold the pin until the release where possible, and move it in its own pull request; the server refuses an export whose index version it does not support |
@@ -303,6 +306,13 @@ Answered on 4 October, for S6:
 - The kit still reads neither `UserDefaults` nor `Bundle.main`. Its stamps go through a stamp-store interface that `UserDefaults` already satisfies, and its data files through providers the app passes, so nothing loads earlier than before. The boundary audit lets the kit import logging, SQLite (`CSQLite` on Linux) and FTS5Store, each behind the `canImport` that selects it.
 - Mac check 3 takes Mac check 2's form, once for each pull request.
 - Left to the sessions unless the owner objects: one kit call runs the passes after indexing, and the app's launch calls it too; the iOS memory-warning observer stays where it is, matched by the notification's name; only what S6's own checks need becomes public; indexing is measured on the fixtures and on a sample of 20 to 30 volumes; check 3 keeps to exact ties.
+
+Answered on 6 October, for S8:
+
+- Three pull requests, not one. Every kit opener wrote to the database it opened, so search over the imported index needed an upstream read-only open first. S8a is that upstream pull request, with web groundwork that needs no new upstream API; S8b moves the pin, with a new three-volume export; S8c adds the endpoints.
+- S8a's upstream scope: the read-only opens, the reader's page and the host's figure addresses. The reader's scripts, the publication year, facets, the query inspector, date order, display titles and BibTeX and RIS wait for one later upstream pull request of phase-1 features, timed so its pin move comes just before the full export for S10.
+- The API follows the draft, extended where the Mac needs more. A search is `GET /search` with form semantics: `+` is a space, a list repeats its name, and one empty value is the empty list. It takes the three filters the draft lacks (`yearKeys`, `includeDocumentText`, `includeFrontMatter`), its count is exact (`countBasis: "exact"`), and it keeps 7,500 results, as the Mac does. Errors are problem details with a `code`, and a refused search carries the kit's refusal as `searchError`. Document JSON is metadata, and `…/html` is the reader's page, with `part=body` for the body alone.
+- Check 3 through the API runs on the real Import path: the kit's fixture index, dropped in as an unstamped copy, imported, and searched through the read-only open.
 
 ## Session 0 kickoff prompt
 

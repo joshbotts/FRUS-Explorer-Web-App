@@ -1,6 +1,6 @@
 # FRUS Explorer and FRUS Explorer Light: working across the two repositories
 
-A proposal for the owner, and for Claude Code sessions in either repository. Drafted 4 October 2026, when the web edition was pinned to the app's commit `cfc0d3c` (build 49, index version 65). Updated the same day, when S3's pin move took the pin to `af8bedab`, with FRUSCoreKit part 1, and on 5 October, when S6's took it to `f69b4a0a`, with part 2; the build and index version are unchanged.
+A proposal for the owner, and for Claude Code sessions in either repository. Drafted 4 October 2026, when the web edition was pinned to the app's commit `cfc0d3c` (build 49, index version 65). Updated the same day, when S3's pin move took the pin to `af8bedab`, with FRUSCoreKit part 1, and on 5 October, when S6's took it to `f69b4a0a`, with part 2; the build and index version are unchanged. On 6 October S8a's upstream pull request merged as `101e17d7`, and the server began linking the kit; the pin stays at `f69b4a0a` until S8b moves it.
 
 - **The app:** FRUS Explorer, for Mac and iOS, in [`joshbotts/FRUS-Explorer`](https://github.com/joshbotts/FRUS-Explorer).
 - **The web edition:** FRUS Explorer Light, a self-hosted server, in [`joshbotts/FRUS-Explorer-Web-App`](https://github.com/joshbotts/FRUS-Explorer-Web-App).
@@ -35,15 +35,15 @@ The web edition does not reimplement the app. It compiles some of the app's own 
 
 | App folder | Compiled on Linux | Web use |
 | --- | --- | --- |
-| SourceNoteKit, CrossRefKit, GeneratorKit | Since S0 | Tests run in the web CI. SourceNoteKit will serve the reader (through FRUSCoreKit) and Source Explorer. CrossRefKit has drifted from the app's own cross-reference rules, so the reader will use FRUSCoreKit's `FRUSURLScheme.resolveCrossRefTarget` instead |
+| SourceNoteKit, CrossRefKit, GeneratorKit | Since S0 | Tests run in the web CI. SourceNoteKit serves the reader through FRUSCoreKit since S8a, and will serve Source Explorer. CrossRefKit has drifted from the app's own cross-reference rules, so the reader will use FRUSCoreKit's `FRUSURLScheme.resolveCrossRefTarget` instead |
 | FTS5Store | Whole kit since the pin move after S1 (web pull request #15). Its schema file was compiled from S0 and its query compiler from S4 | The parity harness compares its parse of 482 queries with the app's. The server will use it for search |
 | TEIHeaderKit, with ManifestGeneratorCore and ManifestGeneratorTests for its tests | Since the pin move after S1 | Tests only, for now |
 | SemanticVectorsKit | Since the pin move after S1 | Semantic search, from phase 4 |
-| FRUSCoreKit, part 1 | Since S3's pin move, to `af8bedab` | The reader's HTML, and Cite. The web CI runs its tests, and renders the 392 golden rows with it |
+| FRUSCoreKit, part 1 | Since S3's pin move, to `af8bedab` | The reader's HTML, which the server serves since S8a, and Cite. The web CI runs its tests, and renders the 392 golden rows with it |
 | FRUSCoreKit, part 2 | Since S6's pin move, to `f69b4a0a` | Indexing and search on the server, and Citation Lookup's matcher in phase 2. The web CI runs the kit's 878 tests, check 7's matcher half among them, and indexes and searches the fixtures with it for checks 2 and 3 |
 | WordCloudKit | Not compiled | Built on Apple's NaturalLanguage framework. Phase 4 plans a separate Linux lemmatizer |
 
-The server itself links none of these yet. On a Mac only, the web repository's `tools/mac-golden` compiles the whole app module, unmodified, to make golden files.
+The server links FRUSCoreKit, FTS5Store and SourceNoteKit since S8a, through its `FRUSLightAPI` target. At `f69b4a0a` it renders the reader's HTML with the kit and reads the manifest with `FixedVolumeCatalogue`. Search waits for S8b's pin move, which brings the read-only open: every opener before it writes to the database it opens. On a Mac only, the web repository's `tools/mac-golden` compiles the whole app module, unmodified, to make golden files.
 
 **The index and export contract.** In phase 1, the server serves a database the app exports with Settings ▸ Data & Recovery ▸ Export Research Database…. It serves one index version and one FTS schema generation: `IndexingPipeline.currentDateIndexVersion` (65) and `FTS5Connection.currentSchemaGeneration` (4) at the pin. A web test reads both declaration lines from the submodule. The server reads the export's `research_provenance` stamp. It refuses an export from another index version or FTS generation, one taken while the app was still re-indexing, one that includes the owner's writing, and one in use (a `-wal` or unfinished `-journal` beside it).
 
@@ -56,7 +56,7 @@ Two more come from an export of a Mac library holding exactly those three volume
 Since S6's pin move the web CI compares all four, through FRUSCoreKit's public API alone, as the server will use it:
 - check 2: the kit indexes the three volumes, and the summary of its index is the export's;
 - check 3: the kit's SearchService returns each query's count and first 50 results as the app does, and compiles each query, in every scope, as the app does;
-- check 4: the kit renders all 392 rows byte-identical to the app's reader, along the reader's path and again from one full parse per volume, the path the server will serve.
+- check 4: the kit renders all 392 rows byte-identical to the app's reader, along the reader's path and again from one full parse per volume, the path the server serves. Since S8a the CI also fetches every row through the server's reader route.
 
 Results may differ in the order of exactly tied scores, which passes and is reported, and the index summary leaves out what depends on indexing history.
 
@@ -109,13 +109,20 @@ The app computes the same results. One timing changes: the broken-references ind
 
 **Part 2 (session S6): two pull requests.** A, the indexing pipeline and the search service, [joshbotts/FRUS-Explorer#1573](https://github.com/joshbotts/FRUS-Explorer/pull/1573), merged on `v2` as `2d216f4c` after the owner's Mac check. B, the citation matcher and splitter and `PageRangeStore`, branched from that merge, [joshbotts/FRUS-Explorer#1574](https://github.com/joshbotts/FRUS-Explorer/pull/1574), merged on `v2` as `f69b4a0a` after the owner's Mac check.
 - `IndexingPipeline.swift` is the app's largest and busiest file. A moves it into the kit with the Foundation-only types it and the search service use, all but its Spotlight section and its SwiftData summary method, which stay in the app's `IndexingPipeline+App.swift` beside the initialiser every app call site uses.
-- The code A moves reads five of the app's JSON files. The host passes them in (`IndexingResources`), four of which change what an index holds; the server will load them from the submodule's `FRUSExplorer/Resources`. B adds the manifest, which the citation matcher reads through `CitableVolumeCatalogue`: the app's `ManifestStore` conforms to it, and the server will pass a `FixedVolumeCatalogue` decoded from the submodule's `manifest.json`.
+- The code A moves reads five of the app's JSON files. The host passes them in (`IndexingResources`), four of which change what an index holds; the server loads them since S8a, from the image's copy of `FRUSExplorer/Resources`. B adds the manifest, which the citation matcher reads through `CitableVolumeCatalogue`: the app's `ManifestStore` conforms to it, and the server reads the manifest with a `FixedVolumeCatalogue` since S8a.
 - The indexer's stamps go through a stamp store (`IndexingStampStore`), which `UserDefaults` satisfies in the app and an in-memory store on the server.
 - A adds `runPostIndexPasses`, the steps after indexing (the person rollup, the broken-reference flags, the subjects), which the app's launch calls and the server's indexer will.
 - B leaves Batch and Structured Entry's types (the block splitter, the batch outcome and row, the lookup form's fields) internal, since only the seam is needed for S6's checks. The web edition's citation lookup, in phase 2, makes them public in its own pull request.
 - The pin move after both, to `f69b4a0a`, changed the source digest, so it remade the golden files, the two from an export with a new three-volume export from the newly pinned build.
 
 Web sessions wrote all of part 2.
+
+**#1575 (session S8a): the read-only open and the reader's page, merged as `101e17d7`.** [joshbotts/FRUS-Explorer#1575](https://github.com/joshbotts/FRUS-Explorer/pull/1575) gives the server what it needs to search and read without writing to the index it serves:
+- `FTS5Store(readingDatabaseAt:)` and `IndexingPipeline(readingIndexAt:fts5Store:resources:volumesDirectory:)` open an index read-only and immutable (`mode=ro&immutable=1`). They skip the schema setup, the switch to write-ahead logging and the writes the other openers make. The pipeline's open still registers `frus_exact_word`, which every `=exact` query needs. The app's openers run as before.
+- `FigureImages.linked(url:)` and `FRUSRenderNodeHTMLSerializer.reader(figureURL:)` let a host name each figure's image by its own address. `FRUSURLScheme.figureURL(for:)` and `isSafeComponent(_:)` are public.
+- The reader's page is kit code: `ReaderPage.build`, its CSS, `ReaderAppearance` and `TextSizePreference`. `HTMLTemplate` and `FRUSTheme` forward to it with the same bytes, which tests pin by SHA-256 for both appearances and all four text sizes.
+
+At the pull request's head, read-only answers equal read-write answers, score bits included, on Linux and on macOS; the full iOS unit run (6,505 tests) failed only the 8 Keychain tests an unsigned build fails; and `tools/mac-golden` wrote all 392 rows and 482 expressions byte for byte as at `f69b4a0a`.
 
 ## 3. The architecture that protects coordination
 
@@ -182,7 +189,7 @@ The whole of the app side's part. Each rule costs little or nothing. The boundar
 - is opened when the app's repository is quiet, and kept small or split into reviewable commits.
 
 **App changes only the web edition needs,** all to be written by web sessions:
-- further moves into the kits (FRUSCoreKit part 2 was S6's, merged as #1573 and #1574);
+- further moves into the kits (FRUSCoreKit part 2 was S6's, merged as #1573 and #1574; the read-only open and the reader's page were S8a's, #1575);
 - the index version shown beside Export Research Database… (phase 1), so a user can match an export to a server before copying 2.8 GB;
 - the JSON export at `formatVersion` 7, adding the model types it lacks, above all saved searches and working corpora (phase 2);
 - optionally, a JSON importer, so data made on the web can return to the Mac;
@@ -207,7 +214,7 @@ The whole of the app side's part. Each rule costs little or nothing. The boundar
    - a Mac check and merge for each web-authored pull request;
    - now and then, an export from the pinned app build: three volumes for the golden files, or any export when the schema changes;
    - the full-corpus export before S10, as the owner checkpoints in `PLAN.md` list.
-4. **The three-volume export, at each pin move.** The owner made the first on 4 October, from a build of `af8bedab`, and the second on 5 October, from a build of `f69b4a0a`, for S6's pin move. Each later pin move needs another.
+4. **The three-volume export, at each pin move.** The owner made the first on 4 October, from a build of `af8bedab`, the second on 5 October, from a build of `f69b4a0a`, for S6's pin move, and the third on 6 October, from a build of `101e17d7`, for S8's. Each later pin move needs another.
 
 ## Appendix: a section for the app's `CLAUDE.md`
 

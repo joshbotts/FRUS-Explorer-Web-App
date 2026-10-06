@@ -5,8 +5,8 @@
 // - SQLite refuses the rank-1 FTS5 integrity check on a read-only connection, so the checks
 //   run on a writable copy, made with the backup API, which then becomes the live index.
 // - Phase 1 serves the corpus only, so an export that includes the owner's writing is refused.
-// - Comparing each document's hashes with its TEI needs FRUSCoreKit's indexer, which the server
-//   does not link yet, so that step waits.
+// - Comparing each document's hashes with its TEI needs FRUSCoreKit's indexer. The server links
+//   the kit since session 8, but that step is not built yet.
 
 import CSQLite
 import Foundation
@@ -43,6 +43,9 @@ public struct IndexSummary: Sendable, Equatable, Codable {
 public final class CorpusIndex: Sendable {
     public let url: URL
     public let summary: IndexSummary
+    /// How many documents each volume has in `document_cache`, by volume id. It is not part of
+    /// the status: the volume endpoints report it per volume.
+    public let documentsByVolume: [String: Int]
     let connection: SQLiteConnection
 
     /// Opens an installed index after checking its format and version, but not its
@@ -59,6 +62,10 @@ public final class CorpusIndex: Sendable {
             throw ImportRefusal(.indexVersionMismatch, refusal.reason)
         }
         let counts = try db.query("SELECT count(*), count(DISTINCT volume_id) FROM document_cache")
+        var documentsByVolume: [String: Int] = [:]
+        for row in try db.query("SELECT volume_id, count(*) FROM document_cache GROUP BY volume_id") {
+            if let volume = row[0].text { documentsByVolume[volume] = Int(row[1].integer ?? 0) }
+        }
         let summary = IndexSummary(
             documents: Int(counts.first?[0].integer ?? 0),
             volumes: Int(counts.first?[1].integer ?? 0),
@@ -67,12 +74,13 @@ public final class CorpusIndex: Sendable {
             exportedAt: provenance?["exported_at"],
             appVersion: provenance?["app_version"],
             appBuild: provenance?["app_build"])
-        return CorpusIndex(url: url, summary: summary, connection: db)
+        return CorpusIndex(url: url, summary: summary, documentsByVolume: documentsByVolume, connection: db)
     }
 
-    private init(url: URL, summary: IndexSummary, connection: SQLiteConnection) {
+    private init(url: URL, summary: IndexSummary, documentsByVolume: [String: Int], connection: SQLiteConnection) {
         self.url = url
         self.summary = summary
+        self.documentsByVolume = documentsByVolume
         self.connection = connection
     }
 }

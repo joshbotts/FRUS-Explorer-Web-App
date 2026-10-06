@@ -23,11 +23,19 @@ public struct ServerConfiguration: Sendable, Equatable {
     public var port: Int
     /// How often Import mode looks for a new export in `/data/import` (`FRUS_IMPORT_POLL_SECONDS`).
     public var importPollInterval: Duration
+    /// The app's data files, `FRUSExplorer/Resources` from the pinned FRUS-Explorer commit
+    /// (`FRUS_RESOURCES_DIR`). The image copies them to the default; `scripts/swift` points at
+    /// the submodule's folder.
+    public var resourcesDirectory: URL
+
+    /// Where the image puts the app's data files.
+    public static let imageResourcesDirectory = URL(fileURLWithPath: "/usr/share/frus-light/resources", isDirectory: true)
 
     public init(
         mode: Mode = .import, auth: Auth = .none, dataDirectory: URL = URL(fileURLWithPath: "/data"),
         publicURL: String = "http://localhost:8080", pdfURL: String? = nil, offline: Bool = false,
-        host: String = "127.0.0.1", port: Int = 8080, importPollInterval: Duration = .seconds(2)
+        host: String = "127.0.0.1", port: Int = 8080, importPollInterval: Duration = .seconds(2),
+        resourcesDirectory: URL = ServerConfiguration.imageResourcesDirectory
     ) {
         self.mode = mode
         self.auth = auth
@@ -38,6 +46,7 @@ public struct ServerConfiguration: Sendable, Equatable {
         self.host = host
         self.port = port
         self.importPollInterval = importPollInterval
+        self.resourcesDirectory = resourcesDirectory
     }
 
     /// Reads the configuration, reporting every problem at once.
@@ -99,6 +108,10 @@ public struct ServerConfiguration: Sendable, Equatable {
             } else {
                 problems.append("FRUS_IMPORT_POLL_SECONDS must be a number of seconds from 0.05 to 3600, not \(raw)")
             }
+        }
+
+        if let raw = value("FRUS_RESOURCES_DIR") {
+            config.resourcesDirectory = URL(fileURLWithPath: raw, isDirectory: true)
         }
 
         if !problems.isEmpty { throw ConfigurationError(problems: problems) }

@@ -147,7 +147,7 @@ public struct ReaderRenderer: Sendable {
         }
     }
 
-    /// The path the server will serve (session 8): one `parseVolumeFull` of each volume, whose
+    /// The path the server serves (FRUSLightAPI's `ReaderService`): one `parseVolumeFull` of each volume, whose
     /// persons and terms make the lookups, then every document it yields, in parse order, with the
     /// reader's converter and serializer. Volumes render concurrently, in the order given. Each
     /// volume's persons and terms are returned too, to be compared with `readerLists`.

@@ -45,7 +45,7 @@ S2 settled these; its DEVLOG entry says how.
   7. a `content_hash` self-check from `document_cache` (it matched 392 of 392 fixture rows);
   8. the rename, keeping `frus.db.prev`, and an immutable reopen.
 
-  The TEI hash comparison needs FRUSCoreKit's indexer, which the server does not link yet, so it waits.
+  The TEI hash comparison needs FRUSCoreKit's indexer. The server links the kit since S8a, but the comparison is not built yet.
 - **The trigger cannot be a file appearing.** A file copied in with `docker compose cp` is visible under its final name while it is still copying.
 - **The owner's export is a real input for local Import trials** while the pin stays at index version 65.
 

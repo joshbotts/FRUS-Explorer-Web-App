@@ -9,6 +9,9 @@
 # - SwiftPM output goes to .build/linux, apart from a Mac's own .build.
 # - The container shares the host's network. Proxy variables and a CA bundle are passed in
 #   when they are set, as a cloud session needs.
+# - FRUS_RESOURCES_DIR names the submodule's FRUSExplorer/Resources, so `scripts/swift run
+#   FRUSLightServer` finds the app's data files in the folder the image copies to
+#   /usr/share/frus-light/resources.
 set -euo pipefail
 
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
@@ -55,6 +58,8 @@ if [ -t 0 ] && [ -t 1 ]; then run_args+=(-it); fi
 for v in $proxy_vars; do
   if [ -n "${!v:-}" ]; then run_args+=(-e "$v"); fi
 done
+# The server reads the app's data files from the submodule, the folder the image copies (session 8).
+run_args+=(-e FRUS_RESOURCES_DIR=/src/upstream/FRUS-Explorer/FRUSExplorer/Resources)
 
 # A session CA bundle may hold only the proxy's certificate, so add it to the image's own bundle.
 ca=""

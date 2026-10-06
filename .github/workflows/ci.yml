@@ -1,7 +1,7 @@
 # FRUS Explorer Light CI, on every pull request and on main.
 # - swift: build and test in swift:6.4-noble with libsqlite3-dev, the way scripts/swift runs them.
-# - compose: build the image, then scripts/compose-smoke imports a synthetic export with
-#   docker compose cp and waits for /readyz to answer 200.
+# - compose: build the image, then scripts/compose-smoke checks the catalogue and the reader,
+#   imports a synthetic export with docker compose cp and waits for /readyz to answer 200.
 # Session 9 adds the web app.
 name: ci
 

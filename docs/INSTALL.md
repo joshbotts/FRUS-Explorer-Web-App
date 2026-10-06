@@ -2,19 +2,19 @@
 
 FRUS Explorer Light runs as one container on a Mac or a Linux host, serving a research database exported from FRUS Explorer on a Mac. This guide covers phase 1: one person on one machine. The server listens on this machine's 127.0.0.1 only, and has no sign-in.
 
-**What phase 1 offers so far:** the server imports an export, checks it and serves it. There is no browser interface yet; it arrives in session 9. Until then the server answers `/healthz`, `/readyz` and `/api/v1/status`.
+**What phase 1 offers so far:** the server imports an export, checks it and serves it, lists the published catalogue, and renders a document's text from the TEI volumes. Search follows later in session 8, and the browser interface in session 9. Until then the server answers `/healthz`, `/readyz`, `/api/v1/status`, `/api/v1/volumes` and the reader's HTML (step 6).
 
 ## What you need
 
 - **Docker with Compose.** On a Mac, Docker Desktop, Podman Desktop or Colima; Docker Desktop needs a paid subscription in larger organisations. On Linux, Docker Engine with the Compose plugin. This guide uses `docker compose`; it was tested with Docker Desktop 4.93.
 - **About 15 GB free for Docker:**
-  - the image is 251 MB;
+  - the image is about 400 MB, with the app's data files;
   - the index for the full corpus is 2.8 GB;
   - an import needs room for the export and a copy while it is checked;
   - a later import keeps the previous index for rollback, so a re-import needs about four times the index while it runs.
-- **Memory.** Importing and serving the full corpus used about 130 MB, so Docker Desktop's default allocation is plenty.
+- **Memory.** Importing and serving the full corpus used about 130 MB, and the reader levelled off at about 170 MB over the largest volumes, so Docker Desktop's default allocation is plenty.
 - **A FRUS Explorer research export** from a Mac running a build that matches the server's index version: 65 today, FRUS Explorer build 49. The server refuses any other version and says which it needs.
-- **The TEI volumes**, for the reader, from session 8. They are optional until then.
+- **The TEI volumes**, which the reader renders documents from. Without them the server still imports and serves the index.
 
 ## 1. Get the Compose file
 
@@ -51,7 +51,7 @@ git clone --depth 1 https://github.com/HistoryAtState/frus.git
 echo "FRUS_TEI_DIR=$PWD/frus/volumes" > .env
 ```
 
-Without `FRUS_TEI_DIR`, Compose mounts an empty `tei` folder beside `compose.yaml`, which is fine until the reader arrives.
+Without `FRUS_TEI_DIR`, Compose mounts an empty `tei` folder beside `compose.yaml`, and the reader has no volumes to render.
 
 ## 3. Start the server
 
@@ -100,6 +100,22 @@ curl -s -w '  %{http_code}\n' http://localhost:8080/readyz
 `curl http://localhost:8080/api/v1/status` shows the versions, the index's document and volume counts, and the last import's outcome.
 
 The installed export is removed from the drop zone, so you can delete your own copy or keep it. Restarting the server copies nothing: the index stays in the volume.
+
+## 6. Read a document
+
+Until the browser interface arrives, `curl` shows what the reader will. The catalogue lists all 553 volumes, saying which the index holds and which have TEI in your folder:
+
+```bash
+curl -s 'http://localhost:8080/api/v1/volumes?subseries=1961-63&limit=3'
+```
+
+A document's text, as the reader renders it, from the TEI folder:
+
+```bash
+curl -s 'http://localhost:8080/api/v1/volumes/frus1961-63v06/documents/d1/html?part=body'
+```
+
+The first document of a volume takes about half a second while the server parses the volume; the rest are immediate. The reader works without an index. An error names its cause in a `code`: `TEI_NOT_AVAILABLE` when the volume is not in your TEI folder, `DOCUMENT_NOT_FOUND` or `VOLUME_NOT_FOUND` for an id the volume or the catalogue lacks.
 
 ## If an import is refused
 

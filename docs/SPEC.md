@@ -513,7 +513,8 @@ The server exposes one versioned JSON API under `/api/v1`, shared by the web cli
 - Counts use the Mac's ceilings. A capped count returns `countBasis: "atLeast"`, the same distinction the method appendix's `count_basis` column draws.
 - Every count-bearing response includes `coverage`: indexed volumes, manifest volumes (553) and the index version.
 - Browsers authenticate with a session cookie (`Secure`, `HttpOnly`, `SameSite=Lax`) plus a CSRF token. Scripts use personal access tokens. A read-only scope suits AI agents, the audience of `Docs/Agentic-Analysis-Guide.md`.
-- Errors use RFC 9457 `application/problem+json`.
+- Errors use RFC 9457 `application/problem+json`, with `type` `about:blank`. A `code` member carries the draft's SCREAMING_SNAKE_CASE identity, such as `VOLUME_NOT_FOUND`, and a refused search carries the kit's refusal as `searchError`, such as `emptyQuery`. Every path under `/api/` answers this way, including those no route matches.
+- Query strings have HTML form semantics, as a browser's `URLSearchParams` writes them: `+` is a space and `%2B` a plus, a list repeats its name, and one empty value is the empty list. The server reads the raw query itself: Hummingbird's query parameters leave `+` and names undecoded, and its form decoder takes a repeated name only as `name[]=`. The empty list keeps apart filters the Mac treats differently: no `yearKeys` filters nothing, and the empty list matches nothing. A parameter the endpoint does not take is refused, not ignored.
 - The server publishes its own OpenAPI document at `/api/v1/openapi.json`, reusing the draft's schemas such as `CitationMatch`.
 - The draft names `api.history.state.gov` as a future server. A self-hosted instance serves under its own origin, and only an instance the Office runs presents itself as an Office of the Historian service.
 
@@ -570,6 +571,7 @@ volumes:
 | --- | --- | --- |
 | `FRUS_MODE` | `import` | `import` or `standalone` |
 | `FRUS_DATA_DIR` | `/data` | Root of all state |
+| `FRUS_RESOURCES_DIR` | `/usr/share/frus-light/resources` | The app's `FRUSExplorer/Resources` from the pinned commit, which the image copies there. The server will not start without the manifest, the broken-refs index and the four indexing resources |
 | `FRUS_AUTH` | `none` | `none` (single user), `local` (accounts) or `header` (trusted proxy) |
 | `FRUS_AUTH_HEADER` | `X-Forwarded-User` | Identity header in `header` mode |
 | `FRUS_TRUSTED_PROXIES` | none | CIDR ranges allowed to set that header |
