@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# FRUS Explorer Light: npm for the browser app in web/ (CLAUDE.md, rule 1).
+#   scripts/npm <npm args>              npm --prefix web <args>: ci, test, run build, install --save-exact ...
+#   scripts/npm --playwright [args]     npx playwright test, in mcr.microsoft.com/playwright at the locked version
+#   scripts/npm --playwright-image      prints that image
+# Works in a cloud session, in CI and on a Mac (macOS ships bash 3.2, so no newer bash features).
+#
+# - On Linux with Node at web/.node-version's major on PATH (a cloud session, CI after setup-node), npm
+#   runs natively. Otherwise, and always on a Mac, it runs in node:<major>-bookworm-slim with this
+#   repository mounted at /src. FRUS_NODE=host or docker overrides the choice.
+# - On a Mac, web/node_modules is a Docker volume, one per checkout: the Linux builds of esbuild and
+#   Rollup in it could not run on macOS, and a volume is faster than the macOS file share.
+#   On Linux the container runs as the caller, so nothing it writes is left owned by root.
+# - Proxy variables and a CA bundle are passed in when they are set, as scripts/swift passes them.
+set -euo pipefail
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+major=$(tr -d '[:space:]' < "$root/web/.node-version")
+image="node:$major-bookworm-slim"
+
+mode=npm
+case "${1:-}" in
+  --playwright) mode=playwright; shift ;;
+  --playwright-image) mode=image ;;
+esac
+
+if [ "$mode" != npm ]; then
+  # The browser image must match @playwright/test exactly, so its tag comes from the lockfile.
+  version=$(sed -n '/"node_modules\/@playwright\/test": {/,/"version"/s/.*"version": "\([^"]*\)".*/\1/p' "$root/web/package-lock.json")
+  if [ -z "$version" ]; then
+    echo "scripts/npm: web/package-lock.json locks no @playwright/test" >&2
+    exit 1
+  fi
+  image="mcr.microsoft.com/playwright:v$version-noble"
+  if [ "$mode" = image ]; then
+    echo "$image"
+    exit 0
+  fi
+else
+  want=docker
+  if [ "$(uname -s)" = Linux ]; then want=host; fi
+  want=${FRUS_NODE:-$want}
+  if [ "$want" = host ] && command -v node >/dev/null 2>&1 \
+     && [ "$(node -p 'process.versions.node.split(".")[0]')" = "$major" ]; then
+    exec npm --prefix "$root/web" "$@"
+  fi
+fi
+
+# Docker Desktop installs its CLI here; a non-interactive shell may not have it on PATH.
+if ! command -v docker >/dev/null 2>&1 && [ -x "$HOME/.docker/bin/docker" ]; then
+  PATH="$HOME/.docker/bin:$PATH"
+fi
+if ! docker info >/dev/null 2>&1; then
+  echo "scripts/npm: Docker is not running or not installed; scripts/doctor says which" >&2
+  exit 1
+fi
+if ! docker image inspect "$image" >/dev/null 2>&1; then
+  echo "scripts/npm: $image is not present; run: docker pull $image" >&2
+  exit 1
+fi
+
+run_args=(--rm --init -v "$root:/src" -w /src/web -e CI -e NPM_CONFIG_UPDATE_NOTIFIER=false)
+if [ -t 0 ] && [ -t 1 ]; then run_args+=(-it); fi
+if [ "$(uname -s)" = Darwin ]; then
+  key=$(printf '%s' "$root" | shasum | cut -c1-12)
+  run_args+=(-v "frus-light-node-modules-$key:/src/web/node_modules")
+else
+  run_args+=(--user "$(id -u):$(id -g)" -e HOME=/tmp)
+fi
+for v in HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy; do
+  if [ -n "${!v:-}" ]; then run_args+=(-e "$v"); fi
+done
+# Node adds NODE_EXTRA_CA_CERTS to its own roots, so no bundle is joined, unlike scripts/swift.
+for v in NODE_EXTRA_CA_CERTS SSL_CERT_FILE CURL_CA_BUNDLE REQUESTS_CA_BUNDLE GIT_SSL_CAINFO; do
+  if [ -n "${!v:-}" ] && [ -f "${!v}" ]; then
+    ca="$(CDPATH='' cd -- "$(dirname -- "${!v}")" && pwd)/$(basename -- "${!v}")"
+    run_args+=(-v "$ca:/run/session-ca.pem:ro" -e NODE_EXTRA_CA_CERTS=/run/session-ca.pem)
+    break
+  fi
+done
+
+if [ "$mode" = playwright ]; then
+  # scripts/compose-smoke --e2e passes container:<server>, so the app is http://localhost:8080, a
+  # secure context, which the clipboard needs.
+  run_args+=(--ipc=host --network "${FRUS_E2E_NETWORK:-host}" -e FRUS_E2E_BASE_URL -e PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1)
+  exec docker run "${run_args[@]}" "$image" npx playwright test "$@"
+fi
+
+case "$(uname -s) ${1:-} ${2:-}" in
+  # On a Mac the container cannot share the host's network, so Vite listens on all of the
+  # container's addresses behind a port published on 127.0.0.1, and reaches a server on the Mac
+  # through host.docker.internal.
+  "Darwin run dev"|"Darwin run preview")
+    run_args+=(-p "127.0.0.1:${FRUS_WEB_PORT:-5173}:5173" -e FRUS_WEB_HOST=0.0.0.0
+               -e "FRUS_API_ORIGIN=${FRUS_API_ORIGIN:-http://host.docker.internal:8080}") ;;
+  # On Linux it shares the host's network: Vite on 127.0.0.1:5173, the server on 127.0.0.1:8080.
+  *" run dev"|*" run preview")
+    run_args+=(--network host -e "FRUS_API_ORIGIN=${FRUS_API_ORIGIN:-http://127.0.0.1:8080}") ;;
+  *)
+    run_args+=(--network host -e PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1) ;;
+esac
+exec docker run "${run_args[@]}" "$image" npm "$@"
