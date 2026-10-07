@@ -9,9 +9,8 @@ const tags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-prac
 /**
  * What the kit's reader page fails today, inside the frame only: its light palette's link, marker
  * and secondary colours are under 4.5:1, and its person and cross-reference links differ from the
- * text around them by colour alone. Upstream FRUS-Explorer pull request "The reader's page meets
- * WCAG AA contrast and marks its links by more than colour" fixes both; when the pin moves past it,
- * this list empties, and the check that the list is still needed fails until it does.
+ * text around them by colour alone. joshbotts/FRUS-Explorer#1578 fixes both; when the pin moves
+ * past it, this list empties, and the suite's checks that each id is still needed fail until it does.
  */
 export const kitKnown = new Set(['color-contrast', 'link-in-text-block']);
 

@@ -47,7 +47,9 @@ private func formEncoded(_ fields: [String: String]) -> String {
         // Twice for a person, once for a broken reference, as the app decodes them.
         #expect(ReaderLinkParse("frusexplorer://person/a%2541") == .person(ref: "aA"))
         #expect(ReaderLinkParse("frusexplorer://brokenref/%2541%23pg_700") == .brokenReference(target: "%41#pg_700"))
-        for refused in ["https://history.state.gov", "frusexplorer://figure/x.png", "frusexplorer://person", "frusexplorer://doc/", "not a url"] {
+        // A person or term link with no path names the empty ref, as the app reads it, which no entry has.
+        #expect(ReaderLinkParse("frusexplorer://person") == .person(ref: ""))
+        for refused in ["https://history.state.gov", "frusexplorer://figure/x.png", "frusexplorer://doc/", "frusexplorer://brokenref", "not a url"] {
             #expect(ReaderLinkParse(refused) == nil, "\(refused)")
         }
     }

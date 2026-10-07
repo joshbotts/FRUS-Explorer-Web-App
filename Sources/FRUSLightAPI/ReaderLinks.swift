@@ -5,7 +5,8 @@
 // decision is the kit's: the reader's lookups for a person or a glossary term, the bundled
 // broken-refs index for an unresolved reference, and `FRUSURLScheme.resolveCrossRefTarget` for a
 // cross-reference. Only the parse of the URL itself is the app's (`FRUSURLSchemeHandler.dispatch`,
-// app code), and `ReaderLinkParse` mirrors it until the kit offers it.
+// app code), and `ReaderLinkParse` mirrors it until the kit offers it, as
+// joshbotts/FRUS-Explorer#1579's `FRUSURLScheme.readerLink(from:)` does.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -89,8 +90,8 @@ public struct ReaderLinkTarget: Codable, Equatable, Sendable {
 extension ReaderLinkTarget: ResponseEncodable {}
 
 /// A reader link, parsed as `FRUSURLSchemeHandler.dispatch(url:)` parses it. That is app code, so
-/// this mirrors it until the kit offers the parse (upstream, FRUS-Explorer: `FRUSURLScheme`'s
-/// `readerLink(from:)`); every decision after it is the kit's.
+/// this mirrors it until the kit offers the parse (joshbotts/FRUS-Explorer#1579, `FRUSURLScheme`'s
+/// `readerLink(from:)`, which the pin move after it switches to); every decision after it is the kit's.
 enum ReaderLinkParse: Equatable {
     /// The longest link the route takes, in UTF-8 bytes: far beyond any the kit writes.
     static let maximumLength = 2_048
@@ -100,21 +101,20 @@ enum ReaderLinkParse: Equatable {
     case crossReference(target: String, volumeId: String?, citing: PageCitationHint?)
     case brokenReference(target: String)
 
-    /// Nil for another scheme, another host, or no first part. As in the app, the path's parts are
-    /// percent-decoded twice, `URL.pathComponents` decoding them once, except a broken reference's
-    /// target, which is decoded once: its encoding is strict, and a second pass would corrupt a
-    /// literal `%`.
+    /// Nil for another scheme, another host, or a `doc` or `brokenref` link with no path. As in the
+    /// app, a `person` or `gloss` link with no path names the empty ref, which no entry has, and the
+    /// path's parts are percent-decoded twice, `URL.pathComponents` decoding them once, except a
+    /// broken reference's target, which is decoded once: its encoding is strict, and a second pass
+    /// would corrupt a literal `%`.
     init?(_ href: String) {
         guard let url = URL(string: href), url.scheme == "frusexplorer" else { return nil }
         let components = url.pathComponents.filter { $0 != "/" }
         let parts = components.map { $0.removingPercentEncoding ?? $0 }
         switch url.host {
         case "person":
-            guard let ref = parts.first else { return nil }
-            self = .person(ref: ref)
+            self = .person(ref: parts.first ?? "")
         case "gloss":
-            guard let ref = parts.first else { return nil }
-            self = .gloss(ref: ref)
+            self = .gloss(ref: parts.first ?? "")
         case "doc":
             guard let target = parts.first else { return nil }
             let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -183,7 +183,8 @@ enum ReaderLinkRoutes {
                                    from: (volumeId, documentId), state: state, reader: reader, resources: resources)
                 case .page(let otherVolume, let page):
                     // Which document holds a page is the index's page ranges, through the kit's
-                    // PageRangeStore, whose open is not yet immutable; until it is, the reader says so.
+                    // PageRangeStore, whose open is not yet immutable (joshbotts/FRUS-Explorer#1579
+                    // adds one); until it is, the reader says so.
                     target.kind = "page"
                     target.page = page
                     target.pageVolumeId = otherVolume ?? volumeId
