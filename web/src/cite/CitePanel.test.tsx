@@ -32,7 +32,7 @@ function renderPanel(onClose = () => {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <CitePanel volumeId="frus1961-63v06" documentId="d1" onClose={onClose} />
+      <CitePanel volumeId="frus1961-63v06" documentId="d1" autoFocus onClose={onClose} />
     </QueryClientProvider>,
   );
 }

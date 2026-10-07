@@ -7,7 +7,9 @@ import { ApiError } from '../api/client';
 import { searchQuery, volumesQuery } from '../api/endpoints';
 import type { DocumentType, SearchResultList, Volume } from '../api/types';
 import { copy } from '../copy';
+import { Badge } from '../shell/Badge';
 import { defaultLimit, documentTypes, pageCount, pageSizes, retainedLimit, type SearchState } from './searchState';
+import { useDocumentTitle } from '../shell/useDocumentTitle';
 import { Snippet } from './Snippet';
 
 const route = getRouteApi('/search');
@@ -25,13 +27,12 @@ export function SearchScreen() {
   }
 
   const titles = new Map((volumes.data?.items ?? []).map((volume: Volume) => [volume.volumeId, volume.title]));
+  useDocumentTitle(state.keywords ? `${copy.search.title}: ${state.keywords}` : copy.search.title);
 
   return (
     <section className="screen search">
       <h1 tabIndex={-1}>{copy.search.title}</h1>
-      {/* Keyed by the URL's text, so going back to another search shows its text. */}
       <SearchForm
-        key={state.keywords ?? ''}
         keywords={state.keywords ?? ''}
         onSubmit={(keywords) => {
           // The same search again leaves the URL as it is, so it asks the server again itself:
@@ -51,6 +52,13 @@ export function SearchScreen() {
 
 function SearchForm({ keywords, onSubmit }: { keywords: string; onSubmit: (keywords: string) => void }) {
   const [text, setText] = useState(keywords);
+  // Going back to another search shows its text. The box is not remounted for it, so a search
+  // made from it keeps its focus.
+  const [shown, setShown] = useState(keywords);
+  if (keywords !== shown) {
+    setShown(keywords);
+    setText(keywords);
+  }
   const inputId = useId();
 
   function submit(event: FormEvent) {
@@ -216,8 +224,8 @@ function Results({
                   <p className="meta">
                     {titles.get(item.volumeId) ?? item.volumeId}
                     {item.dateline && <> · {item.dateline}</>}
-                    {item.isEditorialNote && <span className="badge">{copy.search.editorialNote}</span>}
-                    {item.isFrontMatter && <span className="badge">{copy.search.frontMatterBadge}</span>}
+                    {item.isEditorialNote && <Badge>{copy.search.editorialNote}</Badge>}
+                    {item.isFrontMatter && <Badge>{copy.search.frontMatterBadge}</Badge>}
                   </p>
                   <p className="snippet">
                     <Snippet text={item.snippet} />

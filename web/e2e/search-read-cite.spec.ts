@@ -1,21 +1,7 @@
 // S9's done-when (docs/PLAN.md): Playwright on Chromium searches, opens a document and copies a
 // citation. Against the image, with the synthetic export imported and fixtures/tei mounted.
-import { expect, test } from '@playwright/test';
 import { d1Chicago, d1Text, treatiesResults } from './expected';
-
-test.beforeEach(async ({ page }) => {
-  // Any console error or policy violation in the app or the reader's frame fails the test.
-  const problems: string[] = [];
-  page.on('pageerror', (error) => problems.push(`page error: ${error.message}`));
-  page.on('console', (message) => {
-    if (message.type() === 'error') problems.push(`console: ${message.text()}`);
-  });
-  (page as unknown as { problems: string[] }).problems = problems;
-});
-
-test.afterEach(async ({ page }) => {
-  expect((page as unknown as { problems: string[] }).problems).toEqual([]);
-});
+import { expect, test } from './fixtures';
 
 test('the app is served with its policy, and every client route answers with it', async ({ request }) => {
   const app = await request.get('/');

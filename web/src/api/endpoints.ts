@@ -2,7 +2,18 @@
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import { ApiError, getJSON } from './client';
 import { formEncode } from './form';
-import type { CitationStyleName, DocumentCitation, DocumentDetail, Readiness, SearchResultList, VolumeList } from './types';
+import type {
+  CitationStyleName,
+  DocumentCitation,
+  DocumentDetail,
+  DocumentList,
+  Readiness,
+  ReaderLinkTarget,
+  SearchResultList,
+  Volume,
+  VolumeList,
+  VolumeSectionPage,
+} from './types';
 import type { SearchState } from '../search/searchState';
 import { searchFields } from '../search/searchState';
 
@@ -42,6 +53,47 @@ export const volumesQuery = queryOptions({
   queryFn: ({ signal }) => getJSON<VolumeList>('/api/v1/volumes', formEncode({ limit: 1000 }), signal),
   staleTime: Infinity,
 });
+
+/** One volume with its sections; they change with the index, so readiness refetches them. */
+export function volumeQuery(volumeId: string) {
+  return queryOptions({
+    queryKey: ['volume', volumeId],
+    queryFn: ({ signal }) => getJSON<Volume>(`/api/v1/volumes/${segment(volumeId)}`, undefined, signal),
+    staleTime: 5 * 60_000,
+    retry: retryServerFaults,
+  });
+}
+
+export function sectionQuery(volumeId: string, sectionId: string) {
+  return queryOptions({
+    queryKey: ['section', volumeId, sectionId],
+    queryFn: ({ signal }) =>
+      getJSON<VolumeSectionPage>(`/api/v1/volumes/${segment(volumeId)}/sections/${segment(sectionId)}`, undefined, signal),
+    staleTime: 5 * 60_000,
+    retry: retryServerFaults,
+  });
+}
+
+/** A volume's reading order from the index, for a volume whose sections neither the index nor the TEI gives. */
+export function readingOrderQuery(volumeId: string) {
+  return queryOptions({
+    queryKey: ['readingOrder', volumeId],
+    queryFn: ({ signal }) =>
+      getJSON<DocumentList>(`/api/v1/volumes/${segment(volumeId)}/documents`, formEncode({ limit: 1000 }), signal),
+    staleTime: 5 * 60_000,
+    retry: retryServerFaults,
+  });
+}
+
+/** What a link in a document's page leads to; the same link always leads to the same place. */
+export function linkQuery(volumeId: string, documentId: string, href: string) {
+  return queryOptions({
+    queryKey: ['link', volumeId, documentId, href],
+    queryFn: ({ signal }) => getJSON<ReaderLinkTarget>(`${documentPath(volumeId, documentId)}/link`, formEncode({ href }), signal),
+    staleTime: Infinity,
+    retry: retryServerFaults,
+  });
+}
 
 export function searchQuery(state: SearchState) {
   return queryOptions({

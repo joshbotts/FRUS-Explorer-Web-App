@@ -21,7 +21,18 @@ export function citationNodes(citation: string): ReactNode[] {
   return nodes;
 }
 
-export function CitePanel({ volumeId, documentId, onClose }: { volumeId: string; documentId: string; onClose: () => void }) {
+export function CitePanel({
+  volumeId,
+  documentId,
+  autoFocus,
+  onClose,
+}: {
+  volumeId: string;
+  documentId: string;
+  /** Whether opening it takes focus to it: when the reader opens it, not when a page loads with it open. */
+  autoFocus: boolean;
+  onClose: () => void;
+}) {
   const [style, setStyle] = useCitationStyle();
   const citation = useQuery(citationQuery(volumeId, documentId, style));
   const heading = useRef<HTMLHeadingElement>(null);
@@ -32,8 +43,11 @@ export function CitePanel({ volumeId, documentId, onClose }: { volumeId: string;
   const fallbackField = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => fallbackField.current?.select(), [current?.fallback]);
-  // Opening the rail takes focus to it: below 900 px it covers the text.
-  useEffect(() => heading.current?.focus({ preventScroll: true }), []);
+  // Opening the rail takes focus to it: below 900 px it covers the text. Only on opening.
+  const [focusOnOpen] = useState(autoFocus);
+  useEffect(() => {
+    if (focusOnOpen) heading.current?.focus({ preventScroll: true });
+  }, [focusOnOpen]);
 
   async function copyText(text: string) {
     try {
@@ -49,7 +63,18 @@ export function CitePanel({ volumeId, documentId, onClose }: { volumeId: string;
   // While another style loads, the last one stays on screen, but only its own style is copied.
   const loadingStyle = citation.isPlaceholderData;
   return (
-    <aside id="cite-panel" className="rail" aria-labelledby="cite-heading">
+    <aside
+      id="cite-panel"
+      className="rail"
+      aria-labelledby="cite-heading"
+      // Escape closes the rail, as Close does, and as it closes the app's sheets.
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.stopPropagation();
+          onClose();
+        }
+      }}
+    >
       <div className="rail-header">
         <h2 id="cite-heading" ref={heading} tabIndex={-1}>
           {copy.cite.title}

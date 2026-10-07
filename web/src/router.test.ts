@@ -26,8 +26,18 @@ describe('the router', () => {
     expect(router.state.location.searchStr).toBe('?keywords=treaty&offset=20');
   });
 
-  it('opens the rail only for a known value', async () => {
-    const router = await routerAt('/doc/frus1961-63v06/d1?rail=other');
+  it('opens the rail only for a known value, and lands only on a note’s id', async () => {
+    const router = await routerAt('/doc/frus1961-63v06/d1?rail=other&note=javascript:alert(1)');
     expect(searchOf(router).rail).toBeUndefined();
+    expect(searchOf(router).note).toBeUndefined();
+    const landing = await routerAt('/doc/frus1961-63v06/d16?note=fnote-x-d16fn2');
+    expect(searchOf(landing).note).toBe('fnote-x-d16fn2');
+  });
+
+  it('starts at Browse, whose catalogue keeps its checked fields', async () => {
+    const start = await routerAt('/');
+    expect(start.state.location.pathname).toBe('/browse');
+    const browse = await routerAt('/browse?q=Kennedy&indexed=maybe');
+    expect(searchOf(browse)).toMatchObject({ q: 'Kennedy', indexed: undefined, subseries: undefined });
   });
 });
