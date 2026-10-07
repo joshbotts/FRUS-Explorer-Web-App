@@ -2,7 +2,7 @@
 
 FRUS Explorer Light runs as one container on a Mac or a Linux host, serving a research database exported from FRUS Explorer on a Mac. This guide covers phase 1: one person on one machine. The server listens on this machine's 127.0.0.1 only, and has no sign-in.
 
-**What phase 1 offers so far:** the server imports an export, checks it and serves it, with a browser interface at http://localhost:8080. You can browse the catalogue and a volume's contents, search the index with the app's query language, and read a document, rendered from the TEI volumes. In the reader, links lead to other documents and their notes, people and terms open cards, and Cite copies the citation. Links to printed pages, and how many indexed documents mention a person, come in a later version.
+**What phase 1 offers so far:** the server imports an export, checks it and serves it, with a browser interface at http://localhost:8080. You can browse the catalogue and a volume's contents, search the index with the app's query language, and read a document, rendered from the TEI volumes. In the reader, links lead to other documents, their notes and the documents on printed pages; people and terms open cards; and Cite copies the citation.
 
 ## What you need
 
@@ -110,11 +110,10 @@ Open http://localhost:8080 in a browser.
 - **A result** opens the document in the reader, with **Previous** and **Next** for its neighbours in the volume, a text size, and **Open on history.state.gov**. **Appearance**, at the top, follows the system or stays light or dark.
 - **Links in a document** work as they do in the app:
   - a cross-reference opens the document it names, or the note in it, and **Back** returns to the document you were reading;
-  - a person's name opens a card with their entry from the volume's list of names, and a term opens its definition. **Done** or Escape closes the card;
+  - a person's name opens a card with their entry from the volume's list of names and, once an export is imported, how many indexed documents mention them; a term opens its definition. **Done** or Escape closes the card;
+  - a reference to a printed page, such as "p. 387", opens the document the index places on that page. For a volume this server has not indexed, the reader says so;
   - a reference that resolves nowhere opens an explanation;
   - a document in a volume this server does not have offers its page on history.state.gov.
-
-  References to printed pages, such as "page 387", open in a later version.
 - **Cite** opens the citation beside the document, in the History at State, Chicago or Turabian style. **Copy Citation** copies it as plain text, and **Copy URL** the document's address on history.state.gov. The browser allows copying at http://localhost but not at another machine's address over plain http, so the panel then selects the text for you to copy.
 
 The address of every screen, search and document can be bookmarked or shared with another browser on this machine. Everything works from the keyboard, starting with **Skip to content**, the first stop of the Tab key.

@@ -2,6 +2,102 @@
 
 One entry per session, newest first.
 
+## Session 9c: pin move to the AA reader and the kit's link parse, with page links and mention counts
+
+7 October 2026 · branch `claude/s9c-pin-move` · upstream [joshbotts/FRUS-Explorer#1578](https://github.com/joshbotts/FRUS-Explorer/pull/1578) (merged as `4fc04a60`) and [#1579](https://github.com/joshbotts/FRUS-Explorer/pull/1579) (merged as `f384d2d5`)
+
+S9b's two upstream pull requests merged on `v2` after the owner's Mac check. #1579 needed a merge of `v2` first, made in S9b's clone: both pull requests had added a session entry at the end of `Planning/DEVELOPMENT-PLAN.md`. The merge kept both, and its head was checked again:
+- the Mac build;
+- the full iOS unit run: 6,516 tests, failing only the 8 Keychain tests an unsigned build fails, with the same 17 tests and 2 suites skipped as on `v2`;
+- `swift test` from an empty build folder: 38 runs, 2,557 tests;
+- FRUSCoreKitTests on Linux: 894.
+
+This pull request moves the pin to `f384d2d5` (rule 5) and remakes the golden files from the owner's new export. It also brings what S9b deferred until then:
+- the kit's link parse in place of the server's mirror of the app's;
+- page links, through `PageRangeStore`;
+- the person card's count, through `PersonMentionStore`;
+- no axe allowance.
+
+The index version (65), the FTS generation (4) and the app's build (49) are unchanged, so the image, `compose.yaml` and the export contract are too.
+
+**How the session got there**
+
+- **A map first.** Two readers mapped:
+  - what the move makes stale in the records, the build and the golden files;
+  - the kit's two stores, the Mac's use of each, and fixture data to test them.
+
+  `Package.swift` needed no change: the folder the kit's tests compile picks up #1579's new suite. Two of their findings shaped the tests:
+  - **No fixture document has a page link within its own volume;** such links are only in the tables of contents and indexes, which the reader cannot open. So the parity test writes its own page links, every arabic page of each volume, in the serializer's form.
+  - **The synthetic export had the person and page tables but no rows.**
+- **A review before the pull request opened.** Four reviewers each had a skeptic check their findings. Four findings held, and all were fixed:
+  - **The count's number:** the card wrote it ungrouped ("4512"), but the app's localized string groups it ("4,512"). With the full corpus, counts in the thousands will appear.
+  - **A test gap:** no test sent a page link that names another indexed volume, so a lookup in the wrong volume would have passed. The parity test now sends Nicaragua's pages 9 and 15 from frus1961-63v06, whose own pages 9 and 15 hold other documents.
+  - **Two records:**
+    - SPEC had stopped naming the app code the server copies, the choice between a person's two counts;
+    - one of PLAN's S9 answers lacked its "Done in S9c".
+
+  The server's reviewer found nothing. The two refuted points: the person test's slack of four, since all 121 persons are counted; and a missing test that the stores open immutably, which the code shows and #1579's own tests prove.
+
+**The owner's export**
+
+Made on 7 October from a build of `f384d2d5` after Erase Everything…, and read here only through SQLite's immutable mode:
+- exported at 10:28:02 UTC, after #1579 merged at 10:15:33 UTC;
+- build 49, index version 65, FTS generation 4, with none of the owner's writing;
+- exactly the three fixtures, 139, 123 and 130 documents, every revision at index version 65;
+- 1,130 page ranges and 1,018 person mentions;
+- no log or journal beside it.
+
+`make-golden` copied it to a temporary folder and worked on the copy alone.
+
+**Delivered**
+
+- **The pin, `f384d2d5`.** FRUSCoreKitTests runs 894 tests in 119 suites on Linux, up from 884 in 118.
+- **The golden files,** remade by `scripts/make-golden --export`:
+  - all 392 rows' HTML, the expressions and the index summary's 36 gating digests and 7 checks are as before. #1578 changed the page's head, which the golden bodies leave out;
+  - only provenance and information fields changed. These include the export's stamp, its size, its AUTOINCREMENT counters, which grew by exactly one indexing, and `volumeOrder`;
+  - this export indexed frus1969-76ve09p1 before frus1961-63v06. So in q324 and q430, both "see", the 50th result and its exactly tied successor changed places. Check 3 passes that as a reorder within a Mac tie group, and now reports 480 identical and 2 reordered.
+- **The link route** reads each link with `FRUSURLScheme.readerLink(from:)`. The server's mirror of the app's parse, and its tests, are gone; #1579's tests cover the parse upstream.
+- **The served stack** opens `PageRangeStore(readingDatabaseAt:)` and `PersonMentionStore(readingDatabaseAt:)` beside the search stack, inside the same check that the path still names the served file.
+- **Page links:** a page link lands on the document the index's page ranges place on its page. Of several documents there, it takes the one its footnote names, as the app opens it. With no index, or for a volume or page the index lacks, the reader says why.
+- **The person card:** for a person in the volume's list, it shows "In Indexed Documents" and "Mentioned in N indexed documents", or "Not found in indexed documents", in the app's words. The count is the person's rollup across the corpus, else their documents in the volume, as `DocumentViewModel.loadPersonMentionCount` decides. That choice is app code, so it is recorded glue. Find all mentions is left out, as iOS leaves it out where Search cannot open: it needs a person filter in Search.
+- **The synthetic export,** in both generators, holds the page ranges and person rows a real export holds for its documents. Khrushchev has a rollup and Kennedy does not, so the two counts take different branches.
+- **The axe check** allows nothing: the kit's page meets WCAG 2.2 AA since #1578. The known list and the two checks that it was still needed are gone.
+- **Records:**
+  - `COORDINATION.md`: the pin, both merges, what the move did, and how download order affects exact ties;
+  - `PLAN.md` and its shared copy (rev 118): the S9c row, Mac check 5, the golden-files and risk rows, and the S9 answers marked done;
+  - `SPEC.md`: Reader rendering step 4, the link route and the compatibility contract;
+  - `INSTALL.md`: page links and the card's count;
+  - the prep note and the README.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** from a clean build of this package's own targets: all 1,723 tests pass, up from 1,711, with the one named skip, which CI's skip check allows.
+  - FRUSCoreKitTests: 894 in 119 suites.
+  - FRUSParityTests: 100, up from 98. Its new suite prints "page links through the API: 897 links, 885 placed on a document, every one as the app's store places it" and "person counts through the API: 121 of 121 persons in the reader's lists, each as the app counts them".
+  - FRUSLightServerTests: 71. The parse's suite is gone, and a test of the counts and of pages before an import is new.
+  - Against the new golden files the run printed:
+    - "check 2 passes: 36 digests and 7 checks are the Mac's";
+    - "check 3's results pass: 482 queries, 480 identical and 2 reordered only within Mac tie groups", and the same through the API;
+    - "check 4 through the page: 392 of 392 rows identical".
+- **The web app:**
+  - typecheck, lint, and 34 unit tests, the card's count among them;
+  - the build.
+- **The Compose smoke test with `--e2e`** passes on the local arm64 image. The suite runs six tests on Chromium:
+  - the done-when walk, whose Khrushchev card now shows "Mentioned in 2 indexed documents";
+  - a page link from d1's frame to page 2, which lands on d2, and "vol. XIV, p. 387" in d21, which says the volume is not indexed;
+  - the footnote landing and the volume off the server;
+  - axe, with nothing allowed anywhere: the reader's frame, light and dark, passes;
+  - S9a's two tests.
+
+**Notes**
+
+- **The fixtures cannot show which count branch ran:** every fixture person's rollup has one member, so the rollup's count equals the volume's. The server test sets the synthetic rollup's count apart to show that the rollup wins.
+- **The tools still cannot tell exports of `101e17d7` and `f384d2d5` apart.** Only `exported_at` and the procedure distinguish them.
+- **Download order** decides how exact ties at the 50th place fall in the golden results. Adding the volumes in the order frus1894Nicaragua, frus1961-63v06, frus1969-76ve09p1 keeps check 3's report steady across exports.
+- **Rule 4 glue left:** the choice between a person's two counts, and the `fnote-` prefix the kit's serializer gives a note's entry.
+
+**Next: S10.** The owner's real export imported into Compose, with the TEI folder mounted read-only; checks 3–5 pass on the real export, which is phase 1's exit. The phase-1 features' upstream pull request (the reader's scripts, facets, the inspector, date order, display titles, BibTeX and RIS) is timed so its pin move comes just before S10's export.
+
 ## Session 9b: Browse, the reader's links and cards, by keyboard and checked by axe
 
 7 October 2026 · branch `claude/s9b-browse-links` · upstream [joshbotts/FRUS-Explorer#1578](https://github.com/joshbotts/FRUS-Explorer/pull/1578) and [#1579](https://github.com/joshbotts/FRUS-Explorer/pull/1579), open
