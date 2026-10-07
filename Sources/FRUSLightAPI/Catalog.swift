@@ -51,24 +51,47 @@ public struct Volume: Codable, Equatable, Sendable {
     public var indexedDocuments: Int
     /// Whether its TEI is in the mounted folder, so the reader can render it.
     public var teiAvailable: Bool
-    /// Its front matter, chapters and back matter as the index holds them, on `/volumes/{v}`
-    /// alone, when the index holds the volume.
+    /// Its front matter, chapters and back matter, on `/volumes/{v}` alone: the index's when it holds
+    /// them, else the TEI's, parsed by the kit as the app parses a volume it has not indexed.
     public var structure: [Section]?
+    /// `index` or `tei`: where `structure` came from.
+    public var structureSource: String?
+    /// How many documents `structure` holds, and how many of those the index holds.
+    public var documentCount: Int?
+    public var indexedDocumentCount: Int?
 
     /// A section of a volume: its divisions, in source order, with the documents directly in it.
+    /// Its flags are the kit's `VolumeSection` properties.
     public struct Section: Codable, Equatable, Sendable {
         public var sectionId: String
         public var divType: String
         public var title: String
         public var documentIds: [String]
         public var subsections: [Section]
+        /// How many documents it holds, its subsections' included, and how many of those the index
+        /// holds.
+        public var documentCount: Int
+        public var indexedDocumentCount: Int
+        /// A front-matter kind, such as a preface or a list of names.
+        public var isFrontMatter: Bool
+        /// Prose with no documents, read as a whole, such as a preface.
+        public var canReadDirectly: Bool
+        /// Whether the reader can open it as a document, which only a parse of its TEI can say;
+        /// absent when the TEI is not mounted.
+        public var readable: Bool?
 
-        init(_ section: VolumeSection) {
+        init(_ section: VolumeSection, indexed: Set<String>, readerDocuments: Set<String>?) {
             sectionId = section.sectionId
             divType = section.divType
             title = section.title
             documentIds = section.documentIds
-            subsections = section.subsections.map(Section.init)
+            subsections = section.subsections.map { Section($0, indexed: indexed, readerDocuments: readerDocuments) }
+            let all = section.allDocumentIds
+            documentCount = all.count
+            indexedDocumentCount = all.filter(indexed.contains).count
+            isFrontMatter = section.isFrontMatterKind
+            canReadDirectly = section.canReadDirectly
+            readable = readerDocuments.map { $0.contains(section.sectionId) }
         }
     }
 
@@ -108,7 +131,8 @@ enum CatalogRoutes {
     static let defaultLimit = 20
 
     static func add(to router: Router<BasicRequestContext>, state: ServerState, provider: ServedIndexProvider,
-                    resources: ServerResources, volumesDirectory: URL) {
+                    resources: ServerResources, reader: ReaderService) {
+        let volumesDirectory = reader.volumesDirectory
         router.get("/api/v1/volumes") { request, _ -> VolumeList in
             let query = try FormQuery(request.uri.query)
             try query.refuseUnknown(["limit", "offset", "status", "subseries"])
@@ -130,11 +154,40 @@ enum CatalogRoutes {
             let volumeId = try context.parameters.require("volumeId")
             guard let entry = resources.volume(volumeId) else { throw APIProblem.volumeNotFound(volumeId) }
             var volume = Volume(entry, index: await state.index, volumesDirectory: volumesDirectory)
-            if volume.indexed, let served = try await provider.servedIfReady(),
-               let structure = try await served.pipeline.cachedVolumeStructure(forVolumeId: volumeId) {
-                volume.structure = structure.sections.map(Volume.Section.init)
+            if let contents = try await VolumeContents(volumeId, indexed: volume.indexed, provider: provider, reader: reader) {
+                let sections = contents.sections.map {
+                    Volume.Section($0, indexed: contents.indexed, readerDocuments: contents.readerDocuments)
+                }
+                volume.structure = sections
+                volume.structureSource = contents.source
+                volume.documentCount = sections.reduce(0) { $0 + $1.documentCount }
+                volume.indexedDocumentCount = sections.reduce(0) { $0 + $1.indexedDocumentCount }
             }
             return volume
+        }
+        router.get("/api/v1/volumes/:volumeId/sections/:sectionId") { request, context -> VolumeSectionPage in
+            try FormQuery(request.uri.query).refuseUnknown([])
+            let volumeId = try context.parameters.require("volumeId")
+            let sectionId = try context.parameters.require("sectionId")
+            guard let entry = resources.volume(volumeId) else { throw APIProblem.volumeNotFound(volumeId) }
+            let indexedVolume = (await state.index?.documentsByVolume[volumeId] ?? 0) > 0
+            guard let contents = try await VolumeContents(volumeId, indexed: indexedVolume, provider: provider, reader: reader),
+                  let (section, path) = VolumeContents.find(sectionId, in: contents.sections) else {
+                throw APIProblem(.notFound, code: "SECTION_NOT_FOUND",
+                                 detail: "\(volumeId) has no section \(sectionId) in its structure.")
+            }
+            let documents = section.documentIds.map { documentId -> SectionDocument in
+                if let indexed = contents.entries[documentId] {
+                    return SectionDocument(indexed, readable: contents.readerDocuments?.contains(documentId))
+                }
+                return SectionDocument(documentId: documentId, ast: contents.parsed?.documents[documentId],
+                                       structure: contents.sections, readable: contents.readerDocuments?.contains(documentId))
+            }
+            return VolumeSectionPage(
+                volumeId: volumeId, volumeTitle: entry.title,
+                section: Volume.Section(section, indexed: contents.indexed, readerDocuments: contents.readerDocuments),
+                path: path.map { .init(sectionId: $0.sectionId, title: $0.title) },
+                documents: documents, structureSource: contents.source)
         }
         router.get("/api/v1/volumes/:volumeId/documents") { request, context -> DocumentList in
             let query = try FormQuery(request.uri.query)
@@ -158,9 +211,31 @@ enum CatalogRoutes {
             let volumeId = try context.parameters.require("volumeId")
             let documentId = try context.parameters.require("documentId")
             guard resources.volume(volumeId) != nil else { throw APIProblem.volumeNotFound(volumeId) }
-            let served = try await provider.served()
+            let teiAvailable = ReaderService.teiFile(for: volumeId, in: volumesDirectory) != nil
+            // The parse the reader renders from: which documents it can open, and a document the
+            // index lacks. Nil without the TEI; TEI that will not parse is reported where it matters.
+            var parse: Result<ReaderService.ParsedVolume, any Error>?
+            if teiAvailable {
+                do { parse = .success(try await reader.volume(volumeId)) } catch { parse = .failure(error) }
+            }
+            let parsed = try? parse?.get()
+            /// A document the index cannot answer for, named from its TEI; else `problem`, or the
+            /// TEI's own when it will not parse.
+            func fromTEI(otherwise problem: any Error) throws -> DocumentDetail {
+                if let parse, case .failure(let error) = parse { throw error }
+                guard let parsed, let ast = parsed.documents[documentId] else { throw problem }
+                return DocumentDetail(teiOnly: ast, structure: parsed.structure, volumeId: volumeId)
+            }
+            let served: ServedIndex
+            do {
+                served = try await provider.served()
+            } catch {
+                // The reader works without an index.
+                return try fromTEI(otherwise: error)
+            }
             guard let entry = try await served.pipeline.document(forDocumentId: documentId, inVolume: volumeId) else {
-                throw APIProblem(.notFound, code: "DOCUMENT_NOT_FOUND", detail: "The index holds no document \(documentId) in \(volumeId).")
+                return try fromTEI(otherwise: APIProblem(.notFound, code: "DOCUMENT_NOT_FOUND",
+                                                         detail: "The index holds no document \(documentId) in \(volumeId)."))
             }
             let browse = try await VolumeBrowse(volumeId, served: served)
             let position = browse.sequence.firstIndex { $0.documentId == entry.documentId }
@@ -168,7 +243,8 @@ enum CatalogRoutes {
                 guard let position, browse.sequence.indices.contains(position + offset) else { return nil }
                 let other = browse.sequence[position + offset]
                 return DocumentDetail.Neighbour(documentId: other.documentId, header: other.header,
-                                                inIndex: browse.indexed.contains(other.documentId))
+                                                inIndex: browse.indexed.contains(other.documentId),
+                                                readable: parsed.map { $0.documents[other.documentId] != nil })
             }
             let date = try await served.pipeline.datesByDocumentKey([(volumeId: volumeId, documentId: entry.documentId)])
             let classification = try await served.pipeline.effectiveIsEditorialNote(volumeId: volumeId, documentId: entry.documentId)
@@ -176,11 +252,111 @@ enum CatalogRoutes {
             document.isEditorialNote = classification ?? entry.isEditorialNote
             return DocumentDetail(document: document,
                                   canonicalURL: FRUSCanonicalURL.string(volumeId: volumeId, documentId: entry.documentId),
-                                  previous: neighbour(-1), next: neighbour(1),
-                                  teiAvailable: ReaderService.teiFile(for: volumeId, in: volumesDirectory) != nil)
+                                  previous: neighbour(-1), next: neighbour(1), teiAvailable: teiAvailable)
         }
     }
 }
+
+/// What a volume's contents come from: the index's cached structure when it holds the volume, else
+/// the structure the kit parses from its TEI; with the index's entries for its documents, and the
+/// documents the reader can open, from the same parse the reader renders.
+struct VolumeContents {
+    let sections: [VolumeSection]
+    let source: String
+    /// The index's entries for the volume, by document id; empty when it holds none.
+    let entries: [String: DocumentBrowserEntry]
+    var indexed: Set<String> { Set(entries.keys) }
+    let parsed: ReaderService.ParsedVolume?
+    var readerDocuments: Set<String>? { parsed.map { Set($0.documents.keys) } }
+
+    /// Nil when neither the index nor the TEI gives the volume a structure. An index that cannot be
+    /// read, or TEI that will not parse when the index gives no structure, throws its problem; TEI
+    /// that will not parse beside the index's structure only leaves out which sections the reader
+    /// can open.
+    init?(_ volumeId: String, indexed: Bool, provider: ServedIndexProvider, reader: ReaderService) async throws {
+        let served = indexed ? try await provider.servedIfReady() : nil
+        var entries: [String: DocumentBrowserEntry] = [:]
+        for entry in try await served?.pipeline.documents(forVolume: volumeId) ?? [] where entries[entry.documentId] == nil {
+            entries[entry.documentId] = entry
+        }
+        let cached = try await served?.pipeline.cachedVolumeStructure(forVolumeId: volumeId)
+        let mounted = ReaderService.teiFile(for: volumeId, in: reader.volumesDirectory) != nil
+        let parsed: ReaderService.ParsedVolume?
+        if let cached, !cached.isEmpty {
+            parsed = mounted ? try? await reader.volume(volumeId) : nil
+            (sections, source) = (cached.sections, "index")
+        } else if mounted {
+            let volume = try await reader.volume(volumeId)
+            guard !volume.structure.isEmpty else { return nil }
+            parsed = volume
+            (sections, source) = (volume.structure, "tei")
+        } else {
+            return nil
+        }
+        self.entries = entries
+        self.parsed = parsed
+    }
+
+    /// A section anywhere in the tree, and the sections above it, outermost first.
+    static func find(_ sectionId: String, in sections: [VolumeSection],
+                     above: [VolumeSection] = []) -> (VolumeSection, [VolumeSection])? {
+        for section in sections {
+            if section.sectionId == sectionId { return (section, above) }
+            if let found = find(sectionId, in: section.subsections, above: above + [section]) { return found }
+        }
+        return nil
+    }
+}
+
+/// A section of a volume, with its documents in order and the sections above it.
+public struct VolumeSectionPage: Codable, Equatable, Sendable {
+    public struct Ancestor: Codable, Equatable, Sendable {
+        public var sectionId: String
+        public var title: String
+    }
+
+    public var volumeId: String
+    public var volumeTitle: String
+    public var section: Volume.Section
+    /// The sections above it, outermost first.
+    public var path: [Ancestor]
+    public var documents: [SectionDocument]
+    public var structureSource: String
+}
+
+/// A document in a section's list: the index's entry when it holds the document, else what the
+/// TEI's parse gives, named as the kit names a document by its number ("Document 3").
+public struct SectionDocument: Codable, Equatable, Sendable {
+    public var documentId: String
+    public var header: String
+    public var documentNumber: String?
+    public var dateline: String?
+    public var isEditorialNote: Bool
+    public var inIndex: Bool
+    /// Whether the reader can open it; absent when the TEI is not mounted.
+    public var readable: Bool?
+
+    init(_ entry: DocumentBrowserEntry, readable: Bool?) {
+        documentId = entry.documentId
+        header = entry.header
+        documentNumber = entry.documentNumber
+        dateline = entry.dateline
+        isEditorialNote = entry.isEditorialNote
+        inIndex = true
+        self.readable = readable
+    }
+
+    init(documentId: String, ast: FRUSDocumentAST?, structure: [VolumeSection], readable: Bool?) {
+        self.documentId = documentId
+        header = teiHeader(documentId: documentId, printed: ast?.printedNumber, structure: structure)
+        documentNumber = CitableDocumentNumber.resolve(printed: ast?.printedNumber, documentId: documentId)
+        isEditorialNote = ast?.isShapedAsEditorialNote ?? false
+        inIndex = false
+        self.readable = readable
+    }
+}
+
+extension VolumeSectionPage: ResponseEncodable {}
 
 /// A volume's reading order, from the index: its front matter, documents and back matter as
 /// `readingSequence(forVolume:)` walks its structure, and which of them the index holds.
@@ -207,6 +383,15 @@ public struct DocumentEntry: Codable, Equatable, Sendable {
     public var dateISO: String?
     public var isEditorialNote: Bool
     public var inIndex: Bool
+
+    init(documentId: String, volumeId: String, documentNumber: String?, header: String, isEditorialNote: Bool, inIndex: Bool) {
+        self.documentId = documentId
+        self.volumeId = volumeId
+        self.documentNumber = documentNumber
+        self.header = header
+        self.isEditorialNote = isEditorialNote
+        self.inIndex = inIndex
+    }
 
     init(_ entry: DocumentBrowserEntry, inIndex: Bool, dateISO: String?) {
         documentId = entry.documentId
@@ -238,6 +423,10 @@ public struct DocumentDetail: Codable, Equatable, Sendable {
         public var documentId: String
         public var header: String
         public var inIndex: Bool
+        /// Whether the reader can open it; absent when the TEI is not mounted. A front-matter list
+        /// such as the list of names is in the reading order, but the reader's parse does not make it
+        /// a document.
+        public var readable: Bool?
     }
 
     public var document: DocumentEntry
@@ -247,6 +436,31 @@ public struct DocumentDetail: Codable, Equatable, Sendable {
     public var previous: Neighbour?
     public var next: Neighbour?
     public var teiAvailable: Bool
+}
+
+/// How an entry the index does not hold is named from the TEI. A document with a number is named as
+/// the kit names one by its number ("Document 3"); a section the parse makes a document, such as a
+/// preface, by its title, as the kit's reading order names an entry the index lacks
+/// (`IndexingPipeline.mergeReadingSequence`); anything else by the kit's row label.
+func teiHeader(documentId: String, printed: String?, structure: [VolumeSection]) -> String {
+    if CitableDocumentNumber.resolve(printed: printed, documentId: documentId) == nil,
+       let (section, _) = VolumeContents.find(documentId, in: structure) {
+        return section.title
+    }
+    return CitableDocumentNumber.rowLabel(printed: printed, documentId: documentId)
+}
+
+extension DocumentDetail {
+    /// A document the index does not hold, or none is served, named from its TEI (`teiHeader`), with
+    /// no neighbours, since the reading order is the index's.
+    init(teiOnly ast: FRUSDocumentAST, structure: [VolumeSection], volumeId: String) {
+        let number = CitableDocumentNumber.resolve(printed: ast.printedNumber, documentId: ast.documentId)
+        document = DocumentEntry(documentId: ast.documentId, volumeId: volumeId, documentNumber: number,
+                                 header: teiHeader(documentId: ast.documentId, printed: ast.printedNumber, structure: structure),
+                                 isEditorialNote: ast.isShapedAsEditorialNote, inIndex: false)
+        canonicalURL = FRUSCanonicalURL.string(volumeId: volumeId, documentId: ast.documentId)
+        teiAvailable = true
+    }
 }
 
 extension DocumentList: ResponseEncodable {}

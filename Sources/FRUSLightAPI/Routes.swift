@@ -26,10 +26,11 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
         try FormQuery(request.uri.query).refuseUnknown([])
         return await state.status()
     }
-    CatalogRoutes.add(to: router, state: state, provider: provider, resources: resources, volumesDirectory: reader.volumesDirectory)
+    CatalogRoutes.add(to: router, state: state, provider: provider, resources: resources, reader: reader)
     SearchRoutes.add(to: router, provider: provider, resources: resources)
     ReaderRoutes.add(to: router, reader: reader, provider: provider, resources: resources)
     CitationRoutes.add(to: router, reader: reader, provider: provider, resources: resources)
+    ReaderLinkRoutes.add(to: router, state: state, reader: reader, resources: resources)
     // Last, so it wraps only the requests no route answers.
     if let webClient { router.add(middleware: WebClientMiddleware(webClient, logger: logger)) }
     return router
