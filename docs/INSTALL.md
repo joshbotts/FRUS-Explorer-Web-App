@@ -2,7 +2,7 @@
 
 FRUS Explorer Light runs as one container on a Mac or a Linux host, serving a research database exported from FRUS Explorer on a Mac. This guide covers phase 1: one person on one machine. The server listens on this machine's 127.0.0.1 only, and has no sign-in.
 
-**What phase 1 offers so far:** the server imports an export, checks it and serves it, with a browser interface at http://localhost:8080. It searches the index with the app's query language, opens a document in the reader, rendered from the TEI volumes, and copies its citation. Browsing the catalogue, following links inside a document and the cards for people and terms come next; until then the API lists the catalogue and each volume's documents (step 6).
+**What phase 1 offers so far:** the server imports an export, checks it and serves it, with a browser interface at http://localhost:8080. You can browse the catalogue and a volume's contents, search the index with the app's query language, and read a document, rendered from the TEI volumes. In the reader, links lead to other documents and their notes, people and terms open cards, and Cite copies the citation. Links to printed pages, and how many indexed documents mention a person, come in a later version.
 
 ## What you need
 
@@ -101,15 +101,23 @@ curl -s -w '  %{http_code}\n' http://localhost:8080/readyz
 
 The installed export is removed from the drop zone, so you can delete your own copy or keep it. Restarting the server copies nothing: the index stays in the volume.
 
-## 6. Search, read and cite
+## 6. Browse, search, read and cite
 
 Open http://localhost:8080 in a browser.
 
+- **Browse** lists the 553 volumes of the published catalogue. Type a title or volume number in the box above them to narrow the list, or choose a subseries, or show only the volumes this server indexes. A volume shows its sections: from the index when it holds them, otherwise read from the volume's TEI. A section lists its documents. The index names the documents it holds; the others are named by their number, or a preface or other prose section by its title, and the reader opens them from the TEI.
 - **Search** takes the app's query language: **Search syntax**, under the box, sums it up. The results come best first, with the exact count, and the filters narrow them by kind of document, date and front matter.
 - **A result** opens the document in the reader, with **Previous** and **Next** for its neighbours in the volume, a text size, and **Open on history.state.gov**. **Appearance**, at the top, follows the system or stays light or dark.
+- **Links in a document** work as they do in the app:
+  - a cross-reference opens the document it names, or the note in it, and **Back** returns to the document you were reading;
+  - a person's name opens a card with their entry from the volume's list of names, and a term opens its definition. **Done** or Escape closes the card;
+  - a reference that resolves nowhere opens an explanation;
+  - a document in a volume this server does not have offers its page on history.state.gov.
+
+  References to printed pages, such as "page 387", open in a later version.
 - **Cite** opens the citation beside the document, in the History at State, Chicago or Turabian style. **Copy Citation** copies it as plain text, and **Copy URL** the document's address on history.state.gov. The browser allows copying at http://localhost but not at another machine's address over plain http, so the panel then selects the text for you to copy.
 
-The address of every search and document can be bookmarked or shared with another browser on this machine.
+The address of every screen, search and document can be bookmarked or shared with another browser on this machine. Everything works from the keyboard, starting with **Skip to content**, the first stop of the Tab key.
 
 ### The API
 
@@ -131,6 +139,12 @@ curl -s 'http://localhost:8080/api/v1/volumes?subseries=1961-63&limit=3'
 curl -s 'http://localhost:8080/api/v1/volumes/frus1961-63v06/documents?limit=5'
 ```
 
+A volume's sections are in `structure` on `/api/v1/volumes/frus1961-63v06`, and `structureSource` says whether they came from the index or the TEI. A section lists its documents:
+
+```bash
+curl -s 'http://localhost:8080/api/v1/volumes/frus1961-63v06/sections/comp1'
+```
+
 A document's page, as the reader renders it from the TEI folder, in `colorScheme` `light` or `dark` and `textSize` `small`, `medium`, `large` or `extraLarge`:
 
 ```bash
@@ -145,7 +159,13 @@ A document's citation, in `style` `historyAtState` (the default), `chicago` or `
 curl -s 'http://localhost:8080/api/v1/volumes/frus1961-63v06/documents/d1/citation?style=chicago'
 ```
 
-An error names its cause in a `code`: `INDEX_NOT_READY` for a search before an import has finished, `EMPTY_QUERY` for a query with nothing left to search, `TEI_NOT_AVAILABLE` when the volume is not in your TEI folder, and `DOCUMENT_NOT_FOUND` or `VOLUME_NOT_FOUND` for an id the volume or the catalogue lacks.
+What a link in a document's page leads to, given the link as the page writes it:
+
+```bash
+curl -s -G 'http://localhost:8080/api/v1/volumes/frus1961-63v06/documents/d1/link' --data-urlencode 'href=frusexplorer://person/p_KNS2'
+```
+
+An error names its cause in a `code`: `INDEX_NOT_READY` for a search before an import has finished, `EMPTY_QUERY` for a query with nothing left to search, `TEI_NOT_AVAILABLE` when the volume is not in your TEI folder, and `DOCUMENT_NOT_FOUND`, `SECTION_NOT_FOUND` or `VOLUME_NOT_FOUND` for an id the volume or the catalogue lacks.
 
 ## If an import is refused
 

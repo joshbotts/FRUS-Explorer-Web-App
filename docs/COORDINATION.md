@@ -124,6 +124,20 @@ Web sessions wrote all of part 2.
 
 At the pull request's head, read-only answers equal read-write answers, score bits included, on Linux and on macOS; the full iOS unit run (6,505 tests) failed only the 8 Keychain tests an unsigned build fails; and `tools/mac-golden` wrote all 392 rows and 482 expressions byte for byte as at `f69b4a0a`. The pin move after it, S8b's, remade the golden files, the two from an export with the owner's new three-volume export from a build of `101e17d7`: the HTML, the expressions and the results changed only in provenance, and the index summary's 36 digests and 7 checks not at all.
 
+**#1578 and #1579 (session S9b), open for the owner's Mac check.** S9b's reader needed two things from the kit:
+
+- [joshbotts/FRUS-Explorer#1578](https://github.com/joshbotts/FRUS-Explorer/pull/1578) brings the reader's page to WCAG 2.2 AA:
+  - every text colour is at 4.5:1 or more against the page and against an editorial note's tint, in both palettes;
+  - person and cross-reference links are underlined, so colour is not the only thing that marks them.
+
+  The page changes on every platform, on the Mac's printed page too. The web edition's golden files hold the reader's body alone, and do not move.
+- [joshbotts/FRUS-Explorer#1579](https://github.com/joshbotts/FRUS-Explorer/pull/1579) moves the parse of the reader's links into the kit as `FRUSURLScheme.readerLink(from:)`, verbatim, and the app's handler dispatches what it reads. It also adds `PageRangeStore(readingDatabaseAt:)` and `PersonMentionStore(readingDatabaseAt:)`, immutable opens on #1575's pattern.
+
+Until the pin moves past them:
+- the web edition's axe check allows the kit's two known failures in the reader's frame;
+- its server parses links with a mirror of the app's handler;
+- a page link stops at its page, and the person card counts no mentions.
+
 ## 3. The architecture that protects coordination
 
 These structures let the two codebases share code without app sessions having to think about the web edition. Web sessions add and maintain them, in pull requests on the app's repository.
