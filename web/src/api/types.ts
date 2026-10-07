@@ -142,6 +142,8 @@ export interface ReaderLinkTarget {
   href: string;
   ref?: string;
   person?: { ref: string; name: string; description?: string; role?: string; eraText?: string };
+  /** For a person the volume's list has, how many indexed documents mention them; absent with no index. */
+  mentionCount?: number;
   term?: { ref: string; term: string; definition?: string };
   target?: string;
   destination?: {
@@ -153,6 +155,7 @@ export interface ReaderLinkTarget {
   };
   inPlace?: boolean;
   volume?: { title: string; teiAvailable: boolean; indexed: boolean };
+  /** For a page reference: the page and its volume; `destination` is the document placed on it, if any. */
   page?: number;
   pageVolumeId?: string;
   url?: string;

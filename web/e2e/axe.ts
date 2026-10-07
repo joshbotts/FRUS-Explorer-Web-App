@@ -7,20 +7,11 @@ import { expect } from './fixtures';
 const tags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
 
 /**
- * What the kit's reader page fails today, inside the frame only: its light palette's link, marker
- * and secondary colours are under 4.5:1, and its person and cross-reference links differ from the
- * text around them by colour alone. joshbotts/FRUS-Explorer#1578 fixes both; when the pin moves
- * past it, this list empties, and the suite's checks that each id is still needed fail until it does.
+ * Scans the page as it is: neither the app's own markup nor the kit's page in the reader's frame
+ * may violate a rule. The kit's page has met WCAG 2.2 AA since joshbotts/FRUS-Explorer#1578; until
+ * then its known failures were allowed in the frame.
  */
-export const kitKnown = new Set(['color-contrast', 'link-in-text-block']);
-
-export interface AxeOutcome {
-  /** The rule ids violated inside the reader's frame. */
-  frameViolations: Set<string>;
-}
-
-/** Scans the page as it is: none of the app's own markup may violate a rule, and the frame only the kit's known list. */
-export async function axeCheck(page: Page): Promise<AxeOutcome> {
+export async function axeCheck(page: Page): Promise<void> {
   const results = await new AxeBuilder({ page }).withTags(tags).analyze();
   // A node in the frame has a target path through it: the iframe's selector, then its own.
   const lines = (inFrame: boolean) =>
@@ -30,11 +21,7 @@ export async function axeCheck(page: Page): Promise<AxeOutcome> {
         .map((node) => `${violation.id} (${violation.impact}): ${node.target.join(' >>> ')}`),
     );
   expect(lines(false), 'violations in the app’s own markup').toEqual([]);
-  expect(lines(true).filter((line) => !kitKnown.has(line.split(' ')[0] ?? '')), 'violations in the reader’s frame').toEqual([]);
+  expect(lines(true), 'violations in the reader’s frame').toEqual([]);
   // A frame axe could not reach is reported as incomplete, not as a violation; none may be.
   expect(results.incomplete.filter((result) => result.id === 'frame-tested')).toEqual([]);
-  const frameViolations = new Set(
-    results.violations.filter((violation) => violation.nodes.some((node) => node.target.length > 1)).map((violation) => violation.id),
-  );
-  return { frameViolations };
 }

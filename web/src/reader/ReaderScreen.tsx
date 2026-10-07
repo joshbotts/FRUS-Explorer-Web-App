@@ -74,6 +74,34 @@ export function ReaderScreen() {
   const [focusRail, setFocusRail] = useState(false);
   const sheet = rail === 'cite' && narrow;
 
+  /** Opens a link's destination: a note of this document in place, else its document, if this server has it. */
+  function open(target: ReaderLinkTarget, destination: NonNullable<ReaderLinkTarget['destination']>) {
+    if (target.inPlace) {
+      // A note in this document is shown in place, as the app does: no navigation, so the frame
+      // keeps its history and Back still leaves the document.
+      setNotice(null);
+      if (destination.footnoteElementId) reveal(destination.footnoteElementId);
+    } else if (!target.volume) {
+      setNotice(copy.reader.linkUnknownVolume);
+    } else if (!target.volume.teiAvailable) {
+      setNotice(
+        <>
+          {copy.reader.linkNotOnServer(plainTitle(target.volume.title))}{' '}
+          <a href={destination.canonicalURL} target="_blank" rel="noopener noreferrer">
+            {copy.reader.openOnline}
+          </a>
+        </>,
+      );
+    } else {
+      // A link goes forward, so Back returns to the document it was in.
+      void navigate({
+        to: '/doc/$volumeId/$documentId',
+        params: { volumeId: destination.volumeId, documentId: destination.documentId },
+        search: { rail, note: destination.footnoteElementId },
+      });
+    }
+  }
+
   /** Acts on a link from the page, as the app does: the server says where it leads. */
   async function follow(href: string) {
     let target: ReaderLinkTarget;
@@ -93,37 +121,24 @@ export function ReaderScreen() {
         if (target.brokenReference) setCard(target);
         else say(copy.reader.linkBrokenUnknown);
         return;
-      case 'document': {
-        const destination = target.destination;
-        if (!destination) return;
-        if (target.inPlace) {
-          // A note in this document is shown in place, as the app does: no navigation, so the
-          // frame keeps its history and Back still leaves the document.
-          setNotice(null);
-          if (destination.footnoteElementId) reveal(destination.footnoteElementId);
-        } else if (!target.volume) {
-          say(copy.reader.linkUnknownVolume);
-        } else if (!target.volume.teiAvailable) {
-          say(
-            <>
-              {copy.reader.linkNotOnServer(plainTitle(target.volume.title))}{' '}
-              <a href={destination.canonicalURL} target="_blank" rel="noopener noreferrer">
-                {copy.reader.openOnline}
-              </a>
-            </>,
-          );
-        } else {
-          // A cross-reference goes forward, so Back returns to the document it was in.
-          void navigate({
-            to: '/doc/$volumeId/$documentId',
-            params: { volumeId: destination.volumeId, documentId: destination.documentId },
-            search: { rail, note: destination.footnoteElementId },
-          });
+      case 'page': {
+        // A page lands on the document the index places on it, as a cross-reference does.
+        if (target.destination) {
+          open(target, target.destination);
+          return;
         }
+        const page = target.page ?? 0;
+        say(
+          target.volume?.indexed
+            ? copy.reader.linkPageNotPlaced(page)
+            : target.volume
+              ? copy.reader.linkPageNotIndexed(page, plainTitle(target.volume.title))
+              : copy.reader.linkUnknownVolume,
+        );
         return;
       }
-      case 'page':
-        say(copy.reader.linkPageLater);
+      case 'document':
+        if (target.destination) open(target, target.destination);
         return;
       case 'external':
         say(

@@ -14,7 +14,7 @@
       "research_provenance.current_fts_schema_version" : "4",
       "research_provenance.current_index_version" : "65",
       "research_provenance.documentation" : "https://github.com/joshbotts/FRUS-Explorer/blob/v2/Docs/Agentic-Analysis-Guide.md",
-      "research_provenance.exported_at" : "2026-10-06T04:31:35Z",
+      "research_provenance.exported_at" : "2026-10-07T10:28:02Z",
       "research_provenance.installed_fts_schema_version" : "4",
       "research_provenance.installed_index_version" : "65",
       "research_provenance.my_writing_included" : "0",
@@ -27,9 +27,9 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "237d4bc64a06c358b0ef165084db2708ba5f082a532c8745fccee4c95b120115",
+    "sourceDigest" : "126e27361b007f8e0d15d077acf468d7898b2af7cf1b3b2649e5ae731e170425",
     "tool" : "tools/mac-golden results",
-    "upstreamCommit" : "101e17d7dbce3ab874d068629f9ef91fa71e8cf2"
+    "upstreamCommit" : "f384d2d5ec7f1fe3db236fa1040c93e8de1eb30e"
   },
   "queries" : [
     {
@@ -21814,7 +21814,7 @@
         "bfdfce1a2a2bb14b"
       ],
       "tieTail" : [
-        "frus1969-76ve09p1/d55"
+        "frus1961-63v06/d101"
       ],
       "tieTailScoreBits" : [
         "bfdfce1a2a2bb14b"
@@ -21869,7 +21869,7 @@
         "frus1961-63v06/d60",
         "frus1894Nicaragua/d91",
         "frus1894Nicaragua/d42",
-        "frus1961-63v06/d101"
+        "frus1969-76ve09p1/d55"
       ]
     },
     {
@@ -29348,7 +29348,7 @@
         "bfdfce1a2a2bb14b"
       ],
       "tieTail" : [
-        "frus1969-76ve09p1/d55"
+        "frus1961-63v06/d101"
       ],
       "tieTailScoreBits" : [
         "bfdfce1a2a2bb14b"
@@ -29403,7 +29403,7 @@
         "frus1961-63v06/d60",
         "frus1894Nicaragua/d91",
         "frus1894Nicaragua/d42",
-        "frus1961-63v06/d101"
+        "frus1969-76ve09p1/d55"
       ]
     },
     {

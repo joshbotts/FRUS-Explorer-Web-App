@@ -25,6 +25,19 @@ describe('LinkCard', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it('says how many indexed documents mention the person, as the app’s sheet does, and nothing without an index', () => {
+    const counted = (mentionCount?: number) => {
+      cleanup();
+      render(<LinkCard target={{ ...khrushchev, mentionCount }} onClose={() => {}} />);
+      return screen.getByRole('dialog', { name: 'Khrushchev, Nikita S.' }).textContent;
+    };
+    expect(counted(120)).toContain('In Indexed DocumentsMentioned in 120 indexed documents');
+    expect(counted(4512)).toContain('Mentioned in 4,512 indexed documents');
+    expect(counted(1)).toContain('Mentioned in 1 indexed document');
+    expect(counted(0)).toContain('Not found in indexed documents');
+    expect(counted(undefined)).not.toContain('In Indexed Documents');
+  });
+
   it('says so when the volume’s lists have no entry', () => {
     render(<LinkCard target={{ kind: 'person', href: 'frusexplorer://person/p_X', ref: 'p_X' }} onClose={() => {}} />);
     expect(screen.getByRole('dialog', { name: 'Person Information Unavailable' }).textContent).toContain(

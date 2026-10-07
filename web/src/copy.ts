@@ -2,7 +2,8 @@
 // with the app's. Where the Mac app labels the same control, this uses its wording: Copy URL from
 // its Cite popover, Copy Citation from the reader, Document type and its choices from the search
 // filters, Text Size from Settings; Browse's All Volumes, its filter's prompt, Partial, Planned and
-// Documents (n); the person, term and unresolved-reference sheets' titles, sentences and Done, and
+// Documents (n); the person, term and unresolved-reference sheets' titles, sentences and Done, the
+// person sheet's In Indexed Documents and its count, and
 // the titles of the app's alerts for a person or term it has no entry for, whose sentences, about
 // re-indexing on the Mac, are replaced. The rest, chiefly what only a server has (what it indexes,
 // which TEI it holds), are the web's own until check 10 settles them.
@@ -111,7 +112,9 @@ export const copy = {
     loading: 'Loading the document…',
     linkNotOnServer: (title: string) => `The linked document is in “${title}”, which isn’t on this server.`,
     linkUnknownVolume: 'The referenced volume isn’t part of this collection.',
-    linkPageLater: 'Page references open in a later version of FRUS Explorer Light.',
+    linkPageNotIndexed: (page: number, title: string) =>
+      `Page ${page} is in “${title}”, which this server hasn’t indexed, so it can’t say which document is on it.`,
+    linkPageNotPlaced: (page: number) => `This server’s index places no document on page ${page}.`,
     linkUnresolved: 'This reference has no destination that can be opened.',
     linkExternal: 'This link leads outside FRUS Explorer Light:',
     linkBrokenUnknown: 'This reference could not be resolved.',
@@ -133,6 +136,11 @@ export const copy = {
             : 'The document or section this reference cites no longer exists in the cited volume.',
     apparentDestination: 'Apparent destination',
     flagged: 'Flagged by FRUS Explorer’s corpus-wide cross-reference validation.',
+    inIndexedDocuments: 'In Indexed Documents',
+    /** As the app's sheet writes it, the number grouped as its localized string groups it. */
+    mentionedIn: (count: number) =>
+      `Mentioned in ${count.toLocaleString('en-US')} indexed ${count === 1 ? 'document' : 'documents'}`,
+    notMentioned: 'Not found in indexed documents',
   },
   cite: {
     title: 'Cite',

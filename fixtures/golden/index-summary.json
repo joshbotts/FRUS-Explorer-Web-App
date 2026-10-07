@@ -603,20 +603,20 @@
       },
       "volume_structures.json" : {
         "rows" : 3,
-        "sha256" : "09a2edddf85431255a009e8e26d75026d0291e4270cbfe8a1373584b259635d4",
+        "sha256" : "468b9edead1e45799dc3a19362298c6df276db50da47fa68d960d98f9ac57607",
         "sql" : "SELECT volume_id, structure_json FROM volume_structures ORDER BY volume_id",
         "volumes" : {
           "frus1894Nicaragua" : {
             "rows" : 1,
-            "sha256" : "d6d40fdfdbfaae7c752ee3d5d1f872e9676a2d911b64db09aada34a6d88bd8b3"
+            "sha256" : "5aa0a1b24ecd507710688b0981571391ae0ddf40750e79b3e13217f5b1169620"
           },
           "frus1961-63v06" : {
             "rows" : 1,
-            "sha256" : "c4e7fbe04c271e3692f2c448cfc5944316735cd92ad0928a85342d448567a6a6"
+            "sha256" : "8cac86e0c18e0a3409ae39ef38272108b290e30e311d81c9314ab6291be83fae"
           },
           "frus1969-76ve09p1" : {
             "rows" : 1,
-            "sha256" : "fe359495497993e016d0c931c76a2ba6af8e37b40ebef24ad0d3677243d8a40e"
+            "sha256" : "181f2ca38cf3df67f5c1969636e36cf7378a7a952c51a2aa18469b66f7e8bace"
           }
         }
       }
@@ -627,19 +627,19 @@
       "current_fts_schema_version" : "4",
       "current_index_version" : "65",
       "documentation" : "https://github.com/joshbotts/FRUS-Explorer/blob/v2/Docs/Agentic-Analysis-Guide.md",
-      "exported_at" : "2026-10-06T04:31:35Z",
+      "exported_at" : "2026-10-07T10:28:02Z",
       "installed_fts_schema_version" : "4",
       "installed_index_version" : "65",
       "my_writing_included" : "0",
       "semantic_provenance_digest" : "a726ca606bdf4d1984ba7cfda4d5605c2e9dc1a8320654a1b5742e06aa6e3a64"
     },
-    "fileBytes" : 5111808,
-    "freelistCount" : 7,
+    "fileBytes" : 5107712,
+    "freelistCount" : 5,
     "journalMode" : "delete",
     "notes" : [
 
     ],
-    "pageCount" : 1248,
+    "pageCount" : 1247,
     "pageSize" : 4096,
     "setup" : [
       "CREATE VIRTUAL TABLE temp.parity_frus_documents_row USING fts5vocab(main, frus_documents, row)",
@@ -650,15 +650,15 @@
       "CREATE VIRTUAL TABLE temp.parity_user_content_instance USING fts5vocab(main, user_content, instance)"
     ],
     "sqliteSequence" : {
-      "cross_references" : 371694,
-      "page_ranges" : 1533614,
-      "person_mentions" : 1224650
+      "cross_references" : 371902,
+      "page_ranges" : 1534744,
+      "person_mentions" : 1225668
     },
     "sqliteVersion" : "3.54.0",
     "timings" : {
       "cross_references" : 0.001,
       "cross_references.sequence" : 0,
-      "document_cache" : 0.005,
+      "document_cache" : 0.006,
       "document_cache.sequence" : 0,
       "document_dates" : 0.001,
       "document_dates.sequence" : 0,
@@ -668,17 +668,17 @@
       "document_sources.sequence" : 0,
       "document_subject_refs" : 0.001,
       "document_subject_volumes" : 0,
-      "document_subjects" : 0,
+      "document_subjects" : 0.001,
       "external_citations" : 0,
       "external_citations.sequence" : 0,
       "frus_documents.averages" : 0,
       "frus_documents.config" : 0,
       "frus_documents.docsize" : 0,
       "frus_documents.vocab_col" : 0.008,
-      "frus_documents.vocab_instance" : 0.433,
+      "frus_documents.vocab_instance" : 0.403,
       "frus_documents.vocab_row" : 0.012,
-      "integrity" : 0.031,
-      "page_ranges" : 0.001,
+      "integrity" : 0.028,
+      "page_ranges" : 0.002,
       "page_ranges.sequence" : 0.001,
       "person_cluster_candidate" : 0,
       "person_list_sources" : 0,
@@ -692,7 +692,7 @@
       "schema.export_only" : 0,
       "terms" : 0,
       "terms.sequence" : 0,
-      "total" : 0.516,
+      "total" : 0.49,
       "user_content.averages" : 0,
       "user_content.config" : 0,
       "user_content.docsize" : 0,
@@ -707,8 +707,8 @@
     },
     "volumeOrder" : [
       "frus1894Nicaragua",
-      "frus1961-63v06",
-      "frus1969-76ve09p1"
+      "frus1969-76ve09p1",
+      "frus1961-63v06"
     ]
   },
   "provenance" : {
@@ -724,7 +724,7 @@
       "research_provenance.current_fts_schema_version" : "4",
       "research_provenance.current_index_version" : "65",
       "research_provenance.documentation" : "https://github.com/joshbotts/FRUS-Explorer/blob/v2/Docs/Agentic-Analysis-Guide.md",
-      "research_provenance.exported_at" : "2026-10-06T04:31:35Z",
+      "research_provenance.exported_at" : "2026-10-07T10:28:02Z",
       "research_provenance.installed_fts_schema_version" : "4",
       "research_provenance.installed_index_version" : "65",
       "research_provenance.my_writing_included" : "0",
@@ -737,8 +737,8 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "237d4bc64a06c358b0ef165084db2708ba5f082a532c8745fccee4c95b120115",
+    "sourceDigest" : "126e27361b007f8e0d15d077acf468d7898b2af7cf1b3b2649e5ae731e170425",
     "tool" : "frus-parity summarize",
-    "upstreamCommit" : "101e17d7dbce3ab874d068629f9ef91fa71e8cf2"
+    "upstreamCommit" : "f384d2d5ec7f1fe3db236fa1040c93e8de1eb30e"
   }
 }
