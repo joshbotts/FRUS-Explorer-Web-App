@@ -31,6 +31,9 @@ public struct SyntheticExport: Sendable {
     public var containsUserTag = false
     /// Damages one b-tree page that no check before the integrity check reads.
     public var damagedPage = false
+    /// The count of Khrushchev's person rollup, which spans the corpus; by default the export's own
+    /// two documents that mention him, as a real three-volume export's rollup counts them.
+    public var rollupMentionCount = 2
 
     public static let documents: [(volume: String, id: String, header: String, body: String)] = [
         ("frus1961-63v06", "d1", "1. Telegram From the Embassy in the Soviet Union",
@@ -58,6 +61,21 @@ public struct SyntheticExport: Sendable {
                 [.text(doc.volume), .text(doc.id), .text(String(repeating: "0", count: 64)),
                  .text(String(repeating: "0", count: 16)), .integer(Int64(indexVersion))])
         }
+        // A page and a person for the reader's links, shaped as a real export's rows for the same
+        // documents: d1 and d2 begin pages 1 and 2 of frus1961-63v06, and both mention Khrushchev
+        // (p_KNS2), whose rollup counts his documents, and Kennedy (p_KJF2), who has no rollup here,
+        // so his count is his documents in the volume. scripts/synthetic-export writes the same rows.
+        try db.execute("""
+            INSERT INTO page_ranges (volume_id, document_id, section_id, page_number_type, page_number_int, page_number_raw, is_start)
+            VALUES ('frus1961-63v06', 'd1', 'd1', 'arabic', 1, '1', 1), ('frus1961-63v06', 'd2', 'd2', 'arabic', 2, '2', 1);
+            INSERT INTO person_mentions (volume_id, document_id, person_ref)
+            VALUES ('frus1961-63v06', 'd1', 'p_KNS2'), ('frus1961-63v06', 'd2', 'p_KNS2'),
+                   ('frus1961-63v06', 'd1', 'p_KJF2'), ('frus1961-63v06', 'd2', 'p_KJF2');
+            INSERT INTO person_rollup (rollup_id, namekey, canonical_name, description, mention_count, volume_count)
+            VALUES (1, 'khrushchev, nikita sergeyevich', 'Khrushchev, Nikita Sergeyevich',
+                    'Chairman of the Council of Ministers of the Soviet Union', \(rollupMentionCount), 1);
+            INSERT INTO person_rollup_member (volume_id, ref, rollup_id) VALUES ('frus1961-63v06', 'p_KNS2', 1);
+            """)
         if !stamped {
             // A .backup of the live index: the exporter adds the stamp and these views to its copy only.
             try db.execute("""

@@ -3,7 +3,9 @@
 #   scripts/synthetic-export <output.sqlite>
 # It has the schema of a real export (Tests/FRUSLightTestSupport/Fixtures/export-v65-schema.sql),
 # the index and FTS schema versions this build serves (Sources/FRUSLightCore/Compatibility.swift),
-# three documents and an export stamp without the owner's writing. Needs the sqlite3 command.
+# three documents, the page ranges and person mentions the reader's links read, and an export stamp
+# without the owner's writing: the rows Tests/FRUSLightTestSupport/SyntheticExport.swift writes.
+# Needs the sqlite3 command.
 set -euo pipefail
 
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
@@ -28,6 +30,15 @@ INSERT INTO document_cache (volume_id, document_id, header, body_text) VALUES
    'The canal concession and the Mosquito Reservation.');
 INSERT INTO document_revisions (volume_id, document_id, content_hash, body_hash, index_version)
   SELECT volume_id, document_id, printf('%064d', 0), printf('%016d', 0), $version FROM document_cache;
+INSERT INTO page_ranges (volume_id, document_id, section_id, page_number_type, page_number_int, page_number_raw, is_start)
+  VALUES ('frus1961-63v06', 'd1', 'd1', 'arabic', 1, '1', 1), ('frus1961-63v06', 'd2', 'd2', 'arabic', 2, '2', 1);
+INSERT INTO person_mentions (volume_id, document_id, person_ref)
+  VALUES ('frus1961-63v06', 'd1', 'p_KNS2'), ('frus1961-63v06', 'd2', 'p_KNS2'),
+         ('frus1961-63v06', 'd1', 'p_KJF2'), ('frus1961-63v06', 'd2', 'p_KJF2');
+INSERT INTO person_rollup (rollup_id, namekey, canonical_name, description, mention_count, volume_count)
+  VALUES (1, 'khrushchev, nikita sergeyevich', 'Khrushchev, Nikita Sergeyevich',
+          'Chairman of the Council of Ministers of the Soviet Union', 2, 1);
+INSERT INTO person_rollup_member (volume_id, ref, rollup_id) VALUES ('frus1961-63v06', 'p_KNS2', 1);
 INSERT INTO research_provenance (key, value) VALUES
   ('exported_at', strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
   ('my_writing_included', '0'),

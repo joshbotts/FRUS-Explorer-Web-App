@@ -30,7 +30,7 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     SearchRoutes.add(to: router, provider: provider, resources: resources)
     ReaderRoutes.add(to: router, reader: reader, provider: provider, resources: resources)
     CitationRoutes.add(to: router, reader: reader, provider: provider, resources: resources)
-    ReaderLinkRoutes.add(to: router, state: state, reader: reader, resources: resources)
+    ReaderLinkRoutes.add(to: router, state: state, provider: provider, reader: reader, resources: resources)
     // Last, so it wraps only the requests no route answers.
     if let webClient { router.add(middleware: WebClientMiddleware(webClient, logger: logger)) }
     return router

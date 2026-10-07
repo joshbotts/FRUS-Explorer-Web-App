@@ -31,30 +31,6 @@ private func formEncoded(_ fields: [String: String]) -> String {
     }.joined(separator: "&")
 }
 
-@Suite struct ReaderLinkParseTests {
-    /// The parse mirrors the app's dispatch: path parts decoded twice, a broken reference's target once.
-    @Test func linksParseAsTheAppParsesThem() {
-        #expect(ReaderLinkParse("frusexplorer://person/p_KNS2") == .person(ref: "p_KNS2"))
-        #expect(ReaderLinkParse("frusexplorer://person/frus1918Supp01v01%23p_LR1") == .person(ref: "frus1918Supp01v01#p_LR1"))
-        #expect(ReaderLinkParse("frusexplorer://gloss/t_USSR1") == .gloss(ref: "t_USSR1"))
-        #expect(ReaderLinkParse("frusexplorer://doc/%23d1") == .crossReference(target: "#d1", volumeId: nil, citing: PageCitationHint(queryItems: [])))
-        #expect(ReaderLinkParse("frusexplorer://doc/frus1961-63v05%23d28/frus1961-63v05")
-                == .crossReference(target: "frus1961-63v05#d28", volumeId: "frus1961-63v05", citing: PageCitationHint(queryItems: [])))
-        let hinted = ReaderLinkParse("frusexplorer://doc/%23pg_683?no=497&day=8-17-1888")
-        let items = [URLQueryItem(name: "no", value: "497"), URLQueryItem(name: "day", value: "8-17-1888")]
-        #expect(hinted == .crossReference(target: "#pg_683", volumeId: nil, citing: PageCitationHint(queryItems: items)))
-        #expect(PageCitationHint(queryItems: items) != nil)
-        // Twice for a person, once for a broken reference, as the app decodes them.
-        #expect(ReaderLinkParse("frusexplorer://person/a%2541") == .person(ref: "aA"))
-        #expect(ReaderLinkParse("frusexplorer://brokenref/%2541%23pg_700") == .brokenReference(target: "%41#pg_700"))
-        // A person or term link with no path names the empty ref, as the app reads it, which no entry has.
-        #expect(ReaderLinkParse("frusexplorer://person") == .person(ref: ""))
-        for refused in ["https://history.state.gov", "frusexplorer://figure/x.png", "frusexplorer://doc/", "frusexplorer://brokenref", "not a url"] {
-            #expect(ReaderLinkParse(refused) == nil, "\(refused)")
-        }
-    }
-}
-
 @Suite struct ReaderLinkRouteTests {
     @Test func aPersonOrATermLinkGivesTheVolumesEntry() async throws {
         let fixture = try await servingSyntheticExport(volumes: [v06])
@@ -72,6 +48,42 @@ private func formEncoded(_ fields: [String: String]) -> String {
             let ussr = try decode(ReaderLinkTarget.self, try await client.execute(uri: linkURI("frusexplorer://gloss/t_USSR1", in: "d3"), method: .get))
             #expect(ussr.kind == "gloss" && ussr.term?.term == "USSR")
             #expect(ussr.term?.definition?.split(whereSeparator: \.isWhitespace).joined(separator: " ") == "Union of Soviet Socialist Republics")
+        }
+    }
+
+    /// A person's count is their rollup's, across the corpus, else their documents in the volume,
+    /// as the app's card counts them; with no index served, there is none.
+    @Test func aPersonIsCountedAsTheAppCountsThem() async throws {
+        let fixture = try await servingSyntheticExport(volumes: [v06])
+        try await fixture.app.test(.router) { client in
+            func count(_ ref: String) async throws -> Int? {
+                try decode(ReaderLinkTarget.self, try await client.execute(uri: linkURI("frusexplorer://person/\(ref)"), method: .get)).mentionCount
+            }
+            // Khrushchev's rollup counts his two documents; Kennedy has no rollup, and two documents in v06.
+            let khrushchev = try await count("p_KNS2"), kennedy = try await count("p_KJF2")
+            #expect(khrushchev == 2 && kennedy == 2)
+            // A person of the volume's list whom no indexed document mentions, and one the list lacks.
+            let zorin = try await count("p_ZVA1"), nobody = try await count("p_NOBODY")
+            #expect(zorin == 0 && nobody == nil)
+        }
+        // A rollup spans the corpus, so its count wins over the volume's.
+        let rolled = try await ServerFixture(volumes: [v06])
+        var export = SyntheticExport()
+        export.rollupMentionCount = 120
+        try export.write(to: rolled.files.liveIndex)
+        await rolled.state.openExistingIndex(files: rolled.files)
+        try await rolled.app.test(.router) { client in
+            let khrushchev = try decode(ReaderLinkTarget.self, try await client.execute(uri: linkURI("frusexplorer://person/p_KNS2"), method: .get))
+            let kennedy = try decode(ReaderLinkTarget.self, try await client.execute(uri: linkURI("frusexplorer://person/p_KJF2"), method: .get))
+            #expect(khrushchev.mentionCount == 120 && kennedy.mentionCount == 2)
+        }
+        let before = try await ServerFixture(volumes: [v06])
+        try await before.app.test(.router) { client in
+            let khrushchev = try decode(ReaderLinkTarget.self, try await client.execute(uri: linkURI("frusexplorer://person/p_KNS2"), method: .get))
+            #expect(khrushchev.person?.name == "Khrushchev, Nikita S." && khrushchev.mentionCount == nil)
+            // Nor does a page land anywhere before an import.
+            let page = try decode(ReaderLinkTarget.self, try await client.execute(uri: linkURI("frusexplorer://doc/%23pg_1"), method: .get))
+            #expect(page.destination == nil && page.volume?.indexed == false)
         }
     }
 
@@ -99,10 +111,17 @@ private func formEncoded(_ fields: [String: String]) -> String {
             #expect(v05.destination?.volumeId == "frus1961-63v05" && v05.destination?.documentId == "d28")
             #expect(v05.volume?.teiAvailable == false && v05.volume?.indexed == false)
             #expect(v05.destination?.canonicalURL == "https://history.state.gov/historicaldocuments/frus1961-63v05/d28")
-            // A page waits for the kit's immutable page ranges.
+            // A page lands on the document the index's page ranges place there: d1 and d2 begin pages 1 and 2.
+            let page2 = try await resolve("frusexplorer://doc/%23pg_2", in: "d1")
+            #expect(page2.kind == "page" && page2.page == 2 && page2.pageVolumeId == v06 && page2.inPlace == false)
+            #expect(page2.destination?.documentId == "d2" && page2.destination?.footnoteAnchor == nil && page2.volume?.indexed == true)
+            #expect(try await resolve("frusexplorer://doc/%23pg_1", in: "d2").destination?.documentId == "d1")
+            // A page the index places nowhere, and a volume it does not hold, land nowhere.
+            let unplaced = try await resolve("frusexplorer://doc/%23pg_313", in: "d2")
+            #expect(unplaced.pageVolumeId == v06 && unplaced.destination == nil && unplaced.volume?.indexed == true)
             let page = try await resolve("frusexplorer://doc/frus1961-63v14%23pg_387/frus1961-63v14", in: "d21")
             #expect(page.kind == "page" && page.page == 387 && page.pageVolumeId == "frus1961-63v14" && page.destination == nil)
-            #expect(try await resolve("frusexplorer://doc/%23pg_313", in: "d2").pageVolumeId == v06)
+            #expect(page.volume?.indexed == false && page.volume?.teiAvailable == false)
             let external = try await resolve("frusexplorer://doc/https%3A%2F%2Fhistory.state.gov%2Fabout", in: "d1")
             #expect(external.kind == "external" && external.url == "https://history.state.gov/about")
             #expect(try await resolve("frusexplorer://doc/%23fn3", in: "d1").kind == "unresolved")
@@ -171,6 +190,12 @@ private func formEncoded(_ fields: [String: String]) -> String {
             // A person needs the volume's TEI, which the server does not have for v05.
             let unmounted = try await client.execute(uri: linkURI("frusexplorer://person/p_KNS2", volume: "frus1961-63v05"), method: .get)
             #expect(try problem(unmounted, .notFound).code == "TEI_NOT_AVAILABLE")
+            // The kit reads the link as the app does: a person's ref decoded twice, an empty one
+            // named as the empty ref, which no entry has.
+            let twice = try decode(ReaderLinkTarget.self, try await client.execute(uri: linkURI("frusexplorer://person/p_KNS%2532"), method: .get))
+            #expect(twice.ref == "p_KNS2" && twice.person?.name == "Khrushchev, Nikita S.")
+            let empty = try decode(ReaderLinkTarget.self, try await client.execute(uri: linkURI("frusexplorer://person"), method: .get))
+            #expect(empty.kind == "person" && empty.ref == "" && empty.person == nil)
             // A link far longer than any the kit writes is refused before it is parsed.
             let long = "frusexplorer://doc/" + String(repeating: "d1fn", count: 1_000) + "!"
             #expect(try problem(try await client.execute(uri: linkURI(long), method: .get), .badRequest).code == "INVALID_PARAMETER")

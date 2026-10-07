@@ -1,17 +1,23 @@
-// The kit's search and browse stack over the live index, opened read-only and immutable (upstream #1575).
+// The kit's stack over the live index, opened read-only and immutable: search and browse (upstream
+// #1575), and the page ranges and persons the reader's links need (upstream #1579).
 
 import FRUSCoreKit
 import FRUSLightCore
 import FTS5Store
 import Foundation
 
-/// The live index as the kit reads it: `FTS5Store(readingDatabaseAt:)`, the pipeline's read-only
-/// open and a `SearchService` over both, for one installed `CorpusIndex`. Nothing here writes to
-/// the file: every connection is `mode=ro&immutable=1`, as `CorpusIndex`'s own.
+/// The live index as the kit reads it, for one installed `CorpusIndex`: `FTS5Store(readingDatabaseAt:)`,
+/// the pipeline's read-only open and a `SearchService` over both, and the page-range and person
+/// stores' read-only opens. Nothing here writes to the file: every connection is
+/// `mode=ro&immutable=1`, as `CorpusIndex`'s own.
 public final class ServedIndex: Sendable {
     public let corpus: CorpusIndex
     public let pipeline: IndexingPipeline
     public let service: SearchService
+    /// Which document holds a printed page, for a page link.
+    public let pages: PageRangeStore
+    /// The persons' mentions and rollups, for a person card's count.
+    public let persons: PersonMentionStore
 
     /// Opens the stack, and refuses it unless the path still named the file `corpus` opened before
     /// the first open and after the last: an import renames its new file over the path before the
@@ -23,6 +29,8 @@ public final class ServedIndex: Sendable {
         pipeline = try IndexingPipeline(readingIndexAt: corpus.url, fts5Store: store,
                                         resources: resources.indexing, volumesDirectory: volumesDirectory)
         service = SearchService(fts5Store: store, pipeline: pipeline)
+        pages = try PageRangeStore(readingDatabaseAt: corpus.url)
+        persons = try PersonMentionStore(readingDatabaseAt: corpus.url)
         guard let expected = corpus.file, before == expected, FileIdentity(corpus.url) == expected else {
             throw APIProblem(.serviceUnavailable, code: "INDEX_NOT_READY",
                              detail: "A new index is being installed; ask again in a moment.")
