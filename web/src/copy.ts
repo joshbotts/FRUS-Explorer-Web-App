@@ -137,8 +137,9 @@ export const copy = {
     apparentDestination: 'Apparent destination',
     flagged: 'Flagged by FRUS Explorer’s corpus-wide cross-reference validation.',
     inIndexedDocuments: 'In Indexed Documents',
-    /** As the app writes it, with the number as it stands. */
-    mentionedIn: (count: number) => `Mentioned in ${count} indexed ${count === 1 ? 'document' : 'documents'}`,
+    /** As the app's sheet writes it, the number grouped as its localized string groups it. */
+    mentionedIn: (count: number) =>
+      `Mentioned in ${count.toLocaleString('en-US')} indexed ${count === 1 ? 'document' : 'documents'}`,
     notMentioned: 'Not found in indexed documents',
   },
   cite: {

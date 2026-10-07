@@ -32,6 +32,7 @@ describe('LinkCard', () => {
       return screen.getByRole('dialog', { name: 'Khrushchev, Nikita S.' }).textContent;
     };
     expect(counted(120)).toContain('In Indexed DocumentsMentioned in 120 indexed documents');
+    expect(counted(4512)).toContain('Mentioned in 4,512 indexed documents');
     expect(counted(1)).toContain('Mentioned in 1 indexed document');
     expect(counted(0)).toContain('Not found in indexed documents');
     expect(counted(undefined)).not.toContain('In Indexed Documents');

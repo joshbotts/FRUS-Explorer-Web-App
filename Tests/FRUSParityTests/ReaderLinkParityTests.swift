@@ -29,12 +29,13 @@ import Testing
         let store = try PageRangeStore(databaseURL: built.index.database)
         let index = try SQLiteConnection(built.copy.path, readOnly: true)
         defer { index.close() }
-        var cases: [(volume: String, href: String, expected: String?)] = []
+        // Each link is sent from `from`, and names a page of `volume`.
+        var cases: [(from: String, volume: String, href: String, expected: String?)] = []
         for volume in ParityFixtures.volumes {
             let last = Int(try index.scalar(
                 "SELECT MAX(page_number_int) FROM page_ranges WHERE volume_id = ? AND page_number_type = 'arabic'", [.text(volume)])?.integer ?? 0)
             for page in 0...(last + 1) {
-                cases.append((volume, "frusexplorer://doc/%23pg_\(page)", try await store.document(forPage: page, inVolume: volume, citing: nil)))
+                cases.append((volume, volume, "frusexplorer://doc/%23pg_\(page)", try await store.document(forPage: page, inVolume: volume, citing: nil)))
             }
         }
         // Footnote hints, in the serializer's form, where several documents begin on the page.
@@ -47,14 +48,23 @@ import Testing
             let items = URLComponents(string: "x:?\(hint.query)")?.queryItems ?? []
             let expected = try await store.document(forPage: hint.page, inVolume: hint.volume, citing: PageCitationHint(queryItems: items))
             #expect(expected == hint.named, "the app's store, \(hint.volume) page \(hint.page) with \(hint.query)")
-            cases.append((hint.volume, "frusexplorer://doc/%23pg_\(hint.page)?\(hint.query)", expected))
+            cases.append((hint.volume, hint.volume, "frusexplorer://doc/%23pg_\(hint.page)?\(hint.query)", expected))
+        }
+        // A page of another indexed volume, named as the serializer names it, from frus1961-63v06,
+        // whose own pages 9 and 15 hold other documents: the lookup is in the volume the link names.
+        for (page, query) in [(9, ""), (15, "?no=10&day=3-6")] {
+            let items = URLComponents(string: "x:\(query)")?.queryItems ?? []
+            let expected = try await store.document(forPage: page, inVolume: "frus1894Nicaragua", citing: PageCitationHint(queryItems: items))
+            let local = try await store.document(forPage: page, inVolume: "frus1961-63v06", citing: PageCitationHint(queryItems: items))
+            #expect(expected != nil && expected != local, "Nicaragua's page \(page) and v06's hold different documents")
+            cases.append(("frus1961-63v06", "frus1894Nicaragua", "frusexplorer://doc/frus1894Nicaragua%23pg_\(page)/frus1894Nicaragua\(query)", expected))
         }
         let pairs = cases
         let answers = try await ServedFixture.run { client, _ in
             var answers: [ReaderLinkTarget] = []
             for item in pairs {
                 answers.append(try ServedFixture.decode(ReaderLinkTarget.self,
-                                                        try await client.execute(uri: Self.uri(item.href, volume: item.volume), method: .get)))
+                                                        try await client.execute(uri: Self.uri(item.href, volume: item.from), method: .get)))
             }
             return answers
         }
