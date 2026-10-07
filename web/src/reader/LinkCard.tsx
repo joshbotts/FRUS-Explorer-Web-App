@@ -21,7 +21,21 @@ export function LinkCard({ target, onClose }: { target: ReaderLinkTarget; onClos
   let body: ReactNode;
   if (target.kind === 'person') {
     title = target.person?.name ?? copy.card.personUnavailable;
-    body = target.person ? target.person.description && <p>{target.person.description}</p> : <p>{copy.card.personUnavailableDetail}</p>;
+    const count = target.mentionCount;
+    body = target.person ? (
+      <>
+        {target.person.description && <p>{target.person.description}</p>}
+        {/* How many indexed documents mention them, as the app's sheet says it; not without an index. */}
+        {count !== undefined && (
+          <>
+            <h3>{copy.card.inIndexedDocuments}</h3>
+            <p>{count > 0 ? copy.card.mentionedIn(count) : copy.card.notMentioned}</p>
+          </>
+        )}
+      </>
+    ) : (
+      <p>{copy.card.personUnavailableDetail}</p>
+    );
   } else if (target.kind === 'gloss') {
     title = target.term?.term ?? copy.card.termUnavailable;
     body = target.term ? target.term.definition && <p>{target.term.definition}</p> : <p>{copy.card.termUnavailableDetail}</p>;

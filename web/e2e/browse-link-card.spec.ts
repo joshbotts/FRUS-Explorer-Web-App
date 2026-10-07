@@ -53,11 +53,7 @@ test('browses to a volume, opens a document, follows a link in it and opens a pe
   await expect(heading).toBeFocused();
   const frame = page.frameLocator('iframe.reader-frame');
   await expect(frame.getByText(d2Text)).toBeVisible();
-  const reader = await axeCheck(page);
-  // The kit's light palette is still under 4.5:1 here; with the dark reader's check in the third
-  // test, each of axe.ts's known ids is shown to be still needed. When a pin move fixes one, both
-  // the id and its check go.
-  expect([...reader.frameViolations]).toEqual(['color-contrast']);
+  await axeCheck(page);
 
   // Follow the link: Enter on it in the frame, and the reader goes forward to d1.
   await tabTo(page, frame.getByRole('link', { name: 'Document 1' }));
@@ -74,6 +70,9 @@ test('browses to a volume, opens a document, follows a link in it and opens a pe
   const card = page.getByRole('dialog', { name: khrushchev.name });
   await expect(card).toBeVisible();
   await expect(card).toContainText(khrushchev.description);
+  // The synthetic export's rollup counts Khrushchev's two documents.
+  await expect(card.getByRole('heading', { name: 'In Indexed Documents' })).toBeVisible();
+  await expect(card).toContainText('Mentioned in 2 indexed documents');
   await expect(card.getByRole('heading', { name: khrushchev.name })).toBeFocused();
   await axeCheck(page);
 
@@ -90,6 +89,25 @@ test('browses to a volume, opens a document, follows a link in it and opens a pe
   await expect(frame.getByText(d2Text)).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/browse\/frus1961-63v06\/comp1$/);
+});
+
+test('a page link goes forward to the document on its page, and one this server cannot place says why', async ({ page }) => {
+  // No fixture document links a page of its own volume, so the frame posts the link the kit writes
+  // for one, as its host script posts a link: page 2 of frus1961-63v06, which d2 begins.
+  await page.goto('/doc/frus1961-63v06/d1');
+  await expect(page.frameLocator('iframe.reader-frame').getByText(d1Text)).toBeVisible();
+  const reader = page.frames().find((frame) => frame.url().includes('/documents/d1/html'));
+  await reader!.evaluate(() =>
+    window.parent.postMessage({ source: 'frus-reader', kind: 'link', detail: { href: 'frusexplorer://doc/%23pg_2' } }, '*'),
+  );
+  await expect(page).toHaveURL(/\/doc\/frus1961-63v06\/d2$/);
+  await expect(page.frameLocator('iframe.reader-frame').getByText(d2Text)).toBeVisible();
+
+  // "vol. XIV, p. 387" in d21: a volume this server has not indexed.
+  await page.goto('/doc/frus1961-63v06/d21');
+  await page.frameLocator('iframe.reader-frame').getByRole('link', { name: 'p. 387' }).first().click();
+  await expect(page.getByRole('status').filter({ hasText: 'Page 387 is in' })).toContainText('which this server hasn’t indexed');
+  await expect(page).toHaveURL(/\/doc\/frus1961-63v06\/d21$/);
 });
 
 test('a note in another document lands in its list of footnotes, and a volume not on the server says so', async ({ page }) => {
@@ -113,7 +131,7 @@ test('a note in another document lands in its list of footnotes, and a volume no
   await expect(page).toHaveURL(/\/doc\/frus1961-63v06\/d7$/);
 });
 
-test('the app’s own markup passes axe on Search, the reader, Cite, its narrow sheet and a card, and on Browse and the reader in dark', async ({ page }) => {
+test('nothing on the page fails axe, the reader’s frame included: Search, the reader, Cite, its narrow sheet and a card, and Browse and the reader in dark', async ({ page }) => {
   await page.goto('/search?keywords=treaties');
   await expect(page.getByRole('list', { name: 'Results' }).getByRole('listitem')).toHaveCount(2);
   await axeCheck(page);
@@ -137,9 +155,7 @@ test('the app’s own markup passes axe on Search, the reader, Cite, its narrow 
   await page.goto('/doc/frus1961-63v06/d1');
   await expect(page.locator('iframe.reader-frame')).toHaveAttribute('src', /colorScheme=dark/);
   await expect(page.frameLocator('iframe.reader-frame').getByText(d1Text)).toBeVisible();
-  // In dark the kit's links pass 4.5:1 but differ from the text around them by colour alone.
-  const dark = await axeCheck(page);
-  expect([...dark.frameViolations]).toEqual(['link-in-text-block']);
+  await axeCheck(page);
   const card = page.getByRole('dialog', { name: khrushchev.name });
   await page.frameLocator('iframe.reader-frame').locator('a[href="frusexplorer://person/p_KNS2"]').click();
   await expect(card).toBeVisible();
