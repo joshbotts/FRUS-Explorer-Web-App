@@ -57,6 +57,55 @@ export interface Volume {
   indexed: boolean;
   indexedDocuments: number;
   teiAvailable: boolean;
+  /** On /volumes/{v} alone: its sections, from the index or, failing that, the TEI. */
+  structure?: Section[];
+  structureSource?: 'index' | 'tei';
+  documentCount?: number;
+  indexedDocumentCount?: number;
+}
+
+/** A section of a volume, with the kit's flags for it. */
+export interface Section {
+  sectionId: string;
+  divType: string;
+  title: string;
+  documentIds: string[];
+  subsections: Section[];
+  documentCount: number;
+  indexedDocumentCount: number;
+  isFrontMatter: boolean;
+  canReadDirectly: boolean;
+  /** Whether the reader can open it as a document; absent without the TEI. */
+  readable?: boolean;
+}
+
+/** A document in a section's list, from the index or, failing that, the TEI. */
+export interface SectionDocument {
+  documentId: string;
+  header: string;
+  documentNumber?: string;
+  dateline?: string;
+  isEditorialNote: boolean;
+  inIndex: boolean;
+  readable?: boolean;
+}
+
+export interface VolumeSectionPage {
+  volumeId: string;
+  volumeTitle: string;
+  section: Section;
+  /** The sections above it, outermost first. */
+  path: { sectionId: string; title: string }[];
+  documents: SectionDocument[];
+  structureSource: 'index' | 'tei';
+}
+
+export interface DocumentList {
+  total: number;
+  limit: number;
+  offset: number;
+  items: DocumentEntry[];
+  coverage: Coverage;
 }
 
 export interface VolumeList {
@@ -83,6 +132,31 @@ export interface Neighbour {
   documentId: string;
   header: string;
   inIndex: boolean;
+  /** Whether the reader can open it; absent without the TEI. */
+  readable?: boolean;
+}
+
+/** What a link in the reader's page leads to (GET …/documents/{d}/link). */
+export interface ReaderLinkTarget {
+  kind: 'person' | 'gloss' | 'document' | 'page' | 'external' | 'unresolved' | 'brokenReference';
+  href: string;
+  ref?: string;
+  person?: { ref: string; name: string; description?: string; role?: string; eraText?: string };
+  term?: { ref: string; term: string; definition?: string };
+  target?: string;
+  destination?: {
+    volumeId: string;
+    documentId: string;
+    footnoteAnchor?: string;
+    footnoteElementId?: string;
+    canonicalURL: string;
+  };
+  inPlace?: boolean;
+  volume?: { title: string; teiAvailable: boolean; indexed: boolean };
+  page?: number;
+  pageVolumeId?: string;
+  url?: string;
+  brokenReference?: { target: string; reason: string; resolvedVolume?: string; resolvedAnchor?: string };
 }
 
 export interface DocumentDetail {

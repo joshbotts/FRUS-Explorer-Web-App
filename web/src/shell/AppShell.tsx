@@ -6,6 +6,7 @@ import { createContext, useContext, useEffect, useRef } from 'react';
 import { readinessQuery } from '../api/endpoints';
 import { copy } from '../copy';
 import { type Appearance, useAppearance, useResolvedScheme } from '../settings/preferences';
+import { requestHeadingFocus } from './headingFocus';
 
 const SchemeContext = createContext<'light' | 'dark'>('light');
 
@@ -18,11 +19,12 @@ export function AppShell() {
   const router = useRouter();
 
   // A new screen takes focus at its heading, so a screen reader announces where it arrived. The
-  // router says when the new screen has rendered; a new search on the same screen keeps its focus.
+  // router says when the new screen has rendered; a new search on the same screen keeps its focus,
+  // and a page just loaded starts at its top, where Skip to content is the first stop.
   useEffect(
     () =>
       router.subscribe('onRendered', (event) => {
-        if (event.pathChanged) document.querySelector<HTMLElement>('main h1')?.focus({ preventScroll: true });
+        if (event.pathChanged && event.fromLocation) requestHeadingFocus();
       }),
     [router],
   );
@@ -37,6 +39,9 @@ export function AppShell() {
           {copy.app.name}
         </Link>
         <nav aria-label={copy.app.navigation}>
+          <Link to="/browse" activeProps={{ 'aria-current': 'page' }}>
+            {copy.app.browse}
+          </Link>
           <Link to="/search" activeProps={{ 'aria-current': 'page' }}>
             {copy.app.search}
           </Link>
@@ -68,10 +73,13 @@ function ReadinessBanner() {
   const ready = readiness.data?.ready;
   const wasReady = useRef(ready);
 
-  // When an index becomes ready, the searches and citations asked before it are asked again.
+  // When an index becomes ready, what was asked before it is asked again: searches, citations,
+  // documents, and what Browse shows of what the server indexes.
   useEffect(() => {
     if (ready && wasReady.current === false) {
-      for (const key of ['search', 'citation', 'document']) void queryClient.invalidateQueries({ queryKey: [key] });
+      for (const key of ['search', 'citation', 'document', 'volumes', 'volume', 'section', 'readingOrder']) {
+        void queryClient.invalidateQueries({ queryKey: [key] });
+      }
     }
     wasReady.current = ready;
   }, [ready, queryClient]);

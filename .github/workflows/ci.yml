@@ -52,6 +52,15 @@ jobs:
             swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Package.resolved', 'Package.swift') }}-
             swiftpm-${{ runner.os }}-${{ runner.arch }}-
 
+      # The cache comes from an earlier build, and an incremental build over it can keep a stale
+      # object. In S9b, Swift 6.4's cross-module incremental build recompiled no file of
+      # FRUSParityTests after FRUSLightAPI's Volume gained stored properties, and the test crashed
+      # copying a Volume with the old layout. So this package's own targets, the kits compiled from
+      # the submodule among them, build clean; the dependencies, which change only with
+      # Package.resolved and so with the cache's key, stay cached.
+      - name: Build this package's own targets clean
+        run: rm -rf .build/linux/out/Intermediates.noindex/FRUSLight.build
+
       # Test.cancel is Swift Testing's runtime skip, and the Test step cannot always see it: a
       # cancelled case of a parameterized test leaves no line in the log, and its test is reported as
       # passed. So no target this package builds may call it. A Linux-only skip uses a trait,

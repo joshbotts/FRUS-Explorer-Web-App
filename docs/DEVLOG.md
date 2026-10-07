@@ -2,6 +2,193 @@
 
 One entry per session, newest first.
 
+## Session 9b: Browse, the reader's links and cards, by keyboard and checked by axe
+
+7 October 2026 · branch `claude/s9b-browse-links` · upstream [joshbotts/FRUS-Explorer#1578](https://github.com/joshbotts/FRUS-Explorer/pull/1578) and [#1579](https://github.com/joshbotts/FRUS-Explorer/pull/1579), open
+
+S9's second pull request completes the phase-1 SPA. It adds Browse, the reader's links and their cards, a keyboard path through all of it, and an axe check in the browser suite. The pin stays at `101e17d7`. The session opened two upstream pull requests, which the owner checks on the Mac and merges; nothing here depends on them.
+
+**The owner's decisions, 6 October** (PLAN, "Answered on 6 October, for S9")
+
+- **Axe and the kit's palette:** the app's own markup may have no violations. Inside the reader's frame only the kit's known `color-contrast` and `link-in-text-block` are allowed, until the upstream palette pull request lands; a ratchet then fails the check.
+- **Links:** resolved on the server by kit code, after a parse of the link that mirrors the app's dispatcher, with an upstream pull request to move the parse into the kit.
+- **Page links and mention counts:** deferred until the kit's two index stores open immutably, in the same upstream pull request.
+- **Browse:** the kit's alone. The app's arrangements, front-matter split and document counts wait for an upstream move.
+
+**How the session got there**
+
+- **A map first.** Five readers mapped:
+  - the Mac's link handling and cards;
+  - the Mac's Browse;
+  - the server's pieces and the draft API;
+  - axe and the keyboard path;
+  - the fixtures.
+
+  They found the four decisions above, and the facts the session built on:
+  - every link decision is public kit API, and only the parse of the URL is app code;
+  - the kit's light palette fails AA in the frame: person links 3.67:1, cross-references and footnote markers 4.02:1, datelines 3.98:1;
+  - no fixture volume has a broken reference;
+  - v06's d2 names d1 in a footnote, and d1's heading names Khrushchev.
+
+  The server tests built from these predictions passed on their first run, the persons' and terms' strings included.
+- **The browser suite caught two of the session's own mistakes:**
+  - the shell moved focus to the heading on a page load too, so Skip to content was no longer the first Tab stop;
+  - the narrow sheet's `inert` covered the reader's heading, so axe found no `<h1>`.
+
+  Both are fixed.
+- **A stale object in the incremental build.** The full Swift run crashed in FRUSParityTests while copying a `Volume` to encode it. The bad address was the ASCII of "https:/". The test file's object was from S9a: Swift 6.4's cross-module incremental build had recompiled none of the target's files after `Volume` gained stored properties. Rebuilding this package's own targets clean fixed it, and every test passed.
+  - CI restores its build from an earlier run, so its swift job now deletes `.build/linux/out/Intermediates.noindex/FRUSLight.build` after the restore. That folder holds only this package's own targets; the dependencies stay cached.
+  - `CLAUDE.md`'s building notes say the same for sessions.
+- **A review before the pull request opened.** Five reviewers each had a skeptic check their findings. 17 of 28 held, and all were fixed:
+  - **The frame's history.** Changing the frame's address added entries to the history inside it. After following a link to a page the browser had cached, Back moved the frame to the previous document while the heading and the Cite rail stayed on the current one, so Copy Citation would have cited the wrong document. Each page now loads in a new frame, and a note in the same document is revealed by the host script without navigating. The suite now checks Back's text and that a second Back leaves the reader.
+  - **A long link:** an `href` of tens of kilobytes could keep a CPU busy for minutes in the kit's footnote pattern. Links over 2,048 bytes are refused before any parse.
+  - **Hidden failures:** Browse's routes took TEI that would not parse for a volume without contents, and an index that could not be read for one that holds nothing. Both now report their problem.
+  - **Names:** a document the index lacks was named by its raw id when it had no number ("intro1"). A prose section is now named by its title, as the kit's reading order names it.
+  - **Focus:**
+    - a new screen's heading took focus while it still held an id, so a screen reader announced "comp1". The heading now takes focus once it has its title, seeded from what Browse has already read;
+    - a note landed on was out of reach of the keyboard. The note now takes focus;
+    - a window narrowing below 900 px with the rail open dropped focus to nowhere. Focus now goes to the sheet;
+    - a page loaded with Cite open put focus on Cite. Cite now takes focus only when the reader opens it.
+  - **State:**
+    - a card left open came back, unasked, after Back and Forward. A card or notice now clears with the document;
+    - the catalogue's filter could drift from the URL after the header's Browse link or Back. It now follows the URL when anything else changes it.
+  - **Presentation:**
+    - document lists numbered rows whose headers already carry their numbers;
+    - badges ran into the text before them for screen readers and braille.
+  - **Tests:**
+    - nothing showed the index's structure winning over the TEI's. The parity test now checks `structureSource` and the section ids against the index's;
+    - the skip link was never activated in the suite;
+    - the ratchet checked only `color-contrast`, and now checks both known ids;
+    - the axe test's title claimed more than it covered. It now also covers Browse and a card in dark mode.
+
+  The eleven refuted points include:
+  - the nil-volume fallback and the in-place rule, which follow from the kit's own `CrossRefDestination`;
+  - a full parse behind the volume page, which `readable` needs;
+  - the note pattern's narrowness, which no footnote id in the corpus exceeds;
+  - the count's live region, which speaks only when the count changes.
+
+**The upstream pull requests**
+
+Each was built in its own clone at a real path, reviewed by a skeptic, and fixed before it opened. Their descriptions hold the Mac check's commands and results.
+
+- **[#1578](https://github.com/joshbotts/FRUS-Explorer/pull/1578): the reader's page meets WCAG 2.2 AA contrast and marks its links by more than colour.** Branch `claude/reader-aa-palette`, two commits.
+  - Light accent `rgb(0,102,204)`, light and dark person names `rgb(0,121,107)` and `rgb(0,179,161)`, light secondary 60% black, and dark accent `rgb(64,156,255)`. Every text colour is at 4.5:1 or more on the page and on the editorial tint.
+  - Person and cross-reference links have a quiet underline.
+  - `ReaderPageTests`:
+    - re-takes the eight head pins. Each head grew by exactly 519 bytes, and with the old values put back they hash to #1575's pins;
+    - adds the WCAG arithmetic, a check of every text colour in both palettes, and the underline.
+  - At its head:
+    - `swift test`: 2,550 tests, all passed;
+    - FRUSCoreKitTests: 887 on macOS and on Linux;
+    - the Mac build, with the usual 5 warning lines;
+    - the full iOS unit run, 6,508 tests, failing only the 8 Keychain tests of an unsigned build, plus a timing flake that `v2` shows too.
+  - The owner's items are the colour choice and whether underlines belong on paper; the Mac's File ▸ Print draws the reader's page.
+- **[#1579](https://github.com/joshbotts/FRUS-Explorer/pull/1579): the kit reads the reader's links, and the page-range and person stores open immutable.** Branch `claude/reader-link-parse-immutable-stores`, five commits, each of which passes the unit target on its own.
+  - `FRUSURLScheme.readerLink(from:)` and `ReaderLink` are the app's dispatcher's parse, moved verbatim, and `dispatch(url:)` now switches on it.
+  - `PageRangeStore(readingDatabaseAt:)` and `PersonMentionStore(readingDatabaseAt:)` open `FTS5Store.immutableURI(for:)`.
+  - At its head:
+    - FRUSCoreKitTests: 891 on macOS and on Linux;
+    - `swift test`: 2,554 tests;
+    - the full iOS unit run: 6,513 tests, failing only the 8 Keychain tests;
+    - the symbol diff: 10 removed and 51 added, each named.
+  - It reads a `person` or `gloss` link with no path as the empty ref, as the app always has. The server's parse here now does the same.
+
+When both merge, a pin move:
+- switches the server to `readerLink(from:)`;
+- opens the two stores immutably for page links and mention counts;
+- empties the axe list and its two checks.
+
+**Delivered**
+
+- **The reader's links:** `GET /api/v1/volumes/{v}/documents/{d}/link?href=` (`ReaderLinks.swift`).
+  - `ReaderLinkParse` mirrors `FRUSURLSchemeHandler.dispatch(url:)`. A path's parts are decoded twice, a broken reference's target once, and a link's own volume is passed to `FRUSURLScheme.resolveCrossRefTarget`, as the app does.
+  - A person or term comes from the reader's lookups, the parse the reader renders with. A broken reference comes from `BrokenRefsIndex.degradableInfo`.
+  - A cross-reference gives its destination; a footnote also gives the note's entry id, `fnote-` and `FRUSRenderNode.footnoteDOMKey`. It says `inPlace` for a note of the same document, and what the server holds of the destination's volume, with its history.state.gov URL.
+  - A page reference names its page and volume, and stops there.
+  - An `href` over 2,048 bytes is refused before it is parsed.
+- **Browse on the server:**
+  - `/volumes/{v}` gives `structure`: the index's cached structure, else the kit's parse of the mounted TEI, with `structureSource`. Each section has the kit's flags, its document count and how many the index holds, and `readable` (the reader's parse makes it a document).
+  - `/volumes/{v}/sections/{s}` lists a section's documents. A document the index lacks is named by `CitableDocumentNumber.rowLabel` ("Document 3"), and a prose section by its title.
+  - TEI that will not parse is `TEI_UNREADABLE` on these routes, unless the index gives the structure.
+  - `/volumes/{v}/documents/{d}` answers from the TEI for a document the index lacks, or before an import, and each neighbour says whether the reader can open it.
+- **The host script:**
+  - remembers the link it posted, and refocuses it when the parent asks;
+  - scrolls to a note and gives it focus when the parent asks;
+  - ignores a middle click on a reader link, which the sandbox would refuse as a popup;
+  - lets Space activate an unresolved reference, which the kit marks as a button.
+- **Browse in the SPA:**
+  - `/` opens `/browse`, and the header gains Browse.
+  - The catalogue's filter, subseries and indexed-only choices live in the URL, replaced as they change.
+  - The volume page shows the publication, the editors, the coverage ("2 of 120 documents indexed on this server") and the section tree. Its fallback for a volume with no structure is the index's reading order.
+  - The section page shows a breadcrumb, its subsections and its documents, with the badges Editorial Note and Not indexed on this server.
+- **The reader's links in the SPA:**
+  - a cross-reference goes forward, and Back returns;
+  - each page loads in a new frame, so the frame adds no history of its own;
+  - a note in another document lands through the frame's URL fragment, and one in the same document is revealed by the host script. Either way the note takes focus;
+  - a volume not on the server gets a notice with its history.state.gov link;
+  - external links appear in a notice with a real link, and page and unresolved references with a sentence;
+  - a person, a term or an unresolved reference opens a modal `<dialog>` card with the Mac's titles, sentences and Done. Closing it returns focus to the link in the frame. The not-found cards keep the Mac's titles, with the web's own sentence;
+  - Previous and Next replace the history entry, as the app's `DocumentJump` does, and hide a neighbour the reader cannot open.
+- **Keyboard and WCAG fixes:**
+  - each screen names the tab, and a new screen's heading takes focus once it has its title;
+  - a card or notice clears when the document changes, by any route;
+  - a search keeps its box's focus; the box is no longer remounted;
+  - Escape closes the Cite rail, and below 900 px the toolbar and frame are inert while the sheet is open;
+  - the toolbar is a labelled group, not an ARIA toolbar without roving focus;
+  - the arrows on Previous and Next are hidden from screen readers;
+  - controls have a 3:1 edge (WCAG 1.4.11), and badges carry a comma for screen readers.
+- **The browser suite** (`@axe-core/playwright` 4.13.0, exact, with axe-core 4.13.0):
+  - `web/e2e/fixtures.ts` fails any test on a console error;
+  - `axe.ts` holds the check and the kit's known list;
+  - `keyboard.ts` tabs to a target in the app or the frame;
+  - `browse-link-card.spec.ts` runs the done-when walk, a footnote landing and a missing volume, and axe over every screen in both appearances and beside the narrow sheet.
+- **Docs:**
+  - `INSTALL.md`: what phase 1 offers, and step 6, which adds Browse, links and the API's new routes;
+  - `SPEC.md`: Reader rendering step 4, the API table, four departures, and Browse's routes;
+  - `PLAN.md` and its shared copy (rev 108): the owner's S9 answers, with the upstream pull requests;
+  - `COORDINATION.md`: the two upstream pull requests.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64:** all 1,711 tests pass, up from 1,701, with the one named skip, which CI's skip check allows.
+  - FRUSLightServerTests runs 71, up from 61: the link route for every kind of link, every link on five fixture pages, a broken reference from a decoded index, the refusals, the structure from the TEI, a section's documents, a document the index lacks, and TEI that will not parse.
+  - FRUSParityTests' browse check now also requires the index's structure, by its section ids. The run printed check 3 and check 4 through the API as before, and "browse through the API: 3 volumes of 553 indexed, 139 of 140, 123 of 128, 130 of 134 entries in reading order held by the index".
+- **The web app:**
+  - typecheck, lint, and 33 unit tests in 9 files;
+  - the build: `index.html` 0.5 KB, CSS 5.8 KB, and one script of 364 KB, 115 KB compressed.
+- **The Compose smoke test with `--e2e`** passes on the local arm64 image, still 400 MB. The suite runs five tests on Chromium:
+  - **the done-when walk, by keyboard alone:**
+    - Skip to content first, and Enter on it leaves `main` focused;
+    - the catalogue narrowed to one volume, then its page, focused at its heading ("2 of 120 documents indexed on this server");
+    - its compilation, then d2;
+    - Enter on "Document 1" in the frame goes forward to d1, focused at its heading;
+    - Enter on "Khrushchev" opens the card "Khrushchev, Nikita S.", "Chairman of the Council of Ministers of the Soviet Union", focused at its title;
+    - Escape returns focus to the link in the frame;
+    - Back returns to d2 with d2's text, and a second Back leaves the reader;
+    - axe at the catalogue, the volume, the section, the reader and the card: none of the app's own markup fails, and in the light reader the frame fails `color-contrast` alone;
+  - a note in another document lands in view and takes focus, and a document in a volume not on the server gives its history.state.gov link;
+  - axe over Search, the reader with Cite, the narrow sheet (whose text is inert, and Escape returns focus to the toggle), a card, and, in dark, the reader (whose frame fails `link-in-text-block` alone) and Browse's three screens;
+  - S9a's two tests.
+
+  That is S9b's done-when, read as the owner decided: no axe violations in the app's markup, and only the kit's known two in its frame, until #1578 lands.
+
+**Notes**
+
+- **The frame's known failures, as axe reports them:**
+  - `color-contrast` alone in the light reader (frus1961-63v06 d2);
+  - `link-in-text-block` alone in the dark reader (d1), where the links pass 4.5:1 but differ from the text around them by colour alone.
+
+  The suite asserts each, so each id on the known list is shown to be needed, and a pin move that fixes one fails its check. The map had predicted `link-in-text-block` in light too, for a cross-reference among footnote text. axe does not count a link that is nearly all of its list item as a link in a block of text.
+- **Rule 4 glue, recorded:**
+  - `ReaderLinkParse`, about 20 lines, until the kit's `readerLink(from:)`;
+  - the `fnote-` prefix the kit's serializer writes, joined to the kit's own `footnoteDOMKey`.
+- **No fixture has a broken reference.** The server test decodes a one-record `BrokenRefsIndex`, renders d2's link as broken, and resolves it. The card's text has unit tests.
+- **A target that names a whole volume** (`frus1961-63v05`) resolves, as the kit does, to a document of that name in the current volume, and the reader then says it has no such document. The links pull request files a `.volume` case.
+- **`href="#"`:** a person or term with no ref is still a Tab stop that scrolls the frame to its top, as in the app, until the kit writes a span for it.
+- **Parse cost:** the volume page and a document the index lacks parse the volume's TEI, about half a second for the largest, shared with the reader's cache of four volumes.
+
+**Next: S10.** The owner's real export imported into Compose, with the TEI folder mounted read-only; checks 3–5 pass on the real export, which is phase 1's exit. Before it: the owner's Mac check of the two upstream pull requests, then a pin move that empties the axe list and brings page links and mention counts. The phase-1 features' upstream pull request is timed so its pin move comes just before S10's export.
+
 ## Session 9a: the browser app's foundation, and a citation copied in Chromium
 
 6 October 2026 · branch `claude/s9-web-client`

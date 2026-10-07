@@ -315,6 +315,23 @@ Answered on 6 October, for S8:
 - The API follows the draft, extended where the Mac needs more. A search is `GET /search` with form semantics: `+` is a space, a list repeats its name, and one empty value is the empty list. It takes the three filters the draft lacks (`yearKeys`, `includeDocumentText`, `includeFrontMatter`), its count is exact (`countBasis: "exact"`), and it keeps 7,500 results, as the Mac does. Errors are problem details with a `code`, and a refused search carries the kit's refusal as `searchError`. Document JSON is metadata, and `…/html` is the reader's page, with `part=body` for the body alone.
 - Check 3 through the API runs on the real Import path: the kit's fixture index, dropped in as an unstamped copy, imported, and searched through the read-only open.
 
+Answered on 6 October, for S9:
+
+- Two pull requests. S9a meets S9's done-when first, and S9b completes the phase-1 SPA.
+- npm runs through `scripts/npm`, in Docker where Node is missing, as Swift runs through `scripts/swift`.
+- A citation takes its publication year from the manifest, which agrees with the TEI's for all 553 volumes. The citation endpoint uses the kit's formatter, with no upstream pull request.
+- **S9b's axe check:**
+  - the app's own markup has no violations at any screen;
+  - inside the reader's frame, only the kit's known failures are allowed, `color-contrast` and `link-in-text-block`, from its light palette and from links marked by colour alone;
+  - S9b opens the upstream pull request that fixes them, [joshbotts/FRUS-Explorer#1578](https://github.com/joshbotts/FRUS-Explorer/pull/1578). The check fails once a pin move past it leaves the list unneeded.
+- **S9b's links** are resolved on the server, by kit code, after a parse of the link that mirrors the app's dispatcher. S9b opens an upstream pull request that moves the parse into the kit, [joshbotts/FRUS-Explorer#1579](https://github.com/joshbotts/FRUS-Explorer/pull/1579).
+- **Page references, and the person card's mention count,** wait for immutable opens of the kit's `PageRangeStore` and `PersonMentionStore`, in that same upstream pull request. Every connection stays immutable.
+- **Browse is the kit's alone:**
+  - the catalogue in the manifest's order, narrowed by title, subseries and what the server indexes;
+  - a volume's sections, from the index or else its TEI, and a section's documents.
+
+  The app's arrangements (Title, Published, Era, Length), its front-matter split and its document counts wait for an upstream move into the kit.
+
 ## Session 0 kickoff prompt
 
 Start a cloud session with both repositories selected, and paste this as its first message.

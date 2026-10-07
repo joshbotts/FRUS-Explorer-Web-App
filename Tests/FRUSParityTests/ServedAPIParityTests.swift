@@ -226,11 +226,16 @@ struct ServedFile: Equatable {
         let (golden, _) = try RenderParityTests.currentGolden()
         let built = try await FixtureIndex.value()
         var sequences: [String: [String]] = [:]
+        var structures: [String: [String]] = [:]
         for volume in ParityFixtures.volumes {
             sequences[volume] = try await built.index.pipeline.readingSequence(forVolume: volume).map(\.documentId)
+            structures[volume] = try await built.index.pipeline.cachedVolumeStructure(forVolumeId: volume)?.sections.map(\.sectionId)
         }
-        let (list, volumes, documents, details) = try await ServedFixture.run { client, _ in
+        let (list, volumes, documents, details, section) = try await ServedFixture.run { client, _ in
             let list = try ServedFixture.decode(VolumeList.self, try await client.execute(uri: "/api/v1/volumes?limit=1000", method: .get))
+            // A section of v06's, from the index's structure: its compilation, comp1.
+            let section = try ServedFixture.decode(VolumeSectionPage.self,
+                                                   try await client.execute(uri: "/api/v1/volumes/frus1961-63v06/sections/comp1", method: .get))
             var volumes: [String: Volume] = [:]
             var documents: [String: DocumentList] = [:]
             var details: [String: DocumentDetail] = [:]
@@ -241,8 +246,10 @@ struct ServedFile: Equatable {
                 details[volume] = try ServedFixture.decode(DocumentDetail.self,
                                                            try await client.execute(uri: "/api/v1/volumes/\(volume)/documents/d1", method: .get))
             }
-            return (list, volumes, documents, details)
+            return (list, volumes, documents, details, section)
         }
+        // The index's structure comes first, with the TEI mounted beside it.
+        #expect(section.structureSource == "index" && section.documents.count == 120 && section.documents.allSatisfy(\.inIndex))
         #expect(list.total == 553 && list.coverage == Self.coverage)
         #expect(ParityFixtures.volumes.map { documents[$0]?.total } == [140, 128, 134], "front matter, documents and back matter")
         #expect(Set(list.items.filter(\.indexed).map(\.volumeId)) == Set(ParityFixtures.volumes))
@@ -250,6 +257,8 @@ struct ServedFile: Equatable {
             let rows = Set(golden.rows.filter { $0.volume == volume }.map(\.document))
             #expect(volumes[volume]?.indexedDocuments == built.index.documents[volume] && volumes[volume]?.teiAvailable == true)
             #expect(volumes[volume]?.structure?.isEmpty == false, "\(volume) has a structure")
+            #expect(volumes[volume]?.structureSource == "index", "\(volume)'s structure is the index's")
+            #expect(volumes[volume]?.structure?.map(\.sectionId) == structures[volume], "\(volume)'s sections are the index's")
             let listed = documents[volume]?.items ?? []
             #expect(listed.map(\.documentId) == sequences[volume], "\(volume)'s list is the kit's reading order")
             #expect(Set(listed.filter(\.inIndex).map(\.documentId)) == rows, "\(volume)'s documents are the golden rows")

@@ -20,11 +20,13 @@ import Hummingbird
 /// volume parses it once. A volume whose file changes, by size or modification time, is parsed
 /// again; requests for a volume being parsed wait for that parse.
 public actor ReaderService {
-    /// One volume's documents and the reader's lookups, from one parse.
+    /// One volume's documents, the reader's lookups and the volume's structure, from one parse.
     struct ParsedVolume: Sendable {
         let signature: FileSignature
         let documents: [String: FRUSDocumentAST]
         let lookups: ReaderLookups
+        /// Its front matter, chapters and back matter, as the parse found them in the TEI.
+        let structure: [VolumeSection]
     }
 
     struct FileSignature: Equatable, Sendable {
@@ -77,15 +79,21 @@ public actor ReaderService {
         return url
     }
 
-    /// One document, parsed. Throws an `APIProblem` for an unknown volume or document, a volume
-    /// whose TEI is not mounted, or TEI that will not parse.
-    public func document(volume volumeId: String, document documentId: String) async throws -> Parsed {
+    /// One volume, parsed. Throws an `APIProblem` for an unknown volume, a volume whose TEI is not
+    /// mounted, or TEI that will not parse.
+    func volume(_ volumeId: String) async throws -> ParsedVolume {
         guard resources.volume(volumeId) != nil else { throw APIProblem.volumeNotFound(volumeId) }
         guard let url = Self.teiFile(for: volumeId, in: volumesDirectory) else {
             throw APIProblem(.notFound, code: "TEI_NOT_AVAILABLE",
                              detail: "\(volumeId).xml is not in the TEI folder, \(volumesDirectory.path). Mount a folder of TEI volumes there, such as FRUS Explorer's own or a clone of HistoryAtState/frus's volumes/.")
         }
-        let volume = try await parsedVolume(volumeId, at: url)
+        return try await parsedVolume(volumeId, at: url)
+    }
+
+    /// One document, parsed. Throws an `APIProblem` for an unknown volume or document, a volume
+    /// whose TEI is not mounted, or TEI that will not parse.
+    public func document(volume volumeId: String, document documentId: String) async throws -> Parsed {
+        let volume = try await volume(volumeId)
         guard let ast = volume.documents[documentId] else {
             throw APIProblem(.notFound, code: "DOCUMENT_NOT_FOUND", detail: "\(volumeId) has no document \(documentId).")
         }
@@ -138,7 +146,8 @@ public actor ReaderService {
             var documents: [String: FRUSDocumentAST] = [:]
             for ast in parse.documents where documents[ast.documentId] == nil { documents[ast.documentId] = ast }
             return ParsedVolume(signature: signature, documents: documents,
-                                lookups: ReaderLookups(persons: parse.persons, terms: parse.terms))
+                                lookups: ReaderLookups(persons: parse.persons, terms: parse.terms),
+                                structure: parse.structureSections)
         }
         parsing[volumeId] = task
         defer { parsing[volumeId] = nil }

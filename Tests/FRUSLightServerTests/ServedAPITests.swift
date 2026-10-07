@@ -251,6 +251,9 @@ func servingSyntheticExport(volumes: [String] = []) async throws -> ServerFixtur
             #expect(response.status == .ok && response.headers[.contentType] == "text/javascript; charset=utf-8")
             let script = String(buffer: response.body)
             #expect(script.contains("frus-reader") && script.contains("frusexplorer:") && script.contains("highlightTapped"))
+            // A card hands focus back to the link, a middle click opens nothing, and Space activates an unresolved reference.
+            #expect(script.contains("restoreFocus") && script.contains("auxclick") && script.contains("role') === 'button'"))
+            #expect(script.contains("kind === 'reveal'") && script.contains("scrollIntoView"))
         }
     }
 
