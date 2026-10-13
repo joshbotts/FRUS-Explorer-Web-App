@@ -92,7 +92,7 @@ struct ServedFile: Equatable {
     /// `frus.db` alone, in rollback-journal mode, and the searches leave it byte for byte as it was.
     @Test func checkThreePassesThroughTheAPI() async throws {
         let queries = try QueryList.load(Repository.layout.queries)
-        let (status, records, inspections, anomalies, before, after) = try await ServedFixture.run { client, files in
+        let (status, records, inspections, anomalies, before, after, live) = try await ServedFixture.run { client, files in
             let status = try ServedFixture.decode(ServerStatus.self, try await client.execute(uri: "/api/v1/status", method: .get))
             let before = try ServedFile(files)
             var records: [ResultRecord] = []
@@ -127,7 +127,13 @@ struct ServedFile: Equatable {
                 let inspected = try ServedFixture.decode(Inspected.self, response)
                 inspections.append(ExpressionRecord(id: query.id, parse: inspected.parse, search: inspected.search))
             }
-            return (status, records, inspections, anomalies, before, try ServedFile(files))
+            // frus-parity's results --api reads the same records through LiveAPI, as S10 read them from
+            // a Compose install.
+            let live = await LiveAPI.results(queries) { path in
+                let response = try await client.execute(uri: path, method: .get)
+                return (Int(response.status.code), Data(response.body.readableBytesView))
+            }
+            return (status, records, inspections, anomalies, before, try ServedFile(files), live)
         }
 
         #expect(status.index?.documents == 392 && status.index?.volumes == 3 && status.index?.exportedAt == nil)
@@ -135,6 +141,7 @@ struct ServedFile: Equatable {
         #expect(before.names == ["frus.db"] && before.versions == [1, 1])
         #expect(after == before, "the searches changed the live index or its folder")
         #expect(anomalies.isEmpty, "\(anomalies.joined(separator: "\n"))")
+        #expect(live.records == records && live.anomalies.isEmpty, "LiveAPI.results reads other records: \(live.anomalies)")
 
         // Against the golden results, as check 3 compares them: order, apart from exact Mac ties.
         guard case .present(let golden, let stale) = try GoldenValidation.load(.results, as: ResultsGolden.self, layout: Repository.layout) else {
@@ -173,7 +180,7 @@ struct ServedFile: Equatable {
     @Test func checkFourPassesThroughThePage() async throws {
         let (golden, directory) = try RenderParityTests.currentGolden()
         let rows = golden.rows.map { (volume: $0.volume, document: $0.document) }
-        let (pages, bodies) = try await ServedFixture.run { client, _ in
+        let (pages, bodies, live) = try await ServedFixture.run { client, _ in
             var pages: [(String, String, String)] = []
             var bodies: [String: String] = [:]
             for row in rows {
@@ -186,7 +193,12 @@ struct ServedFile: Equatable {
                 pages.append((row.volume, row.document, String(buffer: page.body)))
                 bodies["\(row.volume)/\(row.document)"] = String(buffer: body.body)
             }
-            return (pages.map { [$0.0, $0.1, $0.2] }, bodies)
+            // frus-parity's render-api reads the bodies through LiveAPI, as S10 read them from a Compose install.
+            let live = try await LiveAPI.bodies(rows) { path in
+                let response = try await client.execute(uri: path, method: .get)
+                return (Int(response.status.code), Data(response.body.readableBytesView))
+            }
+            return (pages.map { [$0.0, $0.1, $0.2] }, bodies, live)
         }
 
         let expectedHead = try await ReaderRenderer(layout: Repository.layout)
@@ -215,6 +227,7 @@ struct ServedFile: Equatable {
         #expect(failures.isEmpty, "\(failures.joined(separator: "\n"))")
         #expect(heads.count == 1 && heads.first == expectedHead, "every page's head is ReaderPage.build's, with the host script")
         #expect(replaced == ["frus1969-76ve09p1/d87": 7, "frus1969-76ve09p1/d116": 1])
+        #expect(live.documents == mapped && live.figures == replaced, "LiveAPI.bodies reads other bodies or figures")
         let mismatches = RenderParity.mismatches(mapped, golden: golden, directory: directory)
         #expect(mismatches.isEmpty, "\(mismatches.count) rows differ:\n\(mismatches.map(\.description).joined(separator: "\n"))")
         print("check 4 through the page: \(mapped.count - mismatches.count) of \(golden.rows.count) rows identical, \(replaced.values.reduce(0, +)) figure images in \(replaced.count) rows named by the server; one head for every page")

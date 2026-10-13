@@ -3,6 +3,8 @@
 //   frus-parity summarize <db> [--any-volumes] [--golden <out.json>] [--upstream-commit <sha>] [--repo <root>]
 //   frus-parity compare-summary <golden.json> <candidate.json>
 //   frus-parity compare-results <golden.json> <candidate.json>
+//   frus-parity results --api <url> --out <candidate.json> [--queries <jsonl>] [--repo <root>]
+//   frus-parity render-api --api <url> <render folder>
 //   frus-parity parse <queries.jsonl>
 //   frus-parity render [<volume> <document> [--full-parse] [--out <file>]] [--repo <root>]
 //   frus-parity index [<volume>...] [--tei <dir>] [--resources <dir>] [--out <db>] [--metrics] [--repo <root>]
@@ -13,12 +15,17 @@
 
 import FRUSParity
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import ParityFormat
 
 let usage = """
     usage: frus-parity summarize <db> [--any-volumes] [--golden <out.json>] [--upstream-commit <sha>] [--repo <root>]
            frus-parity compare-summary <golden.json> <candidate.json>
            frus-parity compare-results <golden.json> <candidate.json>
+           frus-parity results --api <url> --out <candidate.json> [--queries <jsonl>] [--repo <root>]
+           frus-parity render-api --api <url> <render folder>
            frus-parity parse <queries.jsonl>
            frus-parity render [<volume> <document> [--full-parse] [--out <file>]] [--repo <root>]
            frus-parity index [<volume>...] [--tei <dir>] [--resources <dir>] [--out <db>] [--metrics] [--repo <root>]
@@ -300,6 +307,102 @@ func checkGolden(_ arguments: Arguments) throws {
     print("golden files: \(report.present.count) present and valid, \(report.pending.count) pending")
 }
 
+/// GET against a server's base URL, for LiveAPI: a path with its query string, answered with the
+/// status and the body. A request may take 15 minutes: over the full corpus an exact-word search
+/// (`=Soviet`) took more than URLSession's default minute on a server that was busy (S10).
+func httpGet(_ base: URL) -> (String) async throws -> LiveAPI.Response {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.timeoutIntervalForRequest = 900
+    configuration.timeoutIntervalForResource = 3_600
+    let session = URLSession(configuration: configuration)
+    return { path in
+        guard let url = URL(string: path, relativeTo: base) else { throw LiveAPI.Failure("\(path) is not a path") }
+        let (data, response) = try await session.data(from: url)
+        guard let http = response as? HTTPURLResponse else { throw LiveAPI.Failure("\(url.absoluteString) gave no HTTP response") }
+        return (http.statusCode, data)
+    }
+}
+
+/// What a server's status says of the index it serves, which a file made through its API records.
+struct ServedStatus: Decodable {
+    struct Index: Decodable {
+        let documents: Int
+        let volumes: Int
+        let indexVersion: Int
+        let appBuild: String?
+        let exportedAt: String?
+    }
+
+    let version: String
+    let index: Index?
+}
+
+/// Check 3 against a running server (S10): each query's record, read through its API with the
+/// golden tool's loop, as a results file for compare-results. The file records what the server
+/// says it serves, and the query list's records.
+func results(_ arguments: Arguments) async throws {
+    guard arguments.positional.isEmpty, let api = arguments.options["--api"], let base = URL(string: api),
+          let out = arguments.options["--out"] else { throw UsageError("results takes --api <url> and --out <file>") }
+    let layout = try repository(arguments)
+    let queriesPath = arguments.options["--queries"] ?? layout.queries.path
+    let queries = try QueryList.load(URL(fileURLWithPath: queriesPath))
+    let fetch = httpGet(base)
+    // Each request's time, for the slowest few, which check 3 does not compare.
+    var times: [(path: String, seconds: Double)] = []
+    let get: (String) async throws -> LiveAPI.Response = { path in
+        let start = Date()
+        defer { times.append((path, Date().timeIntervalSince(start))) }
+        return try await fetch(path)
+    }
+    let response = try await get("/api/v1/status")
+    guard response.status == 200, let index = try JSONDecoder().decode(ServedStatus.self, from: response.body).index else {
+        fail("\(api) serves no index: import an export first")
+    }
+    let (records, anomalies) = await LiveAPI.results(queries, get: get)
+    var inputs = [Provenance.recordsKey(RepositoryLayout.queriesPath): QueryList.recordDigest(queries), "served.api": api,
+                  "served.documents": String(index.documents), "served.volumes": String(index.volumes)]
+    inputs["served.appBuild"] = index.appBuild
+    inputs["served.exportedAt"] = index.exportedAt
+    let candidate = ResultsGolden(
+        provenance: Provenance(tool: "frus-parity results --api", upstreamCommit: layout.upstreamCommit(),
+                               appBuild: index.appBuild.flatMap { Int($0) }, indexVersion: index.indexVersion,
+                               sourceDigest: try UpstreamDigest.compute(upstream: layout.upstream), inputs: inputs,
+                               platform: .current()),
+        queries: records)
+    try GoldenJSON.write(candidate, to: URL(fileURLWithPath: out))
+    let refused = records.filter { $0.error != nil }.count
+    let tails = records.filter { !$0.tieTail.isEmpty }.count
+    print("results: \(records.count) queries through \(api), \(refused) refused, \(tails) with ties past the 50th, over \(index.documents) documents in \(index.volumes) volumes; wrote \(out)")
+    let total = times.reduce(0) { $0 + $1.seconds }
+    print("information, not compared: \(times.count) requests in \(String(format: "%.0f", total)) s; the slowest:")
+    for time in times.sorted(by: { $0.seconds > $1.seconds }).prefix(5) {
+        print(String(format: "  %7.1f s  ", time.seconds) + (time.path.removingPercentEncoding ?? time.path))
+    }
+    guard anomalies.isEmpty else {
+        for anomaly in anomalies { print("anomaly  \(anomaly)") }
+        fail("\(anomalies.count) page(s) are not what check 3 asked for")
+    }
+}
+
+/// Check 4 against a running server (S10): every row of a render folder, such as `mac-golden
+/// render --tei --rows` writes, fetched as the reader's body and compared byte for byte with the
+/// row's file, figure addresses mapped back.
+func renderAPI(_ arguments: Arguments) async throws {
+    guard arguments.positional.count == 1, let api = arguments.options["--api"], let base = URL(string: api) else {
+        throw UsageError("render-api takes --api <url> and a render folder")
+    }
+    let directory = URL(fileURLWithPath: arguments.positional[0], isDirectory: true)
+    let golden = try GoldenJSON.read(RenderGolden.self, from: directory.appendingPathComponent("manifest.json"))
+    let rows = golden.rows.map { (volume: $0.volume, document: $0.document) }
+    let volumes = Set(rows.map(\.volume)).sorted()
+    print("information, not compared: \(golden.provenance.tool) at \(golden.provenance.upstreamCommit?.prefix(8) ?? "an unknown commit"), \(rows.count) rows in \(volumes.count) volumes, \(volumes.first ?? "") to \(volumes.last ?? "")")
+    let (documents, figures) = try await LiveAPI.bodies(rows, get: httpGet(base))
+    let mismatches = RenderParity.mismatches(documents, golden: golden, directory: directory)
+    for mismatch in mismatches.prefix(50) { print("differs  \(mismatch)") }
+    guard mismatches.isEmpty else { fail("check 4 fails: \(mismatches.count) of \(rows.count) rows differ") }
+    print("check 4 through the API: \(rows.count) of \(rows.count) rows identical, \(figures.values.reduce(0, +)) figure images in \(figures.count) rows named by the server")
+}
+
 let arguments = CommandLine.arguments.dropFirst()
 do {
     switch arguments.first {
@@ -309,6 +412,10 @@ do {
         try compareSummary(Arguments(arguments.dropFirst()))
     case "compare-results":
         try compareResults(Arguments(arguments.dropFirst()))
+    case "results":
+        try await results(Arguments(arguments.dropFirst(), options: ["--api", "--out", "--queries", "--repo"]))
+    case "render-api":
+        try await renderAPI(Arguments(arguments.dropFirst(), options: ["--api"]))
     case "parse":
         try parse(Arguments(arguments.dropFirst()))
     case "render":
