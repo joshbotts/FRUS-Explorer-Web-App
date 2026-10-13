@@ -1,7 +1,7 @@
 // The reader (SPEC, Reader rendering and Reader and Research rail): the document's header and
 // toolbar, the server's page in a sandboxed frame, the Cite rail beside it, and what the page's
-// links lead to: another document or a note in one, or a card for a person, a term or an
-// unresolved reference.
+// links lead to: another document or a note in one, a whole volume in Browse, or a card for a
+// person, a term or an unresolved reference.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from 'react';
@@ -139,6 +139,15 @@ export function ReaderScreen() {
       }
       case 'document':
         if (target.destination) open(target, target.destination);
+        return;
+      case 'volume':
+        // A whole volume opens in Browse when the catalogue holds it, as the app's WholeVolumeLink
+        // sends it there; the app opens any other on history.state.gov.
+        if (target.volume && target.volumeId) {
+          void navigate({ to: '/browse/$volumeId', params: { volumeId: target.volumeId } });
+        } else {
+          say(copy.reader.linkUnknownVolume);
+        }
         return;
       case 'external':
         say(

@@ -131,6 +131,20 @@ test('a note in another document lands in its list of footnotes, and a volume no
   await expect(page).toHaveURL(/\/doc\/frus1961-63v06\/d7$/);
 });
 
+test('a reference to a whole volume opens the volume in Browse, and one outside the catalogue says so', async ({ page }) => {
+  // "volume V" in d7 names Volume V as a whole: the catalogue holds it, though this server has neither its TEI nor its index.
+  await page.goto('/doc/frus1961-63v06/d7');
+  await page.frameLocator('iframe.reader-frame').getByRole('link', { name: 'volume V', exact: true }).first().click();
+  await expect(page).toHaveURL(/\/browse\/frus1961-63v05$/);
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Volume V, Soviet Union');
+
+  // The preface names the microfiche supplement to volumes XIII–XV, which the catalogue does not hold.
+  await page.goto('/doc/frus1961-63v06/preface');
+  await page.frameLocator('iframe.reader-frame').getByRole('link', { name: /microfiche supplement/ }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'isn’t part of this collection' })).toBeVisible();
+  await expect(page).toHaveURL(/\/doc\/frus1961-63v06\/preface$/);
+});
+
 test('nothing on the page fails axe, the reader’s frame included: Search, the reader, Cite, its narrow sheet and a card, and Browse and the reader in dark', async ({ page }) => {
   await page.goto('/search?keywords=treaties');
   await expect(page.getByRole('list', { name: 'Results' }).getByRole('listitem')).toHaveCount(2);

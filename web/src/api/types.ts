@@ -138,7 +138,7 @@ export interface Neighbour {
 
 /** What a link in the reader's page leads to (GET …/documents/{d}/link). */
 export interface ReaderLinkTarget {
-  kind: 'person' | 'gloss' | 'document' | 'page' | 'external' | 'unresolved' | 'brokenReference';
+  kind: 'person' | 'gloss' | 'document' | 'page' | 'volume' | 'external' | 'unresolved' | 'brokenReference';
   href: string;
   ref?: string;
   person?: { ref: string; name: string; description?: string; role?: string; eraText?: string };
@@ -158,6 +158,8 @@ export interface ReaderLinkTarget {
   /** For a page reference: the page and its volume; `destination` is the document placed on it, if any. */
   page?: number;
   pageVolumeId?: string;
+  /** For a reference to a whole volume: the volume; `volume` is absent for one outside the catalogue. */
+  volumeId?: string;
   url?: string;
   brokenReference?: { target: string; reason: string; resolvedVolume?: string; resolvedAnchor?: string };
 }
