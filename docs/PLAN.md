@@ -334,6 +334,12 @@ Answered on 6 October, for S9:
 
   The app's arrangements (Title, Published, Era, Length), its front-matter split and its document counts wait for an upstream move into the kit.
 
+Answered on 13 October, for S10:
+
+- S10 runs on the owner's two exports from build 50, made on 13 October, before the phase-1 features' upstream pull request, which follows it. If that pull request's pin move changes the index version, the owner exports again.
+- Check 5 searches the stripped export for all of the owner's writing in the export made with it: a snippet of every summary and note, and every tag name long enough to be distinctive, printing counts only. The owner chose that over one planted string.
+- S10 runs in a Compose project of its own, on port 8081, beside the owner's install, which it leaves as it was.
+
 ## Session 0 kickoff prompt
 
 Start a cloud session with both repositories selected, and paste this as its first message.

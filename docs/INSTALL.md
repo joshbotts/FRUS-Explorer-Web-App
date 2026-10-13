@@ -175,7 +175,7 @@ A refused file stays in the drop zone. `/api/v1/status` says why, under `lastImp
 | --- | --- |
 | "This export is index version N; this server serves index version M" | Update FRUS Explorer or the server so they match, then export again |
 | "Let FRUS Explorer finish re-indexing, then export again" | Leave FRUS Explorer open until indexing ends |
-| "This export includes your notes, summaries and tags" | Export again with Include My Notes, Summaries, and Tags turned off |
+| "This export includes your notes, summaries and tags" | Export again with Include My Notes, Summaries, and Tags turned off. The refused copy holds your writing, so remove it from the drop zone with `docker compose exec frus rm /data/import/<file>` |
 | "The server cannot read …" | The file kept permissions only you can read. Copy it again with `docker compose cp -a`, which gives it to the server's user; it is tried again within a minute |
 | "needs about N GB free beside the index" | Free space for Docker; the import is tried again by itself |
 | "… is not a SQLite database" or "… is damaged" | Export again with Export Research Database… |

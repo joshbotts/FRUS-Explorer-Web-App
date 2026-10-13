@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+# FRUS Explorer Light: check 5's search of a stripped export for the owner's writing (SPEC,
+# Verification, check 5; S10).
+#   scripts/check-stripped-export <export without writing> <export with writing>
+# Both are files Export Research Database… wrote from one library, the first with Include My Notes,
+# Summaries, and Tags off and the second with it on. Both are read in SQLite's immutable mode.
+#
+# From the second, the script takes a 24-character snippet from the start of the longest line of
+# every summary and note, and one from its middle when the two cannot overlap, and every tag name of
+# 12 bytes or more, and searches
+# the first file's raw bytes for each with GNU grep in the swift:6.4-noble image. It prints counts
+# only: no snippet, match or value is shown or written to a file. It passes when:
+#   - the stripped file's tables hold no summary, note or tag, and its user_content index no term;
+#   - no snippet is found in its bytes, apart from those its corpus text holds too;
+#   - and both controls hold: the snippets are found in the export with writing, and snippets of the
+#     corpus's own text are found in the stripped file.
+# Needs python3 and Docker.
+set -euo pipefail
+
+if [ $# -ne 2 ]; then
+  echo "usage: scripts/check-stripped-export <export without writing> <export with writing>" >&2
+  exit 2
+fi
+for file in "$1" "$2"; do
+  if [ ! -f "$file" ]; then echo "scripts/check-stripped-export: $file is not a file" >&2; exit 2; fi
+  if [ -e "$file-wal" ] || [ -e "$file-journal" ]; then
+    echo "scripts/check-stripped-export: $file has a -wal or -journal beside it, so it may be open" >&2; exit 2
+  fi
+done
+# Docker Desktop installs its CLI here; a non-interactive shell may not have it on PATH.
+if ! command -v docker >/dev/null 2>&1 && [ -x "$HOME/.docker/bin/docker" ]; then
+  PATH="$HOME/.docker/bin:$PATH"
+fi
+
+python3 -I - "$1" "$2" <<'PY'
+import os
+import sqlite3
+import subprocess
+import sys
+
+stripped_path, writing_path = (os.path.abspath(p) for p in sys.argv[1:3])
+SNIPPET = 24  # characters
+
+
+def open_immutable(path):
+    return sqlite3.connect(f"file:{path}?mode=ro&immutable=1", uri=True)
+
+
+def stamp(db):
+    return dict(db.execute("SELECT key, value FROM research_provenance"))
+
+
+def fail(message):
+    print(f"check 5 fails: {message}")
+    sys.exit(1)
+
+
+stripped, writing = open_immutable(stripped_path), open_immutable(writing_path)
+if stamp(stripped).get("my_writing_included") != "0":
+    sys.exit("scripts/check-stripped-export: the first file must be an export without the owner's writing")
+if stamp(writing).get("my_writing_included") != "1":
+    sys.exit("scripts/check-stripped-export: the second file must be an export with the owner's writing")
+
+# The owner's writing, held in memory only, with each snippet's values.
+counts = {"summaries": 0, "notes": 0, "tags": 0}
+snippets, too_short = set(), 0
+sources = {}  # snippet -> the values it was taken from
+value_count = 0
+
+
+def add(snippet):
+    snippets.add(snippet)
+    sources.setdefault(snippet, set()).add(value_count)
+
+
+for column, kind in (("summary_text", "summaries"), ("note_text", "notes")):
+    for (text,) in writing.execute(f"SELECT {column} FROM document_cache WHERE coalesce({column}, '') <> ''"):
+        counts[kind] += 1
+        value_count += 1
+        line = max(text.split("\n"), key=len).strip()
+        if len(line) >= SNIPPET:
+            add(line[:SNIPPET])
+            # grep -o reports one of two matches that overlap, so a middle snippet starts past the first.
+            if len(line) >= 3 * SNIPPET:
+                middle = len(line) // 2 - SNIPPET // 2
+                add(line[middle:middle + SNIPPET])
+        elif len(line.encode()) >= 16:
+            add(line)
+        else:
+            too_short += 1
+for (name,) in writing.execute("SELECT name FROM user_tags"):
+    counts["tags"] += 1
+    value_count += 1
+    if len(name.encode()) >= 12 and "\n" not in name:
+        add(name)
+    else:
+        too_short += 1
+if not snippets:
+    fail("the export with writing holds nothing long enough to search for")
+
+
+def found(path, patterns):
+    """The patterns GNU grep finds in the file's bytes, returned to this process alone."""
+    folder, name = os.path.split(path)
+    run = subprocess.run(
+        ["docker", "run", "--rm", "-i", "--network", "none", "-v", f"{folder}:/x:ro", "swift:6.4-noble",
+         "grep", "-a", "-F", "-o", "-f", "/dev/stdin", f"/x/{name}"],
+        input=("\n".join(sorted(patterns)) + "\n").encode(), capture_output=True)
+    if run.returncode not in (0, 1):
+        sys.exit(f"scripts/check-stripped-export: grep failed with status {run.returncode}")
+    return set(run.stdout.decode("utf-8", "replace").split("\n")) & patterns
+
+
+# Controls: the search finds the writing where it is, and the corpus's own text in the stripped file.
+# A value that runs into overflow pages can cross a page boundary, so a few writing snippets go
+# unfound; the corpus snippets are headers, which a row holds at its start, on one page.
+in_writing = found(writing_path, snippets)
+corpus = set()
+for (header,) in stripped.execute("SELECT header FROM document_cache WHERE length(header) >= 40 AND rowid % 997 = 0 ORDER BY rowid"):
+    line = max(header.split("\n"), key=len).strip()
+    if len(line) >= SNIPPET:
+        corpus.add(line[:SNIPPET])
+corpus_found = found(stripped_path, corpus)
+
+# The stripped file: its tables, its user_content index, then its bytes.
+with_writing = stripped.execute(
+    "SELECT count(*) FROM document_cache WHERE coalesce(summary_text, '') <> '' OR coalesce(note_text, '') <> '' "
+    "OR coalesce(user_tag_ids, '') <> ''").fetchone()[0]
+tags = stripped.execute("SELECT count(*) FROM user_tags").fetchone()[0]
+
+
+def user_content_terms(db):
+    """The terms the user_content index holds, or, where this SQLite lacks fts5vocab, its segment
+    blocks beyond the two an empty index keeps."""
+    try:
+        db.execute("CREATE VIRTUAL TABLE temp.user_content_terms USING fts5vocab(main, 'user_content', 'row')")
+        return db.execute("SELECT count(*) FROM temp.user_content_terms").fetchone()[0]
+    except sqlite3.OperationalError:
+        return max(0, db.execute("SELECT count(*) FROM user_content_data").fetchone()[0] - 2)
+
+
+terms, writing_terms = user_content_terms(stripped), user_content_terms(writing)
+leaked = found(stripped_path, snippets)
+also_corpus = 0
+for snippet in leaked:
+    hit = stripped.execute(
+        "SELECT 1 FROM document_cache WHERE instr(body_text, ?1) OR instr(header, ?1) "
+        "OR instr(coalesce(source_note, ''), ?1) OR instr(coalesce(dateline, ''), ?1) LIMIT 1", (snippet,)).fetchone()
+    also_corpus += hit is not None
+only_writing = len(leaked) - also_corpus
+
+print(f"writing read from the export with writing: {counts['summaries']} summaries, {counts['notes']} notes, {counts['tags']} tags")
+searchable = {value for values in sources.values() for value in values}
+covered = {value for snippet in in_writing for value in sources[snippet]}
+print(f"snippets: {len(snippets)} distinct, from {len(searchable)} values; {too_short} values too short to search for")
+print(f"control: {len(in_writing)} of {len(snippets)} snippets found in the export with writing, covering {len(covered)} of "
+      f"{len(searchable)} values; "
+      f"{len(corpus_found)} of {len(corpus)} corpus snippets found in the stripped export")
+print(f"stripped export: {with_writing} rows with a summary, note or tag; {tags} tags; {terms} terms in its user_content index "
+      f"(the export with writing's holds {writing_terms})")
+print(f"stripped export's bytes: {len(leaked)} of {len(snippets)} snippets found, {also_corpus} of them in its corpus text too: "
+      f"{only_writing} in the owner's writing alone")
+if len(corpus_found) != len(corpus) or len(covered) < len(searchable) * 0.95:
+    fail("a control did not hold, so the search cannot be trusted")
+if with_writing or tags or terms or only_writing:
+    fail("the stripped export holds some of the owner's writing")
+print("check 5 passes: the stripped export holds none of the owner's writing")
+PY

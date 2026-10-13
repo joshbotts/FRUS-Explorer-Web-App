@@ -2,6 +2,69 @@
 
 One entry per session, newest first.
 
+## Session 10: the owner's export in Compose, with checks 3–5 on it
+
+13 October 2026 · branch `claude/s10-real-export`
+
+S10 imported the owner's full export from build 50 into a Compose install and ran checks 3–5 on it. That is phase 1's exit, which waits on the owner's sign-off. On the owner's word, S10 ran on build 50, before the phase-1 features' upstream pull request.
+
+**The install**
+
+- A Compose project of its own, `frus-s10`, on port 8081, set up as `docs/INSTALL.md` says: `compose.yaml`, and a `.env` naming the port, the TEI folder and the image CI published for `main` at `3963520`, the merge of #29.
+- The TEI folder is the owner's clone of HistoryAtState/frus, mounted read-only. It is at `99d851c79`, the corpus that build 50's bundle and the export hold.
+- The owner's own install, from S7's trial, was left as it was. It is on port 8080, with an older image and the 3 October export at index version 65.
+
+**Check 5: import acceptance**
+
+- **The export made with the owner's writing** went into the drop zone first. Import mode refused it at `checking_writing`, 7 seconds after it arrived: "This export includes your notes, summaries and tags." A refused file stays in the drop zone, so its copy was removed. The install guide now says to remove such a copy, since it holds the writing.
+- **The stripped export** installed. It was ready 38 seconds after the copy began, serving 318,151 documents from 553 volumes at index version 69.
+- **`scripts/check-stripped-export`,** new, then searched the stripped file for the writing in the export made with it. It prints counts only, as the owner chose over one planted string:
+  - 6,558 summaries, 8 notes and 21 tags gave 7,102 snippets from 6,580 values; 7 values were too short to search for;
+  - the controls held: the snippets were found in the export with writing for all 6,580 values, and 189 of 189 snippets of the corpus's own headers in the stripped file;
+  - the stripped file's tables hold no summary, note or tag, and its `user_content` index no term, where the export with writing's holds 11,037;
+  - 1,622 snippets appear in its bytes, all of them in its corpus text too, since those summaries quote documents. None is in the owner's writing alone.
+
+**Check 3: search**
+
+- **The Mac's results:** `mac-golden results --any-volumes`, new, ran the app's SearchService over a copy of the export. 482 queries took 32 minutes 37 seconds: 43 were refused, and 12 have ties past the 50th.
+- **The server's:** `frus-parity results --api`, new, read the same queries through the Compose install's API, from a Linux container.
+- **The first run:** 472 records were identical, and 10 failed in the client. Exact-word searches (`=Soviet` and the like) took longer than URLSession's minute while the server served check 4 too.
+- **Read again** with a 15-minute timeout, the 10 answered: 21 requests in 989 seconds, the slowest 66. Merged into the first run, `frus-parity compare-results` printed "check 3's results pass: 482 queries, 482 identical and 0 reordered only within Mac tie groups". 349 queries have other score bits, which is information, as through the API on the fixtures.
+
+**Check 4: the reader**
+
+- **The sample:** in each volume, the middle row of its index that is not front matter. That is 553 documents, from frus1861 to frus1989-92v31.
+- **The Mac's HTML:** `mac-golden render --tei --rows`, new, rendered them from the clone through the Mac reader's path, in 2 minutes 11 seconds. The reader applied the bundled broken-references index as the app applies it: the tool puts the index beside its binary, where `BrokenRefsIndexStore.shared` reads it, and checks that the reader finds it.
+- **The server's:** `frus-parity render-api`, new, fetched each document's body from the server and compared the bytes: "check 4 through the API: 553 of 553 rows identical, 14 figure images in 2 rows named by the server".
+
+**Delivered**
+
+- **`tools/mac-golden`:** flags in its parser; `results --any-volumes`; and `render --tei --rows --out`, which refuses an `--out` inside `fixtures/golden`.
+- **`frus-parity results --api` and `render-api`,** over `LiveAPI` in FRUSParity. Its loop is ParityFormat's `ResultsLoop`, as the tests' and the Mac's are. A request may take 15 minutes, and `results` prints its slowest requests.
+- **Tests:** ServedAPIParityTests' checks 3 and 4 through the API also read through `LiveAPI`, and find the same records and bodies. So CI runs the code S10 ran.
+- **`scripts/check-stripped-export`.**
+- **Records:**
+  - `INSTALL.md`: removing a refused copy that holds the owner's writing;
+  - `SPEC.md`: how a release runs checks 3–5 against a real export;
+  - `PLAN.md`: the answers for S10;
+  - the README and this log.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64:** all 1,797 tests pass, with the one named skip.
+- **On the owner's export:** checks 3, 4 and 5 pass, as above.
+
+**Notes**
+
+- **Exact-word searches are slow over the full corpus.** On the server, with nothing else running, the 10 queries' 21 requests took 989 seconds, about 47 each, the slowest 66. SPEC's check 12 targets 1.5 seconds for keyword search. The Mac app's own search took 11 minutes 22 seconds for the same 10 queries, its copy of the export included, and gave the same records: the time is the search's own, on both platforms. Check 12 is phase 5's, and this is its first measurement.
+- **The server searched on one core.** It held one CPU at 100% throughout, at 218 to 270 MiB.
+- **A request the client abandons runs on.** After the 10 timeouts the server went on computing those searches: a dropped connection does not stop the kit's search.
+- **The Mac slept during the owner's pause,** and Docker's VM with it. The runs took nine hours of wall time, but about 45 minutes of the VM's.
+- **The Mac's disk** had about 17 GB free. The tool's 2.9 GB copy of the export was removed when it finished.
+- **The owner's own install** still serves the 3 October export at index version 65, from an image older than #29. Upgrading it means pulling the new image and importing an export from build 50.
+
+**Next: the owner's sign-off of phase 1.** In PLAN's checkpoint, the owner uses the site and confirms checks 3–5; the S10 install at http://localhost:8081 serves the export. Then the phase-1 features' upstream pull request. Browse's rows for a section's own text, the daily upstream watch and the speed of exact-word search remain before a release.
+
 ## Pin move: build 50, at index version 69
 
 13 October 2026 · branch `claude/frus-upstream-changes-bd0cb7` · upstream `c6f7b2cb` (tag `build-50`)

@@ -934,6 +934,17 @@ The web edition is accepted when it reproduces the Mac app's results on the same
 
 The performance targets and the cosine threshold are proposals for phase 0 to confirm or revise.
 
+**Against a real export.** S10 first ran checks 3–5 on the owner's full export, imported into a Compose install whose TEI folder is a clone of HistoryAtState/frus at the corpus the export indexed. A release runs them the same way:
+- **Check 3:**
+  - `mac-golden results --db <export> --any-volumes` runs the app's SearchService over a copy of the export;
+  - `frus-parity results --api <server>` reads the same queries through the server's API;
+  - `frus-parity compare-results` compares the two.
+- **Check 4:**
+  - `mac-golden render --tei <folder> --rows <file> --out <folder>` renders the listed documents through the Mac reader's path, with the bundled broken-references index applied as the app applies it;
+  - `frus-parity render-api --api <server> <folder>` fetches each one's body from the server and compares the bytes.
+  - S10's rows were the middle row that is not front matter in each of the 553 volumes.
+- **Check 5:** Import mode must refuse the export made with the owner's writing and install the one made without it. `scripts/check-stripped-export` then searches the stripped file's bytes for snippets of every summary, note and tag the other holds, printing counts only.
+
 ## Delivery plan
 
 Build in six phases, plus an optional seventh for the managed variant. Phase 1 already gives researchers a useful read-only edition over a Mac export. Each later phase adds a visible slice with its own exit test from the verification table.
