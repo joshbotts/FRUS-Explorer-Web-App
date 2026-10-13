@@ -2,6 +2,66 @@
 
 One entry per session, newest first.
 
+## Pin move: build 50, at index version 69
+
+13 October 2026 · branch `claude/frus-upstream-changes-bd0cb7` · upstream `c6f7b2cb` (tag `build-50`)
+
+The session began by reading what had changed upstream since S9c's pin, in FRUS Explorer, frus-semantic-vectors and HistoryAtState/frus, to say whether the web edition should catch up before S10. It should: the owner's full exports for S10, made from build 50, are index version 69, and the server at `f384d2d5` served only 65. On the owner's word this pull request moves the pin (rule 5).
+
+**What had changed upstream**
+
+- **FRUS Explorer:** 41 commits on `v2`, from `f384d2d5` to `0fe15702`. Four index bumps merged on 11 October, 65 to 69 ([joshbotts/FRUS-Explorer#1638](https://github.com/joshbotts/FRUS-Explorer/pull/1638), [#1639](https://github.com/joshbotts/FRUS-Explorer/pull/1639), [#1640](https://github.com/joshbotts/FRUS-Explorer/pull/1640) and [#1645](https://github.com/joshbotts/FRUS-Explorer/pull/1645)), and ship together in build 50, which the owner tagged on 13 October at `c6f7b2cb`; `0fe15702` changes only `Planning/`. Upstream's brief for the bumps planned it so: "The web side moves its pin once, after the last." The FTS generation (4) and the exporter are unchanged.
+- **HistoryAtState/frus:** from `8e5da08` (release 1.1.1) to `99d851c79` (1.1.3, 9 October). 26 volumes were corrected (HistoryAtState/frus#470), and 47 documents restored to frus1952-54v09p1 (HistoryAtState/frus#471). No volume was added or removed, and the three fixture volumes are byte-identical, so `fixtures/tei` stands. Build 50's bundle is at `99d851c79`.
+- **frus-semantic-vectors:** the shards of frus1952-54v09p1 and frus1902app1 were re-packed in place for those corrections, and the README and manifest now describe 553 shards; the provenance digest is unchanged. The web edition reads shards only from phase 4. A pin before `f23092ec` bundles the older shard manifest, which refuses the two new shards; this one bundles the new.
+
+**The owner's exports**, read only in SQLite's immutable mode:
+
+- **The full corpus, from build 50:** one export without the owner's writing (2.86 GB), and one with it, for check 5, of which only the stamp and counts were read. Both are index version 69 and FTS generation 4, with 553 volumes and 318,151 documents, the 47 restored ones among them, and no sidecar file. Their library has a long history: its `person_mentions` lacks the UNIQUE constraint fresh libraries have had since June, with no duplicate row, and 162 revision rows at index version 62 name documents no longer indexed. Neither stops an import, since for a stamped export the server reads the stamp.
+- **Three volumes, from build 50,** for the golden files: exported at 05:21:01Z after Erase Everything…, with no writing, exactly the three fixtures (139, 123 and 130 documents, every revision at 69), indexed in the order frus1894Nicaragua, frus1961-63v06, frus1969-76ve09p1.
+
+**Delivered**
+
+- **The pin, `c6f7b2cb`.** Every kit builds and passes on Linux, with no new skip and no upstream repair: FRUSCoreKitTests runs 950 tests in 126 suites, up from 894 in 119.
+- **Index version 69.** `IndexCompatibility.supportedIndexVersion` follows the pin, so the server now refuses build 49's exports, naming both versions.
+- **A reference to a whole volume.** The kit reads one as `CrossRefDestination.volume` since [joshbotts/FRUS-Explorer#1603](https://github.com/joshbotts/FRUS-Explorer/issues/1603), and the link route's switch over the kit's destinations had no case for it, the move's one break. The route now answers `volume`, with `volumeId` and what the server holds of the volume. The browser app opens a catalogue volume in Browse, as the app's `WholeVolumeLink` does. The app opens any other volume's page on history.state.gov, an address the kit keeps internal (`FRUSCanonicalURL.volumeURL`), so the reader says the volume isn't part of the collection. The server test that pinned the old reading, a document named `frus1961-63v05`, now pins the new, with Volume V, the volume itself and the microfiche supplement the preface names.
+- **The schema fixture,** `export-v69-schema.sql`, from the three-volume export, in place of `export-v65-schema.sql`. It holds version 65's statements in their order, and one more: the partial index `idx_document_cache_user_tag_ids`, which [joshbotts/FRUS-Explorer#1614](https://github.com/joshbotts/FRUS-Explorer/pull/1614) added on 9 October with no index version. No table changed, so `IndexSchema.swift`'s list stands.
+- **The golden files,** remade by `scripts/make-golden --export`:
+  - all 392 rows' HTML and the expressions changed only in provenance, and the render manifest's description now names the reader serializer's third setting, `listsNamedReferences` (#1599), and the release build;
+  - in the results, only q324 and q430's tie at the 50th place moved: S9c's export had swapped it, and this one, indexed in the recommended order, swaps it back;
+  - the index summary's 7 checks are unchanged, and seven of its 36 gating digests moved. Six follow the bumps: `cross_references`, its rows and their order (66: a reference to a footnote is an edge to its document, and one to a whole volume a row between volumes), `terms` (66: line breaks folded), `document_sources` and `volume_sources` (69: the class key) and `document_revisions` (every row at 69). The seventh, `schema`, is #1614's partial index.
+- **`scripts/make-golden` builds `tools/mac-golden` in release.**
+  - At build 50 the tool's debug build failed under Xcode 27.0, though Xcode builds the app. In one of the compiler's batches, `ForEach(cols)` in `ResearchRailView.swift` found the `@Model` class `Collection` not Identifiable.
+  - A bisect put it at `845d57ea` (#1645), which edits neither file. A probe naming the conformance in `ResearchRailView.swift` made the module build, and a whole-module compile type-checks it clean, so the fault is the debug build's and not the app's.
+  - Release compiles the module whole, and `-enable-testing` keeps the tool's `@testable import`. At `f384d2d5` the release-built tool wrote render, expressions and results byte for byte as the committed golden files. The tool's header and its render description say how it is built.
+- **Tests that named 65 as the pin's version** now read `IndexCompatibility`, and the parity tests' synthetic export stamps the submodule's build. The summary's own test still names the build, now 50, so a build bump shows there. Literals that stand for another version, or for test data, stay.
+- **Records:**
+  - `COORDINATION.md`: the pin, the counts, the contract and this move;
+  - `PLAN.md` and its shared copy (rev 126): the move, the golden-file and Mac-export checkpoints, and two risk rows;
+  - `SPEC.md`: the table definitions' lines, the compatibility contract and the link route;
+  - `INSTALL.md`: the version, whole-volume links and the first version change on upgrade;
+  - the prep note and the README.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** from a clean build of this package's own targets: all 1,797 tests pass, up from 1,723, with the one named skip, which CI's skip check allows.
+  - By target: FRUSCoreKitTests 950, SourceNoteKitTests 310, FTS5StoreTests 209, FRUSParityTests 100, FRUSLightServerTests 71, ManifestGeneratorTests 60, FRUSLightCoreTests 42, SemanticVectorsKitTests 35, CrossRefKitTests 10, GeneratorKitTests 7, FTS5CheckTests 3.
+  - Against the new golden files the run printed:
+    - "check 2 passes: 36 digests and 7 checks are the Mac's";
+    - "check 3's results pass: 482 queries, 482 identical and 0 reordered only within Mac tie groups", and the same through the API;
+    - "check 4 through the page: 392 of 392 rows identical".
+- **The web app:** typecheck, lint and 34 unit tests.
+- **The Compose smoke test with `--e2e`** passes on the local arm64 image, whose client stage builds the web app. The suite runs seven tests on Chromium, one of them new: "volume V" in d7 opens Volume V in Browse, and the microfiche supplement the preface names says it isn't part of the collection. The axe test still allows nothing.
+
+**Notes**
+
+- **No watch caught the bumps.** COORDINATION's daily job, which would build `v2`'s head on Linux and compare its index version with the pin's, was never added, so four index bumps and a build went unseen here until this session looked.
+- **Browse lists no section's own text yet** ([joshbotts/FRUS-Explorer#1536](https://github.com/joshbotts/FRUS-Explorer/issues/1536), index version 68). The app's Browse lists it first in its section; the server's section page lists the section's documents alone. No fixture section has such a row. The corpus has them for 1,337 sections that hold documents and 33 that hold only sections. The reader's order holds them already, through the kit.
+- **A volume outside the catalogue** gets history.state.gov's page once the kit makes `FRUSCanonicalURL.volumeURL` public: a line for the next upstream pull request.
+- **Rule 4 glue:** the choice between a person's two counts, the `fnote-` prefix, and now the whole-volume choice, in the browser app.
+- **The person rollup can depend on indexing order** ([joshbotts/FRUS-Explorer#1658](https://github.com/joshbotts/FRUS-Explorer/issues/1658)). A fix would move `currentPersonRollupVersion`, not the index version, and every fixture person's rollup has one member, so check 2 cannot show it.
+
+**Next: S10, when the owner says.** Its input is the owner's build-50 export. The plan timed the phase-1 features' upstream pull request so its pin move came just before S10's export; the export now exists, so the owner decides between S10 on build 50, with the features after, and the features first, with another pin move and new exports if the index version moves. Browse's own-text rows and the daily watch are each a small pull request before S10.
+
 ## Session 9c: pin move to the AA reader and the kit's link parse, with page links and mention counts
 
 7 October 2026 · branch `claude/s9c-pin-move` · upstream [joshbotts/FRUS-Explorer#1578](https://github.com/joshbotts/FRUS-Explorer/pull/1578) (merged as `4fc04a60`) and [#1579](https://github.com/joshbotts/FRUS-Explorer/pull/1579) (merged as `f384d2d5`)
