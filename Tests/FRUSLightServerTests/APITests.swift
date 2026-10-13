@@ -118,7 +118,7 @@ func problem(_ response: TestResponse, _ status: HTTPResponse.Status, sourceLoca
             #expect(nicaragua.indexed && nicaragua.indexedDocuments == 1 && nicaragua.teiAvailable)
 
             let list = try decode(VolumeList.self, try await client.execute(uri: "/api/v1/volumes?subseries=1894", method: .get))
-            #expect(list.coverage == Coverage(indexedVolumes: 2, indexedDocuments: 3, manifestVolumes: 553, indexVersion: 65))
+            #expect(list.coverage == Coverage(indexedVolumes: 2, indexedDocuments: 3, manifestVolumes: 553, indexVersion: IndexCompatibility.supportedIndexVersion))
         }
     }
 

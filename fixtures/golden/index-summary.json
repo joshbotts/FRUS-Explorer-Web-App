@@ -13,7 +13,7 @@
     "digests" : {
       "cross_references" : {
         "rows" : 208,
-        "sha256" : "763f98b5308ff9fcd60f709763a04cfffa5f9916879b4ab4df7980f6af644ffa",
+        "sha256" : "a642a4053370a0d2266e243d05a355c8d48be3c5adf25b28366c8ba9fa7af2ad",
         "sql" : "SELECT source_volume_id, source_document_id, target_volume_id, target_document_id, is_broken, reference_type, context FROM cross_references ORDER BY source_volume_id, source_document_id, target_volume_id, target_document_id, is_broken, reference_type, context",
         "volumes" : {
           "frus1894Nicaragua" : {
@@ -22,17 +22,17 @@
           },
           "frus1961-63v06" : {
             "rows" : 177,
-            "sha256" : "4e19acb1f4c05999a9100048fe6a9c4d9935756dcfa3357c77acf94aeda02f41"
+            "sha256" : "813c77e371a56c339fb58e7a7953906250f3464abb24cbbcbaf2aa8500ef934c"
           },
           "frus1969-76ve09p1" : {
             "rows" : 11,
-            "sha256" : "bdf22525531da51e18c3d1055dccd3cd5f4f473e08da3dbccd6c538fc93ad12e"
+            "sha256" : "1cd5b79056ccc7b82c838a6e1b85ea8876f810c8dc33f0fce1aeb2a8b6d519ac"
           }
         }
       },
       "cross_references.sequence" : {
         "rows" : 208,
-        "sha256" : "9c5c9b5a2a7d2d3504615a72bea5add33a8d34d87e0b2908a3c0bac7cc923dd2",
+        "sha256" : "2a1b30655831f6f93ed7fd3a93b4c68c0f8ae836bc428850470a91e48000745a",
         "sql" : "SELECT source_volume_id, source_document_id, target_volume_id, target_document_id, is_broken, reference_type, context FROM cross_references ORDER BY source_volume_id, rowid",
         "volumes" : {
           "frus1894Nicaragua" : {
@@ -41,11 +41,11 @@
           },
           "frus1961-63v06" : {
             "rows" : 177,
-            "sha256" : "076f373b05e215400ac54378836453be6091d9e19ef817d2b8f37eee572b9de8"
+            "sha256" : "4763cc0824201941a3988b852efbebf320250ebe890a5db96df17538c1611a8c"
           },
           "frus1969-76ve09p1" : {
             "rows" : 11,
-            "sha256" : "57066b25562a5ce3e1c595d412302e67e89bd711e2276f61fd806e5aca02f3a7"
+            "sha256" : "36b71ba3a7b11b3407d0a3136ddce886621faa46647e7b6c768473b43f907d31"
           }
         }
       },
@@ -108,26 +108,26 @@
       },
       "document_revisions" : {
         "rows" : 392,
-        "sha256" : "7dcd0a80f37e6c3ceb9346d2880280fcdacc424416d29bfb7e2535309e2c22ba",
+        "sha256" : "b47f92dda6ddeb4bb98b5e936e3d5273c3fcc49d8d2aa721412b4087dd6a35a0",
         "sql" : "SELECT volume_id, document_id, content_hash, body_hash, index_version FROM document_revisions ORDER BY volume_id, document_id",
         "volumes" : {
           "frus1894Nicaragua" : {
             "rows" : 139,
-            "sha256" : "bda08013e36d7a5b599a141210bd14ee22bd9f54b7408e72deb31f514e1a7672"
+            "sha256" : "d45ee736abf533b8aa59b9407987ed226131edd88a9ae8e6596adeba0b2b369e"
           },
           "frus1961-63v06" : {
             "rows" : 123,
-            "sha256" : "30c754f7cb1b5f3f26cd283c158c94b17db958468d181c3083975b8bd92add47"
+            "sha256" : "888e7204871bfd73b122c98d36eda1f12ac6841736ce1da9edaf56fa68d5b900"
           },
           "frus1969-76ve09p1" : {
             "rows" : 130,
-            "sha256" : "4f998f891d5e361ee1e9ff6f61b4312effd616371667d022b6aa01b3895191e7"
+            "sha256" : "f77e266ab9bc2a6b6b34033fffe205aca7f47803b483f3ac5560223662848ba8"
           }
         }
       },
       "document_sources" : {
         "rows" : 245,
-        "sha256" : "4d5b2c09d558aa41b54355575ede1933bfeacfc22aec760db8085736d772191b",
+        "sha256" : "cbc5e2490b011a442520567d723e1b33ea598f2d0a23d8a153d52df71dfd2080",
         "sql" : "SELECT volume_id, document_id, repository, record_group, lot_file, lot_file_norm, series_name, citation_era, raw_text, classification, decimal_class, job_number_norm FROM document_sources ORDER BY volume_id, document_id",
         "volumes" : {
           "frus1961-63v06" : {
@@ -136,7 +136,7 @@
           },
           "frus1969-76ve09p1" : {
             "rows" : 128,
-            "sha256" : "0f8903047552f72da0ba5578d41e1075b422b8f4dee7322ff7f02a0aead88aed"
+            "sha256" : "e09ade4eba1ee9174a2e136957899dcfa5f04269915d88ff317d105bbe843856"
           }
         }
       },
@@ -368,22 +368,22 @@
         }
       },
       "schema" : {
-        "rows" : 85,
-        "sha256" : "2a57e9dca09b03782d1fbbe19ddc03e95c9b2f9000ed9f9e7722446583dffb9f",
+        "rows" : 86,
+        "sha256" : "dfa3593ab82aa12db2046ee35972be89cbe95ff35dd903a64c8c6697a3625d0b",
         "sql" : "SELECT type, name, tbl_name, sql FROM sqlite_schema WHERE name NOT GLOB 'research_*' AND name NOT GLOB 'sqlite_autoindex_research_*' AND name NOT GLOB 'sqlite_stat*' ORDER BY type, name"
       },
       "terms" : {
         "rows" : 98,
-        "sha256" : "238430cc75a0159e5af136e158e5ebd4df869fd19e7e78e04c5d5dccd751bc30",
+        "sha256" : "8c491c2b24c738cc9e32d364e3cdfcda40c752e51ce66957588a34833456dd4d",
         "sql" : "SELECT volume_id, ref, term, definition FROM terms ORDER BY volume_id, ref",
         "volumes" : {
           "frus1961-63v06" : {
             "rows" : 19,
-            "sha256" : "d97c2fc29af394bae0aa7c1a2fc2f57c6ce84caf0b553448833d90858de8bbf7"
+            "sha256" : "b8343969e486ccf507ddcb6e49eb0a6d975eba7ed2514c4e5f026ba49261c8d5"
           },
           "frus1969-76ve09p1" : {
             "rows" : 79,
-            "sha256" : "da5d8391f53fe581cc872d9a107f0c9b9c1fec5c1d340001eb539c557ed82b95"
+            "sha256" : "1b769cb1c024f6bc7b7bfb3d5c2924bb7c7d87f3737b07d769fcb93e263d085c"
           }
         }
       },
@@ -441,7 +441,7 @@
       },
       "volume_sources" : {
         "rows" : 88,
-        "sha256" : "e161a3d91eeee5904c2d11ba149aa253e6f0a4a1a193223de066218687cc0b99",
+        "sha256" : "f453799460e2adbc707b35280ebd8c5c00da54d9bac2f3fb0dfc9463551081bd",
         "sql" : "SELECT volume_id, repository, record_group, lot_file, lot_file_norm, series_name, decimal_class, job_number, job_number_norm, entry_text, kind, depth, is_heading, sort_order, note FROM volume_sources ORDER BY volume_id, sort_order",
         "volumes" : {
           "frus1961-63v06" : {
@@ -450,7 +450,7 @@
           },
           "frus1969-76ve09p1" : {
             "rows" : 61,
-            "sha256" : "6448fe4ac7ffbc19ecfcef82b1e6e6bc67aa4dabe58b322e6ce43cd563bbdb49"
+            "sha256" : "a54e8a98c5584cf6c702a9a194e8e499b1e05e064c7b0ebb347055a5ef1c4364"
           }
         }
       },
@@ -603,43 +603,43 @@
       },
       "volume_structures.json" : {
         "rows" : 3,
-        "sha256" : "468b9edead1e45799dc3a19362298c6df276db50da47fa68d960d98f9ac57607",
+        "sha256" : "c3ff9d5050dd7e3e42e71cfbf56944f377f544e16ca2f25b3990b17ef0cb20d1",
         "sql" : "SELECT volume_id, structure_json FROM volume_structures ORDER BY volume_id",
         "volumes" : {
           "frus1894Nicaragua" : {
             "rows" : 1,
-            "sha256" : "5aa0a1b24ecd507710688b0981571391ae0ddf40750e79b3e13217f5b1169620"
+            "sha256" : "2b8682074766efb5c3463be24b9fc702ede3c5620ef8da7bd3d5785ac056d0bb"
           },
           "frus1961-63v06" : {
             "rows" : 1,
-            "sha256" : "8cac86e0c18e0a3409ae39ef38272108b290e30e311d81c9314ab6291be83fae"
+            "sha256" : "c16a15aa6c3bc23d9af1a67d0cd4447409be208d2a53759ac84f6210d7e98d1d"
           },
           "frus1969-76ve09p1" : {
             "rows" : 1,
-            "sha256" : "181f2ca38cf3df67f5c1969636e36cf7378a7a952c51a2aa18469b66f7e8bace"
+            "sha256" : "0d352b24dededf3aa1df0c32502d367931ec4e39e57c071a309fe370aa78f8f0"
           }
         }
       }
     },
     "exportStamp" : {
-      "app_build" : "49",
+      "app_build" : "50",
       "app_version" : "0.2",
       "current_fts_schema_version" : "4",
-      "current_index_version" : "65",
+      "current_index_version" : "69",
       "documentation" : "https://github.com/joshbotts/FRUS-Explorer/blob/v2/Docs/Agentic-Analysis-Guide.md",
-      "exported_at" : "2026-10-07T10:28:02Z",
+      "exported_at" : "2026-10-13T05:21:01Z",
       "installed_fts_schema_version" : "4",
-      "installed_index_version" : "65",
+      "installed_index_version" : "69",
       "my_writing_included" : "0",
       "semantic_provenance_digest" : "a726ca606bdf4d1984ba7cfda4d5605c2e9dc1a8320654a1b5742e06aa6e3a64"
     },
-    "fileBytes" : 5107712,
-    "freelistCount" : 5,
+    "fileBytes" : 5111808,
+    "freelistCount" : 7,
     "journalMode" : "delete",
     "notes" : [
 
     ],
-    "pageCount" : 1247,
+    "pageCount" : 1248,
     "pageSize" : 4096,
     "setup" : [
       "CREATE VIRTUAL TABLE temp.parity_frus_documents_row USING fts5vocab(main, frus_documents, row)",
@@ -650,17 +650,17 @@
       "CREATE VIRTUAL TABLE temp.parity_user_content_instance USING fts5vocab(main, user_content, instance)"
     ],
     "sqliteSequence" : {
-      "cross_references" : 371902,
-      "page_ranges" : 1534744,
-      "person_mentions" : 1225668
+      "cross_references" : 372318,
+      "page_ranges" : 1537004,
+      "person_mentions" : 1227704
     },
     "sqliteVersion" : "3.54.0",
     "timings" : {
       "cross_references" : 0.001,
       "cross_references.sequence" : 0,
-      "document_cache" : 0.006,
+      "document_cache" : 0.005,
       "document_cache.sequence" : 0,
-      "document_dates" : 0.001,
+      "document_dates" : 0,
       "document_dates.sequence" : 0,
       "document_revisions" : 0,
       "document_revisions.sequence" : 0,
@@ -668,17 +668,17 @@
       "document_sources.sequence" : 0,
       "document_subject_refs" : 0.001,
       "document_subject_volumes" : 0,
-      "document_subjects" : 0.001,
+      "document_subjects" : 0,
       "external_citations" : 0,
       "external_citations.sequence" : 0,
       "frus_documents.averages" : 0,
       "frus_documents.config" : 0,
       "frus_documents.docsize" : 0,
-      "frus_documents.vocab_col" : 0.008,
-      "frus_documents.vocab_instance" : 0.403,
-      "frus_documents.vocab_row" : 0.012,
-      "integrity" : 0.028,
-      "page_ranges" : 0.002,
+      "frus_documents.vocab_col" : 0.007,
+      "frus_documents.vocab_instance" : 0.388,
+      "frus_documents.vocab_row" : 0.011,
+      "integrity" : 0.026,
+      "page_ranges" : 0.001,
       "page_ranges.sequence" : 0.001,
       "person_cluster_candidate" : 0,
       "person_list_sources" : 0,
@@ -692,10 +692,10 @@
       "schema.export_only" : 0,
       "terms" : 0,
       "terms.sequence" : 0,
-      "total" : 0.49,
+      "total" : 0.467,
       "user_content.averages" : 0,
       "user_content.config" : 0,
-      "user_content.docsize" : 0,
+      "user_content.docsize" : 0.003,
       "user_content.vocab_col" : 0,
       "user_content.vocab_instance" : 0,
       "user_content.vocab_row" : 0,
@@ -707,26 +707,26 @@
     },
     "volumeOrder" : [
       "frus1894Nicaragua",
-      "frus1969-76ve09p1",
-      "frus1961-63v06"
+      "frus1961-63v06",
+      "frus1969-76ve09p1"
     ]
   },
   "provenance" : {
-    "appBuild" : 49,
-    "indexVersion" : 65,
+    "appBuild" : 50,
+    "indexVersion" : 69,
     "inputs" : {
       "fixtures/tei/SHA256SUMS" : "41609437167f6e54228471ac8f6638d3fe3db6d55045dbcd242b006c7301ae87",
       "fixtures/tei/frus1894Nicaragua.xml" : "c36aa079477928672a8f9cb98b37757a428452824ce15500db62e0636dd2c4cc",
       "fixtures/tei/frus1961-63v06.xml" : "48d571c05cad26e51d645c7a5fe7d5ea8b1d42e3f9a2c78ae97bf59a0e5c6f3f",
       "fixtures/tei/frus1969-76ve09p1.xml" : "6f88c7c3078d374797db1cbf2ec2999e92c489170d4ce5df0cdcc5c22a612df8",
-      "research_provenance.app_build" : "49",
+      "research_provenance.app_build" : "50",
       "research_provenance.app_version" : "0.2",
       "research_provenance.current_fts_schema_version" : "4",
-      "research_provenance.current_index_version" : "65",
+      "research_provenance.current_index_version" : "69",
       "research_provenance.documentation" : "https://github.com/joshbotts/FRUS-Explorer/blob/v2/Docs/Agentic-Analysis-Guide.md",
-      "research_provenance.exported_at" : "2026-10-07T10:28:02Z",
+      "research_provenance.exported_at" : "2026-10-13T05:21:01Z",
       "research_provenance.installed_fts_schema_version" : "4",
-      "research_provenance.installed_index_version" : "65",
+      "research_provenance.installed_index_version" : "69",
       "research_provenance.my_writing_included" : "0",
       "research_provenance.semantic_provenance_digest" : "a726ca606bdf4d1984ba7cfda4d5605c2e9dc1a8320654a1b5742e06aa6e3a64"
     },
@@ -737,8 +737,8 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "126e27361b007f8e0d15d077acf468d7898b2af7cf1b3b2649e5ae731e170425",
+    "sourceDigest" : "aab1b685b41c00a60d12c886c0dd9143e72d1d9213aa7c775f693c51bcffba1d",
     "tool" : "frus-parity summarize",
-    "upstreamCommit" : "f384d2d5ec7f1fe3db236fa1040c93e8de1eb30e"
+    "upstreamCommit" : "c6f7b2cbcee1939abbac70c1733f3e5799aa3446"
   }
 }

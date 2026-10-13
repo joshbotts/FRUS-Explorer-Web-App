@@ -13,7 +13,7 @@ FRUS Explorer Light runs as one container on a Mac or a Linux host, serving a re
   - an import needs room for the export and a copy while it is checked;
   - a later import keeps the previous index for rollback, so a re-import needs about four times the index while it runs.
 - **Memory.** Importing and serving the full corpus used about 130 MB, and the reader levelled off at about 170 MB over the largest volumes, so Docker Desktop's default allocation is plenty.
-- **A FRUS Explorer research export** from a Mac running a build that matches the server's index version: 65 today, FRUS Explorer build 49. The server refuses any other version and says which it needs.
+- **A FRUS Explorer research export** from a Mac running a build that matches the server's index version: 69 today, FRUS Explorer build 50. The server refuses any other version and says which it needs.
 - **The TEI volumes**, which the reader renders documents from. Without them the server still imports and serves the index.
 
 ## 1. Get the Compose file
@@ -112,6 +112,7 @@ Open http://localhost:8080 in a browser.
   - a cross-reference opens the document it names, or the note in it, and **Back** returns to the document you were reading;
   - a person's name opens a card with their entry from the volume's list of names and, once an export is imported, how many indexed documents mention them; a term opens its definition. **Done** or Escape closes the card;
   - a reference to a printed page, such as "p. 387", opens the document the index places on that page. For a volume this server has not indexed, the reader says so;
+  - a reference to a whole volume, such as "volume V", opens the volume in **Browse**. For a volume outside the catalogue, such as a microfiche supplement, the reader says so;
   - a reference that resolves nowhere opens an explanation;
   - a document in a volume this server does not have offers its page on history.state.gov.
 - **Cite** opens the citation beside the document, in the History at State, Chicago or Turabian style. **Copy Citation** copies it as plain text, and **Copy URL** the document's address on history.state.gov. The browser allows copying at http://localhost but not at another machine's address over plain http, so the panel then selects the text for you to copy.
@@ -187,7 +188,7 @@ A refused file stays in the drop zone. `/api/v1/status` says why, under `lastImp
 docker compose pull && docker compose up -d
 ```
 
-`edge` is the newest build of the project's main branch that passed its smoke test on both architectures. The index stays in the volume. If the new server serves a different index version, `/readyz` answers `index_version_mismatch`, naming both versions: export again from a matching FRUS Explorer build and copy it in. To stay on one build, set `FRUS_IMAGE=ghcr.io/joshbotts/frus-explorer-light:sha-<commit>` in `.env`, where `<commit>` is the first 7 characters of a commit on the main branch.
+`edge` is the newest build of the project's main branch that passed its smoke test on both architectures. The index stays in the volume. If the new server serves a different index version, `/readyz` answers `index_version_mismatch`, naming both versions: export again from a matching FRUS Explorer build and copy it in. The first such change came with FRUS Explorer build 50, which moved the index from version 65 to 69. To stay on one build, set `FRUS_IMAGE=ghcr.io/joshbotts/frus-explorer-light:sha-<commit>` in `.env`, where `<commit>` is the first 7 characters of a commit on the main branch.
 
 ## Stopping and removing
 

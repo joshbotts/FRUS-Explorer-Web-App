@@ -1,8 +1,8 @@
 {
   "format" : 1,
   "provenance" : {
-    "appBuild" : 49,
-    "indexVersion" : 65,
+    "appBuild" : 50,
+    "indexVersion" : 69,
     "inputs" : {
       "fixtures/parity/queries.jsonl#records" : "f75bc7b9e75cf052af539d4c10a9fabef152f0d7f3ff750a4816d18ae0e04189"
     },
@@ -13,9 +13,9 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "126e27361b007f8e0d15d077acf468d7898b2af7cf1b3b2649e5ae731e170425",
+    "sourceDigest" : "aab1b685b41c00a60d12c886c0dd9143e72d1d9213aa7c775f693c51bcffba1d",
     "tool" : "tools/mac-golden expressions",
-    "upstreamCommit" : "f384d2d5ec7f1fe3db236fa1040c93e8de1eb30e"
+    "upstreamCommit" : "c6f7b2cbcee1939abbac70c1733f3e5799aa3446"
   },
   "queries" : [
     {

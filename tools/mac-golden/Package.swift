@@ -1,7 +1,7 @@
 // swift-tools-version: 6.2
 // tools/mac-golden: writes the parity harness's golden files by running the Mac app's own code.
-// Mac only, and debug builds only, since the tool imports the app module with @testable. The
-// owner runs it through scripts/make-golden.
+// Mac only, and built with testing enabled, since the tool imports the app module with @testable.
+// The owner runs it through scripts/make-golden, which builds it in release.
 //
 // The FRUSExplorer target is the whole app module, compiled from the submodule unmodified
 // (CLAUDE.md, rule 4). Its folder holds a stub for the asset symbol Xcode generates, and

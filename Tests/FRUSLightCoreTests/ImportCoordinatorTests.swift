@@ -226,7 +226,7 @@ struct WatchFixture {
         await fixture.state.openExistingIndex(files: fixture.files)
         let readiness = await fixture.state.readiness()
         #expect(readiness.step == .indexVersionMismatch)
-        #expect(readiness.detail.contains("index version 64; this server serves index version 65"))
+        #expect(readiness.detail.contains("index version 64; this server serves index version \(IndexCompatibility.supportedIndexVersion)"))
     }
 }
 

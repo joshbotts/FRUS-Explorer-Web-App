@@ -167,7 +167,7 @@ import Testing
             made.provenance.inputs = [records: QueryList.recordDigest(Self.queries)]
             try GoldenJSON.write(made, to: url)
             #expect(GoldenValidation.validate(layout, sourceDigest: "current").problems
-                == ["queries.expressions.json is stale: it was made at index version 64; the pin's is 65. Run scripts/make-golden"])
+                == ["queries.expressions.json is stale: it was made at index version 64; the pin's is \(IndexCompatibility.supportedIndexVersion). Run scripts/make-golden"])
 
             // Made without recording its query list.
             made.provenance.indexVersion = IndexCompatibility.supportedIndexVersion

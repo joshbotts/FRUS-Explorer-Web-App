@@ -45,7 +45,7 @@ func servingSyntheticExport(volumes: [String] = []) async throws -> ServerFixtur
             #expect(list.limit == 20 && list.offset == 0)
             #expect(Set(list.items.map(\.documentId)) == ["d1", "d2"] && list.items.allSatisfy { $0.volumeId == "frus1961-63v06" })
             #expect(list.items.allSatisfy { $0.snippet.contains("<b>") && $0.bm25Score < 0 })
-            #expect(list.coverage == Coverage(indexedVolumes: 2, indexedDocuments: 3, manifestVolumes: 553, indexVersion: 65))
+            #expect(list.coverage == Coverage(indexedVolumes: 2, indexedDocuments: 3, manifestVolumes: 553, indexVersion: IndexCompatibility.supportedIndexVersion))
             #expect(list.items.first?.header.isEmpty == false)
 
             let second = try decode(SearchResultList.self, try await client.execute(uri: "/api/v1/search?keywords=treaties&limit=1&offset=1", method: .get))

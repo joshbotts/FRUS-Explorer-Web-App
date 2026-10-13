@@ -1,9 +1,9 @@
 {
-  "configuration" : "The Mac reader's own path, without an index. For each row, DocumentViewModel(entry:volumeEntry:parser:) with an entry naming only the volume and the document (its other fields do not reach the HTML; mac-golden checks that on every 25th row), no volume entry, a new FRUSDocumentParser, no person-mention store, no AST cache and no classification override. load(volumeURL:) on the main actor then parses the document alone and takes persons and glossary terms from the volume's TEI. broken-refs-index.json lists no reference in the fixture volumes, so no cross-reference is degraded. Then HTMLTemplate.build(model:colorScheme: .light), keeping the body: the fragment FRUSRenderNodeHTMLSerializer(annotateSourceClassification: true, figureImages: .reader) writes. Rows are every document a full parse of each volume yields, in parse order, volumes sorted. A debug build of the app module, compiled from the submodule unmodified.",
+  "configuration" : "The Mac reader's own path, without an index. For each row, DocumentViewModel(entry:volumeEntry:parser:) with an entry naming only the volume and the document (its other fields do not reach the HTML; mac-golden checks that on every 25th row), no volume entry, a new FRUSDocumentParser, no person-mention store, no AST cache and no classification override. load(volumeURL:) on the main actor then parses the document alone and takes persons and glossary terms from the volume's TEI. broken-refs-index.json lists no reference in the fixture volumes, so no cross-reference is degraded. Then HTMLTemplate.build(model:colorScheme: .light), keeping the body: the fragment FRUSRenderNodeHTMLSerializer.reader writes (annotateSourceClassification: true, figureImages: .reader, listsNamedReferences: true). Rows are every document a full parse of each volume yields, in parse order, volumes sorted. A release build of the app module, with testing enabled, compiled from the submodule unmodified.",
   "format" : 1,
   "provenance" : {
-    "appBuild" : 49,
-    "indexVersion" : 65,
+    "appBuild" : 50,
+    "indexVersion" : 69,
     "inputs" : {
       "fixtures/tei/SHA256SUMS" : "41609437167f6e54228471ac8f6638d3fe3db6d55045dbcd242b006c7301ae87",
       "fixtures/tei/frus1894Nicaragua.xml" : "c36aa079477928672a8f9cb98b37757a428452824ce15500db62e0636dd2c4cc",
@@ -17,9 +17,9 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "126e27361b007f8e0d15d077acf468d7898b2af7cf1b3b2649e5ae731e170425",
+    "sourceDigest" : "aab1b685b41c00a60d12c886c0dd9143e72d1d9213aa7c775f693c51bcffba1d",
     "tool" : "tools/mac-golden render",
-    "upstreamCommit" : "f384d2d5ec7f1fe3db236fa1040c93e8de1eb30e"
+    "upstreamCommit" : "c6f7b2cbcee1939abbac70c1733f3e5799aa3446"
   },
   "rows" : [
     {

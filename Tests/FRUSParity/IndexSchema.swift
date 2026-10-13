@@ -1,9 +1,9 @@
-// What the index summary hashes in an index-65 database, table by table, and how it classifies
+// What the index summary hashes in an index-69 database, table by table, and how it classifies
 // every other object, so that nothing in the file goes unhashed or unexplained.
 //
-// Verified against Tests/FRUSLightTestSupport/Fixtures/export-v65-schema.sql, the schema of the
-// owner's export (index version 65, build 49). A pin move that changes a table fails the column
-// check in `IndexSummarizer`, rather than leaving a new column out of every hash.
+// Verified against Tests/FRUSLightTestSupport/Fixtures/export-v69-schema.sql, the schema of the
+// owner's three-volume export (index version 69, build 50). A pin move that changes a table fails
+// the column check in `IndexSummarizer`, rather than leaving a new column out of every hash.
 
 /// One table of the corpus index and how its rows are hashed.
 struct CorpusTable: Sendable {
@@ -253,7 +253,7 @@ enum IndexSchema {
         }
     }
 
-    /// Tables every index-65 database holds.
+    /// Tables every index-69 database holds.
     static var requiredTables: [String] {
         corpusTables.map(\.name) + fullTextTables.flatMap { table in
             [table] + ["data", "idx", "docsize", "config"].map { "\(table)_\($0)" }

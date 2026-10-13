@@ -125,9 +125,16 @@ private func formEncoded(_ fields: [String: String]) -> String {
             let external = try await resolve("frusexplorer://doc/https%3A%2F%2Fhistory.state.gov%2Fabout", in: "d1")
             #expect(external.kind == "external" && external.url == "https://history.state.gov/about")
             #expect(try await resolve("frusexplorer://doc/%23fn3", in: "d1").kind == "unresolved")
-            // A target naming a whole volume is a document of that name, as the kit resolves it.
+            // A target naming a whole volume is the volume (joshbotts/FRUS-Explorer#1603): Volume V is in
+            // the catalogue though neither mounted nor indexed here, and the microfiche supplement the
+            // preface names is outside it.
             let whole = try await resolve("frusexplorer://doc/frus1961-63v05", in: "preface")
-            #expect(whole.destination?.volumeId == v06 && whole.destination?.documentId == "frus1961-63v05")
+            #expect(whole.kind == "volume" && whole.volumeId == "frus1961-63v05" && whole.target == "frus1961-63v05")
+            #expect(whole.destination == nil && whole.volume?.teiAvailable == false && whole.volume?.indexed == false)
+            let itself = try await resolve("frusexplorer://doc/frus1961-63v06", in: "preface")
+            #expect(itself.kind == "volume" && itself.volume == .init(title: v06Title, teiAvailable: true, indexed: true))
+            let supplement = try await resolve("frusexplorer://doc/frus1961-63v13-15mSupp", in: "preface")
+            #expect(supplement.kind == "volume" && supplement.volumeId == "frus1961-63v13-15mSupp" && supplement.volume == nil)
             // No fixture volume has a broken reference.
             let broken = try await resolve("frusexplorer://brokenref/%23pg_700", in: "d1")
             #expect(broken.kind == "brokenReference" && broken.target == "#pg_700" && broken.brokenReference == nil)
@@ -149,6 +156,8 @@ private func formEncoded(_ fields: [String: String]) -> String {
                     // Every person and term the fixtures name is in its volume's lists.
                     if target.kind == "person" { #expect(target.person != nil, "\(href)") }
                     if target.kind == "gloss" { #expect(target.term != nil, "\(href)") }
+                    // d7 and d21 name Volume V as a whole.
+                    if target.kind == "volume" { #expect(target.volumeId != nil && target.volume != nil, "\(href)") }
                 }
             }
         }

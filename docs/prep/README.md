@@ -2,7 +2,7 @@
 
 3 October 2026 · at `FRUS-Explorer` commit `34a5120` (index version 65, app build 49)
 
-Sessions 0 to 9 are done: S3's upstream pull request merged as `f102fa4d`, S6's two as `2d216f4c` and `f69b4a0a`, S8a's as `101e17d7`, and S9b's two as `4fc04a60` and `f384d2d5`, and their pin moves build and test FRUSCoreKit on Linux in CI, with checks 2 to 4 on the fixtures; see `docs/DEVLOG.md`. S1, S3 and S6 waited while the owner asked that sessions not open pull requests on `FRUS-Explorer`; the owner lifted that hold on 4 October. This folder keeps what a dry run on Linux found for later sessions, so their prompts can start from evidence rather than estimates.
+Sessions 0 to 9 are done: S3's upstream pull request merged as `f102fa4d`, S6's two as `2d216f4c` and `f69b4a0a`, S8a's as `101e17d7`, and S9b's two as `4fc04a60` and `f384d2d5`, and their pin moves, with the one to build 50 (`c6f7b2cb`) after them, build and test FRUSCoreKit on Linux in CI, with checks 2 to 4 on the fixtures; see `docs/DEVLOG.md`. S1, S3 and S6 waited while the owner asked that sessions not open pull requests on `FRUS-Explorer`; the owner lifted that hold on 4 October. This folder keeps what a dry run on Linux found for later sessions, so their prompts can start from evidence rather than estimates.
 
 ## What was verified
 
@@ -11,7 +11,7 @@ Sessions 0 to 9 are done: S3's upstream pull request merged as `f102fa4d`, S6's 
 | S0's three kits build and pass on Linux | Yes, in `swift:6.4-noble` on arm64: SourceNoteKit 292 tests, CrossRefKit 10, GeneratorKit 7, no warnings. The plan's 219 was the count on 22 September |
 | FTS5 works with the app's own DDL | Yes, on SQLite 3.45.1. `FTS5Types.swift` compiles on its own, since it imports only Foundation. `frus_documents` is an external-content table over `document_cache`. The porter tokenizer stems a prefix term as if it were a whole word: `negotiating*` and `negoti*` match "negotiating", but `negotiat*` stays `negotiat*`, which no stored term begins with |
 | Hummingbird 2 builds | Yes: 2.27.0 with Swift 6.4 on Linux. It resolves swift-crypto 5.0.0 |
-| The owner's export matches the pin | Yes. `~/Documents/frus-index.sqlite`, exported on 3 October from build 49: index version 65, FTS schema 4, 553 volumes and 316,768 documents, the whole manifest |
+| The owner's export matches the pin | Yes, until build 50's pin move to index version 69. `~/Documents/frus-index.sqlite`, exported on 3 October from build 49: index version 65, FTS schema 4, 553 volumes and 316,768 documents, the whole manifest |
 | The fixtures match the Mac's copies | Yes. HistoryAtState/frus commit `8e5da08` and the Mac app's downloads are byte-identical, for the three fixtures and for all 553 volumes. The app downloads from `master` and saves the bytes unchanged |
 | TEI rendering matches on Linux | Yes. All 392 fixture documents render to byte-identical HTML on Linux and macOS, in a command-line build with the serializer's default options |
 | The indexer and search run on Linux | Yes, since S6's pin move, compiled from the app's own files in FRUSCoreKit. The three fixture volumes index in 1.07 s together in a release build on arm64, and a 24-volume sample in 24.5 s (SPEC, Sizing) |
@@ -47,7 +47,7 @@ S2 settled these; its DEVLOG entry says how.
 
   The TEI hash comparison needs FRUSCoreKit's indexer. The server links the kit since S8a, but the comparison is not built yet.
 - **The trigger cannot be a file appearing.** A file copied in with `docker compose cp` is visible under its final name while it is still copying.
-- **The owner's export is a real input for local Import trials** while the pin stays at index version 65.
+- **The owner's export is a real input for local Import trials** while it matches the pin's index version: the 3 October export did until build 50's pin move, and the build-50 exports of 13 October do since.
 
 ## Before the S7 and S8 prompts
 
@@ -80,7 +80,7 @@ A full export is 2.83 GB, not 9.3 GB. The larger figure came from an index overh
 
 ## Pinning until the public release
 
-`FRUS-Explorer` merges about eight pull requests a day until its public release, and its index version went from 47 to 65 in 30 days. Each pin move means a new Mac build, a new export and new golden files. Hold the pin (at `f384d2d5` since S9c's pin move) until the release unless a merged pull request for this project needs it, as S3's did, and batch upstream pull requests so the pin moves as few times as possible. Each pin move remakes all the golden files: those made from the app's source, and those made from the owner's three-volume export, which needs a new export from the pinned build (`COORDINATION.md`, section 5). The first such export came from a build of `af8bedab`, on 4 October. The full-corpus export for S10 comes from the build pinned at S10.
+`FRUS-Explorer` merges about eight pull requests a day until its public release, and its index version went from 47 to 65 in 30 days. Each pin move means a new Mac build, a new export and new golden files. Hold the pin (at `c6f7b2cb` since build 50's pin move) until the release, unless a merged pull request for this project needs it, as S3's did, or the owner's exports come from a newer index version, as build 50's did, and batch upstream pull requests so the pin moves as few times as possible. Each pin move remakes all the golden files: those made from the app's source, and those made from the owner's three-volume export, which needs a new export from the pinned build (`COORDINATION.md`, section 5). The first such export came from a build of `af8bedab`, on 4 October. The full-corpus export for S10 comes from the build pinned at S10.
 
 ## Files
 

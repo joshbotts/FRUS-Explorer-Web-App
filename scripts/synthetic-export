@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # FRUS Explorer Light: writes a small synthetic FRUS Explorer research export.
 #   scripts/synthetic-export <output.sqlite>
-# It has the schema of a real export (Tests/FRUSLightTestSupport/Fixtures/export-v65-schema.sql),
+# It has the schema of a real export (Tests/FRUSLightTestSupport/Fixtures/export-v69-schema.sql),
 # the index and FTS schema versions this build serves (Sources/FRUSLightCore/Compatibility.swift),
 # three documents, the page ranges and person mentions the reader's links read, and an export stamp
 # without the owner's writing: the rows Tests/FRUSLightTestSupport/SyntheticExport.swift writes.
@@ -15,7 +15,7 @@ command -v sqlite3 >/dev/null || { echo "scripts/synthetic-export: needs the sql
 constant() { grep -oE "$1 = [0-9]+" "$root/Sources/FRUSLightCore/Compatibility.swift" | grep -oE '[0-9]+$'; }
 version=$(constant supportedIndexVersion)
 fts=$(constant ftsSchemaVersion)
-schema="$root/Tests/FRUSLightTestSupport/Fixtures/export-v65-schema.sql"
+schema="$root/Tests/FRUSLightTestSupport/Fixtures/export-v69-schema.sql"
 
 rm -f "$out" "$out-journal" "$out-wal" "$out-shm"
 sqlite3 "$out" <<SQL
