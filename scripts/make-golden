@@ -30,8 +30,8 @@
 #      outside ~/Documents, such as /Users/Shared/frus-golden.sqlite.
 # The script copies the export to a new temporary folder and works on the copy only.
 #
-# Needs macOS 26 or later, Xcode 27 and the submodule. The first run builds the app module, which
-# takes a minute or two.
+# Needs macOS 26 or later, Xcode 27 and the submodule. The first run builds the app module in
+# release, which takes about four minutes.
 
 fixes=0
 ok()    { printf '  ok     %s\n' "$*"; }
@@ -110,8 +110,13 @@ fi
 echo "From the app's source"
 tool=""
 # Without the manifest cache, the build's list of the submodule's non-Swift files is current.
-if step mac-golden-build swift build --package-path tools/mac-golden --manifest-cache none; then
-  tool="$(swift build --package-path tools/mac-golden --show-bin-path)/mac-golden"
+# Release compiles the app module whole, with testing enabled for the tool's @testable import.
+# From 845d57ea, in build 50, a debug build fails the app module under Xcode 27.0: it finds the
+# @Model `Collection` not Identifiable in ResearchRailView.swift, which a whole-module build
+# compiles clean. At f384d2d5 a release build wrote render, expressions and results byte for byte
+# as the debug build had.
+if step mac-golden-build swift build --package-path tools/mac-golden --manifest-cache none -c release -Xswiftc -enable-testing; then
+  tool="$(swift build --package-path tools/mac-golden -c release --show-bin-path)/mac-golden"
   ok "built tools/mac-golden"
 else
   fix "tools/mac-golden did not build (above)"
