@@ -21,14 +21,22 @@ struct Arguments {
         let message: String
     }
 
+    /// The options that take no value.
+    static let flagNames: Set<String> = ["--any-volumes"]
+
     let command: String
     private var options: [String: String] = [:]
+    private var flags: Set<String> = []
 
     init(_ arguments: [String]) throws {
         guard let command = arguments.first, !command.hasPrefix("-") else { throw UsageError(message: "no command") }
         self.command = command
         var rest = arguments.dropFirst()
         while let name = rest.popFirst() {
+            if Self.flagNames.contains(name) {
+                guard flags.insert(name).inserted else { throw UsageError(message: "\(name) given twice") }
+                continue
+            }
             guard name.hasPrefix("--"), let value = rest.popFirst() else {
                 throw UsageError(message: "expected --option value, found \(name)")
             }
@@ -38,12 +46,15 @@ struct Arguments {
 
     mutating func take(_ name: String) -> String? { options.removeValue(forKey: name) }
 
+    /// Whether a flag was given.
+    mutating func flag(_ name: String) -> Bool { flags.remove(name) != nil }
+
     /// An option naming a file, relative to the current directory.
     mutating func path(_ name: String) -> URL? { take(name).map { URL(fileURLWithPath: $0).standardizedFileURL } }
 
-    /// Refuses options the command did not read.
+    /// Refuses options and flags the command did not read.
     func finish() throws {
-        if let name = options.keys.sorted().first { throw UsageError(message: "\(command) takes no \(name)") }
+        if let name = (options.keys.sorted() + flags.sorted()).first { throw UsageError(message: "\(command) takes no \(name)") }
     }
 }
 
