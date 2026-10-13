@@ -4,7 +4,7 @@ import CSQLite
 import FRUSLightCore
 import Foundation
 
-/// A small export built on `Fixtures/export-v65-schema.sql`, the schema of a real index-65
+/// A small export built on `Fixtures/export-v69-schema.sql`, the schema of a real index-69
 /// export, with switches for each way an export can be wrong.
 public struct SyntheticExport: Sendable {
     public var indexVersion = IndexCompatibility.supportedIndexVersion
@@ -125,7 +125,7 @@ public struct SyntheticExport: Sendable {
 
     /// The real export's schema.
     public static func schema() throws -> String {
-        guard let url = Bundle.module.url(forResource: "export-v65-schema", withExtension: "sql", subdirectory: "Fixtures") else {
+        guard let url = Bundle.module.url(forResource: "export-v69-schema", withExtension: "sql", subdirectory: "Fixtures") else {
             throw CocoaError(.fileNoSuchFile)
         }
         return try String(contentsOf: url, encoding: .utf8)

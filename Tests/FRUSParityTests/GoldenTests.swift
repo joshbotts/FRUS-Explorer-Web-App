@@ -228,13 +228,14 @@ import Testing
         #expect(GoldenValidation.validate(repository.layout, sourceDigest: "current").problems
             == ["\(file.rawValue): its export was made by app build 49, but it records the pin's build as none: export from the pinned build"])
 
+        let version = IndexCompatibility.supportedIndexVersion
         try repository.write(file) {
-            $0.inputs["research_provenance.installed_index_version"] = "64"
-            $0.inputs["research_provenance.current_index_version"] = "66"
+            $0.inputs["research_provenance.installed_index_version"] = String(version - 1)
+            $0.inputs["research_provenance.current_index_version"] = String(version + 1)
         }
         #expect(GoldenValidation.validate(repository.layout, sourceDigest: "current").problems == [
-            "\(file.rawValue): its export's research_provenance.installed_index_version is 64, but it was made at index version 65",
-            "\(file.rawValue): its export's research_provenance.current_index_version is 66, but it was made at index version 65",
+            "\(file.rawValue): its export's research_provenance.installed_index_version is \(version - 1), but it was made at index version \(version)",
+            "\(file.rawValue): its export's research_provenance.current_index_version is \(version + 1), but it was made at index version \(version)",
         ])
     }
 
@@ -268,8 +269,9 @@ struct GoldenRepository {
 
     static let queries = [ParityQuery(id: "q001", rule: "R01", query: "treaty"), ParityQuery(id: "q002", rule: "R01", query: "canal")]
     static let stamp = [
-        "app_build": "49", "app_version": "0.2", "current_index_version": "65", "exported_at": "2026-10-03T15:14:19Z",
-        "installed_index_version": "65", "my_writing_included": "0",
+        "app_build": "49", "app_version": "0.2", "current_index_version": String(IndexCompatibility.supportedIndexVersion),
+        "exported_at": "2026-10-03T15:14:19Z", "installed_index_version": String(IndexCompatibility.supportedIndexVersion),
+        "my_writing_included": "0",
     ]
 
     init() throws {

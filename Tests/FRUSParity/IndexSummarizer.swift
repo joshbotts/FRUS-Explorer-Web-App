@@ -278,7 +278,7 @@ public struct IndexSummarizer: Sendable {
     }
 
     /// Refuses an object the summary does not know, a missing table, or a table whose columns differ
-    /// from index 65's: any of them would leave rows out of every hash.
+    /// from the pin's index version's: any of them would leave rows out of every hash.
     static func checkSchema(_ db: ParityDatabase) throws {
         var unknown: [String] = []
         var tables: Set<String> = []

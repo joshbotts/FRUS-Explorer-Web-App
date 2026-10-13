@@ -1,5 +1,6 @@
-// A synthetic index-65 export of the three fixture volumes, with a row in every corpus table, and
-// switches for storing the same rows differently and for each way the summary must refuse one.
+// A synthetic export of the three fixture volumes, from the pinned build at its index version, with
+// a row in every corpus table, and switches for storing the same rows differently and for each way
+// the summary must refuse one.
 
 import FRUSLightCore
 import FRUSLightTestSupport
@@ -92,9 +93,12 @@ struct ParityExport {
         try db.execute("COMMIT")
         if fragmentsFullText { try fragment(db) }
         if stamped {
+            // The pinned build's stamp: its build from the submodule, and the index version it serves.
+            let build = Upstream.appBuild(Repository.layout.upstream).map(String.init) ?? "none"
+            let version = String(IndexCompatibility.supportedIndexVersion)
             let stamp = [
                 ("exported_at", "2026-10-03T15:14:19Z"), ("my_writing_included", "0"), ("app_version", "0.2"),
-                ("app_build", "49"), ("installed_index_version", "65"), ("current_index_version", "65"),
+                ("app_build", build), ("installed_index_version", version), ("current_index_version", version),
                 ("installed_fts_schema_version", "4"), ("current_fts_schema_version", "4"),
             ]
             for (key, value) in stamp {
@@ -135,7 +139,7 @@ struct ParityExport {
                               .text("day"), .text("stated")])
             try insert("document_revisions", ["volume_id", "document_id", "content_hash", "body_hash", "index_version"],
                        [.text(volume), .text(doc.id), .text(Digest.sha256("\(volume)/\(doc.id)/content")),
-                        .text(String(Digest.sha256(doc.body).prefix(16))), .integer(65)])
+                        .text(String(Digest.sha256(doc.body).prefix(16))), .integer(Int64(IndexCompatibility.supportedIndexVersion))])
             guard !doc.frontMatter else { continue }
             try insert("document_sources",
                        ["volume_id", "document_id", "repository", "record_group", "series_name", "citation_era", "raw_text", "classification"],

@@ -130,7 +130,7 @@ func decode<T: Decodable>(_ type: T.Type, _ response: TestResponse) throws -> T 
             let status = try decode(ServerStatus.self, response)
             #expect(status.version == FRUSLightVersion.string)
             #expect(status.mode == .import && status.auth == .none)
-            #expect(status.supportedIndexVersion == 65 && status.ftsSchemaVersion == 4)
+            #expect(status.supportedIndexVersion == IndexCompatibility.supportedIndexVersion && status.ftsSchemaVersion == 4)
             #expect(status.sqliteVersion.hasPrefix("3."))
             #expect(status.readiness.ready)
             #expect(status.index?.documents == 3 && status.index?.appBuild == "49")

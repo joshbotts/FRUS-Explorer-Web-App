@@ -12,9 +12,10 @@ let renderConfiguration = """
     the document alone and takes persons and glossary terms from the volume's TEI. broken-refs-index.json \
     lists no reference in the fixture volumes, so no cross-reference is degraded. Then \
     HTMLTemplate.build(model:colorScheme: .light), keeping the body: the fragment \
-    FRUSRenderNodeHTMLSerializer(annotateSourceClassification: true, figureImages: .reader) writes. \
+    FRUSRenderNodeHTMLSerializer.reader writes (annotateSourceClassification: true, \
+    figureImages: .reader, listsNamedReferences: true). \
     Rows are every document a full parse of each volume yields, in parse order, volumes sorted. \
-    A debug build of the app module, compiled from the submodule unmodified.
+    A release build of the app module, with testing enabled, compiled from the submodule unmodified.
     """
 
 @MainActor

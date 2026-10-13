@@ -52,7 +52,7 @@ struct ImportFixture {
 
         #expect(await recorder.steps == ReadinessStep.importSteps)
         #expect(await recorder.progress.last == 1)
-        #expect(index.summary == IndexSummary(documents: 3, volumes: 2, indexVersion: 65, ftsSchemaVersion: 4,
+        #expect(index.summary == IndexSummary(documents: 3, volumes: 2, indexVersion: IndexCompatibility.supportedIndexVersion, ftsSchemaVersion: 4,
                                               exportedAt: "2026-10-03T15:14:19Z", appVersion: "0.2", appBuild: "49"))
         #expect(fixture.exists(fixture.files.liveIndex))
         #expect(!fixture.exists(fixture.files.candidateIndex))
@@ -84,7 +84,7 @@ struct ImportFixture {
         var export = SyntheticExport()
         export.stamped = false
         let index = try await fixture.importer.importExport(at: try fixture.drop(export), observer: StepRecorder())
-        #expect(index.summary.indexVersion == 65)
+        #expect(index.summary.indexVersion == IndexCompatibility.supportedIndexVersion)
         #expect(index.summary.exportedAt == nil)
     }
 
@@ -114,7 +114,7 @@ struct ImportFixture {
         }
         return [
             Refusal(name: "an older index version", export: export { $0.indexVersion = 64 },
-                    step: .checkingVersions, reason: "index version 64; this server serves index version 65"),
+                    step: .checkingVersions, reason: "index version 64; this server serves index version \(IndexCompatibility.supportedIndexVersion)"),
             Refusal(name: "a library still re-indexing", export: export { $0.installedIndexVersion = 64 },
                     step: .checkingVersions, reason: "finish re-indexing"),
             Refusal(name: "another FTS schema generation", export: export { $0.ftsSchemaVersion = 3 },

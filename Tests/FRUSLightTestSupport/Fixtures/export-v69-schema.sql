@@ -1,5 +1,7 @@
--- Schema of a FRUS Explorer research export: index version 65, FTS schema 4, app build 49.
--- Taken from the owner's export of 3 October 2026 (sqlite_master, in creation order).
+-- Schema of a FRUS Explorer research export: index version 69, FTS schema 4, app build 50.
+-- Taken from the owner's three-volume export of 13 October 2026 (sqlite_master, in creation order).
+-- Its library was emptied with Erase Everything…, which keeps the database file, so the partial index
+-- idx_document_cache_user_tag_ids comes last among the indexes; a new database makes it earlier.
 -- Schema only: no rows. SQLite internals and FTS5 shadow tables are left out; FTS5 creates those.
 
 CREATE TABLE cross_references (
@@ -264,6 +266,9 @@ ON external_citations(repository, collection);
 CREATE INDEX idx_vol_src_rg ON volume_sources(volume_id, record_group);
 
 CREATE INDEX idx_vol_src_lot_norm ON volume_sources(lot_file_norm);
+
+CREATE INDEX idx_document_cache_user_tag_ids
+ON document_cache(volume_id, document_id) WHERE user_tag_ids IS NOT NULL;
 
 CREATE VIRTUAL TABLE frus_documents USING fts5(
     document_id UNINDEXED,

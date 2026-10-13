@@ -5,7 +5,7 @@
 /// changes either one fails until this file follows.
 public enum IndexCompatibility {
     /// `IndexingPipeline.currentDateIndexVersion` at the pinned commit.
-    public static let supportedIndexVersion = 65
+    public static let supportedIndexVersion = 69
     /// `FTS5Connection.currentSchemaGeneration`, stored in `PRAGMA user_version`.
     public static let ftsSchemaVersion = 4
 }

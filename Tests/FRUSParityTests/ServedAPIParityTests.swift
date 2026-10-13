@@ -17,7 +17,7 @@ import Testing
 
 /// A server with the fixture volumes' TEI mounted, serving the kit's fixture index once it has
 /// imported it from the drop zone. The index is the shared fixture index's rollback-journal copy,
-/// unstamped, which Import mode accepts because every document is at index version 65.
+/// unstamped, which Import mode accepts because every document is at the index version it serves.
 enum ServedFixture {
     static let resources = Repository.layout.upstream.appendingPathComponent(ParityIndex.resourcesPath)
 
@@ -73,7 +73,7 @@ struct ServedFile: Equatable {
 }
 
 @Suite struct ServedAPIParityTests {
-    static let coverage = Coverage(indexedVolumes: 3, indexedDocuments: 392, manifestVolumes: 553, indexVersion: 65)
+    static let coverage = Coverage(indexedVolumes: 3, indexedDocuments: 392, manifestVolumes: 553, indexVersion: IndexCompatibility.supportedIndexVersion)
 
     /// One page of a parity query's search, or the kit's refusal as an error.
     static func search(_ client: any TestClientProtocol, _ query: ParityQuery, limit: Int, offset: Int) async throws -> SearchResultList {

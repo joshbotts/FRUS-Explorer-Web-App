@@ -7,7 +7,8 @@
 // bundled broken-refs index an unresolved reference, `FRUSURLScheme.resolveCrossRefTarget` a
 // cross-reference, and, over the served index, `PageRangeStore` a page's document and
 // `PersonMentionStore` a person's mentions. Only the choice between a person's two counts is the
-// app's, and `mentionCount` mirrors it.
+// app's, and `mentionCount` mirrors it; and a reference to a whole volume says what this server
+// holds of the volume, so the browser app can go where the app's `WholeVolumeLink` sends it.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -62,7 +63,7 @@ public struct ReaderLinkTarget: Codable, Equatable, Sendable {
         public var indexed: Bool
     }
 
-    /// `person`, `gloss`, `document`, `page`, `external`, `unresolved` or `brokenReference`.
+    /// `person`, `gloss`, `document`, `page`, `volume`, `external`, `unresolved` or `brokenReference`.
     public var kind: String
     /// The link, as the page wrote it.
     public var href: String
@@ -74,8 +75,8 @@ public struct ReaderLinkTarget: Codable, Equatable, Sendable {
     /// index is served.
     public var mentionCount: Int?
     public var term: Term?
-    /// The reference's target, as the TEI gives it; for `document`, `page`, `unresolved` and
-    /// `brokenReference`.
+    /// The reference's target, as the TEI gives it; for `document`, `page`, `volume`, `unresolved`
+    /// and `brokenReference`.
     public var target: String?
     public var destination: Destination?
     /// Whether the destination is a note in the document the link is in, which the reader shows in
@@ -86,6 +87,9 @@ public struct ReaderLinkTarget: Codable, Equatable, Sendable {
     /// document the index's page ranges place on that page, when they place one.
     public var page: Int?
     public var pageVolumeId: String?
+    /// The volume a reference to a whole volume names, as its target gives it; for `volume`. Its
+    /// `volume` is what this server holds of it, absent for a volume outside the catalogue.
+    public var volumeId: String?
     /// For `external`.
     public var url: String?
     /// The bundled index's account of an unresolved reference; for `brokenReference`, when it has one.
@@ -169,6 +173,13 @@ enum ReaderLinkRoutes {
                     } else {
                         target.volume = await describe(pageVolume, state: state, reader: reader, resources: resources)
                     }
+                case .volume(let otherVolume):
+                    // A whole volume (joshbotts/FRUS-Explorer#1603). The app opens the volume's page
+                    // in Browse when its catalogue holds it, and history.state.gov's page otherwise,
+                    // whose address the kit keeps to itself (`FRUSCanonicalURL.volumeURL`).
+                    target.kind = "volume"
+                    target.volumeId = otherVolume
+                    target.volume = await describe(otherVolume, state: state, reader: reader, resources: resources)
                 case .external(let url):
                     target.kind = "external"
                     target.url = url.absoluteString
