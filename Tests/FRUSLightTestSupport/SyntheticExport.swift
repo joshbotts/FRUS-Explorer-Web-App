@@ -64,7 +64,8 @@ public struct SyntheticExport: Sendable {
         // A page and a person for the reader's links, shaped as a real export's rows for the same
         // documents: d1 and d2 begin pages 1 and 2 of frus1961-63v06, and both mention Khrushchev
         // (p_KNS2), whose rollup counts his documents, and Kennedy (p_KJF2), who has no rollup here,
-        // so his count is his documents in the volume. scripts/synthetic-export writes the same rows.
+        // so his count is his documents in the volume. Each document has its date from its TEI, so
+        // the facets have years. scripts/synthetic-export writes the same rows.
         try db.execute("""
             INSERT INTO page_ranges (volume_id, document_id, section_id, page_number_type, page_number_int, page_number_raw, is_start)
             VALUES ('frus1961-63v06', 'd1', 'd1', 'arabic', 1, '1', 1), ('frus1961-63v06', 'd2', 'd2', 'arabic', 2, '2', 1);
@@ -75,6 +76,10 @@ public struct SyntheticExport: Sendable {
             VALUES (1, 'khrushchev, nikita sergeyevich', 'Khrushchev, Nikita Sergeyevich',
                     'Chairman of the Council of Ministers of the Soviet Union', \(rollupMentionCount), 1);
             INSERT INTO person_rollup_member (volume_id, ref, rollup_id) VALUES ('frus1961-63v06', 'p_KNS2', 1);
+            INSERT INTO document_dates (volume_id, document_id, date_iso, date_iso_max, date_precision)
+            VALUES ('frus1961-63v06', 'd1', '1960-11-09', '1960-11-09', 'day'),
+                   ('frus1961-63v06', 'd2', '1960-11-10', '1960-11-10', 'day'),
+                   ('frus1894Nicaragua', 'd1', '1894-01-25', '1894-01-25', 'day');
             """)
         if !stamped {
             // A .backup of the live index: the exporter adds the stamp and these views to its copy only.

@@ -71,6 +71,12 @@ struct FormQuery: Sendable {
         return value
     }
 
+    /// A decimal integer in `range`, or nil when absent.
+    func optionalInteger(_ name: String, in range: ClosedRange<Int>) throws(APIProblem) -> Int? {
+        guard try single(name) != nil else { return nil }
+        return try integer(name, in: range, default: range.lowerBound)
+    }
+
     /// The value whose raw value is given, or nil when absent. `known` names the values a refusal lists.
     func choice<T: RawRepresentable>(_ name: String, among known: [T]) throws(APIProblem) -> T? where T.RawValue == String {
         guard let raw = try single(name) else { return nil }

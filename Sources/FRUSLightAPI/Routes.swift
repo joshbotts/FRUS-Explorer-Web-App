@@ -28,6 +28,7 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     }
     CatalogRoutes.add(to: router, state: state, provider: provider, resources: resources, reader: reader)
     SearchRoutes.add(to: router, provider: provider, resources: resources)
+    FacetRoutes.add(to: router, provider: provider, resources: resources)
     ReaderRoutes.add(to: router, reader: reader, provider: provider, resources: resources)
     CitationRoutes.add(to: router, reader: reader, provider: provider, resources: resources)
     ReaderLinkRoutes.add(to: router, state: state, provider: provider, reader: reader, resources: resources)
