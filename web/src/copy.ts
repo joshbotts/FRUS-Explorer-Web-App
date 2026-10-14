@@ -1,6 +1,7 @@
 // Every string the app shows, in one place, for the string catalogue that check 10 will compare
-// with the app's. Where the Mac app labels the same control, this uses its wording: Copy URL from
-// its Cite popover, Copy Citation from the reader, Document type and its choices from the search
+// with the app's. Where the Mac app labels the same control, this uses its wording: Copy URL, Copy
+// BibTeX, Copy RIS and Save as .bib (less its ellipsis, since a browser saves at once) from its
+// Cite popover, Copy Citation from the reader, Document type and its choices from the search
 // filters, Text Size from Settings; Browse's All Volumes, its filter's prompt, Partial, Planned and
 // Documents (n); the person, term and unresolved-reference sheets' titles, sentences and Done, the
 // person sheet's In Indexed Documents and its count, and
@@ -147,6 +148,9 @@ export const copy = {
     style: 'Citation style',
     copyCitation: 'Copy Citation',
     copyLink: 'Copy URL',
+    copyBibTeX: 'Copy BibTeX',
+    copyRIS: 'Copy RIS',
+    saveBibTeX: 'Save as .bib',
     copied: 'Copied',
     copyFailed: 'The browser did not allow copying. The text is selected below: press ⌘C or Ctrl+C.',
     toCopy: 'Text to copy',

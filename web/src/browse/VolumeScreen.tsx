@@ -83,7 +83,7 @@ function ReadingOrder({ volumeId }: { volumeId: string }) {
         {order.data.items.map((item) => (
           <li key={item.documentId}>
             <Link to="/doc/$volumeId/$documentId" params={{ volumeId, documentId: item.documentId }}>
-              {item.header}
+              {item.displayTitle}
             </Link>
             {item.dateline && <p className="meta">{item.dateline}</p>}
           </li>

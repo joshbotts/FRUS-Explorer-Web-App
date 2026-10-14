@@ -131,10 +131,13 @@ private func formEncoded(_ fields: [String: String]) -> String {
             let whole = try await resolve("frusexplorer://doc/frus1961-63v05", in: "preface")
             #expect(whole.kind == "volume" && whole.volumeId == "frus1961-63v05" && whole.target == "frus1961-63v05")
             #expect(whole.destination == nil && whole.volume?.teiAvailable == false && whole.volume?.indexed == false)
+            #expect(whole.url == "https://history.state.gov/historicaldocuments/frus1961-63v05")
             let itself = try await resolve("frusexplorer://doc/frus1961-63v06", in: "preface")
             #expect(itself.kind == "volume" && itself.volume == .init(title: v06Title, teiAvailable: true, indexed: true))
             let supplement = try await resolve("frusexplorer://doc/frus1961-63v13-15mSupp", in: "preface")
             #expect(supplement.kind == "volume" && supplement.volumeId == "frus1961-63v13-15mSupp" && supplement.volume == nil)
+            // Outside the catalogue, the app opens the volume's page on history.state.gov, as the kit spells it.
+            #expect(supplement.url == "https://history.state.gov/historicaldocuments/frus1961-63v13-15mSupp")
             // No fixture volume has a broken reference.
             let broken = try await resolve("frusexplorer://brokenref/%23pg_700", in: "d1")
             #expect(broken.kind == "brokenReference" && broken.target == "#pg_700" && broken.brokenReference == nil)
@@ -260,6 +263,37 @@ private func formEncoded(_ fields: [String: String]) -> String {
             let none = try await client.execute(uri: "/api/v1/volumes/\(v06)/sections/comp1", method: .get)
             #expect(try problem(none, .notFound).code == "SECTION_NOT_FOUND")
         }
+    }
+
+    /// A list names a document as the app's lists do (`DocumentDisplayTitle`), and the reader's heading
+    /// takes the same name: an editorial note whose head says only what it is by its number, a document
+    /// with no head by its id, and any other by its head.
+    @Test func aListNamesADocumentAsTheAppsListsDo() async throws {
+        let fixture = try await servingSyntheticExport(volumes: [v06], edits: """
+            UPDATE document_cache SET header = 'Editorial Note', document_number = '2', is_editorial_note = 1
+              WHERE volume_id = 'frus1961-63v06' AND document_id = 'd2';
+            UPDATE document_cache SET header = '' WHERE volume_id = 'frus1894Nicaragua';
+            """)
+        try await fixture.app.test(.router) { client in
+            let section = try decode(VolumeSectionPage.self, try await client.execute(uri: "/api/v1/volumes/\(v06)/sections/comp1", method: .get))
+            #expect(section.documents[0].displayTitle == "1. Telegram From the Embassy in the Soviet Union")
+            #expect(section.documents[1].header == "Editorial Note" && section.documents[1].displayTitle == "Editorial Note 2")
+            // A document the index lacks keeps the name its TEI gives it.
+            #expect(section.documents[2].displayTitle == "Document 3" && section.documents[2].displayTitle == section.documents[2].header)
+            let order = try decode(DocumentList.self, try await client.execute(uri: "/api/v1/volumes/\(v06)/documents?limit=1000", method: .get))
+            #expect(order.items.first { $0.documentId == "d2" }?.displayTitle == "Editorial Note 2")
+            let d2 = try decode(DocumentDetail.self, try await client.execute(uri: "/api/v1/volumes/\(v06)/documents/d2", method: .get))
+            #expect(d2.document.isEditorialNote && d2.document.displayTitle == "Editorial Note 2")
+            let headless = try decode(DocumentDetail.self, try await client.execute(uri: "/api/v1/volumes/frus1894Nicaragua/documents/d1", method: .get))
+            #expect(headless.document.header.isEmpty && headless.document.displayTitle == "d1")
+        }
+        // A classification taken after the entry is made, as the reader takes the index's effective
+        // one, renames it with it.
+        var entry = DocumentEntry(documentId: "d2", volumeId: v06, documentNumber: "2", header: "Editorial Note",
+                                  isEditorialNote: false, inIndex: true)
+        #expect(entry.displayTitle == "Editorial Note")
+        entry.classify(asEditorialNote: true)
+        #expect(entry.isEditorialNote && entry.displayTitle == "Editorial Note 2")
     }
 
     /// The reader works without the index, so a document the index lacks, or every document before

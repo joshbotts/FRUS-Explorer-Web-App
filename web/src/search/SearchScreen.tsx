@@ -1,5 +1,7 @@
 // Search (SPEC, Search): the query box with the app's query language, the first filters, and a
-// page of results by relevance, with the exact count and what it was counted over.
+// page of results by relevance, with the exact count and what it was counted over. A result is
+// named as the Mac's search window names it, with the document's label beside its volume unless
+// the title already opens with its number.
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { type FormEvent, useId, useState } from 'react';
@@ -218,11 +220,12 @@ function Results({
                 <li key={`${item.volumeId}/${item.documentId}`} className="result">
                   <h3>
                     <Link to="/doc/$volumeId/$documentId" params={{ volumeId: item.volumeId, documentId: item.documentId }}>
-                      {item.header}
+                      {item.displayTitle}
                     </Link>
                   </h3>
                   <p className="meta">
                     {titles.get(item.volumeId) ?? item.volumeId}
+                    {!item.headerRepeatsNumber && <> · {item.documentLabel}</>}
                     {item.dateline && <> · {item.dateline}</>}
                     {item.isEditorialNote && <Badge>{copy.search.editorialNote}</Badge>}
                     {item.isFrontMatter && <Badge>{copy.search.frontMatterBadge}</Badge>}

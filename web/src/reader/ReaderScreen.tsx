@@ -1,7 +1,7 @@
 // The reader (SPEC, Reader rendering and Reader and Research rail): the document's header and
 // toolbar, the server's page in a sandboxed frame, the Cite rail beside it, and what the page's
-// links lead to: another document or a note in one, a whole volume in Browse, or a card for a
-// person, a term or an unresolved reference.
+// links lead to: another document or a note in one, a whole volume in Browse or, outside the
+// catalogue, on history.state.gov, or a card for a person, a term or an unresolved reference.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from 'react';
@@ -142,9 +142,18 @@ export function ReaderScreen() {
         return;
       case 'volume':
         // A whole volume opens in Browse when the catalogue holds it, as the app's WholeVolumeLink
-        // sends it there; the app opens any other on history.state.gov.
+        // sends it there; the app opens any other on history.state.gov, which the notice offers.
         if (target.volume && target.volumeId) {
           void navigate({ to: '/browse/$volumeId', params: { volumeId: target.volumeId } });
+        } else if (target.url) {
+          say(
+            <>
+              {copy.reader.linkUnknownVolume}{' '}
+              <a href={target.url} target="_blank" rel="noopener noreferrer">
+                {copy.reader.openOnline}
+              </a>
+            </>,
+          );
         } else {
           say(copy.reader.linkUnknownVolume);
         }
@@ -210,7 +219,8 @@ export function ReaderScreen() {
   }
 
   const entry = detail.data?.document;
-  const header = entry?.header || documentId;
+  // Named as the row that opened it, by the kit's rule for lists, as the app's reader is.
+  const header = entry?.displayTitle ?? documentId;
   const volumeTitle = volumes.data?.items.find((volume) => volume.volumeId === volumeId)?.title ?? volumeId;
   useDocumentTitle(header);
   useHeadingReady(!detail.isPending);

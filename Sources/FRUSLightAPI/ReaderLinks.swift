@@ -8,7 +8,8 @@
 // cross-reference, and, over the served index, `PageRangeStore` a page's document and
 // `PersonMentionStore` a person's mentions. Only the choice between a person's two counts is the
 // app's, and `mentionCount` mirrors it; and a reference to a whole volume says what this server
-// holds of the volume, so the browser app can go where the app's `WholeVolumeLink` sends it.
+// holds of the volume, with the volume's page on history.state.gov (`FRUSCanonicalURL.volumeURL`),
+// so the browser app can go where the app's `WholeVolumeLink` sends it.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -90,7 +91,8 @@ public struct ReaderLinkTarget: Codable, Equatable, Sendable {
     /// The volume a reference to a whole volume names, as its target gives it; for `volume`. Its
     /// `volume` is what this server holds of it, absent for a volume outside the catalogue.
     public var volumeId: String?
-    /// For `external`.
+    /// For `external`, the link's address; for `volume`, the volume's page on history.state.gov
+    /// (`FRUSCanonicalURL.volumeURL`), which the app opens for a volume outside its catalogue.
     public var url: String?
     /// The bundled index's account of an unresolved reference; for `brokenReference`, when it has one.
     public var brokenReference: BrokenReference?
@@ -102,6 +104,11 @@ extension ReaderLinkTarget: ResponseEncodable {}
 let readerLinkMaximumLength = 2_048
 
 enum ReaderLinkRoutes {
+    /// The prefix the kit's serializer gives a note's entry in the page's list of footnotes
+    /// (`FRUSRenderNodeHTMLSerializer`), before the note's key; the kit's `FootnoteLanding` script
+    /// adds it to the key it is given.
+    static let footnoteEntryPrefix = "fnote-"
+
     static func add(to router: Router<BasicRequestContext>, state: ServerState, provider: ServedIndexProvider,
                     reader: ReaderService, resources: ServerResources) {
         router.get("/api/v1/volumes/:volumeId/documents/:documentId/link") { request, context -> ReaderLinkTarget in
@@ -176,10 +183,11 @@ enum ReaderLinkRoutes {
                 case .volume(let otherVolume):
                     // A whole volume (joshbotts/FRUS-Explorer#1603). The app opens the volume's page
                     // in Browse when its catalogue holds it, and history.state.gov's page otherwise,
-                    // whose address the kit keeps to itself (`FRUSCanonicalURL.volumeURL`).
+                    // whose address the kit gives (`FRUSCanonicalURL.volumeURL`).
                     target.kind = "volume"
                     target.volumeId = otherVolume
                     target.volume = await describe(otherVolume, state: state, reader: reader, resources: resources)
+                    target.url = FRUSCanonicalURL.volumeURL(volumeId: otherVolume)?.absoluteString
                 case .external(let url):
                     target.kind = "external"
                     target.url = url.absoluteString
@@ -200,7 +208,7 @@ enum ReaderLinkRoutes {
         // of footnotes (FRUSRenderNodeHTMLSerializer), so the frame's fragment lands on it.
         target.destination = .init(
             volumeId: volumeId, documentId: documentId, footnoteAnchor: anchor,
-            footnoteElementId: anchor.map { "fnote-" + FRUSRenderNode.footnoteDOMKey(id: $0, sequentialNumber: 0) },
+            footnoteElementId: anchor.map { footnoteEntryPrefix + FRUSRenderNode.footnoteDOMKey(id: $0, sequentialNumber: 0) },
             canonicalURL: FRUSCanonicalURL.string(volumeId: volumeId, documentId: documentId))
         target.inPlace = anchor != nil && volumeId == origin.volumeId && documentId == origin.documentId
         target.volume = await describe(volumeId, state: state, reader: reader, resources: resources)

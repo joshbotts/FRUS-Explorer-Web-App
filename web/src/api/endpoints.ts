@@ -130,6 +130,11 @@ export function citationQuery(volumeId: string, documentId: string, style: Citat
   });
 }
 
+/** A document's BibTeX or RIS record as a file to save, named as the Mac names its .bib file. */
+export function citationFileURL(volumeId: string, documentId: string, suffix: 'bib' | 'ris'): string {
+  return `${documentPath(volumeId, documentId)}/citation.${suffix}`;
+}
+
 /** Retries a network failure or a server fault twice; never a refusal, nor a 503 while importing. */
 export function retryServerFaults(failures: number, error: unknown): boolean {
   if (failures >= 2) return false;

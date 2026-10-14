@@ -1,8 +1,9 @@
 // Cite (SPEC, Citation): the document's citation in the kit's three styles, as the server writes
-// it, with Copy Citation and Copy URL.
+// it, with Copy Citation and Copy URL; and its BibTeX and RIS records, with the Mac popover's Copy
+// BibTeX, Copy RIS and Save as .bib.
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { citationQuery } from '../api/endpoints';
+import { citationFileURL, citationQuery } from '../api/endpoints';
 import type { CitationStyleName } from '../api/types';
 import { copy } from '../copy';
 import { useCitationStyle } from '../settings/preferences';
@@ -50,6 +51,8 @@ export function CitePanel({
   }, [focusOnOpen]);
 
   async function copyText(text: string) {
+    // The status empties first, so a second copy that says the same is announced again.
+    setOutcome(null);
     try {
       await navigator.clipboard.writeText(text);
       setOutcome({ key, status: copy.cite.copied, fallback: null });
@@ -117,6 +120,18 @@ export function CitePanel({
             <button type="button" onClick={() => void copyText(data.canonicalURL)}>
               {copy.cite.copyLink}
             </button>
+          </div>
+          {/* The records name no style, so another style loading leaves them as they are. */}
+          <div className="actions">
+            <button type="button" onClick={() => void copyText(data.bibtex)}>
+              {copy.cite.copyBibTeX}
+            </button>
+            <button type="button" onClick={() => void copyText(data.ris)}>
+              {copy.cite.copyRIS}
+            </button>
+            <a className="button" href={citationFileURL(volumeId, documentId, 'bib')} download>
+              {copy.cite.saveBibTeX}
+            </a>
           </div>
         </>
       )}

@@ -1,5 +1,6 @@
 // A section of a volume (SPEC, Browse): its subsections, and its documents in the volume's order,
-// each named as the index holds it or, for one it does not, by its number from the TEI.
+// each named by the kit's rule for lists from the index's entry, as the reader's heading is, or, for
+// one the index lacks, by its number from the TEI.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { ApiError } from '../api/client';
@@ -70,10 +71,10 @@ export function SectionScreen() {
                 {data.documents.map((document) => (
                   <li key={document.documentId}>
                     {document.readable === false ? (
-                      <span>{document.header}</span>
+                      <span>{document.displayTitle}</span>
                     ) : (
                       <Link to="/doc/$volumeId/$documentId" params={{ volumeId, documentId: document.documentId }}>
-                        {document.header}
+                        {document.displayTitle}
                       </Link>
                     )}
                     {(document.dateline || document.isEditorialNote || !document.inIndex) && (
