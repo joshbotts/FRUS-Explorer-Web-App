@@ -17,10 +17,16 @@ import Testing
 
 @testable import FRUSLightAPI
 
-/// A server fixture serving the synthetic export as its live index.
-func servingSyntheticExport(volumes: [String] = []) async throws -> ServerFixture {
+/// A server fixture serving the synthetic export as its live index, with `edits`, SQL, made to it
+/// first, such as a document's number or header as a real export would give them.
+func servingSyntheticExport(volumes: [String] = [], edits: String? = nil) async throws -> ServerFixture {
     let fixture = try await ServerFixture(volumes: volumes)
     try SyntheticExport().write(to: fixture.files.liveIndex)
+    if let edits {
+        let index = try SQLiteConnection(fixture.files.liveIndex.path, readOnly: false)
+        defer { index.close() }
+        try index.execute(edits)
+    }
     await fixture.state.openExistingIndex(files: fixture.files)
     return fixture
 }
@@ -52,6 +58,43 @@ func servingSyntheticExport(volumes: [String] = []) async throws -> ServerFixtur
             #expect(second.total == 2 && second.items.count == 1 && second.items.first?.documentId == list.items.last?.documentId)
             let none = try decode(SearchResultList.self, try await client.execute(uri: "/api/v1/search?keywords=zanzibar", method: .get))
             #expect(none.total == 0 && none.items.isEmpty)
+        }
+    }
+
+    /// A row names its document as the Mac's search window does: the header less a source note run
+    /// on into it, and beside the volume the document's label, withheld when the header already
+    /// opens with the number. A row with no header, which the window would leave blank, takes the
+    /// name the app's lists give it.
+    @Test func aRowNamesItsDocumentAsTheMacsSearchWindowDoes() async throws {
+        // As a real export would hold them: numbers for the three rows, d2's header run on into its
+        // source note as an index before v15 could leave it, and Nicaragua's d1 an editorial note
+        // with no header.
+        let fixture = try await servingSyntheticExport(edits: """
+            UPDATE document_cache SET document_number = '1' WHERE document_id = 'd1';
+            UPDATE document_cache SET document_number = '2',
+                header = '2. Memorandum of Conversation Source: Department of State, Central Files, 611.61/5–2661'
+              WHERE document_id = 'd2';
+            UPDATE document_cache SET header = '', is_editorial_note = 1 WHERE volume_id = 'frus1894Nicaragua';
+            """)
+        try await fixture.app.test(.router) { client in
+            let treaties = try decode(SearchResultList.self, try await client.execute(uri: "/api/v1/search?keywords=treaties", method: .get))
+            let rows = Dictionary(uniqueKeysWithValues: treaties.items.map { ($0.documentId, $0) })
+            let d1 = try #require(rows["d1"])
+            #expect(d1.displayTitle == "1. Telegram From the Embassy in the Soviet Union" && d1.documentLabel == "Doc 1" && d1.headerRepeatsNumber)
+            let d2 = try #require(rows["d2"])
+            #expect(d2.displayTitle == "2. Memorandum of Conversation" && d2.header.hasSuffix("611.61/5–2661"))
+            #expect(d2.documentLabel == "Doc 2" && d2.headerRepeatsNumber)
+            let canal = try decode(SearchResultList.self, try await client.execute(uri: "/api/v1/search?keywords=canal", method: .get))
+            let note = try #require(canal.items.first)
+            #expect(note.header.isEmpty && note.displayTitle == "Editorial Note 1")
+            #expect(note.documentLabel == "Doc 1" && !note.headerRepeatsNumber)
+        }
+        // With no number, the label is the one the id spells, and nothing withholds it.
+        let unnumbered = try await servingSyntheticExport()
+        try await unnumbered.app.test(.router) { client in
+            let treaties = try decode(SearchResultList.self, try await client.execute(uri: "/api/v1/search?keywords=treaties", method: .get))
+            #expect(treaties.items.allSatisfy { $0.displayTitle == $0.header && !$0.headerRepeatsNumber })
+            #expect(Set(treaties.items.map(\.documentLabel)) == ["Doc 1", "Doc 2"])
         }
     }
 
@@ -254,6 +297,10 @@ func servingSyntheticExport(volumes: [String] = []) async throws -> ServerFixtur
             // A card hands focus back to the link, a middle click opens nothing, and Space activates an unresolved reference.
             #expect(script.contains("restoreFocus") && script.contains("auxclick") && script.contains("role') === 'button'"))
             #expect(script.contains("kind === 'reveal'") && script.contains("scrollIntoView"))
+            // A note is landed on by the app's own script, byte for byte, its key the function's parameter.
+            #expect(script.contains("function landOnFootnote(key) {\n    return \(FootnoteLanding.script(keyExpression: "key"));"))
+            #expect(script.contains("var prefix = '\(ReaderLinkRoutes.footnoteEntryPrefix)';"))
+            #expect(script == ReaderHostScript.source)
         }
     }
 

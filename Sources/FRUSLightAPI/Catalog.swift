@@ -249,7 +249,7 @@ enum CatalogRoutes {
             let date = try await served.pipeline.datesByDocumentKey([(volumeId: volumeId, documentId: entry.documentId)])
             let classification = try await served.pipeline.effectiveIsEditorialNote(volumeId: volumeId, documentId: entry.documentId)
             var document = DocumentEntry(entry, inIndex: true, dateISO: date["\(volumeId)/\(entry.documentId)"])
-            document.isEditorialNote = classification ?? entry.isEditorialNote
+            document.classify(asEditorialNote: classification ?? entry.isEditorialNote)
             return DocumentDetail(document: document,
                                   canonicalURL: FRUSCanonicalURL.string(volumeId: volumeId, documentId: entry.documentId),
                                   previous: neighbour(-1), next: neighbour(1), teiAvailable: teiAvailable)
@@ -329,6 +329,8 @@ public struct VolumeSectionPage: Codable, Equatable, Sendable {
 public struct SectionDocument: Codable, Equatable, Sendable {
     public var documentId: String
     public var header: String
+    /// What the list calls it (`displayTitle(header:documentNumber:isEditorialNote:documentId:)`).
+    public var displayTitle: String
     public var documentNumber: String?
     public var dateline: String?
     public var isEditorialNote: Bool
@@ -342,6 +344,8 @@ public struct SectionDocument: Codable, Equatable, Sendable {
         documentNumber = entry.documentNumber
         dateline = entry.dateline
         isEditorialNote = entry.isEditorialNote
+        displayTitle = FRUSLightAPI.displayTitle(header: header, documentNumber: documentNumber,
+                                                 isEditorialNote: isEditorialNote, documentId: documentId)
         inIndex = true
         self.readable = readable
     }
@@ -351,9 +355,25 @@ public struct SectionDocument: Codable, Equatable, Sendable {
         header = teiHeader(documentId: documentId, printed: ast?.printedNumber, structure: structure)
         documentNumber = CitableDocumentNumber.resolve(printed: ast?.printedNumber, documentId: documentId)
         isEditorialNote = ast?.isShapedAsEditorialNote ?? false
+        displayTitle = FRUSLightAPI.displayTitle(header: header, documentNumber: documentNumber,
+                                                 isEditorialNote: isEditorialNote, documentId: documentId)
         inIndex = false
         self.readable = readable
     }
+}
+
+/// What a list calls a document: the kit's `DocumentDisplayTitle`, from its header, number and
+/// classification. A printed head names it, unless it is an editorial note's head that says only what
+/// it is ("Editorial Note"), when the note is named by its number ("Editorial Note 304"); a document
+/// with no head and no note's flag is named by its id. The app's Research, working-corpus and cluster
+/// lists name a document by it, and its reader's title too. Its Browse rows print the stored head
+/// (`DocumentRowLabel`), which for 2,560 notes is only "Editorial Note"; Browse here takes the kit's
+/// rule instead, so a row reads as the heading of the reader it opens.
+func displayTitle(header: String, documentNumber: String?, isEditorialNote: Bool, documentId: String) -> String {
+    // An empty header is none, as the app's `CrossReferenceStore.documentHeaders(for:)` leaves it out.
+    DocumentDisplayTitle.text(.init(header: header.isEmpty ? nil : header, documentNumber: documentNumber,
+                                    isEditorialNote: isEditorialNote),
+                              documentId: documentId)
 }
 
 extension VolumeSectionPage: ResponseEncodable {}
@@ -378,10 +398,13 @@ public struct DocumentEntry: Codable, Equatable, Sendable {
     public var volumeId: String
     public var documentNumber: String?
     public var header: String
+    /// What a list calls it, and the reader's heading
+    /// (`displayTitle(header:documentNumber:isEditorialNote:documentId:)`).
+    public var displayTitle: String
     public var dateline: String?
     public var sourceNote: String?
     public var dateISO: String?
-    public var isEditorialNote: Bool
+    public private(set) var isEditorialNote: Bool
     public var inIndex: Bool
 
     init(documentId: String, volumeId: String, documentNumber: String?, header: String, isEditorialNote: Bool, inIndex: Bool) {
@@ -391,6 +414,8 @@ public struct DocumentEntry: Codable, Equatable, Sendable {
         self.header = header
         self.isEditorialNote = isEditorialNote
         self.inIndex = inIndex
+        displayTitle = FRUSLightAPI.displayTitle(header: header, documentNumber: documentNumber,
+                                                 isEditorialNote: isEditorialNote, documentId: documentId)
     }
 
     init(_ entry: DocumentBrowserEntry, inIndex: Bool, dateISO: String?) {
@@ -403,6 +428,15 @@ public struct DocumentEntry: Codable, Equatable, Sendable {
         self.dateISO = dateISO
         isEditorialNote = entry.isEditorialNote
         self.inIndex = inIndex
+        displayTitle = FRUSLightAPI.displayTitle(header: header, documentNumber: documentNumber,
+                                                 isEditorialNote: isEditorialNote, documentId: documentId)
+    }
+
+    /// Takes a classification, such as the index's effective one, and the title that goes with it.
+    mutating func classify(asEditorialNote isEditorialNote: Bool) {
+        self.isEditorialNote = isEditorialNote
+        displayTitle = FRUSLightAPI.displayTitle(header: header, documentNumber: documentNumber,
+                                                 isEditorialNote: isEditorialNote, documentId: documentId)
     }
 }
 

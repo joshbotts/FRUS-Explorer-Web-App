@@ -1,4 +1,5 @@
-// The citation endpoint, and the browser app's files with their fallback, through the router.
+// The citation endpoint and its record files, and the browser app's files with their fallback,
+// through the router.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -33,7 +34,7 @@ import Testing
             #expect(byDefault.citation.hasPrefix("_Foreign Relations of the United States_, 1961–1963"))
             #expect(byDefault.plainText == CitationPlainText.plain(byDefault.citation))
             #expect(byDefault.documentNumber == "1" && byDefault.documentLabel == "Doc 1")
-            #expect(byDefault.numberSource == "tei" && byDefault.publicationYearSource == "manifest")
+            #expect(byDefault.numberSource == "tei" && byDefault.publicationYear == "1996" && byDefault.publicationYearSource == "tei")
             #expect(byDefault.canonicalURL == "https://history.state.gov/historicaldocuments/frus1961-63v06/d1")
             #expect(byDefault.styles.map(\.style) == ["historyAtState", "chicago", "turabian"])
             #expect(byDefault.styles.map(\.shortName) == ["history.state.gov", "Chicago", "Turabian"])
@@ -84,16 +85,125 @@ import Testing
         }
     }
 
-    /// The manifest's year stands in for the year the app reads from the TEI header: for each
-    /// fixture volume, the publication statement's year, a `when` attribute or a date's text, is
-    /// the manifest's.
-    @Test func eachFixturesManifestYearIsItsTEIs() throws {
+    /// For each fixture volume, the year its TEI header states, as the kit reads it, is the manifest's,
+    /// so a citation reads the same whether the volume's TEI is mounted or not.
+    @Test func eachFixturesTEIYearIsItsManifests() throws {
         let resources = try TestResources.value()
         for volume in ["frus1894Nicaragua", "frus1961-63v06", "frus1969-76ve09p1"] {
-            let head = try String(decoding: Data(contentsOf: RepositoryFiles.tei.appendingPathComponent("\(volume).xml")).prefix(8_192), as: UTF8.self)
-            let statement = try #require(head.range(of: "<publicationStmt>").map { String(head[$0.upperBound...]) })
-            let year = try #require(statement.firstMatch(of: /when="(\d{4})"/)?.1 ?? statement.firstMatch(of: />(\d{4})\s*</)?.1)
-            #expect(resources.volume(volume)?.publicationDate?.hasPrefix(String(year)) == true, "\(volume)")
+            let year = try #require(TEIPublicationYear.read(from: RepositoryFiles.tei.appendingPathComponent("\(volume).xml")), "\(volume)")
+            #expect(CitationRoutes.manifestYear(resources.volume(volume)?.publicationDate) == year, "\(volume)")
+        }
+    }
+
+    /// The year the TEI header states comes first, as both of the app's hosts take it, and the printer's
+    /// name follows it in the citation and both records: a header that names 2015 for frus1894Nicaragua
+    /// gives that year and the Publishing Office, though the manifest says 1895. An indexed document
+    /// whose TEI is not mounted takes the manifest's year.
+    @Test func theYearIsTheTEIHeadersThenTheManifests() async throws {
+        let fixture = try await ServerFixture(volumes: ["frus1894Nicaragua"])
+        let tei = fixture.files.volumesDirectory.appendingPathComponent("frus1894Nicaragua.xml")
+        let original = try String(contentsOf: tei, encoding: .utf8)
+        let printed = #"type="publication-date">1895</date>"#
+        #expect(original.components(separatedBy: printed).count == 2)
+        try original.replacingOccurrences(of: printed, with: #"type="publication-date">2015</date>"#)
+            .write(to: tei, atomically: true, encoding: .utf8)
+        try await fixture.app.test(.router) { client in
+            let cited = try decode(DocumentCitation.self, try await client.execute(uri: Self.uri("frus1894Nicaragua", document: "d1"), method: .get))
+            #expect(cited.publicationYear == "2015" && cited.publicationYearSource == "tei")
+            #expect(cited.plainText.hasSuffix("(Washington, D.C.: United States Government Publishing Office, 2015), Document 1."))
+            #expect(cited.bibtex.contains("  publisher = {United States Government Publishing Office},\n  address   = {Washington, D.C.},\n  year      = {2015},"))
+            #expect(cited.ris.contains("PB  - United States Government Publishing Office\nCY  - Washington, D.C.\nPY  - 2015\n"))
+        }
+        let unmounted = try await servingSyntheticExport()
+        try await unmounted.app.test(.router) { client in
+            let cited = try decode(DocumentCitation.self, try await client.execute(uri: Self.uri(document: "d2"), method: .get))
+            #expect(cited.publicationYear == "1996" && cited.publicationYearSource == "manifest")
+            #expect(cited.bibtex.contains("  year      = {1996},") && cited.ris.contains("PY  - 1996\n"))
+        }
+    }
+
+    /// With no year in the TEI header, the records take the manifest date's first four-digit year, as
+    /// the Mac's popover does: frus1969-76v32's header gives its date only as 2010-11-05, which the
+    /// kit's scan does not read, and its manifest gives the same date.
+    @Test func theRecordsYearFallsBackAsTheMacsDoes() {
+        #expect(CitationRoutes.manifestYear("1996") == "1996")
+        #expect(CitationRoutes.manifestYear("2010-11-05") == "2010")
+        #expect(CitationRoutes.manifestYear("1969–1976") == "1969")
+        #expect(CitationRoutes.manifestYear("c. 1872") == "1872")
+        // Only the first four-digit run is read, and a year before 1751 is none.
+        #expect(CitationRoutes.manifestYear("1700, reprinted 1972") == nil)
+        #expect(CitationRoutes.manifestYear("19960") == nil)
+        #expect(CitationRoutes.manifestYear("") == nil && CitationRoutes.manifestYear(nil) == nil)
+        let statement = """
+            <publicationStmt>
+                <date calendar="gregorian" type="publication-date">2010-11-05</date>
+                <date calendar="gregorian" type="content-date">1969 to 1972</date>
+            </publicationStmt>
+            """
+        #expect(TEIPublicationYear.year(inHeader: statement) == nil)
+    }
+
+    /// frus1961-63v06 d1's records, as the kit's exporters write them for the index's row: the
+    /// header for a title, the TEI's number, the TEI's year and the canonical URL. A pin move that
+    /// changes the entry or the exporters changes these.
+    static let bibtex = """
+        @incollection{frus1961-63v06_d1,
+          title     = {1. Telegram From the Embassy in the Soviet Union},
+          booktitle = {Foreign Relations of the United States, 1961--1963, Volume VI, Kennedy-Khrushchev Exchanges},
+          editor    = {Charles S. Sampson},
+          publisher = {Government Printing Office},
+          address   = {Washington, D.C.},
+          year      = {1996},
+          note      = {Document 1},
+          url       = {https://history.state.gov/historicaldocuments/frus1961-63v06/d1}
+        }
+        """
+    static let ris = """
+        TY  - CHAP
+        TI  - 1. Telegram From the Embassy in the Soviet Union
+        T2  - Foreign Relations of the United States, 1961–1963, Volume VI, Kennedy-Khrushchev Exchanges
+        A3  - Charles S. Sampson
+        PB  - Government Printing Office
+        CY  - Washington, D.C.
+        PY  - 1996
+        UR  - https://history.state.gov/historicaldocuments/frus1961-63v06/d1
+        M2  - FRUS Document 1
+        ER  -\u{20}
+        """
+
+    /// Every style carries the same records, and a document the index lacks takes its id for a
+    /// title, as the kit's exporters do for a document with no header.
+    @Test func theRecordsAreTheKitsBibTeXAndRIS() async throws {
+        let fixture = try await servingSyntheticExport(volumes: ["frus1961-63v06"])
+        try await fixture.app.test(.router) { client in
+            for style in ["historyAtState", "chicago", "turabian"] {
+                let cited = try decode(DocumentCitation.self, try await client.execute(uri: Self.uri(query: "style=\(style)"), method: .get))
+                #expect(cited.bibtex == Self.bibtex, "\(style)")
+                #expect(cited.ris == Self.ris, "\(style)")
+            }
+            let d3 = try decode(DocumentCitation.self, try await client.execute(uri: Self.uri(document: "d3"), method: .get))
+            #expect(d3.bibtex.hasPrefix("@incollection{frus1961-63v06_d3,\n  title     = {d3},\n"))
+            #expect(d3.ris.hasPrefix("TY  - CHAP\nTI  - d3\n") && d3.ris.contains("M2  - FRUS Document 3\n"))
+        }
+    }
+
+    /// The records as files, as the Mac's Cite saves a .bib: named for the volume and the document,
+    /// to be saved, and the same text the citation carries.
+    @Test func eachRecordIsServedAsAFile() async throws {
+        let fixture = try await servingSyntheticExport(volumes: ["frus1961-63v06"])
+        try await fixture.app.test(.router) { client in
+            for (suffix, type, record) in [("bib", "application/x-bibtex; charset=utf-8", Self.bibtex),
+                                           ("ris", "application/x-research-info-systems; charset=utf-8", Self.ris)] {
+                let response = try await client.execute(uri: "/api/v1/volumes/frus1961-63v06/documents/d1/citation.\(suffix)", method: .get)
+                #expect(response.status == .ok && response.headers[.contentType] == type, "\(suffix)")
+                #expect(response.headers[.contentDisposition] == "attachment; filename=\"frus1961-63v06-d1.\(suffix)\"")
+                #expect(response.headers[.xContentTypeOptions] == "nosniff")
+                #expect(String(buffer: response.body) == record, "\(suffix)")
+                let unknown = try await client.execute(uri: "/api/v1/volumes/frus1961-63v06/documents/d1/citation.\(suffix)?style=chicago", method: .get)
+                #expect(try problem(unknown, .badRequest).code == "UNKNOWN_PARAMETER")
+                let missing = try await client.execute(uri: "/api/v1/volumes/frus1961-63v06/documents/d9999/citation.\(suffix)", method: .get)
+                #expect(try problem(missing, .notFound).code == "DOCUMENT_NOT_FOUND")
+            }
         }
     }
 

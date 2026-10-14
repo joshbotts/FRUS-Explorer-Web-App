@@ -6,7 +6,8 @@ import FTS5Store
 import Foundation
 import Hummingbird
 
-/// One result: the draft's `SearchResult` fields, from the kit's.
+/// One result: the draft's `SearchResult` fields, from the kit's, and what the row draws of them, as
+/// the Mac's search window draws a result.
 ///
 /// `snippet` is the document's text around the matches with `<b>` and `</b>` marking them, and is
 /// not HTML-escaped: a client escapes it and puts back only the two markers.
@@ -15,6 +16,17 @@ public struct SearchItem: Codable, Equatable, Sendable {
     public var documentId: String
     public var documentNumber: String?
     public var header: String
+    /// What the row names the document by: the header less a source note run on into it
+    /// (`DocumentHeaderDisplay.trimmedHeader`), as the Mac's window draws it; for a row with no
+    /// header, which the window would leave blank, the name the kit's rule for lists gives it
+    /// (`DocumentDisplayTitle`).
+    public var displayTitle: String
+    /// The document's label beside its volume, "Doc 12" or "Unnumbered (d710a-1)", as the Mac's
+    /// window labels a row (`CitableDocumentNumber.captionLabel`).
+    public var documentLabel: String
+    /// Whether the header already opens with the document's number, so the row withholds its label,
+    /// as the Mac's window does (`DocumentHeaderDisplay.headerRepeatsNumber`).
+    public var headerRepeatsNumber: Bool
     public var dateline: String?
     public var sourceNote: String?
     public var dateISO: String?
@@ -31,6 +43,13 @@ public struct SearchItem: Codable, Equatable, Sendable {
         documentId = result.documentId
         documentNumber = result.documentNumber
         header = result.header
+        let trimmed = DocumentHeaderDisplay.trimmedHeader(result.header)
+        displayTitle = trimmed.isEmpty
+            ? FRUSLightAPI.displayTitle(header: "", documentNumber: result.documentNumber,
+                                        isEditorialNote: result.isEditorialNote, documentId: result.documentId)
+            : trimmed
+        documentLabel = CitableDocumentNumber.captionLabel(printed: result.documentNumber, documentId: result.documentId)
+        headerRepeatsNumber = DocumentHeaderDisplay.headerRepeatsNumber(result.header, number: result.documentNumber)
         dateline = result.dateline
         sourceNote = result.sourceNote
         dateISO = result.dateISO
