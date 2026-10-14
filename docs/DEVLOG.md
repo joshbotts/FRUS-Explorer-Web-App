@@ -2,6 +2,38 @@
 
 One entry per session, newest first.
 
+## Session 11c, follow-up: a reader page opened at a note keeps focus on its controls
+
+13 October 2026 · branch `claude/s11c-note-focus` · upstream `757c6d29`, unchanged
+
+The owner merged #33 and asked for the follow-up S11c's review had offered, before S11d.
+
+**What was wrong**
+
+- A reader page opened at a note (`/doc/…?note=…`) lands on the note when its frame loads.
+- Another text size or appearance loads the page again, in a new frame, and that frame's load landed on the note again: focus moved from the Text Size or Appearance control into the frame.
+- A keyboard user who changed either control lost their place in it (WCAG 2.2, success criterion 3.2.2, On Input). The behaviour dated from S9b; S11c's wash made it easier to see.
+
+**The fix**
+
+- The reader lands on a note once for each arrival at it, by a link or by Back and Forward: it keeps the document and note it arrived at, and the next frame to load lands on that note once.
+- A page loaded again for another text size or appearance leaves focus on the control that asked for it, and the frame's URL fragment keeps the note in view.
+- `SPEC.md`'s reader rendering says so.
+
+**The test**
+
+- A new browser test follows d21's link to footnote 2 of d16, then changes Text Size and Appearance from the keyboard, and checks after each that the control keeps focus. Back and Forward then land on the note again.
+- It counts the frame's load events at the document, which it sees before the frame's own handler runs in the same dispatch, so it checks focus only once that handler has run.
+- Against `main`'s image, before the fix, it failed where it should: after the text size changed, the control was no longer focused.
+
+**Results**
+
+- **The browser app:** typecheck and lint are clean, and its 40 unit tests pass.
+- **`scripts/compose-smoke --e2e`:** passes, and so do the browser suite's 10 tests on Chromium, up from 9: the new one, and the rest as before, the landings by a link and in place among them.
+- **Linux:** the server's code is unchanged; CI's swift job runs its tests.
+
+**Next: S11d,** the search features over the API and in the browser app: the facets with include, exclude and Apply; the Query Inspector; the date order; and the timeline and concordance readings. Browse's own-text rows, the daily upstream watch and the speed of exact-word search remain before a release.
+
 ## Session 11c: BibTeX and RIS in Cite, display titles, the footnote landing, and a sturdier skip check
 
 13 October 2026 · branch `claude/s11c-cite-titles-footnotes` · upstream `757c6d29`, unchanged

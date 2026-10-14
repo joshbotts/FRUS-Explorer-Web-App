@@ -165,6 +165,60 @@ test('a note in the same document is landed on in place, by the app’s own scri
   expect(await page.evaluate(() => window.history.length)).toBe(entries);
 });
 
+test('a page opened at a note leaves focus on the control that changes its text size or appearance, and lands again on Back and Forward', async ({ page }) => {
+  await page.goto('/doc/frus1961-63v06/d21');
+  const frame = page.frameLocator('iframe.reader-frame');
+  await frame.getByRole('link', { name: /footnote 2, Document/ }).click();
+  await expect(page).toHaveURL(/\/doc\/frus1961-63v06\/d16\?note=fnote-x-d16fn2$/);
+  const note = frame.locator('#fnote-x-d16fn2');
+  await expect(note).toBeFocused();
+  // Each new page loads in a new frame. Counted at the document, its load event is seen before the
+  // frame's own handler runs in the same dispatch, so once the count moves the handler has run.
+  await page.evaluate(() => {
+    const counted = window as { readerFrameLoads?: number };
+    counted.readerFrameLoads = 0;
+    document.addEventListener(
+      'load',
+      (event) => {
+        if (event.target instanceof HTMLIFrameElement) counted.readerFrameLoads = (counted.readerFrameLoads ?? 0) + 1;
+      },
+      true,
+    );
+  });
+  const loads = () => page.evaluate(() => (window as { readerFrameLoads?: number }).readerFrameLoads);
+
+  // Another text size loads the page again: focus stays on the control, as WCAG 3.2.2 asks, and the
+  // frame's URL fragment keeps the note in view.
+  const size = page.getByRole('combobox', { name: 'Text Size' });
+  await size.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(size).toHaveValue('large');
+  await expect(page.locator('iframe.reader-frame')).toHaveAttribute('src', /textSize=large#fnote-x-d16fn2$/);
+  await expect.poll(loads).toBe(1);
+  await expect(size).toBeFocused();
+  await expect(note).toBeInViewport();
+  // The app's landing did not run again in the new page.
+  expect(await revealedFootnote(page, 'd16')).toBeUndefined();
+
+  // So does another appearance, chosen in the header: Light first, which loads nothing new, then Dark.
+  const appearance = page.getByRole('combobox', { name: 'Appearance' });
+  await appearance.focus();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(appearance).toHaveValue('dark');
+  await expect(page.locator('iframe.reader-frame')).toHaveAttribute('src', /colorScheme=dark/);
+  await expect.poll(loads).toBe(2);
+  await expect(appearance).toBeFocused();
+
+  // Back and Forward arrive at the note again, so it is landed on, and takes focus, as a link lands on it.
+  await page.goBack();
+  await expect(page).toHaveURL(/\/doc\/frus1961-63v06\/d21$/);
+  await page.goForward();
+  await expect(page).toHaveURL(/\/doc\/frus1961-63v06\/d16\?note=fnote-x-d16fn2$/);
+  await expect(note).toBeFocused();
+  await expect.poll(() => revealedFootnote(page, 'd16')).toBe('fnote-x-d16fn2');
+});
+
 test('a reference to a whole volume opens the volume in Browse, and one outside the catalogue says so', async ({ page }) => {
   // "volume V" in d7 names Volume V as a whole: the catalogue holds it, though this server has neither its TEI nor its index.
   await page.goto('/doc/frus1961-63v06/d7');
