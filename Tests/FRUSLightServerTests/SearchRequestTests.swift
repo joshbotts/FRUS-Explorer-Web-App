@@ -102,8 +102,12 @@ import Testing
             ("offset=-1", "INVALID_PARAMETER", "offset"),
             ("offset=7481", "INVALID_PARAMETER", "offset"),
             ("offset=7500&limit=1", "INVALID_PARAMETER", "offset"),
-            ("facets=year", "UNSUPPORTED_PARAMETER", "facets"),
+            ("facets=year", "UNSUPPORTED_PARAMETER", "/api/v1/search/facets"),
             ("personRef=p1", "UNSUPPORTED_PARAMETER", "personRef"),
+            ("personRollupId=x", "INVALID_PARAMETER", "personRollupId"),
+            ("personRollupId=-1", "INVALID_PARAMETER", "personRollupId"),
+            ("subjectBucket=1.5", "INVALID_PARAMETER", "subjectBucket"),
+            ("personLabel=a&personLabel=b", "INVALID_PARAMETER", "personLabel"),
             ("volumeIds[]=frus1894Nicaragua", "UNKNOWN_PARAMETER", "volumeIds[]"),
             ("q=treaty", "UNKNOWN_PARAMETER", "q"),
             ("keywords=%E2%28", "MALFORMED_QUERY", "keywords"),
@@ -114,5 +118,67 @@ import Testing
         }
         // The last page the app keeps is allowed.
         #expect(refusal("offset=7480&limit=20") == nil)
+    }
+
+    /// The four fields a facet narrows by reach their parameters: a person's rollup and the name its
+    /// filter shows, and a subject's place in the vocabulary and its durable name.
+    @Test func theFieldsAFacetNarrowsByReachTheirParameters() throws {
+        let request = try decode("keywords=treaty&personRollupId=12&personLabel=Khrushchev%2C+Nikita+S.&subjectBucket=40&subjectBucketKey=Cold+War%2FBerlin")
+        #expect(request.parameters.personRollupId == 12 && request.parameters.personLabel == "Khrushchev, Nikita S.")
+        #expect(request.parameters.subjectBucket == 40 && request.parameters.subjectBucketKey == "Cold War/Berlin")
+    }
+
+    /// What `formFields` writes, the decoder reads back as the same parameters, field by field, and a
+    /// field at its default is left out.
+    @Test func formFieldsSayWhatTheDecoderReads() throws {
+        var every = SearchParameters(keywords: "cuba missile + «quarantine»")
+        every.phrase = "naval quarantine"
+        every.prefixWildcard = "khrush"
+        every.excludedTerms = ["turkey", "jupiter"]
+        every.dateRange = DateRange(earliest: "1962-10-01", latest: "1962-11-30")
+        every.volumeIds = ["frus1961-63v06", "frus1894Nicaragua"]
+        every.yearKeys = ["1962"]
+        every.documentTypeFilter = .editorialNotesOnly
+        every.includeDocumentText = false
+        every.includeSummaries = false
+        every.includeNotes = false
+        every.includeFrontMatter = false
+        every.personRollupId = 12
+        every.personLabel = "Khrushchev, Nikita S."
+        every.subjectBucket = 40
+        every.subjectBucketKey = "Cold War/Berlin"
+        var empties = SearchParameters(keywords: "")
+        empties.volumeIds = []
+        empties.yearKeys = []
+        empties.dateRange = DateRange(earliest: nil, latest: nil)
+        for parameters in [SearchParameters(), SearchParameters(keywords: "treaty"), every, empties] {
+            let fields = SearchRequest.formFields(parameters)
+            let query = fields.keys.sorted().flatMap { name in
+                fields[name, default: []].map { "\(name)=\($0.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? $0)" }
+            }.joined(separator: "&")
+            #expect(try decode(query).parameters == parameters, "\(query)")
+        }
+        #expect(SearchRequest.formFields(SearchParameters()).isEmpty)
+        #expect(SearchRequest.formFields(SearchParameters(keywords: "treaty")) == ["keywords": ["treaty"]])
+        #expect(SearchRequest.formFields(empties)["yearKeys"] == [""], "the empty list is one empty value")
+    }
+
+    /// A change names each field whose values move, with its new values, and `null` for one the new
+    /// search leaves out.
+    @Test func aChangeNamesEachFieldThatMoves() throws {
+        var before = SearchParameters(keywords: "treaty")
+        before.volumeIds = ["frus1961-63v06"]
+        var after = before
+        after.volumeIds = nil
+        after.personRollupId = 1
+        after.personLabel = "Khrushchev"
+        let change = SearchChange(from: before, to: after)
+        let json = try JSONEncoder().encode(change)
+        // An object's keys come in no fixed order; a field left out is null, not absent.
+        let object = try JSONDecoder().decode([String: [String]?].self, from: json)
+        #expect(object == ["personLabel": ["Khrushchev"], "personRollupId": ["1"], "volumeIds": [String]?.none])
+        #expect(String(decoding: json, as: UTF8.self).contains(#""volumeIds":null"#))
+        #expect(try JSONDecoder().decode(SearchChange.self, from: json) == change)
+        #expect(SearchChange(from: before, to: before).fields.isEmpty)
     }
 }

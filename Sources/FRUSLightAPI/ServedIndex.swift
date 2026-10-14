@@ -18,6 +18,8 @@ public final class ServedIndex: Sendable {
     public let pages: PageRangeStore
     /// The persons' mentions and rollups, for a person card's count.
     public let persons: PersonMentionStore
+    /// The facet sections computed lately over this index; a new index starts with none.
+    public let facets = FacetCache()
 
     /// Opens the stack, and refuses it unless the path still named the file `corpus` opened before
     /// the first open and after the last: an import renames its new file over the path before the

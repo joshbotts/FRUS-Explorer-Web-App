@@ -3,7 +3,7 @@
 #   scripts/synthetic-export <output.sqlite>
 # It has the schema of a real export (Tests/FRUSLightTestSupport/Fixtures/export-v69-schema.sql),
 # the index and FTS schema versions this build serves (Sources/FRUSLightCore/Compatibility.swift),
-# three documents, the page ranges and person mentions the reader's links read, and an export stamp
+# three documents with their dates, the page ranges and person mentions the reader's links read, and an export stamp
 # without the owner's writing: the rows Tests/FRUSLightTestSupport/SyntheticExport.swift writes.
 # Needs the sqlite3 command.
 set -euo pipefail
@@ -39,6 +39,10 @@ INSERT INTO person_rollup (rollup_id, namekey, canonical_name, description, ment
   VALUES (1, 'khrushchev, nikita sergeyevich', 'Khrushchev, Nikita Sergeyevich',
           'Chairman of the Council of Ministers of the Soviet Union', 2, 1);
 INSERT INTO person_rollup_member (volume_id, ref, rollup_id) VALUES ('frus1961-63v06', 'p_KNS2', 1);
+INSERT INTO document_dates (volume_id, document_id, date_iso, date_iso_max, date_precision)
+  VALUES ('frus1961-63v06', 'd1', '1960-11-09', '1960-11-09', 'day'),
+         ('frus1961-63v06', 'd2', '1960-11-10', '1960-11-10', 'day'),
+         ('frus1894Nicaragua', 'd1', '1894-01-25', '1894-01-25', 'day');
 INSERT INTO research_provenance (key, value) VALUES
   ('exported_at', strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
   ('my_writing_included', '0'),

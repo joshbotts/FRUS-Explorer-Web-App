@@ -12,28 +12,46 @@ export const ready: Readiness = { ready: true, step: 'ready', detail: '' };
 
 export const coverage: Coverage = { indexedVolumes: 1, indexedDocuments: 2, manifestVolumes: 553, indexVersion: 69 };
 
-/** Answers each request with the JSON `answers` holds for its path; any other path is a 404 problem. */
-export function stubServer(answers: Record<string, unknown>): void {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (input: string) => {
-      const path = new URL(input, 'http://localhost').pathname;
-      if (!(path in answers)) {
-        const problem = { type: 'about:blank', title: 'Not Found', status: 404, detail: `No answer for ${path}.`, instance: path, code: 'NOT_FOUND' };
-        return new Response(JSON.stringify(problem), { status: 404, headers: { 'content-type': 'application/problem+json' } });
-      }
-      return new Response(JSON.stringify(answers[path]), { headers: { 'content-type': 'application/json' } });
-    }),
-  );
+/** An answer: JSON to send, a problem to send with its status, or a function of the request's URL giving either. */
+export type Answer = unknown;
+
+/** A problem the server sends, as RFC 9457 problem details. */
+export class ProblemAnswer {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+    readonly detail: string,
+  ) {}
 }
 
-/** Renders the app at `href`, with nothing cached. */
+/**
+ * Answers each request with what `answers` holds for its path: JSON, a `ProblemAnswer`, or a function
+ * of the request's URL that gives one. Any other path is a 404 problem. Returns the stub, whose calls
+ * name the URLs asked for.
+ */
+export function stubServer(answers: Record<string, Answer>) {
+  const fetch = vi.fn(async (input: string) => {
+    const url = new URL(input, 'http://localhost');
+    const answer = url.pathname in answers ? answers[url.pathname] : new ProblemAnswer(404, 'NOT_FOUND', `No answer for ${url.pathname}.`);
+    const given = typeof answer === 'function' ? (answer as (url: URL) => Answer)(url) : answer;
+    if (given instanceof ProblemAnswer) {
+      const problem = { type: 'about:blank', title: 'Problem', status: given.status, detail: given.detail, instance: url.pathname, code: given.code };
+      return new Response(JSON.stringify(problem), { status: given.status, headers: { 'content-type': 'application/problem+json' } });
+    }
+    return new Response(JSON.stringify(given), { headers: { 'content-type': 'application/json' } });
+  });
+  vi.stubGlobal('fetch', fetch);
+  return fetch;
+}
+
+/** Renders the app at `href`, with nothing cached; the router says where the app has gone since. */
 export function renderAt(href: string) {
   const router = createRouter({ routeTree, parseSearch, stringifySearch, history: createMemoryHistory({ initialEntries: [href] }) });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const rendered = render(
     <QueryClientProvider client={client}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
+  return { ...rendered, router };
 }

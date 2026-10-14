@@ -212,6 +212,41 @@ export interface SearchResultList {
   coverage: Coverage;
 }
 
+/** How one search becomes another: each query field that changes, with its new values, or null for one left out. */
+export type SearchChange = Record<string, string[] | null>;
+
+/** The six ways a search's facets break its match down, in the panel's order. */
+export type FacetSectionName = 'years' | 'volumes' | 'people' | 'documentType' | 'provenance' | 'subjects';
+
+/** One section of a search's facets (GET /search/facets): a page of its rows, as the kit cuts it. */
+export interface SearchFacetSection {
+  section: FacetSectionName;
+  /** Staged rows are chosen, then applied; an immediate row narrows on a click; descriptive rows only describe. */
+  selection: 'staged' | 'immediate' | 'descriptive';
+  matchCount: number;
+  rows: { key: string; label: string; count: number; narrowing?: SearchChange }[];
+  page: { matchingCount: number; totalCount: number; pageIndex: number; pageCount: number; firstRowNumber: number };
+  display: { sort: string; pageSize: string; page: number; filter: string };
+  sortChoices: { value: string; title: string }[];
+  pageSizeChoices: { value: string; title: string }[];
+  bound?: { shown: number; total: number; isTruncated: boolean };
+  undatedCount?: number;
+  topVolumeShare?: number;
+  provenanceCoverage?: { parsed: number; withRecordGroup: number; matchCount: number };
+  subjectCoverage?: number;
+  subjectsPrepared?: boolean;
+  coverage: Coverage;
+}
+
+/** What a staged selection narrows the search to (GET /search/facets/selection). */
+export interface SearchFacetSelection {
+  section: 'years' | 'volumes';
+  /** The keys the selection resolves to; absent when nothing is chosen. */
+  keys?: string[];
+  change: SearchChange;
+  coverage: Coverage;
+}
+
 export type CitationStyleName = 'historyAtState' | 'chicago' | 'turabian';
 
 export interface CitationStyle {
