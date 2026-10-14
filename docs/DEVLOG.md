@@ -2,6 +2,75 @@
 
 One entry per session, newest first.
 
+## Session 11d: the facets, with include, exclude and Apply
+
+14 October 2026 · branch `claude/s11d-search-features` · upstream `757c6d29`, unchanged
+
+The owner merged #33 and #34 and asked for S11d. Three readers mapped the kit's public search code, the Mac's search window and what the web edition had. The search features were then too many for one reviewable pull request, as the S11c features had been, so this one brings the facets, and S11e brings the Query Inspector, the date order and the timeline and concordance readings.
+
+**The API**
+
+- **`/search/facets`** computes one section of a search's whole match: years, volumes, people, document type, provenance or subjects. It uses the kit's `SearchService.resultSetFacets(parameters:request:documentKeys:)`, the route the app's panel takes, as the panel computes a section when it is opened.
+  - The rows come as the kit's `FacetPaging` cuts them, by a sort, page size, page and filter, each the kit's standard for the section unless given.
+  - Beside them: the section's bound, the kit's titles for its sorts and page sizes, and what the panel says: the undated count, the three largest volumes' share, and the provenance and subject coverage.
+- **A row that narrows on a click** (people, document type, subjects) carries its narrowing: the query fields the kit's `FacetNarrowing` changes, each with its values, or null for one it leaves out. The browser app makes that change to the search it shows, so it never needs to know which fields a narrowing touches.
+- **`/search/facets/selection`** resolves a staged selection of years or volumes over the section's whole list, as `FacetSelection` and `FacetSelectionApplier` resolve the Mac's Apply. An exclusion alone means every row but those.
+- **Each served index keeps the 16 sections it computed last,** by the search and the section. A section's other pages, sorts and filters, and its Apply, cost no second computation, as on the Mac, which computes a section once for a search and cuts it as it is shown. A new import opens a new index, which starts with none.
+- **The search request** has one decoder for every search endpoint, and four more fields: a person's rollup and name, and a subject's place and durable name, the fields `FacetNarrowing` sets. Its new encoder writes a search back as the fields the decoder reads, for the narrowings. The draft's `facets` parameter is refused with a pointer to the new paths.
+
+**The browser app**
+
+- **The panel** opens from a Facets toggle beside the count, and stays open across searches (`panel=facets`). Its six sections are closed until opened, and each is fetched when it is, in the Mac's wording: titles, rows, sort and page-size menus, the filter field over 100 rows, the page footer, and each caption.
+- **Years and volumes** stage rows: a click cycles one through not selected, included and excluded, in the order of the kit's `FacetRowState`, and the strip says "2 included · 1 excluded" with Clear and Apply. The resolution is the server's, so it is the kit's.
+- **People, document type and subjects** narrow on a click, and focus returns to the section's heading. Provenance rows only describe, as on the Mac.
+- **Each narrowing is a token** above the results, Years, Person or Subject, which clears it; a type sets the document-type filter. While the panel is open, the count says what the search narrowed from, as the Mac's does.
+- **A new search** keeps each section's sort and page size, the reader's preference, and drops its page, filter and staged rows, which described the last search's rows, as the Mac's panel does.
+- **The subject's name** comes from the row that set it: the kit's subject vocabulary, which the Mac's token reads, is internal.
+
+**Checked**
+
+- **Through the API, beside the kit,** over the fixture index imported as an export (FRUSParityTests):
+  - every section of four searches is the kit's breakdown cut by `FacetPaging`, with its bounds, counts and titles;
+  - a sort, page size, page and filter of the browser app's choosing cut the rows as the kit cuts them, a page past the last clamped;
+  - each row's narrowing makes the search `FacetNarrowing` makes, and that search counts the row's documents;
+  - five staged selections of years and of volumes resolve as the kit resolves them, and the searches they give count the chosen rows.
+- **On Linux, the facets read the immutable index the server opens:** `resultSetFacets` builds a temporary table, which the read-only open keeps in memory.
+- **The label sort** (`localizedStandardCompare`) puts 20 sample labels, with accents, case, numbered volume ids and apostrophes, in the same order in `swift:6.4-noble` (locale `en_001`) as on the Mac (`en_US`), and the filter's accent-insensitive match agrees.
+- **The synthetic export** now has its three documents' dates from their TEI, so the browser suite's facets have years: 1960 for frus1961-63v06's d1 and d2, 1894 for frus1894Nicaragua's d1.
+
+**A review before the pull request opened.** Two reviewers, one for the server and one for the browser app and the records, each checked their own findings against the code. Nine held, and all were fixed:
+
+- **Apply over rows counted before a new index** could widen the search: the kit drops a key its list does not hold, and a volume selection of nothing but such keys clears the filter. The server now refuses such a key as `SECTION_CHANGED` (409), and the browser app counts the section again and drops the choice.
+- **The cache had no tests.** Its computation is now a closure, and four tests show it computing a section once, a concurrent ask waiting for the same computation, the least recently used going when it is full, and a failure not kept.
+- **A test would have crashed** rather than failed with too few rows, and checked one of the coverage figures where it now checks them all.
+- **"Narrowed from"** was said when the match had not shrunk, and while the narrowed search was still loading; it is now said only of a smaller match, as on the Mac. The panel's "Describing all N matches" waits for the new count too.
+- **A failed Apply's message** stayed under the next search's rows, and an answer that came back after another search would have been applied to the old one. Both now belong to the search they were for.
+- **Focus fell to the page** when Clear, Clear filter or a token removed itself. It goes to the section, the filter field and the search box.
+- **Wording:** a hint of the web's own hid the Mac's tooltip on a narrowing row, and the toggle's tooltip now reads "Hide the result-set facets" while the panel is open, as the Mac's does.
+- **The records** said a type narrowing makes a token, where it sets the Document type filter, and that a section is computed once, where the 16 most recent are kept.
+- **The sort and page-size menus** snapped back while a page loaded, and closing the panel lost each section's choices, which the Mac's controller keeps. The menus follow the reader's choice, and the screen keeps the panel's state.
+
+Refuted, among others: a year list's emptiness lost on the way to the URL; a field a narrowing sets that the URL drops; a section of another search standing in; collisions in the cache's keys; and the temporary table on the read-only index.
+
+**Records**
+
+- `PLAN.md` and its shared copy (rev 152): S11d's row, S11e's, and the S11 answers.
+- `SPEC.md`: the Search section, the API table and the facets' departures from the draft.
+- `INSTALL.md`: the facets. The README and this log.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** through the Test step's own script: all 1,928 tests pass, up from 1,914, with the one named skip. FRUSParityTests runs 104, up from 100, and FRUSLightServerTests 87, up from 77; the other targets are unchanged.
+- **The browser app:** typecheck and lint are clean, and 50 unit tests pass in 12 files, up from 40 in 11.
+- **`scripts/compose-smoke --e2e`:** passes, with 11 browser tests on Chromium, up from 10. The facets test runs axe with a year staged, and with every section open over a narrowed match, and it finds nothing.
+
+**Notes**
+
+- **Check 12's facet time** (one section within 3 seconds) is not measured here: the fixture index is three volumes. The kit measured the slowest section, People, at about 0.8 seconds over a whole-corpus match on the owner's 316,839-document index (`ResultSetFacets.swift`), and notes that paging by query would pay that again for every page; the cache is why a page here does not.
+- **A person's rollup is the served index's:** a new import can number the rollups afresh, so a saved address that narrows to a person may name another after one. The app's anchor, which survives a rebuild, has no field in the API yet.
+
+**Next: S11e,** the rest of the search features over the API and in the browser app: the Query Inspector, with the term that matched nothing; the date order; and the timeline and concordance readings, each naming the set it counted. Browse's own-text rows, the daily upstream watch and the speed of exact-word search remain before a release.
+
 ## Session 11c, follow-up: a reader page opened at a note keeps focus on its controls
 
 13 October 2026 · branch `claude/s11c-note-focus` · upstream `757c6d29`, unchanged
