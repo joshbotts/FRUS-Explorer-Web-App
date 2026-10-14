@@ -1,4 +1,5 @@
-// GET /api/v1/search and /api/v1/search/inspect: the kit's search over the live index, and what it compiles.
+// GET /api/v1/search and /api/v1/search/inspect: the kit's search over the live index, in the order
+// the reader chose, and what the Query Inspector says of it.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -62,7 +63,13 @@ public struct SearchItem: Codable, Equatable, Sendable {
     }
 }
 
-/// A page of results, best first, with the exact count of every match.
+/// A choice a control offers, by its value and the kit's title for it.
+public struct Choice: Codable, Equatable, Sendable {
+    public var value: String
+    public var title: String
+}
+
+/// A page of results, in the order asked for, with the exact count of every match.
 public struct SearchResultList: Codable, Equatable, Sendable {
     /// Every document the search matches, counted by the kit's `searchCount`.
     public var total: Int
@@ -73,13 +80,20 @@ public struct SearchResultList: Codable, Equatable, Sendable {
     public var offset: Int
     /// How many results the app keeps of a search, and so how far a page can reach.
     public var retainedLimit: Int
+    /// The order the page is cut from: a `SearchSortOrder` raw value.
+    public var sort: String
+    /// The orders a search offers, with the kit's label for each (`SearchSortOrder.label`).
+    public var sortChoices: [Choice]
     public var items: [SearchItem]
     public var coverage: Coverage
 }
 
-/// What the kit compiles for a search: the unscoped parse of the typed text and the structured
-/// fields, then each table's MATCH expression for the request's scope, as the Query Inspector
-/// shows them. The keys are those of the parity harness's expression records.
+/// What the kit compiles for a search, and what the Query Inspector says of it.
+///
+/// `parse` and `search` are the unscoped parse of the typed text and the structured fields, then
+/// each table's MATCH expression for the request's scope, with the keys of the parity harness's
+/// expression records. `inspection` is the kit's `QueryInspection` over the served index, and
+/// `emptyConjuncts` the terms that match nothing on their own, when asked for.
 public struct SearchInspection: Codable, Equatable, Sendable {
     public struct Parse: Codable, Equatable, Sendable {
         public var expression: String?
@@ -150,8 +164,101 @@ public struct SearchInspection: Codable, Equatable, Sendable {
         public var error: String?
     }
 
+    /// The kit's `QueryInspection`: what the Query Inspector shows of a search, from
+    /// `QueryInspector.inspect(parameters:indexedVolumeCount:)`, its cheap pass, which runs no search.
+    public struct Inspection: Codable, Equatable, Sendable {
+        /// The kit's `RenderedExpression`: each table's MATCH expression, and the one shown.
+        public struct Expression: Codable, Equatable, Sendable {
+            public var corpus: String?
+            public var userContent: String?
+            /// The corpus expression when there is one, else the user-content one (`displayed`).
+            public var displayed: String?
+            /// Whether the two tables are searched with different expressions (`expressionsDiffer`).
+            public var expressionsDiffer: Bool
+
+            init(_ expression: RenderedExpression) {
+                corpus = expression.corpus
+                userContent = expression.userContent
+                displayed = expression.displayed
+                expressionsDiffer = expression.expressionsDiffer
+            }
+        }
+
+        /// The kit's `InspectedOperand`: one of the query's searchable units, with what the index
+        /// knows of it.
+        public struct Term: Codable, Equatable, Sendable {
+            public var operand: Operand
+            /// The index term its word resolves to, from SQLite's own tokenizer; nil for a phrase, a
+            /// prefix, a proximity search, or a word that is more than one term.
+            public var stem: String?
+            /// Its exact count within the request's filters, from the expensive pass
+            /// (`scopedCounts=true`); nil until counted.
+            public var scopedCount: Int?
+            /// How many documents of the whole index hold the stem, and how often it occurs in all,
+            /// from one `fts5vocab` row; nil without a stem, or for a stem the index has no row for.
+            public var corpusDocumentFrequency: Int?
+            public var corpusOccurrences: Int?
+            public var corpusOccurrencesPerDocument: Double?
+            /// Whether the stem differs from the word as typed, so other words with that root match.
+            public var isStemBroadening: Bool
+            /// Whether it came from a structured field rather than the search box (the ADVANCED tag).
+            public var showsStructuredTag: Bool
+
+            init(_ term: InspectedOperand) {
+                operand = Operand(term.operand)
+                stem = term.stem
+                scopedCount = term.scopedCount
+                corpusDocumentFrequency = term.corpusDocumentFrequency
+                corpusOccurrences = term.corpusOccurrences
+                corpusOccurrencesPerDocument = term.corpusOccurrencesPerDocument
+                isStemBroadening = term.isStemBroadening
+                showsStructuredTag = term.showsStructuredTag
+            }
+        }
+
+        public var expression: Expression?
+        public var operands: [Term]
+        /// What the query typed that the search leaves out, as exclusions with nothing to exclude from.
+        public var notApplied: [Operand]
+        /// How many volumes the served index holds: what every count is out of.
+        public var indexedVolumeCount: Int
+        public var isFilterOnly: Bool
+        public var isApproximate: Bool
+        public var isRefused: Bool
+        /// The `NEAR(…)` that refused the query, as typed.
+        public var malformedProximity: String?
+        /// The kit's gates for what the inspector shows: the strip at all, its narrower-than-typed
+        /// caption, its term rows, and the offer to count each term in scope.
+        public var showsStrip: Bool
+        public var showsApproximateCaption: Bool
+        public var showsTermRows: Bool
+        public var hasOperands: Bool
+        public var hasUncountedOperands: Bool
+
+        init(_ inspection: QueryInspection) {
+            expression = inspection.expression.map(Expression.init)
+            operands = inspection.operands.map(Term.init)
+            notApplied = inspection.notApplied.map(Operand.init)
+            indexedVolumeCount = inspection.indexedVolumeCount
+            isFilterOnly = inspection.isFilterOnly
+            isApproximate = inspection.isApproximate
+            isRefused = inspection.isRefused
+            malformedProximity = inspection.malformedProximity
+            showsStrip = inspection.showsStrip
+            showsApproximateCaption = inspection.showsApproximateCaption
+            showsTermRows = inspection.showsTermRows
+            hasOperands = inspection.hasOperands
+            hasUncountedOperands = inspection.hasUncountedOperands
+        }
+    }
+
     public var parse: Parse
     public var search: Search
+    /// Absent while no index is served: the inspector reads the index's own tokenizer and vocabulary.
+    public var inspection: Inspection?
+    /// With `emptyConjuncts=true`: the terms that match no document on their own under the request's
+    /// filters (`QueryInspector.emptyConjuncts(parameters:)`), which name why a search found nothing.
+    public var emptyConjuncts: [Operand]?
 }
 
 extension SearchResultList: ResponseEncodable {}
@@ -165,9 +272,10 @@ enum SearchRoutes {
             do {
                 // One count of the whole match, then the page: both through the pipeline's one connection.
                 let total = try await served.service.searchCount(parameters: search.parameters)
-                let results = try await served.service.search(parameters: search.parameters, limit: search.limit, offset: search.offset)
                 return SearchResultList(total: total, countBasis: "exact", limit: search.limit, offset: search.offset,
-                                        retainedLimit: SearchRequest.retainedLimit, items: results.map(SearchItem.init),
+                                        retainedLimit: SearchRequest.retainedLimit, sort: search.sort.rawValue,
+                                        sortChoices: SearchSortOrder.allCases.map { Choice(value: $0.rawValue, title: $0.label) },
+                                        items: try await page(search, served: served).map(SearchItem.init),
                                         coverage: Coverage(index: served.corpus, resources: resources))
             } catch let error as FTS5Error {
                 throw refusal(error)
@@ -175,14 +283,36 @@ enum SearchRoutes {
         }
         // The inspector compiles without reading the index, so it answers before an import too.
         router.get("/api/v1/search/inspect") { request, _ -> SearchInspection in
-            try await inspect(SearchRequest(formEncoded: request.uri.query), provider: provider)
+            try await inspect(FormQuery(request.uri.query), provider: provider)
         }
         router.post("/api/v1/search/inspect") { request, context -> SearchInspection in
             let body = try await request.body.collect(upTo: 64 * 1_024)
             let form = body.readableBytes > 0 ? String(buffer: body) : request.uri.query
-            return try await inspect(SearchRequest(formEncoded: form), provider: provider)
+            return try await inspect(FormQuery(form), provider: provider)
         }
     }
+
+    /// The page `search` asks for. By relevance it is the kit's page of the match, as before; in an
+    /// order of the date, it is cut from the results the app keeps of the search, all of them in that
+    /// order, as the Mac's window sorts what it keeps and pages it (`SearchSortOrder.sorted(_:)`).
+    static func page(_ search: SearchRequest, served: ServedIndex) async throws -> [SearchResult] {
+        switch search.sort {
+        case .relevance:
+            return try await served.service.search(parameters: search.parameters, limit: search.limit, offset: search.offset)
+        case .dateAscending, .dateDescending:
+            let kept = try await served.retained.results(of: search.parameters, service: served.service)
+            return Array(search.sort.sorted(kept).dropFirst(search.offset).prefix(search.limit))
+        }
+    }
+
+    /// The fields `/search/inspect` takes beside a search's: its two expensive passes.
+    static let passFields: Set<String> = ["scopedCounts", "emptyConjuncts"]
+
+    /// The most terms the Query Inspector looks up in the index. Each costs statements of its own,
+    /// run one after another on the connection every search shares, and each expensive pass a count
+    /// more. No query a reader types comes near it; text pasted into the box by mistake can pass it
+    /// by thousands.
+    static let inspectedTermLimit = 64
 
     /// A query the kit refuses, such as one with nothing left to search, is the request's fault: a
     /// 400 carrying the refusal. Any other error is the server's, and the problem middleware hides it.
@@ -197,7 +327,14 @@ enum SearchRoutes {
         }
     }
 
-    static func inspect(_ search: SearchRequest, provider: ServedIndexProvider) async throws -> SearchInspection {
+    /// What the kit compiles for the search `form` says, and, over the served index, the Query
+    /// Inspector's account of it: its cheap pass always, and each expensive pass the form asks for,
+    /// `scopedCounts` and `emptyConjuncts`, which need an index and are refused until one is served.
+    /// A query of more terms than `inspectedTermLimit` is compiled, and not looked up.
+    static func inspect(_ form: FormQuery, provider: ServedIndexProvider) async throws -> SearchInspection {
+        let search = try SearchRequest(form: form, alsoTaking: passFields)
+        let countsInScope = try form.bool("scopedCounts") ?? false
+        let blames = try form.bool("emptyConjuncts") ?? false
         let parameters = search.parameters
         let parse = FTS5InlineQueryParser.parseDetailed(parameters.keywords ?? "", columnPrefix: "",
                                                         structured: parameters.structuredQueryParts)
@@ -209,7 +346,26 @@ enum SearchRoutes {
         } catch let error as FTS5Error {
             result.error = String(describing: error)
         }
-        return SearchInspection(parse: SearchInspection.Parse(parse), search: result)
+        var inspected = SearchInspection(parse: SearchInspection.Parse(parse), search: result)
+        guard parse.operands.count <= inspectedTermLimit else {
+            if countsInScope || blames {
+                throw APIProblem(.badRequest, code: "TOO_MANY_TERMS",
+                                 detail: "The Query Inspector looks up at most \(inspectedTermLimit) terms in the index; this query has \(parse.operands.count).")
+            }
+            return inspected
+        }
+        let served = countsInScope || blames ? try await provider.served() : try await provider.servedIfReady()
+        guard let served else { return inspected }
+        let inspector = QueryInspector(searchService: served.service)
+        var inspection = await inspector.inspect(parameters: parameters, indexedVolumeCount: served.corpus.summary.volumes)
+        if countsInScope {
+            inspection = inspection.replacingOperands(await inspector.scopedCounts(for: inspection, parameters: parameters))
+        }
+        inspected.inspection = SearchInspection.Inspection(inspection)
+        if blames {
+            inspected.emptyConjuncts = await inspector.emptyConjuncts(parameters: parameters).map(SearchInspection.Operand.init)
+        }
+        return inspected
     }
 
     /// The served stack's search service when an index is open; otherwise one over an empty

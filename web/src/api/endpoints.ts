@@ -1,7 +1,7 @@
 // One function per endpoint the app calls, and the query options that cache them.
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import { ApiError, getJSON } from './client';
-import { formEncode } from './form';
+import { formEncode, type FormValue } from './form';
 import type {
   CitationStyleName,
   DocumentCitation,
@@ -12,6 +12,7 @@ import type {
   DocumentList,
   Readiness,
   ReaderLinkTarget,
+  SearchInspection,
   SearchResultList,
   Volume,
   VolumeList,
@@ -106,6 +107,28 @@ export function searchQuery(state: SearchState) {
     staleTime: 5 * 60_000,
     // The page before stays while the next loads, so the results and the pager stay mounted.
     placeholderData: keepPreviousData,
+    retry: retryServerFaults,
+  });
+}
+
+/** The Query Inspector's expensive passes: each term counted within the filters, and the terms that match nothing. */
+export interface InspectorPasses {
+  scopedCounts?: true;
+  emptyConjuncts?: true;
+}
+
+/**
+ * The Query Inspector's account of the search `fields` say, with each expensive pass asked for. A
+ * pass runs when the reader's action asks for it, as on the Mac, and never again on its own: only a
+ * new index, which invalidates every account, asks for it again.
+ */
+export function inspectQuery(fields: Record<string, FormValue>, passes: InspectorPasses = {}) {
+  const asked = { ...fields, ...passes };
+  const expensive = passes.scopedCounts === true || passes.emptyConjuncts === true;
+  return queryOptions<SearchInspection, unknown, SearchInspection, unknown[]>({
+    queryKey: ['inspect', asked],
+    queryFn: ({ signal }) => getJSON<SearchInspection>('/api/v1/search/inspect', formEncode(asked), signal),
+    ...(expensive ? { staleTime: Infinity, refetchOnWindowFocus: false, refetchOnReconnect: false } : { staleTime: 5 * 60_000 }),
     retry: retryServerFaults,
   });
 }

@@ -1,18 +1,29 @@
-// Search (SPEC, Search): the query box with the app's query language, the filters, and a page of
-// results by relevance, with the exact count and what it was counted over, beside the facet panel
-// when it is open. A result is named as the Mac's search window names it, with the document's
-// label beside its volume unless the title already opens with its number. A facet's narrowing
-// shows as a filter token, as the Mac's does.
+// Search (SPEC, Search): the query box with the app's query language, the filters, the Query
+// Inspector's strip, and a page of results in the order chosen, with the exact count and what it
+// was counted over, beside the facet panel when it is open. A result is named as the Mac's search
+// window names it, with the document's label beside its volume unless the title already opens with
+// its number. A facet's narrowing shows as a filter token, and a search that found nothing names
+// the term responsible, as the Mac's do.
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { type FormEvent, type ReactNode, type RefObject, useId, useRef, useState } from 'react';
 import { ApiError } from '../api/client';
-import { searchQuery, volumesQuery } from '../api/endpoints';
-import type { DocumentType, SearchResultList, Volume } from '../api/types';
+import { inspectQuery, searchQuery, volumesQuery } from '../api/endpoints';
+import type { DocumentType, SearchResultList, SortOrder, Volume } from '../api/types';
 import { copy } from '../copy';
 import { Badge } from '../shell/Badge';
 import { FacetPanel, useFacetPanelState } from './FacetPanel';
-import { defaultLimit, documentTypes, filterFields, pageCount, pageSizes, retainedLimit, type SearchState } from './searchState';
+import { inspectorFields, QueryInspectorStrip, ZeroResult } from './QueryInspector';
+import {
+  defaultLimit,
+  documentTypes,
+  filterFields,
+  isPartialEvidence,
+  pageCount,
+  pageSizes,
+  retainedLimit,
+  type SearchState,
+} from './searchState';
 import { useDocumentTitle } from '../shell/useDocumentTitle';
 import { Snippet } from './Snippet';
 
@@ -39,8 +50,21 @@ export function SearchScreen() {
   const facetPanel = useFacetPanelState(state);
   // While the search shown is still the last one's, its count describes that one.
   const shown = results.isPlaceholderData ? undefined : results.data;
-  // A filter's token removes itself, so focus goes to the search box rather than nowhere.
-  const searchBox = useRef<HTMLInputElement>(null);
+
+  function search(keywords: string) {
+    // The same search again leaves the URL as it is, so it asks the server again itself: after a
+    // refusal or a server fault, or once an index is ready. So does the account of a search that
+    // found nothing.
+    if (keywords === state.keywords && state.offset === undefined) {
+      void queryClient.refetchQueries({ queryKey: searchQuery(state).queryKey, exact: true });
+      void queryClient.refetchQueries({
+        queryKey: inspectQuery(inspectorFields(state, keywords), { emptyConjuncts: true }).queryKey,
+        exact: true,
+      });
+    } else {
+      update({ keywords });
+    }
+  }
 
   function narrowTo(next: SearchState) {
     if (results.data) setNarrowed({ signature: JSON.stringify(filterFields(next)), from: results.data.total });
@@ -58,20 +82,7 @@ export function SearchScreen() {
   return (
     <section className="screen search">
       <h1 tabIndex={-1}>{copy.search.title}</h1>
-      <SearchForm
-        inputRef={searchBox}
-        keywords={state.keywords ?? ''}
-        onSubmit={(keywords) => {
-          // The same search again leaves the URL as it is, so it asks the server again itself:
-          // after a refusal or a server fault, or once an index is ready.
-          if (keywords === state.keywords && state.offset === undefined) {
-            void queryClient.refetchQueries({ queryKey: searchQuery(state).queryKey, exact: true });
-          } else {
-            update({ keywords });
-          }
-        }}
-      />
-      <Filters state={state} titles={titles} update={update} onCleared={() => searchBox.current?.focus()} />
+      <SearchEntry state={state} titles={titles} update={update} onSearch={search} />
       {state.keywords !== undefined && (
         <div className={panelOpen ? 'search-body with-facets' : 'search-body'}>
           <Results
@@ -104,23 +115,55 @@ export function SearchScreen() {
   );
 }
 
+/**
+ * The search box, the filters and the Query Inspector's strip, which follows the box's text as it is
+ * typed, before the search is made. The text is held here rather than by the screen, so a keystroke
+ * renders these and not the results or the facet panel.
+ */
+function SearchEntry({
+  state,
+  titles,
+  update,
+  onSearch,
+}: {
+  state: SearchState;
+  titles: Map<string, string>;
+  update: (changes: Partial<SearchState>) => void;
+  onSearch: (keywords: string) => void;
+}) {
+  // A filter's token removes itself, so focus goes to the search box rather than nowhere.
+  const searchBox = useRef<HTMLInputElement>(null);
+  // Going to another search shows its text; the box is not remounted for it, so a search made from
+  // it keeps its focus.
+  const [text, setText] = useState(state.keywords ?? '');
+  const [shownKeywords, setShownKeywords] = useState(state.keywords ?? '');
+  if ((state.keywords ?? '') !== shownKeywords) {
+    setShownKeywords(state.keywords ?? '');
+    setText(state.keywords ?? '');
+  }
+  // Whether the strip shows its term detail, kept from search to search, as the Mac's window keeps it.
+  const [inspectorExpanded, setInspectorExpanded] = useState(false);
+  return (
+    <>
+      <SearchForm inputRef={searchBox} text={text} onTextChange={setText} onSubmit={onSearch} />
+      <Filters state={state} titles={titles} update={update} onCleared={() => searchBox.current?.focus()} />
+      <QueryInspectorStrip fields={inspectorFields(state, text)} expanded={inspectorExpanded} onExpandedChange={setInspectorExpanded} />
+    </>
+  );
+}
+
 function SearchForm({
   inputRef,
-  keywords,
+  text,
+  onTextChange,
   onSubmit,
 }: {
   inputRef: RefObject<HTMLInputElement | null>;
-  keywords: string;
+  /** The box's text, which the search entry holds. */
+  text: string;
+  onTextChange: (text: string) => void;
   onSubmit: (keywords: string) => void;
 }) {
-  const [text, setText] = useState(keywords);
-  // Going back to another search shows its text. The box is not remounted for it, so a search
-  // made from it keeps its focus.
-  const [shown, setShown] = useState(keywords);
-  if (keywords !== shown) {
-    setShown(keywords);
-    setText(keywords);
-  }
   const inputId = useId();
 
   function submit(event: FormEvent) {
@@ -137,7 +180,7 @@ function SearchForm({
           id={inputId}
           type="search"
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => onTextChange(event.target.value)}
           spellCheck={false}
           autoCapitalize="off"
           autoComplete="off"
@@ -317,8 +360,22 @@ function Results({
             copy.search.searching
           )}
         </p>
+        {list && !failed && <SortOrders state={state} list={list} />}
         {facets}
       </div>
+      {list && !failed && isPartialEvidence(list.total) && (
+        // As the Mac's window says it on every page: an order, a page or a reading of what a search
+        // keeps is of its most relevant 7,500, not of the whole match.
+        <div className="over-cap">
+          <p>
+            <span className="over-cap-mark" aria-hidden="true">
+              ⚠{' '}
+            </span>
+            {copy.search.overCap(Math.min(list.total, retainedLimit), list.total)}
+          </p>
+          <p className="caption">{copy.search.overCapGuidance}</p>
+        </div>
+      )}
       {failed && (
         <p className="error" role="alert">
           {error instanceof ApiError
@@ -331,7 +388,14 @@ function Results({
       {list && !failed && (
         <>
           {list.items.length === 0 ? (
-            <p>{list.total > 0 ? copy.search.pastEnd : copy.search.none}</p>
+            list.total > 0 ? (
+              <p>{copy.search.pastEnd}</p>
+            ) : results.isPlaceholderData ? null : (state.keywords ?? '').trim() !== '' ? (
+              // Only once the search shown is this one, as the Mac's window waits for its search.
+              <ZeroResult state={state} />
+            ) : (
+              <p>{copy.search.none}</p>
+            )
           ) : (
             <ol className="result-list" aria-label={copy.search.results} start={first}>
               {list.items.map((item) => (
@@ -359,6 +423,36 @@ function Results({
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * The orders the results can be read in, as the Mac's sort bar offers them, by the kit's labels: a
+ * click starts the order at its first page. The pressed order is the reader's choice, which the
+ * page on screen follows once it has loaded.
+ */
+function SortOrders({ state, list }: { state: SearchState; list: SearchResultList }) {
+  const navigate = route.useNavigate();
+  const labelId = useId();
+  const chosen: SortOrder = state.sort ?? 'relevance';
+  return (
+    <div className="sort-orders" role="group" aria-labelledby={labelId}>
+      <span id={labelId}>{copy.search.sort}</span>
+      {list.sortChoices.map((choice) => (
+        <button
+          key={choice.value}
+          type="button"
+          aria-pressed={choice.value === chosen}
+          title={copy.search.sortHelp[choice.value]}
+          onClick={() => {
+            const sort = choice.value === 'dateAscending' || choice.value === 'dateDescending' ? choice.value : undefined;
+            void navigate({ search: (previous: SearchState) => ({ ...previous, sort, offset: undefined }) });
+          }}
+        >
+          {choice.title}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -398,7 +492,6 @@ function Pager({ state, list }: { state: SearchState; list: SearchResultList }) 
           ))}
         </select>
       </label>
-      {list.total > retainedLimit && page >= pages && <p className="note">{copy.search.retained}</p>}
     </nav>
   );
 }

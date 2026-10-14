@@ -21,8 +21,16 @@ import Testing
     @Test func nothingGivenIsTheAppsDefaultSearch() throws {
         let request = try decode(nil)
         #expect(request.parameters == SearchParameters())
-        #expect(request.limit == 20 && request.offset == 0)
+        #expect(request.limit == 20 && request.offset == 0 && request.sort == .relevance)
         #expect(try decode("") == request)
+    }
+
+    /// `sort` names a `SearchSortOrder`, and only that.
+    @Test func sortNamesTheKitsOrder() throws {
+        for order in SearchSortOrder.allCases {
+            #expect(try decode("keywords=treaty&sort=\(order.rawValue)").sort == order)
+        }
+        #expect(try decode("keywords=treaty&sort=relevance") == decode("keywords=treaty"))
     }
 
     @Test func everyFieldReachesItsSearchParameter() throws {
@@ -102,6 +110,8 @@ import Testing
             ("offset=-1", "INVALID_PARAMETER", "offset"),
             ("offset=7481", "INVALID_PARAMETER", "offset"),
             ("offset=7500&limit=1", "INVALID_PARAMETER", "offset"),
+            ("sort=date", "INVALID_PARAMETER", "sort"),
+            ("sort=relevance&sort=dateAscending", "INVALID_PARAMETER", "sort"),
             ("facets=year", "UNSUPPORTED_PARAMETER", "/api/v1/search/facets"),
             ("personRef=p1", "UNSUPPORTED_PARAMETER", "personRef"),
             ("personRollupId=x", "INVALID_PARAMETER", "personRollupId"),

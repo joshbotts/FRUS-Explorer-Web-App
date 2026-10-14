@@ -6,9 +6,12 @@
 // Documents (n); the person, term and unresolved-reference sheets' titles, sentences and Done, the
 // person sheet's In Indexed Documents and its count, and
 // the titles of the app's alerts for a person or term it has no entry for, whose sentences, about
-// re-indexing on the Mac, are replaced; and the facet panel's titles, rows, controls and captions,
-// with its filter tokens' field names, but for a sentence about the Mac's library. The rest, chiefly what only a server has (what it indexes,
-// which TEI it holds), are the web's own until check 10 settles them.
+// re-indexing on the Mac, are replaced; the facet panel's titles, rows, controls and captions,
+// with its filter tokens' field names, but for a sentence about the Mac's library; and the Query
+// Inspector's strip, the search window's view of a search that found nothing, and its sort bar's
+// label and tooltips, where "this device" and "you have indexed" become this server. The rest,
+// chiefly what only a server has (what it indexes, which TEI it holds), are the web's own until
+// check 10 settles them.
 
 export const copy = {
   app: {
@@ -77,8 +80,59 @@ export const copy = {
     page: (page: number, pages: number) => `Page ${page} of ${pages}`,
     pageCount: (pages: number) => `${pages.toLocaleString('en-US')} ${pages === 1 ? 'page' : 'pages'}`,
     pageSize: 'Per page',
-    retained: 'Pages reach the first 7,500 results, as on the Mac; narrow the search to see more.',
+    /** The notice above the results when a search keeps only part of its match, as the Mac's window gives it. */
+    overCap: (loaded: number, total: number) => `Showing ${loaded.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} matches`,
+    overCapGuidance: 'Narrow your search with a date range, volume filter, or more specific terms to load every match.',
     notReady: (detail: string) => `The server has no index to search yet. ${detail}`,
+    /** The sort bar's label and each order's tooltip; the orders' own labels are the kit's, from the server. */
+    sort: 'Sort',
+    sortHelp: {
+      relevance: 'Sort results by BM25 relevance — best matches first',
+      dateAscending: 'Sort by document date, oldest first. Undated documents go to the end.',
+      dateDescending: 'Sort by document date, most recent first. Undated documents go to the end.',
+    } as Record<string, string>,
+  },
+  inspector: {
+    /** The strip's name for assistive technology; the Mac's strip shows no title. */
+    label: 'Query Inspector',
+    matchTag: 'MATCH',
+    showDetail: 'Show term detail',
+    hideDetail: 'Hide term detail',
+    approximate:
+      'Narrower than typed: part of this query only excludes terms, and a search needs something to find, so that part was left out.',
+    filterOnly: 'No text search — this query is filters only, so there is no expression to show.',
+    refusedNear: (proximity: string) =>
+      `No expression — ${proximity} holds something a NEAR cannot: a boolean, a minus sign, a nested group, or a distance that is not a whole number. The query was refused rather than run as an ordinary boolean search.`,
+    /** The parser's limit on nesting, FTS5InlineQueryParser.maximumGroupDepth, which a server test holds this to. */
+    refused:
+      'No expression — this query cannot run: nothing is left to search for once its exclusions apply, or its parentheses nest more than 32 deep.',
+    excludedTag: 'EXCLUDED',
+    exactTag: 'EXACT',
+    structuredTag: 'ADVANCED',
+    notAppliedTag: 'NOT APPLIED',
+    stemWarning: (text: string, stem: string) => `${text} is searched as ${stem} — other words with that root match too`,
+    countInScope: 'Count each term in scope…',
+    counting: 'Counting…',
+    notAppliedDetail:
+      'not searched — this part of the query only excludes, and a search needs something to find, so it was left out',
+    excludedDetail: 'excluded — documents containing this are removed wherever the expression above applies it',
+    scopedCount: (count: number) => `${count.toLocaleString('en-US')} in your current scope`,
+    corpusCount: (count: number) => `${count.toLocaleString('en-US')} across everything this server has indexed`,
+    /** The figure to one place, half to even, as the Mac's formatter rounds it. */
+    occurrences: (count: number, perDocument: number) =>
+      `${count.toLocaleString('en-US')} occurrences, ${perDocument.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1, roundingMode: 'halfEven' })} per document`,
+    noCount: 'no corpus count — this term has no single index form',
+    denominator: (volumes: number) =>
+      `Counts are over the ${volumes.toLocaleString('en-US')} volumes indexed on this server — not the whole published series.`,
+  },
+  /** The search window's view of a search that found nothing, which names the term responsible. */
+  zeroResult: {
+    title: 'No Results',
+    combination: 'Each of your terms matches something on its own — it is the combination that appears in no single document.',
+    detail: 'Try different keywords or adjust your filters.',
+    oneEmpty: (term: string) => `${term} matches no document in your current scope. The rest of your query is not the problem.`,
+    severalEmpty: (terms: readonly string[]) => `${terms.join(', ')} match no document in your current scope.`,
+    denominator: (volumes: number) => `0 here means 0 in what this server has indexed — ${volumes.toLocaleString('en-US')} volumes.`,
   },
   facets: {
     toggle: 'Facets',

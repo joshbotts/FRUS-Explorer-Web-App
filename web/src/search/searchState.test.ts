@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { applySearchChange, clampOffset, filterFields, pageCount, retainedLimit, searchFields, validateSearch } from './searchState';
+import {
+  applySearchChange,
+  clampOffset,
+  filterFields,
+  isPartialEvidence,
+  pageCount,
+  retainedLimit,
+  searchFields,
+  validateSearch,
+} from './searchState';
 
 describe('validateSearch', () => {
   it('keeps what fits and drops the rest', () => {
@@ -106,5 +115,28 @@ describe('the facets’ fields', () => {
     const subject = { keywords: 'x', subjectBucket: '40', subjectBucketKey: 'Germany/Berlin', subjectLabel: 'Berlin' };
     expect(applySearchChange(subject, { personRollupId: ['1'] }).subjectLabel).toBe('Berlin');
     expect(applySearchChange(subject, { subjectBucket: null, subjectBucketKey: null }).subjectLabel).toBeUndefined();
+  });
+});
+
+describe('the order', () => {
+  it('keeps an order of the date, leaves relevance out as the default, and sends the order with the page', () => {
+    expect(validateSearch({ sort: 'dateAscending' }).sort).toBe('dateAscending');
+    expect(validateSearch({ sort: 'dateDescending' }).sort).toBe('dateDescending');
+    expect(validateSearch({ sort: 'relevance' }).sort).toBeUndefined();
+    expect(validateSearch({ sort: 'date' }).sort).toBeUndefined();
+    expect(searchFields({ keywords: 'x', sort: 'dateDescending', offset: 40 })).toMatchObject({ sort: 'dateDescending', offset: 40 });
+    // What a search matches does not depend on its order, so the facets' fields leave it out.
+    expect('sort' in filterFields({ keywords: 'x', sort: 'dateDescending' })).toBe(false);
+    // A narrowing keeps the order, as the Mac's window keeps it from search to search.
+    expect(applySearchChange({ keywords: 'x', sort: 'dateAscending', offset: 40 }, { personRollupId: ['1'] })).toMatchObject({
+      sort: 'dateAscending',
+      offset: undefined,
+    });
+  });
+
+  it('takes what the app keeps of a match of 7,500 or more to be part of it', () => {
+    expect(isPartialEvidence(7_499)).toBe(false);
+    expect(isPartialEvidence(7_500)).toBe(true);
+    expect(isPartialEvidence(195_519)).toBe(true);
   });
 });

@@ -11,7 +11,7 @@ import { ApiError } from '../api/client';
 import { type FacetDisplay, facetSectionQuery, fetchFacetSelection } from '../api/endpoints';
 import type { FacetSectionName, SearchFacetSection } from '../api/types';
 import { copy } from '../copy';
-import { applySearchChange, filterFields, type SearchState } from './searchState';
+import { applySearchChange, filterFields, isPartialEvidence, type SearchState } from './searchState';
 
 const sections: readonly FacetSectionName[] = ['years', 'volumes', 'people', 'documentType', 'provenance', 'subjects'];
 
@@ -481,8 +481,10 @@ function SectionBody({
           <p className="caption">{copy.facets.subjectsSource}</p>
         </>
       )}
-      {/* Said only of a real concentration, as the Mac says it: the three largest volumes holding a quarter or more. */}
-      {section === 'volumes' && (data.topVolumeShare ?? 0) >= 0.25 && (
+      {/* Said only of a real concentration, as the Mac says it: the three largest volumes holding a
+          quarter or more. Never said of a match larger than what the app keeps, where, as the Mac
+          has it, no caveat can repair a concentration figure. */}
+      {section === 'volumes' && !isPartialEvidence(data.matchCount) && (data.topVolumeShare ?? 0) >= 0.25 && (
         <p className="caption">{copy.facets.concentration(Math.round((data.topVolumeShare ?? 0) * 100))}</p>
       )}
     </>

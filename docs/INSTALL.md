@@ -12,7 +12,7 @@ FRUS Explorer Light runs as one container on a Mac or a Linux host, serving a re
   - the index for the full corpus is 2.8 GB;
   - an import needs room for the export and a copy while it is checked;
   - a later import keeps the previous index for rollback, so a re-import needs about four times the index while it runs.
-- **Memory.** Importing and serving the full corpus used about 130 MB, and the reader levelled off at about 170 MB over the largest volumes, so Docker Desktop's default allocation is plenty.
+- **Memory.** Importing and serving the full corpus used about 130 MB, and the reader levelled off at about 170 MB over the largest volumes, so Docker Desktop's default allocation is plenty. A search ordered by date holds up to 7,500 results, as the app's search window does, and the server keeps the last two such searches: by estimate, up to about 40 MB more.
 - **A FRUS Explorer research export** from a Mac running a build that matches the server's index version: 69 today, FRUS Explorer build 50. The server refuses any other version and says which it needs.
 - **The TEI volumes**, which the reader renders documents from. Without them the server still imports and serves the index.
 
@@ -106,7 +106,8 @@ The installed export is removed from the drop zone, so you can delete your own c
 Open http://localhost:8080 in a browser.
 
 - **Browse** lists the 553 volumes of the published catalogue. Type a title or volume number in the box above them to narrow the list, or choose a subseries, or show only the volumes this server indexes. A volume shows its sections: from the index when it holds them, otherwise read from the volume's TEI. A section lists its documents. The index names the documents it holds; the others are named by their number, or a preface or other prose section by its title, and the reader opens them from the TEI.
-- **Search** takes the app's query language: **Search syntax**, under the box, sums it up. The results come best first, with the exact count, and the filters narrow them by kind of document, date and front matter. Each result names its volume and, unless its title already begins with it, its document number.
+- **Search** takes the app's query language: **Search syntax**, under the box, sums it up. The results come best first, with the exact count, and the filters narrow them by kind of document, date and front matter. **Sort** reads them by **Relevance** or by date, **Date ↑** oldest first or **Date ↓** most recent first, with undated documents last. A search keeps its 7,500 most relevant results, as the app does, so a larger match is read by date within those, and the results say so. Each result names its volume and, unless its title already begins with it, its document number.
+- **The Query Inspector**, under the filters, shows what the query compiles to as you type it. The ▾ button beside it, named **Show term detail**, lists each term with its tags and how many indexed documents hold it, and **Count each term in scope…** counts each within the filters. A search that finds nothing names the term that matched nothing.
 - **Facets**, beside the results, break the whole match down by year, volume, person, document type, archival provenance and subject, each counted when you open it. Choose years or volumes to include or exclude, then press **Apply**; a person, a type or a subject narrows the search at once. A year, a person or a subject shows as a token above the results, which clears it, and a type sets the Document type filter.
 - **A result** opens the document in the reader, with **Previous** and **Next** for its neighbours in the volume, a text size, and **Open on history.state.gov**. **Appearance**, at the top, follows the system or stays light or dark.
 - **Links in a document** work as they do in the app:
@@ -128,7 +129,7 @@ Everything the browser shows comes from the API, which `curl` reaches too. A sea
 curl -s 'http://localhost:8080/api/v1/search?keywords=NEAR(khrushchev+berlin,+10)&limit=5'
 ```
 
-`curl -G --data-urlencode 'keywords=…'` writes the text safely. Each result's `snippet` marks the matches with `<b>` and is otherwise plain text. `/api/v1/search/inspect` takes the same parameters and shows what the query compiles to.
+`curl -G --data-urlencode 'keywords=…'` writes the text safely. Each result's `snippet` marks the matches with `<b>` and is otherwise plain text. `sort=dateAscending` or `sort=dateDescending` pages the 7,500 results a search keeps by date. `/api/v1/search/inspect` takes the same parameters and shows what the query compiles to, with the Query Inspector's account of each term; `scopedCounts=true` counts each within the filters, and `emptyConjuncts=true` names the terms that match nothing.
 
 The catalogue lists all 553 volumes, saying which the index holds and which have TEI in your folder, and each volume lists its documents in reading order:
 
