@@ -2,6 +2,65 @@
 
 One entry per session, newest first.
 
+## Session 11a: the phase-1 features' two upstream pull requests
+
+13 October 2026 · branch `claude/s11a-phase1-upstream` · upstream [joshbotts/FRUS-Explorer#1664](https://github.com/joshbotts/FRUS-Explorer/pull/1664) and [#1666](https://github.com/joshbotts/FRUS-Explorer/pull/1666)
+
+The owner used the S10 site and asked for the phase-1 features, which signs phase 1 off on its exit. SPEC's phase 1 lists features that S10's checks did not need, and their shared code was internal to the kit or in app files. This session opened two pull requests on `FRUS-Explorer`, both `Mac`-labelled for the owner's check. The owner merged the first, #1664, the same day as `9feff971`, and the second is rebased on it. Each moves that code into FRUSCoreKit or makes it public, and the app calls the moved code too, so nothing is copied here. The pin stays at `c6f7b2cb` until both have merged.
+
+**#1664: search, merged as `9feff971`**
+
+- The concordance (`KWICLine`, `KWICSort`, `ConcordanceResult` and `SearchService.concordance(for:parameters:radius:)`) and the facets (`ResultSetFacets` and its section, sort, paging, bucket, bound and request types) are public.
+- `SearchService.resultSetFacets(parameters:request:documentKeys:)` is the route the app's facet panel took, moved: the match and filters the search runs, or a meaning search's keys. The panel calls it now.
+- The facet panel's narrowing and staged selection move into the kit:
+  - `FacetNarrowing` reads the subject vocabulary from the host's `IndexingResources`;
+  - `FacetSelection`, `FacetRowState` and `FacetSelectionApplier` move with `stagedSections`, which the panel's controller held.
+- The Query Inspector's model, `QueryInspection.swift`, moves whole, with its three passes public.
+- `SearchSortOrder` moves with `sorted(_:)`, the date order both view models kept a copy of, and gains `String` raw values for the API.
+- Its tests: FRUSCoreKitTests goes from 950 tests in 126 suites to 1,022 in 132.
+
+**#1666: citations, titles and the reader**
+
+- `BibtexExporter`, `RISExporter` and `ZoteroJSONExporter` with its items move into the kit; the Zotero exporter's SwiftData lookup stays in the app.
+- `TEIPublicationYear` is the header scan both apps kept a copy of, and both call it, each with its own fallback.
+- `DocumentDisplayTitle` with `Facts`, which was `CrossReferenceStore.DocumentTitleFacts`, and `DocumentHeaderDisplay` move into the kit.
+- `FootnoteLanding` is the app's footnote landing script, byte for byte. `script(keyExpression:)` lets the reader's host here run the same script for a key it has only when the script runs.
+- `FRUSCanonicalURL.volumeURL(volumeId:)` is public, the page a reference to a volume outside the catalogue opens.
+- Its tests: FRUSCoreKitTests goes from 950 tests in 126 suites to 989 in 133.
+
+**How both were checked**
+
+- **#1664,** at its head, whose tree `9feff971` is:
+  - `FRUSExplorerMac`, clean and unsigned, built as `v2` at `13e093ba` did, with the same five warning lines. Its symbol diff, normalized, has 27 removed and 37 added names, each one the move accounts for.
+  - The full iOS unit run on iOS 27.0: 7,147 tests in 844 suites, against `v2`'s 7,139 in 842. Both have the same 8 issues, the Keychain tests an unsigned build fails, and the same 17 tests and 2 suites skipped.
+  - `swift test`: 38 runs and 2,852 tests, none failed or skipped.
+- **#1666,** at its head on `9feff971`:
+  - `FRUSExplorerMac`, clean and unsigned, beside `v2` at `9feff971`, with the same five warning lines. Its symbol diff, normalized, has 107 removed and 131 added names. Nearly all of that is the facts type's new mangled name, `DocumentDisplayTitle.Facts`; with that rename undone it is 5 and 29, each one the move accounts for.
+  - The full iOS unit run: 7,158 tests in 847 suites, against `9feff971`'s 7,147 in 844. Both have the same 8 Keychain issues and the same skips.
+  - `swift test`: 38 runs and 2,891 tests, none failed or skipped.
+- **Linux,** in a scratch worktree of this repository's `main` with each branch copied over the submodule:
+  - FRUSCoreKitTests pass with the one named skip: 1,022 for #1664, and 1,061 for #1666 on it;
+  - every other target passes except FRUSParityTests, whose 13 issues are all golden-file staleness. The source digest covers the kit's folders, and S11b remakes the files;
+  - remade at each branch with `tools/mac-golden`, the 392 rows' HTML and the 482 queries' expressions are byte-identical to the committed golden files; only the two provenance lines differ.
+
+**Delivered here**
+
+- `PLAN.md` and its shared copy: the phase-1 sign-off, S11a–S11c and Mac check 6, the answers for S11, and the risk row's count.
+- `COORDINATION.md`: the two pull requests among the web-authored moves.
+- The README and this log.
+
+**Notes**
+
+- **The editable-content docs pin strings to source lines.** Moving code shifted 60 of their ranges in #1664 and 6 in #1666. `EditableContentKeyTests` caught it in a first iOS run, and the ranges were re-pointed through a line diff of each file, each by the distance its own key moved.
+- **A new kit suite must not reuse a name the app's test target declares.** The package builds the kit's suites alone, and Xcode compiles them into one module with the app's. A first `FRUSCanonicalURLTests` collided with the app's suite of that name and became `CanonicalVolumeURLTests`.
+- **The two pull requests touch the same lines:** `CLAUDE.md`'s FRUSCoreKit entry, and the ends of `Planning/DEVELOPMENT-PLAN.md` and the amendment log. #1666 was not yet pushed when #1664 merged, so it was rebased on `9feff971`, the three conflicts were combined, and its checks ran again at that head.
+- **Disk:** the Mac had 13–15 GB free throughout. The checks reused S6's derived-data folders and its scratch clone, and the worktrees for `v2` and #1666 share the clone's objects.
+
+**Next: the owner's Mac check of [#1666](https://github.com/joshbotts/FRUS-Explorer/pull/1666), and its merge.**
+- **Then S11b:** the pin move past both. It needs a new three-volume export from the merged build for the golden files.
+- **Then S11c:** the features over the API and in the browser app.
+- **Still before a release:** Browse's own-text rows, the daily upstream watch and the speed of exact-word search.
+
 ## Session 10: the owner's export in Compose, with checks 3–5 on it
 
 13 October 2026 · branch `claude/s10-real-export`
