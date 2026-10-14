@@ -45,7 +45,7 @@ The owner used the S10 site and asked for the phase-1 features, which signs phas
 
 **Delivered here**
 
-- `PLAN.md` and its shared copy: the phase-1 sign-off, S11a–S11c and Mac check 6, the answers for S11, and the risk row's count.
+- `PLAN.md` and its shared copy (rev 136): the phase-1 sign-off, S11a–S11c and Mac check 6, the answers for S11, the risk row and the count of owner steps.
 - `COORDINATION.md`: the two pull requests among the web-authored moves.
 - The README and this log.
 

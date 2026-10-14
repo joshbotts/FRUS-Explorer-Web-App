@@ -250,7 +250,7 @@ These are us-east-1 list prices from memory; AWS pricing pages were unreachable 
 
 ## Owner checkpoints
 
-Ten steps need the owner, because a cloud session has no Mac and no Xcode. Sessions keep working on the other track while each one waits.
+Eleven steps need the owner, because a cloud session has no Mac and no Xcode. Sessions keep working on the other track while each one waits.
 
 | Checkpoint | When | What the owner does | Status |
 | --- | --- | --- | --- |
@@ -347,7 +347,7 @@ Answered on 13 October, for S10:
 Answered on 13 October, for S11:
 
 - The owner used the S10 site and signed phase 1 off on its exit, checks 3–5 on the real export, and asked for the phase-1 features next.
-- The features' upstream work is two pull requests, not one: [FRUS-Explorer#1664](https://github.com/joshbotts/FRUS-Explorer/pull/1664) for search, and [FRUS-Explorer#1666](https://github.com/joshbotts/FRUS-Explorer/pull/1666) for the citations, the titles and the reader. One pin move, S11b, follows both, with a new three-volume export, so the owner exports once.
+- The features' upstream work is two pull requests, not one: [FRUS-Explorer#1664](https://github.com/joshbotts/FRUS-Explorer/pull/1664) for search, merged on 13 October as `9feff971`, and [FRUS-Explorer#1666](https://github.com/joshbotts/FRUS-Explorer/pull/1666) for the citations, the titles and the reader. One pin move, S11b, follows both, with a new three-volume export, so the owner exports once.
 - Each moves the code the web edition needs into the kit, or makes it public, and the app calls the moved code, so nothing is copied: the facet panel computes a section through `SearchService.resultSetFacets(parameters:request:documentKeys:)`, both view models sort through `SearchSortOrder.sorted(_:)`, and both apps read the publication year through `TEIPublicationYear`.
 - Left to S11c: the captions that say which set a reading counted, which the app keeps in `ResultSetScope` beside a model type, and the timeline's chart. The web edition words its own captions, in the Mac's wording where a control is the same.
 - Unchanged unless the owner asks: the date order breaks no tie beyond BM25, and each app keeps its own fallback for a volume whose TEI header states no year.
