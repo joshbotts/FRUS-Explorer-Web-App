@@ -658,9 +658,9 @@
     "timings" : {
       "cross_references" : 0.001,
       "cross_references.sequence" : 0,
-      "document_cache" : 0.005,
+      "document_cache" : 0.006,
       "document_cache.sequence" : 0,
-      "document_dates" : 0,
+      "document_dates" : 0.001,
       "document_dates.sequence" : 0,
       "document_revisions" : 0,
       "document_revisions.sequence" : 0,
@@ -668,17 +668,17 @@
       "document_sources.sequence" : 0,
       "document_subject_refs" : 0.001,
       "document_subject_volumes" : 0,
-      "document_subjects" : 0,
+      "document_subjects" : 0.001,
       "external_citations" : 0,
       "external_citations.sequence" : 0,
       "frus_documents.averages" : 0,
       "frus_documents.config" : 0,
       "frus_documents.docsize" : 0,
-      "frus_documents.vocab_col" : 0.007,
-      "frus_documents.vocab_instance" : 0.388,
-      "frus_documents.vocab_row" : 0.011,
-      "integrity" : 0.026,
-      "page_ranges" : 0.001,
+      "frus_documents.vocab_col" : 0.008,
+      "frus_documents.vocab_instance" : 0.412,
+      "frus_documents.vocab_row" : 0.012,
+      "integrity" : 0.028,
+      "page_ranges" : 0.002,
       "page_ranges.sequence" : 0.001,
       "person_cluster_candidate" : 0,
       "person_list_sources" : 0,
@@ -692,7 +692,7 @@
       "schema.export_only" : 0,
       "terms" : 0,
       "terms.sequence" : 0,
-      "total" : 0.467,
+      "total" : 0.504,
       "user_content.averages" : 0,
       "user_content.config" : 0,
       "user_content.docsize" : 0.003,
@@ -702,7 +702,7 @@
       "user_tags" : 0,
       "volume_sources" : 0,
       "volume_sources.sequence" : 0,
-      "volume_structures" : 0,
+      "volume_structures" : 0.001,
       "volume_structures.json" : 0
     },
     "volumeOrder" : [
@@ -737,8 +737,8 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "aab1b685b41c00a60d12c886c0dd9143e72d1d9213aa7c775f693c51bcffba1d",
+    "sourceDigest" : "24382592d086e24d4472a2ab72a49aa7603e2106a07c9ee1360ce29d9b8aa93c",
     "tool" : "frus-parity summarize",
-    "upstreamCommit" : "c6f7b2cbcee1939abbac70c1733f3e5799aa3446"
+    "upstreamCommit" : "757c6d29fa0b6dbb754706900b1d3f15f67ad453"
   }
 }
