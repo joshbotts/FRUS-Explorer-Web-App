@@ -1,6 +1,8 @@
-// A search, as the app's URL holds it: the API's own parameter names, defaults left out.
+// A search, as the app's URL holds it: the API's own parameter names, defaults left out, and two
+// of the app's own, which the API never sees: whether the facet panel is open, and a subject
+// filter's name.
 import type { FormValue } from '../api/form';
-import type { DocumentType } from '../api/types';
+import type { DocumentType, SearchChange } from '../api/types';
 
 export interface SearchState {
   /** The search box's text, exactly as typed; absent until a search is made. */
@@ -12,6 +14,18 @@ export interface SearchState {
   /** Absent, front matter included; false leaves it out. */
   includeFrontMatter?: false;
   volumeIds?: string[];
+  /** The years an Apply in the facet panel chose; the empty list matches nothing. */
+  yearKeys?: string[];
+  /** A person's rollup in the served index, as a People row narrows to it, and the name it shows. */
+  personRollupId?: string;
+  personLabel?: string;
+  /** A subject's place in the subject vocabulary, and its durable name, as a Subjects row narrows to it. */
+  subjectBucket?: string;
+  subjectBucketKey?: string;
+  /** The subject's name, kept from the row that set it, since the kit's vocabulary is internal. Not sent. */
+  subjectLabel?: string;
+  /** `facets` while the facet panel is open. Not sent. */
+  panel?: 'facets';
   /** Absent for the default page size. */
   limit?: number;
   /** Absent for the first page. */
@@ -25,12 +39,36 @@ export const retainedLimit = 7_500;
 export const documentTypes: readonly DocumentType[] = ['all', 'documentsOnly', 'editorialNotesOnly'];
 
 const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+const year = /^\d{4}$/;
+const wholeNumber = /^\d{1,10}$/;
 
 function single(value: unknown): string | undefined {
   if (typeof value === 'string') return value;
   if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   return undefined;
+}
+
+function list(value: unknown): string[] {
+  return (Array.isArray(value) ? value : [value]).filter((item): item is string => typeof item === 'string');
+}
+
+/**
+ * The year filter: absent when the URL has none, the empty list for one empty value, which matches
+ * nothing, and otherwise its years; a value that is no year is dropped, and a filter of nothing but
+ * such values with it.
+ */
+function yearKeys(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined;
+  const values = list(value);
+  if (values.every((item) => item === '')) return [];
+  const years = values.filter((item) => year.test(item));
+  return years.length > 0 ? years : undefined;
+}
+
+function number(value: unknown): string | undefined {
+  const text = single(value);
+  return text !== undefined && wholeNumber.test(text) ? text : undefined;
 }
 
 /**
@@ -43,12 +81,14 @@ export function validateSearch(raw: Record<string, unknown>): SearchState {
   const type = single(raw.documentType);
   const earliest = single(raw.dateRangeEarliest);
   const latest = single(raw.dateRangeLatest);
-  const volumes = (Array.isArray(raw.volumeIds) ? raw.volumeIds : [raw.volumeIds]).filter(
-    (volume): volume is string => typeof volume === 'string' && volume !== '',
-  );
+  const volumes = list(raw.volumeIds).filter((volume) => volume !== '');
   const rawLimit = Number(single(raw.limit));
   const limit = (pageSizes as readonly number[]).includes(rawLimit) && rawLimit !== defaultLimit ? rawLimit : undefined;
   const offset = clampOffset(Number(single(raw.offset)), limit ?? defaultLimit);
+  const personRollupId = number(raw.personRollupId);
+  const subjectBucket = number(raw.subjectBucket);
+  const subjectBucketKey = single(raw.subjectBucketKey) || undefined;
+  const subject = subjectBucket !== undefined || subjectBucketKey !== undefined;
   return {
     keywords,
     documentType: type === 'documentsOnly' || type === 'editorialNotesOnly' ? type : undefined,
@@ -56,6 +96,13 @@ export function validateSearch(raw: Record<string, unknown>): SearchState {
     dateRangeLatest: latest && isoDate.test(latest) ? latest : undefined,
     includeFrontMatter: single(raw.includeFrontMatter) === 'false' ? false : undefined,
     volumeIds: volumes.length > 0 ? volumes : undefined,
+    yearKeys: yearKeys(raw.yearKeys),
+    personRollupId,
+    personLabel: personRollupId !== undefined ? single(raw.personLabel) || undefined : undefined,
+    subjectBucket,
+    subjectBucketKey,
+    subjectLabel: subject ? single(raw.subjectLabel) || undefined : undefined,
+    panel: single(raw.panel) === 'facets' ? 'facets' : undefined,
     limit,
     offset: offset > 0 ? offset : undefined,
   };
@@ -68,8 +115,11 @@ export function clampOffset(offset: number, limit: number): number {
   return Math.min(Math.floor(offset / limit) * limit, last);
 }
 
-/** The API's fields for a search: an empty volume list and absent dates are left out. */
-export function searchFields(state: SearchState): Record<string, FormValue> {
+/**
+ * The API's fields for what a search matches, without its page: an empty volume list and absent
+ * dates are left out, and an empty year list is kept, since it matches nothing.
+ */
+export function filterFields(state: SearchState): Record<string, FormValue> {
   return {
     keywords: state.keywords,
     documentType: state.documentType,
@@ -77,9 +127,36 @@ export function searchFields(state: SearchState): Record<string, FormValue> {
     dateRangeLatest: state.dateRangeLatest,
     includeFrontMatter: state.includeFrontMatter,
     volumeIds: state.volumeIds && state.volumeIds.length > 0 ? state.volumeIds : undefined,
-    limit: state.limit ?? defaultLimit,
-    offset: state.offset ?? 0,
+    yearKeys: state.yearKeys,
+    personRollupId: state.personRollupId,
+    personLabel: state.personLabel,
+    subjectBucket: state.subjectBucket,
+    subjectBucketKey: state.subjectBucketKey,
   };
+}
+
+/** The API's fields for a search and its page. */
+export function searchFields(state: SearchState): Record<string, FormValue> {
+  return { ...filterFields(state), limit: state.limit ?? defaultLimit, offset: state.offset ?? 0 };
+}
+
+/**
+ * The search a change from the server makes of this one, as a facet narrows it: each field it
+ * names set to its values, or left out for null, then checked as the URL's fields are. It starts at
+ * its first page, keeps the page size and the panel, and keeps the subject's name only while it has
+ * a subject.
+ */
+export function applySearchChange(state: SearchState, change: SearchChange): SearchState {
+  const raw: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(filterFields(state))) {
+    if (value !== undefined) raw[name] = Array.isArray(value) ? (value.length > 0 ? value : ['']) : String(value);
+  }
+  for (const [name, values] of Object.entries(change)) {
+    if (values === null) delete raw[name];
+    else raw[name] = values;
+  }
+  raw.subjectLabel = state.subjectLabel;
+  return { ...validateSearch(raw), panel: state.panel, limit: state.limit, offset: undefined };
 }
 
 /** How many pages a search's count gives, within the results it keeps. */

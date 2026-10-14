@@ -1,16 +1,18 @@
-// Search (SPEC, Search): the query box with the app's query language, the first filters, and a
-// page of results by relevance, with the exact count and what it was counted over. A result is
-// named as the Mac's search window names it, with the document's label beside its volume unless
-// the title already opens with its number.
+// Search (SPEC, Search): the query box with the app's query language, the filters, and a page of
+// results by relevance, with the exact count and what it was counted over, beside the facet panel
+// when it is open. A result is named as the Mac's search window names it, with the document's
+// label beside its volume unless the title already opens with its number. A facet's narrowing
+// shows as a filter token, as the Mac's does.
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
-import { type FormEvent, useId, useState } from 'react';
+import { type FormEvent, type ReactNode, type RefObject, useId, useRef, useState } from 'react';
 import { ApiError } from '../api/client';
 import { searchQuery, volumesQuery } from '../api/endpoints';
 import type { DocumentType, SearchResultList, Volume } from '../api/types';
 import { copy } from '../copy';
 import { Badge } from '../shell/Badge';
-import { defaultLimit, documentTypes, pageCount, pageSizes, retainedLimit, type SearchState } from './searchState';
+import { FacetPanel, useFacetPanelState } from './FacetPanel';
+import { defaultLimit, documentTypes, filterFields, pageCount, pageSizes, retainedLimit, type SearchState } from './searchState';
 import { useDocumentTitle } from '../shell/useDocumentTitle';
 import { Snippet } from './Snippet';
 
@@ -28,6 +30,28 @@ export function SearchScreen() {
     void navigate({ search: (previous: SearchState) => ({ ...previous, ...changes, offset: undefined }) });
   }
 
+  // What a facet narrowed from, so the count can say it while the panel is open, as the Mac's does:
+  // the figure exists only at the moment of the click, and belongs to the search the click made.
+  const panelOpen = state.panel === 'facets';
+  const signature = JSON.stringify(filterFields(state));
+  const [narrowed, setNarrowed] = useState<{ signature: string; from: number } | null>(null);
+  // The panel's sections keep their sort and page size while it is closed, as the Mac's do.
+  const facetPanel = useFacetPanelState(state);
+  // While the search shown is still the last one's, its count describes that one.
+  const shown = results.isPlaceholderData ? undefined : results.data;
+  // A filter's token removes itself, so focus goes to the search box rather than nowhere.
+  const searchBox = useRef<HTMLInputElement>(null);
+
+  function narrowTo(next: SearchState) {
+    if (results.data) setNarrowed({ signature: JSON.stringify(filterFields(next)), from: results.data.total });
+    void navigate({ search: next });
+  }
+
+  /** Opens or closes the panel in place of the history entry, so Back leaves the search. */
+  function setPanel(open: boolean) {
+    void navigate({ search: (previous: SearchState) => ({ ...previous, panel: open ? 'facets' : undefined }), replace: true });
+  }
+
   const titles = new Map((volumes.data?.items ?? []).map((volume: Volume) => [volume.volumeId, volume.title]));
   useDocumentTitle(state.keywords ? `${copy.search.title}: ${state.keywords}` : copy.search.title);
 
@@ -35,6 +59,7 @@ export function SearchScreen() {
     <section className="screen search">
       <h1 tabIndex={-1}>{copy.search.title}</h1>
       <SearchForm
+        inputRef={searchBox}
         keywords={state.keywords ?? ''}
         onSubmit={(keywords) => {
           // The same search again leaves the URL as it is, so it asks the server again itself:
@@ -46,13 +71,48 @@ export function SearchScreen() {
           }
         }}
       />
-      <Filters state={state} titles={titles} update={update} />
-      {state.keywords !== undefined && <Results state={state} titles={titles} results={results} />}
+      <Filters state={state} titles={titles} update={update} onCleared={() => searchBox.current?.focus()} />
+      {state.keywords !== undefined && (
+        <div className={panelOpen ? 'search-body with-facets' : 'search-body'}>
+          <Results
+            state={state}
+            titles={titles}
+            results={results}
+            // Said only when the narrowing made the match smaller, as the Mac says it.
+            narrowedFrom={
+              panelOpen && shown && narrowed?.signature === signature && narrowed.from > shown.total ? narrowed.from : undefined
+            }
+            facets={
+              <button
+                type="button"
+                className="facets-toggle"
+                title={panelOpen ? copy.facets.hideHelp : copy.facets.toggleHelp}
+                aria-expanded={panelOpen}
+                aria-controls={panelOpen ? 'facet-panel' : undefined}
+                // Nothing to break down while nothing matches; an open panel can always be closed.
+                disabled={!panelOpen && !(results.data && results.data.total > 0)}
+                onClick={() => setPanel(!panelOpen)}
+              >
+                {copy.facets.toggle}
+              </button>
+            }
+          />
+          {panelOpen && <FacetPanel state={state} total={shown?.total} panel={facetPanel} onSearch={narrowTo} />}
+        </div>
+      )}
     </section>
   );
 }
 
-function SearchForm({ keywords, onSubmit }: { keywords: string; onSubmit: (keywords: string) => void }) {
+function SearchForm({
+  inputRef,
+  keywords,
+  onSubmit,
+}: {
+  inputRef: RefObject<HTMLInputElement | null>;
+  keywords: string;
+  onSubmit: (keywords: string) => void;
+}) {
   const [text, setText] = useState(keywords);
   // Going back to another search shows its text. The box is not remounted for it, so a search
   // made from it keeps its focus.
@@ -73,6 +133,7 @@ function SearchForm({ keywords, onSubmit }: { keywords: string; onSubmit: (keywo
       <label htmlFor={inputId}>{copy.search.label}</label>
       <div className="search-row">
         <input
+          ref={inputRef}
           id={inputId}
           type="search"
           value={text}
@@ -95,10 +156,13 @@ function Filters({
   state,
   titles,
   update,
+  onCleared,
 }: {
   state: SearchState;
   titles: Map<string, string>;
   update: (changes: Partial<SearchState>) => void;
+  /** Called when a chip or a token has cleared its filter, and so removed itself. */
+  onCleared: () => void;
 }) {
   return (
     <fieldset className="filters">
@@ -157,6 +221,7 @@ function Filters({
                 onClick={() => {
                   const remaining = state.volumeIds?.filter((other) => other !== volumeId) ?? [];
                   update({ volumeIds: remaining.length > 0 ? remaining : undefined });
+                  onCleared();
                 }}
               >
                 {title} ×
@@ -165,7 +230,50 @@ function Filters({
           })}
         </div>
       )}
+      {(state.yearKeys || state.personRollupId || state.subjectBucket || state.subjectBucketKey) && (
+        <div className="chips" role="group" aria-label={copy.search.narrowedBy}>
+          {state.yearKeys && (
+            <FilterToken
+              field={copy.search.filterFields.years}
+              value={copy.search.years(state.yearKeys)}
+              onClear={() => {
+                update({ yearKeys: undefined });
+                onCleared();
+              }}
+            />
+          )}
+          {state.personRollupId && (
+            <FilterToken
+              field={copy.search.filterFields.person}
+              value={state.personLabel ?? `#${state.personRollupId}`}
+              onClear={() => {
+                update({ personRollupId: undefined, personLabel: undefined });
+                onCleared();
+              }}
+            />
+          )}
+          {(state.subjectBucket || state.subjectBucketKey) && (
+            <FilterToken
+              field={copy.search.filterFields.subject}
+              value={state.subjectLabel ?? state.subjectBucketKey ?? `#${state.subjectBucket}`}
+              onClear={() => {
+                update({ subjectBucket: undefined, subjectBucketKey: undefined, subjectLabel: undefined });
+                onCleared();
+              }}
+            />
+          )}
+        </div>
+      )}
     </fieldset>
+  );
+}
+
+/** A filter a facet set, by its field and value, as the Mac's token shows it; a click clears it. */
+function FilterToken({ field, value, onClear }: { field: string; value: string; onClear: () => void }) {
+  return (
+    <button type="button" className="chip" aria-label={`${field} ${value}, ${copy.search.clearThisFilter}`} onClick={onClear}>
+      <span className="chip-field">{field}</span> {value} <span aria-hidden="true">×</span>
+    </button>
   );
 }
 
@@ -173,10 +281,16 @@ function Results({
   state,
   titles,
   results,
+  narrowedFrom,
+  facets,
 }: {
   state: SearchState;
   titles: Map<string, string>;
   results: UseQueryResult<SearchResultList, unknown>;
+  /** The count the last facet narrowed from, while the panel shows it. */
+  narrowedFrom: number | undefined;
+  /** The control that opens the facet panel. */
+  facets: ReactNode;
 }) {
   // The last page stays on screen while the next loads, so the pager keeps its focus and the
   // count stays one live region.
@@ -190,17 +304,21 @@ function Results({
       <h2 id="results-heading" className="visually-hidden">
         {copy.search.results}
       </h2>
-      <p className="count" role="status">
-        {failed ? '' : list ? (
-          <>
-            {copy.search.count(list.total, list.countBasis)}
-            {list.items.length > 0 && <> · {copy.search.showing(first, last)}</>} ·{' '}
-            {copy.search.coverage(list.coverage.indexedVolumes, list.coverage.manifestVolumes)}
-          </>
-        ) : (
-          copy.search.searching
-        )}
-      </p>
+      <div className="results-header">
+        <p className="count" role="status">
+          {failed ? '' : list ? (
+            <>
+              {copy.search.count(list.total, list.countBasis)}
+              {narrowedFrom !== undefined && <> · {copy.search.narrowedFrom(narrowedFrom)}</>}
+              {list.items.length > 0 && <> · {copy.search.showing(first, last)}</>} ·{' '}
+              {copy.search.coverage(list.coverage.indexedVolumes, list.coverage.manifestVolumes)}
+            </>
+          ) : (
+            copy.search.searching
+          )}
+        </p>
+        {facets}
+      </div>
       {failed && (
         <p className="error" role="alert">
           {error instanceof ApiError

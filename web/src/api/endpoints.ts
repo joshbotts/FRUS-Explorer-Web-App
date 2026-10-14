@@ -5,6 +5,9 @@ import { formEncode } from './form';
 import type {
   CitationStyleName,
   DocumentCitation,
+  FacetSectionName,
+  SearchFacetSection,
+  SearchFacetSelection,
   DocumentDetail,
   DocumentList,
   Readiness,
@@ -15,7 +18,7 @@ import type {
   VolumeSectionPage,
 } from './types';
 import type { SearchState } from '../search/searchState';
-import { searchFields } from '../search/searchState';
+import { filterFields, searchFields } from '../search/searchState';
 
 const segment = encodeURIComponent;
 
@@ -105,6 +108,54 @@ export function searchQuery(state: SearchState) {
     placeholderData: keepPreviousData,
     retry: retryServerFaults,
   });
+}
+
+/** How a facet section's rows are cut: the kit's sort, page size, page and filter, each its standard when absent. */
+export interface FacetDisplay {
+  sort?: string;
+  pageSize?: string;
+  page?: number;
+  filter?: string;
+}
+
+/** One section of a search's facets, as the panel shows it. */
+export function facetSectionQuery(state: SearchState, section: FacetSectionName, display: FacetDisplay) {
+  const search = filterFields(state);
+  const fields = {
+    ...search,
+    section,
+    facetSort: display.sort,
+    facetPageSize: display.pageSize,
+    facetPage: display.page ? display.page : undefined,
+    facetFilter: display.filter ? display.filter : undefined,
+  };
+  return queryOptions<SearchFacetSection, unknown, SearchFacetSection, unknown[]>({
+    queryKey: ['facets', search, section, fields],
+    queryFn: ({ signal }) => getJSON<SearchFacetSection>('/api/v1/search/facets', formEncode(fields), signal),
+    staleTime: 5 * 60_000,
+    // The section's last page stays while another of the same search loads, so its controls keep
+    // their focus; a section of another search never stands in, since its rows would describe a
+    // match that is no longer shown.
+    placeholderData: (previous, query) =>
+      query && JSON.stringify(query.queryKey[1]) === JSON.stringify(search) && query.queryKey[2] === section ? previous : undefined,
+    retry: retryServerFaults,
+  });
+}
+
+/** What a staged selection of years or volumes narrows the search to, as Apply sets it. */
+export function fetchFacetSelection(
+  state: SearchState,
+  section: 'years' | 'volumes',
+  included: readonly string[],
+  excluded: readonly string[],
+): Promise<SearchFacetSelection> {
+  const fields = {
+    ...filterFields(state),
+    section,
+    include: included.length > 0 ? included : undefined,
+    exclude: excluded.length > 0 ? excluded : undefined,
+  };
+  return getJSON<SearchFacetSelection>('/api/v1/search/facets/selection', formEncode(fields));
 }
 
 export function documentQuery(volumeId: string, documentId: string) {

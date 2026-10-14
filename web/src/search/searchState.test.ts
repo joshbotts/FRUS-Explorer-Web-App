@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampOffset, pageCount, retainedLimit, searchFields, validateSearch } from './searchState';
+import { applySearchChange, clampOffset, filterFields, pageCount, retainedLimit, searchFields, validateSearch } from './searchState';
 
 describe('validateSearch', () => {
   it('keeps what fits and drops the rest', () => {
@@ -61,5 +61,50 @@ describe('searchFields', () => {
       limit: 20,
       offset: 0,
     });
+  });
+});
+
+describe('the facets’ fields', () => {
+  it('keeps an empty year list, which matches nothing, apart from none, and drops what is no year', () => {
+    expect(validateSearch({ yearKeys: '' }).yearKeys).toEqual([]);
+    expect(validateSearch({ yearKeys: [''] }).yearKeys).toEqual([]);
+    expect(validateSearch({ yearKeys: ['1960', '1894'] }).yearKeys).toEqual(['1960', '1894']);
+    expect(validateSearch({ yearKeys: ['1960', 'x'] }).yearKeys).toEqual(['1960']);
+    expect(validateSearch({ yearKeys: 'x' }).yearKeys).toBeUndefined();
+    expect(validateSearch({}).yearKeys).toBeUndefined();
+    expect(filterFields({ keywords: 'x', yearKeys: [] }).yearKeys).toEqual([]);
+  });
+
+  it('keeps a person’s rollup and name, and a subject’s name only beside its subject', () => {
+    expect(validateSearch({ personRollupId: '12', personLabel: 'Khrushchev' })).toMatchObject({ personRollupId: '12', personLabel: 'Khrushchev' });
+    expect(validateSearch({ personRollupId: 'x', personLabel: 'Khrushchev' })).toMatchObject({ personRollupId: undefined, personLabel: undefined });
+    expect(validateSearch({ subjectBucketKey: 'Germany/Berlin', subjectLabel: 'Berlin' }).subjectLabel).toBe('Berlin');
+    expect(validateSearch({ subjectLabel: 'Berlin' }).subjectLabel).toBeUndefined();
+    expect(validateSearch({ panel: 'facets' }).panel).toBe('facets');
+    expect(validateSearch({ panel: 'other' }).panel).toBeUndefined();
+    // The app's own two fields never reach the API.
+    const fields = searchFields({ keywords: 'x', subjectBucket: '40', subjectLabel: 'Berlin', panel: 'facets' });
+    expect(fields.subjectBucket).toBe('40');
+    expect('subjectLabel' in fields || 'panel' in fields).toBe(false);
+  });
+
+  it('makes a change from the server to the search: each field set, or left out for null, from the first page', () => {
+    const state = { keywords: 'treaty', volumeIds: ['frus1961-63v06'], limit: 50, offset: 100, panel: 'facets' as const };
+    expect(applySearchChange(state, { volumeIds: null, personRollupId: ['1'], personLabel: ['Khrushchev'] })).toEqual({
+      keywords: 'treaty',
+      personRollupId: '1',
+      personLabel: 'Khrushchev',
+      limit: 50,
+      panel: 'facets',
+    });
+    expect(applySearchChange(state, { yearKeys: [''] }).yearKeys).toEqual([]);
+    expect(applySearchChange({ keywords: 'x', includeFrontMatter: false }, { documentType: ['editorialNotesOnly'] })).toMatchObject({
+      includeFrontMatter: false,
+      documentType: 'editorialNotesOnly',
+    });
+    // A subject's name goes with its subject.
+    const subject = { keywords: 'x', subjectBucket: '40', subjectBucketKey: 'Germany/Berlin', subjectLabel: 'Berlin' };
+    expect(applySearchChange(subject, { personRollupId: ['1'] }).subjectLabel).toBe('Berlin');
+    expect(applySearchChange(subject, { subjectBucket: null, subjectBucketKey: null }).subjectLabel).toBeUndefined();
   });
 });
