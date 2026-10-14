@@ -2,6 +2,73 @@
 
 One entry per session, newest first.
 
+## Session 11e: the Query Inspector, and the date order
+
+14 October 2026 · branch `claude/s11e-search-readings` · upstream `757c6d29`, unchanged
+
+The owner merged #35 and asked for S11e. A reader mapped the Mac's search window: its Query Inspector strip and its view of a search that found nothing, the sort bar, and the timeline and concordance readings with the captions that name what each counted. The four were again too many for one reviewable pull request, as S11d's had been, so this one brings the Query Inspector and the date order, and S11f brings the timeline and concordance readings.
+
+**The API**
+
+- **`/search/inspect`** keeps `parse` and `search`, the expression records check 3 reads, and adds `inspection` while an index is served: the kit's `QueryInspection`, from the Query Inspector's cheap pass, `QueryInspector.inspect(parameters:indexedVolumeCount:)`, out of the volumes the index holds. It runs no search.
+  - Each term comes with its tags, its index form, its corpus counts from `fts5vocab`, and the gates the strip reads.
+  - `scopedCounts=true` adds each term's count within the filters, and `emptyConjuncts=true` names the terms that match nothing on their own, the kit's two expensive passes. Each runs one count a term, and is refused with `INDEX_NOT_READY` until an index is served.
+  - A query of more than 64 terms is compiled but not looked up, and either pass is refused for it as `TOO_MANY_TERMS`: each term costs the index statements of its own, run one after another on the connection every search shares.
+- **`/search` takes `sort`**, a `SearchSortOrder`. By relevance a page is the kit's page of the match, as before. In either order of the date it is cut from the 7,500 results the search keeps, sorted whole by `SearchSortOrder.sorted(_:)`, as both of the app's view models sort what they keep. Every list names its order and offers the three by the kit's labels.
+- **What a served index computed lately** is one type now, `RecentComputations`, which keeps the facets' 16 sections and the results of the last 2 searches ordered by date, so a search's other pages fetch them once.
+
+**The browser app**
+
+- **The Query Inspector's strip**, under the filters, follows the box's text as it is typed, before the search is made, as the Mac's does: the text trimmed and the filters, asked for once typing pauses for 300 ms. It shows MATCH and the expression, with the caption for one narrower than typed, or the one line that says why there is none.
+- **Its term detail**, behind the Mac's ▾ (**Show term detail**), lists each term with its tags (EXCLUDED, EXACT, ADVANCED), its counts and the stem that widens it, then each part left out (NOT APPLIED), and the denominator. **Count each term in scope…** counts each within the filters, and the counts go when the text or a filter changes.
+- **A search that found nothing** says why in the Mac's words, from each of its terms searched alone under its filters: "formosa matches no document in your current scope", or that the combination is what matches nothing.
+- **Sort** offers Relevance, Date ↑ and Date ↓, which start the order at its first page, and the order outlasts a new search and a facet's narrowing, as the Mac's does.
+- **A match larger than what a search keeps** says so above the results on every page, in the Mac's words: "Showing 7,500 of 20,000 matches", and how to narrow it. It replaces the web's own note on the last page.
+- **The facets' "The top three hold" caption** is no longer given of such a match, as the Mac's panel withholds it: a figure over the most relevant 7,500 is partly a statement about the ranking.
+
+**Checked**
+
+- **Through the API, beside the kit,** over the fixture index imported as an export (FRUSParityTests):
+  - every one of the 482 parity queries is inspected as the kit inspects it, with its scoped counts and the terms that match nothing; between them they reach every state the inspector reports, from an expression that differs between documents and the reader's writing to a malformed NEAR;
+  - every page of a sixth of the queries, in each order of the date, in pages of 7 and of 100, joins up to the kit's order of what the search keeps, undated documents and documents of one day among them;
+  - the browser app's line for a refused query names the parser's limit on nesting, which the test reads from FTS5Store itself.
+- **The Mac's strings** are the browser app's wherever a control is the same, with "this device" and "you have indexed" made this server.
+
+**A review before the pull request opened.** Two reviewers, one for the server and one for the browser app and the records, each checked their own findings against the code. Thirteen held. Eleven are fixed, one is kept and now said, and one is left as the Mac leaves it:
+
+- **The view of a search that found nothing** could run over the last search's page while the next loaded, and blame a search that had matches. It waits for the search shown to be the one made, as the Mac's view waits.
+- **The expensive passes could run unasked:** counts came back when the text returned to what was counted, and a window regaining focus asked again. They run only when asked, or when a new index is served.
+- **A failure to ask again** replaced a good answer with the generic line, and making the same search again did not ask again.
+- **The strip showed the last query's expression** while the next was asked for after the box was emptied.
+- **The date order over a larger match** read as the oldest of all of it. The Mac's notice now says what the search keeps, and the install guide qualifies the order.
+- **The figure per document** rounded a tie away from zero, where the Mac's formatter rounds half to even.
+- **Every keystroke rendered the whole screen.** The text is held by the search box, the filters and the strip.
+- **Pasted text could tie up the server:** the inspector looked up every term of a query of any length. It looks up 64 at most.
+- **A test could not tell** whether a scoped count read the filters, and the records said "waits" of a refusal, named a control that shows only ▾, and claimed more of the cache than it does.
+- **Kept, and now said in SPEC:** `/search/inspect` takes a search's page and order too, which change nothing it says, so a search's address can be inspected as it stands.
+- **Left as the Mac leaves it:** a search ordered by date that no request waits for any more still fetches what it keeps, to its end. The cache now keeps 2 such searches, not 4, and the install guide says what they hold.
+
+Refuted, among others: a string unlike the Mac's; inspector queries that could collide or never refresh; cache keys that could join two searches; the denominator, which is the count the Mac's `indexedVolumeIds` holds; and parity tests that could pass while comparing a value with itself.
+
+**Records**
+
+- `PLAN.md` and its shared copy (rev 155): S11e's row, S11f's, and the S11 answers.
+- `SPEC.md`: the Search section, and the API's `sort` and `/search/inspect`.
+- `INSTALL.md`: Sort, the Query Inspector, the date order's limit and its memory. The README and this log.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** through the Test step's own script: all 1,934 tests pass, up from 1,928, with the one named skip. FRUSParityTests runs 107, up from 104, and FRUSLightServerTests 90, up from 87; the other targets are unchanged.
+- **The browser app:** typecheck and lint are clean, and 64 unit tests pass in 13 files, up from 50 in 12.
+- **`scripts/compose-smoke --e2e`:** passes, with 13 browser tests on Chromium, up from 11. The two new ones use the Query Inspector as it is typed, its counts in scope, a search that found nothing, and both orders of the date, and run axe with the term detail open, over the view of a search that found nothing, and in the date order. It finds nothing.
+
+**Notes**
+
+- **A search ordered by date** fetches the 7,500 results it keeps, with their snippets, on its first page, as the Mac's window fetches them for every search. Over the whole corpus that costs what a Mac search costs; check 12 has not timed it here, over three fixture volumes.
+- **The Mac's caption for expressions that differ** between documents and the reader's own writing has no place in the browser app, which sends no scope that could make them differ.
+
+**Next: S11f,** the timeline and concordance readings over the API and in the browser app, each naming the set it counted. Browse's own-text rows, the daily upstream watch and the speed of exact-word search remain before a release.
+
 ## Session 11d: the facets, with include, exclude and Apply
 
 14 October 2026 · branch `claude/s11d-search-features` · upstream `757c6d29`, unchanged
