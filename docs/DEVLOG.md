@@ -2,6 +2,83 @@
 
 One entry per session, newest first.
 
+## Session 11c: BibTeX and RIS in Cite, display titles, the footnote landing, and a sturdier skip check
+
+13 October 2026 · branch `claude/s11c-cite-titles-footnotes` · upstream `757c6d29`, unchanged
+
+The owner merged #31 and #32, and asked for the phase-1 features. They became two pull requests, as S8's and S9's did: this one brings the citations, titles and reader features of #1666 to the API and the browser app, and S11d brings the search features of #1664. On the owner's word it also changes CI's skip check, after the `ci` run on `main` for #31's merge failed with every test passing.
+
+**CI's skip check**
+
+- **What failed.** Run 38490727044, on `7258ee58`, failed in the swift job's Test step:
+  - all 11 targets reported passing, with the counts of #31's green run on the same tree;
+  - but the step counted the named Linux-only skip 0 times, because about 240 lines of the test output never reached `test.log`: 156 "started" lines, 71 "passed", the skip's own line and a few log lines, all in FTS5StoreTests and FRUSCoreKitTests;
+  - 16 lines arrived as their ends only, such as `t" started.`;
+  - the backup-exclusion test's skip is a compile-time `.enabled(if:)`, so it was skipped as always. The `image` workflow does not depend on `ci`, and published that commit.
+- **The change.** The Test step passes `--xunit-output`, and counts Swift Testing's skips in the results file it writes, `test-results-swift-testing.xml`:
+  - each skip is a `<skipped>` element under its test's suite and function, and the backup-exclusion test (`FTS5StoreTests.FTS5StoreTests`, `backupExclusion()`, a reason beginning "Linux: ") must be the only one;
+  - the log is still read for what the file cannot show: XCTest's skips, for which no file is written here, and cancellations, which the file records as passing. A lost line can hide one of those, but never fails the job;
+  - `COORDINATION.md`'s pin-move checklist says how the allow-list now works.
+- **How it was checked:**
+  - a probe package in `swift:6.4-noble` showed what the file records for each kind of skip: a trait's, a disabled suite's (once for each of its tests), one with no reason, one with a reason over two lines or with XML's special characters, a cancellation and XCTest's;
+  - the step's own script, read from `ci.yml`, ran in the swift image under `bash -eo pipefail`, with `LANG` unset and set to `C.UTF-8`, against nine cases replayed by a stand-in `swift`: the expected skip passes, and so does the failed run's own log; two extra skips (one with a reason over two lines, one with none), the named test run, skipped for another reason or found twice, no results file, an XCTest skip and a cancellation each fail;
+  - this branch's full Linux run, through the same script: its results file holds 1,914 tests, one of them skipped, the backup-exclusion test.
+
+**Cite**
+
+- **The year.** The citation now takes the year the volume's TEI header states, read by the kit's `TEIPublicationYear` as both of the app's hosts read it, when the TEI is mounted.
+  - Without the TEI, it takes the manifest's, with the Mac's fallback for the records, which the kit leaves to each host: `CitationRoutes.manifestYear` mirrors `DocumentExportSupport.effectiveYear`.
+  - `publicationYear` and `publicationYearSource` (`tei` or `manifest`) say which.
+  - Over HistoryAtState/frus at `99d851c79` (9 October), 552 of the 553 published volumes' headers state the manifest's year. frus1969-76v32's gives its date only as 2010-11-05, which the scan does not read, and the manifest gives 2010.
+- **The records.** `bibtex` and `ris` are the kit's `BibtexExporter` and `RISExporter`, as the Mac's Copy BibTeX and Copy RIS write them; `…/citation.bib` and `…/citation.ris` serve them as files, named as the Mac names its .bib file.
+  - The citation and both records are made from one volume's metadata, as iOS's reader makes them, so the printer's name follows the year cited.
+- **The browser app.** Cite adds Copy BibTeX, Copy RIS and Save as .bib, in the Mac popover's wording, the last without its ellipsis, since a browser saves at once.
+
+**Display titles**
+
+- **Search rows** are named as the Mac's search window names them: the header less a leaked source note (`DocumentHeaderDisplay.trimmedHeader`), with the document's label beside its volume (`CitableDocumentNumber.captionLabel`), withheld when the header already opens with its number (`headerRepeatsNumber`). A row with no header takes the name the app's lists give it, where the window would leave it blank.
+- **Every other list** (a section's documents, a volume's reading order) and **the reader's heading** take the kit's `DocumentDisplayTitle`: an editorial note whose head says only "Editorial Note" is named by its number, and a document with no head by its id.
+  - The app names documents by it in its Research, working-corpus and cluster lists and its reader's title. Its Browse rows print the stored head (`DocumentRowLabel`), which for 2,560 notes is only "Editorial Note".
+  - Browse here takes the kit's rule instead, which #1666 moved for the web edition's lists, so a row reads as the heading of the reader it opens. SPEC says so.
+
+**The reader**
+
+- **The footnote landing** is the app's own script: `/reader/host.js` holds the kit's `FootnoteLanding.script(keyExpression:)` byte for byte, as the body of `landOnFootnote(key)`, and runs it whenever the browser app asks it to land on a note, in another document after its page loads, or in place. The entry scrolls into view and is washed for 2.4 seconds; then it takes focus, as before.
+- **A whole volume outside the catalogue**, such as the microfiche supplement v06's preface names, now carries its page on history.state.gov (`FRUSCanonicalURL.volumeURL`, public since #1666), which the app opens, and the reader offers it.
+
+**A review before the pull request opened.** Two reviewers, one for the server and CI and one for the browser app and the records, each checked their own findings against the code. Six held, and all were fixed:
+
+- **Cite's status:** a second copy said "Copied" again, which a live region does not announce, so Copy RIS after Copy BibTeX was silent to a screen reader. The status now empties before each copy. The browser test now waits for each record on the clipboard, where it had passed on the first copy's status.
+- **"As the app's lists do":** the records said every list in the app names documents by `DocumentDisplayTitle`; its Browse rows do not. The comments, SPEC and the README now say that Browse here departs from them, and why.
+- **Untested titles:** no browser-app test could tell a `displayTitle` from a `header`, or see a label withheld. Route-level unit tests now render Search, a section, a volume's reading order and the reader with the server's answers stubbed. With any of the four screens put back to `header`, or the label's guard removed, a test fails.
+- **Cite's two rows of buttons touched**, and now have the gap they have when they wrap.
+- **CI's results file is read as text** (`grep -a`), as the log is: a NUL byte in a skip's reason would otherwise fail the job.
+- **`classify(asEditorialNote:)`,** which renames a document with the index's effective classification, had no test that could fail. The API cannot show it, since both read the same column, so a direct test does.
+
+Refuted, among others: a mismatch between the types and the server's JSON; a download link styled as a button; the 2.4-second wash racing the tests; the host script's JavaScript under the page's policy; and the CI step's exit codes under `-e` and `pipefail`. One finding predates this session, so it is offered as a follow-up: on a reader page opened at a note, changing Text Size or Appearance reloads the frame, and the reload's landing pulls focus into it.
+
+**Records**
+
+- `PLAN.md` and its shared copy (rev 148): S11c's row, S11d's new one, S11b's row with the reused export, and the S11 answers.
+- `SPEC.md`: the reader's landing, the API's search rows, list titles, the link's `url`, and the citation's year, records and files.
+- `INSTALL.md`: Search's document numbers, Cite's three controls, the note's landing, and a volume outside the catalogue.
+- `COORDINATION.md`, the README and this log.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** through the Test step's own script: all 1,914 tests pass, up from 1,908, with the one named skip, which the new check allows. FRUSLightServerTests runs 77, up from 71; the other targets are unchanged.
+- **The browser app:** typecheck and lint are clean, and 40 unit tests pass in 11 files, up from 34 in 9.
+- **The Compose smoke test with `--e2e`:** passes, and so do the browser suite's 9 tests on Chromium, up from 7. Axe runs over a note just landed on, the notice for a volume outside the catalogue, and Cite after its records are copied and saved, and finds nothing.
+
+**Notes**
+
+- **The Mac's popover gives the records the manifest's printer**, computed from the manifest's year, while iOS and this server compute it from the year cited. They differ only for a volume whose header and manifest name years either side of 2014, and no published volume does, so nothing is filed upstream.
+- **A document the index lacks** keeps the name its TEI gives it ("Document 3"), and its records take its id for a title, as the kit's exporters do for an empty header: the kit's header extraction, `IndexingPipeline.extractHeader`, is internal.
+- **The synthetic export's rows carry no document numbers**, so the browser suite sees "Doc 1" beside "1. Telegram From…", as the Mac's window would for those rows. The server tests give the rows numbers to check that the label is withheld, and the unit tests stub the answers.
+- **Scratch files** from the CI checks are in `.build/linux` (`ci-test-step.sh`, `guard-cases/`), which git ignores; the session left them, since its safety check would not remove them for it.
+
+**Next: S11d,** the search features over the API and in the browser app: the facets with include, exclude and Apply; the Query Inspector; the date order; and the timeline and concordance readings. Browse's own-text rows, the daily upstream watch and the speed of exact-word search remain before a release.
+
 ## Session 11b: pin move past S11a's two upstream pull requests
 
 13 October 2026 · branch `claude/s11b-pin-move` · upstream `757c6d29` (#1666's merge, after #1664's `9feff971`)
