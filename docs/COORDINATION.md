@@ -146,6 +146,21 @@ S9c's pin move to `f384d2d5`, after the owner's Mac check of both:
 - remade the golden files, the two made from an export with the owner's new three-volume export. The HTML of all 392 rows and the expressions changed only in provenance. Seven of the index summary's 36 gating digests moved, six with the bumps and one with #1614's index, and the kit on Linux reproduces each;
 - builds `tools/mac-golden` in release, since from `845d57ea` a debug build of the app module fails under Xcode 27.0, where a whole-module build compiles it clean.
 
+**#1664 and #1666 (session S11a), opened on 13 October; #1664 merged the same day as `9feff971`.** The phase-1 features need code the kit kept internal or the app kept in its own files. Both pull requests move it into the kit or make it public, and the app calls the moved code, so the two never hold two copies:
+
+- [joshbotts/FRUS-Explorer#1664](https://github.com/joshbotts/FRUS-Explorer/pull/1664), search:
+  - the concordance and the facets are public;
+  - `SearchService.resultSetFacets(parameters:request:documentKeys:)` is the facet panel's route, and the panel calls it;
+  - the panel's narrowing and staged selection, the Query Inspector's model and the date order move into the kit. `SearchSortOrder.sorted(_:)` replaces the comparator each view model kept.
+- [joshbotts/FRUS-Explorer#1666](https://github.com/joshbotts/FRUS-Explorer/pull/1666), citations, titles and the reader:
+  - the BibTeX, RIS and Zotero exporters move into the kit, with the Zotero exporter's SwiftData lookup left in an app extension;
+  - the TEI's publication year becomes one scan, where each app kept a copy;
+  - the display title, with the facts it reads, and the header display move into the kit;
+  - the reader's footnote landing script moves into the kit;
+  - `FRUSCanonicalURL.volumeURL(volumeId:)` is public.
+
+Both build and pass on Linux over this repository's `main`. Remade at each branch, the 392 rows' HTML and the expressions change only in provenance. S11b's pin move follows both, with a new three-volume export.
+
 ## 3. The architecture that protects coordination
 
 These structures let the two codebases share code without app sessions having to think about the web edition. Web sessions add and maintain them, in pull requests on the app's repository.
@@ -211,7 +226,7 @@ The whole of the app side's part. Each rule costs little or nothing. The boundar
 - is opened when the app's repository is quiet, and kept small or split into reviewable commits.
 
 **App changes only the web edition needs,** all to be written by web sessions:
-- further moves into the kits (FRUSCoreKit part 2 was S6's, merged as #1573 and #1574; the read-only open and the reader's page were S8a's, #1575; the reader's AA palette, the link parse and the stores' immutable opens were S9b's, #1578 and #1579);
+- further moves into the kits (FRUSCoreKit part 2 was S6's, merged as #1573 and #1574; the read-only open and the reader's page were S8a's, #1575; the reader's AA palette, the link parse and the stores' immutable opens were S9b's, #1578 and #1579; the phase-1 features' search, citation, title and reader code is S11a's, #1664 and #1666);
 - the index version shown beside Export Research Database… (phase 1), so a user can match an export to a server before copying 2.8 GB;
 - the JSON export at `formatVersion` 7, adding the model types it lacks, above all saved searches and working corpora (phase 2);
 - optionally, a JSON importer, so data made on the web can return to the Mac;
