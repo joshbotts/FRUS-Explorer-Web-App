@@ -70,6 +70,16 @@ export function ReaderScreen() {
     setNotice(null);
     setCard(null);
   }
+  // A note is landed on once each time the reader arrives at it, by a link or by Back and Forward.
+  // A page loaded again for another text size or appearance leaves focus on the control that asked
+  // for it (WCAG 3.2.2), and the frame's URL fragment keeps the note in view.
+  const arrival = `${documentKey}#${note ?? ''}`;
+  const [arrivedAt, setArrivedAt] = useState(arrival);
+  const [landing, setLanding] = useState(note);
+  if (arrivedAt !== arrival) {
+    setArrivedAt(arrival);
+    setLanding(note);
+  }
   // Cite takes focus when the reader opens it, not when a page loads with it open.
   const [focusRail, setFocusRail] = useState(false);
   const sheet = rail === 'cite' && narrow;
@@ -297,9 +307,11 @@ export function ReaderScreen() {
               sandbox="allow-scripts"
               referrerPolicy="no-referrer"
               // A link to a note lands on it: the fragment scrolls the page there, and focus goes to
-              // the note, so the next Tab continues from it.
+              // the note, so the next Tab continues from it; once for each arrival at the note.
               onLoad={() => {
-                if (note) reveal(note);
+                if (!landing) return;
+                setLanding(undefined);
+                reveal(landing);
               }}
             />
           ) : page.isError ? (
