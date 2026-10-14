@@ -101,7 +101,7 @@ jobs:
       # fails the job. They are matched by the verb right after the test's or suite's name, quoted
       # (greedily, so a name holding quotes still matches) or bare: upstream has a passing test named
       # "A Lot File(s) prefix is skipped, never captured into the key", whose lines a looser pattern
-      # took for a skip. grep -a reads the log as text even if a test prints a NUL byte.
+      # took for a skip. grep -a reads the log and the file as text even if a test prints a NUL byte.
       - name: Test
         run: |
           swift test --skip-build --scratch-path .build/linux --xunit-output test-results.xml 2>&1 | tee test.log
@@ -111,11 +111,11 @@ jobs:
             exit 1
           fi
           named='<testcase classname="FTS5StoreTests.FTS5StoreTests" name="backupExclusion()">'
-          skipped=$(grep -c '<skipped' "$results" || true)
-          allowed=$(grep -A1 -F -e "$named" "$results" | grep -c '^ *<skipped>Linux: ' || true)
+          skipped=$(grep -ac '<skipped' "$results" || true)
+          allowed=$(grep -aA1 -F -e "$named" "$results" | grep -ac '^ *<skipped>Linux: ' || true)
           if [ "$skipped" -ne 1 ] || [ "$allowed" -ne 1 ]; then
             echo "::error::Skips in Swift Testing's results: $skipped; of them, the Linux-only skip SPEC's check 1 names: $allowed. Every test at the pin must run but that one, skipped with a reason that begins \"Linux: \"."
-            grep -B1 '<skipped' "$results" || true
+            grep -aB1 '<skipped' "$results" || true
             exit 1
           fi
           logged='Test "Database file has isExcludedFromBackupKey set after creation" skipped: "Linux: '
