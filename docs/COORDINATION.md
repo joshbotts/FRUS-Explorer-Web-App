@@ -1,6 +1,6 @@
 # FRUS Explorer and FRUS Explorer Light: working across the two repositories
 
-A proposal for the owner, and for Claude Code sessions in either repository. Drafted 4 October 2026, when the web edition was pinned to the app's commit `cfc0d3c` (build 49, index version 65). Updated the same day, when S3's pin move took the pin to `af8bedab`, with FRUSCoreKit part 1, and on 5 October, when S6's took it to `f69b4a0a`, with part 2; the build and index version are unchanged. On 6 October S8a's upstream pull request merged as `101e17d7`, the server began linking the kit, and S8b's pin move took the pin to `101e17d7`; the build and index version are unchanged. On 7 October S9b's two upstream pull requests merged as `4fc04a60` and `f384d2d5`, and S9c's pin move took the pin to `f384d2d5`; the build and index version are unchanged. On 13 October the pin moved to `c6f7b2cb`, the commit the owner tagged `build-50`: build 50, index version 69.
+A proposal for the owner, and for Claude Code sessions in either repository. Drafted 4 October 2026, when the web edition was pinned to the app's commit `cfc0d3c` (build 49, index version 65). Updated the same day, when S3's pin move took the pin to `af8bedab`, with FRUSCoreKit part 1, and on 5 October, when S6's took it to `f69b4a0a`, with part 2; the build and index version are unchanged. On 6 October S8a's upstream pull request merged as `101e17d7`, the server began linking the kit, and S8b's pin move took the pin to `101e17d7`; the build and index version are unchanged. On 7 October S9b's two upstream pull requests merged as `4fc04a60` and `f384d2d5`, and S9c's pin move took the pin to `f384d2d5`; the build and index version are unchanged. On 13 October the pin moved to `c6f7b2cb`, the commit the owner tagged `build-50`: build 50, index version 69. The same day S11a's two pull requests merged as `9feff971` and `757c6d29`, and S11b's pin move took the pin to `757c6d29`; the build and index version are unchanged.
 
 - **The app:** FRUS Explorer, for Mac and iOS, in [`joshbotts/FRUS-Explorer`](https://github.com/joshbotts/FRUS-Explorer).
 - **The web edition:** FRUS Explorer Light, a self-hosted server, in [`joshbotts/FRUS-Explorer-Web-App`](https://github.com/joshbotts/FRUS-Explorer-Web-App).
@@ -146,7 +146,7 @@ S9c's pin move to `f384d2d5`, after the owner's Mac check of both:
 - remade the golden files, the two made from an export with the owner's new three-volume export. The HTML of all 392 rows and the expressions changed only in provenance. Seven of the index summary's 36 gating digests moved, six with the bumps and one with #1614's index, and the kit on Linux reproduces each;
 - builds `tools/mac-golden` in release, since from `845d57ea` a debug build of the app module fails under Xcode 27.0, where a whole-module build compiles it clean.
 
-**#1664 and #1666 (session S11a), opened on 13 October; #1664 merged the same day as `9feff971`.** The phase-1 features need code the kit kept internal or the app kept in its own files. Both pull requests move it into the kit or make it public, and the app calls the moved code, so the two never hold two copies:
+**#1664 and #1666 (session S11a), merged on 13 October as `9feff971` and `757c6d29`.** The phase-1 features need code the kit kept internal or the app kept in its own files. Both pull requests move it into the kit or make it public, and the app calls the moved code, so the two never hold two copies:
 
 - [joshbotts/FRUS-Explorer#1664](https://github.com/joshbotts/FRUS-Explorer/pull/1664), search:
   - the concordance and the facets are public;
@@ -159,7 +159,11 @@ S9c's pin move to `f384d2d5`, after the owner's Mac check of both:
   - the reader's footnote landing script moves into the kit;
   - `FRUSCanonicalURL.volumeURL(volumeId:)` is public.
 
-Both build and pass on Linux over this repository's `main`. Remade at each branch, the 392 rows' HTML and the expressions change only in provenance. S11b's pin move follows both, with a new three-volume export.
+Both build and pass on Linux over this repository's `main`. Remade at each branch, the 392 rows' HTML and the expressions change only in provenance.
+
+S11b's pin move, the same day, to `757c6d29`:
+- found nothing to repair: the web edition's own code built and passed at the new pin, and no kit folder, skip or schema changed;
+- remade the golden files from the owner's three-volume export of 13 October, made from build 50 for its pin move, on the owner's word. The pin is still build 50, and no file on the indexing path changed since `c6f7b2cb`, so a new export would have indexed the same rows.
 
 ## 3. The architecture that protects coordination
 
@@ -241,7 +245,7 @@ The whole of the app side's part. Each rule costs little or nothing. The boundar
 - If the export's schema changed: a new `Tests/FRUSLightTestSupport/Fixtures/export-v<N>-schema.sql` from a real export by the pinned build (the owner is asked for one), the paths that name it, and the table list in `Tests/FRUSParity/IndexSchema.swift`.
 - `UpstreamDigest.directories` and `appDirectories` in `tools/mac-golden/Package.swift`, which must stay the same list, if the app targets gained a source folder (`project.yml`).
 - The CI's allow-list, if a kit test gained or lost a Linux-only skip. The web CI fails on any other skip, and on `Test.cancel`. It matches a skip by the verb right after the test's name, so a passing test whose name says "skipped" is not one.
-- The golden files, remade with `scripts/make-golden --export` on a Mac. The export must come from the pinned app build, in a library holding exactly the three fixture volumes, emptied with Erase Everything… and downloaded again, so the owner is asked for one. Until it arrives, the two files made from an export are listed in `fixtures/golden/PENDING` and the pull request stays a draft. The order the volumes are downloaded in sets the order they are indexed in, which can swap exactly tied results across the 50th place; check 3 passes that as a reorder within a tie, and adding the volumes in the order frus1894Nicaragua, frus1961-63v06, frus1969-76ve09p1 keeps the report steady.
+- The golden files, remade with `scripts/make-golden --export` on a Mac. The export must come from the pinned app build, in a library holding exactly the three fixture volumes, emptied with Erase Everything… and downloaded again, so the owner is asked for one. An export from an earlier pin can serve, by the owner's choice, when the app build is the same and no file on the indexing path changed between the two (`git diff` over the parser, `IndexingPipeline.swift` and its seams, FTS5Store, SourceNoteKit and `FRUSExplorer/Resources`), as S11b's did. Until it arrives, the two files made from an export are listed in `fixtures/golden/PENDING` and the pull request stays a draft. The order the volumes are downloaded in sets the order they are indexed in, which can swap exactly tied results across the 50th place; check 3 passes that as a reorder within a tie, and adding the volumes in the order frus1894Nicaragua, frus1961-63v06, frus1969-76ve09p1 keeps the report steady.
 
 ## 6. For the owner
 
@@ -251,7 +255,7 @@ The whole of the app side's part. Each rule costs little or nothing. The boundar
    - a Mac check and merge for each web-authored pull request;
    - now and then, an export from the pinned app build: three volumes for the golden files, or any export when the schema changes;
    - the full-corpus export before S10, as the owner checkpoints in `PLAN.md` list.
-4. **The three-volume export, at each pin move.** The owner made the first on 4 October, from a build of `af8bedab`, the second on 5 October, from a build of `f69b4a0a`, for S6's pin move, the third on 6 October, from a build of `101e17d7`, for S8b's, the fourth on 7 October, from a build of `f384d2d5`, for S9c's, and the fifth on 13 October, from build 50, for its pin move. Each later pin move needs another.
+4. **The three-volume export, at each pin move.** The owner made the first on 4 October, from a build of `af8bedab`, the second on 5 October, from a build of `f69b4a0a`, for S6's pin move, the third on 6 October, from a build of `101e17d7`, for S8b's, the fourth on 7 October, from a build of `f384d2d5`, for S9c's, and the fifth on 13 October, from build 50, for its pin move. S11b's pin move reused the fifth, since the build and the indexing path were unchanged. A pin move needs another when either changes.
 
 ## Appendix: a section for the app's `CLAUDE.md`
 

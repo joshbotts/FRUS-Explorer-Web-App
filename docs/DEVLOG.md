@@ -2,6 +2,46 @@
 
 One entry per session, newest first.
 
+## Session 11b: pin move past S11a's two upstream pull requests
+
+13 October 2026 · branch `claude/s11b-pin-move` · upstream `757c6d29` (#1666's merge, after #1664's `9feff971`)
+
+The owner merged both of S11a's pull requests, and this one moves the pin to the second's merge (rule 5). It is stacked on #31, S11a's records, so #31 merges first.
+
+**What the move brought**
+
+- **The app's own work since `c6f7b2cb`:** `0fe15702` and `13e093ba` change only `Planning/` and the marketing kit, so build 50 stands. Its index version (69) and FTS generation (4) are unchanged.
+- **#1664 and #1666:** the kit's public search, citation, title and reader code, which S11c builds on. Nothing in the web edition's own code needed a change: the server and its tests built and passed at the new pin as they were, and no kit folder, Linux-only skip or export schema changed.
+
+**The golden files**
+
+- **The export,** on the owner's word: the 13 October three-volume export from build 50, which build 50's pin move used.
+  - The new pin is still build 50, so the export's `app_build` is the pin's.
+  - No file on the indexing path changed between `c6f7b2cb` and `757c6d29`: the TEI parser, `IndexingPipeline.swift` and its seams, FTS5Store, SourceNoteKit and the bundled resources. So a new export would have indexed the same rows.
+  - COORDINATION's checklist now allows such a reuse, by the owner's choice.
+- **Remade by `scripts/make-golden --export`:**
+  - all 392 rows' HTML and the 482 queries' expressions changed only in provenance;
+  - the results changed only in provenance: 482 queries, 43 refused and 12 with ties past the 50th, as before;
+  - in the index summary, no digest or count moved, only the provenance and the timings it records as information;
+  - `frus-parity check-golden` passes.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** from a clean build of this package's own targets: all 1,908 tests pass, up from 1,797, with the one named skip, which CI's skip check allows.
+  - By target: FRUSCoreKitTests 1,061, SourceNoteKitTests 310, FTS5StoreTests 209, FRUSParityTests 100, FRUSLightServerTests 71, ManifestGeneratorTests 60, FRUSLightCoreTests 42, SemanticVectorsKitTests 35, CrossRefKitTests 10, GeneratorKitTests 7, FTS5CheckTests 3.
+  - Against the remade golden files the run printed:
+    - "check 2 passes: 36 digests and 7 checks are the Mac's";
+    - "check 3's results pass: 482 queries, 482 identical and 0 reordered only within Mac tie groups", and the same through the API;
+    - "check 4 through the page: 392 of 392 rows identical".
+- **The web app and the Compose smoke test with `--e2e`:** run by CI's web and compose jobs, since this pull request changes neither the browser app nor the server's code.
+
+**Notes**
+
+- **The source digest moved** with #1664 and #1666, as it does at every pin move, and so did nothing else in the golden files.
+- **Next pin move:** `COORDINATION.md` says when an export can be reused, and when the owner needs to make a new one.
+
+**Next: S11c,** the phase-1 features over the API and in the browser app: the facets with include, exclude and Apply; the Query Inspector; the date order; the timeline and concordance readings; BibTeX and RIS in Cite; display titles in lists; and the footnote landing with the app's own script. Browse's own-text rows, the daily upstream watch and the speed of exact-word search remain before a release.
+
 ## Session 11a: the phase-1 features' two upstream pull requests
 
 13 October 2026 · branch `claude/s11a-phase1-upstream` · upstream [joshbotts/FRUS-Explorer#1664](https://github.com/joshbotts/FRUS-Explorer/pull/1664) and [#1666](https://github.com/joshbotts/FRUS-Explorer/pull/1666)
