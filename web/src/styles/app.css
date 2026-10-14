@@ -14,6 +14,10 @@
   --accent: #0a58b8;
   --mark: #fff1a8;
   --error: #b3261e;
+  /* The Query Inspector's warning, at 4.5:1 or more on the page and on surfaces. */
+  --warning: #8a4b00;
+  /* A micro-tag's ground, under secondary text at 4.5:1 or more. */
+  --tag: #e8e8ed;
   --focus: #0a58b8;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 16px;
@@ -31,6 +35,8 @@
   --accent: #6cb2ff;
   --mark: #5c4d00;
   --error: #ff8a80;
+  --warning: #ffb259;
+  --tag: #3a3a3c;
   --focus: #6cb2ff;
 }
 
@@ -414,6 +420,143 @@ button.facet-row:hover {
   border-color: var(--accent);
   background: var(--accent);
   color: var(--bg);
+}
+
+/* The Query Inspector's strip, between the filters and the results, as the Mac's sits above its
+   sort bar. */
+
+.query-inspector {
+  margin: 0.75rem 0 0;
+  padding: 0.375rem 0.75rem;
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 0.875rem;
+}
+
+.inspector-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.inspector-expression {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.inspector-expression p {
+  margin: 0;
+}
+
+.inspector-expression code,
+.inspector-term {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+}
+
+.inspector-toggle {
+  min-height: 1.5rem;
+  padding: 0 0.375rem;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+}
+
+.micro-tag {
+  display: inline-block;
+  padding: 0 0.25rem;
+  border-radius: 3px;
+  background: var(--tag);
+  color: var(--text-secondary);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.inspector-terms {
+  list-style: none;
+  margin: 0.375rem 0 0;
+  padding: 0;
+}
+
+.inspector-terms li {
+  margin-bottom: 0.375rem;
+}
+
+.inspector-term {
+  font-weight: 600;
+}
+
+.inspector-left-out .inspector-term {
+  color: var(--text-secondary);
+}
+
+.inspector-line {
+  display: block;
+  margin: 0;
+}
+
+.inspector-warning {
+  color: var(--warning);
+}
+
+.link-button {
+  min-height: 1.5rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+/* The sort bar's orders, beside the count. */
+
+.sort-orders {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.sort-orders > span {
+  color: var(--text-secondary);
+}
+
+.sort-orders button[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+
+/* The notice above the results when a search keeps only part of its match. */
+
+.over-cap {
+  margin: 0.5rem 0;
+  padding: 0.375rem 0.75rem;
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.over-cap p {
+  margin: 0;
+}
+
+.over-cap-mark {
+  color: var(--warning);
+}
+
+/* A search that found nothing, in place of its results. */
+
+.zero-result {
+  max-width: 30rem;
+  margin: 1.5rem auto;
+  text-align: center;
+}
+
+.zero-result h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.0625rem;
 }
 
 /* Reader */

@@ -77,7 +77,7 @@ function ReadinessBanner() {
   // documents, and what Browse shows of what the server indexes.
   useEffect(() => {
     if (ready && wasReady.current === false) {
-      for (const key of ['search', 'facets', 'citation', 'document', 'volumes', 'volume', 'section', 'readingOrder']) {
+      for (const key of ['search', 'facets', 'inspect', 'citation', 'document', 'volumes', 'volume', 'section', 'readingOrder']) {
         void queryClient.invalidateQueries({ queryKey: [key] });
       }
     }

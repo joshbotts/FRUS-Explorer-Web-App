@@ -202,14 +202,84 @@ export interface SearchItem {
   userTagIds: string[];
 }
 
+/** The kit's SearchSortOrder: relevance, or the date, oldest or most recent first. */
+export type SortOrder = 'relevance' | 'dateAscending' | 'dateDescending';
+
+/** A choice a control offers, by its value and the kit's title for it. */
+export interface Choice {
+  value: string;
+  title: string;
+}
+
 export interface SearchResultList {
   total: number;
   countBasis: 'exact' | 'atLeast';
   limit: number;
   offset: number;
   retainedLimit: number;
+  /** The order the page is cut from. */
+  sort: SortOrder;
+  /** The three orders, with the kit's label for each. */
+  sortChoices: Choice[];
   items: SearchItem[];
   coverage: Coverage;
+}
+
+/** One of a query's searchable units, as the kit's parser reports it. */
+export interface SearchOperand {
+  text: string;
+  rendered: string;
+  kind: 'word' | 'phrase' | 'prefix' | 'proximity';
+  isNegated: boolean;
+  /** The `=` as typed, and whether the search filters on it. */
+  isExact: boolean;
+  isExactApplied: boolean;
+  /** Typed into the search box, or from a structured field. */
+  source: 'typed' | 'structured';
+}
+
+/** The kit's InspectedOperand: a term, with what the index knows of it. */
+export interface InspectedTerm {
+  operand: SearchOperand;
+  /** The index term its word resolves to; absent for a phrase, a prefix or a proximity search. */
+  stem?: string;
+  /** Its count within the search's filters, once counted. */
+  scopedCount?: number;
+  /** Over the whole index, unfiltered: the documents that hold the stem, and its occurrences. */
+  corpusDocumentFrequency?: number;
+  corpusOccurrences?: number;
+  corpusOccurrencesPerDocument?: number;
+  isStemBroadening: boolean;
+  /** Whether it came from a structured field: the ADVANCED tag. */
+  showsStructuredTag: boolean;
+}
+
+/** The kit's QueryInspection: what the Query Inspector shows of a search. */
+export interface QueryInspection {
+  expression?: { corpus?: string; userContent?: string; displayed?: string; expressionsDiffer: boolean };
+  operands: InspectedTerm[];
+  /** What the query typed that the search leaves out. */
+  notApplied: SearchOperand[];
+  /** How many volumes the served index holds: what every count is out of. */
+  indexedVolumeCount: number;
+  isFilterOnly: boolean;
+  isApproximate: boolean;
+  isRefused: boolean;
+  /** The NEAR(…) that refused the query, as typed. */
+  malformedProximity?: string;
+  showsStrip: boolean;
+  showsApproximateCaption: boolean;
+  showsTermRows: boolean;
+  hasOperands: boolean;
+  hasUncountedOperands: boolean;
+}
+
+/** What the kit compiles for a search, and the Query Inspector's account of it (GET /search/inspect). */
+export interface SearchInspection {
+  /** The inspector's account; absent while no index is served. */
+  inspection?: QueryInspection;
+  /** With emptyConjuncts=true: the terms that match nothing on their own under the search's filters. */
+  emptyConjuncts?: SearchOperand[];
 }
 
 /** How one search becomes another: each query field that changes, with its new values, or null for one left out. */

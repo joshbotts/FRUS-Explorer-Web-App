@@ -2,7 +2,7 @@
 // of the app's own, which the API never sees: whether the facet panel is open, and a subject
 // filter's name.
 import type { FormValue } from '../api/form';
-import type { DocumentType, SearchChange } from '../api/types';
+import type { DocumentType, SearchChange, SortOrder } from '../api/types';
 
 export interface SearchState {
   /** The search box's text, exactly as typed; absent until a search is made. */
@@ -26,6 +26,8 @@ export interface SearchState {
   subjectLabel?: string;
   /** `facets` while the facet panel is open. Not sent. */
   panel?: 'facets';
+  /** The order the results are paged in; absent by relevance. */
+  sort?: Exclude<SortOrder, 'relevance'>;
   /** Absent for the default page size. */
   limit?: number;
   /** Absent for the first page. */
@@ -36,6 +38,16 @@ export const pageSizes = [10, 20, 50, 100] as const;
 export const defaultLimit = 20;
 /** How many of a search's results the Mac keeps, and so how far the pages reach. */
 export const retainedLimit = 7_500;
+
+/**
+ * Whether what the app keeps of a search is only part of its match: the Mac's `isPartialEvidence`
+ * for a keyword search, true once the match reaches the 7,500 results it keeps. A figure computed
+ * over what was kept, rather than over the whole match, is then partly a statement about the
+ * ranking that chose it.
+ */
+export function isPartialEvidence(total: number): boolean {
+  return total >= retainedLimit;
+}
 export const documentTypes: readonly DocumentType[] = ['all', 'documentsOnly', 'editorialNotesOnly'];
 
 const isoDate = /^\d{4}-\d{2}-\d{2}$/;
@@ -89,6 +101,7 @@ export function validateSearch(raw: Record<string, unknown>): SearchState {
   const subjectBucket = number(raw.subjectBucket);
   const subjectBucketKey = single(raw.subjectBucketKey) || undefined;
   const subject = subjectBucket !== undefined || subjectBucketKey !== undefined;
+  const sort = single(raw.sort);
   return {
     keywords,
     documentType: type === 'documentsOnly' || type === 'editorialNotesOnly' ? type : undefined,
@@ -103,6 +116,7 @@ export function validateSearch(raw: Record<string, unknown>): SearchState {
     subjectBucketKey,
     subjectLabel: subject ? single(raw.subjectLabel) || undefined : undefined,
     panel: single(raw.panel) === 'facets' ? 'facets' : undefined,
+    sort: sort === 'dateAscending' || sort === 'dateDescending' ? sort : undefined,
     limit,
     offset: offset > 0 ? offset : undefined,
   };
@@ -135,16 +149,16 @@ export function filterFields(state: SearchState): Record<string, FormValue> {
   };
 }
 
-/** The API's fields for a search and its page. */
+/** The API's fields for a search and its page, in the order chosen. */
 export function searchFields(state: SearchState): Record<string, FormValue> {
-  return { ...filterFields(state), limit: state.limit ?? defaultLimit, offset: state.offset ?? 0 };
+  return { ...filterFields(state), sort: state.sort, limit: state.limit ?? defaultLimit, offset: state.offset ?? 0 };
 }
 
 /**
  * The search a change from the server makes of this one, as a facet narrows it: each field it
  * names set to its values, or left out for null, then checked as the URL's fields are. It starts at
- * its first page, keeps the page size and the panel, and keeps the subject's name only while it has
- * a subject.
+ * its first page, keeps the order, the page size and the panel, and keeps the subject's name only
+ * while it has a subject.
  */
 export function applySearchChange(state: SearchState, change: SearchChange): SearchState {
   const raw: Record<string, unknown> = {};
@@ -156,7 +170,7 @@ export function applySearchChange(state: SearchState, change: SearchChange): Sea
     else raw[name] = values;
   }
   raw.subjectLabel = state.subjectLabel;
-  return { ...validateSearch(raw), panel: state.panel, limit: state.limit, offset: undefined };
+  return { ...validateSearch(raw), panel: state.panel, sort: state.sort, limit: state.limit, offset: undefined };
 }
 
 /** How many pages a search's count gives, within the results it keeps. */

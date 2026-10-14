@@ -2,7 +2,7 @@ import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SearchFacetSection, SearchItem, SearchResultList } from '../api/types';
-import { coverage, ProblemAnswer, ready, renderAt, stubServer } from '../test/renderRoute';
+import { coverage, ProblemAnswer, ready, renderAt, sortChoices, stubServer } from '../test/renderRoute';
 
 afterEach(() => {
   cleanup();
@@ -28,7 +28,7 @@ function item(documentId: string, header: string): SearchItem {
 
 function results(total: number): SearchResultList {
   const items = [item('d1', 'Telegram'), item('d2', 'Memorandum'), item('d3', 'Letter')].slice(0, total);
-  return { total, countBasis: 'exact', limit: 20, offset: 0, retainedLimit: 7500, coverage, items };
+  return { total, countBasis: 'exact', limit: 20, offset: 0, retainedLimit: 7500, sort: 'relevance', sortChoices, coverage, items };
 }
 
 const pageSizeChoices = [
@@ -268,5 +268,27 @@ describe('the facet panel', () => {
     const panel = await screen.findByRole('complementary', { name: 'Result-set facets' });
     await userEvent.click(within(panel).getByRole('button', { name: 'Years' }));
     expect(await within(panel).findByText('Nothing to break down here.')).toBeTruthy();
+  });
+
+  it('says how much the three largest volumes hold only of a match the app keeps whole, as the Mac says it', async () => {
+    let matchCount = 3;
+    server({
+      '/api/v1/search': () => results(3),
+      '/api/v1/search/facets': () =>
+        section({ section: 'volumes', selection: 'staged', rows: [{ key: 'frus1961-63v06', label: 'Volume VI', count: 2 }], topVolumeShare: 0.6, matchCount }),
+    });
+    renderAt('/search?keywords=treaty&panel=facets');
+    let panel = await screen.findByRole('complementary', { name: 'Result-set facets' });
+    await userEvent.click(within(panel).getByRole('button', { name: 'Volumes' }));
+    await waitFor(() => expect(panel.textContent).toContain('The top three hold 60% of the match.'));
+    cleanup();
+
+    // A match of 7,500 or more is more than the app keeps, and the figure is not given of it.
+    matchCount = 7_500;
+    renderAt('/search?keywords=treaty&panel=facets');
+    panel = await screen.findByRole('complementary', { name: 'Result-set facets' });
+    await userEvent.click(within(panel).getByRole('button', { name: 'Volumes' }));
+    await within(panel).findByRole('button', { name: /^Volume VI 2/ });
+    expect(panel.textContent).not.toContain('The top three hold');
   });
 });
