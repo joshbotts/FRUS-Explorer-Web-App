@@ -51,10 +51,7 @@ public struct SearchFacetSection: Codable, Equatable, Sendable {
     }
 
     /// A sort or a page size the section offers, by its value and the kit's title for it.
-    public struct Choice: Codable, Equatable, Sendable {
-        public var value: String
-        public var title: String
-    }
+    public typealias Choice = FRUSLightAPI.Choice
 
     /// The kit's `FacetBound`: how many values the section fetched, of how many it has.
     public struct Bound: Codable, Equatable, Sendable {
@@ -249,29 +246,18 @@ enum FacetRoutes {
 
 /// The facet sections computed lately over one served index, so a section's next page, sort or
 /// filter, and Apply over it, cost no second computation: the app's panel, too, computes a section
-/// once for a search and cuts it as it is shown. Each is kept by the query fields that say its search,
-/// which name each of its parameters the API sets; one asked for again while it is computed waits for
-/// that computation. A computation that fails is not kept.
-public actor FacetCache {
-    struct Key: Hashable {
-        let search: String
-        let section: FacetSection
-    }
-
-    private var sections: [Key: Task<ResultSetFacets, any Error>] = [:]
-    /// The keys in `sections`, least recently used first.
-    private var recency: [Key] = []
-    let capacity: Int
+/// once for a search and cuts it as it is shown. Each is kept by its section and the query fields that
+/// say its search (`SearchRequest.signature(_:)`).
+public struct FacetCache: Sendable {
+    let kept: RecentComputations<ResultSetFacets>
 
     public init(capacity: Int = 16) {
-        self.capacity = max(1, capacity)
+        kept = RecentComputations(capacity: capacity)
     }
 
     /// One section of the search `parameters` say, as computed lately, or by the search service.
     func section(_ section: FacetSection, of parameters: SearchParameters, service: SearchService) async throws -> ResultSetFacets {
-        let fields = SearchRequest.formFields(parameters)
-        let search = fields.keys.sorted().map { "\($0)=\(fields[$0, default: []])" }.joined(separator: "&")
-        return try await self.section(section, search: search) {
+        try await self.section(section, search: SearchRequest.signature(parameters)) {
             try await service.resultSetFacets(parameters: parameters, request: .one(section))
         }
     }
@@ -279,25 +265,6 @@ public actor FacetCache {
     /// The section kept for `search`, or the one `compute` gives, which is kept unless it fails.
     func section(_ section: FacetSection, search: String,
                  compute: @escaping @Sendable () async throws -> ResultSetFacets) async throws -> ResultSetFacets {
-        let key = Key(search: search, section: section)
-        let task: Task<ResultSetFacets, any Error>
-        if let running = sections[key] {
-            task = running
-        } else {
-            task = Task { try await compute() }
-            sections[key] = task
-        }
-        recency.removeAll { $0 == key }
-        recency.append(key)
-        while recency.count > capacity { sections[recency.removeFirst()] = nil }
-        do {
-            return try await task.value
-        } catch {
-            if sections[key] == task {
-                sections[key] = nil
-                recency.removeAll { $0 == key }
-            }
-            throw error
-        }
+        try await kept.value(for: "\(section.rawValue) \(search)", compute: compute)
     }
 }

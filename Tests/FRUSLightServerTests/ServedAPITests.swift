@@ -98,6 +98,41 @@ func servingSyntheticExport(volumes: [String] = [], edits: String? = nil) async 
         }
     }
 
+    /// In an order of the date, a page is cut from what the app keeps of the search, sorted by the
+    /// kit: oldest or newest first, undated documents last either way. By relevance it is as before,
+    /// and every list offers the three orders by the kit's labels.
+    @Test func aDateOrderPagesWhatTheAppKeepsByDate() async throws {
+        @Sendable func order(_ client: any TestClientProtocol, _ query: String) async throws -> [String] {
+            let list = try decode(SearchResultList.self, try await client.execute(uri: "/api/v1/search?keywords=negotiating+OR+canal&\(query)", method: .get))
+            #expect(list.total == 3 && list.sortChoices.map(\.title) == ["Relevance", "Date ↑", "Date ↓"])
+            #expect(list.sortChoices.map(\.value) == ["relevance", "dateAscending", "dateDescending"])
+            return list.items.map { "\($0.volumeId)/\($0.documentId)" }
+        }
+        let fixture = try await servingSyntheticExport()
+        try await fixture.app.test(.router) { client in
+            let ascending = try await order(client, "sort=dateAscending")
+            let descending = try await order(client, "sort=dateDescending")
+            let middle = try await order(client, "sort=dateDescending&limit=1&offset=1")
+            #expect(ascending == ["frus1894Nicaragua/d1", "frus1961-63v06/d1", "frus1961-63v06/d2"])
+            #expect(descending == ["frus1961-63v06/d2", "frus1961-63v06/d1", "frus1894Nicaragua/d1"])
+            #expect(middle == ["frus1961-63v06/d1"])
+            let relevance = try await order(client, "sort=relevance")
+            let unsorted = try await order(client, "limit=20")
+            #expect(relevance == unsorted)
+            let list = try decode(SearchResultList.self, try await client.execute(uri: "/api/v1/search?keywords=canal&sort=dateAscending", method: .get))
+            #expect(list.sort == "dateAscending" && list.items.map(\.documentId) == ["d1"])
+            let byDefault = try decode(SearchResultList.self, try await client.execute(uri: "/api/v1/search?keywords=canal", method: .get))
+            #expect(byDefault.sort == "relevance")
+        }
+        let undated = try await servingSyntheticExport(edits: "DELETE FROM document_dates WHERE volume_id = 'frus1894Nicaragua';")
+        try await undated.app.test(.router) { client in
+            let ascending = try await order(client, "sort=dateAscending")
+            let descending = try await order(client, "sort=dateDescending")
+            #expect(ascending == ["frus1961-63v06/d1", "frus1961-63v06/d2", "frus1894Nicaragua/d1"])
+            #expect(descending == ["frus1961-63v06/d2", "frus1961-63v06/d1", "frus1894Nicaragua/d1"])
+        }
+    }
+
     /// A query with nothing left to search is the kit's refusal, carried as it names it.
     @Test func aRefusedQueryIsAProblemCarryingTheKitsRefusal() async throws {
         let fixture = try await servingSyntheticExport()
@@ -112,7 +147,8 @@ func servingSyntheticExport(volumes: [String] = [], edits: String? = nil) async 
     }
 
     /// The inspector answers before an import, from a scratch compiler, and after, from the served
-    /// stack, through GET or a form-encoded POST; a refused query is a 200 naming the refusal.
+    /// stack, through GET or a form-encoded POST, compiling the same; a refused query is a 200 naming
+    /// the refusal. The Query Inspector's account comes with the served index.
     @Test func theInspectorShowsWhatTheKitCompiles() async throws {
         let fixture = try await ServerFixture()
         try await fixture.app.test(.router) { client in
@@ -125,10 +161,62 @@ func servingSyntheticExport(volumes: [String] = [], edits: String? = nil) async 
             await fixture.state.openExistingIndex(files: fixture.files)
             let posted = try await client.execute(uri: "/api/v1/search/inspect", method: .post,
                                                   body: ByteBuffer(string: "keywords=%3Dtreaty+-canal"))
-            #expect(try decode(SearchInspection.self, posted) == before)
+            let after = try decode(SearchInspection.self, posted)
+            #expect(after.parse == before.parse && after.search == before.search)
+            #expect(before.inspection == nil && after.inspection?.operands.map(\.operand.text) == ["treaty", "canal"])
             let refused = try await client.execute(uri: "/api/v1/search/inspect?keywords=", method: .get)
             #expect(refused.status == .ok)
             #expect(try decode(SearchInspection.self, refused).search.error == "emptyQuery")
+        }
+    }
+
+    /// The Query Inspector's account waits for an index, which its passes read: before one, an
+    /// inspection has none, and a pass is refused as a search is. Over one, each term has its stem and
+    /// corpus counts, a scoped count when asked for, and the terms that match nothing are named.
+    @Test func theInspectorsPassesReadTheServedIndex() async throws {
+        let fixture = try await ServerFixture()
+        try await fixture.app.test(.router) { client in
+            let before = try decode(SearchInspection.self, try await client.execute(uri: "/api/v1/search/inspect?keywords=negotiating", method: .get))
+            #expect(before.inspection == nil && before.emptyConjuncts == nil)
+            for pass in ["scopedCounts", "emptyConjuncts"] {
+                let waits = try problem(try await client.execute(uri: "/api/v1/search/inspect?keywords=negotiating&\(pass)=true", method: .get), .serviceUnavailable)
+                #expect(waits.code == "INDEX_NOT_READY", "\(pass)")
+            }
+
+            try SyntheticExport().write(to: fixture.files.liveIndex)
+            await fixture.state.openExistingIndex(files: fixture.files)
+            let cheap = try decode(SearchInspection.self, try await client.execute(uri: "/api/v1/search/inspect?keywords=negotiating+-canal", method: .get))
+            let inspection = try #require(cheap.inspection)
+            #expect(inspection.indexedVolumeCount == 2 && inspection.showsStrip && inspection.hasUncountedOperands)
+            #expect(inspection.expression?.displayed == cheap.search.corpus)
+            #expect(inspection.operands.map(\.operand.text) == ["negotiating", "canal"])
+            let negotiating = try #require(inspection.operands.first)
+            #expect(negotiating.stem == "negoti" && negotiating.isStemBroadening)
+            #expect(negotiating.corpusDocumentFrequency == 2 && negotiating.corpusOccurrences == 2 && negotiating.scopedCount == nil)
+            #expect(inspection.operands.last?.operand.isNegated == true && cheap.emptyConjuncts == nil)
+
+            // Within the filters: of the two negotiating documents, one is dated by the 9th.
+            let counted = try decode(SearchInspection.self, try await client.execute(uri: "/api/v1/search/inspect?keywords=negotiating+-canal&dateRangeLatest=1960-11-09&scopedCounts=true", method: .get))
+            #expect(counted.inspection?.operands.map(\.scopedCount) == [1, nil], "an excluded term has no count")
+            #expect(counted.inspection?.operands.first?.corpusDocumentFrequency == 2, "the corpus count ignores the filters")
+            #expect(counted.inspection?.hasUncountedOperands == false)
+
+            let blamed = try decode(SearchInspection.self, try await client.execute(uri: "/api/v1/search/inspect?keywords=negotiating+formosa&emptyConjuncts=true", method: .get))
+            #expect(blamed.emptyConjuncts?.map(\.text) == ["formosa"])
+            let none = try decode(SearchInspection.self, try await client.execute(uri: "/api/v1/search/inspect?keywords=negotiating+canal&emptyConjuncts=true", method: .get))
+            #expect(none.emptyConjuncts == [], "each term matches something; only the combination matches nothing")
+
+            let bad = try problem(try await client.execute(uri: "/api/v1/search/inspect?keywords=x&scopedCounts=yes", method: .get), .badRequest)
+            #expect(bad.code == "INVALID_PARAMETER" && bad.detail.contains("scopedCounts"))
+
+            // A query of more terms than the inspector looks up is compiled, and its terms are not looked up.
+            let words = (1...65).map { "w\($0)" }
+            let long = try decode(SearchInspection.self, try await client.execute(uri: "/api/v1/search/inspect?keywords=\(words.joined(separator: "+"))", method: .get))
+            #expect(long.parse.operands.count == 65 && long.search.corpus != nil && long.inspection == nil)
+            let refused = try problem(try await client.execute(uri: "/api/v1/search/inspect?keywords=\(words.joined(separator: "+"))&emptyConjuncts=true", method: .get), .badRequest)
+            #expect(refused.code == "TOO_MANY_TERMS" && refused.detail.contains("64") && refused.detail.contains("65"))
+            let most = try decode(SearchInspection.self, try await client.execute(uri: "/api/v1/search/inspect?keywords=\(words.dropLast().joined(separator: "+"))", method: .get))
+            #expect(most.inspection?.operands.count == 64)
         }
     }
 

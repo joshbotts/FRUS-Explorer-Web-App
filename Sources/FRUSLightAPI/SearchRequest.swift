@@ -5,7 +5,7 @@
 import FRUSCoreKit
 import Foundation
 
-/// A search request: the kit's `SearchParameters`, and the page wanted.
+/// A search request: the kit's `SearchParameters`, and the page wanted, in the order wanted.
 ///
 /// The query string has form semantics (`FormQuery`). A field left out keeps `SearchParameters`'
 /// default, which is the app's. Seventeen names set sixteen of its fields, by the draft's names,
@@ -28,18 +28,23 @@ import Foundation
 ///   `subjectBucketKey`, its durable name, which wins. The facets set these (`FacetNarrowing`).
 ///
 /// `limit` is 1 to 100, 20 by default, and `offset` is at least 0; together they stay within the
-/// 7,500 results the app keeps of a search. The draft's `booleanMode`, `subjectTagIds` and
-/// `personRef` arrive later and are refused until then, as is the draft's `facets`, which is a
-/// resource of its own here (`/api/v1/search/facets`), and any name not listed here.
+/// 7,500 results the app keeps of a search. `sort` is a `SearchSortOrder` raw value, `relevance` by
+/// default. The draft's `booleanMode`, `subjectTagIds` and `personRef` arrive later and are refused
+/// until then, as is the draft's `facets`, which is a resource of its own here
+/// (`/api/v1/search/facets`), and any name not listed here.
 public struct SearchRequest: Equatable, Sendable {
     public static let maximumLimit = 100
     public static let defaultLimit = 20
     /// How many of a search's results the app keeps (`MacSearchViewModel`); the count is exact.
     public static let retainedLimit = 7_500
+    /// The fields that choose a page and its order, beside the search's.
+    static let pageFields: Set<String> = ["limit", "offset", "sort"]
 
     public var parameters: SearchParameters
     public var limit: Int
     public var offset: Int
+    /// The order of the results the app keeps, which the page is cut from.
+    public var sort: SearchSortOrder
 
     public static let fields: Set<String> = [
         "keywords", "phrase", "prefixWildcard", "excludedTerms", "dateRangeEarliest", "dateRangeLatest",
@@ -59,13 +64,19 @@ public struct SearchRequest: Equatable, Sendable {
     /// Decodes a raw query string, such as `uri.query`. Throws an `APIProblem` with status 400
     /// for anything it cannot take.
     public init(formEncoded query: String?) throws(APIProblem) {
-        let form = try FormQuery(query)
-        parameters = try Self.parameters(from: form, alsoTaking: ["limit", "offset"])
+        try self.init(form: FormQuery(query))
+    }
+
+    /// Decodes `form`. An endpoint that takes more than a search and its page names its own fields
+    /// in `extra`, and reads them from `form` itself.
+    init(form: FormQuery, alsoTaking extra: Set<String> = []) throws(APIProblem) {
+        parameters = try Self.parameters(from: form, alsoTaking: Self.pageFields.union(extra))
         limit = try form.integer("limit", in: 1...Self.maximumLimit, default: Self.defaultLimit)
         offset = try form.integer("offset", in: 0...Self.retainedLimit, default: 0)
         guard offset + limit <= Self.retainedLimit else {
             throw APIProblem.invalidParameter("offset", "with limit, it must stay within the \(Self.retainedLimit) results a search keeps: offset + limit is \(offset + limit)")
         }
+        sort = try form.choice("sort", among: SearchSortOrder.allCases) ?? .relevance
     }
 
     /// The search `form` describes. An endpoint that takes more than the search names its own
@@ -133,6 +144,14 @@ public struct SearchRequest: Equatable, Sendable {
         single("subjectBucket", parameters.subjectBucket.map(String.init))
         single("subjectBucketKey", parameters.subjectBucketKey)
         return fields
+    }
+
+    /// The search `parameters` say, as one string: its query fields in order of name, each with its
+    /// values. Two searches the API tells apart never share one, so what is computed for a search can
+    /// be kept by it.
+    static func signature(_ parameters: SearchParameters) -> String {
+        let fields = formFields(parameters)
+        return fields.keys.sorted().map { "\($0)=\(fields[$0, default: []])" }.joined(separator: "&")
     }
 
     /// A date bound: nil for an empty value, otherwise `yyyy-MM-dd`, which the kit compares as text.
