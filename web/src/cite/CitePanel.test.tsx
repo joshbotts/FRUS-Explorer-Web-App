@@ -23,7 +23,10 @@ function citation(style: DocumentCitation['style']): DocumentCitation {
     documentNumber: '1',
     documentLabel: 'Doc 1',
     numberSource: 'index',
-    publicationYearSource: 'manifest',
+    publicationYear: '1996',
+    publicationYearSource: 'tei',
+    bibtex: '@incollection{frus1961-63v06_d1,\n  title     = {d1}\n}',
+    ris: 'TY  - CHAP\nTI  - d1\nER  - ',
     styles: [...styles],
   };
 }
@@ -75,6 +78,34 @@ describe('CitePanel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Copy URL' }));
     expect(writeText).toHaveBeenLastCalledWith('https://history.state.gov/historicaldocuments/frus1961-63v06/d1');
     expect(window.localStorage.getItem('frus.citationStyle')).toBe('chicago');
+  });
+
+  it('copies the BibTeX and RIS records, and saves the BibTeX as a file, as the Mac’s popover does', async () => {
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+    renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: 'Copy BibTeX' }));
+    expect(writeText).toHaveBeenLastCalledWith('@incollection{frus1961-63v06_d1,\n  title     = {d1}\n}');
+    expect(screen.getByRole('status').textContent).toBe('Copied');
+    await userEvent.click(screen.getByRole('button', { name: 'Copy RIS' }));
+    expect(writeText).toHaveBeenLastCalledWith('TY  - CHAP\nTI  - d1\nER  - ');
+    const save = screen.getByRole('link', { name: 'Save as .bib' });
+    expect(save.getAttribute('href')).toBe('/api/v1/volumes/frus1961-63v06/documents/d1/citation.bib');
+    expect(save.hasAttribute('download')).toBe(true);
+  });
+
+  it('empties its status before each copy, so a second "Copied" is announced again', async () => {
+    let finish = () => {};
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+    renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: 'Copy BibTeX' }));
+    expect(screen.getByRole('status').textContent).toBe('Copied');
+    writeText.mockImplementationOnce(() => new Promise<void>((resolve) => (finish = resolve)));
+    await userEvent.click(screen.getByRole('button', { name: 'Copy RIS' }));
+    expect(screen.getByRole('status').textContent).toBe('');
+    finish();
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Copied'));
   });
 
   it('keeps the style choices and their focus while another style loads, and copies only a loaded one', async () => {

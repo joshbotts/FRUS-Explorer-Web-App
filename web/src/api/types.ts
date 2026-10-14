@@ -83,6 +83,8 @@ export interface Section {
 export interface SectionDocument {
   documentId: string;
   header: string;
+  /** What the list calls it: the kit's DocumentDisplayTitle, its rule for naming a document in a list. */
+  displayTitle: string;
   documentNumber?: string;
   dateline?: string;
   isEditorialNote: boolean;
@@ -121,6 +123,8 @@ export interface DocumentEntry {
   volumeId: string;
   documentNumber?: string;
   header: string;
+  /** What a list calls it, and the reader's heading: the kit's DocumentDisplayTitle. */
+  displayTitle: string;
   dateline?: string;
   sourceNote?: string;
   dateISO?: string;
@@ -160,6 +164,7 @@ export interface ReaderLinkTarget {
   pageVolumeId?: string;
   /** For a reference to a whole volume: the volume; `volume` is absent for one outside the catalogue. */
   volumeId?: string;
+  /** For `external`, its address; for `volume`, the volume's page on history.state.gov. */
   url?: string;
   brokenReference?: { target: string; reason: string; resolvedVolume?: string; resolvedAnchor?: string };
 }
@@ -179,6 +184,12 @@ export interface SearchItem {
   documentId: string;
   documentNumber?: string;
   header: string;
+  /** What the row names it by, as the Mac's search window draws it: the header, less a leaked source note. */
+  displayTitle: string;
+  /** Its label beside the volume, "Doc 12" or "Unnumbered (d710a-1)". */
+  documentLabel: string;
+  /** Whether the header opens with the document's number, so the row withholds the label. */
+  headerRepeatsNumber: boolean;
   dateline?: string;
   sourceNote?: string;
   dateISO?: string;
@@ -225,6 +236,13 @@ export interface DocumentCitation {
   documentLabel: string;
   /** Where documentNumber came from; absent when there is none. */
   numberSource?: 'index' | 'tei' | 'documentId';
-  publicationYearSource: 'manifest';
+  /** The year the citation and the records name, or "n.d.". */
+  publicationYear: string;
+  /** Where the year came from: the volume's TEI header, else the manifest; absent for "n.d.". */
+  publicationYearSource?: 'tei' | 'manifest';
+  /** The kit's BibTeX @incollection record, as Copy BibTeX writes it. */
+  bibtex: string;
+  /** The kit's RIS record, as Copy RIS writes it. */
+  ris: string;
   styles: CitationStyle[];
 }

@@ -1,6 +1,7 @@
 // S9b's done-when (docs/PLAN.md): Playwright browses to a volume, opens a document, follows a link
 // inside it and opens a person card, by keyboard alone, with no axe violations. Against the image,
 // with the synthetic export imported and fixtures/tei mounted.
+import type { Page } from '@playwright/test';
 import { axeCheck } from './axe';
 import { d1Text, d2Header, d2Text, khrushchev, v06Compilation, v06Title } from './expected';
 import { expect, test } from './fixtures';
@@ -110,15 +111,27 @@ test('a page link goes forward to the document on its page, and one this server 
   await expect(page).toHaveURL(/\/doc\/frus1961-63v06\/d21$/);
 });
 
+/** The id of the note's entry the app's footnote landing last brought the reader to, in the frame showing `documentId`. */
+async function revealedFootnote(page: Page, documentId: string): Promise<string | null | undefined> {
+  const reader = page.frames().find((frame) => frame.url().includes(`/documents/${documentId}/html`));
+  return reader?.evaluate(() => (window as { FRUSRevealedFootnote?: string | null }).FRUSRevealedFootnote);
+}
+
 test('a note in another document lands in its list of footnotes, and a volume not on the server says so', async ({ page }) => {
   await page.goto('/doc/frus1961-63v06/d21');
   const frame = page.frameLocator('iframe.reader-frame');
   await frame.getByRole('link', { name: /footnote 2, Document/ }).click();
   await expect(page).toHaveURL(/\/doc\/frus1961-63v06\/d16\?note=fnote-x-d16fn2$/);
   await expect(page.locator('iframe.reader-frame')).toHaveAttribute('src', /#fnote-x-d16fn2$/);
+  // The app's own landing script brings the reader to the note's entry and washes it for 2.4 seconds.
+  const note = frame.locator('#fnote-x-d16fn2');
+  await expect(note).toHaveClass(/\bfn-arrived\b/);
+  await expect.poll(() => revealedFootnote(page, 'd16')).toBe('fnote-x-d16fn2');
   // The note is in view and has focus, so the next Tab continues from it.
-  await expect(frame.locator('#fnote-x-d16fn2')).toBeInViewport();
-  await expect(frame.locator('#fnote-x-d16fn2')).toBeFocused();
+  await expect(note).toBeInViewport();
+  await expect(note).toBeFocused();
+  await axeCheck(page);
+  await expect(note).not.toHaveClass(/\bfn-arrived\b/);
 
   await page.goto('/doc/frus1961-63v06/d7');
   await page.frameLocator('iframe.reader-frame').getByRole('link', { name: 'Document 28' }).click();
@@ -131,6 +144,27 @@ test('a note in another document lands in its list of footnotes, and a volume no
   await expect(page).toHaveURL(/\/doc\/frus1961-63v06\/d7$/);
 });
 
+test('a note in the same document is landed on in place, by the app’s own script', async ({ page }) => {
+  // No fixture document links a note of its own, so the frame posts the link the kit writes for one,
+  // as its host script posts a link: d2's first numbered note.
+  await page.goto('/doc/frus1961-63v06/d2');
+  const frame = page.frameLocator('iframe.reader-frame');
+  await expect(frame.getByText(d2Text)).toBeVisible();
+  const reader = page.frames().find((candidate) => candidate.url().includes('/documents/d2/html'));
+  const entries = await page.evaluate(() => window.history.length);
+  await reader!.evaluate(() =>
+    window.parent.postMessage({ source: 'frus-reader', kind: 'link', detail: { href: 'frusexplorer://doc/%23d2fn1' } }, '*'),
+  );
+  const note = frame.locator('#fnote-x-d2fn1');
+  await expect(note).toHaveClass(/\bfn-arrived\b/);
+  await expect.poll(() => revealedFootnote(page, 'd2')).toBe('fnote-x-d2fn1');
+  await expect(note).toBeInViewport();
+  await expect(note).toBeFocused();
+  // Shown in place, as the app shows it: the reader stays where it was, with no entry in the history.
+  await expect(page).toHaveURL(/\/doc\/frus1961-63v06\/d2$/);
+  expect(await page.evaluate(() => window.history.length)).toBe(entries);
+});
+
 test('a reference to a whole volume opens the volume in Browse, and one outside the catalogue says so', async ({ page }) => {
   // "volume V" in d7 names Volume V as a whole: the catalogue holds it, though this server has neither its TEI nor its index.
   await page.goto('/doc/frus1961-63v06/d7');
@@ -141,8 +175,15 @@ test('a reference to a whole volume opens the volume in Browse, and one outside 
   // The preface names the microfiche supplement to volumes XIII–XV, which the catalogue does not hold.
   await page.goto('/doc/frus1961-63v06/preface');
   await page.frameLocator('iframe.reader-frame').getByRole('link', { name: /microfiche supplement/ }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'isn’t part of this collection' })).toBeVisible();
+  const notice = page.getByRole('status').filter({ hasText: 'isn’t part of this collection' });
+  await expect(notice).toBeVisible();
+  // The app opens the volume's page on history.state.gov, so the notice offers it.
+  await expect(notice.getByRole('link', { name: 'Open on history.state.gov' })).toHaveAttribute(
+    'href',
+    'https://history.state.gov/historicaldocuments/frus1961-63v13-15mSupp',
+  );
   await expect(page).toHaveURL(/\/doc\/frus1961-63v06\/preface$/);
+  await axeCheck(page);
 });
 
 test('nothing on the page fails axe, the reader’s frame included: Search, the reader, Cite, its narrow sheet and a card, and Browse and the reader in dark', async ({ page }) => {

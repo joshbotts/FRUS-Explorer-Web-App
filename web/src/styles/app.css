@@ -67,7 +67,8 @@ textarea {
   color: inherit;
 }
 
-button {
+button,
+a.button {
   display: inline-block;
   min-height: 2rem;
   padding: 0.25rem 0.75rem;
@@ -76,6 +77,11 @@ button {
   background: var(--surface);
   text-decoration: none;
   cursor: pointer;
+}
+
+/* A link that saves a file, drawn as the buttons beside it are. */
+a.button {
+  color: var(--text);
 }
 
 button:disabled {
@@ -385,6 +391,10 @@ mark {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+.actions + .actions {
+  margin-top: 0.5rem;
 }
 
 .copy-status {
