@@ -88,32 +88,43 @@ jobs:
         run: swift build --build-tests --scratch-path .build/linux
 
       # Every test at the pin must run, and a skip fails the job. SPEC's check 1 allows a Linux-only
-      # skip only if it is named, and there is one, allowed here by its name: FTS5StoreTests'
-      # backup-exclusion test, which upstream disables where Darwin is missing, with a reason that
-      # begins "Linux: ". Any other skip fails the job, from a trait or XCTSkip, and so does a test or
-      # suite that cancels itself, or this test skipped for another reason. The named skip must
-      # appear exactly once: twice means another test shares its name, since the log shows no suite,
-      # and not at all means it now runs or the log's format has changed. A skip or a cancellation is
-      # matched by its verb right after the test's or suite's name, quoted (greedily, so a name holding
-      # quotes still matches) or bare, and a skip also by XCTest's "Test Case '…' skipped (" line:
-      # upstream has a passing test named "A Lot File(s) prefix is skipped, never captured into the
-      # key", whose lines a looser pattern took for a skip. grep -a reads the log as text even if a
-      # test prints a NUL byte.
+      # skip only if it is named, and there is one, allowed here by its suite and function:
+      # FTS5StoreTests' backup-exclusion test, which upstream disables where Darwin is missing, with a
+      # reason that begins "Linux: ". Swift Testing's skips are counted in the results it writes to a
+      # file of its own (--xunit-output), where each is a <skipped> element under its test's suite and
+      # function, a disabled suite's once for each of its tests. The log can lose lines: on 13 October
+      # a run on main lost about 240, the named skip's among them, while every test passed. So the
+      # named skip must be the file's only one: any other fails the job, and so does this test skipped
+      # for another reason, or run. The log is still read for what the file cannot show: XCTest's
+      # skips ("Test Case '…' skipped ("), for which no file is written here, and a test or suite that
+      # cancels itself, which the file records as passed. A lost line can hide one of those, but never
+      # fails the job. They are matched by the verb right after the test's or suite's name, quoted
+      # (greedily, so a name holding quotes still matches) or bare: upstream has a passing test named
+      # "A Lot File(s) prefix is skipped, never captured into the key", whose lines a looser pattern
+      # took for a skip. grep -a reads the log as text even if a test prints a NUL byte.
       - name: Test
         run: |
-          swift test --skip-build --scratch-path .build/linux 2>&1 | tee test.log
-          named='Test "Database file has isExcludedFromBackupKey set after creation" skipped: "Linux: '
+          swift test --skip-build --scratch-path .build/linux --xunit-output test-results.xml 2>&1 | tee test.log
+          results=test-results-swift-testing.xml
+          if [ ! -s "$results" ]; then
+            echo "::error::swift test wrote no Swift Testing results to $results, so this step cannot count the skips."
+            exit 1
+          fi
+          named='<testcase classname="FTS5StoreTests.FTS5StoreTests" name="backupExclusion()">'
+          skipped=$(grep -c '<skipped' "$results" || true)
+          allowed=$(grep -A1 -F -e "$named" "$results" | grep -c '^ *<skipped>Linux: ' || true)
+          if [ "$skipped" -ne 1 ] || [ "$allowed" -ne 1 ]; then
+            echo "::error::Skips in Swift Testing's results: $skipped; of them, the Linux-only skip SPEC's check 1 names: $allowed. Every test at the pin must run but that one, skipped with a reason that begins \"Linux: \"."
+            grep -B1 '<skipped' "$results" || true
+            exit 1
+          fi
+          logged='Test "Database file has isExcludedFromBackupKey set after creation" skipped: "Linux: '
           skips='(Test|Suite) (".*"|[^ "]+) (skipped([.:]|$)|was cancelled)|Test Case .* skipped \('
-          if grep -aE "$skips" test.log | grep -avF -e "$named"; then
+          if grep -aE "$skips" test.log | grep -avF -e "$logged"; then
             echo "::error::A test was skipped or cancelled. Every test at the pin must run, except the Linux-only skip SPEC's check 1 names."
             exit 1
           fi
-          count=$(grep -acF -e "$named" test.log || true)
-          if [ "$count" -ne 1 ]; then
-            echo "::error::The named Linux-only skip appeared $count times, not once. More than once means another test shares its name; never means it now runs, or the log's format has changed. Either way this step must follow."
-            exit 1
-          fi
-          echo "Named Linux-only skips (SPEC, check 1): $count"
+          echo "Named Linux-only skips (SPEC, check 1): $allowed"
 
       - name: Test count per target
         run: swift test list --skip-build --scratch-path .build/linux | cut -d. -f1 | sort | uniq -c
