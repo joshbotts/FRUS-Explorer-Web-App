@@ -54,7 +54,7 @@ Refuted, among others: a year list's emptiness lost on the way to the URL; a fie
 
 **Records**
 
-- `PLAN.md` and its shared copy (rev 152): S11d's row, S11e's, and the S11 answers.
+- `PLAN.md` and its shared copy (rev 153): S11d's row, S11e's, and the S11 answers.
 - `SPEC.md`: the Search section, the API table and the facets' departures from the draft.
 - `INSTALL.md`: the facets. The README and this log.
 
