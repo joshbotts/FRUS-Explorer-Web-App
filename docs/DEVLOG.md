@@ -25,6 +25,12 @@ The owner merged both of S11a's pull requests, and this one moves the pin to the
   - in the index summary, no digest or count moved, only the provenance and the timings it records as information;
   - `frus-parity check-golden` passes.
 
+**Records**
+
+- `PLAN.md` and its shared copy (rev 144): S11a's row, Mac check 6 done, the golden-file checkpoint, the risk rows' counts and the S11 answer on the export.
+- `COORDINATION.md`: the pin, the move and when an export can be reused.
+- `SPEC.md`: the pin's index version and table lines. The prep notes, the README and this log.
+
 **Results**
 
 - **Linux, `swift:6.4-noble`, arm64,** from a clean build of this package's own targets: all 1,908 tests pass, up from 1,797, with the one named skip, which CI's skip check allows.
