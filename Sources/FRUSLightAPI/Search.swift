@@ -58,16 +58,22 @@ public struct SearchItem: Codable, Equatable, Sendable {
     /// The locale the server writes a row's date in: the browser app's strings are US English.
     static let locale = Locale(identifier: "en_US")
 
+    /// What a row names `result` by: its header less a source note run on into it, or for a row with
+    /// no header the name the kit's rule for lists gives it.
+    static func displayTitle(of result: SearchResult) -> String {
+        let trimmed = DocumentHeaderDisplay.trimmedHeader(result.header)
+        return trimmed.isEmpty
+            ? FRUSLightAPI.displayTitle(header: "", documentNumber: result.documentNumber,
+                                        isEditorialNote: result.isEditorialNote, documentId: result.documentId)
+            : trimmed
+    }
+
     init(_ result: SearchResult) {
         volumeId = result.volumeId
         documentId = result.documentId
         documentNumber = result.documentNumber
         header = result.header
-        let trimmed = DocumentHeaderDisplay.trimmedHeader(result.header)
-        displayTitle = trimmed.isEmpty
-            ? FRUSLightAPI.displayTitle(header: "", documentNumber: result.documentNumber,
-                                        isEditorialNote: result.isEditorialNote, documentId: result.documentId)
-            : trimmed
+        displayTitle = Self.displayTitle(of: result)
         documentLabel = CitableDocumentNumber.captionLabel(printed: result.documentNumber, documentId: result.documentId)
         headerRepeatsNumber = DocumentHeaderDisplay.headerRepeatsNumber(result.header, number: result.documentNumber)
         dateline = result.dateline
