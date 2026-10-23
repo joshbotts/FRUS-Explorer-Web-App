@@ -2,7 +2,8 @@
 // with the app's. Where the Mac app labels the same control, this uses its wording: Copy URL, Copy
 // BibTeX, Copy RIS and Save as .bib (less its ellipsis, since a browser saves at once) from its
 // Cite popover, Copy Citation from the reader, Document type and its choices from the search
-// filters, Text Size from Settings; Browse's All Volumes, its filter's prompt, Partial, Planned and
+// filters, Text Size, and Reading Width with its Narrow, Standard and Wide, from Settings; Browse's
+// All Volumes, its filter's prompt, Partial, Planned and
 // Documents (n); the person, term and unresolved-reference sheets' titles, sentences and Done, the
 // person sheet's In Indexed Documents and its count, and
 // the titles of the app's alerts for a person or term it has no entry for, whose sentences, about
@@ -224,6 +225,8 @@ export const copy = {
     openOnline: 'Open on history.state.gov',
     textSize: 'Text Size',
     textSizes: { small: 'Small', medium: 'Medium', large: 'Large', extraLarge: 'Extra Large' },
+    readingWidth: 'Reading Width',
+    readingWidths: { narrow: 'Narrow', standard: 'Standard', wide: 'Wide' },
     cite: 'Cite',
     frameTitle: (header: string) => `Document text: ${header}`,
     toolbar: 'Document',

@@ -3,6 +3,12 @@
 /** The two documents the synthetic export's index finds for "treaties", from its rows. */
 export const treatiesResults = ['1. Telegram From the Embassy in the Soviet Union', '2. Memorandum of Conversation'];
 
+/**
+ * The words for their dates, which the kit's `SearchResultDate` writes from the export's rows. The
+ * rows print no dateline, so each draws its day, as the Mac's window draws a section's.
+ */
+export const treatiesDates = ['November 9, 1960', 'November 10, 1960'];
+
 /** A sentence of frus1961-63v06 d1's text, from its TEI. */
 export const d1Text = 'Allow me to congratulate you on the occasion of your election';
 

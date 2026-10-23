@@ -1,6 +1,7 @@
 // The API under /api/v1 through the router: problem details, the catalogue, and the reader.
 // FRUSParityTests checks the reader's HTML against every golden row; these check the routes.
 
+import FRUSCoreKit
 import FRUSLightCore
 import FRUSLightTestSupport
 import Foundation
@@ -184,6 +185,33 @@ func problem(_ response: TestResponse, _ status: HTTPResponse.Status, sourceLoca
             // The draft's appearance parameters are taken, and do not change the body.
             let dark = try await client.execute(uri: Self.uri("frus1894Nicaragua", "d1", "part=body&colorScheme=dark&textSize=extraLarge"), method: .get)
             #expect(String(buffer: dark.body) == html)
+        }
+    }
+
+    /// The page's column is as wide as the Reading Width asks (#1665): the head holds the kit's CSS
+    /// variables with the step's measure, Standard's when none is named, as the app's default is, and
+    /// the body is the same at every width. A step the app does not offer is refused by name.
+    @Test func theReadingWidthSetsTheColumnsMeasure() async throws {
+        let fixture = try await ServerFixture(volumes: ["frus1894Nicaragua"])
+        try await fixture.app.test(.router) { client in
+            func page(_ query: String) async throws -> (head: String, body: String) {
+                let response = try await client.execute(uri: Self.uri("frus1894Nicaragua", "d1", query), method: .get)
+                #expect(response.status == .ok, "\(query)")
+                let parts = String(buffer: response.body).components(separatedBy: "<body>\n")
+                return (parts.first ?? "", parts.dropFirst().joined())
+            }
+            let plain = try await page("colorScheme=light")
+            #expect(plain.head.contains(ReaderPage.cssVariables(appearance: .light, textSize: .medium, measure: ReaderMeasure(ch: 87))))
+            for (width, ch) in [("narrow", 70), ("standard", 87), ("wide", 120)] {
+                let chosen = try await page("readingWidth=\(width)&colorScheme=dark&textSize=large")
+                #expect(ReadingWidth(rawValue: width)?.measure == ReaderMeasure(ch: ch))
+                #expect(chosen.head.contains(ReaderPage.cssVariables(appearance: .dark, textSize: .large, measure: ReaderMeasure(ch: ch))),
+                        "\(width) is \(ch)ch")
+                #expect(chosen.body == plain.body, "\(width) changes only the head")
+            }
+            let refused = try problem(try await client.execute(uri: Self.uri("frus1894Nicaragua", "d1", "readingWidth=huge"), method: .get),
+                                      .badRequest)
+            #expect(refused.code == "INVALID_PARAMETER" && refused.detail == "readingWidth: must be one of narrow, standard, wide, not huge")
         }
     }
 

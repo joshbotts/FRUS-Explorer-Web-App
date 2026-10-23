@@ -6,7 +6,8 @@
 // `parseVolumeFull` of the volume, whose persons and glossary terms make the reader's lookups,
 // then the reader's converter with the app's broken-refs index, and the reader's serializer, here
 // with the server's own figure addresses (upstream #1575's `reader(figureURL:)`). The page is the
-// kit's `ReaderPage.build`, which the app's `HTMLTemplate.build` forwards to. When an index is
+// kit's `ReaderPage.build`, which the app's `HTMLTemplate.build` forwards to, in the appearance,
+// text size and Reading Width the request names (#1665, `ReaderMeasure`). When an index is
 // served, its effective classification of the document reshapes the parse first, as the app's
 // reader does. The golden HTML was made by the Mac reader, and FRUSParityTests compares every row
 // through this route. The reader needs no index, so it answers before an import and while search
@@ -40,10 +41,10 @@ public actor ReaderService {
         public let lookups: ReaderLookups
     }
 
-    /// What a request asks for: the whole page, in an appearance and a text size, or the
-    /// fragment its body holds.
+    /// What a request asks for: the whole page, in an appearance, a text size and a column's
+    /// measure, or the fragment its body holds.
     public enum Part: Sendable, Equatable {
-        case page(ReaderAppearance, TextSizePreference)
+        case page(ReaderAppearance, TextSizePreference, ReaderMeasure)
         case body
     }
 
@@ -121,8 +122,8 @@ public actor ReaderService {
         switch part {
         case .body:
             html = serializer.serialize(model)
-        case .page(let appearance, let textSize):
-            html = ReaderPage.build(model: model, appearance: appearance, textSize: textSize,
+        case .page(let appearance, let textSize, let measure):
+            html = ReaderPage.build(model: model, appearance: appearance, textSize: textSize, measure: measure,
                                     serializer: serializer, head: ReaderRoutes.pageHead)
         }
         return Rendered(html: html, renderingVersion: ASTToRenderNodeConverter.renderingVersion(for: model))
@@ -170,6 +171,27 @@ public actor ReaderService {
     }
 }
 
+/// The reader's Reading Width, which the app's Settings ▸ Display offers beside Document Text Size
+/// (#1665): Narrow, Standard and Wide, each a measure for the page's column (`ReaderMeasure`) on the
+/// ladder the app reads on an iPad and the Mac, 70ch, 87ch and 120ch, with Standard its default.
+///
+/// The kit leaves the measure to its host, and the ladder is app code
+/// (`ReadingWidth.measure(on: .wide)`, in `FRUSExplorer/TEI/ReadingWidth.swift`), so this mirrors it;
+/// `ReaderPageParityTests` reads the app's rungs from that file. A browser reads on this ladder on any
+/// device, as an iPad keeps its own in a narrow window: a column narrower than the measure is filled.
+public enum ReadingWidth: String, CaseIterable, Sendable {
+    case narrow, standard, wide
+
+    /// The step's measure: 70ch, the kit's `ReaderMeasure.classic`, then 87ch and 120ch.
+    public var measure: ReaderMeasure {
+        switch self {
+        case .narrow: .classic
+        case .standard: ReaderMeasure(ch: 87)
+        case .wide: ReaderMeasure(ch: 120)
+        }
+    }
+}
+
 enum ReaderRoutes {
     /// `HTTPField.Name`, which Hummingbird does not re-export as it does `HTTPFields`.
     typealias HeaderName = HTTPFields.Element.Name
@@ -210,16 +232,17 @@ enum ReaderRoutes {
         return components.url
     }
 
-    static func add(to router: Router<BasicRequestContext>, reader: ReaderService, provider: ServedIndexProvider,
+    static func add(to router: Router<APIRequestContext>, reader: ReaderService, provider: ServedIndexProvider,
                     resources: ServerResources) {
         router.get("/api/v1/volumes/:volumeId/documents/:documentId/html") { request, context -> Response in
             let query = try FormQuery(request.uri.query)
-            try query.refuseUnknown(["part", "textSize", "colorScheme"])
+            try query.refuseUnknown(["part", "textSize", "colorScheme", "readingWidth"])
             let textSize = try query.choice("textSize", among: TextSizePreference.allCases) ?? .medium
             let appearance = try query.choice("colorScheme", among: ReaderAppearance.allCases) ?? .light
+            let width = try query.choice("readingWidth", among: ReadingWidth.allCases) ?? .standard
             let part: ReaderService.Part
             switch try query.single("part") {
-            case nil, "page"?: part = .page(appearance, textSize)
+            case nil, "page"?: part = .page(appearance, textSize, width.measure)
             case "body"?: part = .body
             case let other?: throw APIProblem.invalidParameter("part", "must be page or body, not \(other)")
             }

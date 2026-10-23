@@ -79,6 +79,78 @@ import Testing
         print("page links through the API: \(pairs.count) links, \(landed) placed on a document, every one as the app's store places it")
     }
 
+    /// Every link in the fixture volumes' pages to a printed page of another volume, read through the
+    /// API, is that page of that volume, which this server, holding only the three fixture volumes,
+    /// cannot place: no destination, and the volume as the server holds it, unindexed and unread.
+    ///
+    /// 1.0's index resolves such a reference under rule C (#1747) through the bundled page map. Where
+    /// the map names a document on the page, read as one page with the link's hint, the index stores
+    /// the reference against that document, unless the link ends a range across documents, which the
+    /// index leaves on the page, as it leaves every page the map names nothing on. The app lands a tap
+    /// on the document the map names (#1778); this server will, through the kit's `PageLink`, once its
+    /// pin moves past joshbotts/FRUS-Explorer#1784, which moved the landing into the kit.
+    @Test func everyPageLinkIntoAnotherVolumeIsWhereTheIndexStoresIt() async throws {
+        let rendered = Repository.layout.golden.appendingPathComponent("render/html")
+        var links: [(volume: String, document: String, href: String)] = []
+        for volume in ParityFixtures.volumes {
+            let folder = rendered.appendingPathComponent(volume)
+            for file in try FileManager.default.contentsOfDirectory(atPath: folder.path).sorted() where file.hasSuffix(".html") {
+                let html = try String(contentsOf: folder.appendingPathComponent(file), encoding: .utf8)
+                var seen = Set<String>()
+                for match in html.matches(of: /href="(frusexplorer:\/\/doc\/([^"%\/]+)%23pg_[0-9]+[^"]*)"/) where match.2 != volume {
+                    let href = String(match.1).replacingOccurrences(of: "&amp;", with: "&")
+                    if seen.insert(href).inserted { links.append((volume, String(file.dropLast(".html".count)), href)) }
+                }
+            }
+        }
+        let map = try JSONDecoder().decode(CitedPageMap.self,
+                                           from: Data(contentsOf: ServedFixture.resources.appendingPathComponent("cited-page-map.json")))
+        let built = try await FixtureIndex.value()
+        let index = try SQLiteConnection(built.copy.path, readOnly: true)
+        defer { index.close() }
+        func stored(_ volume: String, _ document: String, into target: String) throws -> Set<String> {
+            Set(try index.query("""
+                SELECT target_document_id FROM cross_references
+                WHERE source_volume_id = ? AND source_document_id = ? AND target_volume_id = ?
+                """, [.text(volume), .text(document), .text(target)]).compactMap { $0.first?.text })
+        }
+        let asked = links
+        let answers = try await ServedFixture.run { client, _ in
+            var answers: [ReaderLinkTarget] = []
+            for link in asked {
+                answers.append(try ServedFixture.decode(ReaderLinkTarget.self,
+                                                        try await client.execute(uri: Self.uri(link.href, volume: link.volume, document: link.document), method: .get)))
+            }
+            return answers
+        }
+        var volumes = Set<String>()
+        var named = 0
+        var storedAsNamed = 0
+        for (link, answer) in zip(links, answers) {
+            // The kit's reading of the link, as the route reads it.
+            guard let url = URL(string: link.href), case .crossReference(let target, let hrefVolume, let citing)? = FRUSURLScheme.readerLink(from: url),
+                  case .page(let pageVolume?, let page) = FRUSURLScheme.resolveCrossRefTarget(target, volumeId: hrefVolume) else {
+                Issue.record("\(link.href) is not read as a page of another volume")
+                continue
+            }
+            volumes.insert(pageVolume)
+            #expect(answer.kind == "page" && answer.pageVolumeId == pageVolume && answer.page == page, "\(link.href)")
+            #expect(answer.destination == nil && answer.volume?.indexed == false && answer.volume?.teiAvailable == false, "\(link.href)")
+            let kept = try stored(link.volume, link.document, into: pageVolume)
+            if let document = PageSpanResolver.citedDocument(inVolume: pageVolume, page: page, form: .single, citing: citing, map: map) {
+                named += 1
+                if kept.contains(document) { storedAsNamed += 1 }
+                #expect(kept.contains(document) || kept.contains("pg_\(page)"), "\(link.volume)/\(link.document) \(link.href): \(kept)")
+            } else {
+                #expect(kept.contains("pg_\(page)"), "\(link.volume)/\(link.document) \(link.href): \(kept)")
+            }
+        }
+        #expect(links.count == 31 && volumes.count == 6)
+        // frus1894Nicaragua d15's page 469 of frus1889, now d173, among them.
+        #expect(named == 19 && storedAsNamed == 17, "the map names \(named), and the index stores \(storedAsNamed) against it")
+        print("page links into other volumes: \(links.count) into \(volumes.count) volumes this server does not hold, each placed nowhere; the map names a document for \(named), and \(storedAsNamed) are stored against it under rule C")
+    }
+
     /// Every person in each fixture volume's list is counted as the app's card counts them, over
     /// the app's own `PersonMentionStore`; a person the volume's list lacks gets no count.
     @Test func everyPersonIsCountedAsTheAppCountsThem() async throws {

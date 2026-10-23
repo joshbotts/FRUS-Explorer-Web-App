@@ -63,7 +63,7 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
     } else {
         logger.info("No browser app at \(configuration.webDirectory.path): serving the API alone")
     }
-    var app = Application(
+    var app = apiApplication(
         router: buildRouter(state: components.state, resources: components.resources, reader: components.reader,
                             webClient: components.webClient, logger: logger),
         configuration: .init(address: .hostname(configuration.host, port: configuration.port), serverName: "frus-light"),
@@ -71,6 +71,14 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
     app.addServices(ImportWatcher(files: components.files, state: components.state,
                                   coordinator: components.imports, interval: configuration.importPollInterval))
     return app
+}
+
+/// The application around `router`, on the server's HTTP/1.1 channel, which watches each connection
+/// for its client closing it (`APIServer.http1`). The server and the tests of that watch both build it
+/// here.
+func apiApplication(router: Router<APIRequestContext>, configuration: ApplicationConfiguration,
+                    logger: Logger) -> Application<RouterResponder<APIRequestContext>> {
+    Application(router: router, server: APIServer.http1, configuration: configuration, logger: logger)
 }
 
 /// The data directory exists but the server cannot write to it, as with a bind mount owned by

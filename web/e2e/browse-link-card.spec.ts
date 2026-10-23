@@ -165,7 +165,7 @@ test('a note in the same document is landed on in place, by the app’s own scri
   expect(await page.evaluate(() => window.history.length)).toBe(entries);
 });
 
-test('a page opened at a note leaves focus on the control that changes its text size or appearance, and lands again on Back and Forward', async ({ page }) => {
+test('a page opened at a note leaves focus on the control that changes its text size, reading width or appearance, and lands again on Back and Forward', async ({ page }) => {
   await page.goto('/doc/frus1961-63v06/d21');
   const frame = page.frameLocator('iframe.reader-frame');
   await frame.getByRole('link', { name: /footnote 2, Document/ }).click();
@@ -193,11 +193,22 @@ test('a page opened at a note leaves focus on the control that changes its text 
   await size.focus();
   await page.keyboard.press('ArrowDown');
   await expect(size).toHaveValue('large');
-  await expect(page.locator('iframe.reader-frame')).toHaveAttribute('src', /textSize=large#fnote-x-d16fn2$/);
+  await expect(page.locator('iframe.reader-frame')).toHaveAttribute('src', /textSize=large&readingWidth=standard#fnote-x-d16fn2$/);
   await expect.poll(loads).toBe(1);
   await expect(size).toBeFocused();
   await expect(note).toBeInViewport();
   // The app's landing did not run again in the new page.
+  expect(await revealedFootnote(page, 'd16')).toBeUndefined();
+
+  // So does another Reading Width, beside it.
+  const width = page.getByRole('combobox', { name: 'Reading Width' });
+  await width.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(width).toHaveValue('wide');
+  await expect(page.locator('iframe.reader-frame')).toHaveAttribute('src', /readingWidth=wide#fnote-x-d16fn2$/);
+  await expect.poll(loads).toBe(2);
+  await expect(width).toBeFocused();
+  await expect(note).toBeInViewport();
   expect(await revealedFootnote(page, 'd16')).toBeUndefined();
 
   // So does another appearance, chosen in the header: Light first, which loads nothing new, then Dark.
@@ -207,7 +218,7 @@ test('a page opened at a note leaves focus on the control that changes its text 
   await page.keyboard.press('ArrowDown');
   await expect(appearance).toHaveValue('dark');
   await expect(page.locator('iframe.reader-frame')).toHaveAttribute('src', /colorScheme=dark/);
-  await expect.poll(loads).toBe(2);
+  await expect.poll(loads).toBe(3);
   await expect(appearance).toBeFocused();
 
   // Back and Forward arrive at the note again, so it is landed on, and takes focus, as a link lands on it.

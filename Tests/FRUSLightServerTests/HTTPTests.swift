@@ -52,7 +52,7 @@ struct ServerFixture {
         reader = ReaderService(volumesDirectory: files.volumesDirectory, resources: resources)
     }
 
-    var router: Router<BasicRequestContext> { buildRouter(state: state, resources: resources, reader: reader) }
+    var router: Router<APIRequestContext> { buildRouter(state: state, resources: resources, reader: reader) }
     var app: some ApplicationProtocol { Application(router: router) }
 }
 

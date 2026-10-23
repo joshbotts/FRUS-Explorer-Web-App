@@ -15,6 +15,9 @@ import Hummingbird
 /// window starts at the match in the document's own prose, after the heading, source note and
 /// dateline its body opens with. A row whose only match is in those has the prose's opening with
 /// nothing marked, and a row with no match in its body its heading and dateline (#1736).
+///
+/// A row draws its dateline, or where it prints none, the day or span the index dates it by
+/// (`drawnDate`), as the Mac's window draws `result.dateline ?? result.drawnDate` (#1746).
 public struct SearchItem: Codable, Equatable, Sendable {
     public var volumeId: String
     public var documentId: String
@@ -34,6 +37,16 @@ public struct SearchItem: Codable, Equatable, Sendable {
     public var dateline: String?
     public var sourceNote: String?
     public var dateISO: String?
+    /// The row's last day (`SearchResult.dateISOMax`, index version 70): the same day as `dateISO`
+    /// for a document dated to a day, and the end of the span for a section's row, which the index
+    /// dates by the documents it holds.
+    public var dateISOMax: String?
+    /// How precisely the index dates the row, `day`, `month` or `year` (`DatePrecision`), when it says.
+    public var datePrecision: String?
+    /// The words for the row's date, from the kit's `SearchResultDate`, as `SearchResult.drawnDate`
+    /// gives them in US English, the language of the browser app's words: "July 16, 1945",
+    /// "August 21, 1945 – January 22, 1946", "July 1945", "1862"; absent for a row with no date.
+    public var drawnDate: String?
     public var snippet: String
     /// FTS5's bm25 for the document; lower ranks higher. Its bits survive the JSON round trip.
     public var bm25Score: Double
@@ -41,6 +54,9 @@ public struct SearchItem: Codable, Equatable, Sendable {
     public var isFrontMatter: Bool
     public var subjectTagIds: [String]
     public var userTagIds: [String]
+
+    /// The locale the server writes a row's date in: the browser app's strings are US English.
+    static let locale = Locale(identifier: "en_US")
 
     init(_ result: SearchResult) {
         volumeId = result.volumeId
@@ -57,6 +73,10 @@ public struct SearchItem: Codable, Equatable, Sendable {
         dateline = result.dateline
         sourceNote = result.sourceNote
         dateISO = result.dateISO
+        dateISOMax = result.dateISOMax
+        datePrecision = result.datePrecision?.rawValue
+        drawnDate = SearchResultDate.text(dateISO: result.dateISO, dateISOMax: result.dateISOMax,
+                                          precision: result.datePrecision, locale: Self.locale)
         snippet = result.snippet
         bm25Score = result.bm25Score
         isEditorialNote = result.isEditorialNote
@@ -268,30 +288,41 @@ extension SearchResultList: ResponseEncodable {}
 extension SearchInspection: ResponseEncodable {}
 
 enum SearchRoutes {
-    static func add(to router: Router<BasicRequestContext>, provider: ServedIndexProvider, resources: ServerResources) {
-        router.get("/api/v1/search") { request, _ -> SearchResultList in
+    static func add(to router: Router<APIRequestContext>, provider: ServedIndexProvider, resources: ServerResources) {
+        // A search runs while its client is connected: a browser that replaces it closes the
+        // connection, and the kit then stops its statements, the count's, the page's and those of the
+        // results kept for an order of the date, so the next search does not wait behind them (#1698).
+        router.get("/api/v1/search") { request, context -> SearchResultList in
             let search = try SearchRequest(formEncoded: request.uri.query)
             let served = try await provider.served()
-            do {
-                // One count of the whole match, then the page: both through the pipeline's one connection.
-                let total = try await served.service.searchCount(parameters: search.parameters)
-                return SearchResultList(total: total, countBasis: "exact", limit: search.limit, offset: search.offset,
-                                        retainedLimit: SearchRequest.retainedLimit, sort: search.sort.rawValue,
-                                        sortChoices: SearchSortOrder.allCases.map { Choice(value: $0.rawValue, title: $0.label) },
-                                        items: try await page(search, served: served).map(SearchItem.init),
-                                        coverage: Coverage(index: served.corpus, resources: resources))
-            } catch let error as FTS5Error {
-                throw refusal(error)
+            return try await context.whileClientConnected {
+                do {
+                    // One count of the whole match, and the page: both through the pipeline's one
+                    // connection. The page is asked for first, so that in an order of the date the
+                    // request joins at once the results kept of its search, as a request that replaces
+                    // another for the same search must to share them: its count waits behind them.
+                    async let items = page(search, served: served)
+                    let total = try await served.service.searchCount(parameters: search.parameters)
+                    return SearchResultList(total: total, countBasis: "exact", limit: search.limit, offset: search.offset,
+                                            retainedLimit: SearchRequest.retainedLimit, sort: search.sort.rawValue,
+                                            sortChoices: SearchSortOrder.allCases.map { Choice(value: $0.rawValue, title: $0.label) },
+                                            items: try await items.map(SearchItem.init),
+                                            coverage: Coverage(index: served.corpus, resources: resources))
+                } catch let error as FTS5Error {
+                    throw refusal(error)
+                }
             }
         }
-        // The inspector compiles without reading the index, so it answers before an import too.
-        router.get("/api/v1/search/inspect") { request, _ -> SearchInspection in
-            try await inspect(FormQuery(request.uri.query), provider: provider)
+        // The inspector compiles without reading the index, so it answers before an import too. Its
+        // expensive passes count each term, which stops as a search does.
+        router.get("/api/v1/search/inspect") { request, context -> SearchInspection in
+            let form = try FormQuery(request.uri.query)
+            return try await context.whileClientConnected { try await inspect(form, provider: provider) }
         }
         router.post("/api/v1/search/inspect") { request, context -> SearchInspection in
             let body = try await request.body.collect(upTo: 64 * 1_024)
-            let form = body.readableBytes > 0 ? String(buffer: body) : request.uri.query
-            return try await inspect(FormQuery(form), provider: provider)
+            let form = try FormQuery(body.readableBytes > 0 ? String(buffer: body) : request.uri.query)
+            return try await context.whileClientConnected { try await inspect(form, provider: provider) }
         }
     }
 

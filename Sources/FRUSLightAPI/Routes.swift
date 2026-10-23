@@ -8,11 +8,11 @@ import Logging
 
 func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderService,
                  provider: ServedIndexProvider? = nil, webClient: WebClient? = nil,
-                 logger: Logger = Logger(label: "frus-light")) -> Router<BasicRequestContext> {
+                 logger: Logger = Logger(label: "frus-light")) -> Router<APIRequestContext> {
     let provider = provider ?? ServedIndexProvider(state: state, resources: resources, volumesDirectory: reader.volumesDirectory)
     // Every GET route answers HEAD too, so HEAD /readyz says what GET says rather than falling to
     // the browser app's fallback.
-    let router = Router(options: .autoGenerateHeadEndpoints)
+    let router = Router(context: APIRequestContext.self, options: .autoGenerateHeadEndpoints)
     // First, so it covers every route, and the paths no route matches.
     router.add(middleware: ProblemMiddleware(logger: logger))
     // The process is up. It says nothing about the index; /readyz does.
