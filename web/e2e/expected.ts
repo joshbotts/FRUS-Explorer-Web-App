@@ -1,4 +1,5 @@
-// What the suite expects of the synthetic export (scripts/synthetic-export) and fixtures/tei.
+// What the suite expects of the synthetic export (scripts/synthetic-export --own-text), fixtures/tei
+// and fixtures/own-text/frus1969-76v01.xml.
 
 /** The two documents the synthetic export's index finds for "treaties", from its rows. */
 export const treatiesResults = ['1. Telegram From the Embassy in the Soviet Union', '2. Memorandum of Conversation'];
@@ -60,3 +61,22 @@ export const d2Text = 'I am most appreciative of your courtesy in sending me a m
 
 /** p_KNS2, from frus1961-63v06's list of names (fixtures/tei/frus1961-63v06.xml). */
 export const khrushchev = { name: 'Khrushchev, Nikita S.', description: 'Chairman of the Council of Ministers of the Soviet Union' };
+
+/**
+ * frus1969-76v01 here is the kit's fixture for a section's own text (fixtures/own-text), under the id
+ * the kit's tests give it: the export holds the own text of its conference, which holds only
+ * sections, and of the conference's first meeting, with the meeting's two documents.
+ */
+export const ownText = {
+  volumeId: 'frus1969-76v01',
+  volumeTitle: 'Foreign Relations of the United States, 1969–1976, Volume I, Foundations of Foreign Policy, 1969–1972',
+  conference: 'The Conference',
+  meeting: 'First Meeting',
+  /** The sentence under the row, the app's. */
+  note: 'The text this section prints outside the documents and sections it holds.',
+  /** Words of the meeting's own text, its list of those present, and of the conference's. */
+  meetingText: 'Marshall and Brooke',
+  conferenceText: 'Synopsis of the conference.',
+  /** The meeting's first document, which the reader's order puts after its own text. */
+  firstDocument: '1. Minutes',
+};
