@@ -1,0 +1,429 @@
+#!/usr/bin/env bash
+# FRUS Explorer Light: the daily watch of the app's v2 (docs/COORDINATION.md, section 5).
+# .github/workflows/upstream-watch.yml runs it; each step also runs on a Mac or in a cloud session.
+#   scripts/upstream-watch checkout [<ref>]       moves the submodule's working tree to <ref>, by
+#                                                 default the app's v2 head, and prints the commit.
+#                                                 It never stages the move: the pin stays where it is.
+#   scripts/upstream-watch report <commit> [<dir>] [<run>]
+#                                                 writes, as Markdown, what <commit> changes from the
+#                                                 pin that a pin move must follow: the index version,
+#                                                 the FTS generation, the JSON export's formatVersion,
+#                                                 the index resources, the schema statements, the
+#                                                 bundled resources and the commits; then the test
+#                                                 results in <dir>, from `test`. <run> is a line
+#                                                 naming the run, for the report's head.
+#   scripts/upstream-watch test <dir>             builds this package and runs each test target on its
+#                                                 own, in swift:6.4-noble (scripts/swift --exec
+#                                                 scripts/upstream-watch test <dir> on a Mac), and
+#                                                 writes <dir>/tests.md and <dir>/status: pass,
+#                                                 kits-failed or build-failed. Only the kits' suites
+#                                                 count; this package's own tests are expected to fail
+#                                                 past the pin, and are reported as information.
+#   scripts/upstream-watch issue <report> [--dry-run]
+#                                                 opens the watch issue, labelled upstream-watch, or
+#                                                 updates the open one: a comment when v2's head or
+#                                                 the kits' result changed, and a close when nothing
+#                                                 is past the pin. --dry-run prints the writes instead
+#                                                 of making them. Needs gh, and GH_TOKEN in Actions.
+#   scripts/upstream-watch selftest               runs the issue logic seven times against a stub gh,
+#                                                 and checks it opens one issue and then updates it.
+# Works with macOS's bash 3.2.
+set -euo pipefail
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+sub="$root/upstream/FRUS-Explorer"
+label=upstream-watch
+gh=${UPSTREAM_WATCH_GH:-gh}
+
+die() { echo "scripts/upstream-watch: $*" >&2; exit 1; }
+
+# The pinned commit, as this repository's HEAD records it, whatever the submodule has checked out.
+pin() { git -C "$root" ls-tree HEAD upstream/FRUS-Explorer | awk '{print $3}'; }
+
+# The app's repository on the web, from .gitmodules.
+upstream_url() {
+  git -C "$root" config -f .gitmodules submodule.upstream/FRUS-Explorer.url | sed -e 's/\.git$//'
+}
+
+cmd_checkout() {
+  local ref=${1:-v2}
+  [ -e "$sub/.git" ] || die "the submodule is not checked out; git submodule update --init"
+  # A full clone takes the history with the commit; a shallow one, as actions/checkout makes,
+  # only the commit, which is all the build needs.
+  if [ "$(git -C "$sub" rev-parse --is-shallow-repository)" = true ]; then
+    git -C "$sub" fetch --quiet --depth=1 origin "$ref"
+  else
+    git -C "$sub" fetch --quiet origin "$ref"
+  fi
+  git -C "$sub" -c advice.detachedHead=false checkout --quiet FETCH_HEAD
+  git -C "$sub" rev-parse HEAD
+}
+
+# --- compare ---------------------------------------------------------------------------------
+
+# The first integer assigned to a static constant named $2 in the Swift sources under $3 at $1.
+constant_at() {
+  git -C "$sub" grep -h -E "static let $2( *: *Int)? *= *[0-9]+" "$1" -- "$3" 2>/dev/null \
+    | head -n 1 | grep -oE '[0-9]+ *$' | tr -d ' ' || true
+}
+
+# IndexingResources.indexResourceNames at $1, comma-separated in the array's order.
+resource_names_at() {
+  local f
+  f=$(git -C "$sub" grep -l -E 'static let indexResourceNames' "$1" -- FRUSCoreKit 2>/dev/null | head -n 1 || true)
+  [ -n "$f" ] || return 0
+  git -C "$sub" show "$f" | awk '
+    /static let indexResourceNames/ { on = 1 }
+    on { line = $0; while (match(line, /"[^"]*"/)) { print substr(line, RSTART + 1, RLENGTH - 2); line = substr(line, RSTART + RLENGTH) } }
+    on && /\]/ { exit }' | paste -sd, - | sed -e 's/,/, /g'
+}
+
+# The CREATE TABLE and ALTER TABLE statements in FRUSCoreKit's and FTS5Store's Swift sources at
+# $1, one a line with their white space folded, sorted. A statement runs from its keyword until
+# its brackets close, or to the end of a line that does not continue with a backslash; comments
+# are skipped. Swift's string quoting and the call around a statement are dropped.
+schema_at() {
+  local f
+  git -C "$sub" grep -l -E 'CREATE (VIRTUAL )?TABLE|ALTER TABLE' "$1" -- FRUSCoreKit FTS5Store 2>/dev/null \
+    | grep -E '\.swift$' | while IFS= read -r f; do
+      git -C "$sub" show "$f" | awk '
+        function flush() { gsub(/[ \t]+/, " ", stmt); sub(/^ /, "", stmt); sub(/ $/, "", stmt); if (stmt != "") print stmt; stmt = ""; on = 0 }
+        {
+          line = $0
+          if (!on) {
+            if (line ~ /^[ \t]*\/\//) next
+            if (!match(line, /(CREATE (VIRTUAL )?TABLE|ALTER TABLE)/)) next
+            line = substr(line, RSTART); on = 1; depth = 0; opened = 0; interp = 0
+          }
+          out = ""
+          for (i = 1; i <= length(line); i++) {
+            c = substr(line, i, 1)
+            # A Swift interpolation, \(...), is text, and its brackets do not count.
+            if (c == "\\" && substr(line, i + 1, 1) == "(") { interp = 1; out = out "\\("; i++; continue }
+            if (interp) { if (c == "(") interp++; if (c == ")") interp--; out = out c; continue }
+            if (c == "(") { depth++; opened = 1 }
+            if (c == ")") { depth--; if (depth < 0) break }
+            out = out c
+            if (opened && depth == 0) break
+          }
+          sub(/\\$/, "", out); gsub(/"""|"/, "", out)
+          stmt = stmt " " out
+          if (depth < 0 || (opened && depth == 0) || (depth == 0 && line !~ /\\[ \t]*$/)) flush()
+        }'
+    done | sort
+}
+
+short() { printf '%s' "$1" | cut -c1-8; }
+
+# A table row for a value the pin and the commit both have: bold when it changed.
+fact_row() {
+  if [ "$2" = "$3" ]; then
+    printf '| %s | %s | %s |\n' "$1" "${2:-not found}" "${3:-not found}"
+  else
+    printf '| %s | %s | **%s** |\n' "$1" "${2:-not found}" "${3:-not found}"
+  fi
+}
+
+cmd_report() {
+  local head=${1:?usage: scripts/upstream-watch report <commit> [<dir>] [<run>]} dir=${2:-} run=${3:-}
+  local status=untested
+  if [ -n "$dir" ] && [ -s "$dir/status" ]; then status=$(cat "$dir/status"); fi
+  local p url count
+  p=$(pin)
+  url=$(upstream_url)
+  # The commits since the pin need the history between them.
+  if [ "$(git -C "$sub" rev-parse --is-shallow-repository)" = true ]; then
+    git -C "$sub" fetch --quiet --unshallow origin
+  fi
+  git -C "$sub" cat-file -e "$p^{commit}" 2>/dev/null || die "the pin $p is not in the submodule's history; fetch it"
+  git -C "$sub" cat-file -e "$head^{commit}" 2>/dev/null || die "$head is not in the submodule's history; fetch it"
+  head=$(git -C "$sub" rev-parse "$head^{commit}")
+  count=$(git -C "$sub" rev-list --count "$p..$head")
+
+  local iv0 iv1 fts0 fts1 fmt0 fmt1 res0 res1
+  iv0=$(constant_at "$p" currentDateIndexVersion FRUSCoreKit)
+  iv1=$(constant_at "$head" currentDateIndexVersion FRUSCoreKit)
+  fts0=$(constant_at "$p" currentSchemaGeneration FTS5Store)
+  fts1=$(constant_at "$head" currentSchemaGeneration FTS5Store)
+  fmt0=$(constant_at "$p" currentFormatVersion FRUSExplorer/Export)
+  fmt1=$(constant_at "$head" currentFormatVersion FRUSExplorer/Export)
+  res0=$(resource_names_at "$p")
+  res1=$(resource_names_at "$head")
+
+  # The machine-readable line the issue logic reads back.
+  printf '<!-- upstream-watch head=%s pin=%s commits=%s index=%s status=%s -->\n' "$head" "$p" "$count" "$iv1" "$status"
+  if [ "$count" -eq 0 ]; then
+    printf "**\`v2\` at [\`%s\`](%s/commit/%s) has nothing past the pin [\`%s\`](%s/commit/%s).**\n\n" \
+      "$(short "$head")" "$url" "$head" "$(short "$p")" "$url" "$p"
+  else
+    printf "**\`v2\` at [\`%s\`](%s/commit/%s) is %s commits past the pin [\`%s\`](%s/commit/%s).**\n\n" \
+      "$(short "$head")" "$url" "$head" "$count" "$(short "$p")" "$url" "$p"
+  fi
+  [ -z "$run" ] || printf '%s\n\n' "$run"
+
+  echo "### What a pin move must follow"
+  echo
+  printf "| | The pin \`%s\` | \`v2\` \`%s\` |\n| --- | --- | --- |\n" "$(short "$p")" "$(short "$head")"
+  fact_row "Index version, \`IndexingPipeline.currentDateIndexVersion\`" "$iv0" "$iv1"
+  fact_row "FTS generation, \`FTS5Connection.currentSchemaGeneration\`" "$fts0" "$fts1"
+  fact_row "JSON export, \`ResearchDataExporter.currentFormatVersion\`" "$fmt0" "$fmt1"
+  fact_row "\`IndexingResources.indexResourceNames\`" "$res0" "$res1"
+  echo
+
+  local work
+  work=$(mktemp -d)
+  schema_at "$p" >"$work/schema0"
+  schema_at "$head" >"$work/schema1"
+  echo "### Schema statements in FRUSCoreKit and FTS5Store"
+  echo
+  comm -13 "$work/schema0" "$work/schema1" >"$work/added"
+  comm -23 "$work/schema0" "$work/schema1" >"$work/removed"
+  if [ ! -s "$work/added" ] && [ ! -s "$work/removed" ]; then
+    echo "Unchanged: $(wc -l <"$work/schema1" | tr -d ' ') \`CREATE TABLE\` and \`ALTER TABLE\` statements."
+  else
+    if [ -s "$work/added" ]; then
+      printf '%s\n\n```sql\n' "New at \`v2\`, or changed:"; cat "$work/added"; printf '```\n\n'
+    fi
+    if [ -s "$work/removed" ]; then
+      printf '%s\n\n```sql\n' "At the pin, and gone or changed at \`v2\`:"; cat "$work/removed"; printf '```\n'
+    fi
+  fi
+  echo
+
+  echo "### Bundled resources under \`FRUSExplorer/Resources\`"
+  echo
+  git -C "$sub" diff --name-status --no-renames "$p" "$head" -- FRUSExplorer/Resources >"$work/res"
+  if [ ! -s "$work/res" ]; then
+    echo "Unchanged."
+  else
+    awk -F'\t' '{
+      n = $2; sub(/^FRUSExplorer\/Resources\//, "", n)
+      v = ($1 == "A") ? "added" : ($1 == "D") ? "removed" : "changed"
+      printf "- %s `%s`\n", v, n }' "$work/res" | sort -k2,2 -s
+  fi
+  echo
+
+  echo "### Commits since the pin ($count)"
+  echo
+  if [ "$count" -gt 0 ]; then
+    # Pull request numbers go in code spans, so they neither link to this repository's issues nor
+    # mention the app's pull requests.
+    git -C "$sub" log --format="- [\`%h\`]($url/commit/%H) %s" "$p..$head" | head -n 150 \
+      | sed -E 's/#([0-9]+)/`#\1`/g'
+    if [ "$count" -gt 150 ]; then echo "- and $((count - 150)) earlier"; fi
+  fi
+  echo
+  rm -rf "$work"
+  if [ -n "$dir" ] && [ -s "$dir/tests.md" ]; then
+    cat "$dir/tests.md"
+  else
+    echo "### The kits on Linux at \`v2\`"
+    echo
+    echo "No results: the build and test job ended before it wrote them. Its log says why."
+  fi
+}
+
+# --- test ------------------------------------------------------------------------------------
+
+# Package.swift's test targets, each with "kit" when its sources are the submodule's.
+test_targets() {
+  awk '
+    /\.testTarget\(/ { on = 1; name = ""; next }
+    on && /name: *"/ && name == "" { match($0, /"[^"]*"/); name = substr($0, RSTART + 1, RLENGTH - 2) }
+    on && /path: *"/ { print name, ($0 ~ /\\\(upstream\)/) ? "kit" : "web"; on = 0 }' "$root/Package.swift"
+}
+
+cmd_test() {
+  local out=${1:?usage: scripts/upstream-watch test <dir>}
+  mkdir -p "$out"
+  out=$(CDPATH='' cd -- "$out" && pwd)
+  cd "$root"
+  local scratch=.build/linux status=pass
+  local head
+  head=$(git -C "$sub" rev-parse HEAD 2>/dev/null || echo unknown)
+  {
+    echo "### The kits on Linux at \`v2\`"
+    echo
+  } >"$out/tests.md"
+
+  echo "== swift build --build-tests at $(short "$head")"
+  if ! swift build --build-tests --scratch-path "$scratch" >"$out/build.log" 2>&1; then
+    tail -n 60 "$out/build.log"
+    {
+      echo "**The package does not build at \`v2\`.** Its errors:"
+      echo
+      echo '```'
+      grep -aE 'error:' "$out/build.log" | sed -e "s|$root/||" | sort -u | head -n 40
+      echo '```'
+    } >>"$out/tests.md"
+    echo build-failed >"$out/status"
+    echo "build-failed"
+    return 0
+  fi
+
+  {
+    echo "Each target runs on its own (\`swift test --filter '^<target>\\.'\`). A kit's failure is the watch's; this package's own tests check the pin's facts, so they are expected to fail at a \`v2\` past it, and are listed as information for the pin move."
+    echo
+    echo "| Target | | Result | Skips | Summary |"
+    echo "| --- | --- | --- | --- | --- |"
+  } >>"$out/tests.md"
+  local t kind rc result summary skips failures=""
+  while read -r t kind; do
+    echo "== $t ($kind)"
+    rc=0
+    swift test --skip-build --scratch-path "$scratch" --filter "^$t\\." \
+      --xunit-output "$out/$t.xml" >"$out/$t.log" 2>&1 || rc=$?
+    tail -n 3 "$out/$t.log"
+    # Swift Testing's summary, and XCTest's when the target has XCTest cases.
+    summary=$( { grep -aoE 'Test run with [0-9]+ tests?.*' "$out/$t.log" | tail -n 1 | sed -e 's/ after [0-9.]* seconds//' || true;
+                 grep -aoE 'Executed [1-9][0-9]* tests?, with [0-9]+ failures?' "$out/$t.log" | tail -n 1 || true; } \
+               | paste -sd';' - | sed -e 's/;/; /g' -e 's/|/\\|/g')
+    skips=$(cat "$out/$t"*.xml 2>/dev/null | grep -ac '<skipped' || true)
+    if [ "$rc" -eq 0 ]; then result=passed; else result=failed; fi
+    if [ "$kind" = kit ] && [ "$rc" -ne 0 ]; then
+      status=kits-failed
+      result="**failed**"
+      failures="$failures$t
+"
+    fi
+    if [ "$kind" = web ]; then kind="this package's"; fi
+    printf '| %s | %s | %s | %s | %s |\n' "$t" "$kind" "$result" "${skips:-0}" "${summary:-no summary in the log}" >>"$out/tests.md"
+  done < <(test_targets)
+
+  {
+    echo
+    echo "The CI at the pin allows one skip, FTS5StoreTests' \`backupExclusion()\`; any other kit skip needs the allow-list's change at the pin move."
+    if [ -n "$failures" ]; then
+      echo
+      echo "**The kits' failures:**"
+      echo
+      echo '```'
+      printf '%s' "$failures" | while IFS= read -r t; do
+        grep -aE '(Test|Suite) .* (failed|recorded an issue)|error: -\[| error: ' "$out/$t.log" | head -n 15 || true
+      done
+      echo '```'
+    fi
+  } >>"$out/tests.md"
+  echo "$status" >"$out/status"
+  echo "$status"
+}
+
+# --- issue -----------------------------------------------------------------------------------
+
+# A field of the report's or an issue body's watch line.
+field() { grep -oE "<!-- upstream-watch [^>]*-->" | head -n 1 | grep -oE "$1=[^ ]*" | cut -d= -f2- || true; }
+
+cmd_issue() {
+  local report=${1:?usage: scripts/upstream-watch issue <report> [--dry-run]} dry=""
+  [ "${2:-}" = --dry-run ] && dry=1
+  [ -s "$report" ] || die "$report is empty"
+  local repo=${GITHUB_REPOSITORY:-}
+  [ -n "$repo" ] || repo=$($gh repo view --json nameWithOwner --jq .nameWithOwner)
+
+  local head count index status title
+  head=$(field head <"$report")
+  count=$(field commits <"$report")
+  index=$(field index <"$report")
+  status=$(field status <"$report")
+  [ -n "$head" ] && [ -n "$count" ] || die "$report has no watch line"
+  case "$status" in
+    pass) title="Upstream watch: v2 is $count commits past the pin, at index version $index" ;;
+    untested) title="Upstream watch: v2 is $count commits past the pin, at index version $index, with no Linux test results" ;;
+    *)    title="Upstream watch: v2 is $count commits past the pin, at index version $index, and the kits' build or tests fail on Linux" ;;
+  esac
+
+  write() {
+    if [ -n "$dry" ]; then echo "dry run: gh $*" >&2; else $gh "$@"; fi
+  }
+
+  local number old oldhead oldstatus
+  number=$($gh issue list --repo "$repo" --label "$label" --state open --json number --jq '.[0].number // empty')
+  if [ -z "$number" ]; then
+    if [ "$count" -eq 0 ] && [ "$status" = pass ]; then
+      echo "Nothing past the pin, and no watch issue open."
+      return 0
+    fi
+    write label create "$label" --repo "$repo" --color FBCA04 --force \
+      --description "The daily watch of FRUS-Explorer's v2 (docs/COORDINATION.md, section 5)" >/dev/null
+    write issue create --repo "$repo" --title "$title" --label "$label" --body-file "$report"
+    echo "Opened the watch issue."
+    return 0
+  fi
+
+  old=$($gh issue view "$number" --repo "$repo" --json body --jq .body)
+  oldhead=$(printf '%s\n' "$old" | field head)
+  oldstatus=$(printf '%s\n' "$old" | field status)
+  if [ "$count" -eq 0 ] && [ "$status" = pass ]; then
+    write issue edit "$number" --repo "$repo" --title "Upstream watch: v2 has nothing past the pin" --body-file "$report" >/dev/null
+    write issue close "$number" --repo "$repo" --comment "\`v2\` at \`$(short "$head")\` has nothing past the pin, and the kits pass on Linux, so this closes. The next change past the pin opens a new issue."
+    echo "Closed watch issue #$number."
+    return 0
+  fi
+  write issue edit "$number" --repo "$repo" --title "$title" --body-file "$report" >/dev/null
+  if [ "$head" != "$oldhead" ] || [ "$status" != "$oldstatus" ]; then
+    write issue comment "$number" --repo "$repo" \
+      --body "\`v2\` moved from \`$(short "${oldhead:-unknown}")\` to \`$(short "$head")\`, $count commits past the pin, at index version $index; the kits: $status (were ${oldstatus:-unknown}). The description has the new report."
+    echo "Updated watch issue #$number, with a comment."
+  else
+    echo "Updated watch issue #$number: v2 and the kits' result are as before."
+  fi
+}
+
+# --- selftest --------------------------------------------------------------------------------
+
+cmd_selftest() {
+  work=$(mktemp -d)
+  trap 'rm -rf "$work"' EXIT
+  mkdir "$work/issues"
+  # A stub gh that keeps issues as files: <n>.body, <n>.title, and <n>.open while open.
+  cat >"$work/gh" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+d=$(dirname "$0")/issues
+echo "gh $*" >>"$d/../calls"
+arg() { local k=$1; shift; while [ $# -gt 0 ]; do if [ "$1" = "$k" ]; then echo "$2"; return; fi; shift; done; }
+case "$1 $2" in
+  "issue list") for f in $(ls "$d" | grep '\.open$' | sort -n); do echo "${f%.open}"; break; done ;;
+  "issue view") cat "$d/$3.body" ;;
+  "issue create") n=$(( $(ls "$d" | grep -c '\.body$' || true) + 1 ))
+                  cp "$(arg --body-file "$@")" "$d/$n.body"; arg --title "$@" >"$d/$n.title"; touch "$d/$n.open"
+                  echo "https://github.com/example/repo/issues/$n" ;;
+  "issue edit") cp "$(arg --body-file "$@")" "$d/$3.body"; arg --title "$@" >"$d/$3.title" ;;
+  "issue comment") echo "$(arg --body "$@")" >>"$d/$3.comments" ;;
+  "issue close") rm -f "$d/$3.open" ;;
+  "label create") ;;
+  *) echo "stub gh: unexpected: $*" >&2; exit 1 ;;
+esac
+STUB
+  chmod +x "$work/gh"
+  report() { printf '<!-- upstream-watch head=%s pin=p commits=%s index=%s status=%s -->\nreport %s\n' "$@" "$1" >"$work/report"; }
+  run() { UPSTREAM_WATCH_GH="$work/gh" GITHUB_REPOSITORY=example/repo "$root/scripts/upstream-watch" issue "$work/report"; }
+  check() { if ! eval "$1"; then echo "selftest failed: $2" >&2; cat "$work/calls" >&2; exit 1; fi; echo "ok  $2"; }
+  opened() { ls "$work/issues" | grep -c '\.body$' || true; }
+  comments() { cat "$work/issues/1.comments" 2>/dev/null | wc -l | tr -d ' '; }
+
+  report aaaa 0 69 pass; run >/dev/null
+  check '[ "$(opened)" -eq 0 ]' "nothing past the pin opens no issue"
+  report aaaa 85 71 pass; run >/dev/null
+  check '[ "$(opened)" -eq 1 ] && [ -e "$work/issues/1.open" ]' "the first change past the pin opens one issue"
+  check 'grep -q "index version 71" "$work/issues/1.title"' "its title names the index version"
+  report aaaa 85 71 pass; run >/dev/null
+  check '[ "$(opened)" -eq 1 ] && [ "$(comments)" -eq 0 ]' "a second run at the same head updates it, with no comment"
+  report bbbb 90 72 kits-failed; run >/dev/null
+  check '[ "$(opened)" -eq 1 ] && [ "$(comments)" -eq 1 ]' "a new head updates the same issue, with a comment"
+  check 'grep -q "head=bbbb" "$work/issues/1.body" && grep -q "fail on Linux" "$work/issues/1.title"' "the description and title follow the new report"
+  report cccc 0 72 pass; run >/dev/null
+  check '[ "$(opened)" -eq 1 ] && [ ! -e "$work/issues/1.open" ]' "nothing past the pin closes it"
+  report dddd 3 73 pass; run >/dev/null
+  check '[ "$(opened)" -eq 2 ] && [ -e "$work/issues/2.open" ]' "a change after the close opens a new one"
+  echo "selftest passed"
+}
+
+case "${1:-}" in
+  checkout) shift; cmd_checkout "$@" ;;
+  report) shift; cmd_report "$@" ;;
+  test) shift; cmd_test "$@" ;;
+  issue) shift; cmd_issue "$@" ;;
+  selftest) shift; cmd_selftest "$@" ;;
+  *) sed -n '2,30p' "$0" | sed -e 's/^# \{0,1\}//' >&2; exit 2 ;;
+esac
