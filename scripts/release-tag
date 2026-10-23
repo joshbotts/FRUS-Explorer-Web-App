@@ -12,7 +12,8 @@ root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 spec=${FRUS_PROJECT_YML:-$root/upstream/FRUS-Explorer/project.yml}
 [[ -f $spec ]] || { echo "scripts/release-tag: no $spec: check out the submodule" >&2; exit 1; }
 
-# Each target's setting, unquoted: comments and $(…) references are not settings.
+# The value each target gives the setting, without quotes or a trailing comment. A line that only
+# mentions it, such as CFBundleVersion: "$(CURRENT_PROJECT_VERSION)", is not one of them.
 setting() {
   grep -E "^[[:space:]]+$1:" "$spec" \
     | sed -E "s/^[[:space:]]+$1:[[:space:]]*//; s/[[:space:]]+(#.*)?\$//; s/^\"(.*)\"\$/\\1/; s/^'(.*)'\$/\\1/" \

@@ -205,7 +205,7 @@ Everything the web edition serves comes from four sources: the Office of the His
 | Semantic shards (553) | `raw.githubusercontent.com/joshbotts/frus-semantic-vectors/main/generations/89481b18/shards`, the generation the bundled tier's provenance digest names | 162.4 MB; about 294 KB each | project data | semantic related-documents signal; meaning-search rerank |
 | Query encoder | `github.com/joshbotts/frus-semantic-vectors/releases/download/encoder-2/embeddinggemma-2-Q8_0.gguf`, ggml-org's GGUF of EmbeddingGemma 2, unmodified | 309,855,456 bytes; SHA-256 in the app's `NOTICE` | Apache 2.0 | meaning search only |
 
-The manifest lists 553 volumes: 550 published and 3 partially published. A full index holds about 317,000 documents; the semantic map places 314,571.
+The manifest lists 553 volumes: 550 published and 3 partially published. A full index holds about 322,000 documents at index version 71, 321,749 in the owner's 1776 export; the semantic map places 314,616, in 140 clusters.
 
 ### Bundled artifacts
 
@@ -328,7 +328,7 @@ Each surface below states what the web edition must do. Behaviour matches the Ma
 
 ### Browse
 
-- Axes: All Volumes (by Title, Published, Era or Length), Administrations, Editors, Archives (provenance types, collections, central-file classes), Clusters (171), Subseries, Working Corpora and My Scopes.
+- Axes: All Volumes (by Title, Published, Era or Length), Administrations, Editors, Archives (provenance types, collections, central-file classes), Clusters (140 in EmbeddingGemma 2's map, from build 1776), Subseries, Working Corpora and My Scopes.
 - Volume page: front matter and chapters, Top subjects from bundled data, and a summary strip once indexed. Side-loaded and Partial badges.
 - People: reconciled identities with role, active years, mention counts, VIAF and Wikidata links, POCOM careers, and Merge and Separate for curators.
 - Topics: all 491 detected subjects, each showing series-wide reach beside "indexed on this server".

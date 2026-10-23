@@ -3,8 +3,8 @@
 //
 // Verified against Tests/FRUSLightTestSupport/Fixtures/export-v69-schema.sql, the schema of the
 // owner's three-volume export (index version 69, build 50), which index version 71's exports from
-// build 1776 hold unchanged. A pin move that changes a table fails
-// the column check in `IndexSummarizer`, rather than leaving a new column out of every hash.
+// build 1776 hold unchanged. A pin move that changes a table fails the column check in
+// `IndexSummarizer`, rather than leaving a new column out of every hash.
 
 /// One table of the corpus index and how its rows are hashed.
 struct CorpusTable: Sendable {

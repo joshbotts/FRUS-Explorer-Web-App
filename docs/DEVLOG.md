@@ -10,7 +10,7 @@ The pin moves from `757c6d29` (build 50, index version 69) to `f0479037`, the co
 
 **What the move brought**
 
-- **Index version 71** (#1746, 70; #1747, 71). `IndexCompatibility.supportedIndexVersion` follows the pin, so the server now refuses build 50's exports, naming both versions. The FTS generation (4) and the export's `formatVersion` (6) are unchanged.
+- **Index version 71** (#1746, 70; #1747, 71). `IndexCompatibility.supportedIndexVersion` follows the pin, so the server now refuses build 50's exports, naming both versions. The FTS generation (4) and the JSON export's `formatVersion` (6) are unchanged.
 - **A fifth indexing resource,** `cited-page-map.json` (#1747), which `IndexingResources.indexResourceNames` now names. `ServerResources.requiredFiles` follows that list, so the server will not start without it, and the image already copies the whole resources folder.
 - **No repair.** Every kit builds and passes on Linux with no new skip, as issue #37's dry run found, and no kit folder, `Package.swift` setting or app source folder changed. The web edition's own code changed only in tests, a doc comment, and the facts below.
 - **The export's schema is unchanged.** Both 1776 exports hold `export-v69-schema.sql`'s 74 statements, in its order, and nothing else but FTS5's shadow tables, which the fixture leaves out by design. `setupDatabase(_:)` is the same text at the new pin, lines 7680–8335. So the fixture stands, under its name, and `IndexSchema.swift`'s list with it.
@@ -44,11 +44,13 @@ The pin moves from `757c6d29` (build 50, index version 69) to `f0479037`, the co
 
 **Records**
 
-- SPEC: the compatibility contract (71 at `f0479037`, app 1.0 build 1776); the table definitions' lines; the image's tags; the bundled data, with `cited-page-map.json`, the resized citation and semantic files, 54 MB in all, and the Legal row gone; and the licensing lines: EmbeddingGemma 2 is Apache 2.0, from the `encoder-2` release, downloaded only at an admin's request, with no consent screen, since the Gemma Terms file is gone from the bundle (#1674). The shards' address names their generation, `generations/89481b18/`.
+- SPEC: the compatibility contract (71 at `f0479037`, app 1.0 build 1776); the table definitions' lines; the image's tags; the bundled data, with `cited-page-map.json`, the resized citation and semantic files, 54 MB in all, and the Legal row gone; and the licensing lines: EmbeddingGemma 2 is Apache 2.0, from the `encoder-2` release, downloaded only at an admin's request, with no consent screen, since the Gemma Terms file is gone from the bundle (#1674). The shards' address names their generation, `generations/89481b18/`. The corpus figures follow 1.0: a full index holds about 322,000 documents, and the semantic map places 314,616 in 140 clusters.
 - `INSTALL.md`: index version 71 and FRUS Explorer 1.0 (build 1776), the second version change, and the release tags.
 - `COORDINATION.md`: the pin, the contract, the kit's test counts, the 393 rows and this move.
 - `PLAN.md` and its shared copy: S12b done, the golden-files and 1776-export checkpoints, the risk row's counts, and the release tag's rule.
 - The README, the prep note and this log.
+
+## Session 12a: the daily watch of `v2`
 
 22 October 2026 · branch `claude/s12a-upstream-watch-b8c058` · upstream `757c6d29`, unchanged
 
