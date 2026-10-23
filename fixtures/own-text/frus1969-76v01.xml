@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0">
+  <teiHeader><fileDesc><titleStmt><title>Test</title></titleStmt></fileDesc></teiHeader>
+  <text>
+  <front>
+    <div type="section" xml:id="preface"><head>Preface</head><p>Prefatory words.</p></div>
+  </front>
+  <body>
+    <div type="compilation" xml:id="comp1"><head>The Conference</head>
+      <p>Synopsis of the conference.</p>
+      <pb n="9" xml:id="pg_9"/>
+      <div type="chapter" xml:id="ch1"><head>First Meeting<note n="1" xml:id="ch1fn1">Held at Anfa Camp.</note></head>
+        <table><row><cell>Present</cell></row><row><cell>Marshall and Brooke</cell></row></table>
+        <pb n="10" xml:id="pg_10"/>
+        <div type="document" xml:id="d1" n="1"><head>1. Minutes</head><p>Agreed minutes.</p>
+          <pb n="11" xml:id="pg_11"/><p>Continued minutes.</p></div>
+        <pb n="12" xml:id="pg_12"/>
+        <div type="document" xml:id="d2" n="2"><head>2. Memorandum</head><p>Annexed memorandum.</p></div>
+        <pb n="13" xml:id="pg_13"/>
+        <p>Closing communiqué, see <ref target="#d1">Document 1</ref>.</p>
+        <pb n="14" xml:id="pg_14"/>
+      </div>
+      <div type="chapter" xml:id="ch2"><head>Second Meeting</head>
+        <div type="document" xml:id="d3" n="3"><head>3. Minutes</head><p>Second minutes.</p></div>
+      </div>
+      <div type="chapter" xml:id="ch3"><head>Third Meeting<note n="2" xml:id="ch3fn1">Postponed twice.</note></head>
+        <div type="document" xml:id="d4" n="4"><head>4. Minutes</head><p>Third minutes.</p></div>
+      </div>
+      <div type="chapter" xml:id="ch4"><head>Fourth Meeting</head>
+        <p> </p>
+        <div type="document" xml:id="d5" n="5"><head>5. Minutes</head><p>Fourth minutes.</p></div>
+      </div>
+      <div type="chapter" xml:id="ch5"><head>Fifth Meeting</head>
+        <figure><graphic url="seating-plan"/></figure>
+        <div type="document" xml:id="d6" n="6"><head>6. Minutes</head><p>Fifth minutes.</p></div>
+      </div>
+      <div type="section" subtype="subsection" xml:id="sub1"><head>Sixth Meeting</head>
+        <p>Those attending the sixth.</p>
+        <div type="document" xml:id="d7" n="7"><head>7. Minutes</head><p>Sixth minutes.</p></div>
+      </div>
+      <div type="chapter" xml:id="ch7"><head>Seventh Meeting</head>
+        <p>Agenda of the seventh.</p>
+        <div type="section" subtype="editorial-note" xml:id="ch7note"><head>Editorial Note</head>
+          <p>Background the editors supply.</p></div>
+        <div type="document" xml:id="d8" n="8"><head>8. Minutes</head><p>Seventh minutes.</p></div>
+      </div>
+      <p>Adjournment of the conference.</p>
+    </div>
+    <div type="section" subtype="historical-document" xml:id="s01"><head>Statement of the Case</head>
+      <p>The claimants allege a seizure.</p>
+      <div type="document" xml:id="d9" n="9"><head>9. Exhibit</head><p>Exhibit text.</p></div>
+    </div>
+    <div type="compilation" xml:id="comp2"><head>Treaties</head>
+      <p>Notes to the treaties.</p>
+      <div type="chapter" xml:id="t1"><head>Treaty One</head><p>Article one.</p></div>
+      <div type="chapter" xml:id="t2"><head>Treaty Two</head><p>Article two.</p></div>
+    </div>
+    <div type="compilation" xml:id="comp3"><head>Conventions</head>
+      <div type="chapter" xml:id="t3"><head>Convention One</head><p>Article three.</p></div>
+    </div>
+    <div type="chapter"><head>Unnamed</head>
+      <p>Words of a chapter nothing can open.</p>
+      <div type="document" xml:id="d10" n="10"><head>10. Note</head><p>A late note.</p></div>
+    </div>
+  </body>
+  <back>
+    <div type="section" subtype="index" xml:id="index"><head>Index</head>
+      <p>Anfa Camp, 10</p>
+      <div type="document" xml:id="d11" n="11"><head>11. Errata</head><p>An errata slip.</p></div>
+    </div>
+  </back></text>
+</TEI>

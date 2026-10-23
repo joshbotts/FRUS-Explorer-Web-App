@@ -18,10 +18,13 @@ import Testing
 @testable import FRUSLightAPI
 
 /// A server fixture serving the synthetic export as its live index, with `edits`, SQL, made to it
-/// first, such as a document's number or header as a real export would give them.
-func servingSyntheticExport(volumes: [String] = [], edits: String? = nil) async throws -> ServerFixture {
+/// first, such as a document's number or header as a real export would give them; with
+/// `includesOwnText`, the export's rows of the kit's fixture for a section's own text.
+func servingSyntheticExport(volumes: [String] = [], edits: String? = nil, includesOwnText: Bool = false) async throws -> ServerFixture {
     let fixture = try await ServerFixture(volumes: volumes)
-    try SyntheticExport().write(to: fixture.files.liveIndex)
+    var export = SyntheticExport()
+    export.includesOwnText = includesOwnText
+    try export.write(to: fixture.files.liveIndex)
     if let edits {
         let index = try SQLiteConnection(fixture.files.liveIndex.path, readOnly: false)
         defer { index.close() }

@@ -2,6 +2,72 @@
 
 One entry per session, newest first.
 
+## Session 13a: a section's own text in Browse, over the API and in the browser app
+
+23 October 2026 · branch `claude/s13a-browse-own-text-bcd2e3` · upstream `af41efa4`, unchanged
+
+The first of the two items left before a web release: Browse lists the text a section prints outside the documents and sections it holds, first in the section, as the app's Browse does ([joshbotts/FRUS-Explorer#1536](https://github.com/joshbotts/FRUS-Explorer/issues/1536)). Which row that is, is the kit's rule, so no upstream pull request was needed and nothing waits for a pin move. S13b, the speed of exact-word search, ran in parallel.
+
+**What the app does**, mapped at the pin:
+
+- **The rule is the kit's.** `VolumeSection.ownTextRowId` and `ownTextEntry(among:)` (`FRUSCoreKit/Browser/VolumeStructure.swift`, public since #1640, index version 68): a section that holds a document or a section, and has an `xml:id` of its own, can have a row under that id, and `ownTextEntry` finds it among the volume's rows (`IndexingPipeline.documents(forVolume:)`), or finds none. A leaf, whose page is the section itself, and a section with a generated id never have one, and the parse makes no row of a list (persons, sources, a table of contents, an index).
+- **Both Browse views ask it,** over the rows they already load: iOS's `BrowserViewModel.loadDocuments` keeps it in `compilationOwnText` and `CompilationView.ownTextSection` draws it; the Mac's `CorpusSectionDocumentView` does both. Each puts the row first in the section, above its sections and documents, as "Read %@" with the section's title (`browser.compilation.readSection`), over "The text this section prints outside the documents and sections it holds." (`browser.compilation.ownText.footer`), and opens the index's row. It shows no date and no count. Placing the row and those two localized strings are the app's whole part.
+- **What 1.0 added is the kit's too** (#1746, index version 70): a section whose only text of its own is a footnote on its heading has a row, and so does a container whose heading carries one; a section's row is dated by its documents, which Search draws and Browse does not; and the reader's order (`mergeReadingSequence`) puts the row first in its section, and a chapter's opening subsection before its documents (`leadsWithSubsections`).
+- **Front matter:** a row takes the front-matter flag of its section's kind, which Search's filter reads, and Browse lists it all the same. The fixtures' 393rd row, frus1969-76ve09p1's Note on U.S. Covert Actions, is a prose leaf the reader opens directly, not a section's own text.
+
+**The API**
+
+- `/volumes/{v}`: each section adds `hasOwnText`, `VolumeSection.ownTextEntry(among:)` over the index's rows for the volume.
+- `/volumes/{v}/sections/{s}`: `ownText` is the row the rule finds, written as the section's documents are, with its title by the kit's rule for lists and whether the reader can open it; the key is left out when there is none.
+- The rows are the index's, so a volume the server has not indexed lists none, as the app lists nothing before indexing, though the reader opens a section's own text from the TEI.
+- A section's page made the set of documents the reader can open once for each document it listed, and the volume's page once for each top-level section; each now makes it once.
+
+**The browser app**
+
+- **A section's page** lists the row first, after the count, as **Read** and the section's title, a link to the reader described by the app's sentence beneath it. One the reader cannot open is named, not linked. A section that holds no documents shows no count of them.
+- **The volume's contents** open a section with such a row on its page, as one with documents, where a section that holds only prose sections had linked to the reader or been named alone.
+- **The reader** opens the row between the entries the kit's order puts around it: a meeting's own text after the conference's, and before its first document.
+
+**Checked**
+
+- **Over the kit's own fixtures,** since no fixture volume has such a row (FRUSParityTests, `OwnTextAPIParityTests`):
+  - `fixtures/own-text` holds `SectionOwnTextTests`' and `IndexVersion70Tests`' volumes, each its suite's `volumeXML` at the pin, under the id the suite gives it; a test fails, naming the file, when a pin move changes either;
+  - indexed by FRUSCoreKit and dropped into the drop zone as an export, every section of both answers as the kit's rule gives it, through the volume's page and its own: 36 sections, 19 that could have a row and 14 that have one, 11 in sections that hold documents, 3 in sections that hold only sections and 1 of a front-matter kind;
+  - each row opens in the reader between the entries the kit's order puts around it, and its body is the one the app's reader path renders, a parse of that section alone, one with the seating plan the fixture prints;
+  - over the three fixture volumes, 28 sections, 8 that could have a row: the kit finds none, and the API lists none;
+  - the synthetic export's four rows of the kit's fixture, with the outline, are the kit's index of the file, column for column.
+- **The routes** over the synthetic export (FRUSLightServerTests, `OwnTextRouteTests`): the conference's and the meeting's rows, the meeting's documents and neighbours, a section without a row, and the volume before an import and without its TEI.
+- **A mutation:** with the section's page listing no row, both suites fail, the parity suite with 28 differences.
+- **Over the owner's full 1776 export,** in a Compose project of its own, `frus-s13a` on port 8085, with this branch's image and the corpus clone at `6170e4b32`: `frus-parity own-text`, new, read every section's page and every row's neighbours through the API, and held them to the kit's rule over the export, read through the kit's read-only open:
+
+  | Volumes | Sections | Could have a row | Have one | Holding documents | Holding only sections | Front-matter kinds | Reader opens | Differences |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | 553 | 25,115 | 20,052 | 4,896 | 4,615 | 281 | 19 | 4,896 | 0 |
+
+  It took 278 seconds. A volume's page, or a section's, takes 0.4 to 0.6 seconds when the server parses the volume's TEI, which it keeps for the last four volumes, and otherwise 1 to 20 ms.
+- **In Chromium,** the desktop app's browser, on that install: 1945 Berlin vol. II's Meeting of the Joint Chiefs of Staff, 10 a.m., lists "Read Meeting of the Joint Chiefs of Staff, 10 a.m." over the sentence, then Documents (1), at desktop and phone width, and its row opens between No. 710, the log of the President's trip, and the minutes, as the app's own walk found; 1919 Paris vol. XIII's Part III, a section of 14 sections, lists its row above them and no count of documents. The pane's screenshots leave every document's sandboxed frame blank, so the reader's text was read through the API, where the meeting's list of those present names Brigadier General Esposito.
+
+**Records**
+
+- `PLAN.md` and its shared copy (rev 201): the session intro, S13a's row and its answers, and in `PLAN.md` the flowchart.
+- `SPEC.md`: Browse's section page, the API's two fields, and the check against a real export.
+- `INSTALL.md`: Browse's row and the API's two fields.
+- `COORDINATION.md`: §1's use of the kit for the rows, and the pin-move checklist's fixtures.
+- `fixtures/own-text/README.md`, the README's Status and this log.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64:** all 2,073 tests pass, up from 2,066, with the one named skip. FRUSParityTests runs 121, up from 116, and FRUSLightServerTests 110, up from 108; the other targets are unchanged, FRUSCoreKitTests at 1,147.
+- **The browser app:** typecheck and lint are clean, and 89 unit tests pass in 15 files, up from 85.
+- **`scripts/compose-smoke --e2e`** on this branch's image, `frus-light:smoke`, built locally: passes, with 21 browser tests on Chromium, up from 20. The new one, `own-text.spec.ts`, browses by keyboard to the conference and its first meeting, opens the meeting's own text in the reader, turns Next and Previous through the kit's order, and runs axe on each page. It finds nothing.
+
+**Notes**
+
+- **frus1969-76v01 and frus1945-50Intel in the fixtures are the kit's test volumes,** under real volume ids, as the kit's and the app's tests index them: in the browser suite's catalogue, Volume I, Foundations of Foreign Policy, holds the kit's conference.
+- **The `frus-s13a` install** was removed with `docker compose down --volumes`; the owner's install on 8080 was left as it was.
+
+**Next:** **S13b**, the speed of exact-word search, the last item before a web release, which runs in parallel. **S12d** follows once the app's repository tags `version-1.0` (build 1861), moving the pin on from `af41efa4`.
+
 ## Session 11f: the timeline and the concordance, over the API and in the browser app
 
 23 October 2026 · branch `claude/s11f-timeline-concordance-97c312` · upstream `af41efa4`, unchanged

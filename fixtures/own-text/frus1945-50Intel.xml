@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0">
+  <teiHeader><fileDesc><titleStmt><title>Test</title></titleStmt></fileDesc></teiHeader>
+  <text>
+  <front>
+    <div type="section" subtype="note-on-covert-actions" xml:id="actionsstatement"><head>Note on U.S. Covert Actions</head>
+      <p>In compliance with the statute, the editors have identified covert actions.</p></div>
+    <div type="section" subtype="editorial-note" xml:id="note"><head>Note Concerning the Minutes</head>
+      <p>Occasionally referred to as the Council of Five.</p></div>
+    <div type="section" subtype="additional-volumes" xml:id="subseriesvols"><head>Kennedy Administration Volumes</head>
+      <list><item><ref target="frus1961-63v01">I Vietnam, 1961</ref></item></list></div>
+    <div type="section" xml:id="message"><head>Message</head>
+      <p>Fellow-citizens of the Senate and House of Representatives.</p></div>
+    <div type="section" xml:id="lod"><head>List of Documents</head>
+      <table><row><cell>1</cell><cell>Telegram 430 from La Paz</cell></row></table></div>
+  </front>
+  <body>
+    <div type="chapter" xml:id="ch1"><head>Founding of the National Intelligence Structure<note n="1" xml:id="ch1fn1">For previous documentation, see <ref target="frus1941v01#pg_12">Foreign Relations, 1941, vol. I, p. 12</ref>, and the plan of <persName corresp="#p_DWJ1">Donovan</persName>.</note></head>
+      <div type="section" subtype="editorial-note" xml:id="intro1"><head>Introduction</head>
+        <p>This volume takes as its starting point the surrender of Japan.</p></div>
+      <div type="document" xml:id="d1" n="1"><head>1. Memorandum</head><dateline>Washington, <date when="1945-08-21">August 21, 1945</date></dateline><p>First.</p></div>
+      <div type="document" xml:id="d2" n="2"><head>2. Letter</head><dateline>Washington, <date when="1946-01-22">January 22, 1946</date></dateline><p>Second.</p></div>
+    </div>
+    <div type="chapter" xml:id="ch2"><head>Meeting of the Joint Chiefs of Staff, 10 a.m.</head>
+      <dateline><date when="1945-07-16">Monday, July 16, 1945</date></dateline>
+      <table><row><cell>Present</cell></row><row><cell>Marshall and King</cell></row></table>
+      <div type="document" xml:id="d3" n="3"><head>3. Minutes</head><dateline><date when="1945-07-17">July 17, 1945</date></dateline><p>Third.</p></div>
+    </div>
+    <div type="chapter" xml:id="ch3"><head>Those Present</head>
+      <table><row><cell>Leahy</cell></row></table>
+      <div type="document" xml:id="d4" n="4"><head>4. Minutes</head><dateline><date when="1945-07-18">July 18, 1945</date></dateline><p>Fourth.</p></div>
+    </div>
+    <div type="chapter" xml:id="ch4"><head>Spain</head>
+      <p>Correspondence.</p>
+      <div type="document" xml:id="d5" n="5"><head>5. Despatch</head><dateline><date when="1870">1870</date></dateline><p>Fifth.</p></div>
+      <div type="document" xml:id="d6" n="6"><head>6. Despatch</head><dateline><date when="1871-10">October 1871</date></dateline><p>Sixth.</p></div>
+    </div>
+    <div type="chapter" xml:id="ch5"><head>Undated</head>
+      <p>Papers.</p>
+      <div type="document" xml:id="d7" n="7"><head>7. Paper</head><p>No date.</p></div>
+    </div>
+    <div type="compilation" xml:id="comp1"><head>Treaties<note n="2" xml:id="comp1fn1">Continued from the previous volume.</note></head>
+      <pb n="99" xml:id="pg_99"/>
+      <div type="chapter" xml:id="t1"><head>Treaty One</head><p>Article one.</p></div>
+    </div>
+    <div type="chapter" xml:id="ch6"><head>Later</head>
+      <div type="document" xml:id="d8" n="8"><head>8. Note</head><dateline><date when="1950-01-01">January 1, 1950</date></dateline><p>Eighth.</p></div>
+      <div type="subchapter" xml:id="ch6subch1"><head>Appendix</head><p>Appended text.</p></div>
+    </div>
+  </body></text>
+</TEI>

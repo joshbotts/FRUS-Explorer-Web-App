@@ -1,7 +1,7 @@
 // S11e's done-when (docs/PLAN.md): Playwright uses the Query Inspector and the date order on
 // Chromium with no axe violations. Against the image, with the synthetic export imported: three
 // documents, d1 and d2 of November 1960 in frus1961-63v06, both negotiating, and d1 of January 1894
-// in frus1894Nicaragua, of the canal.
+// in frus1894Nicaragua, of the canal; and four rows of frus1969-76v01, which neither word finds.
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
 
@@ -24,7 +24,7 @@ test('the Query Inspector follows the text as it is typed, counts each term in s
   await expect(terms.nth(0)).toContainText('negotiating 2 across everything this server has indexed');
   await expect(terms.nth(0)).toContainText('negotiating is searched as negoti — other words with that root match too');
   await expect(terms.nth(1)).toContainText('canal EXCLUDED excluded');
-  await expect(strip).toContainText('Counts are over the 2 volumes indexed on this server — not the whole published series.');
+  await expect(strip).toContainText('Counts are over the 3 volumes indexed on this server — not the whole published series.');
   await strip.getByRole('button', { name: 'Count each term in scope…' }).click();
   await expect(terms.nth(0)).toContainText('2 in your current scope · 2 across everything this server has indexed');
   await expect(strip.getByRole('button', { name: 'Count each term in scope…' })).toHaveCount(0);
@@ -36,7 +36,7 @@ test('the Query Inspector follows the text as it is typed, counts each term in s
   await box.press('Enter');
   await expect(page.getByRole('heading', { name: 'No Results' })).toBeVisible();
   await expect(page.getByText('formosa matches no document in your current scope. The rest of your query is not the problem.')).toBeVisible();
-  await expect(page.getByText('0 here means 0 in what this server has indexed — 2 volumes.')).toBeVisible();
+  await expect(page.getByText('0 here means 0 in what this server has indexed — 3 volumes.')).toBeVisible();
   await expect(strip.getByRole('button', { name: 'Hide term detail' })).toHaveAttribute('aria-expanded', 'true');
   await expect(strip.getByRole('listitem')).toHaveCount(2);
   await axeCheck(page);

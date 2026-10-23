@@ -79,19 +79,25 @@ public struct Volume: Codable, Equatable, Sendable {
         /// Whether the reader can open it as a document, which only a parse of its TEI can say;
         /// absent when the TEI is not mounted.
         public var readable: Bool?
+        /// Whether the index holds a row of the text it prints outside the documents and sections
+        /// it holds, which its page lists first: the kit's `VolumeSection.ownTextEntry(among:)`
+        /// over the index's rows for the volume, so never for a leaf, a section with a generated
+        /// id, or a volume the index does not hold.
+        public var hasOwnText: Bool
 
-        init(_ section: VolumeSection, indexed: Set<String>, readerDocuments: Set<String>?) {
+        init(_ section: VolumeSection, indexed: Set<String>, rows: [DocumentBrowserEntry], readerDocuments: Set<String>?) {
             sectionId = section.sectionId
             divType = section.divType
             title = section.title
             documentIds = section.documentIds
-            subsections = section.subsections.map { Section($0, indexed: indexed, readerDocuments: readerDocuments) }
+            subsections = section.subsections.map { Section($0, indexed: indexed, rows: rows, readerDocuments: readerDocuments) }
             let all = section.allDocumentIds
             documentCount = all.count
             indexedDocumentCount = all.filter(indexed.contains).count
             isFrontMatter = section.isFrontMatterKind
             canReadDirectly = section.canReadDirectly
             readable = readerDocuments.map { $0.contains(section.sectionId) }
+            hasOwnText = section.ownTextEntry(among: rows) != nil
         }
     }
 
@@ -155,8 +161,10 @@ enum CatalogRoutes {
             guard let entry = resources.volume(volumeId) else { throw APIProblem.volumeNotFound(volumeId) }
             var volume = Volume(entry, index: await state.index, volumesDirectory: volumesDirectory)
             if let contents = try await VolumeContents(volumeId, indexed: volume.indexed, provider: provider, reader: reader) {
+                // Each set made once, not once for each section.
+                let (indexed, readerDocuments) = (contents.indexed, contents.readerDocuments)
                 let sections = contents.sections.map {
-                    Volume.Section($0, indexed: contents.indexed, readerDocuments: contents.readerDocuments)
+                    Volume.Section($0, indexed: indexed, rows: contents.rows, readerDocuments: readerDocuments)
                 }
                 volume.structure = sections
                 volume.structureSource = contents.source
@@ -176,18 +184,24 @@ enum CatalogRoutes {
                 throw APIProblem(.notFound, code: "SECTION_NOT_FOUND",
                                  detail: "\(volumeId) has no section \(sectionId) in its structure.")
             }
+            // Made once, not once for each document.
+            let readerDocuments = contents.readerDocuments
             let documents = section.documentIds.map { documentId -> SectionDocument in
                 if let indexed = contents.entries[documentId] {
-                    return SectionDocument(indexed, readable: contents.readerDocuments?.contains(documentId))
+                    return SectionDocument(indexed, readable: readerDocuments?.contains(documentId))
                 }
                 return SectionDocument(documentId: documentId, ast: contents.parsed?.documents[documentId],
-                                       structure: contents.sections, readable: contents.readerDocuments?.contains(documentId))
+                                       structure: contents.sections, readable: readerDocuments?.contains(documentId))
+            }
+            // The app's Browse finds the row by the same rule, among the same rows (#1536).
+            let ownText = section.ownTextEntry(among: contents.rows).map {
+                SectionDocument($0, readable: readerDocuments?.contains($0.documentId))
             }
             return VolumeSectionPage(
                 volumeId: volumeId, volumeTitle: entry.title,
-                section: Volume.Section(section, indexed: contents.indexed, readerDocuments: contents.readerDocuments),
+                section: Volume.Section(section, indexed: contents.indexed, rows: contents.rows, readerDocuments: readerDocuments),
                 path: path.map { .init(sectionId: $0.sectionId, title: $0.title) },
-                documents: documents, structureSource: contents.source)
+                ownText: ownText, documents: documents, structureSource: contents.source)
         }
         router.get("/api/v1/volumes/:volumeId/documents") { request, context -> DocumentList in
             let query = try FormQuery(request.uri.query)
@@ -263,7 +277,9 @@ enum CatalogRoutes {
 struct VolumeContents {
     let sections: [VolumeSection]
     let source: String
-    /// The index's entries for the volume, by document id; empty when it holds none.
+    /// The index's rows for the volume, in the order the kit gives them; empty when it holds none.
+    let rows: [DocumentBrowserEntry]
+    /// The same rows by document id, the first where two share one.
     let entries: [String: DocumentBrowserEntry]
     var indexed: Set<String> { Set(entries.keys) }
     let parsed: ReaderService.ParsedVolume?
@@ -275,8 +291,9 @@ struct VolumeContents {
     /// can open.
     init?(_ volumeId: String, indexed: Bool, provider: ServedIndexProvider, reader: ReaderService) async throws {
         let served = indexed ? try await provider.servedIfReady() : nil
+        let rows = try await served?.pipeline.documents(forVolume: volumeId) ?? []
         var entries: [String: DocumentBrowserEntry] = [:]
-        for entry in try await served?.pipeline.documents(forVolume: volumeId) ?? [] where entries[entry.documentId] == nil {
+        for entry in rows where entries[entry.documentId] == nil {
             entries[entry.documentId] = entry
         }
         let cached = try await served?.pipeline.cachedVolumeStructure(forVolumeId: volumeId)
@@ -293,6 +310,7 @@ struct VolumeContents {
         } else {
             return nil
         }
+        self.rows = rows
         self.entries = entries
         self.parsed = parsed
     }
@@ -308,7 +326,8 @@ struct VolumeContents {
     }
 }
 
-/// A section of a volume, with its documents in order and the sections above it.
+/// A section of a volume, with the row of its own text, its documents in order and the sections
+/// above it.
 public struct VolumeSectionPage: Codable, Equatable, Sendable {
     public struct Ancestor: Codable, Equatable, Sendable {
         public var sectionId: String
@@ -320,6 +339,10 @@ public struct VolumeSectionPage: Codable, Equatable, Sendable {
     public var section: Volume.Section
     /// The sections above it, outermost first.
     public var path: [Ancestor]
+    /// The row the index holds for the text the section prints outside the documents and sections
+    /// it holds, which the app's Browse lists first, above them (`VolumeSection.ownTextEntry(among:)`);
+    /// absent when it holds none.
+    public var ownText: SectionDocument?
     public var documents: [SectionDocument]
     public var structureSource: String
 }
