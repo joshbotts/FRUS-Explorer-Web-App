@@ -48,7 +48,7 @@ The pin moves from `757c6d29` (build 50, index version 69) to `f0479037`, the co
 - `INSTALL.md`: index version 71 and FRUS Explorer 1.0 (build 1776), the second version change, and the release tags.
 - `COORDINATION.md`: the pin, the contract, the kit's test counts, the 393 rows and this move.
 - `PLAN.md` and its shared copy: S12b done, the golden-files and 1776-export checkpoints, the risk row's counts, and the release tag's rule.
-- The prep note and this log. The README is left to #40, which rewrites its status section and was open when this one finished.
+- The README's Status, as #40 rewrote it, merged here from `main`: only what the move makes untrue, the gap behind 1.0 and S12b's line under Next. The prep note and this log.
 
 ## Session 12a: the daily watch of `v2`
 
