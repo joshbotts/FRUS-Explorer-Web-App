@@ -2,6 +2,43 @@
 
 One entry per session, newest first.
 
+## Issue #37: the plan catches up with FRUS Explorer 1.0
+
+22 October 2026 · branch `claude/issue-37-dev-plan-revision-846914` · upstream `757c6d29`, unchanged
+
+The owner asked for issue #37 to be reviewed, and the plan revised to catch up with the app before feature work goes on. The issue, posted from a session in the app's repository, finds `v2` at `build-51` (`f0479037`, build 1776, the 1.0 TestFlight build), 85 commits past the pin, at index version 71. No web session had seen those commits: the daily watch COORDINATION §5 assigns to web sessions was never added. This session changes records only.
+
+**Checked against the app's repository**
+
+- Each fact the next pin move depends on holds at `build-51`:
+  - `currentDateIndexVersion` is 71;
+  - `cited-page-map.json` is added to the bundled data and `gemma-terms-of-use.txt` removed, with the other changed resources the issue lists;
+  - 85 commits separate `build-51` from the pin.
+- Each of the 17 pull requests' lines for the web edition was read. #1778 changes no kit code, but its page-map landing is app code the web reader would need, so S12c moves it into the kit.
+- **A dry run at `build-51`** built and tested this package on Linux, then restored the pin. The build needs no repair, and every kit suite passes, with only the skip CI already allows. The web edition's own tests fail where a pin move expects: the index version, the sixth resource file, stale golden files, 61 expressions under parser 6.8, and a 393rd fixture row. `docs/prep/README.md` records it, under "The 1.0 pin move".
+
+**The plan**
+
+- **S11f waits.** Three rows come first:
+  - S12a, the daily watch of `v2`, which needs no Mac and no export;
+  - S12b, the pin move to `version-1.0` (build 1861). It starts at `build-51` as a draft and retargets once the tag exists;
+  - S12c, what 1.0 changed that the web edition serves: result dates and their precision, the reader's Reading Width, a replaced search stopping its statements, and the rows 1.0's index changed. Its upstream pull request moves #1778's page-map landing into the kit.
+- **Owner checkpoints:** the 1.0 export, the three-volume one for the golden files and a full one for the owner's install once `edge` serves version 71, and Mac check 7.
+- **The upstream-churn risk** now records the gap, and the watch as its mitigation.
+- **The S12 answers** say which 1.0 changes come with the pin, which wait for phases 2–4, and what remains before a release. One question is open for the owner: whether the release image's tag follows the build number or the version.
+
+**Records**
+
+- `PLAN.md` and its shared copy (rev 156): the S12 rows, the flowchart, the checkpoints, the risk row and the S12 answers.
+- `COORDINATION.md`: the gap, and S12a as the watch's author.
+- `docs/prep/README.md`: the dry run. This log.
+
+**Results**
+
+- No code changed. CI runs as it does on any pull request, at the pin.
+
+**Next: S12a,** the daily watch of the app's `v2`. S12b can start beside it at `build-51`, as a draft, and finishes once `version-1.0` is tagged and the owner's 1.0 export arrives.
+
 ## Session 11e: the Query Inspector, and the date order
 
 14 October 2026 · branch `claude/s11e-search-readings` · upstream `757c6d29`, unchanged
