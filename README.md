@@ -2,7 +2,36 @@
 
 FRUS Explorer Light is a self-hosted web edition of [FRUS Explorer](https://github.com/joshbotts/FRUS-Explorer), the iOS, iPadOS and macOS app for researching the *Foreign Relations of the United States* series. One container serves the corpus, its full-text index, and each researcher's notes and highlights to any modern browser.
 
-**Status:** early development. Session 0 built the scaffold: the pinned `FRUS-Explorer` submodule, the build scripts and CI. Session 2 added the server and Import mode, which checks a Mac export copied into `/data/import`, installs it and serves it read-only. Session 5 added the image and `compose.yaml`, with a Compose smoke test in CI. Session 7 publishes the image to GitHub Container Registry and adds the install guide, [`docs/INSTALL.md`](docs/INSTALL.md). Session 4 adds the parity harness, which compares the web edition's index, search and rendering with the Mac app's. Session 1 is done: with its Linux guards merged upstream, the six shared kits are built and tested on Linux in CI. Session 3 is done too: FRUSCoreKit, part 1, the app's TEI renderer and citation code, merged upstream, and CI renders the three fixture volumes with it on Linux, byte-identical to the Mac reader. So is session 6: FRUSCoreKit, part 2, the app's indexer, search and citation matcher, merged upstream, and CI indexes and searches the fixtures with it on Linux and compares the results with the Mac app's. Session 8 is done: the server searches and browses the imported index through the kit, opened read-only, and serves the reader's page, and CI runs the parity queries through its API. Session 9a adds the browser app at http://localhost:8080: it searches, opens a document in the reader and copies its citation, and CI runs that in Chromium against the image. Session 9b completes it for phase 1: Browse, the links inside a document and the cards for people and terms, all by keyboard, with an axe check in the browser suite. Session 9c moves the pin past its two upstream pull requests: the reader's page now meets WCAG 2.2 AA, links to printed pages open their documents, and a person's card counts the indexed documents that mention them. The pin then moves to FRUS Explorer build 50, whose exports are at index version 69, and a reference to a whole volume opens the volume in Browse. Session 10 imports the owner's full export from build 50 into Compose, and checks 3 to 5 pass on it: search and the reader match the Mac app's, the server refuses the export made with the owner's writing, and the one made without it holds none. That is phase 1's exit, which the owner signed off on 13 October. Session 11a opened the two upstream pull requests for the rest of phase 1's features: the facets, the Query Inspector, the date order and the concordance in one, and BibTeX and RIS, display titles and the footnote landing in the other. Both merged the same day, and session 11b moves the pin past them. Session 11c brings the second's features to the browser app: Cite copies a document's BibTeX and RIS records and saves the BibTeX, lists name documents by the app's rule for lists, a link to a note lands on it with the app's own script, and a volume outside the catalogue offers its page on history.state.gov. Session 11d adds the facets: each search's whole match broken down six ways, with include, exclude and Apply as on the Mac. Session 11e adds the Query Inspector, which shows what a query compiles to and counts each of its terms as it is typed, and names the term a search found nothing for, and the results' date order. Session 11f brings the timeline and concordance readings. See [`docs/PLAN.md`](docs/PLAN.md) and [`docs/DEVLOG.md`](docs/DEVLOG.md).
+## Status
+
+Phase 1 is done: a Docker Compose install that serves a FRUS Explorer research export, read-only, at `http://localhost:8080`. The owner signed it off on 13 October 2026. [`docs/INSTALL.md`](docs/INSTALL.md) is the install guide, [`docs/PLAN.md`](docs/PLAN.md) the plan and [`docs/DEVLOG.md`](docs/DEVLOG.md) the record of each session.
+
+**What works today**, from the published image `ghcr.io/joshbotts/frus-explorer-light:edge`, for amd64 and arm64:
+
+- Import of a Mac export copied into the `/data` volume, checked and served read-only. The server refuses an export from another index version and one that holds the owner's writing.
+- Search with the app's query language, with the facets, the Query Inspector and the order by relevance or date.
+- Browse, the reader and its links, and the cards for people and terms, all usable by keyboard and free of axe violations.
+- Cite, with BibTeX and RIS.
+- Parity with the Mac app, checked in CI on three fixture volumes: the same index rows, search results and document HTML. The server compiles the app's own Swift code from a pinned submodule.
+- A daily CI watch of the app's `v2` branch, which reports in one issue what the next pin move has to handle.
+
+**Known gaps**
+
+- **Behind FRUS Explorer 1.0.** The pin is build 50, at index version 69. Exports from the app's 1.0 builds, at index version 71, are refused until the pin moves.
+- **Phase-1 features still to come:** the timeline and concordance readings, a volume's own-text rows in Browse, and faster exact-word search.
+- **Later phases:**
+  - no notes, highlights or collections on the web (phase 2);
+  - no accounts, sharing beyond localhost, or indexing from TEI on the server (phase 3);
+  - no search by meaning (phase 4);
+  - no AWS deployment (phase 6).
+
+**Next**
+
+1. **S12b**, under way: the pin moves to FRUS Explorer 1.0 build 1776, and CI publishes `:1.0-1776`.
+2. **S12c**: what 1.0 changed that the web edition shows, such as result dates and the reader's Reading Width.
+3. **S12d**: the pin moves to 1.0 build 1861, the App Store build, and CI publishes `:1.0-1861`.
+4. **S11f**: the timeline and concordance readings.
+5. **Phase 2**: user data and its nightly backup.
 
 ## Goals
 
