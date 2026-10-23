@@ -107,6 +107,17 @@ The submodule was checked out at `build-51` in a worktree, this package's own ta
   - The renderer's parity tests: the three fixture volumes now give 393 rows, not 392, so the rendered rows and the golden rows no longer line up. #1746 stores rows for a heading's footnote and for prose the index left out, and the index parity test sees the same 393 `document_revisions` rows.
 - **Left to S12b with the 1.0 export:** whether the 393rd row's HTML and the other rows match the remade golden files; check 3's results with the new snippets; the index summary's digests; and the export's schema, whose `CREATE TABLE` statements the kit's diff does not change.
 
+## Serving the page-map landing
+
+23 October 2026 · for the pin move past [FRUS-Explorer#1784](https://github.com/joshbotts/FRUS-Explorer/pull/1784), merged that day as `af41efa4`: S12d's, or one of its own
+
+S12c moved where a page link and a whole-volume link go, `PageLink` and `WholeVolumeLink`, into FRUSCoreKit's `TEI/FRUSURLScheme.swift`, unchanged but for `public` and `Sendable`. At a pin that holds it, the server can serve the landing #1778 gave the app:
+
+- **The rule:** in `ReaderLinks.swift`'s `.page` case, ask `PageLink.destination(page:volumeId:citing:onDevice:store:map:)`, with `onDevice` whether the served index holds the volume, `store` the served index's `PageRangeStore`, and `map` the bundled `cited-page-map.json` decoded as the kit's `CitedPageMap`, once per process. `IndexingResources.citedPages` is internal, so the server decodes the file itself, from the folder `ServerResources` reads.
+- **`.document`:** the destination, as a cross-reference to that document lands; a volume without its TEI here gets the notice a document link into such a volume gets, with the document's page on history.state.gov, where the app offers the download.
+- **`.volume(volumeId:page:)`:** the volume, as `WholeVolumeLink` sends a whole-volume link, which the server can now answer for the browser app: Browse for a catalogue volume, with a line naming the page in the words of the app's `FollowedPageLink.notice`, "You followed a link to page N of this volume, which isn't downloaded", made the server's; history.state.gov otherwise.
+- **The tests:** `ReaderLinkParityTests.everyPageLinkIntoAnotherVolumeIsWhereTheIndexStoresIt` expects no destination for the fixtures' 31 links into other volumes; at that pin it should expect the map's document for the 19 it names, 17 of which the index stores under rule C, and the volume for the other 12.
+
 ## Files
 
 | File | What it holds |

@@ -2,6 +2,88 @@
 
 One entry per session, newest first.
 
+## Session 12c: what FRUS Explorer 1.0 changed, over the API and in the browser app
+
+23 October 2026 · branch `claude/s12c-what-1-0-changed-64c4b9` · upstream `f0479037` (tag `build-51`), unchanged
+
+The S12 plan's third row: what 1.0 changed that the web edition serves, each as the app shows it. Three features are served here, the rows 1.0's index changed are checked through the API and the reader's links, and the one piece that is app code, where a page link into a volume the server does not hold goes, is [FRUS-Explorer#1784](https://github.com/joshbotts/FRUS-Explorer/pull/1784), which the owner merged the same day.
+
+**A result's date** (#1746)
+
+- **The API:** each search row adds the kit's `dateISOMax` and `datePrecision` (`day`, `month` or `year`), and `drawnDate`, the words the kit's `SearchResultDate` gives them: "July 16, 1945", "August 21, 1945 – January 22, 1946", "July 1945", "1862". The server passes US English, the language of the browser app's words, where the app's `SearchResult.drawnDate` takes the device's locale.
+- **The browser app:** a row draws its dateline, or for a row that prints none the drawn date, as the Mac's window draws `result.dateline ?? result.drawnDate`.
+- **On the full 1776 export,** a section's row is dated by the documents it holds: frus1862's ch23, "Guatemala and Salvador.", draws "July 29, 1862 – September 15, 1862", and frus1865p3's ch14, "Mexico.", "May 4, 1861 – June 9, 1866". The export holds 7,780 rows that are not documents, 5,707 of them dated, 4,245 by a span; build 50's held 4,182, 951 and 165.
+
+**The reader's Reading Width** (#1699)
+
+- **The API:** the page takes `readingWidth`, `narrow`, `standard` or `wide`, beside `textSize` and `colorScheme`, and passes the step's measure to `ReaderPage.build(measure:)`: 70, 87 or 120ch, the steps the app's Settings ▸ Display offers on an iPad and the Mac, Standard by default. Until now the server passed none, so every page had the kit's 70ch.
+- **The ladder is app code** (`ReadingWidth.measure(on:)`), which the kit leaves to its host, so the server mirrors its three numbers. `ReaderPageParityTests` reads the rungs, and the setting's default, from the app's source at the pin: a pin move that changes one fails there.
+- **The browser app:** Reading Width, a select beside Text Size, with the app's Narrow, Standard and Wide, kept in the browser as Text Size is. A page loaded again for another width leaves focus on the control, as Text Size and Appearance do.
+- **In Chromium,** measured on the Long Telegram (frus1946v06/d475) at Medium text, the app's own test document: a mean 69.5, 91.2 and 133 characters a full line at the three steps, where the app's WebKit gives 77, 100 and 145. The install guide gives both.
+
+**A search whose client goes stops** (#1698)
+
+- **What S10 found:** a request its client abandoned ran on; after the timeouts the server went on computing those searches.
+- **The server:** Hummingbird allows half-closure and cancels nothing when a client goes. Each connection's pipeline now holds a handler that notices the client's side closing, the input closed or the connection gone, and the API's request context keeps its connection. `/search` and `/search/inspect` run their work while the client is connected: when it closes, the work is cancelled, and the kit's one progress handler (`SearchStatementStop`) stops the statement at its next call. The problem middleware logs it at debug level and answers 499, which reaches no one.
+- **The kept results:** the cache of what a served index computed lately makes a waiting request leave at once when it is cancelled. The results a date order keeps are stopped once no request waits for them, as the Mac stops a replaced search; a facet section runs to its end and is kept, since nothing stops the kit's facet pass on the Mac either.
+- **The browser app** already abandoned a search it replaced: TanStack Query aborts a fetch whose query loses its last observer, and the browser then closes the connection. A unit test pins it.
+- **On the full 1776 export,** an exact-word search (`=Soviet`) whose client gave up after a few seconds: with S12b's image the server held a core at 100% for at least 25 seconds after; with this branch's, it was idle within about a second, and its log said "GET /api/v1/search stopped: the client closed its connection before the answer".
+- **End to end in Chromium,** the desktop app's browser, on the same install: an `=Soviet` search from the box, then another typed over it while the first ran. The server logged the first one's stop and was idle by the next sample, and the second answered, 722 documents.
+
+**The pages and rows 1.0's index changed** (#1746, #1747)
+
+- **A section's row dated by its documents** comes through the API with its span and its words, as above.
+- **Cross-volume page references under rule C:** the fixture pages hold 31 links to a printed page of another volume, into 6 volumes. Through the API each is that page, which this server, holding only the three fixture volumes, cannot place. The bundled page map names a document for 19 of them, and 1.0's index stores 17 of those against it, frus1894Nicaragua d15's page 469 of frus1889 becoming d173 among them; the rest the index leaves on the page. A new parity test asserts each link's answer and those counts.
+- **The landing** the app gives such a link since #1778 is `PageLink`, app code until #1784; the web edition serves it from the pin move past `af41efa4`. `docs/prep/README.md` says how.
+
+**The upstream pull request:** [FRUS-Explorer#1784](https://github.com/joshbotts/FRUS-Explorer/pull/1784), "Where a link to a whole volume or a printed page goes is FRUSCoreKit's, so FRUS Explorer Light can follow one as both readers do", labelled `Mac`, with "Mac verification requested".
+
+- **The change:** `WholeVolumeLink` and `PageLink` move, unchanged but for `public` and `Sendable`, from the app's `FRUSURLSchemeHandler.swift` to the end of the kit's `TEI/FRUSURLScheme.swift`; `FollowedPageLink` stays. `ReaderLinkTests`' three tests of them leave the app-only block. One editable-content block is re-pointed, and `CLAUDE.md` and the app's plan record it.
+- **Run here, from a clone at a real path, each heavy job under the app's lock, beside `v2` built and run the same way:**
+  - `FRUSExplorerMac`, Debug, clean, unsigned: built, with `v2`'s five warning lines. The two debug dylibs hold the same 249,388 symbols, 245,175 defined: no symbol changes;
+  - iOS 27.0 on an iPhone 17: a clean `build-for-testing`, with `v2`'s 7 warning lines; the full unit target, 7,606 tests in 900 suites, with the 8 Keychain issues an unsigned build has, as on `v2`, and the same 17 tests and 2 suites skipped;
+  - `swift build --target FRUSCoreKit`, and `swift test`: 38 runs, 3,033 tests, all passing, none skipped, against 3,030 on `v2`; `FRUSCoreKitTests` 1,147, up from 1,144;
+  - `CodingStandardsAuditTests` again at the records commit: 63 passed;
+  - Linux: this package at `main` with the branch over its submodule: FRUSCoreKitTests 1,147, every other target passing but the parity suites, whose 13 issues are all golden-file staleness.
+- **Merged** by the owner on 23 October as `af41efa4`, a squash of the branch's two commits whose tree is the branch's head byte for byte, now `v2`'s head; no Mac check results were posted on it. The pin stays at `f0479037` here: it moves only in a pull request of its own (rule 5).
+
+**A review before the pull request opened.** Three reviewers, one for the server, one for the browser app and the records, and one for #1784, each checked their own findings against the code. None found a correctness defect. Every finding below held, and all are fixed here but #1784's records:
+
+- **Turning the date order round while the kept results were computed** would have started them again. The abandoned request left the computation with no one waiting, so it was stopped, and the replacing request, for the same search, came too late: its count waited behind that computation's statement. A request now joins the kept results before it counts, and a computation no one waits for runs on for 250 ms before it is stopped, so the replacing request joins it. A test holds the grace.
+- **No test failed if the server lost its watch:** the live test built an application of its own. Both now build it with `apiApplication`.
+- **Two tests waited on sleeps.** The cache's and the closure's now wait for their waiters to register, and the closure's also covers a waiter cancelled while it waits.
+- **A request whose client had already gone** started its work before stopping it; it now stops at once. A connection reset outright before its route asks has no pipeline left and is not watched, which the code now says; a browser that abandons a request closes with a FIN, which the half-closed pipeline keeps.
+- **The browser suite's measure** read the frame by its URL and could throw while the frame was between pages; it reads the frame shown, through a locator that waits for its column. The abandoned-search test held the first search for a fixed two seconds; it now holds it until the page has abandoned it.
+- **The install guide** gave Chromium's line lengths without saying so; it gives the app's too. SPEC named the app's wrong route for the measure, and its focus sentence left out Reading Width.
+- **The rule-C test** printed its 19 and 17 and asserted neither; it asserts both.
+- **#1784's records** say "unchanged and public" where the types are also `Sendable`, and `FRUSURLScheme`'s own history logs no move. It had merged by then, so these wait for the next web-authored upstream pull request (Notes).
+- A doc comment the new parity test had pushed above the wrong test is back on its own.
+
+Refuted, among others: a double resume or a lost wakeup in the closure or the cache, a close the pipeline would not deliver, a facet section stopped while it was still wanted, an abort test that could pass for the wrong reason, and wording unlike the Mac's.
+
+**Records**
+
+- `PLAN.md` and its shared copy (rev 188): the session intro, S12d's row, Mac check 7, done once #1784 merged, the risk row and S12c's answers. The file's flowchart gains Mac check 7; the shared copy's diagram covers phase 1's sessions only, as before.
+- `SPEC.md`: the reader's measure, the search rows' dates, a replaced search, and the API's `readingWidth` and date fields.
+- `INSTALL.md`: dates in the results, a replaced search, Reading Width and the API's `readingWidth` and `drawnDate`.
+- `COORDINATION.md`: §1's use of the kit at the 1.0 pin with the Reading Width mirror, and §5's list of web-authored pull requests, with #1784.
+- `docs/prep/README.md`: how to serve the landing after #1784 merges. The README's Status and this log.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** through CI's Test step, after the review's fixes: all 2,050 tests pass, up from 2,037, with the one named skip. FRUSLightServerTests runs 100, up from 91, and FRUSParityTests 111, up from 107; the other targets are unchanged.
+- **The browser app:** typecheck and lint are clean, and 67 unit tests pass in 14 files, up from 64 in 13.
+- **`scripts/compose-smoke --e2e`** on this branch's image, built again after the review's fixes: passes, with 16 browser tests on Chromium, up from 13. The new ones draw the rows' dates, use the Reading Width from the keyboard with its measure read from the page, and replace a search under way, and run axe after each; the note-focus test also changes the Reading Width. It finds nothing.
+
+**Notes**
+
+- **The S12b install** on port 8082, `frus-s12b` in `~/Library/Caches/frus-s12b/compose`, now runs this branch's image, `frus-light:s12c`, over the full 1776 export, for the owner to try. `docker compose down --volumes` in that folder removes it and its 2.9 GB volume. S10's install on 8081 and the owner's on 8080 were left as they were.
+- **A client that half-closes** its connection while it waits for an answer is taken to have gone, as Go's server takes it. No browser does; `nc -N` would.
+- **#1784's records, for the next web-authored upstream pull request:** the moved types' version-history lines, the handler's 1.10, `CLAUDE.md` and the amendment log say "unchanged and public" and leave out `Sendable`, which the pull request's body and the app's session entry name; and `FRUSURLScheme`'s own history logs no 1.4 for the move. A review found them after the merge, with nothing else; none changes what the code does.
+- The upstream clone, its build folders and a scratch worktree of this repository are under `~/Library/Caches/frus-s12c`.
+
+**Next: S11f,** the timeline and concordance readings, since the app has not tagged `version-1.0`. **S12d** follows once it does, and serves the page-map landing too, since #1784 merged first; a pin move of its own to `af41efa4` can serve the landing sooner, if the owner wants it before the tag.
+
 ## Session 12b: pin move to `build-51`, FRUS Explorer 1.0 (build 1776)
 
 22 October 2026 · branch `claude/s12b-pin-build51-544354` · upstream `f0479037` (tag `build-51`)
