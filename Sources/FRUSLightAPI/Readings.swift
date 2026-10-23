@@ -213,8 +213,9 @@ enum ReadingRoutes {
         String(String.UnicodeScalarView(dateISO.unicodeScalars.prefix(4)))
     }
 
-    /// The concordance of the page `search` asks for, as `/search` cuts it. It counts nothing: the
-    /// list it is a page of has its count from `/search`.
+    /// The concordance of the page `search` asks for, as `/search` cuts it, and as `/search` kept it
+    /// lately, so the page on screen is not fetched again. It counts nothing: the list it is a page of
+    /// has its count from `/search`.
     static func concordance(_ search: SearchRequest, served: ServedIndex, resources: ServerResources) async throws -> SearchConcordance {
         let results = try await SearchRoutes.page(search, served: served)
         let built = try await served.service.concordance(for: results, parameters: search.parameters)

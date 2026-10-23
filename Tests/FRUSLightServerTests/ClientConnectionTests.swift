@@ -1,7 +1,8 @@
 // A search whose client goes stops its statements (upstream #1698): over a real connection, the
 // kit's statement is held at its test hook until the client closes its socket, and the progress
 // handler then stops it. And the cache of what an index computed lately: a request that is cancelled
-// stops waiting, and a search no request waits for any more is stopped.
+// stops waiting, a search no request waits for any more is stopped, and a page or a count kept is
+// not asked of the kit again (S13b).
 
 #if canImport(Glibc)
 import Glibc
@@ -163,10 +164,10 @@ func eventually(_ condition: () -> Bool) async throws -> Bool {
           FROM document_cache WHERE document_id GLOB 'x*';
         """
 
-    /// The client closes its socket while the search's first statement, the count, is held at its
-    /// start: the request's task is cancelled, and the statement, let go, is stopped by the progress
-    /// handler before its end. The server goes on answering, and a search whose client stays gets
-    /// its answer, each statement run to its end.
+    /// The client closes its socket while the search's first statement, its page's or its count's, is
+    /// held at its start: the request's task is cancelled, and the statement, let go, is stopped by the
+    /// progress handler before its end, and the other is never prepared. The server goes on answering,
+    /// and a search whose client stays gets its answer, each statement run to its end.
     @Test func aSearchWhoseClientLeavesStopsItsStatement() async throws {
         let fixture = try await servingSyntheticExport(edits: Self.manyDocuments)
         let provider = ServedIndexProvider(state: fixture.state, resources: fixture.resources,
@@ -314,6 +315,52 @@ func eventually(_ condition: () -> Bool) async throws -> Bool {
         #expect(try await kept.value(for: "a") { try await gate.compute(2) } == 1)
         let (started, cancelled) = (await gate.started, await gate.cancelled)
         #expect(started == 1 && cancelled == 0)
+    }
+}
+
+/// How many search statements the kit prepared, from the pipeline's test hook.
+final class StatementTally: Sendable {
+    private let count = Mutex(0)
+
+    var prepared: Int { count.withLock { $0 } }
+
+    var hook: @Sendable (SearchStatementMoment) -> Void {
+        { moment in
+            if case .prepared = moment { self.count.withLock { $0 += 1 } }
+        }
+    }
+}
+
+@Suite struct RecentSearchesTests {
+    /// The page `/search` fetched is the concordance's page, and the count it counted is the next
+    /// page's, so an exact word's search reads its match once for each while they are kept, and each
+    /// answer is the one it gave first. Another search asks the kit for its own.
+    @Test func aPageAndACountAreEachAskedOfTheKitOnce() async throws {
+        let fixture = try await servingSyntheticExport()
+        let provider = ServedIndexProvider(state: fixture.state, resources: fixture.resources,
+                                           volumesDirectory: fixture.files.volumesDirectory)
+        let statements = StatementTally()
+        let served = try await provider.served()
+        await served.pipeline.setSearchStatementTestHook(statements.hook)
+        let app = Application(router: buildRouter(state: fixture.state, resources: fixture.resources,
+                                                  reader: fixture.reader, provider: provider))
+        try await app.test(.router) { client in
+            func get<T: Decodable>(_ type: T.Type, _ uri: String) async throws -> T {
+                try decode(type, try await client.execute(uri: uri, method: .get))
+            }
+            let first = try await get(SearchResultList.self, "/api/v1/search?keywords=%3Dnegotiating")
+            #expect(first.total == 2 && first.items.count == 2)
+            #expect(statements.prepared == 2, "the page and the count")
+            let concordance = try await get(SearchConcordance.self, "/api/v1/search/concordance?keywords=%3Dnegotiating")
+            #expect(concordance.documentsOnPage == 2 && statements.prepared == 2, "the concordance read the page /search fetched")
+            let again = try await get(SearchResultList.self, "/api/v1/search?keywords=%3Dnegotiating")
+            #expect(again == first && statements.prepared == 2, "the same page and count, as kept")
+            let next = try await get(SearchResultList.self, "/api/v1/search?keywords=%3Dnegotiating&limit=1&offset=1")
+            #expect(next.total == 2 && next.items.map(\.documentId) == [first.items[1].documentId])
+            #expect(statements.prepared == 3, "the next page alone, with the count kept")
+            let other = try await get(SearchResultList.self, "/api/v1/search?keywords=treaties")
+            #expect(other.total == 2 && statements.prepared == 5, "another search's page and count")
+        }
     }
 }
 

@@ -1,8 +1,45 @@
-// What one served index computed lately, by what was asked: the facets' sections, and the results
-// the app keeps of a search, so the same question asked again costs no second computation.
+// What one served index computed lately, by what was asked: the facets' sections, the results the
+// app keeps of a search, and the pages and counts of searches by relevance, so the same question
+// asked again costs no second computation.
 
 import FRUSCoreKit
 import Foundation
+
+/// The pages and counts of the searches asked for lately by relevance over one served index (S13b):
+/// the page `/search` fetched, which the concordance of that page reads, even while it is fetched, and
+/// the count every page of a search shows, which its next page needs again. A search with an exact word
+/// reads every row its stem matches, for its page and again for its count; the Mac's window, which
+/// keeps what it fetched and pages it, asks for neither twice, and nor does the server while it keeps
+/// them.
+///
+/// Each is kept by the query fields that say its search, and a page by its limit and offset too. A
+/// page holds at most 100 results with their snippets, well under a megabyte. A page or a count no
+/// request waits for any more is stopped at once, with no grace, as `/search` stopped its own when its
+/// client went before it kept them (#1698).
+public struct RecentSearches: Sendable {
+    let pages: RecentComputations<[SearchResult]>
+    let counts: RecentComputations<Int>
+
+    public init(capacity: Int = 4) {
+        pages = RecentComputations(capacity: capacity, stopsAbandoned: true, grace: .zero)
+        counts = RecentComputations(capacity: capacity, stopsAbandoned: true, grace: .zero)
+    }
+
+    /// The page `search` asks for, by relevance, as kept lately or as the search service ranks it.
+    func page(of search: SearchRequest, service: SearchService) async throws -> [SearchResult] {
+        try await pages.value(for: "\(search.limit) \(search.offset) \(SearchRequest.signature(search.parameters))") {
+            try await service.search(parameters: search.parameters, limit: search.limit, offset: search.offset)
+        }
+    }
+
+    /// The count of every document the search `parameters` say matches, as kept lately or as the search
+    /// service counts it.
+    func count(of parameters: SearchParameters, service: SearchService) async throws -> Int {
+        try await counts.value(for: SearchRequest.signature(parameters)) {
+            try await service.searchCount(parameters: parameters)
+        }
+    }
+}
 
 /// The results the app keeps of each search ordered lately by date over one served index: the first
 /// 7,500 the kit ranks, as the Mac's search window keeps them, which the date order sorts whole

@@ -22,6 +22,8 @@ public final class ServedIndex: Sendable {
     public let facets = FacetCache()
     /// The results the app keeps of each search run lately over this index, for its date order.
     public let retained = RetainedResults()
+    /// The pages and counts of the searches run lately by relevance over this index.
+    public let recent = RecentSearches()
 
     /// Opens the stack, and refuses it unless the path still named the file `corpus` opened before
     /// the first open and after the last: an import renames its new file over the path before the
