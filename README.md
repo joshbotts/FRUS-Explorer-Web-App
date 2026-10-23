@@ -17,8 +17,7 @@ Phase 1 is done: a Docker Compose install that serves a FRUS Explorer research e
 
 **Known gaps**
 
-- **Behind FRUS Explorer 1.0's last step.** The pin is 1.0 build 1776, the TestFlight build, at index version 71, with [FRUS-Explorer#1784](https://github.com/joshbotts/FRUS-Explorer/pull/1784) one commit after it: the server serves that build's exports, and its image is also tagged `:1.0-1776`. The App Store build, 1861, waits for S12d.
-- **Exact-word search is slow over a full corpus,** up to about a minute, as it is in the app at this build: a search with `=word` reads every document whose words share its stem. [FRUS-Explorer#1785](https://github.com/joshbotts/FRUS-Explorer/pull/1785) takes it under 1.3 seconds with the same results, and the server serves it from the pin move after the owner's Mac check and merge. Meanwhile the server keeps a search's page and count, so the concordance of a page reads the page it found, and the next page does not count the search again.
+- **Behind FRUS Explorer 1.0's last step.** The pin is 1.0 build 1776, the TestFlight build, at index version 71, with [FRUS-Explorer#1784](https://github.com/joshbotts/FRUS-Explorer/pull/1784) and [FRUS-Explorer#1785](https://github.com/joshbotts/FRUS-Explorer/pull/1785), the two commits after it: the server serves that build's exports, and its image is also tagged `:1.0-1776`. The App Store build, 1861, waits for S12d.
 - **Later phases:**
   - no notes, highlights or collections on the web (phase 2);
   - no accounts, sharing beyond localhost, or indexing from TEI on the server (phase 3);
@@ -27,9 +26,8 @@ Phase 1 is done: a Docker Compose install that serves a FRUS Explorer research e
 
 **Next**
 
-1. **Faster exact-word search**: the owner's Mac check and merge of [FRUS-Explorer#1785](https://github.com/joshbotts/FRUS-Explorer/pull/1785), then the pin move past it, S12d's or one of its own (S13b).
-2. **S12d**, once the app tags `version-1.0`: the pin moves to 1.0 build 1861, the App Store build, and CI publishes `:1.0-1861`.
-3. **Phase 2**: user data and its nightly backup.
+1. **S12d**, once the app tags `version-1.0`: the pin moves to 1.0 build 1861, the App Store build, and CI publishes `:1.0-1861`.
+2. **Phase 2**: user data and its nightly backup.
 
 ## Goals
 

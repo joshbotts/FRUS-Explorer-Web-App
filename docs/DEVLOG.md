@@ -2,6 +2,68 @@
 
 One entry per session, newest first.
 
+## Session 13c: pin move past FRUS-Explorer#1785, the exact-word speed
+
+23 October 2026 · branch `claude/s13c-pin-2767a128-62cc02` · upstream `2767a128`
+
+The pin moves from `af41efa4` to `2767a128`, the owner's merge of [FRUS-Explorer#1785](https://github.com/joshbotts/FRUS-Explorer/pull/1785) the same day, so the server's exact-word filter reads each text as bytes, with the same results: through the API, each of S13b's 45 exact-word queries now takes under two seconds over the full corpus, where such a search took about a minute. S13b's log offered the move with S12d or as one of its own; the owner chose one of its own, under rule 5, before `version-1.0` was tagged.
+
+**What the move brought**
+
+- **One commit,** byte for byte the head of #1785's branch (`f61ca061`). In shared code, `FTS5Store/ExactWordMatcher.swift` gains `Word` and `contains(_:inUTF8:)`, the byte reading, through which `contains(word:in:)` now answers, and keeps the old body as `containsByFolding(word:in:)`. In `FRUSCoreKit/Search/IndexingPipeline.swift`, `frus_exact_word` reads the bytes SQLite holds and keeps its folded word with the statement (`ExactWordArgument`), and `exactWordFunctionForTesting` lets the tests call it. `FRUSURLScheme.swift` gains history lines only. `ExactWordMatcherTests` gains a suite of 7 tests and `ExactWordSearchTests` 3, so FTS5StoreTests runs 219 (from 212) and FRUSCoreKitTests 1,150 (from 1,147). The rest is the app's records.
+- **No repair.** The package builds with no warning, every kit suite passes, and the only skip is the named one. The two test files sit in folders `Package.swift` already compiles. The build (1.0, 1776), the index version (71), the FTS generation (4), the export's schema (`setupDatabase(_:)` is the same text, now at lines 7759–8414), the kit folders, the app's source folders and CI's allow-list are unchanged, so `Compatibility.swift` and the install guide's versions stand, and `scripts/release-tag` still says `1.0-1776`.
+
+**Nothing the indexer runs changed.** `git diff af41efa4 2767a128` over COORDINATION §5's indexing path:
+
+- **The parser, SourceNoteKit and `FRUSExplorer/Resources`:** no change; the six changed lines of `FRUSURLScheme.swift` are comments.
+- **`IndexingPipeline.swift`:** the history line 4.46; `registerExactWordFunction(_:)`'s comment and the closure SQLite calls for `frus_exact_word`; `ExactWordArgument`, which keeps the folded word; and `exactWordFunctionForTesting`, which only the tests call. The pipeline registers the function on its connection (`auxDb`) when it opens it, and outside the tests only one statement names it: the condition each exact term adds to a search's `WHERE`, `frus_exact_word(dc.<column>, ?) = 1` over the columns `SearchService.exactColumns(for:)` gives, which a search's page and count share. No statement that writes the index calls it.
+- **FTS5Store:** `ExactWordMatcher.swift` alone. `word(_:)`, `normalize(_:)` and `tokens(in:)`, which give the index word the query parser keys an `=` mark on, are unchanged; `contains(word:in:)`, which only the SQL function called, answers through the byte reading.
+
+So the owner's 1776 three-volume export holds what the indexer at `2767a128` would write, and the golden files were remade from it, on the owner's word.
+
+**The golden files**, remade by `scripts/make-golden --export /Users/Shared/frus-index-build1776-golden.sqlite` under the app's `Scripts/heavy.sh` lock:
+
+- The 393 rows' HTML is byte for byte as before; the render's manifest, the expressions and the results change only in `sourceDigest` (`cd37102d321b` to `d99bca0de69c`) and `upstreamCommit`.
+- The index summary's gating section, its 36 digests, 7 checks and volumes, is unchanged. Beside its provenance, only four of its information section's timings moved, which record how long this run took to hash a table.
+- `frus-parity check-golden` passes.
+
+**Through the API at the new pin,** in a Compose install of its own, `frus-s13c` on port 8086, with the owner's full 1776 export imported once (321,749 documents in 553 volumes, served 59 s after the copy began), on this branch's image, `frus-light:s13c`, built locally: S13b's 45 exact-word parity queries, one `/api/v1/search` each, its count and first page of 20 as the browser app asks them, one after another, in one pass, under the heavy-job lock so no build ran beside it:
+
+| Per request | The API at `2767a128` | The kit at #1785's branch (S13b, Linux) |
+| --- | --- | --- |
+| The 45 in all | 16.9 s | 15.3 s |
+| Median | 0.39 s | 0.37 s |
+| p95 | 1.07 s | 0.90 s |
+| Slowest | 1.63 s, `=containment` | 1.08 s, `=negotiators` |
+
+- **The slowest was the first request** after the server started on the new image. Every other took 1.14 s at most (`=negotiators`), and each was within 0.17 s faster and 0.27 s slower than the same request through the kit, the median 0.01 s slower.
+- **Every result as the kit gives it.** Each count was the kit-level run's, and `frus-parity results --api` read check 3's records of the 45 through the API, counts, first 50 results and tie tails with their score bits, which `compare-results` found "45 queries, 45 identical and 0 reordered only within Mac tie groups" against S13b's Linux records from before the fix and from after it.
+- **Measured right after the browser suite,** at a load average of 8 falling to 7.6, in Docker Desktop's VM with 10 CPUs and 8 GB; check 12's 4 vCPU host is still phase 5's.
+
+**Records**
+
+- `PLAN.md` and its shared copy (rev 212): the session intro, the flowchart (`PLAN.md`'s; the shared copy's drawing ends at phase 1), S13c's row, S12d's row (from `2767a128`), the golden-files checkpoint, Mac check 8, the two risk rows and S13c's answers.
+- `SPEC.md`: check 12's measurement at the pin, the compatibility contract, and `setupDatabase(_:)`'s lines.
+- `INSTALL.md`: an exact-word search's time over a whole corpus.
+- `COORDINATION.md`: the pin; §1's use of the kit; §2's paragraph on #1785, now merged, and on this move; §5's rule for reusing an export; and §6's exports.
+- `docs/prep/README.md`: the pin. The README's Status and this log.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** through CI's Build and Test steps, this package's own targets built clean: all 2,085 tests pass, up from 2,075, with the one named skip. FTS5StoreTests runs 219 (from 212) and FRUSCoreKitTests 1,150 (from 1,147); the other targets are unchanged, FRUSParityTests at 122 and FRUSLightServerTests at 111. Before the golden files were remade, the only failures were the parity suites' 13 issues of golden-file staleness. Against the remade golden files the run printed:
+  - "check 2 passes: 36 digests and 7 checks are the Mac's";
+  - "check 3's results pass: 482 queries, 482 identical and 0 reordered only within Mac tie groups", and the same through the API;
+  - "check 4 through the page: 393 of 393 rows identical", and the same on the reader's path and from one full parse per volume.
+- **`scripts/compose-smoke --e2e`** on this branch's image: passes, with 21 browser tests on Chromium, and axe finds nothing.
+
+**Notes**
+
+- **The `frus-s13c` install** was removed with `docker compose -p frus-s13c down -v`, its volume with it; the owner's install on 8080 was left as it was.
+- **Builds in a new worktree:** the Linux build reused S13b's `.build/linux` through an APFS clone (`cp -c`) and built this package's own targets clean in 53 seconds; `make-golden`'s two native tools built from empty, and the whole script ran in under six minutes; the image built from its cache mount in under a minute.
+- **Scratch:** the timing's scripts, `api-45.py` (each query's form as `APIParity.formEncode` writes it) and `api-timing.sh`, with their records and the Compose folder, are under `~/Library/Caches/frus-s13c`.
+
+**Next: S12d**, once the app's repository tags `version-1.0` (build 1861), moving the pin on from `2767a128`; beside it, the first session of phase 2, as phase 2's plan in `PLAN.md` names it.
+
 ## Session 13b: the speed of exact-word search
 
 23 October 2026 · branch `claude/s13b-exact-word-speed-111511` · upstream `af41efa4`, unchanged; [FRUS-Explorer#1785](https://github.com/joshbotts/FRUS-Explorer/pull/1785) open

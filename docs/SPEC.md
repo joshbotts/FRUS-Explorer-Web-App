@@ -292,7 +292,7 @@ The corpus index keeps the Mac schema exactly: same tables, columns, tokenizer a
 | Subjects | `document_subjects`, `document_subject_refs`, `document_subject_volumes` | integer positions resolved through `document-subject-index.json` |
 | Export only | `research_provenance`; views `research_documents`, `research_cross_references`, `research_suppressed_volumes` | written by the Mac exporter; the web exporter writes the same |
 
-The table definitions live in `FRUSCoreKit/Search/IndexingPipeline.swift` (`setupDatabase(_:)`, lines 7680–8335 at f0479037 and af41efa4, and 6968–7623 at c6f7b2cb and at 757c6d29, the same text, as at 34a5120 but for one partial index, `idx_document_cache_user_tag_ids`, added on 9 October with no index version (#1614)); the FTS5 definitions come from `FTS5Store/FTS5Types.swift`. `Docs/Agentic-Analysis-Guide.md` §4 documents every column and its traps.
+The table definitions live in `FRUSCoreKit/Search/IndexingPipeline.swift` (`setupDatabase(_:)`, lines 7759–8414 at 2767a128, 7680–8335 at f0479037 and af41efa4, and 6968–7623 at c6f7b2cb and at 757c6d29, the same text, as at 34a5120 but for one partial index, `idx_document_cache_user_tag_ids`, added on 9 October with no index version (#1614)); the FTS5 definitions come from `FTS5Store/FTS5Types.swift`. `Docs/Agentic-Analysis-Guide.md` §4 documents every column and its traps.
 
 ### Verified on this review's host
 
@@ -300,7 +300,7 @@ The Mac's `document_cache`, `frus_documents`, `frus_documents_vocab`, `user_cont
 
 ### Compatibility contract
 
-1. `SUPPORTED_INDEX_VERSION` is a build constant equal to `IndexingPipeline.currentDateIndexVersion` at the image's commit: 65 at 34a5120, at f69b4a0a, at 101e17d7 and at f384d2d5, 69 at c6f7b2cb and 757c6d29, app build 50, and 71 at f0479037 and af41efa4, app 1.0 (build 1776). The server serves no other version.
+1. `SUPPORTED_INDEX_VERSION` is a build constant equal to `IndexingPipeline.currentDateIndexVersion` at the image's commit: 65 at 34a5120, at f69b4a0a, at 101e17d7 and at f384d2d5, 69 at c6f7b2cb and 757c6d29, app build 50, and 71 at f0479037, af41efa4 and 2767a128, app 1.0 (build 1776). The server serves no other version.
 2. The FTS schema generation is 4, stored in `PRAGMA user_version` (`FTS5Connection.currentSchemaGeneration`).
 3. Identity is `(volume_id, document_id)`. `document_cache.rowid` is never persisted, exposed or compared across copies; `VACUUM` may renumber it.
 4. Copies use the SQLite backup API. A WAL database is never copied with `cp`.
@@ -962,14 +962,14 @@ The performance targets and the cosine threshold are proposals for phase 0 to co
 
 **Check 12, so far: exact-word search.** S10 made the first measurement, over the owner's full export from build 50: the 10 exact-word queries that outran a client's minute took 21 requests in 989 seconds through the API, about 47 each, the slowest 66, and the Mac app's own search was as slow. S13b found the cost in the kit's exact-word filter, `frus_exact_word`, which folded and split every candidate's whole text with Foundation, and fixed it upstream, in [FRUS-Explorer#1785](https://github.com/joshbotts/FRUS-Explorer/pull/1785): the filter reads each text's bytes and gives the same answers. `frus-parity time-search <export>` times each query's first page of 20 and its count through FRUSCoreKit's SearchService, over the export opened as the server opens it; by default it takes the 45 parity queries that apply an exact term. Over the owner's 1776 export, the same file on both platforms, per request (page and count):
 
-| | Mac, native, before | Mac, after | Linux, container, before | Linux, after |
-| --- | --- | --- | --- | --- |
-| The 45 requests | 1,343 s | 18.2 s | 1,400 s | 15.3 s |
-| Median | 27.3 s | 0.46 s | 30.7 s | 0.37 s |
-| p95 | 62.7 s | 0.97 s | 63.6 s | 0.90 s |
-| Slowest | 77.7 s | 1.29 s | 69.6 s | 1.08 s |
+| | Mac, native, before | Mac, after | Linux, container, before | Linux, after | Linux, the API at the pin |
+| --- | --- | --- | --- | --- | --- |
+| The 45 requests | 1,343 s | 18.2 s | 1,400 s | 15.3 s | 16.9 s |
+| Median | 27.3 s | 0.46 s | 30.7 s | 0.37 s | 0.39 s |
+| p95 | 62.7 s | 0.97 s | 63.6 s | 0.90 s | 1.07 s |
+| Slowest | 77.7 s | 1.29 s | 69.6 s | 1.08 s | 1.63 s |
 
-After the fix, the 7,500 results a search keeps, which the Mac's window fetches beside its count and the server's date order and timeline read, take 2.6 s at most. Through the API of a Compose install, `/search` for `=containment` and `=Soviet` went from 58 and 60 s to 0.84 and 0.55 s, and every other exact-word search measured took 1.4 s at most; a search's concordance, and a search asked again, take hundredths, since the server keeps its page and count. "After" is the upstream branch, measured before its merge; the served index gets it with the pin move past the merge. The Mac is an M5 MacBook Air, the container Docker Desktop's VM with 10 CPUs and 8 GB, so check 12's 4 vCPU host is still to be measured.
+After the fix, the 7,500 results a search keeps, which the Mac's window fetches beside its count and the server's date order and timeline read, take 2.6 s at most. Through the API of a Compose install, `/search` for `=containment` and `=Soviet` went from 58 and 60 s to 0.84 and 0.55 s, and every other exact-word search measured took 1.4 s at most; a search's concordance, and a search asked again, take hundredths, since the server keeps its page and count. "After" is the upstream branch, measured before its merge. The last column is S13c's pin move to the merge, `2767a128`: the 45 queries through the API of a Compose install of this repository's image, over the same export, one `/search` each, its count and first page of 20 as the browser app asks them, in one pass. Its slowest was the first request after the server started, `=containment`; every other took 1.14 s at most (`=negotiators`), within 0.27 s of the same request through the kit. Every count was the kit's, and check 3's records of the 45, read through the API, were identical to those the kit gave before and after the fix. The Mac is an M5 MacBook Air, the container Docker Desktop's VM with 10 CPUs and 8 GB, so check 12's 4 vCPU host is still to be measured.
 
 **Against a real export.** S10 first ran checks 3–5 on the owner's full export, imported into a Compose install whose TEI folder is a clone of HistoryAtState/frus at the corpus the export indexed. A release runs them the same way:
 - **Check 3:**
