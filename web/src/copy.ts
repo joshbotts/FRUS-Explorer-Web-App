@@ -10,7 +10,11 @@
 // re-indexing on the Mac, are replaced; the facet panel's titles, rows, controls and captions,
 // with its filter tokens' field names, but for a sentence about the Mac's library; and the Query
 // Inspector's strip, the search window's view of a search that found nothing, and its sort bar's
-// label and tooltips, where "this device" and "you have indexed" become this server; and the line a
+// label and tooltips, where "this device" and "you have indexed" become this server; the Reading
+// picker and its tooltip, the timeline's Chart and List, its lines for loading, for no dated
+// documents and for the undated, and its caption for a search kept in part, and the concordance's
+// Align by, its count, its view of no aligned occurrences and its two notes of what it left out,
+// with the singulars the Mac's count and notes lack; and the line a
 // volume's page shows when a page link opened it, where "isn't downloaded" becomes what this server
 // lacks of the volume. The rest,
 // chiefly what only a server has (what it indexes, which TEI it holds), are the web's own until
@@ -94,6 +98,59 @@ export const copy = {
       dateAscending: 'Sort by document date, oldest first. Undated documents go to the end.',
       dateDescending: 'Sort by document date, most recent first. Undated documents go to the end.',
     } as Record<string, string>,
+  },
+  /** The Reading picker, as the Mac's window titles it, and the set each reading covers, from its tooltip. */
+  readings: {
+    label: 'Reading',
+    help: 'How to read these results. The concordance covers this page; the others cover the whole retained set.',
+    titles: { list: 'List', timeline: 'Timeline', concordance: 'Concordance' },
+  },
+  timeline: {
+    /** The mode picker's name, which the Mac's segmented picker hides. */
+    viewMode: 'View mode',
+    modes: { chart: 'Chart', list: 'List' },
+    loading: 'Loading timeline…',
+    emptyTitle: 'No Dated Documents',
+    emptyDetail: 'None of these documents have machine-readable dates.',
+    undated: (count: number) =>
+      `${count.toLocaleString('en-US')} ${count === 1 ? 'document' : 'documents'} without a reliable date excluded from the timeline.`,
+    /** Above the chart when the search keeps only part of its match: the shape is a ranking's. */
+    bias: 'These are the highest-scoring matches, not a sample across time — this shape is theirs, not the whole match’s.',
+    /** The chart's axes, as the Mac's chart names them. */
+    year: 'Year',
+    documents: 'Documents',
+    /** The chart's name for assistive technology, and the web's own words for its table. */
+    chartLabel: (first: string, last: string, documents: number, years: number) =>
+      first === last
+        ? `Documents per year: ${documents.toLocaleString('en-US')} in ${first}`
+        : `Documents per year, ${first} to ${last}: ${documents.toLocaleString('en-US')} in ${years.toLocaleString('en-US')} years`,
+    table: 'Table of the counts',
+    /** What the chart says of the bar under the pointer. */
+    readout: (year: string, count: number) => `${year}: ${count.toLocaleString('en-US')} ${count === 1 ? 'document' : 'documents'}`,
+    failed: 'The timeline could not be computed.',
+  },
+  concordance: {
+    alignBy: 'Align by',
+    /** Unqualified on one page, where “on this page” says nothing. */
+    count: (occurrences: number, documentsOnPage: number, singlePage: boolean) =>
+      `${occurrences.toLocaleString('en-US')} ${occurrences === 1 ? 'occurrence' : 'occurrences'}${
+        singlePage ? '' : ` in the ${documentsOnPage.toLocaleString('en-US')} ${documentsOnPage === 1 ? 'document' : 'documents'} on this page`
+      }`,
+    emptyTitle: 'No Aligned Occurrences',
+    emptyDetail:
+      'These results matched, but none of their text could be aligned on your search term. Phrase, wildcard and proximity searches match in ways a concordance cannot center on a single word.',
+    omitted: (count: number, limit: number) =>
+      count === 1
+        ? `1 further occurrence isn’t shown — each document contributes at most ${limit.toLocaleString('en-US')} lines.`
+        : `${count.toLocaleString('en-US')} further occurrences aren’t shown — each document contributes at most ${limit.toLocaleString('en-US')} lines.`,
+    unaligned: (count: number) =>
+      count === 1
+        ? '1 matching document contributed no line — its match isn’t a whole word this view can center on.'
+        : `${count.toLocaleString('en-US')} matching documents contributed no line — their match isn’t a whole word this view can center on.`,
+    /** The lines' name for assistive technology, the web's own. */
+    lines: 'Occurrences',
+    loading: 'Building the concordance…',
+    failed: 'The concordance could not be built.',
   },
   inspector: {
     /** The strip's name for assistive technology; the Mac's strip shows no title. */

@@ -3,8 +3,10 @@ import {
   applySearchChange,
   clampOffset,
   filterFields,
+  isPaged,
   isPartialEvidence,
   pageCount,
+  readings,
   retainedLimit,
   searchFields,
   validateSearch,
@@ -138,5 +140,36 @@ describe('the order', () => {
     expect(isPartialEvidence(7_499)).toBe(false);
     expect(isPartialEvidence(7_500)).toBe(true);
     expect(isPartialEvidence(195_519)).toBe(true);
+  });
+});
+
+describe('the reading', () => {
+  it('keeps the timeline or the concordance, leaves the list out as the default, and never sends it', () => {
+    expect(validateSearch({ reading: 'timeline' }).reading).toBe('timeline');
+    expect(validateSearch({ reading: 'concordance' }).reading).toBe('concordance');
+    expect(validateSearch({ reading: 'list' }).reading).toBeUndefined();
+    expect(validateSearch({ reading: 'collocates' }).reading).toBeUndefined();
+    expect('reading' in searchFields({ keywords: 'x', reading: 'concordance' })).toBe(false);
+    // A narrowing keeps the reading as it is shown, as the Mac's window keeps it from search to search.
+    expect(applySearchChange({ keywords: 'x', reading: 'timeline', timelineMode: 'list' }, { personRollupId: ['1'] })).toMatchObject({
+      reading: 'timeline',
+      timelineMode: 'list',
+    });
+    expect(applySearchChange({ keywords: 'x', reading: 'concordance', align: 'date' }, { personRollupId: ['1'] }).align).toBe('date');
+  });
+
+  it('keeps the timeline’s list and the concordance’s other orders, and leaves their defaults out', () => {
+    expect(validateSearch({ timelineMode: 'list' }).timelineMode).toBe('list');
+    expect(validateSearch({ timelineMode: 'chart' }).timelineMode).toBeUndefined();
+    expect(validateSearch({ align: 'rightContext' }).align).toBe('rightContext');
+    expect(validateSearch({ align: 'volume' }).align).toBe('volume');
+    expect(validateSearch({ align: 'leftContext' }).align).toBeUndefined();
+    expect(validateSearch({ align: 'document' }).align).toBeUndefined();
+    const fields = searchFields({ keywords: 'x', reading: 'timeline', timelineMode: 'list', align: 'date' });
+    expect(['reading', 'timelineMode', 'align'].filter((name) => name in fields)).toEqual([]);
+  });
+
+  it('pages the list and the concordance, which show one page, and not the timeline, which shows all the search keeps', () => {
+    expect(readings.filter(isPaged)).toEqual(['list', 'concordance']);
   });
 });

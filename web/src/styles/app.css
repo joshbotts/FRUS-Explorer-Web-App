@@ -19,6 +19,9 @@
   /* A micro-tag's ground, under secondary text at 4.5:1 or more. */
   --tag: #e8e8ed;
   --focus: #0a58b8;
+  /* A chart's one series: the accent on light, and on dark a step of its own, inside the dark band
+     of lightness, at 3:1 or more on the page (checked with the dataviz validator). */
+  --chart-mark: #0a58b8;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 16px;
   line-height: 1.5;
@@ -38,6 +41,7 @@
   --warning: #ffb259;
   --tag: #3a3a3c;
   --focus: #6cb2ff;
+  --chart-mark: #3987e5;
 }
 
 * {
@@ -544,6 +548,205 @@ button.facet-row:hover {
 
 .over-cap-mark {
   color: var(--warning);
+}
+
+/* The readings, in the results' place: the timeline and the concordance. */
+
+.empty-reading {
+  max-width: 30rem;
+  margin: 1.5rem auto;
+  text-align: center;
+}
+
+.empty-reading h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.0625rem;
+}
+
+.timeline-modes {
+  margin: 0.75rem 0 0.25rem;
+}
+
+.timeline-chart {
+  margin: 0.5rem 0;
+}
+
+.chart-readout {
+  margin: 0;
+  min-height: 1.5em;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-plot svg {
+  display: block;
+  overflow: visible;
+}
+
+/* One series in its mark colour; hairline grid and axis, recessive; ticks in secondary text. */
+.chart-column {
+  fill: var(--chart-mark);
+}
+
+.chart-column.hovered {
+  opacity: 0.7;
+}
+
+.chart-hit {
+  fill: transparent;
+}
+
+.chart-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.chart-axis {
+  stroke: var(--control-border);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.chart-tick {
+  fill: var(--text-secondary);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (forced-colors: active) {
+  .chart-column {
+    fill: CanvasText;
+  }
+
+  .chart-tick {
+    fill: CanvasText;
+  }
+}
+
+.chart-table summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+
+.chart-table table {
+  margin-top: 0.5rem;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-table th,
+.chart-table td {
+  padding: 0.125rem 1rem 0.125rem 0;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.chart-table td {
+  text-align: right;
+}
+
+.timeline-year h3 {
+  margin: 1rem 0 0.25rem;
+  font-size: 1rem;
+}
+
+.timeline-year ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.timeline-year li {
+  margin-bottom: 0.375rem;
+}
+
+.timeline-year .meta {
+  display: block;
+  font-size: 0.875rem;
+}
+
+.concordance-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin: 0.75rem 0 0.5rem;
+}
+
+/* Each line in three columns, the term between its contexts, in a monospaced face so the margins
+   line up. A column holds the kit's 60 characters a side, the Mac's natural width, and a narrower
+   screen scrolls the lines sideways rather than cut them, as the Mac's does. */
+.kwic-scroll {
+  overflow-x: auto;
+  container-type: inline-size;
+}
+
+.kwic {
+  display: grid;
+  grid-template-columns: minmax(60ch, 1fr) max-content minmax(60ch, 1fr);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+}
+
+.kwic li,
+.kwic-line {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.kwic li {
+  border-bottom: 1px solid var(--border);
+}
+
+.kwic-line {
+  column-gap: 0.75ch;
+  padding: 0.25rem 0.25rem 0.375rem;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.kwic-line:hover {
+  background: var(--surface);
+}
+
+.kwic-left,
+.kwic-right {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The left context ends at the term, so a long one loses its start, not the words beside the term. */
+.kwic-left {
+  direction: rtl;
+  text-align: right;
+}
+
+.kwic-keyword {
+  color: var(--accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* A line's document stays at the left of what the screen shows, however far its line is scrolled. */
+.kwic-source {
+  position: sticky;
+  left: 0.25rem;
+  justify-self: start;
+  max-width: calc(100cqw - 0.5rem);
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* A search that found nothing, in place of its results. */

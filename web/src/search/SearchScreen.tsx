@@ -1,26 +1,30 @@
 // Search (SPEC, Search): the query box with the app's query language, the filters, the Query
 // Inspector's strip, and a page of results in the order chosen, with the exact count and what it
-// was counted over, beside the facet panel when it is open. A result is named as the Mac's search
+// was counted over, beside the facet panel when it is open, or the results in the reading chosen
+// in their place: the timeline or the concordance. A result is named as the Mac's search
 // window names it, with the document's label beside its volume unless the title already opens with
 // its number. A facet's narrowing shows as a filter token, and a search that found nothing names
 // the term responsible, as the Mac's do.
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
-import { type FormEvent, type ReactNode, type RefObject, useId, useRef, useState } from 'react';
+import { type FormEvent, type ReactNode, type RefObject, useId, useMemo, useRef, useState } from 'react';
 import { ApiError } from '../api/client';
-import { inspectQuery, searchQuery, volumesQuery } from '../api/endpoints';
-import type { DocumentType, SearchResultList, SortOrder, Volume } from '../api/types';
+import { concordanceQuery, inspectQuery, searchQuery, timelineQuery, volumesQuery } from '../api/endpoints';
+import type { ConcordanceOrder, DocumentType, SearchResultList, SortOrder, Volume } from '../api/types';
 import { copy } from '../copy';
 import { Badge } from '../shell/Badge';
 import { FacetPanel, useFacetPanelState } from './FacetPanel';
 import { inspectorFields, QueryInspectorStrip, ZeroResult } from './QueryInspector';
+import { ConcordanceReading, ReadingPicker, TimelineReading, type TimelineMode } from './Readings';
 import {
   defaultLimit,
   documentTypes,
   filterFields,
+  isPaged,
   isPartialEvidence,
   pageCount,
   pageSizes,
+  type Reading,
   retainedLimit,
   type SearchState,
 } from './searchState';
@@ -61,6 +65,11 @@ export function SearchScreen() {
         queryKey: inspectQuery(inspectorFields(state, keywords), { emptyConjuncts: true }).queryKey,
         exact: true,
       });
+      // And the reading shown, which may have failed where the list did.
+      if (state.reading === 'timeline') {
+        void queryClient.refetchQueries({ queryKey: timelineQuery(state, state.timelineMode === 'list').queryKey, exact: true });
+      }
+      if (state.reading === 'concordance') void queryClient.refetchQueries({ queryKey: concordanceQuery(state).queryKey, exact: true });
     } else {
       update({ keywords });
     }
@@ -76,7 +85,39 @@ export function SearchScreen() {
     void navigate({ search: (previous: SearchState) => ({ ...previous, panel: open ? 'facets' : undefined }), replace: true });
   }
 
-  const titles = new Map((volumes.data?.items ?? []).map((volume: Volume) => [volume.volumeId, volume.title]));
+  /**
+   * Shows the results in another reading, in place of the history entry, as the panel opens. A
+   * timeline opens on its chart, as the Mac's opens each time it is shown; choosing the reading
+   * already shown changes nothing, as on the Mac's picker.
+   */
+  function setReading(reading: Reading) {
+    void navigate({
+      search: (previous: SearchState) =>
+        (previous.reading ?? 'list') === reading
+          ? previous
+          : { ...previous, reading: reading === 'list' ? undefined : reading, timelineMode: undefined },
+      replace: true,
+    });
+  }
+
+  /** Shows the timeline's chart or its list, in place of the history entry. */
+  function setTimelineMode(mode: TimelineMode) {
+    void navigate({ search: (previous: SearchState) => ({ ...previous, timelineMode: mode === 'list' ? 'list' : undefined }), replace: true });
+  }
+
+  /**
+   * Orders the concordance's lines, in place of the history entry. The order outlasts its pages,
+   * another search and another reading, as the Mac's window keeps its Align by.
+   */
+  function setAlign(order: ConcordanceOrder) {
+    void navigate({ search: (previous: SearchState) => ({ ...previous, align: order === 'leftContext' ? undefined : order }), replace: true });
+  }
+
+  // Kept from render to render, so the readings' long lists render again only when they change.
+  const titles = useMemo(
+    () => new Map((volumes.data?.items ?? []).map((volume: Volume) => [volume.volumeId, volume.title])),
+    [volumes.data],
+  );
   useDocumentTitle(state.keywords ? `${copy.search.title}: ${state.keywords}` : copy.search.title);
 
   return (
@@ -93,6 +134,9 @@ export function SearchScreen() {
             narrowedFrom={
               panelOpen && shown && narrowed?.signature === signature && narrowed.from > shown.total ? narrowed.from : undefined
             }
+            onReading={setReading}
+            onTimelineMode={setTimelineMode}
+            onAlign={setAlign}
             facets={
               <button
                 type="button"
@@ -325,6 +369,9 @@ function Results({
   titles,
   results,
   narrowedFrom,
+  onReading,
+  onTimelineMode,
+  onAlign,
   facets,
 }: {
   state: SearchState;
@@ -332,6 +379,9 @@ function Results({
   results: UseQueryResult<SearchResultList, unknown>;
   /** The count the last facet narrowed from, while the panel shows it. */
   narrowedFrom: number | undefined;
+  onReading: (reading: Reading) => void;
+  onTimelineMode: (mode: TimelineMode) => void;
+  onAlign: (order: ConcordanceOrder) => void;
   /** The control that opens the facet panel. */
   facets: ReactNode;
 }) {
@@ -342,6 +392,7 @@ function Results({
   const error = results.error;
   const first = list && list.items.length > 0 ? list.offset + 1 : 0;
   const last = list ? list.offset + list.items.length : 0;
+  const reading: Reading = state.reading ?? 'list';
   return (
     <section className="results" aria-labelledby="results-heading" aria-busy={results.isFetching}>
       <h2 id="results-heading" className="visually-hidden">
@@ -361,6 +412,8 @@ function Results({
           )}
         </p>
         {list && !failed && <SortOrders state={state} list={list} />}
+        {/* Each reading reads what a search found, so the picker waits for a match, as the Mac's does. */}
+        {list && !failed && <ReadingPicker reading={reading} disabled={list.total === 0} onChange={onReading} />}
         {facets}
       </div>
       {list && !failed && isPartialEvidence(list.total) && (
@@ -387,15 +440,20 @@ function Results({
       )}
       {list && !failed && (
         <>
-          {list.items.length === 0 ? (
-            list.total > 0 ? (
-              <p>{copy.search.pastEnd}</p>
-            ) : results.isPlaceholderData ? null : (state.keywords ?? '').trim() !== '' ? (
+          {list.items.length === 0 && list.total === 0 ? (
+            // A search that found nothing says so in any reading, as the Mac's window does.
+            results.isPlaceholderData ? null : (state.keywords ?? '').trim() !== '' ? (
               // Only once the search shown is this one, as the Mac's window waits for its search.
               <ZeroResult state={state} />
             ) : (
               <p>{copy.search.none}</p>
             )
+          ) : reading === 'timeline' ? (
+            <TimelineReading state={state} titles={titles} mode={state.timelineMode ?? 'chart'} onMode={onTimelineMode} />
+          ) : list.items.length === 0 ? (
+            <p>{copy.search.pastEnd}</p>
+          ) : reading === 'concordance' ? (
+            <ConcordanceReading state={state} total={list.total} order={state.align ?? 'leftContext'} onOrder={onAlign} />
           ) : (
             <ol className="result-list" aria-label={copy.search.results} start={first}>
               {list.items.map((item) => (
@@ -421,7 +479,8 @@ function Results({
               ))}
             </ol>
           )}
-          <Pager state={state} list={list} />
+          {/* The timeline covers every result the search keeps, so it has no page to turn. */}
+          {isPaged(reading) && <Pager state={state} list={list} />}
         </>
       )}
     </section>

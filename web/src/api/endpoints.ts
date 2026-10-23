@@ -12,8 +12,10 @@ import type {
   DocumentList,
   Readiness,
   ReaderLinkTarget,
+  SearchConcordance,
   SearchInspection,
   SearchResultList,
+  SearchTimeline,
   Volume,
   VolumeList,
   VolumeSectionPage,
@@ -111,6 +113,46 @@ export function searchQuery(state: SearchState) {
     staleTime: 5 * 60_000,
     // The page before stays while the next loads, so the results and the pager stay mounted.
     placeholderData: keepPreviousData,
+    retry: retryServerFaults,
+  });
+}
+
+/** Whether an earlier query's answer is the same search's, which may stand in while the next loads. */
+function sameSearch(query: { queryKey: readonly unknown[] } | undefined, search: Record<string, FormValue>): boolean {
+  return query !== undefined && JSON.stringify(query.queryKey[1]) === JSON.stringify(search);
+}
+
+/**
+ * The search's timeline: its years and counts, and with `documents` each year's documents in the
+ * order chosen. The same search's last timeline stays while the next loads, as the results' last
+ * page does; another search's never stands in, since it would describe a match no longer shown.
+ */
+export function timelineQuery(state: SearchState, documents: boolean) {
+  const search = filterFields(state);
+  const fields = { ...search, ...(documents ? { documents: true, sort: state.sort } : {}) };
+  return queryOptions<SearchTimeline, unknown, SearchTimeline, unknown[]>({
+    queryKey: ['timeline', search, documents ? (state.sort ?? 'relevance') : null],
+    queryFn: ({ signal }) => getJSON<SearchTimeline>('/api/v1/search/timeline', formEncode(fields), signal),
+    enabled: state.keywords !== undefined,
+    staleTime: 5 * 60_000,
+    placeholderData: (previous, query) => (sameSearch(query, search) ? previous : undefined),
+    retry: retryServerFaults,
+  });
+}
+
+/**
+ * The concordance of the page the results show, by its fields. The same search's last page stays
+ * while the next loads, as the results' does; another search's never stands in.
+ */
+export function concordanceQuery(state: SearchState) {
+  const search = filterFields(state);
+  const fields = searchFields(state);
+  return queryOptions<SearchConcordance, unknown, SearchConcordance, unknown[]>({
+    queryKey: ['concordance', search, fields],
+    queryFn: ({ signal }) => getJSON<SearchConcordance>('/api/v1/search/concordance', formEncode(fields), signal),
+    enabled: state.keywords !== undefined,
+    staleTime: 5 * 60_000,
+    placeholderData: (previous, query) => (sameSearch(query, search) ? previous : undefined),
     retry: retryServerFaults,
   });
 }
