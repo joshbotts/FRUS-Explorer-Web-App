@@ -9,6 +9,7 @@
 //   frus-parity render [<volume> <document> [--full-parse] [--out <file>]] [--repo <root>]
 //   frus-parity index [<volume>...] [--tei <dir>] [--resources <dir>] [--out <db>] [--metrics] [--repo <root>]
 //   frus-parity check-golden [--repo <root>]
+//   frus-parity time-search <db> [--all] [--ids <id,...>] [--retained] [--out <results.json>] [--queries <jsonl>] [--resources <dir>] [--repo <root>]
 //
 // The repository is found from the current directory unless --repo names it. Exit status: 0 when
 // the check passes, 1 on a refusal, a difference or a problem, 2 on a usage error.
@@ -30,6 +31,7 @@ let usage = """
            frus-parity render [<volume> <document> [--full-parse] [--out <file>]] [--repo <root>]
            frus-parity index [<volume>...] [--tei <dir>] [--resources <dir>] [--out <db>] [--metrics] [--repo <root>]
            frus-parity check-golden [--repo <root>]
+           frus-parity time-search <db> [--all] [--ids <id,...>] [--retained] [--out <results.json>] [--queries <jsonl>] [--resources <dir>] [--repo <root>]
     """
 
 /// A command's positional arguments, flags and options.
@@ -307,6 +309,44 @@ func checkGolden(_ arguments: Arguments) throws {
     print("golden files: \(report.present.count) present and valid, \(report.pending.count) pending")
 }
 
+/// Check 12's search times (S13b): each query's first page of 20 and its count through FRUSCoreKit's
+/// SearchService over an export opened read-only and immutable, as the server opens it, one after the
+/// other as `/api/v1/search` asks them; with --retained, the 7,500 results the app keeps too. By
+/// default the parity queries that apply an exact term; --all times every query, and --ids those
+/// named. With --out, it then writes their records as check 3 makes them, which compare-results
+/// holds to another run's. Build with -c release to measure.
+func timeSearch(_ arguments: Arguments) async throws {
+    guard arguments.positional.count == 1 else { throw UsageError("time-search takes one index") }
+    let layout = try repository(arguments)
+    let database = URL(fileURLWithPath: arguments.positional[0])
+    guard FileManager.default.fileExists(atPath: database.path) else { fail("\(database.path) does not exist") }
+    let queriesPath = arguments.options["--queries"] ?? layout.queries.path
+    var queries = try QueryList.load(URL(fileURLWithPath: queriesPath))
+    if !arguments.flags.contains("--all") { queries = try SearchTiming.exactWordQueries(queries) }
+    if let ids = arguments.options["--ids"] {
+        let wanted = Set(ids.split(separator: ",").map(String.init))
+        queries = queries.filter { wanted.contains($0.id) }
+        guard queries.count == wanted.count else { throw UsageError("--ids names a query the list lacks") }
+    }
+    let resources = arguments.options["--resources"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+        ?? layout.upstream.appendingPathComponent(ParityIndex.resourcesPath)
+    let service = try SearchTiming.service(database: database, resources: resources)
+    #if DEBUG
+    print("a debug build: its timings are not measurements; build with -c release")
+    #endif
+    print("\(queries.count) queries over \(database.lastPathComponent), upstream \(layout.upstreamCommit()?.prefix(8) ?? "unknown"), on \(Platform.current().os), SQLite \(SearchTiming.sqliteVersion)")
+    let records = try await SearchTiming.run(queries, service: service, retained: arguments.flags.contains("--retained")) { record in
+        print(record.line)
+        if let error = record.error { print("        refused: \(error)") }
+    }
+    print(SearchTiming.summary(records))
+    if let out = arguments.options["--out"] {
+        let written = try await SearchTiming.writeRecords(queries, service: service, queriesPath: queriesPath, layout: layout,
+                                                          database: database, to: URL(fileURLWithPath: out))
+        print("wrote \(out): \(written.count) queries' counts, first 50 results and tie tails, score bits included")
+    }
+}
+
 /// GET against a server's base URL, for LiveAPI: a path with its query string, answered with the
 /// status and the body. A request may take 15 minutes: over the full corpus an exact-word search
 /// (`=Soviet`) took more than URLSession's default minute on a server that was busy (S10).
@@ -424,6 +464,9 @@ do {
         try await index(Arguments(arguments.dropFirst(), flags: ["--metrics"], options: ["--tei", "--resources", "--out", "--repo"]))
     case "check-golden":
         try checkGolden(Arguments(arguments.dropFirst(), options: ["--repo"]))
+    case "time-search":
+        try await timeSearch(Arguments(arguments.dropFirst(), flags: ["--all", "--retained"],
+                                       options: ["--ids", "--out", "--queries", "--resources", "--repo"]))
     default:
         throw UsageError(arguments.first.map { "unknown command \($0)" } ?? "no command")
     }
