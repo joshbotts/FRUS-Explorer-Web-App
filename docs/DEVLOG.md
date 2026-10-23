@@ -26,14 +26,53 @@ The owner approved the plan of [issue #37](https://github.com/joshbotts/FRUS-Exp
 
 **Records**
 
-- `COORDINATION.md`: §1 and §3 no longer say the watch is to come, §5 says what it does, below its table, and §6 says what its issue is for. The §5 row and the header's account of the gap are PR #38's, and are left to it.
-- `PLAN.md` is unchanged here: the S12a row is PR #38's, unmerged when this pull request opened, so the plan's shared copy is unchanged too.
+- `COORDINATION.md`: §1 and §3 no longer say the watch is to come, §5's row and a paragraph below its table say what it does, and §6 says what its issue is for.
+- `PLAN.md`, on top of PR #38's revision, merged while this one was open, and its shared copy (rev 174): an owner checkpoint for the watch's first run, which S12a's done-when needs and only the owner can make once the workflow is on `main`. This log.
 
 **For the owner after the merge**
 
 - The first run: Actions → upstream-watch → Run workflow, on `main`, with `v2`. It opens the watch issue with the report above; the label is created on that run.
 
 **Next: S12b, the pin move to build-51 (build 1776).**
+
+## Issue #37: the plan catches up with FRUS Explorer 1.0
+
+22 October 2026 · branch `claude/issue-37-dev-plan-revision-846914` · upstream `757c6d29`, unchanged
+
+The owner asked for issue #37 to be reviewed, and the plan revised to catch up with the app before feature work goes on. The issue, posted from a session in the app's repository, finds `v2` at `build-51` (`f0479037`, build 1776, the 1.0 TestFlight build), 85 commits past the pin, at index version 71. No web session had seen those commits: the daily watch COORDINATION §5 assigns to web sessions was never added. This session changes records only.
+
+**Checked against the app's repository**
+
+- Each fact the next pin move depends on holds at `build-51`:
+  - `currentDateIndexVersion` is 71;
+  - `cited-page-map.json` is added to the bundled data and `gemma-terms-of-use.txt` removed, with the other changed resources the issue lists;
+  - 85 commits separate `build-51` from the pin.
+- Each of the 17 pull requests' lines for the web edition was read. #1778 changes no kit code, but its page-map landing is app code the web reader would need, so S12c moves it into the kit.
+- **A dry run at `build-51`** built and tested this package on Linux, then restored the pin. The build needs no repair, and every kit suite passes, with only the skip CI already allows. The web edition's own tests fail where a pin move expects: the index version, the sixth resource file, stale golden files, 61 expressions under parser 6.8, and a 393rd fixture row. `docs/prep/README.md` records it, under "The 1.0 pin move".
+
+**The plan**
+
+- **S11f waits.** Four rows come first:
+  - S12a, the daily watch of `v2`, which needs no Mac and no export;
+  - S12b, the pin move to `build-51` (1.0, build 1776), for an image tagged `:1.0-1776`;
+  - S12c, what 1.0 changed that the web edition serves: result dates and their precision, the reader's Reading Width, a replaced search stopping its statements, and the rows 1.0's index changed. Its upstream pull request moves #1778's page-map landing into the kit;
+  - S12d, the short pin move to `version-1.0` (build 1861) once it is tagged, for `:1.0-1861`.
+- **Owner checkpoints:** a 1776 export and an 1861 export, each a three-volume one for the golden files and a full one for the owner's install, and Mac check 7.
+- **The upstream-churn risk** now records the gap, and the watch as its mitigation.
+- **The S12 answers** say which 1.0 changes come with the pin, which wait for phases 2–4, and what remains before a release. The owner answered the one question it left open: a release image is tagged with the app's version and build, `:1.0-1776` and `:1.0-1861`, joined by a hyphen since a tag cannot hold the slash asked for, and asked for both to be published, so the pin lands at `build-51` before `version-1.0`.
+
+**Records**
+
+- `PLAN.md` and its shared copy (rev 173): the S12 rows, the flowchart, the checkpoints, the risk row and the S12 answers.
+- `COORDINATION.md`: the gap, and S12a as the watch's author.
+- `SPEC.md`: the release tags.
+- `docs/prep/README.md`: the dry run. This log.
+
+**Results**
+
+- No code changed. CI runs as it does on any pull request, at the pin.
+
+**Next: S12a,** the daily watch of the app's `v2`. S12b can start beside it at `build-51`: the owner made both 1776 exports the same evening, the three-volume one (393 rows) and the full one (553 volumes), each stamped build 1776 at index version 71.
 
 ## Session 11e: the Query Inspector, and the date order
 
