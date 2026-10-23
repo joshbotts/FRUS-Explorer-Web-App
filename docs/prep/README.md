@@ -80,13 +80,13 @@ A full export is 2.83 GB, not 9.3 GB. The larger figure came from an index overh
 
 ## Pinning until the public release
 
-`FRUS-Explorer` merges about eight pull requests a day until its public release, and its index version went from 47 to 65 in 30 days. Each pin move means a new Mac build, a new export and new golden files. Hold the pin (at `757c6d29` since S11b's pin move) until the release, unless a merged pull request for this project needs it, as S3's did, or the owner's exports come from a newer index version, as build 50's did, and batch upstream pull requests so the pin moves as few times as possible. Each pin move remakes all the golden files: those made from the app's source, and those made from the owner's three-volume export, which needs a new export from the pinned build (`COORDINATION.md`, section 5). The first such export came from a build of `af8bedab`, on 4 October. The full-corpus export for S10 comes from the build pinned at S10.
+`FRUS-Explorer` merges about eight pull requests a day until its public release, and its index version went from 47 to 65 in 30 days. Each pin move means a new Mac build, a new export and new golden files. Hold the pin (at `f0479037`, `build-51`, since S12b's pin move) until the release, unless a merged pull request for this project needs it, as S3's did, or the owner's exports come from a newer index version, as build 50's did, and batch upstream pull requests so the pin moves as few times as possible. Each pin move remakes all the golden files: those made from the app's source, and those made from the owner's three-volume export, which needs a new export from the pinned build (`COORDINATION.md`, section 5). The first such export came from a build of `af8bedab`, on 4 October. The full-corpus export for S10 comes from the build pinned at S10.
 
 ## The 1.0 pin move
 
 22 October 2026 · a dry run for S12b, at `build-51` (`f0479037`, build 1776, index version 71), 85 commits past the pin, from [issue #37](https://github.com/joshbotts/FRUS-Explorer-Web-App/issues/37)
 
-The submodule was checked out at `build-51` in a worktree, this package's own targets were rebuilt clean, and `scripts/swift test` ran in `swift:6.4-noble` on arm64. The pin was then restored; nothing here was committed at `build-51`.
+The submodule was checked out at `build-51` in a worktree, this package's own targets were rebuilt clean, and `scripts/swift test` ran in `swift:6.4-noble` on arm64. The pin was then restored; nothing here was committed at `build-51`. S12b made the move, and its log entry says how each item below was met.
 
 - **The build needs no repair.** The package, the server and every kit compile on Linux with no error and no warning. No kit folder, import or `Package.swift` setting has to change.
 - **Every kit suite passes:**

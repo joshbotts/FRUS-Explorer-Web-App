@@ -2,7 +2,53 @@
 
 One entry per session, newest first.
 
-## Session 12a: the daily watch of `v2`
+## Session 12b: pin move to `build-51`, FRUS Explorer 1.0 (build 1776)
+
+22 October 2026 · branch `claude/s12b-pin-build51-544354` · upstream `f0479037` (tag `build-51`)
+
+The pin moves from `757c6d29` (build 50, index version 69) to `f0479037`, the commit the owner tagged `build-51`: FRUS Explorer 1.0, build 1776, the TestFlight build, at index version 71. It is 85 commits on, with the 18 pull requests on shared code or bundled data that [issue #37](https://github.com/joshbotts/FRUS-Explorer-Web-App/issues/37) lists. The owner made both 1776 exports on 22 October: three volumes for the golden files, and the full corpus.
+
+**What the move brought**
+
+- **Index version 71** (#1746, 70; #1747, 71). `IndexCompatibility.supportedIndexVersion` follows the pin, so the server now refuses build 50's exports, naming both versions. The FTS generation (4) and the export's `formatVersion` (6) are unchanged.
+- **A fifth indexing resource,** `cited-page-map.json` (#1747), which `IndexingResources.indexResourceNames` now names. `ServerResources.requiredFiles` follows that list, so the server will not start without it, and the image already copies the whole resources folder.
+- **No repair.** Every kit builds and passes on Linux with no new skip, as issue #37's dry run found, and no kit folder, `Package.swift` setting or app source folder changed. The web edition's own code changed only in tests, a doc comment, and the facts below.
+- **The export's schema is unchanged.** Both 1776 exports hold `export-v69-schema.sql`'s 74 statements, in its order, and nothing else but FTS5's shadow tables, which the fixture leaves out by design. `setupDatabase(_:)` is the same text at the new pin, lines 7680–8335. So the fixture stands, under its name, and `IndexSchema.swift`'s list with it.
+- **No pinned reader head to re-take** (#1699). No web test pins `ReaderPage`'s head: the parity tests compare the page with the kit's own build of it. The server builds the page with `ReaderMeasure`'s default, `.classic`, until S12c brings Reading Width.
+
+**The golden files**, remade by `scripts/make-golden --export /Users/Shared/frus-index-build1776-golden.sqlite`, run under the app's `Scripts/heavy.sh` lock:
+
+- **The render:** 393 rows, not 392. The new one is frus1969-76ve09p1's `notes`, its Note on U.S. Covert Actions, one of the prose rows the index left out until #1746 (`promotableQuasiDocumentKinds`). The other 392 rows' HTML is byte for byte as before, and the manifest changed only in provenance and that row.
+- **The expressions:** 15 of the 482 queries compile differently, all by parser 6.8 (#1770), which trims a mark from a term's end: `"europe,"` is now `"europe"`, `"u.s.s.r."` `"u.s.s.r"`, `"-berlin"` `"berlin"`, `"‘test"` `"test"`, and so on. 43 are refused, as before.
+- **The index summary:** its 7 checks and the schema's digest are unchanged, and 18 of its 36 gating digests moved, each with a pull request:
+  - #1746's notes row: `document_cache` and its sequence, `document_dates`, `document_revisions` (also every row at 71), both FTS tables' `docsize` and `averages`, the three vocabularies, and `page_ranges` and its sequence (pages xxii–xxvi);
+  - `cross_references` and its sequence, 208 rows to 221: the notes row's 13 references (#1746), and 17 references to a printed page of another volume that now name the document on it, `frus1889`'s `pg_469` becoming `d173` and the like (#1747, rule C through the page map);
+  - `volume_structures`: each of the 28 sections records `leadsWithSubsections`, false for every one (#1746);
+  - `volume_sources`: frus1969-76ve09p1's "POL Libya" row is keyed `POL LIBYA`, a file with no subject number that leads its row (#1746);
+  - `person_rollup`: 75 of the 121 rollups lose a VIAF id, since build 51 takes no Wikidata or VIAF link from the name-authority overlay (#1710).
+- **The results:** every query's score bits moved, since BM25 reads the whole index and the index has a row more. 41 counts rose by one, and in each the notes row matches the query's compiled expression; other changes in the top 50 are reorders by those scores. Ties past the 50th place fell from 12 queries to 7.
+- `frus-parity check-golden` passes.
+
+**The tests that named build 50's facts**
+
+- `APITests.theSubmodulesDataFilesLoad`: 6 required files, the last `cited-page-map.json`. `IndexResourcesTests` lists the five index files and decodes the page map, built for the pin's index version.
+- `SummarizerTests`: the summary's build is 1776. The parity export now stamps the pinned app's version as well as its build, both read from `project.yml`.
+- `ServedAPIParityTests`: the fixture index holds 393 documents.
+- **The snippet rule** (#1736): `aSnippetMarksAMatchOnlyInTheProse`, new, serves a synthetic export whose body opens with its heading and dateline. A word matched in the prose is marked; one matched only in the heading or dateline gives the prose's opening with nothing marked; one only in a heading the body does not repeat gives the heading again. The existing test that every row has `<b>` still holds, since both of its rows match in their prose. `SearchItem`'s doc comment says so.
+
+**Release tags**
+
+- **`scripts/release-tag`** prints `<version>-<build>` from the pinned `project.yml`'s `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION`: `1.0-1776` here, and `0.2-50` at the old pin. It fails when the app's targets disagree, when either is missing, or when either is not numbers and dots.
+- **`image.yml`** reads it in each build job, so every pull request that touches the image checks it, and the promote job, after the smoke test on both architectures, moves the release tag with `edge`: `:1.0-1776` follows `main` while the pin holds build 1776, and stays on the last such build once the pin moves on. Sessions never publish (rule 7).
+- `docs/INSTALL.md` and SPEC name the release tags.
+
+**Records**
+
+- SPEC: the compatibility contract (71 at `f0479037`, app 1.0 build 1776); the table definitions' lines; the image's tags; the bundled data, with `cited-page-map.json`, the resized citation and semantic files, 54 MB in all, and the Legal row gone; and the licensing lines: EmbeddingGemma 2 is Apache 2.0, from the `encoder-2` release, downloaded only at an admin's request, with no consent screen, since the Gemma Terms file is gone from the bundle (#1674). The shards' address names their generation, `generations/89481b18/`.
+- `INSTALL.md`: index version 71 and FRUS Explorer 1.0 (build 1776), the second version change, and the release tags.
+- `COORDINATION.md`: the pin, the contract, the kit's test counts, the 393 rows and this move.
+- `PLAN.md` and its shared copy: S12b done, the golden-files and 1776-export checkpoints, the risk row's counts, and the release tag's rule.
+- The README, the prep note and this log.
 
 22 October 2026 · branch `claude/s12a-upstream-watch-b8c058` · upstream `757c6d29`, unchanged
 

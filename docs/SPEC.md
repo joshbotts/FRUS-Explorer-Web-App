@@ -101,7 +101,7 @@ The web edition keeps the search, reader, annotation, collection, citation, arch
 | Checklist mode | Keep | Browser memory, per session, as on the Mac | 2 |
 | Saved searches, working corpora, volume scopes | Keep | Per-user rows; "+N since last run" badge | 2 |
 | Collocates reading | Adapt | Needs a lemmatizer to replace NLTagger; disabled with a stated reason until then | 4 |
-| Search by meaning | Keep (optional) | llama.cpp in the container; the admin downloads EmbeddingGemma after accepting its terms | 4 |
+| Search by meaning | Keep (optional) | llama.cpp in the container; the admin downloads EmbeddingGemma 2 on request, as the Mac's user opts in to it | 4 |
 | Reader: footnotes, page labels, cross-references, broken references, find | Keep | Shared Swift renderer; the app's CSS and JavaScript in an iframe | 1 |
 | Highlights, notes, tags, floating selection bar | Keep | Same offset engine; rich text stored as sanitized HTML | 2 |
 | Classification and person-identity corrections | Adapt | Instance-level, curator role, because they rewrite shared index rows | 2–3 |
@@ -195,15 +195,15 @@ Solid arrows stay on the host. Dotted arrows leave it, and all are optional in I
 
 ## Data
 
-Everything the web edition serves comes from four sources: the Office of the Historian's TEI volumes, the project's semantic-vector repository, the optional EmbeddingGemma weights, and the 46 files (52 MB) the app already bundles in `FRUSExplorer/Resources/`.
+Everything the web edition serves comes from four sources: the Office of the Historian's TEI volumes, the project's semantic-vector repository, the optional EmbeddingGemma 2 weights, and the 46 files (54 MB) the app already bundles in `FRUSExplorer/Resources/`.
 
 ### External data
 
 | Data | Source | Size | Terms | Needed for |
 | --- | --- | --- | --- | --- |
 | TEI volumes (553) | `raw.githubusercontent.com/HistoryAtState/frus/master/volumes/{filename}`; file listing and SHAs from `api.github.com/repos/HistoryAtState/frus/contents/volumes` | 3,338,778,538 bytes | public domain | reading in both modes; indexing in Standalone |
-| Semantic shards (553) | `raw.githubusercontent.com/joshbotts/frus-semantic-vectors/main/shards` | 162.4 MB; about 294 KB each | project data | semantic related-documents signal; meaning-search rerank |
-| Query encoder | `github.com/joshbotts/frus-semantic-vectors/releases/download/encoder-1/embeddinggemma-300m-qat-Q4_0.gguf` | 229,093,184 bytes; SHA-256 in `NOTICE` | Gemma Terms of Use and Prohibited Use Policy | meaning search only |
+| Semantic shards (553) | `raw.githubusercontent.com/joshbotts/frus-semantic-vectors/main/generations/89481b18/shards`, the generation the bundled tier's provenance digest names | 162.4 MB; about 294 KB each | project data | semantic related-documents signal; meaning-search rerank |
+| Query encoder | `github.com/joshbotts/frus-semantic-vectors/releases/download/encoder-2/embeddinggemma-2-Q8_0.gguf`, ggml-org's GGUF of EmbeddingGemma 2, unmodified | 309,855,456 bytes; SHA-256 in the app's `NOTICE` | Apache 2.0 | meaning search only |
 
 The manifest lists 553 volumes: 550 published and 3 partially published. A full index holds about 317,000 documents; the semantic map places 314,571.
 
@@ -217,12 +217,11 @@ The image carries `FRUSExplorer/Resources/` from the same commit as the server s
 | Reader and search | `broken-refs-index.json` (23 KB), `document-subject-index.json` (6.05 MB), `volume-subject-profiles-index.json` (224 KB) | muted dead links, subject facets, Top subjects, Topic Index |
 | People | `person-authority-index.json` (2.54 MB), `pocom-index.json` (531 KB) | People browser, VIAF and Wikidata links, careers, the pre-1906 addressee rule |
 | Archival | `central-files-index.json` (3.61 MB), `presidential-library-catalog.json` (3.27 MB), `collection-authority.json` (1.93 MB), `volume-sources-index.json` (1.09 MB), `collection-usage-index.json` (644 KB), `accession-series-index.json` (619 KB), `external-citation-index.json` (605 KB), `roll-scans-index.json` (278 KB), `provenance-flow-index.json` (260 KB), `digitized-ranges-index.json` (194 KB), `subject-numeric-labels.json` (161 KB), `source-provenance-index.json` (138 KB), `lot-claimants-index.json` (132 KB), `curated-library-resolutions.json` (127 KB), `series-facts-index.json` (122 KB), `decimal-class-labels.json` (60 KB), `curated-lot-resolutions.json` (8 KB) | Source Explorer, Archival Analytics, the Archival Sourcing dashboard, Archives Visits |
-| Citation graph | `resolved-edge-index.json` (289 KB) | complete inbound citations |
+| Citation graph | `resolved-edge-index.json` (1.11 MB), `cited-page-map.json` (536 KB) | complete inbound citations; cross-volume page references, which the indexer reads |
 | Series dashboards | `administration-profiles-index.json` (172 KB) | About the Series |
-| Semantic | `semantic-vectors-binary.bin` (20.47 MB), `semantic-map.bin` (1.89 MB), `semantic-vectors-index.json` (73 KB), `semantic-shards-manifest.json` (66 KB), `semantic-map-index.json` (24 KB) | map, related documents, meaning search |
+| Semantic | `semantic-vectors-binary.bin` (20.47 MB), `semantic-map.bin` (1.89 MB), `semantic-vectors-index.json` (73 KB), `semantic-shards-manifest.json` (66 KB), `semantic-map-index.json` (20 KB) | map, related documents, meaning search |
 | Word cloud | `cloud-vectors-volumes.json` (1.29 MB), `keyness-baseline.json` (1.25 MB), `cloud-vectors-core.json` (261 KB), `word-cloud-lexicons.json`, `word-cloud-stopwords.json` | bundled clouds and keyness |
 | Reader assets | `frus-offset-engine.js`, `frus-highlights.js`, `frus-selection.js`, `frus-print.css` | the reader iframe |
-| Legal | `gemma-terms-of-use.txt` | encoder consent screen |
 
 Not used on the web: `LaunchScreen.storyboard`, `Assets.xcassets` apart from icons, and `PrivacyInfo.xcprivacy`.
 
@@ -292,7 +291,7 @@ The corpus index keeps the Mac schema exactly: same tables, columns, tokenizer a
 | Subjects | `document_subjects`, `document_subject_refs`, `document_subject_volumes` | integer positions resolved through `document-subject-index.json` |
 | Export only | `research_provenance`; views `research_documents`, `research_cross_references`, `research_suppressed_volumes` | written by the Mac exporter; the web exporter writes the same |
 
-The table definitions live in `FRUSCoreKit/Search/IndexingPipeline.swift` (`setupDatabase(_:)`, lines 6968–7623 at c6f7b2cb and at 757c6d29, where they are as at 34a5120 but for one partial index, `idx_document_cache_user_tag_ids`, added on 9 October with no index version (#1614)); the FTS5 definitions come from `FTS5Store/FTS5Types.swift`. `Docs/Agentic-Analysis-Guide.md` §4 documents every column and its traps.
+The table definitions live in `FRUSCoreKit/Search/IndexingPipeline.swift` (`setupDatabase(_:)`, lines 7680–8335 at f0479037, and 6968–7623 at c6f7b2cb and at 757c6d29, the same text, as at 34a5120 but for one partial index, `idx_document_cache_user_tag_ids`, added on 9 October with no index version (#1614)); the FTS5 definitions come from `FTS5Store/FTS5Types.swift`. `Docs/Agentic-Analysis-Guide.md` §4 documents every column and its traps.
 
 ### Verified on this review's host
 
@@ -300,7 +299,7 @@ The Mac's `document_cache`, `frus_documents`, `frus_documents_vocab`, `user_cont
 
 ### Compatibility contract
 
-1. `SUPPORTED_INDEX_VERSION` is a build constant equal to `IndexingPipeline.currentDateIndexVersion` at the image's commit: 65 at 34a5120, at f69b4a0a, at 101e17d7 and at f384d2d5, and 69 at c6f7b2cb and 757c6d29, app build 50. The server serves no other version.
+1. `SUPPORTED_INDEX_VERSION` is a build constant equal to `IndexingPipeline.currentDateIndexVersion` at the image's commit: 65 at 34a5120, at f69b4a0a, at 101e17d7 and at f384d2d5, 69 at c6f7b2cb and 757c6d29, app build 50, and 71 at f0479037, app 1.0 (build 1776). The server serves no other version.
 2. The FTS schema generation is 4, stored in `PRAGMA user_version` (`FTS5Connection.currentSchemaGeneration`).
 3. Identity is `(volume_id, document_id)`. `document_cache.rowid` is never persisted, exposed or compared across copies; `VACUUM` may renumber it.
 4. Copies use the SQLite backup API. A WAL database is never copied with `cp`.
@@ -402,7 +401,7 @@ Each surface below states what the web edition must do. Behaviour matches the Ma
 
 - Map: 314,571 points from `semantic-map.bin` in a deck.gl scatter, colored by region, era, on-server or provenance. Lasso to a working corpus, two-pole axis, nearest in language.
 - Related Documents adds the semantic signal and the "Beyond your library" count once shards are present.
-- Meaning search embeds the query with EmbeddingGemma through `llama-server`, then runs the shared Hamming-800 → int8 funnel in `SemanticVectorsKit`.
+- Meaning search embeds the query with EmbeddingGemma 2 through `llama-server`, then runs the shared Hamming-800 → int8 funnel in `SemanticVectorsKit`.
 
 ### Word clouds (phases 3–4)
 
@@ -550,7 +549,12 @@ The web edition ships as one image, `frus-explorer-light`, run with Docker Compo
 1. **Server stage:** the Swift release matching the app's toolchain (6.4 at this commit) on Ubuntu 24.04 runs `swift build -c release --static-swift-stdlib`.
 2. **Encoder stage:** CMake builds llama.cpp's CPU `llama-server`, pinned to the Mac's `LLAMA_COMMIT` (`8663224`) in `Scripts/build-llama-xcframework.sh`.
 3. **Client stage:** Node 22 runs the Vite production build of the SPA.
-4. **Runtime stage:** Ubuntu 24.04 with the two binaries, the SPA, `FRUSExplorer/Resources` (52 MB), libsqlite3 3.45.1 with FTS5, CA certificates, `rclone` and `tini`. It runs as a non-root user, UID 10001.
+4. **Runtime stage:** Ubuntu 24.04 with the two binaries, the SPA, `FRUSExplorer/Resources` (54 MB), libsqlite3 3.45.1 with FTS5, CA certificates, `rclone` and `tini`. It runs as a non-root user, UID 10001.
+
+CI publishes the image from `main` only, to `ghcr.io/joshbotts/frus-explorer-light`, under three kinds of tag:
+- `sha-<commit>`, each build of `main`, by the commit's first 7 characters;
+- `edge`, the newest build that passed the Compose smoke test on both architectures;
+- `<version>-<build>`, such as `1.0-1776`: the pinned app's `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in its `project.yml`, joined by a hyphen, since a tag cannot hold a slash. It names the app build whose exports the image serves, moves with `edge` while the pin holds that build, and stays on the last such build once the pin moves on.
 
 Two sidecars are optional. `gotenberg/gotenberg:8` enables PDF export. A reverse proxy such as Caddy or Traefik provides TLS beyond localhost.
 
@@ -570,7 +574,7 @@ services:
       FRUS_MODE: import            # or: standalone
       FRUS_AUTH: none              # or: local, header
       FRUS_PUBLIC_URL: http://localhost:8080
-      FRUS_ENCODER: "off"          # "on" lets an admin download EmbeddingGemma
+      FRUS_ENCODER: "off"          # "on" lets an admin download EmbeddingGemma 2
       FRUS_PDF_URL: http://pdf:3000
       FRUS_SECRET_KEY_FILE: /run/secrets/frus_secret_key
     secrets: [frus_secret_key]
@@ -594,7 +598,7 @@ volumes:
 | --- | --- | --- |
 | `FRUS_MODE` | `import` | `import` or `standalone` |
 | `FRUS_DATA_DIR` | `/data` | Root of all state |
-| `FRUS_RESOURCES_DIR` | `/usr/share/frus-light/resources` | The app's `FRUSExplorer/Resources` from the pinned commit, which the image copies there. The server will not start without the manifest, the broken-refs index and the four indexing resources |
+| `FRUS_RESOURCES_DIR` | `/usr/share/frus-light/resources` | The app's `FRUSExplorer/Resources` from the pinned commit, which the image copies there. The server will not start without the manifest, the broken-refs index and the five indexing resources |
 | `FRUS_WEB_DIR` | `/usr/share/frus-light/web` | The SPA's Vite build, `web/dist`, which the image copies there. Where the default holds no `index.html` the server serves the API alone; a folder this variable names must hold one, or the server will not start |
 | `FRUS_AUTH` | `none` | `none` (single user), `local` (accounts) or `header` (trusted proxy) |
 | `FRUS_AUTH_HEADER` | `X-Forwarded-User` | Identity header in `header` mode |
@@ -605,7 +609,7 @@ volumes:
 | `FRUS_INDEX_WORKERS` | `2` | Volumes indexed in parallel |
 | `FRUS_GITHUB_TOKEN` | none | Optional; raises GitHub API limits for listings and correction checks |
 | `FRUS_NARA_API_KEY` | none | Instance-wide NARA Catalog key; users may add their own |
-| `FRUS_ENCODER` | `off` | `on` allows the admin to download EmbeddingGemma and start `llama-server` |
+| `FRUS_ENCODER` | `off` | `on` allows the admin to download EmbeddingGemma 2 and start `llama-server` |
 | `FRUS_PDF_URL` | none | Gotenberg base URL; PDF export is hidden when unset |
 | `FRUS_OFFLINE` | `false` | `true` blocks all outbound traffic |
 | `FRUS_SEED_REMOTE` | none | rclone remote to copy a Mac export, TEI, shards or the encoder from at start; see Runtime options |
@@ -619,7 +623,7 @@ volumes:
 | `/data/app/app.db` | Users and user data |
 | `/data/volumes/` | TEI XML |
 | `/data/semantic/shards/` | Tier-2 vector shards |
-| `/data/models/` | EmbeddingGemma, when downloaded |
+| `/data/models/` | EmbeddingGemma 2, when downloaded |
 | `/data/import/` | Drop zone for Mac exports |
 | `/data/exports/`, `/data/backups/` | Generated files; backups |
 
@@ -659,7 +663,8 @@ Memory figures are estimates until phase 0 measures them. Phase 0's first measur
 ### Licensing
 
 - The code is Apache 2.0; `LICENSE` and `NOTICE` ship in the image. FRUS text is public domain.
-- EmbeddingGemma is never baked into the image. An admin downloads it only after accepting the Gemma Terms of Use from `gemma-terms-of-use.txt`, as the Mac does. The file's SHA-256 is verified before use.
+- EmbeddingGemma 2 is under Apache 2.0, as the code is. It is never baked into the image: at 310 MB it is downloaded only when an admin asks, as the Mac downloads it only when its user opts in, with no agreement step (#1674). The file's SHA-256 is verified before use, and the image's `NOTICE` names the model, its file and its licence, as the app's does.
+- The Gemma Terms of Use bound EmbeddingGemma 300m, the model the app shipped until build 50, and its consent step. From build 1776 the app's bundle no longer carries `gemma-terms-of-use.txt`, and the web edition has no consent screen.
 - llama.cpp's MIT notice ships with the binary.
 - Every page footer credits the Office of the Historian for the FRUS edition and names who operates the instance.
 
@@ -686,7 +691,7 @@ Two new settings, added to the Configuration table, take rclone remote paths, so
 - The image adds rclone (MIT licence). It supports Amazon S3, S3-compatible stores such as MinIO and Ceph, Google Cloud Storage, Azure Blob Storage, SFTP and SMB.
 - Credentials come from the platform's workload identity (an IAM role, a managed identity or a service account) through rclone's environment authentication. No keys are baked into the image.
 - A configured remote's endpoint joins the outbound allowlist.
-- A seeded EmbeddingGemma file is checked against its SHA-256, and the encoder still waits for an admin to accept the Gemma terms.
+- A seeded EmbeddingGemma 2 file is checked against its SHA-256, and the encoder still starts only when `FRUS_ENCODER` is on.
 - A full-corpus seed moves about 13 GB, so keep the bucket in the compute's region.
 - Seeding ships with Import mode in phase 1; remote backup ships with phase 5.
 
@@ -791,7 +796,7 @@ flowchart TD
 1. `FRUS_MODE=snapshot` selects the mode. `FRUS_SNAPSHOT_SOURCE` names either an rclone remote, such as `s3:frus/snapshots`, or a mounted path, such as `/mnt/snapshots`.
 2. At start, the server reads `current.json`, which names the snapshot, its index version, and the size and SHA-256 of every file.
 3. The server refuses a snapshot whose index version differs from its own `SUPPORTED_INDEX_VERSION`, as Import mode does.
-4. From a remote, the server copies `frus.db`, the shards and, when present, the encoder model to local disk, hashing each file as it arrives. From a mount, it checks the manifest and opens the files in place. The encoder still waits for an admin to accept the Gemma terms.
+4. From a remote, the server copies `frus.db`, the shards and, when present, the encoder model to local disk, hashing each file as it arrives. From a mount, it checks the manifest and opens the files in place. The encoder still starts only when `FRUS_ENCODER` is on.
 5. The server opens `frus.db` with `immutable=1` and never writes to it. Snapshot mode turns off every code path that writes the index. A CI run proves it by passing the end-to-end suite against an index file the server cannot write.
 6. The server fetches a volume's TEI the first time it is opened, and keeps up to `FRUS_TEI_CACHE_GB` of TEI on local disk, evicting the least recently used. The reader shows a loading state while it waits.
 7. A new snapshot needs no restart. The server checks `current.json` on a timer and fetches the new snapshot beside the old one. It then sends new queries to the new files, and deletes the old ones once in-flight queries finish. If the new snapshot changes a document's text, the affected highlights go to review, as in Standalone mode. During a switch the disk must hold two indexes, about 19 GB.
@@ -994,7 +999,6 @@ The largest risk is keeping a second front end in step with an app that ships qu
 | Text drift in Import mode | TEI fetched from GitHub may be newer than the text the Mac indexed | Prefer mounting the Mac's `Volumes/` folder; hash check against `document_revisions`; review flow |
 | Shared corrections | In multi-user mode, one curator's correction changes everyone's results | Curator role and an audit log |
 | Operator access | The host operator can read every user's notes | Say so at sign-in; encrypt secrets |
-| Gemma terms | The weights cannot ship in the image | Per-install consent and download, as on the Mac |
 | Official appearance | Anyone can self-host the image, so an instance the Office of the Historian does not run could pass for one it does | Every footer names the operator, and Office of the Historian branding appears only on instances the Office runs |
 
 ### Open questions for the owner
