@@ -10,14 +10,14 @@ Phase 1 is done: a Docker Compose install that serves a FRUS Explorer research e
 
 - Import of a Mac export copied into the `/data` volume, checked and served read-only. The server refuses an export from another index version and one that holds the owner's writing.
 - Search with the app's query language, with the facets, the Query Inspector and the order by relevance or date. Each result carries its date, drawn as the app draws it, and a search you replace stops on the server.
-- Browse, the reader with its text size and Reading Width, its links, and the cards for people and terms, all usable by keyboard and free of axe violations.
+- Browse, the reader with its text size and Reading Width, its links, which follow a printed page into a volume the server does not hold as 1.0 does, and the cards for people and terms, all usable by keyboard and free of axe violations.
 - Cite, with BibTeX and RIS.
 - Parity with the Mac app, checked in CI on three fixture volumes: the same index rows, search results and document HTML. The server compiles the app's own Swift code from a pinned submodule.
 - A daily CI watch of the app's `v2` branch, which reports in one issue what the next pin move has to handle.
 
 **Known gaps**
 
-- **Behind FRUS Explorer 1.0's last steps.** The pin is 1.0 build 1776, the TestFlight build, at index version 71: the server serves that build's exports, and its image is also tagged `:1.0-1776`. A link to a printed page of a volume the server does not hold, which 1.0 opens on the document its page map names, still says the server cannot place it: [FRUS-Explorer#1784](https://github.com/joshbotts/FRUS-Explorer/pull/1784), merged on 23 October, moved that rule into the app's kit, and the next pin move serves it. The App Store build, 1861, waits for S12d.
+- **Behind FRUS Explorer 1.0's last step.** The pin is 1.0 build 1776, the TestFlight build, at index version 71, with [FRUS-Explorer#1784](https://github.com/joshbotts/FRUS-Explorer/pull/1784) one commit after it: the server serves that build's exports, and its image is also tagged `:1.0-1776`. The App Store build, 1861, waits for S12d.
 - **Phase-1 features still to come:** the timeline and concordance readings, a volume's own-text rows in Browse, and faster exact-word search.
 - **Later phases:**
   - no notes, highlights or collections on the web (phase 2);
@@ -28,7 +28,7 @@ Phase 1 is done: a Docker Compose install that serves a FRUS Explorer research e
 **Next**
 
 1. **S11f**: the timeline and concordance readings.
-2. **S12d**, once the app tags `version-1.0`: the pin moves to 1.0 build 1861, the App Store build, and CI publishes `:1.0-1861`. The move also serves the page-map landing ([FRUS-Explorer#1784](https://github.com/joshbotts/FRUS-Explorer/pull/1784)), unless a pin move of its own to `af41efa4` serves it first.
+2. **S12d**, once the app tags `version-1.0`: the pin moves to 1.0 build 1861, the App Store build, and CI publishes `:1.0-1861`.
 3. **Phase 2**: user data and its nightly backup.
 
 ## Goals

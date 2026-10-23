@@ -80,7 +80,7 @@ A full export is 2.83 GB, not 9.3 GB. The larger figure came from an index overh
 
 ## Pinning until the public release
 
-`FRUS-Explorer` merges about eight pull requests a day until its public release, and its index version went from 47 to 65 in 30 days. Each pin move means a new Mac build, a new export and new golden files. Hold the pin (at `f0479037`, `build-51`, since S12b's pin move) until the release, unless a merged pull request for this project needs it, as S3's did, or the owner's exports come from a newer index version, as build 50's did, and batch upstream pull requests so the pin moves as few times as possible. Each pin move remakes all the golden files: those made from the app's source, and those made from the owner's three-volume export, which needs a new export from the pinned build (`COORDINATION.md`, section 5). The first such export came from a build of `af8bedab`, on 4 October. The full-corpus export for S10 comes from the build pinned at S10.
+`FRUS-Explorer` merges about eight pull requests a day until its public release, and its index version went from 47 to 65 in 30 days. Each pin move means a new Mac build, a new export and new golden files. Hold the pin (at `af41efa4`, one commit past `build-51` with the same build, since S12e's pin move) until the release, unless a merged pull request for this project needs it, as S3's did, or the owner's exports come from a newer index version, as build 50's did, and batch upstream pull requests so the pin moves as few times as possible. Each pin move remakes all the golden files: those made from the app's source, and those made from the owner's three-volume export, which needs a new export from the pinned build (`COORDINATION.md`, section 5). The first such export came from a build of `af8bedab`, on 4 October. The full-corpus export for S10 comes from the build pinned at S10.
 
 ## The 1.0 pin move
 
@@ -110,6 +110,8 @@ The submodule was checked out at `build-51` in a worktree, this package's own ta
 ## Serving the page-map landing
 
 23 October 2026 · for the pin move past [FRUS-Explorer#1784](https://github.com/joshbotts/FRUS-Explorer/pull/1784), merged that day as `af41efa4`: S12d's, or one of its own
+
+S12e, a pin move of its own, served it the same day, as below; its log entry says how, and what the browser app shows.
 
 S12c moved where a page link and a whole-volume link go, `PageLink` and `WholeVolumeLink`, into FRUSCoreKit's `TEI/FRUSURLScheme.swift`, unchanged but for `public` and `Sendable`. At a pin that holds it, the server can serve the landing #1778 gave the app:
 

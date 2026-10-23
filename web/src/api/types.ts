@@ -159,12 +159,17 @@ export interface ReaderLinkTarget {
   };
   inPlace?: boolean;
   volume?: { title: string; teiAvailable: boolean; indexed: boolean };
-  /** For a page reference: the page and its volume; `destination` is the document placed on it, if any. */
+  /** For a page reference: the page and its volume; `destination` is the document the kit's PageLink lands on, if any. */
   page?: number;
   pageVolumeId?: string;
-  /** For a reference to a whole volume: the volume; `volume` is absent for one outside the catalogue. */
+  /**
+   * The volume the link opens: a whole volume's, or a page's when PageLink can name no document on
+   * it without the volume; `volume` is absent for one outside the catalogue.
+   */
   volumeId?: string;
-  /** For `external`, its address; for `volume`, the volume's page on history.state.gov. */
+  /** Where that volume opens, as the kit's WholeVolumeLink sends it: its page in Browse, or on history.state.gov (`url`). */
+  wholeVolumeLink?: 'browse' | 'web';
+  /** For `external`, its address; for a link that opens a volume, the volume's page on history.state.gov. */
   url?: string;
   brokenReference?: { target: string; reason: string; resolvedVolume?: string; resolvedAnchor?: string };
 }

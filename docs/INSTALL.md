@@ -113,7 +113,7 @@ Open http://localhost:8080 in a browser.
 - **Links in a document** work as they do in the app:
   - a cross-reference opens the document it names, or the note in it, and **Back** returns to the document you were reading. A note is brought into view and highlighted for a moment, as in the app;
   - a person's name opens a card with their entry from the volume's list of names and, once an export is imported, how many indexed documents mention them; a term opens its definition. **Done** or Escape closes the card;
-  - a reference to a printed page, such as "p. 387", opens the document the index places on that page. For a volume this server has not indexed, the reader says so;
+  - a reference to a printed page, such as "p. 387", opens the document on that page, as the app does: the one the index places there or, in a volume this server has not indexed, the one FRUS Explorer's page map names. Where the map names none, such as the first page of a range across documents, the link opens the volume in **Browse**, which names the page;
   - a reference to a whole volume, such as "volume V", opens the volume in **Browse**. For a volume outside the catalogue, such as a microfiche supplement, the reader says so and offers its page on history.state.gov;
   - a reference that resolves nowhere opens an explanation;
   - a document in a volume this server does not have offers its page on history.state.gov.

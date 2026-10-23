@@ -10,7 +10,9 @@
 // re-indexing on the Mac, are replaced; the facet panel's titles, rows, controls and captions,
 // with its filter tokens' field names, but for a sentence about the Mac's library; and the Query
 // Inspector's strip, the search window's view of a search that found nothing, and its sort bar's
-// label and tooltips, where "this device" and "you have indexed" become this server. The rest,
+// label and tooltips, where "this device" and "you have indexed" become this server; and the line a
+// volume's page shows when a page link opened it, where "isn't downloaded" becomes what this server
+// lacks of the volume. The rest,
 // chiefly what only a server has (what it indexes, which TEI it holds), are the web's own until
 // check 10 settles them.
 
@@ -212,6 +214,9 @@ export const copy = {
     documentCoverage: (indexed: number, total: number) =>
       `${indexed.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} ${total === 1 ? 'document' : 'documents'} indexed on this server`,
     noTEI: 'Its TEI isn’t on this server, so its documents can’t be read here.',
+    /** The line the page shows when a page link opened it, as the app's FollowedPageLink.notice words it for a volume not downloaded. */
+    followedPage: (page: number, teiAvailable: boolean) =>
+      `You followed a link to page ${page} of this volume, which ${teiAvailable ? 'this server hasn’t indexed' : 'isn’t on this server'}.`,
     sections: 'Sections',
     documents: (count: number) => `Documents (${count.toLocaleString('en-US')})`,
     noContents: 'Neither an index nor the TEI on this server gives this volume’s contents.',
@@ -233,8 +238,6 @@ export const copy = {
     loading: 'Loading the document…',
     linkNotOnServer: (title: string) => `The linked document is in “${title}”, which isn’t on this server.`,
     linkUnknownVolume: 'The referenced volume isn’t part of this collection.',
-    linkPageNotIndexed: (page: number, title: string) =>
-      `Page ${page} is in “${title}”, which this server hasn’t indexed, so it can’t say which document is on it.`,
     linkPageNotPlaced: (page: number) => `This server’s index places no document on page ${page}.`,
     linkUnresolved: 'This reference has no destination that can be opened.',
     linkExternal: 'This link leads outside FRUS Explorer Light:',

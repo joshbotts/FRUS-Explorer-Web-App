@@ -4,9 +4,9 @@ import FRUSCoreKit
 import FRUSLightCore
 import Foundation
 
-/// What the server reads from the app's data files. The manifest and the broken-refs index are
-/// decoded at start; the indexing resources, which search reads for subject filters, decode each
-/// file on first use.
+/// What the server reads from the app's data files. The manifest, the broken-refs index and the
+/// page map are decoded at start; the indexing resources, which search reads for subject filters,
+/// decode each file on first use.
 public final class ServerResources: Sendable {
     /// The folder they were read from.
     public let directory: URL
@@ -17,6 +17,11 @@ public final class ServerResources: Sendable {
     private let positions: [String: Int]
     /// The reader's broken-refs index, which degrades dead cross-references.
     public let brokenRefs: BrokenRefsIndex
+    /// The bundled page map, `cited-page-map.json`: the documents on each printed page of another
+    /// volume the corpus cites, which the kit's `PageLink` reads for a page link into a volume the
+    /// served index does not hold, as the app's readers read `CitedPageMapStore.shared`. The kit's
+    /// own copy, `IndexingResources.citedPages`, is internal to it and read only by the indexer.
+    public let citedPages: CitedPageMap
     /// The five files that change what an index holds, for the kit's search stack.
     public let indexing: IndexingResources
 
@@ -46,11 +51,13 @@ public final class ServerResources: Sendable {
             throw ServerResourcesError.unreadable(directory: directory.path, file: "manifest.json", reason: "\(error)")
         }
         let brokenRefs = try decode(BrokenRefsIndex.self, "broken-refs-index.json")
-        return ServerResources(directory: directory, manifest: manifest, brokenRefs: brokenRefs,
+        let citedPages = try decode(CitedPageMap.self, "cited-page-map.json")
+        return ServerResources(directory: directory, manifest: manifest, brokenRefs: brokenRefs, citedPages: citedPages,
                                indexing: try IndexingResources.loading(fromDirectory: directory))
     }
 
-    init(directory: URL, manifest: [VolumeManifestEntry], brokenRefs: BrokenRefsIndex, indexing: IndexingResources) {
+    init(directory: URL, manifest: [VolumeManifestEntry], brokenRefs: BrokenRefsIndex, citedPages: CitedPageMap,
+         indexing: IndexingResources) {
         self.directory = directory
         self.manifest = manifest
         var positions: [String: Int] = [:]
@@ -59,6 +66,7 @@ public final class ServerResources: Sendable {
         }
         self.positions = positions
         self.brokenRefs = brokenRefs
+        self.citedPages = citedPages
         self.indexing = indexing
     }
 

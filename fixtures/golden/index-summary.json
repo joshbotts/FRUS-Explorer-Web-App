@@ -658,7 +658,7 @@
     "timings" : {
       "cross_references" : 0.001,
       "cross_references.sequence" : 0,
-      "document_cache" : 0.005,
+      "document_cache" : 0.006,
       "document_cache.sequence" : 0,
       "document_dates" : 0.001,
       "document_dates.sequence" : 0,
@@ -668,17 +668,17 @@
       "document_sources.sequence" : 0,
       "document_subject_refs" : 0.001,
       "document_subject_volumes" : 0,
-      "document_subjects" : 0,
+      "document_subjects" : 0.001,
       "external_citations" : 0,
       "external_citations.sequence" : 0,
       "frus_documents.averages" : 0,
       "frus_documents.config" : 0,
       "frus_documents.docsize" : 0,
-      "frus_documents.vocab_col" : 0.007,
-      "frus_documents.vocab_instance" : 0.411,
+      "frus_documents.vocab_col" : 0.008,
+      "frus_documents.vocab_instance" : 0.403,
       "frus_documents.vocab_row" : 0.012,
-      "integrity" : 0.03,
-      "page_ranges" : 0.001,
+      "integrity" : 0.029,
+      "page_ranges" : 0.002,
       "page_ranges.sequence" : 0.001,
       "person_cluster_candidate" : 0,
       "person_list_sources" : 0,
@@ -692,7 +692,7 @@
       "schema.export_only" : 0,
       "terms" : 0,
       "terms.sequence" : 0,
-      "total" : 0.492,
+      "total" : 0.491,
       "user_content.averages" : 0,
       "user_content.config" : 0,
       "user_content.docsize" : 0,
@@ -702,7 +702,7 @@
       "user_tags" : 0,
       "volume_sources" : 0,
       "volume_sources.sequence" : 0,
-      "volume_structures" : 0,
+      "volume_structures" : 0.001,
       "volume_structures.json" : 0
     },
     "volumeOrder" : [
@@ -737,8 +737,8 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "096499b657e5773434204ccc0cbf5373bf42148f6ca567af4a94badc73c002f1",
+    "sourceDigest" : "cd37102d321b74796b34a5fcc77ea82adfb2887eaf6bb76b1962cc8815f2c7b8",
     "tool" : "frus-parity summarize",
-    "upstreamCommit" : "f047903701fbe55cc2b054849b209ab137efc732"
+    "upstreamCommit" : "af41efa47868c29a6c9fa37f6a0e54e21defa06e"
   }
 }

@@ -5,11 +5,10 @@
 // answers are the kit's: `FRUSURLScheme.readerLink(from:)` reads the link as the app's handler does
 // (joshbotts/FRUS-Explorer#1579), the reader's lookups give a person or a glossary term, the
 // bundled broken-refs index an unresolved reference, `FRUSURLScheme.resolveCrossRefTarget` a
-// cross-reference, and, over the served index, `PageRangeStore` a page's document and
-// `PersonMentionStore` a person's mentions. Only the choice between a person's two counts is the
-// app's, and `mentionCount` mirrors it; and a reference to a whole volume says what this server
-// holds of the volume, with the volume's page on history.state.gov (`FRUSCanonicalURL.volumeURL`),
-// so the browser app can go where the app's `WholeVolumeLink` sends it.
+// cross-reference, `PageLink` where a link to a printed page goes and `WholeVolumeLink` where a
+// link that opens a volume goes (joshbotts/FRUS-Explorer#1784), and, over the served index,
+// `PageRangeStore` a page's document and `PersonMentionStore` a person's mentions. Only the choice
+// between a person's two counts is the app's, and `mentionCount` mirrors it.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -85,14 +84,23 @@ public struct ReaderLinkTarget: Codable, Equatable, Sendable {
     public var inPlace: Bool?
     public var volume: DestinationVolume?
     /// The page a page reference names, and its volume; for `page`. Its `destination` is the
-    /// document the index's page ranges place on that page, when they place one.
+    /// document the kit's `PageLink` lands on: the one the served index's page ranges place on the
+    /// page, for a volume the index holds, else the one the bundled page map names there. Where
+    /// `PageLink` opens the volume instead, `volumeId` names it.
     public var page: Int?
     public var pageVolumeId: String?
-    /// The volume a reference to a whole volume names, as its target gives it; for `volume`. Its
-    /// `volume` is what this server holds of it, absent for a volume outside the catalogue.
+    /// The volume the link opens: for `volume`, the one a reference to a whole volume names, as its
+    /// target gives it; for `page`, the page's, when the kit's `PageLink` can name no document on
+    /// the page without the volume. Its `volume` is what this server holds of it, absent for a
+    /// volume outside the catalogue.
     public var volumeId: String?
-    /// For `external`, the link's address; for `volume`, the volume's page on history.state.gov
-    /// (`FRUSCanonicalURL.volumeURL`), which the app opens for a volume outside its catalogue.
+    /// Where the volume `volumeId` names opens, as the kit's `WholeVolumeLink` sends it: `browse`,
+    /// its page in Browse, for a volume the catalogue holds, or `web`, its page on history.state.gov,
+    /// `url`; absent when the id can name neither.
+    public var wholeVolumeLink: String?
+    /// For `external`, the link's address; for `volume`, and for `page` when it opens the volume, the
+    /// volume's page on history.state.gov (`FRUSCanonicalURL.volumeURL`), which the app opens for a
+    /// volume outside its catalogue.
     public var url: String?
     /// The bundled index's account of an unresolved reference; for `brokenReference`, when it has one.
     public var brokenReference: BrokenReference?
@@ -165,29 +173,32 @@ enum ReaderLinkRoutes {
                     try await land(&target, volumeId: otherVolume ?? volumeId, documentId: otherDocument, anchor: anchor,
                                    from: (volumeId, documentId), state: state, reader: reader, resources: resources)
                 case .page(let otherVolume, let page):
-                    // The document the index's page ranges place on the page, of several the one the
-                    // footnote around the link names (`citing`), as the app opens it; none without
-                    // an index, or for a volume or page it does not hold.
+                    // Where the kit's `PageLink` sends a link to a printed page, as both of the app's
+                    // readers ask it, with the volumes the served index holds as the device's: for a
+                    // volume it holds, the document its page ranges place on the page, of several the
+                    // one the footnote around the link names (`citing`); else the document the
+                    // bundled page map names there; else, for a volume it does not hold, the volume,
+                    // as a link to the whole volume opens it. A page of a volume it holds that
+                    // neither names leads nowhere.
                     let pageVolume = otherVolume ?? volumeId
                     target.kind = "page"
                     target.page = page
                     target.pageVolumeId = pageVolume
-                    let placed = served == nil ? nil
-                        : (try? await served?.pages.document(forPage: page, inVolume: pageVolume, citing: citing)) ?? nil
-                    if let placed {
-                        try await land(&target, volumeId: pageVolume, documentId: placed, anchor: nil,
+                    let held = (served?.corpus.documentsByVolume[pageVolume] ?? 0) > 0
+                    switch await PageLink.destination(page: page, volumeId: pageVolume, citing: citing, onDevice: held,
+                                                      store: served?.pages, map: { resources.citedPages }) {
+                    case .document(let landingVolume, let landingDocument)?:
+                        try await land(&target, volumeId: landingVolume, documentId: landingDocument, anchor: nil,
                                        from: (volumeId, documentId), state: state, reader: reader, resources: resources)
-                    } else {
+                    case .volume(let landingVolume, _)?:
+                        await openVolume(landingVolume, into: &target, state: state, reader: reader, resources: resources)
+                    case nil:
                         target.volume = await describe(pageVolume, state: state, reader: reader, resources: resources)
                     }
                 case .volume(let otherVolume):
-                    // A whole volume (joshbotts/FRUS-Explorer#1603). The app opens the volume's page
-                    // in Browse when its catalogue holds it, and history.state.gov's page otherwise,
-                    // whose address the kit gives (`FRUSCanonicalURL.volumeURL`).
+                    // A whole volume (joshbotts/FRUS-Explorer#1603).
                     target.kind = "volume"
-                    target.volumeId = otherVolume
-                    target.volume = await describe(otherVolume, state: state, reader: reader, resources: resources)
-                    target.url = FRUSCanonicalURL.volumeURL(volumeId: otherVolume)?.absoluteString
+                    await openVolume(otherVolume, into: &target, state: state, reader: reader, resources: resources)
                 case .external(let url):
                     target.kind = "external"
                     target.url = url.absoluteString
@@ -212,6 +223,25 @@ enum ReaderLinkRoutes {
             canonicalURL: FRUSCanonicalURL.string(volumeId: volumeId, documentId: documentId))
         target.inPlace = anchor != nil && volumeId == origin.volumeId && documentId == origin.documentId
         target.volume = await describe(volumeId, state: state, reader: reader, resources: resources)
+    }
+
+    /// Fills in where a link that opens a volume goes, as the kit's `WholeVolumeLink` sends it: the
+    /// volume's page in Browse when the catalogue holds it, else its page on history.state.gov,
+    /// whose address the kit gives (`FRUSCanonicalURL.volumeURL`), with what this server holds of it.
+    private static func openVolume(_ volumeId: String, into target: inout ReaderLinkTarget, state: ServerState,
+                                   reader: ReaderService, resources: ServerResources) async {
+        target.volumeId = volumeId
+        target.volume = await describe(volumeId, state: state, reader: reader, resources: resources)
+        target.url = FRUSCanonicalURL.volumeURL(volumeId: volumeId)?.absoluteString
+        switch WholeVolumeLink.destination(for: volumeId, inCatalogue: resources.volume(volumeId) != nil) {
+        case .browse?:
+            target.wholeVolumeLink = "browse"
+        case .web(let url)?:
+            target.wholeVolumeLink = "web"
+            target.url = url.absoluteString
+        case nil:
+            break
+        }
     }
 
     /// What this server holds of a volume; nil for one outside the catalogue.

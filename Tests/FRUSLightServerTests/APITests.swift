@@ -366,6 +366,24 @@ enum ParityVolumes {
         #expect(resources.volume("frus1969-76ve09p1")?.subseries == "1969-76")
         #expect(resources.volume("nothing") == nil)
         #expect(ServerResources.requiredFiles.count == 6 && ServerResources.requiredFiles.last == "cited-page-map.json")
+        // The page map a page link reads, decoded at start: Volume XIV's page 387 holds d137 alone.
+        #expect(resources.citedPages.indexVersion == IndexCompatibility.supportedIndexVersion)
+        #expect(resources.citedPages.entry(volumeId: "frus1961-63v14", page: 387)?.documentIds == ["d137"])
+    }
+
+    @Test func aPageMapThatWillNotDecodeIsRefusedNamingIt() throws {
+        let directory = try TemporaryDirectory()
+        for name in ServerResources.requiredFiles {
+            try FileManager.default.copyItem(at: RepositoryFiles.resources.appendingPathComponent(name),
+                                             to: directory.url.appendingPathComponent(name))
+        }
+        try Data("{}".utf8).write(to: directory.url.appendingPathComponent("cited-page-map.json"))
+        #expect {
+            _ = try ServerResources.load(from: directory.url)
+        } throws: { error in
+            guard case .unreadable(_, let file, _)? = error as? ServerResourcesError else { return false }
+            return file == "cited-page-map.json"
+        }
     }
 
     @Test func aFolderWithoutThemIsRefusedNamingEachFile() throws {
