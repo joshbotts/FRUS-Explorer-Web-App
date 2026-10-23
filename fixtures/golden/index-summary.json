@@ -675,9 +675,9 @@
       "frus_documents.config" : 0,
       "frus_documents.docsize" : 0,
       "frus_documents.vocab_col" : 0.008,
-      "frus_documents.vocab_instance" : 0.403,
+      "frus_documents.vocab_instance" : 0.43,
       "frus_documents.vocab_row" : 0.012,
-      "integrity" : 0.029,
+      "integrity" : 0.032,
       "page_ranges" : 0.002,
       "page_ranges.sequence" : 0.001,
       "person_cluster_candidate" : 0,
@@ -692,7 +692,7 @@
       "schema.export_only" : 0,
       "terms" : 0,
       "terms.sequence" : 0,
-      "total" : 0.491,
+      "total" : 0.517,
       "user_content.averages" : 0,
       "user_content.config" : 0,
       "user_content.docsize" : 0,
@@ -702,7 +702,7 @@
       "user_tags" : 0,
       "volume_sources" : 0,
       "volume_sources.sequence" : 0,
-      "volume_structures" : 0.001,
+      "volume_structures" : 0,
       "volume_structures.json" : 0
     },
     "volumeOrder" : [
@@ -737,8 +737,8 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "cd37102d321b74796b34a5fcc77ea82adfb2887eaf6bb76b1962cc8815f2c7b8",
+    "sourceDigest" : "d99bca0de69c450b8614d078f9ca1bbedea5b7163da69975368ad011826015aa",
     "tool" : "frus-parity summarize",
-    "upstreamCommit" : "af41efa47868c29a6c9fa37f6a0e54e21defa06e"
+    "upstreamCommit" : "2767a1280e6164f87fff71ec82eb0d125a336e53"
   }
 }
