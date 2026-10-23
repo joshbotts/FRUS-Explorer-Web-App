@@ -1,0 +1,162 @@
+# The daily watch of FRUS-Explorer's v2 (docs/COORDINATION.md, section 5), run by
+# scripts/upstream-watch, whose header says what each step does.
+# - watch-selftest: the issue logic, against a stub gh.
+# - watch-kits: in swift:6.4-noble, as ci.yml's swift job, the submodule moved to v2's head inside the
+#   job only, this package built and each test target run. A kit suite's failure or a build break is
+#   the watch's finding; this package's own tests check the pin's facts, so their failures past the
+#   pin are information for the pin move.
+# - watch-report: what v2 changes from the pin, with the kits' results, in the run's summary and in one
+#   issue labelled upstream-watch, opened or updated. A build break or a kit failure fails this job,
+#   so the scheduled run's failure reaches the owner.
+# It never moves the pin, and never publishes. On a pull request that changes the watch, it runs at
+# v2's head in a dry mode, writing no issue and failing on nothing v2 does; its job names are not
+# main's required checks, swift and compose.
+name: upstream-watch
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: The FRUS-Explorer branch, tag or commit to watch
+        default: v2
+      dry-run:
+        description: Print the issue's writes instead of making them
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - .github/workflows/upstream-watch.yml
+      - scripts/upstream-watch
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  WATCH_REF: ${{ inputs.ref || 'v2' }}
+
+jobs:
+  selftest:
+    name: watch-selftest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: The issue logic against a stub gh
+        run: scripts/upstream-watch selftest
+
+  kits:
+    name: watch-kits
+    runs-on: ubuntu-24.04
+    container: swift:6.4-noble
+    timeout-minutes: 60
+    outputs:
+      head: ${{ steps.move.outputs.head }}
+    steps:
+      - name: Install SQLite headers
+        run: apt-get update -qq && apt-get install -y -qq --no-install-recommends libsqlite3-dev
+
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      # The container runs as root over a workspace the runner's user owns, so git asks to trust it.
+      - name: Move the submodule to v2's head, in this job only
+        id: move
+        run: |
+          git config --global --add safe.directory '*'
+          head=$(scripts/upstream-watch checkout "$WATCH_REF")
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+          echo "FRUS-Explorer $WATCH_REF is at $head; the pin is $(git ls-tree HEAD upstream/FRUS-Explorer | awk '{print $3}')."
+
+      # ci.yml's cache, restored and never saved: main's dependencies, so the build is this package's.
+      - name: Restore ci.yml's SwiftPM build
+        uses: actions/cache/restore@v5
+        with:
+          path: .build/linux
+          key: swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Package.resolved', 'Package.swift') }}-watch
+          restore-keys: |
+            swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Package.resolved', 'Package.swift') }}-
+            swiftpm-${{ runner.os }}-${{ runner.arch }}-
+
+      # As in ci.yml: an incremental build over the cache can keep a stale object.
+      - name: Build this package's own targets clean
+        run: rm -rf .build/linux/out/Intermediates.noindex/FRUSLight.build
+
+      - name: Build and test at v2
+        run: scripts/upstream-watch test watch-results
+
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: watch-results
+          path: watch-results
+          retention-days: 14
+          if-no-files-found: ignore
+
+  report:
+    name: watch-report
+    needs: [selftest, kits]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      # The whole history of both repositories, for the commits since the pin.
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Fetch the kits' results
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: watch-results
+          path: watch-results
+
+      # The commit watch-kits tested, or v2's head if that job ended before it moved the submodule.
+      - name: Report what v2 changes from the pin
+        env:
+          HEAD_TESTED: ${{ needs.kits.outputs.head }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          head=$(scripts/upstream-watch checkout "${HEAD_TESTED:-$WATCH_REF}")
+          run="The [watch's run]($RUN_URL) of $(date -u +%Y-%m-%d), by ${{ github.event_name }}, at \`$WATCH_REF\`."
+          scripts/upstream-watch report "$head" watch-results "$run" > report.md
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          cat report.md
+
+      - name: Open or update the watch issue
+        if: ${{ needs.selftest.result == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY: ${{ github.event_name == 'pull_request' || inputs.dry-run == true }}
+        run: |
+          if [ "$DRY" = true ]; then
+            scripts/upstream-watch issue report.md --dry-run
+          else
+            scripts/upstream-watch issue report.md
+          fi
+
+      - name: Flag a build break or a kit failure
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          status=$(grep -oE '<!-- upstream-watch [^>]*-->' report.md | grep -oE 'status=[^ ]*' | cut -d= -f2)
+          if [ "$status" != pass ]; then
+            echo "::error::At FRUS-Explorer $WATCH_REF the kits' result is: $status. The watch issue and this run's summary say what failed."
+            exit 1
+          fi
+          echo "The package builds and every kit suite passes at $WATCH_REF."

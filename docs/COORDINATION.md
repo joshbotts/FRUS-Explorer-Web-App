@@ -9,7 +9,7 @@ The web edition does not reimplement the app. It compiles some of the app's own 
 
 ## The division of labour
 
-**Sessions working on the app follow four rules (section 4) and do nothing else for the web edition.** The rules protect the parts of the app's architecture the web edition stands on. Since #1569, a test in the app's normal Xcode run checks rules 1 and 2 for `FRUSCoreKit/`. For everything else, the web side's Linux builds catch what gets through: its CI at each pin move, and the daily watch of section 5 once a web session adds it. App sessions do not label, notify, run Linux builds or write web code. When app work and the web edition pull different ways, the app's work goes ahead, and the web side adapts.
+**Sessions working on the app follow four rules (section 4) and do nothing else for the web edition.** The rules protect the parts of the app's architecture the web edition stands on. Since #1569, a test in the app's normal Xcode run checks rules 1 and 2 for `FRUSCoreKit/`. For everything else, the web side's Linux builds catch what gets through: its CI at each pin move, and the daily watch of section 5, which builds and tests `v2`'s head. App sessions do not label, notify, run Linux builds or write web code. When app work and the web edition pull different ways, the app's work goes ahead, and the web side adapts.
 
 **Sessions working on the web edition carry the rest, at their own token cost:**
 - they watch the app's repository and repair what stops building on Linux;
@@ -171,7 +171,7 @@ These structures let the two codebases share code without app sessions having to
 
 - **Kit folders, compiled twice.** FTS5Store, SourceNoteKit, TEIHeaderKit, SemanticVectorsKit and `FRUSCoreKit/` are top-level folders. Both app targets compile them as source, and the package also builds each as an SPM target. CrossRefKit, GeneratorKit and ManifestGeneratorCore are SPM targets only.
   - The SPM build compiles a kit alone, so it is where a kit naming an app declaration first fails.
-  - A Linux-only break, such as an unguarded Apple import, shows only in a Linux build: the web CI, and the daily watch once it is added.
+  - A Linux-only break, such as an unguarded Apple import, shows only in a Linux build: the web CI, and the daily watch of `v2`.
 - **A boundary test in the normal Xcode run.** `FRUSCoreKitBoundaryTests` fails when a `FRUSCoreKit/` file:
   - imports anything but Foundation, except FoundationXML, CryptoKit, swift-crypto's `Crypto` and SourceNoteKit, and since #1573 OSLog, SQLite3 (`CSQLite` on Linux) and FTS5Store, each inside the `canImport` branch that selects it (any other import fails, guarded or not);
   - reads `Bundle.main` or `UserDefaults`;
@@ -213,13 +213,19 @@ The whole of the app side's part. Each rule costs little or nothing. The boundar
 
 | Task | When | How |
 | --- | --- | --- |
-| Watch the app's `v2` | Daily | A scheduled web CI job, which S12a adds (`PLAN.md`), builds and tests the shared kits at `v2`'s head on Linux. It also compares the index version, FTS generation and export stamp with the pin, and opens a web issue for anything new |
+| Watch the app's `v2` | Daily | A scheduled web CI job, which S12a added (described below the table), builds and tests the shared kits at `v2`'s head on Linux. It also compares the index version, FTS generation, export stamp, index resources, schema and bundled resources with the pin, and keeps one web issue on what is new |
 | Repair breaks | When the watch fails, or a pin move's golden files differ | The smallest fix that leaves behaviour on Apple platforms unchanged: a web-side change when a kit's API or the index contract moved; otherwise a pull request on the app's repository that adds a guard, passes a value in, or moves a declaration into a kit. The app's change is never reverted |
 | App changes only the web edition needs | When a web session needs one | A pull request on the app's repository, written by the web session (list below) |
 | Pin moves | See the cadence below | Web pull request (checklist below) |
 | Conflicts | When a web-authored pull request conflicts with app work | The web side merges `v2` into its branch and resolves the conflict, as the app's own workflows do, with no rebase or force-push. Before asking for the merge, it lists the app's open pull requests that touch the lines it moves, so the owner can merge it after they land. App work never waits, and never has to port a web move |
 | Boundary-test upkeep | If it ever trips on an app-only change | A pull request on the app's repository that narrows the test |
 | This document, and the app's `CLAUDE.md` section | When the rules or the architecture change | Web-authored pull requests in both repositories |
+
+**The daily watch** is `.github/workflows/upstream-watch.yml`, added by S12a, which runs `scripts/upstream-watch` at 06:17 UTC each day and on demand from the Actions tab (Run workflow, with a ref other than `v2` if wanted, and a dry run that writes no issue):
+- In `swift:6.4-noble`, as the web CI's swift job, it moves the submodule to `v2`'s head inside the job only, builds this package, and runs each test target on its own. A build break or a failing kit suite is the watch's finding, and fails the run, so its failure reaches the owner. The web edition's own tests check the pin's facts, so they fail past it by design: the watch lists them as information for the next pin move.
+- It compares `v2` with the pin: the index version (`IndexingPipeline.currentDateIndexVersion`), the FTS generation (`FTS5Connection.currentSchemaGeneration`), the JSON export's stamp (`ResearchDataExporter.currentFormatVersion`), `IndexingResources.indexResourceNames`, FRUSCoreKit's and FTS5Store's `CREATE TABLE` and `ALTER TABLE` statements, the bundled resources added, changed or removed under `FRUSExplorer/Resources`, and the commits since the pin.
+- It writes the report to the run's summary and to one issue labelled `upstream-watch`: it opens one when `v2` is past the pin and none is open, otherwise rewrites the open one's description, and comments when `v2`'s head or the kits' result changed, so a quiet day sends nothing. When nothing is past the pin and the kits pass, it closes the issue.
+- It never moves the pin, never publishes, and needs only `contents: read` and `issues: write`. A pull request that changes the watch runs it in its dry mode; its jobs are not `main`'s required checks.
 
 **Web-authored pull requests on the app's repository.** Each one:
 - follows the app's conventions: a `claude/<topic>` branch, an outcome-sentence title, a session entry in `Planning/DEVELOPMENT-PLAN.md`, and version-history lines;
@@ -250,7 +256,7 @@ The whole of the app side's part. Each rule costs little or nothing. The boundar
 ## 6. For the owner
 
 1. **Sections 4 and 5 are the arrangement.** #1572 added the appendix block to the app's `CLAUDE.md`. That block replaces the `CLAUDE.md` line offered as an owner item in #1567. #1569 added a FRUSCoreKit entry to `CLAUDE.md`'s list of package targets; the block points to that entry rather than repeating it.
-2. **Allow the daily watch.** It runs in the web repository's GitHub Actions and needs nothing from the app's repository, which is public.
+2. **The daily watch** runs in the web repository's GitHub Actions and needs nothing from the app's repository, which is public. Its issue, labelled `upstream-watch`, is the owner's notice that the app has moved past the pin.
 3. **Expect these requests from web sessions:**
    - a Mac check and merge for each web-authored pull request;
    - now and then, an export from the pinned app build: three volumes for the golden files, or any export when the schema changes;

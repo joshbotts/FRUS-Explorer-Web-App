@@ -2,6 +2,39 @@
 
 One entry per session, newest first.
 
+## Session 12a: the daily watch of `v2`
+
+22 October 2026 · branch `claude/s12a-upstream-watch-b8c058` · upstream `757c6d29`, unchanged
+
+The owner approved the plan of [issue #37](https://github.com/joshbotts/FRUS-Explorer-Web-App/issues/37)'s revision and asked for S12a: the daily watch COORDINATION §5 gives web sessions, whose absence let 85 of the app's commits go unseen.
+
+**The watch**
+
+- **`.github/workflows/upstream-watch.yml`** runs daily at 06:17 UTC and from the Actions tab's Run workflow, with a ref other than `v2` and a dry run as options. It needs `contents: read` and, in its report job only, `issues: write`. It never moves the pin and never publishes.
+- **`scripts/upstream-watch`** does the work, and each step also runs on a Mac:
+  - `checkout` moves the submodule's working tree to `v2`'s head inside the job, never staging it;
+  - `test`, in `swift:6.4-noble` with ci.yml's cache restored and this package's targets built clean, builds the package and runs each test target on its own. A build break or a kit suite's failure is the watch's finding, and fails the scheduled run. This package's own tests check the pin's facts, so they fail past it by design, and are listed by suite as information for the pin move;
+  - `report` compares `v2` with the pin: the index version, the FTS generation, the JSON export's `formatVersion`, `indexResourceNames`, FRUSCoreKit's and FTS5Store's `CREATE TABLE` and `ALTER TABLE` statements (read from the sources, with Swift's interpolations kept whole), the bundled resources added, changed or removed, and the commits since the pin, whose pull-request numbers sit in code spans so they neither link here nor mention the app's pull requests;
+  - `issue` keeps one issue labelled `upstream-watch`: it opens one when `v2` is past the pin and none is open, otherwise rewrites the open one's description, and comments only when `v2`'s head or the kits' result changed. When nothing is past the pin and the kits pass, it closes the issue.
+- **On a pull request** that changes the watch, the workflow runs at `v2`'s head in its dry mode: it prints the issue writes, and fails on nothing `v2` does. Its jobs, `watch-selftest`, `watch-kits` and `watch-report`, are not `main`'s required checks.
+
+**Checked**
+
+- **A run at `v2`'s head** (`f0479037`, `build-51`), locally in `swift:6.4-noble` on arm64 and in this pull request's dry run on CI: index version 69 → 71, the FTS generation 4 and the export's `formatVersion` 6 unchanged, `cited-page-map` the sixth index resource, `cited-page-map.json` added and `gemma-terms-of-use.txt` removed among 15 resource changes, the 47 schema statements unchanged, and 85 commits. Every kit suite passes, with the counts issue #37's dry run found (FRUSCoreKitTests 1,144, SourceNoteKitTests 321, FTS5StoreTests 212 with its one allowed skip, ManifestGeneratorTests 60, SemanticVectorsKitTests 40, CrossRefKitTests 10, GeneratorKitTests 7). FRUSLightCoreTests, FRUSLightServerTests and FRUSParityTests fail where S12b expects.
+- **The issue logic,** by `scripts/upstream-watch selftest` against a stub `gh`, in CI's `watch-selftest`: no issue while nothing is past the pin; one opened; a second run at the same head updates it with no comment; a new head updates the same issue with a comment; a dry run finds it and writes nothing; it closes when nothing is past the pin, and a later change opens a new one. A dry run against this repository, which has no watch issue yet, would open one.
+- **The schema reader** was checked against the upstream commit that moved the index's tables into FRUSCoreKit, where it reports all 42 of that kit's statements as new.
+
+**Records**
+
+- `COORDINATION.md`: §1 and §3 no longer say the watch is to come, §5's row and a paragraph below its table say what it does, and §6 says what its issue is for.
+- `PLAN.md`, on top of PR #38's revision, merged while this one was open, and its shared copy (rev 174): an owner checkpoint for the watch's first run, which S12a's done-when needs and only the owner can make once the workflow is on `main`. This log.
+
+**For the owner after the merge**
+
+- The first run: Actions → upstream-watch → Run workflow, on `main`, with `v2`. It opens the watch issue with the report above; the label is created on that run.
+
+**Next: S12b, the pin move to build-51 (build 1776).**
+
 ## Issue #37: the plan catches up with FRUS Explorer 1.0
 
 22 October 2026 · branch `claude/issue-37-dev-plan-revision-846914` · upstream `757c6d29`, unchanged
