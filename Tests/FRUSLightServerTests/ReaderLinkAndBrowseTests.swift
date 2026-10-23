@@ -81,9 +81,11 @@ private func formEncoded(_ fields: [String: String]) -> String {
         try await before.app.test(.router) { client in
             let khrushchev = try decode(ReaderLinkTarget.self, try await client.execute(uri: linkURI("frusexplorer://person/p_KNS2"), method: .get))
             #expect(khrushchev.person?.name == "Khrushchev, Nikita S." && khrushchev.mentionCount == nil)
-            // Nor does a page land anywhere before an import.
+            // Before an import no volume is the index's, so a page the bundled page map names nothing
+            // on opens its volume, where the kit's PageLink sends it, as a link to the whole volume.
             let page = try decode(ReaderLinkTarget.self, try await client.execute(uri: linkURI("frusexplorer://doc/%23pg_1"), method: .get))
-            #expect(page.destination == nil && page.volume?.indexed == false)
+            #expect(page.destination == nil && page.volume?.indexed == false && page.volume?.teiAvailable == true)
+            #expect(page.volumeId == v06 && page.wholeVolumeLink == "browse")
         }
     }
 
@@ -111,32 +113,57 @@ private func formEncoded(_ fields: [String: String]) -> String {
             #expect(v05.destination?.volumeId == "frus1961-63v05" && v05.destination?.documentId == "d28")
             #expect(v05.volume?.teiAvailable == false && v05.volume?.indexed == false)
             #expect(v05.destination?.canonicalURL == "https://history.state.gov/historicaldocuments/frus1961-63v05/d28")
-            // A page lands on the document the index's page ranges place there: d1 and d2 begin pages 1 and 2.
+            // A page lands where the kit's PageLink sends it. In a volume the index holds, on the
+            // document its page ranges place there: d1 and d2 begin pages 1 and 2.
             let page2 = try await resolve("frusexplorer://doc/%23pg_2", in: "d1")
             #expect(page2.kind == "page" && page2.page == 2 && page2.pageVolumeId == v06 && page2.inPlace == false)
             #expect(page2.destination?.documentId == "d2" && page2.destination?.footnoteAnchor == nil && page2.volume?.indexed == true)
+            #expect(page2.volumeId == nil && page2.wholeVolumeLink == nil)
             #expect(try await resolve("frusexplorer://doc/%23pg_1", in: "d2").destination?.documentId == "d1")
-            // A page the index places nowhere, and a volume it does not hold, land nowhere.
+            // Where they place nothing, the bundled page map answers: page 3 holds d4, which the
+            // synthetic index lacks. On page 313 the map names nothing either, so the link leads nowhere.
+            let mapped = try await resolve("frusexplorer://doc/%23pg_3", in: "d1")
+            #expect(mapped.destination?.documentId == "d4" && mapped.volumeId == nil && mapped.volume?.indexed == true)
             let unplaced = try await resolve("frusexplorer://doc/%23pg_313", in: "d2")
             #expect(unplaced.pageVolumeId == v06 && unplaced.destination == nil && unplaced.volume?.indexed == true)
+            #expect(unplaced.volumeId == nil && unplaced.wholeVolumeLink == nil)
+            // In a volume the index does not hold, on the document the map names: Volume XIV's
+            // page 387, in d21, is d137, which this server can neither read nor search.
             let page = try await resolve("frusexplorer://doc/frus1961-63v14%23pg_387/frus1961-63v14", in: "d21")
-            #expect(page.kind == "page" && page.page == 387 && page.pageVolumeId == "frus1961-63v14" && page.destination == nil)
+            #expect(page.kind == "page" && page.page == 387 && page.pageVolumeId == "frus1961-63v14" && page.inPlace == false)
+            #expect(page.destination?.volumeId == "frus1961-63v14" && page.destination?.documentId == "d137" && page.volumeId == nil)
+            #expect(page.destination?.canonicalURL == "https://history.state.gov/historicaldocuments/frus1961-63v14/d137")
             #expect(page.volume?.indexed == false && page.volume?.teiAvailable == false)
+            // Where the map names nothing, the volume opens, as a link to the whole volume opens it: in
+            // Browse for one the catalogue holds, as d42's link to page 859 of Volume XIV does...
+            let unmapped = try await resolve("frusexplorer://doc/frus1961-63v14%23pg_859/frus1961-63v14", in: "d42")
+            #expect(unmapped.kind == "page" && unmapped.page == 859 && unmapped.destination == nil)
+            #expect(unmapped.volumeId == "frus1961-63v14" && unmapped.wholeVolumeLink == "browse")
+            #expect(unmapped.url == "https://history.state.gov/historicaldocuments/frus1961-63v14")
+            #expect(unmapped.volume?.indexed == false && unmapped.volume?.teiAvailable == false)
+            // ...and on history.state.gov for one outside it.
+            let outside = try await resolve("frusexplorer://doc/frus1961-63v13-15mSupp%23pg_5/frus1961-63v13-15mSupp", in: "preface")
+            #expect(outside.kind == "page" && outside.destination == nil && outside.volume == nil)
+            #expect(outside.volumeId == "frus1961-63v13-15mSupp" && outside.wholeVolumeLink == "web")
+            #expect(outside.url == "https://history.state.gov/historicaldocuments/frus1961-63v13-15mSupp")
             let external = try await resolve("frusexplorer://doc/https%3A%2F%2Fhistory.state.gov%2Fabout", in: "d1")
             #expect(external.kind == "external" && external.url == "https://history.state.gov/about")
             #expect(try await resolve("frusexplorer://doc/%23fn3", in: "d1").kind == "unresolved")
             // A target naming a whole volume is the volume (joshbotts/FRUS-Explorer#1603): Volume V is in
             // the catalogue though neither mounted nor indexed here, and the microfiche supplement the
             // preface names is outside it.
+            // Each opens where the kit's WholeVolumeLink sends it.
             let whole = try await resolve("frusexplorer://doc/frus1961-63v05", in: "preface")
             #expect(whole.kind == "volume" && whole.volumeId == "frus1961-63v05" && whole.target == "frus1961-63v05")
             #expect(whole.destination == nil && whole.volume?.teiAvailable == false && whole.volume?.indexed == false)
-            #expect(whole.url == "https://history.state.gov/historicaldocuments/frus1961-63v05")
+            #expect(whole.wholeVolumeLink == "browse" && whole.url == "https://history.state.gov/historicaldocuments/frus1961-63v05")
             let itself = try await resolve("frusexplorer://doc/frus1961-63v06", in: "preface")
             #expect(itself.kind == "volume" && itself.volume == .init(title: v06Title, teiAvailable: true, indexed: true))
+            #expect(itself.wholeVolumeLink == "browse")
             let supplement = try await resolve("frusexplorer://doc/frus1961-63v13-15mSupp", in: "preface")
             #expect(supplement.kind == "volume" && supplement.volumeId == "frus1961-63v13-15mSupp" && supplement.volume == nil)
             // Outside the catalogue, the app opens the volume's page on history.state.gov, as the kit spells it.
+            #expect(supplement.wholeVolumeLink == "web")
             #expect(supplement.url == "https://history.state.gov/historicaldocuments/frus1961-63v13-15mSupp")
             // No fixture volume has a broken reference.
             let broken = try await resolve("frusexplorer://brokenref/%23pg_700", in: "d1")
@@ -159,8 +186,10 @@ private func formEncoded(_ fields: [String: String]) -> String {
                     // Every person and term the fixtures name is in its volume's lists.
                     if target.kind == "person" { #expect(target.person != nil, "\(href)") }
                     if target.kind == "gloss" { #expect(target.term != nil, "\(href)") }
-                    // d7 and d21 name Volume V as a whole.
-                    if target.kind == "volume" { #expect(target.volumeId != nil && target.volume != nil, "\(href)") }
+                    // d7 and d21 name Volume V as a whole, which opens in Browse.
+                    if target.kind == "volume" {
+                        #expect(target.volumeId != nil && target.volume != nil && target.wholeVolumeLink == "browse", "\(href)")
+                    }
                 }
             }
         }
@@ -174,7 +203,8 @@ private func formEncoded(_ fields: [String: String]) -> String {
         let index = try JSONDecoder().decode(BrokenRefsIndex.self, from: Data("""
             {"records":[{"sv":"frus1961-63v06","sd":"d2","t":"#d1","r":"unknownAnchor","rv":"frus1961-63v06","ra":"d1"}]}
             """.utf8))
-        let resources = ServerResources(directory: bundled.directory, manifest: bundled.manifest, brokenRefs: index, indexing: bundled.indexing)
+        let resources = ServerResources(directory: bundled.directory, manifest: bundled.manifest, brokenRefs: index,
+                                        citedPages: bundled.citedPages, indexing: bundled.indexing)
         let reader = ReaderService(volumesDirectory: fixture.files.volumesDirectory, resources: resources)
         let app = Application(router: buildRouter(state: fixture.state, resources: resources, reader: reader))
         try await app.test(.router) { client in

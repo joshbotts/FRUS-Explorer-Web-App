@@ -1,8 +1,8 @@
 // A volume (SPEC, Browse): its title, publication and editors, how many of its documents this
 // server indexes, and its sections; or, when neither the index nor the TEI gives its sections, the
-// index's reading order.
+// index's reading order. A page link that opened it is named first.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getRouteApi, Link } from '@tanstack/react-router';
+import { getRouteApi, Link, useLocation } from '@tanstack/react-router';
 import { ApiError } from '../api/client';
 import { readingOrderQuery, volumeQuery, volumesQuery } from '../api/endpoints';
 import { copy } from '../copy';
@@ -23,6 +23,10 @@ export function VolumeScreen() {
   const title = data?.title ?? listed?.title ?? volumeId;
   useDocumentTitle(title);
   useHeadingReady(!volume.isPending || listed !== undefined);
+  // The page a page link was to, when it opened this page since no document on it can be named
+  // without the volume (the kit's PageLink.volume): the visit that link made names it, as the app's
+  // volume page names FollowedPageLink, and a later visit, by any other route, does not.
+  const followedPage = useLocation({ select: (location) => location.state.followedPage });
 
   return (
     <section className="screen browse-volume">
@@ -37,6 +41,8 @@ export function VolumeScreen() {
       )}
       {data && (
         <>
+          {/* First, as the app puts it first, until the server indexes the volume. */}
+          {followedPage !== undefined && !data.indexed && <p>{copy.browse.followedPage(followedPage, data.teiAvailable)}</p>}
           <div className="volume-meta">
             {data.publicationDate && <p>{copy.browse.published(data.publicationDate)}</p>}
             {data.editors.length > 0 && <p>{data.editors.join(', ')}</p>}

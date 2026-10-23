@@ -1,7 +1,8 @@
 // The reader (SPEC, Reader rendering and Reader and Research rail): the document's header and
 // toolbar, the server's page in a sandboxed frame, the Cite rail beside it, and what the page's
-// links lead to: another document or a note in one, a whole volume in Browse or, outside the
-// catalogue, on history.state.gov, or a card for a person, a term or an unresolved reference.
+// links lead to: another document or a note in one, the document on a printed page, a whole
+// volume in Browse or, outside the catalogue, on history.state.gov, or a card for a person, a term
+// or an unresolved reference.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from 'react';
@@ -113,6 +114,32 @@ export function ReaderScreen() {
     }
   }
 
+  /**
+   * Opens the volume a link opens where the kit's WholeVolumeLink sends it, as the server says: its
+   * page in Browse, which names the page a page link was to, or, outside the catalogue, its page on
+   * history.state.gov, which the notice offers.
+   */
+  function openVolume(target: ReaderLinkTarget, followedPage?: number) {
+    if (target.wholeVolumeLink === 'browse' && target.volumeId) {
+      void navigate({
+        to: '/browse/$volumeId',
+        params: { volumeId: target.volumeId },
+        state: followedPage === undefined ? undefined : { followedPage },
+      });
+    } else if (target.wholeVolumeLink === 'web' && target.url) {
+      setNotice(
+        <>
+          {copy.reader.linkUnknownVolume}{' '}
+          <a href={target.url} target="_blank" rel="noopener noreferrer">
+            {copy.reader.openOnline}
+          </a>
+        </>,
+      );
+    } else {
+      setNotice(copy.reader.linkUnknownVolume);
+    }
+  }
+
   /** Acts on a link from the page, as the app does: the server says where it leads. */
   async function follow(href: string) {
     let target: ReaderLinkTarget;
@@ -132,42 +159,19 @@ export function ReaderScreen() {
         if (target.brokenReference) setCard(target);
         else say(copy.reader.linkBrokenUnknown);
         return;
-      case 'page': {
-        // A page lands on the document the index places on it, as a cross-reference does.
-        if (target.destination) {
-          open(target, target.destination);
-          return;
-        }
-        const page = target.page ?? 0;
-        say(
-          target.volume?.indexed
-            ? copy.reader.linkPageNotPlaced(page)
-            : target.volume
-              ? copy.reader.linkPageNotIndexed(page, plainTitle(target.volume.title))
-              : copy.reader.linkUnknownVolume,
-        );
+      case 'page':
+        // Where the kit's PageLink sends it: the document on the page, which opens as a
+        // cross-reference's does, or, where none can be named without the volume, the volume, as a
+        // link to the whole volume opens it. A page of a volume the index holds may name neither.
+        if (target.destination) open(target, target.destination);
+        else if (target.volumeId) openVolume(target, target.page);
+        else say(target.volume ? copy.reader.linkPageNotPlaced(target.page ?? 0) : copy.reader.linkUnknownVolume);
         return;
-      }
       case 'document':
         if (target.destination) open(target, target.destination);
         return;
       case 'volume':
-        // A whole volume opens in Browse when the catalogue holds it, as the app's WholeVolumeLink
-        // sends it there; the app opens any other on history.state.gov, which the notice offers.
-        if (target.volume && target.volumeId) {
-          void navigate({ to: '/browse/$volumeId', params: { volumeId: target.volumeId } });
-        } else if (target.url) {
-          say(
-            <>
-              {copy.reader.linkUnknownVolume}{' '}
-              <a href={target.url} target="_blank" rel="noopener noreferrer">
-                {copy.reader.openOnline}
-              </a>
-            </>,
-          );
-        } else {
-          say(copy.reader.linkUnknownVolume);
-        }
+        openVolume(target);
         return;
       case 'external':
         say(

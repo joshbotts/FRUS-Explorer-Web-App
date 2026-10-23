@@ -92,23 +92,24 @@ test('browses to a volume, opens a document, follows a link in it and opens a pe
   await expect(page).toHaveURL(/\/browse\/frus1961-63v06\/comp1$/);
 });
 
-test('a page link goes forward to the document on its page, and one this server cannot place says why', async ({ page }) => {
+test('a page link goes forward to the document on its page, and one nothing places says why', async ({ page }) => {
   // No fixture document links a page of its own volume, so the frame posts the link the kit writes
   // for one, as its host script posts a link: page 2 of frus1961-63v06, which d2 begins.
   await page.goto('/doc/frus1961-63v06/d1');
   await expect(page.frameLocator('iframe.reader-frame').getByText(d1Text)).toBeVisible();
-  const reader = page.frames().find((frame) => frame.url().includes('/documents/d1/html'));
-  await reader!.evaluate(() =>
-    window.parent.postMessage({ source: 'frus-reader', kind: 'link', detail: { href: 'frusexplorer://doc/%23pg_2' } }, '*'),
-  );
+  const post = async (documentId: string, href: string) => {
+    const reader = page.frames().find((frame) => frame.url().includes(`/documents/${documentId}/html`));
+    await reader!.evaluate((link) => window.parent.postMessage({ source: 'frus-reader', kind: 'link', detail: { href: link } }, '*'), href);
+  };
+  await post('d1', 'frusexplorer://doc/%23pg_2');
   await expect(page).toHaveURL(/\/doc\/frus1961-63v06\/d2$/);
   await expect(page.frameLocator('iframe.reader-frame').getByText(d2Text)).toBeVisible();
 
-  // "vol. XIV, p. 387" in d21: a volume this server has not indexed.
-  await page.goto('/doc/frus1961-63v06/d21');
-  await page.frameLocator('iframe.reader-frame').getByRole('link', { name: 'p. 387' }).first().click();
-  await expect(page.getByRole('status').filter({ hasText: 'Page 387 is in' })).toContainText('which this server hasn’t indexed');
-  await expect(page).toHaveURL(/\/doc\/frus1961-63v06\/d21$/);
+  // Page 313, on which neither the synthetic export's index nor the bundled page map names a
+  // document, so the kit's PageLink sends the link nowhere.
+  await post('d2', 'frusexplorer://doc/%23pg_313');
+  await expect(page.getByRole('status').filter({ hasText: 'page 313' })).toHaveText('This server’s index places no document on page 313.');
+  await expect(page).toHaveURL(/\/doc\/frus1961-63v06\/d2$/);
 });
 
 /** The id of the note's entry the app's footnote landing last brought the reader to, in the frame showing `documentId`. */

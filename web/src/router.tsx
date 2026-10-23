@@ -99,3 +99,15 @@ declare module '@tanstack/react-router' {
     router: typeof router;
   }
 }
+
+// What a navigation keeps in its history entry beside the URL. The router's HistoryState is
+// @tanstack/history's, which it re-exports.
+declare module '@tanstack/history' {
+  interface HistoryState {
+    /**
+     * The page a page link was to, when it opened the volume's page in Browse (the kit's
+     * PageLink.volume), which that visit to the page names, as the app keeps FollowedPageLink.
+     */
+    followedPage?: number;
+  }
+}
