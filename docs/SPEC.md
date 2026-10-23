@@ -559,7 +559,7 @@ Two sidecars are optional. `gotenberg/gotenberg:8` enables PDF export. A reverse
 ```yaml
 services:
   frus:
-    image: frus-explorer-light:48
+    image: frus-explorer-light:1.0-1861
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
@@ -634,7 +634,7 @@ Memory figures are estimates until phase 0 measures them. Phase 0's first measur
 
 ### Upgrades
 
-- Image tags follow the app build, for example `:48`. Each image states its `SUPPORTED_INDEX_VERSION` at `/api/v1/status`.
+- Release image tags name the app's version and build, for example `:1.0-1861`. Each image states its `SUPPORTED_INDEX_VERSION` at `/api/v1/status`.
 - On start, the server compares that version with the index. Standalone re-indexes in place from cached XML, volume by volume, as the Mac does; search stays up and names the pending volumes.
 - Import mode disables search until a matching export arrives. The reader keeps working from the TEI files.
 - `app.db` migrations are numbered and forward-only, and each runs after an automatic backup.

@@ -82,6 +82,31 @@ A full export is 2.83 GB, not 9.3 GB. The larger figure came from an index overh
 
 `FRUS-Explorer` merges about eight pull requests a day until its public release, and its index version went from 47 to 65 in 30 days. Each pin move means a new Mac build, a new export and new golden files. Hold the pin (at `757c6d29` since S11b's pin move) until the release, unless a merged pull request for this project needs it, as S3's did, or the owner's exports come from a newer index version, as build 50's did, and batch upstream pull requests so the pin moves as few times as possible. Each pin move remakes all the golden files: those made from the app's source, and those made from the owner's three-volume export, which needs a new export from the pinned build (`COORDINATION.md`, section 5). The first such export came from a build of `af8bedab`, on 4 October. The full-corpus export for S10 comes from the build pinned at S10.
 
+## The 1.0 pin move
+
+22 October 2026 · a dry run for S12b, at `build-51` (`f0479037`, build 1776, index version 71), 85 commits past the pin, from [issue #37](https://github.com/joshbotts/FRUS-Explorer-Web-App/issues/37)
+
+The submodule was checked out at `build-51` in a worktree, this package's own targets were rebuilt clean, and `scripts/swift test` ran in `swift:6.4-noble` on arm64. The pin was then restored; nothing here was committed at `build-51`.
+
+- **The build needs no repair.** The package, the server and every kit compile on Linux with no error and no warning. No kit folder, import or `Package.swift` setting has to change.
+- **Every kit suite passes:**
+  - FRUSCoreKitTests 1,144;
+  - SourceNoteKitTests 321;
+  - FTS5StoreTests 212;
+  - ManifestGeneratorTests 60;
+  - SemanticVectorsKitTests 40;
+  - CrossRefKitTests 10 and GeneratorKitTests 7.
+
+  The only skip is FTS5StoreTests' backup-exclusion test, which CI already allows. #1698's cancellation suite runs and passes on Linux.
+- **What fails is what a pin move expects,** all in the web edition's own tests:
+  - `CompatibilityTests`: the pin's index version is 71, and `Compatibility.swift` says 69. So the fixture index, now stamped 71, is refused at import, and every API parity test that imports it (check 3 through the API, the facets, the date order, the reader's links, Browse) stops at `waiting_for_export`.
+  - `APITests.theSubmodulesDataFilesLoad`: `ServerResources.requiredFiles` holds 6 files, not 5, with `cited-page-map.json`. `IndexResourcesTests` lists the four index files by name, and `indexResourceNames` now has five.
+  - `SummarizerTests`: the export's build is not 50.
+  - Every golden file is stale: the source digest moved from `24382592d086` to `096499b657e5`.
+  - `ParseParityTests`: 61 of the 482 queries parse differently, from parser 6.8 (#1770), which drops the marks at a term's ends.
+  - The renderer's parity tests: the three fixture volumes now give 393 rows, not 392, so the rendered rows and the golden rows no longer line up. #1746 stores rows for a heading's footnote and for prose the index left out, and the index parity test sees the same 393 `document_revisions` rows.
+- **Left to S12b with the 1.0 export:** whether the 393rd row's HTML and the other rows match the remade golden files; check 3's results with the new snippets; the index summary's digests; and the export's schema, whose `CREATE TABLE` statements the kit's diff does not change.
+
 ## Files
 
 | File | What it holds |
