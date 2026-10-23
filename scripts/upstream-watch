@@ -25,7 +25,7 @@
 #                                                 the kits' result changed, and a close when nothing
 #                                                 is past the pin. --dry-run prints the writes instead
 #                                                 of making them. Needs gh, and GH_TOKEN in Actions.
-#   scripts/upstream-watch selftest               runs the issue logic seven times against a stub gh,
+#   scripts/upstream-watch selftest               runs the issue logic eight times against a stub gh,
 #                                                 and checks it opens one issue and then updates it.
 # Works with macOS's bash 3.2.
 set -euo pipefail
@@ -267,7 +267,7 @@ cmd_test() {
     echo "| Target | | Result | Skips | Summary |"
     echo "| --- | --- | --- | --- | --- |"
   } >>"$out/tests.md"
-  local t kind rc result summary skips failures=""
+  local t kind rc result summary skips failures="" expected=""
   while read -r t kind; do
     echo "== $t ($kind)"
     rc=0
@@ -286,6 +286,13 @@ cmd_test() {
       failures="$failures$t
 "
     fi
+    if [ "$kind" = web ] && [ "$rc" -ne 0 ]; then
+      # The suites that failed, or the tests where a target has no suite.
+      names=$(grep -aoE '✘ Suite ("[^"]*"|[^ ]+)' "$out/$t.log" | sed -e 's/^✘ Suite //' | sort -u | paste -sd, - || true)
+      [ -n "$names" ] || names=$(grep -aoE '✘ Test ("[^"]*"|[^ ]+)' "$out/$t.log" | grep -v 'Test run' | sed -e 's/^✘ Test //' | sort -u | head -n 20 | paste -sd, - || true)
+      expected="$expected- $t: ${names:-see its log}
+"
+    fi
     if [ "$kind" = web ]; then kind="this package's"; fi
     printf '| %s | %s | %s | %s | %s |\n' "$t" "$kind" "$result" "${skips:-0}" "${summary:-no summary in the log}" >>"$out/tests.md"
   done < <(test_targets)
@@ -293,6 +300,12 @@ cmd_test() {
   {
     echo
     echo "The CI at the pin allows one skip, FTS5StoreTests' \`backupExclusion()\`; any other kit skip needs the allow-list's change at the pin move."
+    if [ -n "$expected" ]; then
+      echo
+      echo "This package's failing suites, for the pin move to bring up to date:"
+      echo
+      printf '%s' "$expected" | sed -e 's/,/, /g'
+    fi
     if [ -n "$failures" ]; then
       echo
       echo "**The kits' failures:**"
@@ -332,6 +345,7 @@ cmd_issue() {
     *)    title="Upstream watch: v2 is $count commits past the pin, at index version $index, and the kits' build or tests fail on Linux" ;;
   esac
 
+  said() { if [ -n "$dry" ]; then echo "Would $1"; else echo "$2"; fi; }
   write() {
     if [ -n "$dry" ]; then echo "dry run: gh $*" >&2; else $gh "$@"; fi
   }
@@ -346,7 +360,7 @@ cmd_issue() {
     write label create "$label" --repo "$repo" --color FBCA04 --force \
       --description "The daily watch of FRUS-Explorer's v2 (docs/COORDINATION.md, section 5)" >/dev/null
     write issue create --repo "$repo" --title "$title" --label "$label" --body-file "$report"
-    echo "Opened the watch issue."
+    echo "$(said open Opened) the watch issue."
     return 0
   fi
 
@@ -356,16 +370,16 @@ cmd_issue() {
   if [ "$count" -eq 0 ] && [ "$status" = pass ]; then
     write issue edit "$number" --repo "$repo" --title "Upstream watch: v2 has nothing past the pin" --body-file "$report" >/dev/null
     write issue close "$number" --repo "$repo" --comment "\`v2\` at \`$(short "$head")\` has nothing past the pin, and the kits pass on Linux, so this closes. The next change past the pin opens a new issue."
-    echo "Closed watch issue #$number."
+    echo "$(said close Closed) watch issue #$number."
     return 0
   fi
   write issue edit "$number" --repo "$repo" --title "$title" --body-file "$report" >/dev/null
   if [ "$head" != "$oldhead" ] || [ "$status" != "$oldstatus" ]; then
     write issue comment "$number" --repo "$repo" \
       --body "\`v2\` moved from \`$(short "${oldhead:-unknown}")\` to \`$(short "$head")\`, $count commits past the pin, at index version $index; the kits: $status (were ${oldstatus:-unknown}). The description has the new report."
-    echo "Updated watch issue #$number, with a comment."
+    echo "$(said update Updated) watch issue #$number, with a comment."
   else
-    echo "Updated watch issue #$number: v2 and the kits' result are as before."
+    echo "$(said update Updated) watch issue #$number: v2 and the kits' result are as before."
   fi
 }
 
@@ -412,6 +426,7 @@ STUB
   report bbbb 90 72 kits-failed; run >/dev/null
   check '[ "$(opened)" -eq 1 ] && [ "$(comments)" -eq 1 ]' "a new head updates the same issue, with a comment"
   check 'grep -q "head=bbbb" "$work/issues/1.body" && grep -q "fail on Linux" "$work/issues/1.title"' "the description and title follow the new report"
+  check '[ "$(UPSTREAM_WATCH_GH="$work/gh" GITHUB_REPOSITORY=example/repo "$root/scripts/upstream-watch" issue "$work/report" --dry-run 2>/dev/null)" = "Would update watch issue #1: v2 and the kits'"'"' result are as before." ] && [ "$(comments)" -eq 1 ]' "a dry run finds the open issue, and writes nothing"
   report cccc 0 72 pass; run >/dev/null
   check '[ "$(opened)" -eq 1 ] && [ ! -e "$work/issues/1.open" ]' "nothing past the pin closes it"
   report dddd 3 73 pass; run >/dev/null
