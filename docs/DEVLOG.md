@@ -19,17 +19,18 @@ The owner asked for issue #37 to be reviewed, and the plan revised to catch up w
 
 **The plan**
 
-- **S11f waits.** Three rows come first:
+- **S11f waits.** Four rows come first:
   - S12a, the daily watch of `v2`, which needs no Mac and no export;
-  - S12b, the pin move to `version-1.0` (build 1861). It starts at `build-51` as a draft and retargets once the tag exists;
-  - S12c, what 1.0 changed that the web edition serves: result dates and their precision, the reader's Reading Width, a replaced search stopping its statements, and the rows 1.0's index changed. Its upstream pull request moves #1778's page-map landing into the kit.
-- **Owner checkpoints:** the 1.0 export, the three-volume one for the golden files and a full one for the owner's install once `edge` serves version 71, and Mac check 7.
+  - S12b, the pin move to `build-51` (1.0, build 1776), for an image tagged `:1.0-1776`;
+  - S12c, what 1.0 changed that the web edition serves: result dates and their precision, the reader's Reading Width, a replaced search stopping its statements, and the rows 1.0's index changed. Its upstream pull request moves #1778's page-map landing into the kit;
+  - S12d, the short pin move to `version-1.0` (build 1861) once it is tagged, for `:1.0-1861`.
+- **Owner checkpoints:** a 1776 export and an 1861 export, each a three-volume one for the golden files and a full one for the owner's install, and Mac check 7.
 - **The upstream-churn risk** now records the gap, and the watch as its mitigation.
-- **The S12 answers** say which 1.0 changes come with the pin, which wait for phases 2–4, and what remains before a release. The owner answered the one question it left open: a release image is tagged with the app's version and build, `:1.0-1776` and `:1.0-1861`, joined by a hyphen since a tag cannot hold the slash asked for.
+- **The S12 answers** say which 1.0 changes come with the pin, which wait for phases 2–4, and what remains before a release. The owner answered the one question it left open: a release image is tagged with the app's version and build, `:1.0-1776` and `:1.0-1861`, joined by a hyphen since a tag cannot hold the slash asked for, and asked for both to be published, so the pin lands at `build-51` before `version-1.0`.
 
 **Records**
 
-- `PLAN.md` and its shared copy (rev 166): the S12 rows, the flowchart, the checkpoints, the risk row and the S12 answers.
+- `PLAN.md` and its shared copy (rev 173): the S12 rows, the flowchart, the checkpoints, the risk row and the S12 answers.
 - `COORDINATION.md`: the gap, and S12a as the watch's author.
 - `SPEC.md`: the release tags.
 - `docs/prep/README.md`: the dry run. This log.
@@ -38,7 +39,7 @@ The owner asked for issue #37 to be reviewed, and the plan revised to catch up w
 
 - No code changed. CI runs as it does on any pull request, at the pin.
 
-**Next: S12a,** the daily watch of the app's `v2`. S12b can start beside it at `build-51`, as a draft, and finishes once `version-1.0` is tagged and the owner's 1.0 export arrives.
+**Next: S12a,** the daily watch of the app's `v2`. S12b can start beside it at `build-51`: the owner made both 1776 exports the same evening, the three-volume one (393 rows) and the full one (553 volumes), each stamped build 1776 at index version 71.
 
 ## Session 11e: the Query Inspector, and the date order
 
