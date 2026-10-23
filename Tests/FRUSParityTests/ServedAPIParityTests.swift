@@ -73,7 +73,7 @@ struct ServedFile: Equatable {
 }
 
 @Suite struct ServedAPIParityTests {
-    static let coverage = Coverage(indexedVolumes: 3, indexedDocuments: 392, manifestVolumes: 553, indexVersion: IndexCompatibility.supportedIndexVersion)
+    static let coverage = Coverage(indexedVolumes: 3, indexedDocuments: 393, manifestVolumes: 553, indexVersion: IndexCompatibility.supportedIndexVersion)
 
     /// One page of a parity query's search, or the kit's refusal as an error.
     static func search(_ client: any TestClientProtocol, _ query: ParityQuery, limit: Int, offset: Int) async throws -> SearchResultList {
@@ -136,7 +136,7 @@ struct ServedFile: Equatable {
             return (status, records, inspections, anomalies, before, try ServedFile(files), live)
         }
 
-        #expect(status.index?.documents == 392 && status.index?.volumes == 3 && status.index?.exportedAt == nil)
+        #expect(status.index?.documents == 393 && status.index?.volumes == 3 && status.index?.exportedAt == nil)
         #expect(status.lastImport?.outcome == .installed)
         #expect(before.names == ["frus.db"] && before.versions == [1, 1])
         #expect(after == before, "the searches changed the live index or its folder")

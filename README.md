@@ -17,7 +17,7 @@ Phase 1 is done: a Docker Compose install that serves a FRUS Explorer research e
 
 **Known gaps**
 
-- **Behind FRUS Explorer 1.0.** The pin is build 50, at index version 69. Exports from the app's 1.0 builds, at index version 71, are refused until the pin moves.
+- **Behind FRUS Explorer 1.0's last steps.** The pin is 1.0 build 1776, the TestFlight build, at index version 71: the server serves that build's exports, and its image is also tagged `:1.0-1776`. What 1.0 changed that the web edition shows waits for S12c, and the App Store build, 1861, for S12d.
 - **Phase-1 features still to come:** the timeline and concordance readings, a volume's own-text rows in Browse, and faster exact-word search.
 - **Later phases:**
   - no notes, highlights or collections on the web (phase 2);
@@ -27,11 +27,10 @@ Phase 1 is done: a Docker Compose install that serves a FRUS Explorer research e
 
 **Next**
 
-1. **S12b**, under way: the pin moves to FRUS Explorer 1.0 build 1776, and CI publishes `:1.0-1776`.
-2. **S12c**: what 1.0 changed that the web edition shows, such as result dates and the reader's Reading Width.
-3. **S12d**: the pin moves to 1.0 build 1861, the App Store build, and CI publishes `:1.0-1861`.
-4. **S11f**: the timeline and concordance readings.
-5. **Phase 2**: user data and its nightly backup.
+1. **S12c**: what 1.0 changed that the web edition shows, such as result dates and the reader's Reading Width.
+2. **S12d**: the pin moves to 1.0 build 1861, the App Store build, and CI publishes `:1.0-1861`.
+3. **S11f**: the timeline and concordance readings.
+4. **Phase 2**: user data and its nightly backup.
 
 ## Goals
 

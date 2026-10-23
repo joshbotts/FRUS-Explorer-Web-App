@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# FRUS Explorer Light: prints the release tag of an image built at the pinned app commit.
+#   scripts/release-tag    prints <version>-<build>, such as 1.0-1776
+# The version and build are the pinned FRUS-Explorer's MARKETING_VERSION and
+# CURRENT_PROJECT_VERSION in its project.yml: the app whose exports the image serves. A hyphen
+# joins them, since a Docker tag cannot hold the slash of 1.0/1776. Every target there must name
+# the same pair, and each must be numbers and dots; otherwise it fails, and image.yml publishes
+# nothing. FRUS_PROJECT_YML reads another project.yml, for a test.
+set -euo pipefail
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+spec=${FRUS_PROJECT_YML:-$root/upstream/FRUS-Explorer/project.yml}
+[[ -f $spec ]] || { echo "scripts/release-tag: no $spec: check out the submodule" >&2; exit 1; }
+
+# The value each target gives the setting, without quotes or a trailing comment. A line that only
+# mentions it, such as CFBundleVersion: "$(CURRENT_PROJECT_VERSION)", is not one of them.
+setting() {
+  grep -E "^[[:space:]]+$1:" "$spec" \
+    | sed -E "s/^[[:space:]]+$1:[[:space:]]*//; s/[[:space:]]+(#.*)?\$//; s/^\"(.*)\"\$/\\1/; s/^'(.*)'\$/\\1/" \
+    | sort -u
+}
+
+value() {
+  local name=$1 pattern=$2 values
+  values=$(setting "$name")
+  if [[ -z $values ]]; then
+    echo "scripts/release-tag: $spec sets no $name" >&2; exit 1
+  elif [[ $(wc -l <<<"$values") -ne 1 ]]; then
+    echo "scripts/release-tag: $spec's targets set $name to $(paste -sd, - <<<"$values")" >&2; exit 1
+  elif ! [[ $values =~ $pattern ]]; then
+    echo "scripts/release-tag: $name is \"$values\", which is not a version a tag can name" >&2; exit 1
+  fi
+  printf '%s' "$values"
+}
+
+version=$(value MARKETING_VERSION '^[0-9]+(\.[0-9]+)*$')
+build=$(value CURRENT_PROJECT_VERSION '^[0-9]+$')
+echo "$version-$build"

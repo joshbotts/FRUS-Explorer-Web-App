@@ -1,9 +1,14 @@
 # FRUS Explorer Light: publishes the image to GitHub Container Registry from main.
 #   ghcr.io/joshbotts/frus-explorer-light:sha-<commit>  each build of main (first 7 characters)
 #   ghcr.io/joshbotts/frus-explorer-light:edge          the newest build that passed its smoke test
+#   ghcr.io/joshbotts/frus-explorer-light:1.0-1776      the newest such build at a pin whose app is
+#                                                       version 1.0, build 1776
 # Each architecture builds natively, amd64 and arm64 side by side, and pushes by digest. The
 # publish job joins them under the commit's tag; verify runs the Compose smoke test against that
-# tag on both architectures; only then does promote move edge.
+# tag on both architectures; only then does promote move edge and the release tag. The release tag
+# is <version>-<build>, which scripts/release-tag reads from the pinned app's project.yml, so it
+# names the app build whose exports the image serves. It moves with edge while the pin holds that
+# build, and stays on the last build of it once the pin moves on.
 # A pull request that changes the image, the server or the browser app builds both architectures
 # and pushes nothing, and so does a manual run on any branch but main: sessions never publish (rule 7).
 name: image
@@ -50,6 +55,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      release: ${{ steps.release.outputs.tag }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -58,6 +65,13 @@ jobs:
       - name: Version
         id: version
         run: echo "version=$(grep -oE 'string = "[^"]+"' Sources/FRUSLightCore/Compatibility.swift | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
+
+      - name: Release tag
+        id: release
+        run: |
+          tag=$(scripts/release-tag)
+          echo "The pinned app's release tag is $tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v4
 
@@ -168,7 +182,7 @@ jobs:
 
   promote:
     name: promote to edge
-    needs: [publish, verify]
+    needs: [build, publish, verify]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -183,7 +197,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Move edge to the verified build
+      - name: Move edge and the release tag to the verified build
         run: |
-          docker buildx imagetools create --tag "$IMAGE:edge" "$IMAGE:${{ needs.publish.outputs.tag }}"
+          docker buildx imagetools create --tag "$IMAGE:edge" --tag "$IMAGE:$RELEASE" "$IMAGE:${{ needs.publish.outputs.tag }}"
           docker buildx imagetools inspect "$IMAGE:edge"
+          docker buildx imagetools inspect "$IMAGE:$RELEASE"
+        env:
+          RELEASE: ${{ needs.build.outputs.release }}

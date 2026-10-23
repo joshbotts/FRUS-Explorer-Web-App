@@ -50,6 +50,7 @@ func servingSyntheticExport(volumes: [String] = [], edits: String? = nil) async 
             #expect(list.total == 2 && list.countBasis == "exact" && list.retainedLimit == 7_500)
             #expect(list.limit == 20 && list.offset == 0)
             #expect(Set(list.items.map(\.documentId)) == ["d1", "d2"] && list.items.allSatisfy { $0.volumeId == "frus1961-63v06" })
+            // Both match in their prose, so both mark it (aSnippetMarksAMatchOnlyInTheProse).
             #expect(list.items.allSatisfy { $0.snippet.contains("<b>") && $0.bm25Score < 0 })
             #expect(list.coverage == Coverage(indexedVolumes: 2, indexedDocuments: 3, manifestVolumes: 553, indexVersion: IndexCompatibility.supportedIndexVersion))
             #expect(list.items.first?.header.isEmpty == false)
@@ -95,6 +96,36 @@ func servingSyntheticExport(volumes: [String] = [], edits: String? = nil) async 
             let treaties = try decode(SearchResultList.self, try await client.execute(uri: "/api/v1/search?keywords=treaties", method: .get))
             #expect(treaties.items.allSatisfy { $0.displayTitle == $0.header && !$0.headerRepeatsNumber })
             #expect(Set(treaties.items.map(\.documentLabel)) == ["Doc 1", "Doc 2"])
+        }
+    }
+
+    /// A snippet marks its match only in the document's own prose (#1736). A body opens with the
+    /// row's heading, source note and dateline, which the row draws already: a row whose only match
+    /// is there gets the opening of its prose with nothing marked, and a row with no match in its
+    /// body at all its heading and dateline again, as the Mac's window draws both.
+    @Test func aSnippetMarksAMatchOnlyInTheProse() async throws {
+        let fixture = try await servingSyntheticExport(edits: """
+            UPDATE document_cache SET dateline = 'Moscow, November 9, 1960.',
+                body_text = '1. Telegram From the Embassy in the Soviet Union Moscow, November 9, 1960. '
+                    || 'The ambassador was negotiating treaties with the minister.'
+              WHERE volume_id = 'frus1961-63v06' AND document_id = 'd1';
+            """)
+        try await fixture.app.test(.router) { client in
+            func snippets(_ keywords: String) async throws -> [String: String] {
+                let list = try decode(SearchResultList.self, try await client.execute(uri: "/api/v1/search?keywords=\(keywords)", method: .get))
+                return Dictionary(uniqueKeysWithValues: list.items.map { ("\($0.volumeId)/\($0.documentId)", $0.snippet) })
+            }
+            let prose = try await snippets("treaties")
+            #expect(prose["frus1961-63v06/d1"]?.hasPrefix("The ambassador was negotiating <b>treaties</b>") == true)
+            #expect(prose["frus1961-63v06/d2"]?.contains("<b>treaties</b>") == true)
+            // In the heading the body opens with, and in the dateline after it: the prose, unmarked.
+            for keywords in ["embassy", "moscow"] {
+                let heading = try await snippets(keywords)
+                #expect(heading == ["frus1961-63v06/d1": "The ambassador was negotiating treaties with the minister."], "\(keywords)")
+            }
+            // In the heading alone, which the body does not repeat: the heading again.
+            let header = try await snippets("gresham")
+            #expect(header == ["frus1894Nicaragua/d1": "No. 1. Mr. Baker to Mr. Gresham"])
         }
     }
 

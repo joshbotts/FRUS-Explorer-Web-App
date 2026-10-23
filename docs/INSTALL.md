@@ -13,7 +13,7 @@ FRUS Explorer Light runs as one container on a Mac or a Linux host, serving a re
   - an import needs room for the export and a copy while it is checked;
   - a later import keeps the previous index for rollback, so a re-import needs about four times the index while it runs.
 - **Memory.** Importing and serving the full corpus used about 130 MB, and the reader levelled off at about 170 MB over the largest volumes, so Docker Desktop's default allocation is plenty. A search ordered by date holds up to 7,500 results, as the app's search window does, and the server keeps the last two such searches: by estimate, up to about 40 MB more.
-- **A FRUS Explorer research export** from a Mac running a build that matches the server's index version: 69 today, FRUS Explorer build 50. The server refuses any other version and says which it needs.
+- **A FRUS Explorer research export** from a Mac running a build that matches the server's index version: 71 today, FRUS Explorer 1.0 (build 1776). The server refuses any other version and says which it needs.
 - **The TEI volumes**, which the reader renders documents from. Without them the server still imports and serves the index.
 
 ## 1. Get the Compose file
@@ -190,7 +190,9 @@ A refused file stays in the drop zone. `/api/v1/status` says why, under `lastImp
 docker compose pull && docker compose up -d
 ```
 
-`edge` is the newest build of the project's main branch that passed its smoke test on both architectures. The index stays in the volume. If the new server serves a different index version, `/readyz` answers `index_version_mismatch`, naming both versions: export again from a matching FRUS Explorer build and copy it in. The first such change came with FRUS Explorer build 50, which moved the index from version 65 to 69. To stay on one build, set `FRUS_IMAGE=ghcr.io/joshbotts/frus-explorer-light:sha-<commit>` in `.env`, where `<commit>` is the first 7 characters of a commit on the main branch.
+`edge` is the newest build of the project's main branch that passed its smoke test on both architectures. The index stays in the volume. If the new server serves a different index version, `/readyz` answers `index_version_mismatch`, naming both versions: export again from a matching FRUS Explorer build and copy it in. The first such change came with FRUS Explorer build 50, which moved the index from version 65 to 69, and the second with 1.0 (build 1776), which moved it to 71.
+
+To stay with the exports of one FRUS Explorer build, set `FRUS_IMAGE=ghcr.io/joshbotts/frus-explorer-light:<version>-<build>` in `.env`, such as `1.0-1776` for FRUS Explorer 1.0 (build 1776): the newest build of the server for that app build that passed its smoke test. It moves with `edge` until the server moves to a later app build, and then stays where it was. To stay on one build of the server, set `FRUS_IMAGE=ghcr.io/joshbotts/frus-explorer-light:sha-<commit>`, where `<commit>` is the first 7 characters of a commit on the main branch.
 
 ## Stopping and removing
 

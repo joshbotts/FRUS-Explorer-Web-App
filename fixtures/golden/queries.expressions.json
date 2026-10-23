@@ -1,8 +1,8 @@
 {
   "format" : 1,
   "provenance" : {
-    "appBuild" : 50,
-    "indexVersion" : 69,
+    "appBuild" : 1776,
+    "indexVersion" : 71,
     "inputs" : {
       "fixtures/parity/queries.jsonl#records" : "f75bc7b9e75cf052af539d4c10a9fabef152f0d7f3ff750a4816d18ae0e04189"
     },
@@ -13,9 +13,9 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "24382592d086e24d4472a2ab72a49aa7603e2106a07c9ee1360ce29d9b8aa93c",
+    "sourceDigest" : "096499b657e5773434204ccc0cbf5373bf42148f6ca567af4a94badc73c002f1",
     "tool" : "tools/mac-golden expressions",
-    "upstreamCommit" : "757c6d29fa0b6dbb754706900b1d3f15f67ad453"
+    "upstreamCommit" : "f047903701fbe55cc2b054849b209ab137efc732"
   },
   "queries" : [
     {
@@ -3053,7 +3053,7 @@
         "exactTerms" : [
 
         ],
-        "expression" : "\"aid\" NOT \"near\" AND (\"military\" AND \"europe,\" AND \"5\")",
+        "expression" : "\"aid\" NOT \"near\" AND (\"military\" AND \"europe\" AND \"5\")",
         "isApproximate" : false,
         "operands" : [
           {
@@ -3088,7 +3088,7 @@
             "isExactApplied" : false,
             "isNegated" : false,
             "kind" : "word",
-            "rendered" : "\"europe,\"",
+            "rendered" : "\"europe\"",
             "source" : "typed",
             "text" : "europe,"
           },
@@ -3104,11 +3104,11 @@
         ]
       },
       "search" : {
-        "corpus" : "\"aid\" NOT \"near\" AND (\"military\" AND \"europe,\" AND \"5\")",
+        "corpus" : "\"aid\" NOT \"near\" AND (\"military\" AND \"europe\" AND \"5\")",
         "exactTerms" : [
 
         ],
-        "userContent" : "\"aid\" NOT \"near\" AND (\"military\" AND \"europe,\" AND \"5\")"
+        "userContent" : "\"aid\" NOT \"near\" AND (\"military\" AND \"europe\" AND \"5\")"
       }
     },
     {
@@ -3160,7 +3160,7 @@
         "exactTerms" : [
 
         ],
-        "expression" : "\"nicaragua\" NOT \"near\" AND (\"mosquito\" AND \"reservation,\" AND \"3\")",
+        "expression" : "\"nicaragua\" NOT \"near\" AND (\"mosquito\" AND \"reservation\" AND \"3\")",
         "isApproximate" : false,
         "operands" : [
           {
@@ -3195,7 +3195,7 @@
             "isExactApplied" : false,
             "isNegated" : false,
             "kind" : "word",
-            "rendered" : "\"reservation,\"",
+            "rendered" : "\"reservation\"",
             "source" : "typed",
             "text" : "reservation,"
           },
@@ -3211,11 +3211,11 @@
         ]
       },
       "search" : {
-        "corpus" : "\"nicaragua\" NOT \"near\" AND (\"mosquito\" AND \"reservation,\" AND \"3\")",
+        "corpus" : "\"nicaragua\" NOT \"near\" AND (\"mosquito\" AND \"reservation\" AND \"3\")",
         "exactTerms" : [
 
         ],
-        "userContent" : "\"nicaragua\" NOT \"near\" AND (\"mosquito\" AND \"reservation,\" AND \"3\")"
+        "userContent" : "\"nicaragua\" NOT \"near\" AND (\"mosquito\" AND \"reservation\" AND \"3\")"
       }
     },
     {
@@ -3267,7 +3267,7 @@
         "exactTerms" : [
 
         ],
-        "expression" : "\"nicaragua\" NOT \"near\" AND (\"bluefields\" AND \"mosquito,\" AND \"5\")",
+        "expression" : "\"nicaragua\" NOT \"near\" AND (\"bluefields\" AND \"mosquito\" AND \"5\")",
         "isApproximate" : false,
         "operands" : [
           {
@@ -3302,7 +3302,7 @@
             "isExactApplied" : false,
             "isNegated" : false,
             "kind" : "word",
-            "rendered" : "\"mosquito,\"",
+            "rendered" : "\"mosquito\"",
             "source" : "typed",
             "text" : "mosquito,"
           },
@@ -3318,11 +3318,11 @@
         ]
       },
       "search" : {
-        "corpus" : "\"nicaragua\" NOT \"near\" AND (\"bluefields\" AND \"mosquito,\" AND \"5\")",
+        "corpus" : "\"nicaragua\" NOT \"near\" AND (\"bluefields\" AND \"mosquito\" AND \"5\")",
         "exactTerms" : [
 
         ],
-        "userContent" : "\"nicaragua\" NOT \"near\" AND (\"bluefields\" AND \"mosquito,\" AND \"5\")"
+        "userContent" : "\"nicaragua\" NOT \"near\" AND (\"bluefields\" AND \"mosquito\" AND \"5\")"
       }
     },
     {
@@ -3972,7 +3972,7 @@
         "exactTerms" : [
 
         ],
-        "expression" : "((((((((((((((((((((((((((((((((\"khrushchev (((((\"))))))))))))))))))))))))))))))))",
+        "expression" : "((((((((((((((((((((((((((((((((\"khrushchev\"))))))))))))))))))))))))))))))))",
         "isApproximate" : false,
         "operands" : [
           {
@@ -3980,18 +3980,18 @@
             "isExactApplied" : false,
             "isNegated" : false,
             "kind" : "phrase",
-            "rendered" : "\"khrushchev (((((\"",
+            "rendered" : "\"khrushchev\"",
             "source" : "typed",
             "text" : "khrushchev ((((("
           }
         ]
       },
       "search" : {
-        "corpus" : "((((((((((((((((((((((((((((((((\"khrushchev (((((\"))))))))))))))))))))))))))))))))",
+        "corpus" : "((((((((((((((((((((((((((((((((\"khrushchev\"))))))))))))))))))))))))))))))))",
         "exactTerms" : [
 
         ],
-        "userContent" : "((((((((((((((((((((((((((((((((\"khrushchev (((((\"))))))))))))))))))))))))))))))))"
+        "userContent" : "((((((((((((((((((((((((((((((((\"khrushchev\"))))))))))))))))))))))))))))))))"
       }
     },
     {
@@ -7107,7 +7107,7 @@
         "exactTerms" : [
 
         ],
-        "expression" : "\"‘test\" AND \"ban’\"",
+        "expression" : "\"test\" AND \"ban\"",
         "isApproximate" : false,
         "operands" : [
           {
@@ -7115,7 +7115,7 @@
             "isExactApplied" : false,
             "isNegated" : false,
             "kind" : "word",
-            "rendered" : "\"‘test\"",
+            "rendered" : "\"test\"",
             "source" : "typed",
             "text" : "‘test"
           },
@@ -7124,18 +7124,18 @@
             "isExactApplied" : false,
             "isNegated" : false,
             "kind" : "word",
-            "rendered" : "\"ban’\"",
+            "rendered" : "\"ban\"",
             "source" : "typed",
             "text" : "ban’"
           }
         ]
       },
       "search" : {
-        "corpus" : "\"‘test\" AND \"ban’\"",
+        "corpus" : "\"test\" AND \"ban\"",
         "exactTerms" : [
 
         ],
-        "userContent" : "\"‘test\" AND \"ban’\""
+        "userContent" : "\"test\" AND \"ban\""
       }
     },
     {
@@ -7995,7 +7995,7 @@
         "exactTerms" : [
 
         ],
-        "expression" : "\"khrushchev\" NOT \"-berlin\"",
+        "expression" : "\"khrushchev\" NOT \"berlin\"",
         "isApproximate" : false,
         "operands" : [
           {
@@ -8012,18 +8012,18 @@
             "isExactApplied" : false,
             "isNegated" : true,
             "kind" : "word",
-            "rendered" : "NOT \"-berlin\"",
+            "rendered" : "NOT \"berlin\"",
             "source" : "typed",
             "text" : "-berlin"
           }
         ]
       },
       "search" : {
-        "corpus" : "\"khrushchev\" NOT \"-berlin\"",
+        "corpus" : "\"khrushchev\" NOT \"berlin\"",
         "exactTerms" : [
 
         ],
-        "userContent" : "\"khrushchev\" NOT \"-berlin\""
+        "userContent" : "\"khrushchev\" NOT \"berlin\""
       }
     },
     {
@@ -10105,7 +10105,7 @@
         "exactTerms" : [
           "Cold"
         ],
-        "expression" : "\"cold\" AND \"war\" OR \"cold.\" AND \"peace\"",
+        "expression" : "\"cold\" AND \"war\" OR \"cold\" AND \"peace\"",
         "isApproximate" : false,
         "operands" : [
           {
@@ -10131,7 +10131,7 @@
             "isExactApplied" : true,
             "isNegated" : false,
             "kind" : "word",
-            "rendered" : "\"cold.\"",
+            "rendered" : "\"cold\"",
             "source" : "typed",
             "text" : "cold."
           },
@@ -10147,11 +10147,11 @@
         ]
       },
       "search" : {
-        "corpus" : "\"cold\" AND \"war\" OR \"cold.\" AND \"peace\"",
+        "corpus" : "\"cold\" AND \"war\" OR \"cold\" AND \"peace\"",
         "exactTerms" : [
           "Cold"
         ],
-        "userContent" : "\"cold\" AND \"war\" OR \"cold.\" AND \"peace\""
+        "userContent" : "\"cold\" AND \"war\" OR \"cold\" AND \"peace\""
       }
     },
     {
@@ -10163,7 +10163,7 @@
         "exactTerms" : [
           "Treaty"
         ],
-        "expression" : "\"treaty\" AND \"canal\" OR \"treaty,\" AND \"nicaragua\"",
+        "expression" : "\"treaty\" AND \"canal\" OR \"treaty\" AND \"nicaragua\"",
         "isApproximate" : false,
         "operands" : [
           {
@@ -10189,7 +10189,7 @@
             "isExactApplied" : true,
             "isNegated" : false,
             "kind" : "word",
-            "rendered" : "\"treaty,\"",
+            "rendered" : "\"treaty\"",
             "source" : "typed",
             "text" : "treaty,"
           },
@@ -10205,11 +10205,11 @@
         ]
       },
       "search" : {
-        "corpus" : "\"treaty\" AND \"canal\" OR \"treaty,\" AND \"nicaragua\"",
+        "corpus" : "\"treaty\" AND \"canal\" OR \"treaty\" AND \"nicaragua\"",
         "exactTerms" : [
           "Treaty"
         ],
-        "userContent" : "\"treaty\" AND \"canal\" OR \"treaty,\" AND \"nicaragua\""
+        "userContent" : "\"treaty\" AND \"canal\" OR \"treaty\" AND \"nicaragua\""
       }
     },
     {
@@ -10996,7 +10996,7 @@
         "exactTerms" : [
 
         ],
-        "expression" : "\"u.s.s.r.\"",
+        "expression" : "\"u.s.s.r\"",
         "isApproximate" : false,
         "operands" : [
           {
@@ -11004,18 +11004,18 @@
             "isExactApplied" : false,
             "isNegated" : false,
             "kind" : "word",
-            "rendered" : "\"u.s.s.r.\"",
+            "rendered" : "\"u.s.s.r\"",
             "source" : "typed",
             "text" : "U.S.S.R."
           }
         ]
       },
       "search" : {
-        "corpus" : "\"u.s.s.r.\"",
+        "corpus" : "\"u.s.s.r\"",
         "exactTerms" : [
 
         ],
-        "userContent" : "\"u.s.s.r.\""
+        "userContent" : "\"u.s.s.r\""
       }
     },
     {
@@ -11151,7 +11151,7 @@
         "exactTerms" : [
 
         ],
-        "expression" : "\"u.s.\"",
+        "expression" : "\"u.s\"",
         "isApproximate" : false,
         "operands" : [
           {
@@ -11159,18 +11159,18 @@
             "isExactApplied" : false,
             "isNegated" : false,
             "kind" : "word",
-            "rendered" : "\"u.s.\"",
+            "rendered" : "\"u.s\"",
             "source" : "typed",
             "text" : "U.S."
           }
         ]
       },
       "search" : {
-        "corpus" : "\"u.s.\"",
+        "corpus" : "\"u.s\"",
         "exactTerms" : [
 
         ],
-        "userContent" : "\"u.s.\""
+        "userContent" : "\"u.s\""
       }
     },
     {
@@ -16378,7 +16378,7 @@
         "exactTerms" : [
 
         ],
-        "expression" : "\"u.s.\"",
+        "expression" : "\"u.s\"",
         "isApproximate" : false,
         "operands" : [
           {
@@ -16386,18 +16386,18 @@
             "isExactApplied" : false,
             "isNegated" : false,
             "kind" : "word",
-            "rendered" : "\"u.s.\"",
+            "rendered" : "\"u.s\"",
             "source" : "typed",
             "text" : "U.S."
           }
         ]
       },
       "search" : {
-        "corpus" : "\"u.s.\"",
+        "corpus" : "\"u.s\"",
         "exactTerms" : [
 
         ],
-        "userContent" : "\"u.s.\""
+        "userContent" : "\"u.s\""
       }
     },
     {
@@ -16409,7 +16409,7 @@
         "exactTerms" : [
 
         ],
-        "expression" : "\"u.s.s.r.\"",
+        "expression" : "\"u.s.s.r\"",
         "isApproximate" : false,
         "operands" : [
           {
@@ -16417,18 +16417,18 @@
             "isExactApplied" : false,
             "isNegated" : false,
             "kind" : "word",
-            "rendered" : "\"u.s.s.r.\"",
+            "rendered" : "\"u.s.s.r\"",
             "source" : "typed",
             "text" : "U.S.S.R."
           }
         ]
       },
       "search" : {
-        "corpus" : "\"u.s.s.r.\"",
+        "corpus" : "\"u.s.s.r\"",
         "exactTerms" : [
 
         ],
-        "userContent" : "\"u.s.s.r.\""
+        "userContent" : "\"u.s.s.r\""
       }
     },
     {
@@ -16440,7 +16440,7 @@
         "exactTerms" : [
 
         ],
-        "expression" : "\"u.s.s.r.\"",
+        "expression" : "\"u.s.s.r\"",
         "isApproximate" : false,
         "operands" : [
           {
@@ -16448,18 +16448,18 @@
             "isExactApplied" : false,
             "isNegated" : false,
             "kind" : "word",
-            "rendered" : "\"u.s.s.r.\"",
+            "rendered" : "\"u.s.s.r\"",
             "source" : "typed",
             "text" : "u.s.s.r."
           }
         ]
       },
       "search" : {
-        "corpus" : "\"u.s.s.r.\"",
+        "corpus" : "\"u.s.s.r\"",
         "exactTerms" : [
 
         ],
-        "userContent" : "\"u.s.s.r.\""
+        "userContent" : "\"u.s.s.r\""
       }
     },
     {
@@ -16502,7 +16502,7 @@
         "exactTerms" : [
 
         ],
-        "expression" : "\"d.c.\"",
+        "expression" : "\"d.c\"",
         "isApproximate" : false,
         "operands" : [
           {
@@ -16510,18 +16510,18 @@
             "isExactApplied" : false,
             "isNegated" : false,
             "kind" : "word",
-            "rendered" : "\"d.c.\"",
+            "rendered" : "\"d.c\"",
             "source" : "typed",
             "text" : "D.C."
           }
         ]
       },
       "search" : {
-        "corpus" : "\"d.c.\"",
+        "corpus" : "\"d.c\"",
         "exactTerms" : [
 
         ],
-        "userContent" : "\"d.c.\""
+        "userContent" : "\"d.c\""
       }
     },
     {
@@ -16533,7 +16533,7 @@
         "exactTerms" : [
 
         ],
-        "expression" : "\"no.\" AND \"27\"",
+        "expression" : "\"no\" AND \"27\"",
         "isApproximate" : false,
         "operands" : [
           {
@@ -16541,7 +16541,7 @@
             "isExactApplied" : false,
             "isNegated" : false,
             "kind" : "word",
-            "rendered" : "\"no.\"",
+            "rendered" : "\"no\"",
             "source" : "typed",
             "text" : "No."
           },
@@ -16557,11 +16557,11 @@
         ]
       },
       "search" : {
-        "corpus" : "\"no.\" AND \"27\"",
+        "corpus" : "\"no\" AND \"27\"",
         "exactTerms" : [
 
         ],
-        "userContent" : "\"no.\" AND \"27\""
+        "userContent" : "\"no\" AND \"27\""
       }
     },
     {

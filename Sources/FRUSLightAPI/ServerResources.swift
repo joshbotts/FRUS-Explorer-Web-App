@@ -17,10 +17,10 @@ public final class ServerResources: Sendable {
     private let positions: [String: Int]
     /// The reader's broken-refs index, which degrades dead cross-references.
     public let brokenRefs: BrokenRefsIndex
-    /// The four files that change what an index holds, for the kit's search stack.
+    /// The five files that change what an index holds, for the kit's search stack.
     public let indexing: IndexingResources
 
-    /// The files the server cannot start without: those it reads here, and the four
+    /// The files the server cannot start without: those it reads here, and the five
     /// `IndexingResources` requires.
     public static let requiredFiles = ["manifest.json", "broken-refs-index.json"]
         + IndexingResources.indexResourceNames.map { "\($0).json" }.filter { $0 != "broken-refs-index.json" }

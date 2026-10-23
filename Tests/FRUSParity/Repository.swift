@@ -50,12 +50,22 @@ enum Upstream {
 
     /// `CURRENT_PROJECT_VERSION` in the submodule's `project.yml`, or nil when it has none.
     static func appBuild(_ upstream: URL) -> Int? {
+        projectSetting("CURRENT_PROJECT_VERSION", upstream) { Int($0) }
+    }
+
+    /// `MARKETING_VERSION` in the submodule's `project.yml`, such as "1.0", or nil when it has none.
+    static func appVersion(_ upstream: URL) -> String? {
+        projectSetting("MARKETING_VERSION", upstream) { $0.isEmpty ? nil : $0 }
+    }
+
+    /// The first value `project.yml` gives `name` that `parse` reads, unquoted.
+    private static func projectSetting<Value>(_ name: String, _ upstream: URL, _ parse: (String) -> Value?) -> Value? {
         guard let text = try? String(contentsOf: upstream.appendingPathComponent("project.yml"), encoding: .utf8) else { return nil }
         for line in text.split(separator: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard trimmed.hasPrefix("CURRENT_PROJECT_VERSION:") else { continue }
-            let value = trimmed.dropFirst("CURRENT_PROJECT_VERSION:".count).trimmingCharacters(in: CharacterSet(charactersIn: " \"'"))
-            if let build = Int(value) { return build }
+            guard trimmed.hasPrefix("\(name):") else { continue }
+            let value = trimmed.dropFirst(name.count + 1).trimmingCharacters(in: CharacterSet(charactersIn: " \"'"))
+            if let parsed = parse(value) { return parsed }
         }
         return nil
     }

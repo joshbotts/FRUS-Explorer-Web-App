@@ -1,20 +1,23 @@
-// The four data files that change what an index holds: present in the submodule, and each decodes.
+// The five data files that change what an index holds: present in the submodule, and each decodes.
 
 @testable import FRUSCoreKit
+import FRUSLightCore
 import FRUSParity
 import Foundation
 import Testing
 
 @Suite struct IndexResourcesTests {
-    /// `IndexingResources.loading(fromDirectory:)` refuses a folder lacking one of the four files,
+    /// `IndexingResources.loading(fromDirectory:)` refuses a folder lacking one of the five files,
     /// but a file that is present and will not decode answers nil, and the index is built without it
     /// while every step reports success. Check 2 would show a missing subject or authority file, but
-    /// not the broken-references index, which flags no cross-reference in the fixtures. So each
-    /// file is decoded here, through the kit's internal providers, and holds what the index reads.
-    @Test func theFourIndexFilesArePresentAndDecode() throws {
+    /// not the broken-references index, which flags no cross-reference in the fixtures, nor the
+    /// cited-page map, whose cross-volume pages no fixture cites. So each file is decoded here,
+    /// through the kit's internal providers, and holds what the index reads.
+    @Test func theFiveIndexFilesArePresentAndDecode() throws {
         let directory = Repository.layout.upstream.appendingPathComponent(ParityIndex.resourcesPath)
         #expect(IndexingResources.indexResourceNames
-                == ["person-authority-index", "document-subject-index", "decimal-class-labels", "broken-refs-index"])
+                == ["person-authority-index", "document-subject-index", "decimal-class-labels", "broken-refs-index",
+                    "cited-page-map"])
         for name in IndexingResources.indexResourceNames {
             #expect(FileManager.default.fileExists(atPath: directory.appendingPathComponent("\(name).json").path), "\(name).json")
         }
@@ -23,5 +26,8 @@ import Testing
         #expect(resources.documentSubjects()?.subjectRows(forVolume: "frus1961-63v06").isEmpty == false, "document-subject-index")
         #expect(resources.decimalClassLabels()?.schedules.isEmpty == false, "decimal-class-labels")
         #expect(resources.brokenRefs()?.records.isEmpty == false, "broken-refs-index")
+        let citedPages = try #require(resources.citedPages(), "cited-page-map")
+        #expect(!citedPages.volumes.isEmpty && citedPages.indexVersion == IndexCompatibility.supportedIndexVersion,
+                "the cited-page map is built for the pin's index version")
     }
 }
