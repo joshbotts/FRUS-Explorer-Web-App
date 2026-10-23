@@ -304,11 +304,13 @@ enum SearchRoutes {
             return try await context.whileClientConnected {
                 do {
                     // One count of the whole match, and the page: both through the pipeline's one
-                    // connection. The page is asked for first, so that in an order of the date the
-                    // request joins at once the results kept of its search, as a request that replaces
-                    // another for the same search must to share them: its count waits behind them.
+                    // connection, and each kept a while, so another page of the search, or the
+                    // concordance of this one, asks for neither again. The page is asked for first, so
+                    // that in an order of the date the request joins at once the results kept of its
+                    // search, as a request that replaces another for the same search must to share
+                    // them: its count waits behind them.
                     async let items = page(search, served: served)
-                    let total = try await served.service.searchCount(parameters: search.parameters)
+                    let total = try await served.recent.count(of: search.parameters, service: served.service)
                     return SearchResultList(total: total, countBasis: "exact", limit: search.limit, offset: search.offset,
                                             retainedLimit: SearchRequest.retainedLimit, sort: search.sort.rawValue,
                                             sortChoices: SearchSortOrder.allCases.map { Choice(value: $0.rawValue, title: $0.label) },
@@ -332,13 +334,13 @@ enum SearchRoutes {
         }
     }
 
-    /// The page `search` asks for. By relevance it is the kit's page of the match, as before; in an
-    /// order of the date, it is cut from the results the app keeps of the search, all of them in that
+    /// The page `search` asks for. By relevance it is the kit's page of the match, as kept lately; in
+    /// an order of the date, it is cut from the results the app keeps of the search, all of them in that
     /// order, as the Mac's window sorts what it keeps and pages it (`SearchSortOrder.sorted(_:)`).
     static func page(_ search: SearchRequest, served: ServedIndex) async throws -> [SearchResult] {
         switch search.sort {
         case .relevance:
-            return try await served.service.search(parameters: search.parameters, limit: search.limit, offset: search.offset)
+            return try await served.recent.page(of: search, service: served.service)
         case .dateAscending, .dateDescending:
             let kept = try await served.retained.results(of: search.parameters, service: served.service)
             return Array(search.sort.sorted(kept).dropFirst(search.offset).prefix(search.limit))

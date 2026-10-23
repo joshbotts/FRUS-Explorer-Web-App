@@ -2,6 +2,100 @@
 
 One entry per session, newest first.
 
+## Session 13b: the speed of exact-word search
+
+23 October 2026 · branch `claude/s13b-exact-word-speed-111511` · upstream `af41efa4`, unchanged; [FRUS-Explorer#1785](https://github.com/joshbotts/FRUS-Explorer/pull/1785) open
+
+The last item before a web release. A search with an exact word (`=word`) took 45 to 70 seconds over the full corpus, on the server and in the Mac app alike. The time was the kit's exact-word filter, so the fix is upstream, [FRUS-Explorer#1785](https://github.com/joshbotts/FRUS-Explorer/pull/1785), which takes such a search under 1.3 seconds on both platforms and keeps every result as it was. It needs no index change. Beside it, the server now keeps a search's page and count, so the concordance of the page on screen and the search's next page ask for neither again.
+
+**Where the time went**, over the owner's full 1776 export, natively on this Mac and on Linux in the build container, the same file on both:
+
+- **Not the match, nor reading the text.** FTS5 matches `soviet` in 58,679 documents in 12 ms. Reading the 425 million characters of their bodies takes 0.22 s warm and 2.3 s cold, natively.
+- **The filter.** `=Soviet` runs that match with `frus_exact_word` over each candidate's header, dateline, source note and body (`SearchService.exactColumns(for:)`). The function folded each whole text with Foundation (`String.folding`, diacritics and case) and split it on `Character`'s properties to find the word, and over `=Soviet`'s rows that took 21.2 s natively and 22.1 s on Linux, 99% of the pass. The count and the page each make that pass, and so do the 7,500 results the Mac's window keeps beside its count, and the server's date order and timeline. The concordance fetched its page again.
+- **The text is mostly ASCII, and almost never all ASCII.** Only 880 of those 58,679 bodies are ASCII alone, but non-ASCII is 0.3% of their characters, and 88% of it is five marks of punctuation: ’ “ ” — –.
+
+**Before**, measured with `frus-parity time-search`, new: the 45 parity queries that apply an exact term, each its first page of 20 and then its count, as `/api/v1/search` asks the pipeline for them, through FRUSCoreKit's SearchService over the export opened as the server opens it:
+
+| Per request, page and count | Mac, native | Linux, container |
+| --- | --- | --- |
+| The 45 in all | 1,343 s | 1,400 s |
+| Median | 27.3 s | 30.7 s |
+| p95 | 62.7 s | 63.6 s |
+| Slowest | 77.7 s, `=protection protect` | 69.6 s, `=containment` |
+
+The two ran at once, and the Mac's slowest beside a test build; run alone again, `=protection protect` took 46 s, `=containment` 51.5 and 53.8 s, `=Soviet` 52.1 and 56.4 s, and `=negotiations`, the Mac's slowest alone, 71.1 s. Every count is the same on both platforms. The largest candidate set is `negoti`'s, 66,904 documents, which `=negotiations`, `=negotiation` and `=negotiators` each read.
+
+**The fix upstream:** [FRUS-Explorer#1785](https://github.com/joshbotts/FRUS-Explorer/pull/1785), "An exact-word search reads each candidate's text as bytes, so over the full corpus its count and its page take under a second each, not 20 to 35", labelled `Mac`, with "Mac verification requested". Under rule 4, in two shared files:
+
+- **`ExactWordMatcher`** (FTS5Store) reads a text's UTF-8 bytes, in regions divided at each ASCII separator whose neighbours are ASCII bytes or the text's ends. The fold changes no ASCII character but `A`–`Z`, and no grapheme joins two ASCII characters but CR LF, so such a separator divides the folded text where it divides the text. A region of ASCII alone is then one token. A region holding a non-ASCII byte is read scalar by scalar, each scalar by the class the fold itself gives it between two ASCII letters: a separator (’), letters it folds to (é to `e`), or a letter that stays itself (ʼ, ½, ж). The class is probed once a process for Latin-1 to Cyrillic and General Punctuation to Number Forms. A region with any other scalar, or with bytes that are not well-formed UTF-8, goes to the fold, as the whole text did before. Two passes, eight bytes at a step, find the word as a region of ASCII alone, then read the regions holding non-ASCII bytes, and a word that folds to something other than ASCII (`gomułka`) is looked for by the fold over the whole text.
+- **`frus_exact_word`** (FRUSCoreKit's `IndexingPipeline`) reads the bytes SQLite holds, to the first NUL as `String(cString:)` read them, without copying them, and folds its word once a statement, kept with it by `sqlite3_set_auxdata`.
+- **The answers are the fold's.** `containsByFolding(word:in:)` keeps the old body as the definition. The tests hold every answer to it: each classed scalar in 24 contexts beside, inside and around 15 words, the scalars sent to the fold, 6,000 random texts of those pieces, 4,000 runs of ill-formed bytes, and the SQL function's own answers, with one word over many rows, a word for each row and a NUL inside a text. `FTS5StoreTests` gains 7 tests and `FRUSCoreKitTests` 3.
+- **#1784's records,** which S12c left for the next web-authored pull request: the two moved types' history lines, the handler's 1.10, `CLAUDE.md` and the amendment log now say they became public and `Sendable`, and `FRUSURLScheme`'s own history logs the move. The handler's comment keeps its line count, so no editable-content range moves.
+
+**Every result as it was**
+
+- **Every row's decision, over the whole export:** the branch's matcher, compiled from its file, against the pin's file, for the 28 words the 45 queries mark, over every row each word's stem matches and every one of its four columns: 941,109 rows and 3,581,190 texts. The old file, the kept definition, the matcher's String path and the SQL function's byte path gave the same answer for every text, natively and on Linux, and each word's rows, texts and exact matches were the same number on both.
+- **Every result, over the whole export:** `frus-parity time-search --out` wrote check 3's records of the 45 queries before and after, counts, first 50 results and tie tails with their score bits, and `compare-results` printed "check 3's results pass: 45 queries, 45 identical and 0 reordered only within Mac tie groups" natively and on Linux, with no score bits other than before's: the same rows in the same order with the same scores, on each platform. Across the platforms the after files hold the same rows in the same order, and 42 queries other score bits, macOS's SQLite 3.54.0 against Linux's 3.45.1, as check 3 has always found.
+- **Check 3's 482 queries and the golden files,** on Linux with the branch over the submodule, in a scratch worktree: through the API, "482 queries, 482 identical and 0 reordered only within Mac tie groups", the read-only open's 482 results the writable index's, score bits included, and the 482 expressions as the golden file says; check 4's 393 rows identical on both of the reader's paths; and check 2's 36 digests and 7 checks with no difference. The 13 issues were all golden-file staleness, since the files' source digest covers the kit's folders (`cd37102d321b` at the pin, `b7a3ccfa0ebc` there), which the pin move past the merge remakes.
+- **On Apple platforms** nothing else changes. Run here as COORDINATION §5 asks, from a clone at a real path, each heavy job under the app's lock, beside `v2` built and run the same way:
+  - `FRUSExplorerMac`, Debug, clean, unsigned: built, with `v2`'s five warning lines. With the numbers the compiler gives local thunks dropped, the debug dylib holds every one of `v2`'s 247,942 names and 241 more, all the byte reading's or what it uses;
+  - iOS 27.0 on an iPhone 17: a clean `build-for-testing`, with `v2`'s 7 warning lines; the full unit target, 7,609 tests in 900 suites against `v2`'s 7,606, with the same 10 issues on both, the 8 Keychain issues an unsigned build has and two presentation tests of `RichTextRestingCapTests`, which failed alone on `v2` too, and the same 17 tests and 2 suites skipped;
+  - `swift build --target FRUSCoreKit`, and `swift test`: 38 runs, 3,043 tests, all passing, none skipped, against 3,033 on `v2`; `FTS5StoreTests` 219, up from 212, and `FRUSCoreKitTests` 1,150, up from 1,147.
+
+**After**, with the branch, its code as it opened, the same 45 queries:
+
+| Per request, page and count | Mac, native | Linux, container |
+| --- | --- | --- |
+| The 45 in all | 18.2 s | 15.3 s |
+| Median | 0.46 s | 0.37 s |
+| p95 | 0.97 s | 0.90 s |
+| Slowest | 1.29 s, `=negotiators` | 1.08 s, `=negotiators` |
+| The 7,500 results kept, slowest | 2.17 s | 2.55 s |
+
+`=Soviet`'s page and count each take 0.30 s natively and 0.21 to 0.23 s on Linux, from 23 to 28 s. A word its stem's documents rarely hold costs most, since each text is read to its end: `=negotiators` reads 66,904 candidates to find 2,632.
+
+**Through the API,** in a Compose install of its own, `frus-s13b` on port 8084, with the full 1776 export imported once: first with the published `edge` image, `main` at the pin, then with this branch's image built over the upstream branch, `frus-light:s13b`. Each request as the browser app makes it, one after another:
+
+| Request | `=containment` before | after | `=Soviet` before | after |
+| --- | --- | --- | --- | --- |
+| `/search`, its count and first page | 58.1 s | 0.84 s | 59.7 s | 0.55 s |
+| The same search again | 57.2 s | 0.00 s | 64.9 s | 0.00 s |
+| Its concordance | 26.6 s | 0.02 s | 29.7 s | 0.02 s |
+| Its timeline, the 7,500 kept | 30.3 s | 0.49 s | 34.8 s | 1.29 s |
+| Its second page | 57.2 s | 0.39 s | 65.4 s | 0.27 s |
+
+With the branch's image, `/search` for the other exact words took 0.57 to 1.36 s (`=negotiators` the slowest), and `soviet`, a common word, 0.12 s. The rows a search asks for again are the server's change: the same search, its concordance and the count of its second page ask the kit for nothing. The "before" ran beside the two record runs, as the 45-query runs ran beside other work; S11f had measured `=containment`'s timeline at 29 s and its concordance at 25 s. A first pass on `edge`, during the Mac check's unit run at a load average of 20 to 33, took 67 to 195 s a search.
+
+**The web side**, which needs no upstream change:
+
+- **A search's page and count are kept** (`RecentSearches`, beside `RetainedResults`): the pages of the last four searches by relevance, by their fields and a page's limit and offset, and their counts. The concordance reads the page `/search` fetched, even while it is fetched, as the browser asks for both at once when the concordance is open, and another page of a search, or the same search again, counts nothing. A page or a count no request waits for any more is stopped at once, as `/search` stopped its own when its client went (#1698). The Mac's window keeps what it fetched and pages it, so it asks for neither twice either.
+- **`frus-parity time-search <export>`** times check 12's search over an export as the server opens it, on either platform: `--all` times every parity query, `--ids` some, `--retained` the 7,500 kept, and `--out` writes check 3's records, which `compare-results` holds to another run's.
+- **Tests:** `RecentSearchesTests` counts the kit's statements through the pipeline's test hook: an exact word's search, its concordance, the same search again and its next page ask for three statements, not seven, with each answer the first one's; another search asks for its own two. `SearchTimingTests` runs the timing over the fixture index: the queries are the 45 the golden expressions give exact terms, and each count is the golden file's.
+
+**Which pin move.** The change moves no index version, export, schema or result, and nothing that indexes: the pipeline's change is the search function's registration. So it can ride with S12d: if it merges after `version-1.0` is tagged, S12d moves the pin to its merge instead of to the tag, one move and one set of golden files, which the owner may remake from the three-volume export S12d uses, since no row it indexes changes. If the owner wants the pin at the App Store build's code exactly, S12d moves to the tag, and a pin move of its own follows the merge. Merging waits on the owner's Mac check, and on the submission as the owner sees fit; until then, the server's own change already halves an exact-word search's next page and spares its concordance a pass.
+
+**Records**
+
+- `PLAN.md` and its shared copy (rev 206): the session intro, the flowchart, S13b's row and its answers, Mac check 8, the owner's fifteen steps and the risk row.
+- `SPEC.md`: check 12's measurements, and the API's kept pages and counts.
+- `INSTALL.md`: an exact-word search's time over a whole corpus, and what the server keeps.
+- `COORDINATION.md`: §2's paragraph on #1785.
+- The README's Status and this log.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** through CI's Test step, this package's own targets built clean: all 2,075 tests pass, up from 2,073 after S13a, with the one named skip. FRUSParityTests runs 122, up from 121, and FRUSLightServerTests 111, up from 110; the other targets are unchanged, FRUSCoreKitTests at 1,147.
+- **With the upstream branch over the submodule,** in the scratch worktree: FTS5StoreTests 219 and FRUSCoreKitTests 1,150, all passing with the one named skip and no build warning, and every other target passing but the parity suites' golden-file staleness.
+- **CI** on the pull request, [#47](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/47), before these records: `swift`, `compose` with the browser suite on Chromium, `web`, and both image builds passed.
+
+**Notes**
+
+- **Measured beside other work.** The before and after runs ran with other jobs on the machine, as recorded: before the fix a request's time moved by up to a third with what else ran, and after it by hundredths of a second. The Docker VM has 10 CPUs and 8 GB, so check 12's 4 vCPU host is still to be measured.
+- **The `frus-s13b` install** was removed with `docker compose -p frus-s13b down -v`, its volume with it; the owner's install on 8080 was left as it was.
+- **Scratch:** the upstream clone, its `v2` worktree, the Mac check's logs and a scratch worktree of this repository at the branch are under `~/Library/Caches/frus-s13b`; the benchmark that found the cost, and the clone of the export it read, are under this worktree's `.build/linux/s13b`.
+
+**Next:** **S12d**, once the app's repository tags `version-1.0` (build 1861), moving the pin on from `af41efa4`, past the merge of #1785 if the owner has merged it by then, or a pin move of its own after the merge. Phase 2 follows.
+
 ## Session 13a: a section's own text in Browse, over the API and in the browser app
 
 23 October 2026 · branch `claude/s13a-browse-own-text-bcd2e3` · upstream `af41efa4`, unchanged

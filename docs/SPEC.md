@@ -516,6 +516,7 @@ The server exposes one versioned JSON API under `/api/v1`, shared by the web cli
 
 - Paths name documents by `volumeId` and `documentId`. No response carries a `rowid`.
 - Counts are exact, as the Mac's `searchCount` is, and say so with `countBasis: "exact"`. `"atLeast"` is kept for a count that could not be made, the method appendix's `floor`. A search keeps the Mac's 7,500 results, so `offset` and `limit` reach no further.
+- Each served index keeps the pages and counts of the last four searches by relevance, by the search's fields and a page's limit and offset, so the concordance of the page on screen and a search's next page ask the kit for neither again, as the Mac's window, which keeps what it fetched, asks for neither twice. A page or a count no request waits for any more is stopped at once.
 - Every count-bearing response includes `coverage`: indexed volumes, manifest volumes (553) and the index version.
 - Browsers authenticate with a session cookie (`Secure`, `HttpOnly`, `SameSite=Lax`) plus a CSRF token. Scripts use personal access tokens. A read-only scope suits AI agents, the audience of `Docs/Agentic-Analysis-Guide.md`.
 - Errors use RFC 9457 `application/problem+json`, with `type` `about:blank`. A `code` member carries the draft's SCREAMING_SNAKE_CASE identity, such as `VOLUME_NOT_FOUND`, and a refused search carries the kit's refusal as `searchError`, such as `emptyQuery`. Every path under `/api/` answers this way, including those no route matches.
@@ -958,6 +959,17 @@ The web edition is accepted when it reproduces the Mac app's results on the same
 | 12 | Performance | Full corpus on 4 vCPU and 8 GB | Keyword search p95 ≤ 1.5 s; warm document render ≤ 300 ms; one facet section ≤ 3 s |
 
 The performance targets and the cosine threshold are proposals for phase 0 to confirm or revise.
+
+**Check 12, so far: exact-word search.** S10 made the first measurement, over the owner's full export from build 50: the 10 exact-word queries that outran a client's minute took 21 requests in 989 seconds through the API, about 47 each, the slowest 66, and the Mac app's own search was as slow. S13b found the cost in the kit's exact-word filter, `frus_exact_word`, which folded and split every candidate's whole text with Foundation, and fixed it upstream, in [FRUS-Explorer#1785](https://github.com/joshbotts/FRUS-Explorer/pull/1785): the filter reads each text's bytes and gives the same answers. `frus-parity time-search <export>` times each query's first page of 20 and its count through FRUSCoreKit's SearchService, over the export opened as the server opens it; by default it takes the 45 parity queries that apply an exact term. Over the owner's 1776 export, the same file on both platforms, per request (page and count):
+
+| | Mac, native, before | Mac, after | Linux, container, before | Linux, after |
+| --- | --- | --- | --- | --- |
+| The 45 requests | 1,343 s | 18.2 s | 1,400 s | 15.3 s |
+| Median | 27.3 s | 0.46 s | 30.7 s | 0.37 s |
+| p95 | 62.7 s | 0.97 s | 63.6 s | 0.90 s |
+| Slowest | 77.7 s | 1.29 s | 69.6 s | 1.08 s |
+
+After the fix, the 7,500 results a search keeps, which the Mac's window fetches beside its count and the server's date order and timeline read, take 2.6 s at most. Through the API of a Compose install, `/search` for `=containment` and `=Soviet` went from 58 and 60 s to 0.84 and 0.55 s, and every other exact-word search measured took 1.4 s at most; a search's concordance, and a search asked again, take hundredths, since the server keeps its page and count. "After" is the upstream branch, measured before its merge; the served index gets it with the pin move past the merge. The Mac is an M5 MacBook Air, the container Docker Desktop's VM with 10 CPUs and 8 GB, so check 12's 4 vCPU host is still to be measured.
 
 **Against a real export.** S10 first ran checks 3–5 on the owner's full export, imported into a Compose install whose TEI folder is a clone of HistoryAtState/frus at the corpus the export indexed. A release runs them the same way:
 - **Check 3:**
