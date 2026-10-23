@@ -297,12 +297,16 @@ enum SearchRoutes {
             let served = try await provider.served()
             return try await context.whileClientConnected {
                 do {
-                    // One count of the whole match, then the page: both through the pipeline's one connection.
+                    // One count of the whole match, and the page: both through the pipeline's one
+                    // connection. The page is asked for first, so that in an order of the date the
+                    // request joins at once the results kept of its search, as a request that replaces
+                    // another for the same search must to share them: its count waits behind them.
+                    async let items = page(search, served: served)
                     let total = try await served.service.searchCount(parameters: search.parameters)
                     return SearchResultList(total: total, countBasis: "exact", limit: search.limit, offset: search.offset,
                                             retainedLimit: SearchRequest.retainedLimit, sort: search.sort.rawValue,
                                             sortChoices: SearchSortOrder.allCases.map { Choice(value: $0.rawValue, title: $0.label) },
-                                            items: try await page(search, served: served).map(SearchItem.init),
+                                            items: try await items.map(SearchItem.init),
                                             coverage: Coverage(index: served.corpus, resources: resources))
                 } catch let error as FTS5Error {
                     throw refusal(error)

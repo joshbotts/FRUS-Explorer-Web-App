@@ -28,14 +28,15 @@ test('the Reading Width loads the page at the app’s measure, beside Text Size,
   const frame = page.locator('iframe.reader-frame');
   await expect(frame).toHaveAttribute('src', /readingWidth=standard/);
 
-  /** The page's measure, and the width its column may grow to, in pixels. */
-  const column = async () => {
-    const reader = page.frames().find((candidate) => candidate.url().includes('/documents/d1/html'));
-    return reader!.evaluate(() => ({
-      measure: getComputedStyle(document.documentElement).getPropertyValue('--reader-measure').trim(),
-      maxWidth: parseFloat(getComputedStyle(document.querySelector('.frus-document')!).maxWidth),
-    }));
-  };
+  /** The page's measure, and the width its column may grow to, in pixels: read in the frame shown, once its column is there. */
+  const column = () =>
+    page
+      .frameLocator('iframe.reader-frame')
+      .locator('.frus-document')
+      .evaluate((element) => ({
+        measure: getComputedStyle(element.ownerDocument.documentElement).getPropertyValue('--reader-measure').trim(),
+        maxWidth: parseFloat(getComputedStyle(element).maxWidth),
+      }));
   await expect.poll(async () => (await column()).measure).toBe('87ch');
   const standard = await column();
 
@@ -57,9 +58,12 @@ test('the Reading Width loads the page at the app’s measure, beside Text Size,
 });
 
 test('a search the reader replaces is abandoned, so the server can stop it', async ({ page }) => {
-  // The first search is held on its way, so the second replaces it while it is under way.
+  // The first search is held on its way until the page has abandoned it, so the second replaces it
+  // while it is under way.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
   await page.route(/\/api\/v1\/search\?keywords=negotiating&/, async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    await held;
     await route.continue().catch(() => {});
   });
   const abandoned = page.waitForEvent('requestfailed', (request) => request.url().includes('/api/v1/search?keywords=negotiating&'));
@@ -68,6 +72,7 @@ test('a search the reader replaces is abandoned, so the server can stop it', asy
   await box.fill('treaties');
   await box.press('Enter');
   expect((await abandoned).failure()?.errorText).toBe('net::ERR_ABORTED');
+  release();
   const results = page.getByRole('list', { name: 'Results' });
   await expect(results.getByRole('listitem')).toHaveCount(2);
   for (const title of treatiesResults) await expect(results.getByRole('link', { name: title })).toBeVisible();

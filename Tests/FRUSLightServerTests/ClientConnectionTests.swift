@@ -13,6 +13,7 @@ import FRUSLightTestSupport
 import Foundation
 import Hummingbird
 import HummingbirdTesting
+import Logging
 import Synchronization
 import Testing
 
@@ -173,9 +174,10 @@ func eventually(_ condition: () -> Bool) async throws -> Bool {
         let moments = StatementMoments()
         let served = try await provider.served()
         await served.pipeline.setSearchStatementTestHook(moments.hook)
-        let app = Application(
+        // Built as the server builds its own, so the test fails if that loses its watch.
+        let app = apiApplication(
             router: buildRouter(state: fixture.state, resources: fixture.resources, reader: fixture.reader, provider: provider),
-            server: APIServer.http1, configuration: .init(address: .hostname("127.0.0.1", port: 0)))
+            configuration: .init(address: .hostname("127.0.0.1", port: 0)), logger: Logger(label: "test"))
         try await app.test(.live) { client in
             let connection = try RawConnection(port: try #require(client.port))
             try connection.send("GET /api/v1/search?keywords=containment HTTP/1.1\r\nHost: localhost\r\n\r\n")
@@ -208,18 +210,25 @@ func eventually(_ condition: () -> Bool) async throws -> Bool {
     @Test func theClosureWakesItsWaitersAndThoseThatComeLater() async throws {
         let closure = ConnectionClosure()
         let waiting = Task { await closure.closed() }
-        try await Task.sleep(for: .milliseconds(20))
+        #expect(try await eventually { closure.waiterCount == 1 })
         #expect(!closure.isClosed)
         closure.close()
         await waiting.value
-        #expect(closure.isClosed)
+        #expect(closure.isClosed && closure.waiterCount == 0)
         await closure.closed()
-        // A waiter whose task is cancelled stops waiting.
+        // A waiter whose task is cancelled stops waiting, whether it was cancelled before it waited
+        // or while it waits.
         let other = ConnectionClosure()
-        let cancelled = Task { await other.closed() }
-        cancelled.cancel()
-        await cancelled.value
-        #expect(!other.isClosed)
+        let early = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            await other.closed()
+        }
+        await early.value
+        let registered = Task { await other.closed() }
+        #expect(try await eventually { other.waiterCount == 1 })
+        registered.cancel()
+        await registered.value
+        #expect(!other.isClosed && other.waiterCount == 0)
     }
 }
 
@@ -246,12 +255,11 @@ func eventually(_ condition: () -> Bool) async throws -> Bool {
     }
 
     @Test func aRequestCancelledWhileAnotherWaitsLeavesAtOnceAndTheValueIsKept() async throws {
-        let kept = RecentComputations<Int>(capacity: 2, stopsAbandoned: true)
+        let kept = RecentComputations<Int>(capacity: 2, stopsAbandoned: true, grace: .zero)
         let gate = Gate()
         let first = Task { try await kept.value(for: "a") { try await gate.compute(1) } }
         let second = Task { try await kept.value(for: "a") { try await gate.compute(2) } }
-        #expect(try await eventuallyAsync { await gate.started == 1 })
-        try await Task.sleep(for: .milliseconds(20))
+        #expect(try await eventuallyAsync { await kept.waitingCount(for: "a") == 2 })
         first.cancel()
         await #expect(throws: CancellationError.self) { try await first.value }
         await gate.release()
@@ -262,7 +270,7 @@ func eventually(_ condition: () -> Bool) async throws -> Bool {
     }
 
     @Test func aComputationNoRequestWaitsForIsStoppedAndNotKept() async throws {
-        let kept = RecentComputations<Int>(capacity: 2, stopsAbandoned: true)
+        let kept = RecentComputations<Int>(capacity: 2, stopsAbandoned: true, grace: .milliseconds(50))
         let gate = Gate()
         let only = Task { try await kept.value(for: "a") { try await gate.compute(1) } }
         #expect(try await eventuallyAsync { await gate.started == 1 })
@@ -273,6 +281,24 @@ func eventually(_ condition: () -> Bool) async throws -> Bool {
         await gate.release()
         #expect(try await kept.value(for: "a") { try await gate.compute(2) } == 2)
         #expect(await gate.started == 2)
+    }
+
+    /// A request for the same search that comes while a computation no one waits for is in its grace,
+    /// as a browser sends one just after it abandons the first, joins it: nothing is computed again.
+    @Test func aRequestThatComesWithinTheGraceJoinsTheComputation() async throws {
+        let kept = RecentComputations<Int>(capacity: 2, stopsAbandoned: true, grace: .seconds(2))
+        let gate = Gate()
+        let first = Task { try await kept.value(for: "a") { try await gate.compute(1) } }
+        #expect(try await eventuallyAsync { await kept.waitingCount(for: "a") == 1 })
+        first.cancel()
+        await #expect(throws: CancellationError.self) { try await first.value }
+        #expect(await kept.waitingCount(for: "a") == 0)
+        let second = Task { try await kept.value(for: "a") { try await gate.compute(2) } }
+        #expect(try await eventuallyAsync { await kept.waitingCount(for: "a") == 1 })
+        await gate.release()
+        #expect(try await second.value == 1)
+        let (started, cancelled) = (await gate.started, await gate.cancelled)
+        #expect(started == 1 && cancelled == 0)
     }
 
     /// The facets' cache keeps a section no request waits for any more: the kit's facet pass, which

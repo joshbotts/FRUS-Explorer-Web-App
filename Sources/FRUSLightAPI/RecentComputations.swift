@@ -36,8 +36,10 @@ public struct RetainedResults: Sendable {
 ///
 /// A request that is cancelled while it waits, as one whose client has gone is, stops waiting at
 /// once. With `stopsAbandoned`, a computation no request waits for any more is cancelled and not
-/// kept, which stops the kit's search; otherwise it runs to its end and is kept, as the kit's facet
-/// pass, which nothing stops, is on the Mac.
+/// kept once `grace` has passed with none, which stops the kit's search; otherwise it runs to its end
+/// and is kept, as the kit's facet pass, which nothing stops, is on the Mac. The grace is for a
+/// request that replaces another for the same search, as a browser sends one just after it abandons
+/// the first when the reader turns the date order round: it joins the computation the first began.
 public actor RecentComputations<Value: Sendable> {
     /// What a key holds: a computation under way, by its number, or the value it gave.
     private enum Slot {
@@ -60,10 +62,12 @@ public actor RecentComputations<Value: Sendable> {
     private var lastNumber: UInt64 = 0
     let capacity: Int
     let stopsAbandoned: Bool
+    let grace: Duration
 
-    public init(capacity: Int, stopsAbandoned: Bool = false) {
+    public init(capacity: Int, stopsAbandoned: Bool = false, grace: Duration = .milliseconds(250)) {
         self.capacity = max(1, capacity)
         self.stopsAbandoned = stopsAbandoned
+        self.grace = grace
     }
 
     /// The value kept for `key`, or the one `compute` gives, which is kept unless it fails. Throws
@@ -131,16 +135,29 @@ public actor RecentComputations<Value: Sendable> {
     }
 
     /// A waiting request was cancelled: it stops waiting, and with `stopsAbandoned` a computation
-    /// left with no one waiting is cancelled, and its slot dropped.
+    /// left with no one waiting is stopped once `grace` has passed with no one joining it.
     private func leave(_ waiter: UInt64, from number: UInt64) {
         guard var computation = computations[number] else { return }
         computation.waiters.removeValue(forKey: waiter)?.resume(throwing: CancellationError())
-        guard stopsAbandoned, computation.waiters.isEmpty else {
-            computations[number] = computation
-            return
+        computations[number] = computation
+        guard stopsAbandoned, computation.waiters.isEmpty else { return }
+        Task {
+            try? await Task.sleep(for: self.grace)
+            self.stopIfAbandoned(number)
         }
+    }
+
+    /// Cancels a computation that still has no request waiting for it, and drops its slot.
+    private func stopIfAbandoned(_ number: UInt64) {
+        guard let computation = computations[number], computation.waiters.isEmpty else { return }
         computation.task.cancel()
         computations[number] = nil
         if case .computing(number)? = slots[computation.key] { drop(computation.key) }
+    }
+
+    /// How many requests wait for the computation under way for `key`, for the tests.
+    func waitingCount(for key: String) -> Int {
+        guard case .computing(let number)? = slots[key] else { return 0 }
+        return computations[number]?.waiters.count ?? 0
     }
 }

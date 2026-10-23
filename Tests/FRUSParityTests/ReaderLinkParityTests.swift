@@ -79,8 +79,6 @@ import Testing
         print("page links through the API: \(pairs.count) links, \(landed) placed on a document, every one as the app's store places it")
     }
 
-    /// Every person in each fixture volume's list is counted as the app's card counts them, over
-    /// the app's own `PersonMentionStore`; a person the volume's list lacks gets no count.
     /// Every link in the fixture volumes' pages to a printed page of another volume, read through the
     /// API, is that page of that volume, which this server, holding only the three fixture volumes,
     /// cannot place: no destination, and the volume as the server holds it, unindexed and unread.
@@ -90,7 +88,7 @@ import Testing
     /// the reference against that document, unless the link ends a range across documents, which the
     /// index leaves on the page, as it leaves every page the map names nothing on. The app lands a tap
     /// on the document the map names (#1778); this server will, through the kit's `PageLink`, once its
-    /// pin moves past the pull request that moves the landing into the kit.
+    /// pin moves past joshbotts/FRUS-Explorer#1784, which moved the landing into the kit.
     @Test func everyPageLinkIntoAnotherVolumeIsWhereTheIndexStoresIt() async throws {
         let rendered = Repository.layout.golden.appendingPathComponent("render/html")
         var links: [(volume: String, document: String, href: String)] = []
@@ -149,10 +147,12 @@ import Testing
         }
         #expect(links.count == 31 && volumes.count == 6)
         // frus1894Nicaragua d15's page 469 of frus1889, now d173, among them.
-        #expect(storedAsNamed > 0 && named >= storedAsNamed)
+        #expect(named == 19 && storedAsNamed == 17, "the map names \(named), and the index stores \(storedAsNamed) against it")
         print("page links into other volumes: \(links.count) into \(volumes.count) volumes this server does not hold, each placed nowhere; the map names a document for \(named), and \(storedAsNamed) are stored against it under rule C")
     }
 
+    /// Every person in each fixture volume's list is counted as the app's card counts them, over
+    /// the app's own `PersonMentionStore`; a person the volume's list lacks gets no count.
     @Test func everyPersonIsCountedAsTheAppCountsThem() async throws {
         let built = try await FixtureIndex.value()
         let store = try PersonMentionStore(databaseURL: built.index.database)

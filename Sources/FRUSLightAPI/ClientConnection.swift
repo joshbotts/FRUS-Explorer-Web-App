@@ -1,11 +1,10 @@
 // A request whose client has gone stops its work: each connection's pipeline notices when the client
 // closes its side, and a search's work, run while its client is connected, is cancelled then, so the
-// kit stops its statement (`SearchStatementStop`, joshbotts/FRUS-Explorer#1698). Session 10 found a
-// search running on for minutes after its client had dropped the connection.
+// kit stops its statement (`SearchStatementStop`, joshbotts/FRUS-Explorer#1698). Session 10 found the
+// server still computing searches whose clients had given up on them.
 
 import Hummingbird
 import HummingbirdCore
-import Logging
 import NIOCore
 import Synchronization
 
@@ -20,6 +19,9 @@ final class ConnectionClosure: Sendable {
     private let state = Mutex(State())
 
     var isClosed: Bool { state.withLock { $0.isClosed } }
+
+    /// How many are waiting to hear it, for the tests.
+    var waiterCount: Int { state.withLock { $0.waiters.count } }
 
     /// Records that the client's side has closed, and wakes every waiter. Called on the event loop.
     func close() {
@@ -94,11 +96,14 @@ public struct APIRequestContext: RequestContext {
     /// Runs `work` while the request's client is connected. When the client closes its side first,
     /// `work` is cancelled, and this throws `ClientClosedConnection` once it has stopped: a search
     /// stops its statement at the progress handler's next call, usually within a millisecond. A
-    /// connection with no `ClientCloseHandler`, as in the router's tests, runs `work` to its end.
+    /// connection with no `ClientCloseHandler`, as in the router's tests, runs `work` to its end; so
+    /// does one reset outright before the route asks, whose pipeline is gone by then, where a browser
+    /// that abandons a request closes with a FIN, which the half-closed pipeline keeps.
     func whileClientConnected<T: Sendable>(_ work: @escaping @Sendable () async throws -> T) async throws -> T {
         guard let closure = try? await channel.pipeline.handler(type: ClientCloseHandler.self).get().closure else {
             return try await work()
         }
+        if closure.isClosed { throw ClientClosedConnection() }
         return try await withThrowingTaskGroup(of: T?.self) { group in
             group.addTask { try await work() }
             group.addTask {
