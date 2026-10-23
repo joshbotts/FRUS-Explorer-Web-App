@@ -1,21 +1,43 @@
 #!/usr/bin/env bash
 # FRUS Explorer Light: writes a small synthetic FRUS Explorer research export.
-#   scripts/synthetic-export <output.sqlite>
+#   scripts/synthetic-export [--own-text] <output.sqlite>
 # It has the schema of a real export (Tests/FRUSLightTestSupport/Fixtures/export-v69-schema.sql),
 # the index and FTS schema versions this build serves (Sources/FRUSLightCore/Compatibility.swift),
 # three documents with their dates, the page ranges and person mentions the reader's links read, and an export stamp
 # without the owner's writing: the rows Tests/FRUSLightTestSupport/SyntheticExport.swift writes.
+# With --own-text it adds four rows of fixtures/own-text/frus1969-76v01.xml, the kit's fixture for a
+# section's own text, as FRUSCoreKit indexes it, and the outline it stores: SyntheticExport's
+# includesOwnText, which the Compose smoke test's browser suite reads.
 # Needs the sqlite3 command.
 set -euo pipefail
 
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-out=${1:?usage: scripts/synthetic-export <output.sqlite>}
+own_text=""
+if [ "${1:-}" = "--own-text" ]; then own_text=1; shift; fi
+out=${1:?usage: scripts/synthetic-export [--own-text] <output.sqlite>}
 command -v sqlite3 >/dev/null || { echo "scripts/synthetic-export: needs the sqlite3 command" >&2; exit 1; }
 
 constant() { grep -oE "$1 = [0-9]+" "$root/Sources/FRUSLightCore/Compatibility.swift" | grep -oE '[0-9]+$'; }
 version=$(constant supportedIndexVersion)
 fts=$(constant ftsSchemaVersion)
 schema="$root/Tests/FRUSLightTestSupport/Fixtures/export-v69-schema.sql"
+
+own_sql=""
+if [ -n "$own_text" ]; then
+  outline=$(cat "$root/fixtures/own-text/frus1969-76v01-outline.json")
+  # Undated, as the kit stores them: a section's row takes the span of its dated documents, and
+  # these have none.
+  own_sql="INSERT INTO document_cache (volume_id, document_id, document_number, header, body_text) VALUES
+  ('frus1969-76v01', 'd1', '1', '1. Minutes', '1. Minutes Agreed minutes. Continued minutes.'),
+  ('frus1969-76v01', 'd2', '2', '2. Memorandum', '2. Memorandum Annexed memorandum.'),
+  ('frus1969-76v01', 'ch1', NULL, 'First Meeting',
+   'First Meeting Held at Anfa Camp. Present Marshall and Brooke Closing communiqué, see Document 1.'),
+  ('frus1969-76v01', 'comp1', NULL, 'The Conference',
+   'The Conference Synopsis of the conference. Adjournment of the conference.');
+INSERT INTO document_dates (volume_id, document_id)
+  SELECT volume_id, document_id FROM document_cache WHERE volume_id = 'frus1969-76v01';
+INSERT INTO volume_structures (volume_id, structure_json) VALUES ('frus1969-76v01', '$outline');"
+fi
 
 rm -f "$out" "$out-journal" "$out-wal" "$out-shm"
 sqlite3 "$out" <<SQL
@@ -28,6 +50,7 @@ INSERT INTO document_cache (volume_id, document_id, header, body_text) VALUES
    'Negotiating began in May, and after many long weeks of talks the treaties came.'),
   ('frus1894Nicaragua', 'd1', 'No. 1. Mr. Baker to Mr. Gresham',
    'The canal concession and the Mosquito Reservation.');
+$own_sql
 INSERT INTO document_revisions (volume_id, document_id, content_hash, body_hash, index_version)
   SELECT volume_id, document_id, printf('%064d', 0), printf('%016d', 0), $version FROM document_cache;
 INSERT INTO page_ranges (volume_id, document_id, section_id, page_number_type, page_number_int, page_number_raw, is_start)
@@ -56,4 +79,4 @@ PRAGMA user_version = $fts;
 .output /dev/null
 PRAGMA journal_mode = DELETE;
 SQL
-echo "$out: synthetic export, index version $version, FTS schema $fts, 3 documents"
+echo "$out: synthetic export, index version $version, FTS schema $fts, $([ -n "$own_text" ] && echo "7 documents, 4 of them frus1969-76v01's: two sections' own text and two documents" || echo "3 documents")"

@@ -22,18 +22,24 @@ enum ServedFixture {
     static let resources = Repository.layout.upstream.appendingPathComponent(ParityIndex.resourcesPath)
 
     static func run<T: Sendable>(_ body: @escaping @Sendable (any TestClientProtocol, DataDirectory) async throws -> T) async throws -> T {
-        let built = try await FixtureIndex.value()
+        try await run(index: try await FixtureIndex.value().copy, volumes: ParityFixtures.volumes, body)
+    }
+
+    /// The same with another index the kit built, in rollback-journal mode, and the volumes named
+    /// mounted from the repository's fixtures.
+    static func run<T: Sendable>(index copy: URL, volumes: [String],
+                                 _ body: @escaping @Sendable (any TestClientProtocol, DataDirectory) async throws -> T) async throws -> T {
         let directory = try TemporaryDirectory()
         defer { withExtendedLifetime(directory) {} }
         let files = DataDirectory(root: directory.url.appendingPathComponent("data"))
-        try RepositoryFiles.mountTEI(ParityFixtures.volumes, at: files.volumesDirectory)
+        try RepositoryFiles.mountTEI(volumes, at: files.volumesDirectory)
         let app = try await buildApplication(configuration: ServerConfiguration(
             dataDirectory: files.root, importPollInterval: .milliseconds(50), resourcesDirectory: resources))
         return try await app.test(.router) { client in
             // Staged outside the drop zone and moved in whole, as `docker compose cp` delivers a
             // file; the import removes what it installs, so it must not be the shared copy.
             let staged = directory.url.appendingPathComponent("staged.sqlite")
-            try FileManager.default.copyItem(at: built.copy, to: staged)
+            try FileManager.default.copyItem(at: copy, to: staged)
             try FileManager.default.moveItem(at: staged, to: files.importDirectory.appendingPathComponent("fixtures.sqlite"))
             var readiness = ""
             for _ in 0..<2_400 {

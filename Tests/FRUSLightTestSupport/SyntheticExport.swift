@@ -34,6 +34,9 @@ public struct SyntheticExport: Sendable {
     /// The count of Khrushchev's person rollup, which spans the corpus; by default the export's own
     /// two documents that mention him, as a real three-volume export's rollup counts them.
     public var rollupMentionCount = 2
+    /// Adds four rows of the kit's fixture volume for a section's own text, and its outline:
+    /// `ownTextRows`, which `scripts/synthetic-export --own-text` writes too.
+    public var includesOwnText = false
 
     public static let documents: [(volume: String, id: String, header: String, body: String)] = [
         ("frus1961-63v06", "d1", "1. Telegram From the Embassy in the Soviet Union",
@@ -43,6 +46,26 @@ public struct SyntheticExport: Sendable {
         ("frus1894Nicaragua", "d1", "No. 1. Mr. Baker to Mr. Gresham",
          "The canal concession and the Mosquito Reservation."),
     ]
+
+    /// The volume of `fixtures/own-text/frus1969-76v01.xml`, the kit's fixture for a section's own
+    /// text (`SectionOwnTextTests`), as FRUSCoreKit indexes it: two documents of its first meeting,
+    /// the meeting's own text and that of the conference around it, which holds only sections, in
+    /// the order the kit stores them. The rest of its rows would change what the export's searches
+    /// find. FRUSParityTests holds them, and the outline, to the kit's index of the file.
+    public static let ownTextVolume = "frus1969-76v01"
+    public static let ownTextRows: [(id: String, number: String?, header: String, body: String)] = [
+        ("d1", "1", "1. Minutes", "1. Minutes Agreed minutes. Continued minutes."),
+        ("d2", "2", "2. Memorandum", "2. Memorandum Annexed memorandum."),
+        ("ch1", nil, "First Meeting", "First Meeting Held at Anfa Camp. Present Marshall and Brooke Closing communiqué, see Document 1."),
+        ("comp1", nil, "The Conference", "The Conference Synopsis of the conference. Adjournment of the conference."),
+    ]
+
+    /// The outline the kit stores for the volume, which gives the reader its order, from
+    /// `fixtures/own-text/frus1969-76v01-outline.json`.
+    public static func ownTextOutline() throws -> String {
+        try String(contentsOf: RepositoryFiles.ownText.appendingPathComponent("\(ownTextVolume)-outline.json"), encoding: .utf8)
+            .trimmingCharacters(in: .newlines)
+    }
 
     public init() {}
 
@@ -81,6 +104,23 @@ public struct SyntheticExport: Sendable {
                    ('frus1961-63v06', 'd2', '1960-11-10', '1960-11-10', 'day'),
                    ('frus1894Nicaragua', 'd1', '1894-01-25', '1894-01-25', 'day');
             """)
+        if includesOwnText {
+            // Undated, as the kit stores them: a section's row takes the span of its dated documents,
+            // and these have none.
+            let volume = Self.ownTextVolume
+            for row in Self.ownTextRows {
+                _ = try db.query(
+                    "INSERT INTO document_cache (volume_id, document_id, document_number, header, body_text) VALUES (?, ?, ?, ?, ?)",
+                    [.text(volume), .text(row.id), row.number.map { .text($0) } ?? .null, .text(row.header), .text(row.body)])
+                _ = try db.query("INSERT INTO document_dates (volume_id, document_id) VALUES (?, ?)", [.text(volume), .text(row.id)])
+                _ = try db.query(
+                    "INSERT INTO document_revisions (volume_id, document_id, content_hash, body_hash, index_version) VALUES (?, ?, ?, ?, ?)",
+                    [.text(volume), .text(row.id), .text(String(repeating: "0", count: 64)),
+                     .text(String(repeating: "0", count: 16)), .integer(Int64(indexVersion))])
+            }
+            _ = try db.query("INSERT INTO volume_structures (volume_id, structure_json) VALUES (?, ?)",
+                             [.text(volume), .text(try Self.ownTextOutline())])
+        }
         if !stamped {
             // A .backup of the live index: the exporter adds the stamp and these views to its copy only.
             try db.execute("""

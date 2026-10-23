@@ -3,7 +3,8 @@
 # Starts compose.yaml's server, checks the browser app, the catalogue and the reader before any
 # import, imports a synthetic export with docker compose cp, and waits for /readyz to answer 200;
 # then searches it, reads a document's page, and checks the user, the read-only root, the health
-# check and a restart.
+# check and a restart. Its TEI folder holds fixtures/tei's volumes and the kit's fixture for a
+# section's own text, fixtures/own-text/frus1969-76v01.xml, whose rows the export holds too.
 #   scripts/compose-smoke                       builds the image as frus-light:smoke first
 #   FRUS_IMAGE=<image> scripts/compose-smoke    tests an image already built
 #   scripts/compose-smoke --e2e                 also runs web/e2e, Playwright on Chromium, against the
@@ -26,7 +27,6 @@ fi
 
 export COMPOSE_PROJECT_NAME="frus-smoke-$$"
 export FRUS_HOST_PORT="${FRUS_HOST_PORT:-18080}"
-export FRUS_TEI_DIR="$root/fixtures/tei"
 if [ -z "${FRUS_IMAGE:-}" ]; then
   export FRUS_IMAGE=frus-light:smoke
   echo "== building $FRUS_IMAGE"
@@ -35,6 +35,9 @@ fi
 base="http://127.0.0.1:$FRUS_HOST_PORT"
 work=$(mktemp -d)
 passed=""
+mkdir "$work/tei"
+cp fixtures/tei/*.xml fixtures/own-text/frus1969-76v01.xml "$work/tei/"
+export FRUS_TEI_DIR="$work/tei"
 
 cleanup() {
   if [ -z "$passed" ]; then
@@ -63,7 +66,7 @@ wait_for_200() {
 }
 
 echo "== synthetic export"
-scripts/synthetic-export "$work/export.sqlite"
+scripts/synthetic-export --own-text "$work/export.sqlite"
 
 echo "== docker compose up (image $FRUS_IMAGE)"
 docker compose up -d frus   # the optional pdf service needs no test
@@ -124,8 +127,8 @@ echo "== docker compose cp the export, then /readyz"
 docker compose cp "$work/export.sqlite" frus:/data/import/export.sqlite
 wait_for_200 "$base/readyz" 120 || fail "/readyz did not reach 200"
 status=$(curl -s --max-time 5 "$base/api/v1/status") || fail "/api/v1/status did not answer"
-printf '%s' "$status" | grep -q '"documents":3' || fail "status does not report 3 documents: $status"
-echo "   status: $(printf '%s' "$status" | sed -nE 's/.*"sqliteVersion":"([^"]+)".*/SQLite \1/p'), 3 documents"
+printf '%s' "$status" | grep -q '"documents":7' || fail "status does not report 7 documents: $status"
+echo "   status: $(printf '%s' "$status" | sed -nE 's/.*"sqliteVersion":"([^"]+)".*/SQLite \1/p'), 7 documents"
 
 echo "== search and the reader's page over the imported index"
 # The kit's read-only stack over the live index: two documents mention treaties.

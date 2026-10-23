@@ -953,6 +953,19 @@ button.facet-row:hover {
   margin: 0.25rem 0;
 }
 
+/* A section's own text, first in its section, as the app's Browse lists it. */
+.own-text {
+  margin: 0.75rem 0 1rem;
+}
+
+.own-text p {
+  margin: 0;
+}
+
+.own-text .note {
+  margin-top: 0.125rem;
+}
+
 .empty h2 {
   font-size: 1.125rem;
 }

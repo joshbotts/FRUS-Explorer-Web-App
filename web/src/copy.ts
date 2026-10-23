@@ -4,7 +4,8 @@
 // Cite popover, Copy Citation from the reader, Document type and its choices from the search
 // filters, Text Size, and Reading Width with its Narrow, Standard and Wide, from Settings; Browse's
 // All Volumes, its filter's prompt, Partial, Planned and
-// Documents (n); the person, term and unresolved-reference sheets' titles, sentences and Done, the
+// Documents (n), and the row of a section's own text, Read and the section's title over its
+// sentence; the person, term and unresolved-reference sheets' titles, sentences and Done, the
 // person sheet's In Indexed Documents and its count, and
 // the titles of the app's alerts for a person or term it has no entry for, whose sentences, about
 // re-indexing on the Mac, are replaced; the facet panel's titles, rows, controls and captions,
@@ -276,6 +277,10 @@ export const copy = {
       `You followed a link to page ${page} of this volume, which ${teiAvailable ? 'this server hasn’t indexed' : 'isn’t on this server'}.`,
     sections: 'Sections',
     documents: (count: number) => `Documents (${count.toLocaleString('en-US')})`,
+    /** The row of a section's own text, as the app's Browse names it, by the section's title. */
+    readSection: (title: string) => `Read ${title}`,
+    /** The sentence under that row, the app's. */
+    ownTextNote: 'The text this section prints outside the documents and sections it holds.',
     noContents: 'Neither an index nor the TEI on this server gives this volume’s contents.',
     notIndexedBadge: 'Not indexed on this server',
     editorialNote: 'Editorial Note',

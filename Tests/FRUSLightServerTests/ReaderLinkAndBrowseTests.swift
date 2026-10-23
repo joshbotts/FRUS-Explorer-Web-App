@@ -366,3 +366,81 @@ private func formEncoded(_ fields: [String: String]) -> String {
         }
     }
 }
+
+/// A section's own text (joshbotts/FRUS-Explorer#1536): the synthetic export's rows of the kit's
+/// fixture for it, frus1969-76v01's first meeting and the conference around it, with the outline the
+/// kit stores. FRUSParityTests holds every section of the kit's index of the file to the kit's rule.
+@Suite struct OwnTextRouteTests {
+    static let volume = SyntheticExport.ownTextVolume
+
+    static func flatten(_ sections: [Volume.Section]) -> [String: Volume.Section] {
+        var all: [String: Volume.Section] = [:]
+        func walk(_ sections: [Volume.Section]) {
+            for section in sections {
+                if all[section.sectionId] == nil { all[section.sectionId] = section }
+                walk(section.subsections)
+            }
+        }
+        walk(sections)
+        return all
+    }
+
+    /// The meeting's own text heads its page, above its documents, and the conference's heads its
+    /// page, above the sections it holds; each opens in the reader between the entries the kit's
+    /// reading order puts around it. A section whose own text the index lacks lists none.
+    @Test func aSectionListsTheRowOfItsOwnText() async throws {
+        let fixture = try await servingSyntheticExport(volumes: [Self.volume], includesOwnText: true)
+        try await fixture.app.test(.router) { client in
+            let volume = try decode(Volume.self, try await client.execute(uri: "/api/v1/volumes/\(Self.volume)", method: .get))
+            #expect(volume.structureSource == "index")
+            let all = Self.flatten(try #require(volume.structure))
+            #expect(Set(all.values.filter(\.hasOwnText).map(\.sectionId)) == ["comp1", "ch1"])
+            // A leaf is read directly, and is no section's own text.
+            #expect(all["t1"]?.hasOwnText == false && all["t1"]?.readable == true)
+
+            let conference = try decode(VolumeSectionPage.self, try await client.execute(uri: "/api/v1/volumes/\(Self.volume)/sections/comp1", method: .get))
+            let own = try #require(conference.ownText)
+            #expect(own.documentId == "comp1" && own.header == "The Conference" && own.displayTitle == "The Conference")
+            #expect(own.documentNumber == nil && own.inIndex && own.readable == true && !own.isEditorialNote)
+            #expect(conference.documents.isEmpty && conference.section.hasOwnText)
+            #expect(conference.section.subsections.first { $0.sectionId == "ch1" }?.hasOwnText == true)
+
+            let meeting = try decode(VolumeSectionPage.self, try await client.execute(uri: "/api/v1/volumes/\(Self.volume)/sections/ch1", method: .get))
+            #expect(meeting.ownText?.documentId == "ch1" && meeting.ownText?.displayTitle == "First Meeting")
+            #expect(meeting.documents.map(\.documentId) == ["d1", "d2"] && meeting.documents.allSatisfy(\.inIndex))
+            #expect(meeting.path.map(\.sectionId) == ["comp1"])
+
+            // No row of its own: the key is left out.
+            let second = try await client.execute(uri: "/api/v1/volumes/\(Self.volume)/sections/ch2", method: .get)
+            #expect(try decode(VolumeSectionPage.self, second).ownText == nil)
+            #expect(!String(buffer: second.body).contains("ownText"))
+
+            let row = try decode(DocumentDetail.self, try await client.execute(uri: "/api/v1/volumes/\(Self.volume)/documents/ch1", method: .get))
+            #expect(row.document.displayTitle == "First Meeting" && row.document.inIndex)
+            #expect(row.previous?.documentId == "comp1" && row.next?.documentId == "d1" && row.next?.readable == true)
+            let body = try await client.execute(uri: "/api/v1/volumes/\(Self.volume)/documents/ch1/html?part=body", method: .get)
+            #expect(body.status == .ok && String(buffer: body.body).contains("Marshall and Brooke"))
+        }
+    }
+
+    /// The rows are the index's: before an import the volume's outline is its TEI's and no section
+    /// lists any, though the reader opens the meeting's own text from the TEI; and without the TEI
+    /// the row is listed with nothing said of reading it.
+    @Test func theRowsAreTheIndexs() async throws {
+        let before = try await ServerFixture(volumes: [Self.volume])
+        try await before.app.test(.router) { client in
+            let volume = try decode(Volume.self, try await client.execute(uri: "/api/v1/volumes/\(Self.volume)", method: .get))
+            #expect(volume.structureSource == "tei")
+            #expect(Self.flatten(try #require(volume.structure)).values.allSatisfy { !$0.hasOwnText })
+            let meeting = try decode(VolumeSectionPage.self, try await client.execute(uri: "/api/v1/volumes/\(Self.volume)/sections/ch1", method: .get))
+            #expect(meeting.ownText == nil && !meeting.section.hasOwnText)
+            let body = try await client.execute(uri: "/api/v1/volumes/\(Self.volume)/documents/ch1/html?part=body", method: .get)
+            #expect(body.status == .ok)
+        }
+        let withoutTEI = try await servingSyntheticExport(includesOwnText: true)
+        try await withoutTEI.app.test(.router) { client in
+            let meeting = try decode(VolumeSectionPage.self, try await client.execute(uri: "/api/v1/volumes/\(Self.volume)/sections/ch1", method: .get))
+            #expect(meeting.structureSource == "index" && meeting.ownText?.documentId == "ch1" && meeting.ownText?.readable == nil)
+        }
+    }
+}

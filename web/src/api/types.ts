@@ -77,6 +77,11 @@ export interface Section {
   canReadDirectly: boolean;
   /** Whether the reader can open it as a document; absent without the TEI. */
   readable?: boolean;
+  /**
+   * Whether the index holds a row of the text it prints outside the documents and sections it holds,
+   * which its page lists first: the kit's VolumeSection.ownTextEntry(among:).
+   */
+  hasOwnText: boolean;
 }
 
 /** A document in a section's list, from the index or, failing that, the TEI. */
@@ -98,6 +103,8 @@ export interface VolumeSectionPage {
   section: Section;
   /** The sections above it, outermost first. */
   path: { sectionId: string; title: string }[];
+  /** The row of the text the section prints outside the documents and sections it holds, which Browse lists first. */
+  ownText?: SectionDocument;
   documents: SectionDocument[];
   structureSource: 'index' | 'tei';
 }
