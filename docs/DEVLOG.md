@@ -2,6 +2,68 @@
 
 One entry per session, newest first.
 
+## Session 12e: pin move past FRUS-Explorer#1784, the page-map landing
+
+23 October 2026 · branch `claude/determined-babbage-3d30b2` · upstream `af41efa4`
+
+The pin moves from `f0479037` (`build-51`) to `af41efa4`, the owner's merge of [FRUS-Explorer#1784](https://github.com/joshbotts/FRUS-Explorer/pull/1784) the same day, and the server serves the landing 1.0 gives a page link into a volume the device does not hold (#1778). S12c's log offered this pin move of its own, under rule 5, so that the landing need not wait for `version-1.0` and S12d.
+
+**What the move brought**
+
+- **One commit.** `FRUSCoreKit/TEI/FRUSURLScheme.swift` gains `WholeVolumeLink` and `PageLink`, public and `Sendable`, from the app's `FRUSURLSchemeHandler.swift`, and `ReaderLinkTests`' three tests of them leave the app-only block, so FRUSCoreKitTests runs 1,147, up from 1,144. The rest is the app's records.
+- **No repair.** The package builds with no warning, every kit suite passes, and the only skip is the named one. The build (1.0, 1776), the index version (71), the export's schema, the kit folders, `Package.swift`, the app's source folders and CI's allow-list are all unchanged, so `Compatibility.swift` and the install guide's versions stand.
+
+**The landing**
+
+- **The API.** The link route's `.page` case asks `PageLink.destination(page:volumeId:citing:onDevice:store:map:)`, as both of the app's readers ask it, with:
+  - `onDevice`: whether the served index holds the volume, since the page ranges it reads are that index's;
+  - `store`: the served index's `PageRangeStore`, opened immutably since S9c;
+  - `map`: the bundled `cited-page-map.json`, decoded at start as the kit's `CitedPageMap` (`ServerResources.citedPages`), since the kit's own provider, `IndexingResources.citedPages`, is internal. A map that will not decode stops the server at start, naming the file, as the broken-refs index does.
+
+  A `.document` lands as a cross-reference does. A `.volume` gives `volumeId`, `wholeVolumeLink` and `url`, as a reference to a whole volume does. No destination, for a page of a volume the index holds that neither the page ranges nor the map names, leaves the answer as it was.
+- **A link that opens a volume** now carries `wholeVolumeLink`, where the kit's `WholeVolumeLink` sends it: `browse` for a volume the catalogue holds, `web` for any other, whose page is `url`. The browser app follows it, where it used to decide from the catalogue entry itself.
+- **The browser app.** A page link to a document opens it as a cross-reference does; in a volume without its TEI here, the notice offers the document's page on history.state.gov. A page link to the volume opens the volume's page in Browse, which says first, for instance, "You followed a link to page 859 of this volume, which isn’t on this server.": the app's `FollowedPageLink.notice`, a localized string that stays app code, made the server's. For a volume whose TEI is here and which the server has not indexed, it ends "which this server hasn’t indexed".
+  - The page is kept in that visit's history entry: Back and Forward to it, and a reload, name it again, and a visit by any other route does not.
+  - The reader's old notice for a page of a volume the server has not indexed ("Page N is in …, which this server hasn’t indexed") is gone, since such a page now always leads somewhere.
+- **Over the fixtures,** the 31 links into the 6 volumes the server does not hold go where the app's readers send them: 19 to the document the map names, 17 of which the index stores against it under rule C (frus1894Nicaragua d15's page 469 of frus1889 is d173), and 12 to the volume in Browse. Within the three fixture volumes, the parity test's 897 links to their pages land as before, 885 on a document: the map names nothing there that the page ranges miss.
+
+**The golden files**, remade by `scripts/make-golden --export /Users/Shared/frus-index-build1776-golden.sqlite` under the app's `Scripts/heavy.sh` lock: the owner's 1776 three-volume export, reused on the owner's word, since `af41efa4` keeps build 1776 and changes no file on the indexing path.
+
+- The 393 rows' HTML is byte for byte as before; the render's manifest, the expressions and the results change only in `sourceDigest` and `upstreamCommit`.
+- The index summary's gating section, its 36 digests, 7 checks and volumes, is unchanged. Beside its provenance, only its information section's timings moved, which record how long this run took to hash each table.
+- `frus-parity check-golden` passes.
+
+**Tests**
+
+- `ReaderLinkParityTests`: `everyPageLinkIntoAnotherVolumeIsWhereTheIndexStoresIt` holds each of the 31 links to `PageLink`'s answer with the volume not on the device, and asserts the 19, the 17 and the 12. `everyPageLinkLandsWhereTheAppsStorePlacesIt` asks `PageLink` with the app's own store as the device's page index, and no page of a volume on the device opens the volume.
+- `ReaderLinkRouteTests`: a page the synthetic index lacks and the map names (frus1961-63v06's page 3, d4); Volume XIV's page 387, now d137; its page 859, which opens the volume in Browse; a page of the microfiche supplement, which opens on history.state.gov; a page before any import, which opens its volume; and `wholeVolumeLink` on each reference to a whole volume.
+- `ResourcesTests`: the page map is decoded at start, and one that will not decode is refused, by name.
+- The browser app: a unit test follows a page link into Browse and reads the line, in both of its wordings, on that visit alone. The browser suite's `page-map-landing.spec.ts` follows Nicaragua d15's link by keyboard to d173's notice, and d42's link to Volume XIV's page in Browse, with Back, Forward and a later visit from the catalogue, running axe on each. `browse-link-card.spec.ts`'s page test now shows a page nothing places, since d21's link to page 387 of Volume XIV lands on d137.
+
+**Records**
+
+- `PLAN.md` and its shared copy (rev 195): the session intro, the flowchart, S12e's row, S12d's row (from `af41efa4`, without the landing), the golden-files checkpoint, the risk row's counts and S12e's answers.
+- `SPEC.md`: the reader's links, the API's answers for a page and a whole volume, the line a volume's page shows, and what the bundled page map serves.
+- `INSTALL.md`: the page-reference bullet.
+- `COORDINATION.md`: the pin; §1's use of the kit; §2's paragraph on #1784, which it lacked, and on this move; §5's list; and §6's exports, which now name S12b's of 22 October.
+- `docs/prep/README.md`: the pin, and the landing served. The README's Status and this log.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** through CI's Build and Test steps: all 2,054 tests pass, up from 2,050, with the one named skip. FRUSCoreKitTests runs 1,147 (from 1,144) and FRUSLightServerTests 101 (from 100); the other targets are unchanged, FRUSParityTests at 111. Against the remade golden files the run printed:
+  - "check 2 passes: 36 digests and 7 checks are the Mac's";
+  - "check 3's results pass: 482 queries, 482 identical and 0 reordered only within Mac tie groups", and the same through the API;
+  - "check 4 through the page: 393 of 393 rows identical".
+- **The browser app:** typecheck and lint are clean, and 68 unit tests pass in 14 files, up from 67.
+- **`scripts/compose-smoke --e2e`** on this branch's image, `frus-light:s12e`, built locally: passes, with 18 browser tests on Chromium, up from 16, and axe finds nothing.
+
+**Notes**
+
+- **Chromium takes a navigation to the address already shown for a reload,** which keeps the history entry's state, so `page.goto` of Browse's own address names the followed page again. The browser test's later visit comes from the catalogue.
+- **Builds in a new worktree:** the Linux build reused S12c's `.build/linux` through an APFS clone (`cp -c`), so the package and its tests built in 68 seconds; `make-golden`'s two native tools built from empty, `mac-golden` in about 3½ minutes and `frus-parity` in 34 seconds.
+
+**Next: S11f,** the timeline and concordance readings. **S12d** follows once the app's repository tags `version-1.0` (build 1861), moving the pin on from `af41efa4`.
+
 ## Session 12c: what FRUS Explorer 1.0 changed, over the API and in the browser app
 
 23 October 2026 · branch `claude/s12c-what-1-0-changed-64c4b9` · upstream `f0479037` (tag `build-51`), unchanged
