@@ -25,12 +25,13 @@ The owner asked for issue #37 to be reviewed, and the plan revised to catch up w
   - S12c, what 1.0 changed that the web edition serves: result dates and their precision, the reader's Reading Width, a replaced search stopping its statements, and the rows 1.0's index changed. Its upstream pull request moves #1778's page-map landing into the kit.
 - **Owner checkpoints:** the 1.0 export, the three-volume one for the golden files and a full one for the owner's install once `edge` serves version 71, and Mac check 7.
 - **The upstream-churn risk** now records the gap, and the watch as its mitigation.
-- **The S12 answers** say which 1.0 changes come with the pin, which wait for phases 2–4, and what remains before a release. One question is open for the owner: whether the release image's tag follows the build number or the version.
+- **The S12 answers** say which 1.0 changes come with the pin, which wait for phases 2–4, and what remains before a release. The owner answered the one question it left open: a release image is tagged with the app's version and build, `:1.0-1776` and `:1.0-1861`, joined by a hyphen since a tag cannot hold the slash asked for.
 
 **Records**
 
 - `PLAN.md` and its shared copy (rev 162): the S12 rows, the flowchart, the checkpoints, the risk row and the S12 answers.
 - `COORDINATION.md`: the gap, and S12a as the watch's author.
+- `SPEC.md`: the release tags.
 - `docs/prep/README.md`: the dry run. This log.
 
 **Results**
