@@ -42,13 +42,46 @@ The pin moves from `757c6d29` (build 50, index version 69) to `f0479037`, the co
 - **`image.yml`** reads it in each build job, so every pull request that touches the image checks it, and the promote job, after the smoke test on both architectures, moves the release tag with `edge`: `:1.0-1776` follows `main` while the pin holds build 1776, and stays on the last such build once the pin moves on. Sessions never publish (rule 7).
 - `docs/INSTALL.md` and SPEC name the release tags.
 
+**Checks 3–5 on the full 1776 export**, as S10 ran them:
+
+- **The install:** a Compose project of its own, `frus-s12b`, with `compose.yaml` and a `.env` naming the port, the TEI folder and the image. The port is 8082, since S10's install still holds 8081 and the owner's 8080, and both were left as they were. The image is this branch's, `frus-light:s12b`, built locally from the code of `5c59c6b`, since sessions never publish. The TEI folder is the owner's clone of HistoryAtState/frus, read-only, at `6170e4b32` (1.1.4), the corpus #1746 measured its rows on.
+- **Check 5, import acceptance:** the full export was ready 43 seconds after the copy began, serving 321,749 documents from 553 volumes at index version 71. Read immutably, it holds no summary, note or tag and no `user_tags` row, and its `user_content` index no term. The refusal half, and `scripts/check-stripped-export`, need an export with the owner's writing from build 1776, which there is not; the refusal's code is unchanged since S10, and the server's tests refuse a synthetic export that holds writing.
+- **Check 3:** `mac-golden results --any-volumes` ran the app's SearchService over a copy of the export in 31 minutes 11 seconds: 482 queries, 43 refused, 9 with ties past the 50th. `frus-parity results --api` read the same queries through the install's API: 886 requests in 37 minutes, none timing out. `frus-parity compare-results` printed "check 3's results pass: 482 queries, 482 identical and 0 reordered only within Mac tie groups"; 392 queries have other score bits, which is information, as on build 50 (349).
+- **Check 4:** the sample is the middle row that is not front matter in each of the 553 volumes, in index order, now drawn from the 1776 export. Five have an id other than `d` and a number, such as frus1943v06's `ch44`, an agreement, and frus1958-60v05mSupp's `gt_d10`. `mac-golden render --tei --rows` rendered them through the Mac reader's path in 1 minute 57 seconds, 5,652,473 bytes of HTML. `frus-parity render-api` fetched each one's body from the server and compared the bytes: "check 4 through the API: 553 of 553 rows identical", in 2 minutes 38 seconds. No row in this sample has a figure image; S10's had 14 in 2 rows.
+- Each run took the app's `Scripts/heavy.sh` lock, one at a time, as the image build had.
+
 **Records**
 
 - SPEC: the compatibility contract (71 at `f0479037`, app 1.0 build 1776); the table definitions' lines; the image's tags; the bundled data, with `cited-page-map.json`, the resized citation and semantic files, 54 MB in all, and the Legal row gone; and the licensing lines: EmbeddingGemma 2 is Apache 2.0, from the `encoder-2` release, downloaded only at an admin's request, with no consent screen, since the Gemma Terms file is gone from the bundle (#1674). The shards' address names their generation, `generations/89481b18/`. The corpus figures follow 1.0: a full index holds about 322,000 documents, and the semantic map places 314,616 in 140 clusters.
 - `INSTALL.md`: index version 71 and FRUS Explorer 1.0 (build 1776), the second version change, and the release tags.
 - `COORDINATION.md`: the pin, the contract, the kit's test counts, the 393 rows and this move.
-- `PLAN.md` and its shared copy: S12b done, the golden-files and 1776-export checkpoints, the risk row's counts, and the release tag's rule.
+- `PLAN.md` and its shared copy (rev 180): S12b done, the golden-files and 1776-export checkpoints, the risk row's counts, and the release tag's rule.
 - The README's Status, as #40 rewrote it, merged here from `main`: only what the move makes untrue, the gap behind 1.0 and S12b's line under Next. The prep note and this log.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** from a clean build of this package's own targets: all 2,037 tests pass, up from 1,934 at the old pin, with the one named skip, which CI's skip check allows.
+  - By target: FRUSCoreKitTests 1,144 (from 1,061), SourceNoteKitTests 321 (310), FTS5StoreTests 212 (209), FRUSParityTests 107, FRUSLightServerTests 91 (90), ManifestGeneratorTests 60, FRUSLightCoreTests 42, SemanticVectorsKitTests 40 (35), CrossRefKitTests 10, GeneratorKitTests 7, FTS5CheckTests 3.
+  - Against the remade golden files the run printed:
+    - "check 2 passes: 36 digests and 7 checks are the Mac's";
+    - "check 3's results pass: 482 queries, 482 identical and 0 reordered only within Mac tie groups", and the same through the API;
+    - "check 4 through the page: 393 of 393 rows identical".
+- **CI** passes on this pull request, with the same counts and the one named skip. Both architectures' image builds read the release tag `1.0-1776`, and the web app's checks and the Compose smoke test with the browser suite pass.
+- **On the owner's full 1776 export:** checks 3, 4 and 5's acceptance half pass, as above.
+
+**Notes**
+
+- **Exact-word searches are still slow** over the full corpus: the slowest requests took 57 seconds through the API, against 66 at build 50, with nothing else running. Check 12 is phase 5's.
+- **The new prose rows are front matter where `<front>` prints them.** The notes row of frus1969-76ve09p1 is one (`is_front_matter` 1, no date), and the Mac's search counts it, as the server's does; Browse's own-text rows remain before a release.
+- **The owner's own install** on port 8080 serves the build 50 export. Once it runs an image at this pin it refuses that export, naming both versions, until the full 1776 export is copied in.
+- **The S12b install** on port 8082, `frus-s12b` in `~/Library/Caches/frus-s12b/compose`, still serves the full 1776 export from the local image. `docker compose down --volumes` in that folder removes it and its 2.9 GB volume. S10's install on 8081 was left running.
+
+**For the owner after the merge**
+
+- `image.yml` publishes `ghcr.io/joshbotts/frus-explorer-light:1.0-1776` beside `edge` and the commit's `sha-` tag, once the smoke test passes on both architectures.
+- Your own install then needs the full 1776 export: `docker compose pull && docker compose up -d`, then `docker compose cp -L /Users/Shared/frus-index-build1776-allvols.sqlite frus:/data/import/`, as `docs/INSTALL.md` says.
+
+**Next: S12c,** what 1.0 changed that the web edition serves: a result's date range and precision, the reader's Reading Width, a replaced search stopping its statements, and the rows 1.0's index changed, with the upstream pull request for the page-map landing. **S12d** follows once the app's repository tags `version-1.0` (build 1861).
 
 ## Session 12a: the daily watch of `v2`
 
