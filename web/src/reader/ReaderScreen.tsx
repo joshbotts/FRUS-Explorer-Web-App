@@ -6,12 +6,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from 'react';
 import { ApiError } from '../api/client';
-import { documentQuery, linkQuery, readerPageURL, type TextSize, volumesQuery } from '../api/endpoints';
+import { documentQuery, linkQuery, type ReadingWidth, readerPageURL, type TextSize, volumesQuery } from '../api/endpoints';
 import type { ReaderLinkTarget } from '../api/types';
 import { CitePanel } from '../cite/CitePanel';
 import { copy } from '../copy';
 import type { ReaderSearch } from '../router';
-import { useTextSize } from '../settings/preferences';
+import { useReadingWidth, useTextSize } from '../settings/preferences';
 import { useScheme } from '../shell/AppShell';
 import { useHeadingReady } from '../shell/headingFocus';
 import { plainTitle, useDocumentTitle } from '../shell/useDocumentTitle';
@@ -44,11 +44,12 @@ export function ReaderScreen() {
   const citeToggle = useRef<HTMLButtonElement>(null);
   const scheme = useScheme();
   const [textSize, setTextSize] = useTextSize();
+  const [readingWidth, setReadingWidth] = useReadingWidth();
   const narrow = useSyncExternalStore(subscribeToWidth, () => window.matchMedia?.(narrowQuery).matches ?? false, () => false);
   // The reader works without an index, so metadata that fails leaves the id and the volume's title.
   const detail = useQuery(documentQuery(volumeId, documentId));
   const volumes = useQuery(volumesQuery);
-  const pageURL = readerPageURL(volumeId, documentId, scheme, textSize);
+  const pageURL = readerPageURL(volumeId, documentId, scheme, textSize, readingWidth);
   const frameURL = note ? `${pageURL}#${note}` : pageURL;
   // Checked once per page: a refocused tab, or a server briefly away, leaves an open document open.
   const page = useQuery({
@@ -71,8 +72,8 @@ export function ReaderScreen() {
     setCard(null);
   }
   // A note is landed on once each time the reader arrives at it, by a link or by Back and Forward.
-  // A page loaded again for another text size or appearance leaves focus on the control that asked
-  // for it (WCAG 3.2.2), and the frame's URL fragment keeps the note in view.
+  // A page loaded again for another text size, reading width or appearance leaves focus on the
+  // control that asked for it (WCAG 3.2.2), and the frame's URL fragment keeps the note in view.
   const arrival = `${documentKey}#${note ?? ''}`;
   const [arrivedAt, setArrivedAt] = useState(arrival);
   const [landing, setLanding] = useState(note);
@@ -278,6 +279,17 @@ export function ReaderScreen() {
                 {(['small', 'medium', 'large', 'extraLarge'] as const).map((size) => (
                   <option key={size} value={size}>
                     {copy.reader.textSizes[size]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {/* Beside Text Size, as the app's Settings ▸ Display has it: how long the page's lines may grow. */}
+            <label>
+              {copy.reader.readingWidth}{' '}
+              <select value={readingWidth} onChange={(event) => setReadingWidth(event.target.value as ReadingWidth)}>
+                {(['narrow', 'standard', 'wide'] as const).map((width) => (
+                  <option key={width} value={width}>
+                    {copy.reader.readingWidths[width]}
                   </option>
                 ))}
               </select>

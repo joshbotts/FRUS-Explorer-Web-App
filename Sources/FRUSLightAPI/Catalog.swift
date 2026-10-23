@@ -130,7 +130,7 @@ enum CatalogRoutes {
     static let maximumLimit = 1_000
     static let defaultLimit = 20
 
-    static func add(to router: Router<BasicRequestContext>, state: ServerState, provider: ServedIndexProvider,
+    static func add(to router: Router<APIRequestContext>, state: ServerState, provider: ServedIndexProvider,
                     resources: ServerResources, reader: ReaderService) {
         let volumesDirectory = reader.volumesDirectory
         router.get("/api/v1/volumes") { request, _ -> VolumeList in

@@ -66,6 +66,7 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
     var app = Application(
         router: buildRouter(state: components.state, resources: components.resources, reader: components.reader,
                             webClient: components.webClient, logger: logger),
+        server: APIServer.http1,
         configuration: .init(address: .hostname(configuration.host, port: configuration.port), serverName: "frus-light"),
         logger: logger)
     app.addServices(ImportWatcher(files: components.files, state: components.state,

@@ -27,17 +27,21 @@ export function documentPath(volumeId: string, documentId: string): string {
   return `/api/v1/volumes/${segment(volumeId)}/documents/${segment(documentId)}`;
 }
 
-/** The reader's page for the frame, in the app's appearance and text size. */
+/** The reader's page for the frame, in the app's appearance, text size and reading width. */
 export function readerPageURL(
   volumeId: string,
   documentId: string,
   colorScheme: 'light' | 'dark',
   textSize: TextSize,
+  readingWidth: ReadingWidth,
 ): string {
-  return `${documentPath(volumeId, documentId)}/html?${formEncode({ colorScheme, textSize })}`;
+  return `${documentPath(volumeId, documentId)}/html?${formEncode({ colorScheme, textSize, readingWidth })}`;
 }
 
 export type TextSize = 'small' | 'medium' | 'large' | 'extraLarge';
+
+/** The app's Reading Width, whose measure for the page's column the server sets: 70, 87 or 120ch. */
+export type ReadingWidth = 'narrow' | 'standard' | 'wide';
 
 /** `/readyz` answers 503 with the step until an index is served, so its body is read either way. */
 export async function fetchReadiness(signal?: AbortSignal): Promise<Readiness> {

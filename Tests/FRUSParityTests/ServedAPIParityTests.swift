@@ -174,9 +174,9 @@ struct ServedFile: Equatable {
     /// Check 4 through the page. Every golden row, read as the page the browser loads, holds the
     /// golden fragment between its one `<body>\n` and `\n</body>`, once the 8 figure images, which
     /// the server names by its own address, are named by the app's again; the body alone is the
-    /// same; and every page's head is the kit's `ReaderPage.build` head with the host script. The
-    /// index is served, so the reader applies its classifications, which for the fixtures are the
-    /// TEI's.
+    /// same; and every page's head is the kit's `ReaderPage.build` head with the host script, at the
+    /// Reading Width's default, Standard. The index is served, so the reader applies its
+    /// classifications, which for the fixtures are the TEI's.
     @Test func checkFourPassesThroughThePage() async throws {
         let (golden, directory) = try RenderParityTests.currentGolden()
         let rows = golden.rows.map { (volume: $0.volume, document: $0.document) }
@@ -202,7 +202,9 @@ struct ServedFile: Equatable {
         }
 
         let expectedHead = try await ReaderRenderer(layout: Repository.layout)
-            .fullParsePass([ParityFixtures.volumes[0]], write: { ReaderPage.build(model: $0, head: ReaderRoutes.pageHead) })
+            .fullParsePass([ParityFixtures.volumes[0]], write: {
+                ReaderPage.build(model: $0, measure: ReadingWidth.standard.measure, head: ReaderRoutes.pageHead)
+            })
             .documents.first?.html?.components(separatedBy: "<body>\n").first
         var heads = Set<String>()
         var mapped: [RenderedDocument] = []
@@ -231,6 +233,41 @@ struct ServedFile: Equatable {
         let mismatches = RenderParity.mismatches(mapped, golden: golden, directory: directory)
         #expect(mismatches.isEmpty, "\(mismatches.count) rows differ:\n\(mismatches.map(\.description).joined(separator: "\n"))")
         print("check 4 through the page: \(mapped.count - mismatches.count) of \(golden.rows.count) rows identical, \(replaced.values.reduce(0, +)) figure images in \(replaced.count) rows named by the server; one head for every page")
+    }
+
+    /// Each Reading Width through the API is the kit's page at the step's measure (#1665): the first
+    /// document of every fixture volume, which holds no figure, in both appearances, is byte for byte
+    /// `ReaderPage.build` with the host script at 70, 87 and 120ch.
+    @Test func eachReadingWidthIsTheKitsPageAtItsMeasure() async throws {
+        let combinations = ReadingWidth.allCases.flatMap { width in ReaderAppearance.allCases.map { (width, $0) } }
+        // One parse of each volume; each d1 is written in every combination, apart by a NUL.
+        let (pages, _) = try await ReaderRenderer(layout: Repository.layout).fullParsePass(ParityFixtures.volumes, write: { model in
+            guard model.documentId == "d1" else { return "" }
+            return combinations.map {
+                ReaderPage.build(model: model, appearance: $0.1, measure: $0.0.measure, head: ReaderRoutes.pageHead)
+            }.joined(separator: "\u{0}")
+        })
+        var expected: [String: String] = [:]
+        for page in pages where page.document == "d1" {
+            for (combination, html) in zip(combinations, (page.html ?? "").components(separatedBy: "\u{0}")) {
+                expected["\(page.volume) \(combination.0.rawValue) \(combination.1.rawValue)"] = html
+            }
+        }
+        let keys = expected.keys.sorted()
+        let served = try await ServedFixture.run { client, _ in
+            var served: [String: String] = [:]
+            for key in keys {
+                let parts = key.split(separator: " ").map(String.init)
+                let uri = "/api/v1/volumes/\(parts[0])/documents/d1/html?readingWidth=\(parts[1])&colorScheme=\(parts[2])"
+                let response = try await client.execute(uri: uri, method: .get)
+                guard response.status == .ok else { throw APIParityError("\(key): \(response.status.code)") }
+                served[key] = String(buffer: response.body)
+            }
+            return served
+        }
+        #expect(keys.count == ParityFixtures.volumes.count * 6)
+        for key in keys { #expect(served[key] == expected[key], "\(key) is not the kit's page") }
+        print("the Reading Width through the API: \(keys.count) pages, each the kit's at 70, 87 or 120ch")
     }
 
     /// Browsing through the API: the catalogue's coverage, each fixture volume's documents, reading

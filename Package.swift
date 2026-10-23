@@ -27,6 +27,9 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0"),
         .package(url: "https://github.com/swift-server/swift-service-lifecycle.git", from: "2.0.0"),
+        // NIOCore for the channel handler that notices a client closing its connection; Hummingbird
+        // already resolves it.
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.81.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
         // SHA-256 for the parity harness. Hummingbird already resolves 5.x; on macOS it wraps CryptoKit.
         .package(url: "https://github.com/apple/swift-crypto.git", "3.12.3"..<"6.0.0"),
@@ -177,12 +180,15 @@ let package = Package(
             swiftSettings: swift6
         ),
         // The HTTP application (session 8): the routes, problem details, the app's data files, the
-        // catalogue, the reader and the search request, over FRUSLightCore and the shared kits.
+        // catalogue, the reader and the search request, over FRUSLightCore and the shared kits. Since
+        // S12c it watches each connection for its client closing it, through HummingbirdCore and NIOCore.
         .target(
             name: "FRUSLightAPI",
             dependencies: [
                 "FRUSLightCore", "FRUSCoreKit", "FTS5Store",
                 .product(name: "Hummingbird", package: "hummingbird"),
+                .product(name: "HummingbirdCore", package: "hummingbird"),
+                .product(name: "NIOCore", package: "swift-nio"),
                 .product(name: "ServiceLifecycle", package: "swift-service-lifecycle"),
                 .product(name: "Logging", package: "swift-log"),
             ],
@@ -248,6 +254,8 @@ let package = Package(
                 "FRUSLightAPI",
                 "FRUSLightCore",
                 "FRUSLightTestSupport",
+                // For the search statements' test hook (upstream #1698), which a test holds a search at.
+                "FRUSCoreKit",
                 .product(name: "HummingbirdTesting", package: "hummingbird"),
                 .product(name: "ServiceLifecycle", package: "swift-service-lifecycle"),
                 .product(name: "Logging", package: "swift-log"),

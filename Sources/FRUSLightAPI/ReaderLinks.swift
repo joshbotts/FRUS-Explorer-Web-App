@@ -109,7 +109,7 @@ enum ReaderLinkRoutes {
     /// adds it to the key it is given.
     static let footnoteEntryPrefix = "fnote-"
 
-    static func add(to router: Router<BasicRequestContext>, state: ServerState, provider: ServedIndexProvider,
+    static func add(to router: Router<APIRequestContext>, state: ServerState, provider: ServedIndexProvider,
                     reader: ReaderService, resources: ServerResources) {
         router.get("/api/v1/volumes/:volumeId/documents/:documentId/link") { request, context -> ReaderLinkTarget in
             let query = try FormQuery(request.uri.query)

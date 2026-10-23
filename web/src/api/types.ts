@@ -193,6 +193,11 @@ export interface SearchItem {
   dateline?: string;
   sourceNote?: string;
   dateISO?: string;
+  /** The row's last day: the end of a section's span, which the index dates by its documents. */
+  dateISOMax?: string;
+  datePrecision?: 'day' | 'month' | 'year';
+  /** The kit's words for the row's date, which a row with no dateline draws: "August 21, 1945 – January 22, 1946". */
+  drawnDate?: string;
   /** The document's text around the matches, with <b> and </b> marking them; otherwise plain text. */
   snippet: string;
   bm25Score: number;

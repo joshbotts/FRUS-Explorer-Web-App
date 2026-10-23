@@ -408,7 +408,9 @@ function Results({
                   <p className="meta">
                     {titles.get(item.volumeId) ?? item.volumeId}
                     {!item.headerRepeatsNumber && <> · {item.documentLabel}</>}
-                    {item.dateline && <> · {item.dateline}</>}
+                    {/* Its dateline, or for a row that prints none the day or span the index dates
+                        it by, as the Mac's window draws `dateline ?? drawnDate`. */}
+                    {(item.dateline ?? item.drawnDate) && <> · {item.dateline ?? item.drawnDate}</>}
                     {item.isEditorialNote && <Badge>{copy.search.editorialNote}</Badge>}
                     {item.isFrontMatter && <Badge>{copy.search.frontMatterBadge}</Badge>}
                   </p>

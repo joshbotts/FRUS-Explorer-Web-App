@@ -99,6 +99,47 @@ func servingSyntheticExport(volumes: [String] = [], edits: String? = nil) async 
         }
     }
 
+    /// A row carries the kit's date and the words the Mac's window draws for a row that prints no
+    /// dateline (#1746): a day, the span of the documents a section's row holds, a month, a year, or
+    /// none for a row with no date. The rows here are dated as a real index dates them: every bound a
+    /// day, a month's or a year's at its first and last.
+    @Test func aRowCarriesItsDateAndTheWordsTheMacsWindowDrawsForIt() async throws {
+        // d1 prints its dateline, and d2 none, dated by a span as a section's row is; Nicaragua's d1
+        // is dated to a month.
+        let fixture = try await servingSyntheticExport(edits: """
+            UPDATE document_cache SET dateline = 'Moscow, November 9, 1960.' WHERE volume_id = 'frus1961-63v06' AND document_id = 'd1';
+            UPDATE document_dates SET date_iso_max = '1961-01-20' WHERE volume_id = 'frus1961-63v06' AND document_id = 'd2';
+            UPDATE document_dates SET date_iso = '1894-01-01', date_iso_max = '1894-03-31', date_precision = 'month'
+              WHERE volume_id = 'frus1894Nicaragua';
+            """)
+        try await fixture.app.test(.router) { client in
+            let treaties = try decode(SearchResultList.self, try await client.execute(uri: "/api/v1/search?keywords=treaties", method: .get))
+            let rows = Dictionary(uniqueKeysWithValues: treaties.items.map { ($0.documentId, $0) })
+            let d1 = try #require(rows["d1"])
+            #expect(d1.dateline == "Moscow, November 9, 1960." && d1.dateISO == "1960-11-09" && d1.dateISOMax == "1960-11-09")
+            #expect(d1.datePrecision == "day" && d1.drawnDate == "November 9, 1960", "the row draws its dateline; the words are there for a client that wants them")
+            let d2 = try #require(rows["d2"])
+            #expect(d2.dateline == nil && d2.dateISO == "1960-11-10" && d2.dateISOMax == "1961-01-20" && d2.datePrecision == "day")
+            #expect(d2.drawnDate == "November 10, 1960 – January 20, 1961")
+            let canal = try decode(SearchResultList.self, try await client.execute(uri: "/api/v1/search?keywords=canal", method: .get))
+            let month = try #require(canal.items.first)
+            #expect(month.datePrecision == "month" && month.drawnDate == "January 1894 – March 1894")
+        }
+        // A year's row, and a row the index gives no date.
+        let other = try await servingSyntheticExport(edits: """
+            UPDATE document_dates SET date_iso = '1960-01-01', date_iso_max = '1960-12-31', date_precision = 'year'
+              WHERE volume_id = 'frus1961-63v06' AND document_id = 'd1';
+            DELETE FROM document_dates WHERE volume_id = 'frus1894Nicaragua';
+            """)
+        try await other.app.test(.router) { client in
+            let treaties = try decode(SearchResultList.self, try await client.execute(uri: "/api/v1/search?keywords=treaties", method: .get))
+            #expect(treaties.items.first { $0.documentId == "d1" }?.drawnDate == "1960")
+            let canal = try decode(SearchResultList.self, try await client.execute(uri: "/api/v1/search?keywords=canal", method: .get))
+            let undated = try #require(canal.items.first)
+            #expect(undated.dateISO == nil && undated.dateISOMax == nil && undated.datePrecision == nil && undated.drawnDate == nil)
+        }
+    }
+
     /// A snippet marks its match only in the document's own prose (#1736). A body opens with the
     /// row's heading, source note and dateline, which the row draws already: a row whose only match
     /// is there gets the opening of its prose with nothing marked, and a row with no match in its

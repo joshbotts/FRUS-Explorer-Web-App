@@ -59,6 +59,64 @@ describe('SearchScreen', () => {
     expect(rows[1]?.querySelector('.meta')?.textContent).toBe('frus1961-63v06 · Doc 2');
   });
 
+  it('draws a row’s dateline, or for a row that prints none the day or span the index dates it by, as the Mac’s window does', async () => {
+    stubServer({
+      '/readyz': ready,
+      '/api/v1/volumes': { total: 0, limit: 1000, offset: 0, items: [], coverage },
+      '/api/v1/search': {
+        total: 3,
+        countBasis: 'exact',
+        limit: 20,
+        offset: 0,
+        retainedLimit: 7500,
+        sort: 'relevance',
+        sortChoices,
+        coverage,
+        items: [
+          item({ displayTitle: 'Telegram', dateline: 'Moscow, November 9, 1960.', dateISO: '1960-11-09', dateISOMax: '1960-11-09', datePrecision: 'day', drawnDate: 'November 9, 1960' }),
+          // A section's row, dated by the documents it holds.
+          item({
+            documentId: 'ch2',
+            displayTitle: 'Founding conference',
+            documentLabel: 'Unnumbered (ch2)',
+            dateISO: '1945-08-21',
+            dateISOMax: '1946-01-22',
+            datePrecision: 'day',
+            drawnDate: 'August 21, 1945 – January 22, 1946',
+          }),
+          item({ documentId: 'd3', displayTitle: 'Undated', documentLabel: 'Doc 3' }),
+        ],
+      },
+    });
+    renderAt('/search?keywords=treaties');
+    const rows = within(await screen.findByRole('list', { name: 'Results' })).getAllByRole('listitem');
+    expect(rows.map((row) => row.querySelector('.meta')?.textContent)).toEqual([
+      'frus1961-63v06 · Doc 1 · Moscow, November 9, 1960.',
+      'frus1961-63v06 · Unnumbered (ch2) · August 21, 1945 – January 22, 1946',
+      'frus1961-63v06 · Doc 3',
+    ]);
+  });
+
+  it('abandons a search it replaces, so the server stops that search', async () => {
+    const fetch = stubServer({
+      '/readyz': ready,
+      '/api/v1/volumes': { total: 0, limit: 1000, offset: 0, items: [], coverage },
+      '/api/v1/search/inspect': { inspection: undefined },
+      // The first search is still under way when the second replaces it.
+      '/api/v1/search': (url: URL) =>
+        url.searchParams.get('keywords') === 'government'
+          ? new Promise(() => {})
+          : { total: 0, countBasis: 'exact', limit: 20, offset: 0, retainedLimit: 7500, sort: 'relevance', sortChoices, coverage, items: [] },
+    });
+    const { router } = renderAt('/search?keywords=government');
+    const first = () => fetch.mock.calls.find(([url]) => String(url).startsWith('/api/v1/search?keywords=government'));
+    await waitFor(() => expect(first()).toBeDefined());
+    const signal = (first() as unknown as [string, RequestInit | undefined] | undefined)?.[1]?.signal;
+    expect(signal?.aborted).toBe(false);
+    await router.navigate({ to: '/search', search: { keywords: 'treaty' } });
+    await waitFor(() => expect(signal?.aborted).toBe(true));
+  });
+
   it('offers the three orders by the kit’s labels, and reads the results from the first page in the order pressed', async () => {
     const fetch = stubServer({
       '/readyz': ready,

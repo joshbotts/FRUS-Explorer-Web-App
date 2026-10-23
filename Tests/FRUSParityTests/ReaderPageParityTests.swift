@@ -2,6 +2,7 @@
 // kit code. Every golden row, along the server's full-parse path.
 
 import FRUSCoreKit
+import FRUSLightAPI
 import FRUSLightTestSupport
 import FRUSParity
 import Foundation
@@ -86,5 +87,24 @@ import Testing
         let mismatches = RenderParity.mismatches(bodies, golden: golden, directory: directory)
         #expect(mismatches.isEmpty, "\(mismatches.count) rows differ:\n\(mismatches.map(\.description).joined(separator: "\n"))")
         print("the reader's page: \(bodies.count - mismatches.count) of \(golden.rows.count) rows' bodies identical, one head for every document")
+    }
+
+    /// The server's Reading Width is the app's (#1665): its steps and their measures are those the
+    /// app's `ReadingWidth.measure(on:)` gives an iPad and the Mac, read from the app's source at the
+    /// pin, and its default is the setting's own, Standard. The ladder is app code, which the server
+    /// mirrors, so a pin move that changes a rung fails here.
+    @Test func theReadingWidthIsTheAppsOnTheIPadAndMacLadder() throws {
+        let app = Repository.layout.upstream.appendingPathComponent("FRUSExplorer")
+        let ladder = try String(contentsOf: app.appendingPathComponent("TEI/ReadingWidth.swift"), encoding: .utf8)
+        var rungs: [String: ReaderMeasure] = [:]
+        for rung in ladder.matches(of: /case \(\.wide, \.(\w+)\):\s+return (\.classic|ReaderMeasure\(ch: (\d+)\))/) {
+            rungs[String(rung.1)] = rung.3.flatMap { Int($0) }.map { ReaderMeasure(ch: $0) } ?? .classic
+        }
+        #expect(rungs == Dictionary(uniqueKeysWithValues: ReadingWidth.allCases.map { ($0.rawValue, $0.measure) }),
+                "the app's rungs on an iPad and the Mac: \(rungs)")
+        #expect(ReadingWidth.allCases.map(\.rawValue) == ["narrow", "standard", "wide"])
+        let settings = try String(contentsOf: app.appendingPathComponent("Settings/SettingsView.swift"), encoding: .utf8)
+        #expect(settings.contains("@AppStorage(SettingsKeys.readingWidth) private var readingWidth: ReadingWidth = .standard"),
+                "the app's Reading Width is Standard until changed")
     }
 }

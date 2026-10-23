@@ -115,7 +115,7 @@ enum FacetRoutes {
     /// The fields `/search/facets/selection` takes beside the search's.
     static let selectionFields: Set<String> = ["section", "include", "exclude"]
 
-    static func add(to router: Router<BasicRequestContext>, provider: ServedIndexProvider, resources: ServerResources) {
+    static func add(to router: Router<APIRequestContext>, provider: ServedIndexProvider, resources: ServerResources) {
         router.get("/api/v1/search/facets") { request, _ -> SearchFacetSection in
             let form = try FormQuery(request.uri.query)
             let parameters = try SearchRequest.parameters(from: form, alsoTaking: sectionFields)

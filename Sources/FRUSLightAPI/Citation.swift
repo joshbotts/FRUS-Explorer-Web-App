@@ -114,7 +114,7 @@ enum CitationRoutes {
         return year
     }
 
-    static func add(to router: Router<BasicRequestContext>, reader: ReaderService, provider: ServedIndexProvider,
+    static func add(to router: Router<APIRequestContext>, reader: ReaderService, provider: ServedIndexProvider,
                     resources: ServerResources) {
         router.get("/api/v1/volumes/:volumeId/documents/:documentId/citation") { request, context -> DocumentCitation in
             let query = try FormQuery(request.uri.query)
@@ -145,7 +145,7 @@ enum CitationRoutes {
 
     /// The document a request names, ready to cite. Throws an `APIProblem` for a volume outside the
     /// catalogue, or a document neither the index nor the mounted TEI holds.
-    static func cite(context: BasicRequestContext, reader: ReaderService, provider: ServedIndexProvider,
+    static func cite(context: APIRequestContext, reader: ReaderService, provider: ServedIndexProvider,
                      resources: ServerResources) async throws -> CitedDocument {
         let volumeId = try context.parameters.require("volumeId")
         let documentId = try context.parameters.require("documentId")

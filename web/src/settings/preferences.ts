@@ -1,7 +1,8 @@
-// The viewer's conveniences, kept in this browser: appearance, the reader's text size and the
-// citation style. Storage can be missing or refuse, so every read and write may fail quietly.
+// The viewer's conveniences, kept in this browser: appearance, the reader's text size and reading
+// width, and the citation style. Storage can be missing or refuse, so every read and write may fail
+// quietly.
 import { useEffect, useSyncExternalStore } from 'react';
-import type { TextSize } from '../api/endpoints';
+import type { ReadingWidth, TextSize } from '../api/endpoints';
 import type { CitationStyleName } from '../api/types';
 
 export type Appearance = 'system' | 'light' | 'dark';
@@ -49,6 +50,9 @@ function usePreference<T extends string>(key: string, allowed: readonly T[], fal
 export const useAppearance = () => usePreference<Appearance>('frus.appearance', ['system', 'light', 'dark'], 'system');
 export const useTextSize = () =>
   usePreference<TextSize>('frus.textSize', ['small', 'medium', 'large', 'extraLarge'], 'medium');
+/** Standard by default, as the app's Reading Width is on every device. */
+export const useReadingWidth = () =>
+  usePreference<ReadingWidth>('frus.readingWidth', ['narrow', 'standard', 'wide'], 'standard');
 export const useCitationStyle = () =>
   usePreference<CitationStyleName>('frus.citationStyle', ['historyAtState', 'chicago', 'turabian'], 'historyAtState');
 

@@ -60,6 +60,10 @@ public struct APIProblem: HTTPResponseError, Equatable, CustomStringConvertible 
     static func volumeNotFound(_ volumeId: String) -> APIProblem {
         APIProblem(.notFound, code: "VOLUME_NOT_FOUND", detail: "The published catalogue has no volume \(volumeId).")
     }
+
+    /// The status a request is answered with when its client went first and its work was stopped,
+    /// as nginx logs such a request. It reaches no client.
+    static let clientClosedRequest = HTTPResponse.Status(code: 499, reasonPhrase: "Client Closed Request")
 }
 
 /// Answers every error under `/api/` with a problem details body: Hummingbird's own, such as a
@@ -80,6 +84,10 @@ struct ProblemMiddleware<Context: RequestContext>: RouterMiddleware {
                              detail: error.body ?? Self.detail(error.status, path: request.uri.path))
         } catch let error as any HTTPResponseError {
             throw APIProblem(error.status, code: Self.code(error.status), detail: error.status.reasonPhrase)
+        } catch let gone as ClientClosedConnection {
+            // Routine: a browser abandons a search it has replaced. No one reads the answer.
+            logger.debug("\(request.method) \(request.uri.path) stopped: \(gone)")
+            throw APIProblem(APIProblem.clientClosedRequest, code: "CLIENT_CLOSED_REQUEST", detail: "\(gone), so its work was stopped.")
         } catch {
             logger.error("\(request.method) \(request.uri.path) failed: \(error)")
             throw APIProblem(.internalServerError, code: "INTERNAL_ERROR", detail: "The server could not answer this request; its log says why.")
