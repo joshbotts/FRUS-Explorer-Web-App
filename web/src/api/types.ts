@@ -235,6 +235,72 @@ export interface SearchResultList {
   coverage: Coverage;
 }
 
+/** A document in a year of the timeline, named as its row in the results names it, with its label. */
+export interface TimelineDocument {
+  volumeId: string;
+  documentId: string;
+  displayTitle: string;
+  documentLabel: string;
+  headerRepeatsNumber: boolean;
+}
+
+/**
+ * A search's timeline (GET /search/timeline): how many of the results the app keeps of it fall in
+ * each year, by the kit's Years facet over them.
+ */
+export interface SearchTimeline {
+  retainedLimit: number;
+  /** The results it counts: those the app keeps, the whole match up to retainedLimit; /search counts the match. */
+  retainedCount: number;
+  /** The order of each year's documents. */
+  sort: SortOrder;
+  /** The years that hold a result, earliest first, each by the kit's key: four digits. */
+  years: { year: string; count: number; documents?: TimelineDocument[] }[];
+  /** The results kept that carry no date, and so are in no year. */
+  undatedCount: number;
+  coverage: Coverage;
+}
+
+/** The kit's KWICSort: how a concordance's lines are ordered. */
+export type ConcordanceOrder = 'leftContext' | 'rightContext' | 'date' | 'volume';
+
+/** One occurrence, with the text either side of it: the kit's KWICLine. */
+export interface ConcordanceLine {
+  volumeId: string;
+  documentId: string;
+  header: string;
+  /** What the document's row in the results names it by. */
+  displayTitle: string;
+  dateISO?: string;
+  left: string;
+  /** The occurrence as the document spells it. */
+  keyword: string;
+  right: string;
+  characterOffset: number;
+}
+
+/** The concordance of one page of a search's results (GET /search/concordance), as the kit builds it. */
+export interface SearchConcordance {
+  /** The page the lines are of; /search counts the match it is a page of. */
+  limit: number;
+  offset: number;
+  retainedLimit: number;
+  sort: SortOrder;
+  documentsOnPage: number;
+  items: ConcordanceLine[];
+  /** Each of the kit's orders, as positions in items. */
+  orders: Record<ConcordanceOrder, number[]>;
+  /** The orders, with the kit's label for each; the first is the Mac's. */
+  orderChoices: Choice[];
+  /** Occurrences the kit's bound on one document's lines left out. */
+  omittedCount: number;
+  documentsWithLines: number;
+  documentsWithoutLines: number;
+  /** That bound, when it left any out. */
+  linesPerDocumentLimit?: number;
+  coverage: Coverage;
+}
+
 /** One of a query's searchable units, as the kit's parser reports it. */
 export interface SearchOperand {
   text: string;

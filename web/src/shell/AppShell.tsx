@@ -73,11 +73,11 @@ function ReadinessBanner() {
   const ready = readiness.data?.ready;
   const wasReady = useRef(ready);
 
-  // When an index becomes ready, what was asked before it is asked again: searches, citations,
-  // documents, and what Browse shows of what the server indexes.
+  // When an index becomes ready, what was asked before it is asked again: searches and their
+  // readings, citations, documents, and what Browse shows of what the server indexes.
   useEffect(() => {
     if (ready && wasReady.current === false) {
-      for (const key of ['search', 'facets', 'inspect', 'citation', 'document', 'volumes', 'volume', 'section', 'readingOrder']) {
+      for (const key of ['search', 'facets', 'inspect', 'timeline', 'concordance', 'citation', 'document', 'volumes', 'volume', 'section', 'readingOrder']) {
         void queryClient.invalidateQueries({ queryKey: [key] });
       }
     }

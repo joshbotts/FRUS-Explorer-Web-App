@@ -1,8 +1,9 @@
-// A search, as the app's URL holds it: the API's own parameter names, defaults left out, and two
-// of the app's own, which the API never sees: whether the facet panel is open, and a subject
-// filter's name.
+// A search, as the app's URL holds it: the API's own parameter names, defaults left out, and the
+// app's own, which the API never sees: whether the facet panel is open, a subject filter's name, and
+// the reading the results are shown in, with the timeline's mode and the concordance's order, so
+// Back to a search from a document it opened shows it as it was, as the Mac's window stays.
 import type { FormValue } from '../api/form';
-import type { DocumentType, SearchChange, SortOrder } from '../api/types';
+import type { ConcordanceOrder, DocumentType, SearchChange, SortOrder } from '../api/types';
 
 export interface SearchState {
   /** The search box's text, exactly as typed; absent until a search is made. */
@@ -26,12 +27,34 @@ export interface SearchState {
   subjectLabel?: string;
   /** `facets` while the facet panel is open. Not sent. */
   panel?: 'facets';
+  /** The reading the results are shown in, as the Mac's Reading picker chooses it; absent for the list. Not sent. */
+  reading?: Exclude<Reading, 'list'>;
+  /** `list` while the timeline shows its List mode; absent for its chart. Not sent. */
+  timelineMode?: 'list';
+  /** The concordance's order, the kit's KWICSort, as its Align by chooses it; absent for the left context. Not sent. */
+  align?: Exclude<ConcordanceOrder, 'leftContext'>;
   /** The order the results are paged in; absent by relevance. */
   sort?: Exclude<SortOrder, 'relevance'>;
   /** Absent for the default page size. */
   limit?: number;
   /** Absent for the first page. */
   offset?: number;
+}
+
+/**
+ * The ways the results can be read, in the order of the Mac's Reading picker (`ResultReading`): the
+ * list, the timeline, and the concordance. Collocates, the Mac's fourth, arrive in phase 4.
+ */
+export const readings = ['list', 'timeline', 'concordance'] as const;
+export type Reading = (typeof readings)[number];
+
+/**
+ * Whether a reading shows one page of the results, and so pages with the pager, as the Mac's
+ * `ResultReading.isPaged` has it: the list and the concordance do; the timeline covers every result
+ * the search keeps.
+ */
+export function isPaged(reading: Reading): boolean {
+  return reading !== 'timeline';
 }
 
 export const pageSizes = [10, 20, 50, 100] as const;
@@ -102,6 +125,8 @@ export function validateSearch(raw: Record<string, unknown>): SearchState {
   const subjectBucketKey = single(raw.subjectBucketKey) || undefined;
   const subject = subjectBucket !== undefined || subjectBucketKey !== undefined;
   const sort = single(raw.sort);
+  const reading = single(raw.reading);
+  const align = single(raw.align);
   return {
     keywords,
     documentType: type === 'documentsOnly' || type === 'editorialNotesOnly' ? type : undefined,
@@ -116,6 +141,9 @@ export function validateSearch(raw: Record<string, unknown>): SearchState {
     subjectBucketKey,
     subjectLabel: subject ? single(raw.subjectLabel) || undefined : undefined,
     panel: single(raw.panel) === 'facets' ? 'facets' : undefined,
+    reading: reading === 'timeline' || reading === 'concordance' ? reading : undefined,
+    timelineMode: single(raw.timelineMode) === 'list' ? 'list' : undefined,
+    align: align === 'rightContext' || align === 'date' || align === 'volume' ? align : undefined,
     sort: sort === 'dateAscending' || sort === 'dateDescending' ? sort : undefined,
     limit,
     offset: offset > 0 ? offset : undefined,
@@ -157,8 +185,8 @@ export function searchFields(state: SearchState): Record<string, FormValue> {
 /**
  * The search a change from the server makes of this one, as a facet narrows it: each field it
  * names set to its values, or left out for null, then checked as the URL's fields are. It starts at
- * its first page, keeps the order, the page size and the panel, and keeps the subject's name only
- * while it has a subject.
+ * its first page, keeps the order, the page size, the panel and the reading as it is shown, and keeps
+ * the subject's name only while it has a subject.
  */
 export function applySearchChange(state: SearchState, change: SearchChange): SearchState {
   const raw: Record<string, unknown> = {};
@@ -170,7 +198,16 @@ export function applySearchChange(state: SearchState, change: SearchChange): Sea
     else raw[name] = values;
   }
   raw.subjectLabel = state.subjectLabel;
-  return { ...validateSearch(raw), panel: state.panel, sort: state.sort, limit: state.limit, offset: undefined };
+  return {
+    ...validateSearch(raw),
+    panel: state.panel,
+    reading: state.reading,
+    timelineMode: state.timelineMode,
+    align: state.align,
+    sort: state.sort,
+    limit: state.limit,
+    offset: undefined,
+  };
 }
 
 /** How many pages a search's count gives, within the results it keeps. */
