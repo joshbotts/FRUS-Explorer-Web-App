@@ -2,6 +2,99 @@
 
 One entry per session, newest first.
 
+## Session 11f: the timeline and the concordance, over the API and in the browser app
+
+23 October 2026 · branch `claude/s11f-timeline-concordance-97c312` · upstream `af41efa4`, unchanged
+
+The last phase-1 feature row, held until the web edition caught up with FRUS Explorer 1.0: the search window's timeline and concordance readings, each naming the set it read, as the Mac's do. Both are computed with kit code that #1664 made public, so no upstream pull request was needed.
+
+**What the Mac's window does**, mapped at the pin:
+
+- **The Reading picker** (`ResultReading`, app code): List, Timeline, Concordance and Collocates, one segmented control in the toolbar, whose tooltip says which set each covers: "The concordance covers this page; the others cover the whole retained set."
+- **The timeline** (`DocumentTimelineView`, app code) plots the window's `displayedResults`: the 7,500 results it keeps, in its order, less what Checklist Mode hides. It dates them with the kit's `IndexingPipeline.datesByDocumentKey(_:)`, groups them by the first four characters of each date, and shows a Chart or a List of each year's documents; a result with no date is left out and counted. Above it, when the results kept reach their ceiling, `ResultSetScope.timelineBiasCaption` says the shape is the ranking's.
+- **The concordance** (`ConcordanceView`) is the kit's `SearchService.concordance(for:parameters:radius:)` over `pagedResults`, the page on screen, with the kit's radius of 60. Align by sorts the lines it holds by `KWICSort`; its count is `ResultSetScope.concordanceCountDescription`, which names the page when there is more than one; two notes say what the per-document bound left out and which documents gave no line.
+
+**The API**
+
+- **`/search/timeline`** takes a search's fields, with its page and order as they stand, and counts by year the results the app keeps of it. The years and counts are the kit's Years facet over the keys of those results (`resultSetFacets(parameters:request:documentKeys:)`, the kit's route for a list it describes by its keys), which keys a document by its date's first four characters, the rule the Mac's timeline groups by, and which its year filter matches (`substr(date_iso, 1, 4)`). The results kept are the date order's, kept for the last two searches, and they stop when no request waits for them; the facet over their keys reads only the rows they name, and is kept beside the panel's sections. With `documents=true` each year carries its documents, the results kept whose date the kit keys by that year, in the order `sort` gives them; `retainedCount` says how many were kept.
+- **`/search/concordance`** takes a search's fields and its page, and gives the kit's lines for the documents of the page `/search` gives, by the draft's names (`keyword`, `characterOffset`), each with the title its row draws. `orders` gives each `KWICSort` order as positions in the lines, with the kit's labels in `orderChoices`, so the browser app changes the order without asking again. `omittedCount` and `documentsWithoutLines` are the kit's. The kit keeps its bound on one document's lines internal, so `linesPerDocumentLimit` gives it as read from the answer when it left any line out: a document it cut short gave exactly that many.
+- **Neither counts the match,** which `/search` counts: over the full corpus an exact-word count takes about 20 seconds, so each count a reading added would have cost that again. The draft's concordance parameters are refused as `UNSUPPORTED_PARAMETER`, each with what this concordance does instead.
+
+**The browser app**
+
+- **Reading**, beside Sort, offers List, Timeline and Concordance, in the Mac's words and with its tooltip, and waits for a match, as the Mac's does. A search that found nothing says so in any reading. Collocates wait for phase 4.
+- **The timeline:**
+  - a chart of a column for each year, from the first year to the last, one series in one colour, with rounded data ends, a hairline grid and the dataviz validator's checks passing in both appearances; dark mode draws its columns in a step of its own, `#3987e5`, since the dark accent is too light for a mark;
+  - the **Table of the counts** beneath it, the chart's text alternative, which the keyboard opens, and a line that names the year and count under the pointer;
+  - its **List** mode, each year's documents under it, in the order Sort gives them;
+  - the Mac's caption when the search reaches the 7,500 results it keeps, its line for the results with no date, and its view of none dated, alone;
+  - no pager, since it covers every result kept.
+- **The concordance:**
+  - each occurrence on a line, the term in a column between its contexts, 60 characters a side in a monospaced face, so the margins line up;
+  - wider than a narrow screen, the lines scroll sideways, as the Mac's do, opening with the terms in view, and each line's document stays at the left of what the screen shows;
+  - **Align by** with the kit's four orders, Left context first, as the Mac's;
+  - its count, "1,198 occurrences in the 20 documents on this page", its view of no aligned occurrences and its two notes, with the singulars the Mac's lack;
+  - a line opens its document, and reads aloud as the Mac's VoiceOver label reads it.
+- **The reading, the timeline's mode and the concordance's order are in the search's address,** so Back from a document shows the search as it was, as the Mac's window stays behind a document it opens. A new search, a facet's narrowing and a page keep them; another reading opens the timeline on its chart, as the Mac's does.
+
+**Checked**
+
+- **Through the API, beside the kit and the app's rule,** over the fixture index imported as an export (FRUSParityTests, `ReadingsAPIParityTests`):
+  - every parity query's timeline with its documents, and a sixth of them in each order of the date, is the Mac's grouping of the 7,500 results the kit keeps: 439 timelines, 359 across more than one year and 208 with undated results, and 123 orders of the date that order a year's documents otherwise;
+  - each year's documents are those the kit's own year filter keeps among the results kept, and where the search keeps its whole match, its count is the facet panel's over the match, the kit's other route to the same years: 46 years of 6 searches;
+  - a match larger than what is kept is counted over what is kept: with 7 kept, the timelines of 8 searches are the Mac's over their 7 best, and none is the whole match's;
+  - every fourth query's concordance, in pages of 7, by relevance and in both orders of the date, is the kit's for the page `/search` gives, in each of the kit's orders: 327 pages, 77 with documents that gave no line, 11 cut at the kit's 200 lines a document, which the answer gives, and 163 pages in an order of the date whose lines the date orders otherwise;
+  - the sets both readings read are held to the app's source at the pin: the timeline's grouping, `displayedResults` and `pagedResults`, the kit's own radius, and the 7,500 results the window keeps.
+- **The routes** over the synthetic export (FRUSLightServerTests, `ReadingRouteTests`): before an import, the three documents by year in each order, a document with no date, the lines of `negotiating` in each order, an exact word that gives no line, a search with no words, and each refusal.
+- **Over the owner's full 1776 export,** in a Compose project of its own, `frus-s11f` on port 8083, with this branch's image, each reading asked first with nothing kept, then again:
+
+  | Search | Matches | Timeline | Its list | Concordance, page 1 |
+  | --- | --- | --- | --- | --- |
+  | `soviet` | 58,679 | 1.5 s, then 2 ms; 7,500 kept, 70 years, 25 undated | 0.07 s, 1.5 MB | 0.29 s; 1,198 lines, 12 left out at 200 |
+  | `berlin crisis` | 1,623 | 0.64 s, then 2 ms; 97 years, 39 undated | 0.02 s | 0.08 s; 367 lines |
+  | `"long telegram"` | 136 | 0.05 s; 51 years | 3 ms | 0.03 s; 63 lines |
+  | `=containment` | 352 | 29 s; 48 years | 6 ms | 25 s; no line, 20 documents unaligned |
+
+  A timeline of an exact word abandoned after 3 seconds stopped: the next search answered in 34 ms. The facet over the whole match the timeline first used, which nothing stops, ran 20 seconds for `=containment`.
+
+- **In Chromium,** the desktop app's browser, on that install: the chart over `soviet` in light and dark, its pointer readout, the List mode, and the concordance at desktop and phone width.
+
+**A review before the pull request opened.** Two reviewers, one for the server and one for the browser app and the records, each checked their own findings against the code. Every finding below held, and all are fixed here:
+
+- **The timeline's facet over the whole match could not be stopped,** and for a match larger than what is kept it ran for its count alone: the kit arms only a search's statements for stopping, so an exact-word search abandoned over the full corpus kept the server busy for about 20 seconds. The years are now the facet over the keys of the results kept, which stop when no request waits for them, and the timeline counts nothing. The browser app's caption reads the results kept, as the Mac's rule does.
+- **A search with no words,** such as a person's, counted every document of its page as giving a line, where the kit builds none and counts none as giving none. The count is now the lines' own.
+- **A year's documents drew their dates in words,** two to four date formatters each for up to 7,500, which the list never shows. The rows carry their title and label alone.
+- **The chart's axis read "1961.5"** between two adjacent years: its step is a whole year at least.
+- **A reading being asked again was dimmed** below the contrast WCAG asks, and another search's answer stood in for the next one at full strength. A reading now keeps only the same search's last answer while the next loads, as the list keeps its last page, and is never dimmed.
+- **A reading that failed was not asked again** when the same search was made again, or when an index became ready.
+- **Timeline, chosen again while it was shown,** reset its List mode, which the Mac's picker does not, and the view of no dated documents carried the modes and the undated note, which the Mac's does not.
+- **The long lists rendered again on any change to the screen:** up to 7,500 rows of the timeline's list, and 20,000 lines of a concordance of 100 documents. They render again only when their answer or their order changes.
+- **The draft's concordance parameters** were refused as unknown, and the timeline refused a search's page fields, which `/search/inspect` takes.
+- **A parity test could trap** rather than fail on an answer longer than the kit's; SPEC's departures left out the draft's `total` and the two counts the answer adds; and the install guide said "larger than the 7,500" where the caption follows the Mac's rule, at 7,500.
+
+Refuted, among others: a timeline key the panel's sections could share, a cache that could outlive its index, a year read from a date otherwise than the facet keys it, early years cut off by the facet's ceiling, the bound read from the answer, wording unlike the Mac's, and tests that compare a value with itself. Kept, and now said: a concordance line names its document by its row's title, where the Mac's label gives the stored header.
+
+**Records**
+
+- `PLAN.md` and its shared copy (rev 199): the session intro and S11f's answers.
+- `SPEC.md`: the Search section's readings, and the API's two paths and their departures from the draft.
+- `INSTALL.md`: Reading, the timeline and the concordance, the API, and the memory a timeline's kept results take.
+- `COORDINATION.md`: §1's use of the kit for the readings.
+- The README's Status and this log.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** after the review's fixes: all 2,066 tests pass, up from 2,054, with the one named skip. FRUSParityTests runs 116, up from 111, and FRUSLightServerTests 108, up from 101; the other targets are unchanged, FRUSCoreKitTests at 1,147.
+- **The browser app:** typecheck and lint are clean, and 85 unit tests pass in 15 files, up from 68 in 14.
+- **`scripts/compose-smoke --e2e`** on this branch's image, `frus-light:s11f`, built locally: passes, with 20 browser tests on Chromium, up from 18. The two new ones use the timeline's chart, its table and its list, and the concordance in two orders and over an exact word, each by keyboard, open a document from each and come Back to it as it was, and run axe on each. It finds nothing.
+
+**Notes**
+
+- **An exact-word search's readings are slow over the full corpus,** 25 to 30 seconds each, as its count and its page are, and the concordance fetches its page again where `/search` fetched it: the speed of exact-word search remains before a release.
+- **The `frus-s11f` install** on port 8083, in `~/Library/Caches/frus-s11f/compose`, serves the full 1776 export from this branch's image, for the owner to try. `docker compose down --volumes` in that folder removes it and its 2.9 GB volume. The owner's install on 8080, S10's on 8081 and S12c's on 8082 were left as they were.
+
+**Next:** Browse's own-text rows and the speed of exact-word search remain before a release. **S12d** follows once the app's repository tags `version-1.0` (build 1861), moving the pin on from `af41efa4`.
+
 ## Session 12e: pin move past FRUS-Explorer#1784, the page-map landing
 
 23 October 2026 · branch `claude/determined-babbage-3d30b2` · upstream `af41efa4`

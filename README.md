@@ -9,7 +9,7 @@ Phase 1 is done: a Docker Compose install that serves a FRUS Explorer research e
 **What works today**, from the published image `ghcr.io/joshbotts/frus-explorer-light:edge`, for amd64 and arm64:
 
 - Import of a Mac export copied into the `/data` volume, checked and served read-only. The server refuses an export from another index version and one that holds the owner's writing.
-- Search with the app's query language, with the facets, the Query Inspector and the order by relevance or date. Each result carries its date, drawn as the app draws it, and a search you replace stops on the server.
+- Search with the app's query language, with the facets, the Query Inspector, the order by relevance or date, and the timeline and concordance readings, each saying which results it read. Each result carries its date, drawn as the app draws it, and a search you replace stops on the server.
 - Browse, the reader with its text size and Reading Width, its links, which follow a printed page into a volume the server does not hold as 1.0 does, and the cards for people and terms, all usable by keyboard and free of axe violations.
 - Cite, with BibTeX and RIS.
 - Parity with the Mac app, checked in CI on three fixture volumes: the same index rows, search results and document HTML. The server compiles the app's own Swift code from a pinned submodule.
@@ -18,7 +18,7 @@ Phase 1 is done: a Docker Compose install that serves a FRUS Explorer research e
 **Known gaps**
 
 - **Behind FRUS Explorer 1.0's last step.** The pin is 1.0 build 1776, the TestFlight build, at index version 71, with [FRUS-Explorer#1784](https://github.com/joshbotts/FRUS-Explorer/pull/1784) one commit after it: the server serves that build's exports, and its image is also tagged `:1.0-1776`. The App Store build, 1861, waits for S12d.
-- **Phase-1 features still to come:** the timeline and concordance readings, a volume's own-text rows in Browse, and faster exact-word search.
+- **Phase-1 features still to come:** a volume's own-text rows in Browse, and faster exact-word search.
 - **Later phases:**
   - no notes, highlights or collections on the web (phase 2);
   - no accounts, sharing beyond localhost, or indexing from TEI on the server (phase 3);
@@ -27,7 +27,7 @@ Phase 1 is done: a Docker Compose install that serves a FRUS Explorer research e
 
 **Next**
 
-1. **S11f**: the timeline and concordance readings.
+1. **Before a release**: a volume's own-text rows in Browse, and faster exact-word search.
 2. **S12d**, once the app tags `version-1.0`: the pin moves to 1.0 build 1861, the App Store build, and CI publishes `:1.0-1861`.
 3. **Phase 2**: user data and its nightly backup.
 
