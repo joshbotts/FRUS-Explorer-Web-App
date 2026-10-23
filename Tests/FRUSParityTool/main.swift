@@ -9,6 +9,7 @@
 //   frus-parity render [<volume> <document> [--full-parse] [--out <file>]] [--repo <root>]
 //   frus-parity index [<volume>...] [--tei <dir>] [--resources <dir>] [--out <db>] [--metrics] [--repo <root>]
 //   frus-parity check-golden [--repo <root>]
+//   frus-parity own-text --api <url> <export> [--volumes <id,id>]
 //
 // The repository is found from the current directory unless --repo names it. Exit status: 0 when
 // the check passes, 1 on a refusal, a difference or a problem, 2 on a usage error.
@@ -30,6 +31,7 @@ let usage = """
            frus-parity render [<volume> <document> [--full-parse] [--out <file>]] [--repo <root>]
            frus-parity index [<volume>...] [--tei <dir>] [--resources <dir>] [--out <db>] [--metrics] [--repo <root>]
            frus-parity check-golden [--repo <root>]
+           frus-parity own-text --api <url> <export> [--volumes <id,id>]
     """
 
 /// A command's positional arguments, flags and options.
@@ -403,6 +405,34 @@ func renderAPI(_ arguments: Arguments) async throws {
     print("check 4 through the API: \(rows.count) of \(rows.count) rows identical, \(figures.values.reduce(0, +)) figure images in \(figures.count) rows named by the server")
 }
 
+/// A section's own text against a running server: every section of every volume an export holds,
+/// or of the volumes --volumes names, through the server's API, held to the kit's rule over the
+/// export's rows, read through the kit's read-only open (`OwnTextCheck`). The export must be the one
+/// the server serves. Each section's page is read, and each row's neighbours in the reader.
+func ownText(_ arguments: Arguments) async throws {
+    guard arguments.positional.count == 1, let api = arguments.options["--api"], let base = URL(string: api) else {
+        throw UsageError("own-text takes --api <url> and the export the server serves")
+    }
+    let database = URL(fileURLWithPath: arguments.positional[0])
+    guard FileManager.default.fileExists(atPath: database.path) else { fail("\(database.path) does not exist") }
+    let volumes = try arguments.options["--volumes"].map { $0.split(separator: ",").map(String.init) }
+        ?? OwnTextCheck.volumes(in: database)
+    let pipeline = try OwnTextCheck.readOnlyPipeline(database)
+    let get = httpGet(base)
+    var report = OwnTextCheck.Report()
+    let clock = ContinuousClock()
+    let start = clock.now
+    for (number, volume) in volumes.enumerated() {
+        try await OwnTextCheck.check(try await OwnTextVolume(volume, pipeline: pipeline), get: get, into: &report)
+        if (number + 1) % 50 == 0 { print("\(number + 1) of \(volumes.count) volumes: \(report.rows) rows, \(report.mismatches.count) differences") }
+    }
+    let seconds = (clock.now - start).components.seconds
+    print(report.summary)
+    for mismatch in report.mismatches.prefix(50) { print("differs  \(mismatch)") }
+    guard report.mismatches.isEmpty else { fail("own text differs from the kit's rule in \(report.mismatches.count) places") }
+    print("own text through the API is the kit's for every section, in \(seconds) s")
+}
+
 let arguments = CommandLine.arguments.dropFirst()
 do {
     switch arguments.first {
@@ -424,6 +454,8 @@ do {
         try await index(Arguments(arguments.dropFirst(), flags: ["--metrics"], options: ["--tei", "--resources", "--out", "--repo"]))
     case "check-golden":
         try checkGolden(Arguments(arguments.dropFirst(), options: ["--repo"]))
+    case "own-text":
+        try await ownText(Arguments(arguments.dropFirst(), options: ["--api", "--volumes"]))
     default:
         throw UsageError(arguments.first.map { "unknown command \($0)" } ?? "no command")
     }
