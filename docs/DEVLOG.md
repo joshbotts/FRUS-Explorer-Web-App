@@ -29,7 +29,7 @@ The owner asked for issue #37 to be reviewed, and the plan revised to catch up w
 
 **Records**
 
-- `PLAN.md` and its shared copy (rev 162): the S12 rows, the flowchart, the checkpoints, the risk row and the S12 answers.
+- `PLAN.md` and its shared copy (rev 166): the S12 rows, the flowchart, the checkpoints, the risk row and the S12 answers.
 - `COORDINATION.md`: the gap, and S12a as the watch's author.
 - `SPEC.md`: the release tags.
 - `docs/prep/README.md`: the dry run. This log.
