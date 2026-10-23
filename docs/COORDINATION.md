@@ -167,7 +167,7 @@ S11b's pin move, the same day, to `757c6d29`:
 
 **S12b's pin move, on 22 October, to `f0479037`,** the commit tagged `build-51`: FRUS Explorer 1.0 (build 1776), 85 commits past `757c6d29`, with 18 pull requests on shared code or bundled data ([issue #37](https://github.com/joshbotts/FRUS-Explorer-Web-App/issues/37)). No web-authored pull request was in it. The move:
 - raised the served index version to 71 (#1746, #1747), so the server refuses build 50's exports, and added `cited-page-map.json`, which `indexResourceNames` gained with #1747, to the files the server will not start without;
-- met no break: every kit built and passed on Linux with no new skip, as issue #37's dry run had found, and the web edition's own code changed only in the tests that named build 50's facts and in a test of the snippet rule #1736 brought;
+- met no break: every kit built and passed on Linux with no new skip, as issue #37's dry run had found. The web edition's own code changed only in its index version, in the tests that named build 50's facts, and in a new test of the snippet rule #1736 brought;
 - kept the schema fixture: both of the owner's 1776 exports hold `export-v69-schema.sql`'s statements in its order, and `setupDatabase(_:)` is the same text;
 - remade the golden files from the owner's 1776 three-volume export. The one new row, frus1969-76ve09p1's Note on U.S. Covert Actions, is #1746's, and the other 392 rows' HTML is unchanged; 15 queries' expressions lose a mark at a term's end, with parser 6.8 (#1770); 18 of the index summary's 36 gating digests moved, each with #1746, #1747 or #1710;
 - publishes a release tag beside `edge`, `:1.0-1776`, read from the pinned `project.yml`.
