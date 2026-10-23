@@ -3,6 +3,8 @@
 -- Its library was emptied with Erase Everything…, which keeps the database file, so the partial index
 -- idx_document_cache_user_tag_ids comes last among the indexes; a new database makes it earlier.
 -- Schema only: no rows. SQLite internals and FTS5 shadow tables are left out; FTS5 creates those.
+-- Index version 71 (app 1.0, build 1776) has the same statements in the same order: checked on
+-- 22 October 2026 against both of the owner's exports from that build, which add only FTS5's tables.
 
 CREATE TABLE cross_references (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

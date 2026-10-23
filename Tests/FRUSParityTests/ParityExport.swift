@@ -93,11 +93,13 @@ struct ParityExport {
         try db.execute("COMMIT")
         if fragmentsFullText { try fragment(db) }
         if stamped {
-            // The pinned build's stamp: its build from the submodule, and the index version it serves.
+            // The pinned build's stamp: its version and build from the submodule, and the index version
+            // it serves.
             let build = Upstream.appBuild(Repository.layout.upstream).map(String.init) ?? "none"
+            let appVersion = Upstream.appVersion(Repository.layout.upstream) ?? "none"
             let version = String(IndexCompatibility.supportedIndexVersion)
             let stamp = [
-                ("exported_at", "2026-10-03T15:14:19Z"), ("my_writing_included", "0"), ("app_version", "0.2"),
+                ("exported_at", "2026-10-03T15:14:19Z"), ("my_writing_included", "0"), ("app_version", appVersion),
                 ("app_build", build), ("installed_index_version", version), ("current_index_version", version),
                 ("installed_fts_schema_version", "4"), ("current_fts_schema_version", "4"),
             ]

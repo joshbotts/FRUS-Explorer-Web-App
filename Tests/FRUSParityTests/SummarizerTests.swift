@@ -264,7 +264,7 @@ enum RefusalCase: String, CaseIterable, Sendable {
         #expect(summary.provenance.tool == "frus-parity summarize")
         #expect(summary.provenance.indexVersion == IndexCompatibility.supportedIndexVersion)
         // Written out, since the summary reads the build from the submodule: a build bump fails here.
-        #expect(summary.provenance.appBuild == 50)
+        #expect(summary.provenance.appBuild == 1776)
         #expect(summary.provenance.sourceDigest == (try UpstreamDigest.compute(upstream: Repository.layout.upstream)))
         #expect(summary.provenance.inputs["research_provenance.exported_at"] == "2026-10-03T15:14:19Z")
         for (key, digest) in try ParityFixtures.verifiedInputs(tei: Repository.layout.tei) {

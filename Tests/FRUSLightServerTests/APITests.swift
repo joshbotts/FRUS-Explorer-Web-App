@@ -337,7 +337,7 @@ enum ParityVolumes {
         #expect(resources.manifest.count == 553)
         #expect(resources.volume("frus1969-76ve09p1")?.subseries == "1969-76")
         #expect(resources.volume("nothing") == nil)
-        #expect(ServerResources.requiredFiles.count == 5)
+        #expect(ServerResources.requiredFiles.count == 6 && ServerResources.requiredFiles.last == "cited-page-map.json")
     }
 
     @Test func aFolderWithoutThemIsRefusedNamingEachFile() throws {

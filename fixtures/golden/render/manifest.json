@@ -2,8 +2,8 @@
   "configuration" : "The Mac reader's own path, without an index. For each row, DocumentViewModel(entry:volumeEntry:parser:) with an entry naming only the volume and the document (its other fields do not reach the HTML; mac-golden checks that on every 25th row), no volume entry, a new FRUSDocumentParser, no person-mention store, no AST cache and no classification override. load(volumeURL:) on the main actor then parses the document alone and takes persons and glossary terms from the volume's TEI. broken-refs-index.json lists no reference in the fixture volumes, so no cross-reference is degraded. Then HTMLTemplate.build(model:colorScheme: .light), keeping the body: the fragment FRUSRenderNodeHTMLSerializer.reader writes (annotateSourceClassification: true, figureImages: .reader, listsNamedReferences: true). Rows are every document a full parse of each volume yields, in parse order, volumes sorted. A release build of the app module, with testing enabled, compiled from the submodule unmodified.",
   "format" : 1,
   "provenance" : {
-    "appBuild" : 50,
-    "indexVersion" : 69,
+    "appBuild" : 1776,
+    "indexVersion" : 71,
     "inputs" : {
       "fixtures/tei/SHA256SUMS" : "41609437167f6e54228471ac8f6638d3fe3db6d55045dbcd242b006c7301ae87",
       "fixtures/tei/frus1894Nicaragua.xml" : "c36aa079477928672a8f9cb98b37757a428452824ce15500db62e0636dd2c4cc",
@@ -17,9 +17,9 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "24382592d086e24d4472a2ab72a49aa7603e2106a07c9ee1360ce29d9b8aa93c",
+    "sourceDigest" : "096499b657e5773434204ccc0cbf5373bf42148f6ca567af4a94badc73c002f1",
     "tool" : "tools/mac-golden render",
-    "upstreamCommit" : "757c6d29fa0b6dbb754706900b1d3f15f67ad453"
+    "upstreamCommit" : "f047903701fbe55cc2b054849b209ab137efc732"
   },
   "rows" : [
     {
@@ -1604,6 +1604,12 @@
       "bytes" : 7034,
       "document" : "terms",
       "sha256" : "0e563382921bca247fa6677aa48289164f37d350467941bdffe87104ab11f6a4",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 27935,
+      "document" : "notes",
+      "sha256" : "28cd962903db3f1b30ac0aadc836adf9e841d6f0fc59c0deacf1261a625024a7",
       "volume" : "frus1969-76ve09p1"
     },
     {

@@ -11,7 +11,10 @@ import Hummingbird
 /// the Mac's search window draws a result.
 ///
 /// `snippet` is the document's text around the matches with `<b>` and `</b>` marking them, and is
-/// not HTML-escaped: a client escapes it and puts back only the two markers.
+/// not HTML-escaped: a client escapes it and puts back only the two markers. It is the kit's: the
+/// window starts at the match in the document's own prose, after the heading, source note and
+/// dateline its body opens with. A row whose only match is in those has the prose's opening with
+/// nothing marked, and a row with no match in its body its heading and dateline (#1736).
 public struct SearchItem: Codable, Equatable, Sendable {
     public var volumeId: String
     public var documentId: String
