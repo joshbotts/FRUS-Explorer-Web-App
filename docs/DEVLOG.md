@@ -4,7 +4,7 @@ One entry per session, newest first.
 
 ## Session 15c: highlights, and check 6
 
-24 October 2026 · branch `claude/phase-2-afce75` · PR_LINK · upstream `503a730b`, unchanged
+24 October 2026 · branch `claude/phase-2-afce75` · [#59](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/59) · upstream `503a730b`, unchanged
 
 Phase 2's row S15c, on the critical path: S15d, notes, follows it. Highlights come to the reader as the app makes and draws them, with the app's own scripts from the kit, and check 6 runs in CI over the 393 fixture rows. No upstream pull request, and no schema change: S14a's `highlights` table holds it all.
 
