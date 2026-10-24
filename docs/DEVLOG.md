@@ -2,6 +2,44 @@
 
 One entry per session, newest first.
 
+## Session 15c, follow-up: the kit's highlight code, upstream
+
+24 October 2026 · branch `claude/s15c-kit-highlight-followups` · [#60](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/60) · upstream `503a730b`, unchanged; [FRUS-Explorer#1789](https://github.com/joshbotts/FRUS-Explorer/pull/1789), open
+
+S15c (#59) found two things in FRUSCoreKit's highlight code and named both as upstream pull requests. The session that ran it asked for them in one pull request, from `claude/highlight-line-break-and-extracts`, cut from `v2` at `503a730b`, labelled `Mac` with "Mac verification requested", and not merged. Under rule 4 it changes shared files, and this repository changes only its records.
+
+**#1789, in two commits and a records commit:**
+- **A highlight that ends on a line break is drawn, with the document's others.**
+  - `kHighlightsJS`'s `buildRanges` ended every range with `setEnd(node, localOffset + 1)`. For a highlight whose last character is a `<br>`, the offset engine's `{node: BR, localOffset: 0}`, that was `setEnd(br, 1)`, and WebKit threw `IndexSizeError` after `FRUSHighlights.render` had cleared the page. The app's `renderHighlights(on:)` drops the error, so the app drew none of that document's highlights. A drag that ends at the start of the line after a `<br>` makes one.
+  - `buildRanges` now ends such a range after the element (`setEndAfter`), and every other range as before. `ReaderAnnotationScriptTests` re-takes `kHighlightsJS`'s pin, 3,045 bytes to 3,344, with the reason.
+  - A new WebKit suite, `HighlightLineBreakRenderTests`, Xcode's alone, makes the highlight from the selection bridge's own payload for such a drag and draws it through the app's `renderHighlights(on:)`, with the document's others. Run against `v2`'s renderer it fails both its tests, the page holding no highlight at all.
+  - `FRUSExplorer/Resources/frus-highlights.js`, which nothing loads, is as it was.
+- **`HighlightReanchor.extracts(passage:start:end:in:)` is public.** It is the kit's test of whether a span of the flat text reproduces a highlight's stored passage, in either form a highlight stores: `flatTextExcerpt(blocks:start:end:)`'s output, or the raw UTF-16 slice of one made before 3 July. It puts the search's own guard in front of the private test, which the search calls unchanged, so a span outside the text reproduces nothing. Four kit tests.
+- `FRUSCoreKitTests` goes from 1,191 tests to 1,196, and the iOS unit target from 7,636 to 7,643.
+
+**How it was checked,** each heavy job under the app's lock, from a clone at a real path, beside `v2` at `503a730b` built and run the same way, Xcode 27.1, clean and unsigned:
+- **The full iOS unit run:** 7,643 tests in 907 suites against `v2`'s 7,636 in 906, both failing only the 8 Keychain tests an unsigned build fails, and skipping the same 17 tests and 2 suites. `FRUSOffsetEngineTests`, `TextNodeEndSelectionTests`, `SelectionScriptParityTests` and `HighlightTextRenderTests` passed.
+- **`swift test`:** 3,089 tests against 3,084, all passed.
+- **The symbol diff,** normalized as before: 249,767 names on `v2` and 249,768 on the branch, none removed, and one added, `HighlightReanchor.extracts(passage:start:end:in:)`. The script's change is inside a string literal.
+- **Both builds** had `v2`'s five and seven warning lines, and `swift build --target FRUSCoreKit` completed.
+- **Linux,** in a scratch worktree of this repository's `main` at `e067d69`, with the branch copied over the submodule:
+  - every target passed but FRUSParityTests, whose 14 issues are all golden-file staleness, S15c's samples test among them;
+  - `FRUSCoreKitTests` ran 1,196 tests, with the one named skip and no build warning, 2,192 tests in all;
+  - a scratch file in `FRUSLightAPI`, never committed, imported FRUSCoreKit without `@testable` and called `HighlightReanchor.extracts`, and the target built.
+- **A review** read the diff cold. It confirmed the end and the pins, and that both WebKit tests fail on the old `buildRanges`. It found a doc line, an assertion message and two missing shifts, all fixed before the runs quoted. It also found one throw that remains, which the pull request files: `buildRanges` has no guard for a negative start, so a highlight stored below 0 throws as the `<br>` end did. Neither reader makes one, and this server refuses offsets outside the text.
+
+**What the pin move past it brings.** The app draws such a highlight, and the kit's renderer no longer throws for one, so:
+- the host script's `drawHighlights` (`ReaderHostScript.swift`), which tries each highlight with `buildRanges` before `FRUSHighlights.render`, and the rail's "This highlight could not be drawn in the text." see none from a line break. They can stay, for any other highlight the kit cannot draw, or go;
+- check 6's sampler (`Tests/FRUSParity/HighlightSamples.swift`) avoids ends on a line break, and may stop, with `samples.json` written again. Until then the samples are the same: neither change touches the converter or the flat text. It was not regenerated here, since `frus-parity highlight-samples` refuses while the golden files are stale;
+- S16c's check 6 on a Mac's highlights can call `HighlightReanchor.extracts` with the page's blocks, and so read a highlight's selected text by the app's own rule in either form.
+
+**Delivered here**
+
+- `COORDINATION.md`: the pull request in §2, and in §5's list of app changes only the web edition needs.
+- This log.
+
+**Next: S15d,** notes and summaries, as S15c named it; the owner's Mac check of #1789 and its merge, then the first pin move after it, which takes it, as `PLAN.md`'s rule has it.
+
 ## Session 15c: highlights, and check 6
 
 24 October 2026 · branch `claude/phase-2-afce75` · [#59](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/59) · upstream `503a730b`, unchanged

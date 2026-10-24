@@ -221,6 +221,18 @@ S16b's pin move, on 24 October, to `503a730b`, `v2`'s head, past all three, and 
 - widened the watch's search for the export's number to `FRUSCoreKit/Export` as well as `FRUSExplorer/Export`: 6 at the old pin, 7 at the new;
 - remade the golden files with a seventh three-volume export, which the owner made from a build of `503a730b`, though on §5's indexing path `git diff` is empty from `2767a128`, and the strip's statements moved into the kit unchanged. The HTML, the expressions and the results changed only in provenance, and the index summary's gating section not at all.
 
+**#1789 (S15c's follow-up), open.** S15c found two things in the kit's highlight code, and [joshbotts/FRUS-Explorer#1789](https://github.com/joshbotts/FRUS-Explorer/pull/1789) carries both, one commit each:
+- **`kHighlightsJS`'s `buildRanges` ends a range that ends on a `<br>` after the element.** It ended every range with `setEnd(node, localOffset + 1)`, which for the offset engine's `<br>` entry throws `IndexSizeError` after `FRUSHighlights.render` has cleared the page, so the app drew none of that document's highlights. `ReaderAnnotationScriptTests` re-takes the script's pin, and a WebKit suite draws such a highlight through the app's `renderHighlights(on:)`.
+- **`HighlightReanchor.extracts(passage:start:end:in:)` is public:** the kit's test of a span against a stored passage in either form a highlight stores, for check 6 on a Mac's highlights in S16c.
+
+On Apple platforms the reader draws a highlight that ends on a line break, and that document's others with it, and nothing else changes. Run beside `v2` at `503a730b`:
+- the full iOS unit run failed only as `v2`'s did, at 7,643 tests against 7,636;
+- `swift test` ran 3,089 tests against 3,084;
+- the symbol diff, normalized, removed nothing and added `HighlightReanchor.extracts`;
+- on Linux over `main`, everything passed but the parity suites' golden-file staleness.
+
+It changes nothing on §5's indexing path. The pin move past it brings both. The host script's try of each highlight before the kit draws them can then stay, for any other the kit cannot draw, or go, and check 6's sampler may stop avoiding an end on a line break.
+
 ## 3. The architecture that protects coordination
 
 These structures let the two codebases share code without app sessions having to think about the web edition. Web sessions add and maintain them, in pull requests on the app's repository.
@@ -297,7 +309,7 @@ The whole of the app side's part. Each rule costs little or nothing. The boundar
 - the JSON export at `formatVersion` 7, adding the model types it lacks, above all saved searches and working corpora, and what 6 drops from the types it carries, a note's rich text and a collection's structure among them, after the envelope moves into FRUSCoreKit (phase 2, `PLAN.md`'s S16a): S16a's [#1786](https://github.com/joshbotts/FRUS-Explorer/pull/1786), merged as `02521d01`. It is the first web-authored change to a file the app writes for its users, so its Mac check exports and decodes again; the owner chose on 23 October to have it opened during the 1.0 submission, and merged it the same day;
 - phase 2's other moves into the kit, each changing nothing on Apple platforms (`PLAN.md`, Phase 2): the reader's annotation scripts and highlight rules, and Citation Lookup's Batch and Structured types made public (S15a: [#1788](https://github.com/joshbotts/FRUS-Explorer/pull/1788) and [#1787](https://github.com/joshbotts/FRUS-Explorer/pull/1787), merged as `9ae72e7e` and `503a730b`, which the server's build compiles since S16b's pin move); a user-data source for the search's user half, which the app leaves at its own columns (S17a); the research layer's rules, from a saved search's freshness to the method appendix (S17b); and collections, rendered from values (S18a), then resolved through a data source (S18b), which is the first to change how one of the app's features is put together;
 - optionally, a JSON importer, so data made on the web can return to the Mac; not in phase 2, by the owner's choice of 23 October;
-- public access for kit types the server needs, as each need arises;
+- public access for kit types the server needs, as each need arises, such as the re-anchor's test of a stored passage for S16c's check 6, with the kit's fix of a highlight that ends on a line break (S15c's follow-up: [#1789](https://github.com/joshbotts/FRUS-Explorer/pull/1789), open);
 - boundary tests for the other kits.
 
 **Pin cadence.** Until the app's public release, the pin holds unless the web edition needs a merged change, and web-authored pull requests are batched so it moves as seldom as possible. After the release, it moves about once per app release.
