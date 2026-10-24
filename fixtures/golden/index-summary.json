@@ -603,20 +603,20 @@
       },
       "volume_structures.json" : {
         "rows" : 3,
-        "sha256" : "016c6fe36fb9f2c45045508998d631837523371eccc29e8ddaf177413cc99fb8",
+        "sha256" : "0f7e5e6a4be8d34c9a62394a9f40a0fa2ea9ccf2daedd43f56185cfba948437e",
         "sql" : "SELECT volume_id, structure_json FROM volume_structures ORDER BY volume_id",
         "volumes" : {
           "frus1894Nicaragua" : {
             "rows" : 1,
-            "sha256" : "4590227170d8891d204a2c378b73c507df7d84f3e303d56af64d38a4caf0a202"
+            "sha256" : "bae71af77a09a20e07c104d82582398243a5ae7e57ca6901f43a39bbcb1e6ac0"
           },
           "frus1961-63v06" : {
             "rows" : 1,
-            "sha256" : "2243f36d168481a0c80f5b49dada062f05728ae5b6f0f61d66a3d34ab196b36d"
+            "sha256" : "3358c099688008486881c3af69dc379388f48334308891fbc4878f6339f78a63"
           },
           "frus1969-76ve09p1" : {
             "rows" : 1,
-            "sha256" : "4facb5b9bd76fd0a140c9d9e35e97c7c3ad5a0d7dba9eef1c58a376dea888ae5"
+            "sha256" : "e67533114db8f5c3d0af8d305a054a110c5bfc17ba2c1fe0b2192f2ce83b8c17"
           }
         }
       }
@@ -627,14 +627,14 @@
       "current_fts_schema_version" : "4",
       "current_index_version" : "71",
       "documentation" : "https://github.com/joshbotts/FRUS-Explorer/blob/v2/Docs/Agentic-Analysis-Guide.md",
-      "exported_at" : "2026-10-23T01:32:33Z",
+      "exported_at" : "2026-10-24T12:42:19Z",
       "installed_fts_schema_version" : "4",
       "installed_index_version" : "71",
       "my_writing_included" : "0",
       "semantic_provenance_digest" : "89481b1869da1880c599a6923df9a90bef19fc402c3db5a370ead2809b7e6101"
     },
     "fileBytes" : 5148672,
-    "freelistCount" : 4,
+    "freelistCount" : 6,
     "journalMode" : "delete",
     "notes" : [
 
@@ -650,9 +650,9 @@
       "CREATE VIRTUAL TABLE temp.parity_user_content_instance USING fts5vocab(main, user_content, instance)"
     ],
     "sqliteSequence" : {
-      "cross_references" : 752811,
-      "page_ranges" : 3069848,
-      "person_mentions" : 2461213
+      "cross_references" : 753032,
+      "page_ranges" : 3070983,
+      "person_mentions" : 2462231
     },
     "sqliteVersion" : "3.54.0",
     "timings" : {
@@ -675,9 +675,9 @@
       "frus_documents.config" : 0,
       "frus_documents.docsize" : 0,
       "frus_documents.vocab_col" : 0.008,
-      "frus_documents.vocab_instance" : 0.43,
+      "frus_documents.vocab_instance" : 0.4,
       "frus_documents.vocab_row" : 0.012,
-      "integrity" : 0.032,
+      "integrity" : 0.029,
       "page_ranges" : 0.002,
       "page_ranges.sequence" : 0.001,
       "person_cluster_candidate" : 0,
@@ -692,7 +692,7 @@
       "schema.export_only" : 0,
       "terms" : 0,
       "terms.sequence" : 0,
-      "total" : 0.517,
+      "total" : 0.491,
       "user_content.averages" : 0,
       "user_content.config" : 0,
       "user_content.docsize" : 0,
@@ -702,13 +702,13 @@
       "user_tags" : 0,
       "volume_sources" : 0,
       "volume_sources.sequence" : 0,
-      "volume_structures" : 0,
+      "volume_structures" : 0.001,
       "volume_structures.json" : 0
     },
     "volumeOrder" : [
       "frus1894Nicaragua",
-      "frus1969-76ve09p1",
-      "frus1961-63v06"
+      "frus1961-63v06",
+      "frus1969-76ve09p1"
     ]
   },
   "provenance" : {
@@ -724,7 +724,7 @@
       "research_provenance.current_fts_schema_version" : "4",
       "research_provenance.current_index_version" : "71",
       "research_provenance.documentation" : "https://github.com/joshbotts/FRUS-Explorer/blob/v2/Docs/Agentic-Analysis-Guide.md",
-      "research_provenance.exported_at" : "2026-10-23T01:32:33Z",
+      "research_provenance.exported_at" : "2026-10-24T12:42:19Z",
       "research_provenance.installed_fts_schema_version" : "4",
       "research_provenance.installed_index_version" : "71",
       "research_provenance.my_writing_included" : "0",
@@ -737,8 +737,8 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "d99bca0de69c450b8614d078f9ca1bbedea5b7163da69975368ad011826015aa",
+    "sourceDigest" : "1c529af846867704d8ea2ace8b06e0573731a2a7c5ff5ebb064d03c7d0d431c5",
     "tool" : "frus-parity summarize",
-    "upstreamCommit" : "2767a1280e6164f87fff71ec82eb0d125a336e53"
+    "upstreamCommit" : "503a730bfacfc06bfeeadedf9bc4069b1ca6750d"
   }
 }
