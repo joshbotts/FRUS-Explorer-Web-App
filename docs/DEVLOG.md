@@ -4,7 +4,7 @@ One entry per session, newest first.
 
 ## Session 15c, follow-up: the kit's highlight code, upstream
 
-24 October 2026 · branch `claude/s15c-kit-highlight-followups` · upstream `503a730b`, unchanged; [FRUS-Explorer#1789](https://github.com/joshbotts/FRUS-Explorer/pull/1789), open
+24 October 2026 · branch `claude/s15c-kit-highlight-followups` · [#60](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/60) · upstream `503a730b`, unchanged; [FRUS-Explorer#1789](https://github.com/joshbotts/FRUS-Explorer/pull/1789), open
 
 S15c (#59) found two things in FRUSCoreKit's highlight code and named both as upstream pull requests. The session that ran it asked for them in one pull request, from `claude/highlight-line-break-and-extracts`, cut from `v2` at `503a730b`, labelled `Mac` with "Mac verification requested", and not merged. Under rule 4 it changes shared files, and this repository changes only its records.
 
