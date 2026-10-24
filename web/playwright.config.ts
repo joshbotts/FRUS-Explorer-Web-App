@@ -2,6 +2,10 @@
 // export imported and fixtures/tei mounted, as scripts/compose-smoke --e2e sets it up.
 import { defineConfig, devices } from '@playwright/test';
 
+// The suite's paths are relative, so it runs under FRUS_E2E_BASE_URL's path as it does at the root
+// (PLAN's S14f). The URL ends in a slash, or a relative path would replace its last name.
+const baseURL = (process.env.FRUS_E2E_BASE_URL ?? 'http://localhost:8080/').replace(/\/?$/, '/');
+
 export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
@@ -15,7 +19,7 @@ export default defineConfig({
     : [['list'], ['html', { open: 'never' }]],
   use: {
     // localhost is a secure context, which the clipboard needs.
-    baseURL: process.env.FRUS_E2E_BASE_URL ?? 'http://localhost:8080',
+    baseURL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     locale: 'en-US',

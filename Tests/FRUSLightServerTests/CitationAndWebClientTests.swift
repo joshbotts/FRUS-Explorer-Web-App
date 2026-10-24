@@ -225,15 +225,21 @@ import Testing
 }
 
 @Suite struct WebClientTests {
-    /// A built app in a temporary folder: its page, a hashed script and a root file.
-    static func builtApp() throws -> (TemporaryDirectory, WebClient) {
+    /// A built app's page, as Vite writes it: a `<base>` for the server to write its path into, and
+    /// relative paths under it.
+    static func page(base: String = "/") -> String {
+        "<!doctype html><head><base href=\"\(base)\" /><title>FRUS Explorer Light</title><script type=\"module\" src=\"./assets/index-abc123.js\"></script>"
+    }
+
+    /// A built app in a temporary folder: its page, a hashed script and a root file, served under
+    /// `publicURL`'s path.
+    static func builtApp(publicURL: String = "http://localhost:8080") throws -> (TemporaryDirectory, WebClient) {
         let directory = try TemporaryDirectory()
         try FileManager.default.createDirectory(at: directory.url.appendingPathComponent("assets"), withIntermediateDirectories: true)
-        try Data("<!doctype html><title>FRUS Explorer Light</title><script type=\"module\" src=\"/assets/index-abc123.js\"></script>".utf8)
-            .write(to: directory.url.appendingPathComponent("index.html"))
+        try Data(page().utf8).write(to: directory.url.appendingPathComponent("index.html"))
         try Data("console.log('app')".utf8).write(to: directory.url.appendingPathComponent("assets/index-abc123.js"))
         try Data("<svg/>".utf8).write(to: directory.url.appendingPathComponent("favicon.svg"))
-        var configuration = ServerConfiguration()
+        var configuration = ServerConfiguration(publicURL: publicURL)
         configuration.webDirectory = directory.url
         return (directory, try #require(try WebClient.load(configuration)))
     }
@@ -244,8 +250,9 @@ import Testing
         let fixture = try await ServerFixture(volumes: ["frus1894Nicaragua"])
         let app = Application(router: buildRouter(state: fixture.state, resources: fixture.resources, reader: fixture.reader, webClient: client))
         let index = try String(contentsOf: directory.url.appendingPathComponent("index.html"), encoding: .utf8)
+        #expect(index == Self.page(), "at the root, the page is the build's")
         try await app.test(.router) { http in
-            for uri in ["/", "/search?keywords=treaties", "/doc/frus1961-63v06/d1", "/browse"] {
+            for uri in ["/", "/index.html", "/search?keywords=treaties", "/doc/frus1961-63v06/d1", "/browse"] {
                 let response = try await http.execute(uri: uri, method: .get)
                 #expect(response.status == .ok && String(buffer: response.body) == index, "\(uri)")
                 #expect(response.headers[.contentType] == "text/html; charset=utf-8", "\(uri)")
@@ -298,9 +305,20 @@ import Testing
         configuration.webDirectory = URL(fileURLWithPath: "/nonexistent/web")
         #expect(try WebClient.load(configuration) == nil)
         configuration.requiresWebDirectory = true
-        #expect(throws: WebClientError.self) { try WebClient.load(configuration) }
+        #expect(throws: WebClientError(path: "/nonexistent/web")) { try WebClient.load(configuration) }
         let named = try ServerConfiguration.fromEnvironment(["FRUS_WEB_DIR": "/srv/web"])
         #expect(named.webDirectory.path == "/srv/web" && named.requiresWebDirectory)
         #expect(!(try ServerConfiguration.fromEnvironment([:])).requiresWebDirectory)
+    }
+
+    /// A page with no `<base href="/">` is not this release's build: the server could not serve it
+    /// under a path, nor at the root once a client route is deep, so it refuses to start.
+    @Test func aPageWithNoBaseIsRefused() throws {
+        let directory = try TemporaryDirectory()
+        try Data("<!doctype html><title>FRUS Explorer Light</title><script type=\"module\" src=\"/assets/index-abc123.js\"></script>".utf8)
+            .write(to: directory.url.appendingPathComponent("index.html"))
+        var configuration = ServerConfiguration()
+        configuration.webDirectory = directory.url
+        #expect(throws: WebClientError(path: directory.url.path, problem: .noBase)) { try WebClient.load(configuration) }
     }
 }

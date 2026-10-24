@@ -8,7 +8,7 @@ import { expect, test } from './fixtures';
 import { tabTo } from './keyboard';
 
 test('the timeline counts the results the search keeps by year, in a chart with its table and in a list under each year', async ({ page }) => {
-  await page.goto('/search?keywords=negotiating+OR+canal');
+  await page.goto('search?keywords=negotiating+OR+canal');
   await expect(page.getByRole('list', { name: 'Results' }).getByRole('link')).toHaveCount(3);
   const picker = page.getByRole('group', { name: 'Reading' });
   await expect(picker.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true');
@@ -58,7 +58,7 @@ test('the timeline counts the results the search keeps by year, in a chart with 
 });
 
 test('the concordance lines up each occurrence on the page between its contexts, in each of the kit’s orders', async ({ page }) => {
-  await page.goto('/search?keywords=negotiating');
+  await page.goto('search?keywords=negotiating');
   await expect(page.getByRole('list', { name: 'Results' }).getByRole('link')).toHaveCount(2);
   await tabTo(page, page.getByRole('group', { name: 'Reading' }).getByRole('button', { name: 'Concordance' }));
   await page.keyboard.press('Enter');

@@ -2,8 +2,8 @@ import { createMemoryHistory, createRouter } from '@tanstack/react-router';
 import { describe, expect, it } from 'vitest';
 import { parseSearch, routeTree, stringifySearch } from './router';
 
-async function routerAt(href: string) {
-  const router = createRouter({ routeTree, parseSearch, stringifySearch, history: createMemoryHistory({ initialEntries: [href] }) });
+async function routerAt(href: string, basepath = '/') {
+  const router = createRouter({ routeTree, basepath, parseSearch, stringifySearch, history: createMemoryHistory({ initialEntries: [href] }) });
   await router.load();
   return router;
 }
@@ -39,5 +39,16 @@ describe('the router', () => {
     expect(start.state.location.pathname).toBe('/browse');
     const browse = await routerAt('/browse?q=Kennedy&indexed=maybe');
     expect(searchOf(browse)).toMatchObject({ q: 'Kennedy', indexed: undefined, subseries: undefined });
+  });
+
+  it('reads and writes its routes under the base path', async () => {
+    const start = await routerAt('/frus-explorer/', '/frus-explorer/');
+    expect(start.state.location.pathname).toBe('/browse');
+    expect(start.history.location.pathname).toBe('/frus-explorer/browse');
+    const reader = await routerAt('/frus-explorer/doc/frus1961-63v06/d16?note=fnote-x-d16fn2', '/frus-explorer/');
+    expect(reader.state.matches.at(-1)?.params).toEqual({ volumeId: 'frus1961-63v06', documentId: 'd16' });
+    expect(searchOf(reader).note).toBe('fnote-x-d16fn2');
+    await reader.navigate({ to: '/search', search: { keywords: 'treaty' } });
+    expect(reader.history.location.pathname + reader.history.location.search).toBe('/frus-explorer/search?keywords=treaty');
   });
 });

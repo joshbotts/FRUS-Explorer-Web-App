@@ -2,7 +2,7 @@
 // readiness banner, the screen, and the footer.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, useRouter } from '@tanstack/react-router';
-import { createContext, useContext, useEffect, useRef } from 'react';
+import { createContext, type MouseEvent, useContext, useEffect, useRef } from 'react';
 import { readinessQuery } from '../api/endpoints';
 import { copy } from '../copy';
 import { type Appearance, useAppearance, useResolvedScheme } from '../settings/preferences';
@@ -31,7 +31,8 @@ export function AppShell() {
 
   return (
     <SchemeContext.Provider value={scheme}>
-      <a className="skip-link" href="#main">
+      {/* Against the page's <base>, #main names the app's first page, so the link moves focus itself. */}
+      <a className="skip-link" href="#main" onClick={skipToMain}>
         {copy.app.skipToContent}
       </a>
       <header className="app-header">
@@ -64,6 +65,11 @@ export function AppShell() {
       </footer>
     </SchemeContext.Provider>
   );
+}
+
+function skipToMain(event: MouseEvent<HTMLAnchorElement>) {
+  event.preventDefault();
+  document.getElementById('main')?.focus();
 }
 
 /** While no index is served, says which step the server is at; the reader works meanwhile. */
