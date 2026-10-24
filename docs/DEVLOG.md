@@ -2,6 +2,52 @@
 
 One entry per session, newest first.
 
+## Session 14f: serving under a path
+
+23 October 2026 · branch `claude/s14f-base-path` · upstream `2767a128`, unchanged
+
+Phase 2's row S14f, the first of a shared deployment's three asks, run beside S14a, with which it shares no files. `FRUS_PUBLIC_URL` may now end in a path, such as `https://example.org/frus-explorer/`. The server then answers the browser app, the reader and the API under that path, and `/healthz` and `/readyz` under it and at the root. One build of the browser app serves either way, and the browser suite passes both ways, the second time through nginx running the install guide's recipe.
+
+**The server**
+
+- **`BasePath`** (`FRUSLightCore/Configuration.swift`) is the path a public URL ends in, `/` or one such as `/frus-explorer/`, with its last slash optional. Its names may hold only letters, digits and `-._~`, so a proxy cannot forward it in another spelling and it needs no escaping where the server writes it. A path with an empty name, `.`, `..` or an escape is refused at start, as is a URL with a query or a fragment. `ServerConfiguration.basePath` is computed from `publicURL`, so the struct gains no stored property.
+- **`ServedRouter`** (`Routes.swift`) puts the routes under the path. The routes stay written at the root: a request under the path reaches them without it, with the base in `APIRequestContext`, so a problem's `instance` and its 404 detail name the path the client sent. `/healthz` and `/readyz` also answer at the root, for Docker's health check, which is unchanged, and a proxy's. A GET of the path without its slash is redirected to it with 308, and of `/` with 302; every other path outside it is a 404 problem. `buildApplication` and `apiApplication` build it at the root too, where it passes every request through.
+- **The browser app's page.** `WebClient.load` writes the path into the page's `<base href="/">`, and refuses to start on a page without one, which is not this release's build. `/` and `/index.html` answer with the written page, which `FileMiddleware` would have served from disk unwritten.
+- **The reader's page** names its host script and its figures under the path: `ReaderRoutes.pageHead(under:)` and `figureURL(for:under:)`, through `ReaderService.render(…, base:)`.
+
+**The browser app**
+
+- **Built once, with relative paths:** Vite's `base` is `./`, and `index.html` carries `<base href="/" />`, so the build's `./assets/…` resolve under whatever path the server writes, and `vite preview` and the development server keep working at the root.
+- **`api/base.ts`** reads the base path from the page's `<base>`, and the root without one, as in the unit tests. `getJSON`, `/readyz`, the reader's page, so the frame, and Cite's record files go under it, and the router takes it as its `basepath`.
+- **Skip to content** moved focus by `href="#main"`, which against the page's `<base>` names the app's first page, so following it would have loaded that page. It now moves focus itself.
+
+**Compose and the smoke test**
+
+- **`compose.yaml`** takes `FRUS_PUBLIC_URL` from `.env`, with today's value, `http://localhost:<port>`, as its default.
+- **`scripts/compose-smoke`** keeps its checks at the root, with the build's relative script path and `<base href="/" />`. After the restart it makes the container again with `FRUS_PUBLIC_URL` ending in `/frus-explorer/`, the index staying in the volume, and checks the page with its base written, a client route, the script, the API, the reader's page and host script under the path, health at both, the redirect, and a 404 outside it.
+- **The install guide's nginx recipes run in the smoke test.** It finds each by its `<!-- compose-smoke: nginx … -->` marker, puts its `location` block in a server on nginx's port 8080 with the `frus` service as the upstream, and starts `nginx:1.28-alpine` on the Compose network: the root recipe in the first phase, the path's in the second. With `--e2e`, the browser suite runs at the root in the server's network namespace, as before, and under the path in the proxy's.
+- **The browser suite's paths are relative,** `page.goto('search')` rather than `'/search'`, since Playwright resolves a leading slash against the origin and would drop the path. `playwright.config.ts` ends the base URL in a slash. `base-path.spec.ts` checks that the page's base is the path the suite was given, that the reader's frame and the skip link stay under it, and that nothing the app or the frame asks for leaves it.
+
+**Records**
+
+- **`INSTALL.md`:** Behind a reverse proxy, with nginx recipes for the root and for a path and how other proxies forward a path unchanged; the `FRUS_PUBLIC_URL` setting; the Notes' first line. It says the server has no sign-in yet, so a proxy must keep it to its own network or sign-in until S14e.
+- **`SPEC.md`:** HTTP API's conventions, for serving under a path; `FRUS_PUBLIC_URL` and `FRUS_WEB_DIR` in Configuration; the reader's host script in Security.
+- **`PLAN.md` and its shared copy (rev 230):** S14f done, in phase 2's closing note; the Compose install's port line; phase 3's line, whose proxy recipe S14f wrote.
+- **`ci.yml`'s header,** the README's Status and this log.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** in this session: the package and its tests build with no warning. FRUSLightServerTests runs 115, up from 111, with `BasePathTests`' three and a page with no `<base>` refused, and FRUSLightCoreTests 44, up from 42; `ServedAPIParityTests`' five pass with the reader's head from `pageHead(under: .root)`. CI runs the rest.
+- **The browser app:** typecheck and lint are clean, and 92 unit tests pass in 16 files, up from 89 in 15: the base path read from a page, a path put under it, and the router under `/frus-explorer/`.
+- **`scripts/compose-smoke --e2e`** on this branch's image: passes, with 22 browser tests on Chromium at the root and the same 22 under `/frus-explorer/` through nginx, up from 21, and axe finds nothing either way. Its first run stopped at the root recipe: in the nginx container `localhost` is `::1` first, and the test's server block listened on IPv4 alone, so it listens on both.
+
+**Notes**
+
+- **Builds in a new worktree:** the Linux build reused S13c's `.build/linux` through an APFS clone (`cp -c`), and built in 45 seconds once the heavy-job lock was free; it waited about ten minutes behind S16a's unit-test run on the Mac.
+- **`nginx:1.28-alpine`** is pulled on the smoke test's first use, on both architectures `image.yml` tests.
+
+**Next: S14a,** the user store's schema and migrations, open in another session, with S14g and S16a beside it. S14e, sign-in through the proxy, follows S14c, and builds on this row: its cookies take `FRUS_PUBLIC_URL`'s path, and S14c's `Host` and `Origin` checks its origin.
+
 ## Phase 2's plan: the user store, the research layer, and a shared deployment's three asks
 
 23 October 2026 · branch `claude/phase2-plan-28c0c7` · upstream `2767a128`, S13c's, unchanged; read at `af41efa4`

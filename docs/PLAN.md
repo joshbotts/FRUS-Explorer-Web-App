@@ -177,7 +177,7 @@ S0 comes first, and the core track starts after it. The tracks join at session 8
 
 Before writing the S1, S2, S3 and S4 prompts, read `docs/prep/README.md`. A dry run on 3 October found what each of those sessions needs beyond this table, and recorded the Linux changes for S1, S3 and S6.
 
-After phase 1, sessions follow the spec's phases 2–5. Phase 2, below, adds user data and its daily backup. Phase 3 adds Standalone indexing, local accounts and a reverse-proxy recipe for sharing beyond localhost. AWS returns as phase 6.
+After phase 1, sessions follow the spec's phases 2–5. Phase 2, below, adds user data and its daily backup. Phase 3 adds Standalone indexing and local accounts, for sharing beyond localhost behind the reverse proxy whose recipes S14f wrote. AWS returns as phase 6.
 
 ### Phase 2
 
@@ -260,7 +260,7 @@ Seven upstream pull requests are in it, where phase 1's features took four: most
 | S19a | Both | Citation Lookup over the API and in the browser app, at `/lookup`: Paste, Batch, split on note numbers, and Structured, through the kit's matcher, splitter and form, with the six confidence labels, as SPEC's `GET /api/v1/citation-lookup` and `POST /api/v1/citation-lookup/batch` | The same as S11c's, with check 7's matcher half through the API |
 | S19b | Both | The Research page: every annotated document, grouped by collection, tag or highlight colour, with Contains Notes and All Notes, as the kit groups them (S17b). Changed by an update waits for phase 3's review of changed text, and says so | The same as S11c's |
 
-S14a comes first. S14f, S14g and S16a share no files with it and can run beside it, S16a with its Mac check; S15a, S17a, S17b and S18a can open whenever the owner can take their checks. The first pin move after a phase-2 upstream pull request merges takes it, whichever row that move is, S12d's included, so there may be fewer pin moves than these rows have.
+S14a comes first. S14f, S14g and S16a share no files with it and can run beside it, S16a with its Mac check. S14f was done on 23 October beside S14a: the server answers under the path `FRUS_PUBLIC_URL` ends in, the browser app takes its base from the `<base>` the server writes into its page, and `scripts/compose-smoke` runs the browser suite at the root and, through nginx with the install guide's recipe, under a path; S15a, S17a, S17b and S18a can open whenever the owner can take their checks. The first pin move after a phase-2 upstream pull request merges takes it, whichever row that move is, S12d's included, so there may be fewer pin moves than these rows have.
 
 ## Docker Compose install
 
@@ -299,7 +299,7 @@ Importing a Mac export takes three steps:
 
 - **`/data` stays a named volume.** On a Mac, Docker runs Linux in a virtual machine, and a folder shared from macOS is not a local filesystem to it, while SQLite's WAL needs one. Only the TEI folder is a bind mount, and it is read-only.
 - **FRUS Explorer's TEI folder needs Docker Desktop's permission.** Session 5 found that Docker Desktop is refused the app's folder under `~/Library/Containers`, because macOS keeps other apps out of an app's container. A clone of HistoryAtState/frus works: its `volumes/` folder holds the same TEI XML the app downloads, though not the figure images the app fetches from static.history.state.gov. Allowing Docker Desktop to read FRUS Explorer's data in System Settings fixes this, and gives the figure images too; `docs/INSTALL.md` uses that on a Mac and the clone on Linux.
-- **The port listens on 127.0.0.1**, so nothing else on the network can reach it. Sharing beyond localhost waits for phase 3's local accounts, behind a TLS reverse proxy such as Caddy.
+- **The port listens on 127.0.0.1**, so nothing else on the network can reach it but a reverse proxy on the same machine. The install guide's nginx recipes, from S14f, serve the app at the root of a host or under a path, which `FRUS_PUBLIC_URL` names. Sharing beyond localhost waits for sign-in, through the proxy from S14e or with phase 3's local accounts.
 - **Upgrades** are `docker compose pull` and then `docker compose up -d`. The index already sits in the volume, so a restart copies nothing. The server refuses an index whose version it does not support; export again from the Mac. `edge` tracks `main`; from the first release, tags name the app's version and build, such as `:1.0-1861`, and from S14g the owner cuts each release by hand, with notes naming its digest and index version.
 - **Backups** start in phase 2, when user data exists: a daily SQLite backup of `app.db` to `/data/backups`, at a set hour and whenever the newest is more than a day old, none when nothing changed, seven kept, each also copied to a folder on the host (S14b).
 - **Disk:** a full export is about 2.8 GB. A re-import holds the export, its checked copy, the live index and the previous one, so allow about 15 GB free.

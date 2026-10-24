@@ -4,7 +4,8 @@
 #   web/.node-version, as scripts/npm runs it.
 # - compose: build the image, then scripts/compose-smoke --e2e checks the browser app, the catalogue
 #   and the reader, imports a synthetic export with docker compose cp, waits for /readyz to answer
-#   200, and runs web/e2e, Playwright on Chromium, against it.
+#   200, and runs web/e2e, Playwright on Chromium, against it; then again with the server under
+#   /frus-explorer/, through nginx and docs/INSTALL.md's recipe for a path.
 name: ci
 
 on:

@@ -12,6 +12,7 @@ Phase 1 is done: a Docker Compose install that serves a FRUS Explorer research e
 - Search with the app's query language, with the facets, the Query Inspector, the order by relevance or date, and the timeline and concordance readings, each saying which results it read. Each result carries its date, drawn as the app draws it, and a search you replace stops on the server.
 - Browse, which lists a section's own text first, as the app does: a meeting's list of those present, say, above its minutes. The reader, with its text size and Reading Width, its links, which follow a printed page into a volume the server does not hold as 1.0 does, and the cards for people and terms. All of it is usable by keyboard and free of axe violations.
 - Cite, with BibTeX and RIS.
+- Serving at the root of a host or under a path behind a reverse proxy, such as `https://example.org/frus-explorer/`, as `FRUS_PUBLIC_URL` says, with an nginx recipe for each in the install guide. The server has no sign-in of its own yet.
 - Parity with the Mac app, checked in CI on three fixture volumes: the same index rows, search results and document HTML. The server compiles the app's own Swift code from a pinned submodule.
 - A daily CI watch of the app's `v2` branch, which reports in one issue what the next pin move has to handle.
 
@@ -27,7 +28,7 @@ Phase 1 is done: a Docker Compose install that serves a FRUS Explorer research e
 **Next**
 
 1. **S12d**, once the app tags `version-1.0`: the pin moves to 1.0 build 1861, the App Store build, and CI publishes `:1.0-1861`.
-2. **Phase 2**, planned in [`docs/PLAN.md`](docs/PLAN.md) as S14a–S19b: notes, highlights, tags, collections and the rest of the research layer, with a daily backup, the Mac's JSON export imported and written back, and Citation Lookup; and, for a shared deployment, sign-in through a trusted proxy, serving under a path, and releases cut by hand. First **S14a**, the user store's schema and migrations; S14f, S14g and S16a, the Mac's JSON export at version 7 as an upstream pull request, can run beside it.
+2. **Phase 2**, planned in [`docs/PLAN.md`](docs/PLAN.md) as S14a–S19b: notes, highlights, tags, collections and the rest of the research layer, with a daily backup, the Mac's JSON export imported and written back, and Citation Lookup; and, for a shared deployment, sign-in through a trusted proxy, serving under a path, and releases cut by hand. Serving under a path (S14f) is done. **S14a**, the user store's schema and migrations, comes first of the rest, with S14g and S16a, the Mac's JSON export at version 7 as an upstream pull request, beside it.
 
 ## Goals
 
