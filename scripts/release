@@ -1,0 +1,543 @@
+#!/usr/bin/env bash
+# FRUS Explorer Light: releases, cut by hand from a build of main (docs/SPEC.md, Deployment > Image).
+# .github/workflows/release.yml runs it; each step also runs on a Mac.
+#   scripts/release build-args     prints the image's build arguments, NAME=value a line: the server's
+#                                  VERSION; APP_VERSION and APP_BUILD, the pinned app's, which
+#                                  scripts/release-tag reads; and INDEX_VERSION, the one the server
+#                                  serves, from Compatibility.swift. image.yml and ci.yml build with
+#                                  them, and the image's labels carry them.
+#   scripts/release cut [--commit <commit>] [--dry-run] [--pull-request] [--out <dir>]
+#                                  cuts the release of <commit>, a build of main, by default the one
+#                                  edge names. It checks that image.yml's newest run for the commit on
+#                                  main passed, smoke test and all; reads the digest and the labels of
+#                                  its image, sha-<commit>, and checks them against the commit's
+#                                  sources; numbers the release <version>-<build>.<n>, one past the
+#                                  last of its app build; and writes its notes to <dir>/notes.md.
+#                                  Then it moves :<version>-<build> to that digest, tags it
+#                                  :<version>-<build>.<n>, and publishes the GitHub release, which
+#                                  tags the commit. It refuses a commit a release already holds.
+#                                  --dry-run prints the writes and makes none. --pull-request, with
+#                                  --dry-run only, takes an image built from a branch, as
+#                                  release.yml's dry run on a pull request does, and skips the two
+#                                  checks only a build of main can pass.
+#   scripts/release selftest       runs cut against stubs of docker and gh, in a repository that
+#                                  borrows this one's objects and holds release tags of its own, and
+#                                  checks what each case prints, refuses and writes.
+# FRUS_RELEASE_IMAGE names another image repository, such as a registry the job runs itself, and
+# FRUS_RELEASE_REPO another GitHub repository. Needs git, docker with buildx, jq and gh, with GH_TOKEN
+# in Actions. Works with macOS's bash 3.2.
+set -euo pipefail
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+sub="$root/upstream/FRUS-Explorer"
+# The selftest's own repository; otherwise this one.
+git_dir=${FRUS_RELEASE_GIT:-$root}
+image=${FRUS_RELEASE_IMAGE:-ghcr.io/joshbotts/frus-explorer-light}
+gh_repo=${FRUS_RELEASE_REPO:-joshbotts/FRUS-Explorer-Web-App}
+docker=${FRUS_RELEASE_DOCKER:-docker}
+gh=${FRUS_RELEASE_GH:-gh}
+ns=io.github.joshbotts.frus-explorer
+# A release's tag, <version>-<build>.<n>, such as 1.0-1776.1.
+release_re='^[0-9]+(\.[0-9]+)*-[0-9]+\.[0-9]+$'
+
+if ! command -v "$docker" >/dev/null 2>&1 && [ -x "$HOME/.docker/bin/docker" ]; then
+  PATH="$HOME/.docker/bin:$PATH"
+fi
+
+die() { echo "scripts/release: $*" >&2; exit 1; }
+g() { git -C "$git_dir" "$@"; }
+
+# --- the sources -----------------------------------------------------------------------------
+
+# Compatibility.swift at commit $1, or in the working tree when $1 is empty.
+compatibility() {
+  if [ -n "$1" ]; then
+    g show "$1:Sources/FRUSLightCore/Compatibility.swift" 2>/dev/null || true
+  else
+    cat "$root/Sources/FRUSLightCore/Compatibility.swift"
+  fi
+}
+
+# The index version the server serves at $1, and the server's own version.
+index_version() { compatibility "$1" | sed -nE 's/.*static let supportedIndexVersion *= *([0-9]+).*/\1/p'; }
+server_version() { compatibility "$1" | sed -nE 's/.*static let string *= *"([^"]+)".*/\1/p'; }
+
+# <version>-<build> at commit $1: scripts/release-tag over the project.yml of the app it pins.
+release_base_at() {
+  local pin spec base
+  pin=$(g rev-parse --verify --quiet "$1:upstream/FRUS-Explorer") || die "$1 pins no upstream/FRUS-Explorer"
+  [ -e "$sub/.git" ] || die "the submodule is not checked out; git submodule update --init"
+  if ! git -C "$sub" cat-file -e "$pin^{commit}" 2>/dev/null; then
+    git -C "$sub" fetch --quiet --depth=1 origin "$pin" || die "cannot fetch the app's $pin, which $1 pins"
+  fi
+  spec=$(mktemp)
+  git -C "$sub" show "$pin:project.yml" > "$spec"
+  base=$(FRUS_PROJECT_YML=$spec "$root/scripts/release-tag") || { rm -f "$spec"; exit 1; }
+  rm -f "$spec"
+  printf '%s' "$base"
+}
+
+cmd_build_args() {
+  local base index server
+  base=$("$root/scripts/release-tag")
+  index=$(index_version "")
+  server=$(server_version "")
+  [ -n "$index" ] || die "Compatibility.swift states no supportedIndexVersion"
+  [ -n "$server" ] || die "Compatibility.swift states no FRUSLightVersion.string"
+  printf 'VERSION=%s\nAPP_VERSION=%s\nAPP_BUILD=%s\nINDEX_VERSION=%s\n' "$server" "${base%-*}" "${base##*-}" "$index"
+}
+
+# --- the image -------------------------------------------------------------------------------
+
+# The digest $1 resolves to, or nothing.
+digest_of() {
+  "$docker" buildx imagetools inspect "$1" --format '{{json .Manifest}}' 2>/dev/null | jq -r '.digest // empty' || true
+}
+
+# Each platform's labels at $1, as {"linux/amd64": {...}, ...}.
+labels_of() {
+  "$docker" buildx imagetools inspect "$1" --format '{{json .Image}}' | jq -c '
+    if has("config") then {((.os // "?") + "/" + (.architecture // "?")): (.config.Labels // {})}
+    else with_entries(.value |= (.config.Labels // {})) end'
+}
+
+# Label $1 of the first platform in $labels.
+label() { jq -r --arg k "$1" '[.[]][0][$k] // empty' <<<"$labels"; }
+
+# --- releases --------------------------------------------------------------------------------
+
+# The newest release on $1's first-parent line, at $1 or before it. Releases are cut from builds of
+# main, each after the last, so the one nearest $1 is the last.
+last_release() {
+  local pairs="$work/release-tags"
+  { g for-each-ref --format='%(if)%(*objectname)%(then)%(*objectname)%(else)%(objectname)%(end) %(refname:strip=2)' refs/tags \
+      | grep -E " ${release_re#^}" || true; } > "$pairs"
+  [ -s "$pairs" ] || return 0
+  g rev-list --first-parent "$1" \
+    | awk 'FILENAME == ARGV[1] { tag[$1] = $2; next } found == "" && ($1 in tag) { found = tag[$1] } END { if (found != "") print found }' "$pairs" -
+}
+
+problems=""
+refuse() { problems="$problems- $1"$'\n'; }
+
+cmd_cut() {
+  local commit="" dry="" pr="" out=""
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --commit) [ $# -ge 2 ] || die "--commit needs a commit"; commit=$2; shift 2 ;;
+      --dry-run) dry=1; shift ;;
+      --pull-request) pr=1; shift ;;
+      --out) [ $# -ge 2 ] || die "--out needs a directory"; out=$2; shift 2 ;;
+      *) die "usage: scripts/release cut [--commit <commit>] [--dry-run] [--pull-request] [--out <dir>]" ;;
+    esac
+  done
+  [ -z "$pr" ] || [ -n "$dry" ] || die "--pull-request is for a dry run only: a release is cut from a build of main"
+  [ "$(g rev-parse --is-shallow-repository)" = false ] || die "the history is shallow; fetch all of it (actions/checkout's fetch-depth: 0)"
+  [ -n "$out" ] || out=$(mktemp -d)
+  mkdir -p "$out"
+  work=$(mktemp -d)
+  trap 'rm -rf "$work"' EXIT
+
+  # The commit: the one given, or the build edge names.
+  local from_edge=""
+  if [ -z "$commit" ]; then
+    [ -z "$pr" ] || die "--pull-request needs --commit"
+    labels=$(labels_of "$image:edge") || die "cannot read $image:edge"
+    commit=$(label org.opencontainers.image.revision)
+    [ -n "$commit" ] || die "$image:edge carries no revision label"
+    from_edge=1
+  fi
+  local given=$commit
+  commit=$(g rev-parse --verify --quiet "$given^{commit}") || die "no commit $given in this repository's history"
+  local short=${commit:0:7}
+
+  # A build of main that passed its smoke test: image.yml's newest run for it on main succeeded.
+  local on_main smoke main run run_id run_status run_conclusion run_url=""
+  if [ -n "$pr" ]; then
+    on_main="not checked, for a pull request's own build"
+    smoke="not checked: ci.yml's compose job smoke-tests a pull request's build"
+  else
+    main=$(g rev-parse --verify --quiet refs/remotes/origin/main || g rev-parse --verify --quiet refs/heads/main) \
+      || die "no main branch here; fetch origin's"
+    if g merge-base --is-ancestor "$commit" "$main"; then on_main=yes; else on_main=no; refuse "$short is not on main"; fi
+    run=$("$gh" api "repos/$gh_repo/actions/workflows/image.yml/runs?branch=main&head_sha=$commit&per_page=100" \
+      --jq '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")] | sort_by(.created_at) | last
+            | if . == null then "" else "\(.id) \(.status) \(.conclusion)" end') || die "cannot list image.yml's runs"
+    if [ -z "$run" ]; then
+      smoke="no run"
+      refuse "image.yml has no run on main for $short"
+    else
+      read -r run_id run_status run_conclusion <<<"$run"
+      run_url="https://github.com/$gh_repo/actions/runs/$run_id"
+      smoke="image.yml's run $run_id, $run_status, $run_conclusion: $run_url"
+      if [ "$run_status" != completed ]; then
+        refuse "image.yml's run $run_id for $short is $run_status: wait for its smoke test"
+      elif [ "$run_conclusion" != success ]; then
+        refuse "image.yml's newest run for $short, $run_id, ended in $run_conclusion, so this build did not pass its smoke test"
+      fi
+    fi
+  fi
+
+  # The image: its digest, and its labels checked against the commit's sources.
+  local ref="$image:sha-$short" digest platforms
+  digest=$(digest_of "$ref")
+  [ -n "$digest" ] || die "no image $ref: image.yml publishes one for each build of main"
+  labels=$(labels_of "$image@$digest") || die "cannot read the labels of $image@$digest"
+  platforms=$(jq -r 'keys | join(", ")' <<<"$labels")
+  [ "$(jq '[.[]] | unique | length' <<<"$labels")" = 1 ] || refuse "its platforms' labels differ"
+
+  local revision app_version app_build index server base want_index
+  revision=$(label org.opencontainers.image.revision)
+  app_version=$(label "$ns.version")
+  app_build=$(label "$ns.build")
+  index=$(label "$ns.index-version")
+  server=$(label org.opencontainers.image.version)
+  base=$(release_base_at "$commit")
+  want_index=$(index_version "$commit")
+  [ "$revision" = "$commit" ] || refuse "its revision label is \"$revision\", not $commit"
+  if [ -z "$app_version$app_build$index" ]; then
+    refuse "it carries none of the labels $ns.version, $ns.build and $ns.index-version, so it was built before S14g"
+  else
+    [ "$app_version-$app_build" = "$base" ] \
+      || refuse "its labels name FRUS Explorer $app_version (build $app_build), where $short pins the app's $base"
+    [ "$index" = "$want_index" ] \
+      || refuse "its index-version label is \"$index\", where Compatibility.swift at $short says $want_index"
+  fi
+
+  # The release: one past the last of its app build, which the commit must not already be in.
+  local held last n tag change last_index
+  held=$(g tag --contains "$commit" | grep -E "$release_re" | paste -sd, - || true)
+  [ -z "$held" ] || refuse "the release $held already holds $short"
+  last=$(last_release "$commit")
+  n=$(g tag -l "$base.*" | sed -n "s/^$(sed 's/\./\\./g' <<<"$base")\.\([0-9][0-9]*\)\$/\1/p" | sort -n | tail -n 1)
+  tag="$base.$(( ${n:-0} + 1 ))"
+  if [ -z "$last" ]; then
+    change="the first release"
+  else
+    last_index=$(index_version "$last")
+    if [ "$last_index" = "$want_index" ]; then
+      change="unchanged since $last"
+    else
+      change="changed from ${last_index:-unknown} at $last"
+    fi
+  fi
+
+  # The pull requests merged into main since the last release, oldest first.
+  local range=$commit numbers count prs=""
+  [ -z "$last" ] || range="$last..$commit"
+  numbers=$(g log --first-parent --merges --reverse --format=%s "$range" | sed -nE 's/^Merge pull request #([0-9]+) from .*/\1/p')
+  count=$(printf '%s' "$numbers" | grep -c . || true)
+  if [ -n "$numbers" ]; then
+    "$gh" pr list -R "$gh_repo" --state merged --limit 1000 --json number,title --jq '.[] | "\(.number)\t\(.title)"' \
+      > "$work/titles" || die "cannot list the merged pull requests"
+    printf '%s\n' "$numbers" > "$work/numbers"
+    prs=$(awk -F '\t' 'FILENAME == ARGV[1] { title[$1] = $2; next } { print "- #" $1 (($1 in title) ? " " title[$1] : "") }' \
+      "$work/titles" "$work/numbers")
+  fi
+
+  echo "== the release of $short${dry:+ (a dry run)}"
+  echo "commit:         $commit${from_edge:+, the build edge names}"
+  echo "on main:        $on_main"
+  echo "smoke test:     $smoke"
+  echo "image:          $ref"
+  echo "digest:         $digest"
+  echo "platforms:      $platforms"
+  echo "labels:"
+  jq -r '[.[]][0] | to_entries | sort_by(.key)[] | "  \(.key)=\(.value)"' <<<"$labels"
+  echo "app:            FRUS Explorer ${base%-*} (build ${base##*-}), from the project.yml $short pins"
+  echo "index version:  $want_index, $change"
+  echo "release:        $tag"
+  echo "pull requests:  $count since ${last:-the start}"
+  if [ -n "$problems" ]; then
+    echo "== refused"
+    printf '%s' "$problems"
+    exit 1
+  fi
+
+  # The notes.
+  local version=${base%-*} build=${base##*-} title notes="$out/notes.md" index_line
+  title="$tag: for FRUS Explorer $version (build $build), index version $want_index"
+  case $change in
+    "the first release") index_line="This is the first release. The server serves an index of version $want_index only, and refuses any other." ;;
+    unchanged*) index_line="The index version is unchanged since $last, so an index already imported is served as it is." ;;
+    *) index_line="**The index version changed** from ${last_index:-unknown} at $last. The server refuses an index of the old version: after upgrading, export again from FRUS Explorer $version (build $build) and copy the export in." ;;
+  esac
+  {
+    echo "This release of FRUS Explorer Light serves research exports from **FRUS Explorer $version (build $build)**, at **index version $want_index**. $index_line"
+    echo
+    echo "| | |"
+    echo "| --- | --- |"
+    echo "| Image | \`$image:$tag\` |"
+    echo "| Digest | \`$digest\` |"
+    echo "| Follows | \`$image:$base\`, which moves to each release for FRUS Explorer $version (build $build) |"
+    echo "| Platforms | $platforms |"
+    echo "| Commit | $commit |"
+    echo "| Server | $server |"
+    if [ -n "$run_url" ]; then echo "| Smoke test | [image.yml's run $run_id]($run_url) |"; fi
+    echo
+    echo "To run exactly this release, set \`FRUS_IMAGE=$image@$digest\` in \`.env\` beside \`compose.yaml\`, then run \`docker compose pull && docker compose up -d\`. The install guide's [Upgrading](https://github.com/$gh_repo/blob/$tag/docs/INSTALL.md#upgrading) says how to follow releases."
+    echo
+    echo "### The image's labels"
+    echo
+    echo "| Label | Value |"
+    echo "| --- | --- |"
+    jq -r '[.[]][0] | to_entries | sort_by(.key)[] | "| `\(.key)` | \(.value) |"' <<<"$labels"
+    echo
+    if [ -z "$last" ]; then
+      echo "### The pull requests up to this first release ($count)"
+    else
+      echo "### The pull requests since $last ($count)"
+    fi
+    echo
+    if [ -n "$prs" ]; then printf '%s\n' "$prs"; else echo "None."; fi
+  } > "$notes"
+  echo "== notes: $title"
+  cat "$notes"
+
+  # The writes: the two image tags, then the release, which tags the commit. Moving a tag to the
+  # digest it already names changes nothing, so a run that failed after the move can run again.
+  local moving="$image:$base" fixed="$image:$tag" kind got t
+  if [ -n "$dry" ]; then
+    kind=$("$docker" buildx imagetools create --dry-run --tag "$moving" --tag "$fixed" "$image@$digest" | jq -r '.mediaType // empty') \
+      || die "imagetools create --dry-run refused the move"
+    echo "== the writes, not made: a dry run"
+    echo "would move $moving and tag $fixed to $digest (imagetools create --dry-run: ${kind:-checked})"
+    echo "would run: gh release create $tag -R $gh_repo --target $commit --title \"$title\" --notes-file $notes --latest"
+  else
+    echo "== the writes"
+    "$docker" buildx imagetools create --tag "$moving" --tag "$fixed" "$image@$digest"
+    for t in "$moving" "$fixed"; do
+      got=$(digest_of "$t")
+      [ "$got" = "$digest" ] || die "$t resolves to ${got:-nothing}, not $digest"
+      echo "$t is $digest"
+    done
+    "$gh" release create "$tag" -R "$gh_repo" --target "$commit" --title "$title" --notes-file "$notes" --latest
+    echo "published $tag"
+  fi
+}
+
+# --- selftest --------------------------------------------------------------------------------
+
+cmd_selftest() {
+  local head base index p1="" p0="" c i old fails=0 status digest pr1 next1
+  [ "$(git -C "$root" rev-parse --is-shallow-repository)" = false ] || die "the selftest needs the whole history"
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
+  head=$(git -C "$root" rev-parse HEAD)
+  base=$(release_base_at "$head")
+  index=$(index_version "$head")
+  digest=sha256:5e1f7e575e1f7e575e1f7e575e1f7e575e1f7e575e1f7e575e1f7e575e1f7e57
+
+  # Two commits on HEAD's first-parent line: p1, at least three back, at HEAD's index version, and
+  # p0, the newest at another.
+  i=0
+  for c in $(git -C "$root" rev-list --first-parent "$head"); do
+    old=$(index_version "$c")
+    if [ -z "$p1" ] && [ "$i" -ge 3 ] && [ "$old" = "$index" ]; then p1=$c; fi
+    if [ -n "$old" ] && [ "$old" != "$index" ]; then p0=$c; break; fi
+    i=$((i + 1))
+  done
+  [ -n "$p1" ] && [ -n "$p0" ] || die "the selftest needs HEAD's first-parent line to reach another index version"
+  local old_index pr1_line
+  old_index=$(index_version "$p0")
+  # The pull request p1 merged, which the release after it leaves out, and the next, which it lists.
+  pr1=$(git -C "$root" log -1 --format=%s "$p1" | sed -nE 's/^Merge pull request #([0-9]+) from .*/\1/p')
+  next1=$(git -C "$root" log --first-parent --merges --reverse --format=%s "$p1..$head" \
+    | sed -nE 's/^Merge pull request #([0-9]+) from .*/\1/p' | head -n 1 || true)
+
+  # A repository that borrows this one's objects, with main at HEAD and no tags.
+  git init -q "$tmp/repo"
+  echo "$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)/objects" > "$tmp/repo/.git/objects/info/alternates"
+  git -C "$tmp/repo" update-ref refs/remotes/origin/main "$head"
+
+  # Stubs of docker and gh: reads answer from STUB_*, and writes are logged to STUB_LOG.
+  mkdir "$tmp/bin"
+  cat > "$tmp/bin/docker" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+[ "$1 $2" = "buildx imagetools" ] || { echo "stub docker: $*" >&2; exit 2; }
+shift 2
+case "$1 $*" in
+  "inspect "*'{{json .Manifest}}'*) printf '{"digest":"%s","mediaType":"application/vnd.oci.image.index.v1+json"}\n' "$STUB_DIGEST" ;;
+  "inspect "*'{{json .Image}}'*) printf '{"linux/amd64":{"config":{"Labels":%s}},"linux/arm64":{"config":{"Labels":%s}}}\n' "$STUB_LABELS" "$STUB_LABELS" ;;
+  "create "*--dry-run*) echo '{"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[]}' ;;
+  "create "*) echo "docker buildx imagetools $*" >> "$STUB_LOG" ;;
+  *) echo "stub docker: $*" >&2; exit 2 ;;
+esac
+STUB
+  cat > "$tmp/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+filter=.
+prev=""
+for a in "$@"; do
+  if [ "$prev" = --jq ]; then filter=$a; fi
+  prev=$a
+done
+case $1 in
+  api) printf '%s' "$STUB_RUNS" | jq -r "$filter" ;;
+  pr) printf '%s' "$STUB_PRS" | jq -r "$filter" ;;
+  release) printf 'gh' >> "$STUB_LOG"; printf ' %q' "$@" >> "$STUB_LOG"; echo >> "$STUB_LOG" ;;
+  *) echo "stub gh: $*" >&2; exit 2 ;;
+esac
+STUB
+  chmod +x "$tmp/bin/docker" "$tmp/bin/gh"
+
+  export FRUS_RELEASE_GIT="$tmp/repo" FRUS_RELEASE_DOCKER="$tmp/bin/docker" FRUS_RELEASE_GH="$tmp/bin/gh"
+  export FRUS_RELEASE_IMAGE=registry.test/frus FRUS_RELEASE_REPO=owner/repo STUB_LOG="$tmp/log" STUB_DIGEST=$digest
+  export STUB_PRS STUB_RUNS STUB_LABELS
+  STUB_PRS=$(jq -cn '[range(1; 1000) | {number: ., title: "Title \(.)"}]')
+  local passed='{"workflow_runs":[{"id":1,"event":"push","created_at":"2026-10-01T00:00:00Z","status":"completed","conclusion":"success"}]}'
+  labels_for() {  # revision, app version-build, index version
+    jq -cn --arg rev "$1" --arg v "${2%-*}" --arg b "${2##*-}" --arg i "$3" --arg ns "$ns" \
+      '{"org.opencontainers.image.revision": $rev, "org.opencontainers.image.version": "0.1.0-dev",
+        ($ns + ".version"): $v, ($ns + ".build"): $b, ($ns + ".index-version"): $i}'
+  }
+  local good
+  good=$(labels_for "$head" "$base" "$index")
+  reset() {
+    STUB_RUNS=$passed STUB_LABELS=$good
+    git -C "$tmp/repo" tag -l | while read -r t; do git -C "$tmp/repo" tag -d "$t" >/dev/null; done
+    git -C "$tmp/repo" update-ref refs/remotes/origin/main "$head"
+  }
+
+  # Runs cut with the arguments after $2, and checks its exit status is $2 and that its output holds
+  # each line of $expect; with $writes empty, that it wrote nothing, otherwise each line of it.
+  local expect writes
+  run() {
+    local name=$1 want=$2 line
+    shift 2
+    : > "$tmp/log"
+    set +e
+    "$root/scripts/release" cut --out "$tmp/out" "$@" > "$tmp/output" 2>&1
+    status=$?
+    set -e
+    local ok=1
+    [ "$status" = "$want" ] || ok=""
+    while IFS= read -r line; do
+      [ -z "$line" ] || grep -qF -e "$line" "$tmp/output" || { ok=""; echo "   missing: $line"; }
+    done <<<"$expect"
+    if [ -z "$writes" ]; then
+      [ ! -s "$tmp/log" ] || { ok=""; echo "   wrote:"; sed 's/^/     /' "$tmp/log"; }
+    else
+      while IFS= read -r line; do
+        grep -qF -e "$line" "$tmp/log" || { ok=""; echo "   not written: $line"; }
+      done <<<"$writes"
+    fi
+    if [ -n "$ok" ]; then
+      echo "ok    $name"
+    else
+      echo "FAIL  $name (exit $status, wanted $want)"
+      sed 's/^/   | /' "$tmp/output"
+      fails=$((fails + 1))
+    fi
+  }
+
+  echo "selftest at ${head:0:7}: $base, index version $index; p1 ${p1:0:7}, p0 ${p0:0:7} at index version $old_index"
+  writes=""
+
+  reset
+  expect="release:        $base.1
+index version:  $index, the first release
+### The pull requests up to this first release
+would run: gh release create $base.1 -R owner/repo --target $head"
+  run "the first release" 0 --commit "$head" --dry-run
+
+  reset
+  git -C "$tmp/repo" tag "$base.1" "$p1"
+  expect="release:        $base.2
+index version:  $index, unchanged since $base.1
+### The pull requests since $base.1
+${next1:+- #$next1 Title $next1}"
+  run "the next release of an app build" 0 --commit "$head" --dry-run
+  if [ -n "$pr1" ] && grep -qE "^- #$pr1( |\$)" "$tmp/out/notes.md"; then
+    echo "FAIL  the next release lists #$pr1, which the last release holds"; fails=$((fails + 1))
+  fi
+
+  reset
+  git -C "$tmp/repo" tag "0.9-100.3" "$p0"
+  git -C "$tmp/repo" tag "$base.4" "$p0"
+  expect="release:        $base.5
+index version:  $index, changed from $old_index at
+**The index version changed** from $old_index"
+  run "a new index version" 0 --commit "$head" --dry-run
+
+  reset
+  expect="release:        $base.1
+commit:         $head, the build edge names"
+  run "the build edge names, by default" 0 --dry-run
+
+  reset
+  git -C "$tmp/repo" tag "$base.1" "$head"
+  expect="the release $base.1 already holds ${head:0:7}"
+  run "a commit already released" 1 --commit "$head" --dry-run
+
+  reset
+  git -C "$tmp/repo" update-ref refs/remotes/origin/main "$p1"
+  expect="${head:0:7} is not on main"
+  run "a commit not on main" 1 --commit "$head" --dry-run
+
+  reset
+  STUB_RUNS='{"workflow_runs":[{"id":1,"event":"push","created_at":"2026-10-01T00:00:00Z","status":"completed","conclusion":"success"},
+    {"id":2,"event":"workflow_dispatch","created_at":"2026-10-02T00:00:00Z","status":"completed","conclusion":"failure"}]}'
+  expect="ended in failure, so this build did not pass its smoke test"
+  run "a build whose newest run failed" 1 --commit "$head" --dry-run
+
+  reset
+  STUB_RUNS='{"workflow_runs":[{"id":3,"event":"push","created_at":"2026-10-01T00:00:00Z","status":"in_progress","conclusion":null}]}'
+  expect="is in_progress: wait for its smoke test"
+  run "a build still being tested" 1 --commit "$head" --dry-run
+
+  reset
+  STUB_RUNS='{"workflow_runs":[]}'
+  expect="image.yml has no run on main"
+  run "a build with no run" 1 --commit "$head" --dry-run
+
+  reset
+  STUB_LABELS=$(labels_for "$head" "$base" "$((index + 1))")
+  expect="its index-version label is \"$((index + 1))\""
+  run "labels of another index version" 1 --commit "$head" --dry-run
+
+  reset
+  STUB_LABELS=$(labels_for "$head" "0.9-1" "$index")
+  expect="its labels name FRUS Explorer 0.9 (build 1)"
+  run "labels of another app build" 1 --commit "$head" --dry-run
+
+  reset
+  STUB_LABELS=$(jq -cn --arg rev "$head" '{"org.opencontainers.image.revision": $rev}')
+  expect="so it was built before S14g"
+  run "an image from before the labels" 1 --commit "$head" --dry-run
+
+  reset
+  STUB_LABELS=$(labels_for "$p1" "$base" "$index")
+  expect="its revision label is \"$p1\""
+  run "another commit's image" 1 --commit "$head" --dry-run
+
+  reset
+  STUB_RUNS='not called'
+  expect="--pull-request is for a dry run only"
+  run "a pull request's build, for real" 1 --commit "$head" --pull-request
+  expect="smoke test:     not checked
+release:        $base.1"
+  run "a pull request's build, dry" 0 --commit "$head" --pull-request --dry-run
+
+  reset
+  expect="published $base.1"
+  writes="docker buildx imagetools create --tag registry.test/frus:$base --tag registry.test/frus:$base.1 registry.test/frus@$digest
+gh release create $base.1 -R owner/repo --target $head --title $base.1:\\ for\\ FRUS\\ Explorer
+--notes-file $tmp/out/notes.md --latest"
+  run "a release, published" 0 --commit "$head"
+  writes=""
+
+  if [ "$fails" -ne 0 ]; then
+    die "selftest: $fails failed"
+  fi
+  echo "selftest: every case passed"
+}
+
+case "${1:-}" in
+  build-args) shift; cmd_build_args "$@" ;;
+  cut) shift; cmd_cut "$@" ;;
+  selftest) shift; cmd_selftest "$@" ;;
+  *) die "usage: scripts/release build-args | cut [--commit <commit>] [--dry-run] [--pull-request] [--out <dir>] | selftest" ;;
+esac

@@ -64,14 +64,23 @@ COPY --from=build /out/resources/ /usr/share/frus-light/resources/
 # The browser app, at the server's default FRUS_WEB_DIR.
 COPY --from=client /web/dist/ /usr/share/frus-light/web/
 
+# The server's version and commit; the version and build of the app whose exports it serves, and
+# the index version it serves, which a release names (PLAN's S14g). scripts/release build-args
+# prints all but REVISION, as image.yml and CI build with them.
 ARG VERSION=0.1.0-dev
 ARG REVISION=unknown
+ARG APP_VERSION=unknown
+ARG APP_BUILD=unknown
+ARG INDEX_VERSION=unknown
 LABEL org.opencontainers.image.title="FRUS Explorer Light" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}" \
       org.opencontainers.image.description="Self-hosted web edition of FRUS Explorer" \
       org.opencontainers.image.source="https://github.com/joshbotts/FRUS-Explorer-Web-App" \
-      org.opencontainers.image.licenses="Apache-2.0"
+      org.opencontainers.image.licenses="Apache-2.0" \
+      io.github.joshbotts.frus-explorer.version="${APP_VERSION}" \
+      io.github.joshbotts.frus-explorer.build="${APP_BUILD}" \
+      io.github.joshbotts.frus-explorer.index-version="${INDEX_VERSION}"
 
 # Everything the server keeps is under /data, owned by the server's user, so a new named
 # volume mounted there starts with that ownership. The root filesystem can be read-only.

@@ -1,0 +1,172 @@
+# FRUS Explorer Light: a release, cut by hand from a build of main that passed its smoke test
+# (PLAN's S14g), by scripts/release, whose header says what each step does.
+# - release-selftest: scripts/release cut against stubs of docker and gh, in sixteen cases.
+# - release: from the Actions tab's Run workflow, on main. It takes the build edge names, or the
+#   commit given; checks that image.yml's newest run for it passed; reads its image's digest and
+#   labels; tags the commit <version>-<build>.<n>; moves :<version>-<build> to the digest and tags it
+#   :<version>-<build>.<n>; and publishes a GitHub release whose notes name the digest, the app build
+#   to export from, the index version and whether it changed, and the pull requests since the last
+#   release. A dry run, the default, and any run on another branch, print the release and write
+#   nothing.
+# - release-dry-run: on a pull request that changes the release or this workflow, this branch's image, built for amd64 and pushed to a registry the job runs itself, is the release's
+#   image, and the dry run prints the release it would publish from it. Nothing leaves the job:
+#   sessions never publish (rule 7). These jobs are not main's required checks, swift and compose.
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: The commit of main to release; by default, the build edge names
+        default: ""
+      dry-run:
+        description: Print the release instead of publishing it
+        type: boolean
+        default: true
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - scripts/release
+      - scripts/release-tag
+
+permissions:
+  contents: read
+
+# One release at a time, never cancelled; a new push to a pull request cancels its older run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || 'cut' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  IMAGE: ghcr.io/joshbotts/frus-explorer-light
+
+jobs:
+  selftest:
+    name: release-selftest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # The whole history, which the cases' release tags sit on, and the pinned app's project.yml.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - name: Cut against stubs of docker and gh
+        run: scripts/release selftest
+
+  release:
+    name: release
+    needs: selftest
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      packages: write
+      actions: read
+      pull-requests: read
+    env:
+      DRY: ${{ inputs.dry-run || github.ref != 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: ${{ env.DRY == 'true' && 'Print the release' || 'Cut the release' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT: ${{ inputs.commit }}
+        run: |
+          set -- --out release
+          if [ -n "$COMMIT" ]; then set -- "$@" --commit "$COMMIT"; fi
+          if [ "$DRY" = true ]; then set -- "$@" --dry-run; fi
+          FRUS_RELEASE_IMAGE="$IMAGE" scripts/release cut "$@"
+
+      - name: The notes, in the run's summary
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -f release/notes.md ]; then
+            { echo "## ${{ env.DRY == 'true' && 'Dry run: the release it would publish' || 'Published' }}"; echo; cat release/notes.md; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  dry-run:
+    name: release-dry-run
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: read
+    # The job's own registry, which the runner reaches at localhost:5000 and which goes with the job.
+    services:
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
+    env:
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      LOCAL: localhost:5000/frus-explorer-light
+    steps:
+      # The branch's head, not the merge GitHub makes, so the image's revision is a commit of the
+      # branch; with the whole history, for the release tags and the pull requests since the last.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          submodules: true
+
+      - name: Build arguments
+        id: args
+        run: |
+          args=$(scripts/release build-args)
+          echo "$args"
+          {
+            echo 'list<<EOF'
+            echo "$args"
+            echo "REVISION=$HEAD_SHA"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+          echo "short=${HEAD_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      # The builder runs on the host's network, so it reaches the job's registry.
+      - uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: network=host
+
+      # image.yml's amd64 cache, read and never written.
+      - name: Build this branch's image into the job's registry
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64
+          build-args: ${{ steps.args.outputs.list }}
+          tags: ${{ env.LOCAL }}:sha-${{ steps.args.outputs.short }}
+          push: true
+          cache-from: type=gha,scope=image-amd64
+
+      - name: Print the release it would publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: FRUS_RELEASE_IMAGE="$LOCAL" scripts/release cut --dry-run --pull-request --commit "$HEAD_SHA" --out release
+
+      - name: The notes, in the run's summary
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -f release/notes.md ]; then
+            { echo "## Dry run: the release this branch's build would publish"; echo; cat release/notes.md; } >> "$GITHUB_STEP_SUMMARY"
+          fi
