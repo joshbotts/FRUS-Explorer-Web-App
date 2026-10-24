@@ -27,7 +27,7 @@ Phase 1 is done: a Docker Compose install that serves a FRUS Explorer research e
 **Next**
 
 1. **S12d**, once the app tags `version-1.0`: the pin moves to 1.0 build 1861, the App Store build, and CI publishes `:1.0-1861`.
-2. **Phase 2**, planned in [`docs/PLAN.md`](docs/PLAN.md) as S14a–S19b: notes, highlights, tags, collections and the rest of the research layer, with a daily backup, the Mac's JSON export imported and written back, and Citation Lookup; and, for a shared deployment, sign-in through a trusted proxy, serving under a path, and releases cut by hand. First **S14a**, the user store's schema and migrations; S14f, S14g and S16a, the Mac's JSON export at version 7 as an upstream pull request, can run beside it.
+2. **Phase 2**, planned in [`docs/PLAN.md`](docs/PLAN.md) as S14a–S19b: notes, highlights, tags, collections and the rest of the research layer, with a daily backup, the Mac's JSON export imported and written back, and Citation Lookup; and, for a shared deployment, sign-in through a trusted proxy, serving under a path, and releases cut by hand. S14a, the user store's schema and migrations, is done: a table for each of the app's 23 model types, held to the app's source in CI. Next **S14c**, the write path and tags, and S14b, the daily backup, beside it, with S14f, S14g and S16a, the Mac's JSON export at version 7 as an upstream pull request.
 
 ## Goals
 
