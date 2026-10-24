@@ -21,9 +21,11 @@ struct UserDataFixture {
 
     static let now = Date(timeIntervalSince1970: 1_792_800_000)  // 2026-10-24T00:00:00Z
 
-    /// `volumes` from fixtures/tei are in the server's TEI folder, for the routes that read a page.
-    init(publicURL: String = "http://localhost:8080", userData: Bool = true, volumes: [String] = []) async throws {
-        server = try await ServerFixture(volumes: volumes)
+    /// `volumes` from fixtures/tei are in the server's TEI folder, for the routes that read a page;
+    /// `indexed`, the server serves the synthetic export, for the routes that read the index.
+    init(publicURL: String = "http://localhost:8080", userData: Bool = true, volumes: [String] = [],
+         indexed: Bool = false) async throws {
+        server = try await indexed ? servingSyntheticExport(volumes: volumes) : ServerFixture(volumes: volumes)
         let url = server.files.userStore
         store = try await SQLiteUserStore(url: url, backupsDirectory: server.files.backupsDirectory)
         rows = try UserStoreRows(url)

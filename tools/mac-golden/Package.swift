@@ -62,7 +62,7 @@ let package = Package(
     // The app's deployment target. It uses FoundationModels, so an earlier one does not build.
     platforms: [.macOS("26.0")],
     dependencies: [
-        // The golden-file formats, from this repository's package.
+        // The golden-file formats and the web's rich-text codec, from this repository's package.
         .package(name: "FRUSLight", path: "../.."),
     ],
     targets: [
@@ -83,6 +83,8 @@ let package = Package(
             dependencies: [
                 "FRUSExplorer",
                 .product(name: "ParityFormat", package: "FRUSLight"),
+                // The web's rich-text codec, whose writing of each case the app reads back.
+                .product(name: "FRUSRichText", package: "FRUSLight"),
             ],
             path: "Sources/mac-golden",
             swiftSettings: [.swiftLanguageMode(.v6)]

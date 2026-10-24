@@ -8,6 +8,9 @@
 # From the app's source, with tools/mac-golden (the app module, compiled from the submodule):
 #   render/                    each fixture document as the reader renders it (check 4)
 #   queries.expressions.json   each query's parse and MATCH expressions (check 3)
+#   rich-text/spans.json       the golden spans: the RTF the note editor writes, and the app's reading
+#                              of it, of fixtures/rich-text/read and of the web codec's RTF (check 13);
+#                              frus-parity rich-text-fixtures first writes fixtures/rich-text/web
 # From an export, with frus-parity and tools/mac-golden:
 #   index-summary.json         each table's row count and content hash (check 2)
 #   queries.results.json       each query's count and first 50 results (check 3)
@@ -142,6 +145,13 @@ if [ -n "$tool" ]; then
   else
     fix "fixtures/parity/queries.jsonl or rules.tsv is missing, so the expressions cannot be made"
   fi
+  # The web cases' RTF, which the codec writes the same on macOS as on Linux: CI checks the bytes.
+  if step rich-text-fixtures swift run -c release frus-parity rich-text-fixtures --repo "$root"; then
+    ok "fixtures/rich-text/web"
+    golden_tool rich-text rich-text
+  else
+    fix "frus-parity rich-text-fixtures failed (above)"
+  fi
 fi
 
 echo "From the export"
@@ -184,10 +194,10 @@ else
 fi
 
 echo
-git status --short -- "$golden" | sed 's/^/  /'
+git status --short -- "$golden" fixtures/rich-text | sed 's/^/  /'
 echo
 if [ "$fixes" -eq 0 ]; then
-  echo "Review the changes to $golden listed above, then commit them. This script commits nothing."
+  echo "Review the changes to $golden and fixtures/rich-text listed above, then commit them. This script commits nothing."
 else
   echo "$fixes item(s) failed, marked FIX above. Review $golden before committing anything."
   exit 1

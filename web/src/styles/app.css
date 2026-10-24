@@ -1301,3 +1301,393 @@ button.highlight-color[aria-pressed='true'] {
     forced-color-adjust: none;
   }
 }
+
+/* ─── Notes and summaries (PLAN's S15d) ──────────────────────────────────── */
+
+/* Tiptap's own rules (@tiptap/core's style.ts), here because the page's policy refuses the <style>
+   it would add (injectCSS: false); the gap cursor's are left out with the extension. */
+.ProseMirror {
+  position: relative;
+}
+
+.ProseMirror {
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  white-space: break-spaces;
+  -webkit-font-variant-ligatures: none;
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0;
+}
+
+.ProseMirror [contenteditable='false'] {
+  white-space: normal;
+}
+
+.ProseMirror [contenteditable='false'] [contenteditable='true'] {
+  white-space: pre-wrap;
+}
+
+img.ProseMirror-separator {
+  display: inline !important;
+  border: none !important;
+  margin: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.ProseMirror-hideselection *::selection {
+  background: transparent;
+}
+
+.ProseMirror-hideselection * {
+  caret-color: transparent;
+}
+
+/* One paragraph is one line of the app's text, so a Return draws a new line, not a paragraph's gap. */
+.ProseMirror p {
+  margin: 0;
+}
+
+/* A note's colour, which its mark view sets through the CSSOM; on the dark theme, lightened by the
+   view where it would be under 4.5:1 there, as a colour picked on a light page can be. */
+.ProseMirror [data-color] {
+  color: var(--note-color);
+}
+
+:root[data-theme='dark'] .ProseMirror [data-color] {
+  color: var(--note-color-dark, var(--note-color));
+}
+
+dialog.note-editor {
+  width: min(40rem, calc(100vw - 2rem));
+  max-width: min(40rem, calc(100vw - 2rem));
+}
+
+dialog.link-dialog,
+dialog.summary-editor {
+  width: min(28rem, calc(100vw - 2rem));
+}
+
+.note-editor-header,
+.note-text-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.note-editor-header h2,
+.note-text-header h3 {
+  margin: 0;
+}
+
+dialog.note-editor h3,
+dialog.note-editor legend {
+  margin: 1rem 0 0.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.note-text-header h3 {
+  margin-top: 1rem;
+}
+
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 1rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+/* The note's text, formatted or plain, at the app's 180 points at least. */
+.note-body {
+  display: block;
+  width: 100%;
+  min-height: 180px;
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+textarea.note-body.plain,
+dialog.summary-editor textarea {
+  width: 100%;
+  min-height: 180px;
+  resize: vertical;
+}
+
+.formatting-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0.375rem 0;
+}
+
+.formatting-bar button {
+  min-width: 2rem;
+  min-height: 1.75rem;
+  padding: 0.125rem 0.5rem;
+}
+
+.formatting-bar button[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.format-bold span[aria-hidden] {
+  font-weight: 700;
+}
+
+.format-italic span[aria-hidden] {
+  font-style: italic;
+}
+
+.format-underline span[aria-hidden] {
+  text-decoration: underline;
+}
+
+input.format-color {
+  width: 2.5rem;
+  height: 1.75rem;
+  padding: 0.125rem;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+fieldset.note-assignments {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.assignment-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.note-summaries ul {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.note-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+/* A summary's text, to three lines, as the app's editor shows it. */
+.note-summary-text {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  white-space: pre-wrap;
+}
+
+dialog.note-editor .actions {
+  justify-content: space-between;
+}
+
+/* The rail's Notes: each note's text to three lines and the time since it changed, as the app's rows. */
+.note-list {
+  margin: 0 0 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.note-list li + li {
+  border-top: 1px solid var(--border);
+}
+
+button.note-row {
+  display: grid;
+  gap: 0.125rem;
+  width: 100%;
+  padding: 0.375rem 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  text-align: left;
+}
+
+.note-row-text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  white-space: pre-wrap;
+}
+
+.note-row-text.empty,
+.note-row-time {
+  color: var(--text-secondary);
+}
+
+.note-row-time {
+  font-size: 0.75rem;
+}
+
+.note-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+/* The rail's Summary, in the Mac's summary block's box. */
+.disclosure-preview {
+  display: block;
+  margin-left: 1.25em;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summary-block {
+  margin-bottom: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid rgb(52 199 89 / 30%);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.summary-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.summary-label {
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.summary-history {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.summary-history button {
+  min-height: 1.5rem;
+  padding: 0 0.375rem;
+}
+
+.summary-text {
+  margin: 0.5rem 0 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.summary-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+/* The selection bar's Note, a word in the pill beside the dots. */
+.selection-bar button.selection-verb {
+  min-height: 0;
+  height: 40px;
+  padding: 0 10px;
+  border: none;
+  background: none;
+  color: #ffffff;
+}
+
+/* All Notes: its filters in a row, then its rows, each its title, where it is, and its day. */
+.notes-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.notes-filters input[type='search'] {
+  flex: 1;
+  min-width: 12rem;
+}
+
+ul.all-notes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+ul.all-notes li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-right: 0.75rem;
+}
+
+ul.all-notes li + li {
+  border-top: 1px solid var(--border);
+}
+
+button.all-notes-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.125rem 1rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.75rem;
+  border: none;
+  border-radius: 0;
+  background: none;
+  text-align: left;
+}
+
+.all-notes-title {
+  font-weight: 600;
+}
+
+.all-notes-detail {
+  grid-column: 1;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.all-notes-date {
+  grid-column: 2;
+  grid-row: 1;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}

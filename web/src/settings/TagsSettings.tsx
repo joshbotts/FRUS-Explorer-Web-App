@@ -3,7 +3,6 @@
 // the list, which makes a tag named New Tag and opens it in the editor to be named. The editor
 // renames, merges and deletes, each by the server's rules, which are the app's.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
 import { type MouseEvent, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
 import type { UserTag } from '../api/types';
@@ -11,6 +10,7 @@ import { createTag, meQuery, tagsQuery } from '../api/userData';
 import { copy } from '../copy';
 import { useHeadingReady } from '../shell/headingFocus';
 import { useDocumentTitle } from '../shell/useDocumentTitle';
+import { SettingsPanes } from './SettingsPanes';
 import { MergeTagDialog, TagEditor } from './TagEditor';
 
 export function TagsSettingsScreen() {
@@ -110,15 +110,7 @@ export function TagsSettingsScreen() {
 
   return (
     <div className="settings">
-      <nav className="settings-panes" aria-label={copy.settings.panes}>
-        <ul>
-          <li>
-            <Link to="/settings/tags" activeProps={{ 'aria-current': 'page' }}>
-              {copy.settings.tags}
-            </Link>
-          </li>
-        </ul>
-      </nav>
+      <SettingsPanes />
       <section className="settings-pane">
         <h1 ref={heading} tabIndex={-1} data-loading={me.isPending ? 'true' : undefined}>
           {copy.settings.tags}

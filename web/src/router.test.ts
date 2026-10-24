@@ -34,6 +34,15 @@ describe('the router', () => {
     expect(searchOf(landing).note).toBe('fnote-x-d16fn2');
   });
 
+  it('opens Research at All Notes, whose filters are checked fields, and Settings at its first pane', async () => {
+    const research = await routerAt('/research');
+    expect(research.state.location.pathname).toBe('/research/notes');
+    const notes = await routerAt('/research/notes?project=unfiled&tag=&q=Berlin');
+    expect(searchOf(notes)).toMatchObject({ project: 'unfiled', tag: undefined, q: 'Berlin' });
+    expect((await routerAt('/settings')).state.location.pathname).toBe('/settings/tags');
+    expect((await routerAt('/settings/data')).state.matches.at(-1)?.routeId).toBe('/settings/data');
+  });
+
   it('starts at Browse, whose catalogue keeps its checked fields', async () => {
     const start = await routerAt('/');
     expect(start.state.location.pathname).toBe('/browse');

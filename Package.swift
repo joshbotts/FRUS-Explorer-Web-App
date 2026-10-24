@@ -21,6 +21,8 @@ let package = Package(
     products: [
         // The golden-file formats, for tools/mac-golden, the Mac-only tool that writes them.
         .library(name: "ParityFormat", targets: ["ParityFormat"]),
+        // The rich-text codec (S15d), for tools/mac-golden, which has the app read what it writes.
+        .library(name: "FRUSRichText", targets: ["FRUSRichText"]),
         // The parity harness's command line: swift run frus-parity summarize | compare-summary | compare-results | parse | render | index | check-golden.
         .executable(name: "frus-parity", targets: ["FRUSParityTool"]),
     ],
@@ -179,13 +181,26 @@ let package = Package(
             path: "Sources/FRUSLightCore",
             swiftSettings: swift6
         ),
+        // The rich-text codec (S15d): RTF to the runs the app reads from it, and runs to RTF, held to
+        // the app's reading by the golden spans. Foundation only, so tools/mac-golden links it too.
+        .target(
+            name: "FRUSRichText",
+            path: "Sources/FRUSRichText",
+            swiftSettings: swift6
+        ),
+        .testTarget(
+            name: "FRUSRichTextTests",
+            dependencies: ["FRUSRichText"],
+            path: "Tests/FRUSRichTextTests",
+            swiftSettings: swift6
+        ),
         // The HTTP application (session 8): the routes, problem details, the app's data files, the
         // catalogue, the reader and the search request, over FRUSLightCore and the shared kits. Since
         // S12c it watches each connection for its client closing it, through HummingbirdCore and NIOCore.
         .target(
             name: "FRUSLightAPI",
             dependencies: [
-                "FRUSLightCore", "FRUSCoreKit", "FTS5Store",
+                "FRUSLightCore", "FRUSCoreKit", "FTS5Store", "FRUSRichText",
                 .product(name: "Hummingbird", package: "hummingbird"),
                 .product(name: "HummingbirdCore", package: "hummingbird"),
                 .product(name: "NIOCore", package: "swift-nio"),
@@ -220,7 +235,7 @@ let package = Package(
         .target(
             name: "FRUSParity",
             dependencies: [
-                "ParityFormat", "FTS5Store", "FRUSCoreKit", "CSQLite", "FRUSLightCore",
+                "ParityFormat", "FTS5Store", "FRUSCoreKit", "CSQLite", "FRUSLightCore", "FRUSRichText",
                 .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "Tests/FRUSParity",
@@ -256,6 +271,8 @@ let package = Package(
                 "FRUSLightTestSupport",
                 // For the search statements' test hook (upstream #1698), which a test holds a search at.
                 "FRUSCoreKit",
+                // For a note's runs and RTF (S15d), which the note routes' tests write and read.
+                "FRUSRichText",
                 .product(name: "HummingbirdTesting", package: "hummingbird"),
                 .product(name: "ServiceLifecycle", package: "swift-service-lifecycle"),
                 .product(name: "Logging", package: "swift-log"),
@@ -267,7 +284,7 @@ let package = Package(
             name: "FRUSParityTests",
             dependencies: [
                 "FRUSParity", "ParityFormat", "FTS5Store", "FRUSCoreKit", "FRUSLightTestSupport", "FRUSLightCore", "CSQLite",
-                "FRUSLightAPI", .product(name: "HummingbirdTesting", package: "hummingbird"),
+                "FRUSLightAPI", "FRUSRichText", .product(name: "HummingbirdTesting", package: "hummingbird"),
             ],
             path: "Tests/FRUSParityTests",
             swiftSettings: swift6
