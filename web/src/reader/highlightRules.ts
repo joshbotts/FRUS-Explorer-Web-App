@@ -23,8 +23,11 @@ export const selectionVerbs: readonly SelectionVerb[] = [
   { kind: 'note', needsDocumentOffsets: false },
 ];
 
-/** The verbs the web edition has so far: the colours. Note comes with S15d, Excerpt with S18d. */
-const available = new Set<SelectionVerb['kind']>(['highlight']);
+/**
+ * The verbs the web edition has so far: the colours, and from S15d Note, which needs no offsets, so a
+ * footnote's selection offers it alone. Excerpt comes with S18d, and Look Up in NARA with phase 3.
+ */
+const available = new Set<SelectionVerb['kind']>(['highlight', 'note']);
 
 /**
  * What the bar offers a selection: every verb the web has, but a verb that needs offsets only for a

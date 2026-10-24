@@ -28,8 +28,9 @@ test('the app, its API and the reader ask for nothing outside the path the app i
   await expect(page.getByRole('main')).toBeFocused();
   await expect(page).toHaveURL(`${base.href}doc/frus1961-63v06/d1`);
 
-  // The router writes its routes under the path, and the search asks the API there.
-  await page.getByRole('navigation').getByRole('link', { name: 'Search' }).click();
+  // The router writes its routes under the path, and the search asks the API there. Exact, since a
+  // name is matched as a part of one, which Research holds.
+  await page.getByRole('navigation').getByRole('link', { name: 'Search', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Search' })).toBeVisible();
   const box = page.getByRole('searchbox', { name: 'Search the documents' });
   await box.fill('treaties');

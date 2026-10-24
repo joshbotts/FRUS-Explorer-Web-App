@@ -51,11 +51,9 @@ private struct CharacterState: Equatable {
     var unicodeSkip = 1
 
     /// Everything but the skip count, which is no attribute.
-    func sameAttributes(as other: CharacterState) -> Bool {
-        var a = self, b = other
-        a.unicodeSkip = 0
-        b.unicodeSkip = 0
-        return a == b
+    func sameAttributes(as state: CharacterState) -> Bool {
+        bold == state.bold && italic == state.italic && underline == state.underline && color == state.color
+            && font == state.font && size == state.size && other == state.other
     }
 }
 
@@ -404,10 +402,10 @@ private struct RTFParser {
         case .text, .fieldResult:
             let link = state.destination == .fieldResult ? state.field.flatMap { fieldLinks[$0] } : nil
             let paragraph = paragraphKeys.count
-            if var last = pieces.last, last.paragraph == paragraph, last.link == link,
+            if let last = pieces.last, last.paragraph == paragraph, last.link == link,
                last.character.sameAttributes(as: state.character) {
-                last.units.append(unit)
-                pieces[pieces.count - 1] = last
+                // In place: a copy of the piece would copy its text at each character.
+                pieces[pieces.count - 1].units.append(unit)
             } else {
                 pieces.append(Piece(units: [unit], character: state.character, link: link, paragraph: paragraph))
             }

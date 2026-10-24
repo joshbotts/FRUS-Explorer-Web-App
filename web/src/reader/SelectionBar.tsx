@@ -1,10 +1,10 @@
 // The selection bar over the reader's frame (SPEC, Reader rendering: "The parent page draws the
 // floating selection bar"), as the Mac's `FloatingSelectionBar` draws it: a dark pill above the
 // selection with the verbs the selection allows, in the kit's order. In the web edition so far those
-// are the four colours, each a dot named as VoiceOver reads the app's, "Highlight Yellow"; a
-// footnote's selection allows none of them, so it has no bar. A toolbar for the keyboard, which
-// Alt+F10 reaches from the text: the arrow keys, Home and End move between the dots, Return or Space
-// chooses one, and Escape puts the bar away.
+// are the four colours, each a dot named as VoiceOver reads the app's, "Highlight Yellow", and from
+// S15d Note, which opens a new note on the document, as the app's does; a footnote's selection
+// allows Note alone. A toolbar for the keyboard, which Alt+F10 reaches from the text: the arrow keys,
+// Home and End move between its buttons, Return or Space chooses one, and Escape puts the bar away.
 import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { HighlightColor } from '../api/types';
 import { copy } from '../copy';
@@ -14,23 +14,30 @@ import type { SelectionRect } from './readerMessages';
 export function SelectionBar({
   rect,
   frame,
+  inText = true,
   focusRequest,
   onChoose,
+  onNote = () => {},
   onDismiss,
 }: {
   /** The selection's rectangle in the frame's viewport, as the kit's bridge measured it. */
   rect: SelectionRect;
   frame: RefObject<HTMLIFrameElement | null>;
-  /** Changes when the keyboard asks for the bar: its first dot then takes focus. */
+  /** Whether the selection is in the document's text, which a colour needs: not a footnote's. */
+  inText?: boolean;
+  /** Changes when the keyboard asks for the bar: its first button then takes focus. */
   focusRequest: number;
   onChoose: (color: HighlightColor) => void;
+  onNote?: () => void;
   onDismiss: () => void;
 }) {
   const bar = useRef<HTMLDivElement>(null);
   const dots = useRef<(HTMLButtonElement | null)[]>([]);
   const [active, setActive] = useState(0);
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
-  const colors = offeredVerbs(true).flatMap((verb) => (verb.kind === 'highlight' ? [verb.color] : []));
+  const verbs = offeredVerbs(inText).filter((verb) => verb.kind === 'highlight' || verb.kind === 'note');
+  // The button in the Tab order, kept among those offered when a selection offers fewer.
+  const at = Math.min(active, verbs.length - 1);
 
   // Placed before it is painted, inside the frame's content box, as the Mac's is kept inside its web view.
   useLayoutEffect(() => {
@@ -44,13 +51,20 @@ export function SelectionBar({
     );
   }, [rect, frame]);
 
-  // The first dot takes focus, and with it the bar's place in the Tab order (its onFocus).
+  // The first dot takes focus, and with it the bar's place in the Tab order (its onFocus), once the
+  // bar is placed: until then it is hidden, and a hidden button takes no focus. Alt+F10 can mount the
+  // bar before the selection's own report does. Each request is answered once.
+  const answered = useRef(0);
   useEffect(() => {
-    if (focusRequest !== 0) dots.current[0]?.focus({ preventScroll: true });
-  }, [focusRequest]);
+    if (focusRequest === 0) answered.current = 0;
+    else if (position && answered.current !== focusRequest) {
+      answered.current = focusRequest;
+      dots.current[0]?.focus({ preventScroll: true });
+    }
+  }, [focusRequest, position]);
 
   function move(to: number) {
-    const next = (to + colors.length) % colors.length;
+    const next = (to + verbs.length) % verbs.length;
     setActive(next);
     dots.current[next]?.focus({ preventScroll: true });
   }
@@ -59,12 +73,12 @@ export function SelectionBar({
     <div
       ref={bar}
       role="toolbar"
-      aria-label={copy.highlights.bar}
+      aria-label={copy.reader.selectionBar}
       className="selection-bar"
       // Through the CSSOM, which the app's policy allows; it is hidden until it is placed.
       style={position ? { left: `${position.left}px`, top: `${position.top}px` } : { visibility: 'hidden' }}
       onKeyDown={(event) => {
-        const keys: Partial<Record<string, number>> = { ArrowRight: active + 1, ArrowDown: active + 1, ArrowLeft: active - 1, ArrowUp: active - 1, Home: 0, End: colors.length - 1 };
+        const keys: Partial<Record<string, number>> = { ArrowRight: at + 1, ArrowDown: at + 1, ArrowLeft: at - 1, ArrowUp: at - 1, Home: 0, End: verbs.length - 1 };
         const to = keys[event.key];
         if (to !== undefined) {
           // Not the page's own move: with caret browsing on, an arrow would also move a caret.
@@ -77,21 +91,30 @@ export function SelectionBar({
         }
       }}
     >
-      {colors.map((color, index) => (
-        <button
-          key={color}
-          ref={(element) => {
+      {verbs.map((verb, index) => {
+        const place = {
+          ref: (element: HTMLButtonElement | null) => {
             dots.current[index] = element;
-          }}
-          type="button"
-          tabIndex={index === active ? 0 : -1}
-          className={`selection-color hl-${color}`}
-          aria-label={copy.highlights.highlightColor(copy.highlights.colors[color])}
-          title={copy.highlights.colors[color]}
-          onFocus={() => setActive(index)}
-          onClick={() => onChoose(color)}
-        />
-      ))}
+          },
+          tabIndex: index === at ? 0 : -1,
+          onFocus: () => setActive(index),
+        };
+        return verb.kind === 'highlight' ? (
+          <button
+            key={verb.color}
+            type="button"
+            {...place}
+            className={`selection-color hl-${verb.color}`}
+            aria-label={copy.highlights.highlightColor(copy.highlights.colors[verb.color])}
+            title={copy.highlights.colors[verb.color]}
+            onClick={() => onChoose(verb.color)}
+          />
+        ) : (
+          <button key={verb.kind} type="button" {...place} className="selection-verb" onClick={onNote}>
+            {copy.notes.note}
+          </button>
+        );
+      })}
     </div>
   );
 }

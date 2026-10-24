@@ -189,7 +189,7 @@ const creates = (fetch: ReturnType<typeof stubServer>) =>
 
 const highlightsSent = (posted: () => Record<string, unknown>[]) => posted().filter((message) => message.kind === 'highlights');
 
-const bar = () => screen.queryByRole('toolbar', { name: 'Highlight Selection' });
+const bar = () => screen.queryByRole('toolbar', { name: 'Selection' });
 
 describe('the reader’s highlights', () => {
   it('draws the document’s highlights in the frame once its page has loaded, each stale or not as the server says', async () => {
@@ -357,7 +357,7 @@ describe('the reader’s highlights', () => {
     expect(creates(fetch)).toHaveLength(1);
   });
 
-  it('offers no bar for a footnote’s selection, and keeps one through a clear shorter than 200 ms', async () => {
+  it('offers Note alone for a footnote’s selection, and keeps a bar through a clear shorter than 200 ms', async () => {
     const fetch = highlighting({
       [highlightsPath]: documentHighlights([]),
       [`POST ${highlightsPath}`]: (_: URL, init?: RequestInit) => highlight({ id: 'N', ...sent(init).body }),
@@ -370,8 +370,11 @@ describe('the reader’s highlights', () => {
 
     selectInText();
     expect(bar()).not.toBeNull();
-    // A footnote's selection lets the one in the text go at once.
+    // A footnote's selection lets the one in the text go at once: its bar offers Note alone.
     fromFrame(frame, 'selectionChanged', { start: -1, end: -1, text: 'a note', rect });
+    expect(within(bar()!).getAllByRole('button').map((button) => button.textContent)).toEqual(['Note']);
+    // One with no rectangle to place a bar by shows none.
+    fromFrame(frame, 'selectionChanged', { start: -1, end: -1, text: 'a note' });
     expect(bar()).toBeNull();
     await userEvent.keyboard('{Control>}{Shift>}H{/Shift}{/Control}');
     await pause(20);
@@ -621,5 +624,184 @@ describe('the reader’s highlights', () => {
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     expect(screen.getByRole('complementary', { name: 'Research' })).toBeTruthy();
     await waitFor(() => expect(document.activeElement).toBe(frame));
+  });
+});
+
+const notesPath = '/api/v1/me/volumes/frus1961-63v06/documents/d1/notes';
+
+/** The reader's answers with the note editor's lists: no tags, projects, summaries or notes. */
+function noting(answers: Record<string, unknown>) {
+  // The plain editor, so these tests need not load the formatting one.
+  window.localStorage.setItem('frus.notes.editor.richText', 'false');
+  return highlighting({
+    '/api/v1/me/tags': { total: 0, items: [] },
+    '/api/v1/me/projects': { total: 0, items: [] },
+    '/api/v1/me/notes': { total: 0, items: [] },
+    '/api/v1/me/volumes/frus1961-63v06/documents/d1/tags': { volumeId: 'frus1961-63v06', documentId: 'd1', items: [] },
+    '/api/v1/me/volumes/frus1961-63v06/documents/d1/summaries': { volumeId: 'frus1961-63v06', documentId: 'd1', items: [] },
+    [notesPath]: { volumeId: 'frus1961-63v06', documentId: 'd1', items: [] },
+    [highlightsPath]: documentHighlights([]),
+    ...answers,
+  });
+}
+
+const madeNote = {
+  id: 'N0000000-0000-4000-8000-000000000000',
+  volumeId: 'frus1961-63v06',
+  documentId: 'd1',
+  bodyText: '',
+  projectIds: [],
+  userTagIds: [],
+  selectedSummaryIds: [],
+  linkedHighlightIds: [],
+  createdAt: null,
+  lastModified: null,
+  runs: null,
+  formattingKept: false,
+};
+
+const noteCreates = (fetch: ReturnType<typeof stubServer>) =>
+  fetch.mock.calls.filter(([url, init]) => init?.method === 'POST' && String(url).endsWith(notesPath)).map(([, init]) => sent(init).body);
+
+describe('the reader’s notes', () => {
+  it('opens a new note on the document from the bar’s Note, for a selection in the text or a footnote’s, and lets the selection go', async () => {
+    const fetch = noting({ [`POST ${notesPath}`]: madeNote });
+    renderAt('/doc/frus1961-63v06/d1');
+    const { frame, posted } = await loadedFrame();
+    await waitFor(() => expect(highlightsSent(posted)).toHaveLength(1));
+    fromFrame(frame, 'selectionChanged', { start: 12, end: 40, text: 'Allow me to say', rect });
+    const buttons = within(bar()!).getAllByRole('button');
+    expect(buttons.map((button) => button.getAttribute('aria-label') ?? button.textContent)).toEqual([
+      'Highlight Yellow',
+      'Highlight Green',
+      'Highlight Blue',
+      'Highlight Pink',
+      'Note',
+    ]);
+    await userEvent.click(within(bar()!).getByRole('button', { name: 'Note' }));
+    const editor = await screen.findByRole('dialog', { name: 'New Research Note' });
+    expect(bar()).toBeNull();
+    expect(posted()).toContainEqual({ source: 'frus-app', kind: 'collapseSelection' });
+    // The selection is gone: ⇧⌘H makes nothing, behind the editor or after it.
+    await userEvent.type(within(editor).getByRole('textbox', { name: 'Research note body' }), 'About the telegram');
+    await userEvent.click(within(editor).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(frame));
+    // A note on the document: no quote of the selection, and no highlight named.
+    expect(noteCreates(fetch)).toEqual([{ bodyText: 'About the telegram', runs: null, userTagIds: [], projectIds: [], selectedSummaryIds: [] }]);
+    await userEvent.keyboard('{Control>}{Shift>}H{/Shift}{/Control}');
+    await pause(20);
+    expect(creates(fetch)).toEqual([]);
+
+    // A footnote's selection offers Note alone, which opens the same editor.
+    fromFrame(frame, 'selectionChanged', { start: -1, end: -1, text: 'a note', rect });
+    await userEvent.click(within(bar()!).getByRole('button', { name: 'Note' }));
+    expect(await screen.findByRole('dialog', { name: 'New Research Note' })).toBeTruthy();
+  });
+
+  it('leaves the reader’s shortcuts alone while the note editor is open over it', async () => {
+    const fetch = noting({ [`POST ${highlightsPath}`]: (_: URL, init?: RequestInit) => highlight({ id: 'N', ...sent(init).body }) });
+    renderAt('/doc/frus1961-63v06/d1');
+    const { frame, posted } = await loadedFrame();
+    await waitFor(() => expect(highlightsSent(posted)).toHaveLength(1));
+    fromFrame(frame, 'selectionChanged', { start: 12, end: 40, text: 'Allow me to say', rect });
+    await userEvent.click(within(bar()!).getByRole('button', { name: 'Note' }));
+    const editor = await screen.findByRole('dialog', { name: 'New Research Note' });
+    // A selection the frame still reported, as it might, with focus on the editor's Save.
+    fromFrame(frame, 'selectionChanged', { start: 12, end: 40, text: 'Allow me to say' });
+    act(() => within(editor).getByRole('button', { name: 'Save' }).focus());
+    await userEvent.keyboard('{Control>}{Shift>}H{/Shift}{/Control}');
+    await userEvent.keyboard('{Alt>}{F10}{/Alt}');
+    await pause(20);
+    expect(creates(fetch)).toEqual([]);
+    expect(posted()).not.toContainEqual({ source: 'frus-app', kind: 'selectionBarRequest' });
+  });
+
+  it('offers Add Note to Highlight in the rail after a highlight is made, until it is chosen, and the note links it', async () => {
+    let items: Highlight[] = [];
+    const fetch = noting({
+      [highlightsPath]: () => documentHighlights(items),
+      [`POST ${highlightsPath}`]: (_: URL, init?: RequestInit) => {
+        const made = highlight({ id: 'H0000000-0000-4000-8000-000000000000', ...sent(init).body });
+        items = [made];
+        return made;
+      },
+      [`POST ${notesPath}`]: madeNote,
+    });
+    renderAt('/doc/frus1961-63v06/d1?rail=research');
+    const { frame, posted } = await loadedFrame();
+    await waitFor(() => expect(highlightsSent(posted)).toHaveLength(1));
+    const rail = screen.getByRole('complementary', { name: 'Research' });
+    await within(rail).findByRole('button', { name: 'Add Note' });
+    expect(within(rail).queryByRole('button', { name: 'Add Note to Highlight' })).toBeNull();
+    fromFrame(frame, 'highlightShortcut', { start: 12, end: 40, rect });
+    const toHighlight = await within(rail).findByRole('button', { name: 'Add Note to Highlight' });
+    // Above Add Note, as the app's.
+    const actions = within(rail.querySelector('.note-actions') as HTMLElement).getAllByRole('button');
+    expect(actions.map((button) => button.textContent?.replace('+ ', ''))).toEqual(['Add Note to Highlight', 'Add Note']);
+    await userEvent.click(toHighlight);
+    const editor = await screen.findByRole('dialog', { name: 'New Research Note' });
+    // Chosen, it is pending no more, saved or not, as the app's.
+    expect(within(rail).queryByRole('button', { name: 'Add Note to Highlight' })).toBeNull();
+    await userEvent.click(within(editor).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(noteCreates(fetch)).toHaveLength(1));
+    expect(noteCreates(fetch)[0]).toEqual({
+      bodyText: '',
+      runs: null,
+      userTagIds: [],
+      projectIds: [],
+      selectedSummaryIds: [],
+      linkedHighlightId: 'H0000000-0000-4000-8000-000000000000',
+    });
+  });
+
+  it('lets a pending highlight go on another document, and keeps it through another text size', async () => {
+    noting({
+      [`POST ${highlightsPath}`]: (_: URL, init?: RequestInit) => highlight({ id: 'H1', ...sent(init).body }),
+      '/api/v1/volumes/frus1961-63v06/documents/d2': { ...d1, document: { ...d1.document, documentId: 'd2', header: '2. Memo', displayTitle: '2. Memo' } },
+      '/api/v1/volumes/frus1961-63v06/documents/d2/html': {},
+      '/api/v1/me/volumes/frus1961-63v06/documents/d2/highlights': { volumeId: 'frus1961-63v06', documentId: 'd2', items: [] },
+      '/api/v1/me/volumes/frus1961-63v06/documents/d2/notes': { volumeId: 'frus1961-63v06', documentId: 'd2', items: [] },
+      '/api/v1/me/volumes/frus1961-63v06/documents/d2/summaries': { volumeId: 'frus1961-63v06', documentId: 'd2', items: [] },
+      '/api/v1/me/volumes/frus1961-63v06/documents/d2/tags': { volumeId: 'frus1961-63v06', documentId: 'd2', items: [] },
+    });
+    const { router } = renderAt('/doc/frus1961-63v06/d1?rail=research');
+    const { frame } = await loadedFrame();
+    fromFrame(frame, 'highlightShortcut', { start: 12, end: 40, rect });
+    const rail = screen.getByRole('complementary', { name: 'Research' });
+    await within(rail).findByRole('button', { name: 'Add Note to Highlight' });
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Text Size' }), 'large');
+    await loadedFrame();
+    expect(within(screen.getByRole('complementary', { name: 'Research' })).getByRole('button', { name: 'Add Note to Highlight' })).toBeTruthy();
+    await router.navigate({ to: '/doc/$volumeId/$documentId', params: { volumeId: 'frus1961-63v06', documentId: 'd2' }, search: { rail: 'research' } });
+    await screen.findByRole('heading', { level: 1, name: '2. Memo' });
+    await within(screen.getByRole('complementary', { name: 'Research' })).findByRole('button', { name: 'Add Note' });
+    expect(screen.queryByRole('button', { name: 'Add Note to Highlight' })).toBeNull();
+  });
+
+  it('never offers on another document a highlight whose request came back after the move to it', async () => {
+    let answer: () => void = () => {};
+    const fetch = noting({
+      [`POST ${highlightsPath}`]: (_: URL, init?: RequestInit) =>
+        new Promise((resolve) => (answer = () => resolve(highlight({ id: 'H0000000-0000-4000-8000-000000000000', ...sent(init).body })))),
+      '/api/v1/volumes/frus1961-63v06/documents/d2': { ...d1, document: { ...d1.document, documentId: 'd2', header: '2. Memo', displayTitle: '2. Memo' } },
+      '/api/v1/volumes/frus1961-63v06/documents/d2/html': {},
+      '/api/v1/me/volumes/frus1961-63v06/documents/d2/highlights': { volumeId: 'frus1961-63v06', documentId: 'd2', items: [] },
+      '/api/v1/me/volumes/frus1961-63v06/documents/d2/notes': { volumeId: 'frus1961-63v06', documentId: 'd2', items: [] },
+      '/api/v1/me/volumes/frus1961-63v06/documents/d2/summaries': { volumeId: 'frus1961-63v06', documentId: 'd2', items: [] },
+      '/api/v1/me/volumes/frus1961-63v06/documents/d2/tags': { volumeId: 'frus1961-63v06', documentId: 'd2', items: [] },
+    });
+    const { router } = renderAt('/doc/frus1961-63v06/d1?rail=research');
+    const { frame, posted } = await loadedFrame();
+    await waitFor(() => expect(highlightsSent(posted)).toHaveLength(1));
+    fromFrame(frame, 'highlightShortcut', { start: 12, end: 40, rect });
+    await waitFor(() => expect(creates(fetch)).toHaveLength(1));
+    await router.navigate({ to: '/doc/$volumeId/$documentId', params: { volumeId: 'frus1961-63v06', documentId: 'd2' }, search: { rail: 'research' } });
+    await screen.findByRole('heading', { level: 1, name: '2. Memo' });
+    await act(async () => answer());
+    await pause(20);
+    const rail = screen.getByRole('complementary', { name: 'Research' });
+    await within(rail).findByRole('button', { name: 'Add Note' });
+    expect(within(rail).queryByRole('button', { name: 'Add Note to Highlight' })).toBeNull();
   });
 });

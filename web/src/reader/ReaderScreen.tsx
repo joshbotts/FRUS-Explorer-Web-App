@@ -1,7 +1,7 @@
 // The reader (SPEC, Reader rendering and Reader and Research rail): the document's header and
 // toolbar, the server's page in a sandboxed frame with the user's highlights drawn in it and the
-// selection bar over it, the rail beside it, Cite or Research, the second
-// only on a server that keeps user data, and what the page's
+// selection bar over it, the note editor the bar's Note opens, the rail beside it, Cite or
+// Research, the second only on a server that keeps user data, and what the page's
 // links lead to: another document or a note in one, the document on a printed page, a whole
 // volume in Browse or, outside the catalogue, on history.state.gov, or a card for a person, a term
 // or an unresolved reference.
@@ -14,6 +14,7 @@ import type { ReaderLinkTarget } from '../api/types';
 import { meQuery } from '../api/userData';
 import { CitePanel } from '../cite/CitePanel';
 import { copy } from '../copy';
+import { NoteEditor } from '../research/NoteEditor';
 import { ResearchRail } from '../research/ResearchRail';
 import type { ReaderSearch } from '../router';
 import { useReadingWidth, useTextSize } from '../settings/preferences';
@@ -83,11 +84,19 @@ export function ReaderScreen() {
   const documentKey = `${volumeId}/${documentId}`;
   const [notice, setNotice] = useState<ReactNode>(null);
   const [card, setCard] = useState<ReaderLinkTarget | null>(null);
+  // The highlight made last, which the rail's Add Note to Highlight makes a note for until it is
+  // chosen or the document changes, as the app's `HighlightCoordinator` holds it, with the document
+  // it is in: one whose request comes back after a move to another is never offered there; and
+  // whether the bar's Note has the editor open.
+  const [pendingHighlight, setPendingHighlight] = useState<{ documentKey: string; id: string } | null>(null);
+  const [composing, setComposing] = useState(false);
   const [shownKey, setShownKey] = useState(documentKey);
   if (shownKey !== documentKey) {
     setShownKey(documentKey);
     setNotice(null);
     setCard(null);
+    setPendingHighlight(null);
+    setComposing(false);
   }
   // A note is landed on once each time the reader arrives at it, by a link or by Back and Forward.
   // A page loaded again for another text size, reading width or appearance leaves focus on the
@@ -110,6 +119,8 @@ export function ReaderScreen() {
     frameURL,
     pageVersion: page.data?.renderingVersion,
     say: setNotice,
+    onHighlightMade: (made) => setPendingHighlight({ documentKey: `${made.volumeId}/${made.documentId}`, id: made.id }),
+    onNote: () => setComposing(true),
   });
 
   /** Opens a link's destination: a note of this document in place, else its document, if this server has it. */
@@ -394,8 +405,22 @@ export function ReaderScreen() {
           documentId={documentId}
           documentNumber={entry?.documentNumber}
           undrawnHighlights={highlights.undrawn}
+          pendingHighlightId={pendingHighlight?.documentKey === documentKey ? pendingHighlight.id : null}
+          onPendingUsed={() => setPendingHighlight(null)}
           autoFocus={focusRail}
           onClose={() => setRail(undefined)}
+        />
+      )}
+      {/* Outside the text's part of the page, which is inert while the rail is a sheet over it. */}
+      {composing && keepsUserData && (
+        <NoteEditor
+          volumeId={volumeId}
+          documentId={documentId}
+          onClose={() => {
+            setComposing(false);
+            // Back to the text, once the dialog has gone: while it is open, the frame is inert.
+            requestAnimationFrame(() => frame.current?.focus({ preventScroll: true }));
+          }}
         />
       )}
       {card && <LinkCard target={card} onClose={closeCard} />}

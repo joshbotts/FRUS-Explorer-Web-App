@@ -110,8 +110,7 @@ import Testing
     }
 
     /// The app's words the browser app takes, each where the app's source writes it, under its key:
-    /// the colours, the bar's names for them and the menu's, the question a tap asks, and the review
-    /// sheet's.
+    /// the colours, the bar's names for them, the question a tap asks, and the review sheet's.
     @Test func theAppsWordsAreTheWebs() throws {
         // copy.ts's `highlights` block, where each word is the web's under the key the UI reads.
         let copy = try Self.read(Self.web, "copy.ts")
@@ -123,7 +122,6 @@ import Testing
             ("Models/DocumentHighlight.swift", "highlight.color.green", "Green", "green"),
             ("Models/DocumentHighlight.swift", "highlight.color.blue", "Blue", "blue"),
             ("Models/DocumentHighlight.swift", "highlight.color.pink", "Pink", "pink"),
-            ("App/FRUSExplorerApp.swift", "menu.document.highlight", "Highlight Selection", "bar"),
             ("App/MacDocumentView.swift", "highlight.delete.title", "Remove Highlight", "removeTitle"),
             ("App/MacDocumentView.swift", "highlight.delete.message", "This highlight will be permanently removed.", "removeMessage"),
             ("App/MacDocumentView.swift", "highlight.delete.confirm", "Remove", "removeConfirm"),

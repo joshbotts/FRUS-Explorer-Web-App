@@ -1,7 +1,8 @@
 // The user a request acts for, and the guard on what is theirs (PLAN's S14c): everything under
 // /api/v1/me. A server with no sign-in can be reached by any page in the browser, so a write must
 // come from the address FRUS_PUBLIC_URL names, to it, with the token GET /api/v1/me gives, as JSON
-// of a capped size; and a read of a user's data must be sent to that address.
+// of a capped size; and a read of a user's data must be sent to that address. Since S15d a note's
+// writes may be larger than the rest, as a note carries its text twice and a Mac note can be long.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -69,9 +70,12 @@ final class CSRFTokens: Sendable {
     }
 }
 
+/// What the user store keeps for the routes under /api/v1/me.
+typealias UserDataStore = UserStore & TagStore & HighlightStore & NoteStore & SummaryStore & ProjectStore
+
 /// What the routes under /api/v1/me need.
 struct UserDataServices: Sendable {
-    let store: any UserStore & TagStore & HighlightStore
+    let store: any UserDataStore
     let resolver: any UserResolver
     let tokens: CSRFTokens
     /// `FRUS_PUBLIC_URL`'s address.
@@ -81,7 +85,7 @@ struct UserDataServices: Sendable {
     let auth: ServerConfiguration.Auth
     let now: @Sendable () -> Date
 
-    init(store: any UserStore & TagStore & HighlightStore, configuration: ServerConfiguration, tokens: CSRFTokens = CSRFTokens(),
+    init(store: any UserDataStore, configuration: ServerConfiguration, tokens: CSRFTokens = CSRFTokens(),
          now: @escaping @Sendable () -> Date = Date.init) {
         self.store = store
         resolver = SingleUserResolver(store: store)
@@ -94,6 +98,15 @@ struct UserDataServices: Sendable {
 
     /// The largest body a request under /api/v1/me may carry.
     static let bodyLimit = 64 * 1_024
+    /// The largest body a new note or a note's save may carry: four times `noteTextLimit`, room for
+    /// the text twice, as `bodyText` and in its runs, with the escapes JSON gives it and each run's
+    /// formatting.
+    static let noteBodyLimit = 4 * 1_024 * 1_024
+    /// The longest text, in UTF-8, a new note or a save's body may be given: a quarter of
+    /// `noteBodyLimit`, so that a body the server accepts plain can be sent again formatted, as the
+    /// browser sends a GET's runs. The app sets no limit; a Mac note an import leaves longer keeps
+    /// its body until a shorter one is saved.
+    static let noteTextLimit = noteBodyLimit / 4
 }
 
 /// The guard on every route under /api/v1/me, in its group, before the route runs:
@@ -103,10 +116,12 @@ struct UserDataServices: Sendable {
 /// 3. with `FRUS_USER_DATA=off`, nothing but /api/v1/me itself answers;
 /// 4. a request that changes state, any but GET, HEAD and OPTIONS, comes from that address (its
 ///    `Origin`), carries the user's token in `X-CSRF-Token`, and declares a body it has as
-///    `application/json`, of `UserDataServices.bodyLimit` at most.
+///    `application/json`, of `bodyLimit` at most: `UserDataServices.bodyLimit`, or for the group of
+///    a note's routes `noteBodyLimit`.
 struct UserDataGuard: RouterMiddleware {
     typealias Context = APIRequestContext
     let services: UserDataServices
+    var bodyLimit = UserDataServices.bodyLimit
 
     func handle(_ request: Request, context: Context, next: (Request, Context) async throws -> Response) async throws -> Response {
         let address = services.address
@@ -136,7 +151,7 @@ struct UserDataGuard: RouterMiddleware {
                     throw APIProblem(.unsupportedMediaType, code: "UNSUPPORTED_MEDIA_TYPE",
                                      detail: "A change's body must be JSON, sent as application/json.")
                 }
-                if let length, length > UserDataServices.bodyLimit { throw JSONBody.tooLarge }
+                if let length, length > bodyLimit { throw JSONBody.tooLarge(bodyLimit) }
             }
         }
         return try await next(request, context)
@@ -150,20 +165,24 @@ enum JSONBody {
         return type.trimmingCharacters(in: .whitespaces).lowercased() == "application/json"
     }
 
-    static let tooLarge = APIProblem(.contentTooLarge, code: "CONTENT_TOO_LARGE",
-                                     detail: "A change's body may be at most \(UserDataServices.bodyLimit / 1_024) KiB.")
+    static func tooLarge(_ limit: Int) -> APIProblem {
+        let size = limit % (1_024 * 1_024) == 0 ? "\(limit / (1_024 * 1_024)) MiB" : "\(limit / 1_024) KiB"
+        return APIProblem(.contentTooLarge, code: "CONTENT_TOO_LARGE", detail: "A change's body here may be at most \(size).")
+    }
 
     /// The body as `T`: a JSON object holding only `fields`, as a query string may hold only the
-    /// parameters a route takes. Any other is refused, as is a body that is not such an object.
-    static func decode<T: Decodable>(_ type: T.Type, from request: Request, fields: Set<String>) async throws -> T {
+    /// parameters a route takes, of `limit` bytes at most, the route's group's. Any other is refused,
+    /// as is a body that is not such an object.
+    static func decode<T: Decodable>(_ type: T.Type, from request: Request, fields: Set<String>,
+                                     limit: Int = UserDataServices.bodyLimit) async throws -> T {
         let buffer: ByteBuffer
         do {
-            buffer = try await request.body.collect(upTo: UserDataServices.bodyLimit)
+            buffer = try await request.body.collect(upTo: limit)
         } catch is NIOTooManyBytesError {
             // A body sent in chunks, whose length no header gave.
-            throw tooLarge
+            throw tooLarge(limit)
         } catch let error as HTTPError where error.status == .contentTooLarge {
-            throw tooLarge
+            throw tooLarge(limit)
         }
         let data = Data(buffer: buffer)
         guard let object = try? JSONDecoder().decode([String: Ignored].self, from: data) else {
@@ -218,11 +237,18 @@ enum UserDataRoutes {
         }
         TagRoutes.add(to: me, services: services, resources: resources)
         HighlightRoutes.add(to: me, services: services, resources: resources, reader: reader, provider: provider)
+        SummaryRoutes.add(to: me, services: services, resources: resources)
+        ProjectRoutes.add(to: me, services: services)
+        // The same guard with a note's larger limit, over a group of its own, so that the limit is
+        // the route's.
+        let notes = router.group("/api/v1/me")
+            .add(middleware: UserDataGuard(services: services, bodyLimit: UserDataServices.noteBodyLimit))
+        NoteRoutes.add(to: notes, services: services, resources: resources, provider: provider)
     }
 
     /// The document a route names. Its volume must be in the catalogue; the document is named and
-    /// not looked up, since the Mac's tags and highlights can name a document this server does not
-    /// hold.
+    /// not looked up, since the Mac's tags, highlights, notes and summaries can name a document this
+    /// server does not hold.
     static func document(_ context: APIRequestContext, resources: ServerResources) throws -> DocumentKey {
         let volumeId = try context.parameters.require("volumeId")
         let documentId = try context.parameters.require("documentId")

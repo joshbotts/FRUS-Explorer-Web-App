@@ -53,7 +53,7 @@ test('highlights by keyboard alone, recolours, reloads and removes', async ({ pa
   for (let word = 0; word < 2; word++) await page.keyboard.press('Control+Shift+ArrowRight');
   await expect.poll(selection).not.toBe('');
   await page.keyboard.press('Alt+F10');
-  const bar = page.getByRole('toolbar', { name: 'Highlight Selection' });
+  const bar = page.getByRole('toolbar', { name: 'Selection' });
   await expect(bar.getByRole('button', { name: 'Highlight Yellow' })).toBeFocused();
   await axeCheck(page);
   await page.keyboard.press('ArrowRight');
@@ -73,9 +73,11 @@ test('highlights by keyboard alone, recolours, reloads and removes', async ({ pa
   await tabTo(page, section);
   await page.keyboard.press('Enter');
   await expect(section).toHaveAttribute('aria-expanded', 'true');
-  await expect(rail.getByRole('listitem')).toHaveCount(2);
+  // The Highlights section's rows: the Notes section above it has rows of its own.
+  const rows = rail.locator('#research-highlights').getByRole('listitem');
+  await expect(rows).toHaveCount(2);
   const blue = (await listed(page)).find((highlight) => highlight.colorTag === 'blue')!;
-  const blueRow = rail.getByRole('listitem').filter({ hasText: blue.selectedText.trim() });
+  const blueRow = rows.filter({ hasText: blue.selectedText.trim() });
   await tabTo(page, blueRow.getByRole('button', { name: 'Pink', exact: true }));
   await page.keyboard.press('Enter');
   await expect(blueRow.getByRole('button', { name: 'Pink', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -86,7 +88,7 @@ test('highlights by keyboard alone, recolours, reloads and removes', async ({ pa
   await page.reload();
   await expect(page.frameLocator('iframe.reader-frame').getByText(d1Text)).toBeVisible();
   await expect.poll(() => drawn(page)).toEqual({ 'frus-yellow': 1, 'frus-pink': 1 });
-  await expect(rail.getByRole('listitem')).toHaveCount(2);
+  await expect(rows).toHaveCount(2);
 
   // Remove… asks, Cancel first; Remove removes, and focus goes on to the next row's Remove….
   const removes = rail.getByRole('button', { name: 'Remove…' });
@@ -104,12 +106,12 @@ test('highlights by keyboard alone, recolours, reloads and removes', async ({ pa
   await page.keyboard.press('Tab');
   await expect(question.getByRole('button', { name: 'Remove', exact: true })).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(rail.getByRole('listitem')).toHaveCount(1);
+  await expect(rows).toHaveCount(1);
   await expect(removes.first()).toBeFocused();
   await page.keyboard.press('Enter');
   await page.keyboard.press('Tab');
   await page.keyboard.press('Enter');
-  await expect(rail.getByRole('listitem')).toHaveCount(0);
+  await expect(rows).toHaveCount(0);
   await expect(section).toBeFocused();
   await expect.poll(() => drawn(page)).toEqual({});
   expect(await listed(page)).toEqual([]);

@@ -46,6 +46,10 @@ export function AppShell() {
           <Link to="/search" activeProps={{ 'aria-current': 'page' }}>
             {copy.app.search}
           </Link>
+          {/* Between Search and Settings, as the app's tabs order them. */}
+          <Link to="/research" activeProps={{ 'aria-current': 'page' }}>
+            {copy.app.research}
+          </Link>
           <Link to="/settings" activeProps={{ 'aria-current': 'page' }}>
             {copy.app.settings}
           </Link>

@@ -4,7 +4,11 @@
 // selection's offsets, as ⇧⌘H, or Ctrl+Shift+H, makes a yellow one, as the app's Highlight
 // Selection ▸ Yellow does; and a tap on a highlight asks to remove it. The selection's offsets are
 // the kit's bridge's, held only while the selection lasts: a footnote's, a cleared one, a new page
-// and a highlight made from them let them go, as the app's reader lets its range go.
+// and a highlight made from them let them go, as the app's reader lets its range go. From S15d the
+// bar's Note, offered for a footnote's selection too, lets the selection go and opens a new note on
+// the document, as the app's does; and each highlight made is reported, for the rail's Add Note to
+// Highlight. A footnote's Note has no key of its own: the host script asks the bar only over the
+// text, and the rail's Add Note makes the same note.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, type RefObject, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { ApiError, errorMessage } from '../api/client';
@@ -31,9 +35,15 @@ function chord(event: KeyboardEvent): 'highlight' | 'bar' | null {
   return null;
 }
 
-/** Whether focus is in a field the keys belong to, where the shortcuts are left alone. */
+/**
+ * Whether focus is in a field the keys belong to, or in a dialog over the reader, as the note
+ * editor, where the shortcuts are left alone.
+ */
 function editing(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.closest('dialog[open]') !== null)
+  );
 }
 
 export function useReaderHighlights({
@@ -44,6 +54,8 @@ export function useReaderHighlights({
   frameURL,
   pageVersion,
   say,
+  onHighlightMade,
+  onNote,
 }: {
   volumeId: string;
   documentId: string;
@@ -56,6 +68,10 @@ export function useReaderHighlights({
   pageVersion: string | null | undefined;
   /** Puts a sentence in the reader's notice. */
   say: (sentence: string) => void;
+  /** A highlight was made, from the bar or the shortcut. */
+  onHighlightMade?: (highlight: Highlight) => void;
+  /** The bar's Note was chosen: a new note on the document. */
+  onNote?: () => void;
 }) {
   const client = useQueryClient();
   const highlights = useQuery({ ...documentHighlightsQuery(volumeId, documentId), enabled });
@@ -109,12 +125,13 @@ export function useReaderHighlights({
     making.current = true;
     setBarShown(false);
     try {
-      await createHighlight(client, volumeId, documentId, {
+      const made = await createHighlight(client, volumeId, documentId, {
         startOffset: over.start,
         endOffset: over.end,
         colorTag: color,
         renderingVersion: version,
       });
+      onHighlightMade?.(made);
       setSelected(null);
       // The web's own, as the app's iPhone and iPad reader clears it: the new colour is not hidden
       // under the selection's, and a caret stays where the selection ended.
@@ -143,8 +160,11 @@ export function useReaderHighlights({
           setSelected({ start: message.start, end: message.end, rect: message.rect });
           setBarShown(message.rect !== undefined && !!message.text);
         } else if (message.text) {
-          // A footnote's selection: nothing the web has needs no offsets yet, so no bar.
-          forget();
+          // A footnote's selection: its bar offers Note alone, which needs no offsets.
+          clearTimeout(clearing.current);
+          setFocusRequest(0);
+          setSelected({ start: -1, end: -1, rect: message.rect });
+          setBarShown(message.rect !== undefined);
         } else {
           clearTimeout(clearing.current);
           clearing.current = setTimeout(forget, clearDelay);
@@ -220,12 +240,20 @@ export function useReaderHighlights({
 
   const elements: ReactNode = (
     <>
-      {enabled && barShown && selected?.rect && version && (
+      {enabled && barShown && selected?.rect && (
         <SelectionBar
           rect={selected.rect}
           frame={frame}
+          // A colour needs the selection's offsets and the version of the text they are in.
+          inText={hasOffsets(selected.start, selected.end) && !!version}
           focusRequest={focusRequest}
           onChoose={(color) => void make(color)}
+          onNote={() => {
+            // The selection goes, as after a highlight: the note is on the document, not on it.
+            forget();
+            post({ kind: 'collapseSelection' });
+            onNote?.();
+          }}
           onDismiss={() => {
             setBarShown(false);
             frame.current?.focus({ preventScroll: true });

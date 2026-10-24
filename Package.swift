@@ -271,6 +271,8 @@ let package = Package(
                 "FRUSLightTestSupport",
                 // For the search statements' test hook (upstream #1698), which a test holds a search at.
                 "FRUSCoreKit",
+                // For a note's runs and RTF (S15d), which the note routes' tests write and read.
+                "FRUSRichText",
                 .product(name: "HummingbirdTesting", package: "hummingbird"),
                 .product(name: "ServiceLifecycle", package: "swift-service-lifecycle"),
                 .product(name: "Logging", package: "swift-log"),
