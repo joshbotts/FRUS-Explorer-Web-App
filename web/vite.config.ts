@@ -6,10 +6,25 @@
 // which the server writes the path it serves the app under, so one build serves at the root or
 // under a path.
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig, type ProxyOptions } from 'vite';
 
 const api = process.env.FRUS_API_ORIGIN ?? 'http://127.0.0.1:8080';
-const proxy = Object.fromEntries(['/api', '/reader', '/healthz', '/readyz'].map((path) => [path, { target: api }]));
+// The server takes a change only from a page at its own address and sent to its host (PLAN's
+// S14c), so the proxy presents the development server's requests as the server's own: its host,
+// and its origin on a request that has one.
+const proxy = Object.fromEntries(
+  ['/api', '/reader', '/healthz', '/readyz'].map((path) => {
+    const options: ProxyOptions = {
+      target: api,
+      changeOrigin: true,
+      configure: (server) =>
+        server.on('proxyReq', (request) => {
+          if (request.getHeader('origin')) request.setHeader('origin', new URL(api).origin);
+        }),
+    };
+    return [path, options];
+  }),
+);
 
 export default defineConfig({
   plugins: [react()],

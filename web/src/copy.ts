@@ -15,9 +15,12 @@
 // picker and its tooltip, the timeline's Chart and List, its lines for loading, for no dated
 // documents and for the undated, and its caption for a search kept in part, and the concordance's
 // Align by, its count, its view of no aligned occurrences and its two notes of what it left out,
-// with the singulars the Mac's count and notes lack; and the line a
+// with the singulars the Mac's count and notes lack; the line a
 // volume's page shows when a page link opened it, where "isn't downloaded" becomes what this server
-// lacks of the volume. The rest,
+// lacks of the volume; and the Research rail's header, its Tags section and Add Tag, the tag
+// picker's document mode, and Settings ▸ Tags with its pane's lines, the tag editor and Merge Tag,
+// where Delete Tag's question takes the editor's own sentence of what deleting does, since the
+// count it names comes later (PLAN's S17b). The rest,
 // chiefly what only a server has (what it indexes, which TEI it holds), are the web's own until
 // check 10 settles them.
 
@@ -28,6 +31,7 @@ export const copy = {
     navigation: 'Main',
     browse: 'Browse',
     search: 'Search',
+    settings: 'Settings',
     /** The browser tab's title for a screen. */
     title: (screen: string) => `${screen} – FRUS Explorer Light`,
     footer:
@@ -295,6 +299,7 @@ export const copy = {
     readingWidth: 'Reading Width',
     readingWidths: { narrow: 'Narrow', standard: 'Standard', wide: 'Wide' },
     cite: 'Cite',
+    research: 'Research',
     frameTitle: (header: string) => `Document text: ${header}`,
     toolbar: 'Document',
     loading: 'Loading the document…',
@@ -340,5 +345,72 @@ export const copy = {
     copyFailed: 'The browser did not allow copying. The text is selected below: press ⌘C or Ctrl+C.',
     toCopy: 'Text to copy',
     close: 'Close',
+  },
+  /** The reader's Research rail and its Tags section, in the app's words. */
+  research: {
+    title: 'Research',
+    close: 'Close',
+    tags: 'Tags',
+    /** The section's badge: how many tags the document carries. */
+    tagCount: (count: number) => `${count.toLocaleString('en-US')} ${count === 1 ? 'tag' : 'tags'}`,
+    addTag: 'Add Tag',
+    removeTag: (name: string) => `Remove ${name}`,
+    loading: 'Loading the tags…',
+  },
+  /** The tag picker, as the app's document-mode sheet words it. */
+  tagPicker: {
+    title: 'Tags',
+    titleDoc: (number: string) => `Tags — Doc ${number}`,
+    titleId: (documentId: string) => `Tags — ${documentId}`,
+    newTag: 'New Tag',
+    newTagPlaceholder: 'Tag name…',
+    newTagField: 'New tag name',
+    add: 'Add',
+    yourTags: 'Your Tags',
+    empty: 'No user tags yet. Type a name above to create one.',
+    badgeNew: 'New',
+    created: (name: string) => `Tag ${name} created and selected`,
+    cancel: 'Cancel',
+    done: 'Done',
+  },
+  /** Settings ▸ Tags, its editor and its merge sheet, in the app's words. */
+  settings: {
+    title: 'Settings',
+    panes: 'Settings',
+    tags: 'Tags',
+    tagsEmpty:
+      'No tags yet. Tags are the labels you apply to research notes and documents as you read — create one here, or from any note.',
+    tagsFooter: 'Tags are global labels you apply to research notes and documents. They are not scoped to a project.',
+    newTag: 'New Tag…',
+    newTagDefault: 'New Tag',
+    edit: (name: string) => `Edit ${name}`,
+    loading: 'Loading the tags…',
+    userDataOff: 'This server keeps no tags or other research data of yours: it is read-only.',
+  },
+  tagEditor: {
+    title: 'Edit Tag',
+    nameHeader: 'Name',
+    namePlaceholder: 'Tag name',
+    nameField: 'Tag name',
+    manage: 'Manage',
+    merge: 'Merge into Another Tag…',
+    delete: 'Delete Tag',
+    manageFooterOnly:
+      'Merging needs a second tag to merge into. Deleting removes this tag from every note and document that carries it; nothing else is deleted.',
+    manageFooter:
+      'Merging re-tags everything here with the tag you choose, then removes this one. Deleting removes this tag from every note and document that carries it; nothing else is deleted.',
+    cancel: 'Cancel',
+    save: 'Save',
+    deleteTitle: 'Delete Tag?',
+    deleteMessage: 'Deleting removes this tag from every note and document that carries it; nothing else is deleted.',
+    deleteConfirm: 'Delete',
+    deleteCancel: 'Cancel',
+  },
+  mergeTag: {
+    title: 'Merge Tag',
+    into: (name: string) => `Merge ‘${name}’ into:`,
+    explanation: (name: string) => `All notes tagged ‘${name}’ will be re-tagged with the selected tag. ‘${name}’ will be deleted.`,
+    cancel: 'Cancel',
+    confirm: 'Merge',
   },
 } as const;

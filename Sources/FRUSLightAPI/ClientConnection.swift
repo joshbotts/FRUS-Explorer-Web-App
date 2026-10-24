@@ -84,12 +84,13 @@ enum APIServer {
 }
 
 /// The context of every request the API answers: Hummingbird's own, the connection the request
-/// came on, so its work can stop when its client has gone, and the base path its client sent it
-/// under, which the router does not see.
+/// came on, so its work can stop when its client has gone, the base path its client sent it under,
+/// which the router does not see, and under /api/v1/me the user it acts for (`UserDataGuard`).
 public struct APIRequestContext: RequestContext {
     public var coreContext: CoreRequestContextStorage
     let channel: any Channel
     var basePath = BasePath.root
+    var user: RequestUser?
 
     public init(source: ApplicationRequestContextSource) {
         coreContext = .init(source: source)

@@ -101,6 +101,7 @@ button:disabled {
 
 input[type='search'],
 input[type='date'],
+input[type='text'],
 select,
 textarea {
   padding: 0.25rem 0.5rem;
@@ -1004,4 +1005,156 @@ dialog.card .destination {
 dialog.card .actions {
   justify-content: flex-end;
   margin-top: 1rem;
+}
+
+/* ─── The Research rail ──────────────────────────────────────────────────── */
+
+.rail-section {
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
+}
+
+.rail-section h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+/* A section's header opens and closes it, as the app's accordion headers do. */
+button.disclosure {
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 0.25rem 0;
+  text-align: left;
+  font-weight: 600;
+}
+
+button.disclosure::before {
+  content: '▸ ';
+}
+
+button.disclosure[aria-expanded='true']::before {
+  content: '▾ ';
+}
+
+.tag-chip {
+  background: var(--tag);
+}
+
+/* ─── The tag picker and the tag editor ──────────────────────────────────── */
+
+dialog.tag-picker,
+dialog.tag-editor,
+dialog.merge-tag {
+  width: min(26rem, calc(100vw - 2rem));
+}
+
+dialog.card h3 {
+  margin-top: 1rem;
+}
+
+.new-tag {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.new-tag input,
+dialog.tag-editor input[type='text'] {
+  flex: 1;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tag-options {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.tag-options li {
+  padding: 0.25rem 0;
+}
+
+dialog.merge-tag fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+dialog.merge-tag legend {
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.manage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+button.destructive {
+  color: var(--error);
+}
+
+/* ─── Settings ───────────────────────────────────────────────────────────── */
+
+.settings {
+  display: grid;
+  grid-template-columns: 12rem minmax(0, 40rem);
+  gap: 1.5rem;
+}
+
+@media (max-width: 899.98px) {
+  .settings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.settings-panes ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-panes a {
+  display: block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+}
+
+.settings-panes a[aria-current='page'] {
+  background: var(--surface);
+  font-weight: 600;
+}
+
+.settings-pane h1 {
+  margin-top: 0;
+}
+
+.settings-list {
+  margin: 0 0 0.75rem;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.settings-list li + li {
+  border-top: 1px solid var(--border);
+}
+
+button.settings-row {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  background: none;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
 }

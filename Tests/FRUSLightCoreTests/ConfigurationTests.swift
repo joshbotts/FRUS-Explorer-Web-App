@@ -63,6 +63,43 @@ import Testing
         for path in ["frus-explorer/", "/a b/", "/%41/", "/a/./"] { #expect(BasePath(path) == nil, "\(path)") }
     }
 
+    @Test func userDataIsOnUnlessTurnedOff() throws {
+        #expect(try ServerConfiguration.fromEnvironment([:]).userData)
+        #expect(try ServerConfiguration.fromEnvironment(["FRUS_USER_DATA": "on"]).userData)
+        #expect(try ServerConfiguration.fromEnvironment(["FRUS_USER_DATA": "OFF"]).userData == false)
+        #expect(throws: ConfigurationError.self) { try ServerConfiguration.fromEnvironment(["FRUS_USER_DATA": "no"]) }
+    }
+
+    /// The address a write must come from and be sent to (S14c): FRUS_PUBLIC_URL's scheme, host
+    /// and port, with the three names of this machine one address.
+    @Test func thePublicAddressIsWhatAWritesHostAndOriginMustName() throws {
+        let local = ServerConfiguration().publicAddress
+        #expect(local == PublicAddress("http://localhost:8080") && local.description == "http://localhost:8080")
+        for host in ["localhost:8080", "LOCALHOST:8080", "127.0.0.1:8080", "[::1]:8080", "localhost"] {
+            #expect(local.allows(host: host), "\(host)")
+        }
+        for host in ["localhost:9999", "attacker.example:8080", "attacker.example", "", "user@localhost:8080", "localhost:8080/x",
+                     "[::1", "localhost:", "localhost:+8080", "127.0.0.2:8080"] {
+            #expect(!local.allows(host: host), "\(host)")
+        }
+        for origin in ["http://localhost:8080", "http://127.0.0.1:8080", "http://[::1]:8080"] {
+            #expect(local.allows(origin: origin), "\(origin)")
+        }
+        for origin in ["null", "", "http://localhost", "https://localhost:8080", "http://localhost:8080/", "http://localhost:8081",
+                       "http://attacker.example:8080", "file://", "http://localhost:8080?x"] {
+            #expect(!local.allows(origin: origin), "\(origin)")
+        }
+
+        let proxied = try ServerConfiguration.fromEnvironment(["FRUS_PUBLIC_URL": "https://Example.org/frus-explorer/"]).publicAddress
+        #expect(proxied.scheme == "https" && proxied.host == "example.org" && proxied.port == 443)
+        #expect(proxied.description == "https://example.org")
+        #expect(proxied.allows(host: "example.org") && proxied.allows(host: "example.org:443") && !proxied.allows(host: "localhost"))
+        #expect(proxied.allows(origin: "https://example.org") && proxied.allows(origin: "https://example.org:443"))
+        #expect(!proxied.allows(origin: "http://example.org") && !proxied.allows(origin: "https://frus.example.org"))
+        #expect(PublicAddress("http://[::1]:8080")?.description == "http://[::1]:8080")
+        #expect(PublicAddress("ftp://example.org") == nil && PublicAddress("http://") == nil)
+    }
+
     @Test func reportsEveryProblemAtOnce() {
         #expect {
             _ = try ServerConfiguration.fromEnvironment([

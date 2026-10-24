@@ -33,10 +33,18 @@ public struct ServerConfiguration: Sendable, Equatable {
     public var webDirectory: URL
     /// Set when `FRUS_WEB_DIR` names the folder, so a server without the app refuses to start.
     public var requiresWebDirectory: Bool
+    /// Whether the server keeps user data (`FRUS_USER_DATA`): off, it is read-only, with no tags,
+    /// notes, highlights or collections, as an instance others reach must be until sign-in.
+    public var userData: Bool
 
     /// The path the server answers under, `FRUS_PUBLIC_URL`'s: the root unless it ends in a path.
     public var basePath: BasePath {
         Self.components(of: publicURL).flatMap { BasePath($0.percentEncodedPath) } ?? .root
+    }
+
+    /// The origin `FRUS_PUBLIC_URL` names, which a write's `Host` and `Origin` must name too.
+    public var publicAddress: PublicAddress {
+        PublicAddress(publicURL) ?? PublicAddress("http://localhost:8080")!
     }
 
     /// Where the image puts the app's data files.
@@ -49,7 +57,8 @@ public struct ServerConfiguration: Sendable, Equatable {
         publicURL: String = "http://localhost:8080", pdfURL: String? = nil, offline: Bool = false,
         host: String = "127.0.0.1", port: Int = 8080, importPollInterval: Duration = .seconds(2),
         resourcesDirectory: URL = ServerConfiguration.imageResourcesDirectory,
-        webDirectory: URL = ServerConfiguration.imageWebDirectory, requiresWebDirectory: Bool = false
+        webDirectory: URL = ServerConfiguration.imageWebDirectory, requiresWebDirectory: Bool = false,
+        userData: Bool = true
     ) {
         self.mode = mode
         self.auth = auth
@@ -63,6 +72,7 @@ public struct ServerConfiguration: Sendable, Equatable {
         self.resourcesDirectory = resourcesDirectory
         self.webDirectory = webDirectory
         self.requiresWebDirectory = requiresWebDirectory
+        self.userData = userData
     }
 
     /// Reads the configuration, reporting every problem at once.
@@ -119,6 +129,13 @@ public struct ServerConfiguration: Sendable, Equatable {
             default: problems.append("FRUS_OFFLINE must be true or false, not \(raw)")
             }
         }
+        if let raw = value("FRUS_USER_DATA") {
+            switch raw.lowercased() {
+            case "on": config.userData = true
+            case "off": config.userData = false
+            default: problems.append("FRUS_USER_DATA must be on or off, not \(raw)")
+            }
+        }
         if let raw = value("FRUS_HOST") { config.host = raw }
         if let raw = value("FRUS_PORT") {
             if let port = Int(raw), (1...65_535).contains(port) { config.port = port } else {
@@ -152,7 +169,100 @@ public struct ServerConfiguration: Sendable, Equatable {
 
     private static func isHTTPOrigin(_ raw: String) -> Bool {
         guard let url = URL(string: raw), let scheme = url.scheme?.lowercased(), url.host != nil else { return false }
-        return scheme == "http" || scheme == "https"
+        return (scheme == "http" || scheme == "https") && PublicAddress(raw) != nil
+    }
+}
+
+/// The scheme, host and port of `FRUS_PUBLIC_URL`: the address people open, and so the one a write
+/// must come from and be sent to (PLAN's S14c). A server with no sign-in can be reached by any page
+/// in the browser, and a name an attacker controls can be pointed at it: a write's `Origin` names the
+/// page that sent it, and its `Host` the name the browser looked up, so both must name this address.
+/// Reads of a user's data check the `Host` too, since a page under such a name could read them.
+public struct PublicAddress: Sendable, Equatable, CustomStringConvertible {
+    /// `http` or `https`.
+    public let scheme: String
+    /// The host, in lowercase, an IPv6 address without its brackets.
+    public let host: String
+    /// The port, given or the scheme's own.
+    public let port: Int
+
+    /// The address of an http or https URL; nil for another scheme, or one with no host.
+    public init?(_ url: String) {
+        guard let separator = url.range(of: "://") else { return nil }
+        let scheme = url[..<separator.lowerBound].lowercased()
+        guard scheme == "http" || scheme == "https" else { return nil }
+        let rest = url[separator.upperBound...]
+        let authority = rest.prefix { $0 != "/" && $0 != "?" && $0 != "#" }
+        guard let (host, port) = Self.split(authority) else { return nil }
+        self.scheme = scheme
+        self.host = host
+        self.port = port ?? (scheme == "https" ? 443 : 80)
+    }
+
+    /// `scheme://host[:port]`, the port left out where it is the scheme's own, as a browser writes
+    /// an `Origin`.
+    public var description: String {
+        let name = host.contains(":") ? "[\(host)]" : host
+        return port == (scheme == "https" ? 443 : 80) ? "\(scheme)://\(name)" : "\(scheme)://\(name):\(port)"
+    }
+
+    /// Whether a request's `Host` names this address: its host, or for an address on this machine
+    /// (`localhost`, `127.0.0.1`, `::1`) any of those three, with this port when it gives one. A proxy
+    /// may leave the port out, as nginx's `$host` does, and a host name is what a page under another
+    /// name cannot forge.
+    public func allows(host authority: String) -> Bool {
+        guard let (host, port) = Self.split(Substring(authority)) else { return false }
+        return names(host) && (port == nil || port == self.port)
+    }
+
+    /// Whether a request's `Origin` is this address: the same scheme and port, and its host, or for
+    /// an address on this machine any of the three names it goes by. `null`, which a sandboxed frame
+    /// or a page from a file sends, is never this address.
+    public func allows(origin: String) -> Bool {
+        // An origin is a scheme and an authority, with no path, query or fragment after them.
+        guard let other = PublicAddress(origin),
+              let separator = origin.range(of: "://"),
+              !origin[separator.upperBound...].contains(where: { "/?#".contains($0) }) else { return false }
+        return other.scheme == scheme && other.port == port && names(other.host)
+    }
+
+    private func names(_ other: String) -> Bool {
+        other == host || (Self.loopback.contains(host) && Self.loopback.contains(other))
+    }
+
+    private static let loopback: Set<String> = ["localhost", "127.0.0.1", "::1"]
+
+    /// `host[:port]` or `[v6]:port`, the host in lowercase; nil for anything else, a user name
+    /// included.
+    private static func split(_ authority: Substring) -> (String, Int?)? {
+        let host: Substring
+        var portText: Substring?
+        if authority.hasPrefix("[") {
+            guard let close = authority.firstIndex(of: "]") else { return nil }
+            host = authority[authority.index(after: authority.startIndex)..<close]
+            let after = authority[authority.index(after: close)...]
+            if !after.isEmpty {
+                guard after.hasPrefix(":") else { return nil }
+                portText = after.dropFirst()
+            }
+            guard !host.isEmpty, host.allSatisfy({ $0.isASCII && ($0.isHexDigit || $0 == ":" || $0 == ".") }) else { return nil }
+        } else {
+            if let colon = authority.lastIndex(of: ":") {
+                host = authority[..<colon]
+                portText = authority[authority.index(after: colon)...]
+            } else {
+                host = authority
+            }
+            let allowed = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-.")
+            guard !host.isEmpty, host.allSatisfy(allowed.contains) else { return nil }
+        }
+        var port: Int?
+        if let portText {
+            guard !portText.isEmpty, portText.count <= 5, portText.allSatisfy({ $0.isASCII && $0.isNumber }), let number = Int(portText),
+                  (1...65_535).contains(number) else { return nil }
+            port = number
+        }
+        return (host.lowercased(), port)
     }
 }
 

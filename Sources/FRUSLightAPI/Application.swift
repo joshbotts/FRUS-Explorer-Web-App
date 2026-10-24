@@ -71,9 +71,14 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
     if !configuration.basePath.isRoot {
         logger.info("Serving under \(configuration.basePath), with /healthz and /readyz at the root too")
     }
+    logger.info(configuration.userData
+        ? "User data on: changes are taken from pages of \(configuration.publicAddress), with its token"
+        : "User data off (FRUS_USER_DATA=off): this server is read-only")
     var app = apiApplication(
         router: buildRouter(state: components.state, resources: components.resources, reader: components.reader,
-                            webClient: components.webClient, base: configuration.basePath, logger: logger),
+                            webClient: components.webClient,
+                            userData: UserDataServices(store: components.userStore, configuration: configuration),
+                            base: configuration.basePath, logger: logger),
         base: configuration.basePath,
         configuration: .init(address: .hostname(configuration.host, port: configuration.port), serverName: "frus-light"),
         logger: logger)

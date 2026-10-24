@@ -12,6 +12,7 @@ Phase 1 is done: a Docker Compose install that serves a FRUS Explorer research e
 - Search with the app's query language, with the facets, the Query Inspector, the order by relevance or date, and the timeline and concordance readings, each saying which results it read. Each result carries its date, drawn as the app draws it, and a search you replace stops on the server.
 - Browse, which lists a section's own text first, as the app does: a meeting's list of those present, say, above its minutes. The reader, with its text size and Reading Width, its links, which follow a printed page into a volume the server does not hold as 1.0 does, and the cards for people and terms. All of it is usable by keyboard and free of axe violations.
 - Cite, with BibTeX and RIS.
+- Tags, the first of the research layer: the reader's Research rail tags a document, with the app's tag picker, and Settings ▸ Tags renames, merges and deletes, each by the app's rules, kept on the server. A server with no sign-in takes a change only from a page at its own address, with a token, as JSON; `FRUS_USER_DATA=off` makes it read-only.
 - Serving at the root of a host or under a path behind a reverse proxy, such as `https://example.org/frus-explorer/`, as `FRUS_PUBLIC_URL` says, with an nginx recipe for each in the install guide. The server has no sign-in of its own yet.
 - Parity with the Mac app, checked in CI on three fixture volumes: the same index rows, search results and document HTML. The server compiles the app's own Swift code from a pinned submodule.
 - A daily CI watch of the app's `v2` branch, which reports in one issue what the next pin move has to handle.
@@ -21,7 +22,7 @@ Phase 1 is done: a Docker Compose install that serves a FRUS Explorer research e
 
 - **Behind FRUS Explorer 1.0's last step.** The pin is 1.0 build 1776, the TestFlight build, at index version 71, with [FRUS-Explorer#1784](https://github.com/joshbotts/FRUS-Explorer/pull/1784) and [FRUS-Explorer#1785](https://github.com/joshbotts/FRUS-Explorer/pull/1785), the two commits after it: the server serves that build's exports. The App Store build, 1861, waits for S12d.
 - **Later phases:**
-  - no notes, highlights or collections on the web, and no sign-in through a proxy (phase 2);
+  - no notes, highlights or collections on the web, no daily backup of the tags yet, and no sign-in through a proxy (phase 2);
   - no local accounts, or indexing from TEI on the server (phase 3);
   - no search by meaning (phase 4);
   - no AWS deployment (phase 6).
@@ -29,7 +30,7 @@ Phase 1 is done: a Docker Compose install that serves a FRUS Explorer research e
 **Next**
 
 1. **S12d**, once the app tags `version-1.0`: the pin moves to 1.0 build 1861, the App Store build, and the owner can release `1.0-1861.1`.
-2. **Phase 2**, planned in [`docs/PLAN.md`](docs/PLAN.md) as S14a–S19b: notes, highlights, tags, collections and the rest of the research layer, with a daily backup, the Mac's JSON export imported and written back, and Citation Lookup; and, for a shared deployment, sign-in through a trusted proxy, beside the releases S14g brought and the serving under a path S14f brought. S14a, the user store's schema and migrations, is done: a table for each of the app's 23 model types, held to the app's source in CI. Next **S14c**, the write path and tags, and S14b, the daily backup, beside it, with S16a, the Mac's JSON export at version 7 as an upstream pull request.
+2. **Phase 2**, planned in [`docs/PLAN.md`](docs/PLAN.md) as S14a–S19b: notes, highlights, tags, collections and the rest of the research layer, with a daily backup, the Mac's JSON export imported and written back, and Citation Lookup; and, for a shared deployment, sign-in through a trusted proxy, beside the releases S14g brought and the serving under a path S14f brought. S14a, the user store's schema and migrations, is done: a table for each of the app's 23 model types, held to the app's source in CI. So is S14c, the write path and tags. Next **S14e**, sign-in through a trusted proxy, and S14d, the PostgreSQL store, beside it, with S14b, the daily backup, and S16b, the pin move past the Mac's JSON export at version 7.
 
 ## Goals
 

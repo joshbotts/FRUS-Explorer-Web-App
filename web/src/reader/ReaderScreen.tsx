@@ -1,5 +1,6 @@
 // The reader (SPEC, Reader rendering and Reader and Research rail): the document's header and
-// toolbar, the server's page in a sandboxed frame, the Cite rail beside it, and what the page's
+// toolbar, the server's page in a sandboxed frame, the rail beside it, Cite or Research, the second
+// only on a server that keeps user data, and what the page's
 // links lead to: another document or a note in one, the document on a printed page, a whole
 // volume in Browse or, outside the catalogue, on history.state.gov, or a card for a person, a term
 // or an unresolved reference.
@@ -9,8 +10,10 @@ import { type ReactNode, useEffect, useEffectEvent, useRef, useState, useSyncExt
 import { ApiError } from '../api/client';
 import { documentQuery, linkQuery, type ReadingWidth, readerPageURL, type TextSize, volumesQuery } from '../api/endpoints';
 import type { ReaderLinkTarget } from '../api/types';
+import { meQuery } from '../api/userData';
 import { CitePanel } from '../cite/CitePanel';
 import { copy } from '../copy';
+import { ResearchRail } from '../research/ResearchRail';
 import type { ReaderSearch } from '../router';
 import { useReadingWidth, useTextSize } from '../settings/preferences';
 import { useScheme } from '../shell/AppShell';
@@ -43,6 +46,11 @@ export function ReaderScreen() {
   const navigate = route.useNavigate();
   const queryClient = useQueryClient();
   const citeToggle = useRef<HTMLButtonElement>(null);
+  const researchToggle = useRef<HTMLButtonElement>(null);
+  // The Research rail holds the user's data, which a server with FRUS_USER_DATA=off keeps none of.
+  const me = useQuery(meQuery);
+  const keepsUserData = me.data?.userData === true;
+  const shownRail = rail === 'research' && !keepsUserData ? undefined : rail;
   const scheme = useScheme();
   const [textSize, setTextSize] = useTextSize();
   const [readingWidth, setReadingWidth] = useReadingWidth();
@@ -82,9 +90,9 @@ export function ReaderScreen() {
     setArrivedAt(arrival);
     setLanding(note);
   }
-  // Cite takes focus when the reader opens it, not when a page loads with it open.
+  // The rail takes focus when the reader opens it, not when a page loads with it open.
   const [focusRail, setFocusRail] = useState(false);
-  const sheet = rail === 'cite' && narrow;
+  const sheet = shownRail !== undefined && narrow;
 
   /** Opens a link's destination: a note of this document in place, else its document, if this server has it. */
   function open(target: ReaderLinkTarget, destination: NonNullable<ReaderLinkTarget['destination']>) {
@@ -218,18 +226,21 @@ export function ReaderScreen() {
   useEffect(() => {
     if (!sheet) return;
     const active = document.activeElement;
-    if (!active || active === document.body || body.current?.contains(active)) document.getElementById('cite-heading')?.focus();
-  }, [sheet]);
+    if (!active || active === document.body || body.current?.contains(active)) {
+      document.getElementById(`${shownRail}-heading`)?.focus();
+    }
+  }, [sheet, shownRail]);
 
   /**
-   * Opens or closes the rail, in place of the history entry, so Back leaves the document; closing
-   * it hands focus back to the toggle.
+   * Opens a rail, Cite or Research, or closes the one open, in place of the history entry, so Back
+   * leaves the document; closing it hands focus back to its toggle.
    */
-  function setRail(open: boolean) {
-    setFocusRail(open);
-    const search = (previous: ReaderSearch): ReaderSearch => ({ ...previous, rail: open ? 'cite' : undefined });
+  function setRail(next: ReaderSearch['rail']) {
+    const toggle = rail === 'research' ? researchToggle : citeToggle;
+    setFocusRail(next !== undefined);
+    const search = (previous: ReaderSearch): ReaderSearch => ({ ...previous, rail: next });
     void navigate({ search, replace: true }).then(() => {
-      if (!open) citeToggle.current?.focus();
+      if (!next) toggle.current?.focus();
     });
   }
 
@@ -243,7 +254,7 @@ export function ReaderScreen() {
   const next = detail.data?.next?.readable === false ? undefined : detail.data?.next;
 
   return (
-    <div className={rail === 'cite' ? 'reader with-rail' : 'reader'}>
+    <div className={shownRail ? 'reader with-rail' : 'reader'}>
       <section className="reader-main">
         <header className="document-header">
           <p className="volume">
@@ -301,12 +312,23 @@ export function ReaderScreen() {
             <button
               ref={citeToggle}
               type="button"
-              aria-expanded={rail === 'cite'}
-              aria-controls={rail === 'cite' ? 'cite-panel' : undefined}
-              onClick={() => setRail(rail !== 'cite')}
+              aria-expanded={shownRail === 'cite'}
+              aria-controls={shownRail === 'cite' ? 'cite-panel' : undefined}
+              onClick={() => setRail(rail === 'cite' ? undefined : 'cite')}
             >
               {copy.reader.cite}
             </button>
+            {keepsUserData && (
+              <button
+                ref={researchToggle}
+                type="button"
+                aria-expanded={shownRail === 'research'}
+                aria-controls={shownRail === 'research' ? 'research-panel' : undefined}
+                onClick={() => setRail(rail === 'research' ? undefined : 'research')}
+              >
+                {copy.reader.research}
+              </button>
+            )}
           </div>
           <p className="notice" role="status">
             {notice}
@@ -339,8 +361,17 @@ export function ReaderScreen() {
           )}
         </div>
       </section>
-      {rail === 'cite' && (
-        <CitePanel volumeId={volumeId} documentId={documentId} autoFocus={focusRail} onClose={() => setRail(false)} />
+      {shownRail === 'cite' && (
+        <CitePanel volumeId={volumeId} documentId={documentId} autoFocus={focusRail} onClose={() => setRail(undefined)} />
+      )}
+      {shownRail === 'research' && (
+        <ResearchRail
+          volumeId={volumeId}
+          documentId={documentId}
+          documentNumber={entry?.documentNumber}
+          autoFocus={focusRail}
+          onClose={() => setRail(undefined)}
+        />
       )}
       {card && <LinkCard target={card} onClose={closeCard} />}
     </div>
