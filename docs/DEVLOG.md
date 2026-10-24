@@ -51,7 +51,14 @@ Phase 2's first row. The user store, `app.db`, gains migration 2: a table for ea
 
 **Results**
 
-- **Linux, `swift:6.4-noble`, arm64,** through CI's Build and Test steps, this package's own targets built clean: the build has no warnings, and all 2,100 tests pass, up from 2,085, with the one named skip. FRUSLightCoreTests runs 57, from 42: `UserStoreTests` 8 and `UserStoreParityTests` 7. The other targets are unchanged.
+- **Linux, `swift:6.4-noble`, arm64,** through CI's Build and Test steps, this package's own targets built clean, with no warnings. Before the review's fixes, all 2,100 tests passed, up from 2,085, with the one named skip. After them, FRUSLightCoreTests runs 61, from 42, all passing: `UserStoreTests` 10 and `UserStoreParityTests` 9. The other targets are unchanged.
+- **The drill,** in a Compose install of its own (`frus-s14a`, port 8087, removed afterwards), with this branch's image built locally as `frus-light:s14a` beside the published `edge`, which predates this change:
+  1. `edge` started on a new volume, leaving the store at migration 1.
+  2. The new image migrated it to 2 and logged the copy, `app-20261024T014556Z-before-migration-2.db`.
+  3. `edge` again refused the store ("app.db is at migration 2, newer than this build's 1") and restarted under the restart policy.
+  4. `INSTALL.md`'s steps put the copy back, and `edge` served again.
+  5. The new image migrated again, reusing the same copy: one file in `/data/backups`.
+- **`scripts/compose-smoke --e2e`** on `frus-light:s14a`: passes, with 21 browser tests on Chromium, and axe finds nothing.
 - **Two corrections on the way:**
   - The draft kept `stateData` as JSON, from its comment's "the `parametersData` pattern". The readers found that no code writes it, so it now stays bytes, and the test holds each `Data` property to whether the app writes it with `JSONEncoder`.
   - That test then failed on `parametersData`, a fault in its own reading. Swift's regular expressions find a word boundary by Unicode's rules, under which `self.parametersData` is one word. So the search for the property's writer missed `self.parametersData = try? JSONEncoder()…`.
