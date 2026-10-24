@@ -4,7 +4,7 @@ One entry per session, newest first.
 
 ## Session 14c: the write path, and tags
 
-23 October 2026 · branch `claude/s14c-tags-and-write-guards` · upstream `2767a128`, unchanged
+23 and 24 October 2026 · branch `claude/s14c-tags-and-write-guards` · [#54](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/54) · upstream `2767a128`, unchanged
 
 Phase 2's row S14c, on the critical path: S14d, S14e and S15c follow it. The server writes the user store for the first time. Every request under `/api/v1/me` acts for a user the server resolves, behind a guard a server with no sign-in needs, and the first resources are the user's tags and a document's tags, kept by the app's rules. The browser app gains the reader's Research rail, with its Tags section and the app's tag picker, and Settings ▸ Tags. No upstream pull request, and no schema change: S14a's `tags` and `tag_assignments` hold it all.
 
@@ -137,6 +137,66 @@ Phase 2's row S14c, on the critical path: S14d, S14e and S15c follow it. The ser
 **Not done here:** the shared copy of `PLAN.md` that the phase-2 planning session keeps, which this session cannot reach.
 
 **Next: S14e,** sign-in through a trusted proxy, and S14d, the PostgreSQL store, which both follow this row and can run beside each other; S15c, highlights, once S15b's pin move lands; and S14b, the daily backup, if it has not merged.
+
+## Session 15a: the reader's annotation scripts and Citation Lookup's types, upstream
+
+24 October 2026 · branch `claude/suspicious-noether-435ab4` · upstream `2767a128`, unchanged; [FRUS-Explorer#1788](https://github.com/joshbotts/FRUS-Explorer/pull/1788) and [FRUS-Explorer#1787](https://github.com/joshbotts/FRUS-Explorer/pull/1787), open
+
+Phase 2's row S15a, whose two pull requests Mac check 9 verifies. S15c draws highlights in the reader with the app's own scripts and rules, and S19a runs Citation Lookup's Batch and Structured Entry with the kit's types, so both need code the kit did not offer. This session opened two pull requests on `FRUS-Explorer`, each from a `claude/…` branch cut from `v2` at `02521d01`, each labelled `Mac` with "Mac verification requested", and neither merged. Under rule 4 they change shared files, and this repository changes only its records.
+
+**#1788 moves the reader's annotation code into FRUSCoreKit, public and otherwise unchanged** (`claude/reader-annotation-scripts-kit`, `edfbc73a`):
+- **The three scripts,** `kOffsetEngineJS`, `kHighlightsJS` and `kSelectionJS`, byte for byte from the app's WebKit file into `FRUSCoreKit/TEI/ReaderAnnotationScripts.swift`; two were `private`. The app injects them as before.
+- **`ReaderHighlight`,** the JSON `FRUSHighlights.render` reads, which was `DocumentHighlight.HighlightDTO`, with its stale rule as `isStale(renderingVersion:currentVersion:)` and an initialiser that takes a highlight's values, so the server builds one from its rows. The app's name is a typealias, and `HighlightColor` is public.
+- **`SelectionVerb`,** with `allInOrder` and `needsDocumentOffsets`, the rule that keeps the colours and Excerpt off a footnote, in `FRUSCoreKit/DocumentView/SelectionVerb.swift`. Its names and symbols stay in the app.
+- **`HighlightReanchor`,** the re-anchor's search, pure over a page's blocks, with `locate(passage:storedStart:storedEnd:in:)`, `Match`, `Search` and `Refusal`, for phase 3's review. The file is `HighlightReanchorSearch.swift`, since the app keeps its `HighlightReanchor.swift`. `HighlightReview` keeps its names as typealiases and a forwarder, and `move`, which writes a `DocumentHighlight`, stays in the app.
+- **Tests:**
+  - `HighlightReanchorTests` moved into the kit's suites, its three app-only tests behind `#if !SWIFT_PACKAGE`.
+  - `ReaderAnnotationTests` is new. It pins each script by SHA-256 and UTF-8 length, as `ReaderPageTests` pins the page's head. It also checks the three handlers the scripts post to, the four JSON fields `kHighlightsJS` reads, the stale rule, and the verbs' order and footnote rule.
+  - `FRUSCoreKitTests` goes from 1,161 tests to 1,191, and the iOS unit target from 7,623 to 7,636.
+
+**#1787 makes Citation Lookup's Batch and Structured Entry types public** (`claude/citation-lookup-batch-public`, `3b040885`):
+- `CitationLookupFields`, `CitationBlockSplitter` with its `Entry`, `BatchCitationOutcome`, `BatchCitationRow`, `BatchCitationRunner` and `ConfidenceLabels`, which #1574 left internal.
+- Three initialisers are spelled out, since a public struct's synthesized ones stay internal. `CitationLookupFields`' keeps every default, so `CitationLookupFields()` is still the empty form.
+- `ConfidenceLabels.cited(_:)` stays internal: it takes the engine's internal `CitedField`, and serves only the engine's own labels, which `CitationMatch.confidenceLabel` already carries.
+- No test changes, and `FRUSCoreKitTests` stays at 1,161.
+
+**How they were checked,** each heavy job under the app's lock, from clones at real paths, beside `v2` at `02521d01` built and run the same way, Xcode 27.1, clean and unsigned:
+- **`v2`:** the full iOS unit run had 7,623 tests in 903 suites, and failed only the 8 Keychain tests an unsigned build fails. `swift test` ran 3,054 tests. With thunk numbers and file-private discriminators dropped, `v2` had 249,757 symbol names, as #1786's head had, so the squash merge's tree built to the same library.
+- **#1788:**
+  - the full unit run had 7,636 tests in 906 suites, with the same 8 issues and the same 17 tests and 2 suites skipped;
+  - `swift test` ran 3,084 tests;
+  - the symbol diff was 243 names removed and 256 added. All but one of the removed are moved declarations' and reappear under their new names. The other is a test seam the moved suite no longer needs, and the 14 other added are the kit's new API.
+- **#1787:**
+  - the full unit run was the same as `v2`'s;
+  - `swift test` ran 3,054 tests;
+  - the symbol diff was 3 names removed and none added: `CitationLookupFields.init()` and two default-argument generators, which the spelled-out initialiser replaces.
+- **Both:** `FRUSOffsetEngineTests` and `SelectionScriptParityTests` passed in all three runs, both Mac builds had `v2`'s five warning lines and the iOS builds its seven, and `swift build --target FRUSCoreKit` completed.
+- **Linux,** in a scratch worktree of this repository's `main` at `c028783`, with each branch copied over the submodule:
+  - every target passed but FRUSParityTests, whose 13 issues are all golden-file staleness;
+  - `FRUSCoreKitTests` ran 1,191 and 1,161 tests, with the one named skip and no build warning;
+  - a scratch file in `FRUSLightAPI`, never committed, imported FRUSCoreKit without `@testable` and used every name each makes public, and the target built.
+
+**Delivered here**
+
+- `COORDINATION.md`: the two pull requests in §2, and in §5's list of app changes only the web edition needs.
+- This log.
+
+**Notes**
+
+- **`JSONEncoder` need not write one value's keys in the same order twice.** #1788's first full unit run failed one new test, which compared two encodings of the same highlight byte for byte. The test now sorts the keys, and the run quoted in the pull request is after that fix. The renderer reads the fields by name, so S15c's host may encode `ReaderHighlight` with any encoder, but a test of its JSON should sort the keys or decode it.
+- **One target cannot compile two files of the same name,** and Xcode compiles `FRUSCoreKit/` and `FRUSExplorer/` into one module. So a kit file that takes code from an app file it leaves in place needs a name of its own.
+- **For S15c:**
+  - the server can serve the three strings as files, loaded in their order: the engine, then the renderer, which reads the engine's map, then the selection bridge;
+  - `ReaderAnnotationScriptTests`' pins fail at any pin move that changes a script, so the reader frame's own test can compare the bytes served with the kit's strings and need no pin of its own;
+  - `SelectionVerb.allInOrder.filter(\.needsDocumentOffsets)` is what a selection inside the body offers, and a footnote selection offers the rest.
+- **Two scripts on one simulator raced.** Each Mac-check script boots, uninstalls and shuts down the shared iPhone simulator outside the lock, so two of them queued at once can uninstall the app under the other's run. One session's runs should share one queue.
+- **Scratch:** the clones, the `v2` worktree, the logs, the scripts and the scratch worktree of this repository (`web-linux`) are under `~/Library/Caches/frus-s15a`.
+
+**Next: S15b, the pin move past #1787 and #1788** once the owner has run Mac check 9 and merged both, as a pull request of its own under rule 5.
+- If S16b's move to `02521d01` merges first, S15b starts from it.
+- Neither pull request touches the indexing path, so the golden files may come from the 1776 three-volume export, by the owner's choice; only provenance should change.
+- `Package.swift` needs no change, and the new kit suites add no skip.
+- Beside it, S14c, the write path and tags, as S14a's entry says; S15c follows S15b and S14c.
 
 ## Session 16a: the Mac's JSON export at format version 7, upstream
 

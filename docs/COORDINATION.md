@@ -198,6 +198,24 @@ It is the first web-authored change to a file the app writes for its users. On A
 
 The owner merged it the day it opened, a squash with the branch head's tree. Mac check 10's decode reads a real export with the kit through `FRUS_RESEARCH_EXPORT`. It changes nothing on §5's indexing path. The pin move past it widens `scripts/upstream-watch`'s search for `currentFormatVersion` to `FRUSCoreKit/Export`, where the number now is.
 
+**#1787 and #1788 (session S15a), open.** S15c draws highlights in the reader with the app's own scripts and rules, and S19a runs Citation Lookup's Batch and Structured Entry with the kit's types:
+- **[joshbotts/FRUS-Explorer#1788](https://github.com/joshbotts/FRUS-Explorer/pull/1788)** moves into FRUSCoreKit, public and otherwise unchanged:
+  - the reader's three annotation scripts, byte for byte, which the app injects as before;
+  - the JSON `FRUSHighlights.render` reads, as `ReaderHighlight`, with its stale rule;
+  - `SelectionVerb` with its footnote rule;
+  - the re-anchor's search, `HighlightReanchor`.
+
+  The app keeps every old name, as a typealias or a forwarder. `ReaderAnnotationScriptTests` pins each script by SHA-256 and length.
+- **[joshbotts/FRUS-Explorer#1787](https://github.com/joshbotts/FRUS-Explorer/pull/1787)** makes `CitationLookupFields`, `CitationBlockSplitter`, `BatchCitationOutcome`, `BatchCitationRow`, `BatchCitationRunner` and `ConfidenceLabels` public, which #1574 left internal.
+
+Run beside `v2` at `02521d01`:
+- both full iOS unit runs failed only as `v2`'s did, #1788 at 7,636 tests and #1787 at 7,623;
+- `swift test` ran 3,084 and 3,054 tests;
+- with thunk numbers and file-private discriminators dropped, #1788's symbol diff was 243 names removed and 256 added, all but one removed reappearing under the moved declaration's new name, and #1787's was 3 removed and none added;
+- on Linux over `main`, everything passed but the parity suites' golden-file staleness, and a scratch file outside the kit used every newly public name without `@testable`.
+
+Neither changes anything on §5's indexing path. Mac check 9 verifies both. Whichever merges second conflicts only in the app's records, and a web session merges `v2` into its branch to combine them.
+
 ## 3. The architecture that protects coordination
 
 These structures let the two codebases share code without app sessions having to think about the web edition. Web sessions add and maintain them, in pull requests on the app's repository.
@@ -272,7 +290,7 @@ The whole of the app side's part. Each rule costs little or nothing. The boundar
 - further moves into the kits (FRUSCoreKit part 2 was S6's, merged as #1573 and #1574; the read-only open and the reader's page were S8a's, #1575; the reader's AA palette, the link parse and the stores' immutable opens were S9b's, #1578 and #1579; the phase-1 features' search, citation, title and reader code is S11a's, #1664 and #1666; where a page link and a whole-volume link go, `PageLink` and `WholeVolumeLink`, is S12c's, #1784, merged as `af41efa4`, for the page-map landing #1778 gave the app, which the server serves since S12e's pin move);
 - the index version shown beside Export Research Database… (phase 1), so a user can match an export to a server before copying 2.8 GB;
 - the JSON export at `formatVersion` 7, adding the model types it lacks, above all saved searches and working corpora, and what 6 drops from the types it carries, a note's rich text and a collection's structure among them, after the envelope moves into FRUSCoreKit (phase 2, `PLAN.md`'s S16a): S16a's [#1786](https://github.com/joshbotts/FRUS-Explorer/pull/1786), merged as `02521d01`. It is the first web-authored change to a file the app writes for its users, so its Mac check exports and decodes again; the owner chose on 23 October to have it opened during the 1.0 submission, and merged it the same day;
-- phase 2's other moves into the kit, each changing nothing on Apple platforms (`PLAN.md`, Phase 2): the reader's annotation scripts and highlight rules, and Citation Lookup's Batch and Structured types made public (S15a); a user-data source for the search's user half, which the app leaves at its own columns (S17a); the research layer's rules, from a saved search's freshness to the method appendix (S17b); and collections, rendered from values (S18a), then resolved through a data source (S18b), which is the first to change how one of the app's features is put together;
+- phase 2's other moves into the kit, each changing nothing on Apple platforms (`PLAN.md`, Phase 2): the reader's annotation scripts and highlight rules, and Citation Lookup's Batch and Structured types made public (S15a: [#1788](https://github.com/joshbotts/FRUS-Explorer/pull/1788) and [#1787](https://github.com/joshbotts/FRUS-Explorer/pull/1787), open); a user-data source for the search's user half, which the app leaves at its own columns (S17a); the research layer's rules, from a saved search's freshness to the method appendix (S17b); and collections, rendered from values (S18a), then resolved through a data source (S18b), which is the first to change how one of the app's features is put together;
 - optionally, a JSON importer, so data made on the web can return to the Mac; not in phase 2, by the owner's choice of 23 October;
 - public access for kit types the server needs, as each need arises;
 - boundary tests for the other kits.
