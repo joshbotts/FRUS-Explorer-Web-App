@@ -30,23 +30,24 @@ import Testing
 
     // 2 and 3. Corrections as override rows, in a user store behind a protocol.
 
-    @Test func userStoreMigratesOnceAndKeepsCorrections() throws {
+    @Test func userStoreMigratesOnceAndKeepsCorrections() async throws {
         let directory = try TemporaryDirectory()
         let url = directory.url.appendingPathComponent("app.db")
-        let store = try SQLiteUserStore(url: url)
-        #expect(try store.schemaVersion() == 1)
-        let user = try store.singleUserID()
-        let correction = IndexCorrection(volumeId: "frus1961-63v06", documentId: "d1", field: .isEditorialNote,
-                                         value: "1", recordedBy: user)
+        let backups = directory.url.appendingPathComponent("backups")
+        let store = try await SQLiteUserStore(url: url, backupsDirectory: backups)
+        #expect(try store.schemaVersion() == UserStoreMigrations.all.count)
+        #expect(try store.singleUserID() == "owner")
+        let correction = ClassificationOverride(volumeId: "frus1961-63v06", documentId: "d1", isEditorialNote: true,
+                                                parsedIsEditorialNote: false)
         try store.record(correction)
         var changed = correction
-        changed.value = "0"
+        changed.isEditorialNote = false
         try store.record(changed)
-        #expect(try store.corrections() == [changed], "a second correction replaces the first")
+        #expect(try store.classificationOverrides() == [changed], "a second correction replaces the first")
 
-        let reopened = try SQLiteUserStore(url: url)
-        #expect(try reopened.schemaVersion() == 1)
-        #expect(try reopened.corrections() == [changed])
+        let reopened = try await SQLiteUserStore(url: url, backupsDirectory: backups)
+        #expect(reopened.migration == nil)
+        #expect(try reopened.classificationOverrides() == [changed])
     }
 
     // 4. Sessions, jobs and generated files behind small interfaces.

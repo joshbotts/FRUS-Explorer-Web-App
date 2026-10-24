@@ -287,5 +287,13 @@ These go in `.env` beside `compose.yaml`.
 - **Only this machine can reach the server,** unless a reverse proxy on it forwards to it, as Behind a reverse proxy sets out. The server has no sign-in of its own until phase 3's local accounts; sign-in through the proxy comes before them, in phase 2.
 - **Keep `/data` in the Docker volume.** On a Mac, a folder shared from macOS is not a local filesystem to SQLite. On Linux, replacing the volume with a host folder in `compose.yaml` works if that folder is writable by UID 10001, the server's user.
 - **On Linux,** the TEI files must be readable by UID 10001; a clone made with the usual umask is. On a host with SELinux enforcing, add `,z` after `ro` in the TEI volume line of `compose.yaml`. To run `docker` without `sudo`, your user must be in the `docker` group.
-- **Backups** start in phase 2, when the server holds your own notes. Until then the index can always be imported again.
+- **Backups** start in phase 2, when the server holds your own notes. Until then the index can always be imported again. Already, an upgrade that changes the layout of the server's own store, `/data/app/app.db`, first copies it into `/data/backups`. If the change fails, the server leaves the store as it was and does not start, and its log names the copy; Compose starts it again, and it tries again without taking another copy.
+- **Going back to an older server** after such an upgrade: the older server cannot open the changed store, and does not start. Put the copy back first, with the server stopped. List the copies with `docker compose run --rm --no-deps --entrypoint ls frus /data/backups`, then, naming the newest `app-…-before-migration-….db`:
+
+  ```bash
+  docker compose stop
+  docker compose run --rm --no-deps --entrypoint sh frus -c 'rm -f /data/app/app.db-wal /data/app/app.db-shm && cp /data/backups/<copy> /data/app/app.db'
+  ```
+
+  Then set `FRUS_IMAGE` to the older server and run `docker compose up -d`.
 - **Podman and Colima** run the same Compose file; this guide has not been tested with them yet.

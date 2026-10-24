@@ -263,6 +263,8 @@ Seven upstream pull requests are in it, where phase 1's features took four: most
 
 S14a comes first. S14f, S14g and S16a share no files with it and can run beside it, S16a with its Mac check. S14f was done on 23 October beside S14a: the server answers under the path `FRUS_PUBLIC_URL` ends in, the browser app takes its base from the `<base>` the server writes into its page, and `scripts/compose-smoke` runs the browser suite at the root and, through nginx with the install guide's recipe, under a path; S15a, S17a, S17b and S18a can open whenever the owner can take their checks. The first pin move after a phase-2 upstream pull request merges takes it, whichever row that move is, S12d's included, so there may be fewer pin moves than these rows have.
 
+S14a was done on 23 October at `2767a128`: the 23 tables, held to the app's own list of its 249 stored properties, and `user_search`, with a copy of the store before each start that migrates it.
+
 ## Docker Compose install
 
 Phase 1 ships as one image and one Compose file. Everything the server keeps lives in a named volume at `/data`, and a folder of TEI volumes is mounted read-only. Session 5 built both; the repository's `compose.yaml` is the working version of the sketch below. It adds hardening and settings, and puts Gotenberg behind a `pdf` profile, off by default.

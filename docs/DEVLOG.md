@@ -2,6 +2,95 @@
 
 One entry per session, newest first.
 
+## Session 14a: the user store's schema and migrations
+
+23 October 2026 · branch `claude/phase-2-start-676787` · upstream `2767a128`, unchanged
+
+Phase 2's first row. The user store, `app.db`, gains migration 2: a table for each of the 23 model types in the app's `frusModelTypes`, with a column for each of their stored properties at the pin, 243 columns for 249 properties, since the six relationships are held by the ids beside them, and `user_search`. A test reads the app's own list of those properties and each class's declarations, so a pin move that adds one fails until a migration follows. Before a start migrates a store it already holds, the server copies it into `/data/backups`, and a migration that fails leaves the store as it was. Nothing writes the new tables yet: S14c brings the write path.
+
+**What the app's source says,** at `2767a128`:
+
+- **The app keeps a list of every stored property.** `CloudKitSchemaInventory.installedIdentifiers` (`FRUSExplorer/Models/CloudKitSchemaInventory.swift`) names each model type and each of its stored properties, relationships included: 23 types and 249 properties. The app's `CloudKitSchemaInventoryTests` rebuilds it from the live schema of `frusModelTypes` and fails when the two differ, so it is the list the web's test reads.
+- **Each property's type, read twice.** A scan of the 23 classes and eight readers in a workflow, each checked by a second reader, found the same 249 declarations, with the same types and optionality. Beside Foundation's types, three are the app's own: `SummaryAuthorship`, a `String` enumeration; `ResponseFormat`, an enumeration with an associated value; and `StructuredSummarySchema`, a struct.
+- **Four `Data` properties hold JSON** that the app writes with `JSONEncoder`: a saved search's `parametersData` and `freshnessData`, and a visit plan's `tiersData` and `deliverableTogglesData`. Three hold RTF, a note's and an entry's `richText` and a collection's `introductionRichText`; an entry's may instead hold an encoded `AttributedString` from an older build. A visit document's and target's `stateData` is reserved, with no payload yet, and is always nil.
+- **Ids.** Most are random. A visit document's and target's are derived from their plan and key, and an annotation review's from what it reviews. A sync can leave two rows with one id, which the app's `DuplicateRecordCleanup` collapses for ten of the types at each launch; the store keeps one row for each id. `SyncedPreferences` has no id: the earliest record is the one that holds.
+- **Relationships.** Three are to-one, each with the id kept beside it (`collection` with `collectionId`, and a plan's `plan` with `planId` twice), and three are the to-many sides of those. Every other reference between models is an id, which the app repairs (`OrphanedTagRepair`) rather than enforces.
+- **One correction per document.** `DocumentClassificationOverrideStore.setOverride` updates the newest override for a document, changing its value and time and keeping its id and the TEI's value, and the apply pass takes them oldest first, so the newest holds.
+
+**Delivered**
+
+- **Migration 2** (`Sources/FRUSLightCore/UserStoreMigrations.swift`), in the order of SPEC's mapping:
+  - 23 tables, named as that mapping names them, with a column for each stored property but the relationships, in snake case and in the order the model declares them.
+  - 21 user tables, each with `user_id` referring to `users`, so its rows are deleted with the user. Twenty are keyed by `(user_id, id)`; `preferences` is keyed by `user_id` alone. So two users may hold rows with one Mac id, as two imports of one file would make. The two override tables are instance-wide, keyed by the Mac's id. No other column refers to another table: the Mac's references are ids that can outlive what they name.
+  - Dates as ISO 8601 text in UTC with milliseconds; booleans as 0 or 1; UUIDs as their strings; arrays, the app's `Codable` values and the four JSON `Data` properties as JSON text; the RTF and the reserved payload as bytes. A column is `NOT NULL` exactly when its property is not optional, and has no default.
+  - 14 indexes, for a document's notes, highlights, tags, summaries and reviews, a tag's assignments, a collection's entries, a project's leads, a plan's documents and targets, the three trails by time, and a document's corrections.
+  - `user_search`, FTS5 with the corpus's `porter unicode61`: `user_id`, `document_id` and `volume_id` unindexed, and the two indexed columns of the Mac's `user_content`, `summary_text` and `note_text`. A virtual table cannot refer to `users`, so a trigger deletes a user's rows with the user.
+  - `index_corrections`' rows carried into `classification_overrides`, each with a new id, and with the opposite of its value as what the TEI said, since a correction changes the flag; then the table dropped.
+- **`UserStoreSchema`** (`UserStoreSchema.swift`) describes the 23 tables: each model, its table, its scope, its columns with their kinds, and its relationships.
+- **Opening the store** (`UserStore.swift`, `UserStoreBackup.swift`) is now `async`.
+  - Before it migrates a store at migration 1 or later, it copies it into `/data/backups` through the backup API, as `app-<time>-before-migration-<n>.db`. The copy reads the store through a read-only connection of its own, so it holds what has been committed. It is written under a `.partial` name of its own, checked with `quick_check`, switched out of write-ahead logging, and then renamed.
+  - A start that finds a copy holding what the store holds now uses it rather than taking another. Compose's `restart: unless-stopped` starts a server whose migration failed again about once a minute, and a copy each time would fill the volume.
+  - The migrations it applies run in one transaction, with foreign keys off until a check before the commit, as SQLite's procedure for changing a table asks. The version is read again under the write lock, so a store another process migrated first is planned again from where it stands. A failure leaves the store as it was. A store newer than the build is refused.
+  - The server logs each migration and the copy. On a failure it does not start, and the message names the copy.
+  - Every use of the store's one connection holds a lock, so no caller's statement runs inside another's transaction.
+- **Interface 2, corrections as override rows,** is now the Mac's `ClassificationOverride`, kept in `classification_overrides` as `setOverride` keeps it, and listed oldest first, one with no time first, as the app's sort takes it. Two with one time fall to their ids rather than to SQLite's rowids, an order S14d's PostgreSQL store can keep too.
+- **`UserStoreDate`** writes a date to the millisecond, and reads only that form or whole seconds, with ASCII digits and a real day: a 31 February is refused rather than carried into March.
+- **Tests,** in FRUSLightCoreTests:
+  - `UserStoreTests`:
+    - a new store and one at migration 1 both reach 2, the second after a copy that is the store at 1, with its correction carried over;
+    - a failing migration leaves the store and its copy as they were, and failing again takes no second copy until the store changes;
+    - a migration that rebuilds `users` keeps the rows that refer to it, and a foreign key a migration breaks fails it;
+    - a newer store is refused;
+    - corrections, and dates.
+  - `UserStoreParityTests`:
+    - the 23 tables against `frusModelTypes` and the inventory, and the inventory against the stored properties each class declares;
+    - each column's kind and optionality against its declaration, and the JSON `Data` against the app's own writers;
+    - the migrated store's columns, keys, references and lack of defaults against the description;
+    - `user_search` against the Mac's `user_content`, and a user's rows going with the user.
+  - `AppModelSource` reads the app's source once, with Swift's comments and string literals blanked and a string's interpolations read as code.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** through CI's Build and Test steps, this package's own targets built clean, with no warnings. Before the review's fixes, all 2,100 tests passed, up from 2,085, with the one named skip. After them, FRUSLightCoreTests runs 61, from 42, all passing: `UserStoreTests` 10 and `UserStoreParityTests` 9. The other targets are unchanged.
+- **The drill,** in a Compose install of its own (`frus-s14a`, port 8087, removed afterwards), with this branch's image built locally as `frus-light:s14a` beside the published `edge`, which predates this change:
+  1. `edge` started on a new volume, leaving the store at migration 1.
+  2. The new image migrated it to 2 and logged the copy, `app-20261024T014556Z-before-migration-2.db`.
+  3. `edge` again refused the store ("app.db is at migration 2, newer than this build's 1") and restarted under the restart policy.
+  4. `INSTALL.md`'s steps put the copy back, and `edge` served again.
+  5. The new image migrated again, reusing the same copy: one file in `/data/backups`.
+- **`scripts/compose-smoke --e2e`** on `frus-light:s14a`: passes, with 21 browser tests on Chromium, and axe finds nothing.
+- **Two corrections on the way:**
+  - The draft kept `stateData` as JSON, from its comment's "the `parametersData` pattern". The readers found that no code writes it, so it now stays bytes, and the test holds each `Data` property to whether the app writes it with `JSONEncoder`.
+  - That test then failed on `parametersData`, a fault in its own reading. Swift's regular expressions find a word boundary by Unicode's rules, under which `self.parametersData` is one word. So the search for the property's writer missed `self.parametersData = try? JSONEncoder()…`.
+
+**Records**
+
+- `SPEC.md`: the user store's tables, keys, values, relationships and `user_search`; the mapping's preferences row; the upgrades line on the copy before a migration; the backups line, which keeps those copies apart from the daily seven; and the ranking risk, since `user_search` pools every user's statistics.
+- `INSTALL.md`: the copy an upgrade makes before it changes the store, what a failure does under Compose's restart policy, and going back to an older server, which cannot open a store a newer one has changed.
+- `PLAN.md` and its shared copy (rev 231): S14a done, in a paragraph of its own after the note that closes phase 2's rows, since S14f's session wrote that note's sentence for itself. The README's Status and this log.
+
+**Notes**
+
+- **A review before the push.** Four readers each took one side of the change: the runner, the schema, the tests and the records. Two skeptics then tried to refute each of their 29 findings, and 15 stood. All 15 are fixed here:
+  - the copies a restart loop would have piled up;
+  - the way back to an older server;
+  - reads inside another caller's transaction;
+  - a date returned unrounded, and dates out of range;
+  - the foreign keys a rebuild needs off, and the tests that could not tell;
+  - a list of models passing as a JSON column;
+  - a `LIKE` pattern whose `_` matched any character;
+  - the lexer's interpolations;
+  - the counts and placeholders in these records;
+  - the copies' place beside S14b's seven;
+  - the pooled ranking statistics.
+
+  So are seven the skeptics refuted but that cost little: the trigger, the second process, the `.partial` names, the classes read beside the inventory, the dates' scope in SPEC, ties broken by id, and JSON kept as the app's bytes.
+- **Who made a correction** is not kept: S2's `recorded_by`, which nothing wrote, is dropped with `index_corrections`, and the Mac's overrides carry no author. Phase 3's curator role brings the audit log that SPEC's risks name.
+- **Beside this session,** S14f, S14g and S16a were proposed as sessions of their own. S14f's and S16a's ran at the same time and took the app's heavy-job lock for their builds and Mac checks, so this session's runs waited their turn.
+- **The build** reused S13c's `.build/linux` through an APFS clone (`cp -c`), at the same pin, and rebuilt this package's own targets clean.
+
+**Next: S14c,** the write path and tags, which S14d, S14e and S15c follow; S14b, the daily backup and its restore, can run beside it, with S16a's Mac check; S14g's first release is the owner's, after #50.
+
 ## Session 14f: serving under a path
 
 23 October 2026 · branch `claude/s14f-base-path` · upstream `2767a128`, unchanged

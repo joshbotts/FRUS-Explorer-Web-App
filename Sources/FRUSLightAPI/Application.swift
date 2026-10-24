@@ -34,13 +34,18 @@ struct ServerComponents: Sendable {
         await state.prepareToOpenExistingIndex(files: files)
         let jobs = InProcessJobQueue()
         let writer = LocalIndexWriter(files: files)
+        let userStore = try await SQLiteUserStore(url: files.userStore, backupsDirectory: files.backupsDirectory)
+        if let migration = userStore.migration {
+            let copy = migration.backup.map { ", after a copy of the store at \(migration.from) in \($0.path)" } ?? ""
+            logger.info("app.db migrated from \(migration.from) to \(migration.to)\(copy)")
+        }
         return ServerComponents(
             files: files,
             state: state,
             resources: resources,
             reader: ReaderService(volumesDirectory: files.volumesDirectory, resources: resources),
             webClient: webClient,
-            userStore: try SQLiteUserStore(url: files.userStore),
+            userStore: userStore,
             sessions: InMemorySessionStore(),
             jobs: jobs,
             indexWriter: writer,
