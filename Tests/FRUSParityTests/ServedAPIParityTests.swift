@@ -209,7 +209,7 @@ struct ServedFile: Equatable {
 
         let expectedHead = try await ReaderRenderer(layout: Repository.layout)
             .fullParsePass([ParityFixtures.volumes[0]], write: {
-                ReaderPage.build(model: $0, measure: ReadingWidth.standard.measure, head: ReaderRoutes.pageHead)
+                ReaderPage.build(model: $0, measure: ReadingWidth.standard.measure, head: ReaderRoutes.pageHead(under: .root))
             })
             .documents.first?.html?.components(separatedBy: "<body>\n").first
         var heads = Set<String>()
@@ -250,7 +250,7 @@ struct ServedFile: Equatable {
         let (pages, _) = try await ReaderRenderer(layout: Repository.layout).fullParsePass(ParityFixtures.volumes, write: { model in
             guard model.documentId == "d1" else { return "" }
             return combinations.map {
-                ReaderPage.build(model: model, appearance: $0.1, measure: $0.0.measure, head: ReaderRoutes.pageHead)
+                ReaderPage.build(model: model, appearance: $0.1, measure: $0.0.measure, head: ReaderRoutes.pageHead(under: .root))
             }.joined(separator: "\u{0}")
         })
         var expected: [String: String] = [:]

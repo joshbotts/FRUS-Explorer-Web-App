@@ -205,6 +205,52 @@ To stay with the exports of one FRUS Explorer build, set `FRUS_IMAGE=ghcr.io/jos
 | `docker compose down` | Removes the container, keeping the index in the volume |
 | `docker compose down --volumes` | Removes the index too; you would import again |
 
+## Behind a reverse proxy
+
+Compose publishes the server on this machine's 127.0.0.1 only. A reverse proxy on the same machine, such as nginx, can give it an address others reach, with TLS: a host of its own, such as `https://frus.example.org/`, or a path of a site that serves other things, such as `https://example.org/frus-explorer/`. **The server has no sign-in yet,** so anyone who can reach the proxy can use it: keep the proxy behind your own network rules or sign-in until sign-in through the proxy arrives later in phase 2. Phase 1 serves the corpus only and holds nothing of yours.
+
+Write the address people will open into `.env`, then make the container again, which keeps the index in the volume:
+
+```bash
+echo "FRUS_PUBLIC_URL=https://example.org/frus-explorer/" >> .env
+```
+
+```bash
+docker compose up -d
+```
+
+With a path, the server answers the browser app, the reader and the API under it, and `/healthz` and `/readyz` both under it and at the root, so Docker's health check and a proxy's both work. Other paths at the root answer 404, apart from `/`, which leads to the path. The proxy forwards the path as it is, and does not strip it. The address may also end in no path, as `https://frus.example.org` does.
+
+These are nginx `location` blocks, for the `server` block that serves the host with TLS. Each passes the address people used, so the server can check it when sign-in arrives, and forwards to the port in `FRUS_HOST_PORT`, 8080 by default.
+
+**At the root of its own host,** with `FRUS_PUBLIC_URL=https://frus.example.org`:
+
+<!-- compose-smoke: nginx at the root -->
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+**Under a path,** with `FRUS_PUBLIC_URL=https://example.org/frus-explorer/`:
+
+<!-- compose-smoke: nginx under a path -->
+```nginx
+location /frus-explorer/ {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+`proxy_pass` names no path, so nginx forwards `/frus-explorer/search` as it is, and it answers `/frus-explorer` with a redirect to `/frus-explorer/`. `scripts/compose-smoke` runs both recipes, and the browser suite through the second. With another proxy, forward the path unchanged in the same way: in Caddy, `handle /frus-explorer/*` with `reverse_proxy 127.0.0.1:8080`, not `handle_path`, which strips it; in Apache, `ProxyPass /frus-explorer/ http://127.0.0.1:8080/frus-explorer/`; in Traefik, a router with no StripPrefix middleware.
+
 ## Settings
 
 These go in `.env` beside `compose.yaml`.
@@ -213,12 +259,13 @@ These go in `.env` beside `compose.yaml`.
 | --- | --- | --- |
 | `FRUS_TEI_DIR` | `./tei` | Folder of TEI volumes, mounted read-only |
 | `FRUS_HOST_PORT` | `8080` | Port on this machine's 127.0.0.1 |
+| `FRUS_PUBLIC_URL` | `http://localhost:8080`, on `FRUS_HOST_PORT` | The address people open. Behind a reverse proxy, its address, which may end in a path such as `/frus-explorer/`: see Behind a reverse proxy |
 | `FRUS_IMAGE` | `ghcr.io/joshbotts/frus-explorer-light:edge` | The image to run |
 | `COMPOSE_PROFILES` | none | `pdf` starts Gotenberg, a 700 MB download, for PDF export when it arrives in phase 3 |
 
 ## Notes
 
-- **Only this machine can reach the server.** Sharing it wider waits for phase 3's local accounts, behind a TLS reverse proxy.
+- **Only this machine can reach the server,** unless a reverse proxy on it forwards to it, as Behind a reverse proxy sets out. The server has no sign-in of its own until phase 3's local accounts; sign-in through the proxy comes before them, in phase 2.
 - **Keep `/data` in the Docker volume.** On a Mac, a folder shared from macOS is not a local filesystem to SQLite. On Linux, replacing the volume with a host folder in `compose.yaml` works if that folder is writable by UID 10001, the server's user.
 - **On Linux,** the TEI files must be readable by UID 10001; a clone made with the usual umask is. On a host with SELinux enforcing, add `,z` after `ro` in the TEI volume line of `compose.yaml`. To run `docker` without `sudo`, your user must be in the `docker` group.
 - **Backups** start in phase 2, when the server holds your own notes. Until then the index can always be imported again.

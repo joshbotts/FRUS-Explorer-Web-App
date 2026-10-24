@@ -11,9 +11,11 @@
 // served, its effective classification of the document reshapes the parse first, as the app's
 // reader does. The golden HTML was made by the Mac reader, and FRUSParityTests compares every row
 // through this route. The reader needs no index, so it answers before an import and while search
-// is unavailable (docs/SPEC.md, Upgrades).
+// is unavailable (docs/SPEC.md, Upgrades). Under a base path, the page names its host script and
+// figures under it.
 
 import FRUSCoreKit
+import FRUSLightCore
 import Foundation
 import Hummingbird
 
@@ -101,30 +103,30 @@ public actor ReaderService {
         return Parsed(ast: ast, lookups: volume.lookups)
     }
 
-    /// One document's body, with no classification applied.
+    /// One document's body, with no classification applied, its figures at the root.
     public func body(volume volumeId: String, document documentId: String) async throws -> Rendered {
         Self.render(try await document(volume: volumeId, document: documentId), volume: volumeId,
-                    classification: nil, part: .body, brokenRefs: resources.brokenRefs)
+                    classification: nil, part: .body, base: .root, brokenRefs: resources.brokenRefs)
     }
 
     /// The reader's converter, as `ReaderRenderer.html` in FRUSParity calls it, then its serializer
-    /// with the server's figure addresses, alone or in the kit's page. `classification`, the
-    /// index's effective classification of the document, reshapes the parse first, as the app's
+    /// with the server's figure addresses under `base`, alone or in the kit's page. `classification`,
+    /// the index's effective classification of the document, reshapes the parse first, as the app's
     /// reader applies it (`DocumentViewModel.load`); nil leaves the parse as it is.
     nonisolated static func render(_ parsed: Parsed, volume: String, classification: Bool?, part: Part,
-                                   brokenRefs: BrokenRefsIndex) -> Rendered {
+                                   base: BasePath, brokenRefs: BrokenRefsIndex) -> Rendered {
         var ast = parsed.ast
         if let classification { ast = ast.applyingClassificationOverride(isEditorialNote: classification) }
         var converter = ASTToRenderNodeConverter(readerOf: volume, lookups: parsed.lookups, brokenRefs: brokenRefs)
         let model = converter.convert(ast)
-        let serializer = FRUSRenderNodeHTMLSerializer.reader(figureURL: ReaderRoutes.figureURL(for:))
+        let serializer = FRUSRenderNodeHTMLSerializer.reader(figureURL: { ReaderRoutes.figureURL(for: $0, under: base) })
         let html: String
         switch part {
         case .body:
             html = serializer.serialize(model)
         case .page(let appearance, let textSize, let measure):
             html = ReaderPage.build(model: model, appearance: appearance, textSize: textSize, measure: measure,
-                                    serializer: serializer, head: ReaderRoutes.pageHead)
+                                    serializer: serializer, head: ReaderRoutes.pageHead(under: base))
         }
         return Rendered(html: html, renderingVersion: ASTToRenderNodeConverter.renderingVersion(for: model))
     }
@@ -198,8 +200,11 @@ enum ReaderRoutes {
 
     static let renderingVersionHeader = HeaderName("X-FRUS-Rendering-Version")!
 
-    /// What the page adds to the kit's head: the host script, which runs after the body parses.
-    static let pageHead = "<script src=\"/reader/host.js\" defer></script>\n"
+    /// What the page adds to the kit's head: the host script, under `base`, which runs after the
+    /// body parses.
+    static func pageHead(under base: BasePath) -> String {
+        "<script src=\"\(base.prefixing("/reader/host.js"))\" defer></script>\n"
+    }
 
     /// The one inline script the reader's markup holds: a figure image's `onerror`, which shows
     /// its placeholder (`FRUSRenderNodeHTMLSerializer.figureImageHTML`), allowed by its SHA-256.
@@ -222,18 +227,18 @@ enum ReaderRoutes {
         HeaderName("Referrer-Policy")!: "no-referrer",
     ]
 
-    /// Where the server serves a figure's image, or nil, and the placeholder, for a name that is
-    /// no file name or a volume id that could not be one path component.
-    @Sendable static func figureURL(for image: FigureImageName) -> URL? {
+    /// Where the server, under `base`, serves a figure's image, or nil, and the placeholder, for a
+    /// name that is no file name or a volume id that could not be one path component.
+    @Sendable static func figureURL(for image: FigureImageName, under base: BasePath) -> URL? {
         guard let volumeId = image.volumeId, let file = image.fileName,
               FRUSURLScheme.isSafeComponent(volumeId), FRUSURLScheme.isSafeComponent(file) else { return nil }
         var components = URLComponents()
-        components.path = "/api/v1/volumes/\(volumeId)/figures/\(file)"
+        components.path = base.prefixing("/api/v1/volumes/\(volumeId)/figures/\(file)")
         return components.url
     }
 
     static func add(to router: Router<APIRequestContext>, reader: ReaderService, provider: ServedIndexProvider,
-                    resources: ServerResources) {
+                    resources: ServerResources, base: BasePath) {
         router.get("/api/v1/volumes/:volumeId/documents/:documentId/html") { request, context -> Response in
             let query = try FormQuery(request.uri.query)
             try query.refuseUnknown(["part", "textSize", "colorScheme", "readingWidth"])
@@ -253,7 +258,7 @@ enum ReaderRoutes {
             let served = try? await provider.servedIfReady()
             let classification = try? await served?.pipeline.effectiveIsEditorialNote(volumeId: volumeId, documentId: documentId)
             let rendered = ReaderService.render(parsed, volume: volumeId, classification: classification ?? nil,
-                                                part: part, brokenRefs: resources.brokenRefs)
+                                                part: part, base: base, brokenRefs: resources.brokenRefs)
             var headers = commonHeaders
             headers[.contentSecurityPolicy] = part == .body ? bodyPolicy : pagePolicy
             headers[renderingVersionHeader] = rendered.renderingVersion

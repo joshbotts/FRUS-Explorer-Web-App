@@ -27,6 +27,40 @@ import Testing
         #expect(config.offline && config.host == "0.0.0.0" && config.port == 9090)
         #expect(config.importPollInterval == .milliseconds(500))
         #expect(config.resourcesDirectory.path == "/src/upstream/FRUS-Explorer/FRUSExplorer/Resources")
+        #expect(config.basePath == .root)
+    }
+
+    /// A public URL that ends in a path is served under it (S14f), with or without its last slash;
+    /// one with no path, or `/`, at the root.
+    @Test func aPublicURLWithAPathIsTheBasePath() throws {
+        for (url, path) in [
+            ("http://localhost:8080", "/"), ("https://example.org/", "/"),
+            ("https://example.org/frus-explorer/", "/frus-explorer/"), ("https://example.org/frus-explorer", "/frus-explorer/"),
+            ("http://localhost:8080/tools/frus_1.0~x/", "/tools/frus_1.0~x/"),
+        ] {
+            let config = try ServerConfiguration.fromEnvironment(["FRUS_PUBLIC_URL": url])
+            #expect(config.publicURL == url && config.basePath.path == path, "\(url)")
+        }
+        #expect(ServerConfiguration().basePath.isRoot)
+        let base = try #require(BasePath("/frus-explorer/"))
+        #expect(base.prefixing("/api/v1/status") == "/frus-explorer/api/v1/status" && base.prefixing("/") == "/frus-explorer/")
+        #expect(BasePath.root.prefixing("/reader/host.js") == "/reader/host.js")
+        #expect(base.stripping("/frus-explorer/search?keywords=x") == "/search?keywords=x" && base.stripping("/frus-explorer/") == "/")
+        #expect(base.stripping("/frus-explorer") == nil && base.stripping("/frus-explorers/") == nil && base.stripping("/search") == nil)
+        #expect(BasePath.root.stripping("/search?keywords=x") == "/search?keywords=x")
+    }
+
+    /// A path a proxy could forward in more than one spelling, or that would need escaping where the
+    /// server writes it, is refused, as is a query or a fragment.
+    @Test func refusesAPathItCouldNotWriteAsItIs() {
+        for url in [
+            "https://example.org/frus%20explorer/", "https://example.org/a//b/", "https://example.org/a/../b/",
+            "https://example.org/./", "https://example.org//", "https://example.org/a\"b/", "https://example.org/?x=1",
+            "https://example.org/frus-explorer/#top",
+        ] {
+            #expect(throws: ConfigurationError.self, "\(url)") { try ServerConfiguration.fromEnvironment(["FRUS_PUBLIC_URL": url]) }
+        }
+        for path in ["frus-explorer/", "/a b/", "/%41/", "/a/./"] { #expect(BasePath(path) == nil, "\(path)") }
     }
 
     @Test func reportsEveryProblemAtOnce() {

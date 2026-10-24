@@ -5,7 +5,7 @@ import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
 
 test('the facets stage years to include or exclude, then Apply, and narrow to a person and a type, each a filter that clears', async ({ page }) => {
-  await page.goto('/search?keywords=negotiating+OR+canal');
+  await page.goto('search?keywords=negotiating+OR+canal');
   const results = page.getByRole('list', { name: 'Results' });
   const count = page.getByRole('status').filter({ hasText: 'match' });
   await expect(results.getByRole('listitem')).toHaveCount(3);

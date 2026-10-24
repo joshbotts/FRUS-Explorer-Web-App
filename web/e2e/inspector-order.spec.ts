@@ -8,7 +8,7 @@ import { expect, test } from './fixtures';
 test('the Query Inspector follows the text as it is typed, counts each term in scope, and names the term a search found nothing for', async ({
   page,
 }) => {
-  await page.goto('/search');
+  await page.goto('search');
   const box = page.getByRole('searchbox', { name: 'Search the documents' });
   await box.fill('negotiating -canal');
   // The strip reads the box as it is typed; nothing is searched until the search is made.
@@ -43,7 +43,7 @@ test('the Query Inspector follows the text as it is typed, counts each term in s
 });
 
 test('the results read in either order of the date from their first page, and by relevance again', async ({ page }) => {
-  await page.goto('/search?keywords=negotiating+OR+canal');
+  await page.goto('search?keywords=negotiating+OR+canal');
   const titles = page.getByRole('list', { name: 'Results' }).getByRole('link');
   await expect(titles).toHaveCount(3);
   const orders = page.getByRole('group', { name: 'Sort' });

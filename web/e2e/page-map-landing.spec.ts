@@ -9,7 +9,7 @@ import { tabTo } from './keyboard';
 
 test('a page link into a volume this server does not hold lands on the document the page map names, by keyboard alone', async ({ page }) => {
   // frus1894Nicaragua d15's one link, to page 469 of the 1889 volume, where the map names d173.
-  await page.goto('/doc/frus1894Nicaragua/d15');
+  await page.goto('doc/frus1894Nicaragua/d15');
   const frame = page.frameLocator('iframe.reader-frame');
   const link = frame.getByRole('link', { name: 'Foreign Relations for that year, page 469' });
   await expect(link).toBeVisible();
@@ -32,7 +32,7 @@ test('a page link into a volume this server does not hold lands on the document 
 test('a page link the page map names no document on opens the volume in Browse, and that visit names the page', async ({ page }) => {
   // d42 cites pages 859–862 of Volume XIV, a range across documents, which the map lists no
   // document for; the link names its first page.
-  await page.goto('/doc/frus1961-63v06/d42');
+  await page.goto('doc/frus1961-63v06/d42');
   await page.frameLocator('iframe.reader-frame').getByRole('link', { name: 'vol. XIV, pp. 859' }).first().click();
   await expect(page).toHaveURL(/\/browse\/frus1961-63v14$/);
   const heading = page.getByRole('heading', { level: 1 });
@@ -52,7 +52,7 @@ test('a page link the page map names no document on opens the volume in Browse, 
   await expect(followed).toBeVisible();
 
   // A later visit, from the catalogue, names none.
-  await page.goto('/browse');
+  await page.goto('browse');
   await page.getByRole('searchbox', { name: 'Title or volume number' }).fill('Berlin Crisis');
   await page.getByRole('list', { name: 'All Volumes' }).getByRole('link', { name: /Volume XIV, Berlin Crisis/ }).click();
   await expect(page).toHaveURL(/\/browse\/frus1961-63v14$/);
