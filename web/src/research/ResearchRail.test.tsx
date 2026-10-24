@@ -1,7 +1,7 @@
-import { cleanup, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DocumentDetail, DocumentTags, Me, UserTag } from '../api/types';
+import type { DocumentDetail, DocumentHighlights, DocumentTags, Highlight, Me, UserTag } from '../api/types';
 import { resetPreferences } from '../settings/preferences';
 import { coverage, ProblemAnswer, ready, renderAt, stubServer } from '../test/renderRoute';
 
@@ -57,6 +57,7 @@ function sent(init?: RequestInit) {
 beforeEach(() => {
   resetPreferences();
   window.localStorage.removeItem('frus.research.tags');
+  window.localStorage.removeItem('frus.research.highlights');
 });
 afterEach(() => {
   cleanup();
@@ -235,5 +236,270 @@ describe('the Research rail', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Remove Berlin' })).toBeNull());
     expect(fetch.mock.calls.filter(([, init]) => init?.method === 'DELETE').map(([, init]) => sent(init).token)).toEqual(['token-1', 'token-2']);
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+const highlightsPath = '/api/v1/me/volumes/frus1961-63v06/documents/d1/highlights';
+
+function highlight(fields: Partial<Highlight> & Pick<Highlight, 'id'>): Highlight {
+  return {
+    volumeId: 'frus1961-63v06',
+    documentId: 'd1',
+    startOffset: 12,
+    endOffset: 40,
+    colorTag: 'yellow',
+    selectedText: 'Allow me to say',
+    renderingVersion: 'v1',
+    createdAt: '2026-10-20T09:00:00Z',
+    ...fields,
+  };
+}
+
+function documentHighlights(items: Highlight[]): DocumentHighlights {
+  return { volumeId: 'frus1961-63v06', documentId: 'd1', renderingVersion: 'v1', items };
+}
+
+/** The row of the highlight whose words are `text`, or Highlighted passage. */
+const row = (text: string) => screen.getByText(text).closest('li')!;
+const removeIn = (text: string) => within(row(text)).getByRole('button', { name: 'Remove…' });
+
+describe('the Research rail’s Highlights', () => {
+  it('is a section above Tags, closed until it is opened, with the document’s count, and then as it was left', async () => {
+    reader({
+      [highlightsPath]: documentHighlights([highlight({ id: 'A' }), highlight({ id: 'B', startOffset: 50, selectedText: 'the Embassy' })]),
+      [tagsPath]: documentTags([berlin]),
+    });
+    renderAt('/doc/frus1961-63v06/d1');
+    await userEvent.click(await screen.findByRole('button', { name: 'Research' }));
+    const rail = await screen.findByRole('complementary', { name: 'Research' });
+    const section = await within(rail).findByRole('button', { name: 'Highlights, 2 highlights' });
+    await within(rail).findByRole('button', { name: 'Tags, 1 tag' });
+    expect(within(rail).getAllByRole('button', { expanded: false }).map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Highlights, 2 highlights',
+      'Tags, 1 tag',
+    ]);
+    expect(within(rail).queryByRole('button', { name: 'Remove…' })).toBeNull();
+    await userEvent.click(section);
+    expect(section.getAttribute('aria-expanded')).toBe('true');
+    expect(section.getAttribute('aria-controls')).toBe('research-highlights');
+    expect(within(rail).getAllByRole('button', { name: 'Remove…' })).toHaveLength(2);
+    expect(window.localStorage.getItem('frus.research.highlights')).toBe('open');
+
+    // Closed and opened again, the rail keeps the section open.
+    await userEvent.click(within(rail).getByRole('button', { name: 'Close' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Research' }));
+    const again = await screen.findByRole('complementary', { name: 'Research' });
+    expect(within(again).getByRole('button', { name: 'Highlights, 2 highlights' }).getAttribute('aria-expanded')).toBe('true');
+    await userEvent.click(within(again).getByRole('button', { name: 'Highlights, 2 highlights' }));
+    expect(window.localStorage.getItem('frus.research.highlights')).toBe('closed');
+  });
+
+  it('counts one highlight as one, and names the section alone when there are none', async () => {
+    reader({ [highlightsPath]: documentHighlights([highlight({ id: 'A' })]) });
+    renderAt('/doc/frus1961-63v06/d1?rail=research');
+    expect(await screen.findByRole('button', { name: 'Highlights, 1 highlight' })).toBeTruthy();
+    cleanup();
+    resetPreferences();
+    reader({ [highlightsPath]: documentHighlights([]) });
+    renderAt('/doc/frus1961-63v06/d1?rail=research');
+    const rail = await screen.findByRole('complementary', { name: 'Research' });
+    await waitFor(() => expect(within(rail).getByRole('button', { name: 'Highlights' }).hasAttribute('aria-label')).toBe(false));
+    expect(within(rail).getByRole('button', { name: 'Highlights' }).querySelector('.badge')).toBeNull();
+  });
+
+  it('says why the highlights could not be read', async () => {
+    window.localStorage.setItem('frus.research.highlights', 'open');
+    reader({ [highlightsPath]: new ProblemAnswer(503, 'USER_DATA_UNAVAILABLE', 'The research data could not be read.') });
+    renderAt('/doc/frus1961-63v06/d1?rail=research');
+    const rail = await screen.findByRole('complementary', { name: 'Research' });
+    expect((await within(rail).findByRole('alert')).textContent).toBe('The research data could not be read.');
+  });
+
+  it('lists the rows as the app’s review sheet does, with their words or Highlighted passage, the stale lines, and the line for one the page could not draw', async () => {
+    window.localStorage.setItem('frus.research.highlights', 'open');
+    // In the server's order, the order the page draws them in.
+    const items = [
+      highlight({ id: 'C', startOffset: 50, endOffset: 61, selectedText: 'the Embassy', isStale: true }),
+      highlight({ id: 'A', startOffset: 12, createdAt: '2026-10-21T09:00:00Z' }),
+      highlight({ id: 'B', startOffset: 12, createdAt: '2026-10-19T09:00:00Z', selectedText: '', isStale: true }),
+      highlight({ id: 'D', startOffset: 70, endOffset: 80, selectedText: 'in Moscow' }),
+    ];
+    reader({ [highlightsPath]: documentHighlights(items) });
+    renderAt('/doc/frus1961-63v06/d1?rail=research');
+    const rail = await screen.findByRole('complementary', { name: 'Research' });
+    await within(rail).findAllByRole('listitem');
+    const rows = () =>
+      within(rail)
+        .getAllByRole('listitem')
+        .map((item) => [...item.querySelectorAll('p')].map((line) => line.textContent));
+    expect(rows()).toEqual([
+      [
+        'Highlighted passage',
+        'Made against an earlier version of the text, and the words it covered were not stored — it can only be checked by eye.',
+      ],
+      ['Allow me to say'],
+      ['the Embassy', 'Made against an earlier version of the text — its position may have moved.'],
+      ['in Moscow'],
+    ]);
+    expect(row('Highlighted passage').querySelector('.highlight-text em')?.textContent).toBe('Highlighted passage');
+
+    // The page reports that it could not draw the fourth it was sent.
+    const frame = screen.getByTitle('Document text: 1. Telegram From the Embassy in the Soviet Union') as HTMLIFrameElement;
+    const post = vi.spyOn(frame.contentWindow!, 'postMessage');
+    fireEvent.load(frame);
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    act(() => {
+      const data = { source: 'frus-reader', kind: 'highlightsRendered', detail: { drawn: 3, skipped: [3] } };
+      window.dispatchEvent(new MessageEvent('message', { data, origin: 'null', source: frame.contentWindow }));
+    });
+    expect(rows()[3]).toEqual(['in Moscow', 'This highlight could not be drawn in the text.']);
+    expect(rows().slice(0, 3).flat()).not.toContain('This highlight could not be drawn in the text.');
+  });
+
+  it('changes a highlight’s colour from its Color group, which shows the colour it has and is held while the change is sent', async () => {
+    window.localStorage.setItem('frus.research.highlights', 'open');
+    let items = [highlight({ id: 'A' })];
+    let release: () => void = () => {};
+    const fetch = reader({
+      [highlightsPath]: () => documentHighlights(items),
+      'PATCH /api/v1/me/highlights/A': (_: URL, init?: RequestInit) => {
+        const colorTag = sent(init).body.colorTag as string;
+        if (colorTag === 'blue') return new ProblemAnswer(404, 'NOT_FOUND', 'No highlight A.');
+        return new Promise((resolve) => {
+          release = () => {
+            items = [{ ...items[0]!, colorTag }];
+            resolve(items[0]);
+          };
+        });
+      },
+    });
+    renderAt('/doc/frus1961-63v06/d1?rail=research');
+    await screen.findByText('Allow me to say');
+    const colors = within(row('Allow me to say')).getByRole('group', { name: 'Color' });
+    const pressed = () => within(colors).getAllByRole('button').filter((button) => button.getAttribute('aria-pressed') === 'true').map((button) => button.textContent);
+    expect(within(colors).getAllByRole('button').map((button) => button.textContent)).toEqual(['Yellow', 'Green', 'Blue', 'Pink']);
+    expect(pressed()).toEqual(['Yellow']);
+
+    // Its own colour again sends nothing.
+    await userEvent.click(within(colors).getByRole('button', { name: 'Yellow' }));
+    expect(fetch.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(false);
+
+    await userEvent.click(within(colors).getByRole('button', { name: 'Green' }));
+    // Held, but focusable still, so the button pressed by keyboard keeps its focus.
+    await waitFor(() => expect(within(colors).getAllByRole('button').every((button) => button.getAttribute('aria-disabled') === 'true')).toBe(true));
+    expect(within(colors).getAllByRole('button').some((button) => (button as HTMLButtonElement).disabled)).toBe(false);
+    release();
+    await waitFor(() => expect(pressed()).toEqual(['Green']));
+    expect(within(colors).getAllByRole('button').some((button) => button.getAttribute('aria-disabled') === 'true')).toBe(false);
+    const patches = fetch.mock.calls.filter(([, init]) => init?.method === 'PATCH');
+    expect(patches.map(([url, init]) => [String(url), sent(init)])).toEqual([
+      ['/api/v1/me/highlights/A', { body: { colorTag: 'green' }, token: 'token-1', type: 'application/json' }],
+    ]);
+
+    // A refusal is said, and the colour stays.
+    await userEvent.click(within(colors).getByRole('button', { name: 'Blue' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('No highlight A.');
+    expect(pressed()).toEqual(['Green']);
+  });
+
+  it('changes another row’s colour while one row’s change is still being sent', async () => {
+    window.localStorage.setItem('frus.research.highlights', 'open');
+    const fetch = reader({
+      [highlightsPath]: documentHighlights([highlight({ id: 'A' }), highlight({ id: 'B', startOffset: 50, endOffset: 64, selectedText: 'the Embassy' })]),
+      'PATCH /api/v1/me/highlights/A': () => new Promise(() => {}),
+      'PATCH /api/v1/me/highlights/B': (_: URL, init?: RequestInit) => highlight({ id: 'B', colorTag: sent(init).body.colorTag as string }),
+    });
+    renderAt('/doc/frus1961-63v06/d1?rail=research');
+    await screen.findByText('Allow me to say');
+    await userEvent.click(within(row('Allow me to say')).getByRole('button', { name: 'Green' }));
+    const second = within(row('the Embassy')).getByRole('button', { name: 'Pink' });
+    expect(second.getAttribute('aria-disabled')).toBe('false');
+    await userEvent.click(second);
+    await waitFor(() =>
+      expect(fetch.mock.calls.filter(([, init]) => init?.method === 'PATCH').map(([url]) => String(url))).toEqual([
+        '/api/v1/me/highlights/A',
+        '/api/v1/me/highlights/B',
+      ]),
+    );
+  });
+
+  it('asks before it removes a highlight from Remove…, Cancel first, and focus goes to the next row’s Remove…, else the one before, else the section', async () => {
+    window.localStorage.setItem('frus.research.highlights', 'open');
+    let items = [
+      highlight({ id: 'A', startOffset: 12, selectedText: 'Allow me' }),
+      highlight({ id: 'B', startOffset: 30, selectedText: 'to say' }),
+      highlight({ id: 'C', startOffset: 50, selectedText: 'the Embassy' }),
+    ];
+    const removal = (id: string) => () => {
+      items = items.filter((item) => item.id !== id);
+      return null;
+    };
+    const fetch = reader({
+      [highlightsPath]: () => documentHighlights(items),
+      'DELETE /api/v1/me/highlights/A': removal('A'),
+      'DELETE /api/v1/me/highlights/B': removal('B'),
+      'DELETE /api/v1/me/highlights/C': removal('C'),
+    });
+    renderAt('/doc/frus1961-63v06/d1?rail=research');
+    await screen.findByText('to say');
+
+    async function remove(text: string) {
+      await userEvent.click(removeIn(text));
+      const question = await screen.findByRole('alertdialog', { name: 'Remove Highlight' });
+      expect(within(question).getByText('This highlight will be permanently removed.')).toBeTruthy();
+      expect(document.activeElement).toBe(within(question).getByRole('button', { name: 'Cancel' }));
+      await userEvent.click(within(question).getByRole('button', { name: 'Remove' }));
+      await waitFor(() => expect(screen.queryByText(text)).toBeNull());
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+    }
+
+    // The middle one: focus goes to the row that took its place.
+    await remove('to say');
+    await waitFor(() => expect(document.activeElement).toBe(removeIn('the Embassy')));
+    // The last one: focus goes to the row before it.
+    await remove('the Embassy');
+    await waitFor(() => expect(document.activeElement).toBe(removeIn('Allow me')));
+    // The only one: focus goes to the section's disclosure.
+    await remove('Allow me');
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Highlights' })));
+    expect(screen.queryByRole('list')).toBeNull();
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === 'DELETE').map(([url, init]) => [String(url), sent(init).token])).toEqual([
+      ['/api/v1/me/highlights/B', 'token-1'],
+      ['/api/v1/me/highlights/C', 'token-1'],
+      ['/api/v1/me/highlights/A', 'token-1'],
+    ]);
+  });
+
+  it('cancels the question by Cancel or by Escape, which leaves the rail open, and focus goes back to the Remove… that asked', async () => {
+    window.localStorage.setItem('frus.research.highlights', 'open');
+    const fetch = reader({
+      [highlightsPath]: documentHighlights([
+        highlight({ id: 'A', startOffset: 12, selectedText: 'Allow me' }),
+        highlight({ id: 'B', startOffset: 30, selectedText: 'to say' }),
+      ]),
+    });
+    renderAt('/doc/frus1961-63v06/d1?rail=research');
+    await screen.findByText('to say');
+
+    await userEvent.click(removeIn('to say'));
+    await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(removeIn('to say')));
+
+    await userEvent.click(removeIn('to say'));
+    const question = await screen.findByRole('alertdialog', { name: 'Remove Highlight' });
+    // The keydown goes no further than the dialog: the rail, which closes on Escape, stays.
+    await userEvent.keyboard('{Escape}');
+    expect(screen.getByRole('complementary', { name: 'Research' })).toBeTruthy();
+    // Escape, as the browser then sends it to the dialog on top.
+    fireEvent(question, new Event('cancel', { cancelable: true }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(screen.getByRole('complementary', { name: 'Research' })).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(removeIn('to say')));
+    expect(fetch.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+
+    // Escape outside a question still closes the rail.
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('complementary', { name: 'Research' })).toBeNull();
   });
 });

@@ -11,6 +11,7 @@
 //   frus-parity check-golden [--repo <root>]
 //   frus-parity own-text --api <url> <export> [--volumes <id,id>]
 //   frus-parity time-search <db> [--all] [--ids <id,...>] [--retained] [--out <results.json>] [--queries <jsonl>] [--resources <dir>] [--repo <root>]
+//   frus-parity highlight-samples --out <samples.json> [--repo <root>]
 //
 // The repository is found from the current directory unless --repo names it. Exit status: 0 when
 // the check passes, 1 on a refusal, a difference or a problem, 2 on a usage error.
@@ -34,6 +35,7 @@ let usage = """
            frus-parity check-golden [--repo <root>]
            frus-parity own-text --api <url> <export> [--volumes <id,id>]
            frus-parity time-search <db> [--all] [--ids <id,...>] [--retained] [--out <results.json>] [--queries <jsonl>] [--resources <dir>] [--repo <root>]
+           frus-parity highlight-samples --out <samples.json> [--repo <root>]
     """
 
 /// A command's positional arguments, flags and options.
@@ -473,6 +475,21 @@ func ownText(_ arguments: Arguments) async throws {
     print("own text through the API is the kit's for every section, in \(seconds) s")
 }
 
+/// Check 6's samples (PLAN's S15c): highlights placed by offset over each golden row's flat text,
+/// for the browser suite. Written to `--out`, never standard output, where a debug build of the kit
+/// prints its parser's log.
+func highlightSamples(_ arguments: Arguments) async throws {
+    guard arguments.positional.isEmpty, let out = arguments.options["--out"] else {
+        throw UsageError("highlight-samples takes --out <file>, such as \(HighlightSamples.path)")
+    }
+    let layout = try repository(arguments)
+    let (golden, stale) = try RenderParity.golden(layout)
+    guard stale.isEmpty else { fail(stale.joined(separator: "\n")) }
+    let file = try await HighlightSamples.make(layout: layout, rows: golden.rows.map { ($0.volume, $0.document) })
+    try GoldenJSON.write(file, to: URL(fileURLWithPath: out))
+    print("check 6's samples: \(file.rows.count) rows, \(file.rows.map(\.samples.count).reduce(0, +)) highlights, in \(out)")
+}
+
 let arguments = CommandLine.arguments.dropFirst()
 do {
     switch arguments.first {
@@ -496,6 +513,8 @@ do {
         try checkGolden(Arguments(arguments.dropFirst(), options: ["--repo"]))
     case "own-text":
         try await ownText(Arguments(arguments.dropFirst(), options: ["--api", "--volumes"]))
+    case "highlight-samples":
+        try await highlightSamples(Arguments(arguments.dropFirst(), options: ["--out", "--repo"]))
     case "time-search":
         try await timeSearch(Arguments(arguments.dropFirst(), flags: ["--all", "--retained"],
                                        options: ["--ids", "--out", "--queries", "--resources", "--repo"]))

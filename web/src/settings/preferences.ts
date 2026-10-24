@@ -58,6 +58,9 @@ export const useCitationStyle = () =>
 
 /** Closed until it is opened, and then as it was left, as the app's rail keeps its Tags section. */
 export const useTagsSectionOpen = () => usePreference<'open' | 'closed'>('frus.research.tags', ['open', 'closed'], 'closed');
+/** The Highlights section, the web's own, kept as the Tags section is. */
+export const useHighlightsSectionOpen = () =>
+  usePreference<'open' | 'closed'>('frus.research.highlights', ['open', 'closed'], 'closed');
 
 const darkQuery = '(prefers-color-scheme: dark)';
 

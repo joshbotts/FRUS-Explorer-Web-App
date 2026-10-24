@@ -3,60 +3,12 @@
 // Delete Tag asks first, as the app's confirmation does. And Merge Tag (`MergeTagSheet`), which the
 // editor hands to its host, as the app's does. Each is a modal dialog: Escape is Cancel.
 import { useQueryClient } from '@tanstack/react-query';
-import { type ReactNode, useEffect, useEffectEvent, useId, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
 import type { UserTag } from '../api/types';
 import { deleteTag, mergeTag, renameTag } from '../api/userData';
 import { copy } from '../copy';
-
-/** A modal dialog, open while it is drawn, that focuses `initial` or its heading when it opens. */
-function Modal({
-  className,
-  role,
-  labelledBy,
-  describedBy,
-  initial,
-  onCancel,
-  onClose,
-  children,
-}: {
-  className: string;
-  role?: 'alertdialog';
-  labelledBy: string;
-  describedBy?: string;
-  initial?: { current: HTMLElement | null };
-  onCancel: () => void;
-  onClose: () => void;
-  children: ReactNode;
-}) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const open = useEffectEvent(() => {
-    const element = dialog.current;
-    if (element && !element.open) element.showModal();
-    (initial?.current ?? element?.querySelector<HTMLElement>('h2'))?.focus();
-  });
-  useEffect(() => open(), []);
-  return (
-    <dialog
-      ref={dialog}
-      className={`card ${className}`}
-      role={role}
-      aria-labelledby={labelledBy}
-      aria-describedby={describedBy}
-      // A dialog's own close and Escape only: React would hand it another's on their way up.
-      onClose={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-      onCancel={(event) => {
-        if (event.target !== event.currentTarget) return;
-        event.preventDefault();
-        onCancel();
-      }}
-    >
-      {children}
-    </dialog>
-  );
-}
+import { Modal } from '../shell/Modal';
 
 export function TagEditor({
   tag,

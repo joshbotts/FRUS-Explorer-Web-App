@@ -1,5 +1,6 @@
 // Rows written into a user store and read back beside it, for the tests of rules that reach tables
-// no route writes yet: a note's tags and a project's tag focus, which S15d and S17f bring.
+// no route writes yet, a note's tags and a project's tag focus, which S15d and S17f bring, and of
+// rows only an import writes, as S16c's will: a highlight with the Mac's id, time and version.
 
 import FRUSLightCore
 import Foundation
@@ -49,6 +50,26 @@ public final class UserStoreRows: @unchecked Sendable {
         _ = try db.query(
             "INSERT INTO tag_assignments (user_id, id, volume_id, document_id, tag_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
             [.text(user), .text(id), .text(volumeId), .text(documentId), .text(tagId), .text(createdAt)])
+    }
+
+    /// A highlight as the Mac's export carries one: any id, any time or none, any version and colour.
+    public func addHighlight(_ id: String, user: String = "owner", volumeId: String = "frus1961-63v06",
+                             documentId: String = "d1", start: Int = 0, end: Int = 5, colorTag: String = "yellow",
+                             noteId: String? = nil, selectedText: String = "", renderingVersion: String = "",
+                             createdAt: String? = "2026-01-01T00:00:00.000Z") throws {
+        _ = try db.query(
+            """
+            INSERT INTO highlights (user_id, id, volume_id, document_id, start_offset, end_offset, color_tag, note_id,
+                                    selected_text, rendering_version, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, [.text(user), .text(id), .text(volumeId), .text(documentId), .integer(Int64(start)), .integer(Int64(end)),
+                  .text(colorTag), noteId.map { .text($0) } ?? .null, .text(selectedText), .text(renderingVersion),
+                  createdAt.map { .text($0) } ?? .null])
+    }
+
+    /// How many highlights the user has, as stored.
+    public func highlightCount(user: String = "owner") throws -> Int {
+        Int(try db.scalar("SELECT count(*) FROM highlights WHERE user_id = ?", [.text(user)])?.integer ?? 0)
     }
 
     /// A note's or a project's tag ids and its last modification, as stored.

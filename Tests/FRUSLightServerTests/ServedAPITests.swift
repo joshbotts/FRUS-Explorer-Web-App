@@ -387,8 +387,9 @@ func servingSyntheticExport(volumes: [String] = [], edits: String? = nil, includ
 @Suite struct ReaderPageRouteTests {
     static func uri(_ query: String = "") -> String { "/api/v1/volumes/frus1894Nicaragua/documents/d1/html\(query.isEmpty ? "" : "?\(query)")" }
 
-    /// The page is the kit's, with the host script in its head and the fragment in its body, under
-    /// a policy that runs nothing but the host script and the figure handler.
+    /// The page is the kit's, with the app's three reader scripts and the host script in its head and
+    /// the fragment in its body, under a policy that runs nothing but the server's scripts and the
+    /// figure handler.
     @Test func thePageIsTheKitsWithTheHostScript() async throws {
         let fixture = try await ServerFixture(volumes: ["frus1894Nicaragua"])
         try await fixture.app.test(.router) { client in
@@ -397,6 +398,14 @@ func servingSyntheticExport(volumes: [String] = [], edits: String? = nil, includ
             let html = String(buffer: page.body)
             #expect(html.hasPrefix("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n"))
             #expect(html.contains("<script src=\"/reader/host.js\" defer></script>\n</head>\n<body>\n"))
+            // In the order the app injects them at document end, then the host's.
+            #expect(html.contains("""
+                <script src="/reader/frus-offset-engine.js" defer></script>
+                <script src="/reader/frus-highlights.js" defer></script>
+                <script src="/reader/frus-selection.js" defer></script>
+                <script src="/reader/host.js" defer></script>
+                </head>
+                """))
             #expect(html.hasSuffix("\n</body>\n</html>"))
             #expect(page.headers[.contentSecurityPolicy] == ReaderRoutes.pagePolicy)
             #expect(ReaderRoutes.pagePolicy.contains("script-src 'self'") && ReaderRoutes.pagePolicy.contains(ReaderRoutes.figureErrorHandlerHash))
@@ -448,6 +457,18 @@ func servingSyntheticExport(volumes: [String] = [], edits: String? = nil, includ
                                          base: .root, brokenRefs: fixture.resources.brokenRefs).html
         #expect(asNote != asTEI)
         #expect(unserved == asTEI && served == asNote)
+        // The classification reshapes the page, not its flat text: a highlight's offsets and the
+        // rendering version it is stale against are the same either way.
+        for classification in [true, false] {
+            let reshaped = ReaderService.model(parsed, volume: "frus1894Nicaragua", classification: classification,
+                                               brokenRefs: fixture.resources.brokenRefs)
+            let asIs = ReaderService.model(parsed, volume: "frus1894Nicaragua", classification: nil, brokenRefs: fixture.resources.brokenRefs)
+            #expect(buildFlatText(from: reshaped) == buildFlatText(from: asIs))
+            #expect(ASTToRenderNodeConverter.renderingVersion(for: reshaped) == ASTToRenderNodeConverter.renderingVersion(for: asIs))
+        }
+        #expect(try await fixture.reader.renderingVersion(volume: "frus1894Nicaragua", document: "d1")
+                == ReaderService.render(parsed, volume: "frus1894Nicaragua", classification: true, part: .body, base: .root,
+                                        brokenRefs: fixture.resources.brokenRefs).renderingVersion)
     }
 
     @Test func theHostScriptIsServed() async throws {
@@ -463,7 +484,32 @@ func servingSyntheticExport(volumes: [String] = [], edits: String? = nil, includ
             // A note is landed on by the app's own script, byte for byte, its key the function's parameter.
             #expect(script.contains("function landOnFootnote(key) {\n    return \(FootnoteLanding.script(keyExpression: "key"));"))
             #expect(script.contains("var prefix = '\(ReaderLinkRoutes.footnoteEntryPrefix)';"))
+            // Highlights: drawn by the kit's renderer, each first built by the kit's buildRanges; the
+            // selection collapsed once a colour is chosen; the app's shortcut; and no tap from the
+            // keyboard or from a link.
+            #expect(script.contains("data.kind === 'highlights'") && script.contains("window.FRUSHighlights.render(drawable)"))
+            #expect(script.contains("buildRanges(highlight.startOffset, highlight.endOffset)") && script.contains("'highlightsRendered'"))
+            #expect(script.contains("data.kind === 'collapseSelection'") && script.contains("collapseToEnd()"))
+            #expect(script.contains("post(highlight ? 'highlightShortcut' : 'selectionBarShortcut', inText);"))
+            #expect(script.contains("rangeEndpointToOffset(range.startContainer, range.startOffset)") && script.contains("selectionGeometry(range).rect"))
+            #expect(script.contains("post('selectionEscape', {})") && script.contains("data.kind === 'selectionBarRequest'"))
+            #expect(script.contains("tapAllowed = event.detail !== 0 && !readerLink(event);"))
             #expect(script == ReaderHostScript.source)
+        }
+    }
+
+    /// The app's three reader scripts are the kit's, byte for byte, as the server's own files, which
+    /// the page's policy runs.
+    @Test func theAppsReaderScriptsAreServedFromTheKit() async throws {
+        let fixture = try await ServerFixture()
+        try await fixture.app.test(.router) { client in
+            for (path, source) in [("/reader/frus-offset-engine.js", kOffsetEngineJS), ("/reader/frus-highlights.js", kHighlightsJS),
+                                   ("/reader/frus-selection.js", kSelectionJS)] {
+                let response = try await client.execute(uri: path, method: .get)
+                #expect(response.status == .ok && response.headers[.contentType] == "text/javascript; charset=utf-8", "\(path)")
+                #expect(response.headers[.xContentTypeOptions] == "nosniff" && response.headers[.cacheControl] == "no-cache")
+                #expect(Data(buffer: response.body) == Data(source.utf8), "\(path)")
+            }
         }
     }
 

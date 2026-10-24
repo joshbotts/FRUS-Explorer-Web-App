@@ -466,3 +466,43 @@ export interface DocumentTags {
   documentId: string;
   items: UserTag[];
 }
+
+/** A highlight's colour, as the app's `HighlightColor` names it. */
+export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink';
+
+/** The four, in the order the app's selection bar offers them (`HighlightColor.allCases`). */
+export const highlightColors: readonly HighlightColor[] = ['yellow', 'green', 'blue', 'pink'];
+
+/** One of the user's highlights, with the fields of the Mac's export. */
+export interface Highlight {
+  id: string;
+  volumeId: string;
+  documentId: string;
+  /** UTF-16 offsets into the document's flat text, the first included and the last not. */
+  startOffset: number;
+  endOffset: number;
+  /** One of the four colours for a highlight made here; an imported one keeps the Mac's. */
+  colorTag: string;
+  noteId?: string;
+  selectedText: string;
+  renderingVersion: string;
+  createdAt?: string;
+  /** In a document's list only: whether its text has changed since, by the kit's rule. */
+  isStale?: boolean;
+}
+
+export interface HighlightList {
+  total: number;
+  items: Highlight[];
+}
+
+/**
+ * A document's highlights, in the order the app's reader draws them, with the document's current
+ * rendering version, absent when the server cannot render the document.
+ */
+export interface DocumentHighlights {
+  volumeId: string;
+  documentId: string;
+  renderingVersion?: string;
+  items: Highlight[];
+}

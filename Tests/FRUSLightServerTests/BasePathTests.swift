@@ -1,6 +1,7 @@
 // The server under a path (PLAN's S14f): FRUS_PUBLIC_URL ending in /frus-explorer/, as a proxy that
 // forwards the path as it is reaches it. The other suites serve at the root.
 
+import FRUSCoreKit
 import FRUSLightCore
 import FRUSLightTestSupport
 import Foundation
@@ -70,6 +71,9 @@ import Testing
             #expect(body == atRoot, "a page with no figure is the same under the path")
             let host = try await http.execute(uri: "/frus-explorer/reader/host.js", method: .get)
             #expect(host.status == .ok && String(buffer: host.body) == ReaderHostScript.source)
+            #expect(String(buffer: page.body).contains("<script src=\"/frus-explorer/reader/frus-offset-engine.js\" defer></script>\n"))
+            let engine = try await http.execute(uri: "/frus-explorer/reader/frus-offset-engine.js", method: .get)
+            #expect(engine.status == .ok && String(buffer: engine.body) == kOffsetEngineJS)
 
             // frus1969-76ve09p1 d116 holds one figure, named under the path.
             let figured = String(buffer: try await http.execute(
@@ -105,7 +109,8 @@ import Testing
                 let response = try await http.execute(uri: uri, method: .get)
                 #expect(response.status == status && response.headers[.location] == location, "\(uri)")
             }
-            for uri in ["/search", "/index.html", "/api/v1/status", "/assets/index-abc123.js", "/reader/host.js", "/frus-explorers/", "/frus-explorer.html"] {
+            for uri in ["/search", "/index.html", "/api/v1/status", "/assets/index-abc123.js", "/reader/host.js",
+                        "/reader/frus-highlights.js", "/frus-explorers/", "/frus-explorer.html"] {
                 let outside = try problem(try await http.execute(uri: uri, method: .get), .notFound)
                 #expect(outside.instance == uri && outside.detail.hasPrefix("This server answers under /frus-explorer/"), "\(uri)")
             }

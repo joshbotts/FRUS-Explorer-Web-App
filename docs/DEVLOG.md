@@ -2,6 +2,110 @@
 
 One entry per session, newest first.
 
+## Session 15c: highlights, and check 6
+
+24 October 2026 · branch `claude/phase-2-afce75` · PR_LINK · upstream `503a730b`, unchanged
+
+Phase 2's row S15c, on the critical path: S15d, notes, follows it. Highlights come to the reader as the app makes and draws them, with the app's own scripts from the kit, and check 6 runs in CI over the 393 fixture rows. No upstream pull request, and no schema change: S14a's `highlights` table holds it all.
+
+**What the app's code says,** at `503a730b`:
+
+- **A highlight** (`DocumentHighlight`) is a pair of UTF-16 offsets into the document's flat text, a `colorTag`, a `noteId`, the `selectedText` and the `renderingVersion` it was made at, and its `createdAt`. It belongs to no project.
+- **Made** (`MacDocumentView.createWebKitHighlight`, iOS's `createHighlight`): the offsets are the selection bridge's last in-document report, `start >= 0 && end > start` (`hasOffsets`); the text is `flatTextExcerpt(from: model, start:, end:) ?? ""`, each paragraph's part joined by a blank line, and the version `ASTToRenderNodeConverter.renderingVersion(for: model)`, both over the reader's own model. The script's `sel.toString()` is never stored. A colour over text another highlight holds makes another: no merge, no dedup. The range goes when the selection clears, for a footnote's selection and after a verb.
+- **Drawn** (`renderHighlights`): every highlight of the document, its `@Query` sorted by `createdAt`, as `ReaderHighlight` (`{startOffset, endOffset, color, isStale}`), after every load and every change. Stale is a stored version that is not the page's; a stale one is drawn in `frus-stale`'s amber and answers no tap.
+- **Removed:** the kit's click listener reports a tap's `{startOffset, endOffset, color}`, and the app asks "Remove Highlight", "This highlight will be permanently removed.", with Remove and Cancel, then deletes the first highlight with those offsets.
+- **Not in the app:** a way to change a highlight's colour (`colorTag` is written only at creation), a way to remove one by keyboard, and a list of a document's highlights outside the review sheet (`DocumentChangeReviewSheet`), whose rows are by `startOffset`, in its words: "Highlights", "Remove…", "Highlighted passage" for one that stored no words, and its two lines for one made against an earlier version of the text.
+- **The selection bar** (`FloatingSelectionBar`): the four colours, Excerpt, Look Up in NARA and Note, in `SelectionVerb.allInOrder`, the colours drawn as dots named "Highlight Yellow" and so on; a dark pill 8 points above the selection, kept 8 inside the web view, flipped below when there is no room; a clear waits 200 ms before it hides the bar. The Mac disables the colours and Excerpt in a footnote; iOS leaves them out. The keyboard's way is the Document menu's Highlight Selection, whose Yellow is ⇧⌘H.
+
+**Delivered**
+
+- **The reader's page loads the app's three scripts from the kit,** `kOffsetEngineJS`, `kHighlightsJS` and `kSelectionJS`, byte for byte, as the server's own files: `/reader/frus-offset-engine.js`, `frus-highlights.js` and `frus-selection.js`, deferred, before `host.js`, in the order the app injects them at document end. The page's policy is unchanged: `script-src 'self'` admits them.
+- **The host script** (`ReaderHostScript.swift`):
+  - draws what the parent sends (`{kind: 'highlights'}`) with the kit's `FRUSHighlights.render`, after trying each with the kit's own `buildRanges`, so one the kit cannot draw does not keep the others from the page, and answers what it drew (`highlightsRendered`);
+  - collapses the selection to its end once a colour is chosen (`collapseSelection`);
+  - posts ⇧⌘H or Ctrl+Shift+H (`highlightShortcut`) and Alt+F10 (`selectionBarShortcut`), each only over a selection in the text, which the kit's `rangeEndpointToOffset` and `selectionGeometry` place, and Escape over any selection (`selectionEscape`);
+  - drops the kit's `highlightTapped` for a click made from the keyboard, whose point the kit's hit test cannot read, and for a click on a reader link, which is followed instead.
+- **The store** (`Sources/FRUSLightCore/UserHighlights.swift`, `HighlightStore`): a document's highlights in the reader's order, `created_at ASC NULLS FIRST, upper(id)`; all of a user's; one by id in any case; made as given; recoloured, changing `color_tag` alone; deleted by id.
+- **The API** (`Sources/FRUSLightAPI/Highlights.swift`), under the S14c guard:
+  - `GET /api/v1/me/volumes/{v}/documents/{d}/highlights`: the document's highlights, with its current `renderingVersion` and each one's `isStale` by `ReaderHighlight.isStale`, both absent when the TEI is not mounted or the document is not in it;
+  - `POST` of the same path with `{startOffset, endOffset, colorTag, renderingVersion}`: 201, its text and version the kit's over the page's model; refused for a colour that is not one of the four, offsets outside the text, and `DOCUMENT_CHANGED` (409) when the page's version has moved;
+  - `GET /api/v1/me/highlights`, and `GET`, `PATCH {colorTag}` and `DELETE` of `/api/v1/me/highlights/{id}`, `HIGHLIGHT_NOT_FOUND` for an id the user has none for.
+  - `JSONBody.decode` now reads `DecodingError.dataCorrupted`, a number that is no `Int`, as `INVALID_FIELD`, where it was a 500.
+  - `ReaderService` keeps each document's rendering version with the volume's parse, and builds the model the page and a new highlight share (`ReaderService.model`).
+- **The browser app:**
+  - `useReaderHighlights` (`web/src/reader/`): the document's highlights drawn on each load of the frame and each change; the selection held only while it lasts; the bar; ⇧⌘H; a tap's question; and the bar put away on a scroll, a press elsewhere, Escape or the rail.
+  - `SelectionBar`: the four dots in a toolbar named "Highlight Selection", placed by the Mac's rule inside the frame's content box.
+  - `RemoveHighlight`: the app's question, Cancel first.
+  - The Research rail's Highlights section, above Tags, where S15d's Notes will come before it: the review sheet's rows and words, each with a Color group of four buttons and Remove….
+  - `highlightRules.ts`, the few lines of the app's view code the browser app mirrors, and `Modal`, moved from the tag editor to `web/src/shell/` so the question uses it; it now keeps Escape from the rail around it.
+- **Check 6** (`fixtures/highlights/`): `frus-parity highlight-samples` places highlights by offset over each golden row's flat text, along the server's path; FRUSParityTests holds the file to the kit; and `web/e2e/highlights-check6.spec.ts` reads every row back from the reader's page in Chromium.
+
+**Decided here, each the web's own**
+
+- **Recolouring,** which the app cannot do, and which the row's done-when asks for: the Research rail's Highlights section, a Color group of four buttons per row, one `PATCH` of `colorTag` a press, as the app's architecture note on highlights imagines an edit of one. A colour chosen over a highlight's text in the bar makes another highlight, as in the app.
+- **Removing by keyboard,** which the app has only for a stale highlight, in its review sheet: each row's Remove…, which asks the app's question. It is also how a stale highlight, which answers no tap, is removed before phase 3's review.
+- **The keyboard's way into the bar:** Alt+F10, the key rich-text editors give a toolbar. ⇧⌘H, or Ctrl+Shift+H, is the app's, and makes a yellow highlight at once. Chromium selects text by keyboard only with caret browsing, F7; the browser suite turns it on with `--blink-settings`, keeping the hover and pointer settings Playwright's headless launch passes, since Chromium keeps only the last of that switch.
+- **The selection collapses to its end** once a colour is chosen, as the app's iPhone and iPad reader clears it, so the new colour is not hidden under the selection's and a caret stays where it was. The Mac keeps the selection.
+- **A click on a reader link inside a highlight** follows the link and does not ask: the app does both, and two modal dialogs cannot open at once. A click made from the keyboard reports no tap, since the kit's hit test would read the point (0, 0).
+- **A highlight the kit cannot draw:** the kit's `buildRanges` ends a range with `setEnd(node, offset + 1)`, which throws for a `<br>`, so a highlight that ends on a line break throws in `FRUSHighlights.render`, after it has cleared the page's highlights. The app catches the error and draws none of the document's. The web's host draws the others and the rail names that one ("This highlight could not be drawn in the text."). The fix belongs in the kit: a FRUS-Explorer pull request, which the next pin move brings.
+- **`renderingVersion` in a new highlight's request,** refused with `DOCUMENT_CHANGED` when the page's text has changed since it loaded, so offsets never land on other words; after one, the reader lets the selection go and keeps the page's version until the page is loaded again, as the server's sentence asks. The page check is asked again each time the frame loads a page, so its version is the one the frame holds.
+- **The rail's place for Highlights,** above Tags, where S15d's Notes will come before it, as the app's rail runs Notes, then Tags. SPEC's list of the rail's sections names it.
+
+**How "kept verbatim" is read.** PLAN's row has `/api/v1/me/highlights` keep offsets, `selectedText` and `renderingVersion` verbatim. The store and every answer keep the three as written. A highlight made on the web takes its text and version from the kit over the page's model, as the app's reader does, and never the browser's `sel.toString()`, which counts skipped text such as a list's labels; an import (S16c) writes the Mac's three as they came.
+
+**Check 6 on the fixtures, and in two steps.** A highlight's selected text is the kit's excerpt of the text between its offsets: within a paragraph that text, across paragraphs each one's part joined by a blank line, and for the Mac's made before 3 July that text itself. So the text the page holds between the offsets cannot equal the selected text across paragraphs, and SPEC's row now says what is compared where:
+- in Chromium, `web/e2e/highlights-check6.spec.ts` loads each of the 393 golden rows' pages from the server and checks the rendering version it sends; the kit's offset engine's flat text, by length and SHA-256; each sample's text, read through the engine's map of the live page; the kit's selection bridge reading the kit's own range for each sample back to its offsets; and the kit's renderer drawing one range for each, under its colour's name or the stale one's;
+- in Swift, `HighlightSamplesTests` makes `fixtures/highlights/samples.json` again along the server's path and expects it byte for byte, and checks each sample's text against the flat text and its selected text against the kit's `flatTextExcerpt`, which is what the API stores for a highlight there (`HighlightTests`).
+
+The file is 591 KB: 393 rows and 2,498 highlights, 954 of them with a selected text that is not their text. A pin move that changes a row's flat text fails until `frus-parity highlight-samples` writes it again; a row whose text no longer matches is reported and its samples are not read, in both halves. `ReaderRenderer.fullParsePass` and the samples share one converter step (`ReaderRenderer.model`), so the path check 4 holds to the golden rows is the one the samples are placed over.
+
+**Mirrored, with a parity test.** `HighlightViewParityTests` reads the app's source at the pin and `web/src` and holds them together: the verbs and colours to the kit's `SelectionVerb.allInOrder` and `needsDocumentOffsets`; `hasOffsets` in the browser app and in the host script; the bar's gap, margin, side, flip and clamps to `FloatingSelectionBar.anchorCenter`, and its 200 ms wait before a clear; the reader's order (`sort: \DocumentHighlight.createdAt`), which the store gives, and the review sheet's (`startOffset`); the review sheet's stale lines (`HighlightReview.status`); the ⇧⌘H shortcut; and the app's 14 words the web takes, each under its key in the app and the web.
+
+**Tests**
+
+- **FRUSLightCoreTests,** 73 to 78: `UserHighlightTests`, 5. What a highlight keeps, verbatim; the reader's order, a highlight with no time first and two of one time by id in uppercase, an import's lowercase id among them; another colour; a delete by id beside another over the same text; each user's own.
+- **FRUSLightServerTests,** 122 to 129:
+  - `HighlightTests`, 6: one made as the app's reader makes one, within a paragraph and across two, and another over the same text; the kit's stale rule, and a document the server cannot render; another colour and Remove; each refusal, nothing stored; each user's own; `FRUS_USER_DATA=off` and the routes under a path;
+  - `theAppsReaderScriptsAreServedFromTheKit`; and the page, host-script and base-path tests extended, with the classification's test now holding that it reshapes the page but leaves its flat text and version.
+- **FRUSParityTests,** 122 to 129: `HighlightSamplesTests`, 2, and `HighlightViewParityTests`, 5.
+- **The web unit suite,** 110 to 157 in 20 files: the frame's messages; `highlightRules`; `SelectionBar`; the reader's highlights, from drawing on each load to the shortcuts, the question and the notice; and the rail's Highlights section.
+- **The browser suite,** 23 to 30 tests:
+  - `highlights.spec.ts`, by pointer: a phrase dragged over, the bar's four colours over the frame, Highlight Yellow, Green in the rail, a reload, and a click on it that asks Remove Highlight, with axe at each state; and a footnote's selection with no bar, and a reader link inside a highlight that opens its card and does not ask;
+  - `highlights-keyboard.spec.ts`, by keyboard, with caret browsing: Tab into the text, a selection by Shift+Ctrl+Arrow, Ctrl+Shift+H for yellow, Alt+F10 and the arrows for blue, the rail by Shift+Tab, Pink, a reload, and both removed with Remove…, Escape cancelling the question and leaving the rail open, focus on the next row's Remove… and then the section;
+  - `highlights-check6.spec.ts`, check 6, in about 8 seconds a run.
+  Each leaves the store with no highlights, since the suite runs twice on one store.
+- **`scripts/compose-smoke`:** the page names the four scripts and each is served, at the root, under the path and through nginx; and a highlight is made in the page's version, listed and removed through the guard.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64:** CI's swift job, replayed under the app's heavy-job lock at the final tree, over `main` at `98ef803`. This package's own targets built clean with no warning. All 2,187 tests pass, up from 2,168, with the one named skip and nothing cancelled:
+  - FRUSLightCoreTests 78, FRUSLightServerTests 129 and FRUSParityTests 129;
+  - the others as at #58: FRUSCoreKitTests 1,191, SourceNoteKitTests 321, FTS5StoreTests 219, ManifestGeneratorTests 60, SemanticVectorsKitTests 40, CrossRefKitTests 10, GeneratorKitTests 7 and FTS5CheckTests 3.
+- **The web job's steps,** through `scripts/npm`: typecheck, lint and the build are clean, and the unit suite passes 157 tests in 20 files.
+- **`scripts/compose-smoke --e2e`** on this branch's image passes:
+  - the four scripts and the highlight's round through the guard;
+  - 30 browser tests on Chromium at the root, and 30 under the path through nginx's recipe, with no axe violations;
+  - in each run, check 6 over the 393 rows and their 2,498 highlights, in about 8 seconds: frus1894Nicaragua's 139 rows and 973 highlights, frus1961-63v06's 123 and 740, and frus1969-76ve09p1's 131 and 785.
+
+**Records**
+
+- `SPEC.md`: Reader rendering's scripts and host; the resources table's reader assets; the selection bar, highlights and the rail's Highlights section; Highlights, how one is made and what stale is; the route table; the user's data, Highlights; and check 6's row, in two steps.
+- `PLAN.md`: S15c done, in a paragraph after S16b's, with check 6's two steps.
+- `INSTALL.md`: highlights in the reader and the rail, by keyboard with caret browsing; the API's routes and its two new codes; and the lines on the store, its address and its backups.
+- `COORDINATION.md` §1: what the server and the browser app now take from the kit, and what they mirror.
+- `fixtures/highlights/README.md`; the README's Status; `web/src/copy.ts`'s account of the app's words; and this log.
+
+**Notes**
+
+- **Reviews.** Before code, the design was read against the app by three readers, for parity, for the browser and for the server, who between them found 31 things; every one changed the design, among them ⇧⌘H making yellow at once, the offsets held only while the selection lasts, check 6 in two steps, the review sheet's words and order for the rail, and the keyboard test in its own worker. After it, the unit tests' author found four bugs, each pinned and then fixed: a reload of the same page drew nothing; a text size changed and back before the other page came drew nothing; after one Alt+F10, every bar took focus; and after `DOCUMENT_CHANGED` a retry filed the old text's offsets under the new version. A last review in four dimensions, each finding put to a skeptic, upheld 16 of 23, all fixed here, among them focus lost from a button disabled under it, Cancel live while a removal was sent, a highlight removed in another tab, Alt+F10 in the app placing the bar from a rectangle the frame had scrolled past, and records that credited the app with a tie-break and a keyboard removal it lacks.
+- **What Chromium showed:**
+  - the paragraph's "Kennedy" in d1 is an unresolved name, `<a href="#">`, not a reader link, so a click on it inside a highlight is a tap and asks; the heading's names are the reader links;
+  - Chromium cannot start a selection by keyboard in a page without caret browsing, and a click made from the keyboard has the point (0, 0);
+  - the whole of check 6 over 393 rows, at the root and under the path, finds the page's flat text the kit's on every row: the HTML5 parser's restructuring of a `<p>` inside a `<p>` (22 rows) moves no text.
+- **Not done here:** the shared copy of `PLAN.md` that the phase-2 planning session keeps.
+
+**Next: S15d,** notes and summaries, which follows this row, its RTF codec held to golden spans that `tools/mac-golden` gains there and the owner makes on a Mac; beside it S19a, Citation Lookup, and S14e, S14d and S14b on the server's track. Two upstream pull requests would serve this row's follow-ups: the kit's `buildRanges` ending a range after a `<br>`, and the kit's test of a passage against a highlight's offsets in either of its two forms (`HighlightReanchor`'s private `extracts`) made public, for check 6 on the Mac's highlights in S16c.
+
 ## Session 16b, follow-up: a draft that waits for its export passes its checks
 
 24 October 2026 · branch `claude/pending-results-wait` · [#58](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/58) · upstream `503a730b`, unchanged

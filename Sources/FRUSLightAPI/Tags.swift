@@ -101,7 +101,7 @@ enum TagRoutes {
         me.get(documentTags) { request, context -> DocumentTags in
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
-            let document = try self.document(context, resources: resources)
+            let document = try UserDataRoutes.document(context, resources: resources)
             let tags = try await Blocking.run { try store.tags(of: document, for: user.id) }
             return DocumentTags(document, tags)
         }
@@ -109,7 +109,7 @@ enum TagRoutes {
         me.put(documentTags) { request, context -> DocumentTags in
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
-            let document = try self.document(context, resources: resources)
+            let document = try UserDataRoutes.document(context, resources: resources)
             let body = try await JSONBody.decode(TagSet.self, from: request, fields: ["tagIds"])
             return DocumentTags(document, try await stored { try store.setTags(body.tagIds, of: document, for: user.id, at: now()) })
         }
@@ -117,22 +117,10 @@ enum TagRoutes {
         me.delete("volumes/:volumeId/documents/:documentId/tags/:tagId") { request, context -> DocumentTags in
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
-            let document = try self.document(context, resources: resources)
+            let document = try UserDataRoutes.document(context, resources: resources)
             let id = try context.parameters.require("tagId")
             return DocumentTags(document, try await stored { try store.removeTag(id, from: document, for: user.id) })
         }
-    }
-
-    /// The document a route names. Its volume must be in the catalogue; the document is named and
-    /// not looked up, since the Mac's assignments can name a document this server does not hold.
-    private static func document(_ context: APIRequestContext, resources: ServerResources) throws -> DocumentKey {
-        let volumeId = try context.parameters.require("volumeId")
-        let documentId = try context.parameters.require("documentId")
-        guard resources.volume(volumeId) != nil else { throw APIProblem.volumeNotFound(volumeId) }
-        guard documentId.utf8.count <= 256, FRUSURLScheme.isSafeComponent(documentId) else {
-            throw APIProblem.invalidParameter("documentId", "\(documentId) is not a document's id.")
-        }
-        return DocumentKey(volumeId: volumeId, documentId: documentId)
     }
 
     /// Runs a store call off the cooperative pool, its refusals as problems.

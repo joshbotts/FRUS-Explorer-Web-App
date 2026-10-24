@@ -1,20 +1,27 @@
 // The reader's Research rail (SPEC, Reader and Research rail), the app's RESEARCH panel beside the
 // text: from S14c its Tags section, which the app's rail keeps closed until it is opened, and
 // remembers. The section shows the document's tags, each with the × that takes it off, and Add Tag,
-// which opens the tag picker.
+// which opens the tag picker. From S15c a Highlights section above it, the web's own, where S15d's
+// Notes will come before it: the document's highlights, as the app's review sheet lists them, each
+// with its colour to change, which the app has no way to do, and Remove…, which asks as a tap on the
+// highlight does and is the keyboard's way to remove one: the app's review sheet removes a stale one,
+// but the app has no keyboard way to remove one that is not.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
-import type { UserTag } from '../api/types';
-import { documentTagsQuery, removeDocumentTag } from '../api/userData';
+import { type Highlight, type HighlightColor, highlightColors, type UserTag } from '../api/types';
+import { documentHighlightsQuery, documentTagsQuery, recolorHighlight, removeDocumentTag } from '../api/userData';
 import { copy } from '../copy';
-import { useTagsSectionOpen } from '../settings/preferences';
+import { reviewOrder, staleLine } from '../reader/highlightRules';
+import { RemoveHighlight } from '../reader/RemoveHighlight';
+import { useHighlightsSectionOpen, useTagsSectionOpen } from '../settings/preferences';
 import { TagPicker } from './TagPicker';
 
 export function ResearchRail({
   volumeId,
   documentId,
   documentNumber,
+  undrawnHighlights = new Set(),
   autoFocus,
   onClose,
 }: {
@@ -22,14 +29,20 @@ export function ResearchRail({
   documentId: string;
   /** The printed number, which the tag picker's title names, as the app's does. */
   documentNumber?: string;
+  /** The ids of the highlights the reader's page could not draw. */
+  undrawnHighlights?: ReadonlySet<string>;
   /** Whether opening it takes focus to it: when the reader opens it, not when a page loads with it open. */
   autoFocus: boolean;
   onClose: () => void;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
+  const highlightsToggle = useRef<HTMLButtonElement>(null);
   const [tagsOpen, setTagsOpen] = useTagsSectionOpen();
+  const [highlightsOpen, setHighlightsOpen] = useHighlightsSectionOpen();
   const tags = useQuery(documentTagsQuery(volumeId, documentId));
+  const highlights = useQuery(documentHighlightsQuery(volumeId, documentId));
   const count = tags.data?.items.length ?? 0;
+  const highlightCount = highlights.data?.items.length ?? 0;
   const [focusOnOpen] = useState(autoFocus);
   useEffect(() => {
     if (focusOnOpen) heading.current?.focus({ preventScroll: true });
@@ -56,6 +69,39 @@ export function ResearchRail({
           {copy.research.close}
         </button>
       </div>
+      <section className="rail-section">
+        <h3>
+          <button
+            ref={highlightsToggle}
+            type="button"
+            className="disclosure"
+            aria-expanded={highlightsOpen === 'open'}
+            aria-controls="research-highlights"
+            aria-label={highlightCount > 0 ? `${copy.highlights.section}, ${copy.highlights.count(highlightCount)}` : undefined}
+            onClick={() => setHighlightsOpen(highlightsOpen === 'open' ? 'closed' : 'open')}
+          >
+            <span className="disclosure-mark" aria-hidden="true">
+              {highlightsOpen === 'open' ? '▾' : '▸'}
+            </span>
+            {copy.highlights.section}
+            {highlightCount > 0 && (
+              <span className="badge" aria-hidden="true">
+                {highlightCount.toLocaleString('en-US')}
+              </span>
+            )}
+          </button>
+        </h3>
+        {highlightsOpen === 'open' && (
+          <div id="research-highlights">
+            <HighlightsSection
+              highlights={highlights.data?.items}
+              error={highlights.error}
+              undrawn={undrawnHighlights}
+              toggle={highlightsToggle}
+            />
+          </div>
+        )}
+      </section>
       <section className="rail-section">
         <h3>
           <button
@@ -158,5 +204,150 @@ function TagsSection({
         />
       )}
     </>
+  );
+}
+
+function HighlightsSection({
+  highlights,
+  error,
+  undrawn,
+  toggle,
+}: {
+  highlights?: Highlight[];
+  error: unknown;
+  undrawn: ReadonlySet<string>;
+  /** The section's disclosure, which takes focus when the last highlight is removed. */
+  toggle: { current: HTMLButtonElement | null };
+}) {
+  const client = useQueryClient();
+  const list = useRef<HTMLUListElement>(null);
+  const [removing, setRemoving] = useState<{ highlight: Highlight; index: number } | null>(null);
+  // The rows whose colour is being changed: each waits for its own change alone.
+  const [recolouring, setRecolouring] = useState<ReadonlySet<string>>(new Set());
+  const [failure, setFailure] = useState<string | null>(null);
+  const rows = highlights ? reviewOrder(highlights) : undefined;
+
+  async function recolour(highlight: Highlight, color: HighlightColor) {
+    if (recolouring.has(highlight.id) || highlight.colorTag === color) return;
+    setRecolouring((rows) => new Set(rows).add(highlight.id));
+    setFailure(null);
+    try {
+      await recolorHighlight(client, highlight, color);
+    } catch (problem) {
+      setFailure(errorMessage(problem));
+    } finally {
+      setRecolouring((rows) => {
+        const left = new Set(rows);
+        left.delete(highlight.id);
+        return left;
+      });
+    }
+  }
+
+  /** After a removal, focus goes to the next row's Remove…, else the one before it, else the section. */
+  function focusAfterRemoving(index: number) {
+    requestAnimationFrame(() => {
+      const buttons = list.current?.querySelectorAll<HTMLButtonElement>('button.remove-highlight') ?? [];
+      (buttons[index] ?? buttons[index - 1] ?? toggle.current)?.focus();
+    });
+  }
+
+  if (error) {
+    return (
+      <p className="error" role="alert">
+        {errorMessage(error)}
+      </p>
+    );
+  }
+  if (!rows) return <p role="status">{copy.highlights.loading}</p>;
+  return (
+    <>
+      {rows.length > 0 && (
+        <ul ref={list} className="highlight-list">
+          {rows.map((highlight, index) => (
+            <HighlightRow
+              key={highlight.id}
+              highlight={highlight}
+              undrawn={undrawn.has(highlight.id)}
+              busy={recolouring.has(highlight.id)}
+              onRecolour={(color) => void recolour(highlight, color)}
+              onRemove={() => setRemoving({ highlight, index })}
+            />
+          ))}
+        </ul>
+      )}
+      {failure && (
+        <p className="error" role="alert">
+          {failure}
+        </p>
+      )}
+      {removing && (
+        <RemoveHighlight
+          highlight={removing.highlight}
+          onClose={(removed) => {
+            const { highlight, index } = removing;
+            setRemoving(null);
+            // Once the question has gone: while a modal dialog is open, all else is inert.
+            if (removed) focusAfterRemoving(index);
+            else
+              requestAnimationFrame(() =>
+                list.current?.querySelector<HTMLButtonElement>(`button.remove-highlight[data-id="${CSS.escape(highlight.id)}"]`)?.focus(),
+              );
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * One highlight, as the app's review sheet shows it: its words, or Highlighted passage when it stored
+ * none; the sheet's line when it was made against an earlier version of the text; its colour, which
+ * the web can change; and Remove….
+ */
+function HighlightRow({
+  highlight,
+  undrawn,
+  busy,
+  onRecolour,
+  onRemove,
+}: {
+  highlight: Highlight;
+  undrawn: boolean;
+  busy: boolean;
+  onRecolour: (color: HighlightColor) => void;
+  onRemove: () => void;
+}) {
+  const textId = useId();
+  const stale = staleLine(highlight);
+  return (
+    <li className={`highlight-row hl-${highlight.colorTag}`}>
+      <p id={textId} className="highlight-text">
+        {highlight.selectedText === '' ? <em>{copy.highlights.noPassage}</em> : highlight.selectedText}
+      </p>
+      {stale && <p className="highlight-status">{copy.highlights[stale]}</p>}
+      {undrawn && <p className="highlight-status">{copy.highlights.notDrawn}</p>}
+      <div className="highlight-actions">
+        <div className="highlight-colors" role="group" aria-label={copy.highlights.color} aria-describedby={textId}>
+          {highlightColors.map((color) => (
+            <button
+              key={color}
+              type="button"
+              className={`highlight-color hl-${color}`}
+              aria-pressed={highlight.colorTag === color}
+              aria-describedby={textId}
+              // aria-disabled, not disabled, so the button pressed by keyboard keeps its focus.
+              aria-disabled={busy}
+              onClick={() => onRecolour(color)}
+            >
+              {copy.highlights.colors[color]}
+            </button>
+          ))}
+        </div>
+        <button type="button" className="remove-highlight" data-id={highlight.id} aria-describedby={textId} onClick={onRemove}>
+          {copy.highlights.remove}
+        </button>
+      </div>
+    </li>
   );
 }

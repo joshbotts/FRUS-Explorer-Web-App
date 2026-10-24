@@ -121,7 +121,8 @@ Open http://localhost:8080 in a browser.
   - a reference that resolves nowhere opens an explanation;
   - a document in a volume this server does not have offers its page on history.state.gov.
 - **Cite** opens the citation beside the document, in the History at State, Chicago or Turabian style. **Copy Citation** copies it as plain text, and **Copy URL** the document's address on history.state.gov. **Copy BibTeX** and **Copy RIS** copy its record for a reference manager such as Zotero, and **Save as .bib** saves the BibTeX as a file. The browser allows copying at http://localhost but not at another machine's address over plain http, so the panel then selects the text for you to copy.
-- **Research**, beside **Cite**, opens the Research rail. Its **Tags** section, closed until you open it and then as you left it, lists the document's tags: **×** takes one off, and **Add Tag** opens the tag picker. There **New Tag** makes a tag and switches it on, **Your Tags** switches the others on and off, **Done** gives the document the tags switched on, and **Cancel** deletes the tags you made there, as in the app.
+- **Highlights**, as in the app: select text in a document and a bar above it offers the four colours; one makes a highlight, kept on the server, and **⇧⌘H** on a Mac, or **Ctrl+Shift+H** elsewhere, makes a yellow one, as the app's Highlight Selection ▸ Yellow does. **Alt+F10** moves into the bar, where the arrow keys choose a colour. Selecting text by keyboard needs the browser's caret browsing, **F7** in Chrome. Clicking a highlight asks **Remove Highlight**. A highlight made against an earlier version of the document's text is drawn in amber and answers no click, as in the app; the Research rail removes it.
+- **Research**, beside **Cite**, opens the Research rail. Its **Highlights** section lists the document's highlights, each with its colour, which you can change there, as the app cannot, and **Remove…**, which asks as a click on the highlight does. Its **Tags** section, closed until you open it and then as you left it, as Highlights is, lists the document's tags: **×** takes one off, and **Add Tag** opens the tag picker. There **New Tag** makes a tag and switches it on, **Your Tags** switches the others on and off, **Done** gives the document the tags switched on, and **Cancel** deletes the tags you made there, as in the app.
 - **Settings**, at the top, lists your tags under **Tags**. A tag opens its editor, to rename it, to merge it into another, which then carries its documents, or to delete it, which takes it off every document; **New Tag…** makes one. Tags are kept on the server, in its store in the Docker volume, so any browser on this machine sees the same ones.
 
 The address of every screen, search and document can be bookmarked or shared with another browser on this machine. Everything works from the keyboard, starting with **Skip to content**, the first stop of the Tab key.
@@ -172,7 +173,7 @@ What a link in a document's page leads to, given the link as the page writes it:
 curl -s -G 'http://localhost:8080/api/v1/volumes/frus1961-63v06/documents/d1/link' --data-urlencode 'href=frusexplorer://person/p_KNS2'
 ```
 
-Your tags are under `/api/v1/me`. A change to them must carry the token `GET /api/v1/me` gives, in `X-CSRF-Token`, come from the server's own address, in `Origin`, and send JSON, as the browser does: a server with no sign-in is guarded so against other pages open in your browser. With the token in a variable:
+Your tags and highlights are under `/api/v1/me`. A change to them must carry the token `GET /api/v1/me` gives, in `X-CSRF-Token`, come from the server's own address, in `Origin`, and send JSON, as the browser does: a server with no sign-in is guarded so against other pages open in your browser. With the token in a variable:
 
 ```bash
 token=$(curl -s http://localhost:8080/api/v1/me | sed -nE 's/.*"csrfToken":"([^"]+)".*/\1/p')
@@ -182,9 +183,9 @@ token=$(curl -s http://localhost:8080/api/v1/me | sed -nE 's/.*"csrfToken":"([^"
 curl -s -X POST http://localhost:8080/api/v1/me/tags -H "X-CSRF-Token: $token" -H 'Origin: http://localhost:8080' -H 'Content-Type: application/json' --data '{"name": "Primary source"}'
 ```
 
-`GET /api/v1/me/tags` lists them, and `PUT /api/v1/me/volumes/frus1961-63v06/documents/d1/tags` with `{"tagIds": [...]}` gives a document exactly those. The token lasts until the server restarts.
+`GET /api/v1/me/tags` lists them, and `PUT /api/v1/me/volumes/frus1961-63v06/documents/d1/tags` with `{"tagIds": [...]}` gives a document exactly those. `GET /api/v1/me/volumes/frus1961-63v06/documents/d1/highlights` lists a document's highlights, with the document's `renderingVersion`. A `POST` there with `{"startOffset", "endOffset", "colorTag", "renderingVersion"}` makes one over those offsets into the document's text, in that version of the text, and `PATCH` or `DELETE /api/v1/me/highlights/{id}` changes its `colorTag` or removes it. The token lasts until the server restarts.
 
-An error names its cause in a `code`: `INDEX_NOT_READY` for a search before an import has finished, `EMPTY_QUERY` for a query with nothing left to search, `TEI_NOT_AVAILABLE` when the volume is not in your TEI folder, and `DOCUMENT_NOT_FOUND`, `SECTION_NOT_FOUND`, `VOLUME_NOT_FOUND` or `TAG_NOT_FOUND` for an id the volume, the catalogue or your tags lack. Under `/api/v1/me` the guard refuses a request, read or change, that was not sent to the address in `FRUS_PUBLIC_URL` as `HOST_NOT_ALLOWED`, such as one to http://127.0.0.1:8081 for a server at http://localhost:8080; and a change without the current token as `CSRF_TOKEN_INVALID`, and from another page as `ORIGIN_NOT_ALLOWED`.
+An error names its cause in a `code`: `INDEX_NOT_READY` for a search before an import has finished, `EMPTY_QUERY` for a query with nothing left to search, `TEI_NOT_AVAILABLE` when the volume is not in your TEI folder, and `DOCUMENT_NOT_FOUND`, `SECTION_NOT_FOUND`, `VOLUME_NOT_FOUND`, `TAG_NOT_FOUND` or `HIGHLIGHT_NOT_FOUND` for an id the volume, the catalogue, your tags or your highlights lack, and `DOCUMENT_CHANGED` for a highlight asked for in a version of the document's text the server no longer has. Under `/api/v1/me` the guard refuses a request, read or change, that was not sent to the address in `FRUS_PUBLIC_URL` as `HOST_NOT_ALLOWED`, such as one to http://127.0.0.1:8081 for a server at http://localhost:8080; and a change without the current token as `CSRF_TOKEN_INVALID`, and from another page as `ORIGIN_NOT_ALLOWED`.
 
 ## If an import is refused
 
@@ -236,11 +237,11 @@ To hear of each release, watch the repository on GitHub for releases only (Watch
 | --- | --- |
 | `docker compose stop` | Stops the server, keeping everything |
 | `docker compose down` | Removes the container, keeping the index in the volume |
-| `docker compose down --volumes` | Removes the index and your tags too; you would import again, and your tags would be gone |
+| `docker compose down --volumes` | Removes the index and your tags and highlights too; you would import again, and your tags and highlights would be gone |
 
 ## Behind a reverse proxy
 
-Compose publishes the server on this machine's 127.0.0.1 only. A reverse proxy on the same machine, such as nginx, can give it an address others reach, with TLS: a host of its own, such as `https://frus.example.org/`, or a path of a site that serves other things, such as `https://example.org/frus-explorer/`. **The server has no sign-in yet,** so anyone who can reach the proxy can use it, your tags included, which they can read and change: keep the proxy behind your own network rules or sign-in until sign-in through the proxy arrives later in phase 2, or set `FRUS_USER_DATA=off` in `.env` for a read-only server, which keeps no tags and offers none.
+Compose publishes the server on this machine's 127.0.0.1 only. A reverse proxy on the same machine, such as nginx, can give it an address others reach, with TLS: a host of its own, such as `https://frus.example.org/`, or a path of a site that serves other things, such as `https://example.org/frus-explorer/`. **The server has no sign-in yet,** so anyone who can reach the proxy can use it, your tags and highlights included, which they can read and change: keep the proxy behind your own network rules or sign-in until sign-in through the proxy arrives later in phase 2, or set `FRUS_USER_DATA=off` in `.env` for a read-only server, which keeps no tags or highlights and offers none.
 
 Write the address people will open into `.env`, then make the container again, which keeps the index in the volume:
 
@@ -292,8 +293,8 @@ These go in `.env` beside `compose.yaml`.
 | --- | --- | --- |
 | `FRUS_TEI_DIR` | `./tei` | Folder of TEI volumes, mounted read-only |
 | `FRUS_HOST_PORT` | `8080` | Port on this machine's 127.0.0.1 |
-| `FRUS_PUBLIC_URL` | `http://localhost:8080`, on `FRUS_HOST_PORT` | The address people open. Behind a reverse proxy, its address, which may end in a path such as `/frus-explorer/`: see Behind a reverse proxy. A change to your tags is taken only from a page at this address; on this machine, `localhost`, `127.0.0.1` and `[::1]` at its port are one address |
-| `FRUS_USER_DATA` | `on` | `off` makes a read-only server, which keeps no tags or other research data and refuses any change |
+| `FRUS_PUBLIC_URL` | `http://localhost:8080`, on `FRUS_HOST_PORT` | The address people open. Behind a reverse proxy, its address, which may end in a path such as `/frus-explorer/`: see Behind a reverse proxy. A change to your tags or highlights is taken only from a page at this address; on this machine, `localhost`, `127.0.0.1` and `[::1]` at its port are one address |
+| `FRUS_USER_DATA` | `on` | `off` makes a read-only server, which keeps no tags, highlights or other research data and refuses any change |
 | `FRUS_IMAGE` | `ghcr.io/joshbotts/frus-explorer-light:edge` | The image to run: a release, or `edge` (see [Releases](#releases)) |
 | `COMPOSE_PROFILES` | none | `pdf` starts Gotenberg, a 700 MB download, for PDF export when it arrives in phase 3 |
 
@@ -302,7 +303,7 @@ These go in `.env` beside `compose.yaml`.
 - **Only this machine can reach the server,** unless a reverse proxy on it forwards to it, as Behind a reverse proxy sets out. The server has no sign-in of its own until phase 3's local accounts; sign-in through the proxy comes before them, in phase 2.
 - **Keep `/data` in the Docker volume.** On a Mac, a folder shared from macOS is not a local filesystem to SQLite. On Linux, replacing the volume with a host folder in `compose.yaml` works if that folder is writable by UID 10001, the server's user.
 - **On Linux,** the TEI files must be readable by UID 10001; a clone made with the usual umask is. On a host with SELinux enforcing, add `,z` after `ro` in the TEI volume line of `compose.yaml`. To run `docker` without `sudo`, your user must be in the `docker` group.
-- **Backups** of your tags, which the server keeps in `/data/app/app.db` in the volume, start later in phase 2 with a daily copy. Until then, keep the volume, and the index can always be imported again. Already, an upgrade that changes the layout of the server's own store, `/data/app/app.db`, first copies it into `/data/backups`. If the change fails, the server leaves the store as it was and does not start, and its log names the copy; Compose starts it again, and it tries again without taking another copy.
+- **Backups** of your tags and highlights, which the server keeps in `/data/app/app.db` in the volume, start later in phase 2 with a daily copy. Until then, keep the volume, and the index can always be imported again. Already, an upgrade that changes the layout of the server's own store, `/data/app/app.db`, first copies it into `/data/backups`. If the change fails, the server leaves the store as it was and does not start, and its log names the copy; Compose starts it again, and it tries again without taking another copy.
 - **Going back to an older server** after such an upgrade: the older server cannot open the changed store, and does not start. Put the copy back first, with the server stopped. List the copies with `docker compose run --rm --no-deps --entrypoint ls frus /data/backups`, then, naming the newest `app-…-before-migration-….db`:
 
   ```bash

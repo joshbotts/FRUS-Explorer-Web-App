@@ -1,6 +1,7 @@
 // The reader: GET /api/v1/volumes/{v}/documents/{d}/html, the document's page rendered from the
-// mounted TEI by FRUSCoreKit, its figures at /api/v1/volumes/{v}/figures/{file}, and the page's
-// host script at /reader/host.js.
+// mounted TEI by FRUSCoreKit, its figures at /api/v1/volumes/{v}/figures/{file}, the app's three
+// reader scripts from the kit at /reader/frus-offset-engine.js, frus-highlights.js and
+// frus-selection.js, and the page's host script at /reader/host.js.
 //
 // The path is check 4's (Tests/FRUSParity/RenderParity.swift, `fullParsePass`): one
 // `parseVolumeFull` of the volume, whose persons and glossary terms make the reader's lookups,
@@ -64,6 +65,8 @@ public actor ReaderService {
     /// Volume ids in `parsed`, least recently used first.
     private var recency: [String] = []
     private var parsing: [String: Task<ParsedVolume, any Error>] = [:]
+    /// The rendering versions of documents of the volumes in `parsed`, each from the parse it names.
+    private var versions: [String: (signature: FileSignature, byDocument: [String: String])] = [:]
     /// How many parses have started.
     private(set) var parseCount = 0
 
@@ -103,6 +106,26 @@ public actor ReaderService {
         return Parsed(ast: ast, lookups: volume.lookups)
     }
 
+    /// A document's rendering version, the kit's over the reader's model, which a highlight is stale
+    /// against. It is computed with no classification: the served index's reshapes the page but not
+    /// its flat text, so not its version (`ReaderPageRouteTests`). Kept while the volume's parse is.
+    public func renderingVersion(volume volumeId: String, document documentId: String) async throws -> String {
+        let volume = try await volume(volumeId)
+        if let kept = versions[volumeId], kept.signature == volume.signature, let version = kept.byDocument[documentId] {
+            return version
+        }
+        guard let ast = volume.documents[documentId] else {
+            throw APIProblem(.notFound, code: "DOCUMENT_NOT_FOUND", detail: "\(volumeId) has no document \(documentId).")
+        }
+        let model = Self.model(Parsed(ast: ast, lookups: volume.lookups), volume: volumeId, classification: nil,
+                               brokenRefs: resources.brokenRefs)
+        let version = ASTToRenderNodeConverter.renderingVersion(for: model)
+        var kept = versions[volumeId].flatMap { $0.signature == volume.signature ? $0 : nil } ?? (signature: volume.signature, byDocument: [:])
+        kept.byDocument[documentId] = version
+        versions[volumeId] = kept
+        return version
+    }
+
     /// One document's body, with no classification applied, its figures at the root.
     public func body(volume volumeId: String, document documentId: String) async throws -> Rendered {
         Self.render(try await document(volume: volumeId, document: documentId), volume: volumeId,
@@ -115,10 +138,7 @@ public actor ReaderService {
     /// reader applies it (`DocumentViewModel.load`); nil leaves the parse as it is.
     nonisolated static func render(_ parsed: Parsed, volume: String, classification: Bool?, part: Part,
                                    base: BasePath, brokenRefs: BrokenRefsIndex) -> Rendered {
-        var ast = parsed.ast
-        if let classification { ast = ast.applyingClassificationOverride(isEditorialNote: classification) }
-        var converter = ASTToRenderNodeConverter(readerOf: volume, lookups: parsed.lookups, brokenRefs: brokenRefs)
-        let model = converter.convert(ast)
+        let model = model(parsed, volume: volume, classification: classification, brokenRefs: brokenRefs)
         let serializer = FRUSRenderNodeHTMLSerializer.reader(figureURL: { ReaderRoutes.figureURL(for: $0, under: base) })
         let html: String
         switch part {
@@ -129,6 +149,18 @@ public actor ReaderService {
                                     serializer: serializer, head: ReaderRoutes.pageHead(under: base))
         }
         return Rendered(html: html, renderingVersion: ASTToRenderNodeConverter.renderingVersion(for: model))
+    }
+
+    /// The model the reader's page is built from: the parse, reshaped by `classification` as the
+    /// app's reader applies it, through the reader's converter. A highlight's offsets, its text and
+    /// its rendering version are the kit's over this model, as the app's reader takes them from its
+    /// `renderModel`.
+    nonisolated static func model(_ parsed: Parsed, volume: String, classification: Bool?,
+                                  brokenRefs: BrokenRefsIndex) -> FRUSDocumentRenderModel {
+        var ast = parsed.ast
+        if let classification { ast = ast.applyingClassificationOverride(isEditorialNote: classification) }
+        var converter = ASTToRenderNodeConverter(readerOf: volume, lookups: parsed.lookups, brokenRefs: brokenRefs)
+        return converter.convert(ast)
     }
 
     private func parsedVolume(_ volumeId: String, at url: URL) async throws -> ParsedVolume {
@@ -157,7 +189,11 @@ public actor ReaderService {
         let volume = try await task.value
         parsed[volumeId] = volume
         touch(volumeId)
-        while recency.count > capacity { parsed[recency.removeFirst()] = nil }
+        while recency.count > capacity {
+            let evicted = recency.removeFirst()
+            parsed[evicted] = nil
+            versions[evicted] = nil
+        }
         return volume
     }
 
@@ -200,10 +236,23 @@ enum ReaderRoutes {
 
     static let renderingVersionHeader = HeaderName("X-FRUS-Rendering-Version")!
 
-    /// What the page adds to the kit's head: the host script, under `base`, which runs after the
-    /// body parses.
+    /// The app's reader scripts, from the kit, by the names of the app's own copies in
+    /// `FRUSExplorer/Resources`, in the order the app injects them at document end
+    /// (`FRUSWebViewConfiguration`): the offset engine, the highlights renderer, which reads the
+    /// engine's map, and the selection bridge.
+    static let annotationScripts: [(path: String, source: String)] = [
+        ("/reader/frus-offset-engine.js", kOffsetEngineJS),
+        ("/reader/frus-highlights.js", kHighlightsJS),
+        ("/reader/frus-selection.js", kSelectionJS),
+    ]
+
+    /// What the page adds to the kit's head, under `base`: the app's three reader scripts, then the
+    /// host script, each deferred, so it runs once the body has parsed, in this order, as the app's
+    /// run at document end.
     static func pageHead(under base: BasePath) -> String {
-        "<script src=\"\(base.prefixing("/reader/host.js"))\" defer></script>\n"
+        (annotationScripts.map(\.path) + ["/reader/host.js"]).map {
+            "<script src=\"\(base.prefixing($0))\" defer></script>\n"
+        }.joined()
     }
 
     /// The one inline script the reader's markup holds: a figure image's `onerror`, which shows
@@ -211,8 +260,8 @@ enum ReaderRoutes {
     static let figureErrorHandler = "this.parentNode.classList.add('missing')"
     static let figureErrorHandlerHash = "sha256-O4LSTB5IvR0PUzEjwmFCMZeO+YGjgMu2Q5Kea551jqY="
 
-    /// The page loads nothing from elsewhere, runs only the host script and the figure handler,
-    /// and can be framed only by the server's own pages.
+    /// The page loads nothing from elsewhere, runs only the server's own scripts and the figure
+    /// handler, and can be framed only by the server's own pages.
     static let pagePolicy = [
         "default-src 'none'", "style-src 'unsafe-inline'", "img-src 'self' data:", "script-src 'self'",
         "script-src-attr 'unsafe-hashes' '\(figureErrorHandlerHash)'", "base-uri 'none'", "form-action 'none'",
@@ -254,10 +303,8 @@ enum ReaderRoutes {
             let volumeId = try context.parameters.require("volumeId")
             let documentId = try context.parameters.require("documentId")
             let parsed = try await reader.document(volume: volumeId, document: documentId)
-            // The reader works without search: when no stack can be had, the parse stays as it is.
-            let served = try? await provider.servedIfReady()
-            let classification = try? await served?.pipeline.effectiveIsEditorialNote(volumeId: volumeId, documentId: documentId)
-            let rendered = ReaderService.render(parsed, volume: volumeId, classification: classification ?? nil,
+            let classification = await Self.classification(of: volumeId, documentId, provider: provider)
+            let rendered = ReaderService.render(parsed, volume: volumeId, classification: classification,
                                                 part: part, base: base, brokenRefs: resources.brokenRefs)
             var headers = commonHeaders
             headers[.contentSecurityPolicy] = part == .body ? bodyPolicy : pagePolicy
@@ -289,12 +336,23 @@ enum ReaderRoutes {
             return Response(status: .ok, headers: headers, body: .init(byteBuffer: ByteBuffer(bytes: data)))
         }
 
-        router.get("/reader/host.js") { _, _ -> Response in
-            var headers = commonHeaders
-            headers[.contentType] = "text/javascript; charset=utf-8"
-            headers[.cacheControl] = "no-cache"
-            return Response(status: .ok, headers: headers, body: .init(byteBuffer: ByteBuffer(string: ReaderHostScript.source)))
+        for (path, source) in annotationScripts + [("/reader/host.js", ReaderHostScript.source)] {
+            router.get(RouterPath(path)) { _, _ -> Response in
+                var headers = commonHeaders
+                headers[.contentType] = "text/javascript; charset=utf-8"
+                headers[.cacheControl] = "no-cache"
+                return Response(status: .ok, headers: headers, body: .init(byteBuffer: ByteBuffer(string: source)))
+            }
         }
+    }
+
+    /// The served index's effective classification of a document, which reshapes its parse as the
+    /// app's reader applies it; nil when it has none or no index is served, since the reader works
+    /// without search.
+    static func classification(of volumeId: String, _ documentId: String, provider: ServedIndexProvider) async -> Bool? {
+        let served = try? await provider.servedIfReady()
+        let classification = try? await served?.pipeline.effectiveIsEditorialNote(volumeId: volumeId, documentId: documentId)
+        return classification ?? nil
     }
 
     /// `<volumeId>.figures/<file>` in the TEI folder, where FRUS Explorer keeps a volume's figure
