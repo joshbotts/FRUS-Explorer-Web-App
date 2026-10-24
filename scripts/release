@@ -275,7 +275,7 @@ cmd_cut() {
     echo "| Server | $server |"
     if [ -n "$run_url" ]; then echo "| Smoke test | [image.yml's run $run_id]($run_url) |"; fi
     echo
-    echo "To run exactly this release, set \`FRUS_IMAGE=$image@$digest\` in \`.env\` beside \`compose.yaml\`, then run \`docker compose pull && docker compose up -d\`. The install guide's [Upgrading](https://github.com/$gh_repo/blob/$tag/docs/INSTALL.md#upgrading) says how to follow releases."
+    echo "To run exactly this release, set \`FRUS_IMAGE=$image@$digest\` in \`.env\` beside \`compose.yaml\`, then run \`docker compose pull && docker compose up -d\`. The install guide's [Releases](https://github.com/$gh_repo/blob/$tag/docs/INSTALL.md#releases) says how to follow them."
     echo
     echo "### The image's labels"
     echo
