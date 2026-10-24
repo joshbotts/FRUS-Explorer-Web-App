@@ -1,6 +1,7 @@
 // frus-parity time-search over the fixture index (S13b): the queries it times by default are the
 // parity queries the golden expressions give exact terms, and it times the server's search, so each
-// count it finds is the golden file's.
+// count it finds is the golden file's. While the golden results wait for the owner's export, the
+// test still times every query and checks that none is refused.
 
 import FRUSLightTestSupport
 import FRUSParity
@@ -25,12 +26,19 @@ import Testing
         let service = try SearchTiming.service(database: database,
                                                resources: layout.upstream.appendingPathComponent(ParityIndex.resourcesPath))
         let records = try await SearchTiming.run(exact, service: service, retained: true)
-        let results = try GoldenJSON.read(ResultsGolden.self, from: golden.appendingPathComponent(GoldenFile.results.rawValue))
-        let counts = Dictionary(uniqueKeysWithValues: results.queries.map { ($0.id, $0.count) })
         #expect(records.map(\.id) == exact.map(\.id))
         for record in records {
-            #expect(record.error == nil && record.count == counts[record.id] ?? nil, "\(record.id)")
             #expect(record.page >= 0 && record.counting >= 0 && record.retained != nil, "\(record.id)")
+        }
+        switch try GoldenValidation.load(.results, as: ResultsGolden.self, layout: layout) {
+        case .present(let results, _):
+            let counts = Dictionary(uniqueKeysWithValues: results.queries.map { ($0.id, $0.count) })
+            for record in records {
+                #expect(record.error == nil && record.count == counts[record.id] ?? nil, "\(record.id)")
+            }
+        case .pending(let reason):
+            print("\(GoldenFile.results.rawValue) is pending: it waits for \(reason)")
+            for record in records { #expect(record.error == nil, "\(record.id)") }
         }
         print(SearchTiming.summary(records))
     }
