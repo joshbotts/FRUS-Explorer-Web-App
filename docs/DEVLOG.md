@@ -4,9 +4,9 @@ One entry per session, newest first.
 
 ## Session 16b, follow-up: a draft that waits for its export passes its checks
 
-24 October 2026 · branch `claude/pending-results-wait` · [#58](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/58) · upstream `2767a128`, unchanged
+24 October 2026 · branch `claude/pending-results-wait` · [#58](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/58) · upstream `503a730b`, unchanged
 
-S16b found it (#57, its Notes), and the session that ran S16b asked for the fix in a pull request of its own, beside #57: it touches none of #57's files but this log.
+S16b found it (#57, its Notes), and the session that ran S16b asked for the fix in a pull request of its own, which touches none of #57's files but this log. #57 merged while this one waited for its CI, so `main` was merged in, with #57's pin, `503a730b`, and its golden files, and the tests were run again there.
 
 **What was wrong**
 
@@ -27,21 +27,28 @@ S16b found it (#57, its Notes), and the session that ran S16b asked for the fix 
 
 **Results**
 
+First at `2767a128`, over `main` at `c19524b`:
+
 - **With both files pending,** listed in `PENDING` as `144d251` listed them, `scripts/swift test --filter FRUSParityTests`, under the app's `Scripts/heavy.sh` lock:
   - before the fix, 122 tests ran and the two failed, on "queries.results.json is pending" and on "The file doesn't exist";
   - with it, all 122 pass, and seven tests print that a file waits: `GoldenTests` for both, `IndexParityTests` for the summary, and `SearchRunTests`, `SearchParityTests`, check 3 through the API and the timing test for the results.
-- **With both files present,** CI's swift job replayed in `swift:6.4-noble` on arm64, over `main` at `c19524b`, this package's own targets built clean with no warning:
+- **With both files present,** CI's swift job replayed in `swift:6.4-noble` on arm64, this package's own targets built clean with no warning:
   - no target calls `Test.cancel`, and all 2,127 tests pass with the one named skip;
   - each target runs what `main`'s CI ran: FRUSCoreKitTests 1,150, SourceNoteKitTests 321, FTS5StoreTests 219, FRUSParityTests 122, FRUSLightServerTests 122, FRUSLightCoreTests 73, ManifestGeneratorTests 60, SemanticVectorsKitTests 40, CrossRefKitTests 10, GeneratorKitTests 7 and FTS5CheckTests 3;
   - the checks print as before, and nothing prints that it waits: "check 2 passes: 36 digests and 7 checks are the Mac's"; "check 3's results pass: 482 queries, 482 identical and 0 reordered only within Mac tie groups"; through the API, "482 queries, 482 identical and 0 reordered only within Mac tie groups, every record the kit's own; 482 compiled as the golden file says, 43 refused; the live index unchanged"; and "check 4 through the page: 393 of 393 rows identical".
+
+Then at `503a730b`, with `main` merged in at `70eec63`, and #57's golden files:
+
+- **With both files pending,** listed with the new pin in their reason, all 122 parity tests pass, and the same seven print that a file waits.
+- **With both files present,** CI's swift job replayed the same way, with no warning: all 2,168 tests pass with the one named skip, and each target runs what #57's CI ran, FRUSCoreKitTests 1,191 and the others as above. Checks 2–4 print as before, and nothing prints that it waits.
 
 **Notes**
 
 - **COORDINATION §5 is unchanged:** its wording holds again.
 - **CI tests only what is committed,** so it never takes the pending path. A pin move that will wait for its export can try it first: remove the two files, list them in `PENDING`, run `scripts/swift test --filter FRUSParityTests`, and restore them with `git checkout`.
-- **Scratch:** the runs' scripts and logs are under `.build/linux/pending/` in the worktree `frus-explorer-readiness-e33c42`.
+- **Scratch:** the runs' scripts and logs are under `.build/linux/pending/` in the worktree `frus-explorer-readiness-e33c42`, the first round's in `at-c19524b/`.
 
-**Next: S15c,** highlights and check 6, once #57, S16b's pin move and S15b's, merges; S19a, Citation Lookup, which #57 also unblocks; and S14b, S14d and S14e on the server's track.
+**Next: S15c,** highlights and check 6, now that #57's pin move is in; beside it S19a, Citation Lookup, which that move also unblocks, and S14e, S14d and S14b on the server's track.
 
 ## Session 16b: pin move past FRUS-Explorer#1786, #1788 and #1787, which is S15b's too
 
