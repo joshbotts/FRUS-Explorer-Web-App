@@ -80,7 +80,7 @@ A full export is 2.83 GB, not 9.3 GB. The larger figure came from an index overh
 
 ## Pinning until the public release
 
-`FRUS-Explorer` merges about eight pull requests a day until its public release, and its index version went from 47 to 65 in 30 days. Each pin move means a new Mac build, a new export and new golden files. Hold the pin (at `2767a128`, two commits past `build-51` with the same build, since S13c's pin move) until the release, unless a merged pull request for this project needs it, as S3's did, or the owner's exports come from a newer index version, as build 50's did, and batch upstream pull requests so the pin moves as few times as possible. Each pin move remakes all the golden files: those made from the app's source, and those made from the owner's three-volume export, which needs a new export from the pinned build (`COORDINATION.md`, section 5). The first such export came from a build of `af8bedab`, on 4 October. The full-corpus export for S10 comes from the build pinned at S10.
+`FRUS-Explorer` merges about eight pull requests a day until its public release, and its index version went from 47 to 65 in 30 days. Each pin move means a new Mac build, a new export and new golden files. Hold the pin (at `503a730b`, five commits past `build-51` with the same build, since S16b's pin move) until the release, unless a merged pull request for this project needs it, as S3's did, or the owner's exports come from a newer index version, as build 50's did, and batch upstream pull requests so the pin moves as few times as possible. Each pin move remakes all the golden files: those made from the app's source, and those made from the owner's three-volume export, which needs a new export from the pinned build (`COORDINATION.md`, section 5). The first such export came from a build of `af8bedab`, on 4 October. The full-corpus export for S10 comes from the build pinned at S10.
 
 ## The 1.0 pin move
 
@@ -122,7 +122,7 @@ S12c moved where a page link and a whole-volume link go, `PageLink` and `WholeVo
 
 ## Phase 2
 
-23 October 2026 · read at `af41efa4` (1.0, build 1776, index version 71), for `PLAN.md`'s phase-2 rows, and checked again at `2767a128`, the pin since S13c, which changes none of it
+23 October 2026 · read at `af41efa4` (1.0, build 1776, index version 71), for `PLAN.md`'s phase-2 rows, and checked again at `2767a128`, the pin since S13c, which changes none of it. S16b's pin move, to `503a730b`, brought S16a's and S15a's moves into the kit, so the rows below on the JSON export, the reader's annotation scripts and Citation Lookup's Batch and Structured types describe the code before them
 
 Each claim below sizes a row of phase 2. Paths are in the app's repository unless they start with `Sources/`, and line numbers are at `2767a128`. Nothing was built at the pin but one check of Linux's Foundation.
 
