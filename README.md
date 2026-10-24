@@ -15,10 +15,11 @@ Phase 1 is done: a Docker Compose install that serves a FRUS Explorer research e
 - Serving at the root of a host or under a path behind a reverse proxy, such as `https://example.org/frus-explorer/`, as `FRUS_PUBLIC_URL` says, with an nginx recipe for each in the install guide. The server has no sign-in of its own yet.
 - Parity with the Mac app, checked in CI on three fixture volumes: the same index rows, search results and document HTML. The server compiles the app's own Swift code from a pinned submodule.
 - A daily CI watch of the app's `v2` branch, which reports in one issue what the next pin move has to handle.
+- Releases, cut by hand from a build that passed its smoke test and named for the FRUS Explorer build whose exports they serve, such as `1.0-1776.1`. Their notes name the image's digest and the index version, saying when it changed, and [`docs/INSTALL.md`](docs/INSTALL.md#releases) says how to follow them. The owner cuts the first.
 
 **Known gaps**
 
-- **Behind FRUS Explorer 1.0's last step.** The pin is 1.0 build 1776, the TestFlight build, at index version 71, with [FRUS-Explorer#1784](https://github.com/joshbotts/FRUS-Explorer/pull/1784) and [FRUS-Explorer#1785](https://github.com/joshbotts/FRUS-Explorer/pull/1785), the two commits after it: the server serves that build's exports, and its image is also tagged `:1.0-1776`. The App Store build, 1861, waits for S12d.
+- **Behind FRUS Explorer 1.0's last step.** The pin is 1.0 build 1776, the TestFlight build, at index version 71, with [FRUS-Explorer#1784](https://github.com/joshbotts/FRUS-Explorer/pull/1784) and [FRUS-Explorer#1785](https://github.com/joshbotts/FRUS-Explorer/pull/1785), the two commits after it: the server serves that build's exports. The App Store build, 1861, waits for S12d.
 - **Later phases:**
   - no notes, highlights or collections on the web, and no sign-in through a proxy (phase 2);
   - no local accounts, or indexing from TEI on the server (phase 3);
@@ -27,8 +28,8 @@ Phase 1 is done: a Docker Compose install that serves a FRUS Explorer research e
 
 **Next**
 
-1. **S12d**, once the app tags `version-1.0`: the pin moves to 1.0 build 1861, the App Store build, and CI publishes `:1.0-1861`.
-2. **Phase 2**, planned in [`docs/PLAN.md`](docs/PLAN.md) as S14a–S19b: notes, highlights, tags, collections and the rest of the research layer, with a daily backup, the Mac's JSON export imported and written back, and Citation Lookup; and, for a shared deployment, sign-in through a trusted proxy, serving under a path, and releases cut by hand. Serving under a path (S14f) is done. **S14a**, the user store's schema and migrations, comes first of the rest, with S14g and S16a, the Mac's JSON export at version 7 as an upstream pull request, beside it.
+1. **S12d**, once the app tags `version-1.0`: the pin moves to 1.0 build 1861, the App Store build, and the owner can release `1.0-1861.1`.
+2. **Phase 2**, planned in [`docs/PLAN.md`](docs/PLAN.md) as S14a–S19b: notes, highlights, tags, collections and the rest of the research layer, with a daily backup, the Mac's JSON export imported and written back, and Citation Lookup; and, for a shared deployment, sign-in through a trusted proxy, beside the releases S14g brought and the serving under a path S14f brought. First **S14a**, the user store's schema and migrations; S16a, the Mac's JSON export at version 7 as an upstream pull request, can run beside it.
 
 ## Goals
 

@@ -195,7 +195,26 @@ docker compose pull && docker compose up -d
 
 `edge` is the newest build of the project's main branch that passed its smoke test on both architectures. The index stays in the volume. If the new server serves a different index version, `/readyz` answers `index_version_mismatch`, naming both versions: export again from a matching FRUS Explorer build and copy it in. The first such change came with FRUS Explorer build 50, which moved the index from version 65 to 69, and the second with 1.0 (build 1776), which moved it to 71.
 
-To stay with the exports of one FRUS Explorer build, set `FRUS_IMAGE=ghcr.io/joshbotts/frus-explorer-light:<version>-<build>` in `.env`, such as `1.0-1776` for FRUS Explorer 1.0 (build 1776): the newest build of the server for that app build that passed its smoke test. It moves with `edge` until the server moves to a later app build, and then stays where it was. To stay on one build of the server, set `FRUS_IMAGE=ghcr.io/joshbotts/frus-explorer-light:sha-<commit>`, where `<commit>` is the first 7 characters of a commit on the main branch.
+### Releases
+
+A release is a build of the main branch that passed its smoke test and that the project's owner chose to publish, with notes. Each is named `<version>-<build>.<n>`, such as `1.0-1776.1`: the version and build of the FRUS Explorer app whose exports it serves, and its number among that build's releases. Its notes, on the project's [releases page](https://github.com/joshbotts/FRUS-Explorer-Web-App/releases), name the image's digest, the FRUS Explorer build to export from, the index version and whether it changed since the last release, and the pull requests it brings. Once an image is pulled, its labels give the build and the index version too:
+
+```bash
+docker image inspect --format '{{json .Config.Labels}}' ghcr.io/joshbotts/frus-explorer-light:edge
+```
+
+Choose what to follow with `FRUS_IMAGE` in `.env`:
+
+| `FRUS_IMAGE` | Follows |
+| --- | --- |
+| `ghcr.io/joshbotts/frus-explorer-light:edge`, the default | Each build of the main branch that passes its smoke test |
+| `ghcr.io/joshbotts/frus-explorer-light:<version>-<build>`, such as `:1.0-1776` | Each release for that FRUS Explorer build. Once the server moves to a later build, it stays on this build's last release |
+| `ghcr.io/joshbotts/frus-explorer-light:<version>-<build>.<n>`, such as `:1.0-1776.1`, or the digest a release names, `ghcr.io/joshbotts/frus-explorer-light@sha256:…` | One release, which never moves |
+| `ghcr.io/joshbotts/frus-explorer-light:sha-<commit>`, where `<commit>` is the first 7 characters of a commit on the main branch | One build of the main branch |
+
+Before releases began, `:1.0-1776` moved with `edge`.
+
+To hear of each release, watch the repository on GitHub for releases only (Watch, then Custom, then Releases), or follow its feed, `https://github.com/joshbotts/FRUS-Explorer-Web-App/releases.atom`. When a release's notes say the index version changed, export again from the FRUS Explorer build they name, upgrade, and copy the new export in as in [5. Import it](#5-import-it); until then `/readyz` answers `index_version_mismatch`.
 
 ## Stopping and removing
 
@@ -260,7 +279,7 @@ These go in `.env` beside `compose.yaml`.
 | `FRUS_TEI_DIR` | `./tei` | Folder of TEI volumes, mounted read-only |
 | `FRUS_HOST_PORT` | `8080` | Port on this machine's 127.0.0.1 |
 | `FRUS_PUBLIC_URL` | `http://localhost:8080`, on `FRUS_HOST_PORT` | The address people open. Behind a reverse proxy, its address, which may end in a path such as `/frus-explorer/`: see Behind a reverse proxy |
-| `FRUS_IMAGE` | `ghcr.io/joshbotts/frus-explorer-light:edge` | The image to run |
+| `FRUS_IMAGE` | `ghcr.io/joshbotts/frus-explorer-light:edge` | The image to run: a release, or `edge` (see [Releases](#releases)) |
 | `COMPOSE_PROFILES` | none | `pdf` starts Gotenberg, a 700 MB download, for PDF export when it arrives in phase 3 |
 
 ## Notes

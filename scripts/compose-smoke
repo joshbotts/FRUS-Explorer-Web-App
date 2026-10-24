@@ -2,11 +2,12 @@
 # FRUS Explorer Light: the Compose smoke test (session 5).
 # Starts compose.yaml's server, checks the browser app, the catalogue and the reader before any
 # import, imports a synthetic export with docker compose cp, and waits for /readyz to answer 200;
-# then searches it, reads a document's page, and checks the user, the read-only root, the health
-# check and a restart. Then it makes the container again with FRUS_PUBLIC_URL ending in
-# /frus-explorer/ and checks the server under that path (PLAN's S14f). docs/INSTALL.md's nginx
-# recipes, for the root and for a path, run in nginx on the Compose network in each phase. Its TEI
-# folder holds fixtures/tei's volumes and the kit's fixture for a section's own text,
+# then checks the image's labels against the server's status, searches the index, reads a
+# document's page, and checks the user, the read-only root, the health check and a restart. Then it
+# makes the container again with FRUS_PUBLIC_URL ending in /frus-explorer/ and checks the server
+# under that path (PLAN's S14f). docs/INSTALL.md's nginx recipes, for the root and for a path, run
+# in nginx on the Compose network in each phase. Its TEI folder holds fixtures/tei's volumes and the
+# kit's fixture for a section's own text,
 # fixtures/own-text/frus1969-76v01.xml, whose rows the export holds too.
 #   scripts/compose-smoke                       builds the image as frus-light:smoke first
 #   FRUS_IMAGE=<image> scripts/compose-smoke    tests an image already built
@@ -34,7 +35,9 @@ export FRUS_HOST_PORT="${FRUS_HOST_PORT:-18080}"
 if [ -z "${FRUS_IMAGE:-}" ]; then
   export FRUS_IMAGE=frus-light:smoke
   echo "== building $FRUS_IMAGE"
-  docker build -f docker/Dockerfile -t "$FRUS_IMAGE" .
+  build_args=()
+  while IFS= read -r arg; do build_args+=(--build-arg "$arg"); done < <(scripts/release build-args)
+  docker build -f docker/Dockerfile "${build_args[@]}" -t "$FRUS_IMAGE" .
 fi
 base="http://127.0.0.1:$FRUS_HOST_PORT"
 proxy="$COMPOSE_PROJECT_NAME-proxy"
@@ -162,6 +165,20 @@ wait_for_200 "$base/readyz" 120 || fail "/readyz did not reach 200"
 status=$(curl -s --max-time 5 "$base/api/v1/status") || fail "/api/v1/status did not answer"
 printf '%s' "$status" | grep -q '"documents":7' || fail "status does not report 7 documents: $status"
 echo "   status: $(printf '%s' "$status" | sed -nE 's/.*"sqliteVersion":"([^"]+)".*/SQLite \1/p'), 7 documents"
+
+echo "== the image's labels"
+# The app build whose exports the image serves, and the index version, which a release names
+# (PLAN's S14g): the index version is the one the server serves.
+label() { docker image inspect --format "{{ index .Config.Labels \"$1\" }}" "$FRUS_IMAGE"; }
+ns=io.github.joshbotts.frus-explorer
+app_version=$(label "$ns.version")
+app_build=$(label "$ns.build")
+labelled=$(label "$ns.index-version")
+served=$(printf '%s' "$status" | sed -nE 's/.*"supportedIndexVersion":([0-9]+).*/\1/p')
+[[ $app_version =~ ^[0-9]+(\.[0-9]+)*$ && $app_build =~ ^[0-9]+$ ]] \
+  || fail "the image's labels name no app build: version \"$app_version\", build \"$app_build\""
+[ "$labelled" = "$served" ] || fail "the image's index-version label is \"$labelled\", where the server serves ${served:-none}"
+echo "   FRUS Explorer $app_version (build $app_build), index version $labelled, the one the server serves"
 
 echo "== search and the reader's page over the imported index"
 # The kit's read-only stack over the live index: two documents mention treaties.

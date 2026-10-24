@@ -566,10 +566,21 @@ The web edition ships as one image, `frus-explorer-light`, run with Docker Compo
 3. **Client stage:** Node 22 runs the Vite production build of the SPA.
 4. **Runtime stage:** Ubuntu 24.04 with the two binaries, the SPA, `FRUSExplorer/Resources` (54 MB), libsqlite3 3.45.1 with FTS5, CA certificates, `rclone` and `tini`. It runs as a non-root user, UID 10001.
 
-CI publishes the image from `main` only, to `ghcr.io/joshbotts/frus-explorer-light`, under three kinds of tag:
+CI publishes the image from `main` only, to `ghcr.io/joshbotts/frus-explorer-light`, under two kinds of tag, and the owner's releases add two more:
 - `sha-<commit>`, each build of `main`, by the commit's first 7 characters;
 - `edge`, the newest build that passed the Compose smoke test on both architectures;
-- `<version>-<build>`, such as `1.0-1776`: the pinned app's `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in its `project.yml`, joined by a hyphen, since a tag cannot hold a slash. It names the app build whose exports the image serves, moves with `edge` while the pin holds that build, and stays on the last such build once the pin moves on. From PLAN's S14g it moves only when the owner cuts a release by hand: the release workflow tags the commit `<version>-<build>.<n>` and publishes a GitHub release naming the image's digest, the app version and build to export from, and the index version, saying when it changed since the last release. The image's labels carry the same three.
+- `<version>-<build>.<n>`, such as `1.0-1776.1`: one release, which never moves. `<version>` and `<build>` are the pinned app's `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in its `project.yml`, the app build whose exports the image serves, joined by a hyphen, since a tag cannot hold a slash; `<n>` counts that app build's releases from 1;
+- `<version>-<build>`, such as `1.0-1776`: the newest release for that app build, which stays on it once the pin moves on. Until PLAN's S14g it moved with `edge` while the pin held its build.
+
+The image's labels name the app's version, `io.github.joshbotts.frus-explorer.version`, its build, `io.github.joshbotts.frus-explorer.build`, and the index version the server serves, `io.github.joshbotts.frus-explorer.index-version`, beside the OCI labels' server version and commit. `scripts/release build-args` gives their values to `image.yml` and CI, and the Compose smoke test checks that the index-version label is the one `/api/v1/status` reports.
+
+**Releases are cut by hand** (PLAN's S14g). The owner runs `release.yml` on a build of `main` whose newest `image.yml` run passed, smoke test and all: by default the build `edge` names, or a commit given. `scripts/release cut` reads that build's digest and labels from its `sha-` tag and checks the labels against the commit's sources; numbers the release one past the last for its app build; moves `<version>-<build>` to the digest and tags it `<version>-<build>.<n>`; and publishes a GitHub release of that name, which tags the commit. A commit that a release already holds is not released again. The release's notes name:
+- the digest, and the image's two release tags;
+- the app version and build whose exports it serves, and the index version, saying whether it changed since the last release, so a deployer knows to export again before upgrading;
+- the image's labels, its platforms and its commit, and the `image.yml` run that tested it;
+- the pull requests merged into `main` since the last release.
+
+The workflow's default is a dry run, which prints the release and writes nothing, as does a run on any branch but `main`. A selftest runs the release against stubs of `docker` and `gh` first. On a pull request that changes the release, the workflow dry-runs against the branch's own build, pushed to a registry inside the job, so nothing is published.
 
 Two sidecars are optional. `gotenberg/gotenberg:8` enables PDF export. A reverse proxy such as Caddy or Traefik provides TLS beyond localhost.
 
@@ -655,7 +666,7 @@ Memory figures are estimates until phase 0 measures them. Phase 0's first measur
 
 ### Upgrades
 
-- Release image tags name the app's version and build, for example `:1.0-1861`. Each image states its `SUPPORTED_INDEX_VERSION` at `/api/v1/status`, and from PLAN's S14g in its labels and its release's notes, which say when a release changes it, so the Mac export can be made again with the upgrade.
+- Release image tags name the app's version and build: `:1.0-1861` for that build's newest release, and `:1.0-1861.1` for one release. Each image states its `SUPPORTED_INDEX_VERSION` at `/api/v1/status` and in its labels, and each release's notes say when a release changes it, so the Mac export can be made again with the upgrade.
 - On start, the server compares that version with the index. Standalone re-indexes in place from cached XML, volume by volume, as the Mac does; search stays up and names the pending volumes.
 - Import mode disables search until a matching export arrives. The reader keeps working from the TEI files.
 - `app.db` migrations are numbered and forward-only, and each runs after an automatic backup. The PostgreSQL store's run in a transaction each; its backups are the database service's.

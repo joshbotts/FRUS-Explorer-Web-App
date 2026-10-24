@@ -4,8 +4,8 @@
 #   web/.node-version, as scripts/npm runs it.
 # - compose: build the image, then scripts/compose-smoke --e2e checks the browser app, the catalogue
 #   and the reader, imports a synthetic export with docker compose cp, waits for /readyz to answer
-#   200, and runs web/e2e, Playwright on Chromium, against it; then again with the server under
-#   /frus-explorer/, through nginx and docs/INSTALL.md's recipe for a path.
+#   200, checks the image's labels, and runs web/e2e, Playwright on Chromium, against it; then
+#   again with the server under /frus-explorer/, through nginx and docs/INSTALL.md's recipe for a path.
 name: ci
 
 on:
@@ -180,11 +180,20 @@ jobs:
 
       - uses: docker/setup-buildx-action@v4
 
+      # The labels' values, as image.yml builds with them; the smoke test checks them.
+      - name: Build arguments
+        id: args
+        run: |
+          args=$(scripts/release build-args)
+          echo "$args"
+          { echo 'list<<EOF'; echo "$args"; echo EOF; } >> "$GITHUB_OUTPUT"
+
       - name: Build the image
         uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile
+          build-args: ${{ steps.args.outputs.list }}
           tags: frus-light:ci
           load: true
           # Shared with image.yml's amd64 build.

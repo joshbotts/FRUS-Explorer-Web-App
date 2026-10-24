@@ -6,7 +6,7 @@ One entry per session, newest first.
 
 23 October 2026 · branch `claude/s14f-base-path` · upstream `2767a128`, unchanged
 
-Phase 2's row S14f, the first of a shared deployment's three asks, run beside S14a, with which it shares no files. `FRUS_PUBLIC_URL` may now end in a path, such as `https://example.org/frus-explorer/`. The server then answers the browser app, the reader and the API under that path, and `/healthz` and `/readyz` under it and at the root. One build of the browser app serves either way, and the browser suite passes both ways, the second time through nginx running the install guide's recipe.
+Phase 2's row S14f, one of the three asks of a shared deployment, run beside S14a, with which it shares no files. `FRUS_PUBLIC_URL` may now end in a path, such as `https://example.org/frus-explorer/`. The server then answers the browser app, the reader and the API under that path, and `/healthz` and `/readyz` under it and at the root. One build of the browser app serves either way, and the browser suite passes both ways, the second time through nginx running the install guide's recipe.
 
 **The server**
 
@@ -46,7 +46,66 @@ Phase 2's row S14f, the first of a shared deployment's three asks, run beside S1
 - **Builds in a new worktree:** the Linux build reused S13c's `.build/linux` through an APFS clone (`cp -c`), and built in 45 seconds once the heavy-job lock was free; it waited about ten minutes behind S16a's unit-test run on the Mac.
 - **`nginx:1.28-alpine`** is pulled on the smoke test's first use, on both architectures `image.yml` tests.
 
-**Next: S14a,** the user store's schema and migrations, open in another session, with S14g and S16a beside it. S14e, sign-in through the proxy, follows S14c, and builds on this row: its cookies take `FRUS_PUBLIC_URL`'s path, and S14c's `Host` and `Origin` checks its origin.
+**Next: S14a,** the user store's schema and migrations, open in another session, with S16a beside it; S14g's releases merged first. S14e, sign-in through the proxy, follows S14c, and builds on this row: its cookies take `FRUS_PUBLIC_URL`'s path, and S14c's `Host` and `Origin` checks its origin.
+
+## Session 14g: releases cut by hand
+
+23 October 2026 · branch `claude/s14g-releases-cf1032` · upstream `2767a128`, unchanged
+
+Phase 2's row S14g, one of the three asks of a shared deployment: releases a deployer can pin, with the index version announced when it changes. The owner now cuts each release by hand from a build of `main` that passed its smoke test, and `image.yml` moves only `edge` and the `sha-` tags. This replaces the 22 October rule that a release tag moves with `edge`.
+
+**The workflow**
+
+- **`.github/workflows/release.yml`** runs from the Actions tab's Run workflow, with a commit to release, by default the build `edge` names, and a dry run, on by default. A run on any branch but `main` is a dry run too. Its `release` job needs `contents: write` for the tag and the release, `packages: write` for the image tags, and `actions: read` and `pull-requests: read` for the checks and the notes. One release runs at a time, and none is cancelled.
+- **`scripts/release`** does the work, and runs on a Mac too:
+  - `build-args` prints the image's build arguments: the server's version, the pinned app's version and build from `scripts/release-tag`, and the index version from `Compatibility.swift`. It fails, as `scripts/release-tag` did, when the app's targets disagree, so `image.yml` publishes nothing.
+  - `cut` checks the build, writes the notes and makes the writes; `--dry-run` prints them instead.
+  - `selftest` runs `cut` against stubs of `docker` and `gh` in sixteen cases, in a repository that borrows this one's objects and holds release tags of its own. `release.yml` runs it before every release, and on a pull request that changes the release.
+
+**A release**
+
+- **The checks.** The commit is on `main`, and `image.yml`'s newest run for it on `main` succeeded, so its build passed the Compose smoke test on both architectures. A commit a release already holds is refused. The image is the commit's `sha-` tag, and its labels must agree with the commit's sources: the revision is the commit, the app's version and build are what `scripts/release-tag` reads from the `project.yml` the commit pins, and the index version is `Compatibility.swift`'s. The two platforms' labels must agree too.
+- **The name.** `<version>-<build>.<n>`, `<n>` one past the last release of that app build, from 1. The last release is the newest release tag on the commit's first-parent line.
+- **The notes** name:
+  - the digest, the image's two release tags, the platforms, the commit, the server's version and the `image.yml` run that tested it;
+  - the FRUS Explorer version and build whose exports it serves, and the index version: the same since the last release, changed from what at which release, with the steps to export again, or the first release;
+  - the image's labels;
+  - the pull requests merged into `main` since the last release, oldest first, by number and title. The merge commits hold only the number, so the titles come from `gh`.
+- **The writes,** in this order: `imagetools create` moves `:<version>-<build>` to the digest and tags it `:<version>-<build>.<n>`, and each tag is read back at that digest; then `gh release create` publishes the release, which tags the commit. A run that fails after the move can run again, since moving a tag to the digest it already names changes nothing, and the commit is not yet a release's. `imagetools create` keeps an index's digest, as `:edge`, `:sha-e15d651` and `:1.0-1776` show on the registry, each `sha256:1a10dcde…`.
+
+**The image**
+
+- **Three labels,** from build arguments the `Dockerfile` declares: `io.github.joshbotts.frus-explorer.version` (`1.0`), `.build` (`1776`) and `.index-version` (`71`), beside the OCI labels' server version and commit.
+- **`image.yml`** takes its build arguments from `scripts/release build-args`, and its promote job moves only `edge`. A pull request that changes `scripts/release` or `scripts/release-tag` builds the image.
+- **CI's compose job** builds with the same arguments, and `scripts/compose-smoke` builds with them too. After the import, the smoke test checks that the labels name an app version and build, and that the index-version label is the one `/api/v1/status` reports. It runs in `image.yml`'s verify job too, so a build of `main` without the labels does not reach `edge`.
+
+**Decided here**
+
+- **A release also tags the image `:<version>-<build>.<n>`,** which never moves, beside the moving `:<version>-<build>`, so a deployer can pin a release by name as well as by digest. The row asked only for the moving tag; PLAN's S14g row and SPEC now name both.
+- **A build from before the labels cannot be released.** So the first release is a build from this pull request's merge on.
+- **On a pull request, the dry run takes the branch's own build.** No image built before this row has the labels, and a session never publishes, so `release-dry-run` builds the branch's head for amd64 from `image.yml`'s cache and pushes it to a `registry:2` service inside the job, at `localhost:5000`. It then runs `cut --dry-run --pull-request`, which skips the two checks only a build of `main` passes, on `main` and its `image.yml` run. Nothing leaves the job.
+
+**Checked**
+
+- **The selftest:** all sixteen cases pass, on a Mac and in CI's `release-selftest`. The first release; the next of an app build, which leaves out the last release's pull requests; a new index version; the build `edge` names; refusals for a commit already released, one not on `main`, a newest run that failed, one still running, no run, labels of another index version or app build, an image without the labels, another commit's image, and a pull request's build outside a dry run; a pull request's build in a dry run; and a release made, whose two writes the stubs record. Breaking the numbering by one fails six cases.
+- **A dry run against `edge` from a Mac,** with the real registry and `gh`: the build of `e15d651`, digest `sha256:1a10dcde…`, on `linux/amd64` and `linux/arm64`, tested by `image.yml`'s run 40044216783; FRUS Explorer 1.0 (build 1776), index version 71, the first release, `1.0-1776.1`, with 47 pull requests. It was refused, as it should be, for the labels that build predates.
+- **A dry run on this branch's build,** built locally and pushed to a `registry:2` on the Mac: the labels above, the release `1.0-1776.1`, its notes and its writes, with nothing pushed. Then the same build released for real into that registry, with a stub `gh`: both tags read back at the build's digest, and the stub received the release.
+- **This pull request's `release-dry-run`,** at `885b4dc`: the branch's amd64 build in the job's registry, digest `sha256:279f35a2…`, with the three labels at `1.0`, `1776` and `71` and the revision `885b4dc`; FRUS Explorer 1.0 (build 1776), index version 71, the first release, `1.0-1776.1`, with 47 pull requests; and the two writes it would make, the move checked by `imagetools create --dry-run`.
+- **`scripts/compose-smoke`** passes on this branch's image, with the labels' check, on a Mac and in CI's compose job, and fails at that check against `edge`.
+- **actionlint 1.7.7** finds nothing in `release.yml`; its one warning is in `image.yml`'s join of the digests, which splits words on purpose.
+
+**Records**
+
+- `SPEC.md`: the image's tags, its labels and what a release is; the upgrade line.
+- `INSTALL.md`: a Releases section under Upgrading, with what a release is, what to set `FRUS_IMAGE` to for each way of following the server, how to hear of releases, and what to do when the index version changes; the `FRUS_IMAGE` setting.
+- `PLAN.md`: `release.yml` in the workflows table; S14g's row and S12d's, whose `:1.0-1861` now comes from a release; the Compose install's upgrade line; the 22 October answer's rule, which S14g replaced; and an owner checkpoint for the first release.
+- `COORDINATION.md`: S12b's release tag, which moved with `edge` until S14g. The README's Status, and this log.
+
+**For the owner after the merge**
+
+- The first release: Actions → release → Run workflow, on `main`, with no commit. Run it first as a dry run, the default, and read its summary; then with dry run off, which publishes `1.0-1776.1`.
+
+**Next:** the owner's first release; then S14b, the daily backup and its restore, once S14a merges, with S14f and S16a beside it.
 
 ## Phase 2's plan: the user store, the research layer, and a shared deployment's three asks
 
