@@ -3,7 +3,7 @@
 // Delete Tag asks first, as the app's confirmation does. And Merge Tag (`MergeTagSheet`), which the
 // editor hands to its host, as the app's does. Each is a modal dialog: Escape is Cancel.
 import { useQueryClient } from '@tanstack/react-query';
-import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useEffectEvent, useId, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
 import type { UserTag } from '../api/types';
 import { deleteTag, mergeTag, renameTag } from '../api/userData';
@@ -30,13 +30,12 @@ function Modal({
   children: ReactNode;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
+  const open = useEffectEvent(() => {
     const element = dialog.current;
     if (element && !element.open) element.showModal();
     (initial?.current ?? element?.querySelector<HTMLElement>('h2'))?.focus();
-    // Only when it opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  });
+  useEffect(() => open(), []);
   return (
     <dialog
       ref={dialog}
@@ -44,8 +43,12 @@ function Modal({
       role={role}
       aria-labelledby={labelledBy}
       aria-describedby={describedBy}
-      onClose={onClose}
+      // A dialog's own close and Escape only: React would hand it another's on their way up.
+      onClose={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
       onCancel={(event) => {
+        if (event.target !== event.currentTarget) return;
         event.preventDefault();
         onCancel();
       }}
@@ -81,11 +84,25 @@ export function TagEditor({
   const deleteButton = useRef<HTMLButtonElement>(null);
   const outcome = useRef<{ gone: boolean; merge: boolean }>({ gone: false, merge: false });
   const dialog = useRef<HTMLDivElement>(null);
+  /** What follows the confirmation once it has gone: focus back on Delete Tag, or the editor closed. */
+  const afterConfirmation = useRef<'return' | 'close' | null>(null);
 
   function close(result: { gone: boolean; merge: boolean } = { gone: false, merge: false }) {
     outcome.current = result;
     dialog.current?.closest('dialog')?.close();
   }
+
+  // Only once the confirmation has left the page: until then the editor beneath it is inert, and
+  // takes no focus.
+  const confirmationGone = useEffectEvent(() => {
+    const next = afterConfirmation.current;
+    afterConfirmation.current = null;
+    if (next === 'return') deleteButton.current?.focus();
+    else if (next === 'close') close({ gone: true, merge: false });
+  });
+  useEffect(() => {
+    if (!confirming) confirmationGone();
+  }, [confirming]);
 
   async function save() {
     const trimmed = name.trim();
@@ -103,86 +120,90 @@ export function TagEditor({
   }
 
   async function remove() {
+    if (busy) return;
     setBusy(true);
     setFailure(null);
     try {
       await deleteTag(client, tag.id);
-      setConfirming(false);
-      close({ gone: true, merge: false });
+      afterConfirmation.current = 'close';
     } catch (error) {
       setBusy(false);
-      setConfirming(false);
       setFailure(errorMessage(error));
+      afterConfirmation.current = 'return';
     }
+    setConfirming(false);
   }
 
   return (
-    <Modal
-      className="tag-editor"
-      labelledBy={headingId}
-      initial={field}
-      onCancel={() => close()}
-      onClose={() => (outcome.current.merge ? onMerge() : onClose(outcome.current.gone))}
-    >
-      <div ref={dialog}>
-        <h2 id={headingId} tabIndex={-1}>
-          {copy.tagEditor.title}
-        </h2>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void save();
-          }}
-        >
-          <h3>{copy.tagEditor.nameHeader}</h3>
-          <input
-            ref={field}
-            type="text"
-            value={name}
-            placeholder={copy.tagEditor.namePlaceholder}
-            aria-label={copy.tagEditor.nameField}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </form>
-        {!isNew && (
-          <>
-            <h3>{copy.tagEditor.manage}</h3>
-            <div className="manage">
-              <button type="button" disabled={peerTagCount < 2 || busy} onClick={() => close({ gone: false, merge: true })}>
-                {copy.tagEditor.merge}
-              </button>
-              <button ref={deleteButton} type="button" className="destructive" disabled={busy} onClick={() => setConfirming(true)}>
-                {copy.tagEditor.delete}
-              </button>
-            </div>
-            <p className="note">{peerTagCount < 2 ? copy.tagEditor.manageFooterOnly : copy.tagEditor.manageFooter}</p>
-          </>
-        )}
-        {failure && (
-          <p className="error" role="alert">
-            {failure}
-          </p>
-        )}
-        <div className="actions">
-          <button type="button" onClick={() => close()}>
-            {copy.tagEditor.cancel}
-          </button>
-          <button type="button" disabled={name.trim() === '' || busy} onClick={() => void save()}>
-            {copy.tagEditor.save}
-          </button>
+    <>
+      <Modal
+        className="tag-editor"
+        labelledBy={headingId}
+        initial={field}
+        onCancel={() => close()}
+        onClose={() => (outcome.current.merge ? onMerge() : onClose(outcome.current.gone))}
+      >
+        <div ref={dialog}>
+          <h2 id={headingId} tabIndex={-1}>
+            {copy.tagEditor.title}
+          </h2>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void save();
+            }}
+          >
+            <h3>{copy.tagEditor.nameHeader}</h3>
+            <input
+              ref={field}
+              type="text"
+              value={name}
+              placeholder={copy.tagEditor.namePlaceholder}
+              aria-label={copy.tagEditor.nameField}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </form>
+          {!isNew && (
+            <>
+              <h3>{copy.tagEditor.manage}</h3>
+              <div className="manage">
+                <button type="button" disabled={peerTagCount < 2 || busy} onClick={() => close({ gone: false, merge: true })}>
+                  {copy.tagEditor.merge}
+                </button>
+                <button ref={deleteButton} type="button" className="destructive" disabled={busy} onClick={() => setConfirming(true)}>
+                  {copy.tagEditor.delete}
+                </button>
+              </div>
+              <p className="note">{peerTagCount < 2 ? copy.tagEditor.manageFooterOnly : copy.tagEditor.manageFooter}</p>
+            </>
+          )}
+          {failure && (
+            <p className="error" role="alert">
+              {failure}
+            </p>
+          )}
+          <div className="actions">
+            <button type="button" onClick={() => close()}>
+              {copy.tagEditor.cancel}
+            </button>
+            <button type="button" disabled={name.trim() === '' || busy} onClick={() => void save()}>
+              {copy.tagEditor.save}
+            </button>
+          </div>
         </div>
-      </div>
+      </Modal>
+      {/* Beside the editor, not in it, so its Escape and its closing are its own. */}
       {confirming && (
         <DeleteConfirmation
           busy={busy}
           onDelete={() => void remove()}
           onCancel={() => {
+            afterConfirmation.current = 'return';
             setConfirming(false);
-            deleteButton.current?.focus();
           }}
         />
       )}
-    </Modal>
+    </>
   );
 }
 

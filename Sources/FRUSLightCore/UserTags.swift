@@ -62,7 +62,8 @@ public enum TagStoreError: Error, Equatable, CustomStringConvertible {
 /// Where a user's tags and their assignments to documents are kept.
 public protocol TagStore: Sendable {
     /// The user's tags in the order the app lists them before the reader's own order (S17f): by
-    /// name, then id.
+    /// name, as `@Query(sort: \UserTag.name)` sorts them, with Foundation's localized standard
+    /// comparison, `SortDescriptor`'s for a string, which reads digits as numbers; then by id.
     func tags(of user: String) throws -> [UserTagRecord]
     /// One of the user's tags, or nil.
     func tag(_ id: String, of user: String) throws -> UserTagRecord?
@@ -93,12 +94,21 @@ public protocol TagStore: Sendable {
 
 extension SQLiteUserStore: TagStore {
     private static let tagColumns = "id, name, created_at, last_modified"
-    private static let tagOrder = "ORDER BY name COLLATE NOCASE, name, id"
 
     public func tags(of user: String) throws -> [UserTagRecord] {
         try reading { db in
-            try db.query("SELECT \(Self.tagColumns) FROM tags WHERE user_id = ? \(Self.tagOrder)", [.text(user)])
-                .map(Self.tag)
+            Self.ordered(try db.query("SELECT \(Self.tagColumns) FROM tags WHERE user_id = ?", [.text(user)]).map(Self.tag))
+        }
+    }
+
+    /// Tags in the order `tags(of:)` gives them.
+    static func ordered(_ tags: [UserTagRecord]) -> [UserTagRecord] {
+        tags.sorted { a, b in
+            switch a.name.localizedStandardCompare(b.name) {
+            case .orderedAscending: true
+            case .orderedDescending: false
+            case .orderedSame: a.id < b.id
+            }
         }
     }
 
@@ -270,12 +280,11 @@ extension SQLiteUserStore: TagStore {
     }
 
     private static func tags(of document: DocumentKey, for user: String, in db: SQLiteConnection) throws -> [UserTagRecord] {
-        try db.query(
+        ordered(try db.query(
             """
             SELECT \(tagColumns) FROM tags WHERE user_id = ? AND id IN (
                 SELECT upper(tag_id) FROM tag_assignments WHERE user_id = ? AND volume_id = ? AND document_id = ?)
-                \(tagOrder)
-            """, [.text(user), .text(user), .text(document.volumeId), .text(document.documentId)]).map(tag)
+            """, [.text(user), .text(user), .text(document.volumeId), .text(document.documentId)]).map(tag))
     }
 
     /// The documents an assignment of `tag` is on, each once, oldest assignment first.

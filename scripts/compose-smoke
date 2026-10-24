@@ -214,7 +214,7 @@ refused() {  # $1: the code expected; the rest: curl's arguments
 }
 refused CSRF_TOKEN_INVALID "${as_app[@]}"
 refused ORIGIN_NOT_ALLOWED -H "Host: localhost:8080" -H "Origin: https://attacker.example" -H "X-CSRF-Token: $token"
-refused HOST_NOT_ALLOWED -H "Origin: http://localhost:8080" -H "X-CSRF-Token: $token"
+refused HOST_NOT_ALLOWED -H "Host: attacker.example:8080" -H "Origin: http://localhost:8080" -H "X-CSRF-Token: $token"
 made=$(curl -s --max-time 5 -X POST "${as_app[@]}" -H "X-CSRF-Token: $token" -H 'Content-Type: application/json' \
   --data '{"name":"  Smoke  "}' -w ' %{http_code}' "$base/api/v1/me/tags") || fail "the tag was not made"
 case "$made" in *'"name":"Smoke"'*' 201') ;; *) fail "making a tag answered $made" ;; esac

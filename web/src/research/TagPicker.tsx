@@ -26,13 +26,17 @@ export function TagPicker({
   onClose: () => void;
 }) {
   const client = useQueryClient();
-  const all = useQuery(tagsQuery);
+  // Read again as the sheet opens: a tag made in another tab since the list was read is listed too.
+  const all = useQuery({ ...tagsQuery, staleTime: 0 });
   const dialog = useRef<HTMLDialogElement>(null);
   const field = useRef<HTMLInputElement>(null);
   const headingId = useId();
   const [selected, setSelected] = useState(() => new Set(applied.map((tag) => tag.id)));
   /** The tags made in the sheet, oldest first. */
   const [made, setMade] = useState<UserTag[]>([]);
+  // The same, for Cancel, which may come while a tag is still being made: it waits for that one.
+  const madeSoFar = useRef<UserTag[]>([]);
+  const making = useRef<Promise<unknown> | null>(null);
   const [name, setName] = useState('');
   const [announcement, setAnnouncement] = useState('');
   const [failure, setFailure] = useState<string | null>(null);
@@ -57,8 +61,13 @@ export function TagPicker({
   });
 
   const madeIds = new Set(made.map((tag) => tag.id));
-  // The tags made here first, newest first, then the rest by name, as the app pins them (#242).
-  const shown = [...made].reverse().concat((all.data?.items ?? []).filter((tag) => !madeIds.has(tag.id)));
+  const listed = all.data?.items ?? [];
+  const listedIds = new Set(listed.map((tag) => tag.id));
+  // The tags made here first, newest first, then the rest by name, as the app pins them (#242). A tag
+  // the document carries is listed even before the list has it, so Done never drops one unseen.
+  const shown = [...made]
+    .reverse()
+    .concat([...listed, ...applied.filter((tag) => !listedIds.has(tag.id))].filter((tag) => !madeIds.has(tag.id)));
 
   async function add() {
     const trimmed = name.trim();
@@ -66,7 +75,10 @@ export function TagPicker({
     setBusy(true);
     setFailure(null);
     try {
-      const tag = await createTag(client, trimmed);
+      const creating = createTag(client, trimmed);
+      making.current = creating.catch(() => null);
+      const tag = await creating;
+      madeSoFar.current = [...madeSoFar.current, tag];
       setMade((earlier) => [...earlier, tag]);
       setSelected((earlier) => new Set(earlier).add(tag.id));
       setName('');
@@ -75,12 +87,13 @@ export function TagPicker({
     } catch (error) {
       setFailure(errorMessage(error));
     } finally {
+      making.current = null;
       setBusy(false);
     }
   }
 
   async function done() {
-    if (closing.current) return;
+    if (closing.current || !all.data) return;
     closing.current = true;
     setBusy(true);
     setFailure(null);
@@ -103,8 +116,10 @@ export function TagPicker({
     if (closing.current) return;
     closing.current = true;
     setBusy(true);
-    // The tags made in the sheet go with it, as the app's Cancel deletes them.
-    for (const tag of made) {
+    // The tags made in the sheet go with it, as the app's Cancel deletes them, one still being
+    // made included.
+    await making.current;
+    for (const tag of madeSoFar.current) {
       try {
         await deleteTag(client, tag.id);
       } catch {
@@ -154,7 +169,13 @@ export function TagPicker({
         </button>
       </form>
       <h3>{copy.tagPicker.yourTags}</h3>
-      {shown.length === 0 ? (
+      {all.isError && !all.data ? (
+        <p className="error" role="alert">
+          {errorMessage(all.error)}
+        </p>
+      ) : !all.data && shown.length === 0 ? (
+        <p role="status">{copy.research.loading}</p>
+      ) : shown.length === 0 ? (
         <p className="note">{copy.tagPicker.empty}</p>
       ) : (
         <ul className="tag-options">
@@ -192,7 +213,7 @@ export function TagPicker({
         <button type="button" onClick={() => void cancel()}>
           {copy.tagPicker.cancel}
         </button>
-        <button type="button" disabled={busy} onClick={() => void done()}>
+        <button type="button" disabled={busy || !all.data} onClick={() => void done()}>
           {copy.tagPicker.done}
         </button>
       </div>

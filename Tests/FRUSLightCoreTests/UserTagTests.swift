@@ -42,13 +42,18 @@ import Testing
         #expect(try store.tags(of: "owner").count == 2)
     }
 
-    @Test func tagsAreListedByNameAndEachUsersAlone() async throws {
+    @Test func tagsAreListedByNameAsTheAppSortsThemAndEachUsersAlone() async throws {
         let (store, rows, directory) = try await Self.open()
         defer { withExtendedLifetime(directory) {} }
         try rows.addUser("reader")
-        for name in ["revisit", "Berlin", "berlin", "Africa"] { try store.createTag(named: name, for: "owner", at: Self.created) }
+        for name in ["revisit", "Berlin", "berlin", "Africa", "Tag 10", "Tag 9", "Élysée"] {
+            try store.createTag(named: name, for: "owner", at: Self.created)
+        }
         try store.createTag(named: "Theirs", for: "reader", at: Self.created)
-        #expect(try store.tags(of: "owner").map(\.name) == ["Africa", "Berlin", "berlin", "revisit"])
+        // As the app's query sorts them, by Foundation's localized standard comparison: digits as
+        // numbers, an accent after its letter, and a lowercase name before its capital.
+        let names = try store.tags(of: "owner").map(\.name)
+        #expect(names == ["Africa", "berlin", "Berlin", "Élysée", "revisit", "Tag 9", "Tag 10"], "\(names)")
         #expect(try store.tags(of: "reader").map(\.name) == ["Theirs"])
         let theirs = try #require(try store.tags(of: "reader").first)
         #expect(try store.tag(theirs.id, of: "owner") == nil, "another user's tag is not the owner's")

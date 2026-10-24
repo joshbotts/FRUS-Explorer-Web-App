@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Me, UserTag } from '../api/types';
@@ -97,6 +97,33 @@ describe('Settings ▸ Tags', () => {
     expect(fetch.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(true);
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Berlin' })).toBeNull());
     expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'Tags' }));
+  });
+
+  it('closes only the confirmation on its Escape, and focus goes back to Delete Tag', async () => {
+    const { fetch } = settings([berlin, cold]);
+    renderAt('/settings/tags');
+    await userEvent.click(await screen.findByRole('button', { name: 'Berlin' }));
+    const editor = await screen.findByRole('dialog', { name: 'Edit Tag' });
+    await userEvent.click(within(editor).getByRole('button', { name: 'Delete Tag' }));
+    const confirm = await screen.findByRole('alertdialog', { name: 'Delete Tag?' });
+    // Escape, as the browser sends it to the dialog on top.
+    fireEvent(confirm, new Event('cancel', { cancelable: true }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(screen.getByRole('dialog', { name: 'Edit Tag' })).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(within(editor).getByRole('button', { name: 'Delete Tag' })));
+    expect(fetch.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+  });
+
+  it('makes one tag however often New Tag… is pressed while it is made', async () => {
+    let release: (tag: unknown) => void = () => {};
+    const { fetch } = settings([], { 'POST /api/v1/me/tags': () => new Promise((resolve) => (release = resolve)) });
+    renderAt('/settings/tags');
+    const button = await screen.findByRole('button', { name: 'New Tag…' });
+    await userEvent.click(button);
+    await userEvent.click(button);
+    release({ id: 'N0000000-0000-4000-8000-000000000000', name: 'New Tag' });
+    await screen.findByRole('dialog', { name: 'Edit Tag' });
+    expect(fetch.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
   });
 
   it('merges a tag into another chosen in Merge Tag, which it opens from the editor', async () => {

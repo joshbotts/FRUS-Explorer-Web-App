@@ -178,6 +178,49 @@ describe('the Research rail', () => {
     expect(fetch.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false);
   });
 
+  it('keeps the document’s tags while the list of tags is read, and waits for it before Done', async () => {
+    window.localStorage.setItem('frus.research.tags', 'open');
+    let release: (list: unknown) => void = () => {};
+    const fetch = reader({
+      [tagsPath]: documentTags([berlin]),
+      '/api/v1/me/tags': () => new Promise((resolve) => (release = resolve)),
+      [`PUT ${tagsPath}`]: (_: URL, init?: RequestInit) => documentTags(sent(init).body.tagIds.includes(berlin.id) ? [berlin] : []),
+    });
+    renderAt('/doc/frus1961-63v06/d1?rail=research');
+    await userEvent.click(await screen.findByRole('button', { name: 'Add Tag' }));
+    const picker = await screen.findByRole('dialog');
+    // The document's own tag is listed, switched on, before the list arrives; Done waits for it.
+    expect(within(picker).getByRole('checkbox', { name: 'Berlin' })).toHaveProperty('checked', true);
+    expect(within(picker).getByRole('button', { name: 'Done' })).toHaveProperty('disabled', true);
+    release({ total: 2, items: [berlin, revisit] });
+    await within(picker).findByRole('checkbox', { name: 'Revisit' });
+    await waitFor(() => expect(within(picker).getByRole('button', { name: 'Done' })).toHaveProperty('disabled', false));
+    await userEvent.click(within(picker).getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(sent(fetch.mock.calls.find(([, init]) => init?.method === 'PUT')?.[1]).body).toEqual({ tagIds: [berlin.id] });
+  });
+
+  it('deletes a tag still being made when the picker is cancelled', async () => {
+    window.localStorage.setItem('frus.research.tags', 'open');
+    const made: UserTag = { id: 'L0000000-0000-4000-8000-000000000000', name: 'Late' };
+    let release: (tag: unknown) => void = () => {};
+    const fetch = reader({
+      [tagsPath]: documentTags([]),
+      '/api/v1/me/tags': { total: 0, items: [] },
+      'POST /api/v1/me/tags': () => new Promise((resolve) => (release = resolve)),
+      [`DELETE /api/v1/me/tags/${made.id}`]: null,
+    });
+    renderAt('/doc/frus1961-63v06/d1?rail=research');
+    await userEvent.click(await screen.findByRole('button', { name: 'Add Tag' }));
+    const picker = await screen.findByRole('dialog');
+    await userEvent.type(within(picker).getByRole('textbox', { name: 'New tag name' }), 'Late{Enter}');
+    await userEvent.click(within(picker).getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    release(made);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(fetch.mock.calls.some(([url, init]) => init?.method === 'DELETE' && String(url).endsWith(`/api/v1/me/tags/${made.id}`))).toBe(true);
+  });
+
   it('asks for a new token and sends the change once more when the server no longer knows the one it has', async () => {
     window.localStorage.setItem('frus.research.tags', 'open');
     let tokens = 0;

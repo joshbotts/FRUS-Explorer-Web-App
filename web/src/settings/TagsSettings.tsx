@@ -23,6 +23,8 @@ export function TagsSettingsScreen() {
   const [editing, setEditing] = useState<{ tag: UserTag; isNew: boolean } | null>(null);
   const [merging, setMerging] = useState<UserTag | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  // New Tag… makes one tag a press, however often it is pressed while the first is made.
+  const [creating, setCreating] = useState(false);
   const opener = useRef<HTMLElement | null>(null);
   useDocumentTitle(copy.settings.tags);
   useHeadingReady(!me.isPending);
@@ -30,6 +32,8 @@ export function TagsSettingsScreen() {
   const items = tags.data?.items ?? [];
 
   async function newTag(event: MouseEvent<HTMLButtonElement>) {
+    if (creating) return;
+    setCreating(true);
     setFailure(null);
     opener.current = event.currentTarget;
     try {
@@ -37,6 +41,8 @@ export function TagsSettingsScreen() {
       setEditing({ tag, isNew: true });
     } catch (error) {
       setFailure(errorMessage(error));
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -89,7 +95,7 @@ export function TagsSettingsScreen() {
             ))}
           </ul>
         )}
-        <button type="button" className="settings-new" aria-haspopup="dialog" onClick={(event) => void newTag(event)}>
+        <button type="button" className="settings-new" aria-haspopup="dialog" disabled={creating} onClick={(event) => void newTag(event)}>
           {copy.settings.newTag}
         </button>
         {failure && (

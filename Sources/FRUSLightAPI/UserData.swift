@@ -6,6 +6,7 @@
 import FRUSLightCore
 import Foundation
 import Hummingbird
+import NIOCore
 import Synchronization
 
 /// Who a request acts for.
@@ -157,6 +158,9 @@ enum JSONBody {
         let buffer: ByteBuffer
         do {
             buffer = try await request.body.collect(upTo: UserDataServices.bodyLimit)
+        } catch is NIOTooManyBytesError {
+            // A body sent in chunks, whose length no header gave.
+            throw tooLarge
         } catch let error as HTTPError where error.status == .contentTooLarge {
             throw tooLarge
         }

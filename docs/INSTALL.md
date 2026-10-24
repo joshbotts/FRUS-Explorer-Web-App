@@ -184,7 +184,7 @@ curl -s -X POST http://localhost:8080/api/v1/me/tags -H "X-CSRF-Token: $token" -
 
 `GET /api/v1/me/tags` lists them, and `PUT /api/v1/me/volumes/frus1961-63v06/documents/d1/tags` with `{"tagIds": [...]}` gives a document exactly those. The token lasts until the server restarts.
 
-An error names its cause in a `code`: `INDEX_NOT_READY` for a search before an import has finished, `EMPTY_QUERY` for a query with nothing left to search, `TEI_NOT_AVAILABLE` when the volume is not in your TEI folder, and `DOCUMENT_NOT_FOUND`, `SECTION_NOT_FOUND`, `VOLUME_NOT_FOUND` or `TAG_NOT_FOUND` for an id the volume, the catalogue or your tags lack. A change the guard refuses is `CSRF_TOKEN_INVALID` without the current token, `ORIGIN_NOT_ALLOWED` from another page, and `HOST_NOT_ALLOWED` when it was not sent to the address in `FRUS_PUBLIC_URL`, such as http://127.0.0.1:8081 for a server at http://localhost:8080.
+An error names its cause in a `code`: `INDEX_NOT_READY` for a search before an import has finished, `EMPTY_QUERY` for a query with nothing left to search, `TEI_NOT_AVAILABLE` when the volume is not in your TEI folder, and `DOCUMENT_NOT_FOUND`, `SECTION_NOT_FOUND`, `VOLUME_NOT_FOUND` or `TAG_NOT_FOUND` for an id the volume, the catalogue or your tags lack. Under `/api/v1/me` the guard refuses a request, read or change, that was not sent to the address in `FRUS_PUBLIC_URL` as `HOST_NOT_ALLOWED`, such as one to http://127.0.0.1:8081 for a server at http://localhost:8080; and a change without the current token as `CSRF_TOKEN_INVALID`, and from another page as `ORIGIN_NOT_ALLOWED`.
 
 ## If an import is refused
 

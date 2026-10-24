@@ -63,13 +63,18 @@ export function ResearchRail({
             className="disclosure"
             aria-expanded={tagsOpen === 'open'}
             aria-controls="research-tags"
+            // Named outright: a browser reads the badge's parts with spaces of its own between them.
+            aria-label={count > 0 ? `${copy.research.tags}, ${copy.research.tagCount(count)}` : undefined}
             onClick={() => setTagsOpen(tagsOpen === 'open' ? 'closed' : 'open')}
           >
+            {/* The mark is drawn, not read: aria-expanded says it. */}
+            <span className="disclosure-mark" aria-hidden="true">
+              {tagsOpen === 'open' ? '▾' : '▸'}
+            </span>
             {copy.research.tags}
             {count > 0 && (
-              <span className="badge">
-                <span aria-hidden="true">{count.toLocaleString('en-US')}</span>
-                <span className="visually-hidden">, {copy.research.tagCount(count)}</span>
+              <span className="badge" aria-hidden="true">
+                {count.toLocaleString('en-US')}
               </span>
             )}
           </button>
