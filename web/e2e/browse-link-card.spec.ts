@@ -8,7 +8,7 @@ import { expect, test } from './fixtures';
 import { tabTo } from './keyboard';
 
 test('browses to a volume, opens a document, follows a link in it and opens a person card, by keyboard alone', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('./');
   await expect(page).toHaveURL(/\/browse$/);
   const heading = page.getByRole('heading', { level: 1 });
 
@@ -95,7 +95,7 @@ test('browses to a volume, opens a document, follows a link in it and opens a pe
 test('a page link goes forward to the document on its page, and one nothing places says why', async ({ page }) => {
   // No fixture document links a page of its own volume, so the frame posts the link the kit writes
   // for one, as its host script posts a link: page 2 of frus1961-63v06, which d2 begins.
-  await page.goto('/doc/frus1961-63v06/d1');
+  await page.goto('doc/frus1961-63v06/d1');
   await expect(page.frameLocator('iframe.reader-frame').getByText(d1Text)).toBeVisible();
   const post = async (documentId: string, href: string) => {
     const reader = page.frames().find((frame) => frame.url().includes(`/documents/${documentId}/html`));
@@ -119,7 +119,7 @@ async function revealedFootnote(page: Page, documentId: string): Promise<string 
 }
 
 test('a note in another document lands in its list of footnotes, and a volume not on the server says so', async ({ page }) => {
-  await page.goto('/doc/frus1961-63v06/d21');
+  await page.goto('doc/frus1961-63v06/d21');
   const frame = page.frameLocator('iframe.reader-frame');
   await frame.getByRole('link', { name: /footnote 2, Document/ }).click();
   await expect(page).toHaveURL(/\/doc\/frus1961-63v06\/d16\?note=fnote-x-d16fn2$/);
@@ -134,7 +134,7 @@ test('a note in another document lands in its list of footnotes, and a volume no
   await axeCheck(page);
   await expect(note).not.toHaveClass(/\bfn-arrived\b/);
 
-  await page.goto('/doc/frus1961-63v06/d7');
+  await page.goto('doc/frus1961-63v06/d7');
   await page.frameLocator('iframe.reader-frame').getByRole('link', { name: 'Document 28' }).click();
   const notice = page.getByRole('status').filter({ hasText: 'isn’t on this server' });
   await expect(notice).toContainText('Volume V');
@@ -148,7 +148,7 @@ test('a note in another document lands in its list of footnotes, and a volume no
 test('a note in the same document is landed on in place, by the app’s own script', async ({ page }) => {
   // No fixture document links a note of its own, so the frame posts the link the kit writes for one,
   // as its host script posts a link: d2's first numbered note.
-  await page.goto('/doc/frus1961-63v06/d2');
+  await page.goto('doc/frus1961-63v06/d2');
   const frame = page.frameLocator('iframe.reader-frame');
   await expect(frame.getByText(d2Text)).toBeVisible();
   const reader = page.frames().find((candidate) => candidate.url().includes('/documents/d2/html'));
@@ -167,7 +167,7 @@ test('a note in the same document is landed on in place, by the app’s own scri
 });
 
 test('a page opened at a note leaves focus on the control that changes its text size, reading width or appearance, and lands again on Back and Forward', async ({ page }) => {
-  await page.goto('/doc/frus1961-63v06/d21');
+  await page.goto('doc/frus1961-63v06/d21');
   const frame = page.frameLocator('iframe.reader-frame');
   await frame.getByRole('link', { name: /footnote 2, Document/ }).click();
   await expect(page).toHaveURL(/\/doc\/frus1961-63v06\/d16\?note=fnote-x-d16fn2$/);
@@ -233,13 +233,13 @@ test('a page opened at a note leaves focus on the control that changes its text 
 
 test('a reference to a whole volume opens the volume in Browse, and one outside the catalogue says so', async ({ page }) => {
   // "volume V" in d7 names Volume V as a whole: the catalogue holds it, though this server has neither its TEI nor its index.
-  await page.goto('/doc/frus1961-63v06/d7');
+  await page.goto('doc/frus1961-63v06/d7');
   await page.frameLocator('iframe.reader-frame').getByRole('link', { name: 'volume V', exact: true }).first().click();
   await expect(page).toHaveURL(/\/browse\/frus1961-63v05$/);
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Volume V, Soviet Union');
 
   // The preface names the microfiche supplement to volumes XIII–XV, which the catalogue does not hold.
-  await page.goto('/doc/frus1961-63v06/preface');
+  await page.goto('doc/frus1961-63v06/preface');
   await page.frameLocator('iframe.reader-frame').getByRole('link', { name: /microfiche supplement/ }).click();
   const notice = page.getByRole('status').filter({ hasText: 'isn’t part of this collection' });
   await expect(notice).toBeVisible();
@@ -253,11 +253,11 @@ test('a reference to a whole volume opens the volume in Browse, and one outside 
 });
 
 test('nothing on the page fails axe, the reader’s frame included: Search, the reader, Cite, its narrow sheet and a card, and Browse and the reader in dark', async ({ page }) => {
-  await page.goto('/search?keywords=treaties');
+  await page.goto('search?keywords=treaties');
   await expect(page.getByRole('list', { name: 'Results' }).getByRole('listitem')).toHaveCount(2);
   await axeCheck(page);
 
-  await page.goto('/doc/frus1961-63v06/d1?rail=cite');
+  await page.goto('doc/frus1961-63v06/d1?rail=cite');
   await expect(page.getByRole('complementary', { name: 'Cite' }).locator('.citation')).toBeVisible();
   await expect(page.frameLocator('iframe.reader-frame').getByText(d1Text)).toBeVisible();
   await axeCheck(page);
@@ -273,7 +273,7 @@ test('nothing on the page fails axe, the reader’s frame included: Search, the 
 
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.emulateMedia({ colorScheme: 'dark' });
-  await page.goto('/doc/frus1961-63v06/d1');
+  await page.goto('doc/frus1961-63v06/d1');
   await expect(page.locator('iframe.reader-frame')).toHaveAttribute('src', /colorScheme=dark/);
   await expect(page.frameLocator('iframe.reader-frame').getByText(d1Text)).toBeVisible();
   await axeCheck(page);
@@ -282,7 +282,7 @@ test('nothing on the page fails axe, the reader’s frame included: Search, the 
   await expect(card).toBeVisible();
   await axeCheck(page);
   await card.getByRole('button', { name: 'Done' }).click();
-  for (const screen of ['/browse', '/browse/frus1961-63v06', '/browse/frus1961-63v06/comp1']) {
+  for (const screen of ['browse', 'browse/frus1961-63v06', 'browse/frus1961-63v06/comp1']) {
     await page.goto(screen);
     await expect(page.getByRole('heading', { level: 1 })).not.toHaveAttribute('data-loading', 'true');
     await expect(page.getByRole('status').or(page.getByRole('heading', { level: 2 })).first()).toBeVisible();

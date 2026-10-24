@@ -7,7 +7,7 @@ import { treatiesDates, treatiesResults } from './expected';
 import { expect, test } from './fixtures';
 
 test('a row that prints no dateline draws the day the index dates it by, as the Mac’s window does', async ({ page }) => {
-  await page.goto('/search?keywords=treaties');
+  await page.goto('search?keywords=treaties');
   const results = page.getByRole('list', { name: 'Results' });
   await expect(results.getByRole('listitem')).toHaveCount(2);
   for (const [index, title] of treatiesResults.entries()) {
@@ -19,7 +19,7 @@ test('a row that prints no dateline draws the day the index dates it by, as the 
 });
 
 test('the Reading Width loads the page at the app’s measure, beside Text Size, keeping focus on its control', async ({ page }) => {
-  await page.goto('/doc/frus1961-63v06/d1');
+  await page.goto('doc/frus1961-63v06/d1');
   const toolbar = page.getByRole('group', { name: 'Document' });
   await expect(toolbar.getByRole('combobox')).toHaveCount(2);
   const width = toolbar.getByRole('combobox', { name: 'Reading Width' });
@@ -67,7 +67,7 @@ test('a search the reader replaces is abandoned, so the server can stop it', asy
     await route.continue().catch(() => {});
   });
   const abandoned = page.waitForEvent('requestfailed', (request) => request.url().includes('/api/v1/search?keywords=negotiating&'));
-  await page.goto('/search?keywords=negotiating');
+  await page.goto('search?keywords=negotiating');
   const box = page.getByRole('searchbox', { name: 'Search the documents' });
   await box.fill('treaties');
   await box.press('Enter');

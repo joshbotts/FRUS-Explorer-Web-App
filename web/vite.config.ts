@@ -2,7 +2,9 @@
 // The browser app's build (vite build), development server (vite) and unit tests (vitest).
 // In development the server's API, the reader's pages and its host script come from the Swift
 // server at FRUS_API_ORIGIN, so the reader's page is same-origin with the app, as it is when the
-// server serves both.
+// server serves both. The build names its files by relative paths under the page's <base>, into
+// which the server writes the path it serves the app under, so one build serves at the root or
+// under a path.
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
@@ -11,6 +13,7 @@ const proxy = Object.fromEntries(['/api', '/reader', '/healthz', '/readyz'].map(
 
 export default defineConfig({
   plugins: [react()],
+  base: './',
   build: {
     // No inline data URIs: the app's policy allows them for images only, and nothing needs them.
     assetsInlineLimit: 0,

@@ -1,5 +1,6 @@
 // One function per endpoint the app calls, and the query options that cache them.
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
+import { servedPath } from './base';
 import { ApiError, getJSON } from './client';
 import { formEncode, type FormValue } from './form';
 import type {
@@ -25,6 +26,7 @@ import { filterFields, searchFields } from '../search/searchState';
 
 const segment = encodeURIComponent;
 
+/** A document's path at the server's root, which `getJSON` and the URLs below put under the base path. */
 export function documentPath(volumeId: string, documentId: string): string {
   return `/api/v1/volumes/${segment(volumeId)}/documents/${segment(documentId)}`;
 }
@@ -37,7 +39,7 @@ export function readerPageURL(
   textSize: TextSize,
   readingWidth: ReadingWidth,
 ): string {
-  return `${documentPath(volumeId, documentId)}/html?${formEncode({ colorScheme, textSize, readingWidth })}`;
+  return `${servedPath(documentPath(volumeId, documentId))}/html?${formEncode({ colorScheme, textSize, readingWidth })}`;
 }
 
 export type TextSize = 'small' | 'medium' | 'large' | 'extraLarge';
@@ -47,7 +49,7 @@ export type ReadingWidth = 'narrow' | 'standard' | 'wide';
 
 /** `/readyz` answers 503 with the step until an index is served, so its body is read either way. */
 export async function fetchReadiness(signal?: AbortSignal): Promise<Readiness> {
-  const response = await fetch('/readyz', { signal, headers: { Accept: 'application/json' } });
+  const response = await fetch(servedPath('/readyz'), { signal, headers: { Accept: 'application/json' } });
   return (await response.json()) as Readiness;
 }
 
@@ -252,7 +254,7 @@ export function citationQuery(volumeId: string, documentId: string, style: Citat
 
 /** A document's BibTeX or RIS record as a file to save, named as the Mac names its .bib file. */
 export function citationFileURL(volumeId: string, documentId: string, suffix: 'bib' | 'ris'): string {
-  return `${documentPath(volumeId, documentId)}/citation.${suffix}`;
+  return `${servedPath(documentPath(volumeId, documentId))}/citation.${suffix}`;
 }
 
 /** Retries a network failure or a server fault twice; never a refusal, nor a 503 while importing. */

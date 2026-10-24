@@ -3,6 +3,7 @@
 // kit stops its statement (`SearchStatementStop`, joshbotts/FRUS-Explorer#1698). Session 10 found the
 // server still computing searches whose clients had given up on them.
 
+import FRUSLightCore
 import Hummingbird
 import HummingbirdCore
 import NIOCore
@@ -82,11 +83,13 @@ enum APIServer {
     }
 }
 
-/// The context of every request the API answers: Hummingbird's own, and the connection the request
-/// came on, so its work can stop when its client has gone.
+/// The context of every request the API answers: Hummingbird's own, the connection the request
+/// came on, so its work can stop when its client has gone, and the base path its client sent it
+/// under, which the router does not see.
 public struct APIRequestContext: RequestContext {
     public var coreContext: CoreRequestContextStorage
     let channel: any Channel
+    var basePath = BasePath.root
 
     public init(source: ApplicationRequestContextSource) {
         coreContext = .init(source: source)
