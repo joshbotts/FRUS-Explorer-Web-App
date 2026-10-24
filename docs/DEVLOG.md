@@ -4,13 +4,13 @@ One entry per session, newest first.
 
 ## Session 16a: the Mac's JSON export at format version 7, upstream
 
-23 October 2026 · branch `claude/priceless-elbakyan-9dab35` · upstream `2767a128`, unchanged; [FRUS-Explorer#1786](https://github.com/joshbotts/FRUS-Explorer/pull/1786) open
+23 October 2026 · branch `claude/priceless-elbakyan-9dab35` · upstream `2767a128`, unchanged; [FRUS-Explorer#1786](https://github.com/joshbotts/FRUS-Explorer/pull/1786) merged as `02521d01`
 
 Phase 2's row S16a. The owner chose to open it now, during the app's 1.0 submission, and to merge it when the submission allows. Phase 2 keeps each researcher's research layer in the server's user store, imports a Mac's **Export as JSON** file into it (S16c) and writes one back (S16d). That needs two things the app did not have:
 - the export's file in the kit, so the server reads and writes the app's own envelope with the app's own decoder;
 - a file that carries the whole research layer. Version 6 carried 15 of the app's 23 model types, and dropped a note's rich text, a project's focus and a collection's composition.
 
-This session opened one pull request on `FRUS-Explorer`, [#1786](https://github.com/joshbotts/FRUS-Explorer/pull/1786), from `claude/research-export-v7`, in two commits. It is labelled `Mac`, with "Mac verification requested". Under rule 4 it changes shared files, and this repository changes only its records.
+This session opened one pull request on `FRUS-Explorer`, [#1786](https://github.com/joshbotts/FRUS-Explorer/pull/1786), from `claude/research-export-v7`, in two commits. It is labelled `Mac`, with "Mac verification requested". Under rule 4 it changes shared files, and this repository changes only its records. The owner merged it the same day as `02521d01`, a squash whose tree is the branch head's, `aac1aefa`, byte for byte.
 
 **The first commit moves the export's file into FRUSCoreKit, unchanged** (`73e86506`):
 - `ResearchDataEnvelope`, its records and its tolerant decoder, public, in `FRUSCoreKit/Export/ResearchDataEnvelope.swift`;
@@ -44,10 +44,11 @@ This session opened one pull request on `FRUS-Explorer`, [#1786](https://github.
 - **`FRUSExplorerMac`** built as `v2` did, with the same five warning lines. With thunk numbers and file-private discriminators dropped, its symbol diff is 68 names removed and 1,786 added, each one the change accounts for. The first commit alone is 11 removed and 59 added: the moved private helpers and the initialisers now spelled out, against the kit's new API.
 - **The full iOS unit run on iOS 27.0:** 7,623 tests in 903 suites, against `v2`'s 7,609 in 900. Both have the same 8 issues, the Keychain tests an unsigned build fails, and the same 17 tests and 2 suites skipped.
 - **`swift test`:** 38 runs and 3,054 tests, none failed or skipped, against 3,043 on `v2`. `FRUSCoreKitTests` ran 1,161, and 1,158 at the first commit alone, whose touched app suites also passed.
-- **Linux,** in a scratch worktree of this repository's `main` (`1ca859f`) with the branch copied over the submodule:
+- **Linux,** in a scratch worktree of this repository's `main` with the branch copied over the submodule, at `1ca859f` and again at `7d4f671`, after S14a and S14f merged:
   - FRUSCoreKitTests: 1,161 tests passed, with the one named skip and no build warning;
   - every other target passed except FRUSParityTests, whose 13 issues are all golden-file staleness. The source digest covers the kit's folders, and the pin move remakes the files;
-  - the encoder's test passed there too, so the server writes the app's layout.
+  - the encoder's test passed there too, so the server writes the app's layout;
+  - at `7d4f671`, S14a's store suites passed with it too, `FRUSLightCoreTests` at 63. They read the app's `@Model` classes, which #1786 leaves where they were, and the three app types they map keep their names.
 
 **Delivered here**
 
@@ -62,7 +63,11 @@ This session opened one pull request on `FRUS-Explorer`, [#1786](https://github.
 - **Kit suite names stay unique:** the three new suites' names were checked against `FRUSExplorerTests/` first, and the fixtures file carries the `#if SWIFT_PACKAGE` header `FRUSCoreKitBoundaryTests` asks of every file there.
 - **Scratch:** the clone, its `v2` and first-commit worktrees, the logs and the scripts are under `~/Library/Caches/frus-s16a`, with a scratch worktree of this repository at `main` in `web-linux`.
 
-**Next:** the owner's Mac check 10 and the merge of [FRUS-Explorer#1786](https://github.com/joshbotts/FRUS-Explorer/pull/1786), when the submission allows. Its pin move, S15b's or S16b's, whichever comes first, also widens the upstream watch's path for the format version. Beside it, S14c, the write path and tags, as S14a's entry says.
+**Next: S16b, the pin move to `02521d01`,** a pull request of its own under rule 5, since #1786 merged before S15a's two.
+- It widens `scripts/upstream-watch`'s search for `currentFormatVersion` to `FRUSCoreKit/Export`.
+- Its golden files may come from the 1776 three-volume export, by the owner's choice: #1786 changes nothing on the indexing path, so only provenance should change.
+- **The owner's JSON export for S16c,** from a library holding every type, is the file Mac check 10 decodes with the kit through `FRUS_RESEARCH_EXPORT`.
+- Beside it, S14c, the write path and tags, as S14a's entry says.
 
 ## Session 14a: the user store's schema and migrations
 
