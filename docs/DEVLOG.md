@@ -43,6 +43,87 @@ S16b found it (#57, its Notes), and the session that ran S16b asked for the fix 
 
 **Next: S15c,** highlights and check 6, once #57, S16b's pin move and S15b's, merges; S19a, Citation Lookup, which #57 also unblocks; and S14b, S14d and S14e on the server's track.
 
+## Session 16b: pin move past FRUS-Explorer#1786, #1788 and #1787, which is S15b's too
+
+24 October 2026 · branch `claude/s16b-pin-503a730b` · upstream `503a730b`
+
+Phase 2's row S16b, and with it S15b. The pin moves from `2767a128` to `503a730b`, `v2`'s head, past three of the owner's merges:
+- [FRUS-Explorer#1786](https://github.com/joshbotts/FRUS-Explorer/pull/1786) (S16a), the Mac's JSON export in the kit at format version 7, merged on the evening of 23 October as `02521d01`;
+- [#1788](https://github.com/joshbotts/FRUS-Explorer/pull/1788) and [#1787](https://github.com/joshbotts/FRUS-Explorer/pull/1787) (S15a), the reader's annotation scripts and Citation Lookup's Batch and Structured Entry types, merged this morning as `9ae72e7e` and `503a730b`.
+
+The session was briefed to move the pin to `02521d01` alone, which it did first. S15a's two merged while it waited for the owner's export, and `PLAN.md` has the first pin move after a phase-2 upstream merge take it, whichever row that is. So, by the owner's choice, this move goes to `503a730b` and is S15b's as well: one move and one set of golden files where there would have been two. S15c, S15d, S16c and S19a build on it. It is a pull request of its own under rule 5.
+
+**What the move brought**
+
+- **Three commits, each a squash with its branch head's tree:** `02521d01` is #1786's `aac1aefa`, and `9ae72e7e` is #1788's `edfbc73a`. #1787's branch had `v2` at `9ae72e7e` merged into it after #1788 landed, keeping both pull requests' records, so `503a730b` is the tree of its last head, `b3b272c6`, and not of `3b040885`, the head S15a's entry names.
+- **In shared code:**
+  - #1786: `FRUSCoreKit/Export/`, a new folder, with `ResearchDataEnvelope.swift`, `ResearchNoteMarkdownExport.swift` and `ResearchDatabaseStrip.swift`; and `SummaryTypes.swift` and `ArchiveVisitValues.swift` in `FRUSCoreKit/Models/`, the five types the envelope's records name, moved out of the app's model files unchanged but public;
+  - #1788: `TEI/ReaderAnnotationScripts.swift`, with the reader's three scripts byte for byte; `ReaderHighlight` and a public `HighlightColor` in `TEI/HighlightColor.swift`; and `DocumentView/SelectionVerb.swift` and `DocumentView/HighlightReanchorSearch.swift`;
+  - #1787: `CitationLookupFields`, `CitationBlockSplitter` and the Batch types public in `FRUSCoreKit/Citation/`, with three initialisers spelled out.
+- **In the kit's tests:** `ResearchDataEnvelopeTests.swift`, three suites and 11 tests, with `ResearchDataFixtures.swift`, a file of each format version 1 to 7; `ReaderAnnotationTests.swift`, new; and `HighlightReanchorTests.swift`, moved into the kit's folder with its three app-only tests behind `#if !SWIFT_PACKAGE`. FRUSCoreKitTests runs 1,191, from 1,150: 1,161 after #1786, as S16a found, and 30 more from #1788.
+- The rest is the app's: its exporter and reader code, now calling the kit, the model files the types left, its tests, manuals, editable content and records.
+- **No repair.** The package builds with no warning, every kit suite passes, and the only skip is the named one. `Package.swift` compiles `FRUSCoreKit/` and `FRUSExplorerTests/FRUSCoreKit/` by folder, so the new folder and files needed no change. These are unchanged:
+  - the build (1.0, 1776), so `scripts/release-tag` still says `1.0-1776`;
+  - the index version (71) and the FTS generation (4), so `Compatibility.swift` and the install guide's versions stand;
+  - the export's schema: `setupDatabase(_:)` is the same text at the same lines, 7759–8414, and the watch finds the same 47 `CREATE TABLE` and `ALTER TABLE` statements;
+  - `IndexingResources.indexResourceNames`, the bundled resources, the app's source folders in `project.yml`, and CI's allow-list.
+
+**Nothing the indexer runs changed.** `git diff 2767a128 503a730b` over COORDINATION §5's indexing path is empty for `FRUSCoreKit/Search`, FTS5Store, SourceNoteKit, `FRUSExplorer/Resources` and `project.yml`. In the parser's folder, `FRUSCoreKit/TEI`, only two files change: `HighlightColor` turns public and gains `ReaderHighlight` beside it, and `ReaderAnnotationScripts.swift` holds the scripts as strings; the serializer that paints a highlight's colour is unchanged. The one change to how an export is written is #1786's strip. It nulls the writing, drops the tag names, vacuums and rebuilds both FTS tables when Include My Notes, Summaries, and Tags is off, and its five statements moved into `ResearchDatabaseStrip.steps` with the same text, in the same order and under the same step names. `IndexDatabaseExporter.strip(_:)` now runs them in a loop. So the 1776 export would have served, as it did for S12e's and S13c's moves, but the owner made a new one from a build of `503a730b`.
+
+**The daily watch reads the export's number from the kit.** `scripts/upstream-watch` took the first `static let currentFormatVersion = <number>` under `FRUSExplorer/Export`. Since #1786 the number is in `FRUSCoreKit/Export/ResearchDataEnvelope.swift`, and the app's line names it (`= ResearchDataEnvelope.currentFormatVersion`). So `constant_at` now takes several paths, and the export's row reads both folders, the kit's first:
+- it gives 6 at `2767a128`, 7 at `02521d01` and `503a730b`, and 6 at `c6f7b2cb`;
+- the row is named for `ResearchDataEnvelope.currentFormatVersion`;
+- `scripts/upstream-watch report 503a730b` printed "6 | **7**", and `selftest` passes.
+
+**The golden files**
+
+Remade by `scripts/make-golden --export /Users/Shared/frus-index-2026-10-24.sqlite` under the app's `Scripts/heavy.sh` lock. The owner made the export that morning from a build of `503a730b`, with My Notes, Summaries, and Tags left out: 1.0 (1776), index version 71, FTS generation 4, and 393 documents in the three fixture volumes.
+- **Only provenance changed** in the 393 rows' HTML, which is byte for byte as before, and in the render's manifest, the expressions and the results: `sourceDigest` (`d99bca0de69c` to `1c529af84686`), `upstreamCommit` and, for the results, the export's time. Every query's count, first 50 results and tie tail are as the 1776 export gave them.
+- **The index summary's gating section,** its 36 digests, 7 checks and volumes, is unchanged. Beside its provenance, its information section moved only where an export's history and this run move it:
+  - the volumes were indexed in the order COORDINATION §5 recommends, Nicaragua, then v06, then ve09p1, where the 1776 export had ve09p1 second;
+  - `volume_structures`' raw bytes hash differently. Each volume's structure is the same JSON with its keys in another order, as the app's encoder leaves them, and the gating digest reads it through `json_tree`;
+  - the AUTOINCREMENT sequences of three tables, which the golden library carries from every erase, the freelist, and the timings.
+- `frus-parity check-golden` passes.
+- At `02521d01`, before the export came, `make-golden` without one gave the same HTML and expressions, with that pin's digest, `08cc27581ac7`.
+
+**Records**
+
+- `PLAN.md`: S12d's row (from `503a730b`), the golden-files checkpoint, the risk row's counts, and a paragraph on the three merges and this move after S14c's.
+- `SPEC.md`: the compatibility contract, and `setupDatabase(_:)`'s lines.
+- `COORDINATION.md`:
+  - the pin, and §1's use of the kit;
+  - §2's paragraph on #1787 and #1788, now merged, with this move after it;
+  - §5's watch line, naming the export's number where it now is, and its list of app changes;
+  - §6's exports.
+- `docs/prep/README.md`: the pin, and a line saying the phase-2 claims on the moved code describe it before the moves.
+- The README's Status and this log.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** through CI's Build and Test steps, this package's own targets built clean with no warning, over `main` at `c19524b`, with S14c and S15a's records: all 2,168 tests pass, up from 2,127, with the one named skip.
+  - FRUSCoreKitTests runs 1,191, from 1,150. The other targets are unchanged: SourceNoteKitTests 321, FTS5StoreTests 219, FRUSParityTests 122, FRUSLightServerTests 122, FRUSLightCoreTests 73, ManifestGeneratorTests 60, SemanticVectorsKitTests 40, CrossRefKitTests 10, GeneratorKitTests 7, FTS5CheckTests 3.
+  - S14a's `UserStoreParityTests`, which read the app's `@Model` classes, pass. #1786 moves value types out of three model files, and #1788 makes `DocumentHighlight.HighlightDTO` a typealias for the kit's `ReaderHighlight`; neither moves a stored property.
+- **Against the remade golden files** the run printed:
+  - "check 2 passes: 36 digests and 7 checks are the Mac's";
+  - "check 3's results pass: 482 queries, 482 identical and 0 reordered only within Mac tie groups; 318 with other score bits (information)", and through the API "482 queries, 482 identical and 0 reordered only within Mac tie groups, every record the kit's own";
+  - "check 4 through the page: 393 of 393 rows identical", and the same on the reader's path and from one full parse per volume.
+- **At `02521d01` first,** over `main` at `c028783`, the same steps built with no warning and ran 2,121 tests, FRUSCoreKitTests 1,161 and the one named skip. The only failures were the parity suites' 13 issues of golden-file staleness. S15a's own Linux runs found the same for #1788 and #1787.
+- **The image and the browser suite** are CI's compose job's, which builds this branch's image and runs `scripts/compose-smoke --e2e` at the root and under a path. The server links none of the new kit code yet.
+
+**Notes**
+
+- **A draft that waits for an export no longer passes CI.** COORDINATION §5 has a pin move list the two export-made files in `fixtures/golden/PENDING` and stay a draft until the export arrives, as S6's did. At `02521d01`, with both files pending, `scripts/swift` ran CI's Test step and two parity tests failed on the missing results file, while check 2's and check 3's own tests waited as they should:
+  - `SearchTimingTests` (S13b) reads `queries.results.json` without asking `GoldenValidation` whether it is pending;
+  - `ServedAPIParityTests.checkThreePassesThroughTheAPI` records an issue when it finds the file pending.
+
+  The export came the same morning, so nothing here pushed a pending file, but the next pin move that waits for an export would show a red CI on its draft.
+- **`make-golden` reads the pin from the index,** not from the submodule's checkout, so its first run stopped with "the pin is 2767a12" until the submodule move was staged.
+- **Builds in a new worktree:** the Linux build reused S16a's scratch build through an APFS clone (`cp -c`), and built this package's own targets clean in under 70 seconds.
+- **Not updated:** the shared copy of `PLAN.md`, as S14g and S14c left it.
+- **Mac checks 9 and 10** are still "To do" in `PLAN.md`. The owner merged #1786, #1788 and #1787; their checks, an export of every type decoded again (10) and the two pull requests' builds and runs (9), are the owner's to record.
+
+**Next: S15c,** highlights and check 6, now that S14c and this move are in; beside it S19a, Citation Lookup, which this move also unblocks, and S14e, S14d and S14b on the server's track.
+
 ## Session 14c: the write path, and tags
 
 23 and 24 October 2026 · branch `claude/s14c-tags-and-write-guards` · [#54](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/54) · upstream `2767a128`, unchanged

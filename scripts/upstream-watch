@@ -61,9 +61,12 @@ cmd_checkout() {
 
 # --- compare ---------------------------------------------------------------------------------
 
-# The first integer assigned to a static constant named $2 in the Swift sources under $3 at $1.
+# The first integer assigned to a static constant named $2 in the Swift sources under the paths
+# after it, at $1.
 constant_at() {
-  git -C "$sub" grep -h -E "static let $2( *: *Int)? *= *[0-9]+" "$1" -- "$3" 2>/dev/null \
+  local rev=$1 name=$2
+  shift 2
+  git -C "$sub" grep -h -E "static let $name( *: *Int)? *= *[0-9]+" "$rev" -- "$@" 2>/dev/null \
     | head -n 1 | grep -oE '[0-9]+ *$' | tr -d ' ' || true
 }
 
@@ -145,8 +148,10 @@ cmd_report() {
   iv1=$(constant_at "$head" currentDateIndexVersion FRUSCoreKit)
   fts0=$(constant_at "$p" currentSchemaGeneration FTS5Store)
   fts1=$(constant_at "$head" currentSchemaGeneration FTS5Store)
-  fmt0=$(constant_at "$p" currentFormatVersion FRUSExplorer/Export)
-  fmt1=$(constant_at "$head" currentFormatVersion FRUSExplorer/Export)
+  # The export's number is FRUSCoreKit's since #1786 (02521d01), and the app's line names it; before,
+  # it was the app's.
+  fmt0=$(constant_at "$p" currentFormatVersion FRUSCoreKit/Export FRUSExplorer/Export)
+  fmt1=$(constant_at "$head" currentFormatVersion FRUSCoreKit/Export FRUSExplorer/Export)
   res0=$(resource_names_at "$p")
   res1=$(resource_names_at "$head")
 
@@ -166,7 +171,7 @@ cmd_report() {
   printf "| | The pin \`%s\` | \`v2\` \`%s\` |\n| --- | --- | --- |\n" "$(short "$p")" "$(short "$head")"
   fact_row "Index version, \`IndexingPipeline.currentDateIndexVersion\`" "$iv0" "$iv1"
   fact_row "FTS generation, \`FTS5Connection.currentSchemaGeneration\`" "$fts0" "$fts1"
-  fact_row "JSON export, \`ResearchDataExporter.currentFormatVersion\`" "$fmt0" "$fmt1"
+  fact_row "JSON export, \`ResearchDataEnvelope.currentFormatVersion\`" "$fmt0" "$fmt1"
   fact_row "\`IndexingResources.indexResourceNames\`" "$res0" "$res1"
   echo
 
