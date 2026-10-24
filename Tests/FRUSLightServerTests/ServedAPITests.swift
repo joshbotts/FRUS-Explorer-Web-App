@@ -443,9 +443,9 @@ func servingSyntheticExport(volumes: [String] = [], edits: String? = nil, includ
         let parsed = try await fixture.reader.document(volume: "frus1894Nicaragua", document: "d1")
         #expect(!parsed.ast.isShapedAsEditorialNote, "the TEI shapes d1 as a document")
         let asNote = ReaderService.render(parsed, volume: "frus1894Nicaragua", classification: true, part: .body,
-                                          brokenRefs: fixture.resources.brokenRefs).html
+                                          base: .root, brokenRefs: fixture.resources.brokenRefs).html
         let asTEI = ReaderService.render(parsed, volume: "frus1894Nicaragua", classification: nil, part: .body,
-                                         brokenRefs: fixture.resources.brokenRefs).html
+                                         base: .root, brokenRefs: fixture.resources.brokenRefs).html
         #expect(asNote != asTEI)
         #expect(unserved == asTEI && served == asNote)
     }
@@ -492,11 +492,14 @@ func servingSyntheticExport(volumes: [String] = [], edits: String? = nil, includ
         }
     }
 
-    /// The page names each figure by the server's address, which is the route above.
-    @Test func figuresAreNamedByTheServersAddress() {
+    /// The page names each figure by the server's address, which is the route above, under the
+    /// server's base path.
+    @Test func figuresAreNamedByTheServersAddress() throws {
         let image = FigureImageName(volumeId: "frus1969-76ve09p1", graphic: "SpanishSaharaMap.jpg")
-        #expect(ReaderRoutes.figureURL(for: image)?.absoluteString == "/api/v1/volumes/frus1969-76ve09p1/figures/SpanishSaharaMap.jpg.png")
-        #expect(ReaderRoutes.figureURL(for: FigureImageName(volumeId: "../x", graphic: "a")) == nil)
-        #expect(ReaderRoutes.figureURL(for: FigureImageName(volumeId: nil, graphic: "a")) == nil)
+        #expect(ReaderRoutes.figureURL(for: image, under: .root)?.absoluteString == "/api/v1/volumes/frus1969-76ve09p1/figures/SpanishSaharaMap.jpg.png")
+        let base = try #require(BasePath("/frus-explorer/"))
+        #expect(ReaderRoutes.figureURL(for: image, under: base)?.absoluteString == "/frus-explorer/api/v1/volumes/frus1969-76ve09p1/figures/SpanishSaharaMap.jpg.png")
+        #expect(ReaderRoutes.figureURL(for: FigureImageName(volumeId: "../x", graphic: "a"), under: .root) == nil)
+        #expect(ReaderRoutes.figureURL(for: FigureImageName(volumeId: nil, graphic: "a"), under: .root) == nil)
     }
 }

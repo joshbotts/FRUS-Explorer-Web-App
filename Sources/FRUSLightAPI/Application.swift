@@ -34,13 +34,18 @@ struct ServerComponents: Sendable {
         await state.prepareToOpenExistingIndex(files: files)
         let jobs = InProcessJobQueue()
         let writer = LocalIndexWriter(files: files)
+        let userStore = try await SQLiteUserStore(url: files.userStore, backupsDirectory: files.backupsDirectory)
+        if let migration = userStore.migration {
+            let copy = migration.backup.map { ", after a copy of the store at \(migration.from) in \($0.path)" } ?? ""
+            logger.info("app.db migrated from \(migration.from) to \(migration.to)\(copy)")
+        }
         return ServerComponents(
             files: files,
             state: state,
             resources: resources,
             reader: ReaderService(volumesDirectory: files.volumesDirectory, resources: resources),
             webClient: webClient,
-            userStore: try SQLiteUserStore(url: files.userStore),
+            userStore: userStore,
             sessions: InMemorySessionStore(),
             jobs: jobs,
             indexWriter: writer,
@@ -63,9 +68,13 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
     } else {
         logger.info("No browser app at \(configuration.webDirectory.path): serving the API alone")
     }
+    if !configuration.basePath.isRoot {
+        logger.info("Serving under \(configuration.basePath), with /healthz and /readyz at the root too")
+    }
     var app = apiApplication(
         router: buildRouter(state: components.state, resources: components.resources, reader: components.reader,
-                            webClient: components.webClient, logger: logger),
+                            webClient: components.webClient, base: configuration.basePath, logger: logger),
+        base: configuration.basePath,
         configuration: .init(address: .hostname(configuration.host, port: configuration.port), serverName: "frus-light"),
         logger: logger)
     app.addServices(ImportWatcher(files: components.files, state: components.state,
@@ -73,12 +82,13 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
     return app
 }
 
-/// The application around `router`, on the server's HTTP/1.1 channel, which watches each connection
-/// for its client closing it (`APIServer.http1`). The server and the tests of that watch both build it
-/// here.
-func apiApplication(router: Router<APIRequestContext>, configuration: ApplicationConfiguration,
-                    logger: Logger) -> Application<RouterResponder<APIRequestContext>> {
-    Application(router: router, server: APIServer.http1, configuration: configuration, logger: logger)
+/// The application around `router`, under `base`, on the server's HTTP/1.1 channel, which watches
+/// each connection for its client closing it (`APIServer.http1`). The server and the tests of that
+/// watch both build it here.
+func apiApplication(router: Router<APIRequestContext>, base: BasePath = .root, configuration: ApplicationConfiguration,
+                    logger: Logger) -> Application<ServedRouter.Responder> {
+    Application(router: ServedRouter(base: base, router: router), server: APIServer.http1,
+                configuration: configuration, logger: logger)
 }
 
 /// The data directory exists but the server cannot write to it, as with a bind mount owned by

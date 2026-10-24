@@ -7,20 +7,20 @@ import { d1BibTeX, d1Chicago, d1RIS, d1Text, treatiesResults } from './expected'
 import { expect, test } from './fixtures';
 
 test('the app is served with its policy, and every client route answers with it', async ({ request }) => {
-  const app = await request.get('/');
+  const app = await request.get('./');
   expect(app.status()).toBe(200);
   expect(app.headers()['content-security-policy']).toMatch(/^default-src 'self'/);
   const html = await app.text();
-  for (const route of ['/search?keywords=treaties', '/doc/frus1961-63v06/d1']) {
+  for (const route of ['search?keywords=treaties', 'doc/frus1961-63v06/d1']) {
     expect(await (await request.get(route)).text()).toBe(html);
   }
-  const unknown = await request.get('/api/v1/no-such-endpoint');
+  const unknown = await request.get('api/v1/no-such-endpoint');
   expect(unknown.status()).toBe(404);
   expect(unknown.headers()['content-type']).toBe('application/problem+json');
 });
 
 test('searches, opens a document and copies a citation', async ({ page }) => {
-  await page.goto('/search');
+  await page.goto('search');
   const box = page.getByRole('searchbox', { name: 'Search the documents' });
   await box.fill('treaties');
   await box.press('Enter');
@@ -65,7 +65,7 @@ test('searches, opens a document and copies a citation', async ({ page }) => {
   await expect(cite.getByRole('status')).toHaveText('Copied');
   const copied = await page.evaluate(() => navigator.clipboard.readText());
 
-  const api = await page.request.get('/api/v1/volumes/frus1961-63v06/documents/d1/citation?style=chicago');
+  const api = await page.request.get('api/v1/volumes/frus1961-63v06/documents/d1/citation?style=chicago');
   const citation = (await api.json()) as { plainText: string };
   expect(copied).toBe(citation.plainText);
   expect(copied).toBe(d1Chicago);
@@ -79,10 +79,10 @@ test('searches, opens a document and copies a citation', async ({ page }) => {
 });
 
 test('Cite copies the BibTeX and RIS records, and saves the BibTeX as the Mac names the file', async ({ page }) => {
-  await page.goto('/doc/frus1961-63v06/d1?rail=cite');
+  await page.goto('doc/frus1961-63v06/d1?rail=cite');
   const cite = page.getByRole('complementary', { name: 'Cite' });
   await expect(cite.locator('.citation')).toBeVisible();
-  const api = await page.request.get('/api/v1/volumes/frus1961-63v06/documents/d1/citation');
+  const api = await page.request.get('api/v1/volumes/frus1961-63v06/documents/d1/citation');
   const records = (await api.json()) as { bibtex: string; ris: string; publicationYear: string; publicationYearSource: string };
   // The TEI is mounted, so the year is the one its header states.
   expect(records.publicationYear).toBe('1996');

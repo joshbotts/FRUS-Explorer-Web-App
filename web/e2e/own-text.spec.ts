@@ -16,7 +16,7 @@ async function precedes(first: Locator, second: Locator): Promise<boolean> {
 test('lists a section’s own text first in its section, as the app’s Browse does, and opens it in the reader, by keyboard alone', async ({
   page,
 }) => {
-  await page.goto(`/browse/${ownText.volumeId}`);
+  await page.goto(`browse/${ownText.volumeId}`);
   const heading = page.getByRole('heading', { level: 1 });
   await expect(heading).toHaveText(ownText.volumeTitle);
   await axeCheck(page);

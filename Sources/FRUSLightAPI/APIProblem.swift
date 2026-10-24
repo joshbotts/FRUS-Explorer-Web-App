@@ -1,5 +1,6 @@
 // Errors as RFC 9457 problem details, application/problem+json (docs/SPEC.md, HTTP API > Conventions).
 
+import FRUSLightCore
 import Foundation
 import Hummingbird
 import Logging
@@ -46,7 +47,7 @@ public struct APIProblem: HTTPResponseError, Equatable, CustomStringConvertible 
     public func response(from request: Request, context: some RequestContext) throws -> Response {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        let data = try encoder.encode(body(instance: request.uri.path))
+        let data = try encoder.encode(body(instance: context.clientPath(of: request)))
         return Response(status: status, headers: [.contentType: Self.contentType],
                         body: .init(byteBuffer: ByteBuffer(bytes: data)))
     }
@@ -81,15 +82,15 @@ struct ProblemMiddleware<Context: RequestContext>: RouterMiddleware {
             throw problem
         } catch let error as HTTPError {
             throw APIProblem(error.status, code: Self.code(error.status),
-                             detail: error.body ?? Self.detail(error.status, path: request.uri.path))
+                             detail: error.body ?? Self.detail(error.status, path: context.clientPath(of: request)))
         } catch let error as any HTTPResponseError {
             throw APIProblem(error.status, code: Self.code(error.status), detail: error.status.reasonPhrase)
         } catch let gone as ClientClosedConnection {
             // Routine: a browser abandons a search it has replaced. No one reads the answer.
-            logger.debug("\(request.method) \(request.uri.path) stopped: \(gone)")
+            logger.debug("\(request.method) \(context.clientPath(of: request)) stopped: \(gone)")
             throw APIProblem(APIProblem.clientClosedRequest, code: "CLIENT_CLOSED_REQUEST", detail: "\(gone), so its work was stopped.")
         } catch {
-            logger.error("\(request.method) \(request.uri.path) failed: \(error)")
+            logger.error("\(request.method) \(context.clientPath(of: request)) failed: \(error)")
             throw APIProblem(.internalServerError, code: "INTERNAL_ERROR", detail: "The server could not answer this request; its log says why.")
         }
     }
@@ -106,5 +107,12 @@ struct ProblemMiddleware<Context: RequestContext>: RouterMiddleware {
 
     static func detail(_ status: HTTPResponse.Status, path: String) -> String {
         status == .notFound ? "No endpoint answers \(path)." : status.reasonPhrase
+    }
+}
+
+extension RequestContext {
+    /// The path `request` was sent to, which the router sees without the server's base path.
+    func clientPath(of request: Request) -> String {
+        ((self as? APIRequestContext)?.basePath ?? .root).prefixing(request.uri.path)
     }
 }

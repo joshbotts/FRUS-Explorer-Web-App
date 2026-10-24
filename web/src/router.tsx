@@ -1,6 +1,8 @@
 // The app's routes (SPEC, Shell and navigation): /browse, /search and /doc/{volumeId}/{documentId}
-// in phase 1. Query strings have the API's form semantics, so a search's URL reads as its request does.
+// in phase 1, under the path the server serves the app at. Query strings have the API's form
+// semantics, so a search's URL reads as its request does.
 import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/react-router';
+import { basePath } from './api/base';
 import { formDecode, formEncode, type FormValue } from './api/form';
 import { CatalogueScreen, type CatalogueSearch, validateCatalogueSearch } from './browse/CatalogueScreen';
 import { SectionScreen } from './browse/SectionScreen';
@@ -88,8 +90,8 @@ const documentRoute = createRoute({
 
 export const routeTree = rootRoute.addChildren([indexRoute, browseRoute, volumeRoute, sectionRoute, searchRoute, documentRoute]);
 
-export function makeRouter() {
-  return createRouter({ routeTree, parseSearch, stringifySearch, scrollRestoration: true });
+export function makeRouter(basepath: string = basePath) {
+  return createRouter({ routeTree, basepath, parseSearch, stringifySearch, scrollRestoration: true });
 }
 
 export const router = makeRouter();
