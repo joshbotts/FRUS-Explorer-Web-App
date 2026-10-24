@@ -265,6 +265,8 @@ S14a comes first. S14f, S14g and S16a share no files with it and can run beside 
 
 S14a was done on 23 October at `2767a128`: the 23 tables, held to the app's own list of its 249 stored properties, and `user_search`, with a copy of the store before each start that migrates it.
 
+S14c was done on 24 October at `2767a128`, with no upstream pull request and no schema change: every request under `/api/v1/me` acts for a user the server resolves in one step, behind a guard of the host, the origin, a token and JSON bodies; tags are kept by the app's rules (`UserTagAdmin`'s delete and merge, the picker's Done, the rail's ×), one assignment per document and tag; and the browser app has the Research rail's Tags section with the app's tag picker, and Settings ▸ Tags. The tag tallies beside Settings' rows wait for S17b's `ResearchItemCounts.tally`, and the reader's own order of tags for S17f's preferences.
+
 ## Docker Compose install
 
 Phase 1 ships as one image and one Compose file. Everything the server keeps lives in a named volume at `/data`, and a folder of TEI volumes is mounted read-only. Session 5 built both; the repository's `compose.yaml` is the working version of the sketch below. It adds hardening and settings, and puts Gotenberg behind a `pdf` profile, off by default.

@@ -3,7 +3,8 @@
 # Starts compose.yaml's server, checks the browser app, the catalogue and the reader before any
 # import, imports a synthetic export with docker compose cp, and waits for /readyz to answer 200;
 # then checks the image's labels against the server's status, searches the index, reads a
-# document's page, and checks the user, the read-only root, the health check and a restart. Then it
+# document's page, makes and deletes a tag through the API's write guard (PLAN's S14c), and checks
+# the user, the read-only root, the health check and a restart. Then it
 # makes the container again with FRUS_PUBLIC_URL ending in /frus-explorer/ and checks the server
 # under that path (PLAN's S14f). docs/INSTALL.md's nginx recipes, for the root and for a path, run
 # in nginx on the Compose network in each phase. Its TEI folder holds fixtures/tei's volumes and the
@@ -32,6 +33,9 @@ fi
 
 export COMPOSE_PROJECT_NAME="frus-smoke-$$"
 export FRUS_HOST_PORT="${FRUS_HOST_PORT:-18080}"
+# The address the browser suite opens, in the server's network namespace: a change must come from
+# it and be sent to it (PLAN's S14c). curl reaches the same server on the host's port.
+export FRUS_PUBLIC_URL=http://localhost:8080
 if [ -z "${FRUS_IMAGE:-}" ]; then
   export FRUS_IMAGE=frus-light:smoke
   echo "== building $FRUS_IMAGE"
@@ -193,6 +197,32 @@ grep -qi "^content-security-policy: default-src 'none'" "$work/page.headers" || 
 host=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "$base/reader/host.js" || true)
 [ "$host" = 200 ] || fail "/reader/host.js answered $host"
 echo "   2 documents found; frus1961-63v06 d1's page, $(wc -c < "$work/page.html" | tr -d ' ') bytes, with its host script and policy"
+
+echo "== the user's tags, through the write guard"
+# Sent to the public address's host and from its origin, as the browser app sends them; curl
+# reaches the server on the host's port, so it names the host the browser would.
+as_app=(-H "Host: localhost:8080" -H "Origin: http://localhost:8080")
+me=$(curl -s --max-time 5 "${as_app[@]}" "$base/api/v1/me") || fail "/api/v1/me did not answer"
+token=$(printf '%s' "$me" | sed -nE 's/.*"csrfToken":"([0-9a-f]+)".*/\1/p')
+[ -n "$token" ] || fail "/api/v1/me gave no token: $me"
+refused() {  # $1: the code expected; the rest: curl's arguments
+  local expected=$1 answer
+  shift
+  answer=$(curl -s --max-time 5 -X POST -H 'Content-Type: application/json' --data '{"name":"Smoke"}' "$@" \
+    -w ' %{http_code}' "$base/api/v1/me/tags" || true)
+  case "$answer" in *"\"code\":\"$expected\""*' 403') ;; *) fail "a write that should be $expected answered $answer" ;; esac
+}
+refused CSRF_TOKEN_INVALID "${as_app[@]}"
+refused ORIGIN_NOT_ALLOWED -H "Host: localhost:8080" -H "Origin: https://attacker.example" -H "X-CSRF-Token: $token"
+refused HOST_NOT_ALLOWED -H "Host: attacker.example:8080" -H "Origin: http://localhost:8080" -H "X-CSRF-Token: $token"
+made=$(curl -s --max-time 5 -X POST "${as_app[@]}" -H "X-CSRF-Token: $token" -H 'Content-Type: application/json' \
+  --data '{"name":"  Smoke  "}' -w ' %{http_code}' "$base/api/v1/me/tags") || fail "the tag was not made"
+case "$made" in *'"name":"Smoke"'*' 201') ;; *) fail "making a tag answered $made" ;; esac
+tag=$(printf '%s' "$made" | sed -nE 's/.*"id":"([0-9A-F-]+)".*/\1/p')
+code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' -X DELETE "${as_app[@]}" -H "X-CSRF-Token: $token" \
+  "$base/api/v1/me/tags/$tag" || true)
+[ "$code" = 204 ] || fail "deleting the tag answered $code"
+echo "   refused without the token, from another origin and to another host; made Smoke, trimmed, and deleted it"
 
 echo "== behind nginx at the root, with docs/INSTALL.md's recipe"
 start_proxy "at the root" /healthz

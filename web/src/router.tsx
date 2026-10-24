@@ -1,5 +1,6 @@
 // The app's routes (SPEC, Shell and navigation): /browse, /search and /doc/{volumeId}/{documentId}
-// in phase 1, under the path the server serves the app at. Query strings have the API's form
+// in phase 1, and /settings, whose first pane, Tags, came with S14c, under the path the server
+// serves the app at. Query strings have the API's form
 // semantics, so a search's URL reads as its request does.
 import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/react-router';
 import { basePath } from './api/base';
@@ -10,6 +11,7 @@ import { VolumeScreen } from './browse/VolumeScreen';
 import { ReaderScreen } from './reader/ReaderScreen';
 import { validateSearch } from './search/searchState';
 import { SearchScreen } from './search/SearchScreen';
+import { TagsSettingsScreen } from './settings/TagsSettings';
 import { AppShell } from './shell/AppShell';
 import { NotFound } from './shell/NotFound';
 
@@ -68,8 +70,8 @@ const searchRoute = createRoute({
 });
 
 export interface ReaderSearch {
-  /** The rail beside the text: `cite` opens Cite. */
-  rail?: 'cite';
+  /** The rail beside the text: `cite` opens Cite, and `research` the Research rail. */
+  rail?: 'cite' | 'research';
   /** The id of a note's entry in the page's list of footnotes, which the frame scrolls to. */
   note?: string;
 }
@@ -82,13 +84,37 @@ const documentRoute = createRoute({
   path: '/doc/$volumeId/$documentId',
   // Every field is always returned, so a raw value the router keeps cannot stand in for it.
   validateSearch: (raw: Record<string, unknown>): ReaderSearch => ({
-    rail: raw.rail === 'cite' ? 'cite' : undefined,
+    rail: raw.rail === 'cite' || raw.rail === 'research' ? raw.rail : undefined,
     note: typeof raw.note === 'string' && noteId.test(raw.note) ? raw.note : undefined,
   }),
   component: ReaderScreen,
 });
 
-export const routeTree = rootRoute.addChildren([indexRoute, browseRoute, volumeRoute, sectionRoute, searchRoute, documentRoute]);
+// Settings opens at its one pane until more arrive.
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings',
+  beforeLoad: () => {
+    throw redirect({ to: '/settings/tags' });
+  },
+});
+
+const settingsTagsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings/tags',
+  component: TagsSettingsScreen,
+});
+
+export const routeTree = rootRoute.addChildren([
+  indexRoute,
+  browseRoute,
+  volumeRoute,
+  sectionRoute,
+  searchRoute,
+  documentRoute,
+  settingsRoute,
+  settingsTagsRoute,
+]);
 
 export function makeRouter(basepath: string = basePath) {
   return createRouter({ routeTree, basepath, parseSearch, stringifySearch, scrollRestoration: true });

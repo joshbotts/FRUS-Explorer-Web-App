@@ -9,6 +9,19 @@ public protocol UserStore: Sendable {
     func schemaVersion() throws -> Int
     /// The user a server with `FRUS_AUTH=none` acts for.
     func singleUserID() throws -> String
+    /// The user with this id, or nil when the store has none.
+    func user(_ id: String) throws -> UserAccount?
+}
+
+/// A user the store holds, as its `users` table keeps them.
+public struct UserAccount: Sendable, Equatable {
+    public let id: String
+    public let displayName: String
+
+    public init(id: String, displayName: String) {
+        self.id = id
+        self.displayName = displayName
+    }
 }
 
 /// A correction of one document's classification, editorial note or document, as the Mac's
@@ -184,6 +197,35 @@ public final class SQLiteUserStore: UserStore, CorrectionStore, @unchecked Senda
     public func schemaVersion() throws -> Int { try access.withLock { try Self.version(of: db) } }
 
     public func singleUserID() throws -> String { "owner" }
+
+    public func user(_ id: String) throws -> UserAccount? {
+        try reading { db in
+            try db.query("SELECT user_id, display_name FROM users WHERE user_id = ?", [.text(id)]).first.map {
+                UserAccount(id: $0[0].text ?? id, displayName: $0[1].text ?? "")
+            }
+        }
+    }
+
+    /// Runs `body` on the connection, holding `access`.
+    func reading<T>(_ body: (SQLiteConnection) throws -> T) throws -> T {
+        try access.withLock { try body(db) }
+    }
+
+    /// Runs `body` in one write transaction, holding `access` throughout: committed when it returns,
+    /// rolled back when it throws, so a rule that changes several tables changes all or none.
+    func writing<T>(_ body: (SQLiteConnection) throws -> T) throws -> T {
+        try access.withLock {
+            try db.execute("BEGIN IMMEDIATE")
+            do {
+                let value = try body(db)
+                try db.execute("COMMIT")
+                return value
+            } catch {
+                try? db.execute("ROLLBACK")
+                throw error
+            }
+        }
+    }
 
     /// Whether the store's connection enforces foreign keys, as it does once it is open.
     func enforcesForeignKeys() throws -> Bool {

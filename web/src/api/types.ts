@@ -434,3 +434,35 @@ export interface DocumentCitation {
   ris: string;
   styles: CitationStyle[];
 }
+
+/** `GET /api/v1/me`: who the server takes the browser to be, and the token its changes carry. */
+export interface Me {
+  userId: string;
+  displayName: string;
+  /** `FRUS_AUTH`: `none` for a server with no sign-in. */
+  auth: string;
+  roles: ('reader' | 'curator' | 'admin')[];
+  /** False when the server keeps no user data (`FRUS_USER_DATA=off`), and refuses all of it. */
+  userData: boolean;
+  csrfToken: string;
+}
+
+/** One of the user's tags. */
+export interface UserTag {
+  id: string;
+  name: string;
+  createdAt?: string;
+  lastModified?: string;
+}
+
+export interface TagList {
+  total: number;
+  items: UserTag[];
+}
+
+/** The tags one document carries, in the tag list's order. */
+export interface DocumentTags {
+  volumeId: string;
+  documentId: string;
+  items: UserTag[];
+}

@@ -46,6 +46,9 @@ export function AppShell() {
           <Link to="/search" activeProps={{ 'aria-current': 'page' }}>
             {copy.app.search}
           </Link>
+          <Link to="/settings" activeProps={{ 'aria-current': 'page' }}>
+            {copy.app.settings}
+          </Link>
         </nav>
         <label className="appearance">
           {copy.appearance.label}{' '}

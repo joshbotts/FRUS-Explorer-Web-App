@@ -2,6 +2,142 @@
 
 One entry per session, newest first.
 
+## Session 14c: the write path, and tags
+
+23 and 24 October 2026 · branch `claude/s14c-tags-and-write-guards` · [#54](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/54) · upstream `2767a128`, unchanged
+
+Phase 2's row S14c, on the critical path: S14d, S14e and S15c follow it. The server writes the user store for the first time. Every request under `/api/v1/me` acts for a user the server resolves, behind a guard a server with no sign-in needs, and the first resources are the user's tags and a document's tags, kept by the app's rules. The browser app gains the reader's Research rail, with its Tags section and the app's tag picker, and Settings ▸ Tags. No upstream pull request, and no schema change: S14a's `tags` and `tag_assignments` hold it all.
+
+**What the app's code says,** at `2767a128`:
+
+- **A name** is trimmed of white space and new lines, and one with nothing left is refused: the picker's `createTag()` and the editor's `commit()` and `saveDisabled` (`UserTagPickerSheet.swift`, `TagEditorView.swift`). Two tags may share a name. Settings' New Tag… makes one named "New Tag" and opens it in the editor, without Merge and Delete.
+- **Delete** is `UserTagAdmin.deleteCascading`: the id leaves every `ResearchNote.userTagIds` and every `Project.defaultUserTagIds`, and every `DocumentTagAssignment` of the tag goes, then the tag.
+- **Merge** is `UserTagAdmin.merge`: each note and project drops the source and gains the target once, after the ids it keeps; each assignment of the source is re-pointed at the target; then the source goes. A document that carried both is left with two assignments of the target, which `assign`, `reindexTagColumn` and `tagColumnPlan` all read as a set.
+- **`lastModified`.** The models' `didSet` observers never fire (`Project.swift` says so); `ModelModificationStamper` stamps every changed `ResearchNote`, `Project` and `UserTag` at save. So a note or project whose ids change is modified then, and a rename moves the tag's, while a merge leaves the surviving tag's alone.
+- **A document's tags.** The picker's Done in its document mode replaces the document's whole set: it deletes every assignment of the document and inserts one per tag switched on (`syncAssignmentsToSwiftData`). Its Cancel deletes the tags made in the sheet. The Research rail's × deletes every assignment of that tag on the document (`removeUserTag`), and its Tags accordion is closed by default and remembered (`@AppStorage("frus.document.researchPanel.tags")`), with the count of applied tags as its badge. An assignment of a tag that no longer exists names nothing (`appliedUserTags`).
+- **Order.** The app lists tags by name (`@Query(sort: \UserTag.name)`) under the reader's own order from `SyncedPreferences` (#1275), which S17f brings.
+- **The tally** beside each Settings row, "12 notes · 3 documents" (`ResearchItemCounts`), is app code that S17b moves into the kit, so it waits for that move.
+
+**Delivered**
+
+- **The user a request acts for** (`Sources/FRUSLightAPI/UserData.swift`). A `UserResolver` resolves it once per request under `/api/v1/me`, into the request's context, and every route reads it there. Under `FRUS_AUTH=none` it is `SingleUserResolver`: the store's `owner`, who holds the three roles. S14e's proxy sign-in and phase 3's accounts are other resolvers, and nothing else changes for them.
+- **The guard,** `UserDataGuard`, on the `/api/v1/me` route group:
+  - **Host.** The request's `Host` names `FRUS_PUBLIC_URL`'s address. `PublicAddress`, in `Configuration.swift`, reads that address and a request's `Host` and `Origin` itself: IPv6 in brackets, an optional port, and no user name. The port may be left out of `Host`, since nginx's `$host` leaves it out. `localhost`, `127.0.0.1` and `::1` at the same port are one address. Reads are checked too, since a page under a name an attacker pointed at the server could read a user's data. The corpus's routes answer any host.
+  - **A change,** anything but GET, HEAD and OPTIONS, also needs:
+    - an `Origin` that is that address;
+    - the user's token in `X-CSRF-Token`, which `GET /api/v1/me` gives. `CSRFTokens` makes it per user, keeps it while the process runs, and compares it in constant time;
+    - a body, when there is one, declared `application/json`, of 64 KiB at most, by its length or as it is read;
+    - only the fields its route takes, as a query string may hold only its parameters.
+  - **Each refusal is a problem with its own code:** `HOST_NOT_ALLOWED`, `ORIGIN_NOT_ALLOWED`, `CSRF_TOKEN_INVALID`, `UNSUPPORTED_MEDIA_TYPE`, `CONTENT_TOO_LARGE`, `INVALID_BODY`, `UNKNOWN_FIELD` and `INVALID_FIELD`.
+  - **`FRUS_USER_DATA=off`,** read by `ServerConfiguration`, refuses everything under `/me` but `/me` itself as `USER_DATA_OFF`, reads included, and `/me` says `userData: false`.
+  - `POST /search/inspect` takes a search's form body and changes nothing, so it is outside the group.
+- **`GET /api/v1/me`:** the user, `auth`, roles, `userData` and the token, never cached.
+- **The tag store,** `TagStore`, which `SQLiteUserStore` implements in `Sources/FRUSLightCore/UserTags.swift`. Each change is one `BEGIN IMMEDIATE` transaction through `writing`, and every read goes through `reading`, both holding the store's `access` lock.
+  - **Names** are trimmed of white space and new lines, and refused when nothing is left. A rename to the same name changes nothing, and any other moves `lastModified`.
+  - **Delete** strips the id from notes' `user_tag_ids` and projects' `default_user_tag_ids`, stamping each changed row's `last_modified`, and deletes the tag's assignments.
+  - **Merge** re-points notes and projects, the target after the ids they keep and once, and re-points the source's assignments. A document that carried both keeps the target's own assignment, so there is one per document and tag. The surviving tag is left as it was.
+  - **A document's tags are set as the picker's Done sets them:** one assignment per tag, and a tag the document keeps keeps its oldest assignment, so its id and time survive. Every other assignment of the document goes, a duplicate or a dangling one included. An unknown tag refuses the whole set. The rail's × removes every assignment of one tag on one document.
+  - **Ids** are compared as uppercase `uuidString`s, whatever case a request or an import wrote. **Order** is the app's query's: Foundation's localized standard comparison, the default of `SortDescriptor` for a string, then id.
+  - `TagReferences` holds the app's two rewrites of an id list, apart from the SQL, for S14d's PostgreSQL store.
+  - `UserStore` gains `user(_:)`, and `SQLiteUserStore` its `reading` and `writing` helpers.
+- **The routes** (`Tags.swift`):
+  - `GET` and `POST /api/v1/me/tags`;
+  - `GET`, `PATCH` and `DELETE /api/v1/me/tags/{id}`;
+  - `POST /api/v1/me/tags/{id}/merge`;
+  - `GET` and `PUT /api/v1/me/volumes/{v}/documents/{d}/tags`, and `DELETE` of one tag there.
+
+  A document's volume must be the catalogue's. The document is named and not looked up, since the Mac's assignments can name one the server does not hold.
+- **The browser app:**
+  - **The reader's toolbar opens Cite or Research**, one at a time, as `rail=cite` or `rail=research`. Research is offered only when `/me` says the server keeps user data.
+  - **The Research rail** (`web/src/research/ResearchRail.tsx`) has its Tags section, closed until opened and then as left, kept in this browser as the app's `@AppStorage` keeps it. Its header counts the document's tags. Each chip's × takes its tag off, and Add Tag opens the picker.
+  - **The tag picker** (`TagPicker.tsx`), a modal dialog, works as the app's document-mode sheet does:
+    - New Tag makes a tag, switches it on and lists it first with a New badge, and focus goes to it, as the app moves VoiceOver;
+    - Done gives the document exactly the tags switched on;
+    - Cancel, or Escape, deletes the tags made in it, waiting for one still being made.
+  - **Settings ▸ Tags** (`web/src/settings/TagsSettings.tsx`, `TagEditor.tsx`), at `/settings/tags`, which `/settings` opens, with Settings in the header:
+    - a row for each tag, which opens Edit Tag: the name, Merge into Another Tag… and Delete Tag, with the app's footers;
+    - Delete Tag's confirmation, a dialog beside the editor rather than in it;
+    - Merge Tag, with the app's sentence;
+    - New Tag…, which makes "New Tag" and opens it with nothing to merge or delete.
+  - **`api/userData.ts`** sends every change with the token, and asks for a new one when the server no longer knows it, as after a restart. It refreshes what the change touched.
+  - **Development.** The development server's proxy presents its own pages' changes as the server's own, by host and origin, and leaves any other page's origin for the server to refuse.
+- **Tests:**
+  - **FRUSLightCoreTests**, 63 to 73:
+    - `UserTagTests`, 8: trimmed names; the order and each user's own tags; renames; delete and merge against notes, projects and assignments written beside the store; the picker's set with duplicates and dangling assignments; the rail's ×; and the id lists' rewrites.
+    - `ConfigurationTests`, 2 more: `FRUS_USER_DATA`, and `PublicAddress` over hosts, origins, IPv6 and proxies' spellings.
+  - **FRUSLightServerTests**, 115 to 122: `UserDataTests`, 7:
+    - `/me`;
+    - the tags' whole round through the API, with a note and a project beside them;
+    - refusals of the token, the origin and the host, the corpus answering any host;
+    - bodies' types, sizes and fields;
+    - each not-found;
+    - `FRUS_USER_DATA=off`;
+    - and the routes under a path.
+  - **The web unit suite,** 92 to 109: the rail, the picker, its Cancel and the token's renewal; Settings ▸ Tags' list, rename, delete, merge and New Tag…; and the review's cases.
+  - **The browser suite,** `web/e2e/tags.spec.ts`: the done-when, by keyboard, with axe at each step. It tabs to Research, opens Tags, adds a tag in the picker and Done, closes the rail with Escape, reaches Settings with Shift+Tab, opens the tag's editor, deletes it after the confirmation, and finds the document without it.
+  - **`scripts/compose-smoke`:** it now names the address the browser suite opens as `FRUS_PUBLIC_URL`, and checks the guard in the image: refused without the token, from another origin and to another host, then a tag made, trimmed, and deleted.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** each run under the app's heavy-job lock:
+  - At the reviewed commit, every target passed: 2,127 tests, from 2,110, with only the named skip. FRUSLightCoreTests ran 73 and FRUSLightServerTests 122.
+  - After the review's fixes, those two targets passed again, at the same counts.
+- **The web job's steps,** through `scripts/npm`: typecheck, lint and the build are clean, and the unit suite passes 109 tests in 18 files.
+- **`scripts/compose-smoke --e2e`** on this branch's image passes:
+  - the write guard's checks, in the image;
+  - 23 browser tests on Chromium at the root, from 22, and 23 under the path through nginx's recipe, with no axe violations. The new test runs in both, so the guard holds behind the proxy, whose `$host` drops the port.
+
+**Records**
+
+- `SPEC.md`:
+  - a new section, The user's data, under the HTTP API: the user, the guard, `/me`, and each tag route by the app's rule;
+  - Tenancy's one step;
+  - Shell's `/settings/{pane}`;
+  - the Research rail and its Tags section;
+  - Settings ▸ Tags, and what waits for S17b and S17f;
+  - the configuration rows for `FRUS_PUBLIC_URL` and `FRUS_USER_DATA`;
+  - Security.
+- `INSTALL.md`:
+  - step 6 is now "Browse, search, read, cite and tag", with Research and Settings;
+  - the API's tags, with the token, by curl, and the guard's refusals;
+  - `down --volumes` takes the tags too;
+  - behind a proxy, others can read and change the tags until sign-in, `FRUS_USER_DATA=off` makes a read-only server, and the recipes' `Host` is checked;
+  - the settings rows;
+  - backups of the tags come later in phase 2.
+- `compose.yaml` passes `FRUS_USER_DATA`.
+- `PLAN.md`: S14c done, in a paragraph after S14a's. The shared copy kept by the phase-2 planning session was not updated here.
+- The README's Status, `web/src/copy.ts`'s account of the app's words, and this log.
+
+**Notes**
+
+- **A review before the push.** One reader took the commit cold, against the app's code and SPEC, and found ten things. Nine are fixed here:
+  - the picker's Done could take tags off a document while the list of tags was still loading, or when the list was read before a tag was made in another tab;
+  - Cancel during a New Tag still being made left that tag behind;
+  - Settings' New Tag… made two tags on a double press;
+  - the confirmation, nested in the editor's dialog, handed its Escape up to the editor, and gave focus to an element still inert;
+  - the 413 for a body sent in chunks lost the server's sentence;
+  - the development proxy rewrote any page's `Origin`, not only its own pages';
+  - the smoke test's host check would pass on a host port of 8080;
+  - the tag order was ASCII's, not the app's;
+  - INSTALL named the host check for changes only.
+
+  The tenth, the missing log entry, is this entry.
+- **Three things Chromium showed that jsdom could not:**
+  - the disclosure's `▸`, drawn by CSS, was read into the Tags button's name, as "▸ Tags". The mark is now a span hidden from assistive technology;
+  - the badge's hidden words are padded by a browser's name computation, so the button is now named outright;
+  - the synthetic export gives d1 no printed number, so the picker is "Tags — d1", the app's own fallback, and the test now expects that.
+- **The header's links keep focus after they navigate,** as Browse's and Search's do, so Settings' heading does not take it. The browser test tabs on from the link.
+- **Foundation's localized standard comparison on Linux** puts "berlin" before "Berlin", and "Tag 9" before "Tag 10". That is the comparison the app's sort makes, so the test holds the store to what it gives, rather than to a guess.
+- **Deliberately not as the app:**
+  - the picker's Done keeps a kept tag's assignment, where the app deletes and re-makes every one, so an assignment keeps its id and time through an export;
+  - a merge keeps one assignment per document and tag, where the app keeps two;
+  - every tag change is one transaction.
+- **S14a's log missed a line,** given here: with `main` merged (S14f, S14g), all 2,110 tests passed, with only the named skip, FRUSLightCoreTests at 63 and FRUSLightServerTests at 115. It is commit `08ed770` on `claude/phase-2-start-676787`, pushed after #52 merged.
+
+**Not done here:** the shared copy of `PLAN.md` that the phase-2 planning session keeps, which this session cannot reach.
+
+**Next: S14e,** sign-in through a trusted proxy, and S14d, the PostgreSQL store, which both follow this row and can run beside each other; S15c, highlights, once S15b's pin move lands; and S14b, the daily backup, if it has not merged.
+
 ## Session 15a: the reader's annotation scripts and Citation Lookup's types, upstream
 
 24 October 2026 · branch `claude/suspicious-noether-435ab4` · upstream `2767a128`, unchanged; [FRUS-Explorer#1788](https://github.com/joshbotts/FRUS-Explorer/pull/1788) and [FRUS-Explorer#1787](https://github.com/joshbotts/FRUS-Explorer/pull/1787), open

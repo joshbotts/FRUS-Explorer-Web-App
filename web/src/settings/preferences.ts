@@ -1,5 +1,5 @@
 // The viewer's conveniences, kept in this browser: appearance, the reader's text size and reading
-// width, and the citation style. Storage can be missing or refuse, so every read and write may fail
+// width, the citation style, and whether the Research rail's Tags section is open. Storage can be missing or refuse, so every read and write may fail
 // quietly.
 import { useEffect, useSyncExternalStore } from 'react';
 import type { ReadingWidth, TextSize } from '../api/endpoints';
@@ -55,6 +55,9 @@ export const useReadingWidth = () =>
   usePreference<ReadingWidth>('frus.readingWidth', ['narrow', 'standard', 'wide'], 'standard');
 export const useCitationStyle = () =>
   usePreference<CitationStyleName>('frus.citationStyle', ['historyAtState', 'chicago', 'turabian'], 'historyAtState');
+
+/** Closed until it is opened, and then as it was left, as the app's rail keeps its Tags section. */
+export const useTagsSectionOpen = () => usePreference<'open' | 'closed'>('frus.research.tags', ['open', 'closed'], 'closed');
 
 const darkQuery = '(prefers-color-scheme: dark)';
 

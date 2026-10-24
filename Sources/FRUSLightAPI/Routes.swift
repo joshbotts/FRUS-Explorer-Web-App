@@ -1,5 +1,6 @@
 // The routes: health, readiness and status, the API under /api/v1 (docs/SPEC.md, HTTP API), the
-// reader's host script, and the browser app, at the root or under the server's base path.
+// user's own under /api/v1/me, the reader's host script, and the browser app, at the root or under
+// the server's base path.
 
 import FRUSLightCore
 import Foundation
@@ -9,8 +10,8 @@ import Logging
 /// The routes, written at the root. `base` is the path the server answers under, for the addresses
 /// the reader's page names; `ServedRouter` puts the routes under it.
 func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderService,
-                 provider: ServedIndexProvider? = nil, webClient: WebClient? = nil, base: BasePath = .root,
-                 logger: Logger = Logger(label: "frus-light")) -> Router<APIRequestContext> {
+                 provider: ServedIndexProvider? = nil, webClient: WebClient? = nil, userData: UserDataServices? = nil,
+                 base: BasePath = .root, logger: Logger = Logger(label: "frus-light")) -> Router<APIRequestContext> {
     let provider = provider ?? ServedIndexProvider(state: state, resources: resources, volumesDirectory: reader.volumesDirectory)
     // Every GET route answers HEAD too, so HEAD /readyz says what GET says rather than falling to
     // the browser app's fallback.
@@ -35,6 +36,7 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     ReaderRoutes.add(to: router, reader: reader, provider: provider, resources: resources, base: base)
     CitationRoutes.add(to: router, reader: reader, provider: provider, resources: resources)
     ReaderLinkRoutes.add(to: router, state: state, provider: provider, reader: reader, resources: resources)
+    if let userData { UserDataRoutes.add(to: router, services: userData, resources: resources) }
     // Last, so it wraps only the requests no route answers.
     if let webClient { router.add(middleware: WebClientMiddleware(webClient, logger: logger)) }
     return router

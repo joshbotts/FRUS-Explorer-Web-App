@@ -325,7 +325,7 @@ Each surface below states what the web edition must do. Behaviour matches the Ma
 
 ### Shell and navigation
 
-- Five top-level routes mirror the iOS tabs: `/browse`, `/search`, `/research`, `/collections` and `/settings`. Admins also see `/admin`. `/` opens `/browse`, the first tab. Browse's volume and section pages are `/browse/{volumeId}` and `/browse/{volumeId}/{sectionId}`.
+- Five top-level routes mirror the iOS tabs: `/browse`, `/search`, `/research`, `/collections` and `/settings`. Admins also see `/admin`. `/` opens `/browse`, the first tab. Browse's volume and section pages are `/browse/{volumeId}` and `/browse/{volumeId}/{sectionId}`. Settings' panes are `/settings/{pane}`, and `/settings` opens the first; Tags, `/settings/tags`, is the first, from PLAN's S14c.
 - Each Mac tool window becomes a route: `/doc/{volumeId}/{documentId}`, `/graph`, `/sources`, `/related`, `/map`, `/chronology`, `/analytics/{kind}`, `/people`, `/topics`, `/visits`, `/lookup` and `/guide`.
 - A document opened from a tool page goes to the reader tab that launched the tool, found through `BroadcastChannel`, or else opens a new tab. This mirrors the Mac rule that documents open where the tool was launched.
 - Desktop layout: sidebar, content, and the Research rail beside the text from 900 px wide; narrower, the rail becomes an overlay. Phone layout: a bottom tab bar.
@@ -366,6 +366,7 @@ Each surface below states what the web edition must do. Behaviour matches the Ma
 - Previous and next follow the volume's reading order. Browser print uses `frus-print.css`.
 - The selection bar offers four highlight colors, Excerpt, Look Up and Note. Colors and Excerpt are disabled inside footnotes, as on the Mac.
 - Rail tiles: Cite, Word Cloud, Sources, Graph, Related, On the Map and Share. Sections: Topics, Summary (display and author), Notes, Tags and Collections. The ⓘ panel carries classification correction for curators.
+- From PLAN's S14c the reader's toolbar opens Cite or the Research rail, one at a time, each named in the reader's address (`rail=cite`, `rail=research`). The Research rail is offered only by a server that keeps user data. Its Tags section is closed until it is opened, and then as it was left, as the app's is; its header counts the document's tags. It shows each tag the document carries, with the × that takes it off, and Add Tag, which opens the tag picker as the app's document-mode sheet works: New Tag makes a tag, switches it on and lists it first with a New badge; Your Tags has a switch for each tag; Done gives the document exactly the tags switched on; Cancel deletes the tags made in the picker, as the app's does.
 - A banner and review sheet appear when a document's text changed after it was annotated.
 
 ### Research, projects and history
@@ -423,6 +424,7 @@ Each surface below states what the web edition must do. Behaviour matches the Ma
 ### Settings and administration
 
 - Per user: display, search defaults, word-cloud tuning and hidden words, citation style, tags, scopes and corpora, session logging, Zotero key, personal NARA key, and data import and export.
+- Settings ▸ Tags (PLAN's S14c) is the app's Tags pane: a row for each tag, by name, which opens the tag's editor, and New Tag… after them, which makes a tag named New Tag and opens it to be named. The editor renames a tag, its name trimmed and never empty; Merge into Another Tag… opens Merge Tag, as the app's does; Delete Tag asks first, with the sentence the app's editor says of it. The app's count of each tag's notes and documents beside its row (`ResearchItemCounts.tally`) comes with the kit's move of it (PLAN's S17b), and the reader's own order of the tags with the synced preferences (S17f).
 - Admin: library (download, index, sideload, remove, check for corrections, compact), mode and import, semantic assets and encoder consent, users and roles, secrets, jobs, backups and status.
 
 ### Accessibility and language
@@ -442,7 +444,7 @@ All user data lives in one server-side SQLite file, `app.db`. The server holds t
 | Local accounts | `FRUS_AUTH=local` | Username and password hashed with Argon2id; session cookie |
 | Trusted proxy | `FRUS_AUTH=header` | An authenticating reverse proxy sets `X-Forwarded-User`, or the header `FRUS_AUTH_HEADER` names; only `FRUS_TRUSTED_PROXIES` may set it. A user is made the first time the header names them |
 
-The trusted proxy arrives in phase 2 (PLAN's S14e), for a deployment behind its own single sign-on, and is phase 2's only multi-user mode; local accounts arrive in phase 3, and the AWS load balancer's signed headers, a form of the same mode, in phase 6. Under `FRUS_AUTH=none` every write is guarded by the request's `Host` and `Origin` and a CSRF token, as signed-in requests are, since any page in the browser can reach a server on 127.0.0.1.
+The trusted proxy arrives in phase 2 (PLAN's S14e), for a deployment behind its own single sign-on, and is phase 2's only multi-user mode; local accounts arrive in phase 3, and the AWS load balancer's signed headers, a form of the same mode, in phase 6. Under `FRUS_AUTH=none` every write is guarded by the request's `Host` and `Origin` and a CSRF token, as signed-in requests are, since any page in the browser can reach a server on 127.0.0.1 (HTTP API, The user's data). From PLAN's S14c, every request under `/api/v1/me` acts for a user the server resolves in one step, `owner` under `FRUS_AUTH=none`, which S14e's sign-in through the proxy and phase 3's local accounts replace.
 
 Roles: **reader** keeps their own data. **Curator** can also make classification and person-identity corrections, which change the shared index. **Admin** can also manage the library, jobs, secrets and users. In single-user mode the one user holds all three roles; behind a trusted proxy, `FRUS_ADMIN_USERS` names the admins.
 
@@ -515,7 +517,7 @@ The server exposes one versioned JSON API under `/api/v1`, shared by the web cli
 | Related and semantic | `GET /volumes/{v}/documents/{d}/similar`, `…/reprints`, `…/related`; `POST /semantic/search`; `GET /semantic/map` | draft; `related` and `semantic` new |
 | Archival | `POST /sources/resolve`; `GET /sources/neighbors`, `/archival/collections/{id}`; `POST /nara/search` | new |
 | Analytics | `GET /analytics/{corpus, persons, cross-references, archival}`, `/chronology`, `/series/{production, geography, provenance, administrations}` | new |
-| User data | `/me/notes`, `/me/highlights`, `/me/tags`, `/me/collections`, `/me/projects`, `/me/saved-searches`, `/me/working-corpora`, `/me/volume-scopes`, `/me/history`, `/me/archive-visits`, `/me/summaries`, `/me/preferences`; `POST /me/import`; `GET /me/export` | new |
+| User data | `GET /me`; `/me/tags`, `/me/volumes/{v}/documents/{d}/tags`; `/me/notes`, `/me/highlights`, `/me/collections`, `/me/projects`, `/me/saved-searches`, `/me/working-corpora`, `/me/volume-scopes`, `/me/history`, `/me/archive-visits`, `/me/summaries`, `/me/preferences`; `POST /me/import`; `GET /me/export` | new |
 | Admin | `/admin/volumes`, `/admin/jobs`, `/admin/index/import`, `/admin/index/export`, `/admin/users`, `/admin/secrets`, `/admin/backup` | new |
 | Health | `GET /healthz`, `GET /status` | new |
 
@@ -557,6 +559,30 @@ The server exposes one versioned JSON API under `/api/v1`, shared by the web cli
 - The server answers under the path `FRUS_PUBLIC_URL` ends in, such as `/frus-explorer/`, which a proxy forwards as it is (PLAN's S14f). The routes are written at the root, and a request under the path reaches them without it. `/healthz` and `/readyz` answer under the path and at the root, for a container's health check and a proxy's. A GET of the path without its last slash is redirected to it with 308, and of `/` with 302; any other path outside it is a 404 problem. A problem's `instance` is the path the client sent. Everything the server writes names the path: the SPA's page, built once with relative paths, carries `<base href="/">`, into which the server writes it, and the SPA's router, its API requests and the reader's frame take it from there; the reader's page names its host script and figures under it.
 - The server publishes its own OpenAPI document at `/api/v1/openapi.json`, reusing the draft's schemas such as `CitationMatch`.
 - The draft names `api.history.state.gov` as a future server. A self-hosted instance serves under its own origin, and only an instance the Office runs presents itself as an Office of the Historian service.
+
+### The user's data (`/api/v1/me`)
+
+PLAN's S14c brought the write path. Everything under `/api/v1/me` is the user's own, and passes a guard first:
+
+- **The user.** The request acts for a user the server resolves in one step: under `FRUS_AUTH=none`, the store's single user, `owner`, who holds the three roles. S14e's sign-in and phase 3's accounts change that step alone. Every route reads the user from it.
+- **The host.** The request's `Host` names `FRUS_PUBLIC_URL`'s address: its host, with its port when the header gives one, since a proxy may leave the port out, as nginx's `$host` does. When that address is this machine (`localhost`, `127.0.0.1` or `::1`), any of the three names is it, at its port. A read is checked too: a page under a name an attacker pointed at this server could otherwise read a user's data. Otherwise `HOST_NOT_ALLOWED` (403). The corpus's routes answer any host.
+- **A change** is any request but GET, HEAD and OPTIONS. It must also carry:
+  - an `Origin` that is that address, the same scheme, host and port, or one of the three names of this machine at its port; `null`, another origin or none is `ORIGIN_NOT_ALLOWED` (403);
+  - the user's token in `X-CSRF-Token`, which `GET /api/v1/me` gives, made for each user when first asked for and kept while the process runs, compared in constant time; else `CSRF_TOKEN_INVALID` (403). The browser app asks for a new token and sends the change once more when it is refused for its token, as after a restart;
+  - a body, when it has one, declared `application/json`, else `UNSUPPORTED_MEDIA_TYPE` (415), of 64 KiB at most, by its `Content-Length` or as it is read when it comes in chunks, else `CONTENT_TOO_LARGE` (413). The body is a JSON object holding only the fields the route takes: anything else is `INVALID_BODY`, a field it does not take `UNKNOWN_FIELD`, and a field missing or of the wrong type `INVALID_FIELD`, each 400.
+- **`FRUS_USER_DATA=off`:** everything under `/api/v1/me` but `/me` itself is `USER_DATA_OFF` (403), reads included, and `/me` says `userData: false`.
+- `POST /search/inspect` takes a search's fields in a form body, and changes nothing, so it is not under the guard.
+- `GET /me` gives `userId`, `displayName`, `auth`, `roles`, `userData` and `csrfToken`, and is never cached (`Cache-Control: no-store`).
+- **Tags,** each by the app's rules, which the store runs:
+  - `GET /me/tags` lists the user's tags by name as the app's query sorts them before the reader's own order (S17f), with Foundation's localized standard comparison, `SortDescriptor`'s for a string, which reads digits as numbers ("Tag 9" before "Tag 10"), then by id. A tag is `id`, the Mac's uppercase `uuidString`, `name`, and `createdAt` and `lastModified` as the store writes dates. `GET /me/tags/{id}` gives one; an id the user has no tag for is `TAG_NOT_FOUND` (404), in any letter case.
+  - `POST /me/tags` with `{"name"}` makes one, 201 with its `Location`. The name is trimmed of white space and new lines, as the app's picker and editor trim it, and one with nothing left is `INVALID_FIELD`. Two tags may share a name, as in the app.
+  - `PATCH /me/tags/{id}` with `{"name"}` renames it, trimmed; a name it has already changes nothing, as the editor's Save leaves it, and another moves `lastModified`.
+  - `DELETE /me/tags/{id}` deletes it as `UserTagAdmin.deleteCascading` does: its id leaves every note's `user_tag_ids` and every project's `default_user_tag_ids`, which each record a change at that time, as the app's save stamps them, and its assignments go with it. 204.
+  - `POST /me/tags/{id}/merge` with `{"into"}` merges it as `UserTagAdmin.merge` does: every note and project that names it names the other once, after the ids it keeps, and each of its assignments becomes the other's; then it is deleted. Where a document carried both, the app keeps two assignments, which all its readers take as one, and the store keeps the other tag's own. It answers the tag that remains; a tag merged into itself is `INVALID_FIELD`.
+  - `GET /me/volumes/{v}/documents/{d}/tags` gives the tags a document carries, in the list's order. An assignment of a tag the user no longer has names nothing, as the app's rail shows nothing for one. The volume must be the catalogue's; the document is named and not looked up, since the Mac's assignments can name one this server does not hold.
+  - `PUT` of the same path with `{"tagIds"}` gives the document exactly those tags, as the tag picker's Done does: one assignment for each, a tag it carries already keeping its oldest, and any other assignment of the document deleted. A tag the user has not is `TAG_NOT_FOUND`, and nothing changes.
+  - `DELETE …/tags/{id}` takes one tag off the document, every assignment of it there, as the rail's × does, and gives the tags left.
+  - Each change is one transaction.
 
 ## Deployment
 
@@ -632,9 +658,9 @@ volumes:
 | `FRUS_AUTH` | `none` | `none` (single user), `local` (accounts) or `header` (trusted proxy) |
 | `FRUS_AUTH_HEADER` | `X-Forwarded-User` | Identity header in `header` mode |
 | `FRUS_TRUSTED_PROXIES` | none | CIDR ranges allowed to set that header |
-| `FRUS_PUBLIC_URL` | `http://localhost:8080` | Origin used for links and cookies. With a path, such as `https://example.org/frus-explorer/`, the server answers under that path, with `/healthz` and `/readyz` at the root too (HTTP API, Conventions). The path's names hold only letters, digits and `-._~`, and the URL has no query or fragment |
+| `FRUS_PUBLIC_URL` | `http://localhost:8080` | Origin used for links and cookies, and the address a change must come from and be sent to (HTTP API, The user's data). With a path, such as `https://example.org/frus-explorer/`, the server answers under that path, with `/healthz` and `/readyz` at the root too (HTTP API, Conventions). The path's names hold only letters, digits and `-._~`, and the URL has no query or fragment |
 | `FRUS_ADMIN_USERS` | none | In `header` mode, the users who hold the admin role |
-| `FRUS_USER_DATA` | `on` | `off` keeps the instance read-only: no notes, highlights, tags or collections |
+| `FRUS_USER_DATA` | `on` | `off` keeps the instance read-only: no notes, highlights, tags or collections. Everything under `/api/v1/me` but `/me` is refused, and the browser app offers none of it |
 | `FRUS_SECRET_KEY_FILE` | none | Key that encrypts stored API keys. If unset, the server creates `/data/app/secret.key` with mode 0600 |
 | `FRUS_DOWNLOAD_CONCURRENCY` | `4` | Parallel TEI downloads; the Mac offers 1, 2, 3, 4 or 6 |
 | `FRUS_INDEX_WORKERS` | `2` | Volumes indexed in parallel |
@@ -684,7 +710,7 @@ Memory figures are estimates until phase 0 measures them. Phase 0's first measur
 ### Security
 
 - Binds to 127.0.0.1 by default. Anything wider goes behind a TLS reverse proxy.
-- Cookies are `Secure`, `HttpOnly` and `SameSite=Lax`, and every state-changing request needs a CSRF token.
+- Cookies are `Secure`, `HttpOnly` and `SameSite=Lax`, and every state-changing request needs a CSRF token. From PLAN's S14c a change under `/api/v1/me` must also come from `FRUS_PUBLIC_URL`'s origin and be sent to its host, as JSON of 64 KiB at most, and a read of a user's data must be sent to its host (HTTP API, The user's data).
 - Content Security Policy: the SPA uses `default-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`. Its build has no inline script or style, and its files also carry `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. The SPA never writes markup from strings: a search snippet's `<b>` becomes `<mark>` elements and a citation's emphasis `<em>`, and its lint rules forbid `dangerouslySetInnerHTML` and `innerHTML`. The reader's page has its own, stricter policy: `default-src 'none'`, its inline styles, same-origin and `data:` images, and `frame-ancestors 'self'`. It runs only same-origin scripts, the server's `/reader/host.js`, under its path when it has one, and, once they move into the kit, the app's three reader scripts. Its one inline handler, the figure image's `onerror`, is allowed by its SHA-256 through `script-src-attr 'unsafe-hashes'`. The `part=body` fragment runs no script.
 - The Swift serializer escapes TEI text. Notes and prose HTML are sanitized against an allowlist on write.
 - XML uploads, such as sideloaded volumes, are size-capped and parsed with external entities disabled.

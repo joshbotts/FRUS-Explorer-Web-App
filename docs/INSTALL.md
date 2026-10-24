@@ -101,7 +101,7 @@ curl -s -w '  %{http_code}\n' http://localhost:8080/readyz
 
 The installed export is removed from the drop zone, so you can delete your own copy or keep it. Restarting the server copies nothing: the index stays in the volume.
 
-## 6. Browse, search, read and cite
+## 6. Browse, search, read, cite and tag
 
 Open http://localhost:8080 in a browser.
 
@@ -121,6 +121,8 @@ Open http://localhost:8080 in a browser.
   - a reference that resolves nowhere opens an explanation;
   - a document in a volume this server does not have offers its page on history.state.gov.
 - **Cite** opens the citation beside the document, in the History at State, Chicago or Turabian style. **Copy Citation** copies it as plain text, and **Copy URL** the document's address on history.state.gov. **Copy BibTeX** and **Copy RIS** copy its record for a reference manager such as Zotero, and **Save as .bib** saves the BibTeX as a file. The browser allows copying at http://localhost but not at another machine's address over plain http, so the panel then selects the text for you to copy.
+- **Research**, beside **Cite**, opens the Research rail. Its **Tags** section, closed until you open it and then as you left it, lists the document's tags: **×** takes one off, and **Add Tag** opens the tag picker. There **New Tag** makes a tag and switches it on, **Your Tags** switches the others on and off, **Done** gives the document the tags switched on, and **Cancel** deletes the tags you made there, as in the app.
+- **Settings**, at the top, lists your tags under **Tags**. A tag opens its editor, to rename it, to merge it into another, which then carries its documents, or to delete it, which takes it off every document; **New Tag…** makes one. Tags are kept on the server, in its store in the Docker volume, so any browser on this machine sees the same ones.
 
 The address of every screen, search and document can be bookmarked or shared with another browser on this machine. Everything works from the keyboard, starting with **Skip to content**, the first stop of the Tab key.
 
@@ -170,7 +172,19 @@ What a link in a document's page leads to, given the link as the page writes it:
 curl -s -G 'http://localhost:8080/api/v1/volumes/frus1961-63v06/documents/d1/link' --data-urlencode 'href=frusexplorer://person/p_KNS2'
 ```
 
-An error names its cause in a `code`: `INDEX_NOT_READY` for a search before an import has finished, `EMPTY_QUERY` for a query with nothing left to search, `TEI_NOT_AVAILABLE` when the volume is not in your TEI folder, and `DOCUMENT_NOT_FOUND`, `SECTION_NOT_FOUND` or `VOLUME_NOT_FOUND` for an id the volume or the catalogue lacks.
+Your tags are under `/api/v1/me`. A change to them must carry the token `GET /api/v1/me` gives, in `X-CSRF-Token`, come from the server's own address, in `Origin`, and send JSON, as the browser does: a server with no sign-in is guarded so against other pages open in your browser. With the token in a variable:
+
+```bash
+token=$(curl -s http://localhost:8080/api/v1/me | sed -nE 's/.*"csrfToken":"([^"]+)".*/\1/p')
+```
+
+```bash
+curl -s -X POST http://localhost:8080/api/v1/me/tags -H "X-CSRF-Token: $token" -H 'Origin: http://localhost:8080' -H 'Content-Type: application/json' --data '{"name": "Primary source"}'
+```
+
+`GET /api/v1/me/tags` lists them, and `PUT /api/v1/me/volumes/frus1961-63v06/documents/d1/tags` with `{"tagIds": [...]}` gives a document exactly those. The token lasts until the server restarts.
+
+An error names its cause in a `code`: `INDEX_NOT_READY` for a search before an import has finished, `EMPTY_QUERY` for a query with nothing left to search, `TEI_NOT_AVAILABLE` when the volume is not in your TEI folder, and `DOCUMENT_NOT_FOUND`, `SECTION_NOT_FOUND`, `VOLUME_NOT_FOUND` or `TAG_NOT_FOUND` for an id the volume, the catalogue or your tags lack. Under `/api/v1/me` the guard refuses a request, read or change, that was not sent to the address in `FRUS_PUBLIC_URL` as `HOST_NOT_ALLOWED`, such as one to http://127.0.0.1:8081 for a server at http://localhost:8080; and a change without the current token as `CSRF_TOKEN_INVALID`, and from another page as `ORIGIN_NOT_ALLOWED`.
 
 ## If an import is refused
 
@@ -222,11 +236,11 @@ To hear of each release, watch the repository on GitHub for releases only (Watch
 | --- | --- |
 | `docker compose stop` | Stops the server, keeping everything |
 | `docker compose down` | Removes the container, keeping the index in the volume |
-| `docker compose down --volumes` | Removes the index too; you would import again |
+| `docker compose down --volumes` | Removes the index and your tags too; you would import again, and your tags would be gone |
 
 ## Behind a reverse proxy
 
-Compose publishes the server on this machine's 127.0.0.1 only. A reverse proxy on the same machine, such as nginx, can give it an address others reach, with TLS: a host of its own, such as `https://frus.example.org/`, or a path of a site that serves other things, such as `https://example.org/frus-explorer/`. **The server has no sign-in yet,** so anyone who can reach the proxy can use it: keep the proxy behind your own network rules or sign-in until sign-in through the proxy arrives later in phase 2. Phase 1 serves the corpus only and holds nothing of yours.
+Compose publishes the server on this machine's 127.0.0.1 only. A reverse proxy on the same machine, such as nginx, can give it an address others reach, with TLS: a host of its own, such as `https://frus.example.org/`, or a path of a site that serves other things, such as `https://example.org/frus-explorer/`. **The server has no sign-in yet,** so anyone who can reach the proxy can use it, your tags included, which they can read and change: keep the proxy behind your own network rules or sign-in until sign-in through the proxy arrives later in phase 2, or set `FRUS_USER_DATA=off` in `.env` for a read-only server, which keeps no tags and offers none.
 
 Write the address people will open into `.env`, then make the container again, which keeps the index in the volume:
 
@@ -240,7 +254,7 @@ docker compose up -d
 
 With a path, the server answers the browser app, the reader and the API under it, and `/healthz` and `/readyz` both under it and at the root, so Docker's health check and a proxy's both work. Other paths at the root answer 404, apart from `/`, which leads to the path. The proxy forwards the path as it is, and does not strip it. The address may also end in no path, as `https://frus.example.org` does.
 
-These are nginx `location` blocks, for the `server` block that serves the host with TLS. Each passes the address people used, so the server can check it when sign-in arrives, and forwards to the port in `FRUS_HOST_PORT`, 8080 by default.
+These are nginx `location` blocks, for the `server` block that serves the host with TLS. Each passes the host people used, which the server checks a change to their tags was sent to, and forwards to the port in `FRUS_HOST_PORT`, 8080 by default. A change must also come from a page at the address in `FRUS_PUBLIC_URL`, so set it to the address people open.
 
 **At the root of its own host,** with `FRUS_PUBLIC_URL=https://frus.example.org`:
 
@@ -278,7 +292,8 @@ These go in `.env` beside `compose.yaml`.
 | --- | --- | --- |
 | `FRUS_TEI_DIR` | `./tei` | Folder of TEI volumes, mounted read-only |
 | `FRUS_HOST_PORT` | `8080` | Port on this machine's 127.0.0.1 |
-| `FRUS_PUBLIC_URL` | `http://localhost:8080`, on `FRUS_HOST_PORT` | The address people open. Behind a reverse proxy, its address, which may end in a path such as `/frus-explorer/`: see Behind a reverse proxy |
+| `FRUS_PUBLIC_URL` | `http://localhost:8080`, on `FRUS_HOST_PORT` | The address people open. Behind a reverse proxy, its address, which may end in a path such as `/frus-explorer/`: see Behind a reverse proxy. A change to your tags is taken only from a page at this address; on this machine, `localhost`, `127.0.0.1` and `[::1]` at its port are one address |
+| `FRUS_USER_DATA` | `on` | `off` makes a read-only server, which keeps no tags or other research data and refuses any change |
 | `FRUS_IMAGE` | `ghcr.io/joshbotts/frus-explorer-light:edge` | The image to run: a release, or `edge` (see [Releases](#releases)) |
 | `COMPOSE_PROFILES` | none | `pdf` starts Gotenberg, a 700 MB download, for PDF export when it arrives in phase 3 |
 
@@ -287,7 +302,7 @@ These go in `.env` beside `compose.yaml`.
 - **Only this machine can reach the server,** unless a reverse proxy on it forwards to it, as Behind a reverse proxy sets out. The server has no sign-in of its own until phase 3's local accounts; sign-in through the proxy comes before them, in phase 2.
 - **Keep `/data` in the Docker volume.** On a Mac, a folder shared from macOS is not a local filesystem to SQLite. On Linux, replacing the volume with a host folder in `compose.yaml` works if that folder is writable by UID 10001, the server's user.
 - **On Linux,** the TEI files must be readable by UID 10001; a clone made with the usual umask is. On a host with SELinux enforcing, add `,z` after `ro` in the TEI volume line of `compose.yaml`. To run `docker` without `sudo`, your user must be in the `docker` group.
-- **Backups** start in phase 2, when the server holds your own notes. Until then the index can always be imported again. Already, an upgrade that changes the layout of the server's own store, `/data/app/app.db`, first copies it into `/data/backups`. If the change fails, the server leaves the store as it was and does not start, and its log names the copy; Compose starts it again, and it tries again without taking another copy.
+- **Backups** of your tags, which the server keeps in `/data/app/app.db` in the volume, start later in phase 2 with a daily copy. Until then, keep the volume, and the index can always be imported again. Already, an upgrade that changes the layout of the server's own store, `/data/app/app.db`, first copies it into `/data/backups`. If the change fails, the server leaves the store as it was and does not start, and its log names the copy; Compose starts it again, and it tries again without taking another copy.
 - **Going back to an older server** after such an upgrade: the older server cannot open the changed store, and does not start. Put the copy back first, with the server stopped. List the copies with `docker compose run --rm --no-deps --entrypoint ls frus /data/backups`, then, naming the newest `app-…-before-migration-….db`:
 
   ```bash
