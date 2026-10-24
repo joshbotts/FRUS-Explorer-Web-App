@@ -14,7 +14,7 @@
       "research_provenance.current_fts_schema_version" : "4",
       "research_provenance.current_index_version" : "71",
       "research_provenance.documentation" : "https://github.com/joshbotts/FRUS-Explorer/blob/v2/Docs/Agentic-Analysis-Guide.md",
-      "research_provenance.exported_at" : "2026-10-23T01:32:33Z",
+      "research_provenance.exported_at" : "2026-10-24T12:42:19Z",
       "research_provenance.installed_fts_schema_version" : "4",
       "research_provenance.installed_index_version" : "71",
       "research_provenance.my_writing_included" : "0",
@@ -27,9 +27,9 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "d99bca0de69c450b8614d078f9ca1bbedea5b7163da69975368ad011826015aa",
+    "sourceDigest" : "1c529af846867704d8ea2ace8b06e0573731a2a7c5ff5ebb064d03c7d0d431c5",
     "tool" : "tools/mac-golden results",
-    "upstreamCommit" : "2767a1280e6164f87fff71ec82eb0d125a336e53"
+    "upstreamCommit" : "503a730bfacfc06bfeeadedf9bc4069b1ca6750d"
   },
   "queries" : [
     {
