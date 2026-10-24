@@ -2,6 +2,68 @@
 
 One entry per session, newest first.
 
+## Session 16a: the Mac's JSON export at format version 7, upstream
+
+23 October 2026 · branch `claude/priceless-elbakyan-9dab35` · upstream `2767a128`, unchanged; [FRUS-Explorer#1786](https://github.com/joshbotts/FRUS-Explorer/pull/1786) open
+
+Phase 2's row S16a. The owner chose to open it now, during the app's 1.0 submission, and to merge it when the submission allows. Phase 2 keeps each researcher's research layer in the server's user store, imports a Mac's **Export as JSON** file into it (S16c) and writes one back (S16d). That needs two things the app did not have:
+- the export's file in the kit, so the server reads and writes the app's own envelope with the app's own decoder;
+- a file that carries the whole research layer. Version 6 carried 15 of the app's 23 model types, and dropped a note's rich text, a project's focus and a collection's composition.
+
+This session opened one pull request on `FRUS-Explorer`, [#1786](https://github.com/joshbotts/FRUS-Explorer/pull/1786), from `claude/research-export-v7`, in two commits. It is labelled `Mac`, with "Mac verification requested". Under rule 4 it changes shared files, and this repository changes only its records.
+
+**The first commit moves the export's file into FRUSCoreKit, unchanged** (`73e86506`):
+- `ResearchDataEnvelope`, its records and its tolerant decoder, public, in `FRUSCoreKit/Export/ResearchDataEnvelope.swift`;
+- `currentFormatVersion`, and the encoder's settings as `makeEncoder()`, with `makeDecoder()` and `jsonData()`;
+- the five types the records name: `ResponseFormat`, `StructuredSummarySchema` and `SummaryAuthorship` in `Models/SummaryTypes.swift`; `ArchiveVisitTier` and `ArchiveVisitDeliverables` in `Models/ArchiveVisitValues.swift`;
+- the Markdown note file, whose `ResearchNoteMarkdownExport.render(noteId:…)` takes a note's values and writes the app's file to the byte;
+- the research database export's strip, as its five statements in order (`ResearchDatabaseStrip.steps`). S16e strips an export with them before installing it, the step S2 deferred;
+- the app keeps every name: `makeEnvelope(modelContext:)`, the rest of `IndexDatabaseExporter` and the views stay its own.
+
+**The second commit raises the export to format version 7** (`aac1aefa`):
+- **The eight model types 6 left out**, each a new array that the tolerant decoder makes empty when absent:
+  - saved searches, each as the kit's `SearchParameters`, the search `SavedSearch.searchParameters` gives the app, with its last run;
+  - working corpora, custom volume scopes, both kinds of correction, annotation reviews and Suggested Next leads;
+  - synced preferences, every record oldest first.
+- **What 6 dropped from the types it carried**, each optional so earlier files still decode:
+  - a note's rich text;
+  - a collection's front matter, composition and settings;
+  - each entry's kind, level, text, rich text, excerpt anchors, block type and overrides, so a heading, prose block, excerpt or apparatus block is no longer an entry with no document;
+  - a project's focus tags and lead weights;
+  - a summary's headnote flag.
+- Rich text is RTF as the app stores it, base64 in the file. S15d's codec reads it.
+- **On Apple platforms nothing else changes.** The export gains those keys. **Contents** in Settings ▸ Data & Recovery counts the eight types, and the JSON footer names them under a new key, as its comment asks. A lead's score that is not a finite number is written as 0, since `JSONEncoder` refuses NaN and the whole export would fail.
+- **Tests:**
+  - `ResearchDataFixtures` keeps a file of each version 1 to 7, in each version's own shape.
+  - The kit's suite holds versions 1 to 6 to the new decoder and decodes the version-7 file of every type whole, to the byte back. It also holds the Markdown file to the byte, and runs the strip on a copy of a real index.
+  - The app's suite exports a store holding every model type and decodes it again.
+  - `FRUSCoreKitTests` goes from 1,150 tests to 1,161, and the iOS unit target from 7,609 to 7,623.
+- **Mac check 10's decode:** a test that decodes a file named by `FRUS_RESEARCH_EXPORT`, and checks nothing when none is named, reads the owner's real export.
+
+**How it was checked**, each heavy job under the app's lock, from a clone at a real path, beside `v2` at `2767a128`, Xcode 27.1, clean and unsigned:
+- **`FRUSExplorerMac`** built as `v2` did, with the same five warning lines. With thunk numbers and file-private discriminators dropped, its symbol diff is 68 names removed and 1,786 added, each one the change accounts for. The first commit alone is 11 removed and 59 added: the moved private helpers and the initialisers now spelled out, against the kit's new API.
+- **The full iOS unit run on iOS 27.0:** 7,623 tests in 903 suites, against `v2`'s 7,609 in 900. Both have the same 8 issues, the Keychain tests an unsigned build fails, and the same 17 tests and 2 suites skipped.
+- **`swift test`:** 38 runs and 3,054 tests, none failed or skipped, against 3,043 on `v2`. `FRUSCoreKitTests` ran 1,161, and 1,158 at the first commit alone, whose touched app suites also passed.
+- **Linux,** in a scratch worktree of this repository's `main` (`1ca859f`) with the branch copied over the submodule:
+  - FRUSCoreKitTests: 1,161 tests passed, with the one named skip and no build warning;
+  - every other target passed except FRUSParityTests, whose 13 issues are all golden-file staleness. The source digest covers the kit's folders, and the pin move remakes the files;
+  - the encoder's test passed there too, so the server writes the app's layout.
+
+**Delivered here**
+
+- `COORDINATION.md`: the pull request among §2's web-authored moves, and §5's list of app changes only the web edition needs.
+- This log.
+
+**Notes**
+
+- **A line-based sweep took a read for a write.** `CloudKitSchemaInventoryTests` fails if any line outside the model writes `annotationId:` other than `nil`. That field is a CloudKit identifier still waiting for its first writer. The export's mapping, `annotationId: review.annotationId`, only copies the field into its record. The first full unit run failed on it, and the pull request narrows the sweep to pass a value read from a record's own `annotationId`, with the reason beside it.
+- **The symbol diff needs the file-private discriminators dropped as well as the thunk numbers.** The synthesized `CodingKeys` of each moved record are private to the file they are in, so moving a file renames them. The pull request's script drops both. The discriminator has two mangled forms, `33_<32 hex>LL` and a compressed one such as `022_…LL`, and the script matches both.
+- **The daily watch will read a blank format version after the merge.** `scripts/upstream-watch` looks for `static let currentFormatVersion = <number>` under `FRUSExplorer/Export`, and the number is now the kit's, in `FRUSCoreKit/Export/ResearchDataEnvelope.swift`. The pin move past the merge widens that path.
+- **Kit suite names stay unique:** the three new suites' names were checked against `FRUSExplorerTests/` first, and the fixtures file carries the `#if SWIFT_PACKAGE` header `FRUSCoreKitBoundaryTests` asks of every file there.
+- **Scratch:** the clone, its `v2` and first-commit worktrees, the logs and the scripts are under `~/Library/Caches/frus-s16a`, with a scratch worktree of this repository at `main` in `web-linux`.
+
+**Next:** the owner's Mac check 10 and the merge of [FRUS-Explorer#1786](https://github.com/joshbotts/FRUS-Explorer/pull/1786), when the submission allows. Its pin move, S15b's or S16b's, whichever comes first, also widens the upstream watch's path for the format version. Beside it, S14a and S14f go on as planned.
+
 ## Session 14g: releases cut by hand
 
 23 October 2026 · branch `claude/s14g-releases-cf1032` · upstream `2767a128`, unchanged
