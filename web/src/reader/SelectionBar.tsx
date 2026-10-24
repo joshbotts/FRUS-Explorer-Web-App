@@ -5,7 +5,7 @@
 // S15d Note, which opens a new note on the document, as the app's does; a footnote's selection
 // allows Note alone. A toolbar for the keyboard, which Alt+F10 reaches from the text: the arrow keys,
 // Home and End move between its buttons, Return or Space chooses one, and Escape puts the bar away.
-import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { type RefObject, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
 import type { HighlightColor } from '../api/types';
 import { copy } from '../copy';
 import { barPosition, offeredVerbs } from './highlightRules';
@@ -16,6 +16,7 @@ export function SelectionBar({
   frame,
   inText = true,
   focusRequest,
+  onFocused = () => {},
   onChoose,
   onNote = () => {},
   onDismiss,
@@ -25,8 +26,10 @@ export function SelectionBar({
   frame: RefObject<HTMLIFrameElement | null>;
   /** Whether the selection is in the document's text, which a colour needs: not a footnote's. */
   inText?: boolean;
-  /** Changes when the keyboard asks for the bar: its first button then takes focus. */
+  /** Changes when the keyboard asks for the bar, 0 for no request: its first button then takes focus. */
   focusRequest: number;
+  /** The request it answered, so that its owner asks no more. */
+  onFocused?: (request: number) => void;
   onChoose: (color: HighlightColor) => void;
   onNote?: () => void;
   onDismiss: () => void;
@@ -55,12 +58,13 @@ export function SelectionBar({
   // bar is placed: until then it is hidden, and a hidden button takes no focus. Alt+F10 can mount the
   // bar before the selection's own report does. Each request is answered once.
   const answered = useRef(0);
+  const report = useEffectEvent((request: number) => onFocused(request));
   useEffect(() => {
     if (focusRequest === 0) answered.current = 0;
-    else if (position && answered.current !== focusRequest) {
-      answered.current = focusRequest;
-      dots.current[0]?.focus({ preventScroll: true });
-    }
+    if (!position || focusRequest === 0 || answered.current === focusRequest) return;
+    answered.current = focusRequest;
+    dots.current[0]?.focus({ preventScroll: true });
+    report(focusRequest);
   }, [focusRequest, position]);
 
   function move(to: number) {

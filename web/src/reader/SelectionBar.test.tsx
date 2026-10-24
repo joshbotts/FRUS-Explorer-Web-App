@@ -177,6 +177,13 @@ describe('the selection bar', () => {
     expect(document.activeElement).toBe(dot('Green'));
   });
 
+  it('says which request it answered, once it is placed and has taken focus', () => {
+    const onFocused = vi.fn<(request: number) => void>();
+    render(<SelectionBar rect={rect} frame={{ current: iframe }} focusRequest={3} onFocused={onFocused} onChoose={() => {}} onDismiss={() => {}} />);
+    expect(document.activeElement).toBe(dot('Yellow'));
+    expect(onFocused).toHaveBeenCalledWith(3);
+  });
+
   it('is placed centred 8 px above the selection, measured from the frame’s content box, and moves with it', () => {
     const { rerender } = render(bar());
     const toolbar = screen.getByRole('toolbar');

@@ -39,6 +39,19 @@ export interface Summary {
 }
 
 /** A run with no formatting but what is given. */
+/**
+ * Lets the editor catch up with keys that come faster than a person types. ProseMirror reads a
+ * selection made by keys on the browser's `selectionchange`, which can come after the next key, so
+ * a formatting key could act on the selection before; and 20 ms after the editor takes focus it puts
+ * back the selection it last read, over any made by keys in the meantime. So a test waits after the
+ * editor takes focus, and after a selection, before it acts: 60 ms and two frames.
+ */
+export async function settle(page: Page): Promise<void> {
+  await page.evaluate(
+    () => new Promise<void>((done) => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(() => done())), 60)),
+  );
+}
+
 export function run(text: string, format: Partial<Run> = {}): Run {
   return { text, bold: false, italic: false, underline: false, ...format };
 }

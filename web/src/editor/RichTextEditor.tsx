@@ -8,6 +8,7 @@ import type { Editor } from '@tiptap/core';
 import { Fragment, Slice } from '@tiptap/pm/model';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { type Ref, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import type { NoteRun } from '../api/types';
 import { FormattingToolbar } from './FormattingToolbar';
 import { LinkDialog } from './LinkDialog';
@@ -57,6 +58,10 @@ export default function RichTextEditor({
   const [content] = useState(() => (runs ? runsToDoc(runs) : textToDoc(text)));
   const [expected] = useState(text);
   const wrapper = useRef<HTMLDivElement>(null);
+  const report = useRef(onUnreadable);
+  useEffect(() => {
+    report.current = onUnreadable;
+  });
 
   const editor = useEditor({
     extensions,
@@ -70,6 +75,11 @@ export default function RichTextEditor({
     // Told after the editor exists, not while it is made.
     onContentError: () => {
       contentError.current = true;
+    },
+    // The content check, once the editor is made and mounted, not in an effect of this component's,
+    // which can run before: invalid content, or a text other than the note's, is not shown as the note.
+    onCreate: ({ editor: made }) => {
+      if (contentError.current || made.getText({ blockSeparator: '\n' }) !== expected) report.current();
     },
     coreExtensionOptions: { clipboardTextSerializer: { blockSeparator: '\n' } },
     editorProps: {
@@ -94,7 +104,9 @@ export default function RichTextEditor({
     // On the component's element, never `editor.view`, which throws until Tiptap has mounted it.
     const element = wrapper.current;
     if (!editor || !element) return;
-    const discard = () => onDiscard();
+    // Committed at once: a custom event is no input React knows, so the dialog would otherwise stay
+    // a moment, the page around it inert, while focus is sent back to what opened it.
+    const discard = () => flushSync(() => onDiscard());
     const link = () => {
       if (!editor.state.selection.empty) setLinking(true);
     };
@@ -105,16 +117,6 @@ export default function RichTextEditor({
       element.removeEventListener(linkEvent, link);
     };
   }, [editor, onDiscard]);
-
-  // The content check: invalid content, or a text other than the note's, is not shown as the note.
-  const report = useRef(onUnreadable);
-  useEffect(() => {
-    report.current = onUnreadable;
-  });
-  useEffect(() => {
-    if (!editor) return;
-    if (contentError.current || editor.getText({ blockSeparator: '\n' }) !== expected) report.current();
-  }, [editor, expected]);
 
   useImperativeHandle(
     ref,

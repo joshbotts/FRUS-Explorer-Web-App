@@ -185,7 +185,7 @@ token=$(curl -s http://localhost:8080/api/v1/me | sed -nE 's/.*"csrfToken":"([^"
 curl -s -X POST http://localhost:8080/api/v1/me/tags -H "X-CSRF-Token: $token" -H 'Origin: http://localhost:8080' -H 'Content-Type: application/json' --data '{"name": "Primary source"}'
 ```
 
-`GET /api/v1/me/tags` lists them, and `PUT /api/v1/me/volumes/frus1961-63v06/documents/d1/tags` with `{"tagIds": [...]}` gives a document exactly those. `GET /api/v1/me/volumes/frus1961-63v06/documents/d1/highlights` lists a document's highlights, with the document's `renderingVersion`. A `POST` there with `{"startOffset", "endOffset", "colorTag", "renderingVersion"}` makes one over those offsets into the document's text, in that version of the text, and `PATCH` or `DELETE /api/v1/me/highlights/{id}` changes its `colorTag` or removes it. `GET /api/v1/me/notes` lists your notes, and `/api/v1/me/volumes/frus1961-63v06/documents/d1/notes` a document's, where a `POST` with `{"bodyText", "runs": null, "userTagIds": [], "projectIds": [], "selectedSummaryIds": []}` makes a plain one; `GET`, `PUT` and `DELETE /api/v1/me/notes/{id}` read, save and delete one, and `GET /api/v1/me/notes/export` gives every note as a ZIP of Markdown files. `GET /api/v1/me/volumes/frus1961-63v06/documents/d1/summaries` lists a document's summaries, where a `POST` with `{"responseText"}` writes your own. A note's body may be 1 MiB; any other change, 64 KiB. The token lasts until the server restarts.
+`GET /api/v1/me/tags` lists them, and `PUT /api/v1/me/volumes/frus1961-63v06/documents/d1/tags` with `{"tagIds": [...]}` gives a document exactly those. `GET /api/v1/me/volumes/frus1961-63v06/documents/d1/highlights` lists a document's highlights, with the document's `renderingVersion`. A `POST` there with `{"startOffset", "endOffset", "colorTag", "renderingVersion"}` makes one over those offsets into the document's text, in that version of the text, and `PATCH` or `DELETE /api/v1/me/highlights/{id}` changes its `colorTag` or removes it. `GET /api/v1/me/notes` lists your notes, and `/api/v1/me/volumes/frus1961-63v06/documents/d1/notes` a document's, where a `POST` with `{"bodyText", "runs": null, "userTagIds": [], "projectIds": [], "selectedSummaryIds": []}` makes a plain one; `GET`, `PUT` and `DELETE /api/v1/me/notes/{id}` read, save and delete one, and `GET /api/v1/me/notes/export` gives every note as a ZIP of Markdown files. `GET /api/v1/me/volumes/frus1961-63v06/documents/d1/summaries` lists a document's summaries, where a `POST` with `{"responseText"}` writes your own. A note's text may be 1 MiB, in a change of 4 MiB at most; any other change may be 64 KiB. The token lasts until the server restarts.
 
 An error names its cause in a `code`: `INDEX_NOT_READY` for a search before an import has finished, `EMPTY_QUERY` for a query with nothing left to search, `TEI_NOT_AVAILABLE` when the volume is not in your TEI folder, and `DOCUMENT_NOT_FOUND`, `SECTION_NOT_FOUND`, `VOLUME_NOT_FOUND`, `TAG_NOT_FOUND`, `HIGHLIGHT_NOT_FOUND`, `NOTE_NOT_FOUND` or `SUMMARY_NOT_FOUND` for an id the volume, the catalogue, your tags, highlights, notes or summaries lack, `SUMMARY_READ_ONLY` for a change to a summary you did not write here, and `DOCUMENT_CHANGED` for a highlight asked for in a version of the document's text the server no longer has. Under `/api/v1/me` the guard refuses a request, read or change, that was not sent to the address in `FRUS_PUBLIC_URL` as `HOST_NOT_ALLOWED`, such as one to http://127.0.0.1:8081 for a server at http://localhost:8080; and a change without the current token as `CSRF_TOKEN_INVALID`, and from another page as `ORIGIN_NOT_ALLOWED`.
 
@@ -257,7 +257,7 @@ docker compose up -d
 
 With a path, the server answers the browser app, the reader and the API under it, and `/healthz` and `/readyz` both under it and at the root, so Docker's health check and a proxy's both work. Other paths at the root answer 404, apart from `/`, which leads to the path. The proxy forwards the path as it is, and does not strip it. The address may also end in no path, as `https://frus.example.org` does.
 
-These are nginx `location` blocks, for the `server` block that serves the host with TLS. Each passes the host people used, which the server checks a change to their tags was sent to, and forwards to the port in `FRUS_HOST_PORT`, 8080 by default. A change must also come from a page at the address in `FRUS_PUBLIC_URL`, so set it to the address people open.
+These are nginx `location` blocks, for the `server` block that serves the host with TLS. Each passes the host people used, which the server checks a change to their research data was sent to, and forwards to the port in `FRUS_HOST_PORT`, 8080 by default. Each raises nginx's own limit on a request's size, 1 MiB, to the 4 MiB a note's save may take; another proxy needs a limit of 4 MiB or more too. A change must also come from a page at the address in `FRUS_PUBLIC_URL`, so set it to the address people open.
 
 **At the root of its own host,** with `FRUS_PUBLIC_URL=https://frus.example.org`:
 
@@ -269,6 +269,7 @@ location / {
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
+    client_max_body_size 4m;
 }
 ```
 
@@ -282,6 +283,7 @@ location /frus-explorer/ {
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
+    client_max_body_size 4m;
 }
 ```
 

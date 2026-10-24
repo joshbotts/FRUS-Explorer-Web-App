@@ -10,7 +10,7 @@ import { axeCheck } from './axe';
 import { d1Text } from './expected';
 import { expect, test } from './fixtures';
 import { documentPath, dragOver, drawn, removeAll } from './highlights';
-import { abbreviatedDate, notes, noteWithRuns, removeNotesAndSummaries, run } from './notes';
+import { abbreviatedDate, notes, noteWithRuns, removeNotesAndSummaries, run, settle } from './notes';
 
 const phrase = 'no insurmountable obstacles';
 
@@ -21,9 +21,13 @@ test.afterEach(async ({ page }) => {
 
 /** Selects `length` characters of the editor's line, from `start`, with the arrow keys. */
 async function selectInLine(body: Locator, start: number, length: number) {
-  await body.press('Home');
-  for (let step = 0; step < start; step++) await body.press('ArrowRight');
-  for (let step = 0; step < length; step++) await body.press('Shift+ArrowRight');
+  const page = body.page();
+  await body.focus();
+  await settle(page);
+  await page.keyboard.press('Home');
+  for (let step = 0; step < start; step++) await page.keyboard.press('ArrowRight');
+  for (let step = 0; step < length; step++) await page.keyboard.press('Shift+ArrowRight');
+  await settle(page);
 }
 
 async function openDocument(page: Page) {
@@ -102,8 +106,10 @@ test('writes a formatted note from the bar’s Note, edits it in the rail, and f
   await expect(editBody.locator('strong')).toHaveText('writes');
   await expect(editBody.locator('span[data-color="0000FF"]')).toHaveText('warmly');
   await editBody.click();
-  await editBody.press('ControlOrMeta+End');
-  await editBody.press('Enter');
+  await settle(page);
+  await page.keyboard.press('ControlOrMeta+End');
+  await settle(page);
+  await page.keyboard.press('Enter');
   await page.keyboard.type('Second line.');
   // A tag made in the editor is made at once, and ticked.
   await edit.getByRole('textbox', { name: 'New tag name' }).fill('Primary source');

@@ -10,7 +10,7 @@ import { d1Text } from './expected';
 import { expect, test } from './fixtures';
 import { documentPath, removeAll } from './highlights';
 import { backTabTo, tabTo } from './keyboard';
-import { notes, noteWithRuns, removeNotesAndSummaries, run } from './notes';
+import { notes, noteWithRuns, removeNotesAndSummaries, run, settle } from './notes';
 
 // Caret browsing, in a worker of its own, as the highlights' keyboard spec has it.
 test.use({
@@ -50,6 +50,7 @@ test('writes, formats, links and saves a note from the bar’s Note, discards an
   await page.keyboard.type('Keyboard note');
   // The last word, bold by the app's ⌘B.
   await page.keyboard.press('Control+Shift+ArrowLeft');
+  await settle(page);
   await page.keyboard.press('ControlOrMeta+b');
   const formatting = editor.getByRole('toolbar', { name: 'Text formatting' });
   await expect(formatting.getByRole('button', { name: 'Bold' })).toHaveAttribute('aria-pressed', 'true');
@@ -76,8 +77,10 @@ test('writes, formats, links and saves a note from the bar’s Note, discards an
 
   // ⌘K over the first word opens the dialog; an address the page cannot follow is refused there,
   // and Escape cancels it.
+  await settle(page);
   await page.keyboard.press('Home');
   await page.keyboard.press('Control+Shift+ArrowRight');
+  await settle(page);
   await page.keyboard.press('ControlOrMeta+k');
   await expect(link.getByRole('textbox')).toBeFocused();
   await page.keyboard.type('history.state.gov');
@@ -115,7 +118,9 @@ test('writes, formats, links and saves a note from the bar’s Note, discards an
   await expect(edit.getByRole('heading', { name: 'Edit Note' })).toBeFocused();
   const editBody = edit.getByRole('textbox', { name: 'Research note body' });
   await tabTo(page, editBody);
+  await settle(page);
   await page.keyboard.press('ControlOrMeta+End');
+  await settle(page);
   await page.keyboard.type(' discarded');
   await axeCheck(page);
   await page.keyboard.press('Escape');

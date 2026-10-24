@@ -83,6 +83,10 @@ export function useReaderHighlights({
   const [selected, setSelected] = useState<Selected | null>(null);
   const [barShown, setBarShown] = useState(false);
   const [focusRequest, setFocusRequest] = useState(0);
+  // The last request the bar has answered, kept across its mounts: a bar a pointer or the caret
+  // shows again does not take focus for a request answered before. A selection's own report, which
+  // can come just after Alt+F10's, so cancels no request.
+  const [answeredFocus, setAnsweredFocus] = useState(0);
   const [removing, setRemoving] = useState<Highlight | null>(null);
   const making = useRef(false);
   const clearing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -155,14 +159,11 @@ export function useReaderHighlights({
       case 'selectionChanged':
         if (hasOffsets(message.start, message.end)) {
           clearTimeout(clearing.current);
-          // A selection made by pointer or caret: the bar it shows does not take focus.
-          setFocusRequest(0);
           setSelected({ start: message.start, end: message.end, rect: message.rect });
           setBarShown(message.rect !== undefined && !!message.text);
         } else if (message.text) {
           // A footnote's selection: its bar offers Note alone, which needs no offsets.
           clearTimeout(clearing.current);
-          setFocusRequest(0);
           setSelected({ start: -1, end: -1, rect: message.rect });
           setBarShown(message.rect !== undefined);
         } else {
@@ -246,7 +247,8 @@ export function useReaderHighlights({
           frame={frame}
           // A colour needs the selection's offsets and the version of the text they are in.
           inText={hasOffsets(selected.start, selected.end) && !!version}
-          focusRequest={focusRequest}
+          focusRequest={focusRequest > answeredFocus ? focusRequest : 0}
+          onFocused={setAnsweredFocus}
           onChoose={(color) => void make(color)}
           onNote={() => {
             // The selection goes, as after a highlight: the note is on the document, not on it.
