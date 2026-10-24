@@ -2,6 +2,69 @@
 
 One entry per session, newest first.
 
+## Phase 2's plan: the user store, the research layer, and a shared deployment's three asks
+
+23 October 2026 · branch `claude/phase2-plan-28c0c7` · upstream `2767a128`, S13c's, unchanged; read at `af41efa4`
+
+The owner asked for phase 2 to be planned before any of its code is written, in rows sized one pull request each, as issue #37's revision planned the 1.0 catch-up. The owner also asked this session to take up three asks from a proposal of 16 October to run the server behind an organisation's reverse proxy and single sign-on. This session changes records only.
+
+**Checked against the app's code at the pin** (`docs/prep/README.md`, Phase 2)
+
+- **The JSON export is at formatVersion 6 and carries 15 of the 23 model types.** Its envelope's DTOs are internal Foundation structs in an app file that imports SwiftData, and the five types they name are Foundation-only, so they can move into the kit unchanged.
+- **Version 6 also drops data from the types it carries:** a note's rich text, a project's focus tags, and a collection's whole source. It writes a heading, a prose block or an apparatus block as an entry with no document.
+- **Linux's Foundation has no RTF reader or writer,** checked by compiling against it in `swift:6.4-noble`, and the Mac keeps every formatted note and prose block as RTF.
+- **The reader's three annotation scripts are strings in a WebKit file,** two of them private. The web's host script already stands in for their three message handlers, and `renderingVersion` is the kit's and already served.
+- **The search's user half reads the index's `user_content` and `user_tag_ids` in private SQL,** so reading user text from `app.db` is an upstream change.
+- **Saved searches keep the kit's `SearchParameters`.** Their freshness, the corpus and scope resolution, the method appendix and the Research page's groups are app code.
+- **Corrections reach search only through writes to the index,** which the server's immutable open refuses.
+- **Collections are app code:** a 1,785-line resolver over `AppState` and SwiftData, 5,300 lines of exporters, and 332 tests, none of them compiled against the kit.
+
+Four read-only surveys of the app's code did the reading. The claims the rows rest on were checked here again, line by line.
+
+**The plan** (`PLAN.md`, Phase 2) has 30 rows in six groups:
+
+- **S14, the user store and the server, without the Mac:** the schema and migrations (S14a), the daily backup and its restore (S14b), the write path and tags (S14c), the PostgreSQL store (S14d), sign-in through a trusted proxy (S14e), serving under a path (S14f) and releases cut by hand (S14g).
+- **S15, writing in the reader:** the reader's scripts into the kit, with Citation Lookup's types made public (S15a, upstream); its pin move (S15b); highlights, with check 6 (S15c); notes and summaries (S15d).
+- **S16, the Mac's JSON export:** the envelope into the kit at formatVersion 7 (S16a, upstream); its pin move (S16b); import (S16c), export (S16d) and an export that includes the owner's writing (S16e).
+- **S17, the research layer in search:** user text in the kit's search (S17a) and the research layer's rules (S17b), both upstream; their pin move (S17c); search over notes, summaries and tags (S17d); saved searches, corpora and scopes (S17e); projects, the history and the method appendix (S17f).
+- **S18, collections:** rendering from values (S18a), then resolving through a data source (S18b), both upstream; their pin move (S18c); the editor (S18d); the preview and exports (S18e); `.fruscollection` and smart collections (S18f).
+- **S19:** Citation Lookup (S19a) and the Research page (S19b).
+
+It has seven upstream pull requests and eleven owner checkpoints: Mac checks 9–14, the golden spans, the owner's JSON export, the restore drill, a web collection opened in the Mac app, and the sign-off. Eight risks are new. The answers record the plan's rule, that the store is the web's and every answer computed from it the app's, and what waits for phases 3 and 4.
+
+**The owner's answers,** in this session:
+
+- **The user store** is SQLite, with a PostgreSQL store beside it, tested in CI and not offered in Compose.
+- **The daily backup** runs at a set hour and whenever the newest backup is more than a day old, and only when something changed; each is also copied to a folder on the host.
+- **Corrections** are held as the Mac made them, not made on the web.
+- **Version 7** opens upstream now, merged when the 1.0 submission allows.
+- **Web to Mac** stays one `.fruscollection` at a time, with no Mac importer.
+- **Imported AI summaries** are shown, read-only and labelled.
+- **Sign-in through a trusted proxy** comes in phase 2, after the user store.
+- **Releases** are cut by hand, with notes, which replaces the 22 October rule that a release tag moves with `edge`.
+
+**The three asks** become S14f (serving under a path), S14e (sign-in through the proxy) and S14g (releases, with the index version announced when it changes). These records leave out the deployment's own infrastructure.
+
+**Records**
+
+- **`PLAN.md`:** the Phase 2 section, with its flowchart, rows and closing note; eleven checkpoints; eight risks; the two answer sections; the Summary, the Compose install's backup and upgrade lines, and A4.
+- **The shared copy of `PLAN.md`** is at rev 227. Its Phase 2 diagram is drawn, as its session plan is, rather than given as Mermaid.
+- **`SPEC.md`:**
+  - Tenancy, with the proxy mode's phase and the guard on writes under `FRUS_AUTH=none`;
+  - the user store, the import and export paths, what version 6 drops, and rich text on Linux;
+  - rule 7 for an immutable index, corrections held in phase 2, and secrets from phase 3;
+  - the release tags, `FRUS_PUBLIC_URL` with a path, `FRUS_ADMIN_USERS`, `FRUS_USER_DATA`, the daily backup and its restore;
+  - phase 2's scope and exit, the app changes requested, and three open questions answered.
+- **`COORDINATION.md` §5:** version 7, phase 2's other moves into the kit, and no Mac importer.
+- **`docs/prep/README.md`:** the Phase 2 section.
+- **The README's Status, and this log.**
+
+**Results**
+
+- No code changed. CI runs as on any pull request, at the pin.
+
+**Next: S14a,** the user store's schema and migrations. S14f, S14g and S16a share no files with it and can run beside it; S16a, the upstream pull request for formatVersion 7, opens now by the owner's choice. S12d still waits for `version-1.0`.
+
 ## Session 13c: pin move past FRUS-Explorer#1785, the exact-word speed
 
 23 October 2026 · branch `claude/s13c-pin-2767a128-62cc02` · upstream `2767a128`

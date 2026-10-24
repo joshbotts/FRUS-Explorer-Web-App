@@ -104,7 +104,7 @@ The web edition keeps the search, reader, annotation, collection, citation, arch
 | Search by meaning | Keep (optional) | llama.cpp in the container; the admin downloads EmbeddingGemma 2 on request, as the Mac's user opts in to it | 4 |
 | Reader: footnotes, page labels, cross-references, broken references, find | Keep | Shared Swift renderer; the app's CSS and JavaScript in an iframe | 1 |
 | Highlights, notes, tags, floating selection bar | Keep | Same offset engine; rich text stored as sanitized HTML | 2 |
-| Classification and person-identity corrections | Adapt | Instance-level, curator role, because they rewrite shared index rows | 2–3 |
+| Classification and person-identity corrections | Adapt | Instance-level, curator role, because they rewrite shared index rows. Phase 2 holds the Mac's override records, already applied in the export it serves; making them on the web comes with phase 3's curator role | 2–3 |
 | Stale-highlight review after volume updates | Keep | Same `renderingVersion` check and review sheet | 3 |
 | Related Documents | Keep | Seven signals in phase 3; semantic signal and "shares:" chips in phase 4 | 3–4 |
 | Cross-reference graph | Adapt | Cytoscape.js with timeline and network layouts | 3 |
@@ -306,14 +306,15 @@ The Mac's `document_cache`, `frus_documents`, `frus_documents_vocab`, `user_cont
 4. Copies use the SQLite backup API. A WAL database is never copied with `cp`.
 5. The tokenizer stays the built-in `porter unicode61`. No custom tokenizer or SQL function may enter the corpus schema, or Mac exports stop being portable.
 6. The image pins its SQLite version (3.45 or later, FTS5 enabled) and reports it at `/api/v1/status`.
-7. Outside indexing and import jobs, the server writes only two things to the index: curator corrections to `document_cache.is_editorial_note`, and the person rollup. The Mac writes the same two.
+7. Outside indexing and import jobs, the server writes only two things to the index: curator corrections to `document_cache.is_editorial_note`, and the person rollup. The Mac writes the same two. Import mode serves its index immutably and writes neither: through phase 2 the server holds the Mac's override records, whose corrections the export it serves already carries, and phase 3, with its curator role, decides how a correction made on the web reaches a served index.
 
 ### User store (`/data/app/app.db`)
 
-- One table per Mac model type, each with a `user_id`, plus `users`, `sessions`, `api_tokens`, `jobs`, `secrets` and `schema_migrations`.
+- One table per Mac model type, each with a `user_id`, plus `users`, `sessions`, `api_tokens`, `jobs`, `secrets` and `schema_migrations`. A row keeps the Mac's id as its key, so it keeps its identity through an import and an export, and phase 2's first migration makes all 23 tables, the types whose screens come later included.
+- A PostgreSQL store, option B's below, implements the same protocol from phase 2 and passes the same suite in CI; the Compose install keeps `app.db`.
 - `user_search` is an FTS5 table over each user's note and summary text. `user_id`, `volume_id` and `document_id` are unindexed, and the tokenizer is the same `porter unicode61`.
 - Search attaches `app.db` read-only and runs the user-text half against `user_search`, joined on `(volume_id, document_id)` rather than `rowid`. Tag filters use an `EXISTS` over the user's tag assignments.
-- This is the one deliberate divergence from the Mac's SQL. It needs an adapter in the shared `searchDocuments`, and its effect on ranking is listed under risks.
+- This is the one deliberate divergence from the Mac's SQL. It needs an adapter in the shared `searchDocuments`, an upstream pull request of phase 2's (PLAN's S17a), and its effect on ranking is listed under risks.
 
 ## Feature specifications
 
@@ -434,11 +435,13 @@ All user data lives in one server-side SQLite file, `app.db`. The server holds t
 
 | Mode | Setting | Behaviour |
 | --- | --- | --- |
-| Single user | `FRUS_AUTH=none` (default) | No login; binds to 127.0.0.1; all data belongs to one user |
+| Single user | `FRUS_AUTH=none` (default) | No login; binds to 127.0.0.1; all data belongs to one user. `FRUS_USER_DATA=off` keeps an instance others can reach read-only |
 | Local accounts | `FRUS_AUTH=local` | Username and password hashed with Argon2id; session cookie |
-| Trusted proxy | `FRUS_AUTH=header` | An authenticating reverse proxy sets `X-Forwarded-User`; only `FRUS_TRUSTED_PROXIES` may set it |
+| Trusted proxy | `FRUS_AUTH=header` | An authenticating reverse proxy sets `X-Forwarded-User`, or the header `FRUS_AUTH_HEADER` names; only `FRUS_TRUSTED_PROXIES` may set it. A user is made the first time the header names them |
 
-Roles: **reader** keeps their own data. **Curator** can also make classification and person-identity corrections, which change the shared index. **Admin** can also manage the library, jobs, secrets and users. In single-user mode the one user holds all three roles.
+The trusted proxy arrives in phase 2 (PLAN's S14e), for a deployment behind its own single sign-on, and is phase 2's only multi-user mode; local accounts arrive in phase 3, and the AWS load balancer's signed headers, a form of the same mode, in phase 6. Under `FRUS_AUTH=none` every write is guarded by the request's `Host` and `Origin` and a CSRF token, as signed-in requests are, since any page in the browser can reach a server on 127.0.0.1.
+
+Roles: **reader** keeps their own data. **Curator** can also make classification and person-identity corrections, which change the shared index. **Admin** can also manage the library, jobs, secrets and users. In single-user mode the one user holds all three roles; behind a trusted proxy, `FRUS_ADMIN_USERS` names the admins.
 
 ### Mapping the 23 Mac model types
 
@@ -457,31 +460,32 @@ Roles: **reader** keeps their own data. **Curator** can also make classification
 | `SummarizationPrompt` | `prompts` | user | Kept to name a summary's prompt; nothing runs it |
 | `AnnotationReview` | `annotation_reviews` | user | |
 | `SyncedPreferences` | `preferences` | user | Word-cloud tuning, citation style, default mode, logging switch |
-| `PersonClusterOverride` | `person_overrides` | instance | Applied to the index's person rollup; curator only |
-| `DocumentClassificationOverride` | `classification_overrides` | instance | Written into `document_cache.is_editorial_note`; curator only |
+| `PersonClusterOverride` | `person_overrides` | instance | Applied to the index's person rollup; curator only. Phase 2 holds the Mac's, already in its export |
+| `DocumentClassificationOverride` | `classification_overrides` | instance | Written into `document_cache.is_editorial_note`; curator only. Phase 2 holds the Mac's, already in its export |
 
-Keychain secrets, the NARA and Zotero keys, move to an encrypted `secrets` table, per user or instance-wide.
+Keychain secrets, the NARA and Zotero keys, move to an encrypted `secrets` table, per user or instance-wide, from phase 3, where the first of them is used.
 
 ### Import and export paths
 
 | Path | Direction | Format | Carries |
 | --- | --- | --- | --- |
-| Mac Export as JSON | Mac → web | `ResearchDataEnvelope`, `formatVersion` 6 or earlier | Notes, tags, tag assignments, highlights, collections, custom prompts, projects, summaries (opt-in), the three history trails, archive visits |
+| Mac Export as JSON | Mac → web | `ResearchDataEnvelope`, `formatVersion` 7 or earlier | At 6: notes, tags, tag assignments, highlights, collections, custom prompts, projects, summaries (opt-in), the three history trails, archive visits. At 7 (PLAN's S16a): all 23 types, whole |
 | `.fruscollection` | both ways | `formatVersion` 2, `minimumReaderVersion` 1 | One collection's source; notes only when included; prose as RTF |
 | Research database with writing | Mac → web | SQLite | Only the newest summary and one note block per document, plus tag names; a last resort |
-| Web export | web → file | The same JSON envelope at version 6, with web-only fields under one added key | Everything the web holds |
+| Web export | web → file | The same JSON envelope at the version the kit writes, 7 from S16a, with web-only fields under one added key | Everything the web holds |
 | Markdown notes, method appendix | web → file | As the Mac writes them | Notes; the search trail |
 
 Two limits:
 
-- The Mac JSON carries 15 of the 23 model types. It omits saved searches, working corpora, volume scopes, both override types, annotation reviews, project leads and synced preferences. A smart collection's `savedSearchId` therefore dangles after import; the importer keeps the collection and marks it unlinked.
-- The Mac has no JSON importer; the exporter's own comment says import is out of scope. Until one exists, web-to-Mac transfer is limited to `.fruscollection`.
+- At `formatVersion` 6 the Mac JSON carries 15 of the 23 model types. It omits saved searches, working corpora, volume scopes, both override types, annotation reviews, project leads and synced preferences. A smart collection's `savedSearchId` therefore dangles after import; the importer keeps the collection and marks it unlinked. Within the types it carries, 6 also drops a note's rich text, a project's focus tags and lead weights, a summary's headnote flag, and a collection's front matter, settings and structure: each entry keeps only its document, so a heading, a prose block or an apparatus block arrives as an entry with none, and an excerpt as the document it quotes. Version 7 carries all of it.
+- The Mac has no JSON importer; the exporter's own comment says import is out of scope. Until one exists, web-to-Mac transfer is limited to `.fruscollection`. The owner chose on 23 October to write none in phase 2; the web's export is the app's own envelope, so one could read it.
 
 ### Rich text
 
 - The Mac stores note and prose formatting as RTF `Data` and keeps plain text beside it for search and export.
 - The web stores a sanitized HTML subset: bold, italic, underline, color and links, the formatting the Mac's editor offers.
 - Import converts RTF to that subset, and `.fruscollection` export writes RTF back with a small writer. Plain text stays the canonical copy, as on the Mac.
+- Linux's Foundation has no RTF reader or writer, and the app reads RTF only through Apple's `NSAttributedString`, so the converter is web code for that subset alone. It is held to the app's own reading by golden files: `tools/mac-golden` writes RTF as the app's editor writes it, with the spans the app's exporters read from it (PLAN's S15d).
 
 ### Highlights
 
@@ -564,7 +568,7 @@ The web edition ships as one image, `frus-explorer-light`, run with Docker Compo
 CI publishes the image from `main` only, to `ghcr.io/joshbotts/frus-explorer-light`, under three kinds of tag:
 - `sha-<commit>`, each build of `main`, by the commit's first 7 characters;
 - `edge`, the newest build that passed the Compose smoke test on both architectures;
-- `<version>-<build>`, such as `1.0-1776`: the pinned app's `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in its `project.yml`, joined by a hyphen, since a tag cannot hold a slash. It names the app build whose exports the image serves, moves with `edge` while the pin holds that build, and stays on the last such build once the pin moves on.
+- `<version>-<build>`, such as `1.0-1776`: the pinned app's `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in its `project.yml`, joined by a hyphen, since a tag cannot hold a slash. It names the app build whose exports the image serves, moves with `edge` while the pin holds that build, and stays on the last such build once the pin moves on. From PLAN's S14g it moves only when the owner cuts a release by hand: the release workflow tags the commit `<version>-<build>.<n>` and publishes a GitHub release naming the image's digest, the app version and build to export from, and the index version, saying when it changed since the last release. The image's labels carry the same three.
 
 Two sidecars are optional. `gotenberg/gotenberg:8` enables PDF export. A reverse proxy such as Caddy or Traefik provides TLS beyond localhost.
 
@@ -613,7 +617,9 @@ volumes:
 | `FRUS_AUTH` | `none` | `none` (single user), `local` (accounts) or `header` (trusted proxy) |
 | `FRUS_AUTH_HEADER` | `X-Forwarded-User` | Identity header in `header` mode |
 | `FRUS_TRUSTED_PROXIES` | none | CIDR ranges allowed to set that header |
-| `FRUS_PUBLIC_URL` | `http://localhost:8080` | Origin used for links and cookies |
+| `FRUS_PUBLIC_URL` | `http://localhost:8080` | Origin used for links and cookies. With a path, such as `https://example.org/frus-explorer/`, the server answers under that path (PLAN's S14f) |
+| `FRUS_ADMIN_USERS` | none | In `header` mode, the users who hold the admin role |
+| `FRUS_USER_DATA` | `on` | `off` keeps the instance read-only: no notes, highlights, tags or collections |
 | `FRUS_SECRET_KEY_FILE` | none | Key that encrypts stored API keys. If unset, the server creates `/data/app/secret.key` with mode 0600 |
 | `FRUS_DOWNLOAD_CONCURRENCY` | `4` | Parallel TEI downloads; the Mac offers 1, 2, 3, 4 or 6 |
 | `FRUS_INDEX_WORKERS` | `2` | Volumes indexed in parallel |
@@ -623,7 +629,7 @@ volumes:
 | `FRUS_PDF_URL` | none | Gotenberg base URL; PDF export is hidden when unset |
 | `FRUS_OFFLINE` | `false` | `true` blocks all outbound traffic |
 | `FRUS_SEED_REMOTE` | none | rclone remote to copy a Mac export, TEI, shards or the encoder from at start; see Runtime options |
-| `FRUS_BACKUP_REMOTE` | none | rclone remote that receives each nightly `app.db` backup |
+| `FRUS_BACKUP_REMOTE` | none | rclone remote that receives each daily `app.db` backup |
 
 ### Disk layout
 
@@ -648,14 +654,15 @@ Memory figures are estimates until phase 0 measures them. Phase 0's first measur
 
 ### Upgrades
 
-- Release image tags name the app's version and build, for example `:1.0-1861`. Each image states its `SUPPORTED_INDEX_VERSION` at `/api/v1/status`.
+- Release image tags name the app's version and build, for example `:1.0-1861`. Each image states its `SUPPORTED_INDEX_VERSION` at `/api/v1/status`, and from PLAN's S14g in its labels and its release's notes, which say when a release changes it, so the Mac export can be made again with the upgrade.
 - On start, the server compares that version with the index. Standalone re-indexes in place from cached XML, volume by volume, as the Mac does; search stays up and names the pending volumes.
 - Import mode disables search until a matching export arrives. The reader keeps working from the TEI files.
-- `app.db` migrations are numbered and forward-only, and each runs after an automatic backup.
+- `app.db` migrations are numbered and forward-only, and each runs after an automatic backup. The PostgreSQL store's run in a transaction each; its backups are the database service's.
 
 ### Backups
 
-- A nightly online backup of `app.db` goes to `/data/backups`, keeping seven, using the SQLite backup API.
+- A daily online backup of `app.db` goes to `/data/backups`, keeping seven, using the SQLite backup API. It runs at a set hour, 03:00 by default in the container's time zone, and whenever the newest backup is more than 24 hours old, so a laptop that slept through the hour backs up soon after it wakes; it is skipped when the store has not changed since the newest, so seven can span more than a week. Each finished backup is also copied to a folder on the host, bind-mounted for backups, which survives the Docker volume and which the host's own backup sees (PLAN's S14b).
+- A restore runs with the server stopped: it checks a backup, keeps the store it replaces, and puts the backup in place, which the next start migrates forward. CI restores one in its Compose smoke test.
 - The index is excluded by default: Standalone can rebuild it, and Import can re-import it.
 - `GET /api/v1/admin/backup` streams the latest backup with a manifest of versions.
 
@@ -696,7 +703,7 @@ Two new settings, added to the Configuration table, take rclone remote paths, so
 | Variable | Example values | Behaviour |
 | --- | --- | --- |
 | `FRUS_SEED_REMOTE` | `s3:frus-seed`, `azureblob:frus-seed`, `gcs:frus-seed`, `minio:frus-seed` | Before serving, copies a Mac export into `/data/import`, and any `volumes/`, `shards/` or `models/` folders into place. Files already present with a matching checksum are skipped |
-| `FRUS_BACKUP_REMOTE` | the same forms | Receives each nightly `app.db` backup. Pair it with bucket versioning and a retention rule |
+| `FRUS_BACKUP_REMOTE` | the same forms | Receives each daily `app.db` backup. Pair it with bucket versioning and a retention rule |
 
 - The image adds rclone (MIT licence). It supports Amazon S3, S3-compatible stores such as MinIO and Ceph, Google Cloud Storage, Azure Blob Storage, SFTP and SMB.
 - Credentials come from the platform's workload identity (an IAM role, a managed identity or a service account) through rclone's environment authentication. No keys are baked into the image.
@@ -838,7 +845,7 @@ Litestream (Apache 2.0) ships in the image, and the server runs Litestream, not 
 
 - Litestream checks the WAL every second by default (`DefaultMonitorInterval`). A container that dies without warning loses any writes not yet uploaded, normally about a second's worth.
 - After SIGTERM, Litestream allows up to 30 seconds for a final sync (`DefaultShutdownSyncTimeout`). Set the ECS `stopTimeout` to 120 seconds, Fargate's maximum.
-- The nightly SQLite backup described under Backups continues, to `FRUS_BACKUP_REMOTE`, as a copy independent of the replica.
+- The daily SQLite backup described under Backups continues, to `FRUS_BACKUP_REMOTE`, as a copy independent of the replica.
 - The cost is downtime: every deploy and every task replacement is a cold start with the site down.
 
 Three layers keep a single writer:
@@ -991,7 +998,7 @@ Build in six phases, plus an optional seventh for the managed variant. Phase 1 a
 | --- | --- | --- |
 | 0. Linux spike | Compile the kits on Linux. Move `IndexingPipeline`, `SearchService`, the TEI pipeline and Citation into a new SPM library, `FRUSCoreKit`, which the app also compiles through `project.yml`, as it does `FTS5Store`. Add the `FoundationXML`, `OSLog`, `CoreSpotlight` and `CryptoKit` guards. Index three volumes on Linux | Checks 1–4 green on three volumes; indexing speed and memory measured |
 | 1. Reader over an export | Import validation and swap; Browse; keyword search with inspector, filters, facets, list, timeline and concordance; the reader; Cite with BibTeX and RIS; single user | Checks 3, 4 and 5 green on a real export |
-| 2. Research layer | Notes, highlights, tags, projects, saved searches, corpora, scopes, history and method appendix. JSON and `.fruscollection` import. Collections with HTML, Word, BibTeX, RIS and `.fruscollection` export. Citation Lookup | Check 6 green; a Mac JSON export imports all 15 carried model types without loss |
+| 2. Research layer | Notes, highlights, tags, projects, saved searches, corpora, scopes, history and method appendix. JSON and `.fruscollection` import. Collections with HTML, Word, BibTeX, RIS and `.fruscollection` export. Citation Lookup. The daily backup and its restore. For a shared deployment: sign-in through a trusted proxy, serving under a path, and releases cut by hand | Check 6 green; a Mac JSON export imports every model type it carries without loss, 15 at `formatVersion` 6 and 23 at 7 |
 | 3. Library and archives | Standalone mode: download, index, sideload, remove, corrections check and update review. Source Explorer, NARA and Zotero, the cross-reference graph, analytics, About the Series, PDF through Gotenberg, multi-user sign-in | Checks 2, 7 and 8 green on the full corpus |
 | 4. Semantic and language | Shards, the semantic Related signal, the map, meaning search, the Linux lemmatizer and its baseline, live word clouds, collocates, Archives Visits packets | Check 9 green |
 | 5. Hardening | Backup and restore drill, upgrade path, accessibility audit, 20-user load test | Checks 11 and 12 green |
@@ -1002,9 +1009,9 @@ Only phase 0 can be sized now: roughly two to four weeks, the range the June por
 ### Changes requested in the Mac app
 
 1. Extract `FRUSCoreKit`, so the server and the app compile the same files (phase 0).
-2. Bump the JSON export to `formatVersion` 7 with the eight missing model types, above all saved searches, working corpora and the two override types (phase 2).
+2. Bump the JSON export to `formatVersion` 7 with the eight missing model types, above all saved searches, working corpora and the two override types, and with what 6 drops from the types it carries: a note's rich text, a collection's front matter, settings and structure, a project's focus tags and lead weights, a summary's headnote flag (phase 2; PLAN's S16a, which moves the envelope into FRUSCoreKit first).
 3. Show the index version beside Export Research Database…, so a user can match it to a server before copying 9 GB (phase 1).
-4. Optionally, add a JSON importer, so web data can return to the Mac.
+4. Optionally, add a JSON importer, so web data can return to the Mac. Not in phase 2, by the owner's choice of 23 October.
 
 ## Risks and open questions
 
@@ -1026,11 +1033,11 @@ The largest risk is keeping a second front end in step with an app that ships qu
 ### Open questions for the owner
 
 - Should Import mode serve a mismatched index read-only with a banner, instead of refusing it?
-- Is multi-user in scope for the first release, or single-user only?
+- Is multi-user in scope for the first release, or single-user only? In part, answered on 23 October: phase 2 is multi-user behind a trusted proxy only, and local accounts wait for phase 3.
 - Is Swift on the server acceptable, trading a smaller contributor pool for parity with the app?
 - Is Gotenberg, a Chromium-based container, acceptable as the optional PDF path?
-- Should imported AI summaries be shown at all, given the web cannot regenerate them?
-- Should the web export feed a future Mac importer?
+- Should imported AI summaries be shown at all, given the web cannot regenerate them? Answered on 23 October: yes, read-only, with the app's authorship label, and searchable under Summaries.
+- Should the web export feed a future Mac importer? Answered on 23 October: its export is the app's own envelope, so it can, but phase 2 writes no Mac importer.
 
 ## Sources
 

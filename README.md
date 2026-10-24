@@ -19,15 +19,15 @@ Phase 1 is done: a Docker Compose install that serves a FRUS Explorer research e
 
 - **Behind FRUS Explorer 1.0's last step.** The pin is 1.0 build 1776, the TestFlight build, at index version 71, with [FRUS-Explorer#1784](https://github.com/joshbotts/FRUS-Explorer/pull/1784) and [FRUS-Explorer#1785](https://github.com/joshbotts/FRUS-Explorer/pull/1785), the two commits after it: the server serves that build's exports, and its image is also tagged `:1.0-1776`. The App Store build, 1861, waits for S12d.
 - **Later phases:**
-  - no notes, highlights or collections on the web (phase 2);
-  - no accounts, sharing beyond localhost, or indexing from TEI on the server (phase 3);
+  - no notes, highlights or collections on the web, and no sign-in through a proxy (phase 2);
+  - no local accounts, or indexing from TEI on the server (phase 3);
   - no search by meaning (phase 4);
   - no AWS deployment (phase 6).
 
 **Next**
 
 1. **S12d**, once the app tags `version-1.0`: the pin moves to 1.0 build 1861, the App Store build, and CI publishes `:1.0-1861`.
-2. **Phase 2**: user data and its nightly backup.
+2. **Phase 2**, planned in [`docs/PLAN.md`](docs/PLAN.md) as S14a–S19b: notes, highlights, tags, collections and the rest of the research layer, with a daily backup, the Mac's JSON export imported and written back, and Citation Lookup; and, for a shared deployment, sign-in through a trusted proxy, serving under a path, and releases cut by hand. First **S14a**, the user store's schema and migrations; S14f, S14g and S16a, the Mac's JSON export at version 7 as an upstream pull request, can run beside it.
 
 ## Goals
 
