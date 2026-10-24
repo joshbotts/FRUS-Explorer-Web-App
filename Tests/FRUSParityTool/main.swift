@@ -12,6 +12,7 @@
 //   frus-parity own-text --api <url> <export> [--volumes <id,id>]
 //   frus-parity time-search <db> [--all] [--ids <id,...>] [--retained] [--out <results.json>] [--queries <jsonl>] [--resources <dir>] [--repo <root>]
 //   frus-parity highlight-samples --out <samples.json> [--repo <root>]
+//   frus-parity rich-text-fixtures [--repo <root>]
 //
 // The repository is found from the current directory unless --repo names it. Exit status: 0 when
 // the check passes, 1 on a refusal, a difference or a problem, 2 on a usage error.
@@ -36,6 +37,7 @@ let usage = """
            frus-parity own-text --api <url> <export> [--volumes <id,id>]
            frus-parity time-search <db> [--all] [--ids <id,...>] [--retained] [--out <results.json>] [--queries <jsonl>] [--resources <dir>] [--repo <root>]
            frus-parity highlight-samples --out <samples.json> [--repo <root>]
+           frus-parity rich-text-fixtures [--repo <root>]
     """
 
 /// A command's positional arguments, flags and options.
@@ -490,6 +492,15 @@ func highlightSamples(_ arguments: Arguments) async throws {
     print("check 6's samples: \(file.rows.count) rows, \(file.rows.map(\.samples.count).reduce(0, +)) highlights, in \(out)")
 }
 
+/// The golden spans' web cases (S15d): the RTF the codec writes for each case of
+/// fixtures/rich-text/web/cases.json, beside it, for tools/mac-golden to read with the app's code.
+func richTextFixtures(_ arguments: Arguments) throws {
+    guard arguments.positional.isEmpty else { throw UsageError("rich-text-fixtures takes only --repo") }
+    let layout = try repository(arguments)
+    let count = try RichTextParity.writeWebFixtures(root: layout.root)
+    print("the codec's RTF for \(count) web cases, in \(RichTextWebCases.path)'s folder")
+}
+
 let arguments = CommandLine.arguments.dropFirst()
 do {
     switch arguments.first {
@@ -515,6 +526,8 @@ do {
         try await ownText(Arguments(arguments.dropFirst(), options: ["--api", "--volumes"]))
     case "highlight-samples":
         try await highlightSamples(Arguments(arguments.dropFirst(), options: ["--out", "--repo"]))
+    case "rich-text-fixtures":
+        try richTextFixtures(Arguments(arguments.dropFirst(), options: ["--repo"]))
     case "time-search":
         try await timeSearch(Arguments(arguments.dropFirst(), flags: ["--all", "--retained"],
                                        options: ["--ids", "--out", "--queries", "--resources", "--repo"]))

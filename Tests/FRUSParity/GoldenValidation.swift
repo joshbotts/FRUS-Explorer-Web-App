@@ -71,6 +71,10 @@ public enum GoldenValidation {
                     let golden = try GoldenJSON.read(IndexSummaryGolden.self, from: url)
                     provenance = golden.provenance
                     problems = format(golden.format, IndexSummaryGolden.currentFormat, file) + indexSummaryProblems(golden)
+                case .richText:
+                    let golden = try GoldenJSON.read(RichTextGolden.self, from: url)
+                    provenance = golden.provenance
+                    problems = format(golden.format, RichTextGolden.currentFormat, file) + richTextProblems(golden, root: layout.root)
                 }
                 report.problems += staleness(of: provenance, file: file.rawValue, layout: layout, sourceDigest: digest ?? "")
                 report.problems += inputProblems(of: provenance, file: file)
@@ -143,6 +147,7 @@ public enum GoldenValidation {
         case .expressions: return [records]
         case .results: return [records] + ParityFixtures.teiInputKeys + requiredStampKeys
         case .indexSummary: return ParityFixtures.teiInputKeys + requiredStampKeys
+        case .richText: return [RichTextGolden.harnessPath, RichTextWebCases.path]
         }
     }
 
@@ -216,6 +221,57 @@ public enum GoldenValidation {
         for volume in volumes where runs.last != volume { runs.append(volume) }
         if runs != runs.sorted() || Set(runs).count != runs.count {
             problems.append("\(file): the rows are not grouped by volume in sorted order")
+        }
+        return problems
+    }
+
+    /// The golden spans are whole: read under the light appearance; a case for every file of
+    /// `fixtures/rich-text/read` and every web case, each recording its file; ids used once; and
+    /// each case's runs holding its text and giving its paragraphs as the app splits them.
+    public static func richTextProblems(_ golden: RichTextGolden, root: URL) -> [String] {
+        let file = GoldenFile.richText.rawValue
+        var problems: [String] = []
+        if golden.appearance != RichTextGolden.appearance {
+            problems.append("\(file): it was read under \(golden.appearance), not \(RichTextGolden.appearance)")
+        }
+        var ids: Set<String> = []
+        for item in golden.cases {
+            if !ids.insert(item.id).inserted { problems.append("\(file): \(item.id) is used twice") }
+            switch (item.kind, item.rtf, item.source) {
+            case (.written, _?, nil), (.read, nil, _?), (.web, nil, _?): break
+            default: problems.append("\(file): \(item.id) is a \(item.kind.rawValue) case with the wrong RTF or source")
+            }
+            if (item.kind == .web) != (item.rewritten == nil) {
+                problems.append("\(file): \(item.id) is a \(item.kind.rawValue) case \(item.kind == .web ? "with" : "without") the codec's rewrite")
+            }
+            if let source = item.source, golden.provenance.inputs[source] == nil {
+                problems.append("\(file): \(item.id) reads \(source), which it does not record")
+            }
+            if !item.runs.map(\.text).joined().utf16.elementsEqual(item.text.utf16) {
+                problems.append("\(file): \(item.id)'s runs do not hold its text")
+            }
+            if ProseParagraphs.paragraphs(of: item.runs) != item.paragraphs {
+                problems.append("\(file): \(item.id)'s runs, split as CollectionProse splits them, are not its paragraphs")
+            }
+        }
+        let readFolder = root.appendingPathComponent(RichTextGolden.readFolder)
+        let readFiles = ((try? FileManager.default.contentsOfDirectory(atPath: readFolder.path)) ?? [])
+            .filter { $0.hasSuffix(".rtf") }.map { "\(RichTextGolden.readFolder)/\($0)" }
+        let readSources = golden.cases.filter { $0.kind == .read }.compactMap(\.source)
+        if Set(readSources) != Set(readFiles) {
+            problems.append("\(file): its read cases are \(readSources.sorted().joined(separator: ", ")), not the files of \(RichTextGolden.readFolder)")
+        }
+        let webSources = golden.cases.filter { $0.kind == .web }.compactMap(\.source)
+        if let web = try? GoldenJSON.read(RichTextWebCases.self, from: root.appendingPathComponent(RichTextWebCases.path)) {
+            if webSources != web.cases.map({ RichTextWebCases.rtfPath($0.id) }) {
+                problems.append("\(file): its web cases are not those of \(RichTextWebCases.path), in order")
+            }
+        } else {
+            problems.append("\(file): \(RichTextWebCases.path) cannot be read")
+        }
+        let names = golden.catalogColors.map(\.name)
+        if names.isEmpty || Set(names).count != names.count {
+            problems.append("\(file): its catalog colours are missing or named twice")
         }
         return problems
     }
@@ -379,6 +435,7 @@ extension RenderGolden: GoldenDocument {}
 extension ExpressionsGolden: GoldenDocument {}
 extension ResultsGolden: GoldenDocument {}
 extension IndexSummaryGolden: GoldenDocument {}
+extension RichTextGolden: GoldenDocument {}
 
 /// A golden file as a check reads it: present, with each way it is stale at this pin, or pending,
 /// with what it waits for.

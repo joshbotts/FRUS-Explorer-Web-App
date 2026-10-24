@@ -10,6 +10,7 @@ let usage = """
            mac-golden render      --tei <dir> --rows <tsv> --out <dir> [--repo <root>]
            mac-golden expressions [--repo <root>] [--queries <jsonl>] [--rules <tsv>] [--out <json>] [--db <file>]
            mac-golden results     --db <export> [--any-volumes] [--repo <root>] [--queries <jsonl>] [--out <json>]
+           mac-golden rich-text   [--repo <root>] [--out <json>]
 
       render       the reader's HTML of every fixture document    (default out: fixtures/golden/render)
                    it replaces <dir>/html and <dir>/manifest.json, and refuses a <dir> holding either without a render manifest
@@ -20,6 +21,9 @@ let usage = """
       results      each query's count and first 50 results, over a copy of a three-volume export
                    (default out: fixtures/golden/queries.results.json); --any-volumes takes any export
                    from the pinned build, such as the full corpus
+      rich-text    the golden spans: the RTF the note editor writes for each formatting it offers, and the
+                   app's reading of it, of fixtures/rich-text/read and of the web codec's fixtures/rich-text/web
+                   (default out: fixtures/golden/rich-text/spans.json)
 
     --repo defaults to the current directory. Paths are relative to the current directory.
     """
@@ -54,6 +58,10 @@ do {
         let anyVolumes = arguments.flag("--any-volumes")
         try arguments.finish()
         try await resultsGolden(repo: repo, export: export, queries: queries, out: out, anyVolumes: anyVolumes)
+    case "rich-text":
+        let out = arguments.path("--out") ?? repo.url(RichTextPaths.golden)
+        try arguments.finish()
+        try await MainActor.run { try richTextGolden(repo: repo, out: out) }
     default:
         throw ToolError("unknown command \(arguments.command)")
     }

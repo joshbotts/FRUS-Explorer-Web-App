@@ -188,7 +188,7 @@ import Testing
     @Test(arguments: GoldenFile.allCases)
     func eachRequiredInputMustBeRecorded(_ file: GoldenFile) throws {
         let repository = try GoldenRepository()
-        try writePending(in: repository.layout.golden, except: .render, .expressions, .results, .indexSummary)
+        try writePending(in: repository.layout.golden, except: .render, .expressions, .results, .indexSummary, .richText)
         for each in GoldenFile.allCases { try repository.write(each) }
         #expect(GoldenValidation.validate(repository.layout, sourceDigest: "current").problems == [])
 
@@ -210,6 +210,8 @@ import Testing
         #expect(GoldenValidation.requiredInputs(.expressions) == ["fixtures/parity/queries.jsonl#records"])
         #expect(GoldenValidation.requiredInputs(.results) == ["fixtures/parity/queries.jsonl#records"] + tei + stamp)
         #expect(GoldenValidation.requiredInputs(.indexSummary) == tei + stamp)
+        #expect(GoldenValidation.requiredInputs(.richText)
+            == ["tools/mac-golden/Sources/mac-golden/RichText.swift", "fixtures/rich-text/web/cases.json"])
     }
 
     /// A file made from an export must come from the pinned build, at the pin's index version.
@@ -279,6 +281,12 @@ struct GoldenRepository {
         layout = RepositoryLayout(root: directory.url)
         try writeTEIFixtures(to: layout.tei)
         try writeQueries(try Self.queries.map(ParseParityTests.line), to: layout.queries)
+        let root = layout.root
+        try FileManager.default.createDirectory(at: root.appendingPathComponent(RichTextGolden.readFolder), withIntermediateDirectories: true)
+        let harness = root.appendingPathComponent(RichTextGolden.harnessPath)
+        try FileManager.default.createDirectory(at: harness.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("// the harness\n".utf8).write(to: harness)
+        try GoldenJSON.write(RichTextWebCases(cases: []), to: root.appendingPathComponent(RichTextWebCases.path))
     }
 
     /// What the tools record for `file`: the fixtures, the query list's records and the stamp, as
@@ -291,6 +299,11 @@ struct GoldenRepository {
         case .render, .indexSummary: inputs = tei
         case .expressions: inputs = records
         case .results: inputs = tei.merging(records) { a, _ in a }
+        case .richText:
+            inputs = [:]
+            for path in [RichTextGolden.harnessPath, RichTextWebCases.path] {
+                inputs[path] = try ParityFormat.Digest.sha256(contentsOf: layout.root.appendingPathComponent(path))
+            }
         }
         if file.needsExport {
             for (key, value) in Self.stamp { inputs["research_provenance.\(key)"] = value }
@@ -327,6 +340,12 @@ struct GoldenRepository {
             var summary = try summarize(ParityExport())
             summary.provenance = provenance
             try GoldenJSON.write(summary, to: url)
+        case .richText:
+            let cases = [RichTextCase(id: "plain", kind: .written, source: nil, rtf: "{\\rtf1 x}", text: "x",
+                                      runs: [RichTextSpan(text: "x")], paragraphs: [[RichTextSpan(text: "x")]],
+                                      rewritten: RichTextRewrite(rtf: "{\\rtf1 x}", runs: [RichTextSpan(text: "x")]))]
+            try GoldenJSON.write(RichTextGolden(provenance: provenance, configuration: "tests", appearance: RichTextGolden.appearance,
+                                                cases: cases, catalogColors: [CatalogColor(name: "textColor", colorHex: nil)]), to: url)
         }
     }
 }
