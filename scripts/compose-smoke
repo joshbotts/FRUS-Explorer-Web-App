@@ -192,11 +192,17 @@ printf '%s' "$search" | grep -Eq '"total":2[,}]' || fail "the search did not fin
 page=$(curl -s --max-time 30 -D "$work/page.headers" -o "$work/page.html" -w '%{http_code} %{content_type}' \
   "$base/api/v1/volumes/frus1961-63v06/documents/d1/html" || true)
 [ "$page" = "200 text/html; charset=utf-8" ] || fail "the reader's page answered $page: $(head -c 300 "$work/page.html")"
-grep -q '<script src="/reader/host.js" defer></script>' "$work/page.html" || fail "the page does not load the host script"
 grep -qi "^content-security-policy: default-src 'none'" "$work/page.headers" || fail "the page has no content security policy"
-host=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "$base/reader/host.js" || true)
-[ "$host" = 200 ] || fail "/reader/host.js answered $host"
-echo "   2 documents found; frus1961-63v06 d1's page, $(wc -c < "$work/page.html" | tr -d ' ') bytes, with its host script and policy"
+# The app's three reader scripts, from the kit, then the host script, each the server's own file.
+for file in frus-offset-engine.js frus-highlights.js frus-selection.js host.js; do
+  grep -q "<script src=\"/reader/$file\" defer></script>" "$work/page.html" || fail "the page does not load /reader/$file"
+  answer=$(curl -s --max-time 5 -o /dev/null -w '%{http_code} %{content_type}' "$base/reader/$file" || true)
+  [ "$answer" = "200 text/javascript; charset=utf-8" ] || fail "/reader/$file answered $answer"
+done
+# The kit's rendering version of d1's text, which a new highlight's request names; a header line ends in CR.
+version=$(grep -i '^x-frus-rendering-version:' "$work/page.headers" | tr -d '\r' | cut -d' ' -f2)
+[ "${#version}" = 16 ] || fail "the page sends no rendering version: '$version'"
+echo "   2 documents found; frus1961-63v06 d1's page, $(wc -c < "$work/page.html" | tr -d ' ') bytes, with the reader's four scripts and its policy"
 
 echo "== the user's tags, through the write guard"
 # Sent to the public address's host and from its origin, as the browser app sends them; curl
@@ -224,13 +230,32 @@ code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' -X DELETE "${as_app[@
 [ "$code" = 204 ] || fail "deleting the tag answered $code"
 echo "   refused without the token, from another origin and to another host; made Smoke, trimmed, and deleted it"
 
+echo "== a highlight, through the write guard"
+# Over d1's first nine characters, in the version of the page read above; the server takes its text
+# from the page's model. Then the document lists it, and it is removed.
+highlights="$base/api/v1/me/volumes/frus1961-63v06/documents/d1/highlights"
+made=$(curl -s --max-time 30 -X POST "${as_app[@]}" -H "X-CSRF-Token: $token" -H 'Content-Type: application/json' \
+  --data "{\"startOffset\":0,\"endOffset\":9,\"colorTag\":\"yellow\",\"renderingVersion\":\"$version\"}" -w ' %{http_code}' \
+  "$highlights") || fail "the highlight was not made"
+case "$made" in *"\"renderingVersion\":\"$version\""*' 201') ;; *) fail "making a highlight answered $made" ;; esac
+case "$made" in *'"selectedText":""'*) fail "the highlight holds no text: $made" ;; esac
+highlight=$(printf '%s' "$made" | sed -nE 's/.*"id":"([0-9A-F-]+)".*/\1/p')
+listed=$(curl -s --max-time 30 "${as_app[@]}" "$highlights") || fail "the document's highlights did not answer"
+case "$listed" in *"\"id\":\"$highlight\""*'"isStale":false'*|*'"isStale":false'*"\"id\":\"$highlight\""*) ;;
+  *) fail "the document does not list its highlight: $listed" ;; esac
+code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' -X DELETE "${as_app[@]}" -H "X-CSRF-Token: $token" \
+  "$base/api/v1/me/highlights/$highlight" || true)
+[ "$code" = 204 ] || fail "deleting the highlight answered $code"
+echo "   made over d1's first nine characters at version $version, listed and not stale, and removed"
+
 echo "== behind nginx at the root, with docs/INSTALL.md's recipe"
 start_proxy "at the root" /healthz
-for path in / "/doc/frus1961-63v06/d1" /api/v1/status "/api/v1/volumes/frus1961-63v06/documents/d1/html" /reader/host.js /readyz; do
+for path in / "/doc/frus1961-63v06/d1" /api/v1/status "/api/v1/volumes/frus1961-63v06/documents/d1/html" /reader/host.js \
+    /reader/frus-highlights.js /readyz; do
   code=$(through_proxy "$path")
   [ "$code" = 200 ] || fail "$path answered $code through nginx"
 done
-echo "   the app, a client route, the API, the reader's page and its host script, and /readyz"
+echo "   the app, a client route, the API, the reader's page and its scripts, and /readyz"
 
 if [ -n "$e2e" ]; then
   echo "== the browser suite at the root: Playwright on Chromium"
@@ -277,8 +302,10 @@ grep -qi '^cache-control: public, max-age=31536000, immutable' "$work/script.hea
 status=$(curl -s --max-time 5 "$under/api/v1/status") || fail "/frus-explorer/api/v1/status did not answer"
 printf '%s' "$status" | grep -q '"documents":7' || fail "status under the path does not report 7 documents: $status"
 curl -s --max-time 30 -o "$work/page.html" "$under/api/v1/volumes/frus1961-63v06/documents/d1/html" || fail "the reader's page did not answer"
-grep -q '<script src="/frus-explorer/reader/host.js" defer></script>' "$work/page.html" || fail "the page does not name its host script under the path"
-for path in /frus-explorer/healthz /frus-explorer/reader/host.js; do
+for file in frus-offset-engine.js frus-highlights.js frus-selection.js host.js; do
+  grep -q "<script src=\"/frus-explorer/reader/$file\" defer></script>" "$work/page.html" || fail "the page does not name /reader/$file under the path"
+done
+for path in /frus-explorer/healthz /frus-explorer/reader/host.js /frus-explorer/reader/frus-selection.js; do
   code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "$base$path" || true)
   [ "$code" = 200 ] || fail "$path answered $code"
 done
@@ -288,11 +315,12 @@ for path in /search /api/v1/status "/${script#./}"; do
   code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "$base$path" || true)
   [ "$code" = 404 ] || fail "$path, outside the path, answered $code"
 done
-echo "   the page with its base, a client route, $script, the API, the reader's page and host script under the path; health at both; 404 outside it"
+echo "   the page with its base, a client route, $script, the API, the reader's page and its scripts under the path; health at both; 404 outside it"
 
 echo "== behind nginx under the path, with docs/INSTALL.md's recipe"
 start_proxy "under a path" /frus-explorer/healthz
-for path in /frus-explorer /frus-explorer/ "/frus-explorer/search?keywords=treaties" /frus-explorer/api/v1/status /frus-explorer/reader/host.js /frus-explorer/readyz; do
+for path in /frus-explorer /frus-explorer/ "/frus-explorer/search?keywords=treaties" /frus-explorer/api/v1/status /frus-explorer/reader/host.js \
+    /frus-explorer/reader/frus-offset-engine.js /frus-explorer/readyz; do
   code=$(through_proxy "$path")
   [ "$code" = 200 ] || fail "$path answered $code through nginx"
 done

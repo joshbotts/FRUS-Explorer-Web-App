@@ -174,13 +174,40 @@ public struct ReaderRenderer: Sendable {
         return (passes.flatMap(\.0), Dictionary(zip(volumes, passes.map(\.1)), uniquingKeysWith: { first, _ in first }))
     }
 
+    /// One document's render model along `fullParsePass`'s path, read by `read`.
+    public struct ModelRow<Value: Sendable>: Sendable {
+        public let volume: String
+        public let document: String
+        public let value: Value
+    }
+
+    /// `fullParsePass`'s path, each document's render model read by `read` rather than written as
+    /// HTML: for a check of what the model holds, such as check 6's flat text.
+    public func fullParseModels<Value: Sendable>(_ volumes: [String],
+                                                 read: @escaping @Sendable (FRUSDocumentRenderModel) -> Value) async throws -> [ModelRow<Value>] {
+        try await Self.map(volumes.count) { index in
+            let volume = volumes[index]
+            let parse = try await FRUSDocumentParser().parseVolumeFull(volumeURL: self.volumeURL(volume))
+            let lookups = LookupLists(persons: parse.persons, terms: parse.terms).lookups
+            return parse.documents.map { ast in
+                ModelRow(volume: volume, document: ast.documentId, value: read(self.model(ast, volume: volume, lookups: lookups)))
+            }
+        }.flatMap { $0 }
+    }
+
     func volumeURL(_ volume: String) -> URL { tei.appendingPathComponent("\(volume).xml") }
 
     /// The reader's HTML for a parsed document: by default the fragment `ReaderPage.build` writes in
     /// the page's body, which the app's `HTMLTemplate.build` forwards to.
     func html(_ ast: FRUSDocumentAST, volume: String, lookups: ReaderLookups, write: Writer = ReaderRenderer.readerFragment) -> String {
+        write(model(ast, volume: volume, lookups: lookups))
+    }
+
+    /// The reader's render model for a parsed document, which both passes write or read: so the one
+    /// the golden rows hold is the one check 6's samples are placed over.
+    func model(_ ast: FRUSDocumentAST, volume: String, lookups: ReaderLookups) -> FRUSDocumentRenderModel {
         var converter = ASTToRenderNodeConverter(readerOf: volume, lookups: lookups, brokenRefs: brokenRefs)
-        return write(converter.convert(ast))
+        return converter.convert(ast)
     }
 
     /// `body` of each index below `count`, in index order, run as many at once as the machine has

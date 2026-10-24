@@ -3,6 +3,7 @@
 // come from the address FRUS_PUBLIC_URL names, to it, with the token GET /api/v1/me gives, as JSON
 // of a capped size; and a read of a user's data must be sent to that address.
 
+import FRUSCoreKit
 import FRUSLightCore
 import Foundation
 import Hummingbird
@@ -70,7 +71,7 @@ final class CSRFTokens: Sendable {
 
 /// What the routes under /api/v1/me need.
 struct UserDataServices: Sendable {
-    let store: any UserStore & TagStore
+    let store: any UserStore & TagStore & HighlightStore
     let resolver: any UserResolver
     let tokens: CSRFTokens
     /// `FRUS_PUBLIC_URL`'s address.
@@ -80,7 +81,7 @@ struct UserDataServices: Sendable {
     let auth: ServerConfiguration.Auth
     let now: @Sendable () -> Date
 
-    init(store: any UserStore & TagStore, configuration: ServerConfiguration, tokens: CSRFTokens = CSRFTokens(),
+    init(store: any UserStore & TagStore & HighlightStore, configuration: ServerConfiguration, tokens: CSRFTokens = CSRFTokens(),
          now: @escaping @Sendable () -> Date = Date.init) {
         self.store = store
         resolver = SingleUserResolver(store: store)
@@ -176,7 +177,9 @@ enum JSONBody {
             return try JSONDecoder().decode(T.self, from: data)
         } catch DecodingError.keyNotFound(let key, _) {
             throw APIProblem(.badRequest, code: "INVALID_FIELD", detail: "\(key.stringValue): required.")
-        } catch DecodingError.typeMismatch(_, let context), DecodingError.valueNotFound(_, let context) {
+        } catch DecodingError.typeMismatch(_, let context), DecodingError.valueNotFound(_, let context),
+                DecodingError.dataCorrupted(let context) {
+            // dataCorrupted: a number that is no Int, such as 5.5 or 1e30.
             let name = context.codingPath.first?.stringValue ?? "body"
             throw APIProblem(.badRequest, code: "INVALID_FIELD", detail: "\(name): \(context.debugDescription)")
         }
@@ -203,7 +206,8 @@ public struct Me: Codable, Equatable, Sendable, ResponseEncodable {
 }
 
 enum UserDataRoutes {
-    static func add(to router: Router<APIRequestContext>, services: UserDataServices, resources: ServerResources) {
+    static func add(to router: Router<APIRequestContext>, services: UserDataServices, resources: ServerResources,
+                    reader: ReaderService, provider: ServedIndexProvider) {
         let me = router.group("/api/v1/me").add(middleware: UserDataGuard(services: services))
         me.get { request, context -> EditedResponse<Me> in
             try FormQuery(request.uri.query).refuseUnknown([])
@@ -213,6 +217,20 @@ enum UserDataRoutes {
             return EditedResponse(headers: [.cacheControl: "no-store"], response: body)
         }
         TagRoutes.add(to: me, services: services, resources: resources)
+        HighlightRoutes.add(to: me, services: services, resources: resources, reader: reader, provider: provider)
+    }
+
+    /// The document a route names. Its volume must be in the catalogue; the document is named and
+    /// not looked up, since the Mac's tags and highlights can name a document this server does not
+    /// hold.
+    static func document(_ context: APIRequestContext, resources: ServerResources) throws -> DocumentKey {
+        let volumeId = try context.parameters.require("volumeId")
+        let documentId = try context.parameters.require("documentId")
+        guard resources.volume(volumeId) != nil else { throw APIProblem.volumeNotFound(volumeId) }
+        guard documentId.utf8.count <= 256, FRUSURLScheme.isSafeComponent(documentId) else {
+            throw APIProblem.invalidParameter("documentId", "\(documentId) is not a document's id.")
+        }
+        return DocumentKey(volumeId: volumeId, documentId: documentId)
     }
 }
 

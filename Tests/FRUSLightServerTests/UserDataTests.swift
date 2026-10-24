@@ -21,8 +21,9 @@ struct UserDataFixture {
 
     static let now = Date(timeIntervalSince1970: 1_792_800_000)  // 2026-10-24T00:00:00Z
 
-    init(publicURL: String = "http://localhost:8080", userData: Bool = true) async throws {
-        server = try await ServerFixture()
+    /// `volumes` from fixtures/tei are in the server's TEI folder, for the routes that read a page.
+    init(publicURL: String = "http://localhost:8080", userData: Bool = true, volumes: [String] = []) async throws {
+        server = try await ServerFixture(volumes: volumes)
         let url = server.files.userStore
         store = try await SQLiteUserStore(url: url, backupsDirectory: server.files.backupsDirectory)
         rows = try UserStoreRows(url)

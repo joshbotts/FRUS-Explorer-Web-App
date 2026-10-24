@@ -20,7 +20,10 @@
 // lacks of the volume; and the Research rail's header, its Tags section and Add Tag, the tag
 // picker's document mode, and Settings ▸ Tags with its pane's lines, the tag editor and Merge Tag,
 // where Delete Tag's question takes the editor's own sentence of what deleting does, since the
-// count it names comes later (PLAN's S17b). The rest,
+// count it names comes later (PLAN's S17b); the four highlight colours, the selection bar's names
+// for them, Highlight Yellow and the rest, and the menu's Highlight Selection, the Remove Highlight
+// question, and the review sheet's Highlights, Remove…, Highlighted passage and its two lines for a
+// highlight made against an earlier version of the text. The rest,
 // chiefly what only a server has (what it indexes, which TEI it holds), are the web's own until
 // check 10 settles them.
 
@@ -356,6 +359,33 @@ export const copy = {
     addTag: 'Add Tag',
     removeTag: (name: string) => `Remove ${name}`,
     loading: 'Loading the tags…',
+  },
+  /**
+   * Highlights: the colours, the selection bar's names for them and the app's menu's name, the
+   * question a tap asks, and the Highlights section's rows, in the words of the app's review sheet.
+   * The section's count, the name of each row's group of colour buttons, Color, and the line for a
+   * highlight the page could not draw are the web's own.
+   */
+  highlights: {
+    colors: { yellow: 'Yellow', green: 'Green', blue: 'Blue', pink: 'Pink' },
+    /** A colour's button in the selection bar, as VoiceOver reads the app's dot. */
+    highlightColor: (color: string) => `Highlight ${color}`,
+    bar: 'Highlight Selection',
+    removeTitle: 'Remove Highlight',
+    removeMessage: 'This highlight will be permanently removed.',
+    removeConfirm: 'Remove',
+    removeCancel: 'Cancel',
+    section: 'Highlights',
+    /** The section's badge: how many highlights the document carries. */
+    count: (count: number) => `${count.toLocaleString('en-US')} ${count === 1 ? 'highlight' : 'highlights'}`,
+    color: 'Color',
+    remove: 'Remove…',
+    noPassage: 'Highlighted passage',
+    stale: 'Made against an earlier version of the text — its position may have moved.',
+    staleNoPassage:
+      'Made against an earlier version of the text, and the words it covered were not stored — it can only be checked by eye.',
+    notDrawn: 'This highlight could not be drawn in the text.',
+    loading: 'Loading the highlights…',
   },
   /** The tag picker, as the app's document-mode sheet words it. */
   tagPicker: {

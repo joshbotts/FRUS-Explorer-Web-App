@@ -1,5 +1,6 @@
 // The reader (SPEC, Reader rendering and Reader and Research rail): the document's header and
-// toolbar, the server's page in a sandboxed frame, the rail beside it, Cite or Research, the second
+// toolbar, the server's page in a sandboxed frame with the user's highlights drawn in it and the
+// selection bar over it, the rail beside it, Cite or Research, the second
 // only on a server that keeps user data, and what the page's
 // links lead to: another document or a note in one, the document on a printed page, a whole
 // volume in Browse or, outside the catalogue, on history.state.gov, or a card for a person, a term
@@ -21,6 +22,7 @@ import { useHeadingReady } from '../shell/headingFocus';
 import { plainTitle, useDocumentTitle } from '../shell/useDocumentTitle';
 import { LinkCard } from './LinkCard';
 import { readerMessage } from './readerMessages';
+import { useReaderHighlights } from './useReaderHighlights';
 
 const route = getRouteApi('/doc/$volumeId/$documentId');
 
@@ -33,11 +35,14 @@ function subscribeToWidth(onChange: () => void): () => void {
   return () => list?.removeEventListener('change', onChange);
 }
 
-/** Fetches the page before the frame loads it, so an error is a notice, never raw JSON in the frame. */
-async function checkPage(url: string, signal: AbortSignal): Promise<true> {
+/**
+ * Fetches the page before the frame loads it, so an error is a notice, never raw JSON in the frame;
+ * gives the kit's rendering version of its text, which a highlight made in it names.
+ */
+async function checkPage(url: string, signal: AbortSignal): Promise<{ renderingVersion: string | null }> {
   const response = await fetch(url, { signal });
   if (!response.ok) throw await ApiError.from(response);
-  return true;
+  return { renderingVersion: response.headers.get('X-FRUS-Rendering-Version') };
 }
 
 export function ReaderScreen() {
@@ -60,12 +65,16 @@ export function ReaderScreen() {
   const volumes = useQuery(volumesQuery);
   const pageURL = readerPageURL(volumeId, documentId, scheme, textSize, readingWidth);
   const frameURL = note ? `${pageURL}#${note}` : pageURL;
-  // Checked once per page: a refocused tab, or a server briefly away, leaves an open document open.
+  // Checked each time the frame loads a page, as the frame fetches the page each time, so the version
+  // a highlight names is the one the frame holds; a refocused tab, or a server briefly away, leaves an
+  // open document open, and its last check with it.
   const page = useQuery({
     queryKey: ['page', pageURL],
     queryFn: ({ signal }) => checkPage(pageURL, signal),
     retry: false,
-    staleTime: Infinity,
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
   const frame = useRef<HTMLIFrameElement>(null);
   const body = useRef<HTMLDivElement>(null);
@@ -93,6 +102,15 @@ export function ReaderScreen() {
   // The rail takes focus when the reader opens it, not when a page loads with it open.
   const [focusRail, setFocusRail] = useState(false);
   const sheet = shownRail !== undefined && narrow;
+  const highlights = useReaderHighlights({
+    volumeId,
+    documentId,
+    enabled: keepsUserData,
+    frame,
+    frameURL,
+    pageVersion: page.data?.renderingVersion,
+    say: setNotice,
+  });
 
   /** Opens a link's destination: a note of this document in place, else its document, if this server has it. */
   function open(target: ReaderLinkTarget, destination: NonNullable<ReaderLinkTarget['destination']>) {
@@ -197,12 +215,15 @@ export function ReaderScreen() {
     }
   }
 
-  // The listener follows a link with the document shown when the link arrives.
+  // The listener follows a link with the document shown when the link arrives, and hands the
+  // page's other messages, its selection, a tap on a highlight and its keys, to the highlights.
   const onLink = useEffectEvent((href: string) => void follow(href));
+  const onReaderMessage = useEffectEvent(highlights.onMessage);
   useEffect(() => {
     function onMessage(event: MessageEvent) {
       const message = readerMessage(event, frame.current?.contentWindow);
       if (message?.kind === 'link') onLink(message.href);
+      else if (message) onReaderMessage(message);
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
@@ -237,6 +258,7 @@ export function ReaderScreen() {
    */
   function setRail(next: ReaderSearch['rail']) {
     const toggle = rail === 'research' ? researchToggle : citeToggle;
+    highlights.hideBar();
     setFocusRail(next !== undefined);
     const search = (previous: ReaderSearch): ReaderSearch => ({ ...previous, rail: next });
     void navigate({ search, replace: true }).then(() => {
@@ -347,6 +369,7 @@ export function ReaderScreen() {
               // A link to a note lands on it: the fragment scrolls the page there, and focus goes to
               // the note, so the next Tab continues from it; once for each arrival at the note.
               onLoad={() => {
+                highlights.onFrameLoad();
                 if (!landing) return;
                 setLanding(undefined);
                 reveal(landing);
@@ -359,6 +382,7 @@ export function ReaderScreen() {
           ) : (
             <p role="status">{copy.reader.loading}</p>
           )}
+          {highlights.elements}
         </div>
       </section>
       {shownRail === 'cite' && (
@@ -369,6 +393,7 @@ export function ReaderScreen() {
           volumeId={volumeId}
           documentId={documentId}
           documentNumber={entry?.documentNumber}
+          undrawnHighlights={highlights.undrawn}
           autoFocus={focusRail}
           onClose={() => setRail(undefined)}
         />
