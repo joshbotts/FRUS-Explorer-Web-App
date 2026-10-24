@@ -2,6 +2,47 @@
 
 One entry per session, newest first.
 
+## Session 16b, follow-up: a draft that waits for its export passes its checks
+
+24 October 2026 · branch `claude/pending-results-wait` · [#58](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/58) · upstream `2767a128`, unchanged
+
+S16b found it (#57, its Notes), and the session that ran S16b asked for the fix in a pull request of its own, beside #57: it touches none of #57's files but this log.
+
+**What was wrong**
+
+- COORDINATION §5 has a pin move whose export is late remove `index-summary.json` and `queries.results.json`, list them in `fixtures/golden/PENDING`, and stay a draft until the export comes. Check 2's and check 3's own tests then print that they wait. The path last ran at S6's pin move, `144d251`, on 5 October.
+- Two tests written since read the results file without asking whether it waits:
+  - S8c's `ServedAPIParityTests.checkThreePassesThroughTheAPI` recorded an issue when `GoldenValidation.load` found it pending, and returned before its other checks;
+  - S13b's `SearchTimingTests` read it with `GoldenJSON.read`, and threw "The file doesn't exist".
+- So a draft's CI would have been red with nothing wrong but the wait.
+
+**The fix**
+
+- Each test now reads the file with `GoldenValidation.load`, as `SearchRunTests` and `IndexParityTests` do, and when it is pending prints "queries.results.json is pending: it waits for …" with `PENDING`'s reason.
+- Each checks first what needs no export, and compares with the golden file only when it is there:
+  - check 3 through the API still checks the import, the live index left as it was, the records `LiveAPI` reads, the records against those the kit gives in process, the expressions over HTTP and the 43 refusals; with the file, it compares the records with the golden results and prints its line, as before;
+  - the timing test still checks that the golden expressions name its 45 exact-word queries, times each one, and checks that none is refused; with the file, each count is the golden file's, as before.
+- With the file present, the checks, their messages and what the tests print are as they were; only the comparison with the golden results now comes last in each test.
+- Nothing is skipped: no `.disabled` and no `Test.cancel`.
+
+**Results**
+
+- **With both files pending,** listed in `PENDING` as `144d251` listed them, `scripts/swift test --filter FRUSParityTests`, under the app's `Scripts/heavy.sh` lock:
+  - before the fix, 122 tests ran and the two failed, on "queries.results.json is pending" and on "The file doesn't exist";
+  - with it, all 122 pass, and seven tests print that a file waits: `GoldenTests` for both, `IndexParityTests` for the summary, and `SearchRunTests`, `SearchParityTests`, check 3 through the API and the timing test for the results.
+- **With both files present,** CI's swift job replayed in `swift:6.4-noble` on arm64, over `main` at `c19524b`, this package's own targets built clean with no warning:
+  - no target calls `Test.cancel`, and all 2,127 tests pass with the one named skip;
+  - each target runs what `main`'s CI ran: FRUSCoreKitTests 1,150, SourceNoteKitTests 321, FTS5StoreTests 219, FRUSParityTests 122, FRUSLightServerTests 122, FRUSLightCoreTests 73, ManifestGeneratorTests 60, SemanticVectorsKitTests 40, CrossRefKitTests 10, GeneratorKitTests 7 and FTS5CheckTests 3;
+  - the checks print as before, and nothing prints that it waits: "check 2 passes: 36 digests and 7 checks are the Mac's"; "check 3's results pass: 482 queries, 482 identical and 0 reordered only within Mac tie groups"; through the API, "482 queries, 482 identical and 0 reordered only within Mac tie groups, every record the kit's own; 482 compiled as the golden file says, 43 refused; the live index unchanged"; and "check 4 through the page: 393 of 393 rows identical".
+
+**Notes**
+
+- **COORDINATION §5 is unchanged:** its wording holds again.
+- **CI tests only what is committed,** so it never takes the pending path. A pin move that will wait for its export can try it first: remove the two files, list them in `PENDING`, run `scripts/swift test --filter FRUSParityTests`, and restore them with `git checkout`.
+- **Scratch:** the runs' scripts and logs are under `.build/linux/pending/` in the worktree `frus-explorer-readiness-e33c42`.
+
+**Next: S15c,** highlights and check 6, once #57, S16b's pin move and S15b's, merges; S19a, Citation Lookup, which #57 also unblocks; and S14b, S14d and S14e on the server's track.
+
 ## Session 14c: the write path, and tags
 
 23 and 24 October 2026 · branch `claude/s14c-tags-and-write-guards` · [#54](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/54) · upstream `2767a128`, unchanged
