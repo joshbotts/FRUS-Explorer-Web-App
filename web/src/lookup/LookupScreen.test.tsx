@@ -53,14 +53,19 @@ const guess = match({
 
 const empty: CitationFields = { subseries: '', volumeNumber: '', partNumber: '', documentNumber: '', pageNumber: '' };
 
+/** The form fields a request posts. */
+function sent(init?: RequestInit): URLSearchParams {
+  return init?.body instanceof URLSearchParams ? init.body : new URLSearchParams();
+}
+
 /** A stand-in for the kit's form, enough for the screen: a citation of Volume VI's document 1, or nothing. */
-function form(url: URL): CitationLookupForm {
-  const mode = (url.searchParams.get('mode') ?? 'paste') as CitationLookupForm['mode'];
-  const text = url.searchParams.get('text') ?? '';
+function form(params: URLSearchParams): CitationLookupForm {
+  const mode = (params.get('mode') ?? 'paste') as CitationLookupForm['mode'];
+  const text = params.get('text') ?? '';
   const derived = mode === 'paste' && text.includes('vol. VI') ? { ...empty, subseries: '1961-63', volumeNumber: 'VI', documentNumber: text.includes('doc. 1') ? '1' : '' } : empty;
   const fields = { ...derived };
   for (const name of Object.keys(empty) as (keyof CitationFields)[]) {
-    const given = url.searchParams.get(name);
+    const given = params.get(name);
     if (given !== null) fields[name] = given;
   }
   const actionable = mode === 'batch' ? text.trim() !== '' : /^\d+$/.test(fields.documentNumber.trim()) || /^\d+$/.test(fields.pageNumber.trim()) || fields.volumeNumber.trim() !== '';
@@ -85,16 +90,16 @@ const batch: CitationBatch = {
 function server(answers: Record<string, unknown> = {}) {
   return stubServer({
     '/readyz': ready,
-    '/api/v1/citation-lookup/fields': (url: URL) => form(url),
-    '/api/v1/citation-lookup': () => [exact, toDownload, guess],
+    'POST /api/v1/citation-lookup/fields': (_url: URL, init?: RequestInit) => form(sent(init)),
+    'POST /api/v1/citation-lookup': () => [exact, toDownload, guess],
     'POST /api/v1/citation-lookup/batch': () => batch,
     ...answers,
   });
 }
 
-/** The URLs of the requests made to `path`, with their query strings. */
-function asked(fetch: ReturnType<typeof stubServer>, path: string): URL[] {
-  return fetch.mock.calls.map(([input]) => new URL(input, 'http://localhost')).filter((url) => url.pathname === path);
+/** The fields of each request posted to `path`, in order. */
+function asked(fetch: ReturnType<typeof stubServer>, path: string): URLSearchParams[] {
+  return fetch.mock.calls.filter(([input]) => new URL(input, 'http://localhost').pathname === path).map(([, init]) => sent(init));
 }
 
 const lookUp = () => screen.getByRole('button', { name: /Look Up|Looking up/ });
@@ -155,7 +160,7 @@ describe('Citation Lookup', () => {
     await user.click(lookUp());
     await screen.findByRole('heading', { level: 2, name: 'Results (3 found)' });
     const lookup = asked(fetch, '/api/v1/citation-lookup').at(-1);
-    expect(lookup && Object.fromEntries(lookup.searchParams)).toEqual({ mode: 'paste', text: 'FRUS, 1961–1963, vol. VI, doc. 1', documentNumber: '2' });
+    expect(lookup && Object.fromEntries(lookup)).toEqual({ mode: 'paste', text: 'FRUS, 1961–1963, vol. VI, doc. 1', documentNumber: '2' });
 
     // A new paste derives every field again, the edit gone with the old text.
     await user.clear(field('Citation Text'));
@@ -199,7 +204,7 @@ describe('Citation Lookup', () => {
 
   it('says No Matches Found, and a Lookup Error with the server’s words', async () => {
     let answer: unknown = [];
-    server({ '/api/v1/citation-lookup': () => answer });
+    server({ 'POST /api/v1/citation-lookup': () => answer });
     const user = userEvent.setup();
     renderAt('/lookup');
     await user.click(await screen.findByRole('radio', { name: 'Structured Entry' }));
@@ -225,7 +230,7 @@ describe('Citation Lookup', () => {
     expect(screen.queryByRole('textbox', { name: 'Citation Text' })).toBeNull();
     await user.type(field('Document no.'), 'abc');
     await user.click(lookUp());
-    await waitFor(() => expect(asked(fetch, '/api/v1/citation-lookup/fields').at(-1)?.searchParams.get('documentNumber')).toBe('abc'));
+    await waitFor(() => expect(asked(fetch, '/api/v1/citation-lookup/fields').at(-1)?.get('documentNumber')).toBe('abc'));
     expect(asked(fetch, '/api/v1/citation-lookup')).toEqual([]);
 
     await user.type(field('Page'), '47');
@@ -233,7 +238,7 @@ describe('Citation Lookup', () => {
     await user.type(field('Subseries'), '1961-63{Enter}');
     await screen.findByRole('heading', { level: 2, name: 'Results (3 found)' });
     const lookup = asked(fetch, '/api/v1/citation-lookup').at(-1);
-    expect(lookup && Object.fromEntries(lookup.searchParams)).toEqual({
+    expect(lookup && Object.fromEntries(lookup)).toEqual({
       mode: 'structured',
       subseries: '1961-63',
       volumeNumber: '',
@@ -284,7 +289,7 @@ describe('Citation Lookup', () => {
     await user.click(field('Footnotes'));
     await user.keyboard('{End}{Enter}2. Ibid.');
     expect((field('Footnotes') as HTMLTextAreaElement).value).toBe('FRUS, 1961–1963, vol. VI, doc. 1\n2. Ibid.');
-    expect(fetch.mock.calls.filter(([, init]) => init?.method === 'POST')).toEqual([]);
+    expect(asked(fetch, '/api/v1/citation-lookup/batch')).toEqual([]);
   });
 
   it('triages a block in Batch: the kit’s summary, the rows worst first or as pasted, each in the app’s words, and a resolved row that opens its document', async () => {
@@ -298,8 +303,7 @@ describe('Citation Lookup', () => {
     await user.click(lookUp());
 
     const table = await screen.findByRole('list', { name: batch.summary });
-    const post = fetch.mock.calls.find(([, init]) => init?.method === 'POST');
-    expect((post?.[1]?.body as URLSearchParams).get('text')).toBe('1. FRUS, 1961–1963, vol. VI, doc. 1.\n2. FRUS, 1961–1963, vol. V, doc. 84.');
+    expect(asked(fetch, '/api/v1/citation-lookup/batch')[0]?.get('text')).toBe('1. FRUS, 1961–1963, vol. VI, doc. 1.\n2. FRUS, 1961–1963, vol. V, doc. 84.');
     const shown = () =>
       within(screen.getByRole('list', { name: batch.summary }))
         .getAllByRole('listitem')
@@ -381,6 +385,6 @@ describe('Citation Lookup', () => {
     // At once, before the form's own question has gone.
     fireEvent.click(lookUp());
     await screen.findByRole('heading', { level: 2, name: 'Results (3 found)' });
-    expect(asked(fetch, '/api/v1/citation-lookup').at(-1)?.searchParams.get('pageNumber')).toBe('12');
+    expect(asked(fetch, '/api/v1/citation-lookup').at(-1)?.get('pageNumber')).toBe('12');
   });
 });

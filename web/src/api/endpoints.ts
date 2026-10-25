@@ -278,13 +278,14 @@ function citationFormFields(request: CitationFormRequest): Record<string, FormVa
 /**
  * The kit's form for `request`: the Parsed Fields a paste yields with the reader's edits over them,
  * and whether Look Up has anything to go on. The last answer stays while the next loads, so the
- * fields and Look Up do not flicker as the text is typed.
+ * fields and Look Up do not flicker as the text is typed. Posted, as every Citation Lookup request
+ * is, so Batch's block of notes outruns no proxy's limit on an address.
  */
 export function citationFormQuery(request: CitationFormRequest) {
   const fields = citationFormFields(request);
   return queryOptions<CitationLookupForm, unknown, CitationLookupForm, unknown[]>({
     queryKey: ['citationForm', fields],
-    queryFn: ({ signal }) => getJSON<CitationLookupForm>('/api/v1/citation-lookup/fields', formEncode(fields), signal),
+    queryFn: ({ signal }) => postForm<CitationLookupForm>('/api/v1/citation-lookup/fields', formEncode(fields), signal),
     staleTime: Infinity,
     placeholderData: keepPreviousData,
     retry: retryServerFaults,
@@ -300,7 +301,7 @@ export function citationLookupQuery(request: CitationFormRequest | undefined) {
   const fields = request ? citationFormFields(request) : null;
   return queryOptions<CitationLookupMatch[], unknown, CitationLookupMatch[], unknown[]>({
     queryKey: ['citationLookup', fields],
-    queryFn: ({ signal }) => getJSON<CitationLookupMatch[]>('/api/v1/citation-lookup', formEncode(fields ?? {}), signal),
+    queryFn: ({ signal }) => postForm<CitationLookupMatch[]>('/api/v1/citation-lookup', formEncode(fields ?? {}), signal),
     enabled: fields !== null,
     staleTime: Infinity,
     gcTime: 30 * 60_000,

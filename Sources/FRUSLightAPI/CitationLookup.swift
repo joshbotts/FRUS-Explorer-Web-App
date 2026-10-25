@@ -1,5 +1,5 @@
-// GET /api/v1/citation-lookup, GET /api/v1/citation-lookup/fields and POST
-// /api/v1/citation-lookup/batch (PLAN's S19a): Citation Lookup's Paste Citation, Structured Entry and
+// /api/v1/citation-lookup, /api/v1/citation-lookup/fields and POST /api/v1/citation-lookup/batch
+// (PLAN's S19a): Citation Lookup's Paste Citation, Structured Entry and
 // Batch, as the app's Citation Lookup window runs them, through the kit's form
 // (`CitationLookupFields`), its matcher (`CitationMatchingEngine`), its splitter
 // (`CitationBlockSplitter`) and its batch runner and outcomes (`BatchCitationRunner`,
@@ -250,8 +250,16 @@ enum CitationLookupRoutes {
     /// a block of thousands of short lines would hold the index for minutes.
     static let batchLimit = 500
 
-    /// The largest form body a Batch request may send, in bytes.
-    static let batchBodyLimit = 256 * 1_024
+    /// The largest form body a request may send, in bytes: Batch's block of notes, or a paste.
+    static let bodyLimit = 256 * 1_024
+
+    /// A request's fields: a POST's form body, or the query when its body is empty, as
+    /// `/search/inspect` reads them. The browser app posts every request, so neither a long paste nor
+    /// Batch's block outruns a proxy's limit on an address, 8 KiB in nginx's default.
+    static func form(of request: Request) async throws -> FormQuery {
+        let body = try await request.body.collect(upTo: bodyLimit)
+        return try FormQuery(body.readableBytes > 0 ? String(buffer: body) : request.uri.query)
+    }
 
     static func add(to router: Router<APIRequestContext>, provider: ServedIndexProvider, resources: ServerResources) {
         // With no index served, the matcher answers from the published catalogue alone, as the
@@ -262,24 +270,28 @@ enum CitationLookupRoutes {
             try await provider.servedIfReady()?.citations ?? catalogueOnly
         }
 
-        router.get("/api/v1/citation-lookup") { request, context -> [CitationLookupMatch] in
-            let lookup = try CitationLookupRequest(try FormQuery(request.uri.query), allowed: [.paste, .structured])
+        // Each answers GET, with the fields in the query, and POST, with them in a form body.
+        let lookup: @Sendable (Request, APIRequestContext) async throws -> [CitationLookupMatch] = { request, context in
+            let lookup = try CitationLookupRequest(try await form(of: request), allowed: [.paste, .structured])
             let engine = try await engine()
             let input = lookup.input
             return try await context.whileClientConnected {
                 try await engine.match(input: input).map(CitationLookupMatch.init)
             }
         }
+        router.get("/api/v1/citation-lookup", use: lookup)
+        router.post("/api/v1/citation-lookup", use: lookup)
 
-        router.get("/api/v1/citation-lookup/fields") { request, _ -> CitationLookupForm in
-            try CitationLookupRequest(try FormQuery(request.uri.query), allowed: [.paste, .structured, .batch]).form
+        let fields: @Sendable (Request, APIRequestContext) async throws -> CitationLookupForm = { request, _ in
+            try CitationLookupRequest(try await form(of: request), allowed: [.paste, .structured, .batch]).form
         }
+        router.get("/api/v1/citation-lookup/fields", use: fields)
+        router.post("/api/v1/citation-lookup/fields", use: fields)
 
         router.post("/api/v1/citation-lookup/batch") { request, context -> CitationBatch in
-            let body = try await request.body.collect(upTo: batchBodyLimit)
-            let form = try FormQuery(body.readableBytes > 0 ? String(buffer: body) : nil)
-            try form.refuseUnknown(["text"])
-            let entries = CitationBlockSplitter.split(try form.single("text") ?? "")
+            let query = try await form(of: request)
+            try query.refuseUnknown(["text"])
+            let entries = CitationBlockSplitter.split(try query.single("text") ?? "")
             guard entries.count <= batchLimit else {
                 throw APIProblem(.badRequest, code: "TOO_MANY_CITATIONS",
                                  detail: "Batch looks up at most \(batchLimit) citations at a time, and this text holds \(entries.count). Send it in parts.")

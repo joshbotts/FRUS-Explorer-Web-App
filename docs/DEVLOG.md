@@ -2,6 +2,86 @@
 
 One entry per session, newest first.
 
+## Session 19a: Citation Lookup, over the API and in the browser app
+
+24 October 2026 · branch `claude/s19a-citation-lookup` · [#PR](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/PR) · upstream `503a730b`, unchanged
+
+Phase 2's row S19a, beside S16c, with which it shares no file but the records. Citation Lookup comes to the web as the app's window has it: Paste Citation, Structured Entry and Batch, through the kit's form, matcher, splitter and runner, every label and count the kit's. No upstream pull request, and no schema change: #1787 made Batch's and Structured Entry's types public, and S16b's pin brought them.
+
+**What the app's code says,** at `503a730b`:
+
+- **The window** (`CitationLookupView`): a segmented Input mode, Paste Citation, Structured Entry and Batch, in `CitationLookupMode.allCases`' order. Paste's field, "Paste a FRUS citation…", re-derives the five Parsed Fields from its text alone on every change (`CitationLookupFields.refreshed(forPaste:mode:parser:)`, #1474), and so does entering Paste after Batch changed the text, while a return from Structured Entry keeps what was typed there. Structured Entry is the fields. Batch shows none (#1506). Look Up is disabled until `isActionable(mode:pasteText:parser:)`, and Return in a field runs it. A result shows its label above it in its strategy's colour and symbol, the volume's title for a row naming a volume and the document's id otherwise, the volume's id, the correction note, and Download Volume or View Document; a lookup that finds nothing says No Matches Found, and one that fails Lookup Error. Batch's table has the kit's summary, Needs work first (on at first, worst first, the paste's order within a kind), each row's printed number or place, its text and its outcome's label, and a tap opens a row's first match when it names a document. Each outcome is announced to VoiceOver.
+- **The lookup** hands the matcher `CitationLookupFields.input(mode:pasteText:parser:)`: the fields trimmed of white space, a document or page that is no whole number dropped, a part Arabic or Roman, and in Paste the title fragment and the paste's link, the link only while the five fields hold what the paste produced.
+- **The matcher** (`CitationMatchingEngine`) reads its volumes from a `CitableVolumeCatalogue`, the app's `ManifestStore`, and takes as downloaded the volumes whose file is on disk, asking the index at each lookup whether it can answer for one (#1522). **Batch** (`BatchCitationRunner.run`) looks each split entry up in turn, its parse whole, and hands each row to the main actor; `BatchCitationOutcome` classifies, orders and sums them up.
+- **The labels** (`ConfidenceLabels`): SPEC's "six confidence labels" were the app's manual's table when SPEC was written. At the pin the manual tables eight kinds, over seven strategies: Exact match; Matched by page number; Possible match, one of several on a page; Match — document number assigned digitally; and three kinds of Volume identified, to download, holding nothing the citation names, and not yet indexed; and Best guess, with why.
+
+**Delivered**
+
+- **The API** (`Sources/FRUSLightAPI/CitationLookup.swift`):
+  - `GET /api/v1/citation-lookup`: Paste Citation with `text`, or Structured Entry with the five fields by the draft's names, read by `CitationLookupFields` as the app's Look Up hands them over, a field given in Paste standing for the reader's edit; the draft's array of `CitationMatch`, each with `isBestGuess` and its strategy's value, `bestGuessExplanation` or `sharedPageDocuments`.
+  - `GET /api/v1/citation-lookup/fields`: the kit's form, the five Parsed Fields a paste fills and Look Up's gate, in each mode.
+  - `POST /api/v1/citation-lookup/batch`: a block of notes as the form field `text`, split by the kit and each note run by its runner, every row with its outcome and matches, and the kit's summary.
+  - The two reads answer POST with a form body too, as `/search/inspect` does, and the browser app posts.
+  - One engine per served index (`ServedIndex.citations`), over its `SearchService` and `PageRangeStore`, a `FixedVolumeCatalogue` of the bundled manifest, and the volumes it holds as the downloaded ones; with no index, one over the catalogue alone.
+- **The browser app** (`web/src/lookup`): `LookupScreen` at `/lookup`, opened by Find by Citation beside Search's syntax, as the Mac's Search window has it beside Tips: the mode picker as the app's segmented control, Paste's text, Batch's footnotes, the Parsed Fields, Look Up and the results, each with the kit's label in its strategy's colour and symbol (`SymbolIcon`, the app's SF Symbols drawn small), its headline, note and action; Batch's table with its summary and Needs work first; the outcome in a status line. `lookupState.ts` keeps the form for the tab's session: what the server last derived from the paste, the reader's edits over it, when to ask again, and the last lookup and block. `lookupRules.ts` holds the few lines of the app's view it mirrors.
+- **Check 7's matcher half through the API** (`CitationLookupAPIParityTests`), below.
+
+**Decided here, each the web's own**
+
+- **`/citation-lookup/fields`,** a route the draft lacks: the browser app may not derive the Parsed Fields or Look Up's gate itself, since both are the kit's, so it asks the server as the text or a field changes, 150 ms after the last keystroke, and once more for what the form holds when Look Up is pressed, so a keystroke in between is never lost.
+- **The fields as the app's form reads them,** never refused: a document or page that is no whole number is none, as in the app's form, so the browser app and the app agree on what Look Up hands over. A request in Paste sends the reader's edits alone, the server deriving the rest from the text, so a field never stands for an edit the reader did not make while the server's answer is on its way.
+- **The draft's `volumeId`, `documentId` and `titleFragment`** are refused as `UNSUPPORTED_PARAMETER`, each saying to send the text, from which the kit's parser takes them, as S11f refused the concordance's.
+- **The downloaded volumes** are those the served index holds, as S12c's page links take them for `PageLink`'s `onDevice`; the mounted TEI is not consulted, since a volume in a clone of the corpus that the index lacks would read "downloaded but not yet indexed; look it up again once it is", which Import mode never changes. With no index served, the catalogue alone answers, as the app's matcher does with nothing downloaded.
+- **View Volume,** where the app offers Download Volume, which this server cannot: it opens the volume's page in Browse, which says what the server holds of it and, with its TEI mounted, lists and opens its documents.
+- **Batch's bounds:** 500 citations a request, `TOO_MANY_CITATIONS` beyond, and a body of 256 KiB, since the runner looks each citation up in turn on the connection every search shares, and the app's has no bound. The table comes whole, where the app's fills as each row completes: a lookup takes about 7 ms, so a chapter's notes take well under a second.
+- **POST for the reads,** found by the session's own review: the browser app first sent Batch's block to the form's gate in an address, which nginx refuses past 8 KiB with 414, so the two reads take a form body as `/search/inspect` does, and the browser app posts.
+- **The six labels** in PLAN's row and SPEC are now the kit's labels, which the browser app shows as the server gives them; the app's colours and SF Symbols are drawn in tones held to 4.5:1 in both appearances and small symbols of the web's own.
+- **Focus.** The screen takes focus at its heading, as every screen does, where the app focuses the paste field; the mode picker keeps the focus as its arrows change the mode, where the app moves it to the mode's first field, since a radio group whose arrows moved focus away could not be walked (WCAG 3.2.2). Look Up is `aria-disabled`, never disabled, so it keeps the focus while it looks up.
+- **The form is kept** for the tab's session, in its session storage, so a document opened from a result, Back, and a reload find the form and its results as they were, as the app's window stays open beside the documents it opens. A result's View Document is a link, which ⌘-click opens in a tab of its own, as the Mac opens a document window.
+- **Return** in Paste's text looks it up, as in the app; Shift+Return begins a line. In Batch's footnotes Return begins a line, as in the app's editor.
+- **Batch's results show after a batch has run.** The app's form shows Nothing to Triage in Batch after a lookup in Paste, its one `hasSearched` serving both.
+- **A View Document link's name** adds the document's and volume's ids, hidden, since a list of links all named View Document names no target; the visible words stay the app's.
+- **The mode picker's label,** Input mode, is hidden, as the app's segmented picker shows none.
+- **"1 matches found"** is the app's announcement, kept.
+
+**Check 7's matcher half through the API.** `CitationLookupAPIParityTests` imports the fixture index as an export is and asks Citation Lookup over HTTP. Each answer is held, field by field, to the kit's engine over the same file and catalogue, built in the test with the kit's calls alone:
+- **the app's own citation of every bundled volume** (the kit's `ownCitationsAreNeverBestGuesses`), in each style, marked and as Copy Citation copies it, through Batch: 551 of 553 come back first as their own volume, never as a best guess, the two the kit excuses by name not, in each of the six forms; the three indexed volumes answer with their document 1, found by its number;
+- **every fixture document,** 393, through Paste Citation and Structured Entry: its link, which names it exactly; its citation in each style as Cite writes it, read from the server's citation endpoint, each numbered document's coming back first as itself, found by its number; the same with its number edited in the Parsed Fields; and its subseries, volume, part and number, and the first and last pages it may be printed on. 3,011 lookups, each the kit's answer: exact matches, page matches, shared pages, digitally numbered documents and volumes to download among them;
+- **Batch,** the kit's splitter fixtures and a chapter's notes, row for row and summary for summary, resolved, best-guess, ambiguous and missing rows among them;
+- **the form,** its fields and Look Up's gate, for pastes, typed fields and blocks;
+- **the kit's tests over the bundled catalogue,** titles printed whole, the series' name, a dated footnote and links, with their own expectations;
+- and **the strategies' names,** the draft's enum, read from FRUS-API.openapi.yaml.
+
+**Mirrored, with a parity test.** `CitationLookupViewParityTests` reads the app's source, the kit's and `web/src` at once: the window's 32 words and Search's two under their keys, the kit's names for the modes, and four format strings; every strategy's colour and symbol, read case by case from the app's two switches; the result's headline, note and action; each outcome's label, colour and symbol, a lone candidate's own label in place of a count; the row a tap opens; Needs work first's order and its first state; the modes' order; and Parsed Fields hidden in Batch.
+
+**Tests**
+
+- **FRUSLightServerTests,** 150 to 159: `CitationLookupTests`, 9. No index; Paste with the reader's edits and a link; Structured Entry's reading; a volume not yet indexed; the form; Batch; every refusal and HEAD; POST as the query; under a path.
+- **FRUSParityTests,** 153 to 162: `CitationLookupAPIParityTests`, 6, and `CitationLookupViewParityTests`, 3.
+- **The web unit suite,** 274 to 289 in 31 files: the screen, 11, and its rules, 4.
+- **The browser suite,** 38 to 43 tests:
+  - `citation-lookup.spec.ts`, by pointer: Find by Citation, a pasted link and its fields, View Document and Back, a page, a volume to download and View Volume; Structured Entry by page, and a part the volume lacks as the kit's best guess; Batch, worst first and as pasted, a note wrapped across lines, and a note's document; and each mode in the dark appearance;
+  - `citation-lookup-keyboard.spec.ts`, by keyboard alone: Tab to the picker and the text, Return to look up, View Document, the picker's arrows to Structured Entry and to Batch, Return beginning a line in the footnotes, Needs work first by Space and a note's document by Return.
+  Each runs axe at each state. No caret browsing: nothing in the reader is selected.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64:** CI's swift job, replayed under the app's heavy-job lock at the final tree: RESULTS
+- **The web job's steps,** through `scripts/npm`: typecheck, lint and the build are clean, and the unit suite passes 289 tests in 31 files.
+- **`scripts/compose-smoke --e2e`** on this branch's image: 43 browser tests at the root and 43 under the path, through nginx with INSTALL's recipe, with no axe violations.
+- **Reviews.** REVIEWS
+
+**Records**
+
+- `docs/SPEC.md`: Citation, the API table, the three routes' departures from the draft, and check 7 through the API.
+- `docs/PLAN.md`: the row's labels and its done paragraph.
+- `docs/INSTALL.md`: Citation Lookup in the browser app, the API's routes and `TOO_MANY_CITATIONS`.
+- `docs/COORDINATION.md` §1: the server's kit calls and the view code the browser app mirrors.
+- README's status, with its phase-2 gaps brought up to date.
+- This log.
+
+**Next: S16c,** the import of a Mac JSON export, which PLAN puts after S15d, with S14e, S14d and S14b beside it.
+
 ## Session 15d: notes and summaries, and the rich-text codec
 
 24 October 2026 · branch `claude/s15d-notes-summaries` · [#61](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/61) · upstream `503a730b`, unchanged

@@ -215,7 +215,7 @@ import Testing
             let notes = (1...(CitationLookupRoutes.batchLimit + 1)).map { "\($0 % 999 + 1). FRUS, vol. V, doc. \($0)." }.joined(separator: "\n")
             let tooMany = try problem(try await Self.batch(client, notes), .badRequest)
             #expect(tooMany.code == "TOO_MANY_CITATIONS" && tooMany.detail.contains("501"))
-            let tooLarge = try problem(try await Self.batch(client, String(repeating: "x", count: CitationLookupRoutes.batchBodyLimit)), .contentTooLarge)
+            let tooLarge = try problem(try await Self.batch(client, String(repeating: "x", count: CitationLookupRoutes.bodyLimit)), .contentTooLarge)
             #expect(tooLarge.code == "CONTENT_TOO_LARGE")
             #expect(try await client.execute(uri: "/api/v1/citation-lookup/batch", method: .get).status == .notFound)
 
@@ -223,6 +223,30 @@ import Testing
                 let head = try await client.execute(uri: path, method: .head)
                 #expect(head.status == .ok && head.body.readableBytes == 0, "\(path)")
             }
+        }
+    }
+
+    /// Each read answers a POST of its fields as a form body as it answers them in the query, as
+    /// `/search/inspect` does, so a paste longer than a proxy takes in an address is looked up whole.
+    @Test func eachReadAnswersAPostedFormAsItsQuery() async throws {
+        let fixture = try await servingSyntheticExport(volumes: ["frus1961-63v06"], edits: Self.numbered)
+        try await fixture.app.test(.router) { client in
+            func post(_ path: String, _ items: [(String, String)]) async throws -> TestResponse {
+                try await client.execute(uri: path, method: .post, headers: [.contentType: "application/x-www-form-urlencoded"],
+                                         body: ByteBuffer(string: Self.query(items)))
+            }
+            let items = [("text", "FRUS, 1961–1963, vol. VI, doc. 1"), ("documentNumber", "2")]
+            let posted = try decode([CitationLookupMatch].self, try await post("/api/v1/citation-lookup", items))
+            #expect(posted == (try await Self.lookup(client, items)) && posted.map(\.documentId) == ["d2"])
+            let form = try decode(CitationLookupForm.self, try await post("/api/v1/citation-lookup/fields", [("mode", "structured"), ("pageNumber", "47")]))
+            #expect(form.actionable && form.pageNumber == "47")
+            // A citation inside a page of prose: an address of 20,000 characters, which nginx refuses.
+            let long = String(repeating: "A memorandum of no consequence. ", count: 600) + "FRUS, 1961–1963, vol. VI, doc. 1"
+            #expect(try decode([CitationLookupMatch].self, try await post("/api/v1/citation-lookup", [("text", long)])).map(\.documentId) == ["d1"])
+            #expect(try problem(try await post("/api/v1/citation-lookup", [("bogus", "1")]), .badRequest).code == "UNKNOWN_PARAMETER")
+            // A block of notes as Batch sends it, for Look Up's gate.
+            let block = (1...200).map { "\($0). FRUS, 1961–1963, vol. VI, doc. \($0 % 2 + 1)." }.joined(separator: "\n")
+            #expect(try decode(CitationLookupForm.self, try await post("/api/v1/citation-lookup/fields", [("mode", "batch"), ("text", block)])).actionable)
         }
     }
 

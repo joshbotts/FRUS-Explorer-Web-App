@@ -43,15 +43,18 @@ const fieldLabels: Record<keyof CitationFields, { label: string; placeholder: st
 /** How long the form waits after a keystroke before it asks the kit about what was typed. */
 const settle = 150;
 
-/** `value` once it has stood unchanged for `delay` milliseconds, compared by its JSON. */
+/**
+ * `value` once it has stood unchanged for `delay` milliseconds, compared by its JSON, from which it
+ * is read back: so a render that gives the same value as a new object does not start the wait again.
+ */
 function useSettled<T>(value: T, delay: number): T {
   const key = JSON.stringify(value);
   const [settled, setSettled] = useState({ key, value });
   useEffect(() => {
     if (key === settled.key) return;
-    const timer = setTimeout(() => setSettled({ key, value }), delay);
+    const timer = setTimeout(() => setSettled({ key, value: JSON.parse(key) as T }), delay);
     return () => clearTimeout(timer);
-  }, [key, value, delay, settled.key]);
+  }, [key, delay, settled.key]);
   return settled.value;
 }
 

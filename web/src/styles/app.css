@@ -1747,6 +1747,8 @@ button.all-notes-row {
 
 .lookup-modes {
   display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   justify-self: start;
   margin: 0;
   padding: 0;
