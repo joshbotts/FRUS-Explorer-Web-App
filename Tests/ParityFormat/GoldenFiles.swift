@@ -12,12 +12,15 @@ public enum GoldenFile: String, CaseIterable, Sendable {
     case results = "queries.results.json"
     /// Check 2, made from the owner's three-volume export.
     case indexSummary = "index-summary.json"
+    /// The golden spans (S15d): the RTF the note editor writes and the app's reading of RTF, made
+    /// from the app's source by `scripts/make-golden`.
+    case richText = "rich-text/spans.json"
 
     /// True for a file made from the owner's export, which may wait for it. One made from the
     /// app's source alone is made in the session and committed, never left pending.
     public var needsExport: Bool {
         switch self {
-        case .render, .expressions: false
+        case .render, .expressions, .richText: false
         case .results, .indexSummary: true
         }
     }

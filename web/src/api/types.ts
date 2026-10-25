@@ -506,3 +506,100 @@ export interface DocumentHighlights {
   renderingVersion?: string;
   items: Highlight[];
 }
+
+/**
+ * A stretch of a note's text with one formatting, as the app's `ProseFormattedSpan` carries it and
+ * FRUSRichText's `RichTextRun` encodes it: the runs of a note, concatenated, are its `bodyText`, and
+ * a "\n" in one is a line break, the app's Return. `colorHex` is uppercase `RRGGBB` and absent for
+ * no colour (near-black included); `linkURL` is absent for no link.
+ */
+export interface NoteRun {
+  text: string;
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  colorHex?: string;
+  linkURL?: string;
+}
+
+/** A research note in a list, with the fields of the Mac's export (`ResearchNoteExport`) but its formatting. */
+export interface NoteSummary {
+  id: string;
+  volumeId: string;
+  documentId: string;
+  /** The plain text, which is canonical: what every list, search and export reads. */
+  bodyText: string;
+  projectIds: string[];
+  userTagIds: string[];
+  selectedSummaryIds: string[];
+  /** The highlights whose note this is, as the highlights' own `noteId` says. */
+  linkedHighlightIds: string[];
+  createdAt?: string | null;
+  lastModified?: string | null;
+}
+
+/** One note, with its formatting as runs, the codec's reading of the RTF the store keeps. */
+export interface Note extends NoteSummary {
+  /** Null for a note with no formatting, or one whose stored formatting the server keeps but cannot give. */
+  runs: NoteRun[] | null;
+  /** True when the store holds formatting it cannot give as runs: it is kept until the text is next edited. */
+  formattingKept: boolean;
+}
+
+export interface NoteList {
+  total: number;
+  items: NoteSummary[];
+}
+
+/** A document's notes, the last changed first. */
+export interface DocumentNotes {
+  volumeId: string;
+  documentId: string;
+  items: NoteSummary[];
+}
+
+/** A summary's authorship, as the kit's `SummaryAuthorship` names it; the store's null reads as AI. */
+export type SummaryAuthorship = 'aiGenerated' | 'aiEdited' | 'userWritten';
+
+/** A summary of a document: one the researcher wrote here, or one imported from the Mac. */
+export interface Summary {
+  id: string;
+  volumeId: string;
+  documentId: string;
+  promptId: string;
+  /** The name of the prompt that made it, only while the user's prompts hold that prompt. */
+  promptName: string | null;
+  /** The text, raw: a structured summary's JSON as the app shows it. */
+  responseText: string;
+  responseFormat: 'general' | 'structured' | 'unknown';
+  wasChunked: boolean;
+  authorship: SummaryAuthorship;
+  /**
+   * A collection's headnote draft, which the app keeps out of a document's own summaries: never in
+   * a document's list, so only a read by its id can give one.
+   */
+  isHeadnoteDraft: boolean;
+  projectId: string | null;
+  createdAt?: string | null;
+  lastModified?: string | null;
+  /** Whether the researcher may change it: only one written here is theirs to change. */
+  editable: boolean;
+}
+
+/** A document's summaries, drafts left out, the newest first by the app's `ranksAbove`. */
+export interface DocumentSummaries {
+  volumeId: string;
+  documentId: string;
+  items: Summary[];
+}
+
+/** One of the user's projects, which only an import fills until S17f. */
+export interface Project {
+  id: string;
+  name: string;
+}
+
+export interface ProjectList {
+  total: number;
+  items: Project[];
+}

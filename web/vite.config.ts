@@ -56,5 +56,8 @@ export default defineConfig({
     include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['src/test/setup.ts'],
     restoreMocks: true,
+    // A note's day is the local one, as the app's is: the tests read it in UTC, as the browser
+    // suite does, so a day expected is the same on every machine.
+    env: { TZ: 'UTC' },
   },
 });

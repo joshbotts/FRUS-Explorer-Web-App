@@ -36,7 +36,10 @@ function documentTags(items: UserTag[]): DocumentTags {
   return { volumeId: 'frus1961-63v06', documentId: 'd1', items };
 }
 
-/** The reader's answers, with the user's and the document's tags as given. */
+const notesPath = '/api/v1/me/volumes/frus1961-63v06/documents/d1/notes';
+const summariesPath = '/api/v1/me/volumes/frus1961-63v06/documents/d1/summaries';
+
+/** The reader's answers, with the user's and the document's tags as given, and no notes or summaries unless given. */
 function reader(answers: Record<string, unknown>) {
   return stubServer({
     '/readyz': ready,
@@ -44,6 +47,8 @@ function reader(answers: Record<string, unknown>) {
     '/api/v1/volumes/frus1961-63v06/documents/d1': d1,
     '/api/v1/volumes/frus1961-63v06/documents/d1/html': {},
     '/api/v1/me': me,
+    [notesPath]: { volumeId: 'frus1961-63v06', documentId: 'd1', items: [] },
+    [summariesPath]: { volumeId: 'frus1961-63v06', documentId: 'd1', items: [] },
     ...answers,
   });
 }
@@ -56,8 +61,7 @@ function sent(init?: RequestInit) {
 
 beforeEach(() => {
   resetPreferences();
-  window.localStorage.removeItem('frus.research.tags');
-  window.localStorage.removeItem('frus.research.highlights');
+  window.localStorage.clear();
 });
 afterEach(() => {
   cleanup();

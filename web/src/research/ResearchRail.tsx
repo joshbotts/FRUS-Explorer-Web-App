@@ -1,20 +1,31 @@
 // The reader's Research rail (SPEC, Reader and Research rail), the app's RESEARCH panel beside the
 // text: from S14c its Tags section, which the app's rail keeps closed until it is opened, and
 // remembers. The section shows the document's tags, each with the × that takes it off, and Add Tag,
-// which opens the tag picker. From S15c a Highlights section above it, the web's own, where S15d's
-// Notes will come before it: the document's highlights, as the app's review sheet lists them, each
-// with its colour to change, which the app has no way to do, and Remove…, which asks as a tap on the
-// highlight does and is the keyboard's way to remove one: the app's review sheet removes a stale one,
-// but the app has no keyboard way to remove one that is not.
+// which opens the tag picker. From S15c a Highlights section above it, the web's own: the
+// document's highlights, as the app's review sheet lists them, each with its colour to change,
+// which the app has no way to do, and Remove…, which asks as a tap on the highlight does and is the
+// keyboard's way to remove one: the app's review sheet removes a stale one, but the app has no
+// keyboard way to remove one that is not. From S15d, above them, the app's Summary and Notes
+// sections, open until they are closed, as the app's are.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
 import { type Highlight, type HighlightColor, highlightColors, type UserTag } from '../api/types';
-import { documentHighlightsQuery, documentTagsQuery, recolorHighlight, removeDocumentTag } from '../api/userData';
+import {
+  documentHighlightsQuery,
+  documentNotesQuery,
+  documentSummariesQuery,
+  documentTagsQuery,
+  recolorHighlight,
+  removeDocumentTag,
+} from '../api/userData';
 import { copy } from '../copy';
 import { reviewOrder, staleLine } from '../reader/highlightRules';
 import { RemoveHighlight } from '../reader/RemoveHighlight';
-import { useHighlightsSectionOpen, useTagsSectionOpen } from '../settings/preferences';
+import { useHighlightsSectionOpen, useNotesSectionOpen, useSummarySectionOpen, useTagsSectionOpen } from '../settings/preferences';
+import { NotesSection } from './NotesSection';
+import { noteCount, summaryPreview } from './notesRules';
+import { shownSummaries, SummarySection } from './SummarySection';
 import { TagPicker } from './TagPicker';
 
 export function ResearchRail({
@@ -22,6 +33,8 @@ export function ResearchRail({
   documentId,
   documentNumber,
   undrawnHighlights = new Set(),
+  pendingHighlightId,
+  onPendingUsed,
   autoFocus,
   onClose,
 }: {
@@ -31,18 +44,35 @@ export function ResearchRail({
   documentNumber?: string;
   /** The ids of the highlights the reader's page could not draw. */
   undrawnHighlights?: ReadonlySet<string>;
+  /** The highlight made last on this document, which Add Note to Highlight makes a note for. */
+  pendingHighlightId?: string | null;
+  onPendingUsed?: () => void;
   /** Whether opening it takes focus to it: when the reader opens it, not when a page loads with it open. */
   autoFocus: boolean;
   onClose: () => void;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
+  const summaryToggle = useRef<HTMLButtonElement>(null);
+  const notesToggle = useRef<HTMLButtonElement>(null);
   const highlightsToggle = useRef<HTMLButtonElement>(null);
+  const [summaryOpen, setSummaryOpen] = useSummarySectionOpen();
+  const [notesOpen, setNotesOpen] = useNotesSectionOpen();
   const [tagsOpen, setTagsOpen] = useTagsSectionOpen();
   const [highlightsOpen, setHighlightsOpen] = useHighlightsSectionOpen();
+  const summaries = useQuery(documentSummariesQuery(volumeId, documentId));
+  const notes = useQuery(documentNotesQuery(volumeId, documentId));
   const tags = useQuery(documentTagsQuery(volumeId, documentId));
   const highlights = useQuery(documentHighlightsQuery(volumeId, documentId));
   const count = tags.data?.items.length ?? 0;
   const highlightCount = highlights.data?.items.length ?? 0;
+  const notesCount = notes.data?.items.length ?? 0;
+  // The summary shown, the newest at first, and again on another document.
+  const documentKey = `${volumeId}/${documentId}`;
+  const [summaryAt, setSummaryAt] = useState({ documentKey, index: 0 });
+  const summaryItems = summaries.data?.items.slice(0, shownSummaries);
+  const summaryIndex = summaryAt.documentKey === documentKey ? Math.min(summaryAt.index, Math.max((summaryItems?.length ?? 1) - 1, 0)) : 0;
+  const shownSummary = summaryItems?.[summaryIndex];
+  const summaryPreviewed = summaryOpen !== 'open' && shownSummary ? summaryPreview(shownSummary.responseText) : null;
   const [focusOnOpen] = useState(autoFocus);
   useEffect(() => {
     if (focusOnOpen) heading.current?.focus({ preventScroll: true });
@@ -69,6 +99,84 @@ export function ResearchRail({
           {copy.research.close}
         </button>
       </div>
+      <section className="rail-section">
+        <h3>
+          <button
+            ref={summaryToggle}
+            type="button"
+            className="disclosure"
+            aria-expanded={summaryOpen === 'open'}
+            aria-controls="research-summary"
+            // Named outright, as the badges are, when it shows its preview.
+            aria-label={summaryPreviewed ? `${copy.summary.title}, ${summaryPreviewed}` : undefined}
+            onClick={() => setSummaryOpen(summaryOpen === 'open' ? 'closed' : 'open')}
+          >
+            <span className="disclosure-mark" aria-hidden="true">
+              {summaryOpen === 'open' ? '▾' : '▸'}
+            </span>
+            {copy.summary.title}
+            {/* Closed, the header previews the summary shown, as the app's does. */}
+            {summaryPreviewed && (
+              <span className="disclosure-preview" aria-hidden="true">
+                {summaryPreviewed}
+              </span>
+            )}
+          </button>
+        </h3>
+        {summaryOpen === 'open' && (
+          <div id="research-summary">
+            {/* Made again for another document, as Notes is, so a dialog left open by Back or Forward writes to no other. */}
+            <SummarySection
+              key={documentKey}
+              volumeId={volumeId}
+              documentId={documentId}
+              summaries={summaryItems}
+              error={summaries.error}
+              index={summaryIndex}
+              onIndex={(index) => setSummaryAt({ documentKey, index })}
+              toggle={summaryToggle}
+            />
+          </div>
+        )}
+      </section>
+      <section className="rail-section">
+        <h3>
+          <button
+            ref={notesToggle}
+            type="button"
+            className="disclosure"
+            aria-expanded={notesOpen === 'open'}
+            aria-controls="research-notes"
+            aria-label={notesCount > 0 ? `${copy.notes.title}, ${noteCount(notesCount)}` : undefined}
+            onClick={() => setNotesOpen(notesOpen === 'open' ? 'closed' : 'open')}
+          >
+            <span className="disclosure-mark" aria-hidden="true">
+              {notesOpen === 'open' ? '▾' : '▸'}
+            </span>
+            {copy.notes.title}
+            {notesCount > 0 && (
+              <span className="badge" aria-hidden="true">
+                {notesCount.toLocaleString('en-US')}
+              </span>
+            )}
+          </button>
+        </h3>
+        {notesOpen === 'open' && (
+          <div id="research-notes">
+            {/* Made again for another document, as the bar's editor is closed, so one left open by Back or Forward saves to no other. */}
+            <NotesSection
+              key={documentKey}
+              volumeId={volumeId}
+              documentId={documentId}
+              notes={notes.data?.items}
+              error={notes.error}
+              pendingHighlightId={pendingHighlightId}
+              onPendingUsed={onPendingUsed}
+              toggle={notesToggle}
+            />
+          </div>
+        )}
+      </section>
       <section className="rail-section">
         <h3>
           <button

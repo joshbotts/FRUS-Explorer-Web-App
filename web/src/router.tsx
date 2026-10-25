@@ -1,7 +1,7 @@
 // The app's routes (SPEC, Shell and navigation): /browse, /search and /doc/{volumeId}/{documentId}
-// in phase 1, and /settings, whose first pane, Tags, came with S14c, under the path the server
-// serves the app at. Query strings have the API's form
-// semantics, so a search's URL reads as its request does.
+// in phase 1, /settings, whose first pane, Tags, came with S14c and whose Data came with S15d, and
+// /research, which opens All Notes until S19b's Research page, under the path the server serves the
+// app at. Query strings have the API's form semantics, so a search's URL reads as its request does.
 import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/react-router';
 import { basePath } from './api/base';
 import { formDecode, formEncode, type FormValue } from './api/form';
@@ -9,8 +9,10 @@ import { CatalogueScreen, type CatalogueSearch, validateCatalogueSearch } from '
 import { SectionScreen } from './browse/SectionScreen';
 import { VolumeScreen } from './browse/VolumeScreen';
 import { ReaderScreen } from './reader/ReaderScreen';
+import { AllNotesScreen, type NotesSearch, validateNotesSearch } from './research/AllNotesScreen';
 import { validateSearch } from './search/searchState';
 import { SearchScreen } from './search/SearchScreen';
+import { DataSettingsScreen } from './settings/DataSettings';
 import { TagsSettingsScreen } from './settings/TagsSettings';
 import { AppShell } from './shell/AppShell';
 import { NotFound } from './shell/NotFound';
@@ -90,7 +92,23 @@ const documentRoute = createRoute({
   component: ReaderScreen,
 });
 
-// Settings opens at its one pane until more arrive.
+// Research opens at All Notes until S19b's Research page, as the app's sidebar lists it there.
+const researchRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/research',
+  beforeLoad: () => {
+    throw redirect({ to: '/research/notes' });
+  },
+});
+
+const researchNotesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/research/notes',
+  validateSearch: (raw: Record<string, unknown>): NotesSearch => validateNotesSearch(raw),
+  component: AllNotesScreen,
+});
+
+// Settings opens at its first pane, Tags.
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
@@ -105,6 +123,12 @@ const settingsTagsRoute = createRoute({
   component: TagsSettingsScreen,
 });
 
+const settingsDataRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings/data',
+  component: DataSettingsScreen,
+});
+
 export const routeTree = rootRoute.addChildren([
   indexRoute,
   browseRoute,
@@ -112,8 +136,11 @@ export const routeTree = rootRoute.addChildren([
   sectionRoute,
   searchRoute,
   documentRoute,
+  researchRoute,
+  researchNotesRoute,
   settingsRoute,
   settingsTagsRoute,
+  settingsDataRoute,
 ]);
 
 export function makeRouter(basepath: string = basePath) {

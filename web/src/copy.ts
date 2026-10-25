@@ -21,9 +21,23 @@
 // picker's document mode, and Settings ▸ Tags with its pane's lines, the tag editor and Merge Tag,
 // where Delete Tag's question takes the editor's own sentence of what deleting does, since the
 // count it names comes later (PLAN's S17b); the four highlight colours, the selection bar's names
-// for them, Highlight Yellow and the rest, and the menu's Highlight Selection, the Remove Highlight
+// for them, Highlight Yellow and the rest, the Remove Highlight
 // question, and the review sheet's Highlights, Remove…, Highlighted passage and its two lines for a
-// highlight made against an earlier version of the text. The rest,
+// highlight made against an earlier version of the text; and from S15d the selection bar's Note,
+// the Research tab's name, the rail's Notes section, its Empty note, Add Note to Highlight and Add
+// Note, its Summary section with the Mac's summary block's AI summary, its prompt's name and its
+// history control, and the headnote chips' AI · edited and Yours for the other authorships; the note
+// editor's titles, sections, empty lines, new tag field, Insert into note and Remove from note,
+// Delete, Discard and Save, and its Formatting switch by its visible word, since the switch's
+// hidden "Formatted text" would not match what it shows; the formatting bar's Bold, Italic,
+// Underline, Text Color and Link selected text to a URL, and its link popover with the iPhone's
+// Cancel; All Notes with its filters, its rows' Empty note, its empty states, its count from the
+// app's sheet and its Delete Note? question; and the Markdown export's action, its line while it
+// is prepared, its line for no notes and its footer. The selection bar's name, Selection, the
+// formatting bar's, Text formatting, its glyphs, Write a Summary, Edit… and Delete… for a summary
+// of one's own and the question before it, the visible Delete… on All Notes' rows, the rail's times,
+// Settings ▸ Data's title and the lines for an editor that could not load or a note, formatted or
+// plain, it could not show are the web's own. The rest,
 // chiefly what only a server has (what it indexes, which TEI it holds), are the web's own until
 // check 10 settles them.
 
@@ -34,6 +48,8 @@ export const copy = {
     navigation: 'Main',
     browse: 'Browse',
     search: 'Search',
+    /** The Research tab's name, the app's: All Notes until S19b's Research page. */
+    research: 'Research',
     settings: 'Settings',
     /** The browser tab's title for a screen. */
     title: (screen: string) => `${screen} – FRUS Explorer Light`,
@@ -305,6 +321,8 @@ export const copy = {
     research: 'Research',
     frameTitle: (header: string) => `Document text: ${header}`,
     toolbar: 'Document',
+    /** The selection bar's name, the web's own: the Mac's bar names only its verbs. */
+    selectionBar: 'Selection',
     loading: 'Loading the document…',
     linkNotOnServer: (title: string) => `The linked document is in “${title}”, which isn’t on this server.`,
     linkUnknownVolume: 'The referenced volume isn’t part of this collection.',
@@ -361,16 +379,14 @@ export const copy = {
     loading: 'Loading the tags…',
   },
   /**
-   * Highlights: the colours, the selection bar's names for them and the app's menu's name, the
-   * question a tap asks, and the Highlights section's rows, in the words of the app's review sheet.
-   * The section's count, the name of each row's group of colour buttons, Color, and the line for a
+   * Highlights: the colours, the selection bar's names for them, the question a tap asks, and the
+   * Highlights section's rows, in the words of the app's review sheet. The section's count, the name of each row's group of colour buttons, Color, and the line for a
    * highlight the page could not draw are the web's own.
    */
   highlights: {
     colors: { yellow: 'Yellow', green: 'Green', blue: 'Blue', pink: 'Pink' },
     /** A colour's button in the selection bar, as VoiceOver reads the app's dot. */
     highlightColor: (color: string) => `Highlight ${color}`,
-    bar: 'Highlight Selection',
     removeTitle: 'Remove Highlight',
     removeMessage: 'This highlight will be permanently removed.',
     removeConfirm: 'Remove',
@@ -386,6 +402,107 @@ export const copy = {
       'Made against an earlier version of the text, and the words it covered were not stored — it can only be checked by eye.',
     notDrawn: 'This highlight could not be drawn in the text.',
     loading: 'Loading the highlights…',
+  },
+  /**
+   * The selection bar's Note, which makes a note on the document, as the app's does, and the rail's
+   * Notes section, in the app's words. The times since a note changed are the web's own, as near as
+   * it comes to the app's relative time.
+   */
+  notes: {
+    note: 'Note',
+    title: 'Notes',
+    emptyNote: 'Empty note',
+    addToHighlight: 'Add Note to Highlight',
+    add: 'Add Note',
+    loading: 'Loading the notes…',
+    /** One unit of the time since a note changed. */
+    unit: (count: number, unit: 'year' | 'month' | 'week' | 'day' | 'hour' | 'minute' | 'second') =>
+      `${count.toLocaleString('en-US')} ${count === 1 ? unit : `${unit}s`}`,
+    /** Its two largest units, "2 hours, 23 minutes", as the app's reads. */
+    elapsed: (units: readonly string[]) => units.join(', '),
+  },
+  /**
+   * The rail's Summary section: the Mac's summary block's label, its prompt's name and its history
+   * control, and for a summary not the model's alone the headnote chips' words, the app's only words
+   * for who wrote one. Writing, editing and deleting one's own are the web's own: the app writes no
+   * summary of a document by hand.
+   */
+  summary: {
+    title: 'Summary',
+    label: 'AI summary',
+    aiEdited: 'AI \u{00B7} edited',
+    userWritten: 'Yours',
+    prompt: (name: string) => `· ${name}`,
+    olderHelp: 'Show older summary',
+    older: 'Older summary',
+    position: (index: number, count: number) => `${index}/${count}`,
+    positionLabel: (index: number, count: number) => `Summary ${index} of ${count}`,
+    newerHelp: 'Show newer summary',
+    newer: 'Newer summary',
+    write: 'Write a Summary',
+    edit: 'Edit…',
+    delete: 'Delete…',
+    editTitle: 'Edit Summary',
+    cancel: 'Cancel',
+    save: 'Save',
+    deleteTitle: 'Delete Summary?',
+    deleteMessage: 'This summary will be permanently deleted.',
+    deleteConfirm: 'Delete',
+    deleteCancel: 'Cancel',
+    loading: 'Loading the summaries…',
+  },
+  /**
+   * The note editor, as the app's sheet words it. Its lines for a note being read, an editor being
+   * loaded or one that could not be, and a note whose formatting it cannot show are the web's own.
+   */
+  noteEditor: {
+    titleNew: 'New Research Note',
+    titleEdit: 'Edit Note',
+    delete: 'Delete',
+    discard: 'Discard',
+    save: 'Save',
+    body: 'Note',
+    bodyLabel: 'Research note body',
+    formatting: 'Formatting',
+    tags: 'Tags',
+    tagsEmpty: 'No tags yet — add one below.',
+    newTag: 'New tag name',
+    addTag: 'Add',
+    projects: 'Projects',
+    projectsEmpty: 'No projects yet.',
+    summaries: 'Generated Summaries',
+    insert: 'Insert into note',
+    remove: 'Remove from note',
+    loading: 'Loading the note…',
+    editorLoading: 'Loading the editor…',
+    editorFailed: 'The formatting editor could not be loaded, so this note is open as plain text.',
+    /** The same for a note with formatting, which a change to its text here drops. */
+    editorFailedFormatted:
+      'The formatting editor could not be loaded, so this note is open as plain text. Its formatting is kept until its text is changed here.',
+    unreadable:
+      'This note could not be shown with its formatting, so it is open as plain text. Its formatting is kept until its text is changed here.',
+    /** The same for a plain note, which has no formatting to keep: a CR or U+2029 among its line breaks. */
+    unreadablePlain: 'This note’s line breaks cannot be shown in the formatting editor, so it is open as plain text.',
+    formattingKept: 'This note’s formatting cannot be shown here. It is kept until the note’s text is changed here.',
+  },
+  /**
+   * The formatting bar and its link popover, in the app's words, with the iPhone's Cancel. The bar's
+   * name, its glyphs and the line for a link the page could not follow are the web's own.
+   */
+  richText: {
+    toolbar: 'Text formatting',
+    bold: 'Bold',
+    italic: 'Italic',
+    underline: 'Underline',
+    color: 'Text Color',
+    link: 'Link selected text to a URL',
+    glyphs: { bold: 'B', italic: 'I', underline: 'U', link: 'Link' },
+    linkTitle: 'Link selection to URL',
+    linkPlaceholder: 'https://…',
+    linkRemove: 'Remove Link',
+    linkApply: 'Apply',
+    linkCancel: 'Cancel',
+    linkRefused: 'A link here starts with http://, https:// or mailto:.',
   },
   /** The tag picker, as the app's document-mode sheet words it. */
   tagPicker: {
@@ -442,5 +559,40 @@ export const copy = {
     explanation: (name: string) => `All notes tagged ‘${name}’ will be re-tagged with the selected tag. ‘${name}’ will be deleted.`,
     cancel: 'Cancel',
     confirm: 'Merge',
+  },
+  /**
+   * All Notes, as the app's Research destination words it, with the count its sheet gives. Each row's
+   * Delete… is the web's own, since the app's is in a context menu.
+   */
+  allNotes: {
+    title: 'All Notes',
+    project: 'Project',
+    allProjects: 'All projects',
+    unfiled: 'Not in a project',
+    tag: 'Tag',
+    allTags: 'All tags',
+    search: 'Search notes…',
+    emptyNote: 'Empty note',
+    noneTitle: 'No Notes',
+    empty: 'No notes yet. Notes you write from a document appear here.',
+    noneFiltered: 'No notes match the selected filters.',
+    showing: (shown: number, total: string) => `Showing ${shown} of ${total}`,
+    noteOne: (count: string) => `${count} note`,
+    noteMany: (count: string) => `${count} notes`,
+    delete: 'Delete…',
+    deleteTitle: 'Delete Note?',
+    deleteMessage: 'This note will be permanently deleted.',
+    deleteConfirm: 'Delete',
+    deleteCancel: 'Cancel',
+    loading: 'Loading the notes…',
+  },
+  /** Settings ▸ Data, the web's own pane, with the app's Markdown export in its words. */
+  dataSettings: {
+    title: 'Data',
+    exportMarkdown: (count: number) => `Export Notes as Markdown (${count.toLocaleString('en-US')})`,
+    preparing: 'Preparing export…',
+    empty: 'No research notes to export.',
+    footer:
+      'One Markdown file per research note, with a citation and link back to the source document. Compatible with Obsidian and similar note-taking tools.',
   },
 } as const;

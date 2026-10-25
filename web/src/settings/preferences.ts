@@ -1,5 +1,6 @@
 // The viewer's conveniences, kept in this browser: appearance, the reader's text size and reading
-// width, the citation style, and whether the Research rail's Tags section is open. Storage can be missing or refuse, so every read and write may fail
+// width, the citation style, which of the Research rail's sections are open, and whether the note
+// editor shows formatting. Storage can be missing or refuse, so every read and write may fail
 // quietly.
 import { useEffect, useSyncExternalStore } from 'react';
 import type { ReadingWidth, TextSize } from '../api/endpoints';
@@ -61,6 +62,15 @@ export const useTagsSectionOpen = () => usePreference<'open' | 'closed'>('frus.r
 /** The Highlights section, the web's own, kept as the Tags section is. */
 export const useHighlightsSectionOpen = () =>
   usePreference<'open' | 'closed'>('frus.research.highlights', ['open', 'closed'], 'closed');
+/** Open until it is closed, as the app's rail keeps its Summary section. */
+export const useSummarySectionOpen = () => usePreference<'open' | 'closed'>('frus.research.summary', ['open', 'closed'], 'open');
+/** Open until it is closed, as the app's rail keeps its Notes section. */
+export const useNotesSectionOpen = () => usePreference<'open' | 'closed'>('frus.research.notes', ['open', 'closed'], 'open');
+/**
+ * Whether the note editor shows formatting, on until it is turned off, in this browser, as the app's
+ * Formatting switch is kept on each device under the same key.
+ */
+export const useNoteEditorRichText = () => usePreference<'true' | 'false'>('frus.notes.editor.richText', ['true', 'false'], 'true');
 
 const darkQuery = '(prefers-color-scheme: dark)';
 

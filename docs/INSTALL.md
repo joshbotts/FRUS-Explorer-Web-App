@@ -121,9 +121,11 @@ Open http://localhost:8080 in a browser.
   - a reference that resolves nowhere opens an explanation;
   - a document in a volume this server does not have offers its page on history.state.gov.
 - **Cite** opens the citation beside the document, in the History at State, Chicago or Turabian style. **Copy Citation** copies it as plain text, and **Copy URL** the document's address on history.state.gov. **Copy BibTeX** and **Copy RIS** copy its record for a reference manager such as Zotero, and **Save as .bib** saves the BibTeX as a file. The browser allows copying at http://localhost but not at another machine's address over plain http, so the panel then selects the text for you to copy.
-- **Highlights**, as in the app: select text in a document and a bar above it offers the four colours; one makes a highlight, kept on the server, and **⇧⌘H** on a Mac, or **Ctrl+Shift+H** elsewhere, makes a yellow one, as the app's Highlight Selection ▸ Yellow does. **Alt+F10** moves into the bar, where the arrow keys choose a colour. Selecting text by keyboard needs the browser's caret browsing, **F7** in Chrome. Clicking a highlight asks **Remove Highlight**. A highlight made against an earlier version of the document's text is drawn in amber and answers no click, as in the app; the Research rail removes it.
-- **Research**, beside **Cite**, opens the Research rail. Its **Highlights** section lists the document's highlights, each with its colour, which you can change there, as the app cannot, and **Remove…**, which asks as a click on the highlight does. Its **Tags** section, closed until you open it and then as you left it, as Highlights is, lists the document's tags: **×** takes one off, and **Add Tag** opens the tag picker. There **New Tag** makes a tag and switches it on, **Your Tags** switches the others on and off, **Done** gives the document the tags switched on, and **Cancel** deletes the tags you made there, as in the app.
-- **Settings**, at the top, lists your tags under **Tags**. A tag opens its editor, to rename it, to merge it into another, which then carries its documents, or to delete it, which takes it off every document; **New Tag…** makes one. Tags are kept on the server, in its store in the Docker volume, so any browser on this machine sees the same ones.
+- **Highlights**, as in the app: select text in a document and a bar above it offers the four colours and **Note**; a colour makes a highlight, kept on the server, and **⇧⌘H** on a Mac, or **Ctrl+Shift+H** elsewhere, makes a yellow one, as the app's Highlight Selection ▸ Yellow does. **Alt+F10** moves into the bar, where the arrow keys choose a colour. Selecting text by keyboard needs the browser's caret browsing, **F7** in Chrome. Clicking a highlight asks **Remove Highlight**. A highlight made against an earlier version of the document's text is drawn in amber and answers no click, as in the app; the Research rail removes it.
+- **Notes**, as in the app: **Note** in the bar, or **Add Note** in the Research rail, opens a new note on the document, and after you make a highlight the rail offers **Add Note to Highlight**, which links the note to it. The note's editor has the app's bold, italic, underline, text colour and link (**⌘B**, **⌘I**, **⌘U**, and **⌘K** for a link, or **Ctrl** elsewhere), and its **Formatting** switch, kept by this browser; its tags, its projects and the document's summaries, which **Insert into note** adds to it; and **Delete**, **Discard** (or **Escape**) and **Save**. A selection inside a footnote gets a bar with **Note** alone. Notes keep their formatting as the Mac keeps it, so a note made on the Mac keeps its formatting here until you change its text.
+- **Research**, at the top, opens **All Notes**: every note, newest first, filtered by project, tag or text, as in the app. A note opens its editor, and **Delete…** asks first.
+- **Research**, beside **Cite**, opens the Research rail. Its **Summary** section shows the document's summaries, one at a time, newest first, with the app's arrows for older ones, each labelled AI summary, AI · edited or Yours; **Write a Summary** writes your own, which alone you can edit or delete. Its **Notes** section lists the document's notes, newest first, with **Add Note**; both are open until you close them, as in the app. Its **Highlights** section lists the document's highlights, each with its colour, which you can change there, as the app cannot, and **Remove…**, which asks as a click on the highlight does. Its **Tags** section, closed until you open it and then as you left it, as Highlights is, lists the document's tags: **×** takes one off, and **Add Tag** opens the tag picker. There **New Tag** makes a tag and switches it on, **Your Tags** switches the others on and off, **Done** gives the document the tags switched on, and **Cancel** deletes the tags you made there, as in the app.
+- **Settings**, at the top, lists your tags under **Tags**, and under **Data** offers **Export Notes as Markdown**: one ZIP file of every note, each as the app's Markdown export writes it. A tag opens its editor, to rename it, to merge it into another, which then carries its documents, or to delete it, which takes it off every document; **New Tag…** makes one. Tags are kept on the server, in its store in the Docker volume, so any browser on this machine sees the same ones.
 
 The address of every screen, search and document can be bookmarked or shared with another browser on this machine. Everything works from the keyboard, starting with **Skip to content**, the first stop of the Tab key.
 
@@ -173,7 +175,7 @@ What a link in a document's page leads to, given the link as the page writes it:
 curl -s -G 'http://localhost:8080/api/v1/volumes/frus1961-63v06/documents/d1/link' --data-urlencode 'href=frusexplorer://person/p_KNS2'
 ```
 
-Your tags and highlights are under `/api/v1/me`. A change to them must carry the token `GET /api/v1/me` gives, in `X-CSRF-Token`, come from the server's own address, in `Origin`, and send JSON, as the browser does: a server with no sign-in is guarded so against other pages open in your browser. With the token in a variable:
+Your tags, highlights, notes and summaries are under `/api/v1/me`. A change to them must carry the token `GET /api/v1/me` gives, in `X-CSRF-Token`, come from the server's own address, in `Origin`, and send JSON, as the browser does: a server with no sign-in is guarded so against other pages open in your browser. With the token in a variable:
 
 ```bash
 token=$(curl -s http://localhost:8080/api/v1/me | sed -nE 's/.*"csrfToken":"([^"]+)".*/\1/p')
@@ -183,9 +185,9 @@ token=$(curl -s http://localhost:8080/api/v1/me | sed -nE 's/.*"csrfToken":"([^"
 curl -s -X POST http://localhost:8080/api/v1/me/tags -H "X-CSRF-Token: $token" -H 'Origin: http://localhost:8080' -H 'Content-Type: application/json' --data '{"name": "Primary source"}'
 ```
 
-`GET /api/v1/me/tags` lists them, and `PUT /api/v1/me/volumes/frus1961-63v06/documents/d1/tags` with `{"tagIds": [...]}` gives a document exactly those. `GET /api/v1/me/volumes/frus1961-63v06/documents/d1/highlights` lists a document's highlights, with the document's `renderingVersion`. A `POST` there with `{"startOffset", "endOffset", "colorTag", "renderingVersion"}` makes one over those offsets into the document's text, in that version of the text, and `PATCH` or `DELETE /api/v1/me/highlights/{id}` changes its `colorTag` or removes it. The token lasts until the server restarts.
+`GET /api/v1/me/tags` lists them, and `PUT /api/v1/me/volumes/frus1961-63v06/documents/d1/tags` with `{"tagIds": [...]}` gives a document exactly those. `GET /api/v1/me/volumes/frus1961-63v06/documents/d1/highlights` lists a document's highlights, with the document's `renderingVersion`. A `POST` there with `{"startOffset", "endOffset", "colorTag", "renderingVersion"}` makes one over those offsets into the document's text, in that version of the text, and `PATCH` or `DELETE /api/v1/me/highlights/{id}` changes its `colorTag` or removes it. `GET /api/v1/me/notes` lists your notes, and `/api/v1/me/volumes/frus1961-63v06/documents/d1/notes` a document's, where a `POST` with `{"bodyText", "runs": null, "userTagIds": [], "projectIds": [], "selectedSummaryIds": []}` makes a plain one; `GET`, `PUT` and `DELETE /api/v1/me/notes/{id}` read, save and delete one, and `GET /api/v1/me/notes/export` gives every note as a ZIP of Markdown files. `GET /api/v1/me/volumes/frus1961-63v06/documents/d1/summaries` lists a document's summaries, where a `POST` with `{"responseText"}` writes your own. A note's text may be 1 MiB, in a change of 4 MiB at most; any other change may be 64 KiB. The token lasts until the server restarts.
 
-An error names its cause in a `code`: `INDEX_NOT_READY` for a search before an import has finished, `EMPTY_QUERY` for a query with nothing left to search, `TEI_NOT_AVAILABLE` when the volume is not in your TEI folder, and `DOCUMENT_NOT_FOUND`, `SECTION_NOT_FOUND`, `VOLUME_NOT_FOUND`, `TAG_NOT_FOUND` or `HIGHLIGHT_NOT_FOUND` for an id the volume, the catalogue, your tags or your highlights lack, and `DOCUMENT_CHANGED` for a highlight asked for in a version of the document's text the server no longer has. Under `/api/v1/me` the guard refuses a request, read or change, that was not sent to the address in `FRUS_PUBLIC_URL` as `HOST_NOT_ALLOWED`, such as one to http://127.0.0.1:8081 for a server at http://localhost:8080; and a change without the current token as `CSRF_TOKEN_INVALID`, and from another page as `ORIGIN_NOT_ALLOWED`.
+An error names its cause in a `code`: `INDEX_NOT_READY` for a search before an import has finished, `EMPTY_QUERY` for a query with nothing left to search, `TEI_NOT_AVAILABLE` when the volume is not in your TEI folder, and `DOCUMENT_NOT_FOUND`, `SECTION_NOT_FOUND`, `VOLUME_NOT_FOUND`, `TAG_NOT_FOUND`, `HIGHLIGHT_NOT_FOUND`, `NOTE_NOT_FOUND` or `SUMMARY_NOT_FOUND` for an id the volume, the catalogue, your tags, highlights, notes or summaries lack, `SUMMARY_READ_ONLY` for a change to a summary you did not write here, and `DOCUMENT_CHANGED` for a highlight asked for in a version of the document's text the server no longer has. Under `/api/v1/me` the guard refuses a request, read or change, that was not sent to the address in `FRUS_PUBLIC_URL` as `HOST_NOT_ALLOWED`, such as one to http://127.0.0.1:8081 for a server at http://localhost:8080; and a change without the current token as `CSRF_TOKEN_INVALID`, and from another page as `ORIGIN_NOT_ALLOWED`.
 
 ## If an import is refused
 
@@ -237,7 +239,7 @@ To hear of each release, watch the repository on GitHub for releases only (Watch
 | --- | --- |
 | `docker compose stop` | Stops the server, keeping everything |
 | `docker compose down` | Removes the container, keeping the index in the volume |
-| `docker compose down --volumes` | Removes the index and your tags and highlights too; you would import again, and your tags and highlights would be gone |
+| `docker compose down --volumes` | Removes the index and your research data too; you would import again, and your tags, highlights, notes and summaries would be gone |
 
 ## Behind a reverse proxy
 
@@ -255,7 +257,7 @@ docker compose up -d
 
 With a path, the server answers the browser app, the reader and the API under it, and `/healthz` and `/readyz` both under it and at the root, so Docker's health check and a proxy's both work. Other paths at the root answer 404, apart from `/`, which leads to the path. The proxy forwards the path as it is, and does not strip it. The address may also end in no path, as `https://frus.example.org` does.
 
-These are nginx `location` blocks, for the `server` block that serves the host with TLS. Each passes the host people used, which the server checks a change to their tags was sent to, and forwards to the port in `FRUS_HOST_PORT`, 8080 by default. A change must also come from a page at the address in `FRUS_PUBLIC_URL`, so set it to the address people open.
+These are nginx `location` blocks, for the `server` block that serves the host with TLS. Each passes the host people used, which the server checks a change to their research data was sent to, and forwards to the port in `FRUS_HOST_PORT`, 8080 by default. Each raises nginx's own limit on a request's size, 1 MiB, to the 4 MiB a note's save may take; another proxy needs a limit of 4 MiB or more too. A change must also come from a page at the address in `FRUS_PUBLIC_URL`, so set it to the address people open.
 
 **At the root of its own host,** with `FRUS_PUBLIC_URL=https://frus.example.org`:
 
@@ -267,6 +269,7 @@ location / {
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
+    client_max_body_size 4m;
 }
 ```
 
@@ -280,6 +283,7 @@ location /frus-explorer/ {
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
+    client_max_body_size 4m;
 }
 ```
 
@@ -293,8 +297,8 @@ These go in `.env` beside `compose.yaml`.
 | --- | --- | --- |
 | `FRUS_TEI_DIR` | `./tei` | Folder of TEI volumes, mounted read-only |
 | `FRUS_HOST_PORT` | `8080` | Port on this machine's 127.0.0.1 |
-| `FRUS_PUBLIC_URL` | `http://localhost:8080`, on `FRUS_HOST_PORT` | The address people open. Behind a reverse proxy, its address, which may end in a path such as `/frus-explorer/`: see Behind a reverse proxy. A change to your tags or highlights is taken only from a page at this address; on this machine, `localhost`, `127.0.0.1` and `[::1]` at its port are one address |
-| `FRUS_USER_DATA` | `on` | `off` makes a read-only server, which keeps no tags, highlights or other research data and refuses any change |
+| `FRUS_PUBLIC_URL` | `http://localhost:8080`, on `FRUS_HOST_PORT` | The address people open. Behind a reverse proxy, its address, which may end in a path such as `/frus-explorer/`: see Behind a reverse proxy. A change to your research data is taken only from a page at this address; on this machine, `localhost`, `127.0.0.1` and `[::1]` at its port are one address |
+| `FRUS_USER_DATA` | `on` | `off` makes a read-only server, which keeps no tags, highlights, notes or other research data and refuses any change |
 | `FRUS_IMAGE` | `ghcr.io/joshbotts/frus-explorer-light:edge` | The image to run: a release, or `edge` (see [Releases](#releases)) |
 | `COMPOSE_PROFILES` | none | `pdf` starts Gotenberg, a 700 MB download, for PDF export when it arrives in phase 3 |
 
@@ -303,7 +307,7 @@ These go in `.env` beside `compose.yaml`.
 - **Only this machine can reach the server,** unless a reverse proxy on it forwards to it, as Behind a reverse proxy sets out. The server has no sign-in of its own until phase 3's local accounts; sign-in through the proxy comes before them, in phase 2.
 - **Keep `/data` in the Docker volume.** On a Mac, a folder shared from macOS is not a local filesystem to SQLite. On Linux, replacing the volume with a host folder in `compose.yaml` works if that folder is writable by UID 10001, the server's user.
 - **On Linux,** the TEI files must be readable by UID 10001; a clone made with the usual umask is. On a host with SELinux enforcing, add `,z` after `ro` in the TEI volume line of `compose.yaml`. To run `docker` without `sudo`, your user must be in the `docker` group.
-- **Backups** of your tags and highlights, which the server keeps in `/data/app/app.db` in the volume, start later in phase 2 with a daily copy. Until then, keep the volume, and the index can always be imported again. Already, an upgrade that changes the layout of the server's own store, `/data/app/app.db`, first copies it into `/data/backups`. If the change fails, the server leaves the store as it was and does not start, and its log names the copy; Compose starts it again, and it tries again without taking another copy.
+- **Backups** of your research data, which the server keeps in `/data/app/app.db` in the volume, start later in phase 2 with a daily copy. Until then, keep the volume, and the index can always be imported again. Already, an upgrade that changes the layout of the server's own store, `/data/app/app.db`, first copies it into `/data/backups`. If the change fails, the server leaves the store as it was and does not start, and its log names the copy; Compose starts it again, and it tries again without taking another copy.
 - **Going back to an older server** after such an upgrade: the older server cannot open the changed store, and does not start. Put the copy back first, with the server stopped. List the copies with `docker compose run --rm --no-deps --entrypoint ls frus /data/backups`, then, naming the newest `app-…-before-migration-….db`:
 
   ```bash
