@@ -22,6 +22,22 @@
   /* A chart's one series: the accent on light, and on dark a step of its own, inside the dark band
      of lightness, at 3:1 or more on the page (checked with the dataviz validator). */
   --chart-mark: #0a58b8;
+  /* Citation Lookup's tones, the app's system colours: each text colour at 4.5:1 or more on its own
+     tint, on the page and on surfaces. */
+  --tone-green: #1d6b30;
+  --tone-green-tint: #e6f4ea;
+  --tone-blue: #0a58b8;
+  --tone-blue-tint: #e6effa;
+  --tone-orange: #8a4b00;
+  --tone-orange-tint: #fbeedd;
+  --tone-teal: #0a6563;
+  --tone-teal-tint: #e0f2f1;
+  --tone-purple: #6a3d9a;
+  --tone-purple-tint: #f0e9f7;
+  --tone-secondary: #555559;
+  --tone-secondary-tint: #ededf0;
+  --tone-red: #b3261e;
+  --tone-red-tint: #fbe9e7;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 16px;
   line-height: 1.5;
@@ -42,6 +58,20 @@
   --tag: #3a3a3c;
   --focus: #6cb2ff;
   --chart-mark: #3987e5;
+  --tone-green: #7fd894;
+  --tone-green-tint: #1f3a27;
+  --tone-blue: #7cbcff;
+  --tone-blue-tint: #1a2f4a;
+  --tone-orange: #ffb45c;
+  --tone-orange-tint: #3d2c16;
+  --tone-teal: #67d3cf;
+  --tone-teal-tint: #173836;
+  --tone-purple: #cfaef7;
+  --tone-purple-tint: #33264a;
+  --tone-secondary: #b8b8bd;
+  --tone-secondary-tint: #2f2f32;
+  --tone-red: #ff8a80;
+  --tone-red-tint: #3d1d1b;
 }
 
 * {
@@ -1690,4 +1720,288 @@ button.all-notes-row {
   grid-row: 1;
   color: var(--text-secondary);
   font-size: 0.875rem;
+}
+
+/* Search's way to Citation Lookup, beside its syntax, as the Mac's Search window has it beside Tips. */
+
+.search-aids {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 1rem;
+}
+
+.search-aids .syntax {
+  flex: 1;
+  min-width: 12rem;
+}
+
+/* Citation Lookup: the app's grouped form, its mode picker drawn as its segmented control. */
+
+.lookup-form {
+  display: grid;
+  gap: 1rem;
+  max-width: 44rem;
+}
+
+.lookup-modes {
+  display: inline-flex;
+  justify-self: start;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.lookup-modes label {
+  position: relative;
+}
+
+.lookup-modes label + label {
+  border-left: 1px solid var(--control-border);
+}
+
+/* The radio itself is kept for the keyboard and assistive technology, under its label. */
+.lookup-modes input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.lookup-modes span {
+  display: block;
+  padding: 0.375rem 1rem;
+  background: var(--surface);
+}
+
+.lookup-modes input:checked + span {
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+.lookup-modes input:focus-visible + span {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
+}
+
+.lookup-field label,
+.parsed-fields legend {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.lookup-field textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.lookup-field textarea.footnotes {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9375rem;
+  min-height: 9rem;
+}
+
+.parsed-fields {
+  margin: 0;
+  padding: 0.5rem 1rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.parsed-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.parsed-grid label {
+  display: grid;
+  gap: 0.125rem;
+}
+
+.parsed-grid span {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.lookup-button {
+  min-width: 8rem;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+.spinner {
+  display: inline-block;
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-right: 0.25rem;
+  vertical-align: -0.125rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}
+
+.lookup-results {
+  max-width: 44rem;
+  margin-top: 1.5rem;
+}
+
+.lookup-outcome h2 {
+  margin-bottom: 0.25rem;
+  font-size: 1.125rem;
+}
+
+.lookup-results h2 {
+  font-size: 1.125rem;
+}
+
+ol.match-list,
+ul.batch-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.match {
+  display: grid;
+  justify-items: start;
+  gap: 0.25rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.match h3 {
+  margin: 0;
+  font-size: 1.0625rem;
+  overflow-wrap: anywhere;
+}
+
+.match .meta {
+  font-size: 0.875rem;
+}
+
+.match-note {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  /* The kit joins a best guess's note and the label of the strategy that found it with a line break. */
+  white-space: pre-line;
+}
+
+.match .button {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.match .button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+
+/* A label beside its symbol, in its tone: on its tint for a result, on the page for a Batch row. */
+
+.confidence,
+.batch-outcome {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.confidence {
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+svg.symbol {
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-top: 0.1875rem;
+}
+
+.tone-green { color: var(--tone-green); }
+.tone-blue { color: var(--tone-blue); }
+.tone-orange { color: var(--tone-orange); }
+.tone-teal { color: var(--tone-teal); }
+.tone-purple { color: var(--tone-purple); }
+.tone-secondary { color: var(--tone-secondary); }
+.tone-red { color: var(--tone-red); }
+
+.confidence.tone-green { background: var(--tone-green-tint); }
+.confidence.tone-blue { background: var(--tone-blue-tint); }
+.confidence.tone-orange { background: var(--tone-orange-tint); }
+.confidence.tone-teal { background: var(--tone-teal-tint); }
+.confidence.tone-purple { background: var(--tone-purple-tint); }
+.confidence.tone-secondary { background: var(--tone-secondary-tint); }
+.confidence.tone-red { background: var(--tone-red-tint); }
+
+.batch-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.batch-header h2 {
+  margin: 0.5rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+button.toggle[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.batch-row {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.batch-marker {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.batch-text {
+  display: -webkit-box;
+  margin: 0 0 0.25rem;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
 }

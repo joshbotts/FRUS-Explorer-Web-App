@@ -1,11 +1,13 @@
 // The app's routes (SPEC, Shell and navigation): /browse, /search and /doc/{volumeId}/{documentId}
-// in phase 1, /settings, whose first pane, Tags, came with S14c and whose Data came with S15d, and
-// /research, which opens All Notes until S19b's Research page, under the path the server serves the
-// app at. Query strings have the API's form semantics, so a search's URL reads as its request does.
+// in phase 1, /settings, whose first pane, Tags, came with S14c and whose Data came with S15d,
+// /research, which opens All Notes until S19b's Research page, and /lookup, Citation Lookup, from
+// S19a, under the path the server serves the app at. Query strings have the API's form semantics, so
+// a search's URL reads as its request does.
 import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/react-router';
 import { basePath } from './api/base';
 import { formDecode, formEncode, type FormValue } from './api/form';
 import { CatalogueScreen, type CatalogueSearch, validateCatalogueSearch } from './browse/CatalogueScreen';
+import { LookupScreen } from './lookup/LookupScreen';
 import { SectionScreen } from './browse/SectionScreen';
 import { VolumeScreen } from './browse/VolumeScreen';
 import { ReaderScreen } from './reader/ReaderScreen';
@@ -92,6 +94,14 @@ const documentRoute = createRoute({
   component: ReaderScreen,
 });
 
+// Citation Lookup, which the app opens in a window of its own from Search's Find by Citation. Its form
+// is kept for the tab's session rather than in the address, since a block of footnotes outgrows one.
+const lookupRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/lookup',
+  component: LookupScreen,
+});
+
 // Research opens at All Notes until S19b's Research page, as the app's sidebar lists it there.
 const researchRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -136,6 +146,7 @@ export const routeTree = rootRoute.addChildren([
   sectionRoute,
   searchRoute,
   documentRoute,
+  lookupRoute,
   researchRoute,
   researchNotesRoute,
   settingsRoute,
