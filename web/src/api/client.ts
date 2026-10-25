@@ -51,6 +51,17 @@ export async function getJSON<T>(path: string, params?: URLSearchParams, signal?
 }
 
 /**
+ * The JSON a POST of `fields` as a form body to `path` answers, for a request that changes nothing
+ * but carries more than an address should, such as Batch's block of notes; throws an `ApiError`
+ * for an error status.
+ */
+export async function postForm<T>(path: string, fields: URLSearchParams, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(servedPath(path), { method: 'POST', signal, headers: { Accept: 'application/json' }, body: fields });
+  if (!response.ok) throw await ApiError.from(response);
+  return (await response.json()) as T;
+}
+
+/**
  * A request that changes state, to `path` at the server's root under the base path: `body` as JSON,
  * and `token` in `X-CSRF-Token`, as the server asks of every change. Gives the answer's JSON, or
  * null for one with no body; throws an `ApiError` for an error status.

@@ -33,7 +33,9 @@
 // Underline, Text Color and Link selected text to a URL, and its link popover with the iPhone's
 // Cancel; All Notes with its filters, its rows' Empty note, its empty states, its count from the
 // app's sheet and its Delete Note? question; and the Markdown export's action, its line while it
-// is prepared, its line for no notes and its footer. The selection bar's name, Selection, the
+// is prepared, its line for no notes and its footer; and from S19a Search's Find by Citation and
+// Citation Lookup's window, its modes, fields, prompts, Look Up, its results, errors and empty states,
+// View Document, and Batch's table with its sort and its rows' labels. The selection bar's name, Selection, the
 // formatting bar's, Text formatting, its glyphs, Write a Summary, Edit… and Delete… for a summary
 // of one's own and the question before it, the visible Delete… on All Notes' rows, the rail's times,
 // Settings ▸ Data's title and the lines for an editor that could not load or a note, formatted or
@@ -594,5 +596,54 @@ export const copy = {
     empty: 'No research notes to export.',
     footer:
       'One Markdown file per research note, with a citation and link back to the source document. Compatible with Obsidian and similar note-taking tools.',
+  },
+  /**
+   * Citation Lookup, in the words of the app's window and of Search's Find by Citation, with the kit's
+   * names for the modes. Each result's label, a Batch row's own label and the table's summary are the
+   * kit's, from the server. View Volume, which stands where the app offers Download Volume, and its
+   * tooltip are the web's own.
+   */
+  lookup: {
+    title: 'Citation Lookup',
+    findByCitation: 'Find by Citation',
+    findByCitationHelp: 'Resolve a pasted or manually entered FRUS citation to a specific document',
+    mode: 'Input mode',
+    modes: { paste: 'Paste Citation', structured: 'Structured Entry', batch: 'Batch' },
+    pasteHeader: 'Citation Text',
+    pastePlaceholder: 'Paste a FRUS citation…',
+    batchHeader: 'Footnotes',
+    batchFooter:
+      'Paste a chapter’s footnotes. Numbered notes are split on their numbers, and a note wrapped across lines is rejoined; an unnumbered list is one citation per line.',
+    fieldsHeader: 'Parsed Fields',
+    fieldsFooter: 'Provide at least a document number, page number, or volume to search.',
+    subseries: 'Subseries',
+    subseriesPlaceholder: 'e.g. 1969-76',
+    volume: 'Volume',
+    volumePlaceholder: 'e.g. I or 1',
+    part: 'Part',
+    partPlaceholder: 'e.g. 1 or I',
+    document: 'Document no.',
+    documentPlaceholder: 'e.g. 15',
+    page: 'Page',
+    pagePlaceholder: 'e.g. 47',
+    lookUp: 'Look Up',
+    lookUpHelp: 'Resolve the citation to matching FRUS documents',
+    searching: 'Looking up…',
+    errorTitle: 'Lookup Error',
+    noMatchTitle: 'No Matches Found',
+    noMatchDetail: 'No FRUS documents matched the provided citation. Check the subseries and volume, then try again.',
+    results: (count: number) => `Results (${count} found)`,
+    /** What a lookup that found matches announces, as the app's announcement words it. */
+    matchesFound: (count: number) => `${count} matches found`,
+    viewDocument: 'View Document',
+    viewDocumentHelp: 'Open this document',
+    viewVolume: 'View Volume',
+    viewVolumeHelp: 'Open this volume’s page in Browse, which says what this server holds of it',
+    batchEmptyTitle: 'Nothing to Triage',
+    batchEmptyDetail: 'No citations were found in that text.',
+    needsWorkFirst: 'Needs work first',
+    resolved: (identity: string) => `Resolved — ${identity}`,
+    possibleDocuments: (count: number) => `${count} possible documents`,
+    noMatch: 'No match',
   },
 } as const;

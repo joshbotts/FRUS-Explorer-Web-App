@@ -231,10 +231,16 @@ function SearchForm({
         />
         <button type="submit">{copy.search.submit}</button>
       </div>
-      <details className="syntax">
-        <summary>{copy.search.syntax}</summary>
-        <p>{copy.search.syntaxBody}</p>
-      </details>
+      <div className="search-aids">
+        <details className="syntax">
+          <summary>{copy.search.syntax}</summary>
+          <p>{copy.search.syntaxBody}</p>
+        </details>
+        {/* The other way to find a document, as the Mac's Search window offers it beside its Tips. */}
+        <Link to="/lookup" className="find-by-citation" title={copy.lookup.findByCitationHelp}>
+          {copy.lookup.findByCitation}
+        </Link>
+      </div>
     </form>
   );
 }
