@@ -4,7 +4,7 @@
 // import of a Mac JSON export (S16c), and the export and what it carries (S16d). A change that the
 // server refuses for its token, as after a restart, asks for a new one and is sent once more.
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
-import { ApiError, getJSON, sendFile, sendJSON } from './client';
+import { ApiError, getFile, getJSON, sendFile, sendJSON } from './client';
 import type {
   DocumentHighlights,
   DocumentNotes,
@@ -341,12 +341,17 @@ export const exportContentsQuery = queryOptions({
   retry: false,
 });
 
-/**
- * Export as JSON: the user's research as the Mac's export, the kit's envelope with the web's one key
- * more, which the server names as the app's export sheet does; every summary with the app's switch on.
- */
+/** Export as JSON's address: every summary with the app's switch on. */
 export function exportPath(includeGeneratedSummaries: boolean): string {
   return '/api/v1/me/export' + (includeGeneratedSummaries ? '?includeGeneratedSummaries=true' : '');
+}
+
+/**
+ * Export as JSON: the user's research as the Mac's export, the kit's envelope with the web's one key
+ * more, under the name the server gives it, the app's export sheet's.
+ */
+export function fetchExport(includeGeneratedSummaries: boolean): Promise<{ blob: Blob; name: string }> {
+  return getFile(exportPath(includeGeneratedSummaries), 'frus-research-export.json');
 }
 
 /** The user's projects, by name, for the note editor's Projects and All Notes' filter. */

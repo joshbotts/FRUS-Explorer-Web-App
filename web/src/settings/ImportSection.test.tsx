@@ -75,6 +75,7 @@ describe('Settings ▸ Data’s import', () => {
       '/readyz': ready,
       '/api/v1/me': me,
       '/api/v1/me/export/contents': () => exportContents({ ResearchNote: contentsRead++ }),
+      '/api/v1/me/notes': { total: 0, items: [] },
       'POST /api/v1/me/import': status('queued'),
       [`/api/v1/me/import/${importId}`]: () => statuses.shift() ?? status('succeeded', { report: done }),
     });
@@ -147,6 +148,7 @@ describe('Settings ▸ Data’s import', () => {
       '/readyz': ready,
       '/api/v1/me': me,
       '/api/v1/me/export/contents': exportContents(),
+      '/api/v1/me/notes': { total: 0, items: [] },
       'POST /api/v1/me/import': new ProblemAnswer(400, 'UNSUPPORTED_FORMAT_VERSION', 'This export is format version 8, and this server reads versions 1 to 7.'),
     });
     const user = userEvent.setup();
@@ -166,6 +168,7 @@ describe('Settings ▸ Data’s import', () => {
       '/readyz': ready,
       '/api/v1/me': me,
       '/api/v1/me/export/contents': exportContents(),
+      '/api/v1/me/notes': { total: 0, items: [] },
       'POST /api/v1/me/import': status('running'),
       [`/api/v1/me/import/${importId}`]: status('failed', { problem: { code: 'INVALID_EXPORT', detail: 'This export could not be read: notes is missing.' } }),
     });
@@ -185,6 +188,7 @@ describe('Settings ▸ Data’s import', () => {
       '/readyz': ready,
       '/api/v1/me': me,
       '/api/v1/me/export/contents': exportContents(),
+      '/api/v1/me/notes': { total: 0, items: [] },
       'POST /api/v1/me/import': status('running'),
       [`/api/v1/me/import/${importId}`]: () => {
         asked += 1;

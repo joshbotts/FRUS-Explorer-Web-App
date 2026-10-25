@@ -94,7 +94,8 @@ const contents: [string, string[]][] = [
 
 /** What each of Contents' rows counts in a file, its arrays' lengths, as the app's sheet counts its store. */
 function counted(file: ExportFile): string[][] {
-  return contents.map(([name, keys]) => [name, keys.reduce((sum, key) => sum + (file[key] as unknown[]).length, 0).toLocaleString('en-US')]);
+  // As the app's sheet writes each count, an interpolated number, which groups no digits.
+  return contents.map(([name, keys]) => [name, String(keys.reduce((sum, key) => sum + (file[key] as unknown[]).length, 0))]);
 }
 
 /** The saved file, read as JSON. */
@@ -117,7 +118,7 @@ test('counts what an export carries as the app’s Contents does, and saves the 
 
   const file = JSON.parse(exported) as Record<string, unknown>;
   const plain = page.waitForEvent('download');
-  await page.getByRole('link', { name: 'Export as JSON' }).click();
+  await page.getByRole('button', { name: 'Export as JSON' }).click();
   const first = await saved(await plain);
   expect(first.formatVersion).toBe(7);
   expect(Object.keys(first).sort()).toEqual([...envelopeKeys, 'frusExplorerLight'].sort());
@@ -135,7 +136,7 @@ test('counts what an export carries as the app’s Contents does, and saves the 
   expect(summaries).toBeGreaterThanOrEqual((file.summaries as unknown[]).length);
   await axeCheck(page);
   const all = page.waitForEvent('download');
-  await page.getByRole('link', { name: 'Export as JSON' }).click();
+  await page.getByRole('button', { name: 'Export as JSON' }).click();
   const second = await saved(await all);
   expect(second.frusExplorerLight.includesGeneratedSummaries).toBe(true);
   expect((second.summaries as unknown[]).length).toBe(summaries);
@@ -152,7 +153,7 @@ test('turns the switch on and exports, by keyboard', async ({ page }) => {
   await tabTo(page, toggle);
   await page.keyboard.press('Space');
   await expect(toggle).toBeChecked();
-  await tabTo(page, page.getByRole('link', { name: 'Export as JSON' }));
+  await tabTo(page, page.getByRole('button', { name: 'Export as JSON' }));
   const saving = page.waitForEvent('download');
   await page.keyboard.press('Enter');
   const file = await saved(await saving);

@@ -11,12 +11,13 @@
 // - a summary with no authorship, from a file before version 5, written as an AI summary, as every
 //   reader takes one;
 // - a lead's score that is no finite number written as 0, which the encoder would refuse;
-// - a saved search's watermark, and a plan's tiers and toggles, read as the app's getters read them;
+// - a saved search's search and watermark, and a plan's tiers and toggles, read as the app's
+//   getters read them;
 // - the header's project, the one the export is made under, as the Mac's names its active project:
 //   none for no id or one that names no project.
 // The web keeps no field the envelope cannot carry: the store's columns are the app's (S14a), and
-// those the app's export leaves out no path here writes (`ExportColumns`). Its key says what the
-// file leaves out by choice, which the envelope cannot say.
+// those the app's export leaves out no path here writes, which ExportParityTests holds column by
+// column. Its key says what the file leaves out by choice, which the envelope cannot say.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -372,14 +373,62 @@ public enum ResearchExport {
     }
 
     static func savedSearch(_ row: Fields) throws -> SavedSearchExport {
-        // The search as the app runs it, from its whole snapshot, which every saved search here
-        // holds; the watermark as `SavedSearch.freshness` reads it, none when it does not decode.
-        let freshness = row.appJSON(SavedSearchColumns.Freshness.self, "freshness_data")
+        // The watermark as `SavedSearch.freshness` reads it: none when there is none or it is no
+        // object, each field none that does not read.
+        let freshness = row.appJSON(Freshness.self, "freshness_data")
         return SavedSearchExport(
-            id: try row.uuid("id"), name: try row.text("name"), parameters: try row.json(SearchParameters.self, "parameters_data"),
+            id: try row.uuid("id"), name: try row.text("name"), parameters: try searchParameters(row),
             lastRunAt: freshness?.lastRunAt, matchCountAtLastRun: freshness?.matchCountAtLastRun,
             indexedVolumeCountAtLastRun: freshness?.indexedVolumeCountAtLastRun, createdAt: try row.optionalDate("created_at"),
             lastModified: try row.optionalDate("last_modified"))
+    }
+
+    /// The search a saved search runs, as `SavedSearch.searchParameters` reads it, app code mirrored:
+    /// its whole snapshot, which every saved search here holds, and when there is none, or it does
+    /// not decode, the search its scalar columns make.
+    static func searchParameters(_ row: Fields) throws -> SearchParameters {
+        if let parameters = row.appJSON(SearchParameters.self, "parameters_data") { return parameters }
+        let list = { (csv: String) in csv.isEmpty ? [] : csv.split(separator: ",").map(String.init) }
+        let documentType: DocumentTypeFilter = switch try row.text("document_type_filter_raw") {
+        case "documentsOnly": .documentsOnly
+        case "editorialNotesOnly": .editorialNotesOnly
+        default: .all
+        }
+        var dateRange: DateRange?
+        if let start = try row.optionalDate("date_range_start"), let end = try row.optionalDate("date_range_end") {
+            let format = ISO8601DateFormatter()
+            format.formatOptions = [.withFullDate]
+            dateRange = DateRange(earliest: format.string(from: start), latest: format.string(from: end))
+        }
+        let flags = try row.int("scope_flags")
+        let text = { (column: String) throws -> String? in
+            let value = try row.text(column)
+            return value.isEmpty ? nil : value
+        }
+        return SearchParameters(
+            keywords: try text("query_text"), phrase: try text("phrase_text"),
+            booleanMode: try row.text("boolean_mode_raw") == "or" ? .or : .and,
+            excludedTerms: list(try row.text("excluded_terms_csv")), prefixWildcard: try text("prefix_wildcard"),
+            dateRange: dateRange, subjectTagIds: list(try row.text("subject_tag_ids_csv")),
+            includeDocumentText: flags & 1 != 0, includeSummaries: flags & 2 != 0, includeNotes: flags & 4 != 0,
+            documentTypeFilter: documentType, personRef: try text("person_ref"))
+    }
+
+    /// `SavedSearchFreshness` as the app decodes it, app code mirrored: each field on its own, none
+    /// for one that does not read, so a blob with a field it does not know keeps the rest.
+    struct Freshness: Decodable {
+        var lastRunAt: Date?
+        var matchCountAtLastRun: Int?
+        var indexedVolumeCountAtLastRun: Int?
+
+        enum CodingKeys: String, CodingKey { case lastRunAt, matchCountAtLastRun, indexedVolumeCountAtLastRun }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            lastRunAt = try? container.decodeIfPresent(Date.self, forKey: .lastRunAt)
+            matchCountAtLastRun = try? container.decodeIfPresent(Int.self, forKey: .matchCountAtLastRun)
+            indexedVolumeCountAtLastRun = try? container.decodeIfPresent(Int.self, forKey: .indexedVolumeCountAtLastRun)
+        }
     }
 
     static func corpus(_ row: Fields) throws -> WorkingCorpusExport {

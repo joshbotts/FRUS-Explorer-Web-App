@@ -143,7 +143,7 @@ An export of format version 6, which FRUS Explorer wrote until the format reache
 
 ### Take your research with you
 
-**Settings ▸ Data ▸ Export as JSON** saves `frus-research-export.json`, the file FRUS Explorer's Export as JSON writes, at the format version this server's FRUS Explorer writes: everything you have here, each record under its id, with one key more that the app passes over, `frusExplorerLight`, which says whether the file holds your summaries. As on the Mac, the summaries come only with **Include AI-Generated Summaries** turned on, your own among them. Imported into this server again, it changes nothing; imported into another, it brings everything it holds. FRUS Explorer itself imports no JSON export yet, so the file is a backup and a way to another server rather than to the Mac.
+**Settings ▸ Data ▸ Export as JSON** saves `frus-research-export.json`, the file FRUS Explorer's Export as JSON writes, at the format version this server's FRUS Explorer writes: everything you have here, each record under its id, with one key more that the app passes over, `frusExplorerLight`, which gives its own version and says whether the file holds your summaries and the server's corrections of its index. As on the Mac, the summaries come only with **Include AI-Generated Summaries** turned on, your own among them. Imported into this server again, it changes nothing; imported into another, it brings everything it holds, but the corrections for someone who is not a curator there. FRUS Explorer itself imports no JSON export yet, so the file is a backup and a way to another server rather than to the Mac.
 
 ### The API
 

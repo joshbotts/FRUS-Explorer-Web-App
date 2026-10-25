@@ -1,14 +1,14 @@
 // Settings ▸ Data's export (PLAN's S16d), as the app's export sheet lays it out: Contents, what an
 // export carries of each kind of record, in its order and its words; Include AI-Generated Summaries,
-// off by default, as the app's switch; and Export as JSON, which saves the server's file, the Mac's
-// export with the web's one key more. The counts come from one read of the server's, as the sheet
-// counts from the read that writes its file; the file is written when it is asked for.
+// off by default, as the app's switch; and Export as JSON, which fetches the server's file, the Mac's
+// export with the web's one key more, and saves it, saying while it is prepared and, as the app's row
+// does, why it could not be. The counts come from one read of the server's, as the sheet counts from
+// the read that writes its file; the file is written when it is asked for.
 import type { UseQueryResult } from '@tanstack/react-query';
 import { useId, useState } from 'react';
-import { servedPath } from '../api/base';
 import { errorMessage } from '../api/client';
 import type { ExportContents, ResearchType } from '../api/types';
-import { exportPath } from '../api/userData';
+import { fetchExport } from '../api/userData';
 import { copy } from '../copy';
 
 const words = copy.dataSettings;
@@ -40,11 +40,37 @@ export function countOf(contents: ExportContents, type: ResearchType): number {
   return contents.types.find((count) => count.type === type)?.count ?? 0;
 }
 
-const number = (value: number) => value.toLocaleString('en-US');
+/** Hands `file` to the browser to save as `name`, through an address of its own that lasts until the save has begun. */
+function save(file: Blob, name: string) {
+  const address = URL.createObjectURL(file);
+  const link = document.createElement('a');
+  link.href = address;
+  link.download = name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(address), 60_000);
+}
 
 export function ExportSection({ contents }: { contents: UseQueryResult<ExportContents> }) {
   const id = useId();
   const [includeSummaries, setIncludeSummaries] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  async function exportJSON() {
+    setPreparing(true);
+    setProblem(null);
+    try {
+      const file = await fetchExport(includeSummaries);
+      save(file.blob, file.name);
+    } catch (error) {
+      setProblem(errorMessage(error));
+    } finally {
+      setPreparing(false);
+    }
+  }
+
   return (
     <>
       <section className="export-contents" aria-labelledby={`${id}-contents`}>
@@ -61,7 +87,8 @@ export function ExportSection({ contents }: { contents: UseQueryResult<ExportCon
               {contentsRows.map((row) => (
                 <tr key={row.types.join()}>
                   <th scope="row">{row.label ?? words.types[row.types[0]]}</th>
-                  <td>{number(row.types.reduce((sum, type) => sum + countOf(contents.data, type), 0))}</td>
+                  {/* As the app's sheet writes each count, an interpolated number, which groups no digits. */}
+                  <td>{String(row.types.reduce((sum, type) => sum + countOf(contents.data, type), 0))}</td>
                 </tr>
               ))}
             </tbody>
@@ -75,12 +102,17 @@ export function ExportSection({ contents }: { contents: UseQueryResult<ExportCon
         </label>
       </p>
       {contents.data && <p className="note">{words.includeSummariesFooter(countOf(contents.data, 'GeneratedSummary'))}</p>}
-      <p>
-        {/* The server names the file, frus-research-export.json, and the browser saves it. */}
-        <a className="button" href={servedPath(exportPath(includeSummaries))} download>
+      <p className="export-json">
+        <button type="button" disabled={preparing} onClick={() => void exportJSON()}>
           {words.exportJSON}
-        </a>
+        </button>{' '}
+        <span role="status">{preparing ? words.preparing : ''}</span>
       </p>
+      {problem && (
+        <p className="error" role="alert">
+          {words.jsonError(problem)}
+        </p>
+      )}
       <p className="note">{words.jsonFooter}</p>
     </>
   );

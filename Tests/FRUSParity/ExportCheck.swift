@@ -20,8 +20,8 @@ public enum ExportCheck {
         /// The file's records beside the export's, read at the file's format version.
         public let comparison: ResearchComparison
         /// For a file of the kit's format version, the top-level keys whose values the export gives
-        /// otherwise than the file, as the kit writes it in the app's order and the store keeps it
-        /// (`macOrdered`, `asStored`), and those either has that the other lacks: only the web's own
+        /// otherwise than the file, as the store keeps it and the kit writes it in the app's order
+        /// (`asStored`, `macOrdered`), and those either has that the other lacks: only the web's own
         /// for a file the Mac wrote. Nil for an older file, which the export writes at the kit's.
         public let differentKeys: [String]?
         /// The import's and the export's time.
@@ -57,7 +57,7 @@ public enum ExportCheck {
         return Outcome(report: report, export: export,
                        comparison: .compare(file: file, stored: atVersion(exported, file.formatVersion)),
                        differentKeys: current
-                           ? try differentKeys(export, asStored(macOrdered(file)).jsonData()) : nil,
+                           ? try differentKeys(export, macOrdered(asStored(file)).jsonData()) : nil,
                        importSeconds: seconds(exportStart - importStart), exportSeconds: seconds(exportEnd - exportStart))
     }
 
@@ -138,19 +138,91 @@ public enum ExportCheck {
         return envelope
     }
 
-    /// `envelope` as the store keeps it, which an export of it gives back: one set of synced settings,
-    /// the earliest made, as the app reads them; and a summary's authorship, none in a file before
-    /// version 5, as `.aiGenerated`, as the app's exporter writes it.
+    /// `envelope` as the store keeps it, which an export of it gives back: a record the file repeats
+    /// under one id once, in the first copy's place, the newer copy by the import's stamp
+    /// (`ImportStamp`), of two as new the first, a collection's entries and a plan's documents and
+    /// targets under the parent their kept copy names; one set of synced settings, the earliest made,
+    /// as the app reads them; and a summary's authorship, none in a file before version 5, as
+    /// `.aiGenerated`, as the app's exporter writes it. `macOrdered` then gives its export's order.
     public static func asStored(_ envelope: ResearchDataEnvelope) -> ResearchDataEnvelope {
         var envelope = envelope
-        envelope.syncedPreferences = envelope.syncedPreferences.enumerated()
-            .min { ($0.element.createdAt, $0.offset) < ($1.element.createdAt, $1.offset) }.map { [$0.element] } ?? []
-        envelope.summaries = envelope.summaries.map { summary in
+        envelope.notes = collapsed(envelope.notes, "notes", id: \.id)
+        envelope.tags = collapsed(envelope.tags, "tags", id: \.id)
+        envelope.tagAssignments = collapsed(envelope.tagAssignments, "tag_assignments", id: \.id)
+        envelope.highlights = collapsed(envelope.highlights, "highlights", id: \.id)
+        let entries = collapsed(envelope.collections.flatMap { collection in collection.entries.map { (collection.id, $0) } },
+                                "collection_entries", id: \.1.id, record: \.1)
+        envelope.collections = collapsed(envelope.collections, "collections", id: \.id).map { collection in
+            var collection = collection
+            collection.entries = entries.filter { $0.0 == collection.id }.map(\.1)
+            return collection
+        }
+        envelope.prompts = collapsed(envelope.prompts, "prompts", id: \.id)
+        envelope.projects = collapsed(envelope.projects, "projects", id: \.id)
+        envelope.summaries = collapsed(envelope.summaries, "summaries", id: \.id).map { summary in
             var summary = summary
             summary.authorship = summary.authorship ?? .aiGenerated
             return summary
         }
+        envelope.readingHistory = collapsed(envelope.readingHistory, "trail_reading", id: \.id)
+        envelope.searchHistory = collapsed(envelope.searchHistory, "trail_search", id: \.id)
+        envelope.exportHistory = collapsed(envelope.exportHistory, "trail_export", id: \.id)
+        let documents = collapsed(envelope.archiveVisits.flatMap { plan in plan.documents.map { (plan.id, $0) } },
+                                  "visit_documents", id: \.1.id, record: \.1)
+        let targets = collapsed(envelope.archiveVisits.flatMap { plan in plan.targets.map { (plan.id, $0) } },
+                                "visit_targets", id: \.1.id, record: \.1)
+        envelope.archiveVisits = collapsed(envelope.archiveVisits, "visit_plans", id: \.id).map { plan in
+            var plan = plan
+            plan.documents = documents.filter { $0.0 == plan.id }.map(\.1)
+            plan.targets = targets.filter { $0.0 == plan.id }.map(\.1)
+            return plan
+        }
+        envelope.savedSearches = collapsed(envelope.savedSearches, "saved_searches", id: \.id)
+        envelope.workingCorpora = collapsed(envelope.workingCorpora, "working_corpora", id: \.id)
+        envelope.customVolumeScopes = collapsed(envelope.customVolumeScopes, "volume_scopes", id: \.id)
+        envelope.classificationOverrides = collapsed(envelope.classificationOverrides, "classification_overrides", id: \.id)
+        envelope.personClusterOverrides = collapsed(envelope.personClusterOverrides, "person_overrides", id: \.id)
+        envelope.annotationReviews = collapsed(envelope.annotationReviews, "annotation_reviews", id: \.id)
+        envelope.projectLeads = collapsed(envelope.projectLeads, "project_leads", id: \.id)
+        envelope.syncedPreferences = envelope.syncedPreferences.enumerated()
+            .min { ($0.element.createdAt, $0.offset) < ($1.element.createdAt, $1.offset) }.map { [$0.element] } ?? []
         return envelope
+    }
+
+    /// `items` with each id once, as the import writes a record a file repeats: in the first copy's
+    /// place, a later copy taking it only when it is newer by the import's stamp for `table`, its time
+    /// of change or else its creation, or for a type with none the time of what it records.
+    static func collapsed<T>(_ items: [T], _ table: String, id: (T) -> UUID) -> [T] where T: Encodable {
+        collapsed(items, table, id: id, record: \.self)
+    }
+
+    static func collapsed<T, Record: Encodable>(_ items: [T], _ table: String, id: (T) -> UUID,
+                                                 record: KeyPath<T, Record>) -> [T] {
+        // The stamp's columns, by the JSON keys the kit writes them under: `last_modified` is `lastModified`.
+        let keys = (ImportStamp.columns[table] ?? []).map { column in
+            let parts = column.split(separator: "_")
+            return ([String(parts[0])] + parts.dropFirst().map { $0.prefix(1).uppercased() + $0.dropFirst() }).joined()
+        }
+        let encoder = ResearchDataEnvelope.makeEncoder()
+        func time(_ item: T) -> Date {
+            guard let data = try? encoder.encode(item[keyPath: record]),
+                  let object = try? JSONDecoder().decode([String: JSONValue].self, from: data) else { return .distantPast }
+            for key in keys {
+                if case .string(let text)? = object[key], let date = ISO8601DateFormatter().date(from: text) { return date }
+            }
+            return .distantPast
+        }
+        var kept: [T] = []
+        var places: [UUID: Int] = [:]
+        for item in items {
+            guard let earlier = places[id(item)] else {
+                places[id(item)] = kept.count
+                kept.append(item)
+                continue
+            }
+            if time(item) > time(kept[earlier]) { kept[earlier] = item }
+        }
+        return kept
     }
 
     /// `envelope` as a file of `version` carries it: a type or a field the version cannot carry as

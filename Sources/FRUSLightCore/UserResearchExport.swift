@@ -1,7 +1,8 @@
 // The web's export (PLAN's S16d), the store's half: the rows of the tables an export carries, read
 // at one moment, so that the file describes the store as it was then, each with its place among its
 // table's rows, the order the store took them in, which the export reads as the order the app's
-// store fetches its records in. Of the prompts, the researcher's own only, as the app's export
+// store fetches its records in. Of the prompts, the researcher's own only, and of a collection's
+// entries and a plan's documents and targets, those whose parent the store holds, as the app's export
 // carries them. And how many rows of each an export would carry, for the browser app's Contents.
 
 import Foundation
@@ -44,8 +45,20 @@ public protocol ResearchExportStore: Sendable {
 /// Which of a table's rows an export carries, where it does not carry them all.
 public enum ResearchExportRows {
     /// The researcher's own prompts, as the app's exporter carries them (`!isStandard`), never the
-    /// standard ones, whose ids each device mints. No path here writes a standard prompt.
-    public static let conditions: [String: String] = ["prompts": "is_standard = 0"]
+    /// standard ones, whose ids each device mints; and the entries of a collection, and the documents
+    /// and targets of a plan, the store holds, as the app's exporter reaches them only through their
+    /// parent. No path here writes a standard prompt, or leaves a child whose parent is gone.
+    public static let conditions: [String: String] = [
+        "prompts": "is_standard = 0",
+        "collection_entries": held("collections", "collection_entries", "collection_id"),
+        "visit_documents": held("visit_plans", "visit_documents", "plan_id"),
+        "visit_targets": held("visit_plans", "visit_targets", "plan_id"),
+    ]
+
+    /// That the user holds the row of `parents` the row of `table` names in `column`, its id in any case.
+    private static func held(_ parents: String, _ table: String, _ column: String) -> String {
+        "EXISTS (SELECT 1 FROM \(parents) parent WHERE parent.user_id = \(table).user_id AND upper(parent.id) = upper(\(table).\(column)))"
+    }
 }
 
 extension SQLiteUserStore: ResearchExportStore {

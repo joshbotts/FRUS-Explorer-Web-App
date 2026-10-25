@@ -600,6 +600,7 @@ export const copy = {
     includeSummariesFooter: (count: number) =>
       `Adds all ${count.toLocaleString('en-US')} generated summaries to the JSON export. Off by default since AI output can be large.`,
     exportJSON: 'Export as JSON',
+    jsonError: (detail: string) => `Couldn’t prepare the export: ${detail}`,
     jsonFooter:
       'One JSON file with your notes, tags, highlights, collections, custom prompts, projects, archive visit plans, saved searches, working corpora, volume scopes, corrections, reviewed changes, Suggested Next leads, and synced settings. It also holds your research trail: every document you opened, every search you ran and how many results it returned, and every collection you exported.',
     exportMarkdown: (count: number) => `Export Notes as Markdown (${count.toLocaleString('en-US')})`,

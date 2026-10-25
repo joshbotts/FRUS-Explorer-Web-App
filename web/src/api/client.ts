@@ -51,6 +51,18 @@ export async function getJSON<T>(path: string, params?: URLSearchParams, signal?
 }
 
 /**
+ * The file at `path`, a path at the server's root, under the base path, with the name the server
+ * gives it in its `Content-Disposition`, or `name`: an export (PLAN's S16d). Throws an `ApiError` for
+ * an error status, so that a page can say why there is no file.
+ */
+export async function getFile(path: string, name: string): Promise<{ blob: Blob; name: string }> {
+  const response = await fetch(servedPath(path), { headers: { Accept: 'application/json' } });
+  if (!response.ok) throw await ApiError.from(response);
+  const given = /filename="([^"]+)"/.exec(response.headers.get('content-disposition') ?? '')?.[1];
+  return { blob: await response.blob(), name: given ?? name };
+}
+
+/**
  * The JSON a POST of `fields` as a form body to `path` answers, for a request that changes nothing
  * but carries more than an address should, such as Batch's block of notes; throws an `ApiError`
  * for an error status.

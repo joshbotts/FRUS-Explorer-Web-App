@@ -198,6 +198,9 @@ import Testing
             // The app interpolates the count, which a localized string groups.
             ("Export/ResearchDataExportView.swift", "settings.export.markdown.action", #"Export Notes as Markdown (\(markdownExportURLs.count))"#, "dataSettings",
              "exportMarkdown: (count: number) => `Export Notes as Markdown (${count.toLocaleString('en-US')})`,"),
+            ("Export/ResearchDataExportView.swift", "settings.export.json.error",
+             #"Couldn’t prepare the export: \(error.localizedDescription)"#, "dataSettings",
+             "jsonError: (detail: string) => `Couldn’t prepare the export: ${detail}`,"),
             ("Export/ResearchDataExportView.swift", "settings.export.includeSummaries.footer",
              #"Adds all \(summaries.count) generated summaries to the JSON export. Off by default since AI output can be large."#, "dataSettings",
              "includeSummariesFooter: (count: number) => `Adds all ${count.toLocaleString('en-US')} generated summaries to the JSON export. Off by default since AI output can be large.`,"),
@@ -255,6 +258,8 @@ import Testing
         }
         #expect(webRows == expected.map(\.types), "\(webRows)")
         #expect(web.contains("{ types: ['UserTag', 'DocumentTagAssignment'], label: words.tagsAndAssignments },"))
+        // Each count as the sheet's `value: "\(…)"` writes it, an interpolated number, no digit grouped.
+        #expect(web.contains("<td>{String(row.types.reduce((sum, type) => sum + countOf(contents.data, type), 0))}</td>"))
     }
 
     /// All Notes' rows, as `NotesPaneSnapshot` builds them, and its filters and count, as it and
