@@ -2,6 +2,62 @@
 
 One entry per session, newest first.
 
+## Session 16d: the export
+
+25 October 2026 · branch `claude/s16d-export` · [#64](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/64) · upstream `503a730b`, unchanged
+
+Phase 2's row S16d. The user's research leaves the server as the Mac's own Export as JSON writes it, the kit's envelope at format version 7, through `GET /api/v1/me/export`, with one key of the web's own beside it, and Settings ▸ Data lays out the app's export sheet: Contents, Include AI-Generated Summaries and Export as JSON. No upstream pull request, no pin move and no schema change.
+
+**What the app's code says,** at `503a730b`:
+
+- **The exporter,** `ResearchDataExporter.makeEnvelope` (app code, over SwiftData), fetches eight types unsorted (notes, tags, tag assignments, highlights, collections, prompts, projects, summaries), the summaries only with Include AI-Generated Summaries, which the sheet keeps off; the trail by its times, a plan by its name and then when it was made, the eight types of version 7 by when each was made, a review by when it was made, a lead by when it first surfaced, each sort putting a time that is none first; a collection's entries by their place, a plan's documents and targets by their keys. A note's `linkedHighlightIds` are the highlights whose `noteId` names it. It writes a summary with no authorship as `aiGenerated`, a lead's score that is no finite number as 0, only the researcher's own prompts, a saved search's parameters and watermark and a plan's tiers and toggles as its getters read them, and in the header the active project's name and question.
+- **The encoder,** the kit's `makeEncoder()`: pretty-printed, keys sorted, ISO 8601 dates, which on Linux, as probed, cut a time to its second, never round it up.
+- **The sheet,** `DataExportSections`: Contents, eighteen rows, tags and their assignments in one, the custom prompts the researcher's own; the switch, its footer counting every summary; Export as JSON, saved as `frus-research-export.json`; then the Mac's database export, the Markdown notes and the method appendix.
+
+**Delivered**
+
+- **The store** (`Sources/FRUSLightCore/UserResearchExport.swift`): the rows of the tables an export names, read at one moment, each with its place among its table's rows; the researcher's own prompts only, and a collection's entries and a plan's documents and targets whose parent it holds; and the counts of the same rows.
+- **The mapping** (`Sources/FRUSLightAPI/ResearchExport.swift`): each row as the kit's record, every field version 7 carries, with the exporter's coercions and orders, the store's order standing for SwiftData's fetch order and breaking each tie; the envelope and the web's key, `frusExplorerLight`, written by the kit's encoder into one object; a row it cannot write, an id that is no UUID or a time the store does not write, refusing the export by table, row and column.
+- **The routes** (`Sources/FRUSLightAPI/Exports.swift`): `GET /api/v1/me/export`, an attachment named as the app's, never cached, `includeGeneratedSummaries=true` for every summary and `projectId` for the header's project; `GET /api/v1/me/export/contents`, the counts.
+- **The browser app:** Settings ▸ Data in the sheet's order: Contents, each count written as the sheet writes it; the switch and its footer; Export as JSON, which fetches the file and saves it, saying while it is prepared and, in the app's words, why it could not be; its footer; then the Markdown notes, counted by S15d's list of notes, and the import.
+- **The parity harness:** `ExportCheck`, which imports an export into a store of its own, exports it as the route does and holds the export to the file: every record at the file's version, by `ResearchComparison`, and for a file of version 7 every top-level key; `ExportCheck.macOrdered`, the exporter's orders over the kit's records, an implementation of its own beside the export's over rows; and `frus-parity export-check <export>`, which runs it on an export it is given, printing counts, ids and keys.
+
+**Decided here, each the web's own**
+
+- **What only the web holds:** nothing the envelope cannot carry. The store's columns are the app's model's (S14a); the three the app's export leaves out, a summary's source content hash and the state of a visit's documents and of its targets, no path here writes; a saved search's twelve other columns are made from its parameters, which the file carries. So the added key holds its own version and what the file leaves out by choice, which the Mac's file cannot say: whether it carries the summaries and the instance's corrections. A parity test changes every column of every table in turn, a child's parent to another the store holds, and finds the file changed by each but those fifteen, and holds every table of the store to the export or to the three that hold no one's research, so a column or a table added later must find its place.
+- **The store's order for SwiftData's,** as both are the order the records came: so an imported Mac file comes back in its own order.
+- **The corrections are a curator's to carry,** as only a curator imports them.
+- **The header's project is named, not assumed:** `projectId`, as the Mac's names its active project; an id that names no project heads the file with none, as the app's does. The browser app has no active project until S17f, and exports in the Mac's Global Context.
+- **The counts and the file are two reads,** where the sheet counts in the pass that writes its file: the browser counts as the pane opens and after an import, and the file is written when it is asked for.
+
+**The owner's export.** S16c's, the version-6 export from the library holding the owner's writing, summaries included, read only on this Mac, from a copy in the ignored build folder removed afterwards: never committed, and nothing of it is in this repository but what follows. `frus-parity export-check` imported it into a store of its own and exported that, in about 2 seconds and 1.3, and the export carried every record of each of the 15 types the file carries as the file has it, read at the file's version; the records it repeats under one id, each an exact copy, came out once each. The export is at version 7, so it adds the fields 6 cannot carry, with the app's initial values the import gave them.
+
+**Tests**
+
+- **FRUSLightCoreTests,** 104 to 106: `UserResearchExportTests`, 2: the rows of the tables named, the user's, every column, in the order the store took them, which a newer copy's replace keeps; an instance table's every row, the researcher's own prompts only, and the counts of the same rows.
+- **FRUSLightServerTests,** 166 to 172: `ExportRouteTests`, 6: the kit's envelope at its version with the web's key, its headers and the kit's bytes; the switch, the header's project and the refusals; Contents' counts; the corrections a curator's; what the web writes, as the app's records; a row the export cannot write, named and its value never; the guard and the route under a path.
+- **FRUSParityTests,** 176 to 188: `ExportParityTests`, 11: the done-when's two halves, over the kit's own files of versions 1 to 7, every type at 6 and at 7 and the browser suite's export; a file the export rewrites, out of the app's order, with two sets of synced settings or records twice, coming back as the store keeps it; what the web writes, through its own export at the file's seconds; every column of every table changed in turn, and every table of the store, accounted for; the exporter's orders over the store's rows, on the cases a wrong order gets wrong; ids in lower case; a saved search read as the app's getters read it; a child whose parent is gone; and the mirrors of the app's exporter, its getters and its sheet, held to its source. `NoteViewParityTests`, 1 more: the sheet's Contents, its rows' order, words and counts, beside `ExportSection.tsx`'s, and its words for the switch and the JSON row.
+- **The web unit suite,** 300 to 304 in 33 files: `DataSettings.test.tsx`, 3 to 7: Contents, the switch and the file saved, preparing and the app's words for a failure, and the notes' export when Contents fails.
+- **The browser suite,** 45 to 47 tests: `export.spec.ts`, by pointer, the kit's export of every type imported and Contents counted, the file saved without and with the summaries, each the kit's envelope with the web's key, its records what Contents counts; and by keyboard, the switch turned on and the file saved.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64:** CI's swift job, replayed under the app's heavy-job lock on the branch over main at #63, built this package's own targets clean with no warning. All 2,359 tests pass, up from 2,339 at #63, with the one named skip and nothing cancelled: FRUSLightCoreTests 106, FRUSLightServerTests 172 and FRUSParityTests 188; the others as at #63.
+- **The web job's steps,** through `scripts/npm`: typecheck, lint and the build are clean, and the unit suite passes 304 tests in 33 files.
+- **`scripts/compose-smoke --e2e`** on the branch's image passes: 47 browser tests at the root and 47 under the path, through nginx with INSTALL's recipe, `export.spec.ts` among them in both, and the smoke test's own steps.
+- **CI on #64** is green: the swift, web and compose jobs.
+- **A review** read the diff cold, by reading alone, and found no record mapped otherwise than the app's exporter maps it, and the coercions, the orders, the scoping, the one read and the guard as they should be. It found: a failed export the page did not show, since a link hands the server's refusal to the browser's downloads; Contents grouping digits the app's sheet writes ungrouped; the orders test over cases no wrong order gets wrong (plan names of one letter, no ties, no time that is none), the column test counting a child that left the file as one that reached it, and no id in lower case anywhere; `export-check` failing a file that repeats a record, against a comparison that kept the repeats; Contents counting children the file cannot carry; the Markdown export hidden when Contents fails; the app's saved-search getters mirrored in part; and docs that said more than the code. Each is fixed and tested: Export as JSON fetches the file, says it is preparing it and, in the app's words, why it could not; Contents writes each count as the sheet interpolates it; the tests take plan names a byte order gets wrong, ties and times that are none, move a child to another parent, and export a store whose ids are all in lower case; `asStored` keeps a repeated record as the import does; the store counts and reads only children whose parent it holds; the notes count on their own again; a saved search with no snapshot runs what its columns make, and its watermark reads field by field.
+
+**Records**
+
+- `docs/SPEC.md`: the export path's row and its limit, how the web exports, the routes under The user's data and in the route table, and Settings ▸ Data.
+- `docs/PLAN.md`: the row's done paragraph.
+- `docs/INSTALL.md`: Take your research with you, Settings' **Data**, and the routes.
+- `docs/COORDINATION.md` §1: the kit calls the export makes, and its standing mirrors of the app's exporter and sheet.
+- README's status; and this log.
+
+**Next: S16e,** the import of a research database exported with the owner's writing, SPEC's last resort, which Import mode refuses in phase 1: the writing moved into the user store and the copy stripped with the kit's own sequence before it is installed; and **S17d** once S17c's pin move brings S17a's search of user text and S17b's rules, both in their own sessions now; with S14e, S14d and S14b on the server's track. The export's header waits on S17f's active project, and the sheet's method appendix on S17f.
+
 ## Session 16c: the import of a Mac JSON export
 
 25 October 2026 · branch `claude/s16c-json-import` · [#63](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/63) · upstream `503a730b`, unchanged
