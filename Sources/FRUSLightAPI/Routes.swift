@@ -35,6 +35,7 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     ReadingRoutes.add(to: router, provider: provider, resources: resources)
     ReaderRoutes.add(to: router, reader: reader, provider: provider, resources: resources, base: base)
     CitationRoutes.add(to: router, reader: reader, provider: provider, resources: resources)
+    CitationLookupRoutes.add(to: router, provider: provider, resources: resources)
     ReaderLinkRoutes.add(to: router, state: state, provider: provider, reader: reader, resources: resources)
     if let userData { UserDataRoutes.add(to: router, services: userData, resources: resources, reader: reader, provider: provider) }
     // Last, so it wraps only the requests no route answers.

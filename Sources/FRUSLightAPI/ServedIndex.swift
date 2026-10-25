@@ -1,5 +1,6 @@
 // The kit's stack over the live index, opened read-only and immutable: search and browse (upstream
-// #1575), and the page ranges and persons the reader's links need (upstream #1579).
+// #1575), the page ranges and persons the reader's links need (upstream #1579), and the citation
+// matcher over both that Citation Lookup asks (PLAN's S19a).
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -18,6 +19,10 @@ public final class ServedIndex: Sendable {
     public let pages: PageRangeStore
     /// The persons' mentions and rollups, for a person card's count.
     public let persons: PersonMentionStore
+    /// The kit's citation matcher over this index and the published catalogue, with the volumes
+    /// the index holds as the device's downloaded ones, as the reader's page links take them: the
+    /// app builds its engine over its own index, its catalogue and the volumes on its disk.
+    public let citations: CitationMatchingEngine
     /// The facet sections computed lately over this index; a new index starts with none.
     public let facets = FacetCache()
     /// The results the app keeps of each search run lately over this index, for its date order.
@@ -37,6 +42,9 @@ public final class ServedIndex: Sendable {
         service = SearchService(fts5Store: store, pipeline: pipeline)
         pages = try PageRangeStore(readingDatabaseAt: corpus.url)
         persons = try PersonMentionStore(readingDatabaseAt: corpus.url)
+        citations = CitationMatchingEngine(manifestStore: FixedVolumeCatalogue(entries: resources.manifest),
+                                           searchService: service, pageRangeStore: pages,
+                                           downloadedVolumeIds: Set(corpus.documentsByVolume.filter { $0.value > 0 }.keys))
         guard let expected = corpus.file, before == expected, FileIdentity(corpus.url) == expected else {
             throw APIProblem(.serviceUnavailable, code: "INDEX_NOT_READY",
                              detail: "A new index is being installed; ask again in a moment.")
