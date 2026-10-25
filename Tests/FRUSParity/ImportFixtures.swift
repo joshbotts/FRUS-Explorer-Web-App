@@ -347,12 +347,17 @@ public enum ImportFixtures {
             ResearchNoteExport(id: id(1), documentId: "d3", volumeId: "frus1961-63v06", bodyText: "Planners on Zapata.\nA second line.",
                                projectIds: [id(40)], userTagIds: [id(20)], selectedSummaryIds: [id(70)], linkedHighlightIds: [],
                                createdAt: date("2026-03-01T10:00:00Z"), lastModified: date("2026-03-02T10:00:00Z")),
+            // Formatted as the Mac's editor writes it, which the codec reads.
             ResearchNoteExport(id: id(2), documentId: "d4", volumeId: "frus1961-63v06", bodyText: "The OAS meeting.",
                                projectIds: [id(40), id(41)], userTagIds: [], selectedSummaryIds: [], linkedHighlightIds: [],
-                               createdAt: date("2026-03-03T10:00:00Z"), lastModified: date("2026-03-03T11:00:00Z")),
+                               createdAt: date("2026-03-03T10:00:00Z"), lastModified: date("2026-03-03T11:00:00Z"),
+                               richText: Data(RTFWriter.write([RichTextRun(text: "The "), RichTextRun(text: "OAS", bold: true),
+                                                               RichTextRun(text: " meeting.")]))),
+            // With RTF whose text is another's, which the codec keeps as it came.
             ResearchNoteExport(id: id(3), documentId: "d5", volumeId: "frus1961-63v06", bodyText: "In no project.",
                                projectIds: [], userTagIds: [id(21)], selectedSummaryIds: [], linkedHighlightIds: [],
-                               createdAt: date("2026-03-04T10:00:00Z"), lastModified: date("2026-03-04T12:34:56Z")),
+                               createdAt: date("2026-03-04T10:00:00Z"), lastModified: date("2026-03-04T12:34:56Z"),
+                               richText: Data(#"{\rtf1\ansi\ansicpg1252\cocoartf2868 {\fonttbl\f0\fnil Helvetica;}\f0 Another text}"#.utf8)),
         ]
         envelope.projects = [
             ProjectExport(id: id(40), name: "Bay of Pigs review", researchQuestion: "What did the planners expect?",

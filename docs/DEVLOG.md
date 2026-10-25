@@ -2,6 +2,65 @@
 
 One entry per session, newest first.
 
+## Session 16c: the import of a Mac JSON export
+
+25 October 2026 · branch `claude/s16c-json-import` · PR_LINK · upstream `503a730b`, unchanged
+
+Phase 2's row S16c, on the critical path: S16d, the export, S16e and S17d follow it. The Mac's JSON export comes into the server's research store whole, every type a file of format version 1 to 7 carries, each record under its Mac id, through `POST /api/v1/me/import` as a job, and Settings ▸ Data imports a file and shows its report. No upstream pull request, no pin move and no schema change: S14a's 23 tables hold it all.
+
+**What the app's code says,** at `503a730b`:
+
+- **The file** is the kit's `ResearchDataEnvelope`, read by its tolerant decoder (`makeDecoder()`): every version from 1 decodes, a type or field it cannot carry as empty or none. Version 3 added the trails, 4 a search's capture fields, 5 a summary's authorship, 6 archive visits, 7 the eight other types and what 6 dropped (a note's RTF, a collection's front matter, settings and structure, a project's focus tags and lead weights, a summary's headnote flag). It carries the researcher's own prompts only: the standard ones, whose ids each device mints (`PromptTemplate.id` is never persisted), never.
+- **A smart collection whose saved search is gone** keeps its `savedSearchId`; the app reads it as "The linked saved search could not be found. It may have been deleted." and offers Unlink. **An entry of a kind it does not know** reads as `.unrecognized` (`CollectionEntry.entryKind`), an inert row that resolve and export skip. **Every headnote draft** the app makes carries the prompt `0EAD0000-0000-4000-8000-000000000001` (the inspector stamps it, a duplicate copies it). **Synced settings** in several copies keep the earliest made (`SettingsSyncCoordinator`).
+- **A saved search** keeps its `SearchParameters` as JSON beside scalar columns `SavedSearch.init(name:parameters:)` writes from it, and its run as `SavedSearchFreshness`, both with a plain `JSONEncoder()`; a plan's tiers and toggles are written by their setters the same way.
+- The app has no importer of its own.
+
+**Delivered**
+
+- **The store** (`Sources/FRUSLightCore/UserResearchImport.swift`): a batch of rows by table, each with the values its file carries and the defaults a new row takes, written under the user in one transaction. A row the store holds by user and id (by id alone in an instance's table, by user alone for the settings) is replaced only when the copy is newer by `ImportStamp`, its time of change or else its creation, or for a type with none the time of what it records; and then only in the columns the copy carries. Then the user's `user_search` rows are made again from all their notes and summaries.
+- **The mapping** (`Sources/FRUSLightAPI/MacImport.swift`): each of the envelope's records as its table's row, by the file's version, with the app's initial value for each field an older file cannot carry; a record a file repeats under one id written once, the newer copy, and counted; the report.
+- **The route** (`Sources/FRUSLightAPI/Imports.swift`): `POST /api/v1/me/import`, the export itself as the body, of 128 MiB at most, its `formatVersion` read at once (`INVALID_EXPORT`, `UNSUPPORTED_FORMAT_VERSION`), then a job on the server's queue, 202 with `Location: /api/v1/me/import/{id}`; one import a user at a time (`IMPORT_IN_PROGRESS`); `GET /api/v1/me/import/{id}`, the status and, once done, the report or the problem (`IMPORT_NOT_FOUND` for none).
+- **The browser app:** Settings ▸ Data's Import a JSON Export: the file, Import, the job's line as it waits and runs, and the report: a table of each kind of record in the order and the words of the app's export sheet, with what the file held, came in, replaced an older copy or was kept, and a line for each thing the import made of what the file does not say.
+- **The parity harness:** `StoredResearch`, which reads a user's rows back by its own SQL as the kit's records, and `ResearchComparison`, which holds them to a file type by type and id by id, naming a field that differs but never its value; `frus-parity import-check <export>`, which imports an export into a store of its own as the route's job does and reads it back; `frus-parity check-highlights <export> --tei <dir>`, check 6's Swift half on an export's highlights, which writes the browser suite's samples; and `frus-parity import-fixture`, which writes `fixtures/import/research-export.json`, the browser suite's export, made with the kit's own records, its highlight over d3's own text.
+
+**Decided here, each the web's own**
+
+- **No pin move first.** Check 6 on an export's highlights needs the kit's test of a stored passage, `HighlightReanchor.extracts`, which FRUS-Explorer#1789 made public after the pin. Its two forms are the kit's public `flatTextExcerpt` of the flat text between the offsets, and that text itself; the harness composes them, and `ImportParityTests` holds the kit's private body to them line for line, so the pin move past #1789, S17c's or S12d's, calls the kit's. A pin move first would have been a pull request of its own, with the golden files and check 6's samples to remake.
+- **"Marked unlinked"** is read as the app reads a link whose search was deleted: the collection keeps its `savedSearchId`, and the report names it with the app's sentence. A later import that brings the search links it again, which a mark in the store would not.
+- **"Kept inert":** a version-6 entry with no document is written with the kind `unrecognized`, the raw value of the app's own inert kind.
+- **A field an older file cannot carry** keeps the store's value when its copy replaces the row, and in a new row takes the app's initial value, which a parity test reads from the app's model classes. So a version-6 file newer than the store's version-7 copy keeps the front matter, the RTF and the focus tags 6 does not carry.
+- **A type with no time of change** compares the time it was made, so a highlight or a correction the store holds is kept; the trails, reviews, leads and settings compare the time of what they record.
+- **A record repeated in one file** under one id, as the owner's was, is written once, the newer copy, and counted as repeated, apart from what the store kept.
+- **The instance's two corrections** are imported for a curator only, which under `FRUS_AUTH=none` the one user is; anyone else's are set aside and counted.
+- **One import a user at a time,** each kept in memory with its report, the last 50 finished, until the server restarts.
+- **128 MiB** for an export: a summary takes a few kilobytes, so tens of thousands of them fit, and the job, which holds the file and its records at once, stays within a small server's memory. INSTALL's nginx recipes raise nginx's own limit to it.
+- **The report's names** are the app's export sheet's Contents, and the web's own for the parts that sheet counts in one row: Tags and Tag Assignments, Collection Entries, Archives Visit Documents and Targets.
+
+**The owner's export.** A version-6 export from the library holding the owner's writing, with Include AI-Generated Summaries on, made on 24 October and read only on this Mac: never committed, and nothing of it is in this repository but what follows. `frus-parity import-check` imported it in about 16 seconds and read every record of each of the 15 types it carries back as the file has it, the eight types 6 cannot carry counted as not carried; some notes and trail records came twice under one id, each repeat an exact copy, which the report counts as repeated. Through the API, on a Compose install of this branch's image, it imported the same: OWNER_API. Check 6 on its highlights: in Swift, the TEI clone at `HistoryAtState/frus` `6170e4b32` matched every highlight's rendering version, and each one's selected text is the kit's excerpt; in Chromium, CHECK6_CHROMIUM.
+
+**Tests**
+
+- **FRUSLightCoreTests,** 96 to CORE: `UserResearchImportTests`, 8: rows under the user with the Mac's ids; the newer-copy rule at each edge; a replace writing only what the file carries; each user's own and the instance's shared; `user_search` made again for the user; the collections whose search is not held; a batch that does not fit, writing nothing; a stamp for every table.
+- **FRUSLightServerTests,** 150 to SERVER: `ImportRouteTests`, 6: the job queued behind another and its report, `IMPORT_IN_PROGRESS`, the same file again kept, `IMPORT_NOT_FOUND`; the refusals at once; a file whose records do not decode failing its job and keeping nothing; the guard and the import's own limit; user data off and the route under a path; the corrections set aside for a user who is no curator.
+- **FRUSParityTests,** 153 to PARITY: `ImportParityTests`, 13: an envelope the kit writes with every type, at 7 and at 6, through the route, field for field; each of the kit's own files of versions 1 to 7 (`ResearchDataFixtures`, read from the submodule's source) whole; a newer copy replacing only its row and only what 6 carries; a record the file repeats; the check naming a record the store holds otherwise or not at all; the browser suite's export byte for byte as the command writes it; check 6 on an export's highlights over the fixture TEI; and the mirrors: the headnote prompt, the inert kind, the models' initial values, the saved search's columns and watermark, a plan's blobs and the synced settings. `NoteViewParityTests` holds the report's names to the export sheet.
+- **The web unit suite,** 274 to 278 in 30 files: `ImportSection.test.tsx`.
+- **The browser suite,** 38 to E2E tests: `import.spec.ts`, by pointer, three imports of the browser suite's export, All Notes filtered by an imported project, and d3's imported summaries in the rail with the app's words and their prompts' names; and by keyboard, the file chosen and imported. `notes.spec.ts` reads the projects an import leaves; `highlights-check6.spec.ts` reads another file of samples by `FRUS_CHECK6_SAMPLES`.
+- **`scripts/compose-smoke`:** an import of more than 4 MiB through nginx under the path, with the recipe's limit.
+
+**Results**
+
+RESULTS
+
+**Records**
+
+- `docs/SPEC.md`: how the web imports a Mac JSON export, the two limits' unlinked collection, the route and the report under The user's data, the body limits, Settings ▸ Data, the security line and check 6's row.
+- `docs/PLAN.md`: the row's unlinked sentence, its done paragraph, and the owner's checkpoint done.
+- `docs/INSTALL.md`: Bring your research from the Mac, the routes and their codes, and the nginx recipes' `client_max_body_size 128m`, which compose-smoke runs.
+- `docs/COORDINATION.md` §1: the kit calls the import adds, and its standing mirrors.
+- README's status; and this log.
+
+**Next: S16d,** the export, which reads what this row writes; then S16e, and S17d once S17c's pin move brings the kit's search of user text; with S14e, S14d and S14b on the server's track. The owner's export repeated records under one id, an exact copy each: worth a look in the app, whose `DuplicateRecordCleanup` collapses such copies, since its export wrote them.
+
 ## Session 15d: notes and summaries, and the rich-text codec
 
 24 October 2026 · branch `claude/s15d-notes-summaries` · [#61](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/61) · upstream `503a730b`, unchanged

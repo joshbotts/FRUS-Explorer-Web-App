@@ -124,10 +124,9 @@ struct UserDataServices: Sendable {
     /// sends a GET's runs, while its runs and escapes fit in what is left. The app sets no limit; a
     /// Mac note an import leaves longer keeps its body until a shorter one is saved.
     static let noteTextLimit = noteBodyLimit / 4
-    /// The largest Mac JSON export an import may send (S16c), the web's own: many times the
-    /// research of a library that has summarized thousands of documents, which exports in some
-    /// 10 MB, and small enough that the job's decoding, which holds the file and its records at
-    /// once, stays within a small server's memory.
+    /// The largest Mac JSON export an import may send (S16c), the web's own: a summary takes a few
+    /// kilobytes, so tens of thousands of them fit, and the job's decoding, which holds the file and
+    /// its records at once, stays within a small server's memory.
     static let importBodyLimit = 128 * 1_024 * 1_024
 }
 

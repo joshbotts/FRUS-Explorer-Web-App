@@ -114,7 +114,7 @@ test('imports the kit’s export of every type, imports it again and keeps it, t
   await expect(section.getByText('A version-7 export, written on October 24, 2026.')).toBeVisible();
   await expect(section.getByText(/^The file held a second set of synced settings/)).toBeVisible();
   await expect(section.getByText('One note keeps formatting this server cannot show: it opens as plain text until you edit it here.')).toBeVisible();
-  await expect(section.getByText('A deleted search’s: The linked saved search could not be found. It may have been deleted.')).toBeVisible();
+  await expect(section.getByText("A deleted search's: The linked saved search could not be found. It may have been deleted.")).toBeVisible();
   await axeCheck(page);
 
   // Again: every record kept, as the store's copy is as new.
