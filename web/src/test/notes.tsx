@@ -1,9 +1,10 @@
 // What the notes' and summaries' tests share: the user, a note and a summary with the fields the
-// server writes, what a change sent, and a component rendered with a query client of its own.
+// server writes, what a change sent, and a component rendered with a query client of its own; and
+// Settings ▸ Data's, what an export carries of each type.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import type { Me, Note, NoteSummary, Summary, UserTag } from '../api/types';
+import type { ExportContents, Me, Note, NoteSummary, ResearchType, Summary, UserTag } from '../api/types';
 
 export const me: Me = { userId: 'owner', displayName: 'Owner', auth: 'none', roles: ['reader', 'curator', 'admin'], userData: true, csrfToken: 'token-1' };
 
@@ -14,6 +15,38 @@ export const documentPaths = {
   notes: '/api/v1/me/volumes/frus1961-63v06/documents/d1/notes',
   summaries: '/api/v1/me/volumes/frus1961-63v06/documents/d1/summaries',
 };
+
+/** The 23 model types, in the user store's order, as the server lists them. */
+export const storeOrder: ResearchType[] = [
+  'ResearchNote',
+  'DocumentHighlight',
+  'UserTag',
+  'DocumentTagAssignment',
+  'Collection',
+  'CollectionEntry',
+  'Project',
+  'ProjectLeadEntry',
+  'SavedSearch',
+  'WorkingCorpus',
+  'CustomVolumeScope',
+  'ReadingHistoryEntry',
+  'SearchHistoryEntry',
+  'ExportHistoryEntry',
+  'ArchiveVisitPlan',
+  'ArchiveVisitDocument',
+  'ArchiveVisitTarget',
+  'GeneratedSummary',
+  'SummarizationPrompt',
+  'AnnotationReview',
+  'SyncedPreferences',
+  'PersonClusterOverride',
+  'DocumentClassificationOverride',
+];
+
+/** What GET /api/v1/me/export/contents answers: `counts` of each type, none of the rest. */
+export function exportContents(counts: Partial<Record<ResearchType, number>> = {}): ExportContents {
+  return { formatVersion: 7, types: storeOrder.map((type) => ({ type, count: counts[type] ?? 0 })) };
+}
 
 export function noteSummary(fields: Partial<NoteSummary> & Pick<NoteSummary, 'id'>): NoteSummary {
   return {

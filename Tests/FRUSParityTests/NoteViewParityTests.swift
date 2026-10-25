@@ -4,7 +4,8 @@
 // selection bar's Note, the rail's Notes and Summary, the note editor, its formatting bar and link
 // popover, All Notes and the Markdown export, and from S16c the import's names of the records its
 // report counts, the export sheet's, each in the copy.ts block the browser app reads it from, and
-// its format strings as functions; All Notes' rows, filters and count, which
+// its format strings as functions; from S16d the sheet's Contents, its rows' order and counts, its
+// switch and its JSON row; All Notes' rows, filters and count, which
 // web/src/research/notesRules.ts mirrors until S17b moves them into the kit; the rail's note rows,
 // its summary preview and history control, and its sections' open states; and the editor's rules
 // for a summary inserted, a tag made, the formatting bar's toggles and its link. A pin move that
@@ -161,6 +162,15 @@ import Testing
             ("Collections/CollectionListView.swift", "export.smart.missingSearch",
              "The linked saved search could not be found. It may have been deleted.", "dataSettings", "missingSearch"),
             ("Models/Collection.swift", "collection.untitled.name", "Untitled Collection", "dataSettings", "untitledCollection"),
+            // S16d: the export sheet's Contents, its switch and its JSON row.
+            ("Export/ResearchDataExportView.swift", "settings.export.section.contents", "Contents", "dataSettings", "contents"),
+            ("Export/ResearchDataExportView.swift", "settings.export.tags", "Tags & Assignments", "dataSettings", "tagsAndAssignments"),
+            ("Export/ResearchDataExportView.swift", "settings.export.includeSummaries", "Include AI-Generated Summaries", "dataSettings",
+             "includeSummaries"),
+            ("Export/ResearchDataExportView.swift", "settings.export.json.action", "Export as JSON", "dataSettings", "exportJSON"),
+            ("Export/ResearchDataExportView.swift", "settings.export.json.footer.searches",
+             "One JSON file with your notes, tags, highlights, collections, custom prompts, projects, archive visit plans, saved searches, working corpora, volume scopes, corrections, reviewed changes, Suggested Next leads, and synced settings. It also holds your research trail: every document you opened, every search you ran and how many results it returned, and every collection you exported.",
+             "dataSettings", "jsonFooter"),
         ]
         let sources = Sources()
         for word in words {
@@ -188,6 +198,12 @@ import Testing
             // The app interpolates the count, which a localized string groups.
             ("Export/ResearchDataExportView.swift", "settings.export.markdown.action", #"Export Notes as Markdown (\(markdownExportURLs.count))"#, "dataSettings",
              "exportMarkdown: (count: number) => `Export Notes as Markdown (${count.toLocaleString('en-US')})`,"),
+            ("Export/ResearchDataExportView.swift", "settings.export.json.error",
+             #"Couldn’t prepare the export: \(error.localizedDescription)"#, "dataSettings",
+             "jsonError: (detail: string) => `Couldn’t prepare the export: ${detail}`,"),
+            ("Export/ResearchDataExportView.swift", "settings.export.includeSummaries.footer",
+             #"Adds all \(summaries.count) generated summaries to the JSON export. Off by default since AI output can be large."#, "dataSettings",
+             "includeSummariesFooter: (count: number) => `Adds all ${count.toLocaleString('en-US')} generated summaries to the JSON export. Off by default since AI output can be large.`,"),
         ]
         let sources = Sources()
         for format in formats {
@@ -203,6 +219,47 @@ import Testing
             "const grouped = count.toLocaleString('en-US');",
             "return count === 1 ? copy.allNotes.noteOne(grouped) : copy.allNotes.noteMany(grouped);",
         ], file: "notesRules.ts")
+    }
+
+    /// The export sheet's Contents (S16d), as `DataExportSections` lists it, in its order, each row
+    /// counting what the web's row counts, and `ExportSection.tsx`'s rows in the same order: the
+    /// researcher's own prompts, as the export carries them; tags with their assignments in one row;
+    /// the trail's three and the eight of version 7 by the counts the sheet takes from its read.
+    @Test func theExportSheetsContentsAreTheWebs() throws {
+        let sources = Sources()
+        let sheet = try sources.app("Export/ResearchDataExportView.swift")
+        let start = try #require(sheet.range(of: #"Section(String(localized: "settings.export.section.contents""#))
+        let end = try #require(sheet.range(of: "Section { Toggle(", range: start.upperBound..<sheet.endIndex))
+        let contents = String(sheet[start.upperBound..<end.lowerBound])
+        let rows = contents.matches(of: /LabeledContent\(String\(localized: "settings\.export\.(\w+)", defaultValue: "[^"]*"\), value: "\\\((.*?)\)"\)/)
+            .map { (String($0.1), String($0.2)) }
+        let expected: [(key: String, count: String, types: [String])] = [
+            ("notes", "notes.count", ["ResearchNote"]),
+            ("tags", "tags.count + tagAssignments.count", ["UserTag", "DocumentTagAssignment"]),
+            ("highlights", "highlights.count", ["DocumentHighlight"]), ("collections", "collections.count", ["Collection"]),
+            ("prompts", "userPromptCount", ["SummarizationPrompt"]), ("projects", "projects.count", ["Project"]),
+            ("archiveVisits", "archiveVisits.count", ["ArchiveVisitPlan"]),
+            ("savedSearches", "inventoryCounts.savedSearches", ["SavedSearch"]),
+            ("workingCorpora", "inventoryCounts.workingCorpora", ["WorkingCorpus"]),
+            ("volumeScopes", "inventoryCounts.volumeScopes", ["CustomVolumeScope"]),
+            ("classificationCorrections", "inventoryCounts.classificationCorrections", ["DocumentClassificationOverride"]),
+            ("personCorrections", "inventoryCounts.personCorrections", ["PersonClusterOverride"]),
+            ("reviewedChanges", "inventoryCounts.reviewedChanges", ["AnnotationReview"]),
+            ("suggestedNext", "inventoryCounts.suggestedLeads", ["ProjectLeadEntry"]),
+            ("syncedSettings", "inventoryCounts.syncedSettings", ["SyncedPreferences"]),
+            ("readingHistory", "trailCounts.visits", ["ReadingHistoryEntry"]), ("searchHistory", "trailCounts.searches", ["SearchHistoryEntry"]),
+            ("exportHistory", "trailCounts.exports", ["ExportHistoryEntry"]),
+        ]
+        #expect(rows.map(\.0) == expected.map(\.key) && rows.map(\.1) == expected.map(\.count), "\(rows)")
+        #expect(sheet.contains("private var userPromptCount: Int { prompts.filter { !$0.isStandard }.count }"))
+        let web = try sources.web("settings/ExportSection.tsx")
+        let webRows = web.matches(of: /\{ types: \[('[^\]]*)\]/).map { match in
+            match.1.split(separator: ",").map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "' ")) }
+        }
+        #expect(webRows == expected.map(\.types), "\(webRows)")
+        #expect(web.contains("{ types: ['UserTag', 'DocumentTagAssignment'], label: words.tagsAndAssignments },"))
+        // Each count as the sheet's `value: "\(…)"` writes it, an interpolated number, no digit grouped.
+        #expect(web.contains("<td>{String(row.types.reduce((sum, type) => sum + countOf(contents.data, type), 0))}</td>"))
     }
 
     /// All Notes' rows, as `NotesPaneSnapshot` builds them, and its filters and count, as it and

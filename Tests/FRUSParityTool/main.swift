@@ -15,6 +15,7 @@
 //   frus-parity rich-text-fixtures [--repo <root>]
 //   frus-parity import-fixture [--repo <root>]
 //   frus-parity import-check <export.json> [--keep <dir>]
+//   frus-parity export-check <export.json> [--out <export.json>]
 //   frus-parity check-highlights <export.json> --tei <dir> [--samples <out.json>] [--repo <root>]
 //
 // The repository is found from the current directory unless --repo names it. Exit status: 0 when
@@ -44,6 +45,7 @@ let usage = """
            frus-parity rich-text-fixtures [--repo <root>]
            frus-parity import-fixture [--repo <root>]
            frus-parity import-check <export.json> [--keep <dir>]
+           frus-parity export-check <export.json> [--out <export.json>]
            frus-parity check-highlights <export.json> --tei <dir> [--samples <out.json>] [--repo <root>]
     """
 
@@ -543,6 +545,33 @@ func importCheck(_ arguments: Arguments) async throws {
     guard outcome.comparison.isWhole else { fail("the store does not hold every record as the file has it") }
 }
 
+/// A Mac JSON export imported into a store of its own and exported again, as the server's import and
+/// export routes do (S16d): per type, whether the export carries every record of the file as the file
+/// has it, at the file's version, and for a file of the kit's version which keys the export writes
+/// otherwise than the file. It prints counts, ids, field names and keys, never what a record says.
+/// The store is removed afterwards; --out keeps the export.
+func exportCheck(_ arguments: Arguments) async throws {
+    guard arguments.positional.count == 1 else { throw UsageError("export-check takes one export file") }
+    let data = try Data(contentsOf: URL(fileURLWithPath: arguments.positional[0]))
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("frus-export-check-\(UUID().uuidString)",
+                                                                                 isDirectory: true)
+    // Removed before any exit, a failure's too, since `fail` exits: the store holds the export's records.
+    let outcome: ExportCheck.Outcome
+    do {
+        outcome = try await ExportCheck.run(data, in: directory)
+    } catch {
+        try? FileManager.default.removeItem(at: directory)
+        throw error
+    }
+    try? FileManager.default.removeItem(at: directory)
+    if let out = arguments.options["--out"] { try outcome.export.write(to: URL(fileURLWithPath: out), options: .atomic) }
+    for line in ExportCheck.describe(outcome) { print(line) }
+    guard outcome.comparison.isWhole else { fail("the export does not carry every record as the file has it") }
+    if let keys = outcome.differentKeys, keys != [ResearchExport.webKey] {
+        fail("the export differs from the file by more than the web's key")
+    }
+}
+
 /// Check 6 on a Mac JSON export's highlights (S16c), its Swift half: each highlight's document from the
 /// TEI folder `--tei`, and where the TEI matches, its selected text one of SPEC's two forms. With
 /// --samples it writes the matched highlights as check 6's samples, for the browser suite's half
@@ -600,6 +629,8 @@ do {
         try await importFixture(Arguments(arguments.dropFirst(), options: ["--repo"]))
     case "import-check":
         try await importCheck(Arguments(arguments.dropFirst(), options: ["--keep"]))
+    case "export-check":
+        try await exportCheck(Arguments(arguments.dropFirst(), options: ["--out"]))
     case "check-highlights":
         try await checkHighlights(Arguments(arguments.dropFirst(), options: ["--tei", "--samples", "--repo"]))
     case "time-search":

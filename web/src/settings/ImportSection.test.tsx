@@ -2,7 +2,7 @@ import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ImportStatus, ImportTypeCount, ResearchImportReport, ResearchType } from '../api/types';
-import { me } from '../test/notes';
+import { exportContents, me } from '../test/notes';
 import { ProblemAnswer, ready, renderAt, stubServer } from '../test/renderRoute';
 import { reportOrder } from './ImportSection';
 
@@ -62,19 +62,20 @@ describe('Settings ▸ Data’s import', () => {
   it('sends the chosen export as it is, follows its job, and shows what came in, was replaced or was kept, in the export sheet’s order and words', async () => {
     const done = report(
       {
-        ResearchNote: { inFile: 22, added: 16, repeated: 6 },
-        UserTag: { inFile: 21, added: 20, kept: 1 },
-        DocumentHighlight: { inFile: 8, added: 7, replaced: 1 },
-        GeneratedSummary: { inFile: 6592, added: 6592 },
+        ResearchNote: { inFile: 27, added: 21, repeated: 6 },
+        UserTag: { inFile: 18, added: 17, kept: 1 },
+        DocumentHighlight: { inFile: 9, added: 8, replaced: 1 },
+        GeneratedSummary: { inFile: 5280, added: 5280 },
       },
       { headnoteDrafts: 3, inertEntries: 35, unlinkedCollections: [{ id: 'C1', name: 'Every covert action' }, { id: 'C2', name: ' ' }] },
     );
     const statuses = [status('queued'), status('running'), status('succeeded', { report: done })];
-    let notesListed = 0;
+    let contentsRead = 0;
     const fetch = stubServer({
       '/readyz': ready,
       '/api/v1/me': me,
-      '/api/v1/me/notes': () => ({ total: notesListed++, items: [] }),
+      '/api/v1/me/export/contents': () => exportContents({ ResearchNote: contentsRead++ }),
+      '/api/v1/me/notes': { total: 0, items: [] },
       'POST /api/v1/me/import': status('queued'),
       [`/api/v1/me/import/${importId}`]: () => statuses.shift() ?? status('succeeded', { report: done }),
     });
@@ -120,9 +121,9 @@ describe('Settings ▸ Data’s import', () => {
       'Collections Exported',
       'Generated Summaries',
     ]);
-    expect(rows[1]).toEqual(['Research Notes', '22', '16', '0', '0']);
-    expect(rows[4]).toEqual(['Highlights', '8', '7', '1', '0']);
-    expect(rows[15]).toEqual(['Generated Summaries', '6,592', '6,592', '0', '0']);
+    expect(rows[1]).toEqual(['Research Notes', '27', '21', '0', '0']);
+    expect(rows[4]).toEqual(['Highlights', '9', '8', '1', '0']);
+    expect(rows[15]).toEqual(['Generated Summaries', '5,280', '5,280', '0', '0']);
     expect(
       within(section)
         .getAllByRole('listitem')
@@ -137,8 +138,8 @@ describe('Settings ▸ Data’s import', () => {
       'Every covert action: The linked saved search could not be found. It may have been deleted.',
       'Untitled Collection: The linked saved search could not be found. It may have been deleted.',
     ]);
-    // What it brought is read again: the export's count of notes among it.
-    await waitFor(() => expect(notesListed).toBeGreaterThan(1));
+    // What it brought is read again: what an export carries, the count of notes among it.
+    await waitFor(() => expect(contentsRead).toBeGreaterThan(1));
     expect(button.hasAttribute('disabled')).toBe(false);
   });
 
@@ -146,6 +147,7 @@ describe('Settings ▸ Data’s import', () => {
     stubServer({
       '/readyz': ready,
       '/api/v1/me': me,
+      '/api/v1/me/export/contents': exportContents(),
       '/api/v1/me/notes': { total: 0, items: [] },
       'POST /api/v1/me/import': new ProblemAnswer(400, 'UNSUPPORTED_FORMAT_VERSION', 'This export is format version 8, and this server reads versions 1 to 7.'),
     });
@@ -165,6 +167,7 @@ describe('Settings ▸ Data’s import', () => {
     stubServer({
       '/readyz': ready,
       '/api/v1/me': me,
+      '/api/v1/me/export/contents': exportContents(),
       '/api/v1/me/notes': { total: 0, items: [] },
       'POST /api/v1/me/import': status('running'),
       [`/api/v1/me/import/${importId}`]: status('failed', { problem: { code: 'INVALID_EXPORT', detail: 'This export could not be read: notes is missing.' } }),
@@ -184,6 +187,7 @@ describe('Settings ▸ Data’s import', () => {
     stubServer({
       '/readyz': ready,
       '/api/v1/me': me,
+      '/api/v1/me/export/contents': exportContents(),
       '/api/v1/me/notes': { total: 0, items: [] },
       'POST /api/v1/me/import': status('running'),
       [`/api/v1/me/import/${importId}`]: () => {

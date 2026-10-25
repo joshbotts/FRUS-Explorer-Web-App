@@ -1164,6 +1164,31 @@ button.destructive {
   margin-top: 0;
 }
 
+/* Settings ▸ Data's export (S16d): Contents, as the app's export sheet lists it. */
+.export-contents h2 {
+  font-size: 1.25rem;
+}
+
+.export-contents table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.export-contents th,
+.export-contents td {
+  padding: 0.125rem 0.75rem 0.125rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.export-contents th[scope='row'] {
+  font-weight: normal;
+  text-align: left;
+}
+
+.export-contents td {
+  text-align: right;
+}
+
 /* Settings ▸ Data's import (S16c): the file, its job's line, and its report. */
 .import {
   margin-top: 2rem;
