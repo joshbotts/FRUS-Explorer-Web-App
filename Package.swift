@@ -231,11 +231,12 @@ let package = Package(
         ),
         // The harness itself: the index summary (check 2), the parse and results comparisons
         // (check 3), the render comparison (check 4), the golden files' validation, and the
-        // indexing metrics.
+        // indexing metrics; since S16c, the import of a Mac JSON export it is given, through the
+        // server's own mapping, read back from the store.
         .target(
             name: "FRUSParity",
             dependencies: [
-                "ParityFormat", "FTS5Store", "FRUSCoreKit", "CSQLite", "FRUSLightCore", "FRUSRichText",
+                "ParityFormat", "FTS5Store", "FRUSCoreKit", "CSQLite", "FRUSLightCore", "FRUSRichText", "FRUSLightAPI",
                 .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "Tests/FRUSParity",
@@ -243,7 +244,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "FRUSParityTool",
-            dependencies: ["FRUSParity", "ParityFormat"],
+            dependencies: ["FRUSParity", "ParityFormat", "FRUSLightAPI"],
             path: "Tests/FRUSParityTool",
             swiftSettings: swift6
         ),

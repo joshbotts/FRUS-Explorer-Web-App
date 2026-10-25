@@ -13,10 +13,14 @@
 //   frus-parity time-search <db> [--all] [--ids <id,...>] [--retained] [--out <results.json>] [--queries <jsonl>] [--resources <dir>] [--repo <root>]
 //   frus-parity highlight-samples --out <samples.json> [--repo <root>]
 //   frus-parity rich-text-fixtures [--repo <root>]
+//   frus-parity import-fixture [--repo <root>]
+//   frus-parity import-check <export.json> [--keep <dir>]
+//   frus-parity check-highlights <export.json> --tei <dir> [--samples <out.json>] [--repo <root>]
 //
 // The repository is found from the current directory unless --repo names it. Exit status: 0 when
 // the check passes, 1 on a refusal, a difference or a problem, 2 on a usage error.
 
+import FRUSLightAPI
 import FRUSParity
 import Foundation
 #if canImport(FoundationNetworking)
@@ -38,6 +42,9 @@ let usage = """
            frus-parity time-search <db> [--all] [--ids <id,...>] [--retained] [--out <results.json>] [--queries <jsonl>] [--resources <dir>] [--repo <root>]
            frus-parity highlight-samples --out <samples.json> [--repo <root>]
            frus-parity rich-text-fixtures [--repo <root>]
+           frus-parity import-fixture [--repo <root>]
+           frus-parity import-check <export.json> [--keep <dir>]
+           frus-parity check-highlights <export.json> --tei <dir> [--samples <out.json>] [--repo <root>]
     """
 
 /// A command's positional arguments, flags and options.
@@ -501,6 +508,58 @@ func richTextFixtures(_ arguments: Arguments) throws {
     print("the codec's RTF for \(count) web cases, in \(RichTextWebCases.path)'s folder")
 }
 
+/// The browser suite's Mac JSON export (S16c), as the kit writes it, with its highlight over d3's own
+/// text: fixtures/import/research-export.json, which FRUSParityTests holds to this.
+func importFixture(_ arguments: Arguments) async throws {
+    guard arguments.positional.isEmpty else { throw UsageError("import-fixture takes only --repo") }
+    let layout = try repository(arguments)
+    let url = layout.root.appendingPathComponent(ImportFixtures.browserSuitePath)
+    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try await ImportFixtures.browserSuiteFile(layout: layout).write(to: url)
+    print("the browser suite's export, in \(ImportFixtures.browserSuitePath)")
+}
+
+/// A Mac JSON export imported into a store of its own, as the server's import route does it, and read
+/// back as the kit's records (S16c): per type, what the file held, what became of it, and whether the
+/// store holds every record as the file has it. It prints counts, ids and field names, never what a
+/// record says. The store is removed afterwards, unless --keep names a folder for it.
+func importCheck(_ arguments: Arguments) async throws {
+    guard arguments.positional.count == 1 else { throw UsageError("import-check takes one export file") }
+    let data = try Data(contentsOf: URL(fileURLWithPath: arguments.positional[0]))
+    let directory = arguments.options["--keep"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+        ?? FileManager.default.temporaryDirectory.appendingPathComponent("frus-import-check-\(UUID().uuidString)", isDirectory: true)
+    defer { if arguments.options["--keep"] == nil { try? FileManager.default.removeItem(at: directory) } }
+    let outcome = try await ImportCheck.run(data, in: directory)
+    for line in ImportCheck.describe(outcome) { print(line) }
+    guard outcome.comparison.isWhole else { fail("the store does not hold every record as the file has it") }
+}
+
+/// Check 6 on a Mac JSON export's highlights (S16c), its Swift half: each highlight's document from the
+/// TEI folder `--tei`, and where the TEI matches, its selected text one of SPEC's two forms. With
+/// --samples it writes the matched highlights as check 6's samples, for the browser suite's half
+/// (FRUS_CHECK6_SAMPLES). It prints counts, ids and reasons, never what a highlight says.
+func checkHighlights(_ arguments: Arguments) async throws {
+    guard arguments.positional.count == 1, let tei = arguments.options["--tei"] else {
+        throw UsageError("check-highlights takes one export file and --tei <dir>")
+    }
+    let layout = try repository(arguments)
+    let envelope = try MacImport.envelope(of: try Data(contentsOf: URL(fileURLWithPath: arguments.positional[0])))
+    let result = try await ExportHighlights.check(envelope.highlights, layout: layout, tei: URL(fileURLWithPath: tei, isDirectory: true))
+    let documents = Set(envelope.highlights.map { "\($0.volumeId)/\($0.documentId)" }).count
+    let volumes = Set(envelope.highlights.map(\.volumeId)).count
+    print("check 6 on \(result.highlights) highlights in \(documents) documents of \(volumes) volumes:")
+    print("  the TEI matches for \(result.matched): \(result.passed) pass, \(result.rawForm) of them in the raw form of before 3 July")
+    print("  \(result.toReview.count) to review, which nothing moves; \(result.failures.count) fail")
+    for (id, reason) in result.toReview { print("  review \(id): \(reason)") }
+    for (id, reason) in result.failures { print("  FAIL \(id): \(reason)") }
+    for id in result.endingOnALineBreak { print("  \(id) ends on a line break, which the kit's renderer at the pin cannot draw: left out of the samples") }
+    if let out = arguments.options["--samples"] {
+        try GoldenJSON.write(result.samples, to: URL(fileURLWithPath: out))
+        print("  samples for the browser suite: \(result.samples.rows.count) documents, in \(out)")
+    }
+    guard result.failures.isEmpty else { fail("check 6 fails on \(result.failures.count) highlights") }
+}
+
 let arguments = CommandLine.arguments.dropFirst()
 do {
     switch arguments.first {
@@ -528,6 +587,12 @@ do {
         try await highlightSamples(Arguments(arguments.dropFirst(), options: ["--out", "--repo"]))
     case "rich-text-fixtures":
         try richTextFixtures(Arguments(arguments.dropFirst(), options: ["--repo"]))
+    case "import-fixture":
+        try await importFixture(Arguments(arguments.dropFirst(), options: ["--repo"]))
+    case "import-check":
+        try await importCheck(Arguments(arguments.dropFirst(), options: ["--keep"]))
+    case "check-highlights":
+        try await checkHighlights(Arguments(arguments.dropFirst(), options: ["--tei", "--samples", "--repo"]))
     case "time-search":
         try await timeSearch(Arguments(arguments.dropFirst(), flags: ["--all", "--retained"],
                                        options: ["--ids", "--out", "--queries", "--resources", "--repo"]))
