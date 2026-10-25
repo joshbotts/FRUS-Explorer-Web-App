@@ -151,7 +151,12 @@ public enum MacImport {
 
     /// The file, decoded as the kit decodes an export, with its tolerant decoder.
     public static func envelope(of data: Data) throws -> ResearchDataEnvelope {
-        let version = try formatVersion(of: data)
+        try envelope(of: data, formatVersion: try formatVersion(of: data))
+    }
+
+    /// The same, of a file whose `formatVersion` has been read already: the route's job's, which
+    /// parses the file once more, not twice.
+    static func envelope(of data: Data, formatVersion version: Int) throws -> ResearchDataEnvelope {
         do {
             let envelope = try ResearchDataEnvelope.makeDecoder().decode(ResearchDataEnvelope.self, from: data)
             precondition(envelope.formatVersion == version)

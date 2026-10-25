@@ -2,7 +2,8 @@
 // request's body, imported into the user's store as a job, and its report. The file's format version
 // is read at once, so a file that is not an export, or of a version the server does not read, is
 // refused before it waits; the rest, its decoding with the kit's envelope and its rows, is the job's.
-// A user has one import at a time. What each job did is kept while the server runs.
+// A user has one import at a time. What each job did is kept while the server runs, under an id of
+// its own, so that after a restart an old id names no import rather than another.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -12,7 +13,8 @@ import NIOCore
 
 /// An import of a Mac JSON export, and where it is.
 public struct ImportStatus: Codable, Equatable, Sendable, ResponseEncodable {
-    public var id: Int
+    /// A UUID, new for each import.
+    public var id: String
     /// `queued` behind another job, `running`, `succeeded` with its report, or `failed` with why.
     public var state: JobRecord.State
     /// The file's `formatVersion`, which was read before the job was queued.
@@ -40,8 +42,9 @@ public struct ImportProblem: Codable, Equatable, Sendable {
 
 /// Each import's status while the server runs, by its id, each the user's who made it.
 actor ResearchImports {
-    private var imports: [Int: (user: String, status: ImportStatus)] = [:]
-    private var nextID = 1
+    private var imports: [String: (user: String, status: ImportStatus)] = [:]
+    /// The ids in the order the imports began.
+    private var order: [String] = []
     /// How many finished imports are kept, the oldest forgotten first.
     private let kept = 50
 
@@ -50,29 +53,30 @@ actor ResearchImports {
         guard !imports.values.contains(where: { $0.user == user && [.queued, .running].contains($0.status.state) }) else {
             return nil
         }
-        let status = ImportStatus(id: nextID, state: .queued, formatVersion: formatVersion, report: nil, problem: nil)
-        imports[nextID] = (user, status)
-        nextID += 1
-        let finished = imports.filter { [.succeeded, .failed].contains($0.value.status.state) }.keys.sorted()
+        let status = ImportStatus(id: UUID().uuidString, state: .queued, formatVersion: formatVersion, report: nil, problem: nil)
+        imports[status.id] = (user, status)
+        order.append(status.id)
+        let finished = order.filter { [.succeeded, .failed].contains(imports[$0]?.status.state) }
         for id in finished.dropLast(kept) { imports[id] = nil }
+        order.removeAll { imports[$0] == nil }
         return status
     }
 
-    func run(_ id: Int) { imports[id]?.status.state = .running }
+    func run(_ id: String) { imports[id]?.status.state = .running }
 
-    func succeed(_ id: Int, with report: ResearchImportReport) {
+    func succeed(_ id: String, with report: ResearchImportReport) {
         imports[id]?.status.state = .succeeded
         imports[id]?.status.report = report
     }
 
-    func fail(_ id: Int, with problem: ImportProblem) {
+    func fail(_ id: String, with problem: ImportProblem) {
         imports[id]?.status.state = .failed
         imports[id]?.status.problem = problem
     }
 
-    /// The import, if it is the user's.
-    func status(_ id: Int, of user: String) -> ImportStatus? {
-        guard let entry = imports[id], entry.user == user else { return nil }
+    /// The import, if it is the user's; an id in any case names it.
+    func status(_ id: String, of user: String) -> ImportStatus? {
+        guard let entry = imports[TagReferences.normalized(id) ?? id], entry.user == user else { return nil }
         return entry.status
     }
 }
@@ -88,9 +92,10 @@ enum ImportRoutes {
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
             let data = try await body(of: request, limit: limit)
+            // Read off the cooperative pool, as the parse reads the whole file.
             let version: Int
             do {
-                version = try MacImport.formatVersion(of: data)
+                version = try await Blocking.run { try MacImport.formatVersion(of: data) }
             } catch let error as MacImportError {
                 throw error.problem
             }
@@ -104,7 +109,8 @@ enum ImportRoutes {
                 await imports.run(status.id)
                 do {
                     let report = try await Blocking.run {
-                        try MacImport.run(try MacImport.envelope(of: data), into: store, for: user.id, includingInstanceWide: curator)
+                        try MacImport.run(try MacImport.envelope(of: data, formatVersion: version), into: store, for: user.id,
+                                          includingInstanceWide: curator)
                     }
                     await imports.succeed(status.id, with: report)
                 } catch {
@@ -120,7 +126,7 @@ enum ImportRoutes {
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
             let id = try context.parameters.require("importId")
-            guard let number = Int(id), let status = await imports.status(number, of: user.id) else {
+            guard let status = await imports.status(id, of: user.id) else {
                 throw APIProblem(.notFound, code: "IMPORT_NOT_FOUND", detail: "You have no import with the id \(id).")
             }
             return EditedResponse(headers: [.cacheControl: "no-store"], response: status)

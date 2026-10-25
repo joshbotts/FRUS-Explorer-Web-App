@@ -607,6 +607,8 @@ export const copy = {
     importRunning: (name: string) => `Importing ${name}…`,
     importDone: (name: string) => `Imported ${name}`,
     importFailed: (name: string) => `${name} could not be imported. Nothing of it was kept.`,
+    importLost: (name: string) =>
+      `The import of ${name} can no longer be followed, as after the server restarts, so whether it finished is not known here. Importing the file again changes nothing it brought.`,
     importWritten: (version: number, date: string) => `A version-${version} export, written on ${date}.`,
     reportCaption: 'What the export held, and what became of it',
     reportType: 'Records',

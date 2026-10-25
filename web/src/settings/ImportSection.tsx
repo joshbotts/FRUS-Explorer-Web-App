@@ -48,12 +48,14 @@ export function ImportSection() {
   const client = useQueryClient();
   const inputId = useId();
   const [file, setFile] = useState<File | null>(null);
-  const [started, setStarted] = useState<{ id: number; name: string } | null>(null);
+  const [started, setStarted] = useState<{ id: string; name: string } | null>(null);
   const [sending, setSending] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<{ name: string; detail: string } | null>(null);
-  const status = useQuery({ ...importStatusQuery(started?.id ?? 0), enabled: started !== null });
-  const state = started ? status.data?.state : undefined;
-  const running = sending !== null || state === 'queued' || state === 'running' || (started !== null && status.isPending);
+  const status = useQuery({ ...importStatusQuery(started?.id ?? ''), enabled: started !== null });
+  // A status the server can no longer give, as after it restarts: the import cannot be followed.
+  const lost = started !== null && status.isError;
+  const state = started && !lost ? status.data?.state : undefined;
+  const running = sending !== null || state === 'queued' || state === 'running' || (started !== null && !lost && status.isPending);
 
   // What an import brought is in every list of the user's.
   useEffect(() => {
@@ -83,8 +85,7 @@ export function ImportSection() {
   else if (started && state === 'succeeded') line = words.importDone(started.name);
   const failure =
     refusal ??
-    (started && state === 'failed' ? { name: started.name, detail: status.data?.problem?.detail ?? '' } : null) ??
-    (started && status.isError ? { name: started.name, detail: errorMessage(status.error) } : null);
+    (started && state === 'failed' ? { name: started.name, detail: status.data?.problem?.detail ?? '' } : null);
 
   return (
     <section className="import" aria-labelledby={`${inputId}-title`}>
@@ -107,6 +108,11 @@ export function ImportSection() {
       {failure && (
         <p className="error" role="alert">
           {words.importFailed(failure.name)} {failure.detail}
+        </p>
+      )}
+      {started && lost && (
+        <p className="error" role="alert">
+          {words.importLost(started.name)} {errorMessage(status.error)}
         </p>
       )}
       {started && state === 'succeeded' && status.data?.report && <Report report={status.data.report} />}

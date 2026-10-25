@@ -50,8 +50,10 @@ function report(changes: Partial<Record<ResearchType, Partial<ImportTypeCount>>>
   };
 }
 
+const importId = 'A1B2C3D4-0000-4000-8000-000000000003';
+
 function status(state: ImportStatus['state'], extra: Partial<ImportStatus> = {}): ImportStatus {
-  return { id: 3, state, formatVersion: 6, report: null, problem: null, ...extra };
+  return { id: importId, state, formatVersion: 6, report: null, problem: null, ...extra };
 }
 
 const file = () => new File(['{"formatVersion": 6}'], 'frus-research-export.json', { type: 'application/json' });
@@ -74,7 +76,7 @@ describe('Settings ▸ Data’s import', () => {
       '/api/v1/me': me,
       '/api/v1/me/notes': () => ({ total: notesListed++, items: [] }),
       'POST /api/v1/me/import': status('queued'),
-      '/api/v1/me/import/3': () => statuses.shift() ?? status('succeeded', { report: done }),
+      [`/api/v1/me/import/${importId}`]: () => statuses.shift() ?? status('succeeded', { report: done }),
     });
     const user = userEvent.setup();
     renderAt('/settings/data');
@@ -165,7 +167,7 @@ describe('Settings ▸ Data’s import', () => {
       '/api/v1/me': me,
       '/api/v1/me/notes': { total: 0, items: [] },
       'POST /api/v1/me/import': status('running'),
-      '/api/v1/me/import/3': status('failed', { problem: { code: 'INVALID_EXPORT', detail: 'This export could not be read: notes is missing.' } }),
+      [`/api/v1/me/import/${importId}`]: status('failed', { problem: { code: 'INVALID_EXPORT', detail: 'This export could not be read: notes is missing.' } }),
     });
     const user = userEvent.setup();
     renderAt('/settings/data');
@@ -175,6 +177,33 @@ describe('Settings ▸ Data’s import', () => {
     expect((await within(section).findByRole('alert', undefined, { timeout: 3_000 })).textContent).toBe(
       'frus-research-export.json could not be imported. Nothing of it was kept. This export could not be read: notes is missing.',
     );
+  });
+
+  it('says when the import can no longer be followed, as after the server restarts, stops asking, and lets another start', async () => {
+    let asked = 0;
+    stubServer({
+      '/readyz': ready,
+      '/api/v1/me': me,
+      '/api/v1/me/notes': { total: 0, items: [] },
+      'POST /api/v1/me/import': status('running'),
+      [`/api/v1/me/import/${importId}`]: () => {
+        asked += 1;
+        return new ProblemAnswer(404, 'IMPORT_NOT_FOUND', `You have no import with the id ${importId}.`);
+      },
+    });
+    const user = userEvent.setup();
+    renderAt('/settings/data');
+    const section = await screen.findByRole('region', { name: 'Import a JSON Export' });
+    await user.upload(within(section).getByLabelText('Export file'), file());
+    await user.click(within(section).getByRole('button', { name: 'Import' }));
+    expect((await within(section).findByRole('alert')).textContent).toBe(
+      `The import of frus-research-export.json can no longer be followed, as after the server restarts, so whether it finished is not known here. Importing the file again changes nothing it brought. You have no import with the id ${importId}.`,
+    );
+    expect(within(section).getByRole('status').textContent).toBe('');
+    expect(within(section).getByRole('button', { name: 'Import' }).hasAttribute('disabled')).toBe(false);
+    const after = asked;
+    await new Promise((done) => setTimeout(done, 1_200));
+    expect(asked).toBe(after);
   });
 
   it('is not offered by a server that keeps no user data', async () => {

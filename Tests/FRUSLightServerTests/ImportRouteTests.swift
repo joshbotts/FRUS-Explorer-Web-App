@@ -72,18 +72,22 @@ import Testing
         try await fixture.app.test(.router) { client in
             let browser = Browser(client: client)
             let posted = try await browser.send(.post, Self.path, try Self.export())
-            #expect(posted.status == .accepted && posted.headers[.location] == "/api/v1/me/import/1")
-            #expect(posted.headers[.cacheControl] == "no-store")
             let queued = try decode(ImportStatus.self, posted)
-            #expect(queued == ImportStatus(id: 1, state: .queued, formatVersion: 7, report: nil, problem: nil))
+            let location = "/api/v1/me/import/\(queued.id)"
+            #expect(posted.status == .accepted && posted.headers[.location] == location)
+            #expect(UUID(uuidString: queued.id)?.uuidString == queued.id, "an id of its own, which a restart never gives again")
+            #expect(posted.headers[.cacheControl] == "no-store")
+            #expect(queued == ImportStatus(id: queued.id, state: .queued, formatVersion: 7, report: nil, problem: nil))
             let raw = try #require(try JSONSerialization.jsonObject(with: Data(buffer: posted.body)) as? [String: Any])
             #expect(Set(raw.keys) == ["id", "state", "formatVersion", "report", "problem"], "a report and a problem with none as null")
-            #expect(try decode(ImportStatus.self, try await browser.get("/api/v1/me/import/1")) == queued)
+            #expect(try decode(ImportStatus.self, try await browser.get(location)) == queued)
+            #expect(try decode(ImportStatus.self, try await browser.get("/api/v1/me/import/\(queued.id.lowercased())")) == queued,
+                    "its id in any case")
             let second = try await browser.send(.post, Self.path, try Self.export())
             #expect(second.status == .conflict && problemCode(second) == "IMPORT_IN_PROGRESS")
             open.finish()
 
-            let done = try await Self.finished(browser, fixture, "/api/v1/me/import/1")
+            let done = try await Self.finished(browser, fixture, location)
             #expect(done.state == .succeeded && done.problem == nil)
             let report = try #require(done.report)
             #expect(report.formatVersion == 7 && report.exportedAt == "2026-10-24T20:00:00.000Z")
@@ -111,14 +115,15 @@ import Testing
 
             // The same file again: every record kept, with a new status of its own.
             let again = try await browser.send(.post, Self.path, try Self.export())
-            #expect(again.headers[.location] == "/api/v1/me/import/2")
-            let kept = try #require(try await Self.finished(browser, fixture, "/api/v1/me/import/2").report)
+            let next = try #require(again.headers[.location])
+            #expect(next != location && next.hasPrefix("/api/v1/me/import/"))
+            let kept = try #require(try await Self.finished(browser, fixture, next).report)
             #expect(kept.types.allSatisfy { $0.kept == $0.inFile && $0.added == 0 && $0.repeated == 0 })
-            for missing in ["/api/v1/me/import/3", "/api/v1/me/import/x", "/api/v1/me/import/-1"] {
+            for missing in ["/api/v1/me/import/\(UUID().uuidString)", "/api/v1/me/import/x", "/api/v1/me/import/1"] {
                 let response = try await browser.get(missing)
                 #expect(response.status == .notFound && problemCode(response) == "IMPORT_NOT_FOUND", "\(missing)")
             }
-            let unknown = try await browser.get("/api/v1/me/import/1?x=1")
+            let unknown = try await browser.get("\(location)?x=1")
             #expect(problemCode(unknown) == "UNKNOWN_PARAMETER")
         }
     }
@@ -204,9 +209,10 @@ import Testing
         try await under.app.test(.router) { client in
             let browser = Browser(client: client, base: "/frus-explorer")
             let posted = try await browser.send(.post, Self.path, try Self.export())
-            #expect(posted.headers[.location] == "/frus-explorer/api/v1/me/import/1")
+            let id = try decode(ImportStatus.self, posted).id
+            #expect(posted.headers[.location] == "/frus-explorer/api/v1/me/import/\(id)")
             await under.jobs.waitUntilIdle()
-            #expect(try decode(ImportStatus.self, try await browser.get("/api/v1/me/import/1")).state == .succeeded)
+            #expect(try decode(ImportStatus.self, try await browser.get("/api/v1/me/import/\(id)")).state == .succeeded)
         }
     }
 

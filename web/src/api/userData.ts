@@ -358,14 +358,15 @@ export async function startImport(client: QueryClient, file: Blob): Promise<Impo
 /** How often an import still under way is asked after, in milliseconds. */
 export const importPollInterval = 500;
 
-/** An import's status, asked after until its job has finished. */
-export function importStatusQuery(id: number) {
+/** An import's status, asked after until its job has finished, or until the server cannot say. */
+export function importStatusQuery(id: string) {
   return queryOptions({
     queryKey: ['import', id],
-    queryFn: ({ signal }) => getJSON<ImportStatus>(`/api/v1/me/import/${id}`, undefined, signal),
+    queryFn: ({ signal }) => getJSON<ImportStatus>(`/api/v1/me/import/${segment(id)}`, undefined, signal),
     staleTime: 0,
     retry: false,
     refetchInterval: (query) => {
+      if (query.state.status === 'error') return false;
       const state = query.state.data?.state;
       return state === 'succeeded' || state === 'failed' ? false : importPollInterval;
     },

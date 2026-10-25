@@ -673,7 +673,8 @@ export interface ResearchImportReport {
 
 /** An import of a Mac JSON export, as a job: queued, running, then succeeded or failed. */
 export interface ImportStatus {
-  id: number;
+  /** A UUID, new for each import, so an id from before a restart names none. */
+  id: string;
   state: 'queued' | 'running' | 'succeeded' | 'failed';
   formatVersion: number;
   report: ResearchImportReport | null;

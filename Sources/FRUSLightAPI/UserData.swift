@@ -31,13 +31,28 @@ protocol UserResolver: Sendable {
 /// (SPEC, Tenancy and roles).
 struct SingleUserResolver: UserResolver {
     let store: any UserStore
+    /// The user, once read: the store's single user, who does not change while the server runs. So a
+    /// request asks the store only for what it reads, and one that reads nothing else, such as an
+    /// import's status, need not wait while an import writes (S16c).
+    private let known = KnownUser()
+
+    init(store: any UserStore) {
+        self.store = store
+    }
 
     func user(for request: Request, context: APIRequestContext) async throws -> RequestUser {
+        if let user = known.value.withLock({ $0 }) { return user }
         let store = store
-        return try await Blocking.run {
+        let user = try await Blocking.run {
             let id = try store.singleUserID()
             return RequestUser(id: id, displayName: try store.user(id)?.displayName ?? id, roles: [.reader, .curator, .admin])
         }
+        known.value.withLock { $0 = user }
+        return user
+    }
+
+    private final class KnownUser: Sendable {
+        let value = Mutex<RequestUser?>(nil)
     }
 }
 

@@ -526,10 +526,19 @@ func importFixture(_ arguments: Arguments) async throws {
 func importCheck(_ arguments: Arguments) async throws {
     guard arguments.positional.count == 1 else { throw UsageError("import-check takes one export file") }
     let data = try Data(contentsOf: URL(fileURLWithPath: arguments.positional[0]))
-    let directory = arguments.options["--keep"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+    let kept = arguments.options["--keep"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+    let directory = kept
         ?? FileManager.default.temporaryDirectory.appendingPathComponent("frus-import-check-\(UUID().uuidString)", isDirectory: true)
-    defer { if arguments.options["--keep"] == nil { try? FileManager.default.removeItem(at: directory) } }
-    let outcome = try await ImportCheck.run(data, in: directory)
+    // Removed before any exit, a failure's too: the store holds the export's records.
+    let remove = { if kept == nil { try? FileManager.default.removeItem(at: directory) } }
+    let outcome: ImportCheck.Outcome
+    do {
+        outcome = try await ImportCheck.run(data, in: directory)
+    } catch {
+        remove()
+        throw error
+    }
+    remove()
     for line in ImportCheck.describe(outcome) { print(line) }
     guard outcome.comparison.isWhole else { fail("the store does not hold every record as the file has it") }
 }

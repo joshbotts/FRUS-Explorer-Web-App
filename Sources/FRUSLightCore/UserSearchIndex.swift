@@ -49,18 +49,65 @@ extension SQLiteUserStore {
     /// is deleted, then written again unless both texts are empty; an empty one is NULL, as the
     /// app's clear leaves its column.
     static func refreshSearch(of document: DocumentKey, for user: String, in db: SQLiteConnection) throws {
-        let notes = UserSearchText.noteText(try indexedNotes(of: document, for: user, in: db))
-        let summary = UserSearchText.summaryText(try summaries(of: document, for: user, in: db))
+        let notes = try indexedNotes(of: document, for: user, in: db)
+        let summaries = try summaries(of: document, for: user, in: db)
         _ = try db.query("DELETE FROM user_search WHERE user_id = ? AND volume_id = ? AND document_id = ?",
                          [.text(user), .text(document.volumeId), .text(document.documentId)])
-        let columns = [summary, notes].map { text -> SQLiteValue in
+        try writeSearchRow(of: document, notes: notes, summaries: summaries, for: user, in: db)
+    }
+
+    /// Makes all of the user's rows of `user_search` again, inside the caller's transaction, as an
+    /// import does (S16c): each document's row by `refreshSearch`'s rules, from one read of the user's
+    /// notes and one of their summaries, where a refresh of each document would read both for each.
+    /// Returns how many rows it wrote.
+    static func rebuildSearch(for user: String, in db: SQLiteConnection) throws -> Int {
+        _ = try db.query("DELETE FROM user_search WHERE user_id = ?", [.text(user)])
+        var notes: [DocumentKey: [NoteRecord]] = [:]
+        for row in try db.query("SELECT id, volume_id, document_id, body_text, created_at FROM notes WHERE user_id = ?",
+                                [.text(user)]) {
+            let document = DocumentKey(volumeId: row[1].text ?? "", documentId: row[2].text ?? "")
+            notes[document, default: []].append(NoteRecord(
+                id: row[0].text ?? "", volumeId: document.volumeId, documentId: document.documentId, bodyText: row[3].text ?? "",
+                richText: nil, projectIds: [], userTagIds: [], selectedSummaryIds: [],
+                createdAt: row[4].text.flatMap(UserStoreDate.date), lastModified: nil))
+        }
+        var summaries: [DocumentKey: [SummaryRecord]] = [:]
+        for row in try db.query(
+            """
+            SELECT id, volume_id, document_id, response_text, is_headnote_draft, created_at, last_modified FROM summaries
+                WHERE user_id = ?
+            """, [.text(user)]) {
+            let document = DocumentKey(volumeId: row[1].text ?? "", documentId: row[2].text ?? "")
+            summaries[document, default: []].append(SummaryRecord(
+                id: row[0].text ?? "", volumeId: document.volumeId, documentId: document.documentId, promptId: "",
+                responseText: row[3].text ?? "", responseFormat: "", wasChunked: false, authorship: nil,
+                isHeadnoteDraft: row[4].integer == 1, sourceContentHash: nil, projectId: nil,
+                createdAt: row[5].text.flatMap(UserStoreDate.date), lastModified: row[6].text.flatMap(UserStoreDate.date)))
+        }
+        var written = 0
+        for document in Set(notes.keys).union(summaries.keys) {
+            if try writeSearchRow(of: document, notes: notes[document] ?? [], summaries: summaries[document] ?? [], for: user,
+                                  in: db) {
+                written += 1
+            }
+        }
+        return written
+    }
+
+    /// Writes the user's row of `user_search` for `document` from its notes and summaries, unless both
+    /// texts are empty; an empty one is NULL, as the app's clear leaves its column. Whether it wrote one.
+    @discardableResult
+    private static func writeSearchRow(of document: DocumentKey, notes: [NoteRecord], summaries: [SummaryRecord],
+                                       for user: String, in db: SQLiteConnection) throws -> Bool {
+        let columns = [UserSearchText.summaryText(summaries), UserSearchText.noteText(notes)].map { text -> SQLiteValue in
             guard let text, !text.isEmpty else { return .null }
             return .text(text)
         }
-        guard columns.contains(where: { $0 != .null }) else { return }
+        guard columns.contains(where: { $0 != .null }) else { return false }
         _ = try db.query(
             "INSERT INTO user_search (user_id, document_id, volume_id, summary_text, note_text) VALUES (?, ?, ?, ?, ?)",
             [.text(user), .text(document.documentId), .text(document.volumeId)] + columns)
+        return true
     }
 
     /// A document's notes as far as `UserSearchText.noteText` reads them: each one's id, body and

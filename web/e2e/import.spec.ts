@@ -42,11 +42,11 @@ async function importByPointer(page: Page, text: string): Promise<TypeCount[]> {
   await section.getByLabel('Export file').setInputFiles({ name: fileName, mimeType: 'application/json', buffer: Buffer.from(text) });
   const posted = page.waitForResponse((response) => response.url().endsWith('/api/v1/me/import') && response.request().method() === 'POST');
   await section.getByRole('button', { name: 'Import' }).click();
-  return finished(page, (await (await posted).json()) as { id: number });
+  return finished(page, (await (await posted).json()) as { id: string });
 }
 
 /** The report, once the page says the import is done. */
-async function finished(page: Page, begun: { id: number }): Promise<TypeCount[]> {
+async function finished(page: Page, begun: { id: string }): Promise<TypeCount[]> {
   const section = page.getByRole('region', { name: 'Import a JSON Export' });
   await expect(section.getByRole('status')).toHaveText(`Imported ${fileName}`);
   const status = (await (await page.request.get(`api/v1/me/import/${begun.id}`)).json()) as { report: { types: TypeCount[] } };
@@ -182,7 +182,7 @@ test('chooses the export and imports it by keyboard alone', async ({ page }) => 
   await expect(section.getByRole('button', { name: 'Import' })).toBeFocused();
   const posted = page.waitForResponse((response) => response.url().endsWith('/api/v1/me/import') && response.request().method() === 'POST');
   await page.keyboard.press('Enter');
-  const types = await finished(page, (await (await posted).json()) as { id: number });
+  const types = await finished(page, (await (await posted).json()) as { id: string });
   expect(types.find((type) => type.type === 'ResearchNote')).toMatchObject({ inFile: 3, added: 3 });
   expectTable(await tableRows(page), types);
   await axeCheck(page);

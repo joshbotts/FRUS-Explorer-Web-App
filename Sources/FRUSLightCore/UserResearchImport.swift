@@ -153,9 +153,10 @@ extension SQLiteUserStore: ResearchImportStore {
         return try writing { db in
             var counts: [String: ImportCount] = [:]
             for table in tables {
+                var held = try Self.held(in: table, for: user, in: db)
                 var count = ImportCount()
                 for row in batch.rows[table.name] ?? [] {
-                    switch try Self.write(row, into: table, for: user, in: db) {
+                    switch try Self.write(row, into: table, for: user, held: &held, in: db) {
                     case .added: count.added += 1
                     case .replaced: count.replaced += 1
                     case .kept: count.kept += 1
@@ -170,6 +171,13 @@ extension SQLiteUserStore: ResearchImportStore {
     }
 
     private enum Outcome { case added, replaced, kept }
+
+    /// A row the store holds: its id as the store spells it, nil for a table keyed by user alone, and
+    /// its time by `ImportStamp`.
+    private struct Held {
+        var id: String?
+        var time: Date?
+    }
 
     /// The batch's tables, in the schema's order, once every row's columns are found to be theirs.
     private static func check(_ batch: ResearchImportBatch) throws -> [UserStoreSchema.Table] {
@@ -194,25 +202,34 @@ extension SQLiteUserStore: ResearchImportStore {
         return tables
     }
 
-    private static func write(_ row: ImportRow, into table: UserStoreSchema.Table, for user: String,
+    /// The rows of `table` the store holds, the user's or an instance-wide table's every row, by id as
+    /// the store finds one, in any case, or by "" for a table keyed by user alone: read once, so that a
+    /// row's lookup does not read the table again however many rows it holds.
+    private static func held(in table: UserStoreSchema.Table, for user: String, in db: SQLiteConnection) throws -> [String: Held] {
+        let stamps = ImportStamp.columns[table.name] ?? []
+        let keyed = table.primaryKey.contains("id")
+        let columns = (keyed ? ["id"] : []) + stamps
+        let rows = try db.query(
+            "SELECT \((columns.isEmpty ? ["1"] : columns).joined(separator: ", ")) FROM \(table.name)"
+                + (table.scope == .user ? " WHERE user_id = ?" : ""),
+            table.scope == .user ? [.text(user)] : [])
+        var held: [String: Held] = [:]
+        for row in rows {
+            let id = keyed ? row[0].text : nil
+            let first = keyed ? 1 : 0
+            let time = ImportStamp.time(of: { column in stamps.firstIndex(of: column).map { row[first + $0] } }, in: table.name)
+            let key = id.map(UserSearchText.uuidString) ?? ""
+            if held[key] == nil { held[key] = Held(id: id, time: time) }
+        }
+        return held
+    }
+
+    private static func write(_ row: ImportRow, into table: UserStoreSchema.Table, for user: String, held: inout [String: Held],
                               in db: SQLiteConnection) throws -> Outcome {
-        // The row's key: `user_id` for a user's table, then the Mac's id in any case, as the store
-        // finds one; an instance-wide table's by its id alone.
-        var conditions: [String] = []
-        var keys: [SQLiteValue] = []
-        if table.scope == .user {
-            conditions.append("user_id = ?")
-            keys.append(.text(user))
-        }
-        if table.primaryKey.contains("id") {
-            conditions.append("upper(id) = ?")
-            keys.append(.text(UserSearchText.uuidString(row.values["id"]?.text ?? "")))
-        }
-        let key = conditions.joined(separator: " AND ")
-        let stampColumns = ImportStamp.columns[table.name] ?? []
-        let stored = try db.query("SELECT \((stampColumns.isEmpty ? ["1"] : stampColumns).joined(separator: ", ")) FROM \(table.name) WHERE \(key) LIMIT 1",
-                                  keys).first
-        guard let stored else {
+        let keyed = table.primaryKey.contains("id")
+        let key = keyed ? UserSearchText.uuidString(row.values["id"]?.text ?? "") : ""
+        let givenTime = ImportStamp.time(of: { row.values[$0] }, in: table.name)
+        guard let stored = held[key] else {
             let columns = table.columns.map(\.name)
             let names = (table.scope == .user ? ["user_id"] : []) + columns
             let values = (table.scope == .user ? [SQLiteValue.text(user)] : [])
@@ -220,52 +237,47 @@ extension SQLiteUserStore: ResearchImportStore {
             _ = try db.query(
                 "INSERT INTO \(table.name) (\(names.joined(separator: ", "))) VALUES (\(names.map { _ in "?" }.joined(separator: ", ")))",
                 values)
+            held[key] = Held(id: row.values["id"]?.text, time: givenTime)
             return .added
         }
-        let storedTime = ImportStamp.time(of: { column in stampColumns.firstIndex(of: column).map { stored[$0] } }, in: table.name)
-        let givenTime = ImportStamp.time(of: { row.values[$0] }, in: table.name)
-        guard let givenTime, givenTime > (storedTime ?? .distantPast) else { return .kept }
-        // Only what the file carries; the id stays as the store spells it.
+        guard let givenTime, givenTime > (stored.time ?? .distantPast) else { return .kept }
+        // Only what the file carries, in the row the store holds, by its key as the store spells it.
+        var conditions: [String] = []
+        var keys: [SQLiteValue] = []
+        if table.scope == .user {
+            conditions.append("user_id = ?")
+            keys.append(.text(user))
+        }
+        if keyed, let id = stored.id {
+            conditions.append("id = ?")
+            keys.append(.text(id))
+        }
         let columns = table.columns.map(\.name).filter { $0 != "id" && row.values[$0] != nil }
         _ = try db.query(
-            "UPDATE \(table.name) SET \(columns.map { "\($0) = ?" }.joined(separator: ", ")) WHERE \(key)",
+            "UPDATE \(table.name) SET \(columns.map { "\($0) = ?" }.joined(separator: ", ")) WHERE \(conditions.joined(separator: " AND "))",
             columns.map { row.values[$0] ?? .null } + keys)
+        held[key]?.time = givenTime
         return .replaced
     }
 
-    /// The collections among `rows` that name a saved search the user does not hold.
+    /// The collections among `rows` that name a saved search the user does not hold, in their order.
     private static func unlinkedCollections(among rows: [ImportRow], for user: String,
                                             in db: SQLiteConnection) throws -> [UnlinkedCollection] {
-        var unlinked: [UnlinkedCollection] = []
-        var seen: Set<String> = []
-        for row in rows {
-            let id = UserSearchText.uuidString(row.values["id"]?.text ?? "")
-            guard seen.insert(id).inserted,
-                  let stored = try db.query(
-                    """
-                    SELECT c.id, c.name FROM collections c
-                        WHERE c.user_id = ? AND upper(c.id) = ? AND c.saved_search_id IS NOT NULL
-                          AND NOT EXISTS (SELECT 1 FROM saved_searches s
-                                              WHERE s.user_id = c.user_id AND upper(s.id) = upper(c.saved_search_id))
-                    """, [.text(user), .text(id)]).first else { continue }
-            unlinked.append(UnlinkedCollection(id: stored[0].text ?? id, name: stored[1].text ?? ""))
-        }
-        return unlinked
-    }
-
-    /// Makes the user's rows of `user_search` again, one for each document their notes or summaries
-    /// name, by `refreshSearch`'s rules. Returns how many rows it wrote.
-    private static func rebuildSearch(for user: String, in db: SQLiteConnection) throws -> Int {
-        _ = try db.query("DELETE FROM user_search WHERE user_id = ?", [.text(user)])
-        let documents = try db.query(
+        var unlinked: [String: UnlinkedCollection] = [:]
+        for row in try db.query(
             """
-            SELECT volume_id, document_id FROM notes WHERE user_id = ?
-            UNION SELECT volume_id, document_id FROM summaries WHERE user_id = ?
-            """, [.text(user), .text(user)])
-        for document in documents {
-            try refreshSearch(of: DocumentKey(volumeId: document[0].text ?? "", documentId: document[1].text ?? ""),
-                              for: user, in: db)
+            SELECT c.id, c.name FROM collections c
+                WHERE c.user_id = ? AND c.saved_search_id IS NOT NULL
+                  AND NOT EXISTS (SELECT 1 FROM saved_searches s
+                                      WHERE s.user_id = c.user_id AND upper(s.id) = upper(c.saved_search_id))
+            """, [.text(user)]) {
+            let id = row[0].text ?? ""
+            unlinked[UserSearchText.uuidString(id)] = UnlinkedCollection(id: id, name: row[1].text ?? "")
         }
-        return Int(try db.scalar("SELECT count(*) FROM user_search WHERE user_id = ?", [.text(user)])?.integer ?? 0)
+        var seen: Set<String> = []
+        return rows.compactMap { row in
+            let id = UserSearchText.uuidString(row.values["id"]?.text ?? "")
+            return seen.insert(id).inserted ? unlinked[id] : nil
+        }
     }
 }

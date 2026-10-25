@@ -345,10 +345,12 @@ token=$(printf '%s' "$me" | sed -nE 's/.*"csrfToken":"([0-9a-f]+)".*/\1/p')
 posted=$(docker exec "$proxy" wget -q -S -O - --header 'Content-Type: application/json' --header "X-CSRF-Token: $token" \
   --header 'Origin: http://localhost:8080' --post-file /tmp/import.json "http://localhost:8080/frus-explorer/api/v1/me/import" 2>&1 || true)
 case "$posted" in *'HTTP/1.1 202'*) ;; *) fail "the import through nginx answered: $(printf '%s' "$posted" | head -3)" ;; esac
-job=$(printf '%s' "$posted" | sed -nE 's/.*"id":([0-9]+).*/\1/p' | head -1)
+job=$(printf '%s' "$posted" | sed -nE 's/.*"id":"([0-9A-F-]+)".*/\1/p' | head -1)
+[ -n "$job" ] || fail "the import through nginx gave no id: $(printf '%s' "$posted" | tail -1)"
 state=""
 for _ in $(seq 1 120); do
-  state=$(docker exec "$proxy" wget -q -O - "http://localhost:8080/frus-explorer/api/v1/me/import/$job" | sed -nE 's/.*"state":"([a-z]+)".*/\1/p')
+  state=$(docker exec "$proxy" wget -q -O - "http://localhost:8080/frus-explorer/api/v1/me/import/$job" 2>/dev/null \
+    | sed -nE 's/.*"state":"([a-z]+)".*/\1/p' || true)
   [ "$state" = succeeded ] && break
   [ "$state" = failed ] && break
   sleep 0.25
