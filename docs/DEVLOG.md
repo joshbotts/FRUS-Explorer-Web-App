@@ -63,7 +63,7 @@ Phase 2's row S16c, on the critical path: S16d, the export, S16e and S17d follow
 - `docs/COORDINATION.md` §1: the kit calls the import adds, and its standing mirrors.
 - README's status; and this log.
 
-**Next: S16d,** the export, which reads what this row writes; then S16e, and S17d once S17c's pin move brings the kit's search of user text; with S14e, S14d and S14b on the server's track. The owner's export repeated records under one id, an exact copy each: worth a look in the app, whose `DuplicateRecordCleanup` collapses such copies, since its export wrote them.
+**Next: S16d,** the export, which reads what this row writes; then S16e, and S17d once S17c's pin move brings the kit's search of user text; with S14e, S14d and S14b on the server's track. The owner's export repeated records under one id, an exact copy each: worth a look in the app, whose `DuplicateRecordCleanup` collapses such copies at `503a730b` for ten types, among which are neither notes nor the trails, the types the repeats were of.
 
 ## Session 15d: notes and summaries, and the rich-text codec
 
