@@ -174,6 +174,32 @@ import Testing
         #expect(models.contains("public var showsParsedFields: Bool { self != .batch }"))
     }
 
+    /// When the Parsed Fields are derived again, which web/src/lookup/lookupState.ts mirrors: the kit's
+    /// rule (`CitationLookupFields.refreshed(forPaste:mode:parser:)`), in Paste alone and only for a
+    /// text other than the one they came from, asked by the app's view on two events, a change of the
+    /// paste field's text, which only Paste shows, and a change of mode. In the web, a change of the
+    /// text in Paste derives every field again and drops the edits, and entering Paste does when Batch
+    /// changed the text since; the fields are empty until the server answers.
+    @Test func theFieldsAreDerivedAgainWhenTheAppDerivesThem() throws {
+        let sources = NoteViewParityTests.Sources()
+        let fields = NoteViewParityTests.flattened(try String(contentsOf: Self.kit("Citation/CitationLookupFields.swift"), encoding: .utf8))
+        #expect(fields.contains("guard mode == .paste, text != derivedFrom else { return self } return .derived(fromPaste: text, parser: parser)"))
+        let view = try sources.app(Self.view)
+        let paste = try #require(view.range(of: "} else if mode == .paste {"))
+        let onPaste = try #require(view.range(of: ".onChange(of: pasteText) { _, new in"))
+        let shown = try #require(view.range(of: "if mode.showsParsedFields {"))
+        #expect(paste.upperBound < onPaste.lowerBound && onPaste.upperBound < shown.lowerBound, "only the paste field derives on a change of text")
+        NoteViewParityTests.expect(view, holds: [
+            "fields = fields.refreshed(forPaste: new, mode: mode, parser: parser)",
+            ".onChange(of: mode) { _, newMode in",
+            "fields = fields.refreshed(forPaste: pasteText, mode: newMode, parser: parser)",
+        ], file: Self.view)
+        NoteViewParityTests.expect(try sources.web("lookup/lookupState.ts"), holds: [
+            "const derive = state.mode === 'paste'; update({ ...state, text, ...(derive ? { derivedFrom: text, derived: emptyFields, edits: {} } : {}) });",
+            "const derive = mode === 'paste' && state.text !== state.derivedFrom; update({ ...state, mode, ...(derive ? { derivedFrom: state.text, derived: emptyFields, edits: {} } : {}) });",
+        ], file: "lookupState.ts")
+    }
+
     /// A file of the kit's, from the submodule.
     static func kit(_ path: String) -> URL {
         RepositoryFiles.root.appendingPathComponent("upstream/FRUS-Explorer/FRUSCoreKit").appendingPathComponent(path)

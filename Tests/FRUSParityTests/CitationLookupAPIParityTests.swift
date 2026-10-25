@@ -257,14 +257,14 @@ import Testing
                         }
                     }
 
-                    // The Parsed Fields as a paste fills them, with the number edited, as the reader may.
+                    // The Parsed Fields as a paste fills them, with the number edited, as the reader may:
+                    // the text and the edit alone, as the browser app sends them.
                     let text = try await Self.get(DocumentCitation.self, client, "/api/v1/volumes/\(volume)/documents/\(id)/citation").plainText
                     let derived = try await Self.get(CitationLookupForm.self, client,
                                                      "/api/v1/citation-lookup/fields?\(Self.query([("text", text)]))")
                     let edited = String((Int(derived.documentNumber) ?? 0) + 1)
-                    _ = try await check(
-                        "/api/v1/citation-lookup?\(Self.query([("text", text), ("subseries", derived.subseries), ("volumeNumber", derived.volumeNumber), ("partNumber", derived.partNumber), ("documentNumber", edited), ("pageNumber", derived.pageNumber)]))",
-                        try await kit.paste(text) { $0.document = edited })
+                    _ = try await check("/api/v1/citation-lookup?\(Self.query([("text", text), ("documentNumber", edited)]))",
+                                        try await kit.paste(text) { $0.document = edited })
 
                     // Structured Entry: its volume's fields and its number, then the pages it may be printed on.
                     let fields = CitationLookupFields.derived(fromPaste: link, parser: CitationParser())

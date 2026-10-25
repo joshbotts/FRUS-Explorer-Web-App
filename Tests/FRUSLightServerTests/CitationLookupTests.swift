@@ -250,6 +250,22 @@ import Testing
         }
     }
 
+    /// Batch runs the kit's runner a slice at a time, so a block whose request's task is stopped, as
+    /// when its client goes, stops at the next slice rather than looking up every note; and the
+    /// slices give the rows the runner gives the whole block, in order.
+    @Test func batchStopsBetweenSlicesWhenItsTaskIsStopped() async throws {
+        let resources = try TestResources.value()
+        let engine = CitationMatchingEngine(manifestStore: FixedVolumeCatalogue(entries: resources.manifest),
+                                            searchService: nil, pageRangeStore: nil, downloadedVolumeIds: [])
+        let entries = CitationBlockSplitter.split((1...(BatchRows.slice * 3)).map { "\($0). FRUS, 1961–1963, vol. VI, doc. \($0)." }.joined(separator: "\n"))
+        #expect(entries.count == BatchRows.slice * 3)
+        let rows = try await BatchRows.collect(entries, engine: engine)
+        #expect(rows.map(\.entry) == entries && rows.allSatisfy { $0.matches.first?.volumeId == "frus1961-63v06" })
+        let stopped = Task { try await BatchRows.collect(entries, engine: engine) }
+        stopped.cancel()
+        await #expect(throws: CancellationError.self) { try await stopped.value }
+    }
+
     /// Under a path, as behind a proxy that forwards it (PLAN's S14f).
     @Test func citationLookupAnswersUnderThePath() async throws {
         let fixture = try await ServerFixture()

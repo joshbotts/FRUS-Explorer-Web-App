@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CitationBatch, CitationBatchRow, CitationFields, CitationLookupForm, CitationLookupMatch } from '../api/types';
 import { ProblemAnswer, ready, renderAt, stubServer } from '../test/renderRoute';
-import { lookupState, resetLookupState } from './lookupState';
+import { lookupState, resetLookupState, restoreLookupState, setText } from './lookupState';
 
 const v06 = {
   volumeId: 'frus1961-63v06',
@@ -369,11 +369,89 @@ describe('Citation Lookup', () => {
     expect((field('Citation Text') as HTMLTextAreaElement).value).toBe('FRUS, 1961–1963, vol. VI, doc. 1');
     expect(asked(fetch, '/api/v1/citation-lookup')).toHaveLength(1);
 
-    // A new page in the same tab, as after a reload, reads the form back from the session.
+    // A new page in the same tab, as after a reload, starts with nothing and reads the form back
+    // from the session.
     unmount();
-    expect(JSON.parse(window.sessionStorage.getItem('frus.citationLookup') ?? '{}').text).toBe('FRUS, 1961–1963, vol. VI, doc. 1');
+    resetLookupState({ keepingSession: true });
+    expect(lookupState().text).toBe('');
+    restoreLookupState();
+    expect(lookupState().text).toBe('FRUS, 1961–1963, vol. VI, doc. 1');
     renderAt('/lookup');
     expect(await screen.findByRole('heading', { level: 2, name: 'Results (3 found)' })).toBeTruthy();
+    expect((field('Citation Text') as HTMLTextAreaElement).value).toBe('FRUS, 1961–1963, vol. VI, doc. 1');
+  });
+
+  it('empties the Parsed Fields at a new paste until the kit has read it, so a field typed meanwhile starts from nothing', async () => {
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    server({
+      'POST /api/v1/citation-lookup/fields': async (_url: URL, init?: RequestInit) => {
+        const asked = sent(init);
+        // The second citation's fields wait, as a slow answer would.
+        if (asked.get('text')?.includes('vol. V,')) await held;
+        return form(asked);
+      },
+    });
+    const user = userEvent.setup();
+    renderAt('/lookup');
+    await user.click(await screen.findByRole('textbox', { name: 'Citation Text' }));
+    await user.paste('FRUS, 1961–1963, vol. VI, doc. 1');
+    await waitFor(() => expect((field('Document no.') as HTMLInputElement).value).toBe('1'));
+    await user.clear(field('Citation Text'));
+    await user.paste('FRUS, 1961–1963, vol. V, p. 47');
+    expect((field('Document no.') as HTMLInputElement).value).toBe('');
+    expect((field('Volume') as HTMLInputElement).value).toBe('');
+    await user.type(field('Document no.'), '5');
+    expect((field('Document no.') as HTMLInputElement).value).toBe('5');
+    release();
+    // What the reader typed stands over what the kit then reads.
+    await waitFor(() => expect(lookupState().derivedFrom).toBe('FRUS, 1961–1963, vol. V, p. 47'));
+    expect((field('Document no.') as HTMLInputElement).value).toBe('5');
+  });
+
+  it('keeps the fields of a text changed and changed back before it settled', async () => {
+    server();
+    const user = userEvent.setup();
+    renderAt('/lookup');
+    await user.click(await screen.findByRole('textbox', { name: 'Citation Text' }));
+    await user.paste('FRUS, 1961–1963, vol. VI, doc. 1');
+    await waitFor(() => expect((field('Document no.') as HTMLInputElement).value).toBe('1'));
+    // A character typed and taken back at once, quicker than the form waits to ask.
+    setText('FRUS, 1961–1963, vol. VI, doc. 12');
+    setText('FRUS, 1961–1963, vol. VI, doc. 1');
+    await waitFor(() => expect((field('Document no.') as HTMLInputElement).value).toBe('1'));
+    expect((field('Volume') as HTMLInputElement).value).toBe('VI');
+  });
+
+  it('asks the server again at every Look Up, an earlier citation’s too, as the app asks its matcher', async () => {
+    const fetch = server();
+    const user = userEvent.setup();
+    renderAt('/lookup');
+    await user.click(await screen.findByRole('textbox', { name: 'Citation Text' }));
+    for (const text of ['FRUS, 1961–1963, vol. VI, doc. 1', 'FRUS, 1961–1963, vol. VI', 'FRUS, 1961–1963, vol. VI, doc. 1']) {
+      await user.clear(field('Citation Text'));
+      await user.paste(text);
+      await waitFor(() => expect(lookUp().getAttribute('aria-disabled')).toBe('false'));
+      await user.click(lookUp());
+      await screen.findByRole('heading', { level: 2, name: 'Results (3 found)' });
+    }
+    await waitFor(() => expect(asked(fetch, '/api/v1/citation-lookup').map((fields) => fields.get('text'))).toEqual([
+      'FRUS, 1961–1963, vol. VI, doc. 1',
+      'FRUS, 1961–1963, vol. VI',
+      'FRUS, 1961–1963, vol. VI, doc. 1',
+    ]));
+  });
+
+  it('says an error once, in its alert, and nothing in the status line', async () => {
+    server({ 'POST /api/v1/citation-lookup': new ProblemAnswer(503, 'INDEX_NOT_READY', 'A new index is being installed; ask again in a moment.') });
+    const user = userEvent.setup();
+    renderAt('/lookup');
+    await user.click(await screen.findByRole('radio', { name: 'Structured Entry' }));
+    await user.type(field('Page'), '1');
+    await waitFor(() => expect(lookUp().getAttribute('aria-disabled')).toBe('false'));
+    await user.click(lookUp());
+    expect((await screen.findByRole('alert')).textContent).toContain('A new index is being installed');
+    expect(screen.getByRole('status').textContent).toBe('');
   });
 
   it('asks the gate again for what the form holds when Look Up comes before the last answer', async () => {

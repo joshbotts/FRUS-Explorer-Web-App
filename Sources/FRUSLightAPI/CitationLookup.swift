@@ -298,7 +298,7 @@ enum CitationLookupRoutes {
             }
             let engine = try await engine()
             return try await context.whileClientConnected {
-                CitationBatch(await BatchRows.collect(entries, engine: engine))
+                CitationBatch(try await BatchRows.collect(entries, engine: engine))
             }
         }
     }
@@ -307,17 +307,27 @@ enum CitationLookupRoutes {
 /// The rows the kit's runner hands back, kept on the main actor, where it hands each one as it
 /// completes, as the app's table fills.
 @MainActor
-private final class BatchRows {
+final class BatchRows {
     var rows: [BatchCitationRow] = []
 
     nonisolated init() {}
 
-    /// Every row of `entries`, in their order, as `BatchCitationRunner.run` looks them up.
+    /// How many entries the runner is given at a time. It looks each up in turn and turns a lookup
+    /// stopped by its task into a failed row, so a block a client abandons would otherwise run to its
+    /// end, on the matcher every search shares; between two slices the work stops.
+    nonisolated static let slice = 25
+
+    /// Every row of `entries`, in their order, as `BatchCitationRunner.run` looks them up, a slice at
+    /// a time while the request's task goes on.
     nonisolated static func collect(_ entries: [CitationBlockSplitter.Entry],
-                                    engine: CitationMatchingEngine) async -> [BatchCitationRow] {
+                                    engine: CitationMatchingEngine) async throws -> [BatchCitationRow] {
         let collected = BatchRows()
-        await BatchCitationRunner.run(entries: entries, engine: engine, parser: CitationLookupRoutes.parser) { row in
-            collected.rows.append(row)
+        for start in stride(from: 0, to: entries.count, by: slice) {
+            try Task.checkCancellation()
+            let part = Array(entries[start..<min(start + slice, entries.count)])
+            await BatchCitationRunner.run(entries: part, engine: engine, parser: CitationLookupRoutes.parser) { row in
+                collected.rows.append(row)
+            }
         }
         return await collected.rows
     }

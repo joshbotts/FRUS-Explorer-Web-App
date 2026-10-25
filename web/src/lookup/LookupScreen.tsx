@@ -3,12 +3,12 @@
 // and Structured Entry is, Look Up, and the results, each with the kit's label, or Batch's triage
 // table with its summary. What a citation says, which fields it fills, whether Look Up has anything
 // to go on, and every match, label and count are the kit's, from the server; this screen draws them.
-import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { isCancelledError, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { type KeyboardEvent, useEffect, useId, useState } from 'react';
 import { errorMessage } from '../api/client';
 import { citationBatchQuery, citationFormQuery, citationLookupQuery } from '../api/endpoints';
-import type { CitationBatch, CitationBatchRow, CitationFields, CitationLookupMatch, CitationLookupMode } from '../api/types';
+import type { CitationBatch, CitationBatchRow, CitationFields, CitationLookupForm, CitationLookupMatch, CitationLookupMode } from '../api/types';
 import { copy } from '../copy';
 import { plainTitle, useDocumentTitle } from '../shell/useDocumentTitle';
 import { batchOutcome, batchRowTarget, matchAction, sortedBatchRows, strategyBadges } from './lookupRules';
@@ -63,43 +63,51 @@ export function LookupScreen() {
   const queryClient = useQueryClient();
   useDocumentTitle(copy.lookup.title);
 
-  // What the paste yields, asked of the kit whenever the text the fields are derived from changes.
+  // What the paste yields, asked of the kit whenever the text the fields are derived from changes,
+  // and kept whenever the form's fields are not yet that answer: a text changed and changed back
+  // before it settled asks nothing new, and the answer already had is kept again.
   const derivedFrom = useSettled(form.derivedFrom, settle);
   const derivation = useQuery(citationFormQuery({ mode: 'paste', text: derivedFrom }));
   useEffect(() => {
     const fields = derivation.data;
     if (!fields || derivation.isPlaceholderData) return;
     setDerived(derivedFrom, Object.fromEntries(fieldNames.map((name) => [name, fields[name]])) as unknown as CitationFields);
-  }, [derivation.data, derivation.isPlaceholderData, derivedFrom]);
+  }, [derivation.data, derivation.isPlaceholderData, derivedFrom, form.derivedFrom, form.derived]);
 
   // Look Up's gate for what the form holds in its mode, as the kit's form gives it.
   const settledRequest = useSettled(formRequest(form), settle);
   const gate = useQuery(citationFormQuery(settledRequest));
-  const lookup = useQuery(citationLookupQuery(form.lookup));
-  const batch = useQuery(citationBatchQuery(form.batch));
+  // Each mode's results are asked for only in that mode: a reload in Paste Citation sends no batch.
+  const lookup = useQuery(citationLookupQuery(form.mode === 'batch' ? undefined : form.lookup));
+  const batch = useQuery(citationBatchQuery(form.mode === 'batch' ? form.batch : undefined));
   const busy = form.mode === 'batch' ? batch.isFetching : lookup.isFetching;
   const actionable = gate.data?.actionable === true;
 
   /**
    * Look Up, from the button or Return in a field: once the kit says the form, as it is now, has
-   * something to go on, the lookup in its mode; the same lookup again is asked again, as the app's
-   * Look Up runs whatever it last ran.
+   * something to go on, the lookup in its mode, always asked of the server, as the app's Look Up
+   * always asks its matcher: an answer kept from earlier may be another index's.
    */
   async function lookUp() {
     const current = formRequest(lookupState());
     if (busy) return;
     // The gate is asked again for what the form holds now, which a keystroke may have changed since.
-    const answer = await queryClient.fetchQuery(citationFormQuery(current)).catch(() => null);
+    // A question the form's own change abandoned runs nothing; one the server could not answer runs
+    // the lookup, whose answer then says what went wrong.
+    let answer: CitationLookupForm | null = null;
+    try {
+      answer = await queryClient.fetchQuery({ ...citationFormQuery(current), retry: false });
+    } catch (error) {
+      if (isCancelledError(error)) return;
+    }
     if (answer && !answer.actionable) return;
-    const state = lookupState();
     if (current.mode === 'batch') {
       const text = current.text ?? '';
-      if (state.batch === text) void queryClient.refetchQueries({ queryKey: citationBatchQuery(text).queryKey, exact: true });
-      else setBatch(text);
-    } else if (JSON.stringify(state.lookup) === JSON.stringify(current)) {
-      void queryClient.refetchQueries({ queryKey: citationLookupQuery(current).queryKey, exact: true });
+      setBatch(text);
+      void queryClient.refetchQueries({ queryKey: citationBatchQuery(text).queryKey, exact: true });
     } else {
       setLookup(current);
+      void queryClient.refetchQueries({ queryKey: citationLookupQuery(current).queryKey, exact: true });
     }
   }
 
@@ -231,9 +239,9 @@ function ParsedFields({ fields }: { fields: CitationFields }) {
 /** Paste Citation's and Structured Entry's results, as the app's results section shows them. */
 function LookupResults({ query }: { query: UseQueryResult<CitationLookupMatch[], unknown> }) {
   const matches = query.data;
-  const outcome = query.isError
-    ? errorMessage(query.error)
-    : matches === undefined || query.isFetching
+  // An error is said by its alert, below.
+  const outcome =
+    query.isError || matches === undefined || query.isFetching
       ? undefined
       : matches.length === 0
         ? copy.lookup.noMatchTitle
@@ -316,7 +324,8 @@ function MatchRow({ match }: { match: CitationLookupMatch }) {
 /** Batch's triage table, as the app's shows it: the summary, Needs work first, and a row per note. */
 function BatchResults({ query, needsWorkFirst }: { query: UseQueryResult<CitationBatch, unknown>; needsWorkFirst: boolean }) {
   const batch = query.data;
-  const outcome = query.isError ? errorMessage(query.error) : batch === undefined || query.isFetching ? undefined : batch.summary;
+  // An error is said by its alert, below.
+  const outcome = query.isError || batch === undefined || query.isFetching ? undefined : batch.summary;
   return (
     <section className="lookup-results" aria-busy={query.isFetching}>
       {/* Empty while it looks up, so every outcome is announced, as the app announces each one. */}

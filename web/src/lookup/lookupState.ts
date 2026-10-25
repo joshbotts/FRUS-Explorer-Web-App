@@ -35,7 +35,7 @@ const initial: LookupState = { mode: 'paste', text: '', derivedFrom: '', derived
 const storageKey = 'frus.citationLookup';
 
 /** The state the tab's session kept, when it kept one this build can read. */
-function restored(): LookupState {
+export function restored(): LookupState {
   try {
     const kept = JSON.parse(window.sessionStorage.getItem(storageKey) ?? 'null') as Partial<LookupState> | null;
     if (!kept || typeof kept !== 'object' || !['paste', 'structured', 'batch'].includes(kept.mode as string)) return initial;
@@ -80,11 +80,13 @@ export function shownFields(form: LookupState): CitationFields {
 
 /**
  * The paste's text changed: in Paste Citation every field is the text's alone again, as each paste
- * re-derives the app's fields from scratch; in Batch, which never reads the fields, they stay.
+ * re-derives the app's fields from scratch; in Batch, which never reads the fields, they stay. Until
+ * the server has derived them, the fields are empty, never the last paste's: a field typed in, or a
+ * lookup in Structured Entry, meanwhile starts from nothing rather than from another citation.
  */
 export function setText(text: string) {
   const derive = state.mode === 'paste';
-  update({ ...state, text, ...(derive ? { derivedFrom: text, edits: {} } : {}) });
+  update({ ...state, text, ...(derive ? { derivedFrom: text, derived: emptyFields, edits: {} } : {}) });
 }
 
 /**
@@ -93,7 +95,7 @@ export function setText(text: string) {
  */
 export function setMode(mode: CitationLookupMode) {
   const derive = mode === 'paste' && state.text !== state.derivedFrom;
-  update({ ...state, mode, ...(derive ? { derivedFrom: state.text, edits: {} } : {}) });
+  update({ ...state, mode, ...(derive ? { derivedFrom: state.text, derived: emptyFields, edits: {} } : {}) });
 }
 
 export function setField(name: keyof CitationFields, value: string) {
@@ -136,12 +138,20 @@ export function formRequest(form: LookupState): CitationFormRequest {
   }
 }
 
-/** For tests: the form as a new tab opens it. */
-export function resetLookupState() {
-  try {
-    window.sessionStorage.removeItem(storageKey);
-  } catch {
-    // Nothing kept.
+/** The form as the tab's session kept it, read again as a new page of the tab reads it. */
+export function restoreLookupState() {
+  state = restored();
+  for (const listener of listeners) listener();
+}
+
+/** For tests: the form as a new tab opens it, or, `keepingSession`, as it is before a page reads the session's. */
+export function resetLookupState({ keepingSession = false }: { keepingSession?: boolean } = {}) {
+  if (!keepingSession) {
+    try {
+      window.sessionStorage.removeItem(storageKey);
+    } catch {
+      // Nothing kept.
+    }
   }
   state = initial;
   for (const listener of listeners) listener();
