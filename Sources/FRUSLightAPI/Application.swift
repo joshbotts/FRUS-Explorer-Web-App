@@ -77,7 +77,8 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
     var app = apiApplication(
         router: buildRouter(state: components.state, resources: components.resources, reader: components.reader,
                             webClient: components.webClient,
-                            userData: UserDataServices(store: components.userStore, configuration: configuration),
+                            userData: UserDataServices(store: components.userStore, configuration: configuration,
+                                                       jobs: components.jobs),
                             base: configuration.basePath, logger: logger),
         base: configuration.basePath,
         configuration: .init(address: .hostname(configuration.host, port: configuration.port), serverName: "frus-light"),

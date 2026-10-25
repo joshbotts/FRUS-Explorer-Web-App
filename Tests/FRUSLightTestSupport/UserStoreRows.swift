@@ -171,6 +171,11 @@ public final class UserStoreRows: @unchecked Sendable {
         try db.query(sql, [.text(user), .text(id)]).first?.map { $0.text ?? "" } ?? []
     }
 
+    /// The first row a query gives, each value as text and NULL as empty, or none.
+    public func firstRow(_ sql: String, _ bindings: [String] = []) throws -> [String] {
+        try db.query(sql, bindings.map { .text($0) }).first?.map { $0.text ?? "" } ?? []
+    }
+
     public static func json(_ ids: [String]) -> String {
         "[" + ids.map { "\"\($0)\"" }.joined(separator: ",") + "]"
     }

@@ -694,3 +694,80 @@ export interface ProjectList {
   total: number;
   items: Project[];
 }
+
+/** The app's model types, as an import's report names them (PLAN's S16c). */
+export type ResearchType =
+  | 'ResearchNote'
+  | 'DocumentHighlight'
+  | 'UserTag'
+  | 'DocumentTagAssignment'
+  | 'Collection'
+  | 'CollectionEntry'
+  | 'Project'
+  | 'ProjectLeadEntry'
+  | 'SavedSearch'
+  | 'WorkingCorpus'
+  | 'CustomVolumeScope'
+  | 'ReadingHistoryEntry'
+  | 'SearchHistoryEntry'
+  | 'ExportHistoryEntry'
+  | 'ArchiveVisitPlan'
+  | 'ArchiveVisitDocument'
+  | 'ArchiveVisitTarget'
+  | 'GeneratedSummary'
+  | 'SummarizationPrompt'
+  | 'AnnotationReview'
+  | 'SyncedPreferences'
+  | 'PersonClusterOverride'
+  | 'DocumentClassificationOverride';
+
+/** What became of one model type's records in an import. */
+export interface ImportTypeCount {
+  type: ResearchType;
+  /** Whether a file of the export's format version can carry the type. */
+  carried: boolean;
+  inFile: number;
+  /** Records the store did not hold, now written. */
+  added: number;
+  /** Records of which the store held an older copy, now the file's. */
+  replaced: number;
+  /** Records of which the store held a copy as new or newer, kept. */
+  kept: number;
+  /** Synced settings after the earliest, and an instance's corrections for a user who is no curator. */
+  setAside: number;
+  /** Records whose id the file already gave: one copy written, the newest. */
+  repeated: number;
+}
+
+/** A collection that names a saved search the user does not hold. */
+export interface UnlinkedCollection {
+  id: string;
+  name: string;
+}
+
+/** What a Mac JSON export brought to the user's store. */
+export interface ResearchImportReport {
+  formatVersion: number;
+  exportedAt: string;
+  /** Each of the 23 model types, in the store's order. */
+  types: ImportTypeCount[];
+  formattedNotes: number;
+  /** Notes whose RTF this server cannot show, kept as it came: they open plain until edited here. */
+  formattingKept: number;
+  headnoteDrafts: number;
+  summariesWithoutAuthorship: number;
+  /** A version-6 file's collection entries with no document, kept as the app keeps an unknown kind. */
+  inertEntries: number;
+  unlinkedCollections: UnlinkedCollection[];
+  searchableDocuments: number;
+}
+
+/** An import of a Mac JSON export, as a job: queued, running, then succeeded or failed. */
+export interface ImportStatus {
+  /** A UUID, new for each import, so an id from before a restart names none. */
+  id: string;
+  state: 'queued' | 'running' | 'succeeded' | 'failed';
+  formatVersion: number;
+  report: ResearchImportReport | null;
+  problem: { code: string; detail: string } | null;
+}

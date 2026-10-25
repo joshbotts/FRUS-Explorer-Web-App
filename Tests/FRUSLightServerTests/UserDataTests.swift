@@ -18,19 +18,24 @@ struct UserDataFixture {
     let rows: UserStoreRows
     let configuration: ServerConfiguration
     let services: UserDataServices
+    /// The queue an import runs on (S16c), which a test waits on.
+    let jobs: InProcessJobQueue
 
     static let now = Date(timeIntervalSince1970: 1_792_800_000)  // 2026-10-24T00:00:00Z
 
     /// `volumes` from fixtures/tei are in the server's TEI folder, for the routes that read a page;
-    /// `indexed`, the server serves the synthetic export, for the routes that read the index.
+    /// `indexed`, the server serves the synthetic export, for the routes that read the index;
+    /// `importLimit`, an import's largest file.
     init(publicURL: String = "http://localhost:8080", userData: Bool = true, volumes: [String] = [],
-         indexed: Bool = false) async throws {
+         indexed: Bool = false, importLimit: Int = UserDataServices.importBodyLimit) async throws {
         server = try await indexed ? servingSyntheticExport(volumes: volumes) : ServerFixture(volumes: volumes)
         let url = server.files.userStore
         store = try await SQLiteUserStore(url: url, backupsDirectory: server.files.backupsDirectory)
         rows = try UserStoreRows(url)
         configuration = ServerConfiguration(dataDirectory: server.files.root, publicURL: publicURL, userData: userData)
-        services = UserDataServices(store: store, configuration: configuration, now: { Self.now })
+        jobs = InProcessJobQueue()
+        services = UserDataServices(store: store, configuration: configuration, jobs: jobs, importLimit: importLimit,
+                                    now: { Self.now })
     }
 
     var app: some ApplicationProtocol {

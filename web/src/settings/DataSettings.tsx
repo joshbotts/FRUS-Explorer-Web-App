@@ -1,7 +1,8 @@
 // Settings ▸ Data (PLAN's S15d), the web's own pane: the app's Markdown export of every research
 // note, one file each with a citation and a link back to its document, as the app's Data & Recovery
 // offers it, here as one ZIP that the browser saves, since a page cannot share loose files as the
-// app does. Its count is the server's list of the user's notes, read as the pane opens.
+// app does. Its count is the server's list of the user's notes, read as the pane opens. From S16c it
+// also imports a Mac JSON export and shows its report (ImportSection).
 import { useQuery } from '@tanstack/react-query';
 import { errorMessage } from '../api/client';
 import { servedPath } from '../api/base';
@@ -9,6 +10,7 @@ import { meQuery, notesExportPath, notesQuery } from '../api/userData';
 import { copy } from '../copy';
 import { useHeadingReady } from '../shell/headingFocus';
 import { useDocumentTitle } from '../shell/useDocumentTitle';
+import { ImportSection } from './ImportSection';
 import { SettingsPanes } from './SettingsPanes';
 
 export function DataSettingsScreen() {
@@ -27,17 +29,15 @@ export function DataSettingsScreen() {
     );
   } else if (me.data && !keepsUserData) {
     body = <p>{copy.settings.userDataOff}</p>;
-  } else if (notes.isError) {
-    body = (
-      <p className="error" role="alert">
-        {errorMessage(notes.error)}
-      </p>
-    );
   } else {
     const total = notes.data?.total;
     body = (
       <>
-        {total === undefined ? (
+        {notes.isError ? (
+          <p className="error" role="alert">
+            {errorMessage(notes.error)}
+          </p>
+        ) : total === undefined ? (
           <p role="status">{copy.dataSettings.preparing}</p>
         ) : total === 0 ? (
           <p>{copy.dataSettings.empty}</p>
@@ -50,6 +50,7 @@ export function DataSettingsScreen() {
           </p>
         )}
         <p className="note">{copy.dataSettings.footer}</p>
+        {keepsUserData && <ImportSection />}
       </>
     );
   }

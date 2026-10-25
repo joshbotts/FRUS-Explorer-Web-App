@@ -6,8 +6,9 @@
 # document's page, makes and deletes a tag through the API's write guard (PLAN's S14c), and checks
 # the user, the read-only root, the health check and a restart. Then it
 # makes the container again with FRUS_PUBLIC_URL ending in /frus-explorer/ and checks the server
-# under that path (PLAN's S14f). docs/INSTALL.md's nginx recipes, for the root and for a path, run
-# in nginx on the Compose network in each phase. Its TEI folder holds fixtures/tei's volumes and the
+# under that path (PLAN's S14f), where it imports a Mac JSON export of more than 4 MiB through
+# nginx (S16c). docs/INSTALL.md's nginx recipes, for the root and for a path, run in nginx on the
+# Compose network in each phase. Its TEI folder holds fixtures/tei's volumes and the
 # kit's fixture for a section's own text,
 # fixtures/own-text/frus1969-76v01.xml, whose rows the export holds too.
 #   scripts/compose-smoke                       builds the image as frus-light:smoke first
@@ -332,6 +333,30 @@ if [ -n "$e2e" ]; then
   FRUS_E2E_NETWORK="container:$proxy" FRUS_E2E_BASE_URL=http://localhost:8080/frus-explorer/ scripts/npm --playwright \
     || fail "the browser suite failed under the path; web/playwright-report has its report"
 fi
+
+echo "== an import of more than 4 MiB through nginx under the path, with the recipe's limit"
+# The browser suite's export, padded with spaces past 4 MiB, sent through the guard from inside the
+# proxy's container as the browser app sends it, and followed to its report. After the browser
+# suite, which expects a store without the export's notes.
+{ cat fixtures/import/research-export.json; head -c 5242880 /dev/zero | tr '\0' ' '; } > "$work/import.json"
+docker cp "$work/import.json" "$proxy:/tmp/import.json" >/dev/null || fail "the export could not be copied to nginx"
+me=$(docker exec "$proxy" wget -q -O - "http://localhost:8080/frus-explorer/api/v1/me") || fail "/api/v1/me did not answer through nginx"
+token=$(printf '%s' "$me" | sed -nE 's/.*"csrfToken":"([0-9a-f]+)".*/\1/p')
+posted=$(docker exec "$proxy" wget -q -S -O - --header 'Content-Type: application/json' --header "X-CSRF-Token: $token" \
+  --header 'Origin: http://localhost:8080' --post-file /tmp/import.json "http://localhost:8080/frus-explorer/api/v1/me/import" 2>&1 || true)
+case "$posted" in *'HTTP/1.1 202'*) ;; *) fail "the import through nginx answered: $(printf '%s' "$posted" | head -3)" ;; esac
+job=$(printf '%s' "$posted" | sed -nE 's/.*"id":"([0-9A-F-]+)".*/\1/p' | head -1)
+[ -n "$job" ] || fail "the import through nginx gave no id: $(printf '%s' "$posted" | tail -1)"
+state=""
+for _ in $(seq 1 120); do
+  state=$(docker exec "$proxy" wget -q -O - "http://localhost:8080/frus-explorer/api/v1/me/import/$job" 2>/dev/null \
+    | sed -nE 's/.*"state":"([a-z]+)".*/\1/p' || true)
+  [ "$state" = succeeded ] && break
+  [ "$state" = failed ] && break
+  sleep 0.25
+done
+[ "$state" = succeeded ] || fail "the import through nginx ended $state"
+echo "   $(wc -c < "$work/import.json" | tr -d ' ') bytes, accepted and imported"
 
 echo "== health check under the path"
 wait_healthy

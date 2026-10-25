@@ -62,6 +62,17 @@ export async function postForm<T>(path: string, fields: URLSearchParams, signal?
 }
 
 /**
+ * A file sent as a change's body, as it is, under `contentType`, with `token` in `X-CSRF-Token`:
+ * an import's export (PLAN's S16c). Gives the answer's JSON; throws an `ApiError` for an error status.
+ */
+export async function sendFile<T>(path: string, token: string, file: Blob, contentType: string): Promise<T> {
+  const headers = { Accept: 'application/json', 'X-CSRF-Token': token, 'Content-Type': contentType };
+  const response = await fetch(servedPath(path), { method: 'POST', headers, body: file });
+  if (!response.ok) throw await ApiError.from(response);
+  return (await response.json()) as T;
+}
+
+/**
  * A request that changes state, to `path` at the server's root under the base path: `body` as JSON,
  * and `token` in `X-CSRF-Token`, as the server asks of every change. Gives the answer's JSON, or
  * null for one with no body; throws an `ApiError` for an error status.

@@ -2,7 +2,8 @@
 // /api/v1/me. A server with no sign-in can be reached by any page in the browser, so a write must
 // come from the address FRUS_PUBLIC_URL names, to it, with the token GET /api/v1/me gives, as JSON
 // of a capped size; and a read of a user's data must be sent to that address. Since S15d a note's
-// writes may be larger than the rest, as a note carries its text twice and a Mac note can be long.
+// writes may be larger than the rest, as a note carries its text twice and a Mac note can be long,
+// and since S16c an import's larger still, as it carries a whole Mac JSON export.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -30,13 +31,28 @@ protocol UserResolver: Sendable {
 /// (SPEC, Tenancy and roles).
 struct SingleUserResolver: UserResolver {
     let store: any UserStore
+    /// The user, once read: the store's single user, who does not change while the server runs. So a
+    /// request asks the store only for what it reads, and one that reads nothing else, such as an
+    /// import's status, need not wait while an import writes (S16c).
+    private let known = KnownUser()
+
+    init(store: any UserStore) {
+        self.store = store
+    }
 
     func user(for request: Request, context: APIRequestContext) async throws -> RequestUser {
+        if let user = known.value.withLock({ $0 }) { return user }
         let store = store
-        return try await Blocking.run {
+        let user = try await Blocking.run {
             let id = try store.singleUserID()
             return RequestUser(id: id, displayName: try store.user(id)?.displayName ?? id, roles: [.reader, .curator, .admin])
         }
+        known.value.withLock { $0 = user }
+        return user
+    }
+
+    private final class KnownUser: Sendable {
+        let value = Mutex<RequestUser?>(nil)
     }
 }
 
@@ -71,7 +87,7 @@ final class CSRFTokens: Sendable {
 }
 
 /// What the user store keeps for the routes under /api/v1/me.
-typealias UserDataStore = UserStore & TagStore & HighlightStore & NoteStore & SummaryStore & ProjectStore
+typealias UserDataStore = UserStore & TagStore & HighlightStore & NoteStore & SummaryStore & ProjectStore & ResearchImportStore
 
 /// What the routes under /api/v1/me need.
 struct UserDataServices: Sendable {
@@ -84,8 +100,15 @@ struct UserDataServices: Sendable {
     let enabled: Bool
     let auth: ServerConfiguration.Auth
     let now: @Sendable () -> Date
+    /// Where an import runs (S16c): the server's queue, beside an index's import.
+    let jobs: any JobQueue
+    /// Each import's status and report.
+    let imports: ResearchImports
+    /// The largest export an import may send: `importBodyLimit`, or a test's smaller one.
+    let importLimit: Int
 
     init(store: any UserDataStore, configuration: ServerConfiguration, tokens: CSRFTokens = CSRFTokens(),
+         jobs: any JobQueue = InProcessJobQueue(), importLimit: Int = UserDataServices.importBodyLimit,
          now: @escaping @Sendable () -> Date = Date.init) {
         self.store = store
         resolver = SingleUserResolver(store: store)
@@ -94,6 +117,9 @@ struct UserDataServices: Sendable {
         enabled = configuration.userData
         auth = configuration.auth
         self.now = now
+        self.jobs = jobs
+        imports = ResearchImports()
+        self.importLimit = importLimit
     }
 
     /// The largest body a request under /api/v1/me may carry.
@@ -113,6 +139,10 @@ struct UserDataServices: Sendable {
     /// sends a GET's runs, while its runs and escapes fit in what is left. The app sets no limit; a
     /// Mac note an import leaves longer keeps its body until a shorter one is saved.
     static let noteTextLimit = noteBodyLimit / 4
+    /// The largest Mac JSON export an import may send (S16c), the web's own: a summary takes a few
+    /// kilobytes, so tens of thousands of them fit, and the job's decoding, which holds the file and
+    /// its records at once, stays within a small server's memory.
+    static let importBodyLimit = 128 * 1_024 * 1_024
 }
 
 /// The guard on every route under /api/v1/me, in its group, before the route runs:
@@ -123,7 +153,7 @@ struct UserDataServices: Sendable {
 /// 4. a request that changes state, any but GET, HEAD and OPTIONS, comes from that address (its
 ///    `Origin`), carries the user's token in `X-CSRF-Token`, and declares a body it has as
 ///    `application/json`, of `bodyLimit` at most: `UserDataServices.bodyLimit`, or for the group of
-///    a note's routes `noteBodyLimit`.
+///    a note's routes `noteBodyLimit`, and of an import's `importLimit`.
 struct UserDataGuard: RouterMiddleware {
     typealias Context = APIRequestContext
     let services: UserDataServices
@@ -250,6 +280,10 @@ enum UserDataRoutes {
         let notes = router.group("/api/v1/me")
             .add(middleware: UserDataGuard(services: services, bodyLimit: UserDataServices.noteBodyLimit))
         NoteRoutes.add(to: notes, services: services, resources: resources, provider: provider)
+        // And an import's, the export itself.
+        let imports = router.group("/api/v1/me")
+            .add(middleware: UserDataGuard(services: services, bodyLimit: services.importLimit))
+        ImportRoutes.add(to: imports, services: services)
     }
 
     /// The document a route names. Its volume must be in the catalogue; the document is named and

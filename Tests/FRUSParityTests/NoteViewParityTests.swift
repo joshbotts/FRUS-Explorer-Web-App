@@ -2,8 +2,9 @@
 // take (PLAN's S15d, and PLAN's rule for view code: "mirrored with a parity test that reads the
 // app's source at the pin"), read from the app's source and from web/src at once: the words of the
 // selection bar's Note, the rail's Notes and Summary, the note editor, its formatting bar and link
-// popover, All Notes and the Markdown export, each in the copy.ts block the browser app reads it
-// from, and its format strings as functions; All Notes' rows, filters and count, which
+// popover, All Notes and the Markdown export, and from S16c the import's names of the records its
+// report counts, the export sheet's, each in the copy.ts block the browser app reads it from, and
+// its format strings as functions; All Notes' rows, filters and count, which
 // web/src/research/notesRules.ts mirrors until S17b moves them into the kit; the rail's note rows,
 // its summary preview and history control, and its sections' open states; and the editor's rules
 // for a summary inserted, a tag made, the formatting bar's toggles and its link. A pin move that
@@ -135,6 +136,31 @@ import Testing
             ("Export/ResearchDataExportView.swift", "settings.export.markdown.footer",
              "One Markdown file per research note, with a citation and link back to the source document. Compatible with Obsidian and similar note-taking tools.",
              "dataSettings", "footer"),
+            // S16c: an import's report names the records as the export sheet's Contents does.
+            ("Export/ResearchDataExportView.swift", "settings.export.notes", "Research Notes", "dataSettings", "ResearchNote"),
+            ("Export/ResearchDataExportView.swift", "settings.export.highlights", "Highlights", "dataSettings", "DocumentHighlight"),
+            ("Export/ResearchDataExportView.swift", "settings.export.collections", "Collections", "dataSettings", "Collection"),
+            ("Export/ResearchDataExportView.swift", "settings.export.prompts", "Custom Prompts", "dataSettings", "SummarizationPrompt"),
+            ("Export/ResearchDataExportView.swift", "settings.export.projects", "Projects", "dataSettings", "Project"),
+            ("Export/ResearchDataExportView.swift", "settings.export.archiveVisits", "Archives Visits", "dataSettings", "ArchiveVisitPlan"),
+            ("Export/ResearchDataExportView.swift", "settings.export.savedSearches", "Saved Searches", "dataSettings", "SavedSearch"),
+            ("Export/ResearchDataExportView.swift", "settings.export.workingCorpora", "Working Corpora", "dataSettings", "WorkingCorpus"),
+            ("Export/ResearchDataExportView.swift", "settings.export.volumeScopes", "Volume Scopes", "dataSettings", "CustomVolumeScope"),
+            ("Export/ResearchDataExportView.swift", "settings.export.classificationCorrections", "Classification Corrections",
+             "dataSettings", "DocumentClassificationOverride"),
+            ("Export/ResearchDataExportView.swift", "settings.export.personCorrections", "Person Corrections", "dataSettings",
+             "PersonClusterOverride"),
+            ("Export/ResearchDataExportView.swift", "settings.export.reviewedChanges", "Reviewed Changes", "dataSettings", "AnnotationReview"),
+            ("Export/ResearchDataExportView.swift", "settings.export.suggestedNext", "Suggested Next Leads", "dataSettings", "ProjectLeadEntry"),
+            ("Export/ResearchDataExportView.swift", "settings.export.syncedSettings", "Synced Settings", "dataSettings", "SyncedPreferences"),
+            ("Export/ResearchDataExportView.swift", "settings.export.readingHistory", "Documents Visited", "dataSettings", "ReadingHistoryEntry"),
+            ("Export/ResearchDataExportView.swift", "settings.export.searchHistory", "Searches Executed", "dataSettings", "SearchHistoryEntry"),
+            ("Export/ResearchDataExportView.swift", "settings.export.exportHistory", "Collections Exported", "dataSettings", "ExportHistoryEntry"),
+            ("ResearchNoteEditor/ResearchNoteEditorView.swift", "note.editor.summaries.header", "Generated Summaries", "dataSettings",
+             "GeneratedSummary"),
+            ("Collections/CollectionListView.swift", "export.smart.missingSearch",
+             "The linked saved search could not be found. It may have been deleted.", "dataSettings", "missingSearch"),
+            ("Models/Collection.swift", "collection.untitled.name", "Untitled Collection", "dataSettings", "untitledCollection"),
         ]
         let sources = Sources()
         for word in words {

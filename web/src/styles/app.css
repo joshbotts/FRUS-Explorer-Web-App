@@ -1164,6 +1164,49 @@ button.destructive {
   margin-top: 0;
 }
 
+/* Settings ▸ Data's import (S16c): the file, its job's line, and its report. */
+.import {
+  margin-top: 2rem;
+}
+
+.import h2 {
+  font-size: 1.25rem;
+}
+
+.import-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.import-report table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.import-report caption {
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.import-report th,
+.import-report td {
+  padding: 0.125rem 0.75rem 0.125rem 0;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+}
+
+.import-report th[scope='row'],
+.import-report th[scope='col']:first-child {
+  text-align: left;
+}
+
+.import-notes {
+  padding-left: 1.25rem;
+}
+
 .settings-list {
   margin: 0 0 0.75rem;
   padding: 0;
