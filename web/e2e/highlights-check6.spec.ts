@@ -6,7 +6,9 @@
 // text has the row's length and digest; each sample's text, read through the engine's map of the
 // live page, is the sample's; the kit's selection bridge reads the kit's own range for each sample
 // back to its offsets; and the kit's renderer draws one range for each, under its colour's name or
-// the stale one's.
+// the stale one's. FRUS_CHECK6_SAMPLES names another file of samples, by its path from the
+// repository's root: the one `frus-parity check-highlights` writes for a Mac export's highlights
+// (PLAN's S16c), read back in place of the fixtures' rows from a server whose TEI folder holds them.
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { expect, test } from './fixtures';
@@ -36,7 +38,8 @@ interface ReaderWindow {
   rangeEndpointToOffset(node: Node, offset: number): number;
 }
 
-const file = JSON.parse(readFileSync(new URL('../../fixtures/highlights/samples.json', import.meta.url), 'utf8')) as {
+const samples = process.env.FRUS_CHECK6_SAMPLES ?? 'fixtures/highlights/samples.json';
+const file = JSON.parse(readFileSync(new URL(`../../${samples}`, import.meta.url), 'utf8')) as {
   formatVersion: number;
   rows: Row[];
 };
@@ -45,10 +48,12 @@ const volumes = [...new Set(file.rows.map((row) => row.volume))];
 /** A figure's image, which the suite's TEI folder lacks: an empty PNG, so a figure row logs no 404. */
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
 
-test('the samples cover the 393 golden rows', () => {
-  expect(file.formatVersion).toBe(1);
-  expect(file.rows).toHaveLength(393);
-});
+if (!process.env.FRUS_CHECK6_SAMPLES) {
+  test('the samples cover the 393 golden rows', () => {
+    expect(file.formatVersion).toBe(1);
+    expect(file.rows).toHaveLength(393);
+  });
+}
 
 for (const volume of volumes) {
   const rows = file.rows.filter((row) => row.volume === volume);

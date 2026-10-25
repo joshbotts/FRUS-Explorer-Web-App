@@ -390,12 +390,20 @@ public struct ResearchComparison: Sendable, Equatable {
         var comparison = TypeComparison(type: type, inFile: file.count)
         var held: [UUID: T] = [:]
         for record in stored { held[id(record)] = record }
+        // A record the file gives twice is held as one of its copies, the newer of two that differ.
+        var copies: [UUID: [T]] = [:]
+        var order: [UUID] = []
         for record in file {
-            guard let copy = held[id(record)] else {
-                comparison.missing.append(id(record).uuidString)
+            if copies[id(record)] == nil { order.append(id(record)) }
+            copies[id(record), default: []].append(record)
+        }
+        for key in order {
+            let given = copies[key] ?? []
+            guard let copy = held[key] else {
+                comparison.missing.append(key.uuidString)
                 continue
             }
-            if copy != record { comparison.different.append((id(record).uuidString, fields(record, copy))) }
+            if !given.contains(copy), let first = given.first { comparison.different.append((key.uuidString, fields(first, copy))) }
         }
         return comparison
     }

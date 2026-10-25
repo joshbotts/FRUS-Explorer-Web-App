@@ -39,7 +39,7 @@ public enum ImportCheck {
         for (count, compared) in zip(outcome.report.types, outcome.comparison.types) {
             let carried = count.carried ? "" : " (not carried at this version)"
             var line = "\(count.type): \(count.inFile) in the file\(carried); \(count.added) came in, \(count.replaced) replaced, "
-                + "\(count.kept) kept, \(count.setAside) set aside"
+                + "\(count.kept) kept, \(count.setAside) set aside, \(count.repeated) repeated in the file"
             line += compared.isWhole ? "; all held as the file has them" : "; NOT WHOLE"
             lines.append(line)
             for id in compared.missing { lines.append("  missing: \(id)") }

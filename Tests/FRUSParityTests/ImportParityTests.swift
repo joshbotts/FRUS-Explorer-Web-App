@@ -88,8 +88,8 @@ enum ImportServer {
         for type in report.types {
             #expect(type.carried == (envelope.formatVersion >= since[type.type, default: 1]), "\(type.type)", sourceLocation: sourceLocation)
             #expect(type.inFile == counts[type.type], "\(type.type)", sourceLocation: sourceLocation)
-            #expect(type.added + type.setAside == type.inFile && type.replaced == 0 && type.kept == 0, "\(type.type): \(type)",
-                    sourceLocation: sourceLocation)
+            #expect(type.added + type.setAside + type.repeated == type.inFile && type.replaced == 0 && type.kept == 0,
+                    "\(type.type): \(type)", sourceLocation: sourceLocation)
         }
     }
 
@@ -212,6 +212,36 @@ enum ImportServer {
             #expect(stored.notes.first { $0.id == ImportFixtures.id(2) }?.richText == v7.notes[1].richText,
                     "its RTF, which 6 does not carry, kept")
         }
+    }
+
+    /// A record the file gives twice, as the owner's export of build 50 did, is written once: the
+    /// newer copy, or of two as new the first; and the report counts the repeat apart from what the
+    /// store kept.
+    @Test func aRecordTheFileGivesTwiceIsWrittenOnceAndCountedAsARepeat() async throws {
+        var envelope = ImportFixtures.everyType(formatVersion: 6)
+        envelope.notes.append(envelope.notes[0])
+        envelope.readingHistory += [envelope.readingHistory[0], envelope.readingHistory[0]]
+        var renamed = envelope.tags[0]
+        renamed.name = "Cuba, renamed"
+        renamed.lastModified = ImportFixtures.date("2026-08-01T00:00:00Z")
+        var earlier = envelope.tags[0]
+        earlier.name = "Cuba, before"
+        earlier.lastModified = ImportFixtures.date("2026-01-15T00:00:00Z")
+        envelope.tags += [renamed, earlier]
+        let directory = try TemporaryDirectory()
+        defer { withExtendedLifetime(directory) {} }
+        let outcome = try await ImportCheck.run(try ImportFixtures.file(envelope), in: directory.url)
+        let counts = Dictionary(uniqueKeysWithValues: outcome.report.types.map { ($0.type, $0) })
+        #expect(counts["ResearchNote"].map { [$0.inFile, $0.added, $0.kept, $0.repeated] } == [4, 3, 0, 1])
+        #expect(counts["ReadingHistoryEntry"].map { [$0.inFile, $0.added, $0.kept, $0.repeated] } == [4, 2, 0, 2])
+        #expect(counts["UserTag"].map { [$0.inFile, $0.added, $0.kept, $0.repeated] } == [4, 2, 0, 2])
+        Self.expectEverythingCameIn(outcome.report, envelope)
+        let stored = try StoredResearch.envelope(at: outcome.store, user: "owner", formatVersion: 6, header: envelope)
+        #expect(stored.tags.first { $0.id == ImportFixtures.id(20) }?.name == "Cuba, renamed", "the newest copy")
+        #expect(outcome.comparison.isWhole)
+        #expect(ImportCheck.describe(outcome).contains {
+            $0.hasPrefix("ResearchNote: 4 in the file; 3 came in, 0 replaced, 0 kept, 0 set aside, 1 repeated in the file")
+        })
     }
 
     /// The check sees what the store holds otherwise: a field changed beside the import is named,

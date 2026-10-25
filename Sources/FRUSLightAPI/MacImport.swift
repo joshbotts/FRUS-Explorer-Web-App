@@ -64,6 +64,9 @@ public struct ImportTypeCount: Codable, Equatable, Sendable {
     /// Records not written: synced settings after the earliest, which the app does not read, and an
     /// instance's corrections, which only a curator imports.
     public var setAside: Int
+    /// Records whose id the file already gave, the same record exported twice: one copy is written,
+    /// the newest, or of two as new the first, as a copy the store held would be kept.
+    public var repeated: Int
 }
 
 /// A file the import cannot read.
@@ -185,7 +188,8 @@ public enum MacImport {
             let count = result.counts[type.table] ?? ImportCount()
             return ImportTypeCount(type: type.model, carried: envelope.formatVersion >= type.since,
                                    inFile: prepared.inFile[type.table] ?? 0, added: count.added, replaced: count.replaced,
-                                   kept: count.kept, setAside: prepared.setAside[type.table] ?? 0)
+                                   kept: count.kept, setAside: prepared.setAside[type.table] ?? 0,
+                                   repeated: prepared.repeated[type.table] ?? 0)
         }
         let formatted = envelope.notes.filter { $0.richText != nil }
         let kept = formatted.filter { note in
@@ -203,15 +207,37 @@ public enum MacImport {
             unlinkedCollections: result.unlinkedCollections, searchableDocuments: result.searchableDocuments)
     }
 
-    /// The file's rows, with how many records of each table it held and how many are set aside.
+    /// The file's rows, one for each id, with how many records of each table it held, how many are set
+    /// aside and how many repeat an id it already gave.
     struct Prepared {
         var batch = ResearchImportBatch()
         var inFile: [String: Int] = [:]
         var setAside: [String: Int] = [:]
+        var repeated: [String: Int] = [:]
 
+        /// A table's rows in the file's order. A row whose id the file gave before is counted as a
+        /// repeat, and takes the earlier one's place only when it is newer by `ImportStamp`, as it
+        /// would replace a copy the store held.
         mutating func add(_ table: String, _ rows: [ImportRow], inFile count: Int? = nil) {
-            batch.rows[table, default: []] += rows
             inFile[table, default: 0] += count ?? rows.count
+            var kept = batch.rows[table] ?? []
+            var positions: [String: Int] = [:]
+            for (index, row) in kept.enumerated() { if let id = row.values["id"]?.text { positions[UserSearchText.uuidString(id)] = index } }
+            for row in rows {
+                guard let id = row.values["id"]?.text.map(UserSearchText.uuidString) else {
+                    kept.append(row)
+                    continue
+                }
+                guard let earlier = positions[id] else {
+                    positions[id] = kept.count
+                    kept.append(row)
+                    continue
+                }
+                repeated[table, default: 0] += 1
+                let time = { (row: ImportRow) in ImportStamp.time(of: { row.values[$0] }, in: table) ?? .distantPast }
+                if time(row) > time(kept[earlier]) { kept[earlier] = row }
+            }
+            batch.rows[table] = kept
         }
     }
 

@@ -1,10 +1,10 @@
 // The user's own data, under /api/v1/me (PLAN's S14c): who the server takes the browser to be, with
 // the token every change carries, the user's tags, theirs and a document's, a document's highlights
-// (S15c), and the user's research notes, a document's summaries and the user's projects (S15d). A
-// change that the server refuses for its token, as after a restart, asks for a new one and is sent
-// once more.
+// (S15c), the user's research notes, a document's summaries and the user's projects (S15d), and the
+// import of a Mac JSON export (S16c). A change that the server refuses for its token, as after a
+// restart, asks for a new one and is sent once more.
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
-import { ApiError, getJSON, sendJSON } from './client';
+import { ApiError, getJSON, sendFile, sendJSON } from './client';
 import type {
   DocumentHighlights,
   DocumentNotes,
@@ -12,6 +12,7 @@ import type {
   DocumentTags,
   Highlight,
   HighlightColor,
+  ImportStatus,
   Me,
   Note,
   NoteList,
@@ -338,3 +339,42 @@ export const projectsQuery = queryOptions({
   staleTime: 60_000,
   retry: false,
 });
+
+/**
+ * Sends a Mac JSON export to be imported, as it is, with the user's token, and once more with a new
+ * one if the server no longer knows it. Answers the import's status: queued, or already running.
+ */
+export async function startImport(client: QueryClient, file: Blob): Promise<ImportStatus> {
+  const me = await client.ensureQueryData(meQuery);
+  try {
+    return await sendFile<ImportStatus>('/api/v1/me/import', me.csrfToken, file, 'application/json');
+  } catch (error) {
+    if (!(error instanceof ApiError && error.code === 'CSRF_TOKEN_INVALID')) throw error;
+    const fresh = await client.fetchQuery({ ...meQuery, staleTime: 0 });
+    return await sendFile<ImportStatus>('/api/v1/me/import', fresh.csrfToken, file, 'application/json');
+  }
+}
+
+/** How often an import still under way is asked after, in milliseconds. */
+export const importPollInterval = 500;
+
+/** An import's status, asked after until its job has finished. */
+export function importStatusQuery(id: number) {
+  return queryOptions({
+    queryKey: ['import', id],
+    queryFn: ({ signal }) => getJSON<ImportStatus>(`/api/v1/me/import/${id}`, undefined, signal),
+    staleTime: 0,
+    retry: false,
+    refetchInterval: (query) => {
+      const state = query.state.data?.state;
+      return state === 'succeeded' || state === 'failed' ? false : importPollInterval;
+    },
+  });
+}
+
+/** After an import, every list of the user's may hold what it brought. */
+export function researchImported(client: QueryClient) {
+  for (const key of ['tags', 'documentTags', 'notes', 'documentNotes', 'note', 'documentSummaries', 'documentHighlights', 'projects']) {
+    void client.invalidateQueries({ queryKey: [key] });
+  }
+}

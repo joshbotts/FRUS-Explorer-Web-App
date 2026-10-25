@@ -141,9 +141,11 @@ test('writes a formatted note from the bar’s Note, edits it in the rail, and f
   await expect(page.getByRole('status')).toHaveText('1 note');
   await axeCheck(page);
 
-  // The filters: no projects yet, so the project picker's own two; the tag; the text.
+  // The filters: the project picker's own two, then the user's projects by name, which only an
+  // import brings (import.spec.ts leaves its own); the tag; the text.
   const project = page.getByRole('combobox', { name: 'Project' });
-  await expect(project.locator('option')).toHaveText(['All projects', 'Not in a project']);
+  const projects = ((await (await page.request.get('api/v1/me/projects')).json()) as { items: { name: string }[] }).items;
+  await expect(project.locator('option')).toHaveText(['All projects', 'Not in a project', ...projects.map((each) => each.name)]);
   await project.selectOption({ label: 'Not in a project' });
   await expect(item).toHaveCount(1);
   const tag = page.getByRole('combobox', { name: 'Tag' });

@@ -33,11 +33,13 @@
 // Underline, Text Color and Link selected text to a URL, and its link popover with the iPhone's
 // Cancel; All Notes with its filters, its rows' Empty note, its empty states, its count from the
 // app's sheet and its Delete Note? question; and the Markdown export's action, its line while it
-// is prepared, its line for no notes and its footer. The selection bar's name, Selection, the
+// is prepared, its line for no notes and its footer; and from S16c the names of the records an
+// import's report counts, its export sheet's Contents, and its sentence for a smart collection whose
+// saved search is gone. The selection bar's name, Selection, the
 // formatting bar's, Text formatting, its glyphs, Write a Summary, Edit… and Delete… for a summary
 // of one's own and the question before it, the visible Delete… on All Notes' rows, the rail's times,
 // Settings ▸ Data's title and the lines for an editor that could not load or a note, formatted or
-// plain, it could not show are the web's own. The rest,
+// plain, it could not show are the web's own, and so is the import's every other word. The rest,
 // chiefly what only a server has (what it indexes, which TEI it holds), are the web's own until
 // check 10 settles them.
 
@@ -594,5 +596,76 @@ export const copy = {
     empty: 'No research notes to export.',
     footer:
       'One Markdown file per research note, with a citation and link back to the source document. Compatible with Obsidian and similar note-taking tools.',
+    // The import (PLAN's S16c), the web's own words, since the app imports no JSON export, but for
+    // the records' names, which are its export sheet's Contents, and the missing search's sentence.
+    importTitle: 'Import a JSON Export',
+    importLead:
+      'Import the file FRUS Explorer writes on the Mac with Settings ▸ Data & Recovery ▸ Export as JSON; turn on Include AI-Generated Summaries there to bring your summaries. Each record keeps its id from the Mac, and a record you already have here is replaced only by a newer copy. Nothing here is deleted.',
+    importFile: 'Export file',
+    importAction: 'Import',
+    importQueued: (name: string) => `${name} waits for the server’s other work…`,
+    importRunning: (name: string) => `Importing ${name}…`,
+    importDone: (name: string) => `Imported ${name}`,
+    importFailed: (name: string) => `${name} could not be imported. Nothing of it was kept.`,
+    importWritten: (version: number, date: string) => `A version-${version} export, written on ${date}.`,
+    reportCaption: 'What the export held, and what became of it',
+    reportType: 'Records',
+    reportInFile: 'In the file',
+    reportAdded: 'Came in',
+    reportReplaced: 'Replaced',
+    reportKept: 'Kept',
+    reportKeptNote: 'Replaced: you had an older copy here. Kept: you had a copy as new or newer.',
+    notCarried: (version: number, names: string) => `A version-${version} export carries no ${names}.`,
+    repeated: (count: number, name: string) =>
+      `${count.toLocaleString('en-US')} of the ${name.toLowerCase()} came twice in the file: each is kept once, the newer copy.`,
+    setAsideSettings: (count: number) =>
+      count === 1
+        ? 'The file held a second set of synced settings, from a device iCloud had not yet merged: the earliest set is kept, as the app keeps it.'
+        : `The file held ${count.toLocaleString('en-US')} more sets of synced settings, from devices iCloud had not yet merged: the earliest set is kept, as the app keeps it.`,
+    setAsideCorrections: (count: number) =>
+      `${count.toLocaleString('en-US')} ${count === 1 ? 'correction was' : 'corrections were'} left out: a correction changes the index everyone here reads, and only a curator imports one.`,
+    formattingKept: (count: number) =>
+      count === 1
+        ? 'One note keeps formatting this server cannot show: it opens as plain text until you edit it here.'
+        : `${count.toLocaleString('en-US')} notes keep formatting this server cannot show: they open as plain text until you edit them here.`,
+    headnoteDrafts: (count: number) =>
+      count === 1
+        ? 'One summary is a collection’s headnote draft, which no list of a document’s summaries shows.'
+        : `${count.toLocaleString('en-US')} summaries are collections’ headnote drafts, which no list of a document’s summaries shows.`,
+    withoutAuthorship: (count: number) =>
+      `${count.toLocaleString('en-US')} ${count === 1 ? 'summary says' : 'summaries say'} nothing of who wrote ${count === 1 ? 'it' : 'them'}, as exports before version 5 do, and ${count === 1 ? 'is' : 'are'} shown as AI summaries.`,
+    inertEntries: (count: number) =>
+      count === 1
+        ? 'One collection entry has no document. A version-6 export does not say what it was, a section heading, a note block or an apparatus block, so it is kept as an entry this server does not show.'
+        : `${count.toLocaleString('en-US')} collection entries have no document. A version-6 export does not say what they were, section headings, note blocks or apparatus blocks, so they are kept as entries this server does not show.`,
+    unlinkedLead: 'These smart collections keep their link to a saved search this export does not carry:',
+    missingSearch: 'The linked saved search could not be found. It may have been deleted.',
+    /** What the app's lists call a collection with no name (`CollectionEditorNaming.listName`). */
+    untitledCollection: 'Untitled Collection',
+    types: {
+      ResearchNote: 'Research Notes',
+      UserTag: 'Tags',
+      DocumentTagAssignment: 'Tag Assignments',
+      DocumentHighlight: 'Highlights',
+      Collection: 'Collections',
+      CollectionEntry: 'Collection Entries',
+      SummarizationPrompt: 'Custom Prompts',
+      Project: 'Projects',
+      ArchiveVisitPlan: 'Archives Visits',
+      ArchiveVisitDocument: 'Archives Visit Documents',
+      ArchiveVisitTarget: 'Archives Visit Targets',
+      SavedSearch: 'Saved Searches',
+      WorkingCorpus: 'Working Corpora',
+      CustomVolumeScope: 'Volume Scopes',
+      DocumentClassificationOverride: 'Classification Corrections',
+      PersonClusterOverride: 'Person Corrections',
+      AnnotationReview: 'Reviewed Changes',
+      ProjectLeadEntry: 'Suggested Next Leads',
+      SyncedPreferences: 'Synced Settings',
+      ReadingHistoryEntry: 'Documents Visited',
+      SearchHistoryEntry: 'Searches Executed',
+      ExportHistoryEntry: 'Collections Exported',
+      GeneratedSummary: 'Generated Summaries',
+    },
   },
 } as const;

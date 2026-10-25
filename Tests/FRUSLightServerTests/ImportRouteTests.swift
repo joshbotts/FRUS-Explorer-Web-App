@@ -113,7 +113,7 @@ import Testing
             let again = try await browser.send(.post, Self.path, try Self.export())
             #expect(again.headers[.location] == "/api/v1/me/import/2")
             let kept = try #require(try await Self.finished(browser, fixture, "/api/v1/me/import/2").report)
-            #expect(kept.types.allSatisfy { $0.kept == $0.inFile && $0.added == 0 })
+            #expect(kept.types.allSatisfy { $0.kept == $0.inFile && $0.added == 0 && $0.repeated == 0 })
             for missing in ["/api/v1/me/import/3", "/api/v1/me/import/x", "/api/v1/me/import/-1"] {
                 let response = try await browser.get(missing)
                 #expect(response.status == .notFound && problemCode(response) == "IMPORT_NOT_FOUND", "\(missing)")

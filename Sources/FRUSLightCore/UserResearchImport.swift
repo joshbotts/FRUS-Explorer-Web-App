@@ -128,7 +128,7 @@ public enum ImportStamp {
     ]
 
     /// The time `values` give a row of `table`, or nil.
-    static func time(of values: (String) -> SQLiteValue?, in table: String) -> Date? {
+    public static func time(of values: (String) -> SQLiteValue?, in table: String) -> Date? {
         for column in columns[table] ?? [] {
             if let text = values(column)?.text, let date = UserStoreDate.date(text) { return date }
         }
