@@ -171,6 +171,27 @@ public final class UserStoreRows: @unchecked Sendable {
         try db.query(sql, [.text(user), .text(id)]).first?.map { $0.text ?? "" } ?? []
     }
 
+    /// Runs a statement, for a row no route or import writes.
+    public func run(_ sql: String, _ bindings: [SQLiteValue] = []) throws {
+        _ = try db.query(sql, bindings)
+    }
+
+    /// The first column of each row a query gives, as text, NULL as empty.
+    public func column(_ sql: String, _ bindings: [SQLiteValue] = []) throws -> [String] {
+        try db.query(sql, bindings).map { $0.first?.text ?? "" }
+    }
+
+    /// Every row of `table`, a user table's of `user`'s, each with all of its columns but `user_id`, in
+    /// the order the store took them (S16d's export and its round trip).
+    public func rows(of table: String, user: String = "owner") throws -> [[String: SQLiteValue]] {
+        guard let schema = UserStoreSchema.tables.first(where: { $0.name == table }) else { return [] }
+        let columns = schema.columns.map(\.name)
+        return try db.query("SELECT \(columns.joined(separator: ", ")) FROM \(table)"
+                                + (schema.scope == .user ? " WHERE user_id = ?" : "") + " ORDER BY rowid",
+                            schema.scope == .user ? [.text(user)] : [])
+            .map { Dictionary(uniqueKeysWithValues: zip(columns, $0)) }
+    }
+
     /// The first row a query gives, each value as text and NULL as empty, or none.
     public func firstRow(_ sql: String, _ bindings: [String] = []) throws -> [String] {
         try db.query(sql, bindings.map { .text($0) }).first?.map { $0.text ?? "" } ?? []

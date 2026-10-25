@@ -1,8 +1,8 @@
 // The user's own data, under /api/v1/me (PLAN's S14c): who the server takes the browser to be, with
 // the token every change carries, the user's tags, theirs and a document's, a document's highlights
-// (S15c), the user's research notes, a document's summaries and the user's projects (S15d), and the
-// import of a Mac JSON export (S16c). A change that the server refuses for its token, as after a
-// restart, asks for a new one and is sent once more.
+// (S15c), the user's research notes, a document's summaries and the user's projects (S15d), the
+// import of a Mac JSON export (S16c), and the export and what it carries (S16d). A change that the
+// server refuses for its token, as after a restart, asks for a new one and is sent once more.
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
 import { ApiError, getJSON, sendFile, sendJSON } from './client';
 import type {
@@ -10,6 +10,7 @@ import type {
   DocumentNotes,
   DocumentSummaries,
   DocumentTags,
+  ExportContents,
   Highlight,
   HighlightColor,
   ImportStatus,
@@ -332,6 +333,22 @@ export async function deleteSummary(client: QueryClient, summary: Summary): Prom
   await summariesChanged(client, summary.volumeId, summary.documentId);
 }
 
+/** What an export of the user's carries of each type, for Settings ▸ Data's Contents (S16d). */
+export const exportContentsQuery = queryOptions({
+  queryKey: ['exportContents'],
+  queryFn: ({ signal }) => getJSON<ExportContents>('/api/v1/me/export/contents', undefined, signal),
+  staleTime: 0,
+  retry: false,
+});
+
+/**
+ * Export as JSON: the user's research as the Mac's export, the kit's envelope with the web's one key
+ * more, which the server names as the app's export sheet does; every summary with the app's switch on.
+ */
+export function exportPath(includeGeneratedSummaries: boolean): string {
+  return '/api/v1/me/export' + (includeGeneratedSummaries ? '?includeGeneratedSummaries=true' : '');
+}
+
 /** The user's projects, by name, for the note editor's Projects and All Notes' filter. */
 export const projectsQuery = queryOptions({
   queryKey: ['projects'],
@@ -375,7 +392,7 @@ export function importStatusQuery(id: string) {
 
 /** After an import, every list of the user's may hold what it brought. */
 export function researchImported(client: QueryClient) {
-  for (const key of ['tags', 'documentTags', 'notes', 'documentNotes', 'note', 'documentSummaries', 'documentHighlights', 'projects']) {
+  for (const key of ['tags', 'documentTags', 'notes', 'documentNotes', 'note', 'documentSummaries', 'documentHighlights', 'projects', 'exportContents']) {
     void client.invalidateQueries({ queryKey: [key] });
   }
 }

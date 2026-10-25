@@ -762,6 +762,20 @@ export interface ResearchImportReport {
   searchableDocuments: number;
 }
 
+/** How many records of one model type an export carries (PLAN's S16d). */
+export interface ExportTypeCount {
+  type: ResearchType;
+  count: number;
+}
+
+/** What an export of the user's would carry, for Settings ▸ Data's Contents. */
+export interface ExportContents {
+  /** The format version the export writes, the kit's. */
+  formatVersion: number;
+  /** Each of the 23 model types, in the store's order: the summaries as with the switch on. */
+  types: ExportTypeCount[];
+}
+
 /** An import of a Mac JSON export, as a job: queued, running, then succeeded or failed. */
 export interface ImportStatus {
   /** A UUID, new for each import, so an id from before a restart names none. */
