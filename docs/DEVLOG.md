@@ -4,7 +4,7 @@ One entry per session, newest first.
 
 ## Session 19a: Citation Lookup, over the API and in the browser app
 
-24 October 2026 · branch `claude/s19a-citation-lookup` · [#PR](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/PR) · upstream `503a730b`, unchanged
+24 October 2026 · branch `claude/s19a-citation-lookup` · [#62](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/62) · upstream `503a730b`, unchanged
 
 Phase 2's row S19a, beside S16c, with which it shares no file but the records. Citation Lookup comes to the web as the app's window has it: Paste Citation, Structured Entry and Batch, through the kit's form, matcher, splitter and runner, every label and count the kit's. No upstream pull request, and no schema change: #1787 made Batch's and Structured Entry's types public, and S16b's pin brought them.
 
@@ -66,10 +66,10 @@ Phase 2's row S19a, beside S16c, with which it shares no file but the records. C
 
 **Results**
 
-- **Linux, `swift:6.4-noble`, arm64:** CI's swift job, replayed under the app's heavy-job lock at the final tree: RESULTS
+- **Linux, `swift:6.4-noble`, arm64:** CI's swift job, replayed under the app's heavy-job lock before the last change: all 2,309 tests pass, up from 2,292, with the one named skip and nothing cancelled, and no build warning; FRUSLightServerTests 158 and FRUSParityTests 162, the others as at #61. The POST reading, which came after, adds one server test, 159, run with the S19a suites, all passing; CI runs the whole at the final tree.
 - **The web job's steps,** through `scripts/npm`: typecheck, lint and the build are clean, and the unit suite passes 289 tests in 31 files.
 - **`scripts/compose-smoke --e2e`** on this branch's image: 43 browser tests at the root and 43 under the path, through nginx with INSTALL's recipe, with no axe violations.
-- **Reviews.** REVIEWS
+- **Reviews.** The session's own review of the screen found the gate's settling restarted by every render, and Batch's block sent to the gate in an address that nginx refuses past 8 KiB; both are fixed. A cold review of the whole branch was started and stopped unfinished when the session's usage ran out: it is owed before merge.
 
 **Records**
 
