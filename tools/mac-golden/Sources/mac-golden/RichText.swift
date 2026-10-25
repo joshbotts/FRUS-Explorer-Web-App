@@ -27,7 +27,10 @@ let richTextConfiguration = """
     link's absoluteString or string); paragraphs are CollectionProse.paragraphs(fromRTF:). Catalog \
     colours are each key of the System colour list, as an RTF \\cname entry, read the same way. \
     Each written and read case is also rewritten: the web's codec (FRUSRichText) reads it, writes its \
-    merged runs with RTFWriter, and the app reads that RTF the same way. \
+    runs in canonical form with RTFWriter, as the server stores a web edit, and the app reads that RTF \
+    the same way. Code pages are ParityFormat's RichTextCodePages documents, every text byte and \
+    double-byte pair in a group of its own, read by ProseRichText.decodedRTF; the web's codec must read \
+    each the same before its digest is recorded. \
     A release build of the app module, with testing enabled, compiled from the submodule unmodified.
     """
 
@@ -44,6 +47,7 @@ func richTextGolden(repo: Repository, out: URL) throws {
     let aqua = try NSAppearance(named: .aqua).orThrow("no aqua appearance")
     var cases: [RichTextCase] = []
     var catalog: [CatalogColor] = []
+    var codePages: [RichTextCodePageReading] = []
     var inputs: [String: String] = [:]
     var failure: Error?
     aqua.performAsCurrentDrawingAppearance {
@@ -70,6 +74,7 @@ func richTextGolden(repo: Repository, out: URL) throws {
                 cases.append(try reading(id: "web-" + web.id, kind: .web, source: path, rtf: data))
             }
             catalog = try catalogColors()
+            codePages = try codePageReadings()
         } catch {
             failure = error
         }
@@ -84,12 +89,13 @@ func richTextGolden(repo: Repository, out: URL) throws {
         configuration: richTextConfiguration,
         appearance: NSAppearance.Name.aqua.rawValue,
         cases: cases,
-        catalogColors: catalog
+        catalogColors: catalog,
+        codePages: codePages
     )
     try GoldenJSON.write(golden, to: out)
     let counts = Dictionary(grouping: cases, by: \.kind).mapValues(\.count)
     note("rich-text: \(counts[.written] ?? 0) written, \(counts[.read] ?? 0) read and \(counts[.web] ?? 0) web cases, "
-        + "\(catalog.count) catalog colours, to \(repo.relativePath(out))")
+        + "\(catalog.count) catalog colours, \(codePages.count) code pages, to \(repo.relativePath(out))")
 }
 
 /// The app's reading of one RTF payload, checked against itself: the runs, split as
@@ -113,12 +119,32 @@ private func reading(id: String, kind: RichTextCase.Kind, source: String?, rtf: 
     var rewritten: RichTextRewrite?
     if kind != .web {
         guard let codec = RTFReader.read(Array(rtf)) else { throw ToolError("rich-text: \(id): the web's codec does not read it") }
-        let bytes = RTFWriter.write(codec.mergedRuns)
+        let bytes = RTFWriter.write(RichTextRuns.canonical(codec.runs))
         guard let back = ProseRichText.decodedRTF(Data(bytes)) else { throw ToolError("rich-text: \(id): the app does not read the codec's RTF") }
         rewritten = RichTextRewrite(rtf: String(decoding: bytes, as: UTF8.self), runs: spanRuns(back))
     }
     return RichTextCase(id: id, kind: kind, source: source, rtf: text, text: decoded.string, runs: runs, paragraphs: paragraphs,
                         rewritten: rewritten)
+}
+
+/// The app's reading of each code page's document, which the web's codec must read the same, here
+/// first, so that a difference names its entry.
+@MainActor
+private func codePageReadings() throws -> [RichTextCodePageReading] {
+    try RichTextCodePages.pages.map { page in
+        let rtf = RichTextCodePages.document(page)
+        let decoded = try ProseRichText.decodedRTF(Data(rtf)).orThrow("rich-text: code page \(page.name) does not read")
+        let codec = try RTFReader.read(rtf).orThrow("rich-text: the web's codec does not read code page \(page.name)")
+        let app = decoded.string.unicodeScalars.split(separator: "|", omittingEmptySubsequences: false)
+        let ours = codec.text.unicodeScalars.split(separator: "|", omittingEmptySubsequences: false)
+        let differing = zip(app, ours).enumerated().first(where: { !$0.element.0.elementsEqual($0.element.1) })?.offset
+        if let entry = differing ?? (app.count == ours.count ? nil : min(app.count, ours.count)) {
+            throw ToolError("rich-text: the web's codec reads entry \(entry) of code page \(page.name) (\(RichTextCodePages.entry(entry, of: page))) "
+                + "otherwise than the app: \(entry < ours.count ? String(String.UnicodeScalarView(ours[entry])).debugDescription : "nothing"), "
+                + "the app's \(entry < app.count ? String(String.UnicodeScalarView(app[entry])).debugDescription : "nothing")")
+        }
+        return RichTextCodePageReading(name: page.name, length: decoded.length, sha256: Digest.sha256(Data(decoded.string.utf8)))
+    }
 }
 
 /// Each attribute run of `decoded`, read by `CollectionProse.paragraphs(fromDecoded:)`'s rules.
@@ -364,11 +390,33 @@ private func writtenCases() throws -> [WrittenCase] {
         edit("paragraph-separator") { $0.type("one\u{2029}two") },
         edit("carriage-returns") { $0.type("one\r\ntwo\rthree") },
         edit("link-javascript") { e in e.type("A script link."); try e.select("script"); e.link("javascript:alert(1)") },
+        // Hosts that hold what a host may not, which URL(string:) refuses, so the editor keeps the text
+        // and Apple's writer writes the link as AppKit reads such a field.
+        edit("link-invalid-host") { e in e.type("A host link."); try e.select("host"); e.link("https://ex|ample.com/%41") },
+        edit("link-lone-percent-host") { e in e.type("A percent link."); try e.select("percent"); e.link("https://exa%mple.com/%41") },
+        // U+FFFD, which AppKit's reader reads as no character, so the Mac's RTF loses it.
+        edit("replacement-character") { $0.type("a\u{FFFD}b") },
         edit("paste-cjk-fonts") { e in
             e.type("Typed ")
             for name in ["PingFangSC-Regular", "HiraginoSans-W3", "AppleSDGothicNeo-Regular"] {
                 let font = try NSFont(name: name, size: 13).orThrow("rich-text: no font \(name)")
                 e.paste("\(name) \u{4E2D}\u{6587}\u{65E5}\u{672C}\u{D55C}\u{AD6D} ", [.font: font])
+            }
+        },
+        edit("paste-charset-fonts") { e in
+            // Fonts Apple writes in charsets of their own, each run's text as \'xx bytes in its code page,
+            // with two characters Foundation on Linux reads otherwise: the euro sign in code page 936,
+            // and the sun sign in 950.
+            e.type("Typed ")
+            for (name, text) in [("PingFangTC-Regular", "\u{7E41}\u{9AD4}\u{4E2D}\u{6587} \u{2609}"),
+                                 ("PingFangSC-Regular", "\u{4E2D}\u{6587} \u{20AC}"),
+                                 ("PTSans-Regular", "\u{041F}\u{0440}\u{0438}\u{0432}\u{0435}\u{0442} caf\u{E9} \u{20AC}"),
+                                 ("Thonburi", "\u{0E20}\u{0E32}\u{0E29}\u{0E32} caf\u{E9}"),
+                                 ("ArialHebrew", "\u{05E2}\u{05D1}\u{05E8}\u{05D9}\u{05EA} caf\u{E9}"),
+                                 ("GeezaPro", "\u{0627}\u{0644}\u{0639}\u{0631}\u{0628}\u{064A}\u{0629} caf\u{E9}"),
+                                 ("DevanagariMT", "caf\u{E9} na\u{EF}ve \u{2014} \u{0928}")] {
+                let font = try NSFont(name: name, size: 13).orThrow("rich-text: no font \(name)")
+                e.paste("\(name) \(text) ", [.font: font])
             }
         },
         edit("formatted-characters") { e in
@@ -397,6 +445,11 @@ private func writtenCases() throws -> [WrittenCase] {
         edit("paste-size-boundary-blank-line") { e in
             e.type("a\n")
             e.paste("\nb", [.font: NSFont.systemFont(ofSize: 18)])
+        },
+        edit("paste-baseline-blank-line") { e in
+            // Apple's writer lowers the first run with \dn and ends it with \up0, one offset.
+            e.paste("x\n", [.font: NSFont.systemFont(ofSize: 13), .baselineOffset: -2.0])
+            e.paste("\ny", [.font: NSFont.systemFont(ofSize: 13)])
         },
         edit("paste-underline-styles") { e in
             for (label, style) in [("single", NSUnderlineStyle.single), ("double", .double), ("thick", .thick),

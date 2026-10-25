@@ -1647,18 +1647,18 @@
         ]
       ],
       "rewritten" : {
-        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 \\b x\\\n\\b0 \\\ny}",
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 \\b x\\\n\\\n\\b0 y}",
         "runs" : [
           {
             "bold" : true,
             "italic" : false,
-            "text" : "x\n",
+            "text" : "x\n\n",
             "underline" : false
           },
           {
             "bold" : false,
             "italic" : false,
-            "text" : "\ny",
+            "text" : "y",
             "underline" : false
           }
         ]
@@ -1702,24 +1702,12 @@
         ]
       ],
       "rewritten" : {
-        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 a\\b \\\n\\\n\\b0 b}",
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 a\\\n\\\nb}",
         "runs" : [
           {
             "bold" : false,
             "italic" : false,
-            "text" : "a",
-            "underline" : false
-          },
-          {
-            "bold" : true,
-            "italic" : false,
-            "text" : "\n\n",
-            "underline" : false
-          },
-          {
-            "bold" : false,
-            "italic" : false,
-            "text" : "b",
+            "text" : "a\n\nb",
             "underline" : false
           }
         ]
@@ -2137,6 +2125,189 @@
       "text" : "A script link."
     },
     {
+      "id" : "link-invalid-host",
+      "kind" : "written",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "A ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://ex%7Cample.com/A",
+            "text" : "host",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " link.",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 A {\\field{\\*\\fldinst{HYPERLINK \"https://ex%7Cample.com/A\"}}{\\fldrslt host}} link.}",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "A ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://ex%7Cample.com/A",
+            "text" : "host",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " link.",
+            "underline" : false
+          }
+        ]
+      },
+      "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 A {\\field{\\*\\fldinst{HYPERLINK \"https://ex%7Cample.com/A\"}}{\\fldrslt host}} link.}",
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "A ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://ex%7Cample.com/A",
+          "text" : "host",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " link.",
+          "underline" : false
+        }
+      ],
+      "text" : "A host link."
+    },
+    {
+      "id" : "link-lone-percent-host",
+      "kind" : "written",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "A ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://exa%25mple.com/%2541",
+            "text" : "percent",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " link.",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 A {\\field{\\*\\fldinst{HYPERLINK \"https://exa%25mple.com/%2541\"}}{\\fldrslt percent}} link.}",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "A ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://exa%25mple.com/%2541",
+            "text" : "percent",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " link.",
+            "underline" : false
+          }
+        ]
+      },
+      "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 A {\\field{\\*\\fldinst{HYPERLINK \"https://exa%25mple.com/%2541\"}}{\\fldrslt percent}} link.}",
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "A ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://exa%25mple.com/%2541",
+          "text" : "percent",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " link.",
+          "underline" : false
+        }
+      ],
+      "text" : "A percent link."
+    },
+    {
+      "id" : "replacement-character",
+      "kind" : "written",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "ab",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 ab}",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "ab",
+            "underline" : false
+          }
+        ]
+      },
+      "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 a\\uc0\\u65533 b}",
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "ab",
+          "underline" : false
+        }
+      ],
+      "text" : "ab"
+    },
+    {
       "id" : "paste-cjk-fonts",
       "kind" : "written",
       "paragraphs" : [
@@ -2206,6 +2377,125 @@
         }
       ],
       "text" : "Typed PingFangSC-Regular 中文日本한국 HiraginoSans-W3 中文日本한국 AppleSDGothicNeo-Regular 中文日本한국 "
+    },
+    {
+      "id" : "paste-charset-fonts",
+      "kind" : "written",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "Typed ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "PingFangTC-Regular 繁體中文 ☉ ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "PingFangSC-Regular 中文 € ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "PTSans-Regular Привет café € ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "Thonburi ภาษา café ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "ArialHebrew עברית café ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "GeezaPro العربية café ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "DevanagariMT café naïve — न ",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 Typed PingFangTC-Regular \\u32321 \\u39636 \\u20013 \\u25991  \\u9737  PingFangSC-Regular \\u20013 \\u25991  \\u8364  PTSans-Regular \\u1055 \\u1088 \\u1080 \\u1074 \\u1077 \\u1090  caf\\u233  \\u8364  Thonburi \\u3616 \\u3634 \\u3625 \\u3634  caf\\u233  ArialHebrew \\u1506 \\u1489 \\u1512 \\u1497 \\u1514  caf\\u233  GeezaPro \\u1575 \\u1604 \\u1593 \\u1585 \\u1576 \\u1610 \\u1577  caf\\u233  DevanagariMT caf\\u233  na\\u239 ve \\u8212  \\u2344  }",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "Typed PingFangTC-Regular 繁體中文 ☉ PingFangSC-Regular 中文 € PTSans-Regular Привет café € Thonburi ภาษา café ArialHebrew עברית café GeezaPro العربية café DevanagariMT café naïve — न ",
+            "underline" : false
+          }
+        ]
+      },
+      "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;\\f1\\fnil\\fcharset136 PingFangTC-Regular;\\f2\\fnil\\fcharset134 PingFangSC-Regular;\n\\f3\\fnil\\fcharset204 PTSans-Regular;\\f4\\fnil\\fcharset222 Thonburi;\\f5\\fnil\\fcharset177 ArialHebrew;\n\\f6\\fnil\\fcharset178 GeezaPro;\\f7\\fnil\\fcharset77 DevanagariMT;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 Typed \n\\f1 PingFangTC-Regular \\'c1\\'63\\'c5\\'e9\\'a4\\'a4\\'a4\\'e5 \\'a1\\'f3 \n\\f2 PingFangSC-Regular \\'d6\\'d0\\'ce\\'c4 \\'a2\\'e3 \n\\f3 PTSans-Regular \\'cf\\'f0\\'e8\\'e2\\'e5\\'f2 caf\\uc0\\u233  \\'88 \n\\f4 Thonburi \\'c0\\'d2\\'c9\\'d2 caf\\uc0\\u233  \n\\f5 ArialHebrew \\'f2\\'e1\\'f8\\'e9\\'fa caf\\uc0\\u233  \n\\f6 GeezaPro \\'c7\\'e1\\'da\\'d1\\'c8\\'ed\\'c9 caf\\'e9 \n\\f7 DevanagariMT caf\\'8e na\\'95ve \\'d1 \\uc0\\u2344  }",
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "Typed ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "PingFangTC-Regular 繁體中文 ☉ ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "PingFangSC-Regular 中文 € ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "PTSans-Regular Привет café € ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "Thonburi ภาษา café ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "ArialHebrew עברית café ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "GeezaPro العربية café ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "DevanagariMT café naïve — न ",
+          "underline" : false
+        }
+      ],
+      "text" : "Typed PingFangTC-Regular 繁體中文 ☉ PingFangSC-Regular 中文 € PTSans-Regular Привет café € Thonburi ภาษา café ArialHebrew עברית café GeezaPro العربية café DevanagariMT café naïve — न "
     },
     {
       "id" : "formatted-characters",
@@ -2698,6 +2988,53 @@
         }
       ],
       "text" : "a\n\nb"
+    },
+    {
+      "id" : "paste-baseline-blank-line",
+      "kind" : "written",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "x\n",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "\ny",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 x\\\n\\\ny}",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "x\n\ny",
+            "underline" : false
+          }
+        ]
+      },
+      "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\dn4 x\\\n\\up0 \\\ny}",
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "x\n",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "\ny",
+          "underline" : false
+        }
+      ],
+      "text" : "x\n\ny"
     },
     {
       "id" : "paste-underline-styles",
@@ -45875,6 +46212,166 @@
       "text" : "C000 C001 C002 C003 C004 C010 C011 C012 C013 C014 C020 C021 C022 C023 C024 C030 C031 C032 C033 C034 C040 C041 C042 C043 C044 C100 C101 C102 C103 C104 C110 C111 C112 C113 C114 C120 C121 C122 C123 C124 C130 C131 C132 C133 C134 C140 C141 C142 C143 C144 C200 C201 C202 C203 C204 C210 C211 C212 C213 C214 C220 C221 C222 C223 C224 C230 C231 C232 C233 C234 C240 C241 C242 C243 C244 C300 C301 C302 C303 C304 C310 C311 C312 C313 C314 C320 C321 C322 C323 C324 C330 C331 C332 C333 C334 C340 C341 C342 C343 C344 C400 C401 C402 C403 C404 C410 C411 C412 C413 C414 C420 C421 C422 C423 C424 C430 C431 C432 C433 C434 C440 C441 C442 C443 C444"
     },
     {
+      "id" : "read-baseline-up-down",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "x\n",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "\ny\n",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "x\n",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "\ny\n",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "x",
+            "underline" : false
+          }
+        ],
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "y\n",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "x",
+            "underline" : false
+          }
+        ],
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "y",
+            "underline" : false
+          }
+        ],
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "z",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 x\\\n\\\ny\\\nx\\\n\\\ny\\\nx\\\n\\\ny\\\nx\\\n\\\ny\\\n\\\nz}",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "x\n\ny\nx\n\ny\nx\n\ny\nx\n\ny\n\nz",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "x\n",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "\ny\n",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "x\n",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "\ny\n",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "x\n\ny\n",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "x\n\ny",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "\n\nz",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/baseline-up-down.rtf",
+      "text" : "x\n\ny\nx\n\ny\nx\n\ny\nx\n\ny\n\nz"
+    },
+    {
+      "id" : "read-binary",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "axyzbc",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 axyzbc}",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "axyzbc",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "axyzbc",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/binary.rtf",
+      "text" : "axyzbc"
+    },
+    {
       "id" : "read-breaks",
       "kind" : "read",
       "paragraphs" : [
@@ -45924,6 +46421,659 @@
       ],
       "source" : "fixtures/rich-text/read/breaks.rtf",
       "text" : "onetwo\nthree\nfour five\n\nsix\n\nseven"
+    },
+    {
+      "id" : "read-code-page-ansicpg",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "П\nÏ\n",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "П\n",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "Ï\nП\nÀА",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 \\u1055 \\\n\\u207 \\\n\\u1055 \\\n\\u207 \\\n\\u1055 \\\n\\u192 \\u1040 }",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "П\nÏ\nП\nÏ\nП\nÀА",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "П\nÏ\n",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "П\n",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "Ï\nП\nÀА",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/code-page-ansicpg.rtf",
+      "text" : "П\nÏ\nП\nÏ\nП\nÀА"
+    },
+    {
+      "id" : "read-code-page-bytes",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "before ",
+            "underline" : false
+          },
+          {
+            "bold" : true,
+            "italic" : false,
+            "text" : "bold after",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "\n",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "lead\n諴\n謀\n中\n衎",
+            "underline" : false
+          }
+        ],
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "\n",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "€",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "☉十‧",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 before \\b bold after\\\n\\b0 lead\\\n\\u35572 \\\n\\u35584 \\\n\\u20013 \\\n\\u34894 \\\n\\\n\\\n\\u8364 \\u9737 \\u21313 \\u63615 \\u8231 }",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "before ",
+            "underline" : false
+          },
+          {
+            "bold" : true,
+            "italic" : false,
+            "text" : "bold after\n",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "lead\n諴\n謀\n中\n衎\n\n\n€☉十‧",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "before ",
+          "underline" : false
+        },
+        {
+          "bold" : true,
+          "italic" : false,
+          "text" : "bold after",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "\n",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "lead\n諴\n謀\n中\n衎\n\n",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "\n",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "€",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "☉十‧",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/code-page-bytes.rtf",
+      "text" : "before bold after\nlead\n諴\n謀\n中\n衎\n\n\n€☉十‧"
+    },
+    {
+      "id" : "read-code-page-default-font",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "À\n",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "А\n",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "А",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 \\u192 \\\n\\u1040 \\\n\\u1040 }",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "À\nА\nА",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "À\n",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "А\n",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "А",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/code-page-default-font.rtf",
+      "text" : "À\nА\nА"
+    },
+    {
+      "id" : "read-code-page-document-words",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "x\ny",
+            "underline" : false
+          }
+        ],
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "w\n",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 x\\\ny\\\n\\\nw\\\n}",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "x\ny\n\nw\n",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "x\ny\n\nw\n",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/code-page-document-words.rtf",
+      "text" : "x\ny\n\nw\n"
+    },
+    {
+      "id" : "read-code-page-groups",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "АÀАéЋÁΑА¿АБŽŽ",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 \\u1040 \\u192 \\u1040 \\u233 \\u1035 \\u193 \\u913 \\u1040 \\u191 \\u1040 \\u1041 \\u381 \\u381 }",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "АÀАéЋÁΑА¿АБŽŽ",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "АÀАéЋÁΑА¿АБŽŽ",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/code-page-groups.rtf",
+      "text" : "АÀАéЋÁΑА¿АБŽŽ"
+    },
+    {
+      "id" : "read-code-page-mac-ansicpg",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "ééŽéé",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 \\u233 \\u233 \\u381 \\u233 \\u233 }",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "ééŽéé",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "ééŽéé",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/code-page-mac-ansicpg.rtf",
+      "text" : "ééŽéé"
+    },
+    {
+      "id" : "read-code-page-mac",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "é\né\nŽ\né\né",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 \\u233 \\\n\\u233 \\\n\\u381 \\\n\\u233 \\\n\\u233 }",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "é\né\nŽ\né\né",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "é\né\nŽ\né\né",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/code-page-mac.rtf",
+      "text" : "é\né\nŽ\né\né"
+    },
+    {
+      "id" : "read-code-page-none",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "¹Ø none",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 \\u185 \\u216  none}",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "¹Ø none",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "¹Ø none",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/code-page-none.rtf",
+      "text" : "¹Ø none"
+    },
+    {
+      "id" : "read-code-page-pc",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "А¹¹Ž",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 \\u1040 \\u185 \\u185 \\u381 }",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "А¹¹Ž",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "А¹¹Ž",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/code-page-pc.rtf",
+      "text" : "А¹¹Ž"
+    },
+    {
+      "id" : "read-code-page-plain",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "À",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "А",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 \\u192 \\u1040 }",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "ÀА",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "À",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "А",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/code-page-plain.rtf",
+      "text" : "ÀА"
+    },
+    {
+      "id" : "read-code-page-trailing-lead",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "\nefgh\nij",
+            "underline" : false
+          }
+        ],
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "\n",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 \\\nefgh\\\nij\\\n\\\n\\\n}",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "\nefgh\nij\n\n\n",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "\nefgh\nij\n\n\n",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/code-page-trailing-lead.rtf",
+      "text" : "\nefgh\nij\n\n\n"
+    },
+    {
+      "id" : "read-code-page-unread",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "asciiééА",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 ascii\\u233 \\u233 \\u1040 }",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "asciiééА",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "asciiééА",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/code-page-unread.rtf",
+      "text" : "asciiééА"
+    },
+    {
+      "id" : "read-control-symbols",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "a:bcde\u000bf",
+            "underline" : false
+          },
+          {
+            "bold" : true,
+            "italic" : false,
+            "text" : "g",
+            "underline" : false
+          },
+          {
+            "bold" : true,
+            "italic" : true,
+            "text" : "-1 hi\fj",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 a:bcde\\u11 f\\b g\\i -1 hi\\u12 j}",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "a:bcde\u000bf",
+            "underline" : false
+          },
+          {
+            "bold" : true,
+            "italic" : false,
+            "text" : "g",
+            "underline" : false
+          },
+          {
+            "bold" : true,
+            "italic" : true,
+            "text" : "-1 hi\fj",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "a:bcde\u000bf",
+          "underline" : false
+        },
+        {
+          "bold" : true,
+          "italic" : false,
+          "text" : "g",
+          "underline" : false
+        },
+        {
+          "bold" : true,
+          "italic" : true,
+          "text" : "-1 hi\fj",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/control-symbols.rtf",
+      "text" : "a:bcde\u000bfg-1 hi\fj"
     },
     {
       "id" : "read-expanded-color-table",
@@ -46103,6 +47253,101 @@
       ],
       "source" : "fixtures/rich-text/read/expanded-color-table.rtf",
       "text" : "white-legacy text legacy-only unknown-name gray alpha system-red none"
+    },
+    {
+      "id" : "read-field-text",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "X",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/",
+            "text" : "YL",
+            "underline" : false
+          },
+          {
+            "bold" : true,
+            "italic" : false,
+            "linkURL" : "https://example.com/",
+            "text" : "M",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "NOPQ",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 X{\\field{\\*\\fldinst{HYPERLINK \"https://example.com/\"}}{\\fldrslt YL\\b M}}NOPQ}",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "X",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/",
+            "text" : "YL",
+            "underline" : false
+          },
+          {
+            "bold" : true,
+            "italic" : false,
+            "linkURL" : "https://example.com/",
+            "text" : "M",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "NOPQ",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "X",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://example.com/",
+          "text" : "YL",
+          "underline" : false
+        },
+        {
+          "bold" : true,
+          "italic" : false,
+          "linkURL" : "https://example.com/",
+          "text" : "M",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "NOPQ",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/field-text.rtf",
+      "text" : "XYLMNOPQ"
     },
     {
       "id" : "read-fields",
@@ -46297,6 +47542,113 @@
       ],
       "source" : "fixtures/rich-text/read/fields.rtf",
       "text" : "plain link bold link bare inst 7 not a link mail end"
+    },
+    {
+      "id" : "read-fonts-applied",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " x\n",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "\ny\n",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "\nz\n",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "a",
+            "underline" : false
+          }
+        ],
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "b",
+            "underline" : false
+          }
+        ],
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "c",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "\na",
+            "underline" : false
+          }
+        ],
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "b",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0  x\\\n\\\ny\\\n\\\nz\\\na\\\n\\\nb\\\n\\\nc\\\na\\\n\\\nb}",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " x\n\ny\n\nz\na\n\nb\n\nc\na\n\nb",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " x\n",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "\ny\n",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "\nz\n",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "a\n\nb\n\nc",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "\na\n\nb",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/fonts-applied.rtf",
+      "text" : " x\n\ny\n\nz\na\n\nb\n\nc\na\n\nb"
     },
     {
       "id" : "read-groups-and-state",
@@ -46668,6 +48020,41 @@
       "text" : "Key turning point in the negotiations."
     },
     {
+      "id" : "read-leading-line-break",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "after line breaks",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 after line breaks}",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "after line breaks",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "after line breaks",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/leading-line-break.rtf",
+      "text" : "after line breaks"
+    },
+    {
       "id" : "read-legacy-color-table",
       "kind" : "read",
       "paragraphs" : [
@@ -46785,6 +48172,764 @@
       ],
       "source" : "fixtures/rich-text/read/legacy-color-table.rtf",
       "text" : "red near-black edge blue default"
+    },
+    {
+      "id" : "read-link-characters",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/a%7Cb%5Ec%60d",
+            "text" : "L0",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/a%5Bb%5D%3Cc%3E",
+            "text" : "L1",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/100%25",
+            "text" : "L2",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/a%25zzb%7c%41",
+            "text" : "L3",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/a#b%23c",
+            "text" : "L4",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://u%40v@example.com/",
+            "text" : "L5",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://u:p%7Cw@example.com/",
+            "text" : "L6",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://[::1]:8080/a%7Cb",
+            "text" : "L7",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://ex%7Cample.com:80/",
+            "text" : "L8",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com:/",
+            "text" : "L9",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "mailto:a@b.c?subject=a%7Cb#x%23y",
+            "text" : "L10",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "x#y%23z",
+            "text" : "L11",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "//h%7C/p",
+            "text" : "L12",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/a%20b",
+            "text" : "L13",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/%7Bx%7D%5Cy",
+            "text" : "L14",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/caf%C3%A9",
+            "text" : "L15",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "javascript:alert(1)",
+            "text" : "L16",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "not%20a%20url",
+            "text" : "L17",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " L18 L19 ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://[fe80::1%25en0]/x",
+            "text" : "L20",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " L21",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 {\\field{\\*\\fldinst{HYPERLINK \"https://example.com/a%7Cb%5Ec%60d\"}}{\\fldrslt L0}} {\\field{\\*\\fldinst{HYPERLINK \"https://example.com/a%5Bb%5D%3Cc%3E\"}}{\\fldrslt L1}} {\\field{\\*\\fldinst{HYPERLINK \"https://example.com/100%25\"}}{\\fldrslt L2}} {\\field{\\*\\fldinst{HYPERLINK \"https://example.com/a%25zzb%7c%41\"}}{\\fldrslt L3}} {\\field{\\*\\fldinst{HYPERLINK \"https://example.com/a#b%23c\"}}{\\fldrslt L4}} {\\field{\\*\\fldinst{HYPERLINK \"https://u%40v@example.com/\"}}{\\fldrslt L5}} {\\field{\\*\\fldinst{HYPERLINK \"https://u:p%7Cw@example.com/\"}}{\\fldrslt L6}} {\\field{\\*\\fldinst{HYPERLINK \"https://[::1]:8080/a%7Cb\"}}{\\fldrslt L7}} {\\field{\\*\\fldinst{HYPERLINK \"https://ex%7Cample.com:80/\"}}{\\fldrslt L8}} {\\field{\\*\\fldinst{HYPERLINK \"https://example.com:/\"}}{\\fldrslt L9}} {\\field{\\*\\fldinst{HYPERLINK \"mailto:a@b.c?subject=a%7Cb#x%23y\"}}{\\fldrslt L10}} {\\field{\\*\\fldinst{HYPERLINK \"x#y%23z\"}}{\\fldrslt L11}} {\\field{\\*\\fldinst{HYPERLINK \"//h%7C/p\"}}{\\fldrslt L12}} {\\field{\\*\\fldinst{HYPERLINK \"https://example.com/a%20b\"}}{\\fldrslt L13}} {\\field{\\*\\fldinst{HYPERLINK \"https://example.com/%7Bx%7D%5Cy\"}}{\\fldrslt L14}} {\\field{\\*\\fldinst{HYPERLINK \"https://example.com/caf%C3%A9\"}}{\\fldrslt L15}} {\\field{\\*\\fldinst{HYPERLINK \"javascript:alert(1)\"}}{\\fldrslt L16}} {\\field{\\*\\fldinst{HYPERLINK \"not%20a%20url\"}}{\\fldrslt L17}} L18 L19 {\\field{\\*\\fldinst{HYPERLINK \"https://[fe80::1%25en0]/x\"}}{\\fldrslt L20}} L21}",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/a%7Cb%5Ec%60d",
+            "text" : "L0",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/a%5Bb%5D%3Cc%3E",
+            "text" : "L1",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/100%25",
+            "text" : "L2",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/a%25zzb%7c%41",
+            "text" : "L3",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/a#b%23c",
+            "text" : "L4",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://u%40v@example.com/",
+            "text" : "L5",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://u:p%7Cw@example.com/",
+            "text" : "L6",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://[::1]:8080/a%7Cb",
+            "text" : "L7",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://ex%7Cample.com:80/",
+            "text" : "L8",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com:/",
+            "text" : "L9",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "mailto:a@b.c?subject=a%7Cb#x%23y",
+            "text" : "L10",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "x#y%23z",
+            "text" : "L11",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "//h%7C/p",
+            "text" : "L12",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/a%20b",
+            "text" : "L13",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/%7Bx%7D%5Cy",
+            "text" : "L14",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/caf%C3%A9",
+            "text" : "L15",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "javascript:alert(1)",
+            "text" : "L16",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "not%20a%20url",
+            "text" : "L17",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " L18 L19 ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://[fe80::1%25en0]/x",
+            "text" : "L20",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " L21",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://example.com/a%7Cb%5Ec%60d",
+          "text" : "L0",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://example.com/a%5Bb%5D%3Cc%3E",
+          "text" : "L1",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://example.com/100%25",
+          "text" : "L2",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://example.com/a%25zzb%7c%41",
+          "text" : "L3",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://example.com/a#b%23c",
+          "text" : "L4",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://u%40v@example.com/",
+          "text" : "L5",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://u:p%7Cw@example.com/",
+          "text" : "L6",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://[::1]:8080/a%7Cb",
+          "text" : "L7",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://ex%7Cample.com:80/",
+          "text" : "L8",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://example.com:/",
+          "text" : "L9",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "mailto:a@b.c?subject=a%7Cb#x%23y",
+          "text" : "L10",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "x#y%23z",
+          "text" : "L11",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "//h%7C/p",
+          "text" : "L12",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://example.com/a%20b",
+          "text" : "L13",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://example.com/%7Bx%7D%5Cy",
+          "text" : "L14",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://example.com/caf%C3%A9",
+          "text" : "L15",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "javascript:alert(1)",
+          "text" : "L16",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "not%20a%20url",
+          "text" : "L17",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " L18 L19 ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://[fe80::1%25en0]/x",
+          "text" : "L20",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " L21",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/link-characters.rtf",
+      "text" : "L0 L1 L2 L3 L4 L5 L6 L7 L8 L9 L10 L11 L12 L13 L14 L15 L16 L17 L18 L19 L20 L21"
     },
     {
       "id" : "read-list",
@@ -46939,6 +49084,359 @@
       ],
       "source" : "fixtures/rich-text/read/near-black-edge.rtf",
       "text" : "at-0.08 under-0.08 red-at-0.08 none"
+    },
+    {
+      "id" : "read-no-rtf-word",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "no ",
+            "underline" : false
+          },
+          {
+            "bold" : true,
+            "italic" : false,
+            "text" : "rtf",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " word",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 no \\b rtf\\b0  word}",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "no ",
+            "underline" : false
+          },
+          {
+            "bold" : true,
+            "italic" : false,
+            "text" : "rtf",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " word",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "no ",
+          "underline" : false
+        },
+        {
+          "bold" : true,
+          "italic" : false,
+          "text" : "rtf",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " word",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/no-rtf-word.rtf",
+      "text" : "no rtf word"
+    },
+    {
+      "id" : "read-nosupersub",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "s",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "x\n",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "\ny",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 sx\\\n\\\ny}",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "sx\n\ny",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "s",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "x\n",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "\ny",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/nosupersub.rtf",
+      "text" : "sx\n\ny"
+    },
+    {
+      "id" : "read-plain-no-font-zero",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "x",
+            "underline" : false
+          }
+        ],
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "y",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 x\\\n\\\ny}",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "x\n\ny",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "x\n\ny",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/plain-no-font-zero.rtf",
+      "text" : "x\n\ny"
+    },
+    {
+      "id" : "read-replacement-character",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "abcd?e?f",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 abcd?e?f}",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "abcd?e?f",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "abcd?e?f",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/replacement-character.rtf",
+      "text" : "abcd?e?f"
+    },
+    {
+      "id" : "read-star-destinations",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "acefhi jklm",
+            "underline" : false
+          },
+          {
+            "bold" : true,
+            "italic" : false,
+            "text" : "n",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "o",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 acefhi jklm\\b n\\b0 o}",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "acefhi jklm",
+            "underline" : false
+          },
+          {
+            "bold" : true,
+            "italic" : false,
+            "text" : "n",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "o",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "acefhi jklm",
+          "underline" : false
+        },
+        {
+          "bold" : true,
+          "italic" : false,
+          "text" : "n",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "o",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/star-destinations.rtf",
+      "text" : "acefhi jklmno"
+    },
+    {
+      "id" : "read-unicode-skip",
+      "kind" : "read",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "caféY aéXbéZ中x ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/",
+            "text" : "café",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " П\txП\nxПРПxyПxП\nbcdП xyП zП\txПxy",
+            "underline" : false
+          }
+        ]
+      ],
+      "rewritten" : {
+        "rtf" : "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n{\\colortbl;\\red255\\green255\\blue255;\\red0\\green0\\blue0;}\n{\\*\\expandedcolortbl;;\\cssrgb\\c0\\c0\\c0\\cname textColor;}\n\\pard\\tx560\\tx1120\\tx1680\\tx2240\\tx2800\\tx3360\\tx3920\\tx4480\\tx5040\\tx5600\\tx6160\\tx6720\\pardirnatural\\partightenfactor0\n\n\\f0\\fs26 \\cf2 \\uc0 caf\\u233 Y a\\u233 Xb\\u233 Z\\u20013 x {\\field{\\*\\fldinst{HYPERLINK \"https://example.com/\"}}{\\fldrslt caf\\u233 }} \\u1055 \tx\\u1055 \\\nx\\u1055 \\u1056 \\u1055 xy\\u1055 x\\u1055 \\\nbcd\\u1055 \\u160 xy\\u1055  z\\u1055 \tx\\u1055 xy}",
+        "runs" : [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "caféY aéXbéZ中x ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/",
+            "text" : "café",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " П\txП\nxПРПxyПxП\nbcdП xyП zП\txПxy",
+            "underline" : false
+          }
+        ]
+      },
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "caféY aéXbéZ中x ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://example.com/",
+          "text" : "café",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " П\txП\nxПРПxyПxП\nbcdП xyП zП\txПxy",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/read/unicode-skip.rtf",
+      "text" : "caféY aéXbéZ中x café П\txП\nxПРПxyПxП\nbcdП xyП zП\txПxy"
     },
     {
       "id" : "read-unicode",
@@ -47606,6 +50104,236 @@
       ],
       "source" : "fixtures/rich-text/web/link-across-line-break.rtf",
       "text" : "one\ntwo"
+    },
+    {
+      "id" : "web-link-non-ascii-text",
+      "kind" : "web",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "See ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/",
+            "text" : "café 中文 😀",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " — après.",
+            "underline" : false
+          }
+        ]
+      ],
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "See ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://example.com/",
+          "text" : "café 中文 😀",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " — après.",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/web/link-non-ascii-text.rtf",
+      "text" : "See café 中文 😀 — après."
+    },
+    {
+      "id" : "web-link-reencoded",
+      "kind" : "web",
+      "paragraphs" : [
+        [
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : "Links ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/a%7Cb%5Ec%60d",
+            "text" : "one",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/p%5B1%5D?q=a%7Cb#f%23g",
+            "text" : "two",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/100%25",
+            "text" : "three",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "mailto:a@example.com?subject=a%7Cb",
+            "text" : "four",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://[::1]/x%7Cy",
+            "text" : "five",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : " ",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "linkURL" : "https://example.com/a%3Cb%3Ec",
+            "text" : "six",
+            "underline" : false
+          },
+          {
+            "bold" : false,
+            "italic" : false,
+            "text" : ".",
+            "underline" : false
+          }
+        ]
+      ],
+      "runs" : [
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : "Links ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://example.com/a%7Cb%5Ec%60d",
+          "text" : "one",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://example.com/p%5B1%5D?q=a%7Cb#f%23g",
+          "text" : "two",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://example.com/100%25",
+          "text" : "three",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "mailto:a@example.com?subject=a%7Cb",
+          "text" : "four",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://[::1]/x%7Cy",
+          "text" : "five",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : " ",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "linkURL" : "https://example.com/a%3Cb%3Ec",
+          "text" : "six",
+          "underline" : false
+        },
+        {
+          "bold" : false,
+          "italic" : false,
+          "text" : ".",
+          "underline" : false
+        }
+      ],
+      "source" : "fixtures/rich-text/web/link-reencoded.rtf",
+      "text" : "Links one two three four five six."
     },
     {
       "id" : "web-color",
@@ -66417,13 +69145,15 @@
           {
             "bold" : true,
             "italic" : false,
-            "text" : "x\n",
+            "text" : "x",
             "underline" : false
-          },
+          }
+        ],
+        [
           {
             "bold" : false,
             "italic" : false,
-            "text" : "\ny",
+            "text" : "y",
             "underline" : false
           }
         ]
@@ -66432,13 +69162,13 @@
         {
           "bold" : true,
           "italic" : false,
-          "text" : "x\n",
+          "text" : "x\n\n",
           "underline" : false
         },
         {
           "bold" : false,
           "italic" : false,
-          "text" : "\ny",
+          "text" : "y",
           "underline" : false
         }
       ],
@@ -66850,30 +69580,137 @@
       "name" : "windowFrameTextColor"
     }
   ],
-  "configuration" : "Written cases drive the note editor's own path on macOS: an NSTextView set up as RichTextPlatformEditor.makeNSView sets it (rich text, undo, the 13-point system font, its inset, no background), loaded as initialAttributed() loads a note (the stored RTF, else the plain body), with RichTextEditorController given the view as the representable gives it. Text is typed with insertText(_:replacementRange:); bold, italic, underline and links go through the controller's toggleBold(), toggleItalic(), toggleUnderline() and applyLink(_:) after refreshSelectionState(), as the formatting bar's buttons call them; a colour is applied as colorPanelDidPick(_:) applies the panel's colour, which mac-golden cannot open; text pasted with other attributes is inserted as an attributed string. The RTF is what report(_:) stores on macOS: RichTextRestingText.withBreaksRestored, then ProseRichText.rtfData(from:). Read and web cases are files under fixtures/rich-text. Every case is read under the aqua appearance, since the app's reading of a dynamic colour follows the appearance current when it runs: text is NSAttributedString.string of ProseRichText.decodedRTF; runs are its enumerateAttributes runs, unmerged, each read by CollectionProse's span rules (bold and italic from the font's symbolic traits, underline from a nonzero underline style, the colour through usingColorSpace(.sRGB) with near-black as none, the link's absoluteString or string); paragraphs are CollectionProse.paragraphs(fromRTF:). Catalog colours are each key of the System colour list, as an RTF \\cname entry, read the same way. Each written and read case is also rewritten: the web's codec (FRUSRichText) reads it, writes its merged runs with RTFWriter, and the app reads that RTF the same way. A release build of the app module, with testing enabled, compiled from the submodule unmodified.",
-  "format" : 1,
+  "codePages" : [
+    {
+      "length" : 349,
+      "name" : "no-code-page",
+      "sha256" : "ccbc5aa944f8591a25b0af808943e9a94a2c84ce4d7b96c1786f756812fa5e2a"
+    },
+    {
+      "length" : 346,
+      "name" : "fcharset0",
+      "sha256" : "8a65046cfa41d672c359407851ac74c93f16d4773ac336d7e7626d3db87fe9c2"
+    },
+    {
+      "length" : 351,
+      "name" : "fcharset77",
+      "sha256" : "a33aadfe9db5fdd38715b68be203b735dd95b2f22d766b193bde3279b4628094"
+    },
+    {
+      "length" : 334,
+      "name" : "fcharset161",
+      "sha256" : "8ca448f71d998b16cf1a3cab09b8abde1f88d07760d0cf7381b2de67a94b4fe3"
+    },
+    {
+      "length" : 344,
+      "name" : "fcharset162",
+      "sha256" : "a9c92c2211d97ebfc4b89e1e052438e4d2aef2d89144c0c93868395b419fc619"
+    },
+    {
+      "length" : 342,
+      "name" : "fcharset163",
+      "sha256" : "47237103a7fec3b11cd8529e14bb9a64e8e18a51969da12531e4218330a49f4b"
+    },
+    {
+      "length" : 328,
+      "name" : "fcharset177",
+      "sha256" : "b195ea516e85d3270a2e5bc0e03b55f317cf13866acaa468906cbfc817d0a943"
+    },
+    {
+      "length" : 343,
+      "name" : "fcharset178",
+      "sha256" : "240fa6c95a35116cfe7280e934b3f6f224340312b8dbbd876d95d0b57e4650ab"
+    },
+    {
+      "length" : 349,
+      "name" : "fcharset186",
+      "sha256" : "34302e3faa7d895d1020e6595bc9e6cb9c65034a7a9cf9df9c9b58fe3664675f"
+    },
+    {
+      "length" : 350,
+      "name" : "fcharset204",
+      "sha256" : "155ee9daa4cf9257334fcf09a49b6ae076fb8fb5844261839c680fd97be2c57d"
+    },
+    {
+      "length" : 320,
+      "name" : "fcharset222",
+      "sha256" : "2957b7a2503bb588948d633a1e4f53af20658a4b272641c33ff796a143eeecaa"
+    },
+    {
+      "length" : 346,
+      "name" : "fcharset238",
+      "sha256" : "6837a19640390cf4f472a1e4712fc45e365cbba2557267f87b18c16081b3a010"
+    },
+    {
+      "length" : 54250,
+      "name" : "fcharset128",
+      "sha256" : "403f7b7f92d9df5ef352299d5cfdaffc0dd0952caebdf76ea11a9f324b1cd557"
+    },
+    {
+      "length" : 41523,
+      "name" : "fcharset129",
+      "sha256" : "a1c195e78d37f214960fe3de923ca8763b16ec21a7d5cb1d3532d86870f7ce6b"
+    },
+    {
+      "length" : 46256,
+      "name" : "fcharset134",
+      "sha256" : "2fee942e98cbdc7c468daa78e3cedba94037fa87f86aa06654a3a610266bd984"
+    },
+    {
+      "length" : 37801,
+      "name" : "fcharset136",
+      "sha256" : "38d9156c31b820bc77f1744a0d9aaf58b389769d71509e6798d06df487b10d52"
+    }
+  ],
+  "configuration" : "Written cases drive the note editor's own path on macOS: an NSTextView set up as RichTextPlatformEditor.makeNSView sets it (rich text, undo, the 13-point system font, its inset, no background), loaded as initialAttributed() loads a note (the stored RTF, else the plain body), with RichTextEditorController given the view as the representable gives it. Text is typed with insertText(_:replacementRange:); bold, italic, underline and links go through the controller's toggleBold(), toggleItalic(), toggleUnderline() and applyLink(_:) after refreshSelectionState(), as the formatting bar's buttons call them; a colour is applied as colorPanelDidPick(_:) applies the panel's colour, which mac-golden cannot open; text pasted with other attributes is inserted as an attributed string. The RTF is what report(_:) stores on macOS: RichTextRestingText.withBreaksRestored, then ProseRichText.rtfData(from:). Read and web cases are files under fixtures/rich-text. Every case is read under the aqua appearance, since the app's reading of a dynamic colour follows the appearance current when it runs: text is NSAttributedString.string of ProseRichText.decodedRTF; runs are its enumerateAttributes runs, unmerged, each read by CollectionProse's span rules (bold and italic from the font's symbolic traits, underline from a nonzero underline style, the colour through usingColorSpace(.sRGB) with near-black as none, the link's absoluteString or string); paragraphs are CollectionProse.paragraphs(fromRTF:). Catalog colours are each key of the System colour list, as an RTF \\cname entry, read the same way. Each written and read case is also rewritten: the web's codec (FRUSRichText) reads it, writes its runs in canonical form with RTFWriter, as the server stores a web edit, and the app reads that RTF the same way. Code pages are ParityFormat's RichTextCodePages documents, every text byte and double-byte pair in a group of its own, read by ProseRichText.decodedRTF; the web's codec must read each the same before its digest is recorded. A release build of the app module, with testing enabled, compiled from the submodule unmodified.",
+  "format" : 2,
   "provenance" : {
     "appBuild" : 1776,
     "indexVersion" : 71,
     "inputs" : {
+      "fixtures/rich-text/read/baseline-up-down.rtf" : "fa7bcd3dadbf9c0abda959ccca1065bad85f4219b42825d14d9bdecde8198cd2",
+      "fixtures/rich-text/read/binary.rtf" : "d1fd763db2ce44562bc673982eebc3a115a34ae6577fa3f84c9fdce61924280c",
       "fixtures/rich-text/read/breaks.rtf" : "16579b11b4ebcc82e31ac879ecdef9ab7d5b1e635358cd3525580b0f6338db10",
+      "fixtures/rich-text/read/code-page-ansicpg.rtf" : "20e6fa845f809f3a1e85202db5c0d638ddef5cad92b603252c1d27e78528b107",
+      "fixtures/rich-text/read/code-page-bytes.rtf" : "39a34753d783cb485b2cce88ce0c030b06b519c0c150525c38f6c5ab56a6c83c",
+      "fixtures/rich-text/read/code-page-default-font.rtf" : "95c537419889a2f5c3defb77de0adc0767175f5c46a496c783381df17122797e",
+      "fixtures/rich-text/read/code-page-document-words.rtf" : "2e567a031151eb68111a69440bffc5e5a22665fbdf52ffc62e99f87315646076",
+      "fixtures/rich-text/read/code-page-groups.rtf" : "1bdf12753eae41e11427de6121962214ae0a1d5ae04964afd92ce824091965cb",
+      "fixtures/rich-text/read/code-page-mac-ansicpg.rtf" : "a097e5a00ffe8e209e02e8ce67c9cfd7665b77fbf8e9e5cdecdd7031992f9fe8",
+      "fixtures/rich-text/read/code-page-mac.rtf" : "ad0cde1d6a8388be7a6f6639f277c2979f2a2e08e3ca0afc76a82a83b9370c97",
+      "fixtures/rich-text/read/code-page-none.rtf" : "eb0286648f5ac33c7e9e3392408ff1cdd7a9893f202345d9592ee9512d677bac",
+      "fixtures/rich-text/read/code-page-pc.rtf" : "0581e899a8d3b3a199219a12e057b8571bda86f9869e532aa283aa8c3dfbbe55",
+      "fixtures/rich-text/read/code-page-plain.rtf" : "ecdff964e4f9cccf76c3b28cdfe5c6d48a8dc22211fe789555483594fcd69861",
+      "fixtures/rich-text/read/code-page-trailing-lead.rtf" : "6f5b70c851b88d4fd142614ba06863b95aac504787e27002483d0ae1c9c4565f",
+      "fixtures/rich-text/read/code-page-unread.rtf" : "9d7dc5cd45060d9886c7c484b8ea0a6aa6b2f6850c474c083823bf7339a68d09",
+      "fixtures/rich-text/read/control-symbols.rtf" : "4444170634c7e6a9ba111fa282b179d77c28ed1b343618cdb00373f6b97b6c22",
       "fixtures/rich-text/read/expanded-color-table.rtf" : "ef4ca23ab85d40b9a046d192868264ebf4e0bc20b3ccc3a7edc9fcffbf6bc148",
+      "fixtures/rich-text/read/field-text.rtf" : "3adc529c54f5067cc290369b86ed5d48167d8e4d09116865e8aed044089aebbd",
       "fixtures/rich-text/read/fields.rtf" : "bfa1227611b652ae8e75d8c16b1d919433eccfa9d558754035b333741a04b3c8",
+      "fixtures/rich-text/read/fonts-applied.rtf" : "96f993c78c60078c406b0614886bc6f63729c21d546a9bf407df90d67b928c9a",
       "fixtures/rich-text/read/groups-and-state.rtf" : "f2adfb0ca0fa4805e316ddfcf6874003ab8787a17caf0b95d0f6fefe258ca64a",
       "fixtures/rich-text/read/ios-style.rtf" : "31f15e8804e26863016b7620c99fc91c29de58dcb7ff15601bf73b4047fdad23",
       "fixtures/rich-text/read/kit.rtf" : "b36b1d436e390891224992ae3a0e7d022ec956eb8cffb2201d0ac6736d2e20e2",
+      "fixtures/rich-text/read/leading-line-break.rtf" : "e62c3891fd23bddee32803515bf396811dc9b9cb9741e6c5b7f66de9d235ee01",
       "fixtures/rich-text/read/legacy-color-table.rtf" : "79d3374276de55055e6382944931572e97becbe2dbf9195a319f76116a313002",
+      "fixtures/rich-text/read/link-characters.rtf" : "f93ceb739814e7ef693b0963fc315cb7194301bac67c8ede98fdde968d4b17c0",
       "fixtures/rich-text/read/list.rtf" : "eb187c90b58f061c3a466bb01dfeb12b8395dafdc7dde6459fc939f8dddc4ebb",
       "fixtures/rich-text/read/near-black-edge.rtf" : "0833eaa009486f14a5616eec092cecbf0e311811d685423fe1aa599576ad901e",
+      "fixtures/rich-text/read/no-rtf-word.rtf" : "f6354e3d868f7c70740d5d4b767a25ae00bd4d44a711423557d85da5c3496307",
+      "fixtures/rich-text/read/nosupersub.rtf" : "528b6cda896d71bdf241b2d238995641ee91e122e732f5bc6d72f6afff5b176f",
+      "fixtures/rich-text/read/plain-no-font-zero.rtf" : "f0dce567e76094bac3f64a219388987a57ac7ce771efec0d6da304f4daefdc49",
+      "fixtures/rich-text/read/replacement-character.rtf" : "51e0576900122a34c89e7398a676202faae5b7bd75414edf79def285484418b6",
+      "fixtures/rich-text/read/star-destinations.rtf" : "39a3f3dc96f507854daa1dbee9eb34b8a64f8a5b05d558a53b739c5356cf325f",
+      "fixtures/rich-text/read/unicode-skip.rtf" : "dc020a43f2d61a98e276b48bca3196be230cac0f87448f8681e70dd4f0e010f5",
       "fixtures/rich-text/read/unicode.rtf" : "4329c1af9dc3b55a2a9c0102e7c678e4749e2895c281e888a47b7c8af614ac38",
       "fixtures/rich-text/web/adjacent-links.rtf" : "369bed065b055a8be87de9b421c1a884eaef22c9e0d6fcfd2020f0d77eabd35b",
       "fixtures/rich-text/web/all-three.rtf" : "a2e2197632c411f25d6215bc0f3f339fb0ebd30f279ce1a6d5b5ee18a4ba3907",
-      "fixtures/rich-text/web/blank-line-across-runs.rtf" : "29dec38de5d3e319b1480ef9390795e979e88fd8734527407f48fa9807d589f7",
+      "fixtures/rich-text/web/blank-line-across-runs.rtf" : "4142831f227c9ccf37059152acd154cc2d5f98313ba3b8edabe0ed25f8502e14",
       "fixtures/rich-text/web/blank-line.rtf" : "6aaa766c226b0068429de3d6602ecac158dcb22986ccf1b88aaa9e47a4914ce5",
       "fixtures/rich-text/web/bold-across-blank-line.rtf" : "f7e25257ac281aef6fb1be35d1fd47d840a9c97ad330743f13b5bdabb26d67d1",
       "fixtures/rich-text/web/bold-inside-link.rtf" : "f62da53e73951fbfad7f1006139517e1112ca1464aa5a37331d47fc6a78cde56",
       "fixtures/rich-text/web/bold.rtf" : "0d6be8852b5f54e5c3d78807b44b2fcd541cab278060f3cf7fda7d614f9ffcf8",
-      "fixtures/rich-text/web/cases.json" : "933b5d194a107469ff4c7f96f568793561dc3b4406f51dfffebab0f7d771cf46",
+      "fixtures/rich-text/web/cases.json" : "5fc6f7d0557fe000fe9b7b5a31edc4b507a8cfd8055aec296fb140330c929974",
       "fixtures/rich-text/web/characters.rtf" : "2c24761f37b35536bcaa29e91fd435abd4f468b78edd15b20ceea449b74fe3ad",
       "fixtures/rich-text/web/color-bold-link.rtf" : "be3be5817895582112d631ec4072ce8f197a1071556e721777bab4760365340c",
       "fixtures/rich-text/web/color-edges.rtf" : "a6150e72e5e6dc617846f78f702b9c7c14fe1755a43d12ff5d3b54bda59ad427",
@@ -66894,6 +69731,8 @@
       "fixtures/rich-text/web/link-encoded.rtf" : "ca942f72a00702b8a6035cd7d96c860c2f4af56523f12b2751d2687867bb09d9",
       "fixtures/rich-text/web/link-https.rtf" : "9c33799d89b198b9ce96e9b0fb4076b92bf9bdbc46bfddb0e9b0e8ddf8464cc1",
       "fixtures/rich-text/web/link-mailto.rtf" : "d46d686c17b3dd4e8d3b93eda73b3d68b4e3dc2aa59c2aa8b031b493fd7f55de",
+      "fixtures/rich-text/web/link-non-ascii-text.rtf" : "63fc3604d0eff94d0f4e3f901eae53fdc923b26bdc4fa2617b03955ab1a6bf2c",
+      "fixtures/rich-text/web/link-reencoded.rtf" : "6332f4f4d713a05c8292055df8cd4bf759cb4c2f87de4dcd31f34f8a2ebc2184",
       "fixtures/rich-text/web/non-latin.rtf" : "4a1ee46ea8ef0ae607bfc7a23fa954f1a086fcb48e878ce31291d7afef36b918",
       "fixtures/rich-text/web/only-newline.rtf" : "096922c865fa8312bc61cf7c829b3a4afb4da9a119a133c9687b6e82da0e994e",
       "fixtures/rich-text/web/overlap.rtf" : "6de8e34b954f085d0d5c83d33a91d13b2de29ce78e0e3f8e47ff542d3ac19320",
@@ -66904,7 +69743,7 @@
       "fixtures/rich-text/web/two-blank-lines.rtf" : "462d6489549f6db9e6f0b9a35491e0c0a929d620c8d3bf67b0f8e7f4b169f73b",
       "fixtures/rich-text/web/underline.rtf" : "da6a19af8933cc1ac143a12c14fa95660857c36fd51598661d2590e781d0ba1e",
       "fixtures/rich-text/web/whole-text-bold.rtf" : "22bf50c154f5254ad98d2be7ae6ace1d7d441fa110e7afa735672c2a5ed30fb2",
-      "tools/mac-golden/Sources/mac-golden/RichText.swift" : "3799030f106d7aabd2c5b4c7a0aa462bd62a674e780e71fcee5b627ea3ca7e08"
+      "tools/mac-golden/Sources/mac-golden/RichText.swift" : "5c146c9544ce299d8d3dbae98ab23042443f463fdd12654d841ebf5732902bc6"
     },
     "platform" : {
       "arch" : "arm64",

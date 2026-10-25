@@ -177,8 +177,15 @@ async function loadedFrame() {
 
 /** A message from the page's host script, posted from the frame's window. */
 function fromFrame(frame: HTMLIFrameElement, kind: string, detail: unknown = {}) {
+  fromFrameAtOnce(frame, [[kind, detail]]);
+}
+
+/** Messages from the page's host script that come together, as React handles them: in one batch. */
+function fromFrameAtOnce(frame: HTMLIFrameElement, messages: readonly (readonly [kind: string, detail: unknown])[]) {
   act(() => {
-    window.dispatchEvent(new MessageEvent('message', { data: { source: 'frus-reader', kind, detail }, origin: 'null', source: frame.contentWindow }));
+    for (const [kind, detail] of messages) {
+      window.dispatchEvent(new MessageEvent('message', { data: { source: 'frus-reader', kind, detail }, origin: 'null', source: frame.contentWindow }));
+    }
   });
 }
 
@@ -425,6 +432,20 @@ describe('the reader’s highlights', () => {
     fromFrame(frame, 'selectionBarShortcut', { start: 12, end: 40, rect });
     fromFrame(frame, 'selectionScrolled');
     expect(bar()).toBeNull();
+  });
+
+  // The selection's own report can come just after Alt+F10's, before React draws the bar.
+  it('keeps Alt+F10’s request for the bar when the selection’s own report comes with it', async () => {
+    highlighting({ [highlightsPath]: documentHighlights([]) });
+    renderAt('/doc/frus1961-63v06/d1');
+    const { frame, posted } = await loadedFrame();
+    await waitFor(() => expect(highlightsSent(posted)).toHaveLength(1));
+    fromFrameAtOnce(frame, [
+      ['selectionBarShortcut', { start: 12, end: 40, rect }],
+      ['selectionChanged', { start: 12, end: 40, text: 'Allow me to say', rect }],
+    ]);
+    expect(bar()).not.toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Highlight Yellow' }));
   });
 
   // Only the keyboard's request moves focus into the bar: a later selection's bar leaves it in the text.

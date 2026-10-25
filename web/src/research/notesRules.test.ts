@@ -57,6 +57,8 @@ describe('a row’s detail and date', () => {
   });
 
   it('dates a row as the app’s abbreviated date, and gives none without one', () => {
+    // The local day, read in the zone vite.config.ts pins for every run, so it is the same day everywhere.
+    expect(new Intl.DateTimeFormat().resolvedOptions().timeZone).toBe('UTC');
     expect(noteDate('2026-10-24T12:00:00.000Z')).toBe('Oct 24, 2026');
     expect(noteDate(null)).toBeNull();
     expect(noteDate(undefined)).toBeNull();
@@ -90,6 +92,13 @@ describe('the filters', () => {
     // A line break is not trimmed, as `.whitespaces` holds none.
     expect(ids(filterNotes(all, { query: 'Kennedy\n' }))).toEqual([]);
     expect(ids(filterNotes(all, { query: 'kennedy', tag: 'T1' }))).toEqual([]);
+  });
+
+  it('finds an accent typed as one character in text that holds a letter and a mark, and the reverse', () => {
+    const composed = note({ id: 'nfc', bodyText: 'Le caf\u{00E9} de la Paix' });
+    const decomposed = note({ id: 'nfd', bodyText: 'Le cafe\u{0301} de la Paix' });
+    expect(ids(filterNotes([composed, decomposed], { query: 'CAF\u{00C9}' }))).toEqual(['nfc', 'nfd']);
+    expect(ids(filterNotes([composed, decomposed], { query: 'cafe\u{0301}' }))).toEqual(['nfc', 'nfd']);
   });
 });
 

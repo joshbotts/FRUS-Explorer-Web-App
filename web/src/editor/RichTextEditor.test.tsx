@@ -38,6 +38,36 @@ const toolbar = () => screen.getByRole('toolbar', { name: 'Text formatting' });
 // A colour input has no role of its own; its name is its label.
 const control = (name: string) => (name === 'Text Color' ? within(toolbar()).getByLabelText(name) : within(toolbar()).getByRole('button', { name }));
 
+/** A paste of `html`, as a browser's clipboard gives it, with its text as the plain copy. */
+function pasteHTML(body: HTMLElement, html: string) {
+  const paste = new Event('paste', { bubbles: true, cancelable: true });
+  Object.defineProperty(paste, 'clipboardData', {
+    value: { types: ['text/html', 'text/plain'], getData: (type: string) => (type === 'text/html' ? html : html.replace(/<[^>]*>/g, '')) },
+  });
+  act(() => {
+    body.dispatchEvent(paste);
+  });
+}
+
+/** A paste of plain text alone. */
+function pasteText(body: HTMLElement, text: string) {
+  const paste = new Event('paste', { bubbles: true, cancelable: true });
+  Object.defineProperty(paste, 'clipboardData', { value: { types: ['text/plain'], getData: (type: string) => (type === 'text/plain' ? text : '') } });
+  act(() => {
+    body.dispatchEvent(paste);
+  });
+}
+
+/** The runs an empty note has once `html` is pasted into it. */
+function pasted(html: string) {
+  const { body, editor, last } = editorFor({ runs: [run('')] });
+  select(editor, 1, 1);
+  pasteHTML(body, html);
+  const runs = last();
+  cleanup();
+  return runs;
+}
+
 function select(editor: Editor, from: number, to: number) {
   act(() => {
     editor.commands.setTextSelection({ from, to });
@@ -88,6 +118,34 @@ describe('the note editor’s text', () => {
     await waitFor(() => expect(control('Bold').getAttribute('aria-pressed')).toBe('false'));
     await userEvent.click(control('Bold'));
     expect(last()).toEqual([run('a', { bold: true }), run('b'), run('cd', { bold: true })]);
+  });
+
+  it('reads a selection from a line’s end by its line break, which has the formatting of the text before it, as the app’s "\\n" does', async () => {
+    // "abc" then "def" bold: the selection starts with the break after "abc", which is plain.
+    let shown = editorFor({ runs: [run('abc\n'), run('def', { bold: true })] });
+    select(shown.editor, 4, 9);
+    await waitFor(() => expect(control('Bold').getAttribute('aria-pressed')).toBe('false'));
+    await userEvent.click(control('Bold'));
+    // Bold over the whole selection, as the app's toggle makes it: "def" stays bold.
+    expect(shown.body.querySelector('strong')?.textContent).toBe('def');
+    expect(shown.last()).toBeUndefined();
+    cleanup();
+
+    // From an empty line after bold text, the break is bold, and Bold takes it off the selection.
+    shown = editorFor({ runs: [run('abc\n\n', { bold: true }), run('def')] });
+    select(shown.editor, 6, 11);
+    await waitFor(() => expect(control('Bold').getAttribute('aria-pressed')).toBe('true'));
+    cleanup();
+
+    // A break after linked, coloured text has its link and its colour.
+    shown = editorFor({ runs: [run('abc', { linkURL: 'https://history.state.gov/', colorHex: '0000FF' }), run('\ndef')] });
+    select(shown.editor, 4, 9);
+    await waitFor(() => expect(control('Link selected text to a URL').getAttribute('aria-pressed')).toBe('true'));
+    expect((control('Text Color') as HTMLInputElement).value).toBe('#0000ff');
+    await userEvent.click(control('Link selected text to a URL'));
+    const dialog = await screen.findByRole('dialog', { name: 'Link selection to URL' });
+    expect((within(dialog).getByRole('textbox') as HTMLInputElement).value).toBe('https://history.state.gov/');
+    expect(within(dialog).getByRole('button', { name: 'Remove Link' })).toBeTruthy();
   });
 
   it('takes ⌘B, ⌘I and ⌘U, as Ctrl off a Mac, by the same rule', async () => {
@@ -195,7 +253,9 @@ describe('the note editor’s text', () => {
 
   it('says when it cannot show the note as its text reads, so the note opens plain', async () => {
     const shown = editorFor({ runs: [run('a')], text: 'a' });
-    await act(async () => {});
+    // The check runs when Tiptap tells the editor made, a timer after it is mounted, and it is
+    // marked made just after: until then, a call not made says nothing.
+    await waitFor(() => expect(shown.editor.isInitialized).toBe(true));
     expect(shown.onUnreadable).not.toHaveBeenCalled();
     cleanup();
     const differs = editorFor({ runs: null, text: 'a\r\nb' });
@@ -237,6 +297,68 @@ describe('the note editor’s text', () => {
       body.dispatchEvent(paste);
     });
     expect(last()).toEqual([run('red '), run('bold', { bold: true }), run(' '), run('link', { linkURL: 'https://example.com/' })]);
+  });
+
+  it('pastes a line for each line break the HTML draws, a <br> or a new line in <pre>, but none for a break that ends its block', () => {
+    // The reader's own lines, a dateline and a signature, with the spaces a source puts about them.
+    expect(pasted('<p>Embassy Moscow<br>\n  Telegram 1234<br><br>Secret</p>')).toEqual([run('Embassy Moscow\nTelegram 1234\n\nSecret')]);
+    expect(pasted('<p>a <b>bold<br>still bold</b></p>')).toEqual([run('a '), run('bold\nstill bold', { bold: true })]);
+    // A trailing <br> draws no line of its own; two draw one.
+    expect(pasted('<p>a<br></p><p>b<br><br></p>')).toEqual([run('a\nb\n')]);
+    // Apple Mail's blank line, and Google Docs' Shift+Return.
+    expect(pasted('<div>a</div><div><br></div><div>b</div>')).toEqual([run('a\n\nb')]);
+    expect(pasted('<p><span>one</span><br><span>two</span></p>')).toEqual([run('one\ntwo')]);
+    // Preformatted text keeps its lines and its spaces; the new line after <pre> is the markup's.
+    expect(pasted('<pre>\nline one\n  indented\n</pre>')).toEqual([run('line one\n  indented')]);
+    // Between blocks, a <br> draws a line of its own, as Google Docs writes an empty paragraph.
+    expect(pasted('<p>a</p><br><p>b</p>')).toEqual([run('a\n\nb')]);
+  });
+
+  it('pastes no line for the <br>s ProseMirror’s clipboard ignores: a browser’s where a copy starts or ends at a paragraph’s edge, and one that ends the copy', () => {
+    // Chrome's and Safari's copy of a paragraph chosen with a triple click, from the reader say.
+    expect(pasted('<p>a</p><br class="Apple-interchange-newline">')).toEqual([run('a')]);
+    expect(pasted('<br class="Apple-interchange-newline"><p>a</p>')).toEqual([run('a')]);
+    expect(pasted('<br class="Apple-interchange-newline"><span>a</span><br class="Apple-interchange-newline">')).toEqual([run('a')]);
+    // Windows' clipboard ends its fragment with a comment.
+    expect(pasted('<p>a</p><br><!--EndFragment-->\n')).toEqual([run('a')]);
+  });
+
+  it('splits only the lines a paste’s markup broke, so the text’s own characters are kept wherever they are pasted from', () => {
+    // Private-use characters, as a PDF's text and icon fonts give, and the noncharacters the marks are.
+    const own = 'a\u{E000}b\u{E001}c\u{FDD0}d\u{FDD1}e';
+    const plainPaste = editorFor({ runs: [run('')] });
+    select(plainPaste.editor, 1, 1);
+    pasteText(plainPaste.body, own);
+    expect(plainPaste.last()).toEqual([run(own)]);
+    cleanup();
+    expect(pasted('<p>a\u{E000}b<br>c</p>')).toEqual([run('a\u{E000}b\nc')]);
+    // Markup that holds a mark already keeps it, its breaks read as spaces, as the parser reads them.
+    expect(pasted('<p>a\u{FDD0}b<br>c</p>')).toEqual([run('a\u{FDD0}b c')]);
+    // A drag within the note is put down as it was taken up, never read as markup.
+    const { editor } = editorFor({ runs: [run(own)] });
+    const taken = editor.state.doc.slice(1, 1 + own.length);
+    let dropped = taken;
+    editor.view.someProp('transformPasted', (transform) => {
+      dropped = transform(dropped, editor.view, false);
+    });
+    expect(dropped.eq(taken)).toBe(true);
+  });
+
+  it('pastes the bold, italic and underline a style gives, as Google Docs’ spans carry them, and takes bold off where a style says normal', () => {
+    const { body, editor, last } = editorFor({ runs: [run('')] });
+    select(editor, 1, 1);
+    pasteHTML(
+      body,
+      '<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-x"><p dir="ltr" style="line-height:1.38"><span style="font-size:11pt;font-weight:700;color:#000000">Key</span><span style="font-weight:400"> </span><span style="font-style:italic;text-decoration:underline">point</span></p><p><b>Bold <span style="font-weight:normal">not</span></b></p></b>',
+    );
+    // The line break has the formatting of the text before it.
+    expect(last()).toEqual([run('Key', { bold: true }), run(' '), run('point\n', { italic: true, underline: true }), run('Bold ', { bold: true }), run('not')]);
+  });
+
+  it('pastes Word’s bold as bold, though its style says a weight of normal for right-to-left text', () => {
+    const word =
+      '<html xmlns:o="urn:schemas-microsoft-com:office:office"><head><style>p.MsoNormal { margin: 0in }</style></head><body lang=EN-US style=\'tab-interval:.5in\'><!--StartFragment--><p class=MsoNormal><b style=\'mso-bidi-font-weight:normal\'><span lang=EN-US style=\'font-size:12.0pt\'>Secret</span></b><span lang=EN-US> cable, <b>sent</b> today<o:p></o:p></span></p><!--EndFragment--></body></html>';
+    expect(pasted(word)).toEqual([run('Secret', { bold: true }), run(' cable, '), run('sent', { bold: true }), run(' today')]);
   });
 
   it('writes a pasted link’s address as the link dialog writes a typed one, and pastes one it cannot follow as text', () => {

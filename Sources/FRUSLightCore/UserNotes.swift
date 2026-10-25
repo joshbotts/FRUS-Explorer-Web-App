@@ -139,7 +139,7 @@ extension SQLiteUserStore: NoteStore {
         """
 
     public func notes(of document: DocumentKey, for user: String) throws -> [NoteRecord] {
-        try reading { db in try Self.notes(of: document, for: user, in: db, ordered: true) }
+        try reading { db in try Self.notes(of: document, for: user, in: db) }
     }
 
     public func notes(for user: String) throws -> [NoteRecord] {
@@ -180,7 +180,7 @@ extension SQLiteUserStore: NoteStore {
                 _ = try db.query("UPDATE highlights SET note_id = ? WHERE user_id = ? AND upper(id) = ?",
                                  [.text(note.id), .text(user), .text(highlight)])
             }
-            note.linkedHighlightIds = try Self.highlightLinks(for: user, in: db)[note.id] ?? []
+            note.linkedHighlightIds = try Self.highlightLinks(for: user, ofNote: note.id, in: db)[note.id] ?? []
             try Self.refreshSearch(of: document, for: user, in: db)
             return note
         }
@@ -233,21 +233,21 @@ extension SQLiteUserStore: NoteStore {
 
     // MARK: Within a transaction
 
-    /// A document's notes, in the rail's order when `ordered`, else as SQLite finds them.
-    static func notes(of document: DocumentKey, for user: String, in db: SQLiteConnection, ordered: Bool) throws -> [NoteRecord] {
-        let links = try highlightLinks(for: user, in: db)
+    /// A document's notes, in the rail's order, with the links of those notes alone.
+    private static func notes(of document: DocumentKey, for user: String, in db: SQLiteConnection) throws -> [NoteRecord] {
+        let documentNotes = "SELECT upper(id) FROM notes WHERE user_id = ? AND volume_id = ? AND document_id = ?"
+        let keys: [SQLiteValue] = [.text(user), .text(document.volumeId), .text(document.documentId)]
+        let links = try highlightLinks(for: user, narrowedBy: "AND upper(note_id) IN (\(documentNotes))", keys, in: db)
         return try db.query(
-            """
-            SELECT \(noteColumns) FROM notes WHERE user_id = ? AND volume_id = ? AND document_id = ?
-                \(ordered ? "ORDER BY \(listOrder)" : "")
-            """, [.text(user), .text(document.volumeId), .text(document.documentId)]).map { note($0, links: links) }
+            "SELECT \(noteColumns) FROM notes WHERE user_id = ? AND volume_id = ? AND document_id = ? ORDER BY \(listOrder)", keys)
+            .map { note($0, links: links) }
     }
 
     private static func note(_ id: String, of user: String, in db: SQLiteConnection) throws -> NoteRecord? {
         // An id in any case, as an import may write one.
         guard let row = try db.query("SELECT \(noteColumns) FROM notes WHERE user_id = ? AND upper(id) = ?",
                                      [.text(user), .text(id)]).first else { return nil }
-        return note(row, links: try highlightLinks(for: user, in: db))
+        return note(row, links: try highlightLinks(for: user, ofNote: id, in: db))
     }
 
     private static func note(_ row: [SQLiteValue], links: [String: [String]]) -> NoteRecord {
@@ -274,16 +274,31 @@ extension SQLiteUserStore: NoteStore {
     }
 
     /// The ids of the user's highlights that name each note, by the note's id in uppercase, each
-    /// note's in the order the reader draws highlights.
-    private static func highlightLinks(for user: String, in db: SQLiteConnection) throws -> [String: [String]] {
+    /// note's in the order the reader draws highlights: every note's, or with `filter`, a clause
+    /// on `note_id` and its bindings, only those it keeps. A note's links are read for that note
+    /// alone, so that a read or a save, under the store's one lock, returns no more rows the more
+    /// highlights the user has linked elsewhere. SQLite still visits each of the user's highlights
+    /// to test its `note_id`: an index on `(user_id, upper(note_id))`, the expression these queries
+    /// test, would spare that, and would be a migration (one on `note_id` itself would not, since
+    /// the queries read it in uppercase).
+    private static func highlightLinks(for user: String, narrowedBy filter: String = "", _ bindings: [SQLiteValue] = [],
+                                       in db: SQLiteConnection) throws -> [String: [String]] {
         var links: [String: [String]] = [:]
         for row in try db.query(
-            "SELECT id, note_id FROM highlights WHERE user_id = ? AND note_id IS NOT NULL ORDER BY created_at ASC NULLS FIRST, upper(id)",
-            [.text(user)]) {
+            """
+            SELECT id, note_id FROM highlights WHERE user_id = ? AND note_id IS NOT NULL \(filter)
+                ORDER BY created_at ASC NULLS FIRST, upper(id)
+            """, [.text(user)] + bindings) {
             guard let id = row[0].text, let note = row[1].text else { continue }
             links[TagReferences.normalized(note) ?? note.uppercased(), default: []].append(id)
         }
         return links
+    }
+
+    /// The links of one note, whose id is in uppercase, as `ResearchNoteExport.linkedHighlightIds`
+    /// derives them: a `noteId` in any case names it.
+    private static func highlightLinks(for user: String, ofNote id: String, in db: SQLiteConnection) throws -> [String: [String]] {
+        try highlightLinks(for: user, narrowedBy: "AND upper(note_id) = ?", [.text(id)], in: db)
     }
 
     /// `given` as a note keeps it: each id in uppercase, once, in the order given. An id the note

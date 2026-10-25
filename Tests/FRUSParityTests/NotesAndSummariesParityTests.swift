@@ -5,16 +5,19 @@
 // `UserSearchText.summaryText` mirror; `ResearchNote.indexedTextPerDocument`, which
 // `UserSearchText.noteText` mirrors; the headnote prompt id the web's own summaries must never take;
 // the kit's summary types, whose encoding the store keeps; the rule that names a summary's prompt;
-// the editor's rules for a body, its RTF kept until an edit, a highlight's link and a delete; and the
-// Markdown exporter's citation. A pin move that changes one fails here until the server follows it.
+// the editor's rules for a body, its RTF kept until an edit, a highlight's link and a delete; the
+// Markdown exporter's citation; and CollectionProse's paragraphs and colours, which the golden spans'
+// mirror and the codec follow. A pin move that changes one fails here until the server follows it.
 
 import FRUSCoreKit
 import FRUSLightCore
 import FRUSLightTestSupport
 import Foundation
+import ParityFormat
 import Testing
 
 @testable import FRUSLightAPI
+@testable import FRUSRichText
 
 @Suite struct NotesAndSummariesParityTests {
     static let app = RepositoryFiles.root.appendingPathComponent("upstream/FRUS-Explorer/FRUSExplorer")
@@ -248,6 +251,42 @@ import Testing
         #expect(NotesExport.citation(of: "d2", among: [entry], volume: manifest) == nil, "a document the index lacks")
         #expect(NotesExport.citation(of: "d1", among: nil, volume: manifest) == nil, "a volume not indexed")
         #expect(NotesExport.citation(of: "d1", among: [entry], volume: nil) == nil, "a volume not in the manifest")
+    }
+
+    /// `CollectionProse.append`, which `ProseParagraphs.paragraphs(of:)` mirrors, splits each run on
+    /// blank lines by itself; `hex` reads a colour under 0.08 in every channel as none and truncates
+    /// each channel to a byte, as `RTFColor.hex` does, of the colour in sRGB. The golden spans check
+    /// the mirror against the app's paragraphs on every case once a Mac remakes them; this names the
+    /// rule a pin move changes on Linux, before then.
+    @Test func theAppsParagraphsAndColoursAreTheMirrors() throws {
+        let source = try Self.read("Collections/CollectionExporter.swift")
+        #expect(try Self.body(of: "private static func append(text: String, bold: Bool, italic: Bool, underline: Bool,", in: source) == [
+            #"let parts = text.components(separatedBy: "\n\n")"#,
+            "for (index, part) in parts.enumerated() {",
+            "if index > 0 { paragraphs.append([]) } // a blank line starts a new paragraph",
+            "if !part.isEmpty {",
+            "paragraphs[paragraphs.count - 1].append(",
+            "ProseFormattedSpan(text: part, bold: bold, italic: italic,",
+            "underline: underline, colorHex: colorHex,",
+            "linkURL: linkURL))",
+            "}",
+            "}",
+        ])
+        #expect(try Self.body(of: "private static func hex(r: CGFloat, g: CGFloat, b: CGFloat) -> String? {", in: source) == [
+            "if r < 0.08, g < 0.08, b < 0.08 { return nil } // (near-)black default text",
+            #"return String(format: "%02X%02X%02X", Int(r * 255), Int(g * 255), Int(b * 255))"#,
+        ])
+        #expect(try Self.body(of: "private static func hexColor(_ color: NSColor) -> String? {", in: source) == [
+            "guard let c = color.usingColorSpace(.sRGB) else { return nil }",
+            "return hex(r: c.redComponent, g: c.greenComponent, b: c.blueComponent)",
+        ])
+        let bold = RichTextSpan(text: "\n\n", bold: true)
+        #expect(ProseParagraphs.paragraphs(of: [RichTextSpan(text: "a\n\nb"), bold, RichTextSpan(text: "c")])
+                == [[RichTextSpan(text: "a")], [RichTextSpan(text: "b")], [RichTextSpan(text: "c")]])
+        #expect(ProseParagraphs.paragraphs(of: [RichTextSpan(text: "x\n"), RichTextSpan(text: "\ny")]).count == 1,
+                "a blank line across two runs splits nothing")
+        #expect(RTFColor.hex(0.079, 0.079, 0.079) == nil && RTFColor.hex(0.08, 0, 0) == "140000")
+        #expect(RTFColor.hex(0.5, 0.25, 1.0) == "7F3FFF")
     }
 
     static func flattened(_ text: String) -> String {

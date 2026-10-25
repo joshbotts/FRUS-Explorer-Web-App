@@ -16,8 +16,10 @@ public struct RichTextGolden: Codable, Equatable, Sendable {
     public var cases: [RichTextCase]
     /// Each colour of the system's catalog list, as the app reads it under `appearance`.
     public var catalogColors: [CatalogColor]
+    /// The app's reading of every byte and pair of each code page, `RichTextCodePages.pages`.
+    public var codePages: [RichTextCodePageReading]
 
-    public static let currentFormat = 1
+    public static let currentFormat = 2
     /// The appearance the app's reading is made under: the light one.
     public static let appearance = "NSAppearanceNameAqua"
     /// The harness that writes the cases, an input of the file, since the submodule's digest does not cover it.
@@ -26,13 +28,14 @@ public struct RichTextGolden: Codable, Equatable, Sendable {
     public static let readFolder = "fixtures/rich-text/read"
 
     public init(provenance: Provenance, configuration: String, appearance: String,
-                cases: [RichTextCase], catalogColors: [CatalogColor]) {
+                cases: [RichTextCase], catalogColors: [CatalogColor], codePages: [RichTextCodePageReading]) {
         self.format = Self.currentFormat
         self.provenance = provenance
         self.configuration = configuration
         self.appearance = appearance
         self.cases = cases
         self.catalogColors = catalogColors
+        self.codePages = codePages
     }
 }
 
@@ -152,6 +155,73 @@ public struct CatalogColor: Codable, Equatable, Sendable {
     public init(name: String, colorHex: String?) {
         self.name = name
         self.colorHex = colorHex
+    }
+}
+
+/// The app's reading of one of `RichTextCodePages.pages`: the SHA-256 of its text in UTF-8.
+public struct RichTextCodePageReading: Codable, Equatable, Sendable {
+    public var name: String
+    /// The text's length, in UTF-16 units.
+    public var length: Int
+    public var sha256: String
+
+    public init(name: String, length: Int, sha256: String) {
+        self.name = name
+        self.length = length
+        self.sha256 = sha256
+    }
+}
+
+/// RTF holding every text byte from 0x80, and every lead and trail pair of a double-byte page, in a
+/// font of each charset the codec reads and in a document that names no code page, each byte or
+/// pair in a group of its own, so that one the page does not define loses only itself. The golden
+/// spans hold the app's reading of each, and the codec must read each the same, on Linux too.
+public enum RichTextCodePages {
+    public struct Page: Sendable {
+        public var name: String
+        /// The font's `\fcharset`, or nil for a document with no font table and no `\ansi`.
+        public var charset: Int?
+        public var doubleByte: Bool
+    }
+
+    public static let pages: [Page] = {
+        let singleByte: [Int] = [0, 77, 161, 162, 163, 177, 178, 186, 204, 222, 238]
+        let doubleByte: [Int] = [128, 129, 134, 136]
+        return [Page(name: "no-code-page", charset: nil, doubleByte: false)]
+            + singleByte.map { Page(name: "fcharset\($0)", charset: $0, doubleByte: false) }
+            + doubleByte.map { Page(name: "fcharset\($0)", charset: $0, doubleByte: true) }
+    }()
+
+    /// The page's RTF: each entry in a group followed by `|`, then printable ASCII.
+    public static func document(_ page: Page) -> [UInt8] {
+        var rtf = "{\\rtf1"
+        if let charset = page.charset { rtf += "\\ansi\\ansicpg1252{\\fonttbl\\f0\\fnil\\fcharset\(charset) Font;}\\f0" }
+        rtf += " "
+        let digits = Array("0123456789abcdef")
+        func hex(_ byte: Int) -> String { "\\'" + String([digits[byte >> 4], digits[byte & 0xF]]) }
+        for byte in 0x80...0xFF { rtf += "{" + hex(byte) + "}|" }
+        if page.doubleByte {
+            for lead in 0x81...0xFE {
+                for trail in 0x40...0xFE { rtf += "{" + hex(lead) + hex(trail) + "}|" }
+            }
+        }
+        for byte in 0x20...0x7E {
+            switch byte {
+            case 0x5C, 0x7B, 0x7D: rtf += "\\" + String(UnicodeScalar(UInt8(byte)))
+            default: rtf += String(UnicodeScalar(UInt8(byte)))
+            }
+        }
+        return Array((rtf + "}").utf8)
+    }
+
+    /// The bytes of the document's `index`th entry, counting from zero, as hexadecimal, or the ASCII
+    /// that follows the last.
+    public static func entry(_ index: Int, of page: Page) -> String {
+        func hex(_ byte: Int) -> String { String(byte, radix: 16, uppercase: true) }
+        if index < 128 { return hex(0x80 + index) }
+        let pair = index - 128
+        guard page.doubleByte, pair < 126 * 191 else { return "the printable ASCII" }
+        return hex(0x81 + pair / 191) + " " + hex(0x40 + pair % 191)
     }
 }
 

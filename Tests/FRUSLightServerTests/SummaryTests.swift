@@ -2,8 +2,9 @@
 // summary, the web's own, is written, read, edited and deleted, stored with the web's prompt id and the
 // kit's `ResponseFormat.general` as its encoder writes it; a document's are listed newest first by the
 // app's `ranksAbove`, headnote drafts left out, each with its authorship read as the app reads it and
-// its prompt named only while the user has it; and every summary the reader did not write here is
-// read-only, an imported user-written headnote draft among them.
+// its prompt named only while the user has it; a draft is found by its id and says it is one; and
+// every summary the reader did not write here is read-only, an imported user-written headnote draft
+// among them.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -34,6 +35,7 @@ import Testing
             #expect(summary.promptId == "0EB00000-0000-4000-8000-000000000001" && summary.promptName == nil)
             #expect(summary.responseText == "My summary.\n\nTwo paragraphs." && summary.responseFormat == "general")
             #expect(!summary.wasChunked && summary.authorship == "userWritten" && summary.projectId == nil && summary.editable)
+            #expect(!summary.isHeadnoteDraft)
             #expect(summary.createdAt == "2026-10-24T00:00:00.000Z" && summary.lastModified == summary.createdAt)
             // Stored as the app's own rows are: the kit's encoding of `.general`, not a literal of it.
             let stored = try #require(try fixture.rows.storedSummary(summary.id))
@@ -43,7 +45,8 @@ import Testing
             #expect(stored["was_chunked"] == "0" && stored["project_id"] == .some(nil) && stored["source_content_hash"] == .some(nil))
             // Every field written, a prompt's name, a project and a time with none as null.
             let raw = try #require(try JSONSerialization.jsonObject(with: Data(buffer: made.body)) as? [String: Any])
-            #expect(raw["promptName"] is NSNull && raw["projectId"] is NSNull && raw.count == 13)
+            #expect(raw["promptName"] is NSNull && raw["projectId"] is NSNull && raw.count == 14)
+            #expect(raw["isHeadnoteDraft"] as? Bool == false, "the draft flag is written, false too")
 
             #expect(try decode(Summary.self, try await browser.get(Self.summary(summary.id.lowercased()))) == summary)
             #expect(try decode(DocumentSummaries.self, try await browser.get(Self.d1)) ==
@@ -104,20 +107,28 @@ import Testing
             #expect(listed.items[2].responseText == #"{"People":"Kennedy"}"# && listed.items[2].projectId == "CC000000-0000-4000-8000-000000000003")
             #expect(listed.items[3].createdAt == nil)
             #expect(listed.items.allSatisfy { !$0.editable }, "only the reader's own")
+            #expect(listed.items.allSatisfy { !$0.isHeadnoteDraft }, "the imported headnote too, though it shares the draft's prompt")
             #expect(try decode(DocumentSummaries.self, try await browser.get("/api/v1/me/volumes/frus1961-63v06/documents/d2/summaries"))
                 .items.count == 21, "uncapped: the rail shows 20")
-            #expect(try decode(Summary.self, try await browser.get(Self.summary("50000000-0000-4000-8000-000000000005"))).editable == false,
-                    "a draft is found by its id")
+            // A draft is found by its id, and says it is one, as nothing else it carries tells it
+            // from the imported headnote: both have the app's headnote prompt.
+            let draft = try decode(Summary.self, try await browser.get(Self.summary("50000000-0000-4000-8000-000000000005")))
+            #expect(draft.isHeadnoteDraft && !draft.editable && draft.promptId == listed.items[0].promptId)
+            let rawDraft = try #require(try JSONSerialization.jsonObject(
+                with: Data(buffer: try await browser.get(Self.summary(draft.id)).body)) as? [String: Any])
+            #expect(rawDraft["isHeadnoteDraft"] as? Bool == true)
 
             // Read-only: an imported user-written headnote with the app's headnote prompt, an AI
-            // summary, one edited by the reader in the app, and a draft.
-            for id in ["40000000-0000-4000-8000-000000000004", "10000000-0000-4000-8000-000000000001",
-                       "30000000-0000-4000-8000-000000000003", "50000000-0000-4000-8000-000000000005"] {
+            // summary, one edited by the reader in the app, and a draft, each kept as it was added.
+            for (id, text) in [("40000000-0000-4000-8000-000000000004", "A headnote, imported from an older file."),
+                               ("10000000-0000-4000-8000-000000000001", "Named."),
+                               ("30000000-0000-4000-8000-000000000003", "Edited AI."),
+                               ("50000000-0000-4000-8000-000000000005", "A collection's draft.")] {
                 for response in [try await browser.send(.put, Self.summary(id), #"{"responseText": "Mine now."}"#),
                                  try await browser.send(.delete, Self.summary(id))] {
                     #expect(response.status == .forbidden && problemCode(response) == "SUMMARY_READ_ONLY", "\(id)")
                 }
-                #expect(try fixture.rows.storedSummary(id)?["response_text"] != "Mine now.")
+                #expect(try #require(try fixture.rows.storedSummary(id), "\(id) is still stored")["response_text"] == .some(text))
             }
             // The reader's own comes first, as the newest.
             let mine = try decode(Summary.self, try await browser.send(.post, Self.d1, #"{"responseText": "Mine."}"#))

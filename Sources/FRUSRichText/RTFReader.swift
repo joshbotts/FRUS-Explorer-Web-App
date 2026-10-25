@@ -3,7 +3,10 @@
 // as AppKit does for what the app's spans hold, and the golden spans hold it to the app's reading:
 // the text is NSAttributedString.string, and runs break where AppKit's attribute runs break, since
 // CollectionProse splits paragraphs one run at a time. What the spans do not hold, such as fonts,
-// sizes, strikethrough or a paragraph's style, still breaks runs, through each run's key.
+// sizes, strikethrough or a paragraph's style, still breaks runs, through each run's key. Text bytes
+// are read as AppKit reads them (RTFCodePage), held together until a control word AppKit knows
+// (RTFKeywords), a group's start or end, or a control symbol but \' \\ \{ \} \:, and then decoded
+// in the code page in force: a byte the page does not define loses them all, as AppKit loses them.
 
 import Foundation
 
@@ -22,14 +25,17 @@ public struct RTFReading: Equatable, Sendable {
 
 public enum RTFReader {
     /// The app's reading of `data`, or nil when it is not RTF. The app reads an empty payload, or
-    /// anything AppKit does not read as RTF, as no formatting, and so does the store.
+    /// anything AppKit does not read as RTF, as no formatting, and so does the store. AppKit reads
+    /// as RTF what opens a group after any line breaks and NULs, `{\rtf` or not, and only once that
+    /// group closes; a space or a tab before it, or a document cut short, it does not read (probe of
+    /// 24 Oct 2026). More than 256 groups nested the codec does not read either, though AppKit does.
     public static func read(_ data: [UInt8]) -> RTFReading? {
         var start = 0
-        while start < data.count, [0x20, 0x09, 0x0A, 0x0D].contains(data[start]) { start += 1 }
-        guard data.count - start >= 5, Array(data[start..<start + 5]) == Array("{\\rtf".utf8) else { return nil }
+        while start < data.count, [0x0A, 0x0D, 0x00].contains(data[start]) { start += 1 }
+        guard start < data.count, data[start] == UInt8(ascii: "{") else { return nil }
         var parser = RTFParser(data, from: start)
         parser.parse()
-        return parser.unreadable ? nil : parser.reading()
+        return parser.unreadable || !parser.closed ? nil : parser.reading()
     }
 }
 
@@ -69,6 +75,12 @@ private struct GroupState {
     var field: Int?
     /// A `\*` was read and no control word since.
     var starred = false
+    /// The code page text bytes are decoded in, which the last `\f` or `\plain` set, or the last word
+    /// that names the document's page: NeXTSTEP's in a document that names none.
+    var codePage = RTFCodePage.singleByte(RTFCodePage.nextstep)
+    /// Whether the last byte of those held is dropped alone when the rest decode and it does not,
+    /// as a lead byte with no trail is after `\f` set a double-byte page, until the next `\f`.
+    var dropsTrailingLead = false
 }
 
 /// Text in one state: AppKit's attributes for it are a function of this.
@@ -88,19 +100,33 @@ private struct RTFParser {
     /// Each paragraph's properties, fixed at its end, by paragraph number.
     var paragraphKeys: [[String]] = []
     var fonts: [Int: String] = [:]
-    /// Each font's `\fcharset`, which its `\'xx` bytes are in.
+    /// Each font's `\fcharset`, which its text bytes are in.
     var charsets: [Int: Int] = [:]
-    var defaultFont: Int?
-    /// Bytes in the current font's charset, decoded together, since a double-byte character is two.
+    /// The fonts the font table holds, whatever their names and charsets.
+    var tableFonts: Set<Int> = []
+    /// The code page of text in a font the table does not hold, from the last `\ansi`, `\mac`, `\pc`,
+    /// `\pca` or `\ansicpg`, which holds beyond its group.
+    var documentCodePage = RTFCodePage.singleByte(RTFCodePage.nextstep)
+    /// The code page of a font of no charset: Mac OS Roman after `\mac` or an `\ansicpg` of a Mac
+    /// page, else Windows-1252, which holds beyond its group too.
+    var fontCodePage = RTFCodePage.singleByte(RTFCodePage.cp1252)
+    /// The code page each font of no charset took when it was first selected, which it keeps.
+    var noCharsetPages: [Int: RTFCodePage] = [:]
+    /// Text bytes held until AppKit would decode them, together, since a double-byte character is two.
     var pendingBytes: [UInt8] = []
-    /// Nested past what AppKit's documents need, or a `\bin` beyond the data.
+    /// Nested past 256 groups, which no document AppKit writes needs.
     var unreadable = false
+    /// The document's own group has closed.
+    var closed = false
     var legacyColors: [(Int, Int, Int)?] = []
     var expandedColors: [RTFColorEntry?] = []
     var fieldInstructions: [[UInt16]] = []
     var fieldLinks: [String?] = []
     /// Fallback characters still to skip after a `\u`.
     var skip = 0
+    /// A group has opened and nothing but line breaks has followed: only there does `\*` mark a
+    /// destination, as AppKit reads it (probe of 24 Oct 2026).
+    var groupStart = false
     // The table entry being read.
     var fontIndex: Int?
     var fontCharset: Int?
@@ -118,16 +144,17 @@ private struct RTFParser {
     mutating func parse() {
         while index < data.count, !unreadable {
             let byte = data[index]
-            let hexByte = byte == UInt8(ascii: "\\") && index + 1 < data.count && data[index + 1] == UInt8(ascii: "'")
-            if !hexByte, byte < 0x80 || state.destination != .text && state.destination != .fieldResult { flushBytes() }
             switch byte {
             case UInt8(ascii: "{"):
+                flushBytes()
                 index += 1
                 skip = 0
                 stack.append(state)
                 state.starred = false
+                groupStart = true
                 if stack.count > 256 { unreadable = true }
             case UInt8(ascii: "}"):
+                flushBytes()
                 index += 1
                 skip = 0
                 endGroup()
@@ -138,42 +165,79 @@ private struct RTFParser {
                 index += 1
             default:
                 index += 1
-                if skip > 0 { skip -= 1; continue }
-                if byte >= 0x80 { textByte(byte) } else { text(UInt16(byte)) }
+                groupStart = false
+                state.starred = false
+                if skip > 0 {
+                    // A space in a \u's fallback text AppKit drops without counting it, and a tab ends
+                    // the fallback (probe of 24 Oct 2026).
+                    if byte == 0x20 { continue }
+                    if byte != 0x09 { skip -= 1; continue }
+                    skip = 0
+                }
+                textByte(byte)
             }
             // The document's own group has closed.
-            if stack.isEmpty, byte == UInt8(ascii: "}") { break }
+            if stack.isEmpty, byte == UInt8(ascii: "}") {
+                closed = true
+                break
+            }
         }
         flushBytes()
         paragraphKeys.append(state.paragraph)
     }
 
-    /// A byte of 8-bit text, in the current font's charset when it is text, else in Windows-1252.
+    /// A byte of text, held until AppKit would decode it; outside text, as itself or in Windows-1252.
     mutating func textByte(_ byte: UInt8) {
-        guard state.destination == .text || state.destination == .fieldResult,
-              RTFCodePage.encoding(forCharset: charsets[state.character.font ?? defaultFont ?? -1]) != nil else {
-            text(RTFCodePage.cp1252(byte))
-            return
+        switch state.destination {
+        case .text, .field, .fieldResult: pendingBytes.append(byte)
+        default: text(RTFCodePage.windows1252(byte))
         }
-        pendingBytes.append(byte)
     }
 
+    /// The text bytes held, decoded together in the code page in force, or dropped when the page
+    /// does not define one of them.
     mutating func flushBytes() {
         guard !pendingBytes.isEmpty else { return }
         let bytes = pendingBytes
         pendingBytes = []
-        let charset = charsets[state.character.font ?? defaultFont ?? -1]
-        if let encoding = RTFCodePage.encoding(forCharset: charset), let decoded = String(bytes: bytes, encoding: encoding) {
-            for unit in decoded.utf16 { text(unit) }
+        guard let units = state.codePage.decode(bytes, dropsTrailingLead: state.dropsTrailingLead) else { return }
+        for unit in units { text(unit) }
+    }
+
+    /// `\f` and `\plain`: the code page of text in `font` from now in the group, its charset's when
+    /// the font table holds it, else the document's. A font of no charset takes the fonts' page when
+    /// it is first selected and keeps it, as AppKit reads it (probe of 24 Oct 2026).
+    mutating func selectFont(_ font: Int?) {
+        if let font, tableFonts.contains(font) {
+            if let page = RTFCodePage.of(charset: charsets[font]) {
+                state.codePage = page
+            } else {
+                let page = noCharsetPages[font] ?? fontCodePage
+                noCharsetPages[font] = page
+                state.codePage = page
+            }
         } else {
-            for byte in bytes { text(RTFCodePage.cp1252(byte)) }
+            state.codePage = documentCodePage
         }
+        state.dropsTrailingLead = state.codePage.isDoubleByte
+    }
+
+    /// A word that names the document's code page: the text that follows it, and text in a font
+    /// the table does not hold, are in `page`, and a font of no charset in `fonts`.
+    mutating func nameDocumentCodePage(_ page: RTFCodePage, fonts: RTFCodePage) {
+        documentCodePage = page
+        fontCodePage = fonts
+        state.codePage = page
     }
 
     mutating func endGroup() {
         if state.destination == .fontTable { finishFont() }
-        // A field's result, and its link, end with its group.
+        // A field's instruction is read when its group ends, and the text after it in the field's
+        // group is linked; a field's result, and its link, end with its group.
         guard let outer = stack.popLast() else { return }
+        if state.destination == .fieldInstruction, outer.destination != .fieldInstruction, let field = state.field {
+            fieldLinks[field] = Self.hyperlink(fieldInstructions[field])
+        }
         state = outer
     }
 
@@ -182,6 +246,8 @@ private struct RTFParser {
     mutating func controlSequence() {
         guard index < data.count else { return }
         let first = data[index]
+        let atGroupStart = groupStart
+        groupStart = false
         if isLetter(first) {
             var end = index
             while end < data.count, isLetter(data[end]), end - index < 32 { end += 1 }
@@ -198,19 +264,19 @@ private struct RTFParser {
                     digits += 1
                     count += 1
                 }
-                if count > 0 || !negative {
-                    parameter = negative ? -value : value
-                    index = digits
-                }
+                // A minus with no digit AppKit reads as part of the word, which then has no
+                // parameter: \b- is \b (probe of 24 Oct 2026).
+                parameter = count > 0 ? (negative ? -value : value) : nil
+                index = digits
             }
             if index < data.count, data[index] == 0x20 { index += 1 }
-            if word == "bin" {
-                // Raw data, which no destination the reader keeps holds.
-                let count = max(0, parameter ?? 0)
-                if count > data.count - index { unreadable = true } else { index += count }
-                return
-            }
-            if skip > 0 { skip -= 1; return }
+            // A control word ends a \u's fallback text rather than standing for one of its characters,
+            // as any control symbol but \' \\ \{ \} \: does (probe of 24 Oct 2026). \bin's data AppKit
+            // reads as RTF, as if the word were not there.
+            skip = 0
+            // AppKit decodes the text bytes it holds at each control word it knows, and not at one it
+            // does not.
+            if RTFKeywords.appKit.contains(word) { flushBytes() }
             controlWord(word, parameter)
             state.starred = false
             return
@@ -220,17 +286,27 @@ private struct RTFParser {
         case UInt8(ascii: "'"):
             guard index + 1 < data.count, let high = hexValue(data[index]), let low = hexValue(data[index + 1]) else { return }
             index += 2
+            let byte = UInt8(high * 16 + low)
+            // A NUL, a line feed or a carriage return AppKit ignores, as it ignores the byte itself.
+            if [0x00, 0x0A, 0x0D].contains(byte) { return }
             if skip > 0 { skip -= 1; return }
-            textByte(UInt8(high * 16 + low))
+            textByte(byte)
+        case UInt8(ascii: "\\"), UInt8(ascii: "{"), UInt8(ascii: "}"), UInt8(ascii: ":"):
+            // Bytes of the text, which may be a double-byte character's trail.
+            if skip > 0 { skip -= 1; return }
+            textByte(first)
         case UInt8(ascii: "*"):
-            state.starred = true
+            skip = 0
+            flushBytes()
+            state.starred = atGroupStart
         case 0x0A, 0x0D:
-            if skip > 0 { skip -= 1; return }
+            skip = 0
+            flushBytes()
             controlWord("par", nil)
         default:
-            if skip > 0 { skip -= 1; return }
+            skip = 0
+            flushBytes()
             switch first {
-            case UInt8(ascii: "\\"), UInt8(ascii: "{"), UInt8(ascii: "}"): text(UInt16(first))
             case UInt8(ascii: "~"): text(0x00A0)
             case UInt8(ascii: "_"): text(0x2011)
             default: break
@@ -242,10 +318,13 @@ private struct RTFParser {
         let on = parameter.map { $0 != 0 } ?? true
         if state.destination == .skip { return }
         if state.starred {
+            // A destination AppKit does not know it skips; a word it knows it reads as it reads the
+            // word anywhere.
             switch word {
             case "expandedcolortbl": state.destination = .expandedColorTable; entry = RTFColorEntry(); return
             case "fldinst": startFieldInstruction(); return
-            default: state.destination = .skip; return
+            case _ where !RTFKeywords.appKit.contains(word): state.destination = .skip; return
+            default: break
             }
         }
         if let destination = Self.destinations[word] {
@@ -286,10 +365,10 @@ private struct RTFParser {
             default: if word.hasPrefix("cs") { entry.space = .other }
             }
             return
-        case .field, .fieldInstruction:
+        case .fieldInstruction:
             if word == "fldrslt" { startFieldResult() }
             return
-        case .text, .fieldResult:
+        case .text, .field, .fieldResult:
             break
         }
         switch word {
@@ -300,8 +379,15 @@ private struct RTFParser {
             state.destination = .field
         case "fldrslt":
             startFieldResult()
-        case "deff":
-            defaultFont = parameter
+        case "ansi":
+            nameDocumentCodePage(.singleByte(RTFCodePage.cp1252), fonts: .singleByte(RTFCodePage.cp1252))
+        case "mac":
+            nameDocumentCodePage(.singleByte(RTFCodePage.macRoman), fonts: .singleByte(RTFCodePage.macRoman))
+        case "pc", "pca":
+            nameDocumentCodePage(.singleByte(RTFCodePage.nextstep), fonts: .singleByte(RTFCodePage.cp1252))
+        case "ansicpg":
+            let named = RTFCodePage.named(byANSICodePage: parameter)
+            nameDocumentCodePage(named.text, fonts: named.fonts)
         case "b": state.character.bold = on
         case "i": state.character.italic = on
         case "ulnone": state.character.underline = nil
@@ -312,22 +398,31 @@ private struct RTFParser {
         case _ where word.hasPrefix("ul") && Self.underlineStyles.contains(word):
             state.character.underline = on ? word : nil
         case "cf": state.character.color = parameter ?? 0
-        case "f": state.character.font = parameter
+        case "f":
+            state.character.font = parameter
+            selectFont(parameter)
         case "fs": state.character.size = parameter ?? 24
         case "plain":
+            // Font 0, whatever \deff names, as AppKit reads text after it (probe of 24 Oct 2026).
             let skipCount = state.character.unicodeSkip
             state.character = CharacterState()
-            state.character.font = defaultFont
+            state.character.font = 0
             state.character.unicodeSkip = skipCount
+            selectFont(0)
         case "super", "sub":
             state.character.other["super"] = nil
             state.character.other["sub"] = nil
             state.character.other[word] = 1
         case "nosupersub":
+            // Superscript only: a baseline offset from \up or \dn holds until \up0 or \dn0, as
+            // AppKit reads it (probe of 24 Oct 2026).
             state.character.other["super"] = nil
             state.character.other["sub"] = nil
-            state.character.other["up"] = nil
-            state.character.other["dn"] = nil
+        case "up", "dn":
+            // One baseline offset, in half points, 12 by default, which each sets and \up0 and \dn0
+            // both end, as Apple's writer ends a lowered run with \up0 (probe of 24 Oct 2026).
+            let offset = (parameter ?? 12) * (word == "dn" ? -1 : 1)
+            state.character.other["baseline"] = offset == 0 ? nil : offset
         case _ where Self.otherCharacterWords.contains(word):
             setOther(word, parameter)
         case "uc":
@@ -335,18 +430,21 @@ private struct RTFParser {
         case "u":
             var value = parameter ?? 0
             if value < 0 { value += 65_536 }
-            text(UInt16(truncatingIfNeeded: value))
+            let unit = UInt16(truncatingIfNeeded: value)
+            // U+FFFD AppKit reads as no character, and its fallback as text (probe of 24 Oct 2026).
+            guard unit != 0xFFFD else { return }
+            text(unit)
             skip = state.character.unicodeSkip
         case "par":
             text(0x0A)
             paragraphKeys.append(state.paragraph)
         case "line": text(0x2028)
+        case "page": text(0x0C)
         case "tab": text(0x09)
         case "emdash": text(0x2014)
         case "endash": text(0x2013)
         case "emspace": text(0x2003)
         case "enspace": text(0x2002)
-        case "qmspace": text(0x2005)
         case "bullet": text(0x2022)
         case "lquote": text(0x2018)
         case "rquote": text(0x2019)
@@ -354,8 +452,6 @@ private struct RTFParser {
         case "rdblquote": text(0x201D)
         case "zwj": text(0x200D)
         case "zwnj": text(0x200C)
-        case "ltrmark": text(0x200E)
-        case "rtlmark": text(0x200F)
         case "pard":
             state.paragraph = []
         case _ where Self.paragraphWords.contains(word):
@@ -380,17 +476,20 @@ private struct RTFParser {
         fieldLinks[field] = Self.hyperlink(fieldInstructions[field])
     }
 
-    /// The URL of a `HYPERLINK "url"` instruction, verbatim, as AppKit reads it.
+    /// The link of a `HYPERLINK "url"` instruction as AppKit reads it, percent-encoded where a URL
+    /// may not hold what it holds, or nil when AppKit reads no link.
     static func hyperlink(_ instruction: [UInt16]) -> String? {
         let text = String(decoding: instruction, as: UTF16.self).trimmingCharacters(in: .whitespaces)
         guard text.uppercased().hasPrefix("HYPERLINK") else { return nil }
         let rest = text.dropFirst("HYPERLINK".count).trimmingCharacters(in: .whitespaces)
+        let url: String?
         if rest.hasPrefix("\"") {
             let body = rest.dropFirst()
-            guard let close = body.firstIndex(of: "\"") else { return String(body) }
-            return String(body[..<close])
+            url = body.firstIndex(of: "\"").map { String(body[..<$0]) } ?? String(body)
+        } else {
+            url = rest.split(separator: " ").first.map(String.init)
         }
-        return rest.split(separator: " ").first.map(String.init)
+        return url.flatMap(RichTextRuns.appReading(ofLink:))
     }
 
     // MARK: Text
@@ -399,8 +498,9 @@ private struct RTFParser {
 
     mutating func text(_ unit: UInt16) {
         switch state.destination {
-        case .text, .fieldResult:
-            let link = state.destination == .fieldResult ? state.field.flatMap { fieldLinks[$0] } : nil
+        case .text, .field, .fieldResult:
+            // Text in a field's group AppKit reads too, linked once the instruction has been read.
+            let link = state.destination == .text ? nil : state.field.flatMap { fieldLinks[$0] }
             let paragraph = paragraphKeys.count
             if let last = pieces.last, last.paragraph == paragraph, last.link == link,
                last.character.sameAttributes(as: state.character) {
@@ -431,13 +531,14 @@ private struct RTFParser {
             } else if readingName {
                 name.append(unit)
             }
-        case .skip, .field:
+        case .skip:
             break
         }
     }
 
     mutating func finishFont() {
         if let fontIndex {
+            tableFonts.insert(fontIndex)
             let name = String(decoding: fontName, as: UTF16.self).trimmingCharacters(in: .whitespaces)
             if !name.isEmpty { fonts[fontIndex] = name }
             if let fontCharset { charsets[fontIndex] = fontCharset }
@@ -458,7 +559,7 @@ private struct RTFParser {
         }
         struct Key: Equatable {
             var character: CharacterState
-            var font: String?
+            var font: String
             var color: RTFColorEntry?
             var link: String?
             var paragraph: [String]
@@ -470,7 +571,11 @@ private struct RTFParser {
         for piece in pieces {
             var character = piece.character
             character.unicodeSkip = 0
-            let font = (piece.character.font ?? defaultFont).map { fonts[$0] ?? "#\($0)" }
+            // AppKit's font: the table's, by its name, or Helvetica, its default, for text in no font
+            // or in one the table does not hold, whatever \deff names, and for a font with no name.
+            // AppKit gives a name the Mac lacks a font of its family, and a family's name its regular
+            // face, which the codec does not know, so it breaks runs there that AppKit does not.
+            let font = piece.character.font.flatMap { tableFonts.contains($0) ? fonts[$0] : nil } ?? "Helvetica"
             character.font = nil
             let colorIndex = piece.character.color
             character.color = 0
@@ -496,15 +601,25 @@ private struct RTFParser {
 
     // MARK: Tables of words
 
+    /// The destinations whose text the codec does not read: those AppKit skips, which a probe of
+    /// 24 Oct 2026 found by reading each word it knows before text, and others Word writes, which
+    /// AppKit skips after `\*` or which hold only destinations it skips.
     static let destinations: [String: Destination] = {
-        var table: [String: Destination] = ["fonttbl": .fontTable, "colortbl": .colorTable]
-        for word in ["stylesheet", "info", "pict", "object", "header", "headerl", "headerr", "headerf", "footer",
-                     "footerl", "footerr", "footerf", "listtable", "listoverridetable", "revtbl", "filetbl",
-                     "listtext", "pntext", "pntxta", "pntxtb", "footnote", "annotation", "atnid", "atnauthor",
-                     "xmlnstbl", "rsidtbl", "mmathPr", "themedata", "colorschememapping", "latentstyles",
-                     "datastore", "generator", "nonshppict", "shppict", "bkmkstart", "bkmkend", "template",
-                     "fldinst"] {
-            table[word] = word == "fldinst" ? .fieldInstruction : .skip
+        var table: [String: Destination] = ["fonttbl": .fontTable, "colortbl": .colorTable, "fldinst": .fieldInstruction]
+        for word in ["AppleHighlightTable", "AppleHilightClrSchTbl", "aftncn", "aftnsep", "aftnsepc", "annotation", "atnauthor",
+                     "atnicn", "atnid", "atnref", "atntime", "atrfend", "atrfstart", "author", "background", "bkmkend",
+                     "bkmkstart", "buptim", "category", "comment", "company", "copyright", "creatim", "datafield", "do",
+                     "doccomm", "falt", "file", "filetbl", "fonteb", "fontfile", "footer", "footerf", "footerl", "footerr",
+                     "footnote", "ftncn", "ftnsep", "ftnsepc", "glid", "header", "headerf", "headerl", "headerr", "keycode",
+                     "keywords", "listoverridetable", "listtable", "listtext", "manager", "nextcolor", "nextcolortbl",
+                     "nextfile", "objalias", "objclass", "objdata", "object", "objitem", "objname", "objsect", "objtopic",
+                     "operator", "pgnhn", "pict", "pn", "pnseclvl", "pntext", "pntexta", "pntextb", "printim", "result",
+                     "revtbl", "revtim", "rxe", "stylesheet", "subject", "tc", "template", "title", "txe", "verscomm",
+                     "version", "xe",
+                     // Word's, which AppKit reads as text unless \* comes before them, or holding only what it skips.
+                     "info", "pntxta", "pntxtb", "xmlnstbl", "rsidtbl", "mmathPr", "themedata", "colorschememapping",
+                     "latentstyles", "datastore", "generator", "nonshppict", "shppict"] {
+            table[word] = .skip
         }
         return table
     }()
@@ -514,18 +629,19 @@ private struct RTFParser {
         "ulthdashdd", "ulwave", "ulhwave", "ululdbwave", "ulldash", "ulthldash",
     ]
 
+    /// The character words AppKit reads as an attribute the app's spans do not hold, each of which
+    /// breaks its runs. A word AppKit does not know, such as Word's \highlight, breaks none.
     static let otherCharacterWords: Set<String> = [
-        "strike", "striked", "strikec", "cb", "highlight", "chcbpat", "up", "dn", "shad", "outl", "embo", "impr",
-        "scaps", "caps", "v", "expnd", "expndtw", "kerning", "charscalex", "obliqueness", "expansion", "strokewidth",
-        "strokec", "shadx", "shady", "shadr", "shadb", "shadc",
+        "strike", "striked", "strikec", "cb", "shad", "outl", "embo", "impr", "scaps", "caps", "v", "expnd",
+        "expndtw", "kerning", "obliqueness", "expansion", "strokewidth", "strokec", "shadx", "shady", "shadr", "shadc",
     ]
 
+    /// The paragraph words AppKit reads, each of which may break its runs.
     static let paragraphWords: Set<String> = [
-        "ql", "qc", "qr", "qj", "qd", "qn", "li", "ri", "fi", "lin", "rin", "sb", "sa", "sl", "slmult", "slleading",
-        "slmaximum", "slminimum", "tx", "tb", "tqr", "tqc", "tqdec", "tldot", "tlhyph", "tlul", "tlth", "tleq", "ls",
-        "ilvl", "pardeftab", "pardirnatural", "partightenfactor", "s", "keep", "keepn", "intbl", "itap", "widctlpar",
-        "nowidctlpar", "hyphpar", "rtlpar", "ltrpar", "noline", "pagebb", "sbauto", "saauto", "headerlevel",
-        "pardeftab", "parhyphenfactor", "nooverflow", "faauto", "aspalpha", "aspnum", "adjustright",
+        "ql", "qc", "qr", "qj", "li", "ri", "fi", "sb", "sa", "sl", "slmult", "slleading", "slmaximum", "slminimum",
+        "tx", "tb", "tqr", "tqc", "tqdec", "tldot", "tlhyph", "tlul", "tlth", "tleq", "ls", "ilvl", "pardeftab",
+        "pardirnatural", "partightenfactor", "s", "keep", "keepn", "intbl", "itap", "nowidctlpar", "hyphpar", "rtlpar",
+        "ltrpar", "noline", "pagebb", "parhyphenfactor",
     ]
 
     private func isLetter(_ byte: UInt8) -> Bool { (0x41...0x5A).contains(byte) || (0x61...0x7A).contains(byte) }
@@ -537,40 +653,5 @@ private struct RTFParser {
         case 0x61...0x66: Int(byte - 0x61 + 10)
         default: nil
         }
-    }
-}
-
-/// Windows-1252, the code page of `\ansi`, for `\'xx` and 8-bit text.
-enum RTFCodePage {
-    private static let high: [UInt16] = [
-        0x20AC, 0x0081, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008D, 0x017D, 0x008F,
-        0x0090, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, 0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x009D, 0x017E, 0x0178,
-    ]
-
-    static func cp1252(_ byte: UInt8) -> UInt16 {
-        (0x80...0x9F).contains(byte) ? high[Int(byte) - 0x80] : UInt16(byte)
-    }
-
-    /// The encoding of a font's `\fcharset` other than Windows-1252's, as AppKit reads its `\'xx`
-    /// bytes: the Windows code page of each charset, double-byte for Japanese, Korean and Chinese.
-    static func encoding(forCharset charset: Int?) -> String.Encoding? {
-        let windows: UInt32
-        switch charset {
-        case 128?: windows = 0x0420      // Shift-JIS, code page 932
-        case 129?: windows = 0x0422      // Hangul, code page 949
-        case 134?: windows = 0x0421      // GBK, code page 936
-        case 136?: windows = 0x0A03      // Big5
-        case 161?: windows = 0x0503      // Greek, 1253
-        case 162?: windows = 0x0504      // Turkish, 1254
-        case 163?: windows = 0x0508      // Vietnamese, 1258
-        case 177?: windows = 0x0505      // Hebrew, 1255
-        case 178?: windows = 0x0506      // Arabic, 1256
-        case 186?: windows = 0x0507      // Baltic, 1257
-        case 204?: windows = 0x0502      // Cyrillic, 1251
-        case 222?: windows = 0x041D      // Thai, 874
-        case 238?: windows = 0x0501      // Central European, 1250
-        default: return nil
-        }
-        return String.Encoding(rawValue: UInt(0x8000_0000 | windows))
     }
 }

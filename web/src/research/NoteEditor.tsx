@@ -66,6 +66,11 @@ interface Draft {
 
 const upper = (id: string) => id.toUpperCase();
 
+/** Whether runs carry any formatting, which an edit typed with formatting off drops. */
+function carriesFormatting(runs: readonly NoteRun[] | null | undefined): boolean {
+  return !!runs?.some((run) => run.bold || run.italic || run.underline || run.colorHex !== undefined || run.linkURL !== undefined);
+}
+
 /** The ids to save: those ticked that a list shows or the note already holds, in the order ticked. */
 function kept(ids: readonly string[], listed: readonly { id: string }[], held: readonly string[] = []): string[] {
   const keep = new Set([...listed.map((item) => upper(item.id)), ...held.map(upper)]);
@@ -243,9 +248,14 @@ export function NoteEditor({
 
   // A plain note has no formatting to keep: what the formatting editor cannot show is its line breaks.
   const unreadable = stored.data?.runs || stored.data?.formattingKept ? copy.noteEditor.unreadable : copy.noteEditor.unreadablePlain;
+  // A note with formatting, the server's or made here before the editor failed, loses it once its
+  // text is typed in the plain field, so the sentence says so, as the one for a note it cannot show.
+  const hasFormatting = stored.data?.formattingKept === true || carriesFormatting(stored.data?.runs) || carriesFormatting(draft?.body.runs);
   const notice =
     fallback === 'failed'
-      ? copy.noteEditor.editorFailed
+      ? hasFormatting
+        ? copy.noteEditor.editorFailedFormatted
+        : copy.noteEditor.editorFailed
       : fallback === 'unreadable'
         ? unreadable
         : stored.data?.formattingKept && !draft?.body.edited

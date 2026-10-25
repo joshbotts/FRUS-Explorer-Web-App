@@ -488,6 +488,43 @@ describe('the note editor', () => {
     expect(within(dialog).getByRole('textbox', { name: 'Research note body' })).toBeTruthy();
   });
 
+  it('says a note’s formatting is kept until its text is changed when the editor cannot be loaded for a note that has some', async () => {
+    const failedFormatted =
+      'The formatting editor could not be loaded, so this note is open as plain text. Its formatting is kept until its text is changed here.';
+    fake.fail = true;
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    server({ [notePath]: note({ id: noteId, bodyText: 'Text', runs: [{ text: 'Text', bold: true, italic: false, underline: false }] }) });
+    editNote();
+    let dialog = await screen.findByRole('dialog', { name: 'Edit Note' });
+    expect(await within(dialog).findByText(failedFormatted)).toBeTruthy();
+    cleanup();
+
+    // Formatting the server keeps but cannot give is formatting all the same.
+    server({ [notePath]: note({ id: noteId, bodyText: 'Mac text', formattingKept: true }) });
+    editNote();
+    dialog = await screen.findByRole('dialog', { name: 'Edit Note' });
+    expect(await within(dialog).findByText(failedFormatted)).toBeTruthy();
+    cleanup();
+
+    // Runs that carry none have none to lose.
+    server({ [notePath]: note({ id: noteId, bodyText: 'Plain', runs: [{ text: 'Plain', bold: false, italic: false, underline: false }] }) });
+    editNote();
+    dialog = await screen.findByRole('dialog', { name: 'Edit Note' });
+    expect(await within(dialog).findByText('The formatting editor could not be loaded, so this note is open as plain text.')).toBeTruthy();
+    cleanup();
+
+    // An editor that fails after formatting was made in it: the formatting made here is kept too.
+    fake.fail = false;
+    server();
+    newNote();
+    dialog = await screen.findByRole('dialog', { name: 'New Research Note' });
+    await userEvent.click(await within(dialog).findByRole('button', { name: 'Format' }));
+    fake.fail = true;
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Format' }));
+    expect(await within(dialog).findByText(failedFormatted)).toBeTruthy();
+    expect((within(dialog).getByRole('textbox', { name: 'Research note body' }) as HTMLTextAreaElement).value).toBe('Bold words');
+  });
+
   it('says a note’s formatting is kept when the server cannot give it, until its text is changed', async () => {
     server({ [notePath]: note({ id: noteId, bodyText: 'Mac text', formattingKept: true }) });
     editNote();

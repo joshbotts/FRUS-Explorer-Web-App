@@ -26,3 +26,4 @@ The self-hosted web edition of FRUS Explorer. `docs/PLAN.md` is the plan, `docs/
 - `scripts/swift run frus-parity check-golden` validates `fixtures/golden`; `frus-parity summarize <db>` writes check 2's summary of an index.
 - `scripts/swift run -c release frus-parity index [--tei <dir>] --metrics` indexes the fixtures, or a folder of volumes such as `fixtures/sample`'s, with FRUSCoreKit, and times it with its peak memory.
 - `tools/mac-golden` runs the Mac app's own code to make golden files. It builds only natively on a Mac with Xcode 27, never in CI: `scripts/make-golden` builds and runs it, and refreshes the golden files after a pin move.
+- `tools/rtf-code-pages/make` writes the rich-text codec's code page tables again, on a Mac with Docker, from the Mac's Foundation and the image's; `scripts/make-golden` then holds them to AppKit's reading.

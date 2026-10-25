@@ -574,6 +574,11 @@ export interface Summary {
   responseFormat: 'general' | 'structured' | 'unknown';
   wasChunked: boolean;
   authorship: SummaryAuthorship;
+  /**
+   * A collection's headnote draft, which the app keeps out of a document's own summaries: never in
+   * a document's list, so only a read by its id can give one.
+   */
+  isHeadnoteDraft: boolean;
   projectId: string | null;
   createdAt?: string | null;
   lastModified?: string | null;

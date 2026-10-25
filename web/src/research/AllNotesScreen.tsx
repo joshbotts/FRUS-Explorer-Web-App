@@ -32,6 +32,16 @@ function single(value: unknown): string | undefined {
   return undefined;
 }
 
+/**
+ * A filter's value as the list it is chosen from spells it, whatever the URL's case: none for one
+ * the list, once read, does not hold, a tag deleted since or an old bookmark's, which so filters
+ * nothing, as its select then shows; until the list is read, the value as it is.
+ */
+function listed(value: string | undefined, ids: readonly string[] | undefined): string | undefined {
+  if (value === undefined || ids === undefined) return value;
+  return ids.find((id) => id.toUpperCase() === value.toUpperCase());
+}
+
 /** Every field is returned, undefined when dropped, so the router's raw value cannot stand in for it. */
 export function validateNotesSearch(raw: Record<string, unknown>): NotesSearch {
   const q = single(raw.q);
@@ -88,8 +98,10 @@ export function AllNotesScreen() {
   const tagItems = tags.data?.items ?? [];
   const projectNames = new Map(projectItems.map((project) => [project.id.toUpperCase(), project.name]));
   const tagNames = new Map(tagItems.map((tag) => [tag.id.toUpperCase(), tag.name]));
+  const projectFilter = listed(search.project, projects.data && ['unfiled', ...projectItems.map((item) => item.id)]);
+  const tagFilter = listed(search.tag, tags.data && tagItems.map((item) => item.id));
   const all = notes.data?.items ?? [];
-  const shown = filterNotes(all, { project: search.project, tag: search.tag, query: text });
+  const shown = filterNotes(all, { project: projectFilter, tag: tagFilter, query: text });
 
   let body;
   if (me.isError) {
@@ -114,7 +126,7 @@ export function AllNotesScreen() {
         <div className="notes-filters" role="search">
           <label>
             {copy.allNotes.project}{' '}
-            <select value={search.project ?? ''} onChange={(event) => update({ project: event.target.value || undefined })}>
+            <select value={projectFilter ?? ''} onChange={(event) => update({ project: event.target.value || undefined })}>
               <option value="">{copy.allNotes.allProjects}</option>
               <option value="unfiled">{copy.allNotes.unfiled}</option>
               {projectItems.map((project) => (
@@ -126,7 +138,7 @@ export function AllNotesScreen() {
           </label>
           <label>
             {copy.allNotes.tag}{' '}
-            <select value={search.tag ?? ''} onChange={(event) => update({ tag: event.target.value || undefined })}>
+            <select value={tagFilter ?? ''} onChange={(event) => update({ tag: event.target.value || undefined })}>
               <option value="">{copy.allNotes.allTags}</option>
               {tagItems.map((tag) => (
                 <option key={tag.id} value={tag.id}>

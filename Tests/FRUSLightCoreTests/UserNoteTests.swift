@@ -3,12 +3,19 @@
 // latest first, as the Research rail and All Notes list them; a save that keeps the body byte for byte
 // unless it was edited, as the app's editor rewrites it only on an edit; ids that must name what the
 // user has unless the note already carries them, as the app's picker keeps a dangling one; and the
-// highlight a new note is written for, linked by its `noteId`, which a delete leaves.
+// highlight a new note is written for, linked by its `noteId`, which a delete leaves; a note's links
+// read for that note alone, and none read, nor any RTF, to rewrite a document's search text.
 
+import CSQLite
 @testable import FRUSLightCore
 import FRUSLightTestSupport
 import Foundation
 import Testing
+
+/// The rows each statement gave, by its SQL, for `UserNoteTests.rowsReturned`.
+private final class StatementRows {
+    var counts: [String: Int] = [:]
+}
 
 @Suite struct UserNoteTests {
     static let created = Date(timeIntervalSince1970: 1_792_800_000.1234)  // 2026-10-24T00:00:00.123Z, rounded
@@ -23,6 +30,28 @@ import Testing
                      user: String = "owner", at time: Date = created) throws -> NoteRecord {
         try store.createNote(in: document, bodyText: body, richText: richText, projectIds: projects, userTagIds: tags,
                              selectedSummaryIds: summaries, linkedHighlightId: highlight, for: user, at: time)
+    }
+
+    /// The rows each statement gave on the store's own connection while `body` ran, by its SQL, as
+    /// SQLite's trace reports them (`SQLITE_TRACE_ROW`): what a call read, whatever it kept of it.
+    static func rowsReturned(by store: SQLiteUserStore, during body: () throws -> Void) throws -> [String: Int] {
+        let rows = StatementRows()
+        let context = Unmanaged.passUnretained(rows).toOpaque()
+        try store.reading { db in
+            _ = sqlite3_trace_v2(db.handle, UInt32(SQLITE_TRACE_ROW), { _, context, statement, _ in
+                guard let context, let statement, let sql = sqlite3_sql(OpaquePointer(statement)) else { return 0 }
+                Unmanaged<StatementRows>.fromOpaque(context).takeUnretainedValue().counts[String(cString: sql), default: 0] += 1
+                return 0
+            }, context)
+        }
+        defer { _ = try? store.reading { sqlite3_trace_v2($0.handle, 0, nil, nil) } }
+        try withExtendedLifetime(rows) { try body() }
+        return rows.counts
+    }
+
+    /// How many rows of highlights the store's statements gave while `body` ran.
+    static func highlightRows(by store: SQLiteUserStore, during body: () throws -> Void) throws -> Int {
+        try rowsReturned(by: store, during: body).filter { $0.key.contains("FROM highlights") }.values.reduce(0, +)
     }
 
     @Test func aNoteKeepsWhatItIsGivenVerbatim() async throws {
@@ -237,6 +266,66 @@ import Testing
         try store.deleteHighlight(highlight.id, for: "owner")
         #expect(try store.note(note.id, of: "owner") != nil, "a highlight's delete keeps its note")
         #expect(throws: NoteStoreError.noteNotFound(second.id)) { try store.deleteNote(second.id, for: "owner") }
+    }
+
+    /// A note's links are read for that note alone, and a document's for its own notes, so that a
+    /// read or a save, under the store's one lock, gives no more rows the more highlights the user
+    /// has linked to other notes; rewriting a document's search text reads no link and no RTF.
+    /// All Notes still reads every link. (SQLite still visits each of the user's highlights to test
+    /// its `noteId`: an index on `(user_id, upper(note_id))` would spare that, and would be a
+    /// migration; one on `note_id` itself would not, since the queries read it in uppercase.)
+    @Test func aNotesLinksAreReadForThatNoteAlone() async throws {
+        let (store, rows, directory) = try await UserTagTests.open()
+        defer { withExtendedLifetime(directory) {} }
+        let first = try Self.make(store, "First.", richText: Self.rtf)
+        let second = try Self.make(store, "Second.", at: Self.later)
+        let elsewhere = try Self.make(store, "Elsewhere.", in: Self.d2)
+        // Two links to the first, an import's in lowercase among them, the older first; one to the
+        // second; twenty to the note on d2; and twenty highlights linked to nothing.
+        try rows.addHighlight("B2000000-0000-4000-8000-0000000000B2", noteId: first.id, createdAt: "2026-02-01T00:00:00.000Z")
+        try rows.addHighlight("b1000000-0000-4000-8000-0000000000b1", noteId: first.id.lowercased(), createdAt: "2026-01-01T00:00:00.000Z")
+        try rows.addHighlight("B3000000-0000-4000-8000-0000000000B3", noteId: second.id)
+        for index in 0..<20 {
+            try rows.addHighlight(String(format: "C%07d-0000-4000-8000-0000000000C1", index), documentId: "d2", noteId: elsewhere.id)
+            try rows.addHighlight(String(format: "D%07d-0000-4000-8000-0000000000D1", index))
+        }
+        let firstLinks = ["b1000000-0000-4000-8000-0000000000b1", "B2000000-0000-4000-8000-0000000000B2"]
+
+        var read: NoteRecord?
+        let readRows = try Self.highlightRows(by: store) { read = try store.note(first.id, of: "owner") }
+        #expect(readRows == 2 && read?.linkedHighlightIds == firstLinks, "the note's own two links")
+        var listed: [NoteRecord] = []
+        let listRows = try Self.highlightRows(by: store) { listed = try store.notes(of: Self.d1, for: "owner") }
+        #expect(listRows == 3 && listed.map(\.linkedHighlightIds) == [["B3000000-0000-4000-8000-0000000000B3"], firstLinks],
+                "its notes' three")
+        let allRows = try Self.highlightRows(by: store) { listed = try store.notes(for: "owner") }
+        #expect(allRows == 23 && listed.first { $0.id == elsewhere.id }?.linkedHighlightIds.count == 20, "every note's, for All Notes")
+
+        // The search text, from the bodies alone.
+        let refresh = try Self.rowsReturned(by: store) {
+            try store.writing { try SQLiteUserStore.refreshSearch(of: Self.d1, for: "owner", in: $0) }
+        }
+        let statements = refresh.keys.sorted()
+        #expect(!statements.contains { $0.contains("FROM highlights") }, "no link: \(statements)")
+        #expect(!statements.contains { $0.contains("rich_text") }, "no RTF: \(statements)")
+        #expect(try rows.userSearch().first?.noteText == "First.\n\nSecond.")
+        // A save, a new note linked to a highlight, and a delete each read their note's links alone,
+        // beside the highlight a new note links, and none for the search text.
+        var saved: NoteRecord?
+        let saveRows = try Self.highlightRows(by: store) {
+            saved = try store.updateNote(first.id, body: nil, projectIds: [], userTagIds: [], selectedSummaryIds: [], for: "owner",
+                                         at: Self.later)
+        }
+        #expect(saveRows == 2 && saved?.linkedHighlightIds == firstLinks && saved?.richText == Self.rtf)
+        var made: NoteRecord?
+        let makeRows = try Self.highlightRows(by: store) {
+            made = try Self.make(store, "Linked.", highlight: "D0000000-0000-4000-8000-0000000000D1", at: Self.later)
+        }
+        #expect(makeRows == 2 && made?.linkedHighlightIds == ["D0000000-0000-4000-8000-0000000000D1"],
+                "the highlight it links, and its one link")
+        let deleteRows = try Self.highlightRows(by: store) { try store.deleteNote(second.id, for: "owner") }
+        #expect(deleteRows == 1)
+        #expect(try rows.userSearch().first?.noteText == "First.\n\nLinked.")
     }
 
     @Test func eachUsersNotesAreTheirsAlone() async throws {

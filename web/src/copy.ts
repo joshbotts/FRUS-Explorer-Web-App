@@ -476,6 +476,9 @@ export const copy = {
     loading: 'Loading the note…',
     editorLoading: 'Loading the editor…',
     editorFailed: 'The formatting editor could not be loaded, so this note is open as plain text.',
+    /** The same for a note with formatting, which a change to its text here drops. */
+    editorFailedFormatted:
+      'The formatting editor could not be loaded, so this note is open as plain text. Its formatting is kept until its text is changed here.',
     unreadable:
       'This note could not be shown with its formatting, so it is open as plain text. Its formatting is kept until its text is changed here.',
     /** The same for a plain note, which has no formatting to keep: a CR or U+2029 among its line breaks. */

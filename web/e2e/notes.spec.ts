@@ -1,10 +1,13 @@
 // S15d's done-when (docs/PLAN.md), by pointer: Playwright writes a note from the selection bar's
 // Note with bold, a colour and a link, saves it, finds it in the Research rail's Notes and edits it
-// there, then filters for it and deletes it in All Notes; makes a highlight and a note for it from the
-// rail's Add Note to Highlight, which the highlight takes as its note; opens Note from a footnote's
-// bar, which offers it alone; and pastes styled HTML into the editor with no policy violation; on
-// Chromium with no axe violations. By keyboard, it is notes-keyboard.spec.ts. Against the image,
-// whose user store starts with no notes, and which each test leaves with none.
+// there, then filters for it and deletes it in All Notes; writes one with italic, underline and a
+// link, removes the link, edits it plain with the Formatting switch off, which drops its formatting,
+// and deletes it from the editor's own Delete; makes a highlight and a note for it from the rail's
+// Add Note to Highlight, which the highlight takes as its note; opens Note from a footnote's bar,
+// which offers it alone; and pastes styled HTML into the editor, with the formatting its styles give
+// and its line breaks, with no policy violation; on Chromium with no axe violations. By keyboard, it
+// is notes-keyboard.spec.ts. Against the image, whose user store starts with no notes, and which each
+// test leaves with none.
 import type { Locator, Page } from '@playwright/test';
 import { axeCheck } from './axe';
 import { d1Text } from './expected';
@@ -169,6 +172,102 @@ test('writes a formatted note from the bar’s Note, edits it in the rail, and f
   expect(await notes(page)).toEqual([]);
 });
 
+test('writes italic, underline and a link, removes the link, edits plain with Formatting off, and deletes from the editor, by pointer', async ({ page }) => {
+  await openDocument(page);
+  await page.getByRole('button', { name: 'Research' }).click();
+  const rail = page.getByRole('complementary', { name: 'Research' });
+  await rail.getByRole('button', { name: 'Add Note', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: 'New Research Note' });
+  const body = editor.getByRole('textbox', { name: 'Research note body' });
+  await expect(body).toBeFocused();
+  await settle(page);
+  await page.keyboard.type('Italic, underlined and linked.');
+  const formatting = editor.getByRole('toolbar', { name: 'Text formatting' });
+
+  await selectInLine(body, 0, 6);
+  await formatting.getByRole('button', { name: 'Italic' }).click();
+  await expect(formatting.getByRole('button', { name: 'Italic' })).toHaveAttribute('aria-pressed', 'true');
+  await selectInLine(body, 8, 10);
+  await formatting.getByRole('button', { name: 'Underline' }).click();
+  await expect(formatting.getByRole('button', { name: 'Underline' })).toHaveAttribute('aria-pressed', 'true');
+  await selectInLine(body, 23, 6);
+  await formatting.getByRole('button', { name: 'Link selected text to a URL' }).click();
+  const link = page.getByRole('dialog', { name: 'Link selection to URL' });
+  await link.getByRole('textbox').fill('https://history.state.gov/');
+  await link.getByRole('button', { name: 'Apply' }).click();
+  await expect(link).toHaveCount(0);
+  await expect(body.locator('em')).toHaveText('Italic');
+  await expect(body.locator('u')).toHaveText('underlined');
+  await axeCheck(page);
+  await editor.getByRole('button', { name: 'Save' }).click();
+  await expect(editor).toHaveCount(0);
+  const [made] = await notes(page);
+  expect((await noteWithRuns(page, made.id)).runs).toEqual([
+    run('Italic', { italic: true }),
+    run(', '),
+    run('underlined', { underline: true }),
+    run(' and '),
+    run('linked', { linkURL: 'https://history.state.gov/' }),
+    run('.'),
+  ]);
+
+  // Remove Link, from the dialog over the link, which starts with its address.
+  const row = rail.locator('#research-notes').getByRole('button', { name: /^Italic, underlined and linked\./ });
+  await row.click();
+  const edit = page.getByRole('dialog', { name: 'Edit Note' });
+  const editBody = edit.getByRole('textbox', { name: 'Research note body' });
+  await expect(editBody.locator('a[href="https://history.state.gov/"]')).toHaveText('linked');
+  await selectInLine(editBody, 23, 6);
+  await edit.getByRole('toolbar', { name: 'Text formatting' }).getByRole('button', { name: 'Link selected text to a URL' }).click();
+  await expect(link.getByRole('textbox')).toHaveValue('https://history.state.gov/');
+  await axeCheck(page);
+  await link.getByRole('button', { name: 'Remove Link' }).click();
+  await expect(link).toHaveCount(0);
+  await expect(editBody.locator('a')).toHaveCount(0);
+  await edit.getByRole('button', { name: 'Save' }).click();
+  await expect(edit).toHaveCount(0);
+  expect((await noteWithRuns(page, made.id)).runs).toEqual([
+    run('Italic', { italic: true }),
+    run(', '),
+    run('underlined', { underline: true }),
+    run(' and linked.'),
+  ]);
+
+  // With Formatting off, the note is plain text, and an edit to it drops the formatting, as the
+  // app's plain editor does.
+  await row.click();
+  const switchControl = edit.getByRole('switch', { name: 'Formatting' });
+  await expect(switchControl).toBeChecked();
+  await switchControl.click();
+  await expect(switchControl).not.toBeChecked();
+  const plain = edit.locator('textarea');
+  await expect(plain).toHaveAccessibleName('Research note body');
+  await expect(plain).toHaveValue('Italic, underlined and linked.');
+  await expect(edit.getByRole('toolbar', { name: 'Text formatting' })).toHaveCount(0);
+  await plain.click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type(' Plain now.');
+  await axeCheck(page);
+  await edit.getByRole('button', { name: 'Save' }).click();
+  await expect(edit).toHaveCount(0);
+  const plainNote = await noteWithRuns(page, made.id);
+  expect([plainNote.bodyText, plainNote.runs, plainNote.formattingKept]).toEqual(['Italic, underlined and linked. Plain now.', null, false]);
+
+  // The switch on again, the note opens formatted, with nothing to format; the editor's Delete
+  // deletes it at once, as the app's editor does.
+  await row.click();
+  await expect(plain).toBeVisible();
+  await switchControl.click();
+  await expect(switchControl).toBeChecked();
+  await expect(editBody).toHaveText('Italic, underlined and linked. Plain now.');
+  await expect(editBody.locator('em, u, strong, a')).toHaveCount(0);
+  await axeCheck(page);
+  await edit.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(edit).toHaveCount(0);
+  expect(await notes(page)).toEqual([]);
+  await expect(rail.locator('#research-notes').getByRole('button', { name: /^Italic, underlined/ })).toHaveCount(0);
+});
+
 test('makes a note for a highlight from the rail’s Add Note to Highlight, which the highlight takes as its note', async ({ page }) => {
   await openDocument(page);
   await page.getByRole('button', { name: 'Research' }).click();
@@ -220,25 +319,30 @@ test('a footnote’s selection offers Note alone, which opens a new note on the 
   expect(await notes(page)).toEqual([]);
 });
 
-test('pastes HTML from elsewhere with its bold and links, and none of its styles, which the page’s policy refuses', async ({ page }) => {
+test('pastes HTML from elsewhere with its bold, italic, underline, links and lines, and none of its styles, which the page’s policy refuses', async ({ page }) => {
   await openDocument(page);
   await page.getByRole('button', { name: 'Research' }).click();
   await page.getByRole('complementary', { name: 'Research' }).getByRole('button', { name: 'Add Note', exact: true }).click();
   const editor = page.getByRole('dialog', { name: 'New Research Note' });
   const body = editor.getByRole('textbox', { name: 'Research note body' });
   await expect(body).toBeFocused();
+  // Google Docs' copy: its wrapper, a <b> that is not bold, and the formatting in its spans' styles;
+  // a line broken by a <br>, as the reader's own lines are; and the <br> Chrome adds where a copy ends
+  // at a paragraph's end, which makes no line.
   const html =
-    '<style>b { color: red }</style><b style="font-weight:normal;" id="docs-internal-guid-1"><p><span style="color:#ff0000;font-size:20pt">Red</span> <strong style="color:blue">bold</strong> <a href="https://history.state.gov/" style="color:green">link</a></p></b>';
+    '<style>b { color: red }</style><b style="font-weight:normal;" id="docs-internal-guid-1"><p><span style="color:#ff0000;font-size:20pt">Red</span> <strong style="color:blue">bold</strong> <a href="https://history.state.gov/" style="color:green">link</a><br>\n<span style="font-size:11pt;font-weight:700">Key</span> <span style="font-style:italic;text-decoration:underline">point</span></p></b><br class="Apple-interchange-newline">';
   await body.evaluate((element, pasted) => {
     const data = new DataTransfer();
     data.setData('text/html', pasted);
-    data.setData('text/plain', 'Red bold link');
+    data.setData('text/plain', 'Red bold link\nKey point');
     element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
   }, html);
-  await expect(body).toHaveText('Red bold link');
-  await expect(body.locator('strong')).toHaveText('bold');
+  await expect(body.locator('p')).toHaveText(['Red bold link', 'Key point']);
+  await expect(body.locator('strong')).toHaveText(['bold', 'Key']);
+  await expect(body.locator('em')).toHaveText('point');
+  await expect(body.locator('u')).toHaveText('point');
   await expect(body.locator('a[href="https://history.state.gov/"]')).toHaveText('link');
-  await expect(body.locator('[data-color]')).toHaveCount(0);
+  await expect(body.locator('[data-color], [data-pasted-style], [style]:not(span[data-color])')).toHaveCount(0);
   await axeCheck(page);
   // Escape in the text is the editor's Discard, as the app's sheet takes it.
   await body.press('Escape');

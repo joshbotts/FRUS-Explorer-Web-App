@@ -44,6 +44,7 @@ export function summary(fields: Partial<Summary> & Pick<Summary, 'id'>): Summary
     responseFormat: 'general',
     wasChunked: false,
     authorship: 'userWritten',
+    isHeadnoteDraft: false,
     projectId: null,
     createdAt: '2026-10-24T09:00:00.000Z',
     lastModified: '2026-10-24T09:00:00.000Z',

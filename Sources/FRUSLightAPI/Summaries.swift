@@ -9,8 +9,7 @@ import FRUSLightCore
 import Foundation
 import Hummingbird
 
-/// One of a document's summaries, with the fields of the Mac's export (`GeneratedSummaryExport`) but
-/// the draft flag, which a list never shows.
+/// One of a document's summaries, with the fields of the Mac's export (`GeneratedSummaryExport`).
 public struct Summary: Codable, Equatable, Sendable, ResponseEncodable {
     public var id: String
     public var volumeId: String
@@ -28,6 +27,9 @@ public struct Summary: Codable, Equatable, Sendable, ResponseEncodable {
     /// `SummaryAuthorship`'s raw value; a summary with none is `aiGenerated`, as every reader in the
     /// app takes it.
     public var authorship: String
+    /// A collection's headnote draft, which the app keeps out of the document's own summaries: never
+    /// in a document's list, and given by its id, so that a client knows it was given one.
+    public var isHeadnoteDraft: Bool
     public var projectId: String?
     public var createdAt: String?
     public var lastModified: String?
@@ -44,6 +46,7 @@ public struct Summary: Codable, Equatable, Sendable, ResponseEncodable {
         responseFormat = Self.format(record.responseFormat)
         wasChunked = record.wasChunked
         authorship = (record.authorship.flatMap(SummaryAuthorship.init(rawValue:)) ?? .aiGenerated).rawValue
+        isHeadnoteDraft = record.isHeadnoteDraft
         projectId = record.projectId.map(NoteRoutes.wire)
         createdAt = record.createdAt.map(UserStoreDate.text)
         lastModified = record.lastModified.map(UserStoreDate.text)
@@ -78,6 +81,7 @@ public struct Summary: Codable, Equatable, Sendable, ResponseEncodable {
         try container.encode(responseFormat, forKey: .responseFormat)
         try container.encode(wasChunked, forKey: .wasChunked)
         try container.encode(authorship, forKey: .authorship)
+        try container.encode(isHeadnoteDraft, forKey: .isHeadnoteDraft)
         try container.encode(projectId, forKey: .projectId)
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(lastModified, forKey: .lastModified)
@@ -128,6 +132,7 @@ enum SummaryRoutes {
             let location = context.basePath.prefixing("/api/v1/me/summaries/\(response.id)")
             return EditedResponse(status: .created, headers: [.location: location], response: response)
         }
+        // Any of the user's summaries by its id, a headnote draft too, which says it is one.
         me.get("summaries/:summaryId") { request, context -> Summary in
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()

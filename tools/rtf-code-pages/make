@@ -1,0 +1,25 @@
+#!/bin/bash
+# FRUS Explorer Light: writes Sources/FRUSRichText/RTFCodePageTables.swift again (S15d), on a Mac
+# with Xcode and Docker. It dumps every byte and pair of the codec's code pages with the Mac's
+# Foundation, which AppKit's RTF reader matched entry for entry, and with swift:6.4-noble's, which
+# the codec calls on Linux, and generates the tables from both. Run it when the server image's
+# Swift changes and RichTextGoldenTests names a code page, then scripts/make-golden, which holds
+# the tables to AppKit's reading; review the diff, and commit it.
+set -euo pipefail
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)
+cd "$root"
+tools=tools/rtf-code-pages
+# The container sees the repository at /src, so the Linux dump goes under .build/linux, which git ignores.
+work=.build/linux/rtf-code-pages
+mkdir -p "$work"
+mac=$(mktemp -d) || exit 1
+trap 'rm -rf "$mac"' EXIT
+
+xcrun swiftc -O -o "$mac/dump" "$tools/dump.swift"
+"$mac/dump" "$mac/dump-mac.txt"
+scripts/swift --exec swiftc -O -o "$work/dump" "$tools/dump.swift"
+scripts/swift --exec "$work/dump" "$work/dump-linux.txt"
+xcrun swiftc -O -o "$mac/generate" "$tools/generate.swift"
+"$mac/generate" "$mac/dump-mac.txt" "$work/dump-linux.txt" Sources/FRUSRichText/RTFCodePageTables.swift
+git status --short -- Sources/FRUSRichText/RTFCodePageTables.swift

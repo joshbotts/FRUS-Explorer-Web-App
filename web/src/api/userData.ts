@@ -295,21 +295,10 @@ export function documentSummariesQuery(volumeId: string, documentId: string) {
   });
 }
 
-/** One summary, as a document's list gives it. */
-export function summaryQuery(id: string) {
-  return queryOptions({
-    queryKey: ['summary', id],
-    queryFn: ({ signal }) => getJSON<Summary>(`/api/v1/me/summaries/${segment(id)}`, undefined, signal),
-    staleTime: 60_000,
-    retry: false,
-  });
-}
-
 /** Whether the server has no such summary: deleted elsewhere. */
 const summaryGone = (error: unknown) => error instanceof ApiError && error.code === 'SUMMARY_NOT_FOUND';
 
 function summariesChanged(client: QueryClient, volumeId: string, documentId: string) {
-  void client.invalidateQueries({ queryKey: ['summary'] });
   return client.invalidateQueries({ queryKey: documentSummariesQuery(volumeId, documentId).queryKey });
 }
 

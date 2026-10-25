@@ -51,11 +51,15 @@ export const lineBreak = /\r\n|[\n\r\u{0085}\u{2029}]/u;
 /**
  * Text as a formatted edit sends it: a CRLF, a CR, U+0085 and U+2029 are each the app's "\n", and
  * any other control character but a tab is a space, as the server refuses them in runs (DEL with
- * them). U+2028, the Mac's line break inside a paragraph, is kept.
+ * them); and U+FFFD goes, as the app's RTF reader drops it, so that a note's text is what the Mac
+ * reads back. U+2028, the Mac's line break inside a paragraph, is kept.
  */
 export function cleanText(text: string): string {
   // Every control character (Unicode's Cc) but a tab and a line break.
-  return text.replace(/\r\n|[\r\u{0085}\u{2029}]/gu, '\n').replace(/[^\P{Cc}\t\n]/gu, ' ');
+  return text
+    .replace(/\r\n|[\r\u{0085}\u{2029}]/gu, '\n')
+    .replace(/[^\P{Cc}\t\n]/gu, ' ')
+    .replace(/\u{FFFD}/gu, '');
 }
 
 /** The note's plain text: its runs' texts, concatenated. */

@@ -105,6 +105,31 @@ describe('All Notes', () => {
     expect(screen.getByRole('status').textContent).toBe('Showing 0 of 3 notes');
   });
 
+  it('reads a filter the URL names in another case as its list’s, and one the list does not hold as none, as its select shows', async () => {
+    server();
+    renderAt(`/research/notes?tag=${berlin.id.toLowerCase()}&project=${project.id.toLowerCase()}`);
+    await screen.findByRole('list', { name: 'All Notes' });
+    await waitFor(() => expect((screen.getByRole('combobox', { name: 'Tag' }) as HTMLSelectElement).value).toBe(berlin.id));
+    expect((screen.getByRole('combobox', { name: 'Project' }) as HTMLSelectElement).value).toBe(project.id);
+    expect(shown().map((row) => row[0])).toEqual([expect.stringMatching(/^Kennedy/)]);
+    expect(screen.getByRole('status').textContent).toBe('Showing 1 of 3 notes');
+    cleanup();
+    server();
+    renderAt('/research/notes?project=UNFILED');
+    await waitFor(() => expect((screen.getByRole('combobox', { name: 'Project' }) as HTMLSelectElement).value).toBe('unfiled'));
+    expect(shown().map((row) => row[1])).toEqual(['frus1969-76v01 / d42']);
+    cleanup();
+
+    // A tag deleted since, and a project gone: the selects say All, and so do the rows.
+    server();
+    renderAt('/research/notes?tag=D0000000-0000-4000-8000-000000000000&project=GONE0000-0000-4000-8000-000000000000');
+    await screen.findByRole('list', { name: 'All Notes' });
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('3 notes'));
+    expect(shown()).toHaveLength(3);
+    expect((screen.getByRole('combobox', { name: 'Tag' }) as HTMLSelectElement).value).toBe('');
+    expect((screen.getByRole('combobox', { name: 'Project' }) as HTMLSelectElement).value).toBe('');
+  });
+
   it('says there are no notes yet in the app’s words', async () => {
     server({}, []);
     renderAt('/research/notes');

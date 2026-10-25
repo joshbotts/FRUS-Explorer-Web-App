@@ -129,6 +129,8 @@ describe('cleanText', () => {
     expect(cleanText('a\r\nb\rc\u{0085}d\u{2029}e')).toBe('a\nb\nc\nd\ne');
     expect(cleanText('\u{0000}\u{0007}\u{001F}\u{007F}\u{0090}')).toBe('     ');
     expect(cleanText('\tx\u{2028}y')).toBe('\tx\u{2028}y');
+    // U+FFFD goes, as the app's RTF reader drops it, which the server's rules for runs follow.
+    expect(cleanText('a\u{FFFD}b')).toBe('ab');
   });
 });
 

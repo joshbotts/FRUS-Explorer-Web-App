@@ -182,6 +182,65 @@ import Testing
         #expect(GoldenValidation.indexSummaryProblems(failing) == ["index-summary.json: frus_documents.docsize_orphans: is 2, expected 0"])
     }
 
+    @Test func richTextIntegrityFindsEachProblem() throws {
+        let directory = try TemporaryDirectory()
+        try withExtendedLifetime(directory) {
+            let root = directory.url
+            let read = root.appendingPathComponent(RichTextGolden.readFolder)
+            try FileManager.default.createDirectory(at: read, withIntermediateDirectories: true)
+            for name in ["a", "b"] { try Data("{\\rtf1 \(name)}".utf8).write(to: read.appendingPathComponent("\(name).rtf")) }
+            try FileManager.default.createDirectory(at: root.appendingPathComponent("fixtures/rich-text/web"), withIntermediateDirectories: true)
+            try GoldenJSON.write(RichTextWebCases(cases: [RichTextWebCase(id: "w1", runs: [RichTextSpan(text: "1")]),
+                                                          RichTextWebCase(id: "w2", runs: [RichTextSpan(text: "2")])]),
+                                 to: root.appendingPathComponent(RichTextWebCases.path))
+            func item(_ id: String, _ kind: RichTextCase.Kind, source: String? = nil, rtf: String? = nil, text: String = "x",
+                      rewritten: Bool = true) -> RichTextCase {
+                RichTextCase(id: id, kind: kind, source: source, rtf: rtf, text: text, runs: [RichTextSpan(text: text)],
+                             paragraphs: [[RichTextSpan(text: text)]],
+                             rewritten: rewritten ? RichTextRewrite(rtf: "{\\rtf1 \(text)}", runs: [RichTextSpan(text: text)]) : nil)
+            }
+            let sources = ["a", "b"].map { "\(RichTextGolden.readFolder)/\($0).rtf" } + ["w1", "w2"].map(RichTextWebCases.rtfPath)
+            var provenance = Self.provenance
+            for source in sources { provenance.inputs[source] = "recorded" }
+            let golden = RichTextGolden(
+                provenance: provenance, configuration: "tests", appearance: RichTextGolden.appearance,
+                cases: [item("plain", .written, rtf: "{\\rtf1 x}"), item("read-a", .read, source: sources[0]),
+                        item("read-b", .read, source: sources[1]), item("web-w1", .web, source: sources[2], rewritten: false),
+                        item("web-w2", .web, source: sources[3], rewritten: false)],
+                catalogColors: [CatalogColor(name: "textColor", colorHex: nil)], codePages: GoldenRepository.codePages)
+            #expect(GoldenValidation.richTextProblems(golden, root: root) == [])
+
+            var damaged = golden
+            damaged.appearance = "NSAppearanceNameDarkAqua"
+            damaged.cases[1].rtf = "{\\rtf1 x}"
+            damaged.cases.swapAt(3, 4)
+            var short = item("short-runs", .written, rtf: "{\\rtf1 xy}", text: "x")
+            short.text = "xy"
+            var split = item("bad-paragraphs", .written, rtf: "{\\rtf1 x}")
+            split.paragraphs = []
+            damaged.cases += [item("plain", .written, rtf: "{\\rtf1 x}"), item("no-rewrite", .written, rtf: "{\\rtf1 x}", rewritten: false),
+                              short, split]
+            damaged.provenance.inputs[sources[1]] = nil
+            damaged.catalogColors.append(CatalogColor(name: "textColor", colorHex: nil))
+            damaged.codePages.removeLast()
+            try Data("{\\rtf1 c}".utf8).write(to: read.appendingPathComponent("c.rtf"))
+            let file = GoldenFile.richText.rawValue
+            #expect(GoldenValidation.richTextProblems(damaged, root: root) == [
+                "\(file): it was read under NSAppearanceNameDarkAqua, not NSAppearanceNameAqua",
+                "\(file): read-a is a read case with the wrong RTF or source",
+                "\(file): read-b reads \(sources[1]), which it does not record",
+                "\(file): plain is used twice",
+                "\(file): no-rewrite is a written case without the codec's rewrite",
+                "\(file): short-runs's runs do not hold its text",
+                "\(file): bad-paragraphs's runs, split as CollectionProse splits them, are not its paragraphs",
+                "\(file): its read cases are \(sources[0]), \(sources[1]), not the files of \(RichTextGolden.readFolder)",
+                "\(file): its web cases are not those of \(RichTextWebCases.path), in order",
+                "\(file): its catalog colours are missing or named twice",
+                "\(file): its code pages are not those of RichTextCodePages, in order, each with a SHA-256",
+            ])
+        }
+    }
+
     // MARK: - Required inputs
 
     /// Each golden file records every input it depends on; without one it could not go stale.
@@ -270,6 +329,10 @@ struct GoldenRepository {
     let layout: RepositoryLayout
 
     static let queries = [ParityQuery(id: "q001", rule: "R01", query: "treaty"), ParityQuery(id: "q002", rule: "R01", query: "canal")]
+    /// A reading of every code page, of no text.
+    static let codePages = RichTextCodePages.pages.map {
+        RichTextCodePageReading(name: $0.name, length: 0, sha256: ParityFormat.Digest.sha256(Data()))
+    }
     static let stamp = [
         "app_build": "49", "app_version": "0.2", "current_index_version": String(IndexCompatibility.supportedIndexVersion),
         "exported_at": "2026-10-03T15:14:19Z", "installed_index_version": String(IndexCompatibility.supportedIndexVersion),
@@ -345,7 +408,8 @@ struct GoldenRepository {
                                       runs: [RichTextSpan(text: "x")], paragraphs: [[RichTextSpan(text: "x")]],
                                       rewritten: RichTextRewrite(rtf: "{\\rtf1 x}", runs: [RichTextSpan(text: "x")]))]
             try GoldenJSON.write(RichTextGolden(provenance: provenance, configuration: "tests", appearance: RichTextGolden.appearance,
-                                                cases: cases, catalogColors: [CatalogColor(name: "textColor", colorHex: nil)]), to: url)
+                                                cases: cases, catalogColors: [CatalogColor(name: "textColor", colorHex: nil)],
+                                                codePages: Self.codePages), to: url)
         }
     }
 }

@@ -136,7 +136,7 @@ enum NoteFormatting {
         guard let reading = RTFReader.read(bytes), reading.text.utf16.elementsEqual(record.bodyText.utf16) else {
             return (nil, true)
         }
-        let runs = canonical(reading.runs)
+        let runs = RichTextRuns.canonical(reading.runs)
         // A link the writer could not write again, from RTF the Mac did not write, or a character a
         // note's runs may not hold: kept as bytes rather than offered to a save that would refuse it.
         guard RichTextRuns.problem(runs, bodyText: record.bodyText) == nil else { return (nil, true) }
@@ -149,40 +149,6 @@ enum NoteFormatting {
         return Set(reading.runs.compactMap(\.linkURL))
     }
 
-    /// Runs in canonical form: each line break formatted as the text before it, plain at the start;
-    /// neighbours of one formatting joined; none empty. The browser sends them so; the server makes
-    /// sure before it writes, so one text and formatting is always one RTF.
-    static func canonical(_ runs: [RichTextRun]) -> [RichTextRun] {
-        var pieces: [RichTextRun] = []
-        var before = RichTextRun(text: "")
-        for run in runs {
-            var segment = ""
-            for scalar in run.text.unicodeScalars {
-                guard scalar == "\n" else {
-                    segment.unicodeScalars.append(scalar)
-                    continue
-                }
-                if !segment.isEmpty {
-                    pieces.append(piece(segment, like: run))
-                    before = run
-                    segment = ""
-                }
-                pieces.append(piece("\n", like: before))
-            }
-            if !segment.isEmpty {
-                pieces.append(piece(segment, like: run))
-                before = run
-            }
-        }
-        return RichTextRuns.merged(pieces)
-    }
-
-    private static func piece(_ text: String, like run: RichTextRun) -> RichTextRun {
-        var piece = run
-        piece.text = text
-        return piece
-    }
-
     /// A body edit as the store keeps it. `runs` nil is a plain-mode edit, which keeps no RTF, as
     /// the app's `setPlainBody` keeps none; runs are a formatted-mode edit, which keeps the codec's
     /// RTF of them once they are held to the codec's rules and made canonical. A link the stored
@@ -190,8 +156,9 @@ enum NoteFormatting {
     /// back, as the app links any text. `stored` gives the note's links, and is asked only for a
     /// link a browser may not follow, since it reads the note's RTF, a long note's slowest step. A
     /// new note with no text keeps no RTF, as the app's editor stores none until something is
-    /// typed. The text may be `UserDataServices.noteTextLimit` long, so that a body a note is given
-    /// can be sent again formatted.
+    /// typed. The text may be `UserDataServices.noteTextLimit` long, a quarter of the route's body
+    /// limit, so that a text that long can be sent again formatted while its runs and escapes fit
+    /// in the rest (`UserDataServices.noteBodyLimit` says when they do not).
     static func body(_ text: String, runs: [RichTextRun]?, stored: () -> Set<String>, isNew: Bool) throws -> NoteBody {
         guard text.utf8.count <= UserDataServices.noteTextLimit else {
             throw NoteRoutes.invalidField(
@@ -214,7 +181,7 @@ enum NoteFormatting {
                 throw NoteRoutes.invalidField("runs", "linkURL \(url) is not http, https or mailto, which a new link must be.")
             }
         }
-        let canonical = canonical(runs)
+        let canonical = RichTextRuns.canonical(runs)
         if isNew, canonical.isEmpty { return NoteBody(text: text, richText: nil) }
         return NoteBody(text: text, richText: RTFWriter.write(canonical))
     }

@@ -10,6 +10,7 @@
 // changes one fails here until the web follows it. The server's mirrors of the app's model code are
 // NotesAndSummariesParityTests'.
 
+@testable import FRUSCoreKit
 import FRUSLightTestSupport
 import Foundation
 import Testing
@@ -144,7 +145,8 @@ import Testing
 
     /// The app's format strings, each a function in copy.ts that writes what the format writes: a
     /// `%lld` ungrouped, as `String(format:)` prints it, and a count's `%@` grouped where the app's
-    /// `CountCopy` groups it, in web/src/research/notesRules.ts.
+    /// `CountCopy` groups it, in web/src/research/notesRules.ts; and `CountCopy`'s rule itself, the
+    /// one form at exactly one and the number grouped, which the kit's code is run for.
     @Test func theAppsFormatsAreTheWebs() throws {
         let copy = try Self.read(Self.web, "copy.ts")
         let formats: [(file: String, key: String, value: String, block: String, web: String)] = [
@@ -167,6 +169,10 @@ import Testing
             #expect(try Self.block(format.block, of: copy).contains(Self.flattened(format.web)), "copy.\(format.block) holds \(format.web)")
         }
         #expect(try sources.app("Models/ResearchItemCounts.swift").contains("CountCopy.phrase(count,"))
+        // The values web/src/research/notesRules.test.ts expects of noteCount.
+        let english = Locale(identifier: "en_US")
+        #expect([1, 0, 1_204].map { CountCopy.phrase($0, one: "%@ note", many: "%@ notes", locale: english) }
+                == ["1 note", "0 notes", "1,204 notes"])
         Self.expect(try sources.web("research/notesRules.ts"), holds: [
             "const grouped = count.toLocaleString('en-US');",
             "return count === 1 ? copy.allNotes.noteOne(grouped) : copy.allNotes.noteMany(grouped);",
@@ -209,7 +215,11 @@ import Testing
             "return [`${note.volumeId} / ${note.documentId}`, ...named(note.projectIds, projectNames), ...named(note.userTagIds, tagNames)].join(' · ');",
             "(project === 'UNFILED' ? note.projectIds.length === 0 : note.projectIds.some((id) => id.toUpperCase() === project));",
             "const tagged = tag === undefined || note.userTagIds.some((id) => id.toUpperCase() === tag);",
-            "const query = (filter.query ?? '').replace(whitespaces, '').toLocaleLowerCase('en-US');",
+            // `localizedCaseInsensitiveContains` is a search without `.literal`, which takes a composed
+            // character and its decomposed sequence alike.
+            "const fold = (text: string) => text.normalize('NFC').toLocaleLowerCase('en-US');",
+            "const query = fold((filter.query ?? '').replace(whitespaces, ''));",
+            "const holds = (text: string) => fold(text).includes(query);",
             "const found = query === '' || holds(note.bodyText) || holds(note.volumeId) || holds(note.documentId);",
             "new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' })",
             "return shown < total ? copy.allNotes.showing(shown, noteCount(total)) : noteCount(total);",
@@ -221,10 +231,18 @@ import Testing
     /// both open until closed; a closed Summary previews its summary, trimmed, at 80 characters; at
     /// most the 20 newest, drafts left out, the newest first, the history control only for more than
     /// one, older first and disabled at the oldest; a note's text untrimmed, or Empty note, with the
-    /// time since it changed, now when it has none; and Add Note to Highlight while a highlight is
-    /// pending, which choosing it, or another document, ends.
+    /// time since it changed, now when it has none; Add Note to Highlight while a highlight is
+    /// pending, which choosing it, or another document, ends; and the order of the sections, Summary,
+    /// Notes then Tags, and of the Notes section's actions, Add Note to Highlight above Add Note.
     @Test func theRailsSummaryAndNotesAreTheApps() throws {
         let sources = Sources()
+        // The web's own order is NotesSection.test.tsx's and ReaderScreen.test.tsx's to check.
+        let rail = try sources.app("DocumentView/ResearchRailView.swift")
+        #expect(rail.contains("summaryAccordion Divider() notesAccordion Divider() tagsAccordion"),
+                "ResearchRailView.swift orders its sections Summary, Notes, Tags")
+        let pending = try #require(rail.range(of: "if let link = pendingHighlightLink {"))
+        let add = try #require(rail.range(of: #"String(localized: "panel.notes.add", defaultValue: "Add Note")"#))
+        #expect(pending.lowerBound < add.lowerBound, "ResearchRailView.swift offers Add Note to Highlight above Add Note")
         Self.expect(try sources.app("DocumentView/ResearchRailView.swift"), holds: [
             #"@AppStorage("frus.document.researchPanel.summary") private var summaryExpanded = true"#,
             #"@AppStorage("frus.document.researchPanel.notes") private var notesExpanded = true"#,

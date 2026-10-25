@@ -6,9 +6,10 @@ import Foundation
 import ParityFormat
 
 public enum RichTextParity {
-    /// Each web case's file, as the codec writes it.
+    /// Each web case's file: the RTF the server stores for its runs, those runs made canonical
+    /// and written by the codec.
     public static func webFixtures(_ cases: RichTextWebCases) -> [(path: String, bytes: [UInt8])] {
-        cases.cases.map { (RichTextWebCases.rtfPath($0.id), RTFWriter.write($0.runs.map(RichTextRun.init))) }
+        cases.cases.map { (RichTextWebCases.rtfPath($0.id), RTFWriter.write(RichTextRuns.canonical($0.runs.map(RichTextRun.init)))) }
     }
 
     /// Writes every web case's file under `root` and returns how many, after checking each case is

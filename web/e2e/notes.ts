@@ -35,10 +35,10 @@ export interface Summary {
   id: string;
   responseText: string;
   authorship: string;
+  isHeadnoteDraft: boolean;
   editable: boolean;
 }
 
-/** A run with no formatting but what is given. */
 /**
  * Lets the editor catch up with keys that come faster than a person types. ProseMirror reads a
  * selection made by keys on the browser's `selectionchange`, which can come after the next key, so
@@ -52,6 +52,7 @@ export async function settle(page: Page): Promise<void> {
   );
 }
 
+/** A run with no formatting but what is given. */
 export function run(text: string, format: Partial<Run> = {}): Run {
   return { text, bold: false, italic: false, underline: false, ...format };
 }

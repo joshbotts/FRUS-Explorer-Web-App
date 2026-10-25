@@ -301,6 +301,119 @@
       ]
     },
     {
+      "id": "link-non-ascii-text",
+      "runs": [
+        {
+          "bold": false,
+          "italic": false,
+          "text": "See ",
+          "underline": false
+        },
+        {
+          "bold": false,
+          "italic": false,
+          "linkURL": "https://example.com/",
+          "text": "café 中文 😀",
+          "underline": false
+        },
+        {
+          "bold": false,
+          "italic": false,
+          "text": " — après.",
+          "underline": false
+        }
+      ]
+    },
+    {
+      "id": "link-reencoded",
+      "runs": [
+        {
+          "bold": false,
+          "italic": false,
+          "text": "Links ",
+          "underline": false
+        },
+        {
+          "bold": false,
+          "italic": false,
+          "linkURL": "https://example.com/a|b^c`d",
+          "text": "one",
+          "underline": false
+        },
+        {
+          "bold": false,
+          "italic": false,
+          "text": " ",
+          "underline": false
+        },
+        {
+          "bold": false,
+          "italic": false,
+          "linkURL": "https://example.com/p[1]?q=a|b#f#g",
+          "text": "two",
+          "underline": false
+        },
+        {
+          "bold": false,
+          "italic": false,
+          "text": " ",
+          "underline": false
+        },
+        {
+          "bold": false,
+          "italic": false,
+          "linkURL": "https://example.com/100%",
+          "text": "three",
+          "underline": false
+        },
+        {
+          "bold": false,
+          "italic": false,
+          "text": " ",
+          "underline": false
+        },
+        {
+          "bold": false,
+          "italic": false,
+          "linkURL": "mailto:a@example.com?subject=a|b",
+          "text": "four",
+          "underline": false
+        },
+        {
+          "bold": false,
+          "italic": false,
+          "text": " ",
+          "underline": false
+        },
+        {
+          "bold": false,
+          "italic": false,
+          "linkURL": "https://[::1]/x|y",
+          "text": "five",
+          "underline": false
+        },
+        {
+          "bold": false,
+          "italic": false,
+          "text": " ",
+          "underline": false
+        },
+        {
+          "bold": false,
+          "italic": false,
+          "linkURL": "https://example.com/a<b>c",
+          "text": "six",
+          "underline": false
+        },
+        {
+          "bold": false,
+          "italic": false,
+          "text": ".",
+          "underline": false
+        }
+      ]
+    },
+    {
       "id": "color",
       "runs": [
         {

@@ -72,13 +72,15 @@ export interface NotesFilter {
  * The rows `AllNotesScreen` shows: those in the project, where Not in a project is a note with no
  * project id at all, so one whose only project is gone is in neither; carrying the tag; and holding
  * the search field's text, trimmed of spaces and tabs, in its text, its volume's id or its document's,
- * whatever the case.
+ * whatever the case, and an accent typed as one character or as a letter and a mark alike, as
+ * Foundation's search without `.literal` takes them.
  */
 export function filterNotes(notes: readonly NoteSummary[], filter: NotesFilter): NoteSummary[] {
   const project = filter.project?.toUpperCase();
   const tag = filter.tag?.toUpperCase();
-  const query = (filter.query ?? '').replace(whitespaces, '').toLocaleLowerCase('en-US');
-  const holds = (text: string) => text.toLocaleLowerCase('en-US').includes(query);
+  const fold = (text: string) => text.normalize('NFC').toLocaleLowerCase('en-US');
+  const query = fold((filter.query ?? '').replace(whitespaces, ''));
+  const holds = (text: string) => fold(text).includes(query);
   return notes.filter((note) => {
     const inProject =
       project === undefined ||

@@ -49,7 +49,7 @@ extension SQLiteUserStore {
     /// is deleted, then written again unless both texts are empty; an empty one is NULL, as the
     /// app's clear leaves its column.
     static func refreshSearch(of document: DocumentKey, for user: String, in db: SQLiteConnection) throws {
-        let notes = UserSearchText.noteText(try notes(of: document, for: user, in: db, ordered: false))
+        let notes = UserSearchText.noteText(try indexedNotes(of: document, for: user, in: db))
         let summary = UserSearchText.summaryText(try summaries(of: document, for: user, in: db))
         _ = try db.query("DELETE FROM user_search WHERE user_id = ? AND volume_id = ? AND document_id = ?",
                          [.text(user), .text(document.volumeId), .text(document.documentId)])
@@ -61,5 +61,17 @@ extension SQLiteUserStore {
         _ = try db.query(
             "INSERT INTO user_search (user_id, document_id, volume_id, summary_text, note_text) VALUES (?, ?, ?, ?, ?)",
             [.text(user), .text(document.documentId), .text(document.volumeId)] + columns)
+    }
+
+    /// A document's notes as far as `UserSearchText.noteText` reads them: each one's id, body and
+    /// creation time, and none of what a row of `user_search` does not hold, their RTF, lists and
+    /// highlights' links, which a save would otherwise read for every note of its document.
+    private static func indexedNotes(of document: DocumentKey, for user: String, in db: SQLiteConnection) throws -> [NoteRecord] {
+        try db.query("SELECT id, body_text, created_at FROM notes WHERE user_id = ? AND volume_id = ? AND document_id = ?",
+                     [.text(user), .text(document.volumeId), .text(document.documentId)]).map { row in
+            NoteRecord(id: row[0].text ?? "", volumeId: document.volumeId, documentId: document.documentId,
+                       bodyText: row[1].text ?? "", richText: nil, projectIds: [], userTagIds: [], selectedSummaryIds: [],
+                       createdAt: row[2].text.flatMap(UserStoreDate.date), lastModified: nil)
+        }
     }
 }

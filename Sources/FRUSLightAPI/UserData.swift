@@ -98,14 +98,20 @@ struct UserDataServices: Sendable {
 
     /// The largest body a request under /api/v1/me may carry.
     static let bodyLimit = 64 * 1_024
-    /// The largest body a new note or a note's save may carry: four times `noteTextLimit`, room for
-    /// the text twice, as `bodyText` and in its runs, with the escapes JSON gives it and each run's
-    /// formatting.
+    /// The largest body a new note or a note's save may carry, the web's own: four times
+    /// `noteTextLimit`, room for the longest text twice, as `bodyText` and in its runs, and 2 MiB
+    /// more for the escapes JSON gives it and each run's own fields, some 57 bytes a run beside its
+    /// text, so about 36,000 runs. It bounds what one request makes the server read, and does not
+    /// promise that every text `noteTextLimit` allows can be sent formatted: one near that length
+    /// whose formatting changes every few words, or that is full of what JSON escapes (quotation
+    /// marks, backslashes and line breaks, two bytes each, sent twice), is refused as
+    /// CONTENT_TOO_LARGE with its runs, as is a plain one mostly of control characters, which JSON
+    /// writes in six bytes each.
     static let noteBodyLimit = 4 * 1_024 * 1_024
     /// The longest text, in UTF-8, a new note or a save's body may be given: a quarter of
-    /// `noteBodyLimit`, so that a body the server accepts plain can be sent again formatted, as the
-    /// browser sends a GET's runs. The app sets no limit; a Mac note an import leaves longer keeps
-    /// its body until a shorter one is saved.
+    /// `noteBodyLimit`, so that a text of that length can be sent again formatted, as the browser
+    /// sends a GET's runs, while its runs and escapes fit in what is left. The app sets no limit; a
+    /// Mac note an import leaves longer keeps its body until a shorter one is saved.
     static let noteTextLimit = noteBodyLimit / 4
 }
 

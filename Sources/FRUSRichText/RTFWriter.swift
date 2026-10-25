@@ -11,9 +11,15 @@ public enum RTFWriter {
     /// `RichTextRuns.problem`; text the writer cannot hold is the caller's to refuse.
     public static func write(_ runs: [RichTextRun]) -> [UInt8] {
         let runs = RichTextRuns.merged(runs)
+        // Each colour in the order the runs first use it, and its \cf index: 2 is the catalog text
+        // colour, and the runs' own follow it.
         var colors: [String] = []
+        var indexes: [String: Int] = [:]
         for run in runs {
-            if let hex = run.colorHex, !colors.contains(hex) { colors.append(hex) }
+            if let hex = run.colorHex, indexes[hex] == nil {
+                indexes[hex] = colors.count + 3
+                colors.append(hex)
+            }
         }
         var out = "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2907\n"
         out += "\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n"
@@ -35,17 +41,22 @@ public enum RTFWriter {
         var index = 0
         while index < runs.count {
             guard let url = runs[index].linkURL else {
-                out += outside.change(to: Format(runs[index], colors)) + escaped(runs[index].text)
-                outside = Format(runs[index], colors)
+                let format = Format(runs[index], indexes)
+                out += outside.change(to: format) + escaped(runs[index].text)
+                outside = format
                 index += 1
                 continue
             }
-            // One field per stretch of runs with the same link, its formatting scoped to its group.
-            out += "{\\field{\\*\\fldinst{HYPERLINK \"\(url)\"}}{\\fldrslt "
+            // One field per stretch of runs with the same link, its formatting scoped to its group,
+            // the link as the app reads it back, so that the field holds what the app's reading of
+            // it gives. The text's \uc0 holds in the field's groups too, as AppKit reads RTF.
+            let link = RichTextRuns.appReading(ofLink: url) ?? url
+            out += "{\\field{\\*\\fldinst{HYPERLINK \"\(link)\"}}{\\fldrslt "
             var inside = outside
             while index < runs.count, runs[index].linkURL == url {
-                out += inside.change(to: Format(runs[index], colors)) + escaped(runs[index].text)
-                inside = Format(runs[index], colors)
+                let format = Format(runs[index], indexes)
+                out += inside.change(to: format) + escaped(runs[index].text)
+                inside = format
                 index += 1
             }
             out += "}}"
@@ -64,11 +75,11 @@ public enum RTFWriter {
 
         init() {}
 
-        init(_ run: RichTextRun, _ colors: [String]) {
+        init(_ run: RichTextRun, _ indexes: [String: Int]) {
             bold = run.bold
             italic = run.italic
             underline = run.underline
-            color = run.colorHex.flatMap { colors.firstIndex(of: $0) }.map { $0 + 3 } ?? 2
+            color = run.colorHex.flatMap { indexes[$0] } ?? 2
         }
 
         /// The control words that take this formatting to `next`, with their delimiter.

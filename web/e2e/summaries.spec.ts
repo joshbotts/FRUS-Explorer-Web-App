@@ -1,8 +1,9 @@
 // S15d's done-when (docs/PLAN.md) for summaries: Playwright writes two summaries of its own in the
 // Research rail's Summary section, the web's own, moves between them with the Mac's history control,
 // edits one, previews the one shown in the closed section's header, inserts one into a note from the
-// note editor's Generated Summaries, and deletes both, each after its question; on Chromium with no
-// axe violations. An imported or AI summary, its labels and its prompt's name, are the server's and
+// note editor's Generated Summaries and, with the note opened again, takes it out with Remove from
+// note, which leaves its text, and deletes both, each after its question; on Chromium with no axe
+// violations. An imported or AI summary, its labels and its prompt's name, are the server's and
 // Vitest's to test until S16c imports them. Against the image, whose user store starts with none,
 // and which the test leaves with none.
 import { axeCheck } from './axe';
@@ -36,11 +37,12 @@ test('writes, moves between, edits, inserts into a note and deletes the research
   }
   await expect(section.locator('.summary-label')).toHaveText('Yours');
   const [newest, oldest] = await summaries(page);
-  expect([newest.responseText, oldest.responseText, newest.authorship, newest.editable]).toEqual([
+  expect([newest.responseText, oldest.responseText, newest.authorship, newest.editable, newest.isHeadnoteDraft]).toEqual([
     'The second reading: an offer of talks.',
     'The first reading: a cordial opening.',
     'userWritten',
     true,
+    false,
   ]);
 
   // The Mac's history control: older first, the position, newer last.
@@ -85,6 +87,29 @@ test('writes, moves between, edits, inserts into a note and deletes the research
   await expect(editor).toHaveCount(0);
   const [made] = await notes(page);
   expect([made.bodyText, made.selectedSummaryIds]).toEqual(['The second reading: an offer of talks.', [newest.id]]);
+
+  // Opened again from the rail, Remove from note unticks the summary and leaves its text, as the
+  // app's does; Insert into note then adds it again after a blank line.
+  const row = rail.locator('#research-notes').getByRole('button', { name: /^The second reading/ });
+  await row.click();
+  const edit = page.getByRole('dialog', { name: 'Edit Note' });
+  const inserted = edit.getByRole('region', { name: 'Generated Summaries' }).getByRole('listitem').filter({ hasText: 'offer of talks' });
+  await inserted.getByRole('button', { name: 'Remove from note' }).click();
+  await expect(inserted.getByRole('button', { name: 'Insert into note' })).toBeVisible();
+  await expect(edit.getByRole('button', { name: 'Remove from note' })).toHaveCount(0);
+  await expect(edit.getByRole('textbox', { name: 'Research note body' })).toHaveText('The second reading: an offer of talks.');
+  await axeCheck(page);
+  await edit.getByRole('button', { name: 'Save' }).click();
+  await expect(edit).toHaveCount(0);
+  const [removed] = await notes(page);
+  expect([removed.bodyText, removed.selectedSummaryIds]).toEqual(['The second reading: an offer of talks.', []]);
+  await row.click();
+  await inserted.getByRole('button', { name: 'Insert into note' }).click();
+  await expect(inserted.getByRole('button', { name: 'Remove from note' })).toBeVisible();
+  await edit.getByRole('button', { name: 'Save' }).click();
+  await expect(edit).toHaveCount(0);
+  const [again] = await notes(page);
+  expect([again.bodyText, again.selectedSummaryIds]).toEqual(['The second reading: an offer of talks.\n\nThe second reading: an offer of talks.', [newest.id]]);
 
   // Delete… each, after its question, Cancel first.
   for (let left = 2; left > 0; left--) {

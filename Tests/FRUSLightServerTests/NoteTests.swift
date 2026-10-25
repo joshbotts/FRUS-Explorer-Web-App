@@ -153,7 +153,7 @@ struct NoteJSON: Encodable {
             let canonical = [RichTextRun(text: "\n"), RichTextRun(text: "Bold\n\n", bold: true), RichTextRun(text: "next!\n")]
             #expect(note.runs == canonical && note.bodyText == text)
             #expect(try fixture.rows.storedNote(note.id)?.richText == RTFWriter.write(canonical))
-            #expect(NoteFormatting.canonical(canonical) == canonical, "canonical runs are their own canonical form")
+            #expect(RichTextRuns.canonical(canonical) == canonical, "canonical runs are their own canonical form")
 
             let empty = try decode(Note.self, try await browser.send(.post, Self.d1, NoteJSON(bodyText: "", runs: .formatted([])).json))
             #expect(empty.runs == nil && !empty.formattingKept && empty.bodyText == "")
@@ -185,16 +185,22 @@ struct NoteJSON: Encodable {
         let unreadable = "D0000000-0000-4000-8000-00000000000D"
         try fixture.rows.addNote(unreadable, bodyText: "Not RTF.", richText: Array("Not RTF.".utf8))
         // RTF another writer made, which reads as the body but holds what a save could not send
-        // back: a link with a space, which Apple's writer would have escaped, and a control character.
-        let spaced = "E0000000-0000-4000-8000-00000000000E"
-        let spacedRTF = Array(#"{\rtf1\ansi A {\field{\*\fldinst{HYPERLINK "https://example.org/a b"}}{\fldrslt link}}.}"#.utf8)
-        try fixture.rows.addNote(spaced, bodyText: "A link.", richText: spacedRTF)
+        // back: a link longer than a link may be once AppKit has escaped it, and a control character.
+        // A link with a space is not one: the app reads it escaped, and so the codec offers it so.
+        let long = "E0000000-0000-4000-8000-00000000000E"
+        let longURL = "https://example.org/" + String(repeating: "|", count: 700)
+        let longRTF = Array(#"{\rtf1\ansi A {\field{\*\fldinst{HYPERLINK ""#.utf8) + Array(longURL.utf8) + Array(#""}}{\fldrslt link}}.}"#.utf8)
+        try fixture.rows.addNote(long, bodyText: "A link.", richText: longRTF)
         let control = "F0000000-0000-4000-8000-00000000000F"
         let controlRTF = Array(#"{\rtf1\ansi a\'0bb}"#.utf8)
         try fixture.rows.addNote(control, bodyText: "a\u{0B}b", richText: controlRTF)
-        #expect(RTFReader.read(spacedRTF)?.text == "A link." && RTFReader.read(controlRTF)?.text == "a\u{0B}b",
+        #expect(RTFReader.read(longRTF)?.text == "A link." && RTFReader.read(controlRTF)?.text == "a\u{0B}b",
                 "each reads as its body, so only the runs' rules keep it")
-        #expect(RTFReader.read(spacedRTF)?.runs.compactMap(\.linkURL) == ["https://example.org/a b"])
+        #expect(RTFReader.read(longRTF)?.runs.compactMap(\.linkURL).first.map { RichTextRuns.linkProblem($0) != nil } == true)
+        let spaced = "A1000000-0000-4000-8000-0000000000A1"
+        let spacedRTF = Array(#"{\rtf1\ansi A {\field{\*\fldinst{HYPERLINK "https://example.org/a b"}}{\fldrslt link}}.}"#.utf8)
+        try fixture.rows.addNote(spaced, bodyText: "A link.", richText: spacedRTF)
+        #expect(RTFReader.read(spacedRTF)?.runs.compactMap(\.linkURL) == ["https://example.org/a%20b"])
         try await fixture.app.test(.router) { client in
             let browser = Browser(client: client)
             let tag = try decode(UserTag.self, try await browser.send(.post, "/api/v1/me/tags", #"{"name": "Laos"}"#))
@@ -208,13 +214,19 @@ struct NoteJSON: Encodable {
             for (id, body, bytes) in [(separated, "one\u{2029}two", try Self.golden("paragraph-separator")),
                                       (returns, "one\r\ntwo\rthree", try Self.golden("carriage-returns")),
                                       (unreadable, "Not RTF.", Array("Not RTF.".utf8)),
-                                      (spaced, "A link.", spacedRTF), (control, "a\u{0B}b", controlRTF)] {
+                                      (long, "A link.", longRTF), (control, "a\u{0B}b", controlRTF)] {
                 let kept = try decode(Note.self, try await browser.get(Self.note(id)))
                 #expect(kept.runs == nil && kept.formattingKept && kept.bodyText == body, "\(id)")
                 let saved = try decode(Note.self, try await browser.send(.put, Self.note(id), NoteJSON.lists(tags: [tag.id]).json))
                 #expect(saved.formattingKept && saved.bodyText == body && saved.userTagIds == [tag.id])
                 #expect(try fixture.rows.storedNote(id)?.richText == bytes && fixture.rows.storedNote(id)?.bodyText == body)
             }
+            // A link with a space is offered as the app reads it, and a change of tags keeps its bytes.
+            let offered = try decode(Note.self, try await browser.get(Self.note(spaced)))
+            #expect(offered.runs == [RichTextRun(text: "A "), RichTextRun(text: "link", linkURL: "https://example.org/a%20b"), RichTextRun(text: ".")]
+                    && !offered.formattingKept)
+            _ = try await browser.send(.put, Self.note(spaced), NoteJSON.lists(tags: [tag.id]).json)
+            #expect(try fixture.rows.storedNote(spaced)?.richText == spacedRTF)
             // A GET's values sent back: the Mac note's runs, as a formatted edit, which writes the
             // codec's RTF; a kept note's body, as a plain one, which any text but a NUL may be.
             let resent = try decode(Note.self, try await browser.send(
@@ -431,8 +443,9 @@ struct NoteJSON: Encodable {
     }
 
     /// A note's text may be 1 MiB, in UTF-8, and a note's routes take a body of 4 MiB, so that a
-    /// body a note was given plain can be sent again formatted, its text twice, as a GET gives it;
-    /// the other routes keep 64 KiB.
+    /// text that long can be sent again formatted, twice in the body, as a GET gives it, while its
+    /// runs' own fields fit in the rest, some 36,000 runs; in many more, the body is refused whole,
+    /// its text within the limit or not. The other routes keep 64 KiB.
     @Test func aNotesTextMayBeOneMebibyte() async throws {
         let fixture = try await UserDataFixture()
         defer { withExtendedLifetime(fixture) {} }
@@ -463,6 +476,27 @@ struct NoteJSON: Encodable {
             let formatted = try await browser.send(.put, Self.note(note.id), NoteJSON(bodyText: longest, runs: .formatted(runs)).json)
             #expect(try formatted.status == .ok && decode(Note.self, formatted).runs == runs)
             #expect(try fixture.rows.storedNote(note.id)?.richText == RTFWriter.write(runs))
+            // In runs of a few words each, bold and plain by turns: some 36,000 of them fit, and in
+            // 65,536 their fields take the body past 4 MiB, so the save is refused, its text no
+            // longer than the one just saved, and the note is kept as it was.
+            let bytes = Array(longest.utf8)
+            func split(_ size: Int) -> [RichTextRun] {
+                stride(from: 0, to: bytes.count, by: size).enumerated().map { index, start in
+                    RichTextRun(text: String(decoding: bytes[start..<min(start + size, bytes.count)], as: UTF8.self),
+                                bold: index.isMultiple(of: 2))
+                }
+            }
+            let fitting = split(29)
+            let fittingJSON = NoteJSON(bodyText: longest, runs: .formatted(fitting)).json
+            #expect(fitting.count > 36_000 && fittingJSON.utf8.count <= limit)
+            let fits = try await browser.send(.put, Self.note(note.id), fittingJSON)
+            #expect(try fits.status == .ok && decode(Note.self, fits).runs == fitting)
+            let many = split(16)
+            let manyJSON = NoteJSON(bodyText: longest, runs: .formatted(many)).json
+            #expect(many.count == 65_536 && manyJSON.utf8.count > limit && RichTextRuns.text(many) == longest)
+            let tooMany = try await browser.send(.put, Self.note(note.id), manyJSON)
+            #expect(tooMany.status == .contentTooLarge && problemCode(tooMany) == "CONTENT_TOO_LARGE")
+            #expect(try fixture.rows.storedNote(note.id)?.richText == RTFWriter.write(fitting), "kept as it was")
             // A byte more is refused, new or saved, plain or formatted.
             let longer = words(textLimit + 1)
             for (method, path, json) in [(HTTPRequest.Method.post, Self.d1, NoteJSON(bodyText: longer).json),

@@ -226,8 +226,9 @@ public enum GoldenValidation {
     }
 
     /// The golden spans are whole: read under the light appearance; a case for every file of
-    /// `fixtures/rich-text/read` and every web case, each recording its file; ids used once; and
-    /// each case's runs holding its text and giving its paragraphs as the app splits them.
+    /// `fixtures/rich-text/read` and every web case, each recording its file; ids used once; each
+    /// case's runs holding its text and giving its paragraphs as the app splits them; and a reading
+    /// of every code page of `RichTextCodePages`, in order.
     public static func richTextProblems(_ golden: RichTextGolden, root: URL) -> [String] {
         let file = GoldenFile.richText.rawValue
         var problems: [String] = []
@@ -272,6 +273,10 @@ public enum GoldenValidation {
         let names = golden.catalogColors.map(\.name)
         if names.isEmpty || Set(names).count != names.count {
             problems.append("\(file): its catalog colours are missing or named twice")
+        }
+        if golden.codePages.map(\.name) != RichTextCodePages.pages.map(\.name)
+            || golden.codePages.contains(where: { $0.sha256.wholeMatch(of: /[0-9a-f]{64}/) == nil }) {
+            problems.append("\(file): its code pages are not those of RichTextCodePages, in order, each with a SHA-256")
         }
         return problems
     }

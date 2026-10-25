@@ -16,7 +16,8 @@ import { Text } from '@tiptap/extension-text';
 import { Underline } from '@tiptap/extension-underline';
 import { UndoRedo } from '@tiptap/extensions';
 import type { Mark as ProseMirrorMark } from '@tiptap/pm/model';
-import type { EditorState } from '@tiptap/pm/state';
+import { type EditorState, Plugin, PluginKey } from '@tiptap/pm/state';
+import { pasteProps } from './paste';
 import { followableLink, followableScheme } from './runs';
 
 /** The marks a toolbar button or key turns on or off. */
@@ -24,18 +25,35 @@ export type ToggledMark = 'bold' | 'italic' | 'underline';
 
 /**
  * The marks at the selection's start, as the app's `refreshSelectionState` reads them: the first
- * selected character's, or at a caret what typing would take.
+ * selected character's, or at a caret what typing would take. A selection that starts at a line's
+ * end, an empty line's included, starts with the line break, the app's "\n", which has the
+ * formatting of the text before it, as a note's runs give it (none at the start), its link included.
  */
 export function marksAtStart(state: EditorState): readonly ProseMirrorMark[] {
-  const { selection } = state;
+  const { selection, doc } = state;
   if (selection.empty) return state.storedMarks ?? selection.$from.marks();
   let found: readonly ProseMirrorMark[] | null = null;
-  state.doc.nodesBetween(selection.from, selection.to, (node) => {
-    if (found) return false;
-    if (node.isText) found = node.marks;
-    return !found;
+  doc.nodesBetween(selection.from, selection.to, (node, pos) => {
+    if (found || !node.isTextblock) return !found;
+    const start = pos + 1;
+    const end = start + node.content.size;
+    const at = Math.max(selection.from, start);
+    // The first selected character is in this line's text, or is the break at its end.
+    if (at < Math.min(selection.to, end)) found = node.childAfter(at - start).node?.marks ?? [];
+    else if (end < selection.to) found = marksBefore(state, end);
+    return false;
   });
   return found ?? selection.$from.marks();
+}
+
+/** The marks of the last text before `pos`, which a line break there has; none at the start. */
+function marksBefore(state: EditorState, pos: number): readonly ProseMirrorMark[] {
+  let marks: readonly ProseMirrorMark[] = [];
+  state.doc.nodesBetween(0, pos, (node) => {
+    if (node.isText) marks = node.marks;
+    return true;
+  });
+  return marks;
 }
 
 /** Whether the selection's start has `name`, as each button shows and each toggle reads. */
@@ -209,7 +227,20 @@ const NoteKeys = Extension.create({
   },
 });
 
-/** Every extension the editor runs: the schema's, undo and redo, and its own keys. */
+/**
+ * How the editor reads pasted markup, as paste.ts sets out: with the formatting a style gave its
+ * text, and a paragraph for each line the markup broke. The parser needs the editor's own schema,
+ * and each editor its own, which remembers what it marked until the paste is made.
+ */
+const NotePaste = Extension.create({
+  name: 'notePaste',
+
+  addProseMirrorPlugins() {
+    return [new Plugin({ key: new PluginKey('notePaste'), props: pasteProps(this.editor.schema) })];
+  },
+});
+
+/** Every extension the editor runs: the schema's, undo and redo, its own keys and its paste. */
 export function editorExtensions() {
-  return [...schemaExtensions(), UndoRedo, NoteKeys];
+  return [...schemaExtensions(), UndoRedo, NoteKeys, NotePaste];
 }
