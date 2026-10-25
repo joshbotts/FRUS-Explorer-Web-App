@@ -4,7 +4,7 @@ One entry per session, newest first.
 
 ## Session 16c: the import of a Mac JSON export
 
-25 October 2026 · branch `claude/s16c-json-import` · PR_LINK · upstream `503a730b`, unchanged
+25 October 2026 · branch `claude/s16c-json-import` · [#63](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/63) · upstream `503a730b`, unchanged
 
 Phase 2's row S16c, on the critical path: S16d, the export, S16e and S17d follow it. The Mac's JSON export comes into the server's research store whole, every type a file of format version 1 to 7 carries, each record under its Mac id, through `POST /api/v1/me/import` as a job, and Settings ▸ Data imports a file and shows its report. No upstream pull request, no pin move and no schema change: S14a's 23 tables hold it all.
 
