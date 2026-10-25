@@ -435,6 +435,97 @@ export interface DocumentCitation {
   styles: CitationStyle[];
 }
 
+/** A volume of the published catalogue, as `manifest.json` describes it (the kit's `VolumeManifestEntry`). */
+export interface VolumeManifestEntry {
+  volumeId: string;
+  filename: string;
+  subseries: string;
+  title: string;
+  dateRange: DateRange;
+  publicationDate?: string;
+  status: 'published' | 'partiallyPublished' | 'planned';
+  editors: string[];
+  generalEditor?: string;
+  sizeBytes: number;
+  tags: string[];
+}
+
+/** How the kit's matcher made a match, by the draft's names. */
+export type MatchStrategy =
+  | 'exactDocumentNumber'
+  | 'pageRange'
+  | 'sharedPage'
+  | 'superimposedDocumentNumber'
+  | 'titleFragmentMatch'
+  | 'manifestOnly'
+  | 'bestGuess';
+
+/** A candidate the kit's matcher gives, by the draft's `CitationMatch`. */
+export interface CitationLookupMatch {
+  /** Empty for a row that names a volume and no document. */
+  documentId: string;
+  volumeId: string;
+  rank: number;
+  matchStrategy: MatchStrategy;
+  /** The kit's label, which the app shows above the result. */
+  confidenceLabel: string;
+  correctionNote: string | null;
+  /** The volume is not one the served index holds. */
+  requiresDownload: boolean;
+  awaitingIndex: boolean;
+  volumeManifestEntry: VolumeManifestEntry | null;
+  sharedPageTotal: number | null;
+  volumeIsBestGuess: boolean;
+  isBestGuess: boolean;
+  bestGuessExplanation: string | null;
+  sharedPageDocuments: number | null;
+}
+
+export type CitationLookupMode = 'paste' | 'structured' | 'batch';
+
+/** The Parsed Fields, by the API's names. */
+export interface CitationFields {
+  subseries: string;
+  volumeNumber: string;
+  partNumber: string;
+  documentNumber: string;
+  pageNumber: string;
+}
+
+/** `GET /api/v1/citation-lookup/fields`: the kit's form, its fields and Look Up's gate. */
+export interface CitationLookupForm extends CitationFields {
+  mode: CitationLookupMode;
+  actionable: boolean;
+}
+
+export type BatchOutcome = 'resolved' | 'bestGuess' | 'ambiguous' | 'missing' | 'failed';
+
+/** A row of Batch's triage table. */
+export interface CitationBatchRow {
+  /** Its place in the paste, from 1. */
+  index: number;
+  /** The footnote's number as printed, or null. */
+  marker: string | null;
+  text: string;
+  outcome: BatchOutcome;
+  /** How many documents an ambiguous row may be. */
+  count: number | null;
+  /** Why a failed row could not be looked up. */
+  reason: string | null;
+  /** The kit's order for Needs work first. */
+  triageOrder: number;
+  /** The label a row shows in place of a count. */
+  loneCandidateLabel: string | null;
+  matches: CitationLookupMatch[];
+}
+
+/** `POST /api/v1/citation-lookup/batch`. */
+export interface CitationBatch {
+  /** The kit's summary of the rows. */
+  summary: string;
+  items: CitationBatchRow[];
+}
+
 /** `GET /api/v1/me`: who the server takes the browser to be, and the token its changes carry. */
 export interface Me {
   userId: string;

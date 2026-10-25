@@ -1,9 +1,14 @@
 // One function per endpoint the app calls, and the query options that cache them.
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import { servedPath } from './base';
-import { ApiError, getJSON } from './client';
+import { ApiError, getJSON, postForm } from './client';
 import { formEncode, type FormValue } from './form';
 import type {
+  CitationBatch,
+  CitationFields,
+  CitationLookupForm,
+  CitationLookupMatch,
+  CitationLookupMode,
   CitationStyleName,
   DocumentCitation,
   FacetSectionName,
@@ -255,6 +260,65 @@ export function citationQuery(volumeId: string, documentId: string, style: Citat
 /** A document's BibTeX or RIS record as a file to save, named as the Mac names its .bib file. */
 export function citationFileURL(volumeId: string, documentId: string, suffix: 'bib' | 'ris'): string {
   return `${servedPath(documentPath(volumeId, documentId))}/citation.${suffix}`;
+}
+
+/** What Citation Lookup's form holds for a request: its mode, the paste's text, and the fields given. */
+export interface CitationFormRequest {
+  mode: CitationLookupMode;
+  /** Paste Citation's and Batch's text; Structured Entry reads none. */
+  text?: string;
+  /** The fields given: in Paste Citation the reader's edits alone, which stand over what the text yields. */
+  fields?: Partial<CitationFields>;
+}
+
+function citationFormFields(request: CitationFormRequest): Record<string, FormValue> {
+  return { mode: request.mode, text: request.mode === 'structured' ? undefined : (request.text ?? ''), ...request.fields };
+}
+
+/**
+ * The kit's form for `request`: the Parsed Fields a paste yields with the reader's edits over them,
+ * and whether Look Up has anything to go on. The last answer stays while the next loads, so the
+ * fields and Look Up do not flicker as the text is typed. Posted, as every Citation Lookup request
+ * is, so Batch's block of notes outruns no proxy's limit on an address.
+ */
+export function citationFormQuery(request: CitationFormRequest) {
+  const fields = citationFormFields(request);
+  return queryOptions<CitationLookupForm, unknown, CitationLookupForm, unknown[]>({
+    queryKey: ['citationForm', fields],
+    queryFn: ({ signal }) => postForm<CitationLookupForm>('/api/v1/citation-lookup/fields', formEncode(fields), signal),
+    staleTime: Infinity,
+    placeholderData: keepPreviousData,
+    retry: retryServerFaults,
+  });
+}
+
+/**
+ * One lookup, Paste Citation's or Structured Entry's, as Look Up ran it. Its answer depends on the
+ * index, so readiness refetches it; it is kept for half an hour, so a document opened from it and
+ * Back find it as it was, as the app's window keeps its matches while the reader works through them.
+ */
+export function citationLookupQuery(request: CitationFormRequest | undefined) {
+  const fields = request ? citationFormFields(request) : null;
+  return queryOptions<CitationLookupMatch[], unknown, CitationLookupMatch[], unknown[]>({
+    queryKey: ['citationLookup', fields],
+    queryFn: ({ signal }) => postForm<CitationLookupMatch[]>('/api/v1/citation-lookup', formEncode(fields ?? {}), signal),
+    enabled: fields !== null,
+    staleTime: Infinity,
+    gcTime: 30 * 60_000,
+    retry: retryServerFaults,
+  });
+}
+
+/** Batch's table for a block of notes, as Look Up ran it, kept as a lookup is. */
+export function citationBatchQuery(text: string | undefined) {
+  return queryOptions<CitationBatch, unknown, CitationBatch, unknown[]>({
+    queryKey: ['citationBatch', text ?? null],
+    queryFn: ({ signal }) => postForm<CitationBatch>('/api/v1/citation-lookup/batch', formEncode({ text: text ?? '' }), signal),
+    enabled: text !== undefined,
+    staleTime: Infinity,
+    gcTime: 30 * 60_000,
+    retry: retryServerFaults,
+  });
 }
 
 /** Retries a network failure or a server fault twice; never a refusal, nor a 503 while importing. */
