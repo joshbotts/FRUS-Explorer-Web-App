@@ -2,6 +2,107 @@
 
 One entry per session, newest first.
 
+## Session 18a: collections render from values in FRUSCoreKit, upstream
+
+25–27 October 2026 · branch `claude/wonderful-dewdney-bda10e` · [#67](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/67) · upstream `503a730b`, unchanged; [FRUS-Explorer#1807](https://github.com/joshbotts/FRUS-Explorer/pull/1807), open
+
+This is phase 2's row S18a, the first of the six collection rows, and Mac check 13 verifies it. S18d to S18f bring collections to the web (their editor, their preview and their exports), with each export byte for byte the app's. For that, the kit has to render a collection from values, which this row does, and resolve one through a data source, which is S18b's.
+
+This session opened one pull request on `FRUS-Explorer`, from `claude/collections-render-from-values`. It is labelled `Mac`, its body says "Mac verification requested", and it is not merged. Under rule 4 the pull request changes shared files, and this repository changes only its records.
+
+It was begun on `v2` at `9fa4375d` on 25 October, and stopped before it opened when the usage limit stopped every session. On 27 October it was rebased twice:
+- **onto `41950692`, past #1792, #1793 and #1801.** #1793 clamps `CollectionProse.hex(r:g:b:)`, which this branch moves into the kit, so the clamp moved with it, and #1793's new sRGB test builds its prose item from spans;
+- **onto `391b3461`, when S17b's #1805 and S17a's #1806 merged during the runs.**
+  - #1805 moved the provenance vocabulary byte for byte as this branch did, so the branch's commit for it fell away.
+  - The `Models/Collection.swift` blocks were re-pointed again, the copy scan's baseline combined, and the records combined.
+  - The branch's version line in `IndexingPipeline.swift` is 4.48, after #1806's 4.47.
+
+Every run was taken again at each head, and every figure below is at the last.
+
+**#1807, in six commits of moves, a commit of tests and a records commit:**
+- **The export's payloads, options, presets and naming,** made public in `FRUSCoreKit/Collections/CollectionExporter.swift`, with `CollectionEditorNaming` and `CollectionGeneratedBlockType`.
+  - What reads SwiftData, Apple Intelligence, the app's rendering of the method appendix, or AppKit and UIKit stays in the app's new `CollectionExporter+App.swift`, together with `ExportFormat` and the RTF decoder.
+  - Two shapes change, but neither changes what an export prints:
+    - a prose item carries the spans every format renders (`[[ProseFormattedSpan]]`). The content resolver decodes them from the RTF, the call each exporter used to make, and the span rules `CollectionProse.append` and `hex` are public;
+    - `CollectionExportMetadata.exportDate`, a `CollectionExportDate` of moment, locale and time zone, dates the Word cover and the colophon. The app passes `nil`, which keeps the export dated now in the device's calendar, as before.
+- **The outline's value core,** every rule over `StructuralRef`, three levels deep. The rules over `CollectionEntry` stay in the app.
+- **The quotation check,** `ExcerptVerifier` and its report, with `IndexingPipeline.documentBodyTextsByKey(forKeys:)` and `WordCloudDocumentKey` made public.
+- **The HTML renderer and exporter.**
+  - The stylesheet is `ReaderPage`'s.
+  - Figures come from a `FigureImageSource` the host passes in, and the word cloud as a PNG from a drawing it passes in.
+  - `serialize(_:includeFootnotes:highlights:)` is public.
+- **The Word exporter, with its ZIP writer.** Its figures and its word cloud come in as the HTML exporter's do, and `documentData(metadata:items:options:wordCloud:)` returns the bytes.
+- **The BibTeX and RIS collection exporters,** with `bibTeX(for:options:)` and `ris(for:options:)` returning the text.
+- **Tests:**
+  - **`CollectionRenderingTests`** is new in the kit's suites.
+    - It pins, by SHA-256 and length, each output of two collections and the live preview's page: the HTML, the Word package, the BibTeX and the RIS.
+    - The date is fixed, in a fixed locale and time zone, so the pins hold on any platform.
+    - It also covers the outline's core and the span rules.
+  - **`ExcerptVerifierTests`** moves into the kit's suites.
+  - **The counts:** `FRUSCoreKitTests` goes from 1,251 tests to 1,286, and the iOS unit target from 7,725 to 7,739.
+
+**How it was checked.** Each heavy job ran under the app's lock, from a clone at a real path, beside `v2` at `391b3461` built and run the same way: Xcode 27.1 on macOS 27.2, clean and unsigned, on an iPhone 18 Pro simulator (iOS 27.0), which S17a's and S17b's sessions, sharing the lock, did not use.
+- **The full iOS unit run:** 7,739 tests in 927 suites, against `v2`'s 7,725 in 924.
+  - Both fail the 8 Keychain tests an unsigned build fails, and show the 6 known issues of `v2`'s system-log test.
+  - Both skip the same 17 tests and 2 suites.
+- **`swift test`:** 3,179 tests against 3,144, all passed; `FRUSCoreKitTests` 1,286 against 1,251.
+- **The symbol diff,** normalized as before: 251,332 names on `v2` and 251,475 on the branch, 103 removed and 246 added, the same names as at `41950692`.
+  - 32 of the removed were private, and reappear without the file-private discriminator.
+  - 60 reappear under a new signature: the prose renderers now take spans, the exporters' figure source and initialiser changed, and so did the colophon's date.
+  - The other 11 are default-argument generators, and an implicit `init()`, that the now-public declarations no longer need.
+  - The other 152 added are the new API (`CollectionExportDate`, `CollectionWordCloud`, `FigureImageSource`, `NoFigureImages`, `FigureImagePNG`) and the names the compiler makes for it.
+- **Both builds** had `v2`'s five and seven warning lines, and `swift build --target FRUSCoreKit` completed.
+- **Each export, byte for byte.** A scratch suite was appended to `CollectionTests.swift` for one run and never committed. At `v2` and at the branch, the same day, it exported four test collections through `ExportFormat.makeExporter()`, as the export sheet does: in HTML, Word, BibTeX, RIS, and PDF (as text). One collection was resolved by the app's resolver from SwiftData entries.
+  - All 22 files were the same, byte for byte, at both heads, and the same bytes as at `41950692`.
+  - Against `v2`'s run of 25 October, the only differences were the dates a colophon and the Word cover print, so the two runs of a comparison have to be on one day.
+- **`RichTextRestingCapTests`' link-alert test** fails now and then on both heads, as #1785's runs found.
+  - It failed in the branch's full run of 25 October, and passed in every full run on the 27th.
+  - Run alone, alternating the two heads, it failed 1 of 15 runs at `v2` and 2 of 15 at the branch, at `391b3461`, and 0 of 7 and 1 of 7 at `41950692`.
+  - Every failure was the same wait for the alert to go (`host.dismissPresented()`), and nothing here touches the editor.
+- **Linux,** in a scratch worktree of this repository's `main` at `37a4e35`, with `v2` and then the branch copied over the submodule:
+  - **the kit:** `FRUSCoreKitTests` ran 1,286 tests, with the one named skip, so the pins hold there;
+  - **the rest:** every other target passed but the parity suites, whose issues are `v2`'s but for one test:
+    - 41 are the same on both: golden-file staleness (14), golden-span staleness (7), and 20 pins this repository keeps on app source that `v2` has moved since the pin, in #1792, #1805 and #1806;
+    - the one that differs is `NotesAndSummariesParityTests`' `theAppsParagraphsAndColoursAreTheMirrors`. At `v2` it finds #1790's and #1793's new colour bodies, and at the branch the file it reads has moved;
+  - **public access:** a scratch file in `FRUSLightAPI`, never committed, imported FRUSCoreKit without `@testable` and used every name the pull request makes public, and the target built.
+- **The records:** `CodingStandardsAuditTests` and `EditableContentKeyTests`, which read `Planning/` and `Docs/`, passed again at the records head.
+- **A review** read the diff cold, before the rebases. It found these, all fixed before the runs quoted:
+  - the project file was missing the moved test file and the new suite;
+  - one test file moved a commit early;
+  - several doc lines and commit messages were wrong.
+
+**For S18c, the pin move past S18a and S18b:**
+- **`NotesAndSummariesParityTests`** fails by design at that move. Its `theAppsParagraphsAndColoursAreTheMirrors` reads `Collections/CollectionExporter.swift` for `private static func append`, `hex` and `hexColor`. After #1807:
+  - `append` and `hex` are `public static func` in `FRUSCoreKit/Collections/CollectionExporter.swift`. `append`'s body is unchanged, its continuation lines moved one column, and `hex` has #1793's clamp.
+  - Both `hexColor`s are in `FRUSExplorer/Collections/CollectionExporter+App.swift`, as #1790 left them.
+
+  Rather than re-point the test, the codec (`Sources/FRUSRichText`) and `Tests/ParityFormat/RichText.swift` can call the kit's `append` and `hex` and drop those mirrors, which also takes #1793's clamp. Only `hexColor`'s colour resolution, which is AppKit's and UIKit's, stays a mirror.
+- **`tools/mac-golden`'s `RichText.swift`** calls `CollectionProse.paragraphs(fromRTF:)`, unchanged in the app, and uses `ProseFormattedSpan`, now the kit's, so it compiles as it is.
+  - Its comments name `paragraphs(fromDecoded:)` and `hexColor(_:)`, which are now in `CollectionExporter+App.swift`.
+  - `make-golden` remakes the golden spans then, as at any pin move, and they should change only in provenance.
+- **The host builds a prose item's spans** with the codec.
+- **The host dates an export** with `CollectionExportDate(date:locale:timeZone:)`, so the Word cover and the colophon print the app's `en_US` long date. Without one, a Linux container prints `en_001`'s "27 October 2026" where the app prints "October 27, 2026".
+- **Figures and the word cloud are passed in.** Figures come from a `FigureImageSource` over the web's own figure store, or from `NoFigureImages()`. The word cloud is PNG data, or none, since the web has no renderer for it.
+- **No temporary files are needed.** `CollectionItemHTMLRenderer.pageHTML(...)`, `DocxCollectionExporter.documentData(...)`, `bibTeX(for:options:)` and `ris(for:options:)` return bytes and text.
+- **The quotation check** is `ExcerptVerifier.verify(_:bodyTexts:)` over `documentBodyTextsByKey(forKeys:)`, then `upgradingVanished` with each document's revision, then `ExcerptVerificationReport.summary`.
+- **On §5's indexing path,** #1807 changes `IndexingPipeline.swift` only in making `documentBodyTextsByKey` public. It is a read that only an export runs, so the golden files' export may be reused, by the owner's choice.
+- **`Package.swift` needs no change.**
+- **The notes export keeps its own ZIP writer.** `PLAN.md`'s S18c row says S15d's notes export may take the kit's ZIP writer. But that writer is private to `DocxCollectionExporter`, writes no file times and has no ZIP64 guard, and the web's `StoredZIP` has both.
+
+**Delivered here**
+
+- `COORDINATION.md`: #1790 merged and #1807 open in §2, and #1807 in §5's list of app changes only the web edition needs.
+- This log.
+
+**Notes**
+
+- **Three sessions shared the app's lock on 25 October.** S17a's, S17b's and this one's Mac checks queued behind each other, and one simulator per session kept their installs apart. On 27 October, with S17a and S17b merged, the same runs took a fraction of the time.
+- **In `swift:6.4-noble` with `LANG` unset,** `Locale.current` is `en_001`. Any date the kit formats with the current locale reads day first there.
+- **An export comparison is a same-day comparison.** A colophon and the Word cover print the day of the export, so two runs a day apart differ in those lines and nowhere else.
+- **Scratch:** under `~/Library/Caches/frus-s18a`: the clone with the earlier heads kept as `s18a-before-rebase` and `s18a-rebase1`, its `v2` worktree, the logs, the scripts, the dumps, and a scratch worktree of this repository (`web-linux`).
+
+**Next: S18b,** once the owner has run Mac check 13 on #1807 and merged it, branched from `v2` after the merge. S17c's pin move, which S17a's entry names next, can go before it. If S17c moves to a `v2` without #1807, S18c takes S18a and S18b together. Beside them: S17d, S16e and the server's track.
+
 ## Session 17a: the user half of the kit's search from an attached store, upstream
 
 25–27 October 2026 · branch `claude/vigorous-boyd-f2fce4` · [#66](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/66) · upstream `503a730b`, unchanged; [FRUS-Explorer#1806](https://github.com/joshbotts/FRUS-Explorer/pull/1806) merged as `391b3461`
