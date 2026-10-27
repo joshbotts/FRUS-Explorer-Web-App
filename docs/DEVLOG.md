@@ -2,6 +2,77 @@
 
 One entry per session, newest first.
 
+## Session 17b: the research layer's rules, upstream
+
+25–27 October 2026 · branch `claude/practical-brahmagupta-626e2f` · upstream `503a730b`, unchanged; [FRUS-Explorer#1805](https://github.com/joshbotts/FRUS-Explorer/pull/1805), open
+
+Phase 2's row S17b, whose pull request Mac check 12 verifies. Phase 2 shows the research layer as the app does: a saved search's "+N since last run", working corpora and volume scopes as a search's filters, the trail's sessions, the method appendix, and the Research page's lists and counts. Each was a rule the app computes over its SwiftData rows, in app files the server cannot compile.
+
+This session opened one pull request on `FRUS-Explorer`, from `claude/research-layer-rules-kit`, labelled `Mac` with "Mac verification requested", and did not merge it. The branch was cut from `v2` at `9fa4375d`. When the sessions resumed on 27 October it was rebased onto `41950692`, past #1792 and #1793, on the owner's word. Under rule 4 it changes shared files, and this repository changes only its records.
+
+**#1805 moves the research layer's rules into FRUSCoreKit, public, each over values a host's rows map to** (`claude/research-layer-rules-kit`, `6941f3fb`). The app maps its rows to those values and calls the rules, and it keeps every name it used, as a typealias, a forwarder or an extension.
+- **A saved search's freshness:** `SavedSearchFreshness`, moved unchanged, with the evaluation of "+N since last run": no badge, new results, or a backfill for the host to store. It also carries the mark a run writes and its blob. The count and the store stay the host's.
+- **Corpora and scopes as filters:**
+  - `WorkingCorpusResolver.resolve(documentKeys:)`, `DocumentScopeGate` and `runningInside(workingCorpus:)`;
+  - a capture's truncation and its line, and a Meaning capture's provenance sentence;
+  - `CustomScopeResolver` and `IndexedResolution`.
+- **The trail's sessions:** the 30-minute grouping, the newest window's merge and the session log's page. The loaders stay in the app.
+- **The method appendix:**
+  - It is made from `RecordedSearch` values, one per trail row, whose `RecordedCount` was `SearchHistoryEntry.RecordedCount`.
+  - It is rendered for a `QueryMethodAppendix.Host`, which passes in the version for the Generated line, the data files that name a subject, and the locale, calendar and time zone.
+  - It moves with `SearchScopeSignature`, `ProvenanceSource`, `ProvenanceStatement` and a corpus's coverage (`DocumentEngagement`, `EngagementCoverage`).
+- **The Research page:** `ResearchDocumentAggregation` over values, `ResearchItemCounts.tally`, `NotesPaneSnapshot` with All Notes' filter, and `CollectionEntryKind`. Which documents a tag, a collection or a colour lists stays view code in `ResearchView`, with a hang fix the app's tests pin, and the pull request files it.
+- **On Linux only,** the kit's `String(localized:)` stand-in writes an interpolated integer grouped for the locale, as Foundation does. It wrote "1200 documents" where the app writes "1,200 documents".
+- **Tests:**
+  - `QueryMethodAppendixFixtureTests` holds a fixture trail's appendix to the byte, with the same literals on iOS, macOS and Linux, which is the row's done-when. The Markdown is 3,381 bytes (SHA-256 `ecc9ebf0…`), and the CSV with `count_basis` is 3,945 bytes (`28273936…`).
+  - `ResearchLayerRulesTests`, 38 tests in 9 suites, checks each rule over values.
+  - `FRUSCoreKitTests` goes from 1,197 tests to 1,243, and the iOS unit target from 7,673 to 7,717.
+
+**The rebase.** `v2` moved nine commits while the usage limit stopped every session. #1792 reads one copy of each note, saved search and trail row stored more than once under one id, and two of the fetches it changed are in files this pull request moves. Each fetch stays in the app, in `ResearchItemCounts+App.swift` and `NotesPaneSnapshot+App.swift`, with #1792's read, and `DuplicateCopiesTests` passes. Everything below was run at the new head.
+
+**How it was checked.** Each heavy job ran under the app's lock, from a clone at a real path, beside `v2` at `41950692` built and run the same way, with Xcode 27.1, clean and unsigned.
+- **`v2`:**
+  - the full iOS unit run had 7,673 tests in 912 suites, and failed only the 8 Keychain tests an unsigned build fails, with #1606's 6 known issues and 17 tests and 2 suites skipped;
+  - `swift test` ran 3,090 tests in 369 suites, `FRUSCoreKitTests` 1,197;
+  - with thunk numbers and file-private discriminators dropped, its Mac library had 250,315 symbol names;
+  - the Mac build had 5 warning lines and the iOS build 7.
+- **The branch:**
+  - the full iOS unit run had 7,717 tests in 922 suites, with the same 8 issues, the same 6 known issues and the same 17 tests and 2 suites skipped;
+  - `swift test` ran 3,136 tests in 379 suites, `FRUSCoreKitTests` 1,243;
+  - with thunk numbers and file-private discriminators dropped, the symbol diff was 172 names removed and 1,043 added, the same as before the rebase. 106 of the removed reappear under the moved types' new names, and the other 66 are closures, private helpers that now take the host or a locale, the moved nested types' mangled names, two `CodingKeys` witnesses, and the initialisers the public ones replace;
+  - both builds had `v2`'s warning lines, and `swift build --target FRUSCoreKit` completed.
+- **Linux,** in a scratch worktree of this repository's `main` at `4028b22`, with the branch and then `v2` copied over the submodule:
+  - `FRUSCoreKitTests` ran 1,243 tests and 1,197, with the one named skip and no build warning;
+  - seven parity tests failed on the branch only, and one more had four more issues, each reading app source the pull request moves (below);
+  - everything else failed or passed as at `v2`;
+  - a scratch file in `FRUSLightAPI`, never committed, used every newly public name without `@testable`, and its target built.
+
+**Delivered here**
+
+- `COORDINATION.md`: the pull request in §2, and in §5's list of app changes only the web edition needs; #1789's merge, in both.
+- This log.
+
+**Notes**
+
+- **The appendix is the same file on every platform because the host passes the formatting in.** The appendix read the current locale and time zone, and Linux's stand-in for `String(localized:)` wrote integers bare. With the formatting passed in and the stand-in grouping as Foundation does, one set of literals holds on iOS, macOS and Linux. The app passes `.autoupdatingCurrent`, which is what its formatters defaulted to, so its file is unchanged.
+- **For S17c,** the pin move past S17a's and S17b's pull requests:
+  - **Seven parity tests read app source this moves,** and fail at the new pin until they are pointed at the kit:
+    - `ImportParityTests.aSavedSearchsColumnsAreWhatTheAppWritesFromItsParameters` looks for `SavedSearchFreshness` in `Models/SavedSearch.swift`. It is public in `FRUSCoreKit/Search/SavedSearchFreshness.swift` now, and a run's blob is `SavedSearchFreshness.run(at:matchCount:indexedVolumeCount:).encoded`.
+    - `ImportParityTests.anInertEntryReadsAsTheAppsUnrecognizedKind` looks for `CollectionEntryKind`'s cases in `Models/Collection.swift`. They are in `FRUSCoreKit/Models/CollectionEntryKind.swift` now.
+    - `NoteViewParityTests`' `allNotesRowsAndFiltersAreTheApps`, `theAppsFormatsAreTheWebs` and `theAppsWordsAreTheWebs` read `Models/NotesPaneSnapshot.swift`. It is `FRUSCoreKit/Models/NotesPaneSnapshot.swift` now, and All Notes' search-field filter moved into it from `AllNotesScreen`, as `filtered(project:tagId:query:)`.
+    - `UserStoreParityTests`' `eachColumnHoldsItsPropertysType` and `dataTheAppWritesAsJSONIsTheDataKeptAsJSON` find the `Data` columns the app writes as JSON by the encoder call in each model's file. `SavedSearch.freshnessData`'s is the kit's `SavedSearchFreshness.encoded` now, so both read it as a blob.
+    - `ExportParityTests.theExportMirrorsTheAppsExporterAtThePin` gains four issues, from the same freshness lines.
+  - **`web/src/research/notesRules.ts` mirrors All Notes' rows and filters,** which `NoteViewParityTests` holds to the app's source. Once the kit has them, the server can serve the kit's `NotesPaneSnapshot.build` and `filtered`, and the mirror and its parity test can go, or the test can be pointed at the kit's file.
+  - **S14c's tally waits for this move:** the "12 notes · 3 documents" beside each Settings row is `ResearchItemCounts.tally`, over each note's projects and tags, each collection's projects and each assignment's tag.
+  - **The kit's rules take the projects in the order given.** The app's fetch sorts them by name, so `UserProjects.swift`'s sort stays the web's.
+  - **The History pane is unchanged by #1792:** the app lists each stored copy of a trail row there, and its totals count stored rows, which #1792 leaves to the owner. The web's store keeps one row per id.
+  - **On Linux, an interpolated integer is now grouped** wherever the kit writes one through `String(localized:)`, as the Mac's are, Citation Lookup's labels for a page of 1,000 or more among them. No test here expects a bare one of a thousand or more.
+  - **#1793 changes `kHighlightsJS`:** `render` skips a highlight whose range throws, where one such highlight left none of the document's drawn, and `buildRanges` builds no range from a negative start. `ReaderAnnotationScriptTests`' pins change with it, and the reader frame's own try of each highlight may go. It also removes the app's unloaded copies of the two scripts from `FRUSExplorer/Resources/`, which the watch lists as removed resources.
+  - **The pull request changes nothing on §5's indexing path,** so the golden files' remake is decided by what else the pin move brings.
+- **Scratch:** the clone, the `v2` worktree, the logs, the scripts and the scratch worktree of this repository (`web-linux`) are under `~/Library/Caches/frus-s17b`.
+
+**Next: S17c, the pin move past S17a's and S17b's pull requests,** once the owner has run Mac checks 11 and 12 and merged both, as a pull request of its own under rule 5. S18a's pull request, made beside this one, carries the same two provenance files byte for byte, so whichever of the two merges second has no conflict in them. Beside it: S16e, and S14e, S14d and S14b on the server's track, as S16d's entry says.
+
 ## Session 16d: the export
 
 25 October 2026 · branch `claude/s16d-export` · [#64](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/64) · upstream `503a730b`, unchanged
