@@ -59,16 +59,22 @@ Not taken yet, each for its row: attaching the store to search, S17d's; saved se
 
 **The golden files**
 
-Remade from the app's source by `scripts/make-golden`, under the app's `Scripts/heavy.sh` lock, on this Mac, which runs macOS 27.2 now:
+Remade by `scripts/make-golden`, under the app's `Scripts/heavy.sh` lock, on this Mac, which runs macOS 27.2 now, first from the app's source alone, and then, by the owner's choice, with `--export /Users/Shared/frus-index-2026-10-24.sqlite`, the seventh three-volume export, made on 24 October from a build of `503a730b` for S16b's move. §5 allows it: the build is the same, and what changed on the indexing path is code that a search, an export or the reader runs, none that indexing runs.
 - **The render and the expressions:** the 393 rows' HTML is byte for byte as before, and the manifest and the expressions change only in provenance: `sourceDigest` (`1c529af84686` to `60d61d5d2ef1`), `upstreamCommit`, and the platform's macOS, 27.2.0 where it was 27.0.1.
+- **The results** change only in that provenance. Every query's count, first 50 results and tie tail are as before.
+- **The index summary's** gating section, its 36 digests, 7 checks and volumes, is unchanged. Beside the same provenance, its information section moves only in the summarizer's timings.
 - **The golden spans** change in provenance, in the harness's digest of `tools/mac-golden`'s `RichText.swift`, which this pull request edits, and in the RTF of the 90 written cases, which differ only in AppKit's writer stamp: `\cocoartf2908` on macOS 27.2, where 27.0.1 wrote `\cocoartf2907`. Every case's text, runs and paragraphs, the 51 catalog colours and the 16 code pages' readings are as before, and `fixtures/rich-text/web`, the codec's own RTF, is unchanged.
-- **The two made from an export,** `index-summary.json` and `queries.results.json`, wait in `fixtures/golden/PENDING` for the owner's choice: the export of 24 October, from a build of `503a730b`, which §5 allows by the owner's choice, since what changed on the indexing path is code that a search, an export or the reader runs and none that indexing runs, or a new one from a build of `1c18b51e`. Until it comes, this pull request is a draft, and checks 2 and 3 print that they wait.
+- `frus-parity check-golden` passes, and `PENDING` is empty again. Until the export was chosen, the two files made from it waited there, and the pull request was a draft whose checks 2 and 3 printed that they waited.
 
 **Results**
 
 - **Linux, `swift:6.4-noble`, arm64,** CI's Build and Test steps replayed over `main` at `8e6d681`, this package's own targets built clean with no warning, all under the app's `Scripts/heavy.sh` lock:
   - **at the new pin before the repairs:** every kit suite passed, and two targets failed with 42 issues: in FRUSParityTests, 21 of golden-file staleness and 19 in ten of the twelve tests named above, and in FRUSLightCoreTests the other two;
-  - **with the repairs, the source-made golden files remade and the two export-made ones pending:** 2,454 tests, up from 2,359, all passing with only the named skip, in Swift Testing's results file and in the log. Seven tests print that a file waits; check 4 prints "check 4 through the page: 393 of 393 rows identical", and the same on the reader's path and from one full parse per volume;
+  - **with the repairs, the source-made golden files remade and the two export-made ones pending:** every test passed but one, a check this session had added that compared the watermark's bytes, which the kit's encoder writes in no fixed order. It compares what they decode to, from before the draft was pushed. Seven tests printed that a file waits;
+  - **with every golden file:** 2,454 tests, up from 2,359, all passing with only the named skip, in Swift Testing's results file and in the log. The checks print:
+    - "check 2 passes: 36 digests and 7 checks are the Mac's";
+    - "check 3's results pass: 482 queries, 482 identical and 0 reordered only within Mac tie groups; 318 with other score bits (information)", and through the API "482 queries, 482 identical and 0 reordered only within Mac tie groups, every record the kit's own";
+    - "check 4 through the page: 393 of 393 rows identical", and the same on the reader's path and from one full parse per volume;
   - **per target:** FRUSCoreKitTests 1,286, SourceNoteKitTests 321, FTS5StoreTests 219, FRUSParityTests 188, FRUSLightServerTests 172, FRUSLightCoreTests 106, ManifestGeneratorTests 60, FRUSRichTextTests 42, SemanticVectorsKitTests 40, CrossRefKitTests 10, GeneratorKitTests 7, FTS5CheckTests 3.
 - **The web job:** typecheck, lint, and 304 unit tests in 33 files, unchanged but for a comment in `notesRules.ts`.
 - **`tools/mac-golden`** built in release with the codec and the formats importing the kit, and wrote the files above.
@@ -78,14 +84,15 @@ Remade from the app's source by `scripts/make-golden`, under the app's `Scripts/
 
 **Records**
 
-- `PLAN.md`: S17c's done paragraph after S16d's, S12d's row (from `1c18b51e`), S18c's row and the risk row's merges.
+- `PLAN.md`: S17c's done paragraph after S16d's, S12d's row (from `1c18b51e`), S18c's row, the golden-files checkpoint and the risk row's merges.
 - `SPEC.md`: the compatibility contract, and `setupDatabase(_:)`'s lines.
-- `COORDINATION.md`: the pin; §1's use of the kit, the mirrors and the counts; §2's #1807, now merged, and this move after it; §5's list of app changes.
+- `COORDINATION.md`: the pin; §1's use of the kit, the mirrors and the counts; §2's #1807, now merged, and this move after it; §5's list of app changes; §6's exports.
 - `docs/prep/README.md`: the pin. The README's Status and this log.
 
 **Notes**
 
 - **`internal import` keeps the kit out of a client's sight.** `tools/mac-golden` compiles the kit's files into its app module and links `FRUSRichText` and `ParityFormat`, which now import the kit's module. Imported `internal`, the second module adds no name and no extension member the tool can see, so nothing it names is ambiguous.
+- **`make-golden` leaves `tools/mac-golden/Package.resolved` changed.** Xcode 27.1's SwiftPM resolves every dependency of the path package `mac-golden` names, so the lockfile gains this package's 22 server dependencies, at newer versions than the root's lockfile. Resolving the tool against `main`'s manifest does the same, so it is the toolchain's and not this move's. The two pins the tool builds, swift-crypto 5.0.0 and swift-asn1 1.7.3, stay as they are, and the change is left out.
 - **S14c's tallies are unblocked.** "12 notes · 3 documents" beside each Settings ▸ Tags row is `ResearchItemCounts.tally` over each note's tags and each assignment's tag, with the kit's `TagTally.summary` for its words. It is small, and in no row's way.
 - **Mac checks 11, 12 and 13** are still "To do" in `PLAN.md`, as 9 and 10 are. The owner merged #1805, #1806 and #1807; their checks are the owner's to record.
 
