@@ -97,21 +97,27 @@ public final class SQLiteConnection: @unchecked Sendable {
 
     /// Runs a query and returns every row, each as its column values.
     public func query(_ sql: String, _ bindings: [SQLiteValue] = []) throws -> [[SQLiteValue]] {
+        var rows: [[SQLiteValue]] = []
+        try forEachRow(sql, bindings) { rows.append($0) }
+        return rows
+    }
+
+    /// Runs a query and hands each row to `body` as it is read, so a large table is never held
+    /// whole.
+    public func forEachRow(_ sql: String, _ bindings: [SQLiteValue] = [], _ body: ([SQLiteValue]) throws -> Void) throws {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(handle, sql, -1, &stmt, nil) == SQLITE_OK else { throw lastError() }
         defer { sqlite3_finalize(stmt) }
         for (index, value) in bindings.enumerated() {
             try bind(value, at: Int32(index + 1), in: stmt)
         }
-        var rows: [[SQLiteValue]] = []
         var code = sqlite3_step(stmt)
         while code == SQLITE_ROW {
             let count = sqlite3_column_count(stmt)
-            rows.append((0..<count).map { column(stmt, $0) })
+            try body((0..<count).map { column(stmt, $0) })
             code = sqlite3_step(stmt)
         }
         guard code == SQLITE_DONE else { throw lastError() }
-        return rows
     }
 
     /// The first column of the first row, or nil when there is no row.

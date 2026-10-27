@@ -25,9 +25,11 @@ struct UserDataFixture {
 
     /// `volumes` from fixtures/tei are in the server's TEI folder, for the routes that read a page;
     /// `indexed`, the server serves the synthetic export, for the routes that read the index;
-    /// `importLimit`, an import's largest file.
+    /// `importLimit`, an import's largest file; `resolver`, who a request acts for, the store's single
+    /// user by default.
     init(publicURL: String = "http://localhost:8080", userData: Bool = true, volumes: [String] = [],
-         indexed: Bool = false, importLimit: Int = UserDataServices.importBodyLimit) async throws {
+         indexed: Bool = false, importLimit: Int = UserDataServices.importBodyLimit,
+         resolver: (any UserResolver)? = nil) async throws {
         server = try await indexed ? servingSyntheticExport(volumes: volumes) : ServerFixture(volumes: volumes)
         let url = server.files.userStore
         store = try await SQLiteUserStore(url: url, backupsDirectory: server.files.backupsDirectory)
@@ -35,7 +37,7 @@ struct UserDataFixture {
         configuration = ServerConfiguration(dataDirectory: server.files.root, publicURL: publicURL, userData: userData)
         jobs = InProcessJobQueue()
         services = UserDataServices(store: store, configuration: configuration, jobs: jobs, importLimit: importLimit,
-                                    now: { Self.now })
+                                    resolver: resolver, now: { Self.now })
     }
 
     var app: some ApplicationProtocol {

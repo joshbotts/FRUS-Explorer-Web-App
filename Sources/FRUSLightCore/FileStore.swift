@@ -40,6 +40,10 @@ public struct DataDirectory: FileStore {
     public var volumesDirectory: URL { root.appendingPathComponent("volumes", isDirectory: true) }
     public var exportsDirectory: URL { root.appendingPathComponent("exports", isDirectory: true) }
     public var backupsDirectory: URL { root.appendingPathComponent("backups", isDirectory: true) }
+    /// Held shared by each server while it runs, and exclusively by a restore (S14b).
+    public var serverLock: URL { root.appendingPathComponent("app/server.lock") }
+    /// Held by a backup while it runs, so two never run at once (S14b).
+    public var backupLock: URL { root.appendingPathComponent("app/backup.lock") }
 
     public func prepare() throws {
         // volumes/ is not created: it is a read-only mount, or arrives with Standalone mode.

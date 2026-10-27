@@ -177,7 +177,8 @@ let package = Package(
         // links no shared kit, only SQLite.
         .target(
             name: "FRUSLightCore",
-            dependencies: ["CSQLite"],
+            // Crypto for the backups' SHA-256 (S14b); the server already links it through FRUSCoreKit.
+            dependencies: ["CSQLite", .product(name: "Crypto", package: "swift-crypto")],
             path: "Sources/FRUSLightCore",
             swiftSettings: swift6
         ),
