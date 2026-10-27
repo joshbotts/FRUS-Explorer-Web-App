@@ -258,7 +258,10 @@ func eventually(_ condition: () -> Bool) async throws -> Bool {
     @Test func aRequestCancelledWhileAnotherWaitsLeavesAtOnceAndTheValueIsKept() async throws {
         let kept = RecentComputations<Int>(capacity: 2, stopsAbandoned: true, grace: .zero)
         let gate = Gate()
+        // Two tasks reach `kept` in no set order, so the second is begun only once the first waits,
+        // and joins the computation the first began.
         let first = Task { try await kept.value(for: "a") { try await gate.compute(1) } }
+        #expect(try await eventuallyAsync { await kept.waitingCount(for: "a") == 1 })
         let second = Task { try await kept.value(for: "a") { try await gate.compute(2) } }
         #expect(try await eventuallyAsync { await kept.waitingCount(for: "a") == 2 })
         first.cancel()
