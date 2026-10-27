@@ -234,6 +234,18 @@ On Apple platforms the reader draws a highlight that ends on a line break, and t
 
 It changes nothing on §5's indexing path. The pin move past it brings both. The host script's try of each highlight before the kit draws them can then stay, for any other the kit cannot draw, or go, and check 6's sampler may stop avoiding an end on a line break.
 
+**#1790 (S15d's follow-up), merged on 25 October as `9fa4375d`.** S15d's probes of AppKit for the codec's golden spans found that the collection exporters read the colour of typed prose as white whenever the current appearance is dark. [joshbotts/FRUS-Explorer#1790](https://github.com/joshbotts/FRUS-Explorer/pull/1790) fixes it in `CollectionProse.hexColor(_:)`, the decoder that the HTML, Word and PDF exporters and the live preview share. The fix resolves a colour as the light appearance draws it:
+- on the Mac, inside `NSAppearance(named: .aqua)?.performAsCurrentDrawingAppearance`;
+- on iOS, through `resolvedColor(with:)` with a light trait collection.
+
+On Apple platforms, typed prose now has no colour in an export under either appearance, and a system colour takes its light shade. Run beside `v2` at `96c9de0c`:
+- the full iOS unit run failed only as `v2`'s did, at 7,646 tests against 7,643;
+- `swift test` ran 3,089 tests on both;
+- the normalized symbol diff removed nothing and added 14 names, the closure and `NSAppearance`'s;
+- Linux was not run, since no package target changed.
+
+It changes nothing on §5's indexing path. The web's codec already reads each catalog colour as Aqua draws it. At the pin move past it, `NotesAndSummariesParityTests` fails by design, since it pins `hexColor`'s old two lines, and the golden spans should change only in provenance. Its left-over, a colour outside sRGB written from iOS as more than six hex digits, is #1793's.
+
 **#1805 (session S17b), merged on 27 October as `295e5276`.** Phase 2 shows the research layer as the app does, and each part of it was a rule the app computes over its SwiftData rows, in app files. [joshbotts/FRUS-Explorer#1805](https://github.com/joshbotts/FRUS-Explorer/pull/1805) moves those rules into FRUSCoreKit, public, each over values a host's rows map to. The app maps its rows to the values and calls the rules, and keeps every name it used. The rules are:
 - a saved search's freshness, "+N since last run";
 - a working corpus and a volume scope as a search's filters;
@@ -269,6 +281,23 @@ On Apple platforms nothing changes. The app passes no source, and `SearchStateme
 - on Linux over `main`, everything passed or failed as at `v2`. Check 3 gave its golden results through the default source, and a fixture user's note, summary and tags, written through this server's own store, were found through the kit with the store attached.
 
 On §5's indexing path, `IndexingPipeline.swift` changes only in code a search runs and in the read-only open. When S17b's #1805 merged first, `v2` was merged into the branch, the records combined. The owner merged #1806 the same day, a squash with the branch head's tree. The pin move past it, S17c's, attaches the server's store at the read-only open and gives each request's user a service with that user's source.
+
+**#1807 (session S18a), open.** Phase 2's collection rows need the kit to render a collection from values (S18a), and then to resolve one through a data source (S18b). [joshbotts/FRUS-Explorer#1807](https://github.com/joshbotts/FRUS-Explorer/pull/1807) does the first, one move per commit, each move public:
+- **The payloads, options, presets and naming.** Prose is carried as the spans every format renders, which the app's resolver decodes from the RTF, and an export date can be named.
+- **The outline's value core.**
+- **The quotation check,** with the body-text lookup it reads.
+- **The HTML renderer and exporter, the Word exporter with its ZIP writer, and the BibTeX and RIS collection exporters.** Figures come from a source the host passes in, and the word cloud comes as image data from a drawing it passes in.
+
+What reads SwiftData, Apple Intelligence or AppKit and UIKit stays in the app, which calls the moved code by its old names. `CollectionRenderingTests` pins each output of two value collections and the preview by SHA-256 and length, at a fixed date, so the pins hold on any platform.
+
+The branch was begun on `v2` at `9fa4375d` and rebased on 27 October onto `41950692`, then onto `391b3461`, after #1805, which carried the same provenance move byte for byte, and #1806. Run beside `v2` at `391b3461`:
+- the full iOS unit run failed only as `v2`'s did, at 7,739 tests against 7,725;
+- `swift test` ran 3,179 tests against 3,144, `FRUSCoreKitTests` 1,286 against 1,251;
+- with thunk numbers and file-private discriminators dropped, the symbol diff was 103 names removed and 246 added. Each removed name reappears without its discriminator or under a new signature, or is a default-argument generator or implicit initialiser that the public declarations no longer need;
+- each export of four test collections through `makeExporter()`, one resolved from SwiftData, was the same 22 files, byte for byte, at both;
+- on Linux over `main`, everything passed or failed as at `v2` but one parity test, which reads the exporter file this moves.
+
+On §5's indexing path, only the lookup's access changes. Mac check 13 verifies it. S18b's pull request is branched after it merges, and S18c moves the pin past both.
 
 ## 3. The architecture that protects coordination
 
@@ -344,7 +373,7 @@ The whole of the app side's part. Each rule costs little or nothing. The boundar
 - further moves into the kits (FRUSCoreKit part 2 was S6's, merged as #1573 and #1574; the read-only open and the reader's page were S8a's, #1575; the reader's AA palette, the link parse and the stores' immutable opens were S9b's, #1578 and #1579; the phase-1 features' search, citation, title and reader code is S11a's, #1664 and #1666; where a page link and a whole-volume link go, `PageLink` and `WholeVolumeLink`, is S12c's, #1784, merged as `af41efa4`, for the page-map landing #1778 gave the app, which the server serves since S12e's pin move);
 - the index version shown beside Export Research Database… (phase 1), so a user can match an export to a server before copying 2.8 GB;
 - the JSON export at `formatVersion` 7, adding the model types it lacks, above all saved searches and working corpora, and what 6 drops from the types it carries, a note's rich text and a collection's structure among them, after the envelope moves into FRUSCoreKit (phase 2, `PLAN.md`'s S16a): S16a's [#1786](https://github.com/joshbotts/FRUS-Explorer/pull/1786), merged as `02521d01`. It is the first web-authored change to a file the app writes for its users, so its Mac check exports and decodes again; the owner chose on 23 October to have it opened during the 1.0 submission, and merged it the same day;
-- phase 2's other moves into the kit, each changing nothing on Apple platforms (`PLAN.md`, Phase 2): the reader's annotation scripts and highlight rules, and Citation Lookup's Batch and Structured types made public (S15a: [#1788](https://github.com/joshbotts/FRUS-Explorer/pull/1788) and [#1787](https://github.com/joshbotts/FRUS-Explorer/pull/1787), merged as `9ae72e7e` and `503a730b`, which the server's build compiles since S16b's pin move); a user-data source for the search's user half, which the app leaves at its own columns (S17a: [#1806](https://github.com/joshbotts/FRUS-Explorer/pull/1806), merged as `391b3461`); the research layer's rules, from a saved search's freshness to the method appendix (S17b: [#1805](https://github.com/joshbotts/FRUS-Explorer/pull/1805), merged as `295e5276`); and collections, rendered from values (S18a), then resolved through a data source (S18b), which is the first to change how one of the app's features is put together;
+- phase 2's other moves into the kit, each changing nothing on Apple platforms (`PLAN.md`, Phase 2): the reader's annotation scripts and highlight rules, and Citation Lookup's Batch and Structured types made public (S15a: [#1788](https://github.com/joshbotts/FRUS-Explorer/pull/1788) and [#1787](https://github.com/joshbotts/FRUS-Explorer/pull/1787), merged as `9ae72e7e` and `503a730b`, which the server's build compiles since S16b's pin move); a user-data source for the search's user half, which the app leaves at its own columns (S17a: [#1806](https://github.com/joshbotts/FRUS-Explorer/pull/1806), merged as `391b3461`); the research layer's rules, from a saved search's freshness to the method appendix (S17b: [#1805](https://github.com/joshbotts/FRUS-Explorer/pull/1805), merged as `295e5276`); and collections, rendered from values (S18a: [#1807](https://github.com/joshbotts/FRUS-Explorer/pull/1807), open), then resolved through a data source (S18b), which is the first to change how one of the app's features is put together;
 - optionally, a JSON importer, so data made on the web can return to the Mac; not in phase 2, by the owner's choice of 23 October;
 - public access for kit types the server needs, as each need arises, such as the re-anchor's test of a stored passage for S16c's check 6, with the kit's fix of a highlight that ends on a line break (S15c's follow-up: [#1789](https://github.com/joshbotts/FRUS-Explorer/pull/1789), merged as `96c9de0c`);
 - boundary tests for the other kits.
