@@ -31,8 +31,8 @@ import Testing
         return row
     }
 
-    @Test func aBatchsRowsComeInUnderTheUserWithTheMacsIds() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func aBatchsRowsComeInUnderTheUserWithTheMacsIds(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let result = try store.importResearch(ResearchImportBatch(rows: [
             "tags": [Self.tag(name: "Cuba", modified: "2026-02-01T00:00:00.000Z"),
@@ -50,8 +50,8 @@ import Testing
 
     /// The newer-copy rule: a later time replaces, the same time or an earlier one keeps the store's,
     /// and a copy with no time of change is as new as when it was made.
-    @Test func aRowTheStoreHoldsIsReplacedOnlyByANewerCopy() async throws {
-        let (store, _, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func aRowTheStoreHoldsIsReplacedOnlyByANewerCopy(_ kind: UserStoreKind) async throws {
+        let (store, _, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let second = "5E16C000-0000-4000-8000-000000000002"
         _ = try store.importResearch(ResearchImportBatch(rows: ["tags": [
@@ -82,8 +82,8 @@ import Testing
     }
 
     /// A replace writes the columns the file carries, and keeps the rest; a new row takes the defaults.
-    @Test func aReplaceWritesOnlyWhatTheFileCarries() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func aReplaceWritesOnlyWhatTheFileCarries(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let id = "5E16C000-0000-4000-8000-0000000000A1"
         let rtf = Array(#"{\rtf1\ansi Bold}"#.utf8)
@@ -104,8 +104,8 @@ import Testing
     }
 
     /// Each user's rows are theirs, with the same Mac ids; an instance's are the instance's, by id.
-    @Test func eachUsersRowsAreTheirsAndAnInstancesAreShared() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func eachUsersRowsAreTheirsAndAnInstancesAreShared(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         try rows.addUser("reader")
         let correction = ImportRow(values: [
@@ -123,8 +123,8 @@ import Testing
 
     /// user_search is made again for the user from every note and summary they hold, not only the
     /// batch's, and another user's rows are left as they are.
-    @Test func userSearchIsMadeAgainForTheUser() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func userSearchIsMadeAgainForTheUser(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         try rows.addUser("reader")
         try rows.addNote("5E16C000-0000-4000-8000-0000000000B1", user: "reader", bodyText: "The reader's.")
@@ -141,8 +141,8 @@ import Testing
         #expect(try rows.userSearch(user: "reader").isEmpty, "the reader's rows, theirs to make at their own next write")
     }
 
-    @Test func theCollectionsWhoseSavedSearchTheUserLacksAreNamed() async throws {
-        let (store, _, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func theCollectionsWhoseSavedSearchTheUserLacksAreNamed(_ kind: UserStoreKind) async throws {
+        let (store, _, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         func collection(_ number: Int, search: Int?) -> ImportRow {
             ImportRow(values: [
@@ -173,10 +173,10 @@ import Testing
         #expect(result.unlinkedCollections == [UnlinkedCollection(id: "5E16C000-0000-4000-8000-000000000052", name: "Collection 2")])
     }
 
-    /// A batch that does not fit the tables is refused before anything is written, and a row SQLite
-    /// refuses rolls back the whole import.
-    @Test func aBatchThatDoesNotFitWritesNothing() async throws {
-        let (store, _, directory) = try await UserTagTests.open()
+    /// A batch that does not fit the tables is refused before anything is written, and a row the
+    /// store's database refuses, SQLite or PostgreSQL, rolls back the whole import.
+    @Test(arguments: UserStoreKind.available) func aBatchThatDoesNotFitWritesNothing(_ kind: UserStoreKind) async throws {
+        let (store, _, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let good = Self.tag(name: "Cuba", modified: nil)
         var stray = good
@@ -196,9 +196,9 @@ import Testing
         }
         var unnamed = Self.tag("5E16C000-0000-4000-8000-000000000002", name: "", modified: nil)
         unnamed.values["name"] = .null
-        #expect(throws: SQLiteError.self) {
+        #expect {
             try store.importResearch(ResearchImportBatch(rows: ["tags": [good, unnamed]]), for: "owner")
-        }
+        } throws: { $0 is SQLiteError || $0 is PostgreSQLError }
         #expect(try store.tags(of: "owner").isEmpty, "nothing of any of them was kept")
     }
 

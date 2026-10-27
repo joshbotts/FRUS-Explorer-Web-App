@@ -317,9 +317,37 @@ location /frus-explorer/ {
 
 `proxy_pass` names no path, so nginx forwards `/frus-explorer/search` as it is, and it answers `/frus-explorer` with a redirect to `/frus-explorer/`. `scripts/compose-smoke` runs both recipes, and the browser suite through the second. With another proxy, forward the path unchanged in the same way: in Caddy, `handle /frus-explorer/*` with `reverse_proxy 127.0.0.1:8080`, not `handle_path`, which strips it; in Apache, `ProxyPass /frus-explorer/ http://127.0.0.1:8080/frus-explorer/`; in Traefik, a router with no StripPrefix middleware.
 
+## A PostgreSQL user store
+
+The Compose install keeps your research data in `/data/app/app.db`, in the volume, and needs nothing else. A deployment that keeps it in a PostgreSQL database instead, as a managed database service runs one, sets `FRUS_USER_STORE` to the database's URL. At its first start the server makes the store's tables there, by the same numbered migrations as `app.db`'s, and from then on migrates them forward at each start, each migration in a transaction of its own. Search still reads FTS5: the server keeps a copy of what it reads, your notes' and summaries' text and your tags, in `/data/app/user-search.db`, made again from the database at each start and written beside each change. The image holds no PostgreSQL client tools; the server speaks PostgreSQL's protocol itself.
+
+- **The database:** PostgreSQL 14 or later, one of its own, in which the server's role can make tables, as a database it owns can: `CREATE ROLE frus LOGIN PASSWORD '…';` then `CREATE DATABASE frus OWNER frus;`. The tables go in the role's own search path, `public` for most roles.
+- **The URL,** in the form PostgreSQL's own tools take: `postgres://frus@db.example.org:5432/frus`. Its connection uses TLS and checks the server's certificate and name against the system's trusted roots, `sslmode=verify-full`, unless the URL says otherwise: `sslrootcert=` names a PEM file of a provider's own roots, mounted into the container, for a service whose certificates the system does not trust; `sslmode=verify-ca` checks the certificate but not its name, `require` neither; `disable` is for a database on the same host or a private network only. The server refuses any other parameter.
+- **The password** is best kept in a file named by `FRUS_POSTGRES_PASSWORD_FILE`, as a Compose secret mounts one, rather than in the URL, which `docker inspect` shows. The log names the URL without it.
+- **One server for each database,** for now: each server's copy for search follows its own writes alone, so a second server sharing the database would search what it had seen. A later phase adds the feed that keeps several in step.
+- **Backups are the database service's.** The copies the server takes into `/data/backups`, before a migration and daily, are of `app.db`.
+- **To move your research** from `app.db` to PostgreSQL, export it with Settings ▸ Data ▸ Export as JSON, with Include AI-Generated Summaries on, start the server with the PostgreSQL store, and import the file in the same pane.
+
+With Compose, give the settings to the server in `compose.override.yaml` beside `compose.yaml`, which Compose reads with it:
+
+```yaml
+services:
+  frus:
+    environment:
+      FRUS_USER_STORE: postgres://frus@db.example.org:5432/frus
+      FRUS_POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password]
+
+secrets:
+  postgres_password:
+    file: ./postgres-password    # the password alone, readable by you only
+```
+
+Then run `docker compose up -d`. The log's first lines name the store, and `FRUS_USER_STORE=sqlite`, or no setting, goes back to `app.db`, which the server leaves as it was.
+
 ## Settings
 
-These go in `.env` beside `compose.yaml`.
+These go in `.env` beside `compose.yaml`. A PostgreSQL user store's go in `compose.override.yaml`, as A PostgreSQL user store sets out.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |

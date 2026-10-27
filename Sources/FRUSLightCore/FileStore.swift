@@ -15,6 +15,8 @@ public protocol FileStore: Sendable {
     var previousIndex: URL { get }
     /// Users and their data.
     var userStore: URL { get }
+    /// The PostgreSQL user store's local copy of what search reads (S14d), made again at each start.
+    var userSearchCopy: URL { get }
     /// TEI volumes, mounted read-only from the Mac or fetched.
     var volumesDirectory: URL { get }
     var exportsDirectory: URL { get }
@@ -37,6 +39,7 @@ public struct DataDirectory: FileStore {
     public var candidateIndex: URL { indexDirectory.appendingPathComponent("frus.db.new") }
     public var previousIndex: URL { indexDirectory.appendingPathComponent("frus.db.prev") }
     public var userStore: URL { root.appendingPathComponent("app/app.db") }
+    public var userSearchCopy: URL { root.appendingPathComponent("app/user-search.db") }
     public var volumesDirectory: URL { root.appendingPathComponent("volumes", isDirectory: true) }
     public var exportsDirectory: URL { root.appendingPathComponent("exports", isDirectory: true) }
     public var backupsDirectory: URL { root.appendingPathComponent("backups", isDirectory: true) }

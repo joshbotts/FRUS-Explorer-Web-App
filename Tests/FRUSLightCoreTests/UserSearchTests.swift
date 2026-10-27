@@ -22,8 +22,8 @@ import Testing
 
     /// Every kind of note write: a new note, a save with its body and one without, and a delete,
     /// the last of which leaves no row.
-    @Test func aDocumentsNotesAreJoinedAsTheAppIndexesThem() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func aDocumentsNotesAreJoinedAsTheAppIndexesThem(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         #expect(try rows.userSearch().isEmpty)
         _ = try UserNoteTests.make(store, "Second, written later.", at: Self.time(2))
@@ -73,8 +73,8 @@ import Testing
 
     /// Every kind of summary write. The row's summary is the newest but a headnote draft, whose text
     /// is a collection's own; one whose every summary is a draft has none.
-    @Test func aDocumentsSummaryIsItsNewestButADraft() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func aDocumentsSummaryIsItsNewestButADraft(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         try rows.addSummary("10000000-0000-4000-8000-000000000001", responseText: "An older AI summary.",
                             createdAt: "2026-01-01T00:00:00.000Z")
@@ -103,8 +103,8 @@ import Testing
 
     /// Porter stems the user's words as the corpus's: a search for "negotiate" finds "negotiating".
     /// A tag change touches no row, as user_search holds no tags; each user's rows are theirs.
-    @Test func theRowsAreSearchableAndEachUsersAlone() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func theRowsAreSearchableAndEachUsersAlone(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         try rows.addUser("reader")
         let tag = try store.createTag(named: "Laos", for: "owner", at: Self.time(0))

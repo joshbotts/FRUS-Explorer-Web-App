@@ -13,7 +13,7 @@ struct ServerComponents: Sendable {
     let resources: ServerResources
     let reader: ReaderService
     let webClient: WebClient?
-    let userStore: SQLiteUserStore
+    let userStore: RelationalUserStore
     let sessions: InMemorySessionStore
     let jobs: InProcessJobQueue
     let indexWriter: LocalIndexWriter
@@ -34,11 +34,7 @@ struct ServerComponents: Sendable {
         await state.prepareToOpenExistingIndex(files: files)
         let jobs = InProcessJobQueue()
         let writer = LocalIndexWriter(files: files)
-        let userStore = try await SQLiteUserStore(url: files.userStore, backupsDirectory: files.backupsDirectory)
-        if let migration = userStore.migration {
-            let copy = migration.backup.map { ", after a copy of the store at \(migration.from) in \($0.path)" } ?? ""
-            logger.info("app.db migrated from \(migration.from) to \(migration.to)\(copy)")
-        }
+        let userStore = try await openUserStore(configuration.userStore, files: files, logger: logger)
         return ServerComponents(
             files: files,
             state: state,
@@ -51,6 +47,27 @@ struct ServerComponents: Sendable {
             indexWriter: writer,
             imports: ImportCoordinator(files: files, importer: IndexImporter(files: files, writer: writer),
                                        state: state, jobs: jobs))
+    }
+
+    /// The user store `FRUS_USER_STORE` names, migrated to this build's schema: app.db in the data
+    /// directory, or the PostgreSQL store, with its local copy for search beside app.db's place.
+    private static func openUserStore(_ choice: ServerConfiguration.UserStoreChoice, files: DataDirectory,
+                                      logger: Logger) async throws -> RelationalUserStore {
+        switch choice {
+        case .sqlite:
+            let store = try await SQLiteUserStore(url: files.userStore, backupsDirectory: files.backupsDirectory)
+            if let migration = store.migration {
+                let copy = migration.backup.map { ", after a copy of the store at \(migration.from) in \($0.path)" } ?? ""
+                logger.info("app.db migrated from \(migration.from) to \(migration.to)\(copy)")
+            }
+            return store
+        case .postgreSQL(let configuration):
+            let store = try await PostgreSQLUserStore(configuration: configuration, searchCopy: files.userSearchCopy,
+                                                      logger: logger)
+            let migrated = store.migration.map { ", migrated from \($0.from) to \($0.to)" } ?? ""
+            logger.info("User store: PostgreSQL at \(configuration)\(migrated), searched through \(files.userSearchCopy.path)")
+            return store
+        }
     }
 }
 

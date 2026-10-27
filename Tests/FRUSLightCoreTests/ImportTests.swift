@@ -334,6 +334,7 @@ final class TightFileStore: FileStore, @unchecked Sendable {
     var candidateIndex: URL { base.candidateIndex }
     var previousIndex: URL { base.previousIndex }
     var userStore: URL { base.userStore }
+    var userSearchCopy: URL { base.userSearchCopy }
     var volumesDirectory: URL { base.volumesDirectory }
     var exportsDirectory: URL { base.exportsDirectory }
     var backupsDirectory: URL { base.backupsDirectory }

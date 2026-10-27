@@ -25,7 +25,7 @@ private final class StatementRows {
     /// RTF as AppKit writes a bold word, whose bytes the store keeps whatever they say.
     static let rtf = Array(#"{\rtf1\ansi\ansicpg1252\cocoartf2907 {\fonttbl\f0\fnil\fcharset0 HelveticaNeue;}\f0\fs26 A \b bold\b0  word.}"#.utf8)
 
-    static func make(_ store: SQLiteUserStore, _ body: String = "A note.", in document: DocumentKey = d1, richText: [UInt8]? = nil,
+    static func make(_ store: RelationalUserStore, _ body: String = "A note.", in document: DocumentKey = d1, richText: [UInt8]? = nil,
                      tags: [String] = [], projects: [String] = [], summaries: [String] = [], highlight: String? = nil,
                      user: String = "owner", at time: Date = created) throws -> NoteRecord {
         try store.createNote(in: document, bodyText: body, richText: richText, projectIds: projects, userTagIds: tags,
@@ -37,14 +37,14 @@ private final class StatementRows {
     static func rowsReturned(by store: SQLiteUserStore, during body: () throws -> Void) throws -> [String: Int] {
         let rows = StatementRows()
         let context = Unmanaged.passUnretained(rows).toOpaque()
-        try store.reading { db in
+        try store.withConnection { db in
             _ = sqlite3_trace_v2(db.handle, UInt32(SQLITE_TRACE_ROW), { _, context, statement, _ in
                 guard let context, let statement, let sql = sqlite3_sql(OpaquePointer(statement)) else { return 0 }
                 Unmanaged<StatementRows>.fromOpaque(context).takeUnretainedValue().counts[String(cString: sql), default: 0] += 1
                 return 0
             }, context)
         }
-        defer { _ = try? store.reading { sqlite3_trace_v2($0.handle, 0, nil, nil) } }
+        defer { _ = try? store.withConnection { sqlite3_trace_v2($0.handle, 0, nil, nil) } }
         try withExtendedLifetime(rows) { try body() }
         return rows.counts
     }
@@ -54,8 +54,8 @@ private final class StatementRows {
         try rowsReturned(by: store, during: body).filter { $0.key.contains("FROM highlights") }.values.reduce(0, +)
     }
 
-    @Test func aNoteKeepsWhatItIsGivenVerbatim() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func aNoteKeepsWhatItIsGivenVerbatim(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let body = "A bold word.\n\nAnd a second paragraph, café — “quoted”."
         let note = try Self.make(store, body, richText: Self.rtf)
@@ -78,8 +78,8 @@ private final class StatementRows {
 
     /// The rail's `@Query` sorted by `lastModified` in reverse, and All Notes' too: the latest first,
     /// one with no time after the rest, then by id in uppercase, an import's lowercase one among them.
-    @Test func notesAreListedTheLatestFirst() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func notesAreListedTheLatestFirst(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let made = try Self.make(store, at: Self.later)
         try rows.addNote("B0000000-0000-0000-0000-000000000000", lastModified: "2026-01-01T00:00:00.000Z")
@@ -103,8 +103,8 @@ private final class StatementRows {
     /// The app's editor writes `richText` only when its view reports an edit: a save that leaves the
     /// body alone keeps it, Mac RTF the codec could not write included, byte for byte; a plain-mode
     /// edit drops it, as `setPlainBody` does; a formatted one replaces it.
-    @Test func aSaveKeepsTheBodyByteForByteUnlessItWasEdited() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func aSaveKeepsTheBodyByteForByteUnlessItWasEdited(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let tag = try store.createTag(named: "Revisit", for: "owner", at: Self.created)
         // A Mac note whose RTF holds what no wire carries, and a body with a CRLF, as a paste keeps one.
@@ -139,8 +139,8 @@ private final class StatementRows {
     /// depends on what the note holds, the links a save may send back, is held to the row it
     /// changes, and not to one a save read before another's; it is made before the lists are held
     /// to their rule, and what it throws is passed on with nothing written.
-    @Test func aSavesBodyIsMadeFromTheNoteItChanges() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func aSavesBodyIsMadeFromTheNoteItChanges(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let note = try Self.make(store, "A bold word.", richText: Self.rtf)
         // Another save takes the RTF out; the next save's body sees the note without it.
@@ -178,8 +178,8 @@ private final class StatementRows {
     /// A new id in a note's lists must name one of the user's tags, projects or summaries, so a
     /// stale editor cannot put back an id a delete has just taken out (S14c's rule); an id the note
     /// already carries is kept whatever it names, as the app's picker keeps one its catalogue lacks.
-    @Test func anIdMustNameWhatTheUserHasUnlessTheNoteCarriesIt() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func anIdMustNameWhatTheUserHasUnlessTheNoteCarriesIt(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let tag = try store.createTag(named: "Revisit", for: "owner", at: Self.created)
         try rows.addProject("aa000000-0000-4000-8000-000000000001", name: "Laos")
@@ -235,8 +235,8 @@ private final class StatementRows {
 
     /// `linkNoteToHighlight`: Save sets the highlight's `noteId`, if the highlight is still there,
     /// and saves the note unlinked if not. Deleting either leaves the other, the link dangling.
-    @Test func aNewNoteLinksTheHighlightItWasWrittenFor() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func aNewNoteLinksTheHighlightItWasWrittenFor(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let highlight = try store.createHighlight(in: Self.d1, start: 0, end: 5, colorTag: "yellow", selectedText: "Allow",
                                                   renderingVersion: "v", for: "owner", at: Self.created)
@@ -328,8 +328,8 @@ private final class StatementRows {
         #expect(try rows.userSearch().first?.noteText == "First.\n\nLinked.")
     }
 
-    @Test func eachUsersNotesAreTheirsAlone() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func eachUsersNotesAreTheirsAlone(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         try rows.addUser("reader")
         let theirs = try Self.make(store, user: "reader")

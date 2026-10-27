@@ -1,6 +1,7 @@
 // FRUS_* environment variables.
 
 import FRUSLightCore
+import FRUSLightTestSupport
 import Foundation
 import Testing
 
@@ -68,6 +69,42 @@ import Testing
         #expect(try ServerConfiguration.fromEnvironment(["FRUS_USER_DATA": "on"]).userData)
         #expect(try ServerConfiguration.fromEnvironment(["FRUS_USER_DATA": "OFF"]).userData == false)
         #expect(throws: ConfigurationError.self) { try ServerConfiguration.fromEnvironment(["FRUS_USER_DATA": "no"]) }
+    }
+
+    /// The user store is app.db unless FRUS_USER_STORE names a PostgreSQL database (S14d), whose
+    /// password the URL or FRUS_POSTGRES_PASSWORD_FILE gives, never both; a problem with either never
+    /// repeats the URL, which may hold the password.
+    @Test func theUserStoreIsAppDBUnlessAPostgreSQLURLIsGiven() throws {
+        #expect(try ServerConfiguration.fromEnvironment([:]).userStore == .sqlite)
+        #expect(try ServerConfiguration.fromEnvironment(["FRUS_USER_STORE": "sqlite"]).userStore == .sqlite)
+        let url = "postgres://frus:s%40cret@db.example.org:6543/research?sslmode=require"
+        let given = try ServerConfiguration.fromEnvironment(["FRUS_USER_STORE": url]).userStore
+        #expect(given == .postgreSQL(PostgreSQLConfiguration(host: "db.example.org", port: 6543, username: "frus", password: "s@cret",
+                                                             database: "research", tls: .require)))
+
+        let directory = try TemporaryDirectory()
+        let file = directory.url.appendingPathComponent("postgres-password")
+        try Data("from a file\n".utf8).write(to: file)
+        let secret = try ServerConfiguration.fromEnvironment([
+            "FRUS_USER_STORE": "postgresql://frus@db.example.org/research", "FRUS_POSTGRES_PASSWORD_FILE": file.path,
+        ]).userStore
+        #expect(secret == .postgreSQL(PostgreSQLConfiguration(host: "db.example.org", username: "frus", password: "from a file",
+                                                              database: "research")), "verify-full unless the URL says otherwise")
+
+        for environment in [
+            ["FRUS_USER_STORE": url, "FRUS_POSTGRES_PASSWORD_FILE": file.path],
+            ["FRUS_POSTGRES_PASSWORD_FILE": file.path],
+            ["FRUS_USER_STORE": "postgres://frus@db.example.org/research", "FRUS_POSTGRES_PASSWORD_FILE": "/no/such/file"],
+            ["FRUS_USER_STORE": "postgres://frus:s%40cret@db.example.org/research?sslmode=prefer"],
+            ["FRUS_USER_STORE": "mysql://frus:s%40cret@db.example.org/research"],
+        ] {
+            #expect(throws: ConfigurationError.self, "\(environment)") { try ServerConfiguration.fromEnvironment(environment) }
+            do {
+                _ = try ServerConfiguration.fromEnvironment(environment)
+            } catch let error as ConfigurationError {
+                #expect(!error.description.contains("s%40cret") && !error.description.contains("s@cret"), "\(error)")
+            }
+        }
     }
 
     /// The address a write must come from and be sent to (S14c): FRUS_PUBLIC_URL's scheme, host
