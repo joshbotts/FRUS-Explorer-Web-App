@@ -2,6 +2,83 @@
 
 One entry per session, newest first.
 
+## Session 17a: the user half of the kit's search from an attached store, upstream
+
+25–27 October 2026 · branch `claude/vigorous-boyd-f2fce4` · [#66](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/66) · upstream `503a730b`, unchanged; [FRUS-Explorer#1806](https://github.com/joshbotts/FRUS-Explorer/pull/1806), open
+
+Phase 2's row S17a, whose pull request Mac check 11 verifies. This server keeps each researcher's notes, summaries and tags in its own store, never in the index it serves: `user_search`, the FTS5 table S14a made and S15d's writes keep, and S14c's `tag_assignments`. S17d searches them through the kit, whose search read its user half from the index alone.
+
+This session opened one pull request on `FRUS-Explorer`, from `claude/search-attached-user-store`, labelled `Mac` with "Mac verification requested", and not merged. It was begun on `v2` at `9fa4375d` on 25 October and stopped when the usage limit stopped every session. On 27 October it was rebased onto `41950692`, past #1792, #1793 and #1801, and the rebase was clean. Every figure below is at the rebased head. Under rule 4 it changes shared files, and this repository changes only its records.
+
+**#1806, in one commit and a records commit:**
+- **`SearchUserSource`** says where a search reads its user half:
+  - `.index`, the index's own `user_content` and `document_cache` columns: the app's, and the default everywhere;
+  - `.attachedStore(userId:)`, one user's rows of a store attached to the index's connection, each joined to the index's row on `(volume_id, document_id)`.
+
+  `SearchSQLFilters.userSource` carries it into every statement builder, and `SearchService.userSource`, an initialiser parameter, into the filters the service builds.
+- **The read-only open attaches the store:** `IndexingPipeline(readingIndexAt:fts5Store:resources:volumesDirectory:userStore:)`.
+  - It attaches it as `user_store`, with `mode=ro` and never `immutable`, since this server writes to the store while the index is served; each statement reads the store as last committed.
+  - The tables it reads are this server's, by name: `user_search` and `tag_assignments`.
+- **Every reader of the user half takes the source:**
+  - **the match:** the user's rows of `user_search`, joined to their `document_cache` rows for the rowid, which drops a document the index does not hold. When that half runs alone, it is grouped by rowid and materialized first: SQLite would otherwise flatten it into the grouping, where FTS5 refuses `bm25`;
+  - **the tag filter and the exact-word filter's note and summary columns:** the row's key in the set that the user's assignments, or the user's rows holding the word, make. Each set is a subquery SQLite runs once a statement;
+  - **a row's tags,** in the search's three shapes and the Meaning rows: the user's assignments of the document, each tag once, its id in uppercase, sorted, as the app's reconcile writes `user_tag_ids`;
+  - **the tag counts,** driven from the user's assignments, **a tag's documents and a document's tags.**
+
+  A tag id matches whatever the case of its letters, as the column's `LIKE` does.
+- **`SearchService.userTagCounts(parameters:tagIds:documentKeys:)`**, public: the filter sheet's two routes to its tag counts, as the app's view model composes them, for S17d.
+- **The app's statements are pinned.** `SearchStatementTextTests` runs every route to a statement on the user half through the app's own calls, for 22 searches over each scope and filter. It records each of the 365 statements as SQLite expanded it, text and binds, and pins them by SHA-256. The pin was taken by running the same file against `v2` with the trace hook alone copied in, at `9fa4375d` and again at `41950692`. So with no source, each statement is the text and binds it was.
+- **`SearchUserSourceTests`, 7 tests,** over two readers' notes, summaries and tags in a store attached to a read-only index. The first reader's are also in the index's own columns of a second copy, as the app's writers keep them.
+  - Through the store, every route gives the app's answers for the same text and tags, scores aside.
+  - Each reader finds only their own.
+  - A missing store fails the open.
+  - The store, read-only, shows the next search what its host wrote since.
+- **Counts:** `FRUSCoreKitTests` goes from 1,197 tests to 1,205, and the iOS unit target from 7,673 to 7,681.
+
+**How it was checked.** Each heavy job ran under the app's lock, from a clone at a real path, beside `v2` at `41950692` built and run the same way: Xcode 27.1 on macOS 27.2, clean and unsigned, on an iPhone 17e simulator (iOS 27.0), which S17b's and S18a's sessions, sharing the lock, did not use.
+- **The full iOS unit run:** 7,681 tests in 914 suites, against `v2`'s 7,673 in 912.
+  - Both fail the 8 Keychain tests an unsigned build fails, and show the 6 known issues `v2`'s system-log test declares.
+  - Both skip the same 17 tests and 2 suites.
+  - A collection editor test failed once on the branch under load, its settings screen slow to open. Its suite then passed alone twice on the same build.
+- **`swift test`:** 3,098 tests, against 3,090, all passed.
+- **The symbol diff,** normalized as before: 250,315 names on `v2` and 250,461 on the branch, 36 removed and 182 added. Each removed name comes back under the signature that takes the source or the store.
+- **Both builds** had `v2`'s five and seven warning lines, and `swift build --target FRUSCoreKit` completed.
+- **Mutations,** each alone in a throwaway worktree:
+  - a text-only change to the app's row-tag column fails the pin alone;
+  - dropping the user's own rows from the match, the materialization, or the case-blind tag match each fails the store's suite and leaves the pin passing.
+- **Linux,** in a scratch worktree of this repository's `main` at `4028b22`, with `v2` and then the branch copied over the submodule:
+  - **the default source:** check 3's 482 queries gave the golden results, 482 identical, none reordered or different. 318 had other score bits, as S16b's pin move recorded them;
+  - **an attached store:** a scratch suite, never committed and importing FRUSCoreKit without `@testable`, wrote a fixture user's note, a summary and two tags through this server's own `SQLiteUserStore`. It opened the fixture index read-only with that `app.db` attached, and found them through the kit: the note and summary in each scope, the exact word, the tag filter, a row's tags, the tag counts on both routes, and a note written after the open;
+  - **the kit:** `FRUSCoreKitTests` ran 1,205 tests, with the one named skip, so the pin holds on SQLite 3.45.1;
+  - **the rest:** every other target passed but FRUSParityTests. Its 32 issues are `v2`'s, the same list on both: golden-file staleness, and the pins this repository keeps on app source that `v2` has moved since the pin (the colour rules in #1790 and #1793; the notes' search text, the editor's save and the export in #1792).
+- **A review** read the diff cold. It found no SQL bug, and checked the bind order and the app's text. It found a filter-only case that proved nothing, a plan assertion that either scan satisfied, the trace hook's order of release, and four doc claims. All were fixed before the runs quoted.
+
+**What the pin move past it brings** (S17c, which takes S17b's pull request and, by PLAN's rule, #1789, #1790, #1792 and #1793):
+- **The served index:** `ServedIndex` opens the pipeline with `userStore:` the store's file, and builds a `SearchService` with `.attachedStore(userId:)` for each request's user. The index's service, with `.index`, serves the rest as before.
+- **Check 3** is unchanged through the default source.
+- **Golden files:** on §5's indexing path, `IndexingPipeline.swift` changes only in code a search runs and in the read-only open. So the golden files may come from the export already in use, by the owner's choice, as at S13c's move.
+- **#1792's rules:** the parity tests above re-take their pins on the moved source. #1792 collapses the copies of a record stored under one id. This server's store keys each record by its user and id, and S16c's import writes a repeated record once, so the store holds no such copies to collapse.
+
+**Delivered here**
+
+- `COORDINATION.md`: the pull request in §2, and in §5's list of app changes only the web edition needs.
+- This log.
+
+**Notes**
+
+- **SQLite flattens a lone FTS5 half into its grouping.** `SELECT docrowid, MIN(score) FROM (SELECT …, bm25(…) …) GROUP BY docrowid` fails with "unable to use function bm25 in the requested context". The `UNION ALL` of two halves is never flattened so, which is why the app's own grouping works. `AS MATERIALIZED` keeps the user half's `bm25` where its table is matched.
+- **A statement trace pins SQL by what runs, not by a copy.**
+  - `sqlite3_trace_v2` with `SQLITE_TRACE_STMT`, recording `sqlite3_expanded_sql` for the statements the pipeline itself prepared, gives the text and binds of every statement a route runs.
+  - The same test, run on the earlier tree with the hook copied in, gives the reference, so nothing is transcribed.
+  - FTS5's own statements inside them are left out, since their text is SQLite's and can move between versions.
+  - A search's snippet pass asks the vocabulary in a `Set`'s order, which differs between processes. So the pin calls the search's statement as `search(parameters:limit:offset:)` does, and leaves the snippets out.
+- **Per-user BM25,** SPEC's risk, holds as written. The user half's scores are BM25 over every user's rows of `user_search`, so the same documents match, and a note's score is not the Mac's. Corpus-only searches are unchanged, scores bit for bit.
+- **The exact-word set reads every row of `user_search`,** since an FTS5 table indexes none of its unindexed columns, `user_id` among them. The word is tested in the user's rows alone. It was not measured at a shared instance's size.
+- **Not in the row:** `documentSnippets(forKeys:)` and `documentsInDateRange` still read `summary_text` from the index, for Related Documents, Project Home and the Chronology. None of them is in phase 2.
+- **Scratch:** under `~/Library/Caches/frus-s17a`: the clone, its `v2` worktree, the logs and scripts, a scratch worktree of this repository (`web-linux`) and the mutations' worktree.
+
+**Next: S17c,** the pin move past #1806 and S17b's [#1805](https://github.com/joshbotts/FRUS-Explorer/pull/1805), once the owner has run Mac checks 11 and 12 and merged both. Then **S17d**, search over the researcher's writing, which attaches the store and passes each user's source. Beside them, S16e and the server's track.
+
 ## Session 16d: the export
 
 25 October 2026 · branch `claude/s16d-export` · [#64](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/64) · upstream `503a730b`, unchanged

@@ -234,6 +234,25 @@ On Apple platforms the reader draws a highlight that ends on a line break, and t
 
 It changes nothing on §5's indexing path. The pin move past it brings both. The host script's try of each highlight before the kit draws them can then stay, for any other the kit cannot draw, or go, and check 6's sampler may stop avoiding an end on a line break.
 
+**#1806 (session S17a), open.** This server keeps each researcher's notes, summaries and tags in its own store, `user_search` and `tag_assignments`, never in the index it serves, and the kit's search read that half from the index alone. [joshbotts/FRUS-Explorer#1806](https://github.com/joshbotts/FRUS-Explorer/pull/1806) gives the search a source for it, in one commit and a records commit:
+- **`SearchUserSource`:** `.index`, the index's own `user_content` and `document_cache` columns, the app's and the default everywhere; or `.attachedStore(userId:)`, one user's rows of a store attached to the index's connection, joined to the index's rows on `(volume_id, document_id)`. `SearchSQLFilters.userSource` and `SearchService.userSource` carry it.
+- **The read-only open attaches the store,** read-only and never immutable: `IndexingPipeline(readingIndexAt:fts5Store:resources:volumesDirectory:userStore:)`, as `user_store`.
+- **Every reader of the user half takes the source:**
+  - the match;
+  - the tag filter, and the exact-word filter's note and summary columns;
+  - a row's tags, in the search and the Meaning rows;
+  - the tag counts, a tag's documents and a document's tags.
+
+  `SearchService.userTagCounts(parameters:tagIds:documentKeys:)` is public.
+
+On Apple platforms nothing changes. The app passes no source, and `SearchStatementTextTests` pins the 365 statements the app's calls run on the user half, text and binds, to the same file's run on `v2`. Rebased onto `41950692` and run beside `v2` there:
+- the full iOS unit run failed only as `v2`'s did, at 7,681 tests against 7,673, apart from one collection test that failed under load and then passed alone twice;
+- `swift test` ran 3,098 tests against 3,090, `FRUSCoreKitTests` 1,205 against 1,197;
+- with thunk numbers and file-private discriminators dropped, the symbol diff was 36 names removed and 182 added. Every removed name comes back under the signature that now takes a source or a store;
+- on Linux over `main`, everything passed or failed as at `v2`. Check 3 gave its golden results through the default source, and a fixture user's note, summary and tags, written through this server's own store, were found through the kit with the store attached.
+
+On §5's indexing path, `IndexingPipeline.swift` changes only in code a search runs and in the read-only open. Mac check 11 verifies it. The pin move past it, S17c's, attaches the server's store at the read-only open and gives each request's user a service with that user's source.
+
 ## 3. The architecture that protects coordination
 
 These structures let the two codebases share code without app sessions having to think about the web edition. Web sessions add and maintain them, in pull requests on the app's repository.
@@ -308,7 +327,7 @@ The whole of the app side's part. Each rule costs little or nothing. The boundar
 - further moves into the kits (FRUSCoreKit part 2 was S6's, merged as #1573 and #1574; the read-only open and the reader's page were S8a's, #1575; the reader's AA palette, the link parse and the stores' immutable opens were S9b's, #1578 and #1579; the phase-1 features' search, citation, title and reader code is S11a's, #1664 and #1666; where a page link and a whole-volume link go, `PageLink` and `WholeVolumeLink`, is S12c's, #1784, merged as `af41efa4`, for the page-map landing #1778 gave the app, which the server serves since S12e's pin move);
 - the index version shown beside Export Research Database… (phase 1), so a user can match an export to a server before copying 2.8 GB;
 - the JSON export at `formatVersion` 7, adding the model types it lacks, above all saved searches and working corpora, and what 6 drops from the types it carries, a note's rich text and a collection's structure among them, after the envelope moves into FRUSCoreKit (phase 2, `PLAN.md`'s S16a): S16a's [#1786](https://github.com/joshbotts/FRUS-Explorer/pull/1786), merged as `02521d01`. It is the first web-authored change to a file the app writes for its users, so its Mac check exports and decodes again; the owner chose on 23 October to have it opened during the 1.0 submission, and merged it the same day;
-- phase 2's other moves into the kit, each changing nothing on Apple platforms (`PLAN.md`, Phase 2): the reader's annotation scripts and highlight rules, and Citation Lookup's Batch and Structured types made public (S15a: [#1788](https://github.com/joshbotts/FRUS-Explorer/pull/1788) and [#1787](https://github.com/joshbotts/FRUS-Explorer/pull/1787), merged as `9ae72e7e` and `503a730b`, which the server's build compiles since S16b's pin move); a user-data source for the search's user half, which the app leaves at its own columns (S17a); the research layer's rules, from a saved search's freshness to the method appendix (S17b); and collections, rendered from values (S18a), then resolved through a data source (S18b), which is the first to change how one of the app's features is put together;
+- phase 2's other moves into the kit, each changing nothing on Apple platforms (`PLAN.md`, Phase 2): the reader's annotation scripts and highlight rules, and Citation Lookup's Batch and Structured types made public (S15a: [#1788](https://github.com/joshbotts/FRUS-Explorer/pull/1788) and [#1787](https://github.com/joshbotts/FRUS-Explorer/pull/1787), merged as `9ae72e7e` and `503a730b`, which the server's build compiles since S16b's pin move); a user-data source for the search's user half, which the app leaves at its own columns (S17a: [#1806](https://github.com/joshbotts/FRUS-Explorer/pull/1806), open); the research layer's rules, from a saved search's freshness to the method appendix (S17b); and collections, rendered from values (S18a), then resolved through a data source (S18b), which is the first to change how one of the app's features is put together;
 - optionally, a JSON importer, so data made on the web can return to the Mac; not in phase 2, by the owner's choice of 23 October;
 - public access for kit types the server needs, as each need arises, such as the re-anchor's test of a stored passage for S16c's check 6, with the kit's fix of a highlight that ends on a line break (S15c's follow-up: [#1789](https://github.com/joshbotts/FRUS-Explorer/pull/1789), open);
 - boundary tests for the other kits.
