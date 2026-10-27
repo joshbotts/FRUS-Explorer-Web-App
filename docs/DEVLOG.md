@@ -4,11 +4,19 @@ One entry per session, newest first.
 
 ## Session 17a: the user half of the kit's search from an attached store, upstream
 
-25–27 October 2026 · branch `claude/vigorous-boyd-f2fce4` · [#66](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/66) · upstream `503a730b`, unchanged; [FRUS-Explorer#1806](https://github.com/joshbotts/FRUS-Explorer/pull/1806), open
+25–27 October 2026 · branch `claude/vigorous-boyd-f2fce4` · [#66](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/66) · upstream `503a730b`, unchanged; [FRUS-Explorer#1806](https://github.com/joshbotts/FRUS-Explorer/pull/1806) merged as `391b3461`
 
 Phase 2's row S17a, whose pull request Mac check 11 verifies. This server keeps each researcher's notes, summaries and tags in its own store, never in the index it serves: `user_search`, the FTS5 table S14a made and S15d's writes keep, and S14c's `tag_assignments`. S17d searches them through the kit, whose search read its user half from the index alone.
 
 This session opened one pull request on `FRUS-Explorer`, from `claude/search-attached-user-store`, labelled `Mac` with "Mac verification requested", and not merged. It was begun on `v2` at `9fa4375d` on 25 October and stopped when the usage limit stopped every session. On 27 October it was rebased onto `41950692`, past #1792, #1793 and #1801, and the rebase was clean. Every figure below is at the rebased head. Under rule 4 it changes shared files, and this repository changes only its records.
+
+When S17b's [#1805](https://github.com/joshbotts/FRUS-Explorer/pull/1805) merged as `295e5276`, `v2` was merged into the branch as `334e0afc`, with no rebase:
+- the conflicts were records alone, and both sessions' were kept in `CLAUDE.md`'s FRUSCoreKit entry and at the end of the development plan;
+- the project file was generated again;
+- at the merged tree, SwiftPM ran the branch's two suites and S17b's, and passed;
+- the pin, re-derived on `v2` at `295e5276` with the hook alone copied in, was the same.
+
+The owner merged #1806 the same day as `391b3461`, a squash with the branch head's tree, before the full checks could run again at the merge; they had run at `67b90398` on `41950692`, as below.
 
 **#1806, in one commit and a records commit:**
 - **`SearchUserSource`** says where a search reads its user half:
@@ -77,7 +85,7 @@ This session opened one pull request on `FRUS-Explorer`, from `claude/search-att
 - **Not in the row:** `documentSnippets(forKeys:)` and `documentsInDateRange` still read `summary_text` from the index, for Related Documents, Project Home and the Chronology. None of them is in phase 2.
 - **Scratch:** under `~/Library/Caches/frus-s17a`: the clone, its `v2` worktree, the logs and scripts, a scratch worktree of this repository (`web-linux`) and the mutations' worktree.
 
-**Next: S17c,** the pin move past #1806 and S17b's [#1805](https://github.com/joshbotts/FRUS-Explorer/pull/1805), once the owner has run Mac checks 11 and 12 and merged both. Then **S17d**, search over the researcher's writing, which attaches the store and passes each user's source. Beside them, S16e and the server's track.
+**Next: S17c,** the pin move past #1805 and #1806, both merged on 27 October, to `v2`'s head; by PLAN's rule it takes #1789, #1790, #1792 and #1793 too. Then **S17d**, search over the researcher's writing, which attaches the store and passes each user's source. Beside them, S16e and the server's track.
 
 ## Session 16d: the export
 
