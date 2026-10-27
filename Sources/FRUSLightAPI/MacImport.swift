@@ -104,9 +104,10 @@ public enum MacImport {
     /// `CollectionEntryInspector`, which `GeneratedSummary.duplicateHeadnoteDraft` copies.
     static let headnoteDraftPromptId = "0EAD0000-0000-4000-8000-000000000001"
 
-    /// The kind a version-6 entry with no document is kept as: one the app does not know, which its
-    /// `CollectionEntry.entryKind` reads as `.unrecognized`, an inert row.
-    static let inertKind = "unrecognized"
+    /// The kind a version-6 entry with no document is kept as: the kit's `CollectionEntryKind`
+    /// `.unrecognized`, the app's reading of a kind it does not know (`CollectionEntry.entryKind`), an
+    /// inert row.
+    static let inertKind = CollectionEntryKind.unrecognized.rawValue
 
     /// The model types, each with its table and the first format version that carries it.
     static let types: [(model: String, table: String, since: Int)] = [
@@ -386,7 +387,7 @@ public enum MacImport {
             "include_related_documents": bool(entry?.includeRelatedDocuments), "include_headnote": bool(entry?.includeHeadnote),
             "headnote_summary_id": uuid(entry?.headnoteSummaryId), "excerpt_start": int(entry?.excerptStart),
             "excerpt_end": int(entry?.excerptEnd), "excerpt_rendering_version": text(entry?.excerptRenderingVersion),
-            "excerpt_color_tag": text(entry?.excerptColorTag), "kind": .text(entry?.kind ?? "document"),
+            "excerpt_color_tag": text(entry?.excerptColorTag), "kind": .text(entry?.kind ?? CollectionEntryKind.document.rawValue),
             "generated_block_type": text(entry?.generatedBlockType), "text": text(entry?.text), "rich_text": blob(entry?.richText),
         ]
     }
@@ -592,10 +593,10 @@ extension ImportRow {
     }
 }
 
-/// The columns the app's `SavedSearch` keeps beside its search's snapshot, app code mirrored: its
-/// `init(name:parameters:)` writes the scalar columns from the parameters, and `recordRun` writes the
-/// watermark, `SavedSearchFreshness`, with a plain `JSONEncoder()`. NotesAndSummariesParityTests
-/// holds both to the app's source.
+/// The columns the app's `SavedSearch` keeps beside its search's snapshot: its `init(name:parameters:)`
+/// writes the scalar columns from the parameters, app code mirrored, which ImportParityTests holds to
+/// the app's source; and `recordRun` writes the watermark, the kit's `SavedSearchFreshness`, as its
+/// `encoded` blob, which the import writes with the kit's own call.
 enum SavedSearchColumns {
     /// `SavedSearch.init(name:parameters:)`'s scalar columns, as it writes them from `parameters`.
     static func scalars(of parameters: SearchParameters) -> [String: SQLiteValue] {
@@ -628,20 +629,13 @@ enum SavedSearchColumns {
         ]
     }
 
-    /// The watermark `SavedSearchFreshness` encodes, or NULL when the file records no run, as a
-    /// search saved and never run again keeps none.
+    /// The watermark the file records, as the kit's `SavedSearchFreshness.encoded` writes it (a field
+    /// with no value left out, a date as seconds since 2001), or NULL when the file records no run, as
+    /// a search saved and never run again keeps none.
     static func freshness(lastRunAt: Date?, matchCount: Int?, indexedVolumeCount: Int?) -> SQLiteValue {
         guard lastRunAt != nil || matchCount != nil || indexedVolumeCount != nil else { return .null }
-        return MacImport.json(Freshness(lastRunAt: lastRunAt, matchCountAtLastRun: matchCount,
-                                        indexedVolumeCountAtLastRun: indexedVolumeCount))
-    }
-
-    /// `SavedSearchFreshness`'s fields and keys, encoded as its synthesized encoder writes them: a
-    /// field with no value left out, and the date as the default strategy writes one, seconds since
-    /// 2001, which the app's decoder reads back.
-    struct Freshness: Codable, Equatable {
-        var lastRunAt: Date?
-        var matchCountAtLastRun: Int?
-        var indexedVolumeCountAtLastRun: Int?
+        let mark = SavedSearchFreshness(lastRunAt: lastRunAt, matchCountAtLastRun: matchCount,
+                                        indexedVolumeCountAtLastRun: indexedVolumeCount)
+        return mark.encoded.map { .text(String(decoding: $0, as: UTF8.self)) } ?? .null
     }
 }

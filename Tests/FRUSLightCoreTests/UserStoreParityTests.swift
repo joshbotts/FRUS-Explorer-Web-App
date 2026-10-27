@@ -115,8 +115,8 @@ import Testing
         case "Double": [.real]
         case "Bool": [.boolean]
         case "Date": [.date]
-        // Data the app writes with JSONEncoder becomes JSON text, as SPEC has `parametersData`; any
-        // other, RTF or a payload not yet defined, stays bytes.
+        // Data the app writes with JSONEncoder, or as a kit type's `encoded` blob, becomes JSON text,
+        // as SPEC has `parametersData`; any other, RTF or a payload not yet defined, stays bytes.
         case "Data": try AppModelSource.isWrittenAsJSON(property) ? [.json] : [.blob]
         // A list of models is a relationship, never a column.
         case _ where type.hasPrefix("[") && models.contains(type.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))): []

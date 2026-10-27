@@ -332,26 +332,15 @@ enum ImportServer {
         #expect(row.samples.map(\.text) == [raw, raw] && row.samples.map(\.selectedText) == [excerpt, nil])
     }
 
-    /// Check 6's two forms are the kit's own test, `HighlightReanchor`'s `extracts`, private at the
-    /// pin and public from FRUS-Explorer#1789: held here to its body, so a change to the kit's rule
-    /// fails until the check follows it, and the pin move past #1789, whose signature differs, makes
-    /// the check call the kit's.
+    /// Check 6's two forms are the kit's own test, `HighlightReanchor.extracts(passage:start:end:in:)`,
+    /// public since FRUS-Explorer#1789, which the harness calls since S17c's pin move: the excerpt,
+    /// which joins two blocks' parts with a blank line, or the raw slice, and nothing else.
     @Test func check6sTwoFormsAreTheKitsOwnTest() throws {
-        let source = try String(contentsOf: Self.layout.upstream.appendingPathComponent(
-            "FRUSCoreKit/DocumentView/HighlightReanchorSearch.swift"), encoding: .utf8)
-        let body = try NotesAndSummariesParityTests.body(of: "private static func extracts(_ passage: String, start: Int, end: Int,",
-                                                         in: source)
-        #expect(body == [
-            "if flatTextExcerpt(blocks: blocks, start: start, end: end) == passage { return true }",
-            "guard end <= flat.count, end > start else { return false }",
-            "return String(decoding: flat[start..<end], as: UTF16.self) == passage",
-        ])
         let blocks = ["First paragraph.", "Second one."]
-        let flat = Array(blocks.joined().utf16)
-        #expect(ExportHighlights.extracts("paragraph.\n\nSecond", start: 6, end: 22, flat: flat, blocks: blocks))
-        #expect(ExportHighlights.extracts("paragraph.Second", start: 6, end: 22, flat: flat, blocks: blocks))
-        #expect(!ExportHighlights.extracts("paragraph. Second", start: 6, end: 22, flat: flat, blocks: blocks))
-        #expect(!ExportHighlights.extracts("paragraph.", start: 6, end: 99, flat: flat, blocks: blocks))
+        #expect(HighlightReanchor.extracts(passage: "paragraph.\n\nSecond", start: 6, end: 22, in: blocks))
+        #expect(HighlightReanchor.extracts(passage: "paragraph.Second", start: 6, end: 22, in: blocks))
+        #expect(!HighlightReanchor.extracts(passage: "paragraph. Second", start: 6, end: 22, in: blocks))
+        #expect(!HighlightReanchor.extracts(passage: "paragraph.", start: 6, end: 99, in: blocks))
     }
 
     // MARK: Mirrored, with a parity test
@@ -380,12 +369,14 @@ enum ImportServer {
     }
 
     /// An entry of a kind the app does not know reads as `.unrecognized`, an inert row that resolve
-    /// and export skip, and so does the raw value `unrecognized` itself.
+    /// and export skip, and so does the raw value `unrecognized` itself, the kit's `CollectionEntryKind`
+    /// since S17b's FRUS-Explorer#1805, which the import names.
     @Test func anInertEntryReadsAsTheAppsUnrecognizedKind() throws {
         let collection = try Self.read("Models/Collection.swift")
         #expect(collection.contains("get { CollectionEntryKind(rawValue: kind) ?? .unrecognized }"))
-        #expect(collection.contains("    case unrecognized\n"), "its raw value is its name")
-        #expect(MacImport.inertKind == "unrecognized")
+        #expect(MacImport.inertKind == "unrecognized" && CollectionEntryKind(rawValue: MacImport.inertKind) == .unrecognized,
+                "its raw value is its name")
+        #expect(!CollectionEntryKind.allCases.contains(.unrecognized), "a kind the app never writes")
     }
 
     /// A field a file before version 7 cannot carry takes, in a new row, the initial value the app's
@@ -422,7 +413,8 @@ enum ImportServer {
     }
 
     /// The saved search's scalar columns are what `SavedSearch.init(name:parameters:)` writes from the
-    /// parameters, and its watermark is `SavedSearchFreshness`, encoded as `recordRun` encodes it.
+    /// parameters, and its watermark is the kit's `SavedSearchFreshness`, encoded as `recordRun`
+    /// encodes it, with the kit's `encoded`.
     @Test func aSavedSearchsColumnsAreWhatTheAppWritesFromItsParameters() throws {
         let source = try Self.read("Models/SavedSearch.swift")
         let initializer = try NotesAndSummariesParityTests.body(of: "init(name: String, parameters: SearchParameters) {", in: source)
@@ -456,14 +448,13 @@ enum ImportServer {
         #expect(Set(scalars.keys).union(["id", "name", "created_at", "last_modified", "parameters_data", "freshness_data"])
                 == Set(UserStoreSchema.table(for: "SavedSearch")?.columns.map(\.name) ?? []))
 
-        let freshness = try #require(source.range(of: "struct SavedSearchFreshness: Codable, Equatable, Sendable {"))
-        let fields = source[freshness.upperBound...].matches(of: /\n    var (\w+): ([^\n]+)\n/).map { "\($0.1): \($0.2)" }
-        #expect(Array(fields.prefix(3)) == ["lastRunAt: Date?", "matchCountAtLastRun: Int?", "indexedVolumeCountAtLastRun: Int?"])
-        #expect(source.contains("freshnessData = try? JSONEncoder().encode(mark)"))
-        // The app's encoder sets no order of keys, so the blob is read, not compared byte for byte:
+        #expect(NotesAndSummariesParityTests.flattened(source).contains(
+            "freshnessData = SavedSearchFreshness.run(at: .now, matchCount: matchCount, indexedVolumeCount: indexedVolumeCount).encoded"))
+        // The kit's encoder sets no order of keys, so the blob is read, not compared byte for byte:
         // a date as seconds since 2001, and a field with no value left out.
         let run = Date(timeIntervalSinceReferenceDate: 800_000_000)
         let blob = try #require(SavedSearchColumns.freshness(lastRunAt: run, matchCount: 3, indexedVolumeCount: nil).text)
+        #expect(SavedSearchFreshness.decoded(from: Data(blob.utf8)) == SavedSearchFreshness.run(at: run, matchCount: 3, indexedVolumeCount: nil))
         let object = try #require(try JSONSerialization.jsonObject(with: Data(blob.utf8)) as? [String: Any])
         #expect(Set(object.keys) == ["lastRunAt", "matchCountAtLastRun"])
         #expect((object["lastRunAt"] as? NSNumber)?.doubleValue == 800_000_000 && (object["matchCountAtLastRun"] as? NSNumber)?.intValue == 3)

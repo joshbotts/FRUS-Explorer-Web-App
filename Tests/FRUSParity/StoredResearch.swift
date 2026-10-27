@@ -150,7 +150,7 @@ public enum StoredResearch {
         }
         if version >= 7 {
             envelope.savedSearches = try reader.rows("saved_searches").map { row in
-                let freshness = try row.optionalJSON(Freshness.self, "freshness_data")
+                let freshness = try row.optionalJSON(SavedSearchFreshness.self, "freshness_data")
                 return SavedSearchExport(
                     id: row.uuid("id"), name: row.text("name"), parameters: try row.json(SearchParameters.self, "parameters_data"),
                     lastRunAt: freshness?.lastRunAt, matchCountAtLastRun: freshness?.matchCountAtLastRun,
@@ -236,13 +236,6 @@ public enum StoredResearch {
             includeRelatedDocuments: v7 ? row.optionalBool("include_related_documents") : nil,
             includeHeadnote: v7 ? row.optionalBool("include_headnote") : nil,
             headnoteSummaryId: v7 ? row.optionalUUID("headnote_summary_id") : nil)
-    }
-
-    /// The app's `SavedSearchFreshness` as its decoder reads the store's blob.
-    private struct Freshness: Decodable {
-        var lastRunAt: Date?
-        var matchCountAtLastRun: Int?
-        var indexedVolumeCountAtLastRun: Int?
     }
 
     /// The rows of one table, each by its columns' names.

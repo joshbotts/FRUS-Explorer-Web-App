@@ -6,9 +6,8 @@
 // matched highlights are written as check 6's samples, the format of fixtures/highlights/samples.json,
 // for the browser suite to read back from the reader's page in Chromium (FRUS_CHECK6_SAMPLES).
 //
-// The two forms are the kit's own test, `HighlightReanchor.extracts`, which is private at the pin and
-// public from FRUS-Explorer#1789: this composes it from the kit's public pieces, and ImportParityTests
-// holds the kit's private test to them, until the pin move past #1789 calls it.
+// The two forms are the kit's own test, `HighlightReanchor.extracts(passage:start:end:in:)`, public
+// since FRUS-Explorer#1789, which the check calls over the page's blocks.
 
 import Crypto
 import FRUSCoreKit
@@ -28,19 +27,13 @@ public enum ExportHighlights {
         public var toReview: [(id: String, reason: String)] = []
         /// Highlights whose TEI matches and whose selected text is neither form.
         public var failures: [(id: String, reason: String)] = []
-        /// Passed highlights that end on a line break, which the kit's renderer at the pin cannot end
-        /// a range after (FRUS-Explorer#1789 fixes it): left out of the samples, which Chromium draws.
+        /// Passed highlights that end on a line break: left out of the samples, as the fixtures' are
+        /// (`HighlightSamples.sampled`). The kit's renderer draws one since FRUS-Explorer#1789, ending
+        /// its range after the `<br>`, but check 6 in Chromium also reads each range back through the
+        /// kit's selection bridge, whose map names the `<br>` and not the end after it.
         public var endingOnALineBreak: [String] = []
         /// The matched highlights, as check 6's samples.
         public var samples = HighlightSampleFile(formatVersion: HighlightSamples.formatVersion, rows: [])
-    }
-
-    /// The two forms of a highlight's selected text over the flat text between its offsets, as the
-    /// kit's `HighlightReanchor.extracts` accepts them: the excerpt, or the raw slice.
-    public static func extracts(_ passage: String, start: Int, end: Int, flat: [UInt16], blocks: [String]) -> Bool {
-        if flatTextExcerpt(blocks: blocks, start: start, end: end) == passage { return true }
-        guard end <= flat.count, end > start else { return false }
-        return String(decoding: flat[start..<end], as: UTF16.self) == passage
     }
 
     /// Check 6 over `highlights`, their documents read from `tei`, one full parse of each volume.
@@ -80,8 +73,8 @@ public enum ExportHighlights {
             }
             let raw = String(decoding: units[highlight.startOffset..<highlight.endOffset], as: UTF16.self)
             let excerpt = flatTextExcerpt(blocks: model.blocks, start: highlight.startOffset, end: highlight.endOffset)
-            guard extracts(highlight.selectedText, start: highlight.startOffset, end: highlight.endOffset, flat: units,
-                           blocks: model.blocks) else {
+            guard HighlightReanchor.extracts(passage: highlight.selectedText, start: highlight.startOffset,
+                                             end: highlight.endOffset, in: model.blocks) else {
                 result.failures.append((id, "its selected text is neither the excerpt nor the text between its offsets"))
                 continue
             }

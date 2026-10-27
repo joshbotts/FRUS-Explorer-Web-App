@@ -78,8 +78,10 @@ public enum HighlightSamples {
     /// words; a span across up to two of its blocks' boundaries (`buildFlatTextBlocks`), where a
     /// paragraph's last letter meets the next one's first with nothing between; a span holding its
     /// first line break, a `<br>` in the page; and a few words at its middle. None ends on a line
-    /// break, since the kit's renderer cannot end a range after a `<br>`, and none splits a
-    /// surrogate pair. Colours follow `HighlightColor`'s order, and the last sample is stale.
+    /// break: the kit's renderer ends such a range after the `<br>` since FRUS-Explorer#1789, but the
+    /// kit's selection bridge, which reads each range back in Chromium, maps the `<br>` itself and not
+    /// the end after it. None splits a surrogate pair. Colours follow `HighlightColor`'s order, and the
+    /// last sample is stale.
     public static func sampled(volume: String, document: String, flat: String, blocks: [String],
                                renderingVersion: String) -> HighlightSampleFile.Row {
         let units = Array(flat.utf16)
