@@ -11,7 +11,7 @@ Phase 2's row S17c. The pin moves from `503a730b` to `1c18b51e`, `v2`'s head, pa
 - [#1806](https://github.com/joshbotts/FRUS-Explorer/pull/1806) (S17a), the search's user half from a store the host attaches, as `391b3461`;
 - [#1807](https://github.com/joshbotts/FRUS-Explorer/pull/1807) (S18a), a collection rendered from values, as `1c18b51e`, a squash with its branch head's tree (`cba143d8`).
 
-`PLAN.md` has the first pin move after a phase-2 upstream merge take it, whichever row that is, so this move takes every merge since the pin as well: S15c's follow-up [#1789](https://github.com/joshbotts/FRUS-Explorer/pull/1789) (`96c9de0c`), S15d's [#1790](https://github.com/joshbotts/FRUS-Explorer/pull/1790) (`9fa4375d`), the app's [#1792](https://github.com/joshbotts/FRUS-Explorer/pull/1792) (`2b153f81`), [#1793](https://github.com/joshbotts/FRUS-Explorer/pull/1793) (`b33c05da`) and [#1801](https://github.com/joshbotts/FRUS-Explorer/pull/1801) (`36e7add7`), and six that change only the app's planning and marketing records (#1794, #1795, #1800, #1802, #1803, #1804). So S18c, which was to move past S18a's and S18b's pull requests, moves past S18b's alone. It is a pull request of its own under rule 5.
+`PLAN.md` has the first pin move after a phase-2 upstream merge take it, whichever row that is, so this move takes every merge since the pin as well: S15c's follow-up [#1789](https://github.com/joshbotts/FRUS-Explorer/pull/1789) (`96c9de0c`), S15d's [#1790](https://github.com/joshbotts/FRUS-Explorer/pull/1790) (`9fa4375d`), the app's [#1792](https://github.com/joshbotts/FRUS-Explorer/pull/1792) (`2b153f81`), [#1793](https://github.com/joshbotts/FRUS-Explorer/pull/1793) (`b33c05da`) and [#1801](https://github.com/joshbotts/FRUS-Explorer/pull/1801) (`36e7add7`), and six that change only the app's plans, guides, manuals and marketing copy (#1794, #1795, #1800, #1802, #1803, #1804). So S18c, which was to move past S18a's and S18b's pull requests, moves past S18b's alone. It is a pull request of its own under rule 5.
 
 **What the move brought, in shared code**
 
@@ -68,7 +68,7 @@ Remade from the app's source by `scripts/make-golden`, under the app's `Scripts/
 
 - **Linux, `swift:6.4-noble`, arm64,** CI's Build and Test steps replayed over `main` at `8e6d681`, this package's own targets built clean with no warning, all under the app's `Scripts/heavy.sh` lock:
   - **at the new pin before the repairs:** every kit suite passed, and two targets failed with 42 issues: in FRUSParityTests, 21 of golden-file staleness and 19 in ten of the twelve tests named above, and in FRUSLightCoreTests the other two;
-  - **with the repairs, the source-made golden files remade and the two export-made ones pending:** 2,454 tests, up from 2,359, all passing with only the named skip, in Swift Testing's results file and in the log. Seven tests print that a file waits, and "check 4 through the page: 393 of 393 rows identical", as do the reader's path and the full parse;
+  - **with the repairs, the source-made golden files remade and the two export-made ones pending:** 2,454 tests, up from 2,359, all passing with only the named skip, in Swift Testing's results file and in the log. Seven tests print that a file waits; check 4 prints "check 4 through the page: 393 of 393 rows identical", and the same on the reader's path and from one full parse per volume;
   - **per target:** FRUSCoreKitTests 1,286, SourceNoteKitTests 321, FTS5StoreTests 219, FRUSParityTests 188, FRUSLightServerTests 172, FRUSLightCoreTests 106, ManifestGeneratorTests 60, FRUSRichTextTests 42, SemanticVectorsKitTests 40, CrossRefKitTests 10, GeneratorKitTests 7, FTS5CheckTests 3.
 - **The web job:** typecheck, lint, and 304 unit tests in 33 files, unchanged but for a comment in `notesRules.ts`.
 - **`tools/mac-golden`** built in release with the codec and the formats importing the kit, and wrote the files above.
@@ -78,9 +78,9 @@ Remade from the app's source by `scripts/make-golden`, under the app's `Scripts/
 
 **Records**
 
-- `PLAN.md`: S17c's done paragraph after S16d's, S12d's row (from `1c18b51e`), S18c's row, the golden-files checkpoint and the risk row's counts.
+- `PLAN.md`: S17c's done paragraph after S16d's, S12d's row (from `1c18b51e`), S18c's row and the risk row's merges.
 - `SPEC.md`: the compatibility contract, and `setupDatabase(_:)`'s lines.
-- `COORDINATION.md`: the pin; §1's use of the kit, the mirrors and the counts; §2's #1807, now merged, and this move after it; §5's list of app changes; §6's exports.
+- `COORDINATION.md`: the pin; §1's use of the kit, the mirrors and the counts; §2's #1807, now merged, and this move after it; §5's list of app changes.
 - `docs/prep/README.md`: the pin. The README's Status and this log.
 
 **Notes**
