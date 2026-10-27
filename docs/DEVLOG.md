@@ -36,6 +36,8 @@ The bundled resources lose `frus-highlights.js` and `frus-offset-engine.js`, whi
 - `FRUSExplorer/Resources` loses the two unloaded scripts;
 - FTS5Store, SourceNoteKit and `project.yml` are unchanged, and #1792 and #1801 change no file on the path.
 
+So the owner's seventh three-volume export, made on 24 October from a build of `503a730b`, holds what the indexer at `1c18b51e` would write: the build (1.0, 1776), the index version (71) and the FTS generation (4) are the same, and on the indexing path only code that a search, an export or the reader runs changed. The golden files were remade from it, on the owner's word.
+
 **Parity tests repaired.** Twelve tests in five suites failed at the new pin on app source the move changed, as S17b's and S18a's entries foresaw:
 - **pointed at the kit's moved files, or at the app's files the code left:** `NoteViewParityTests`' words, formats, and All Notes' rows and filters (`FRUSCoreKit/Models/NotesPaneSnapshot.swift`, with the search field's filter, which moved into it from `AllNotesScreen` as `filtered(project:tagId:query:)`, and `ResearchItemCounts.swift`); `ImportParityTests`' inert kind (`CollectionEntryKind`) and saved search, whose `recordRun` writes the kit's `encoded`; and `NotesAndSummariesParityTests`' reading of prose (`Collections/CollectionExporter+App.swift`);
 - **re-taken on #1792's one copy of each record:** `ExportParityTests`' exporter lines, `NoteViewParityTests`' Contents counts (`DuplicateCopies.count`), and `NotesAndSummariesParityTests`' note text, the editor's save to every copy and its `deleteEveryCopy`. The store keeps one row for each user and id, and S16c's import keeps the newer of a file's repeated records, so the web has one copy of each by construction and nothing to collapse;
@@ -59,7 +61,7 @@ Not taken yet, each for its row: attaching the store to search, S17d's; saved se
 
 **The golden files**
 
-Remade by `scripts/make-golden`, under the app's `Scripts/heavy.sh` lock, on this Mac, which runs macOS 27.2 now, first from the app's source alone, and then, by the owner's choice, with `--export /Users/Shared/frus-index-2026-10-24.sqlite`, the seventh three-volume export, made on 24 October from a build of `503a730b` for S16b's move. §5 allows it: the build is the same, and what changed on the indexing path is code that a search, an export or the reader runs, none that indexing runs.
+Remade by `scripts/make-golden`, under the app's `Scripts/heavy.sh` lock, on this Mac, which runs macOS 27.2 now, first from the app's source alone, and then, by the owner's choice, with `--export /Users/Shared/frus-index-2026-10-24.sqlite`, the seventh three-volume export, which S16b's move was made from. No new export was made, and neither library was touched.
 - **The render and the expressions:** the 393 rows' HTML is byte for byte as before, and the manifest and the expressions change only in provenance: `sourceDigest` (`1c529af84686` to `60d61d5d2ef1`), `upstreamCommit`, and the platform's macOS, 27.2.0 where it was 27.0.1.
 - **The results** change only in that provenance. Every query's count, first 50 results and tie tail are as before.
 - **The index summary's** gating section, its 36 digests, 7 checks and volumes, is unchanged. Beside the same provenance, its information section moves only in the summarizer's timings.
