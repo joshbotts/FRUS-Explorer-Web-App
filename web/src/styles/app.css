@@ -192,6 +192,11 @@ textarea {
   margin-left: auto;
 }
 
+.signed-in {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .banner {
   margin: 0;
   padding: 0.5rem 1rem;

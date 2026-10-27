@@ -41,7 +41,8 @@
 // formatting bar's, Text formatting, its glyphs, Write a Summary, Edit… and Delete… for a summary
 // of one's own and the question before it, the visible Delete… on All Notes' rows, the rail's times,
 // Settings ▸ Data's title and the lines for an editor that could not load or a note, formatted or
-// plain, it could not show are the web's own, and so is the import's every other word. The rest,
+// plain, it could not show are the web's own, and so is the import's every other word, and from
+// S14e the header's line naming the user and the footer's saying what the operator can read. The rest,
 // chiefly what only a server has (what it indexes, which TEI it holds), are the web's own until
 // check 10 settles them.
 
@@ -59,6 +60,11 @@ export const copy = {
     title: (screen: string) => `${screen} – FRUS Explorer Light`,
     footer:
       'FRUS Explorer Light is a self-hosted edition of FRUS Explorer, with documents published by the Office of the Historian. This instance is not an Office of the Historian service.',
+    /** Behind a proxy that signs people in (PLAN's S14e): who the proxy named. */
+    signedInAs: (name: string) => `Signed in as ${name}`,
+    /** And what SPEC's Privacy asks the app to say once someone has signed in. */
+    operatorReads:
+      'Whoever runs this instance can read everything it keeps for you, your tags, highlights, notes and summaries included.',
   },
   appearance: {
     label: 'Appearance',

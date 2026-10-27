@@ -2,6 +2,56 @@
 
 One entry per session, newest first.
 
+## Session 14e: sign-in through a trusted proxy
+
+27 October 2026 · branch `claude/zen-volhard-bf9e37` · [#PR](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/PR) · upstream `503a730b`, unchanged
+
+Phase 2's row S14e, the last of the three asks of the shared deployment behind an organisation's reverse proxy and single sign-on, after S14f's path and S14g's releases. With `FRUS_AUTH=header` a proxy that signs people in names each in a header, the server takes the header from the proxy's address alone, and each user's research is theirs. No upstream pull request, no pin move and no schema change: the `users` table S2 made takes the new users.
+
+**Delivered**
+
+- **The settings** (`Sources/FRUSLightCore/Configuration.swift`): `FRUS_AUTH=header`, with `FRUS_AUTH_HEADER`, a header's name, `X-Forwarded-User` by default; `FRUS_TRUSTED_PROXIES`, IPv4 and IPv6 addresses and CIDR ranges separated by commas or spaces, each an `AddressRange`, which holds an IPv4 address as IPv6 maps it, so that a peer in either form matches; and `FRUS_ADMIN_USERS`, names separated by commas. The server does not start in header mode without a proxy, or with a range of every address, nor with any of the three set under another mode, which would leave every visitor one user. `local` stays phase 3's.
+- **The one step** (`Sources/FRUSLightAPI/UserData.swift`): `ProxyHeaderResolver`, S14c's `UserResolver` for header mode. The peer must be in the list; the header's one value, at most 256 bytes of UTF-8 with no control character, is the user, made in the store the first time with it as their id and display name (`signedInUser(_:at:)`, an insert that keeps a row already there), and held in memory after, as the single user is, so that `GET /me` does not wait on an import; an admin, with the three roles, if `FRUS_ADMIN_USERS` names them, and otherwise a reader. `TrustedProxyGuard`, in the router after `/healthz` and `/readyz`, refuses every other request from a peer outside the list, the browser app and the paths no route answers included. The refusals are `PROXY_NOT_TRUSTED` and `NOT_SIGNED_IN`, both 403, and the log names each refused peer the first time, so an operator finds the proxy's address as the server sees it. The context's `peerAddress` is the connection's own.
+- **The browser app:** the header says "Signed in as" the user, and the footer, under the line on the Office of the Historian, that whoever runs the instance can read everything it keeps for them, as SPEC's Privacy asks. Neither shows without sign-in, whose one user runs the server.
+- **The install guide:** Signing in through the proxy, with its recipe for nginx and oauth2-proxy under a path; the address to trust for a proxy on the host, the Compose network's gateway, and the command that prints it; research kept before sign-in, which is `owner`'s, moved by an export and an import; the four settings; and the two codes. `compose.yaml` passes the four from `.env`.
+- **The smoke test,** a last phase: nginx with the recipe and a stand-in for oauth2-proxy in its own container, on 127.0.0.1:4180, whose sign-in page takes a name; the server made again with nginx's address alone in the list and alice an admin; curl through the published port, from the Compose network's gateway, refused with a header naming alice, for `/api/v1/me`, the app, the API and the reader's script, and answered for the health endpoints; through nginx, no session asked to sign in, alice's session alice whatever header the browser sends, bob's bob, her tag not his, and the reader's scripts and figures reached without a session; then the sign-in spec, and the container's health check.
+- **The browser suite:** `sign-in.spec.ts`, which runs alone where `FRUS_E2E_SIGN_IN` is set, as the smoke test's last phase sets it through `scripts/npm`, and is left out everywhere else (`playwright.config.ts`).
+
+**Decided here, each the web's own**
+
+- **"Any other request is refused" is read for the peer.** A request from an address outside the list is refused everywhere but `/healthz` and `/readyz`, whatever it names, so the server is reached only through the proxy; one from the proxy that names no one reads the corpus, the reader and the browser app, and nothing under `/api/v1/me`. The health endpoints answer anyone, for Docker's health check, which asks from inside the container, and a proxy's.
+- **The reader's frame needs two locations without a session.** Before the recipe was written, Chromium showed that a sandboxed frame's requests for its scripts and images go `Sec-Fetch-Site: cross-site` and carry no `SameSite=Lax` cookie, which a session's is: nginx with a cookie check logged the frame's document with the cookie and its script and image without it. So the recipe forwards `/reader/` and the figures without the check, and with the header removed; they are the same for everyone. The browser suite's highlight is the proof that the frame's scripts arrive.
+- **Every location sets the header,** to the session's user or to nothing, which nginx then leaves out, so a header the browser sends never reaches the server; the smoke test sends one.
+- **The address to trust for a proxy on the host is the Compose network's gateway:** a connection through the published port reaches the container from it, as Docker Desktop showed on this Mac and Docker's proxy gives on Linux. Every program on the host reaches the port from the same address, and the guide says so.
+- **A name is the header's value as it comes,** trimmed and never folded, so the proxy should send a stable one; `FRUS_ADMIN_USERS` names users the same way.
+- **Both refusals are 403:** the server has no challenge a client could answer, which a 401 must carry; the proxy signs people in.
+- **Research kept under `FRUS_AUTH=none` stays `owner`'s,** and a header that names `owner` acts as them. An export and an import move it to a signed-in user.
+
+**The search's user half** waits for S17d, which has not merged: S17c's pin move, [#68](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/68), is open. The two-user test holds every route under `/api/v1/me`, and S17d's row must hold the search to it: one user's search finding none of another's notes, summaries or tags, and the tag filter refusing another's tag.
+
+**Tests**
+
+- **FRUSLightCoreTests,** 106 to 109: `ConfigurationTests`, 3: the header, the proxies and the admins read as listed; header mode refused without a proxy, with a range of every address, a host name or a range too long, a header's name that is none, and sign-in's settings under `none`; an address range's peers, an IPv4 one in either form, and the spellings it refuses.
+- **FRUSLightServerTests,** 172 to 175: `SignInTests`, 3, on a real socket so that each request has its peer: a request from outside the list refused under `/me`, for the corpus, the reader's script, the browser app and an unknown path, with or without the header, making no user, while the health endpoints answer, and refused too where the peer is unknown; the header's user made the first time, an admin as `FRUS_ADMIN_USERS` says, a name in UTF-8, and no one, two names or one too long refused under `/me` while the corpus answers; each user's token their own; and the done-when's first half, alice writing through every kind of route under `/me` and importing, and bob reaching none of it by list or by id, through all 15 routes whose path names an id, the document's tags given hers, and every list and export, his note unable to name her tag or link her highlight, and the same export imported by both under the Mac's ids into two copies, his deleted and hers kept. `UserDataFixture` takes sign-in's settings, and `Browser` the proxy's header.
+- **The web unit suite,** 304 to 306 in 34 files: `AppShell.test.tsx`, 2: the user named and the footer's line behind sign-in; neither without it, nor when the server names no one.
+- **The browser suite:** `sign-in.spec.ts`, 1, in the smoke test's last phase alone: carol asks for All Notes, signs in on the proxy's page and arrives there, named, with the footer's line and none of the notes imported earlier for the server's one user, then highlights a phrase in the reader, drawn and kept; dave, in a browser of his own, signs in and finds no highlight; axe finds no violation on either. The 47 tests at the root and under the path are as they were.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64:** `scripts/swift test` on the branch: all 2,365 tests pass, up from 2,359 at #64, with the one named skip and nothing cancelled: FRUSLightCoreTests 109 and FRUSLightServerTests 175; the others as at #64.
+- **The web job's steps,** through `scripts/npm`: typecheck and lint are clean, and the unit suite passes 306 tests in 34 files.
+- **`scripts/compose-smoke --e2e`** on the branch's image: RESULTS.
+- **CI on #PR:** CI.
+
+**Records**
+
+- `docs/SPEC.md`: Tenancy and roles, the operator's line under Privacy, The user under The user's data, the wait for a user's first request, and the configuration table's four rows.
+- `docs/PLAN.md`: the row's done paragraph, Sharing beyond localhost and the risk of one store for a shared instance.
+- `docs/INSTALL.md`: Signing in through the proxy, Behind a reverse proxy's warning, Settings, the API's codes and the notes.
+- README's status, `compose.yaml`'s settings, and this log.
+
+**Next: S17d,** search in notes, summaries and tags, once S17c's pin move merges, holding the search's user half to this row's two-user test. S16e and S14b run in sessions of their own, and S14d, the PostgreSQL store, is the server track's last row, whose conformance suite takes `signedInUser`.
+
 ## Session 18a: collections render from values in FRUSCoreKit, upstream
 
 25–27 October 2026 · branch `claude/wonderful-dewdney-bda10e` · [#67](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/67) · upstream `503a730b`, unchanged; [FRUS-Explorer#1807](https://github.com/joshbotts/FRUS-Explorer/pull/1807), open

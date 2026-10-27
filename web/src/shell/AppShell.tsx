@@ -1,9 +1,12 @@
 // The frame around every screen: a skip link, the header with navigation and appearance, the
-// readiness banner, the screen, and the footer.
+// readiness banner, the screen, and the footer. Behind a proxy that signs people in (PLAN's S14e),
+// the header names the user and the footer says that the instance's operator can read what it
+// keeps for them, as SPEC's Privacy asks.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, useRouter } from '@tanstack/react-router';
 import { createContext, type MouseEvent, useContext, useEffect, useRef } from 'react';
 import { readinessQuery } from '../api/endpoints';
+import { meQuery } from '../api/userData';
 import { copy } from '../copy';
 import { type Appearance, useAppearance, useResolvedScheme } from '../settings/preferences';
 import { requestHeadingFocus } from './headingFocus';
@@ -17,6 +20,9 @@ export function AppShell() {
   const [appearance, setAppearance] = useAppearance();
   const scheme = useResolvedScheme(appearance);
   const router = useRouter();
+  // Signed in, through the proxy: a server with no sign-in has one user, its operator.
+  const me = useQuery(meQuery);
+  const signedIn = me.data && me.data.auth !== 'none' ? me.data : undefined;
 
   // A new screen takes focus at its heading, so a screen reader announces where it arrived. The
   // router says when the new screen has rendered; a new search on the same screen keeps its focus,
@@ -62,6 +68,7 @@ export function AppShell() {
             <option value="dark">{copy.appearance.dark}</option>
           </select>
         </label>
+        {signedIn && <p className="signed-in">{copy.app.signedInAs(signedIn.displayName)}</p>}
       </header>
       <ReadinessBanner />
       <main id="main" tabIndex={-1}>
@@ -69,6 +76,7 @@ export function AppShell() {
       </main>
       <footer className="app-footer">
         <p>{copy.app.footer}</p>
+        {signedIn && <p>{copy.app.operatorReads}</p>}
       </footer>
     </SchemeContext.Provider>
   );

@@ -74,6 +74,11 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
     logger.info(configuration.userData
         ? "User data on: changes are taken from pages of \(configuration.publicAddress), with its token"
         : "User data off (FRUS_USER_DATA=off): this server is read-only")
+    if configuration.auth == .header {
+        let proxies = configuration.trustedProxies.map(\.description).joined(separator: ", ")
+        let admins = configuration.adminUsers.isEmpty ? "no admins" : "admins \(configuration.adminUsers.sorted().joined(separator: ", "))"
+        logger.info("Sign-in through a proxy (FRUS_AUTH=header): the user is \(configuration.authHeader) on requests from \(proxies), and every other request but /healthz and /readyz is refused; \(admins)")
+    }
     var app = apiApplication(
         router: buildRouter(state: components.state, resources: components.resources, reader: components.reader,
                             webClient: components.webClient,

@@ -16,6 +16,9 @@
 #                    proxy, its address, which may end in a path such as /frus-explorer/. A change to
 #                    your tags must come from a page at this address
 #   FRUS_USER_DATA   off for a read-only server, which keeps no tags or other research data
+#   FRUS_AUTH        header to sign people in through a reverse proxy, which names each in a
+#                    header, with FRUS_TRUSTED_PROXIES, the proxy's addresses, and optionally
+#                    FRUS_AUTH_HEADER (X-Forwarded-User by default) and FRUS_ADMIN_USERS
 #   FRUS_IMAGE       image to run, ghcr.io/joshbotts/frus-explorer-light:edge by default
 #   COMPOSE_PROFILES set to pdf to start Gotenberg, for PDF export when it arrives (phase 3)
 
@@ -29,7 +32,10 @@ services:
       - "${FRUS_TEI_DIR:-./tei}:/data/volumes:ro"
     environment:
       FRUS_MODE: import
-      FRUS_AUTH: none
+      FRUS_AUTH: ${FRUS_AUTH:-none}
+      FRUS_AUTH_HEADER: ${FRUS_AUTH_HEADER:-}
+      FRUS_TRUSTED_PROXIES: ${FRUS_TRUSTED_PROXIES:-}
+      FRUS_ADMIN_USERS: ${FRUS_ADMIN_USERS:-}
       FRUS_PUBLIC_URL: ${FRUS_PUBLIC_URL:-http://localhost:${FRUS_HOST_PORT:-8080}}
       FRUS_USER_DATA: ${FRUS_USER_DATA:-on}
       FRUS_PDF_URL: http://pdf:3000   # the optional pdf service below

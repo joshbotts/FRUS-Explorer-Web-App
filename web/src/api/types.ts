@@ -530,7 +530,7 @@ export interface CitationBatch {
 export interface Me {
   userId: string;
   displayName: string;
-  /** `FRUS_AUTH`: `none` for a server with no sign-in. */
+  /** `FRUS_AUTH`: `none` for a server with no sign-in, `header` behind a proxy that signs people in. */
   auth: string;
   roles: ('reader' | 'curator' | 'admin')[];
   /** False when the server keeps no user data (`FRUS_USER_DATA=off`), and refuses all of it. */

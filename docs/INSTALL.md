@@ -1,6 +1,6 @@
 # Installing FRUS Explorer Light
 
-FRUS Explorer Light runs as one container on a Mac or a Linux host, serving a research database exported from FRUS Explorer on a Mac. This guide covers phase 1: one person on one machine. The server listens on this machine's 127.0.0.1 only, and has no sign-in.
+FRUS Explorer Light runs as one container on a Mac or a Linux host, serving a research database exported from FRUS Explorer on a Mac. This guide covers phase 1: one person on one machine. The server listens on this machine's 127.0.0.1 only, and has no sign-in of its own; behind a reverse proxy that signs people in, each keeps research of their own, as [Signing in through the proxy](#signing-in-through-the-proxy) sets out.
 
 **What phase 1 offers so far:** the server imports an export, checks it and serves it, with a browser interface at http://localhost:8080. You can browse the catalogue and a volume's contents, search the index with the app's query language, and read a document, rendered from the TEI volumes. In the reader, links lead to other documents, their notes and the documents on printed pages; people and terms open cards; and Cite copies the citation, or its BibTeX or RIS record.
 
@@ -215,7 +215,7 @@ curl -s -X POST http://localhost:8080/api/v1/me/tags -H "X-CSRF-Token: $token" -
 
 `GET /api/v1/me/tags` lists them, and `PUT /api/v1/me/volumes/frus1961-63v06/documents/d1/tags` with `{"tagIds": [...]}` gives a document exactly those. `GET /api/v1/me/volumes/frus1961-63v06/documents/d1/highlights` lists a document's highlights, with the document's `renderingVersion`. A `POST` there with `{"startOffset", "endOffset", "colorTag", "renderingVersion"}` makes one over those offsets into the document's text, in that version of the text, and `PATCH` or `DELETE /api/v1/me/highlights/{id}` changes its `colorTag` or removes it. `GET /api/v1/me/notes` lists your notes, and `/api/v1/me/volumes/frus1961-63v06/documents/d1/notes` a document's, where a `POST` with `{"bodyText", "runs": null, "userTagIds": [], "projectIds": [], "selectedSummaryIds": []}` makes a plain one; `GET`, `PUT` and `DELETE /api/v1/me/notes/{id}` read, save and delete one, and `GET /api/v1/me/notes/export` gives every note as a ZIP of Markdown files. `GET /api/v1/me/volumes/frus1961-63v06/documents/d1/summaries` lists a document's summaries, where a `POST` with `{"responseText"}` writes your own. A `POST /api/v1/me/import` with a JSON export as its body, `application/json`, imports it as a job and answers where to follow it, `GET /api/v1/me/import/{id}`, which gives the report once it is done. `GET /api/v1/me/export` gives the export, with `?includeGeneratedSummaries=true` your summaries too, and `GET /api/v1/me/export/contents` how many records of each kind it carries. A note's text may be 1 MiB, in a change of 4 MiB at most; an export 128 MiB; any other change may be 64 KiB. The token lasts until the server restarts.
 
-An error names its cause in a `code`: `INDEX_NOT_READY` for a search before an import has finished, `EMPTY_QUERY` for a query with nothing left to search, `TEI_NOT_AVAILABLE` when the volume is not in your TEI folder, and `DOCUMENT_NOT_FOUND`, `SECTION_NOT_FOUND`, `VOLUME_NOT_FOUND`, `TAG_NOT_FOUND`, `HIGHLIGHT_NOT_FOUND`, `NOTE_NOT_FOUND` or `SUMMARY_NOT_FOUND` for an id the volume, the catalogue, your tags, highlights, notes or summaries lack, `SUMMARY_READ_ONLY` for a change to a summary you did not write here, `TOO_MANY_CITATIONS` for a block of more than 500 citations, `DOCUMENT_CHANGED` for a highlight asked for in a version of the document's text the server no longer has, `INVALID_EXPORT` for a file that is not a JSON export or whose records cannot be read, `UNSUPPORTED_FORMAT_VERSION` for an export newer than the server reads, `IMPORT_IN_PROGRESS` while another of your imports runs, and `IMPORT_NOT_FOUND` for an import the server does not know, as after a restart. Under `/api/v1/me` the guard refuses a request, read or change, that was not sent to the address in `FRUS_PUBLIC_URL` as `HOST_NOT_ALLOWED`, such as one to http://127.0.0.1:8081 for a server at http://localhost:8080; and a change without the current token as `CSRF_TOKEN_INVALID`, and from another page as `ORIGIN_NOT_ALLOWED`.
+An error names its cause in a `code`: `INDEX_NOT_READY` for a search before an import has finished, `EMPTY_QUERY` for a query with nothing left to search, `TEI_NOT_AVAILABLE` when the volume is not in your TEI folder, and `DOCUMENT_NOT_FOUND`, `SECTION_NOT_FOUND`, `VOLUME_NOT_FOUND`, `TAG_NOT_FOUND`, `HIGHLIGHT_NOT_FOUND`, `NOTE_NOT_FOUND` or `SUMMARY_NOT_FOUND` for an id the volume, the catalogue, your tags, highlights, notes or summaries lack, `SUMMARY_READ_ONLY` for a change to a summary you did not write here, `TOO_MANY_CITATIONS` for a block of more than 500 citations, `DOCUMENT_CHANGED` for a highlight asked for in a version of the document's text the server no longer has, `INVALID_EXPORT` for a file that is not a JSON export or whose records cannot be read, `UNSUPPORTED_FORMAT_VERSION` for an export newer than the server reads, `IMPORT_IN_PROGRESS` while another of your imports runs, and `IMPORT_NOT_FOUND` for an import the server does not know, as after a restart. Under `/api/v1/me` the guard refuses a request, read or change, that was not sent to the address in `FRUS_PUBLIC_URL` as `HOST_NOT_ALLOWED`, such as one to http://127.0.0.1:8081 for a server at http://localhost:8080; and a change without the current token as `CSRF_TOKEN_INVALID`, and from another page as `ORIGIN_NOT_ALLOWED`. Behind a proxy that signs people in, a request from anywhere but the proxy is `PROXY_NOT_TRUSTED`, and one under `/api/v1/me` that names no one, or names two, `NOT_SIGNED_IN`.
 
 ## If an import is refused
 
@@ -271,7 +271,7 @@ To hear of each release, watch the repository on GitHub for releases only (Watch
 
 ## Behind a reverse proxy
 
-Compose publishes the server on this machine's 127.0.0.1 only. A reverse proxy on the same machine, such as nginx, can give it an address others reach, with TLS: a host of its own, such as `https://frus.example.org/`, or a path of a site that serves other things, such as `https://example.org/frus-explorer/`. **The server has no sign-in yet,** so anyone who can reach the proxy can use it, your tags and highlights included, which they can read and change: keep the proxy behind your own network rules or sign-in until sign-in through the proxy arrives later in phase 2, or set `FRUS_USER_DATA=off` in `.env` for a read-only server, which keeps no tags or highlights and offers none.
+Compose publishes the server on this machine's 127.0.0.1 only. A reverse proxy on the same machine, such as nginx, can give it an address others reach, with TLS: a host of its own, such as `https://frus.example.org/`, or a path of a site that serves other things, such as `https://example.org/frus-explorer/`. **Without sign-in,** anyone who can reach the proxy uses the server as you do, your tags and highlights included, which they can read and change: keep the proxy behind your own network rules, have it sign people in, as [Signing in through the proxy](#signing-in-through-the-proxy) sets out, or set `FRUS_USER_DATA=off` in `.env` for a read-only server, which keeps no tags or highlights and offers none.
 
 Write the address people will open into `.env`, then make the container again, which keeps the index in the volume:
 
@@ -317,6 +317,74 @@ location /frus-explorer/ {
 
 `proxy_pass` names no path, so nginx forwards `/frus-explorer/search` as it is, and it answers `/frus-explorer` with a redirect to `/frus-explorer/`. `scripts/compose-smoke` runs both recipes, and the browser suite through the second. With another proxy, forward the path unchanged in the same way: in Caddy, `handle /frus-explorer/*` with `reverse_proxy 127.0.0.1:8080`, not `handle_path`, which strips it; in Apache, `ProxyPass /frus-explorer/ http://127.0.0.1:8080/frus-explorer/`; in Traefik, a router with no StripPrefix middleware.
 
+### Signing in through the proxy
+
+A proxy that signs people in, with your organisation's single sign-on or another, can give each of them research of their own. It checks each request's session before it forwards it, and names the person to the server in a header, `X-Forwarded-User` unless `FRUS_AUTH_HEADER` names another, in place of any the browser sent. The server takes the header from the proxy alone: it refuses every request but `/healthz` and `/readyz` that does not come from an address in `FRUS_TRUSTED_PROXIES`, so no one who reaches it another way can name themselves. A person is made the first time the proxy names them, by the name it gives, which the app shows at the top of every page, and their tags, highlights, notes, summaries, imports and exports are theirs alone. A request through the proxy that names no one can read the documents, and nothing under `/api/v1/me`. `FRUS_ADMIN_USERS` names the admins, who, like the one user of a server with no sign-in, also import and export the corrections of the index that everyone shares.
+
+**Whoever runs the server can read everything it keeps,** everyone's research included: it is all in `app.db`, in the Docker volume, unencrypted. The app's footer says so to everyone who signs in. Research kept before sign-in belongs to the one user of a server with no sign-in, `owner`: to keep it as your own, export it first from **Settings ▸ Data**, and import it once you have signed in.
+
+A proxy on this machine reaches the server through the port Compose publishes, which the server sees as coming from the gateway of the Compose network, so that is the address to trust. With the server running, this prints it:
+
+```bash
+docker network inspect frus-light_default --format '{{range .IPAM.Config}}{{.Gateway}} {{end}}'
+```
+
+Write it into `.env` in place of `172.18.0.1`, with the admins' names, then make the container again, which keeps the index and everyone's research in the volume:
+
+```bash
+printf 'FRUS_AUTH=header\nFRUS_TRUSTED_PROXIES=172.18.0.1\nFRUS_ADMIN_USERS=you@example.org\n' >> .env
+```
+
+```bash
+docker compose up -d
+```
+
+Every program on this machine reaches the port from that address, so the server trusts the machine as it trusts the proxy: keep the machine to the people who run the server. When the proxy is refused, `docker compose logs frus` names the address the server refused, as after `docker compose down` makes the network again with another gateway. `FRUS_TRUSTED_PROXIES` takes several addresses, or CIDR ranges such as `10.0.0.0/8`, separated by commas.
+
+This nginx recipe serves the app under a path, as the second recipe above does, and checks each request's session with [oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/), run on this machine at port 4180 with `--reverse-proxy` and `--set-xauthrequest`, which signs people in with an OpenID Connect provider and answers nginx's `auth_request` with the person's name in `X-Auth-Request-User`. Another check that answers `auth_request` in the same way, such as a SAML service provider's, can take its place, with its own header in `auth_request_set`. At the root of a host, drop `/frus-explorer` from the locations.
+
+<!-- compose-smoke: nginx signing in -->
+```nginx
+location /oauth2/ {
+    proxy_pass http://127.0.0.1:4180;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Auth-Request-Redirect $request_uri;
+}
+
+location = /oauth2/auth {
+    proxy_pass http://127.0.0.1:4180;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Content-Length "";
+    proxy_pass_request_body off;
+}
+
+location /frus-explorer/ {
+    auth_request /oauth2/auth;
+    auth_request_set $frus_user $upstream_http_x_auth_request_user;
+    error_page 401 = /oauth2/sign_in;
+    proxy_pass http://127.0.0.1:8080;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-User $frus_user;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    client_max_body_size 128m;
+}
+
+location ~ ^/frus-explorer/(reader/|api/v1/volumes/[^/]+/figures/) {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-User "";
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+The reader shows a document in a sandboxed frame, and what the frame asks for, the reader's scripts and the document's figures, carries none of the cookies a browser keeps for the site alone, as a session's are (`SameSite=Lax` or `Strict`). So the last location forwards those without the check, and with no user: they are the same for everyone, and nothing under `/api/v1/me` answers without a user. Both of the app's locations set `X-Forwarded-User`, the last to nothing, which nginx then leaves out, so a header the browser sends never reaches the server. With another proxy, do the same: check the session everywhere under the path but those two, set the header from the session, and remove any the browser sent. `scripts/compose-smoke` runs this recipe with a stand-in for oauth2-proxy, and the browser suite signs in through it.
+
 ## Settings
 
 These go in `.env` beside `compose.yaml`.
@@ -327,12 +395,16 @@ These go in `.env` beside `compose.yaml`.
 | `FRUS_HOST_PORT` | `8080` | Port on this machine's 127.0.0.1 |
 | `FRUS_PUBLIC_URL` | `http://localhost:8080`, on `FRUS_HOST_PORT` | The address people open. Behind a reverse proxy, its address, which may end in a path such as `/frus-explorer/`: see Behind a reverse proxy. A change to your research data is taken only from a page at this address; on this machine, `localhost`, `127.0.0.1` and `[::1]` at its port are one address |
 | `FRUS_USER_DATA` | `on` | `off` makes a read-only server, which keeps no tags, highlights, notes or other research data and refuses any change |
+| `FRUS_AUTH` | `none` | `header` signs people in through the proxy, which names each in a header: see [Signing in through the proxy](#signing-in-through-the-proxy) |
+| `FRUS_AUTH_HEADER` | `X-Forwarded-User` | With `FRUS_AUTH=header`, the header the proxy names the person in |
+| `FRUS_TRUSTED_PROXIES` | none | With `FRUS_AUTH=header`, which it needs, the proxy's addresses or CIDR ranges, separated by commas. Every request from elsewhere is refused, but `/healthz` and `/readyz` |
+| `FRUS_ADMIN_USERS` | none | With `FRUS_AUTH=header`, the admins, by the names the proxy gives them, separated by commas |
 | `FRUS_IMAGE` | `ghcr.io/joshbotts/frus-explorer-light:edge` | The image to run: a release, or `edge` (see [Releases](#releases)) |
 | `COMPOSE_PROFILES` | none | `pdf` starts Gotenberg, a 700 MB download, for PDF export when it arrives in phase 3 |
 
 ## Notes
 
-- **Only this machine can reach the server,** unless a reverse proxy on it forwards to it, as Behind a reverse proxy sets out. The server has no sign-in of its own until phase 3's local accounts; sign-in through the proxy comes before them, in phase 2.
+- **Only this machine can reach the server,** unless a reverse proxy on it forwards to it, as Behind a reverse proxy sets out. The server has no sign-in of its own until phase 3's local accounts; a proxy can sign people in for it, as Signing in through the proxy sets out.
 - **Keep `/data` in the Docker volume.** On a Mac, a folder shared from macOS is not a local filesystem to SQLite. On Linux, replacing the volume with a host folder in `compose.yaml` works if that folder is writable by UID 10001, the server's user.
 - **On Linux,** the TEI files must be readable by UID 10001; a clone made with the usual umask is. On a host with SELinux enforcing, add `,z` after `ro` in the TEI volume line of `compose.yaml`. To run `docker` without `sudo`, your user must be in the `docker` group.
 - **Backups** of your research data, which the server keeps in `/data/app/app.db` in the volume, start later in phase 2 with a daily copy. Until then, keep the volume, and the index can always be imported again. Already, an upgrade that changes the layout of the server's own store, `/data/app/app.db`, first copies it into `/data/backups`. If the change fails, the server leaves the store as it was and does not start, and its log names the copy; Compose starts it again, and it tries again without taking another copy.

@@ -6,8 +6,14 @@ import { defineConfig, devices } from '@playwright/test';
 // (PLAN's S14f). The URL ends in a slash, or a relative path would replace its last name.
 const baseURL = (process.env.FRUS_E2E_BASE_URL ?? 'http://localhost:8080/').replace(/\/?$/, '/');
 
+// Behind a proxy that signs people in (PLAN's S14e), the sign-in spec runs alone, signing in as it
+// goes; everywhere else, the rest run without it.
+const signIn = /sign-in\.spec\.ts$/;
+const signingIn = !!process.env.FRUS_E2E_SIGN_IN;
+
 export default defineConfig({
   testDir: './e2e',
+  ...(signingIn ? { testMatch: signIn } : { testIgnore: signIn }),
   timeout: 30_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
