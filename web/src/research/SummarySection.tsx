@@ -4,7 +4,9 @@
 // text, raw. The label is the web's own mapping onto the app's words: AI summary for the model's,
 // and the headnote chips' AI · edited and Yours for the others, since the app's rail says AI summary
 // of every one. A summary the researcher writes here is the web's own, as are Write a Summary and its
-// Edit… and Delete…: the app writes none by hand, and nothing here makes or remakes one by a model.
+// Edit… and Delete…: the app writes none by hand, and nothing here makes or remakes one by a model. A
+// summary from a research database, whose prompt the index does not keep, says so in the prompt's
+// place (S16e).
 import { useQueryClient } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
@@ -73,6 +75,7 @@ export function SummarySection({
           <div className="summary-header">
             <span className="summary-label">{summaryLabel(shown)}</span>
             {shown.promptName && <span className="summary-prompt">{copy.summary.prompt(shown.promptName)}</span>}
+            {shown.fromResearchDatabase && <span className="summary-prompt">{copy.summary.fromResearchDatabase}</span>}
             {summaries.length > 1 && (
               <span className="summary-history">
                 {/* aria-disabled, not disabled, so the button pressed by keyboard keeps its focus at either end. */}

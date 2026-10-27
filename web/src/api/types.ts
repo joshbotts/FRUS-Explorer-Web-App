@@ -627,6 +627,11 @@ export interface NoteSummary {
   linkedHighlightIds: string[];
   createdAt?: string | null;
   lastModified?: string | null;
+  /**
+   * A document's note block from a research database the Mac exported with the owner's writing,
+   * which joins the document's notes into one.
+   */
+  fromResearchDatabase: boolean;
 }
 
 /** One note, with its formatting as runs, the codec's reading of the RTF the store keeps. */
@@ -675,6 +680,8 @@ export interface Summary {
   lastModified?: string | null;
   /** Whether the researcher may change it: only one written here is theirs to change. */
   editable: boolean;
+  /** A document's newest summary from a research database the Mac exported with the owner's writing. */
+  fromResearchDatabase: boolean;
 }
 
 /** A document's summaries, drafts left out, the newest first by the app's `ranksAbove`. */

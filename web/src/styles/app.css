@@ -1639,10 +1639,12 @@ button.note-row {
 }
 
 .note-row-text.empty,
+.note-row-origin,
 .note-row-time {
   color: var(--text-secondary);
 }
 
+.note-row-origin,
 .note-row-time {
   font-size: 0.75rem;
 }
@@ -1786,6 +1788,12 @@ button.all-notes-row {
 .all-notes-date {
   grid-column: 2;
   grid-row: 1;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.all-notes-origin {
+  grid-column: 1;
   color: var(--text-secondary);
   font-size: 0.875rem;
 }

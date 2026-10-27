@@ -174,10 +174,11 @@ let package = Package(
         ),
 
         // Web-only logic: configuration, Import mode, readiness, and the five v1 interfaces. It
-        // links no shared kit, only SQLite.
+        // links no shared kit, only SQLite, and swift-crypto's SHA-1 for the name-based ids of what an
+        // import takes from a research database (S16e); the kit's strip is given to it.
         .target(
             name: "FRUSLightCore",
-            dependencies: ["CSQLite"],
+            dependencies: ["CSQLite", .product(name: "Crypto", package: "swift-crypto")],
             path: "Sources/FRUSLightCore",
             swiftSettings: swift6
         ),

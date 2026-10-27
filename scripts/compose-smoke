@@ -7,7 +7,9 @@
 # the user, the read-only root, the health check and a restart. Then it
 # makes the container again with FRUS_PUBLIC_URL ending in /frus-explorer/ and checks the server
 # under that path (PLAN's S14f), where it imports a Mac JSON export of more than 4 MiB through
-# nginx (S16c). docs/INSTALL.md's nginx recipes, for the root and for a path, run in nginx on the
+# nginx (S16c), then an export made with the owner's writing, whose installed index
+# scripts/check-stripped-export searches for it (S16e). docs/INSTALL.md's nginx recipes, for the root
+# and for a path, run in nginx on the
 # Compose network in each phase. Its TEI folder holds fixtures/tei's volumes and the
 # kit's fixture for a section's own text,
 # fixtures/own-text/frus1969-76v01.xml, whose rows the export holds too.
@@ -357,6 +359,34 @@ for _ in $(seq 1 120); do
 done
 [ "$state" = succeeded ] || fail "the import through nginx ended $state"
 echo "   $(wc -c < "$work/import.json" | tr -d ' ') bytes, accepted and imported"
+
+echo "== an export made with the owner's writing (PLAN's S16e)"
+# The server keeps the writing in the user's store, strips its copy with the kit's statements, with
+# SQLite's temporary files in the volume rather than the tmpfs, and installs it; check 5's script then
+# searches the installed index for the writing. After the browser suite, which expects none of it.
+docker compose logs --no-color frus 2>&1 | grep -q "SQLite's temporary files go to /data/tmp" \
+  || fail "the server does not put SQLite's temporary files in /data/tmp"
+scripts/synthetic-export --own-text --writing "$work/writing.sqlite" >/dev/null
+docker compose cp "$work/writing.sqlite" frus:/data/import/writing.sqlite
+# The index already served stays served meanwhile, so the status's report of the import, which only an
+# installed export with writing gives, says when it is done.
+installed=""
+for _ in $(seq 1 240); do
+  status=$(curl -s --max-time 5 "$under/api/v1/status" || true)
+  case "$status" in *"were moved into your research data"*) installed=1; break ;; esac
+  sleep 0.25
+done
+[ -n "$installed" ] || fail "the export with writing was not installed: $status"
+case "$status" in *"marked as from a research database"*) ;; *) fail "the report does not say the writing is marked: $status" ;; esac
+case "$status" in *"Export as JSON"*) ;; *) fail "the report does not recommend the JSON export: $status" ;; esac
+docker compose cp frus:/data/index/frus.db "$work/installed.sqlite"
+scripts/check-stripped-export "$work/installed.sqlite" "$work/writing.sqlite" | sed 's/^/   /'
+notes=$(curl -s --max-time 5 "${as_app[@]}" "$under/api/v1/me/notes") || fail "the notes did not answer"
+case "$notes" in *'Ask the archivist whether the Vienna cables survive'*'"fromResearchDatabase":true'*|*'"fromResearchDatabase":true'*'Ask the archivist whether the Vienna cables survive'*) ;;
+  *) fail "the store does not hold the export's note block, marked: $notes" ;; esac
+summaries=$(curl -s --max-time 5 "${as_app[@]}" "$under/api/v1/me/volumes/frus1961-63v06/documents/d1/summaries") || fail "the summaries did not answer"
+case "$summaries" in *'Llewellyn Thompson reports from Moscow'*) ;; *) fail "the store does not hold the export's summary: $summaries" ;; esac
+echo "   installed, its writing in the store and marked, none of it in the index"
 
 echo "== health check under the path"
 wait_healthy

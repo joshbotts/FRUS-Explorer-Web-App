@@ -45,8 +45,9 @@ import Testing
             #expect(stored["was_chunked"] == "0" && stored["project_id"] == .some(nil) && stored["source_content_hash"] == .some(nil))
             // Every field written, a prompt's name, a project and a time with none as null.
             let raw = try #require(try JSONSerialization.jsonObject(with: Data(buffer: made.body)) as? [String: Any])
-            #expect(raw["promptName"] is NSNull && raw["projectId"] is NSNull && raw.count == 14)
+            #expect(raw["promptName"] is NSNull && raw["projectId"] is NSNull && raw.count == 15)
             #expect(raw["isHeadnoteDraft"] as? Bool == false, "the draft flag is written, false too")
+            #expect(raw["fromResearchDatabase"] as? Bool == false, "the research database's mark is written, false too (S16e)")
 
             #expect(try decode(Summary.self, try await browser.get(Self.summary(summary.id.lowercased()))) == summary)
             #expect(try decode(DocumentSummaries.self, try await browser.get(Self.d1)) ==

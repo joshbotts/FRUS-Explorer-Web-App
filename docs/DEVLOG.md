@@ -2,6 +2,113 @@
 
 One entry per session, newest first.
 
+## Session 16e: an export with the owner's writing
+
+27 October 2026 · branch `claude/reverent-lumiere-6a5062` · PR to come · upstream `503a730b`, unchanged
+
+Phase 2's row S16e, SPEC's last resort. Import mode in phase 1 refused a Mac "Export Research Database…" file made with Include My Notes, Summaries, and Tags on. It now takes one: the writing goes into the importing user's store, marked as from a research database, and the server's copy is stripped with the kit's own statements before it is checked and installed, the step S2 deferred. No upstream pull request, no pin move and no schema change.
+
+**What the app's code says,** at `503a730b`:
+
+- **The export with the writing** is the index as it is. `document_cache.summary_text` holds each document's newest summary that is not a headnote draft (`GeneratedSummary.newestNonDraftPerDocument`), and `note_text` every note on it, oldest first, joined by a blank line (`ResearchNote.indexedTextPerDocument`). `user_tag_ids` holds the ids of its tags, space-separated (`updateUserTagIds`), and `user_tags` every tag's id and name (`replaceUserTagNames`). The ids are `uuidString`s. The stamp says `my_writing_included` "1" and gives `exported_at` as `ISO8601DateFormatter` writes it.
+- **Without the writing,** `IndexDatabaseExporter` runs `ResearchDatabaseStrip.steps`, the kit's since S16a, on its copy and stamps it "0".
+- **Every summary the index keeps is the model's.** No app screen writes a document's summary by hand, and the user's own summaries are headnote drafts, which the index leaves out. The index keeps no summary's prompt, format or authorship, and no note's id, time, formatting, projects or tags.
+- **SQLite's `secure_delete`,** measured: macOS 27.2's SQLite (3.54.0) defaults to `FAST`, which writes zeros over no freed page. Ubuntu noble's libsqlite3 (3.45.1), the image's, is built with `SECURE_DELETE`, so it is on.
+
+**Delivered**
+
+- **The importer** (`Sources/FRUSLightCore/IndexImport.swift`). For an export whose stamp says it holds the writing, `checking_writing` reads the writing from the copy. Two steps are new:
+  - `stripping_writing` runs the kit's statements in their order, each named in `/readyz` in the kit's words, on the copy's connection with `secure_delete` on. It stamps the copy `my_writing_included = 0`, as the app stamps a copy it strips, and refuses a copy that still holds writing.
+  - `moving_writing` comes after `checking_integrity` has checked the stripped copy, and keeps the writing in the user's store just before the copy is installed, so a file refused at any step still changes nothing.
+
+  The import returns what the store made of the writing beside the index (`ImportedExport`). A refusal names the kit's statement it failed in. The strip asks for about twice the copy's size free, for `VACUUM`'s copy and its journal.
+- **The writing and the store** (`Sources/FRUSLightCore/ResearchDatabaseWriting.swift`). `ResearchDatabaseWriting` is what the copy holds. `ResearchDatabaseMark` is how a record is known to be from a research database. `SQLiteUserStore.keep(_:summaryFormat:for:)` writes the records through S16c's row writer, which `importResearch` and it now share, and makes `user_search` again. `MovedWriting` and its report count four kinds, each as a JSON import counts a type.
+- **The API** (`Sources/FRUSLightAPI/ResearchDatabaseImport.swift`). Import mode's importer is given the kit's `ResearchDatabaseStrip.steps`, and the store for its single user, whenever `FRUS_USER_DATA` is on. Notes and summaries carry `fromResearchDatabase`. `/api/v1/status`'s `lastImport` gains `writing`, the counts, and its message the report.
+- **SQLite's temporary folder.** `FRUSLightServer` names `/data/tmp` in `SQLITE_TMPDIR` before anything opens a database, unless the environment names one. `compose.yaml` makes `/tmp` a tmpfs, held in memory, and `VACUUM`'s copy of the full corpus is as large as the index. The server's log names the folder.
+- **The browser app.** The rail's note rows and All Notes' rows say "From a research database" of a note block, and the Summary section's header says so of a summary, in its prompt's place.
+- **The synthetic export:** `Tests/FRUSLightTestSupport/Fixtures/export-writing.sql`, two summaries, two note blocks and three tags, one of them on no document. `SyntheticExport.includesWriting` and `scripts/synthetic-export --writing` both read it, so the two cannot drift apart.
+- **The Compose smoke test.** After its JSON import, it copies an export with writing into the running container, waits for the report, and checks that it names what moved, the mark and the JSON export. It copies the installed index out and runs `scripts/check-stripped-export` over it, then reads the note block and the summary back, marked, through the API. CI pulls `swift:6.4-noble` for the script's search.
+
+**Decided here, each the web's own**
+
+- **The mark is kept in values the app's model already has,** as the brief preferred, so the store gains no column and no migration. A column would also be one the Mac's envelope cannot carry (S16d), so the mark would be lost in an export.
+  - **A summary carries the web's own prompt id,** `0EB00000-0000-4000-8000-000000000002`, which no prompt row holds. Its prompt id has to name something, since the index does not keep the real one. It is how the app knows a collection's headnote draft, by `0EAD0000-0000-4000-8000-000000000001`, and how the web knows its reader's own summaries, by `…0001`.
+  - **A note has no field to hold a mark, so its id is the mark.** The id is a name-based UUID (version 5, RFC 9562) of its document, in a namespace of the web's own. It is recognized wherever the note goes, an export and an import included. A later export's block finds its earlier one and replaces it rather than standing beside it.
+  - **The summary's id is named the same way,** for the same reason. So is each assignment's, which the index keeps without one.
+  - **Tags need no mark.** They are the Mac's own records under the Mac's own ids, and the documents they are on are facts the index keeps whole, so the JSON export's copies of them, imported before or after, are the same records.
+
+  The API gives the mark as `fromResearchDatabase`.
+- **Every record is as new as the export,** its stamp's `exported_at`, which a new record also takes as when it was made. A record the store holds is replaced only by a newer copy, as S16c's rule has it, and only in what the export says. So the same export again changes nothing, and a later one replaces each block and summary. A block's projects and tags, which the reader may have given it here, stay, and a block the reader formatted here is plain again. A stamp with no `exported_at` is refused.
+- **What the user's own records hold already is not written again,** and is counted as kept:
+  - a block the user's other notes on the document already are, joined as the index joins them, the standing mirror of `ResearchNote.indexedTextPerDocument`;
+  - a summary whose text one of the user's summaries of the document already has;
+  - an assignment of a tag the document already carries.
+
+  So a research database imported after a JSON import of the same library adds only what the JSON export did not bring.
+- **A summary is a general one, not chunked, with no authorship.** The index keeps neither format nor authorship. Every reader takes no authorship as an AI summary, which every summary the index keeps is. A note block is a plain note.
+- **A server that keeps no user data refuses such an export,** as phase 1 did, in the same words with the reason. An unstamped copy that holds writing is still refused, since nothing says when it was made.
+- **The importing user** is the store's single user, whom `FRUS_AUTH=none` acts for and who copies the export into the drop zone. S14e, which brings more than one user, decides whose the drop zone's writing is.
+- **The order puts the store last.** The brief's "moves …, then strips …, before it checks and installs it" runs here as: read the writing, strip, check, write the writing, install. Every check that can refuse a file comes before the one write outside the copy, which keeps the importer's rule that a refused file changes nothing. Only an install that fails after the store write leaves the writing kept without the index, and the import is then tried again, keeping what it kept.
+
+**Found**
+
+- **The kit's order leaves words of the notes and summaries in a stripped copy's free pages,** where SQLite does not write zeros over a freed page. The strip rebuilds both full-text indexes after `VACUUM`, as it must, since `VACUUM` may renumber the rows they index. The pages the rebuild of `user_content` frees then stay in the file, and they held the index's terms.
+  - **Measured on a synthetic copy** of 4,000 notes and 2,000 summaries: after the kit's statements at macOS's `FAST`, 171 pages were free, and 24 of the notes' marker words, 23 of their other words and 10 of the summaries' were found whole in the file. With `secure_delete` on, none were.
+  - **The Mac's own export,** S10's build-50 pair, read immutably, counts only: the free pages of the export made without the writing hold a stem of the writing that the corpus's vocabulary lacks.
+  - **Why so few are found.** FTS5 stores all but the first term of each leaf prefix-compressed, so only a few terms are ever found whole. Check 5's 24-character snippets cannot see one at all, which is why S10's check 5 passed.
+  - **So the app's footer overstates it.** "The words are gone rather than merely unlinked" is not quite so for a copy made on the Mac, and the fix is the app's: `secure_delete` before the strip, or a statement of the kit's own. That is an upstream pull request for a later session, with a Mac check.
+  - **The server runs the statements with `secure_delete` on.** Ubuntu's SQLite already has it on, and the pragma keeps it so whatever SQLite the image carries.
+- **Whether a test shows those words depends on how the index's segments came to be.** With the fixture's small writes before them, FTS5's automerge folded the strip's deletes into the terms before `VACUUM`, and nothing was left to find. The test writes its writing as one write, as a long-kept index holds most of its terms in segments merged long ago.
+- **SQLite's Unix layer reads `SQLITE_TMPDIR` once, when SQLite starts** (`unixTempFileInit`), so the server sets it at the top of `main`, before anything opens a database.
+
+**Tests**
+
+- **FRUSLightCoreTests,** 106 to 111. `ResearchDatabaseWritingTests`, 5:
+  - the ids are version-5 UUIDs, checked against RFC 9562's own example, one for each kind and document;
+  - the two marks;
+  - the writing read as the index keeps it, a blank block none and an id that is no UUID given one;
+  - the report's words.
+
+  `ImportTests` refuses an export with writing on a server that keeps no user data, and one whose stamp gives no time.
+- **FRUSLightServerTests,** 172 to 180. `ResearchDatabaseImportTests`, 8, through the server's own wiring, the kit's strip and the store:
+  - **the row's done-when.** The steps in order. The installed index holds no writing in its tables, no term in `user_content`, the stamp of a copy made without it, and none of check 5's snippets or the writing's own words in its bytes, which the controls find in the export. The store holds every block, summary, tag and assignment, marked, and `user_search` finds them;
+  - the same export again keeps everything;
+  - a later export replaces what changed and keeps the reader's tags on a block;
+  - what the user's records hold is not added again;
+  - a file damaged where only `VACUUM` reads it is refused and changes nothing;
+  - too little room for the strip is the server's problem;
+  - **free pages.** Over 3,000 notes and 1,500 summaries, the kit's statements at `FAST` leave words of both in the file, and the server's strip none;
+  - the report through `/api/v1/status`, and the marked records through the user's routes.
+
+  Two tests that list a note's and a summary's keys now list `fromResearchDatabase`.
+- **The web unit suite,** 304 to 307 in 33 files: the mark in the rail's rows, in All Notes and in the summary's header.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64.** All 2,372 tests pass, up from 2,359, with the one named skip: FRUSLightCoreTests 111, FRUSLightServerTests 180, FRUSParityTests 188 and FRUSCoreKitTests 1,191, the others as before. Each was taken through `scripts/swift test`, the server's and the core's again under the app's heavy-job lock after the two key lists were fixed.
+- **The web job's steps,** through `scripts/npm`: typecheck and lint clean, and 307 unit tests.
+- **`scripts/compose-smoke --e2e`:** to come.
+- **CI:** to come.
+
+**Records**
+
+- `docs/SPEC.md`:
+  - the Import procedure's step 3, and how Import mode takes a research database with writing;
+  - the paths table's row, and the mapping's notes and summaries;
+  - check 5, and the room a strip needs.
+- `docs/PLAN.md`: the row's done paragraph.
+- `docs/INSTALL.md`: the export step, the import's steps and status, the room, the refusal, and Bring your research from the Mac.
+- `docs/COORDINATION.md` §1: the kit's strip the server runs, and its stamp.
+- README's status; and this log.
+
+**For later sessions**
+
+- **Upstream:** the Mac's Export Research Database… with the switch off keeps words of the notes and summaries in its free pages, as Found says. It could run its strip with `secure_delete` on, or the kit's steps could begin with it. Mac check needed.
+- **Check 5's script** finds no single word. A search of a stripped file's free pages for the writing's stems that the corpus lacks would find what Found found.
+- **A JSON import after a research database's** brings the notes beside their blocks, which the reader then deletes. A rule that a JSON import drops a block its notes now hold whole would change S16c's "an import deletes nothing", so it is the owner's to decide.
+
+**Next: S17d,** search in the researcher's notes, summaries and tags through the kit's search with the user's `user_search` attached, once S17c's pin move (#68) merges; with S14e, S14d and S14b on the server's track.
+
 ## Session 18a: collections render from values in FRUSCoreKit, upstream
 
 25–27 October 2026 · branch `claude/wonderful-dewdney-bda10e` · [#67](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/67) · upstream `503a730b`, unchanged; [FRUS-Explorer#1807](https://github.com/joshbotts/FRUS-Explorer/pull/1807), open

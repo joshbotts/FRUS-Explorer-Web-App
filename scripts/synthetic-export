@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # FRUS Explorer Light: writes a small synthetic FRUS Explorer research export.
-#   scripts/synthetic-export [--own-text] <output.sqlite>
+#   scripts/synthetic-export [--own-text] [--writing] <output.sqlite>
 # It has the schema of a real export (Tests/FRUSLightTestSupport/Fixtures/export-v69-schema.sql),
 # the index and FTS schema versions this build serves (Sources/FRUSLightCore/Compatibility.swift),
 # three documents with their dates, the page ranges and person mentions the reader's links read, and an export stamp
@@ -8,13 +8,26 @@
 # With --own-text it adds four rows of fixtures/own-text/frus1969-76v01.xml, the kit's fixture for a
 # section's own text, as FRUSCoreKit indexes it, and the outline it stores: SyntheticExport's
 # includesOwnText, which the Compose smoke test's browser suite reads.
+# With --writing it is an export made with Include My Notes, Summaries, and Tags on (PLAN's S16e): it
+# holds Tests/FRUSLightTestSupport/Fixtures/export-writing.sql's summaries, note blocks and tags, and
+# its stamp says my_writing_included = 1, as SyntheticExport's includesWriting has it.
 # Needs the sqlite3 command.
 set -euo pipefail
 
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+usage="usage: scripts/synthetic-export [--own-text] [--writing] <output.sqlite>"
 own_text=""
-if [ "${1:-}" = "--own-text" ]; then own_text=1; shift; fi
-out=${1:?usage: scripts/synthetic-export [--own-text] <output.sqlite>}
+writing=""
+while [ $# -gt 1 ]; do
+  case "$1" in
+    --own-text) own_text=1 ;;
+    --writing) writing=1 ;;
+    *) echo "$usage" >&2; exit 2 ;;
+  esac
+  shift
+done
+out=${1:?$usage}
+case "$out" in --*) echo "$usage" >&2; exit 2 ;; esac
 command -v sqlite3 >/dev/null || { echo "scripts/synthetic-export: needs the sqlite3 command" >&2; exit 1; }
 
 constant() { grep -oE "$1 = [0-9]+" "$root/Sources/FRUSLightCore/Compatibility.swift" | grep -oE '[0-9]+$'; }
@@ -37,6 +50,13 @@ if [ -n "$own_text" ]; then
 INSERT INTO document_dates (volume_id, document_id)
   SELECT volume_id, document_id FROM document_cache WHERE volume_id = 'frus1969-76v01';
 INSERT INTO volume_structures (volume_id, structure_json) VALUES ('frus1969-76v01', '$outline');"
+fi
+
+included=0
+writing_sql=""
+if [ -n "$writing" ]; then
+  included=1
+  writing_sql=".read '$root/Tests/FRUSLightTestSupport/Fixtures/export-writing.sql'"
 fi
 
 rm -f "$out" "$out-journal" "$out-wal" "$out-shm"
@@ -66,9 +86,10 @@ INSERT INTO document_dates (volume_id, document_id, date_iso, date_iso_max, date
   VALUES ('frus1961-63v06', 'd1', '1960-11-09', '1960-11-09', 'day'),
          ('frus1961-63v06', 'd2', '1960-11-10', '1960-11-10', 'day'),
          ('frus1894Nicaragua', 'd1', '1894-01-25', '1894-01-25', 'day');
+$writing_sql
 INSERT INTO research_provenance (key, value) VALUES
   ('exported_at', strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-  ('my_writing_included', '0'),
+  ('my_writing_included', '$included'),
   ('app_version', 'synthetic'),
   ('app_build', '0'),
   ('installed_index_version', '$version'),
@@ -79,4 +100,4 @@ PRAGMA user_version = $fts;
 .output /dev/null
 PRAGMA journal_mode = DELETE;
 SQL
-echo "$out: synthetic export, index version $version, FTS schema $fts, $([ -n "$own_text" ] && echo "7 documents, 4 of them frus1969-76v01's: two sections' own text and two documents" || echo "3 documents")"
+echo "$out: synthetic export, index version $version, FTS schema $fts, $([ -n "$own_text" ] && echo "7 documents, 4 of them frus1969-76v01's: two sections' own text and two documents" || echo "3 documents")$([ -n "$writing" ] && echo ", with the owner's writing: 2 summaries, 2 note blocks, 3 tags")"

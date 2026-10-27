@@ -59,6 +59,7 @@ export function noteSummary(fields: Partial<NoteSummary> & Pick<NoteSummary, 'id
     linkedHighlightIds: [],
     createdAt: '2026-10-24T09:00:00.000Z',
     lastModified: '2026-10-24T09:00:00.000Z',
+    fromResearchDatabase: false,
     ...fields,
   };
 }
@@ -82,6 +83,7 @@ export function summary(fields: Partial<Summary> & Pick<Summary, 'id'>): Summary
     createdAt: '2026-10-24T09:00:00.000Z',
     lastModified: '2026-10-24T09:00:00.000Z',
     editable: true,
+    fromResearchDatabase: false,
     ...fields,
   };
 }

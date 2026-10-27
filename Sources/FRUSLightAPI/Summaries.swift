@@ -35,6 +35,9 @@ public struct Summary: Codable, Equatable, Sendable, ResponseEncodable {
     public var lastModified: String?
     /// Whether the reader may change or delete it: one of their own (`OwnSummary.isEditable`).
     public var editable: Bool
+    /// A document's newest summary from a research database, an export made with the owner's writing,
+    /// which keeps no other (`ResearchDatabaseMark.isFromResearchDatabase`, S16e).
+    public var fromResearchDatabase: Bool
 
     init(_ record: SummaryRecord, promptNames: [String: String]) {
         id = NoteRoutes.wire(record.id)
@@ -51,6 +54,7 @@ public struct Summary: Codable, Equatable, Sendable, ResponseEncodable {
         createdAt = record.createdAt.map(UserStoreDate.text)
         lastModified = record.lastModified.map(UserStoreDate.text)
         editable = record.isEditable
+        fromResearchDatabase = ResearchDatabaseMark.isFromResearchDatabase(record)
     }
 
     /// The kit's `ResponseFormat` of a stored value, by its case's name.
@@ -86,6 +90,7 @@ public struct Summary: Codable, Equatable, Sendable, ResponseEncodable {
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(lastModified, forKey: .lastModified)
         try container.encode(editable, forKey: .editable)
+        try container.encode(fromResearchDatabase, forKey: .fromResearchDatabase)
     }
 }
 

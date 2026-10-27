@@ -4,7 +4,11 @@
 // v65 export showed the spec could not work as written (docs/prep/README.md):
 // - SQLite refuses the rank-1 FTS5 integrity check on a read-only connection, so the checks
 //   run on a writable copy, made with the backup API, which then becomes the live index.
-// - Phase 1 serves the corpus only, so an export that includes the owner's writing is refused.
+// - An export that includes the owner's writing (PLAN's S16e) has it read from the copy, then the
+//   copy stripped with the kit's own statements and checked; the writing goes into the importing
+//   user's store only after every check that could refuse the file, just before the copy is
+//   installed, so a refusal still changes nothing. A server that keeps no user data refuses one, as
+//   phase 1 did.
 // - Comparing each document's hashes with its TEI needs FRUSCoreKit's indexer. The server links
 //   the kit since session 8, but that step is not built yet.
 
@@ -105,21 +109,34 @@ public final class CorpusIndex: Sendable {
     }
 }
 
+/// An installed export: the live index, and what became of the owner's writing when the export held it.
+public struct ImportedExport: Sendable {
+    /// The new live index, open.
+    public let index: CorpusIndex
+    /// What the user's store made of the writing, for an export made with it; nil for one without.
+    public let writing: MovedWriting?
+}
+
 /// Validates a Mac export and installs it.
 public struct IndexImporter: Sendable {
     let files: any FileStore
     let writer: any IndexWriter
+    /// What becomes of the owner's writing in an export made with it; nil on a server that keeps
+    /// no user data, which refuses such an export.
+    let writingMove: WritingMove?
 
-    public init(files: any FileStore, writer: any IndexWriter) {
+    public init(files: any FileStore, writer: any IndexWriter, writing: WritingMove? = nil) {
         self.files = files
         self.writer = writer
+        self.writingMove = writing
     }
 
     /// Imports one export. On success its copy is the live index and open; the old index is kept
     /// as `frus.db.prev`. On an `ImportRefusal` (the file's fault) or an `ImportProblem` (the
-    /// server's) nothing changes. The source file is never modified or removed; the caller
-    /// decides what happens to it.
-    public func importExport(at source: URL, observer: some ImportObserver) async throws -> CorpusIndex {
+    /// server's) nothing changes, with one exception: when installing the copy fails, the owner's
+    /// writing an export held stays kept in the user's store, and a retry keeps it as it is. The
+    /// source file is never modified or removed; the caller decides what happens to it.
+    public func importExport(at source: URL, observer: some ImportObserver) async throws -> ImportedExport {
         let name = source.lastPathComponent
         let candidate = files.candidateIndex
         removeCandidate()  // left behind by an interrupted import
@@ -132,6 +149,7 @@ public struct IndexImporter: Sendable {
                 throw ExportChecks.classify(error, at: step, file: name)
             }
         }
+        var moved: MovedWriting?
 
         await observer.importDidReach(.copyingExport, detail: "Copying \(name)", progress: 0)
         // Checked before anything reads the file, since every read would follow the link.
@@ -188,11 +206,30 @@ public struct IndexImporter: Sendable {
             await observer.importDidReach(.checkingVersions, detail: "Checking the index and FTS schema versions", progress: nil)
             _ = try await run(.checkingVersions) { try ExportChecks.checkVersions(copy, provenance: provenance) }
 
-            await observer.importDidReach(.checkingWriting, detail: "Checking that it holds no notes, summaries or tags", progress: nil)
-            try await run(.checkingWriting) { try ExportChecks.checkWriting(copy, provenance: provenance) }
+            let includesWriting = provenance?["my_writing_included"] == "1"
+            await observer.importDidReach(.checkingWriting, detail: includesWriting
+                ? "Reading your notes, summaries and tags from the export" : "Checking that it holds no notes, summaries or tags",
+                progress: nil)
+            let canKeep = writingMove != nil
+            let writing = try await run(.checkingWriting) {
+                try ExportChecks.checkWriting(copy, provenance: provenance, canKeep: canKeep)
+            }
+            if writing != nil, let move = writingMove {
+                try await strip(copy, of: name, with: move.strip, observer: observer)
+            }
 
             await observer.importDidReach(.checkingIntegrity, detail: "Checking the database and both full-text indexes", progress: nil)
             try await run(.checkingIntegrity) { try ExportChecks.checkIntegrity(copy) }
+
+            if let writing, let move = writingMove {
+                await observer.importDidReach(.movingWriting, detail: "Moving your notes, summaries and tags into your research data",
+                                              progress: nil)
+                do {
+                    moved = try await Blocking.run { try move.keep(writing) }
+                } catch {
+                    throw ImportProblem(.movingWriting, "Your notes, summaries and tags could not be kept in your research data, so \(name) was not installed: \(error)")
+                }
+            }
         } catch {
             removeCandidate()
             throw error
@@ -209,9 +246,48 @@ public struct IndexImporter: Sendable {
         await observer.importDidReach(.openingIndex, detail: "Opening the index read-only", progress: nil)
         let live = files.liveIndex
         do {
-            return try await Blocking.run { try CorpusIndex.open(live) }
+            return ImportedExport(index: try await Blocking.run { try CorpusIndex.open(live) }, writing: moved)
         } catch let error as SQLiteError {
             throw ImportProblem(.openingIndex, "The new index was installed but could not be opened: \(error.message).")
+        }
+    }
+
+    /// Removes the owner's writing from the copy with the kit's statements, each named as the kit
+    /// names it, then stamps the copy as the app stamps one it made without the writing. A copy that
+    /// still holds some is refused.
+    ///
+    /// The statements run with SQLite's `secure_delete` on, which leaves zeros where they free a
+    /// page. The kit's order reclaims the freed pages before the two full-text indexes are rebuilt,
+    /// as it must, since `VACUUM` may renumber the rows they index; so the pages the rebuild of
+    /// `user_content` frees, which held the words of the notes and summaries, would otherwise stay
+    /// in the file. `VACUUM` writes a whole copy of the database beside it, in SQLite's temporary
+    /// folder (`FRUSLightServer` puts it under the data directory), and the pages it replaces in the
+    /// journal, so the strip needs about twice the copy's size free.
+    private func strip(_ copy: SQLiteConnection, of name: String, with steps: [StripStep],
+                       observer: some ImportObserver) async throws {
+        let needed = 2 * (Self.size(of: files.candidateIndex) ?? 0) + 64 * 1_048_576
+        if let free = try? files.availableCapacity(), free < needed {
+            throw ImportProblem(.strippingWriting, "Removing your notes, summaries and tags from the server's copy of \(name) needs about \(gigabytes(needed)) free beside the index; \(gigabytes(free)) is free.")
+        }
+        do {
+            try await Blocking.run { try copy.execute("PRAGMA secure_delete = ON") }
+            for step in steps {
+                await observer.importDidReach(.strippingWriting, detail: "\(step.action.prefix(1).uppercased())\(step.action.dropFirst()) in the server's copy",
+                                              progress: nil)
+                do {
+                    try await Blocking.run { try copy.execute(step.sql) }
+                } catch let error as SQLiteError {
+                    throw ExportChecks.classify(error, at: .strippingWriting, file: name, while: step.action)
+                }
+            }
+            try await Blocking.run {
+                _ = try copy.query("UPDATE research_provenance SET value = '0' WHERE key = 'my_writing_included'")
+            }
+            guard try await Blocking.run({ try !ExportChecks.holdsWriting(copy) }) else {
+                throw ImportRefusal(.strippingWriting, "The server's copy of \(name) still held notes, summaries or tags after FRUS Explorer's steps had removed them, so it is not served. Export again with Export Research Database….")
+            }
+        } catch let error as SQLiteError {
+            throw ExportChecks.classify(error, at: .strippingWriting, file: name)
         }
     }
 
@@ -331,34 +407,51 @@ enum ExportChecks {
         return supported
     }
 
-    /// Refuses an export that holds the owner's notes, summaries or tags: phase 1 serves the corpus only.
-    static func checkWriting(_ db: SQLiteConnection, provenance: [String: String]?) throws {
+    /// The owner's writing an export made with it holds, to be kept in the user's store, or nil for
+    /// an export without it. Refuses one made with it when the server keeps no user data
+    /// (`canKeep` false) or its stamp does not say when it was made; and, as in phase 1, a copy
+    /// whose stamp denies writing it holds, or an unstamped copy that holds some.
+    static func checkWriting(_ db: SQLiteConnection, provenance: [String: String]?, canKeep: Bool) throws -> ResearchDatabaseWriting? {
         if provenance?["my_writing_included"] == "1" {
-            throw ImportRefusal(.checkingWriting, "This export includes your notes, summaries and tags. This server holds the corpus only for now: export again with Include My Notes, Summaries, and Tags turned off.")
+            guard let exportedAt = provenance?["exported_at"].flatMap(UserStoreDate.date) else {
+                throw ImportRefusal(.checkingWriting, "The export's stamp says it includes your notes, summaries and tags, but not when it was made, so the server cannot tell them from newer copies. Export again.")
+            }
+            guard canKeep else {
+                throw ImportRefusal(.checkingWriting, "This export includes your notes, summaries and tags, and this server keeps no research data: FRUS_USER_DATA is off. Export again with Include My Notes, Summaries, and Tags turned off.")
+            }
+            return try ResearchDatabaseWriting(reading: db, exportedAt: exportedAt)
         }
-        var found = try db.scalar("""
+        if try holdsWriting(db) {
+            throw ImportRefusal(.checkingWriting, provenance == nil
+                ? "This copy has no export stamp and holds notes, summaries or tags, so the server cannot tell when they were written. Use Export Research Database… in FRUS Explorer's settings."
+                : "The export's stamp says it excludes your writing, but it holds notes, summaries or tags. Export again.")
+        }
+        return nil
+    }
+
+    /// Whether the copy holds any of the owner's writing: a summary, a note or a tag on a document,
+    /// or a tag's name.
+    static func holdsWriting(_ db: SQLiteConnection) throws -> Bool {
+        if try db.scalar("""
             SELECT EXISTS (SELECT 1 FROM document_cache
                            WHERE coalesce(summary_text, '') <> '' OR coalesce(note_text, '') <> ''
                               OR coalesce(user_tag_ids, '') <> '')
-            """)?.integer == 1
-        if !found, try db.hasObject(named: "user_tags") {
-            found = try db.scalar("SELECT EXISTS (SELECT 1 FROM user_tags)")?.integer == 1
+            """)?.integer == 1 {
+            return true
         }
-        if found {
-            throw ImportRefusal(.checkingWriting, provenance == nil
-                ? "This copy has no export stamp and holds notes, summaries or tags. Use Export Research Database… with Include My Notes, Summaries, and Tags turned off."
-                : "The export's stamp says it excludes your writing, but it holds notes, summaries or tags. Export again.")
-        }
+        return try db.hasObject(named: "user_tags") && db.scalar("SELECT EXISTS (SELECT 1 FROM user_tags)")?.integer == 1
     }
 
     /// Sorts a SQLite failure into the server's fault (disk full, I/O, permissions), which is
-    /// retried, or the file's (damaged, not a database), which refuses it.
-    static func classify(_ error: SQLiteError, at step: ReadinessStep, file: String) -> any Error {
+    /// retried, or the file's (damaged, not a database), which refuses it. `action` names the
+    /// statement of the kit's strip it came from, as the kit names it.
+    static func classify(_ error: SQLiteError, at step: ReadinessStep, file: String, while action: String? = nil) -> any Error {
+        let during = action.map { " while \($0)" } ?? ""
         switch error.code & 0xFF {
         case SQLITE_FULL, SQLITE_IOERR, SQLITE_CANTOPEN, SQLITE_NOMEM, SQLITE_READONLY, SQLITE_PERM:
-            return ImportProblem(step, "The server could not write its copy of \(file): \(error.message).")
+            return ImportProblem(step, "The server could not write its copy of \(file)\(during): \(error.message).")
         default:
-            return ImportRefusal(step, "\(file) is damaged or is not a FRUS Explorer research export: \(error.message).")
+            return ImportRefusal(step, "\(file) is damaged or is not a FRUS Explorer research export\(action == nil ? "" : ": the server's copy failed\(during)"): \(error.message).")
         }
     }
 
