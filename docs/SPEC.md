@@ -645,6 +645,12 @@ PLAN's S14c brought the write path. Everything under `/api/v1/me` is the user's 
   - `GET /me/import/{id}` gives the status, never cached: `id`, `state` (`queued`, `running`, `succeeded` or `failed`), `formatVersion`, the `report` once the job has succeeded, and once it has failed the `problem`, a `code` and `detail`: `INVALID_EXPORT` for a record the kit's decoder cannot read, naming where it is, such as `notes[2].bodyText`, or `IMPORT_FAILED` when the store could not write it. Nothing of a failed import is kept. An id the user has no import for is `IMPORT_NOT_FOUND` (404). The server keeps each import's status while it runs, the last 50 finished, under an id of its own, a UUID, so that after a restart an old id names no import rather than another.
   - The report: the file's `formatVersion` and `exportedAt`; for each of the 23 model types, in the store's order, whether a file of that version `carried` it, and its records `inFile`, which are the sum of those `added`, `replaced`, `kept`, `setAside` and `repeated`; then `formattedNotes` and `formattingKept`, `headnoteDrafts`, `summariesWithoutAuthorship`, `inertEntries`, `unlinkedCollections` (each `id` and `name`) and `searchableDocuments`.
 
+### An admin's data (`/api/v1/admin`)
+
+PLAN's S14b brought the first route, the store's backup. The store holds every user's data, so everything under `/api/v1/admin` passes `/api/v1/me`'s guard, its host, its user and its changes' origin and token, and is refused as `USER_DATA_OFF` while `FRUS_USER_DATA` is off; and each route needs the admin role, by the role check the server makes for an instance's data, as an import takes the instance's corrections only from a curator. A user without it is `ROLE_REQUIRED` (403). Under `FRUS_AUTH=none` the one user holds all three roles; behind S14e's proxy, `FRUS_ADMIN_USERS` names who does.
+
+- `GET /admin/backup` streams the newest daily backup with a manifest of versions, as one tar archive (POSIX ustar), `application/x-tar`, never cached, as an attachment named `frus-light-backup-<time>.tar`: first `manifest.json`, then the backup under its own name. The manifest gives `manifestVersion`, 1; `backup`, the one it holds; `server`, the `version`, the store's newest `migration` and the `indexVersion` of the server that wrote it, and its `sqliteVersion`; and `versions`, every backup and copy the server keeps, newest first, the archive's among them. Each is its `name`, `kind` (`daily`, `beforeMigration` or `beforeRestore`), `takenAt`, `bytes`, the store's `migration` in it, whether the host folder holds it too in `copied` (absent without one), and for the archive's own its `sha256`. The backup is read through the handle that hashed it, so the archive holds the bytes its manifest describes though another backup is taken meanwhile. Before the first backup it is `BACKUP_NOT_FOUND` (404). `frus-light restore` takes the archive as it is.
+
 ## Deployment
 
 The web edition ships as one image, `frus-explorer-light`, run with Docker Compose. All state lives under one mounted `/data` volume. A full-corpus Standalone install uses about 13 GB of disk; provision 25 GB so the index can be copied during compaction or import.
@@ -686,10 +692,12 @@ services:
       - frus-data:/data
       # Import mode, optional: the Mac's own TEI files, read-only
       # - "${HOME}/Library/Containers/bottsywattsy.FRUS-Explorer/Data/Library/Application Support/FRUSExplorer/Volumes:/data/volumes:ro"
+      - ./backups:/backups         # a copy of each daily backup, outside the volume
     environment:
       FRUS_MODE: import            # or: standalone
       FRUS_AUTH: none              # or: local, header
       FRUS_PUBLIC_URL: http://localhost:8080
+      FRUS_BACKUP_COPY_DIR: /backups
       FRUS_ENCODER: "off"          # "on" lets an admin download EmbeddingGemma 2
       FRUS_PDF_URL: http://pdf:3000
       FRUS_SECRET_KEY_FILE: /run/secrets/frus_secret_key
@@ -731,6 +739,9 @@ volumes:
 | `FRUS_PDF_URL` | none | Gotenberg base URL; PDF export is hidden when unset |
 | `FRUS_OFFLINE` | `false` | `true` blocks all outbound traffic |
 | `FRUS_SEED_REMOTE` | none | rclone remote to copy a Mac export, TEI, shards or the encoder from at start; see Runtime options |
+| `FRUS_BACKUP_HOUR` | `3` | The hour of the daily `app.db` backup, 0 to 23, in the container's time zone (PLAN's S14b) |
+| `TZ` | the image's, UTC | The container's time zone, which the backup's hour is in |
+| `FRUS_BACKUP_COPY_DIR` | none | A folder each finished backup is also copied to, which keeps its own seven: Compose's `/backups`, bind-mounted from the host |
 | `FRUS_BACKUP_REMOTE` | none | rclone remote that receives each daily `app.db` backup |
 
 ### Disk layout
@@ -738,12 +749,13 @@ volumes:
 | Path | Contents |
 | --- | --- |
 | `/data/index/frus.db` (plus `-wal`, `-shm`) | Corpus index |
-| `/data/app/app.db` | Users and user data |
+| `/data/app/app.db` | Users and user data, with `server.lock` and `backup.lock` beside it (PLAN's S14b) |
 | `/data/volumes/` | TEI XML |
 | `/data/semantic/shards/` | Tier-2 vector shards |
 | `/data/models/` | EmbeddingGemma 2, when downloaded |
 | `/data/import/` | Drop zone for Mac exports |
-| `/data/exports/`, `/data/backups/` | Generated files; backups |
+| `/data/exports/`, `/data/backups/` | Generated files; the store's backups, and its copies before a migration or a restore |
+| `/backups/` | Compose's bind mount from the host, `./backups`: a copy of each backup |
 
 ### Sizing
 
@@ -763,10 +775,12 @@ Memory figures are estimates until phase 0 measures them. Phase 0's first measur
 
 ### Backups
 
-- A daily online backup of `app.db` goes to `/data/backups`, keeping seven, using the SQLite backup API. It runs at a set hour, 03:00 by default in the container's time zone, and whenever the newest backup is more than 24 hours old, so a laptop that slept through the hour backs up soon after it wakes; it is skipped when the store has not changed since the newest, so seven can span more than a week. The copies taken before a migration are not among the seven: each is kept until it is removed by hand, and a start that fails to migrate the same store again takes no second copy. Each finished backup is also copied to a folder on the host, bind-mounted for backups, which survives the Docker volume and which the host's own backup sees (PLAN's S14b).
-- A restore runs with the server stopped: it checks a backup, keeps the store it replaces, and puts the backup in place, which the next start migrates forward. CI restores one in its Compose smoke test.
+- A daily online backup of `app.db` goes to `/data/backups`, keeping seven, using the SQLite backup API. It runs at a set hour, 03:00 by default in the container's time zone (`FRUS_BACKUP_HOUR`, `TZ`), and whenever the newest backup is more than 24 hours old, so a laptop that slept through the hour backs up soon after it wakes; the server looks at its start, every five minutes and when the hour begins. It is skipped when the store has not changed since the newest, so seven can span more than a week, and while the store holds no research yet, so a new store's first backup comes at the look after its first import or tag rather than holding it off until the hour (PLAN's S14b). The copies taken before a migration are not among the seven: each is kept until it is removed by hand, and a start that fails to migrate the same store again takes no second copy. Each finished backup is also copied to a folder on the host, bind-mounted for backups, which survives the Docker volume and which the host's own backup sees (PLAN's S14b): Compose mounts `./backups`, or `FRUS_BACKUP_DIR`, at `/backups`, which `FRUS_BACKUP_COPY_DIR` names. It keeps its own seven, so a new volume's backups give up the oldest of an old volume's one at a time, and is filled again once it can be written. So is a copy taken before a migration, or of the store a restore replaced.
+- A backup is `app-<time>.db`, the time in UTC to the second, numbered after it when that name is taken; a copy before a migration `app-<time>-before-migration-<n>.db`, and of the store a restore replaced `app-<time>-before-restore.db`. Each is one file, out of write-ahead logging, written under a `.partial` name and checked with `quick_check` before it takes its own. Whether the store has changed since the newest is a SHA-256 of what each holds, every schema object's SQL and every table's rows in order, read in one transaction; the server reads the store again only when SQLite's count of its changes has moved since it last looked.
+- `frus-light backup`, run in the container, takes one at once, unless the store has not changed since the newest. A server's backups and the command's take one lock, `/data/app/backup.lock`, so two never run at once.
+- A restore runs with the server stopped, as `frus-light restore <backup>` in a container of its own (`docker compose run --rm frus restore …`): it checks a backup, keeps the store it replaces, and puts the backup in place, which the next start migrates forward. A server holds `/data/app/server.lock` shared while it runs, and a restore takes it exclusively or refuses, so it never replaces a store a server has open; a server that starts meanwhile waits for it. The backup is named in `/data/backups` or the host folder, or by a path, and may be the archive the API gives. It is copied beside the store and checked there: `integrity_check` and `foreign_key_check`, the store's tables, a migration from 1 to the server's own, no `-wal` or `-journal` beside it, and an archive's backup held to its manifest's size and SHA-256. The store it replaces is copied through the backup API, `-wal` and all, or, where the API cannot read it, as a damaged store's, its files are moved as they are. The store's side files are removed, so no `-wal` of another store is read with the backup, and one rename puts the backup in place. Until then the store is as it was, and a refusal changes nothing. CI restores one in its Compose smoke test.
 - The index is excluded by default: Standalone can rebuild it, and Import can re-import it.
-- `GET /api/v1/admin/backup` streams the latest backup with a manifest of versions.
+- `GET /api/v1/admin/backup` streams the latest backup with a manifest of versions, as one tar archive (HTTP API, An admin's data).
 
 ### Security
 
