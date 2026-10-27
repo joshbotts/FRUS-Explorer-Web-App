@@ -182,7 +182,7 @@ struct FreeSpace: FileStore {
     /// ids; what the reader added to a block here, its tags, stays.
     @Test func aLaterExportReplacesWhatChanged() async throws {
         let fixture = try await WritingImportFixture()
-        let (source, dropped) = try fixture.drop(WritingImportFixture.withWriting)
+        let (_, dropped) = try fixture.drop(WritingImportFixture.withWriting)
         _ = try await fixture.importer.importExport(at: dropped, observer: WritingStepRecorder())
         let d1 = DocumentKey(volumeId: "frus1961-63v06", documentId: "d1")
         let block = ResearchDatabaseMark.noteId(for: d1)
@@ -215,7 +215,6 @@ struct FreeSpace: FileStore {
         #expect(try fixture.store.tag("5C1E0001-7E4A-4B9C-9D2E-0A1B2C3D4E5F", of: "owner")?.name == "Berlin crisis, chapter two")
         #expect(try fixture.rows.column("SELECT count(*) FROM notes").first == "2")
         #expect(try fixture.rows.column("SELECT count(*) FROM summaries").first == "2")
-        _ = source
     }
 
     /// What the user's own records hold already, from a JSON import of the same library, is not added

@@ -86,8 +86,12 @@ Phase 2's row S16e, SPEC's last resort. Import mode in phase 1 refused a Mac "Ex
 **Results**
 
 - **Linux, `swift:6.4-noble`, arm64.** All 2,372 tests pass, up from 2,359, with the one named skip: FRUSLightCoreTests 111, FRUSLightServerTests 180, FRUSParityTests 188 and FRUSCoreKitTests 1,191, the others as before. Each was taken through `scripts/swift test`, the server's and the core's again under the app's heavy-job lock after the two key lists were fixed.
-- **The web job's steps,** through `scripts/npm`: typecheck and lint clean, and 307 unit tests.
-- **`scripts/compose-smoke --e2e`:** to come.
+- **The web job's steps,** through `scripts/npm`: typecheck, lint and the build clean, and 307 unit tests.
+- **SQLite's temporary folder, in the image.** The branch's image was run with a 64 KB tmpfs at `/tmp` and given a 13.9 MB synthetic export with writing, whose `VACUUM` copy outgrows SQLite's page cache. It installed it, its log naming `/data/tmp`. With `SQLITE_TMPDIR=/tmp` forced, the same import failed while "reclaiming freed pages: database or disk is full", the server's problem, tried again later.
+- **`scripts/compose-smoke --e2e`** on the branch's image passes: 47 browser tests at the root and 47 under the path, through nginx with INSTALL's recipe, and the smoke test's own steps.
+  - **The new phase** imported `scripts/synthetic-export --own-text --writing` into the running container, whose root is read-only and whose `/tmp` is a tmpfs. The report named what moved, the mark and the JSON export.
+  - **Check 5's script** ran over the index the server installed. It found 0 of the 11 snippets in its bytes, 0 rows with a summary, note or tag, 0 tags, and 0 terms in its `user_content`, where the export with writing's holds 56. Both controls held.
+  - **The API** gave back the note block and the summary, marked.
 - **CI:** to come.
 
 **Records**
