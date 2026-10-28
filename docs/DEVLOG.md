@@ -75,6 +75,7 @@ So the PostgreSQL store's copy holds both tables, the row's `user_search` and th
 - **CI on #73 at `364b9e8`** is green. The swift job, amd64, with its PostgreSQL service, passes all 2,472 tests, up from 2,454 on main, with the one named skip and nothing cancelled: FRUSLightCoreTests 121, FRUSLightServerTests 174 and FRUSParityTests 189, the others as on main. The web and compose jobs pass, the compose job's image with PostgresNIO linked and no client tools, and the image builds for amd64 and arm64.
 - **After the merge with #69,** at `c4c1aa0`, on Linux, arm64, with `scripts/swift --postgres` and through the heavy-job lock: FRUSLightCoreTests 128 and FRUSLightServerTests 183, S16e's tests among them, and `AttachedUserStoreTests` pass, 48 tests on both stores: the 42 before, S16e's summary that may be deleted, four of `ResearchDatabaseImportTests` and the kit's search over each store's file.
 - **After the merge with #70,** at `1f06f29`, the same way, this package's targets built clean, with no warning: FRUSLightCoreTests 148 and FRUSLightServerTests 187, S14b's tests among them, and `AttachedUserStoreTests` pass, the PostgreSQL store's tests run, none skipped.
+- **After the merges with #74 and #71,** at `e87a642`, the same way: FRUSLightCoreTests 152 and FRUSLightServerTests 192, S14e's tests among them, and `AttachedUserStoreTests` pass, `aSignedInUserIsMadeOnceWithTheirIdAsTheirName` on both stores. CI's compose job had failed at `429e6de`, before #71's merge brought its fix to the smoke test's log checks.
 
 **Records**
 
