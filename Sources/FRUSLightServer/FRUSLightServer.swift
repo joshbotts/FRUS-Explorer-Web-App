@@ -27,6 +27,9 @@ struct FRUSLightServer {
         } catch {
             fail("\(error)", status: 2)
         }
+        // SQLite reads its temporary folder from the environment once, before its first use, so it
+        // is set here, before anything opens a database, unless the environment names one already.
+        setenv("SQLITE_TMPDIR", DataDirectory(root: configuration.dataDirectory).temporaryDirectory.path, 0)
         do {
             let app = try await buildApplication(configuration: configuration)
             try await app.runService()

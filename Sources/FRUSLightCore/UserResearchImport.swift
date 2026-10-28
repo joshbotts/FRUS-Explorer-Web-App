@@ -151,23 +151,32 @@ extension SQLiteUserStore: ResearchImportStore {
     public func importResearch(_ batch: ResearchImportBatch, for user: String) throws -> ResearchImportResult {
         let tables = try Self.check(batch)
         return try writing { db in
-            var counts: [String: ImportCount] = [:]
-            for table in tables {
-                var held = try Self.held(in: table, for: user, in: db)
-                var count = ImportCount()
-                for row in batch.rows[table.name] ?? [] {
-                    switch try Self.write(row, into: table, for: user, held: &held, in: db) {
-                    case .added: count.added += 1
-                    case .replaced: count.replaced += 1
-                    case .kept: count.kept += 1
-                    }
-                }
-                counts[table.name] = count
-            }
+            let counts = try Self.write(batch, tables: tables, for: user, in: db)
             let unlinked = try Self.unlinkedCollections(among: batch.rows["collections"] ?? [], for: user, in: db)
             return ResearchImportResult(counts: counts, unlinkedCollections: unlinked,
                                         searchableDocuments: try Self.rebuildSearch(for: user, in: db))
         }
+    }
+
+    /// Writes the rows of `batch` into `tables`, `check(_:)`'s, inside the caller's transaction, as
+    /// `importResearch` describes, and counts what became of each table's: the import of an export
+    /// made with the owner's writing writes its rows so too (S16e).
+    static func write(_ batch: ResearchImportBatch, tables: [UserStoreSchema.Table], for user: String,
+                      in db: SQLiteConnection) throws -> [String: ImportCount] {
+        var counts: [String: ImportCount] = [:]
+        for table in tables {
+            var held = try Self.held(in: table, for: user, in: db)
+            var count = ImportCount()
+            for row in batch.rows[table.name] ?? [] {
+                switch try Self.write(row, into: table, for: user, held: &held, in: db) {
+                case .added: count.added += 1
+                case .replaced: count.replaced += 1
+                case .kept: count.kept += 1
+                }
+            }
+            counts[table.name] = count
+        }
+        return counts
     }
 
     private enum Outcome { case added, replaced, kept }
@@ -180,7 +189,7 @@ extension SQLiteUserStore: ResearchImportStore {
     }
 
     /// The batch's tables, in the schema's order, once every row's columns are found to be theirs.
-    private static func check(_ batch: ResearchImportBatch) throws -> [UserStoreSchema.Table] {
+    static func check(_ batch: ResearchImportBatch) throws -> [UserStoreSchema.Table] {
         for name in batch.rows.keys where UserStoreSchema.tables.first(where: { $0.name == name }) == nil {
             throw ResearchImportError.unknownTable(name)
         }

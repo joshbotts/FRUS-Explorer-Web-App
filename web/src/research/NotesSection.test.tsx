@@ -99,6 +99,22 @@ describe('the rail’s Notes', () => {
     expect(within(rail).getByRole('button', { name: 'Add Note' })).toBeTruthy();
   });
 
+  it('marks a document’s note block from a research database under its text (S16e)', async () => {
+    reader({
+      [documentPaths.notes]: documentNotes([
+        noteSummary({ id: 'R', bodyText: 'Ask the archivist.\n\nCompare the memoir.', fromResearchDatabase: true, lastModified: ago(60) }),
+        noteSummary({ id: 'M', bodyText: 'Mine.', lastModified: ago(120) }),
+      ]),
+    });
+    renderAt('/doc/frus1961-63v06/d1?rail=research');
+    const rail = await screen.findByRole('complementary', { name: 'Research' });
+    await within(rail).findByRole('button', { name: 'Notes, 2 notes' });
+    const rows = within(rail.querySelector('#research-notes') as HTMLElement).getAllByRole('listitem');
+    expect(rows.map((row) => row.querySelector('.note-row-origin')?.textContent ?? null)).toEqual(['From a research database', null]);
+    // The row's button names the note with its mark, as it reads.
+    expect(within(rows[0] as HTMLElement).getByRole('button').textContent).toContain('From a research database');
+  });
+
   it('opens a note from its row in the editor, and saves it; focus goes back to its row', async () => {
     let items = [noteSummary({ id: 'A', bodyText: 'Old text' })];
     const fetch = reader({

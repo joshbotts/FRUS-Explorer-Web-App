@@ -12,6 +12,9 @@ public struct ImportReport: Sendable, Equatable, Codable {
     public var step: ReadinessStep?
     public var message: String
     public var finishedAt: String
+    /// For an export made with the owner's writing, what the user's store made of it (S16e), which
+    /// the message says in words; nil for one without it.
+    public var writing: MovedWriting?
 }
 
 /// An import under way.
@@ -141,16 +144,18 @@ public actor ServerState: ImportObserver {
         if isNewStep { log("Import: \(step.rawValue)") }
     }
 
-    /// `note` reports a loose end, such as a drop file that could not be removed.
-    func importFinished(file: String, index newIndex: CorpusIndex, note: String? = nil) {
+    /// `writing` is what the user's store made of the owner's writing an export held, and `note`
+    /// reports a loose end, such as a drop file that could not be removed.
+    func importFinished(file: String, index newIndex: CorpusIndex, writing: MovedWriting? = nil, note: String? = nil) {
         index = newIndex
         importing = nil
         startupProblem = nil
         let s = newIndex.summary
         var message = "Installed \(s.documents) documents from \(s.volumes) volumes, index version \(s.indexVersion)"
-        if let note { message += ". \(note)" }
+        if let writing { message += ". \(writing.report)" }
+        if let note { message += "\(writing == nil ? "." : "") \(note)" }
         lastImport = ImportReport(file: file, outcome: .installed, step: nil, message: message,
-                                  finishedAt: Self.timestamp(Date()))
+                                  finishedAt: Self.timestamp(Date()), writing: writing)
         log(message)
     }
 

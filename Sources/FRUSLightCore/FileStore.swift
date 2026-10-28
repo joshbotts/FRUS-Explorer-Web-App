@@ -40,11 +40,15 @@ public struct DataDirectory: FileStore {
     public var volumesDirectory: URL { root.appendingPathComponent("volumes", isDirectory: true) }
     public var exportsDirectory: URL { root.appendingPathComponent("exports", isDirectory: true) }
     public var backupsDirectory: URL { root.appendingPathComponent("backups", isDirectory: true) }
+    /// SQLite's temporary files, on the index's volume: the copy `VACUUM` writes when an import strips
+    /// the owner's writing from an export (S16e) is as large as the index, where `/tmp` is a tmpfs in
+    /// `compose.yaml`, held in memory. `FRUSLightServer` names it in `SQLITE_TMPDIR`.
+    public var temporaryDirectory: URL { root.appendingPathComponent("tmp", isDirectory: true) }
 
     public func prepare() throws {
         // volumes/ is not created: it is a read-only mount, or arrives with Standalone mode.
         for directory in [importDirectory, indexDirectory, userStore.deletingLastPathComponent(),
-                          exportsDirectory, backupsDirectory] {
+                          exportsDirectory, backupsDirectory, temporaryDirectory] {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
     }

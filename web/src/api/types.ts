@@ -17,7 +17,9 @@ export type ReadinessStep =
   | 'checking_format'
   | 'checking_versions'
   | 'checking_writing'
+  | 'stripping_writing'
   | 'checking_integrity'
+  | 'moving_writing'
   | 'installing_index'
   | 'opening_index'
   | 'index_version_mismatch'
@@ -627,6 +629,11 @@ export interface NoteSummary {
   linkedHighlightIds: string[];
   createdAt?: string | null;
   lastModified?: string | null;
+  /**
+   * A document's note block from a research database the Mac exported with the owner's writing,
+   * which joins the document's notes into one.
+   */
+  fromResearchDatabase: boolean;
 }
 
 /** One note, with its formatting as runs, the codec's reading of the RTF the store keeps. */
@@ -675,6 +682,10 @@ export interface Summary {
   lastModified?: string | null;
   /** Whether the researcher may change it: only one written here is theirs to change. */
   editable: boolean;
+  /** Whether the researcher may delete it: one written here, or one from a research database. */
+  deletable: boolean;
+  /** A document's newest summary from a research database the Mac exported with the owner's writing. */
+  fromResearchDatabase: boolean;
 }
 
 /** A document's summaries, drafts left out, the newest first by the app's `ranksAbove`. */
