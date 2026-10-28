@@ -255,6 +255,24 @@ func eventually(_ condition: () -> Bool) async throws -> Bool {
         func release() { open = true }
     }
 
+    /// The graces a `RecentComputations` waits out, each held until the test ends it.
+    final class Graces: Sendable {
+        private let begun = Mutex<[CheckedContinuation<Void, Never>]>([])
+
+        /// How many graces have begun.
+        var count: Int { begun.withLock { $0.count } }
+
+        /// Holds a grace, whatever its length, until the test ends it.
+        func wait(_: Duration) async {
+            await withCheckedContinuation { continuation in begun.withLock { $0.append(continuation) } }
+        }
+
+        /// Ends the grace that began `index`th, counting from 0.
+        func end(_ index: Int) {
+            begun.withLock { $0[index] }.resume()
+        }
+    }
+
     @Test func aRequestCancelledWhileAnotherWaitsLeavesAtOnceAndTheValueIsKept() async throws {
         let kept = RecentComputations<Int>(capacity: 2, stopsAbandoned: true, grace: .zero)
         let gate = Gate()
@@ -303,6 +321,64 @@ func eventually(_ condition: () -> Bool) async throws -> Bool {
         #expect(try await second.value == 1)
         let (started, cancelled) = (await gate.started, await gate.cancelled)
         #expect(started == 1 && cancelled == 0)
+    }
+
+    /// The grace runs from the last request to leave, as when the reader turns the date order round
+    /// twice: a request that joins within a grace and leaves begins a grace of its own, and the one
+    /// before it ends without stopping the computation, which a request within the later grace
+    /// joins. The test ends each grace by hand, and each request begins once the one before it has
+    /// left.
+    @Test func theGraceRunsFromTheLastRequestToLeave() async throws {
+        let kept = RecentComputations<Int>(capacity: 2, stopsAbandoned: true)
+        let graces = Graces()
+        await kept.waitOutGraces(with: graces.wait)
+        let gate = Gate()
+        let first = Task { try await kept.value(for: "a") { try await gate.compute(1) } }
+        #expect(try await eventuallyAsync { await kept.waitingCount(for: "a") == 1 })
+        first.cancel()
+        await #expect(throws: CancellationError.self) { try await first.value }
+        #expect(try await eventually { graces.count == 1 })
+        let second = Task { try await kept.value(for: "a") { try await gate.compute(2) } }
+        #expect(try await eventuallyAsync { await kept.waitingCount(for: "a") == 1 })
+        second.cancel()
+        await #expect(throws: CancellationError.self) { try await second.value }
+        #expect(try await eventually { graces.count == 2 })
+        // The first's grace ends within the second's.
+        graces.end(0)
+        #expect(try await eventuallyAsync { await kept.gracesPassed == 1 })
+        // A third request joins the computation, and the second's grace ends while it waits.
+        let third = Task { try await kept.value(for: "a") { try await gate.compute(3) } }
+        #expect(try await eventuallyAsync { await kept.waitingCount(for: "a") == 1 })
+        graces.end(1)
+        #expect(try await eventuallyAsync { await kept.gracesPassed == 2 })
+        await gate.release()
+        #expect(try await third.value == 1)
+        #expect(try await kept.value(for: "a") { try await gate.compute(4) } == 1)
+        let (started, cancelled) = (await gate.started, await gate.cancelled)
+        #expect(started == 1 && cancelled == 0)
+    }
+
+    /// A computation two requests have left in turn is stopped when the grace the second began ends,
+    /// and is computed again when it is asked for again.
+    @Test func theLastRequestsGraceStopsTheComputation() async throws {
+        let kept = RecentComputations<Int>(capacity: 2, stopsAbandoned: true)
+        let graces = Graces()
+        await kept.waitOutGraces(with: graces.wait)
+        let gate = Gate()
+        for value in 1...2 {
+            let request = Task { try await kept.value(for: "a") { try await gate.compute(value) } }
+            #expect(try await eventuallyAsync { await kept.waitingCount(for: "a") == 1 })
+            request.cancel()
+            await #expect(throws: CancellationError.self) { try await request.value }
+            #expect(try await eventually { graces.count == value })
+        }
+        graces.end(0)
+        #expect(try await eventuallyAsync { await kept.gracesPassed == 1 })
+        graces.end(1)
+        #expect(try await eventuallyAsync { await gate.cancelled == 1 }, "the computation was not cancelled")
+        await gate.release()
+        #expect(try await kept.value(for: "a") { try await gate.compute(3) } == 3)
+        #expect(await gate.started == 2)
     }
 
     /// The facets' cache keeps a section no request waits for any more: the kit's facet pass, which

@@ -73,10 +73,11 @@ public struct RetainedResults: Sendable {
 ///
 /// A request that is cancelled while it waits, as one whose client has gone is, stops waiting at
 /// once. With `stopsAbandoned`, a computation no request waits for any more is cancelled and not
-/// kept once `grace` has passed with none, which stops the kit's search; otherwise it runs to its end
-/// and is kept, as the kit's facet pass, which nothing stops, is on the Mac. The grace is for a
-/// request that replaces another for the same search, as a browser sends one just after it abandons
-/// the first when the reader turns the date order round: it joins the computation the first began.
+/// kept once `grace` has passed with none since the last request left, which stops the kit's search;
+/// otherwise it runs to its end and is kept, as the kit's facet pass, which nothing stops, is on the
+/// Mac. The grace is for a request that replaces another for the same search, as a browser sends one
+/// just after it abandons the first when the reader turns the date order round: it joins the
+/// computation the first began, and if it is abandoned in turn, the grace begins again.
 public actor RecentComputations<Value: Sendable> {
     /// What a key holds: a computation under way, by its number, or the value it gave.
     private enum Slot {
@@ -84,11 +85,13 @@ public actor RecentComputations<Value: Sendable> {
         case done(Value)
     }
 
-    /// A computation under way, the key it is for, and the requests waiting for it.
+    /// A computation under way, the key it is for, the requests waiting for it, and how many times
+    /// it has been abandoned, left with no request waiting.
     private struct Computation {
         let key: String
         let task: Task<Void, Never>
         var waiters: [UInt64: CheckedContinuation<Value, any Error>] = [:]
+        var abandonments = 0
     }
 
     private var slots: [String: Slot] = [:]
@@ -100,6 +103,11 @@ public actor RecentComputations<Value: Sendable> {
     let capacity: Int
     let stopsAbandoned: Bool
     let grace: Duration
+    /// What waits out a grace: a sleep for its length, or a wait the tests end by hand.
+    private var graceWait: @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0) }
+    /// How many graces have passed, each with its computation stopped or left to run on, for the
+    /// tests.
+    private(set) var gracesPassed = 0
 
     public init(capacity: Int, stopsAbandoned: Bool = false, grace: Duration = .milliseconds(250)) {
         self.capacity = max(1, capacity)
@@ -172,21 +180,29 @@ public actor RecentComputations<Value: Sendable> {
     }
 
     /// A waiting request was cancelled: it stops waiting, and with `stopsAbandoned` a computation
-    /// left with no one waiting is stopped once `grace` has passed with no one joining it.
+    /// left with no one waiting is stopped once `grace` has passed with no one joining it. Each
+    /// abandonment begins a grace, and a grace stops nothing once a later abandonment has begun
+    /// another.
     private func leave(_ waiter: UInt64, from number: UInt64) {
         guard var computation = computations[number] else { return }
         computation.waiters.removeValue(forKey: waiter)?.resume(throwing: CancellationError())
+        let abandoned = stopsAbandoned && computation.waiters.isEmpty
+        if abandoned { computation.abandonments += 1 }
         computations[number] = computation
-        guard stopsAbandoned, computation.waiters.isEmpty else { return }
+        guard abandoned else { return }
+        let abandonment = computation.abandonments
         Task {
-            try? await Task.sleep(for: self.grace)
-            self.stopIfAbandoned(number)
+            await self.graceWait(self.grace)
+            self.stopIfAbandoned(number, since: abandonment)
         }
     }
 
-    /// Cancels a computation that still has no request waiting for it, and drops its slot.
-    private func stopIfAbandoned(_ number: UInt64) {
-        guard let computation = computations[number], computation.waiters.isEmpty else { return }
+    /// Cancels a computation whose last abandonment is still `abandonment`, with no request waiting
+    /// for it, and drops its slot.
+    private func stopIfAbandoned(_ number: UInt64, since abandonment: Int) {
+        gracesPassed += 1
+        guard let computation = computations[number], computation.waiters.isEmpty,
+              computation.abandonments == abandonment else { return }
         computation.task.cancel()
         computations[number] = nil
         if case .computing(number)? = slots[computation.key] { drop(computation.key) }
@@ -196,5 +212,10 @@ public actor RecentComputations<Value: Sendable> {
     func waitingCount(for key: String) -> Int {
         guard case .computing(let number)? = slots[key] else { return 0 }
         return computations[number]?.waiters.count ?? 0
+    }
+
+    /// Waits out each grace with `wait` instead of a sleep, for the tests.
+    func waitOutGraces(with wait: @escaping @Sendable (Duration) async -> Void) {
+        graceWait = wait
     }
 }

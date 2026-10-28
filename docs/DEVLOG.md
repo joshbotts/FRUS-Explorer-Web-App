@@ -86,6 +86,88 @@ So the PostgreSQL store's copy holds both tables, the row's `user_search` and th
 
 **Next: S17d,** which S17c's #68 has opened, searching through the kit with each store's `searchDatabase` attached, as `AttachedUserStoreTests` does; with S14e, sign-in through a trusted proxy, on the server's track.
 
+## Session 14b, second follow-up: the grace runs from the last request to leave
+
+27 October 2026 · branch `claude/mystifying-goldberg-7dfcf1` · [#74](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/74) · upstream `1c18b51e`, unchanged
+
+#72's session found it while it fixed a flake in the same suite, and recorded it in #72's Notes; the owner started this session from its proposal. This pull request changes `RecentComputations`, its suite in `ClientConnectionTests.swift`, and this log. #72 merged while it was under way, so `main` is merged in at `3e94f10`. #69, S16e, merged while this one waited for review, so `main` was merged in again at `2fac971`, and the tests were run again there.
+
+**What was wrong**
+
+- `RecentComputations` keeps what a served index computed lately. With `stopsAbandoned`, it stops a computation no request waits for any more once its grace has passed.
+  - Only `RetainedResults` has a grace, the default 250 ms: the results a date order keeps, 7,500 at most.
+  - The grace is for the request a browser sends when the reader turns the date order round. It joins the computation the abandoned request began.
+- Each request that left a computation with no one waiting began a wait of the grace. The wait then stopped the computation if no one waited at that moment, so the first wait to end decided, however recently the last request had left:
+  - request A began the computation and left, and A's grace began;
+  - B joined it within A's grace, and left, and B's grace began;
+  - A's grace ended and stopped the computation, though B's had not passed;
+  - C came within B's grace, found the computation stopped, and began another.
+- The actor's doc comment said a computation is stopped "once `grace` has passed with none". A's grace had not passed with none: B waited during it.
+- The cost was a date order's results computed again, in a narrow window: when the reader turns the order round twice in quick succession, and the second replacing request comes after the first grace has ended. `RecentSearches`' pages and counts have no grace, and the facets' sections are never stopped.
+
+**The fix**
+
+- Each computation counts its abandonments: the times it was left with no request waiting.
+- A grace takes the count its own abandonment gave. When it ends, it stops the computation only if the count is still the same and no request waits. A later abandonment begins a grace of its own, so the grace runs from the last request to leave.
+- Unchanged:
+  - a cancelled request leaves at once;
+  - a computation a request waits for runs on;
+  - `RecentSearches`' grace of zero stops a computation at once;
+  - without `stopsAbandoned`, nothing is stopped.
+- For the tests:
+  - the grace's sleep is a closure (`graceWait`), which a test replaces with a wait it ends by hand (`waitOutGraces(with:)`);
+  - `gracesPassed` counts the graces whose check has run, so a test knows when one has ended without sleeping around it.
+- The doc comments say the grace runs from the last request to leave.
+- SPEC is unchanged. Its sentences on stopping still hold: a page or a count "is stopped at once", and the kept results "stop when no request waits for them". It never names the grace.
+
+**The tests**
+
+Both new tests use `RetainedResults`' settings and end each grace by hand. Each request begins only once the one before it has left, and the first test's third only once A's grace has been checked, so no two tasks reach the actor in an order left open, the cause of #72's flake.
+- `theGraceRunsFromTheLastRequestToLeave` is A, B and C:
+  - A's grace ends within B's, and C joins;
+  - B's grace ends while C waits;
+  - C gets A's computation's value, which is kept, with one computation started and none cancelled.
+- `theLastRequestsGraceStopsTheComputation` holds the stop to the last grace:
+  - two requests leave in turn, and the first's grace ends;
+  - then the second's grace ends and stops the computation, which is computed again when asked for.
+  - It passes before the fix too.
+- The suite's four other tests are unchanged.
+
+**Results**
+
+All in `swift:6.4-noble` on arm64, while other sessions' builds loaded the Mac. Its load average ran from 11 to 142 during the runs.
+- Each run is its own process of `FRUSLightServerTests`' test runner, unless it says otherwise.
+- "Beside busy loops" means with 12 shell loops in the container, which has 10 CPUs.
+
+- **Before the fix,** with the old stop logic and the tests' seam, never committed:
+  - `theGraceRunsFromTheLastRequestToLeave` failed 50 of 50 runs, and 50 of 50 beside busy loops. Each failure was on the same three expectations: the third request's value, the value asked for again, and the computations started and cancelled.
+  - A diagnostic run, never committed, printed "third.value 3, asked again 3, started 2, cancelled 1" in 5 runs of 5.
+  - A run of the whole suite there failed only that test and #72's; `theLastRequestsGraceStopsTheComputation` passed, as it should.
+- **After it:**
+  - the two new tests passed 200 of 200 runs, and 200 of 200 beside busy loops;
+  - one process repeating `theGraceRunsFromTheLastRequestToLeave` 5,000 times beside busy loops passed every repetition, and so did one repeating `theLastRequestsGraceStopsTheComputation` 2,000 times;
+  - the whole suite, its six tests, passed 200 of 200 runs, and 200 of 200 beside busy loops. These ran before #72 merged, with its three lines applied by hand, and the test file they ran is byte for byte the merged one.
+- **At the merge,** `ecc6f2e`, with this package's own targets rebuilt clean and no warning:
+  - `scripts/swift test --filter FRUSLightServerTests` passed all 174 tests in 29 suites: #72's 172 and the two new ones;
+  - `scripts/swift test` passed all 2,456 tests in its twelve targets, with the one named skip; no issue was recorded.
+- **Again with `main` at `2fac971`** (#69) merged in, rebuilt clean the same way, with no warning:
+  - the suite passed 100 of 100 runs beside busy loops;
+  - `scripts/swift test --filter FRUSLightServerTests` passed all 183 tests in 30 suites, with #69's;
+  - `scripts/swift test` passed all 2,472 tests, with the one named skip; no issue was recorded.
+
+**Notes**
+
+- **#72 merged while this was under way.** It changed three lines of the suite's first test, and this branch adds the helper above that test and the two new tests below the third, so the merge was clean.
+  - Before #72 merged, the suite failed 7 of 100 runs beside busy loops without its lines, each time on #72's two expectations and never on another.
+  - So the suite's runs here applied #72's lines by hand, and the merge gave the same file.
+- **Two of the existing tests still wait out a real grace.**
+  - `aComputationNoRequestWaitsForIsStoppedAndNotKept` waits, ten seconds at most, for a grace of 50 ms to stop its computation.
+  - `aRequestThatComesWithinTheGraceJoinsTheComputation` needs its second request to come within a grace of 2 s, so it would fail if the machine stalled that long between its two requests.
+  - Either could hold its grace with `waitOutGraces(with:)`. They are left as they were, since they pass and this task kept them.
+- **Scratch:** the runs' scripts and logs are under `.build/linux/flake/` in the worktree `mystifying-goldberg-7dfcf1`: `before.sh`, and copies of #72's `runner.sh` and `repeat.sh`.
+
+**Next: S17d,** search over the researcher's writing, now that S17c's pin move (#68) is merged. Beside it: S18b's upstream pull request, and on the server's track S14b (#70), S14e (#71) and S14d (#73).
+
 ## Session 16e: an export with the owner's writing
 
 27 October 2026 · branch `claude/reverent-lumiere-6a5062` · [#69](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/69) · upstream `503a730b`, unchanged by this row; `1c18b51e` once `main` with S17c's pin move was merged in
