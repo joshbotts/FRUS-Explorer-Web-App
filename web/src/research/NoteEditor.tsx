@@ -29,6 +29,8 @@ import { copy } from '../copy';
 import type { RichTextEditorHandle } from '../editor/RichTextEditor';
 import { runsText, withSummary } from '../editor/runs';
 import { useNoteEditorRichText } from '../settings/preferences';
+import { useListOrder } from '../settings/syncedPreferences';
+import { applyOrder } from './listOrder';
 import { closeAtOnce, Modal } from '../shell/Modal';
 
 const RichTextEditor = lazy(() => import('../editor/RichTextEditor'));
@@ -145,8 +147,13 @@ export function NoteEditor({
     if (!editing) textarea.current?.focus();
   }, [editing]);
 
-  const tagItems = [...(tags.data?.items ?? []), ...made.filter((tag) => !tags.data?.items.some((listed) => listed.id === tag.id))];
-  const projectItems = projects.data?.items ?? [];
+  // Both lists in the reader's own order (S17f), as the app's note editor lists them.
+  const { tagOrder, projectOrder } = useListOrder();
+  const tagItems = [
+    ...applyOrder(tags.data?.items ?? [], tagOrder, (tag) => tag.id),
+    ...made.filter((tag) => !tags.data?.items.some((listed) => listed.id === tag.id)),
+  ];
+  const projectItems = applyOrder(projects.data?.items ?? [], projectOrder, (project) => project.id);
   const summaryItems = summaries.data?.items ?? [];
 
   function setBody(body: Body) {

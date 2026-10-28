@@ -6,7 +6,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { citationFileURL, citationQuery } from '../api/endpoints';
 import type { CitationStyleName } from '../api/types';
 import { copy } from '../copy';
-import { useCitationStyle } from '../settings/preferences';
+import { useCitationStyleSetting } from '../settings/syncedPreferences';
 
 /** The formatter's Markdown emphasis, `_…_` or `*…*`, as <em>; everything else stays text. */
 export function citationNodes(citation: string): ReactNode[] {
@@ -34,7 +34,8 @@ export function CitePanel({
   autoFocus: boolean;
   onClose: () => void;
 }) {
-  const [style, setStyle] = useCitationStyle();
+  // The user's synced style (S17f), or this browser's on a server that keeps no user data.
+  const [style, setStyle] = useCitationStyleSetting();
   const citation = useQuery(citationQuery(volumeId, documentId, style));
   const heading = useRef<HTMLHeadingElement>(null);
   // What Copy said, and the text to copy by hand, belong to the citation they were for.

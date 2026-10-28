@@ -392,7 +392,7 @@ export function fetchExport(includeGeneratedSummaries: boolean): Promise<{ blob:
   return getFile(exportPath(includeGeneratedSummaries), 'frus-research-export.json');
 }
 
-/** The user's projects, by name, for the note editor's Projects and All Notes' filter. */
+/** The user's projects, by name, for the note editor's Projects and All Notes' filter, and since S17f the one they work in. */
 export const projectsQuery = queryOptions({
   queryKey: ['projects'],
   queryFn: ({ signal }) => getJSON<ProjectList>('/api/v1/me/projects', undefined, signal),
@@ -439,5 +439,7 @@ export function researchImported(client: QueryClient) {
     void client.invalidateQueries({ queryKey: [key] });
   }
   for (const key of ['savedSearches', 'workingCorpora', 'workingCorpus', 'volumeScopes', 'volumeScope']) void client.invalidateQueries({ queryKey: [key] });
+  // And the project worked in, Project Home, the trail and the synced preferences (S17f).
+  for (const key of ['projectHome', 'history', 'sessionLog', 'preferences']) void client.invalidateQueries({ queryKey: [key] });
   searchesChanged(client);
 }

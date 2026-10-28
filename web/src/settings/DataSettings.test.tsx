@@ -39,6 +39,9 @@ describe('Settings ▸ Data', () => {
     const panes = screen.getByRole('navigation', { name: 'Settings' });
     expect(within(panes).getAllByRole('link').map((link) => [link.textContent, link.getAttribute('aria-current')])).toEqual([
       ['Tags', null],
+      ['Projects', null],
+      ['Research Sessions', null],
+      ['Reading', null],
       ['Data', 'page'],
     ]);
     const download = await screen.findByRole('link', { name: 'Export Notes as Markdown (1,204)' });
