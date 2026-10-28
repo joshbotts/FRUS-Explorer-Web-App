@@ -6,7 +6,7 @@ import { errorMessage } from '../api/client';
 import type { NoteSummary } from '../api/types';
 import { deleteNote } from '../api/userData';
 import { copy } from '../copy';
-import { Modal } from '../shell/Modal';
+import { closeAtOnce, Modal } from '../shell/Modal';
 
 /** Asks, then deletes `note`; `onClose` says whether it was deleted. */
 export function DeleteNote({ note, onClose }: { note: NoteSummary; onClose: (deleted: boolean) => void }) {
@@ -23,7 +23,7 @@ export function DeleteNote({ note, onClose }: { note: NoteSummary; onClose: (del
     setFailure(null);
     try {
       await deleteNote(client, note);
-      onClose(true);
+      closeAtOnce(() => onClose(true));
     } catch (problem) {
       setFailure(errorMessage(problem));
       setBusy(false);

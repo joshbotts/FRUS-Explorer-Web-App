@@ -1,6 +1,18 @@
 // A modal dialog, as the app's sheets and alerts are: open while it is drawn, its first focus where
-// it names, Escape its Cancel. The tag editor's, Merge Tag's and the reader's Remove Highlight.
+// it names, Escape its Cancel, and its close after a request committed at once. The tag editor's,
+// Merge Tag's and the reader's Remove Highlight.
 import { type ReactNode, useEffect, useEffectEvent, useRef } from 'react';
+import { flushSync } from 'react-dom';
+
+/**
+ * A dialog's close once its request has been answered, committed at once. A close from a press or a
+ * key is committed before the next frame, where each dialog's parent sends focus back; one after a
+ * request would be committed only in a later task, so that frame could find the page around the
+ * dialog still inert, and focus would fall to the page's body when the dialog went.
+ */
+export function closeAtOnce(close: () => void): void {
+  flushSync(close);
+}
 
 /** A modal dialog, open while it is drawn, that focuses `initial` or its heading when it opens. */
 export function Modal({

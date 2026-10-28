@@ -7,7 +7,7 @@ import { errorMessage } from '../api/client';
 import type { Highlight } from '../api/types';
 import { deleteHighlight } from '../api/userData';
 import { copy } from '../copy';
-import { Modal } from '../shell/Modal';
+import { closeAtOnce, Modal } from '../shell/Modal';
 
 /** Asks, then removes `highlight`; `onClose` says whether it was removed. Cancel has focus first. */
 export function RemoveHighlight({ highlight, onClose }: { highlight: Highlight; onClose: (removed: boolean) => void }) {
@@ -24,7 +24,7 @@ export function RemoveHighlight({ highlight, onClose }: { highlight: Highlight; 
     setFailure(null);
     try {
       await deleteHighlight(client, highlight);
-      onClose(true);
+      closeAtOnce(() => onClose(true));
     } catch (problem) {
       setFailure(errorMessage(problem));
       setBusy(false);
