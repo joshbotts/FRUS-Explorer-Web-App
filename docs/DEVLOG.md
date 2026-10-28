@@ -214,7 +214,7 @@ Phase 2's row S14b, on the server's track after S14a. Since S15c the store holds
 - **Compose:** `./backups` mounted at `/backups`, with `FRUS_BACKUP_COPY_DIR`, `FRUS_BACKUP_HOUR` and `TZ`.
 - **The Compose smoke test** (`scripts/compose-smoke`):
   - At the start, the host folder is writable, the server names its backup's hour in `TZ`'s zone, America/New_York, and a new store is not backed up.
-  - After the import through nginx, it backs up with `frus-light backup`, and a second run takes none.
+  - After the import through nginx and, since the merge with #69, S16e's exports, it backs up with `frus-light backup`, and a second run takes none.
   - It fetches the archive through the API: `tar -xf` opens it, its backup is the host folder's byte for byte, and the manifest names its SHA-256.
   - A restore beside the running server is refused.
   - It stops the server, removes the store, restores it, starts again, and reads the whole export back byte for byte, but for its time.
@@ -227,7 +227,7 @@ Phase 2's row S14b, on the server's track after S14a. Since S15c the store holds
 
 **Results**
 
-- **Linux, `swift:6.4-noble`, arm64:** this package's own targets built clean, with no warnings. All 2,382 tests pass, up from 2,359 at #63, with the one named skip and nothing cancelled: FRUSLightCoreTests 126 and FRUSLightServerTests 175, the others as at #63. The first full run, before the rule for an empty store, also hit the flake under Notes. On the merge with main at #68, S17c's pin move to `1c18b51e`, the package's own targets built clean again, and all 2,477 tests pass, up from 2,454 at #68, with the one named skip and nothing cancelled; the others are as at #68, FRUSCoreKitTests 1,286 among them.
+- **Linux, `swift:6.4-noble`, arm64:** this package's own targets built clean, with no warnings. All 2,382 tests pass, up from 2,359 at #63, with the one named skip and nothing cancelled: FRUSLightCoreTests 126 and FRUSLightServerTests 175, the others as at #63. The first full run, before the rule for an empty store, also hit the flake under Notes. On the merges with main, at #68, S17c's pin move to `1c18b51e`, and then at #69, S16e's, the package's own targets built clean again, and all 2,493 tests pass, up from 2,470 at #69, with the one named skip and nothing cancelled: FRUSLightCoreTests 133 and FRUSLightServerTests 184, the others as at #69, FRUSCoreKitTests 1,286 among them.
 - **`scripts/compose-smoke`,** on this branch's image built as `frus-light:smoke`, in a Compose project and on a port of its own (18094), both removed afterwards: passes.
   - The first look named 03:00 America/New_York, and took no backup of the new store.
   - After the import through nginx, `frus-light backup` took `app-20261027T232048Z.db` and copied it to the host folder, and a second run took none.
