@@ -240,7 +240,7 @@ public final class PostgreSQLUserStore: RelationalUserStore, @unchecked Sendable
     /// Runs `body` in one write transaction holding the lock, with the copy's beside it: the store's is
     /// committed first, then the copy's. A copy that cannot take a change the store has taken is made
     /// again before the next call, and the call is answered as the store answers it.
-    override func writing<T>(_ body: (UserStoreTransaction) throws -> T) throws -> T {
+    override func writing<T>(outsideSearch: Bool = false, _ body: (UserStoreTransaction) throws -> T) throws -> T {
         try access.withLock {
             let db = try ready()
             try db.execute("BEGIN")
@@ -263,14 +263,17 @@ public final class PostgreSQLUserStore: RelationalUserStore, @unchecked Sendable
                 try? db.execute("ROLLBACK")
                 throw error
             }
+            var copied = true
             do {
                 try copy.execute("COMMIT")
             } catch {
                 try? copy.execute("ROLLBACK")
                 copyIsStale.withLock { $0 = true }
+                copied = false
                 logger.error("The local copy of user_search could not take a change the PostgreSQL store took (\(error)); it is made again before the next call")
             }
-            didCommit()
+            // A write that leaves the copy stale counts itself, whatever it changed, after the flag.
+            if !outsideSearch || !copied { didCommit() }
             return value
         }
     }

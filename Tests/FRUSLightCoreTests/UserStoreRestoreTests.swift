@@ -107,12 +107,12 @@ import Testing
         db.close()
         let backup = try await Self.backUp(files)
         _ = try await SQLiteUserStore(url: files.userStore, backupsDirectory: files.backupsDirectory)
-        #expect(try UserStoreRestore.check(files.userStore) == 2)
+        #expect(try UserStoreRestore.check(files.userStore) == 3)
 
         let report = try await Self.restore(backup, files)
         #expect(report.migration == 1)
         let store = try await SQLiteUserStore(url: files.userStore, backupsDirectory: files.backupsDirectory)
-        #expect(store.migration?.from == 1 && store.migration?.to == 2)
+        #expect(store.migration?.from == 1 && store.migration?.to == 3)
         #expect(try store.classificationOverrides().map(\.documentId) == ["d1"], "its correction carried forward")
     }
 
@@ -155,9 +155,9 @@ import Testing
 
         let newer = try copy("newer.db")
         let newerDB = try SQLiteConnection(newer.path, readOnly: false)
-        try newerDB.execute("CREATE TABLE later (a TEXT); INSERT INTO schema_migrations VALUES (3, '2026-11-01T00:00:00Z');")
+        try newerDB.execute("CREATE TABLE later (a TEXT); INSERT INTO schema_migrations VALUES (4, '2026-11-01T00:00:00Z');")
         newerDB.close()
-        #expect(await refusal(newer) == .newerThanThisBuild(newer, store: 3, build: 2))
+        #expect(await refusal(newer) == .newerThanThisBuild(newer, store: 4, build: 3))
 
         let damaged = try copy("damaged.db")
         let handle = try FileHandle(forWritingTo: damaged)
@@ -182,7 +182,7 @@ import Testing
         #expect(try StoreDump(files.userStore) == before)
         #expect(try Self.staged(files).isEmpty)
         #expect(UserStoreBackup.files(in: files.backupsDirectory).map(\.name) == [backup.lastPathComponent], "nothing was kept")
-        #expect(try await Self.restore(backup, files).migration == 2, "and once it is stopped, the backup is restored")
+        #expect(try await Self.restore(backup, files).migration == 3, "and once it is stopped, the backup is restored")
     }
 
     /// The archive `GET /api/v1/admin/backup` gives is a tar file of the manifest and the backup,
@@ -199,8 +199,8 @@ import Testing
         let manifest = source.manifest
         #expect(manifest.backup.name == backup.lastPathComponent && manifest.backup.kind == .daily)
         #expect(manifest.backup.sha256 == (try UserStoreBackup.sha256(of: backup)))
-        #expect(manifest.backup.migration == 2 && manifest.backup.takenAt == "2026-10-27T03:00:00Z")
-        #expect(manifest.server == .current && manifest.server.migration == 2)
+        #expect(manifest.backup.migration == 3 && manifest.backup.takenAt == "2026-10-27T03:00:00Z")
+        #expect(manifest.server == .current && manifest.server.migration == 3)
         #expect(manifest.versions == [manifest.backup])
         let file = directory.url.appendingPathComponent(source.fileName)
         try archive.write(to: file)
@@ -214,7 +214,7 @@ import Testing
 
         try Self.tag(files, ["Since"])
         let report = try await Self.restore(file, files)
-        #expect(report.backup == file && report.migration == 2)
+        #expect(report.backup == file && report.migration == 3)
         #expect(try Self.tags(files.userStore) == ["Archived"])
 
         // An archive whose backup changed after the API wrote it is refused.

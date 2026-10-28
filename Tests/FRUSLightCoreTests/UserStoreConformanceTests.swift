@@ -312,5 +312,22 @@ import Testing
         ])]]), for: "owner")
         #expect(try moved(), "an import")
         #expect(try store.searchMark() == mark, "and asked again, the same")
+
+        // S17f's writes change nothing a search reads, so they leave every kept search standing.
+        let project = "5E17F000-0000-4000-8000-0000000000E1"
+        let projects = try #require(UserStoreSchema.table(for: "Project"))
+        try store.addResearchRow(projects, ["id": .text(project), "name": .text("Laos"), "default_subject_tag_ids": .text("[]"),
+                                            "default_country_tag_ids": .text("[]"), "default_user_tag_ids": .text("[]")],
+                                 for: "owner", outsideSearch: true)
+        try store.setActiveProject(project, for: "owner")
+        let reading = try #require(UserStoreSchema.table(for: "ReadingHistoryEntry"))
+        try store.addResearchRow(reading, UserTrailTests.visit(UserTrailTests.entry(1), at: nil, project: project), for: "owner",
+                                 outsideSearch: true)
+        try store.deleteResearchRow(reading, id: UserTrailTests.entry(1), for: "owner", outsideSearch: true)
+        try store.setPreferences(["research_logging_enabled": .integer(0)], initial: UserTrailTests.initialPreferences, for: "owner",
+                                 at: Self.created)
+        _ = try store.deleteTrail(of: "owner")
+        try store.deleteProject(project, for: "owner")
+        #expect(try !moved(), "a project, the one worked in, the trail and the preferences")
     }
 }

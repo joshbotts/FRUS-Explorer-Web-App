@@ -69,9 +69,9 @@ struct PostgreSQLUserStoreTests {
                                       migrations: migrations)
     }
 
-    /// A store left at migration 1, as a build with only that one would have left it, reaches 2, its
-    /// corrections the classification overrides app.db's migration 2 makes of them.
-    @Test func aStoreAtMigrationOneReachesTwoWithItsCorrections() async throws {
+    /// A store left at migration 1, as a build with only that one would have left it, reaches the
+    /// latest, its corrections the classification overrides app.db's migration 2 makes of them.
+    @Test func aStoreAtMigrationOneReachesTheLatestWithItsCorrections() async throws {
         try await Self.inSchema { configuration, directory in
             let db = try PostgreSQLConnection.connect(configuration)
             defer { db.close() }
@@ -85,8 +85,8 @@ struct PostgreSQLUserStoreTests {
 
             let store = try await Self.open(configuration, in: directory)
             defer { store.close() }
-            #expect(store.migration == UserStoreMigration(from: 1, to: 2, backup: nil), "its backups are the database service's")
-            #expect(try store.schemaVersion() == 2 && store.user("owner")?.displayName == "Owner")
+            #expect(store.migration == UserStoreMigration(from: 1, to: 3, backup: nil), "its backups are the database service's")
+            #expect(try store.schemaVersion() == 3 && store.user("owner")?.displayName == "Owner")
             let corrections = try store.classificationOverrides()
             #expect(corrections.count == 1)
             #expect(corrections.first?.isEditorialNote == true && corrections.first?.parsedIsEditorialNote == false)
@@ -106,11 +106,11 @@ struct PostgreSQLUserStoreTests {
                 _ = try await Self.open(configuration, in: directory, migrations: PostgreSQLMigrations.all + [failing])
             } throws: { error in
                 guard case .postgreSQLMigrationFailed(let leftAt, let to, _) = error as? UserStoreOpenError else { return false }
-                return leftAt == 2 && to == 3 && "\(error)".contains("left at 2")
+                return leftAt == 3 && to == 4 && "\(error)".contains("left at 3")
             }
             let store = try await Self.open(configuration, in: directory)
             defer { store.close() }
-            #expect(try store.schemaVersion() == 2 && store.migration == nil)
+            #expect(try store.schemaVersion() == 3 && store.migration == nil)
             let db = try PostgreSQLConnection.connect(configuration)
             defer { db.close() }
             #expect(try db.scalar("SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'later'", [])
@@ -126,7 +126,7 @@ struct PostgreSQLUserStoreTests {
                 _ = try await Self.open(configuration, in: directory)
             } throws: { error in
                 guard case .postgreSQLNewerThanThisBuild(let store, let build) = error as? UserStoreOpenError else { return false }
-                return store == 3 && build == 2
+                return store == 4 && build == 3
             }
         }
     }

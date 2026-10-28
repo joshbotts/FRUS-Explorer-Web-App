@@ -4,7 +4,7 @@
 /// starting at 1. Never edit one that has shipped: add another, and with it any change to
 /// `UserStoreSchema`.
 public enum UserStoreMigrations {
-    public static let all: [String] = [one, two]
+    public static let all: [String] = [one, two, three]
 
     /// S2: the single user, and corrections as override rows.
     static let one = """
@@ -411,5 +411,12 @@ public enum UserStoreMigrations {
         WHERE field = 'is_editorial_note'
         ORDER BY recorded_at, rowid;
         DROP TABLE index_corrections;
+        """
+
+    /// S17f's: the project each user works in, the web's own, since the Mac keeps its active project
+    /// on each device (`AppState.activeProjectId`) and a user here has one, which a trail row's
+    /// `project_id` is stamped from as the Mac stamps it. NULL is the Mac's Global Context.
+    static let three = """
+        ALTER TABLE users ADD COLUMN active_project_id TEXT;
         """
 }

@@ -26,21 +26,9 @@ public enum SearchSetTable: String, Sendable, CaseIterable {
     }
 }
 
-/// Why the store refused a row of one of the three tables.
-public enum SearchSetStoreError: Error, Equatable, CustomStringConvertible {
-    /// A row was given a column its table does not have.
-    case unknownColumn(table: String, column: String)
-    /// A new row was given no id, or one the user's rows of its table hold already.
-    case invalidId(table: String, id: String?)
-
-    public var description: String {
-        switch self {
-        case .unknownColumn(let table, let column): "\(table) has no column \(column)"
-        case .invalidId(let table, let id?): "\(table) holds a row with the id \(id) already"
-        case .invalidId(let table, nil): "a row of \(table) needs an id"
-        }
-    }
-}
+/// Why the store refused a row of one of the three tables: the rows' own refusals, since S17f
+/// those of every user table keyed by the Mac's id.
+public typealias SearchSetStoreError = ResearchRowStoreError
 
 /// Where a user's saved searches, working corpora and volume scopes are kept: each a row of its table,
 /// with its columns by name, the user's alone. A row's id is the Mac's, an uppercase `uuidString`, and
@@ -65,79 +53,24 @@ public protocol SearchSetStore: Sendable {
 
 extension RelationalUserStore: SearchSetStore {
     public func searchSets(_ table: SearchSetTable, of user: String) throws -> [ExportRow] {
-        try reading { db in
-            try Self.rows(of: table.table, where: "user_id = ?", [.text(user)], in: db)
-        }
+        try researchRows(table.table, of: user)
     }
 
     public func searchSet(_ table: SearchSetTable, id: String, of user: String) throws -> ExportRow? {
-        try reading { db in try Self.row(table.table, id: id, of: user, in: db) }
+        try researchRow(table.table, id: id, of: user)
     }
 
     public func addSearchSet(_ table: SearchSetTable, _ values: [String: SQLiteValue], for user: String) throws {
-        let schema = table.table
-        try Self.check(values, in: schema)
-        guard let id = values["id"]?.text else { throw SearchSetStoreError.invalidId(table: schema.name, id: nil) }
-        try writing { db in
-            guard try Self.row(schema, id: id, of: user, in: db) == nil else {
-                throw SearchSetStoreError.invalidId(table: schema.name, id: id)
-            }
-            let columns = schema.columns.map(\.name)
-            let names = ["user_id"] + columns
-            _ = try db.query(
-                "INSERT INTO \(schema.name) (\(names.joined(separator: ", "))) VALUES (\(names.map { _ in "?" }.joined(separator: ", ")))",
-                [.text(user)] + columns.map { values[$0] ?? .null })
-        }
+        try addResearchRow(table.table, values, for: user, outsideSearch: false)
     }
 
     @discardableResult
     public func updateSearchSet(_ table: SearchSetTable, id: String, _ values: [String: SQLiteValue], for user: String) throws -> ExportRow? {
-        let schema = table.table
-        try Self.check(values, in: schema)
-        let columns = schema.columns.map(\.name).filter { $0 != "id" && values[$0] != nil }
-        return try writing { db in
-            guard let held = try Self.row(schema, id: id, of: user, in: db) else { return nil }
-            guard !columns.isEmpty else { return held }
-            _ = try db.query(
-                "UPDATE \(schema.name) SET \(columns.map { "\($0) = ?" }.joined(separator: ", ")) WHERE user_id = ? AND id = ?",
-                columns.map { values[$0] ?? .null } + [.text(user), held.values["id"] ?? .null])
-            return try Self.row(schema, id: id, of: user, in: db)
-        }
+        try updateResearchRow(table.table, id: id, values, for: user, outsideSearch: false)
     }
 
     @discardableResult
     public func deleteSearchSet(_ table: SearchSetTable, id: String, for user: String) throws -> Bool {
-        let schema = table.table
-        return try writing { db in
-            guard let held = try Self.row(schema, id: id, of: user, in: db) else { return false }
-            _ = try db.query("DELETE FROM \(schema.name) WHERE user_id = ? AND id = ?", [.text(user), held.values["id"] ?? .null])
-            return true
-        }
-    }
-
-    /// Refuses values for a column `table` lacks.
-    private static func check(_ values: [String: SQLiteValue], in table: UserStoreSchema.Table) throws {
-        let columns = Set(table.columns.map(\.name))
-        if let unknown = values.keys.sorted().first(where: { !columns.contains($0) }) {
-            throw SearchSetStoreError.unknownColumn(table: table.name, column: unknown)
-        }
-    }
-
-    /// The user's row of `table` whose id is `id` in any letter case, the first in the order of the
-    /// ids where two differ only in case, as the import finds one.
-    private static func row(_ table: UserStoreSchema.Table, id: String, of user: String,
-                            in db: UserStoreTransaction) throws -> ExportRow? {
-        try rows(of: table, where: "user_id = ? AND upper(id) = ?", [.text(user), .text(UserSearchText.uuidString(id))],
-                 order: "id", in: db).first
-    }
-
-    private static func rows(of table: UserStoreSchema.Table, where condition: String, _ bindings: [SQLiteValue],
-                             order: String = "rowid", in db: UserStoreTransaction) throws -> [ExportRow] {
-        let columns = table.columns.map(\.name)
-        return try db.query("SELECT rowid, \(columns.joined(separator: ", ")) FROM \(table.name) WHERE \(condition) ORDER BY \(order)",
-                            bindings)
-            .map { row in
-                ExportRow(values: Dictionary(uniqueKeysWithValues: zip(columns, row.dropFirst())), position: row[0].integer ?? 0)
-            }
+        try deleteResearchRow(table.table, id: id, for: user, outsideSearch: false)
     }
 }
