@@ -65,6 +65,8 @@ Phase 2's row S17d, the first of the search-and-research rows that S17c's pin mo
 - **The web job's steps,** through `scripts/npm`: typecheck, lint and the build are clean, and the unit suite passes 321 tests in 35 files.
 - **The browser suite,** over an image of the branch under a tag and port of its own (`frus-light:s17d`): a scratch copy of the smoke test, its root phase alone, passes, with the new spec and the search specs beside it, `facets`, `inspector-order`, `readings`, `search-read-cite` and `tags`, 10 of 10 in Chromium, axe finding no violation. The whole suite, twice, and the sign-in phase are CI's compose job's.
 - **CI on #76 at `02fd64b`:** the swift job, amd64, with its PostgreSQL service, passes with the same counts per target and the one named skip, and prints check 3 through the API as above, 482 identical; the web job and the image builds for amd64 and arm64 pass; and the compose job passes in 16 minutes, the browser suite's 48 tests at the root and 48 under the path, the new spec among them, then the sign-in phase and its spec. The review's fix and these records follow it.
+- **CI on #76 at `1740ce3`,** the review's fix and these records: every job passes as at `02fd64b`, at the same counts, the compose job in 12 minutes.
+- **At the merge with `main`** at `6b413b0` (#78, S16e's follow-up's records), whose one conflict was this log's top entry, both entries are kept, this row's above #78's. The merge brings lines of `COORDINATION.md` and of this log alone, so the code is `1740ce3`'s and its runs above stand.
 
 **Records**
 
