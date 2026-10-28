@@ -314,7 +314,7 @@ S17c's pin move, on 27 October, to `1c18b51e`, `v2`'s head, past #1805, #1806 an
 - **The `.fruscollection` file,** written from values and read into values.
 
 `CollectionResolutionTests` resolves a fixture collection over a volume the kit's pipeline indexes and a store the test supplies, and pins the items by SHA-256. The branch was begun on `v2` at `3af1fc07`, #1807's merge with #1808's website drafts. Run beside it:
-- the full iOS unit run failed only as `v2`'s did, at 7,752 tests against 7,739, but for two tests of #1360's editor, which this does not touch. Run alone, the colour picker's passed every time, and the link alert's failed 4 of 12 runs at the branch and 2 of 12 at `v2`, within chance;
+- the full iOS unit run failed only as `v2`'s did, at 7,752 tests against 7,739, but for two tests of #1360's editor, which this does not touch. Run alone, the colour picker's passed every time, and the link alert's failed 4 of 18 runs at the branch and 2 of 18 at `v2`, within chance;
 - `swift test` ran 3,191 tests against 3,179, `FRUSCoreKitTests` 1,298 against 1,286;
 - with thunk numbers and file-private discriminators dropped, the symbol diff was 614 names removed and 1,071 added. Each removed name is the resolver's machinery, now the kit's assembly, a signature that names a moved type or gained a locale, or a closure whose code moved;
 - test collections built in SwiftData and resolved every way the app resolves one, with the `.fruscollection` file, its import and a smart snapshot, were the same files at both, three runs each, but for the order an unsorted fetch returned one document's two highlights, which changed from run to run at `v2` itself;
