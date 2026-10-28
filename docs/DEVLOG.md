@@ -4,7 +4,7 @@ One entry per session, newest first.
 
 ## Session 14d: the PostgreSQL store
 
-27 October 2026 · branch `claude/clever-banach-5614db` · PR_LINK · upstream `503a730b`, unchanged
+27 October 2026 · branch `claude/clever-banach-5614db` · [#73](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/73) · upstream `503a730b`, unchanged
 
 Phase 2's row S14d, on the server's track after S14c. The user store gains its second store, SPEC's option B: a PostgreSQL database beside `app.db`, which a deployment chooses with `FRUS_USER_STORE`. Every store method is one piece of code on both, and one conformance suite holds the two alike, in CI against a PostgreSQL service. No upstream pull request, no pin move, and no change to `app.db`'s migrations.
 
@@ -70,7 +70,6 @@ So the PostgreSQL store's copy holds both tables, the row's `user_search` and th
 **Results**
 
 - **Linux, `swift:6.4-noble`, arm64,** with `scripts/swift --postgres`, PostgreSQL 18: this package's own targets build clean with no warning. All 2,376 tests pass, up from 2,359 on main, with the one named skip and nothing cancelled: FRUSLightCoreTests 121, in about 15 seconds, and FRUSLightServerTests 174, the others as on main.
-- **CI on CI_LINK** CI_RESULT
 
 **Records**
 
