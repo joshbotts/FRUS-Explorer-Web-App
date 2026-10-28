@@ -52,6 +52,104 @@ All in `swift:6.4-noble` on arm64, while other sessions' builds loaded the Mac. 
 
 **Next: S17d,** search over the researcher's writing, once S17c's pin move (#68) is merged. Beside it: S18b's upstream pull request, S16e (#69) and S14b (#70), and S14e and S14d on the server's track.
 
+## Session 17c: pin move past FRUS-Explorer#1805, #1806 and #1807, with #1789 to #1804
+
+27 October 2026 · branch `claude/cranky-murdock-f76a42` · [#68](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/68) · upstream `1c18b51e`
+
+Phase 2's row S17c. The pin moves from `503a730b` to `1c18b51e`, `v2`'s head, past the three web-authored pull requests the owner merged today:
+- [FRUS-Explorer#1805](https://github.com/joshbotts/FRUS-Explorer/pull/1805) (S17b), the research layer's rules, as `295e5276`;
+- [#1806](https://github.com/joshbotts/FRUS-Explorer/pull/1806) (S17a), the search's user half from a store the host attaches, as `391b3461`;
+- [#1807](https://github.com/joshbotts/FRUS-Explorer/pull/1807) (S18a), a collection rendered from values, as `1c18b51e`, a squash with its branch head's tree (`cba143d8`).
+
+`PLAN.md` has the first pin move after a phase-2 upstream merge take it, whichever row that is, so this move takes every merge since the pin as well: S15c's follow-up [#1789](https://github.com/joshbotts/FRUS-Explorer/pull/1789) (`96c9de0c`), S15d's [#1790](https://github.com/joshbotts/FRUS-Explorer/pull/1790) (`9fa4375d`), the app's [#1792](https://github.com/joshbotts/FRUS-Explorer/pull/1792) (`2b153f81`), [#1793](https://github.com/joshbotts/FRUS-Explorer/pull/1793) (`b33c05da`) and [#1801](https://github.com/joshbotts/FRUS-Explorer/pull/1801) (`36e7add7`), and six that change only the app's plans, guides, manuals and marketing copy (#1794, #1795, #1800, #1802, #1803, #1804). So S18c, which was to move past S18a's and S18b's pull requests, moves past S18b's alone. It is a pull request of its own under rule 5.
+
+**What the move brought, in shared code**
+
+- **#1789 and #1793, the reader's highlights.** `kHighlightsJS`'s `buildRanges` ends a range that ends on a `<br>` after the element, and builds none from a negative start; `render` skips a highlight whose range throws, alone, where one such highlight left the page with none drawn. `HighlightReanchor.extracts(passage:start:end:in:)` is public. #1793 also removes the app's unloaded copies of the engine and the renderer from `FRUSExplorer/Resources/`, and clamps a colour outside sRGB in `CollectionProse.hex`.
+- **#1805:** the research layer's rules, public, over values: `SavedSearchFreshness` and "+N since last run", `WorkingCorpusResolver` and `CustomScopeResolver`, the trail's sessions, the method appendix with `RecordedSearch`, `SearchScopeSignature` and the provenance vocabulary, `DocumentEngagement`, `ResearchDocumentAggregation`, `ResearchItemCounts.tally`, `NotesPaneSnapshot` with All Notes' filter, and `CollectionEntryKind`; and, on Linux only, an interpolated integer grouped as Foundation groups it.
+- **#1806:** `SearchUserSource`, and the read-only open's `userStore:`, which attaches a store read-only as `user_store`; every reader of the search's user half takes the source.
+- **#1807:** the collection export's payloads, options, presets and naming, the outline's value core, the quotation check, and the HTML, Word, BibTeX and RIS exporters, with `CollectionProse.append` and `hex`, `FRUSRenderNodeHTMLSerializer.serialize(_:includeFootnotes:highlights:)`, `ExportHighlight`, `HighlightColor.ooxmlHighlightName` and `IndexingPipeline.documentBodyTextsByKey(forKeys:)` public.
+- **In the kit's tests:** `SearchStatementTextTests`, `SearchUserSourceTests`, `ResearchLayerRulesTests`, `QueryMethodAppendixFixtureTests` and `CollectionRenderingTests` are new, `ExcerptVerifierTests` moved into the kit's folder, and `ReaderAnnotationScriptTests` re-took its pins of the scripts for #1789 and #1793. FRUSCoreKitTests runs 1,286, from 1,191.
+- The rest is the app's: #1790's colour under the light appearance, #1792's one copy of each record, #1801's offline launch, ranking chart, word cloud and cross-reference graph, and the app's halves of the three moves.
+
+**No repair to the build.** The package builds with no warning, every kit suite passes, and the only skip is the named one. `Package.swift` compiles `FRUSCoreKit/` by folder, so its new `Collections/`, `Provenance/` and `Research/` needed no change. These are unchanged:
+- the build (1.0, 1776), so `scripts/release-tag` still says `1.0-1776`;
+- the index version (71) and the FTS generation (4), so `Compatibility.swift` and the install guide's versions stand;
+- the export's schema: `setupDatabase(_:)` is the same text, now at lines 8010–8665, and the watch finds the same 47 `CREATE TABLE` and `ALTER TABLE` statements;
+- `IndexingResources.indexResourceNames`, the export's format version (7), the app's source folders in `project.yml`, and CI's allow-list.
+
+The bundled resources lose `frus-highlights.js` and `frus-offset-engine.js`, which nothing loaded, and `frus-selection.js` changes in its comments. The server serves the kit's constants as its reader scripts, and its tests compare them with the constants, so its `frus-highlights.js` now has #1789's and #1793's fixes.
+
+**On §5's indexing path,** `git diff 503a730b 1c18b51e` shows nothing that indexing runs:
+- `IndexingPipeline.swift` changes in search-time code (#1806's user source in every statement builder, the tag counts and a document's tags), in the read-only open, which attaches a store, in two test hooks, and in one access level (#1807's `documentBodyTextsByKey`, a read only an export runs). The read-write open passes no store, and `setupDatabase(_:)` is the same text;
+- the parser's folder, `FRUSCoreKit/TEI`, changes in comments, in access (`serialize`, `ExportHighlight`), in `ooxmlHighlightName`, which moved in from the app unchanged, in the new `FigureImageSource.swift`, which the collection exporters read, and in the reader's scripts;
+- `FRUSExplorer/Resources` loses the two unloaded scripts;
+- FTS5Store, SourceNoteKit and `project.yml` are unchanged, and #1792 and #1801 change no file on the path.
+
+So the owner's seventh three-volume export, made on 24 October from a build of `503a730b`, holds what the indexer at `1c18b51e` would write: the build (1.0, 1776), the index version (71) and the FTS generation (4) are the same, and on the indexing path only code that a search, an export or the reader runs changed. The golden files were remade from it, on the owner's word.
+
+**Parity tests repaired.** Twelve tests in five suites failed at the new pin on app source the move changed, as S17b's and S18a's entries foresaw:
+- **pointed at the kit's moved files, or at the app's files the code left:** `NoteViewParityTests`' words, formats, and All Notes' rows and filters (`FRUSCoreKit/Models/NotesPaneSnapshot.swift`, with the search field's filter, which moved into it from `AllNotesScreen` as `filtered(project:tagId:query:)`, and `ResearchItemCounts.swift`); `ImportParityTests`' inert kind (`CollectionEntryKind`) and saved search, whose `recordRun` writes the kit's `encoded`; and `NotesAndSummariesParityTests`' reading of prose (`Collections/CollectionExporter+App.swift`);
+- **re-taken on #1792's one copy of each record:** `ExportParityTests`' exporter lines, `NoteViewParityTests`' Contents counts (`DuplicateCopies.count`), and `NotesAndSummariesParityTests`' note text, the editor's save to every copy and its `deleteEveryCopy`. The store keeps one row for each user and id, and S16c's import keeps the newer of a file's repeated records, so the web has one copy of each by construction and nothing to collapse;
+- **`UserStoreParityTests`' two:** a saved search's `freshnessData` is the kit's `SavedSearchFreshness.encoded` now, not an assignment from `JSONEncoder()`, so `AppModelSource.isWrittenAsJSON` also reads a kit type's `encoded` blob as JSON when the kit writes it with a plain `JSONEncoder`.
+
+**Rule 4: where the kit now has the code the server mirrored, the server calls it.**
+- **A saved search's watermark.** The export reads `freshness_data` with `SavedSearchFreshness.decoded(from:)`, the import writes it with the kit's `encoded`, and the parity harness reads it back as the kit's type. The three copies of the struct go: `ResearchExport.Freshness`, `SavedSearchColumns.Freshness` and `StoredResearch`'s. The import's NULL for a file that records no run stays the web's, as the app's record of a search never run holds none.
+- **A collection entry's kinds.** `MacImport.inertKind` is `CollectionEntryKind.unrecognized.rawValue`, and a new entry's default kind `.document`'s.
+- **Check 6's two forms.** `ExportHighlights.check` calls `HighlightReanchor.extracts(passage:start:end:in:)` over the page's blocks, where it composed the private test from the kit's public pieces, as S16c planned.
+- **The codec's colour and the golden reading's paragraphs.** `RTFColor.hex` is the kit's `CollectionProse.hex`, #1793's clamp with it, which the codec already applied, and `ProseParagraphs.paragraphs(of:)` splits with the kit's `CollectionProse.append`, as S18a's entry proposed. `FRUSRichText` and `ParityFormat` depend on `FRUSCoreKit` now, imported `internal`, so `tools/mac-golden`, which links both beside the app module and its own compile of the kit's files, sees one `CollectionProse`. Only `hexColor`'s resolution of a colour, AppKit's, is the codec's own, and `theAppsParagraphsAndColoursAreTheMirrors` pins the app's AppKit body, #1790's, and the decoder's call of `append`.
+
+Left as mirrors, with their parity tests:
+- **All Notes' rows and filters** (`web/src/research/notesRules.ts`). The browser app filters the notes it holds as each key is typed; serving the kit's `NotesPaneSnapshot` would make each key a request. Its test reads the kit's file now.
+- **The app's code that stays the app's:** `SavedSearch.init(name:parameters:)`'s columns, `ResearchNote.indexedTextPerDocument` and `GeneratedSummary.ranksAbove`, the exporter's `makeEnvelope`, and the export sheet's counts.
+
+Not taken yet, each for its row: attaching the store to search, S17d's; saved searches, corpora and scopes, S17e's; the trail and the appendix, S17f's; the Research page's aggregation, S19b's; the collection renderers, S18d's to S18f's; and `ResearchItemCounts.tally`, which S14c's Settings tallies waited for.
+
+**The reader.** The host script's try of each highlight with `buildRanges` before `FRUSHighlights.render` stays, to name in the rail any the kit cannot draw, since the kit's renderer, which skips one alone now, does not say which; its comments say why. Check 6's samples still leave out a highlight that ends on a line break. The kit's renderer draws one since #1789, ending its range after the `<br>`, but check 6 in Chromium also reads each range back through the kit's selection bridge, and `rangeEndpointToOffset` finds an endpoint by the node its map names, the `<br>` itself, not the paragraph that `setEndAfter` gives. A throwaway page in Chromium, never committed, loaded the kit's three scripts over `ab<br>cd`: the range for 0–3 ends at the paragraph's offset 2, the bridge reads that end back as -1, and the renderer draws the highlight. Ranges that end in text read back to their offsets. A reader's drag ends in the text after the break, which the bridge maps, as #1789's tests found in WebKit, so only check 6's read-back meets the gap.
+
+**#1801** changes nothing the web serves. Its timeline is the cross-reference graph's (`CrossReferenceStore`, app code); S11f's is the search window's, through the kit's facets, and `ReadingsAPIParityTests` passes unchanged. The web has no word cloud.
+
+**The golden files**
+
+Remade by `scripts/make-golden`, under the app's `Scripts/heavy.sh` lock, on this Mac, which runs macOS 27.2 now, first from the app's source alone, and then, by the owner's choice, with `--export /Users/Shared/frus-index-2026-10-24.sqlite`, the seventh three-volume export, which S16b's move was made from. No new export was made, and neither library was touched.
+- **The render and the expressions:** the 393 rows' HTML is byte for byte as before, and the manifest and the expressions change only in provenance: `sourceDigest` (`1c529af84686` to `60d61d5d2ef1`), `upstreamCommit`, and the platform's macOS, 27.2.0 where it was 27.0.1.
+- **The results** change only in that provenance. Every query's count, first 50 results and tie tail are as before.
+- **The index summary's** gating section, its 36 digests, 7 checks and volumes, is unchanged. Beside the same provenance, its information section moves only in the summarizer's timings.
+- **The golden spans** change in provenance, in the harness's digest of `tools/mac-golden`'s `RichText.swift`, which this pull request edits, and in the RTF of the 90 written cases, which differ only in AppKit's writer stamp: `\cocoartf2908` on macOS 27.2, where 27.0.1 wrote `\cocoartf2907`. Every case's text, runs and paragraphs, the 51 catalog colours and the 16 code pages' readings are as before, and `fixtures/rich-text/web`, the codec's own RTF, is unchanged.
+- `frus-parity check-golden` passes, and `PENDING` is empty again. Until the export was chosen, the two files made from it waited there, and the pull request was a draft whose checks 2 and 3 printed that they waited.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** CI's Build and Test steps replayed over `main` at `8e6d681`, this package's own targets built clean with no warning, all under the app's `Scripts/heavy.sh` lock:
+  - **at the new pin before the repairs:** every kit suite passed, and two targets failed with 42 issues: in FRUSParityTests, 21 of golden-file staleness and 19 in ten of the twelve tests named above, and in FRUSLightCoreTests the other two;
+  - **with the repairs, the source-made golden files remade and the two export-made ones pending:** every test passed but one, a check this session had added that compared the watermark's bytes, which the kit's encoder writes in no fixed order. It compares what they decode to, from before the draft was pushed. Seven tests printed that a file waits;
+  - **with every golden file:** 2,454 tests, up from 2,359, all passing with only the named skip, in Swift Testing's results file and in the log. The checks print:
+    - "check 2 passes: 36 digests and 7 checks are the Mac's";
+    - "check 3's results pass: 482 queries, 482 identical and 0 reordered only within Mac tie groups; 318 with other score bits (information)", and through the API "482 queries, 482 identical and 0 reordered only within Mac tie groups, every record the kit's own";
+    - "check 4 through the page: 393 of 393 rows identical", and the same on the reader's path and from one full parse per volume;
+  - **per target:** FRUSCoreKitTests 1,286, SourceNoteKitTests 321, FTS5StoreTests 219, FRUSParityTests 188, FRUSLightServerTests 172, FRUSLightCoreTests 106, ManifestGeneratorTests 60, FRUSRichTextTests 42, SemanticVectorsKitTests 40, CrossRefKitTests 10, GeneratorKitTests 7, FTS5CheckTests 3.
+- **The web job:** typecheck, lint, and 304 unit tests in 33 files, unchanged but for a comment in `notesRules.ts`.
+- **`tools/mac-golden`** built in release with the codec and the formats importing the kit, and wrote the files above.
+- **The image and the browser suite** are CI's compose job's. The server's reader serves the kit's scripts as they now are.
+
+**The daily watch.** [Issue #56](https://github.com/joshbotts/FRUS-Explorer-Web-App/issues/56) reported `v2` at `41950692`, 11 commits past the pin, with every kit passing and this package's suites failing as listed. Its comment names this pull request for the 14 commits to `1c18b51e`. Its first run after the merge finds nothing past the pin and closes it.
+
+**Records**
+
+- `PLAN.md`: S17c's done paragraph after S16d's, S12d's row (from `1c18b51e`), S18c's row, the golden-files checkpoint and the risk row's merges.
+- `SPEC.md`: the compatibility contract, and `setupDatabase(_:)`'s lines.
+- `COORDINATION.md`: the pin; §1's use of the kit, the mirrors and the counts; §2's #1807, now merged, and this move after it; §5's list of app changes; §6's exports.
+- `docs/prep/README.md`: the pin. The README's Status and this log.
+
+**Notes**
+
+- **`internal import` keeps the kit out of a client's sight.** `tools/mac-golden` compiles the kit's files into its app module and links `FRUSRichText` and `ParityFormat`, which now import the kit's module. Imported `internal`, the second module adds no name and no extension member the tool can see, so nothing it names is ambiguous.
+- **`make-golden` leaves `tools/mac-golden/Package.resolved` changed.** Xcode 27.1's SwiftPM resolves every dependency of the path package `mac-golden` names, so the lockfile gains this package's 22 server dependencies, at newer versions than the root's lockfile. Resolving the tool against `main`'s manifest does the same, so it is the toolchain's and not this move's. The two pins the tool builds, swift-crypto 5.0.0 and swift-asn1 1.7.3, stay as they are, and the change is left out.
+- **S14c's tallies are unblocked.** "12 notes · 3 documents" beside each Settings ▸ Tags row is `ResearchItemCounts.tally` over each note's tags and each assignment's tag, with the kit's `TagTally.summary` for its words. It is small, and in no row's way.
+- **Mac checks 11, 12 and 13** are still "To do" in `PLAN.md`, as 9 and 10 are. The owner merged #1805, #1806 and #1807; their checks are the owner's to record.
+
+**Next: S17d,** search over the researcher's writing, which attaches the store at the read-only open and gives each request's user a service with `.attachedStore(userId:)`; beside it **S17e**, saved searches, corpora and scopes, and **S17f**, projects, the history and the method appendix, with S16e and the server's track, S14e, S14d and S14b.
+
 ## Session 18a: collections render from values in FRUSCoreKit, upstream
 
 25–27 October 2026 · branch `claude/wonderful-dewdney-bda10e` · [#67](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/67) · upstream `503a730b`, unchanged; [FRUS-Explorer#1807](https://github.com/joshbotts/FRUS-Explorer/pull/1807), open

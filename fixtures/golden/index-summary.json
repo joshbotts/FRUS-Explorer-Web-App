@@ -668,17 +668,17 @@
       "document_sources.sequence" : 0,
       "document_subject_refs" : 0.001,
       "document_subject_volumes" : 0,
-      "document_subjects" : 0.001,
+      "document_subjects" : 0,
       "external_citations" : 0,
       "external_citations.sequence" : 0,
       "frus_documents.averages" : 0,
       "frus_documents.config" : 0,
       "frus_documents.docsize" : 0,
       "frus_documents.vocab_col" : 0.008,
-      "frus_documents.vocab_instance" : 0.4,
-      "frus_documents.vocab_row" : 0.012,
+      "frus_documents.vocab_instance" : 0.403,
+      "frus_documents.vocab_row" : 0.011,
       "integrity" : 0.029,
-      "page_ranges" : 0.002,
+      "page_ranges" : 0.001,
       "page_ranges.sequence" : 0.001,
       "person_cluster_candidate" : 0,
       "person_list_sources" : 0,
@@ -692,7 +692,7 @@
       "schema.export_only" : 0,
       "terms" : 0,
       "terms.sequence" : 0,
-      "total" : 0.491,
+      "total" : 0.484,
       "user_content.averages" : 0,
       "user_content.config" : 0,
       "user_content.docsize" : 0,
@@ -702,7 +702,7 @@
       "user_tags" : 0,
       "volume_sources" : 0,
       "volume_sources.sequence" : 0,
-      "volume_structures" : 0.001,
+      "volume_structures" : 0,
       "volume_structures.json" : 0
     },
     "volumeOrder" : [
@@ -733,12 +733,12 @@
     "platform" : {
       "arch" : "arm64",
       "locale" : "en_US",
-      "os" : "macOS 27.0.1",
+      "os" : "macOS 27.2.0",
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "1c529af846867704d8ea2ace8b06e0573731a2a7c5ff5ebb064d03c7d0d431c5",
+    "sourceDigest" : "60d61d5d2ef118790f1ae6037101065b87ba0496f8b57cb2761c730c2ffee552",
     "tool" : "frus-parity summarize",
-    "upstreamCommit" : "503a730bfacfc06bfeeadedf9bc4069b1ca6750d"
+    "upstreamCommit" : "1c18b51ea73594664d3cd0a61e20ba11d8db9c14"
   }
 }

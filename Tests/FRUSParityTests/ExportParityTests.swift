@@ -469,16 +469,22 @@ import Testing
             "ProjectLeadEntry": "sortBy: [\(sorted)firstSurfacedAt)]", "SyncedPreferences": "sortBy: [\(sorted)createdAt)]",
         ], "\(fetches)")
         for line in [
-            "let summaries = includeGeneratedSummaries ? try modelContext.fetch(FetchDescriptor<GeneratedSummary>()) : []",
+            // Each record once since #1792, the copy last modified, of a record stored as several under
+            // one id; a collection and a plan with every copy's children, one of each. The store keeps
+            // one row for each id, so one of each is what the web's export has to write.
+            "let notes = ResearchNote.oneCopyEach(try modelContext.fetch(FetchDescriptor<ResearchNote>()))",
+            "let savedSearches = SavedSearch.oneCopyEach(try modelContext.fetch(FetchDescriptor<SavedSearch>(sortBy: [SortDescriptor(\\.createdAt)])))",
+            "let collections = DuplicateCopies.oneEach(collectionCopies, id: \\.id, lastModified: \\.lastModified)",
+            "let summaries = includeGeneratedSummaries ? DuplicateCopies.oneEach(try modelContext.fetch(FetchDescriptor<GeneratedSummary>()), id: \\.id, lastModified: \\.lastModified) : []",
             #"let highlightsByNoteId = Dictionary(grouping: highlights, by: \.noteId)"#,
             "let activeProject = activeProjectId.flatMap { id in projects.first { $0.id == id } }",
             "exportedForProjectName: activeProject?.name, exportedForProjectResearchQuestion: activeProject?.researchQuestion,",
             #"linkedHighlightIds: (highlightsByNoteId[note.id] ?? []).map(\.id),"#,
-            "entries: (collection.documentEntries ?? []) .sorted { $0.sortOrder < $1.sortOrder }",
+            "entries: (entriesByCollection[collection.id] ?? []) .sorted { $0.sortOrder < $1.sortOrder }",
             "prompts: prompts.filter { !$0.isStandard }.map { prompt in",
             "authorship: summary.authorship ?? .aiGenerated,",
-            "documents: (plan.documents ?? []) .sorted { $0.documentKey < $1.documentKey }",
-            "targets: (plan.targets ?? []) .sorted { $0.targetKey < $1.targetKey }",
+            "documents: (documentsByVisit[plan.id] ?? []) .sorted { $0.documentKey < $1.documentKey }",
+            "targets: (targetsByVisit[plan.id] ?? []) .sorted { $0.targetKey < $1.targetKey }",
             "savedSearches: savedSearches.map(savedSearchExport),",
             "aggregateScore: lead.aggregateScore.isFinite ? lead.aggregateScore : 0,",
             "parameters: search.searchParameters,",
@@ -489,10 +495,8 @@ import Testing
         }
         let savedSearch = try source("Models/SavedSearch.swift")
         for line in [
-            "guard let freshnessData else { return nil } return try? JSONDecoder().decode(SavedSearchFreshness.self, from: freshnessData)",
-            "lastRunAt = try? container.decodeIfPresent(Date.self, forKey: .lastRunAt)",
-            "matchCountAtLastRun = try? container.decodeIfPresent(Int.self, forKey: .matchCountAtLastRun)",
-            "indexedVolumeCountAtLastRun = try? container.decodeIfPresent(Int.self, forKey: .indexedVolumeCountAtLastRun)",
+            // The watermark's getter reads the kit's decoder, which the export calls since S17c's pin move.
+            "var freshness: SavedSearchFreshness? { SavedSearchFreshness.decoded(from: freshnessData) }",
             "if let parametersData, let decoded = try? JSONDecoder().decode(SearchParameters.self, from: parametersData) { return decoded }",
             "let kw = queryText.isEmpty ? nil : queryText let ph = phraseText.isEmpty ? nil : phraseText let pw = prefixWildcard.isEmpty ? nil : prefixWildcard",
             #"let excluded: [String] = excludedTermsCSV.isEmpty ? [] : excludedTermsCSV.split(separator: ",").map(String.init)"#,
@@ -606,7 +610,8 @@ import Testing
             parameters.keywords = (parameters.keywords ?? "") + " another"
             return try json(parameters)
         case "freshness_data":
-            var freshness = decoded(SavedSearchColumns.Freshness.self) ?? SavedSearchColumns.Freshness()
+            var freshness = decoded(SavedSearchFreshness.self)
+                ?? SavedSearchFreshness(lastRunAt: nil, matchCountAtLastRun: nil, indexedVolumeCountAtLastRun: nil)
             freshness.matchCountAtLastRun = (freshness.matchCountAtLastRun ?? 0) + 1
             return try json(freshness)
         case "default_subject_tag_ids", "default_country_tag_ids", "document_keys", "volume_ids", "contributing_seed_keys":

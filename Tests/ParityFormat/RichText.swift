@@ -2,6 +2,9 @@
 // rich-text codec (S15d).
 
 import Foundation
+// The kit's span rules, hidden from this module's clients: tools/mac-golden links this module beside
+// the app module, which compiles the kit's files itself.
+internal import FRUSCoreKit
 
 /// `fixtures/golden/rich-text/spans.json`. Each case is RTF and the app's reading of it: the RTF
 /// the editor writes for a formatting it offers, a hand-written file under `fixtures/rich-text/read`,
@@ -225,25 +228,23 @@ public enum RichTextCodePages {
     }
 }
 
-/// The app's reading of spans into paragraphs, `CollectionProse.append`: each run is split on
-/// blank lines (`"\n\n"`) by itself, so one that straddles two runs splits nothing; a blank line
-/// starts a paragraph and empty parts are dropped. Golden checks hold this to the app's own
-/// paragraphs on every case.
+/// The app's reading of spans into paragraphs, the kit's `CollectionProse.append` since
+/// FRUS-Explorer#1807, which the app's decoder calls for each run: each run is split on blank lines
+/// (`"\n\n"`) by itself, so one that straddles two runs splits nothing; a blank line starts a
+/// paragraph and empty parts are dropped. Golden checks hold this to the app's own paragraphs on
+/// every case.
 public enum ProseParagraphs {
     public static func paragraphs(of runs: [RichTextSpan]) -> [[RichTextSpan]] {
         guard !runs.isEmpty else { return [] }
-        var paragraphs: [[RichTextSpan]] = [[]]
+        var paragraphs: [[ProseFormattedSpan]] = [[]]
         for run in runs {
-            for (index, part) in run.text.components(separatedBy: "\n\n").enumerated() {
-                if index > 0 { paragraphs.append([]) }
-                if !part.isEmpty {
-                    var span = run
-                    span.text = part
-                    paragraphs[paragraphs.count - 1].append(span)
-                }
-            }
+            CollectionProse.append(text: run.text, bold: run.bold, italic: run.italic, underline: run.underline,
+                                   colorHex: run.colorHex, linkURL: run.linkURL, to: &paragraphs)
         }
-        return paragraphs
+        return paragraphs.map { paragraph in
+            paragraph.map { RichTextSpan(text: $0.text, bold: $0.bold, italic: $0.italic, underline: $0.underline,
+                                         colorHex: $0.colorHex, linkURL: $0.linkURL) }
+        }
     }
 
     /// Adjacent spans of the same formatting joined, within each paragraph, so readings that break
