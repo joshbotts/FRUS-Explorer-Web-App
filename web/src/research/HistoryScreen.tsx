@@ -48,7 +48,8 @@ export function HistoryScreen() {
     try {
       await deleteHistoryEntry(client, kind, id);
       await client.refetchQueries({ queryKey: historyQuery(scope, limit).queryKey, exact: true });
-      const left = [...(list?.querySelectorAll<HTMLButtonElement>('button.delete') ?? [])];
+      // The deleted row's own Delete is passed over, should the list not have lost it yet.
+      const left = [...(list?.querySelectorAll<HTMLButtonElement>('button.delete') ?? [])].filter((button) => button.dataset.id !== id);
       (left[index] ?? left[index - 1] ?? heading.current)?.focus();
     } catch (error) {
       setFailure(errorMessage(error));
@@ -71,7 +72,7 @@ export function HistoryScreen() {
     const searches = page.searches.filter((row) => searchMatches(row, query));
     const exports = page.exports.filter((row) => exportMatches(row, query));
     const showMore = (
-      <li className="show-more">
+      <li key="show-more" className="show-more">
         <button type="button" onClick={() => setLimit((current) => current + historyPageIncrement)}>
           {copy.history.showMore}
         </button>
@@ -121,7 +122,7 @@ export function HistoryScreen() {
                   {[row.caption, row.accessedAt ? timeSince(row.accessedAt, now) : undefined].filter(Boolean).join(' · ')}
                 </span>
               </span>
-              <DeleteButton name={row.title} onDelete={(item) => void remove('documents', row.id, item)} />
+              <DeleteButton id={row.id} name={row.title} onDelete={(item) => void remove('documents', row.id, item)} />
             </li>
           ))}
           {documents.length > 0 && page.documents.length < page.totalDocuments && showMore}
@@ -144,7 +145,7 @@ export function HistoryScreen() {
                 </span>
                 <span className="caption">{row.scope}</span>
               </span>
-              <DeleteButton name={row.queryText} onDelete={(item) => void remove('searches', row.id, item)} />
+              <DeleteButton id={row.id} name={row.queryText} onDelete={(item) => void remove('searches', row.id, item)} />
             </li>
           ))}
           {searches.length > 0 && page.searches.length < page.totalSearches && showMore}
@@ -164,7 +165,7 @@ export function HistoryScreen() {
                     .join(' · ')}
                 </span>
               </span>
-              <DeleteButton name={row.title} onDelete={(item) => void remove('exports', row.id, item)} />
+              <DeleteButton id={row.id} name={row.title} onDelete={(item) => void remove('exports', row.id, item)} />
             </li>
           ))}
           {exports.length > 0 && page.exports.length < page.totalExports && showMore}
@@ -216,9 +217,15 @@ function Section({
   );
 }
 
-function DeleteButton({ name, onDelete }: { name: string; onDelete: (row: HTMLElement | null) => void }) {
+function DeleteButton({ id, name, onDelete }: { id: string; name: string; onDelete: (row: HTMLElement | null) => void }) {
   return (
-    <button type="button" className="delete" aria-label={copy.history.deleteNamed(name)} onClick={(event) => onDelete(event.currentTarget.closest('li'))}>
+    <button
+      type="button"
+      className="delete"
+      data-id={id}
+      aria-label={copy.history.deleteNamed(name)}
+      onClick={(event) => onDelete(event.currentTarget.closest('li'))}
+    >
       {copy.history.delete}
     </button>
   );

@@ -16,6 +16,7 @@ import { copy } from '../copy';
 import { applyOrder, type MoveStep, moving } from '../research/listOrder';
 import { useHeadingReady } from '../shell/headingFocus';
 import { Modal } from '../shell/Modal';
+import { useActiveProjectId } from '../shell/ProjectPicker';
 import { useDocumentTitle } from '../shell/useDocumentTitle';
 import { SettingsPanes } from './SettingsPanes';
 import { useListOrder } from './syncedPreferences';
@@ -41,7 +42,7 @@ export function ProjectsSettingsScreen() {
   useHeadingReady(!me.isPending);
 
   const ordered = applyOrder(projects.data?.items ?? [], projectOrder, (project) => project.id);
-  const active = projects.data?.activeProjectId;
+  const active = useActiveProjectId(projects.data);
 
   async function run(action: () => Promise<unknown>) {
     setFailure(null);

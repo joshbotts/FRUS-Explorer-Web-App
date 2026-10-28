@@ -9,6 +9,8 @@ import { preferences } from '../test/research';
 import { exportContents, me, sent } from '../test/notes';
 import { ProblemAnswer, ready, renderAt, stubServer } from '../test/renderRoute';
 import { activityText, sessionLength, summaryText } from './SessionsSettings';
+import { resetPreferences } from './preferences';
+import { resetStyleOffer } from './syncedPreferences';
 
 afterEach(() => {
   cleanup();
@@ -164,6 +166,35 @@ describe('Settings ▸ Reading', () => {
       const bodies = fetch.mock.calls.filter(([url, init]) => String(url).endsWith('/preferences') && init?.method === 'PATCH').map(([, init]) => sent(init).body);
       expect(bodies).toEqual([{ defaultDocumentMode: 'research' }, { citationStyle: 'chicago' }]);
     });
+  });
+
+  it('gives the server the style this browser kept before S17f once for the browser, not again to another user', async () => {
+    resetPreferences();
+    window.localStorage.removeItem('frus.citationStyle.offered');
+    window.localStorage.setItem('frus.citationStyle', 'turabian');
+    resetStyleOffer();
+    const answers = {
+      '/readyz': ready,
+      '/api/v1/me': me,
+      '/api/v1/me/preferences': preferences,
+      'PATCH /api/v1/me/preferences': (_: URL, init?: RequestInit) => ({ ...preferences, ...sent(init).body }),
+    };
+    const patches = (fetch: ReturnType<typeof stubServer>) =>
+      fetch.mock.calls.filter(([url, init]) => String(url).endsWith('/preferences') && init?.method === 'PATCH').map(([, init]) => sent(init).body);
+    const first = stubServer(answers);
+    renderAt('/settings/reading');
+    await waitFor(() => expect(patches(first)).toEqual([{ citationStyle: 'turabian' }]));
+    cleanup();
+    // Another page, for a user whose server holds no style either: the browser's has had its chance.
+    resetStyleOffer();
+    const second = stubServer(answers);
+    renderAt('/settings/reading');
+    // The browser's last style until the user's is read, then theirs, none chosen.
+    const style = (await screen.findByRole('combobox', { name: 'Citation Style' })) as HTMLSelectElement;
+    await waitFor(() => expect(style.value).toBe('historyAtState'));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(patches(second)).toEqual([]);
+    window.localStorage.removeItem('frus.citationStyle');
   });
 
   it('shows a choice before the server answers it, and the server’s copy again when it refuses one', async () => {

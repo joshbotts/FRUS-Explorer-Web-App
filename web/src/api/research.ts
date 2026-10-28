@@ -4,8 +4,8 @@
 // which can bring any of it, asks again for all of it (`researchImported`).
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
 import { getJSON } from './client';
-import type { Project } from './types';
-import { change } from './userData';
+import type { Project, ProjectList } from './types';
+import { change, projectsQuery } from './userData';
 
 const segment = encodeURIComponent;
 
@@ -266,10 +266,49 @@ export async function mergeProject(client: QueryClient, id: string, into: string
 }
 
 /** The project picker: a project to work in, or none, Global Context. */
+/**
+ * The project chosen and not yet answered, shown at once by every picker over the server's, as the
+ * preferences' changes are, until the newest choice is answered: then the server's stands, or, when
+ * it refuses, the one it holds.
+ */
+let pendingActive: { projectId: string | null } | undefined;
+let activeChoicesSent = 0;
+const activeListeners = new Set<() => void>();
+
+function setPendingActive(next: { projectId: string | null } | undefined) {
+  pendingActive = next;
+  for (const listener of activeListeners) listener();
+}
+
+export function subscribePendingActiveProject(listener: () => void): () => void {
+  activeListeners.add(listener);
+  return () => {
+    activeListeners.delete(listener);
+  };
+}
+
+export function pendingActiveProject(): { projectId: string | null } | undefined {
+  return pendingActive;
+}
+
 export async function setActiveProject(client: QueryClient, projectId: string | null): Promise<ActiveProject> {
-  const active = (await change<ActiveProject>(client, 'PUT', '/api/v1/me/active-project', { projectId }))!;
-  for (const key of ['projects', 'projectHome']) void client.invalidateQueries({ queryKey: [key] });
-  return active;
+  const sent = ++activeChoicesSent;
+  setPendingActive({ projectId });
+  try {
+    const active = (await change<ActiveProject>(client, 'PUT', '/api/v1/me/active-project', { projectId }))!;
+    if (sent === activeChoicesSent) {
+      client.setQueryData<ProjectList>(projectsQuery.queryKey, (list) => list && { ...list, activeProjectId: active.projectId });
+      setPendingActive(undefined);
+    }
+    for (const key of ['projects', 'projectHome']) void client.invalidateQueries({ queryKey: [key] });
+    return active;
+  } catch (error) {
+    if (sent === activeChoicesSent) {
+      setPendingActive(undefined);
+      void client.invalidateQueries({ queryKey: projectsQuery.queryKey });
+    }
+    throw error;
+  }
 }
 
 /** Suggested Next's ×. */

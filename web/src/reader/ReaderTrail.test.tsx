@@ -92,4 +92,23 @@ describe('the reader and the trail', () => {
     const remembered = renderAt('/doc/frus1961-63v06/d2');
     await waitFor(() => expect(remembered.router.state.location.search).toMatchObject({ rail: 'research' }));
   });
+
+  it('asks for Cite’s citation in the style this browser last chose while the user’s preferences are read', async () => {
+    window.localStorage.setItem('frus.citationStyle', 'chicago');
+    const fetch = stubServer({
+      '/readyz': ready,
+      '/api/v1/me': me,
+      '/api/v1/me/preferences': () => new Promise(() => {}),
+      '/api/v1/volumes': { total: 0, limit: 1000, offset: 0, items: [], coverage },
+      '/api/v1/volumes/frus1961-63v06/documents/d1': detail('d1'),
+      '/api/v1/volumes/frus1961-63v06/documents/d1/html': {},
+    });
+    renderAt('/doc/frus1961-63v06/d1?rail=cite');
+    // Once the server is known to keep user data, which is when the preferences are asked for, and a moment more.
+    await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).endsWith('/api/v1/me/preferences'))).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const asked = fetch.mock.calls.map(([url]) => String(url)).filter((url) => url.includes('/citation'));
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked.every((url) => url.includes('style=chicago'))).toBe(true);
+  });
 });

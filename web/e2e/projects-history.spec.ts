@@ -84,8 +84,12 @@ test('makes a project, works in it, and sees its Project Home and history fill, 
       .poll(async () => (await getJSON<Projects>(page, 'api/v1/me/projects')).items.find((item) => item.name === 'Grain diplomacy')?.researchQuestion)
       .toBe('How did treaties follow the wheat?');
 
-    // The History screen: the visit and the search, filtered, and a row deleted.
-    await page.goto('research/history');
+    // The History screen, from All Notes' Research navigation: the visit and the search, filtered, and a
+    // row deleted.
+    await page.goto('research/notes');
+    await tabTo(page, page.getByRole('navigation', { name: 'Research', exact: true }).getByRole('link', { name: 'History' }));
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { level: 1, name: 'History' })).toBeFocused();
     const visited = page.getByRole('region', { name: 'Documents Visited' });
     await expect(visited.getByRole('link', { name: treatiesResults[0] })).toBeVisible();
     const searched = page.getByRole('region', { name: 'Searches Executed' });

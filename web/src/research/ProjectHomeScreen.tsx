@@ -48,7 +48,15 @@ export function ProjectHomeScreen() {
   } else if (!home.data) {
     body = <p role="status">{copy.projectHome.loading}</p>;
   } else {
-    body = <Workspace home={home.data} onFailure={() => void client.invalidateQueries({ queryKey: ['projectHome', projectId] })} />;
+    // Keyed by the project, so a draft or an editor of one project is never another's, when the route
+    // moves to a project whose Home is already read.
+    body = (
+      <Workspace
+        key={home.data.project.id}
+        home={home.data}
+        onFailure={() => void client.invalidateQueries({ queryKey: ['projectHome', projectId] })}
+      />
+    );
   }
 
   return (
@@ -116,11 +124,14 @@ function Question({ projectId, question }: { projectId: string; question: string
     window.clearTimeout(timer.current);
     const trimmed = trimmedQuestion(text);
     if (trimmed === saved.current) return;
+    const before = saved.current;
     saved.current = trimmed;
     try {
       setFailure(null);
       await updateProject(client, projectId, { researchQuestion: trimmed });
     } catch (error) {
+      // Not saved, so the next commit of the same words tries again.
+      if (saved.current === trimmed) saved.current = before;
       setFailure(errorMessage(error));
     }
   }

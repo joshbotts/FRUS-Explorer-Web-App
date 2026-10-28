@@ -5,14 +5,21 @@
 // a menu. And the "Working on:" line Browse and Search show under it, as the app's `WorkingOnBanner`.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useRouterState } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { errorMessage } from '../api/client';
-import { setActiveProject } from '../api/research';
+import { pendingActiveProject, setActiveProject, subscribePendingActiveProject } from '../api/research';
+import type { ProjectList } from '../api/types';
 import { meQuery, projectsQuery } from '../api/userData';
 import { copy } from '../copy';
 import { applyOrder } from '../research/listOrder';
 import { workingOnQuestion } from '../research/projectRules';
 import { useListOrder } from '../settings/syncedPreferences';
+
+/** The project the user works in, a choice not yet answered shown at once (`setActiveProject`). */
+export function useActiveProjectId(list: ProjectList | undefined): string | undefined {
+  const pending = useSyncExternalStore(subscribePendingActiveProject, pendingActiveProject);
+  return pending ? (pending.projectId ?? undefined) : list?.activeProjectId;
+}
 
 export function ProjectPicker() {
   const client = useQueryClient();
@@ -20,10 +27,10 @@ export function ProjectPicker() {
   const keepsUserData = me.data?.userData === true;
   const projects = useQuery({ ...projectsQuery, enabled: keepsUserData });
   const { projectOrder } = useListOrder();
+  const active = useActiveProjectId(projects.data);
   const [failure, setFailure] = useState<string | null>(null);
   if (!keepsUserData || !projects.data) return null;
   const ordered = applyOrder(projects.data.items, projectOrder, (project) => project.id);
-  const active = projects.data.activeProjectId;
 
   async function choose(projectId: string | null) {
     setFailure(null);
@@ -68,9 +75,10 @@ export function WorkingOn() {
   const me = useQuery(meQuery);
   const keepsUserData = me.data?.userData === true;
   const projects = useQuery({ ...projectsQuery, enabled: keepsUserData });
+  const active = useActiveProjectId(projects.data);
   const path = useRouterState({ select: (state) => state.location.pathname });
   if (!keepsUserData || !projects.data || !/\/(browse|search)(\/|$)/.test(path)) return null;
-  const question = workingOnQuestion(projects.data.activeProjectId, projects.data.items);
+  const question = workingOnQuestion(active, projects.data.items);
   if (!question) return null;
   return (
     <p className="working-on">

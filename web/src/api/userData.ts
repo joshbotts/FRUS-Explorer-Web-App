@@ -106,6 +106,8 @@ function tagsChanged(client: QueryClient) {
   void client.invalidateQueries({ queryKey: ['tags'] });
   void client.invalidateQueries({ queryKey: ['documentTags'] });
   for (const key of ['notes', 'documentNotes', 'note']) void client.invalidateQueries({ queryKey: [key] });
+  // Project Home names its focus tags, and shows them once the reader has a tag (S17f).
+  void client.invalidateQueries({ queryKey: ['projectHome'] });
   searchesChanged(client);
 }
 
@@ -113,6 +115,7 @@ export async function createTag(client: QueryClient, name: string): Promise<User
   const tag = (await change<UserTag>(client, 'POST', '/api/v1/me/tags', { name }))!;
   void client.invalidateQueries({ queryKey: ['tags'] });
   void client.invalidateQueries({ queryKey: ['searchTags'] });
+  void client.invalidateQueries({ queryKey: ['projectHome'] });
   return tag;
 }
 
@@ -167,6 +170,8 @@ export function documentHighlightsQuery(volumeId: string, documentId: string) {
 
 /** After a change to one of a document's highlights, its list is read again: the server says what is stale. */
 function highlightsChanged(client: QueryClient, volumeId: string, documentId: string) {
+  // A highlight is a document annotated, which Project Home's coverage counts (S17f).
+  void client.invalidateQueries({ queryKey: ['projectHome'] });
   return client.invalidateQueries({ queryKey: documentHighlightsQuery(volumeId, documentId).queryKey });
 }
 
@@ -278,6 +283,10 @@ export const noteGone = (error: unknown) => error instanceof ApiError && error.c
  */
 async function notesChanged(client: QueryClient, volumeId: string, documentId: string) {
   searchesChanged(client);
+  // Project Home counts and lists the notes filed under it, and a project's tally counts them (S17f):
+  // the tally is read again where it is next shown, not at each save of a note's words.
+  void client.invalidateQueries({ queryKey: ['projectHome'] });
+  void client.invalidateQueries({ queryKey: ['projects'], refetchType: 'none' });
   await Promise.all([
     client.invalidateQueries({ queryKey: notesQuery.queryKey }),
     client.invalidateQueries({ queryKey: documentNotesQuery(volumeId, documentId).queryKey }),

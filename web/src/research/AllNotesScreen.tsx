@@ -16,6 +16,7 @@ import { useDocumentTitle } from '../shell/useDocumentTitle';
 import { DeleteNote } from './DeleteNote';
 import { NoteEditor } from './NoteEditor';
 import { countLine, filterNotes, noteDate, noteDetail, noteTitle } from './notesRules';
+import { ResearchNav } from './ResearchNav';
 
 const route = getRouteApi('/research/notes');
 
@@ -191,6 +192,8 @@ export function AllNotesScreen() {
 
   return (
     <section className="screen research-notes">
+      {/* Research's screens, All Notes and History (S17f). */}
+      <ResearchNav />
       <h1 ref={heading} tabIndex={-1} data-loading={me.isPending ? 'true' : undefined}>
         {copy.allNotes.title}
       </h1>
