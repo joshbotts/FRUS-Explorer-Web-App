@@ -93,7 +93,7 @@ Phase 2's row S16e, SPEC's last resort. Import mode in phase 1 refused a Mac "Ex
 
 **Results**
 
-- **Linux, `swift:6.4-noble`, arm64.** All 2,372 tests pass, up from 2,359, with the one named skip: FRUSLightCoreTests 111, FRUSLightServerTests 180, FRUSParityTests 188 and FRUSCoreKitTests 1,191, the others as before. Each was taken through `scripts/swift test`, the server's and the core's again under the app's heavy-job lock after the two key lists were fixed.
+- **Linux, `swift:6.4-noble`, arm64.** Before the review, at `503a730b`, all 2,372 tests passed with the one named skip. After the review's fixes and the merge of `main` with S17c's pin move, at `1c18b51e`, all 2,470 pass with the one named skip: FRUSLightCoreTests 113, FRUSLightServerTests 181, FRUSParityTests 188 and FRUSCoreKitTests 1,286, the others as before. They ran through `scripts/swift test` under the app's heavy-job lock, with this package's own targets built clean.
 - **The web job's steps,** through `scripts/npm`: typecheck, lint and the build clean, and 307 unit tests.
 - **SQLite's temporary folder, in the image.** The branch's image was run with a 64 KB tmpfs at `/tmp` and given a 13.9 MB synthetic export with writing, whose `VACUUM` copy outgrows SQLite's page cache. It installed it, its log naming `/data/tmp`. With `SQLITE_TMPDIR=/tmp` forced, the same import failed while "reclaiming freed pages: database or disk is full", the server's problem, tried again later.
 - **`scripts/compose-smoke --e2e`** on the branch's image passes: 47 browser tests at the root and 47 under the path, through nginx with INSTALL's recipe, and the smoke test's own steps.
@@ -101,6 +101,9 @@ Phase 2's row S16e, SPEC's last resort. Import mode in phase 1 refused a Mac "Ex
   - **Check 5's script** ran over the index the server installed. It found 0 of the 11 snippets in its bytes, 0 rows with a summary, note or tag, 0 tags, and 0 terms in its `user_content`, where the export with writing's holds 56. Both controls held.
   - **The API** gave back the note block and the summary, marked.
 - **CI on #69** was green at `5b90631`, before the review's fixes: the swift, web and compose jobs and both image builds.
+  - **After the fixes and the merge,** the compose job's first run failed the new small-`/tmp` phase: it had copied the export into a container whose server had not yet made `/data/import`. The phase now waits for the drop zone, and fails at once on a refusal.
+  - **At the next head,** the compose job passed both new phases in CI's own container. Check 5's script found none of the writing in the installed index, and the 13.7 MB export installed with `/data/tmp` and not with `/tmp`.
+  - **The tag `frus-light:smoke`** that `scripts/compose-smoke` builds is shared by every worktree on this Mac. A check of the phase against it, after another session's run had rebuilt it from `main`, tested the wrong image.
 - **A review** read the diff cold, by reading only. It found no fault in the import's order, in the candidate's cleanup on every path, in how faults are sorted, in the store's ids, or in S16c's row writer, which the refactor left as it was. It found these, and each is fixed:
   - **duplicate summaries the reader could not remove.** The report recommends a JSON import, which brings each summary again under the Mac's id, and the research database's copy, dated at the export, ranked first and was read-only. It now has no time it was made, so it ranks last, and it can be deleted;
   - **a full copy of the export every minute** when there was room for the copy but not for the strip. The room is now asked for before the copy;
