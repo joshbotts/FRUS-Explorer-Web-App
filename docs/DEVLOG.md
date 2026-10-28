@@ -4,9 +4,9 @@ One entry per session, newest first.
 
 ## Session 18b, follow-up: the link-alert test's random failure, upstream
 
-28 October 2026 · branch `claude/elated-lederberg-fc1c0a` · [#79](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/79) · upstream `1c18b51e`, unchanged; [FRUS-Explorer#1811](https://github.com/joshbotts/FRUS-Explorer/pull/1811), open
+28 October 2026 · branch `claude/elated-lederberg-fc1c0a` · [#79](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/79) · upstream `1c18b51e`, unchanged; [FRUS-Explorer#1811](https://github.com/joshbotts/FRUS-Explorer/pull/1811), merged as `32e295e5`
 
-The Mac checks of FRUS-Explorer#1785, #1807 and #1809 each lost a re-run to `RichTextRestingCapTests`' link-alert test (#1360's capped editor), which failed at random at `v2` as at each branch. The checks of #1785 and #1809 also lost one to its colour-picker test. S18b's session asked for one pull request that stops the link-alert test failing, from `claude/link-alert-test-waits-for-its-presentation`, cut from `v2` at `fef96201`. It is labelled `Mac`, its body says "Mac verification requested", and it is not merged. It changes one file of the app's test target, which this repository neither compiles nor hashes into its golden files, and the app's plan, so no pin move needs it, and this repository changes only its records.
+The Mac checks of FRUS-Explorer#1785, #1807 and #1809 each lost a re-run to `RichTextRestingCapTests`' link-alert test (#1360's capped editor), which failed at random at `v2` as at each branch, and #1810's first full run failed it too. The colour-picker test failed in #1785's, #1809's and #1810's. S18b's session asked for one pull request that stops the link-alert test failing, from `claude/link-alert-test-waits-for-its-presentation`, cut from `v2` at `fef96201`. It was labelled `Mac`, its body said "Mac verification requested", and the owner merged it on 28 October. It changes one file of the app's test target, which this repository neither compiles nor hashes into its golden files, and the app's plan, so no pin move needs it, and this repository changes only its records.
 
 **The cause, found before anything changed.** A diagnostic build, never committed, gave the test a millisecond timeline: a 5 ms sampler of the alert's presentation state, the root's transition coordinator and both first responders, with the keyboard and editing notifications and the dismissal's completion. It followed 30 runs of the suite alone on the iPhone 18 Pro Max simulator (iOS 27.0) of S18b's runs.
 - The test host's `dismissPresented()` dismisses the alert with `dismiss(animated: false)` and waited 3 s for it to go, its `settle`'s default. #1807's and #1809's bodies say 5 s; the file's other hosts allow 5, but this one 3.
@@ -15,7 +15,7 @@ The Mac checks of FRUS-Explorer#1785, #1807 and #1809 each lost a re-run to `Ric
 - The test asked for the dismissal while UIKit was still presenting the alert, in 16 runs of 16. That is not the cause: asked once the presentation had ended, a dismissal took 2.1 to 2.7 s, and with the alert's field resigned first, 2.3 to 2.7 s.
 - The colour-picker test fails in the host's other such wait, 3 s for the system colour picker to appear.
 
-**#1811, in a commit and two records commits,** in `FRUSExplorerTests/CollectionTests.swift` and the app's plan:
+**#1811, in a commit, two records commits and a merge of `v2`,** in `FRUSExplorerTests/CollectionTests.swift` and the app's plan:
 - `RestingCapEditorHost.presentationTimeout`, 15 s, for `presented(_:)` and `dismissPresented()`. It bounds a hang, not a pace: each wait ends when UIKit is done. `settle`'s 3 s stays for the suite's waits on SwiftUI's sizing.
 - A new `finishedPresenting(_:)`, which the link-alert test waits for before its half-second hold over the alert and its Cancel. It costs the test 0.8 s a run.
 - A log line with each dismissal's time, and the suite's version history.
@@ -26,12 +26,13 @@ The Mac checks of FRUS-Explorer#1785, #1807 and #1809 each lost a re-run to `Ric
 - **The full iOS unit run:** 7,752 tests in 929 suites at both heads, both failing only the 8 Keychain tests an unsigned build fails, with the 6 known issues of #1606, and skipping the same 17 tests and 2 suites. The editor suite passed at both.
 - **`swift test`:** 3,191 tests in 389 suites at both, all passed; `FRUSCoreKitTests` 1,298.
 - **The Mac app's symbols** are `v2`'s, name for name, and both builds had `v2`'s five and seven warning lines.
+- **Again once #1810 had merged.** `v2` moved to `e1d68919`, and #1811 then conflicted in the app's plan alone, where both pull requests end with a session entry. A merge of `v2`, `2d0c80b8`, kept both entries, #1810's first; against `e1d68919` the branch changes the same lines as against `fef96201`. The whole check ran again there, beside `v2` at `e1d68919`: the same builds, symbols and issues on both, with 7,754 tests in 929 suites in the full iOS run and 3,192 in `swift test`. The runs of the suite alone were not repeated, since #1810 changes nothing the suite exercises. The owner merged #1811 at `2d0c80b8` while that check ran. `32e295e5`'s tree is `2d0c80b8`'s, so the check is of what merged. A records commit with its results, `10cb8dff`, reached the branch after the merge and is not in `v2`; #1811's body has them.
 
 **Filed, not fixed.** After a cold boot, or on a new simulator, the system colour picker sometimes never appears. A variant of the host that allowed 60 s, never committed, saw it miss the first run on each of two new simulators, and one cold boot in three of the long-used one, though Text Color's action was delivered; the next run on each new simulator presented it within 2 s. No bound fixes that, so the colour-picker test can still fail on a simulator just created or booted, at either head.
 
 **Delivered here:** this log. The session's notes, scripts and logs are in `~/Library/Caches/frus-linkalert/`; the diagnostic is on that clone's local branch `diag/link-alert-timeline`, never pushed.
 
-**Next:** the owner's Mac check of #1811, then its merge, which asks nothing of this repository. Phase 2 goes on with S18c, the pin move past #1809 ([#77](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/77)).
+**Next:** nothing for #1811. The first pin move past `32e295e5` takes it with nothing to change here, since this repository compiles none of it and its golden files hash none of it. Phase 2 goes on with S18c, the pin move past #1809 ([#77](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/77)), and then the move past #1810, whose needs #78's entry lists.
 
 ## Session 16e, follow-up: a stripped export's free pages, upstream
 
