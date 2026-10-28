@@ -724,6 +724,17 @@ function Results({
   const first = list && list.items.length > 0 ? list.offset + 1 : 0;
   const last = list ? list.offset + list.items.length : 0;
   const reading: Reading = state.reading ?? 'list';
+  // A row marked reviewed leaves the list once the page has loaded again, and its button with it: the
+  // focus goes to the Mark Reviewed of the row that takes its place, or past the last to Mark Page Reviewed.
+  const listElement = useRef<HTMLOListElement>(null);
+  const focusAfterMark = useRef<number | null>(null);
+  useEffect(() => {
+    const index = focusAfterMark.current;
+    if (index === null || results.isFetching || results.isPlaceholderData) return;
+    focusAfterMark.current = null;
+    const buttons = listElement.current?.querySelectorAll<HTMLButtonElement>('button.mark-reviewed') ?? [];
+    (buttons[index] ?? document.querySelector<HTMLButtonElement>('.checklist-strip button[data-mark-page]'))?.focus();
+  }, [list, results.isFetching, results.isPlaceholderData]);
   const hidden = list?.hidden ?? 0;
   // What the pages reach: the results kept, less those Checklist Mode hides.
   const shownTotal = list ? Math.max(0, Math.min(list.total, retainedLimit) - hidden) : 0;
@@ -814,8 +825,8 @@ function Results({
           ) : reading === 'concordance' ? (
             <ConcordanceReading state={state} total={list.total} order={state.align ?? 'leftContext'} onOrder={onAlign} reviewed={reviewed} />
           ) : (
-            <ol className="result-list" aria-label={copy.search.results} start={first}>
-              {list.items.map((item) => (
+            <ol ref={listElement} className="result-list" aria-label={copy.search.results} start={first}>
+              {list.items.map((item, index) => (
                 <li key={`${item.volumeId}/${item.documentId}`} className="result">
                   <h3>
                     <Link to="/doc/$volumeId/$documentId" params={{ volumeId: item.volumeId, documentId: item.documentId }}>
@@ -841,7 +852,10 @@ function Results({
                       type="button"
                       className="mark-reviewed"
                       aria-label={`${copy.checklist.markReviewed}: ${item.displayTitle}`}
-                      onClick={() => checklist.markOne(reviewedKey(item.volumeId, item.documentId))}
+                      onClick={() => {
+                        focusAfterMark.current = index;
+                        checklist.markOne(reviewedKey(item.volumeId, item.documentId));
+                      }}
                     >
                       {copy.checklist.markReviewed}
                     </button>

@@ -179,6 +179,7 @@ import Testing
 
             let corpus = try await Self.corpus(owner, " Treaty talks\n", "keywords=treaties")
             #expect(corpus.name == "Treaty talks" && corpus.documentCount == 2 && corpus.sourceQuery == "treaties")
+            #expect(corpus.quotableSourceQuery == "treaties")
             #expect(corpus.sourceDescription == "Search results" && corpus.wasTruncatedAtCapture == false)
             #expect(corpus.totalMatchCountAtCapture == 2 && corpus.indexedVolumeCountAtCapture == 2)
             #expect(corpus.capturedAt == UserStoreDate.text(UserDataFixture.now))

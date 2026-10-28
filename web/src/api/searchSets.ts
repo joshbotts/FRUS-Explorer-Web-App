@@ -55,6 +55,8 @@ export interface WorkingCorpus {
   documentCount: number;
   capturedAt?: string;
   sourceQuery?: string;
+  /** Those words as a list quotes them, by the kit's rule: a query that is one phrase, once, without its own marks. */
+  quotableSourceQuery?: string;
   sourceDescription?: string;
   indexedVolumeCountAtCapture?: number;
   wasTruncatedAtCapture?: boolean;

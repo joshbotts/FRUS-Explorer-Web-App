@@ -5,7 +5,7 @@ import type { VolumeScope, WorkingCorpus, WorkingCorpusDetail } from '../api/sea
 import type { Volume } from '../api/types';
 import { coverage, ProblemAnswer, ready, renderAt, stubServer } from '../test/renderRoute';
 import { sent } from '../test/notes';
-import { corpusCaption, quotable } from './CorporaScreen';
+import { corpusCaption } from './CorporaScreen';
 
 afterEach(() => {
   cleanup();
@@ -65,7 +65,15 @@ describe('Browse’s Working Corpora', () => {
         total: 2,
         items: [
           corpus({ id: talksId, name: 'Talks', sourceDescription: 'Search results (years 1960)', capturedAt: '2026-10-24T12:00:00Z' }),
-          corpus({ id: 'X', name: '', documentCount: 7500, sourceQuery: '"long telegram"', truncationLine: 'Saved 7500 of 9,000 matches', truncationWarns: true }),
+          corpus({
+            id: 'X',
+            name: '',
+            documentCount: 7500,
+            sourceQuery: '"long telegram"',
+            quotableSourceQuery: 'long telegram',
+            truncationLine: 'Saved 7500 of 9,000 matches',
+            truncationWarns: true,
+          }),
         ],
       },
     });
@@ -82,10 +90,9 @@ describe('Browse’s Working Corpora', () => {
     expect(await screen.findByText('No Working Corpora')).toBeTruthy();
   });
 
-  it('quotes a query that is one phrase once, as the Mac’s caption does', () => {
-    expect(quotable('"long telegram"')).toBe('long telegram');
-    expect(quotable('"a" OR "b"')).toBe('"a" OR "b"');
-    expect(corpusCaption(corpus({ id: 'A', name: 'A', documentCount: 1, sourceQuery: 'x' }))).toBe('1 documents · captured from “x”');
+  it('names where a corpus came from by its provenance, or else by its words as the kit quotes them', () => {
+    expect(corpusCaption(corpus({ id: 'A', name: 'A', documentCount: 1, sourceQuery: 'x', quotableSourceQuery: 'x' }))).toBe('1 documents · captured from “x”');
+    expect(corpusCaption(corpus({ id: 'A', name: 'A', sourceQuery: 'x', sourceDescription: 'Search results' }))).toBe('2 documents · Search results');
   });
 
   it('opens a corpus by volume, with its coverage once at the top, the documents of a volume the server lacks named, and deletes it', async () => {

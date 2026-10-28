@@ -29,17 +29,10 @@ export function shortDate(text: string | undefined): string | undefined {
 export function corpusCaption(corpus: WorkingCorpus): string {
   const parts = [copy.corpora.rowCount(corpus.documentCount)];
   if (corpus.sourceDescription) parts.push(corpus.sourceDescription);
-  else if (corpus.sourceQuery) parts.push(copy.corpora.capturedFrom(quotable(corpus.sourceQuery)));
+  else if (corpus.sourceQuery) parts.push(copy.corpora.capturedFrom(corpus.quotableSourceQuery ?? corpus.sourceQuery));
   const captured = shortDate(corpus.capturedAt);
   if (captured) parts.push(captured);
   return parts.join(' · ');
-}
-
-/** A query quoted once: one that is a single phrase in its own marks loses them (`QueryQuoting.quotable`). */
-export function quotable(query: string): string {
-  const trimmed = query.trim();
-  const inner = trimmed.slice(1, -1);
-  return trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"') && !inner.includes('"') ? inner : trimmed;
 }
 
 export function CorporaScreen() {

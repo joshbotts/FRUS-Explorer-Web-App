@@ -24,6 +24,9 @@ public struct WorkingCorpus: Codable, Equatable, Sendable, ResponseEncodable {
     public var capturedAt: String?
     /// The words it was captured from, and where it came from, as the capture recorded them.
     public var sourceQuery: String?
+    /// Those words as a list quotes them, the kit's `QueryQuoting.quotable`: a query that is one
+    /// phrase once, without its own marks, as `CorporaAxis.rowCaption` prints it.
+    public var quotableSourceQuery: String?
     public var sourceDescription: String?
     public var indexedVolumeCountAtCapture: Int?
     public var wasTruncatedAtCapture: Bool?
@@ -49,6 +52,7 @@ public struct WorkingCorpus: Codable, Equatable, Sendable, ResponseEncodable {
         documentCount = corpus.documentKeys.count
         capturedAt = corpus.capturedAt.map(UserStoreDate.text)
         sourceQuery = corpus.sourceQuery
+        quotableSourceQuery = corpus.sourceQuery.map(QueryQuoting.quotable)
         sourceDescription = corpus.sourceDescription
         indexedVolumeCountAtCapture = corpus.indexedVolumeCountAtCapture
         wasTruncatedAtCapture = corpus.wasTruncatedAtCapture

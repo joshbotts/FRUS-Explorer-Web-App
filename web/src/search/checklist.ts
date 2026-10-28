@@ -60,7 +60,7 @@ export function undoableCount(marks: ReviewedMarks, loadedKeys: Iterable<string>
   return count;
 }
 
-const typographicDoubleQuotationMarks = new Set(['“', '”', '„', '‟', '＂', '«', '»']);
+const typographicDoubleQuotationMarks = new Set(['\u201C', '\u201D', '\u201E', '\u201F', '\uFF02', '\u00AB', '\u00BB']);
 
 /** The query grammar's reading of the quotation marks: every typographic double one as U+0022. */
 export function normalizingQuotationMarks(text: string): string {
