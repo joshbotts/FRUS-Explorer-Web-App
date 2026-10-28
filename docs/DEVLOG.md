@@ -31,9 +31,9 @@ One entry per session, newest first.
 
 ## Session 18b, follow-up: the link-alert test's random failure, upstream
 
-28 October 2026 · branch `claude/elated-lederberg-fc1c0a` · [#79](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/79) · upstream `1c18b51e`, unchanged; [FRUS-Explorer#1811](https://github.com/joshbotts/FRUS-Explorer/pull/1811), open
+28 October 2026 · branch `claude/elated-lederberg-fc1c0a` · [#79](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/79) · upstream `1c18b51e`, unchanged; [FRUS-Explorer#1811](https://github.com/joshbotts/FRUS-Explorer/pull/1811), merged as `32e295e5`
 
-The Mac checks of FRUS-Explorer#1785, #1807 and #1809 each lost a re-run to `RichTextRestingCapTests`' link-alert test (#1360's capped editor), which failed at random at `v2` as at each branch. The checks of #1785 and #1809 also lost one to its colour-picker test. S18b's session asked for one pull request that stops the link-alert test failing, from `claude/link-alert-test-waits-for-its-presentation`, cut from `v2` at `fef96201`. It is labelled `Mac`, its body says "Mac verification requested", and it is not merged. It changes one file of the app's test target, which this repository neither compiles nor hashes into its golden files, and the app's plan, so no pin move needs it, and this repository changes only its records.
+The Mac checks of FRUS-Explorer#1785, #1807 and #1809 each lost a re-run to `RichTextRestingCapTests`' link-alert test (#1360's capped editor), which failed at random at `v2` as at each branch, and #1810's first full run failed it too. The colour-picker test failed in #1785's, #1809's and #1810's. S18b's session asked for one pull request that stops the link-alert test failing, from `claude/link-alert-test-waits-for-its-presentation`, cut from `v2` at `fef96201`. It was labelled `Mac`, its body said "Mac verification requested", and the owner merged it on 28 October. It changes one file of the app's test target, which this repository neither compiles nor hashes into its golden files, and the app's plan, so no pin move needs it, and this repository changes only its records.
 
 **The cause, found before anything changed.** A diagnostic build, never committed, gave the test a millisecond timeline: a 5 ms sampler of the alert's presentation state, the root's transition coordinator and both first responders, with the keyboard and editing notifications and the dismissal's completion. It followed 30 runs of the suite alone on the iPhone 18 Pro Max simulator (iOS 27.0) of S18b's runs.
 - The test host's `dismissPresented()` dismisses the alert with `dismiss(animated: false)` and waited 3 s for it to go, its `settle`'s default. #1807's and #1809's bodies say 5 s; the file's other hosts allow 5, but this one 3.
@@ -42,7 +42,7 @@ The Mac checks of FRUS-Explorer#1785, #1807 and #1809 each lost a re-run to `Ric
 - The test asked for the dismissal while UIKit was still presenting the alert, in 16 runs of 16. That is not the cause: asked once the presentation had ended, a dismissal took 2.1 to 2.7 s, and with the alert's field resigned first, 2.3 to 2.7 s.
 - The colour-picker test fails in the host's other such wait, 3 s for the system colour picker to appear.
 
-**#1811, in a commit and two records commits,** in `FRUSExplorerTests/CollectionTests.swift` and the app's plan:
+**#1811, in a commit, two records commits and a merge of `v2`,** in `FRUSExplorerTests/CollectionTests.swift` and the app's plan:
 - `RestingCapEditorHost.presentationTimeout`, 15 s, for `presented(_:)` and `dismissPresented()`. It bounds a hang, not a pace: each wait ends when UIKit is done. `settle`'s 3 s stays for the suite's waits on SwiftUI's sizing.
 - A new `finishedPresenting(_:)`, which the link-alert test waits for before its half-second hold over the alert and its Cancel. It costs the test 0.8 s a run.
 - A log line with each dismissal's time, and the suite's version history.
@@ -53,12 +53,13 @@ The Mac checks of FRUS-Explorer#1785, #1807 and #1809 each lost a re-run to `Ric
 - **The full iOS unit run:** 7,752 tests in 929 suites at both heads, both failing only the 8 Keychain tests an unsigned build fails, with the 6 known issues of #1606, and skipping the same 17 tests and 2 suites. The editor suite passed at both.
 - **`swift test`:** 3,191 tests in 389 suites at both, all passed; `FRUSCoreKitTests` 1,298.
 - **The Mac app's symbols** are `v2`'s, name for name, and both builds had `v2`'s five and seven warning lines.
+- **Again once #1810 had merged.** `v2` moved to `e1d68919`, and #1811 then conflicted in the app's plan alone, where both pull requests end with a session entry. A merge of `v2`, `2d0c80b8`, kept both entries, #1810's first; against `e1d68919` the branch changes the same lines as against `fef96201`. The whole check ran again there, beside `v2` at `e1d68919`: the same builds, symbols and issues on both, with 7,754 tests in 929 suites in the full iOS run and 3,192 in `swift test`. The runs of the suite alone were not repeated, since #1810 changes nothing the suite exercises. The owner merged #1811 at `2d0c80b8` while that check ran. `32e295e5`'s tree is `2d0c80b8`'s, so the check is of what merged. A records commit with its results, `10cb8dff`, reached the branch after the merge and is not in `v2`; #1811's body has them.
 
 **Filed, not fixed.** After a cold boot, or on a new simulator, the system colour picker sometimes never appears. A variant of the host that allowed 60 s, never committed, saw it miss the first run on each of two new simulators, and one cold boot in three of the long-used one, though Text Color's action was delivered; the next run on each new simulator presented it within 2 s. No bound fixes that, so the colour-picker test can still fail on a simulator just created or booted, at either head.
 
 **Delivered here:** this log. The session's notes, scripts and logs are in `~/Library/Caches/frus-linkalert/`; the diagnostic is on that clone's local branch `diag/link-alert-timeline`, never pushed.
 
-**Next:** the owner's Mac check of #1811, then its merge, which asks nothing of this repository. Phase 2 goes on with S18c, the pin move past #1809 ([#77](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/77)).
+**Next:** nothing for #1811. The first pin move past `32e295e5` takes it with nothing to change here, since this repository compiles none of it and its golden files hash none of it. Phase 2 goes on with S18c, the pin move past #1809 ([#77](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/77)), and then the move past #1810, whose needs #78's entry lists.
 
 ## Session 16e, follow-up: a stripped export's free pages, upstream
 
@@ -102,6 +103,79 @@ S16e (#69) found that the Mac's Export Research Database…, with Include My Not
 - This log.
 
 **Next:** the owner's Mac check of FRUS-Explorer#1810 and its merge; the first pin move after it takes it, drops the server's own pragma and changes S16e's control. On the plan's track, S17d.
+
+## Session 18b: a collection resolves through a data source in FRUSCoreKit, upstream
+
+27 October 2026 · branch `claude/optimistic-blackwell-d0048f` · [#75](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/75) · upstream `503a730b`, unchanged by this row; `1c18b51e` once `main` with S17c's pin move was merged in · [FRUS-Explorer#1809](https://github.com/joshbotts/FRUS-Explorer/pull/1809), merged as `fef96201`
+
+This is phase 2's row S18b, the second of the two upstream collection rows, and Mac check 14 verifies it. S18a's #1807 made what renders a collection the kit's; this row makes what resolves one the kit's, so S18d to S18f can put a collection together on the server from its own store, as the app does from SwiftData.
+
+This session opened one pull request on `FRUS-Explorer`, from `claude/collections-resolve-through-a-data-source`, branched from `v2` at `3af1fc07` (#1807's merge, `1c18b51e`, with #1808's website drafts). It is labelled `Mac` and its body says "Mac verification requested". The owner merged it the same day as `fef96201`, a squash with the branch head's tree (`d1b45392`). Under rule 4 the pull request changes shared files, and this repository changes only its records.
+
+**#1809, in seven commits of moves and tests, and a records commit:**
+- **The archival indexes and the document resolution** (`FRUSCoreKit/SourceExplorer/`): `CentralFilesIndex`, `VolumeSourcesIndex` and `LotClaimantsIndex`, public with their decoders, and `ArchivalResolver`'s document resolution over `ArchivalIndexes`, the three as one value. The stores that read the app's bundle and the front-matter resolution stay in the app, which passes `ArchivalIndexes.bundled`.
+- **The five apparatus blocks** (`CollectionGeneratedBlocks`), public with their data source and records. The chronology's dates print in a locale the caller passes, and the tag union the thematic index reads is the kit's.
+- **A collection's values and its composition's rules:** `CollectionExportOptions(composing:)` over the research data export's `CollectionExport`, `CollectionFootnoteStyle`'s two legacy mappings, `CollectionBodyDepth.available(summariesAvailable:)`, and the app's initialisers from its models to those values, which `ResearchDataExporter` now maps through, writing the same records.
+- **The smart collection:** `SmartCollectionSnapshot.documentRefs(parameters:searchService:limit:)`, at most `resultLimit`, 1,000, and `snapshot(of:results:)`, the snapshot's values. The app inserts them.
+- **The assembly,** `CollectionContentAssembly`: which notes and highlights an entry takes, the overrides cascaded through sections, body depth, headnotes, excerpts, the "See also:" line, the blocks, the Zotero items and the summary phase, over the collection's values, the entries' (a prose block's spans decoded by the host) and the notes as `ResearchNoteExport`.
+  - `CollectionContentDataSource` is what it reads besides. The store's answers are the export's records, which this server's store already maps its rows to for S16d's export.
+  - Its four export methods are the saved search's run, the volumes' download, the figure images' fetch and the summaries' generation. The assembly asks for them only for `.export`.
+  - The app's `CollectionContentResolver` keeps every entry point and is the data source, each read the fetch it made before.
+- **The `.fruscollection` file:** `FRUSCollectionFile`, its error, `encode`, `decode`, `makeFile(from:includeNotes:resolveNoteTexts:)` over a `CollectionExport` and `importedValues(from:)` into a `NativeCollectionImport`. Inserting SwiftData models, the file system and the index stay in the app.
+- **Tests:** `CollectionResolutionTests` resolves a fixture collection over a volume the kit's own pipeline indexes and a store the test supplies, through every entry point, and pins the preview's items by SHA-256. `CollectionValuesTests` covers the rules over values. `FRUSCoreKitTests` goes from 1,286 tests to 1,298, and the iOS unit target from 7,739 to 7,752.
+
+**How it was checked.** Each heavy job ran under the app's lock, from a clone at a real path, beside `v2` at `3af1fc07` built and run the same way: Xcode 27.1 on macOS 27.2, clean and unsigned, on an iPhone 18 Pro Max simulator (iOS 27.0). Other sessions' Docker jobs shared the lock throughout.
+- **The seven commits,** made one by one in a worktree from `v2`, each built the kit with `swift build` and the Mac app with Xcode before the cold review's fixes (below); after them, the first five were built so again. The sixth differs from the seventh, the head built and tested in full, only by the seventh's test file, so its kit and Mac builds compile the head's sources.
+- **The full iOS unit run:** 7,752 tests in 929 suites, against `v2`'s 7,739 in 927.
+  - Both fail the 8 Keychain tests an unsigned build fails, and show the 6 known issues of `v2`'s system-log test.
+  - The branch's run also failed `RichTextRestingCapTests`' colour-picker and link-alert tests, #1360's editor, which this does not touch. Run alone afterwards, alternating the heads from the same builds, the colour-picker test passed every time, and the link-alert test failed 4 of 18 runs at the branch and 2 of 18 at `v2`, each on the 5 s wait #1807 describes, which is within chance; the last six rounds, with `v2` first, passed at both.
+  - Both skip the same 17 tests and 2 suites.
+  - The branch's run took 996 s against 634. The difference is spread over 40 suites, led by indexing tests and one that hosts the real collection editor, whose two siblings took the same time at both heads; the two new suites took half a second.
+- **`swift test`:** 3,191 tests against 3,179, all passed; `FRUSCoreKitTests` 1,298 against 1,286.
+- **The symbol diff,** normalized as before: 251,475 names on `v2` and 251,932 on the branch, 614 removed and 1,071 added.
+  - 416 of the removed are the resolver's private machinery, which reappears in the kit's assembly.
+  - 148 name the resolver's `SmartDocumentRef` or `ResolvePurpose`, now the kit's types, with every entry point whose signature names them.
+  - The other 50 are the blocks' functions that gained a locale, closures whose code moved into the kit, and `lotResolution`, internal now.
+  - No moved type that keeps its name changes its mangled name.
+- **Both builds** had `v2`'s five and seven warning lines.
+- **Every test collection, resolving as before.** A scratch suite, appended to `CollectionTests.swift` for each run and never committed, built test collections in SwiftData over a volume a real pipeline indexed, resolved them through every entry point of `CollectionContentResolver` (preview, capped preview, export, summary-only, documents only, entry by entry, the smart path and its capped preview), and wrote the `.fruscollection` file, its import and a smart snapshot.
+  - It ran three times at each head, alternating, and every file was the same at both.
+  - The one difference was the order in which an unsorted SwiftData fetch returned one document's two highlights. It changed from run to run at `v2` itself, and every exporter sorts highlights by offset before drawing them.
+- **Linux,** in a scratch worktree of this repository's `main` at `8e6d681`, with the branch and then `v2` copied over the submodule:
+  - **the kit:** `FRUSCoreKitTests` ran 1,298 tests, against 1,286 at `v2`, with the one named skip. The fixture collection resolves over the kit's own index there, and its pin holds;
+  - **the rest:** every other target passed but the parity suites, whose 42 issues are the same tests at the branch and at `v2`;
+  - **2,466 tests in all,** against 2,454;
+  - **public access:** a scratch file in `FRUSLightAPI`, never committed, imported FRUSCoreKit without `@testable`, implemented the data source and used every name the pull request makes public, and the target built.
+- **Linux again, over `main` at `2fac971`,** after S17c's pin move to `1c18b51e`, which this branch starts from: the package built clean with no warning, and ran 2,482 tests against the 2,470 CI ran at that commit: `FRUSCoreKitTests` 1,298 against 1,286, every other target's count the same. Every target passed but the parity suites, whose 21 issues in 20 tests are all the golden files' staleness: their provenance's source digest hashes `FRUSCoreKit/` and `FRUSExplorer/` whole, so the five files read as made from other app sources until the pin move runs `scripts/make-golden`. Every parity check that reads the app's source passed, `ExportParityTests`' mirror of the exporter and `ImportParityTests`' reads of `Models/Collection.swift` among them, and the public-access file built again.
+- **The records:** `CodingStandardsAuditTests` and `EditableContentKeyTests` passed again at the records head, 84 tests in 2 suites.
+
+**For S18c, the pin move past #1809 alone** (S17c's move took #1807):
+- **No parity test needs pointing anywhere.** Over `main` at `2fac971`, with this branch copied in, every parity check that reads the app's source passed. `ExportParityTests`' mirror of the exporter still finds its line: the collection mapping is now `CollectionExport(collection, entries: (entriesByCollection[collection.id] ?? []) .sorted { $0.sortOrder < $1.sortOrder } .map(CollectionEntryExport.init))`, the fields themselves in the app's new `CollectionEntryExport.init(_:)` and `CollectionExport.init(_:entries:)` (`Models/Collection.swift`), the same fields as before.
+- **The golden files need `scripts/make-golden`:** their source digest hashes `FRUSCoreKit/` and `FRUSExplorer/` whole, so all five read as stale past this pull request, and those 21 issues were the run's only failures.
+- **Nothing on §5's indexing path changes.** No file of the parser, `IndexingPipeline.swift`, FTS5Store, SourceNoteKit, `FRUSExplorer/Resources`, `project.yml` or `Package.swift` changes, so the golden files' export may be reused, by the owner's choice.
+- **`Package.swift` needs no change:** the kit's new `SourceExplorer/` folder is compiled by folder, and `tools/mac-golden` lists `FRUSCoreKit` whole.
+- **What S18d to S18f call:**
+  - `CollectionContentAssembly`, with `Entry(_:proseParagraphs:)` (the codec decodes a prose block's RTF, and the introduction's, into spans) and `CollectionContentDataSource`, whose store reads answer with the export's records (`DocumentHighlightExport`, `GeneratedSummaryExport`, `UserTagExport`, `DocumentTagAssignmentExport`), the notes passed in as `ResearchNoteExport`.
+  - The assembly and its data source are `@MainActor`, as `BatchCitationRunner` is, so the server resolves a collection on the main actor. Passing `locale: Locale(identifier: "en_US")` prints the chronology's dates as the app does.
+  - The data source's export methods are the server's: `smartDocumentRefs()` runs the saved search through `SmartCollectionSnapshot.documentRefs(parameters:searchService:)` with the user's search service, in either purpose; `prepareVolumesForExport` has nothing to do on a server that holds every volume; `fetchAbsentFigureImages` reaches the server's figure store, or nothing; `generateSummaries` answers stored summaries, and refuses the rest, since the server has no summarizer.
+  - `ArchivalIndexes`, from the three files in `upstream/FRUS-Explorer/FRUSExplorer/Resources/` (`central-files-index.json`, `volume-sources-index.json`, `lot-claimants-index.json`), which the image will need to carry.
+  - `NativeCollectionSerializer.makeFile(from:includeNotes:resolveNoteTexts:)`, `encode`, `decode` and `importedValues(from:)`; `SmartCollectionSnapshot.snapshot(of:results:)`; `CollectionExportOptions(composing:)` over a `CollectionExport`; `CollectionBodyDepth.available(summariesAvailable:)`.
+
+**Delivered here**
+
+- `COORDINATION.md`: #1809 in §2, merged, with its runs, and in §5's list.
+- `PLAN.md`: S18c's row names #1809, and keeps S15d's notes export on its own ZIP writer, as S18a's log found.
+- This log.
+
+**Notes**
+
+- **A cold review of the diff,** given the code and none of the session's conclusions, found no defect in what the app resolves, and six things that were fixed before the runs quoted: the `.fruscollection` writer looked each entry's notes up by id, so two synced copies of one id with different selections would share the first's; a smart collection's own entries were read, healing a legacy prose blob; a static export read the collection before its volumes' download, which can take minutes, where it read it after; the data source's doc said the saved search runs only for an export; the app's and the kit's composition rules were two copies (the app's now reads the kit's); and the divided-lot test passed without the rule it tests.
+- **An unsorted SwiftData fetch varies its order from run to run.** Two highlights on one document came back in either order at the same head, so the comparison puts a document's highlights in offset order, as every exporter does before drawing them.
+- **`main` moved during the session,** from `8e6d681` to `17507cb`: S17c's pin move (#68), the follow-up to S14b (#72), S16e's records (#69), S14b (#70) and its second follow-up (#74), S14e (#71), S14d (#73), and the records of the follow-ups to S16e (#78) and to this session (#79). This branch was brought up to it, and the Linux run repeated over `2fac971`, at S17c's pin.
+- **Other sessions' Docker jobs shared the heavy-job lock all evening,** so the runs took longer than their own time.
+- **Scratch:** under `~/Library/Caches/frus-s18b`: the clone and its WIP commits, the rebuilt commits' worktree, `v2`'s worktree, the logs, the scripts, the dumps, and a scratch worktree of this repository (`web-linux`).
+
+**Next: S18c,** the pin move past #1809, merged as `fef96201` ([#77](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/77)). Beside it: S17d, search over the researcher's writing ([#76](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/76)), with S17e and S17f.
 
 ## Session 14d: the PostgreSQL store
 
