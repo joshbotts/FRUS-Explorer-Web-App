@@ -4,11 +4,11 @@ One entry per session, newest first.
 
 ## Session 18b: a collection resolves through a data source in FRUSCoreKit, upstream
 
-27 October 2026 · branch `claude/optimistic-blackwell-d0048f` · [#75](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/75) · upstream `503a730b`, unchanged by this row; `1c18b51e` once `main` with S17c's pin move was merged in · [FRUS-Explorer#1809](https://github.com/joshbotts/FRUS-Explorer/pull/1809), open
+27 October 2026 · branch `claude/optimistic-blackwell-d0048f` · [#75](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/75) · upstream `503a730b`, unchanged by this row; `1c18b51e` once `main` with S17c's pin move was merged in · [FRUS-Explorer#1809](https://github.com/joshbotts/FRUS-Explorer/pull/1809), merged as `fef96201`
 
 This is phase 2's row S18b, the second of the two upstream collection rows, and Mac check 14 verifies it. S18a's #1807 made what renders a collection the kit's; this row makes what resolves one the kit's, so S18d to S18f can put a collection together on the server from its own store, as the app does from SwiftData.
 
-This session opened one pull request on `FRUS-Explorer`, from `claude/collections-resolve-through-a-data-source`, branched from `v2` at `3af1fc07` (#1807's merge, `1c18b51e`, with #1808's website drafts). It is labelled `Mac`, its body says "Mac verification requested", and it is not merged. Under rule 4 the pull request changes shared files, and this repository changes only its records.
+This session opened one pull request on `FRUS-Explorer`, from `claude/collections-resolve-through-a-data-source`, branched from `v2` at `3af1fc07` (#1807's merge, `1c18b51e`, with #1808's website drafts). It is labelled `Mac` and its body says "Mac verification requested". The owner merged it the same day as `fef96201`, a squash with the branch head's tree (`d1b45392`). Under rule 4 the pull request changes shared files, and this repository changes only its records.
 
 **#1809, in seven commits of moves and tests, and a records commit:**
 - **The archival indexes and the document resolution** (`FRUSCoreKit/SourceExplorer/`): `CentralFilesIndex`, `VolumeSourcesIndex` and `LotClaimantsIndex`, public with their decoders, and `ArchivalResolver`'s document resolution over `ArchivalIndexes`, the three as one value. The stores that read the app's bundle and the front-matter resolution stay in the app, which passes `ArchivalIndexes.bundled`.
@@ -61,7 +61,7 @@ This session opened one pull request on `FRUS-Explorer`, from `claude/collection
 
 **Delivered here**
 
-- `COORDINATION.md`: #1809 in §2, open, with its runs, and in §5's list.
+- `COORDINATION.md`: #1809 in §2, merged, with its runs, and in §5's list.
 - `PLAN.md`: S18c's row names #1809, and keeps S15d's notes export on its own ZIP writer, as S18a's log found.
 - This log.
 
@@ -73,7 +73,7 @@ This session opened one pull request on `FRUS-Explorer`, from `claude/collection
 - **Other sessions' Docker jobs shared the heavy-job lock all evening,** so the runs took longer than their own time.
 - **Scratch:** under `~/Library/Caches/frus-s18b`: the clone and its WIP commits, the rebuilt commits' worktree, `v2`'s worktree, the logs, the scripts, the dumps, and a scratch worktree of this repository (`web-linux`).
 
-**Next: S18c,** the pin move past #1809, once the owner has run Mac check 14 on it and merged it. Beside it: S17d, search over the researcher's writing, with S17e and S17f, and on the server's track S14e (#71) and S14d (#73).
+**Next: S18c,** the pin move past #1809, merged as `fef96201`, `v2`'s head. Beside it: S17d, search over the researcher's writing, with S17e and S17f, and on the server's track S14d (#73).
 
 ## Session 14e: sign-in through a trusted proxy
 
