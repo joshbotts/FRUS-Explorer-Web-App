@@ -29,7 +29,7 @@ import { copy } from '../copy';
 import type { RichTextEditorHandle } from '../editor/RichTextEditor';
 import { runsText, withSummary } from '../editor/runs';
 import { useNoteEditorRichText } from '../settings/preferences';
-import { Modal } from '../shell/Modal';
+import { closeAtOnce, Modal } from '../shell/Modal';
 
 const RichTextEditor = lazy(() => import('../editor/RichTextEditor'));
 
@@ -218,7 +218,7 @@ export function NoteEditor({
           ...(linkedHighlightId ? { linkedHighlightId } : {}),
         });
       }
-      onClose('saved');
+      closeAtOnce(() => onClose('saved'));
     } catch (error) {
       setFailure(errorMessage(error));
       setBusy(false);
@@ -239,7 +239,7 @@ export function NoteEditor({
     setFailure(null);
     try {
       await deleteNote(client, note);
-      onClose('deleted');
+      closeAtOnce(() => onClose('deleted'));
     } catch (error) {
       setFailure(errorMessage(error));
       setBusy(false);

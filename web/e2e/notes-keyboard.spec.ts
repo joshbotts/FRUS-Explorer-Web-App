@@ -45,14 +45,18 @@ test('writes, formats, links and saves a note from the bar’s Note, discards an
   // The editor: its heading first, then the text, for a new note.
   const editor = page.getByRole('dialog', { name: 'New Research Note' });
   const body = editor.getByRole('textbox', { name: 'Research note body' });
+  const formatting = editor.getByRole('toolbar', { name: 'Text formatting' });
+  const linkButton = formatting.getByRole('button', { name: 'Link selected text to a URL' });
   await expect(body).toBeFocused();
   await expect.poll(selection).toBe('');
+  await settle(page);
   await page.keyboard.type('Keyboard note');
-  // The last word, bold by the app's ⌘B.
+  // The last word, bold by the app's ⌘B once the editor holds it, as the bar's Link, offered only
+  // over a selection, shows.
   await page.keyboard.press('Control+Shift+ArrowLeft');
   await settle(page);
+  await expect(linkButton).toHaveAttribute('aria-disabled', 'false');
   await page.keyboard.press('ControlOrMeta+b');
-  const formatting = editor.getByRole('toolbar', { name: 'Text formatting' });
   await expect(formatting.getByRole('button', { name: 'Bold' })).toHaveAttribute('aria-pressed', 'true');
   await axeCheck(page);
 
@@ -62,7 +66,6 @@ test('writes, formats, links and saves a note from the bar’s Note, discards an
   await page.keyboard.press('ArrowRight');
   await expect(formatting.getByRole('button', { name: 'Italic' })).toBeFocused();
   await page.keyboard.press('End');
-  const linkButton = formatting.getByRole('button', { name: 'Link selected text to a URL' });
   await expect(linkButton).toBeFocused();
   await page.keyboard.press('Enter');
   const link = page.getByRole('dialog', { name: 'Link selection to URL' });
@@ -75,12 +78,14 @@ test('writes, formats, links and saves a note from the bar’s Note, discards an
   await expect(body).toBeFocused();
   await expect(linkButton).toHaveAttribute('aria-pressed', 'true');
 
-  // ⌘K over the first word opens the dialog; an address the page cannot follow is refused there,
-  // and Escape cancels it.
+  // ⌘K over the first word, once the editor holds it, opens the dialog; an address the page cannot
+  // follow is refused there, and Escape cancels it.
   await settle(page);
   await page.keyboard.press('Home');
   await page.keyboard.press('Control+Shift+ArrowRight');
   await settle(page);
+  await expect(linkButton).toHaveAttribute('aria-pressed', 'false');
+  await expect(linkButton).toHaveAttribute('aria-disabled', 'false');
   await page.keyboard.press('ControlOrMeta+k');
   await expect(link.getByRole('textbox')).toBeFocused();
   await page.keyboard.type('history.state.gov');

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DocumentDetail, DocumentHighlights, Highlight, Me, ReaderLinkTarget, Volume } from '../api/types';
 import { resetPreferences } from '../settings/preferences';
+import { framesAtOnce } from '../test/frames';
 import { coverage, ProblemAnswer, ready, renderAt, stubServer } from '../test/renderRoute';
 
 const d1: DocumentDetail = {
@@ -309,6 +310,26 @@ describe('the reader’s highlights', () => {
     // The list is read again and drawn without it; focus goes back to the text.
     await waitFor(() => expect(highlightsSent(posted)).toHaveLength(2));
     expect((highlightsSent(posted)[1]?.highlights as { color: string }[]).map((drawn) => drawn.color)).toEqual(['green', 'pink', 'green']);
+    await waitFor(() => expect(document.activeElement).toBe(frame));
+  });
+
+  it('sends focus back to the text once a removed highlight’s question has gone, though a frame comes before React’s next task', async () => {
+    let items = [highlight({ id: 'L' })];
+    highlighting({
+      [highlightsPath]: () => documentHighlights(items),
+      'DELETE /api/v1/me/highlights/L': () => {
+        items = [];
+        return null;
+      },
+    });
+    renderAt('/doc/frus1961-63v06/d1');
+    const { frame, posted } = await loadedFrame();
+    await waitFor(() => expect(highlightsSent(posted)).toHaveLength(1));
+    fromFrame(frame, 'highlightTapped', { startOffset: 12, endOffset: 40, color: 'green' });
+    const question = await screen.findByRole('alertdialog', { name: 'Remove Highlight' });
+    framesAtOnce();
+    await userEvent.click(within(question).getByRole('button', { name: 'Remove' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(frame));
   });
 
@@ -719,6 +740,20 @@ describe('the reader’s notes', () => {
     fromFrame(frame, 'selectionChanged', { start: -1, end: -1, text: 'a note', rect });
     await userEvent.click(within(bar()!).getByRole('button', { name: 'Note' }));
     expect(await screen.findByRole('dialog', { name: 'New Research Note' })).toBeTruthy();
+  });
+
+  it('sends focus back to the text once a saved note’s editor has gone, though a frame comes before React’s next task', async () => {
+    noting({ [`POST ${notesPath}`]: madeNote });
+    renderAt('/doc/frus1961-63v06/d1');
+    const { frame, posted } = await loadedFrame();
+    await waitFor(() => expect(highlightsSent(posted)).toHaveLength(1));
+    fromFrame(frame, 'selectionChanged', { start: 12, end: 40, text: 'Allow me to say', rect });
+    await userEvent.click(within(bar()!).getByRole('button', { name: 'Note' }));
+    const editor = await screen.findByRole('dialog', { name: 'New Research Note' });
+    framesAtOnce();
+    await userEvent.click(within(editor).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(frame));
   });
 
   it('leaves the reader’s shortcuts alone while the note editor is open over it', async () => {

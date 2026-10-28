@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NoteSummary } from '../api/types';
 import { resetPreferences } from '../settings/preferences';
+import { framesAtOnce } from '../test/frames';
 import { berlin, me, note, noteSummary, revisit, sent } from '../test/notes';
 import { ProblemAnswer, ready, renderAt, stubServer } from '../test/renderRoute';
 
@@ -211,6 +212,34 @@ describe('All Notes', () => {
     await userEvent.click(within(await screen.findByRole('alertdialog', { name: 'Delete Note?' })).getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'All Notes' })));
     expect(screen.getByText('No notes yet. Notes you write from a document appear here.')).toBeTruthy();
+  });
+
+  it('sends focus on once a note deleted from its question or its editor has gone, though a frame comes before React’s next task', async () => {
+    const { state } = server({
+      '/api/v1/me/notes/B': note({ id: 'B', bodyText: '', volumeId: 'frus1969-76v01', documentId: 'd42' }),
+      '/api/v1/me/volumes/frus1969-76v01/documents/d42/summaries': new ProblemAnswer(404, 'VOLUME_NOT_FOUND', 'No such volume.'),
+      'DELETE /api/v1/me/notes/A': () => {
+        state.notes = state.notes.filter((row) => row.id !== 'A');
+        return null;
+      },
+      'DELETE /api/v1/me/notes/B': () => {
+        state.notes = state.notes.filter((row) => row.id !== 'B');
+        return null;
+      },
+    });
+    renderAt('/research/notes');
+    await screen.findByRole('list', { name: 'All Notes' });
+    framesAtOnce();
+    const deleteOf = (id: string) => document.querySelector<HTMLButtonElement>(`button.delete-note[data-id="${id}"]`);
+    await userEvent.click(deleteOf('A')!);
+    await userEvent.click(within(await screen.findByRole('alertdialog', { name: 'Delete Note?' })).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(document.activeElement).toBe(deleteOf('B')));
+    // The editor's own Delete, which asks nothing: its row gone, focus goes to the heading.
+    await userEvent.click(screen.getByRole('button', { name: /^Empty note/ }));
+    const editor = await screen.findByRole('dialog', { name: 'Edit Note' });
+    await userEvent.click(await within(editor).findByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'All Notes' })));
   });
 
   it('opens a row’s note in the editor, as the app’s sheet', async () => {
