@@ -6,8 +6,9 @@
 // `UserSearchText.noteText` mirrors; the headnote prompt id the web's own summaries must never take;
 // the kit's summary types, whose encoding the store keeps; the rule that names a summary's prompt;
 // the editor's rules for a body, its RTF kept until an edit, a highlight's link and a delete; the
-// Markdown exporter's citation; and CollectionProse's paragraphs and colours, which the golden spans'
-// mirror and the codec follow. A pin move that changes one fails here until the server follows it.
+// Markdown exporter's citation; and how the app reads prose, a colour through AppKit, which the codec
+// follows, and its paragraphs by the kit's span rules, which the codec and the golden spans' reading
+// call since S17c's pin move. A pin move that changes one fails here until the server follows it.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -114,13 +115,14 @@ import Testing
 
     /// `UserSearchText.noteText` is `indexedTextPerDocument` for one document: oldest first by
     /// `createdAt`, none first of all, then by `uuidString`; blank bodies left out; joined by the
-    /// app's separator; none when nothing is left (`noteTextWrite`'s `.clear`).
+    /// app's separator; none when nothing is left (`noteTextWrite`'s `.clear`). Since #1792 the app
+    /// reads one copy of a note stored as several under one id; the store keeps one row for each id.
     @Test func searchJoinsADocumentsNotesAsTheAppIndexesThem() throws {
         let source = try Self.read("Models/ResearchNote.swift")
         #expect(source.contains(#"static let indexedTextSeparator = "\n\n""#) && UserSearchText.separator == "\n\n")
         let joined = try Self.body(of: "static func indexedTextPerDocument(", in: source)
         for line in [
-            "for note in notes where !note.volumeId.isEmpty && !note.documentId.isEmpty {",
+            "for note in oneCopyEach(notes) where !note.volumeId.isEmpty && !note.documentId.isEmpty {",
             "let left = $0.createdAt ?? .distantPast",
             "let right = $1.createdAt ?? .distantPast",
             "if left != right { return left < right }",
@@ -172,12 +174,15 @@ import Testing
     /// reports an edit, and Save writes it back, so a save that leaves the body keeps it byte for
     /// byte; a plain-mode edit, and a summary's insertion, drop it; Save links the highlight, if it
     /// is still there, by its `noteId`; and Delete deletes the note alone, the highlight's plain id
-    /// left dangling.
+    /// left dangling. Since #1792 a save and a delete reach every copy of a note stored as several
+    /// under one id, and the store keeps one row for each id, which the web's save and delete reach.
     @Test func theEditorsRulesForTheBodyAndTheHighlightAreTheApps() throws {
         let model = try Self.read("ResearchNoteEditor/ResearchNoteEditorViewModel.swift")
         #expect(try Self.body(of: "func load(context: ModelContext) {", in: model).first == "richText = noteToEdit?.richText")
         let save = try Self.body(of: "func save(context: ModelContext) -> UUID? {", in: model)
-        #expect(save.filter { $0 == "note.richText = richText" }.count == 2, "an existing note and a new one")
+        #expect(save.contains("for copy in [note] + otherCopies {") && save.filter { $0 == "copy.richText = richText" }.count == 1,
+                "an existing note, in every copy")
+        #expect(save.filter { $0 == "note.richText = richText" }.count == 1, "a new one")
         #expect(try Self.body(of: "func setPlainBody(_ text: String) {", in: model) == ["bodyText = text", "richText = nil"])
         #expect(try Self.body(of: "func replaceBody(with text: String) {", in: model).contains("richText = nil"))
         let view = try Self.read("ResearchNoteEditor/ResearchNoteEditorView.swift")
@@ -190,7 +195,10 @@ import Testing
         #expect(link.contains("guard let highlight = try? modelContext.fetch(descriptor).first else { return }"))
         #expect(link.last == "highlight.noteId = noteId")
         #expect(try Self.withoutDebug(Self.body(of: "func delete(context: ModelContext) {", in: model))
-            == ["guard let note = noteToEdit else { return }", "context.delete(note)"])
+            == ["guard let note = noteToEdit else { return }", "ResearchNote.deleteEveryCopy(of: note, in: context)"])
+        let copies = Self.flattened(try Self.read("Models/ResearchNote.swift"))
+        #expect(copies.contains("for copy in copies(of: note.id, in: context) where copy.persistentModelID != note.persistentModelID { context.delete(copy) } context.delete(note)"),
+                "every copy, and nothing else")
         #expect(try Self.read("Models/DocumentHighlight.swift").contains("var noteId: UUID? = nil"), "a plain id, no relationship")
     }
 
@@ -253,31 +261,23 @@ import Testing
         #expect(NotesExport.citation(of: "d1", among: [entry], volume: nil) == nil, "a volume not in the manifest")
     }
 
-    /// `CollectionProse.append`, which `ProseParagraphs.paragraphs(of:)` mirrors, splits each run on
-    /// blank lines by itself; `hex` reads a colour under 0.08 in every channel as none and truncates
-    /// each channel to a byte, as `RTFColor.hex` does, of the colour in sRGB. The golden spans check
-    /// the mirror against the app's paragraphs on every case once a Mac remakes them; this names the
-    /// rule a pin move changes on Linux, before then.
+    /// The app's reading of prose since FRUS-Explorer#1807: `paragraphs(fromDecoded:)`, in the app's
+    /// `CollectionExporter+App.swift`, reads each run's formatting and its colour through `hexColor`,
+    /// as the light appearance draws it (#1790), and splits the run with the kit's
+    /// `CollectionProse.append`. `ProseParagraphs.paragraphs(of:)` calls the same `append`, and the
+    /// codec's `RTFColor.hex` the kit's `hex`, so only the colour's resolution, AppKit's, is the codec's
+    /// own, which the golden spans hold to the app on every case once a Mac remakes them; this names
+    /// the reading a pin move changes on Linux, before then.
     @Test func theAppsParagraphsAndColoursAreTheMirrors() throws {
-        let source = try Self.read("Collections/CollectionExporter.swift")
-        #expect(try Self.body(of: "private static func append(text: String, bold: Bool, italic: Bool, underline: Bool,", in: source) == [
-            #"let parts = text.components(separatedBy: "\n\n")"#,
-            "for (index, part) in parts.enumerated() {",
-            "if index > 0 { paragraphs.append([]) } // a blank line starts a new paragraph",
-            "if !part.isEmpty {",
-            "paragraphs[paragraphs.count - 1].append(",
-            "ProseFormattedSpan(text: part, bold: bold, italic: italic,",
-            "underline: underline, colorHex: colorHex,",
-            "linkURL: linkURL))",
-            "}",
-            "}",
-        ])
-        #expect(try Self.body(of: "private static func hex(r: CGFloat, g: CGFloat, b: CGFloat) -> String? {", in: source) == [
-            "if r < 0.08, g < 0.08, b < 0.08 { return nil } // (near-)black default text",
-            #"return String(format: "%02X%02X%02X", Int(r * 255), Int(g * 255), Int(b * 255))"#,
-        ])
+        let source = try Self.read("Collections/CollectionExporter+App.swift")
+        #expect(Self.flattened(source).contains(
+            "append(text: plain.substring(with: range), bold: bold, italic: italic, underline: underline, colorHex: colorHex, linkURL: linkURL, to: &paragraphs)"))
         #expect(try Self.body(of: "private static func hexColor(_ color: NSColor) -> String? {", in: source) == [
-            "guard let c = color.usingColorSpace(.sRGB) else { return nil }",
+            "var light: NSColor?",
+            "NSAppearance(named: .aqua)?.performAsCurrentDrawingAppearance {",
+            "light = color.usingColorSpace(.sRGB)",
+            "}",
+            "guard let c = light ?? color.usingColorSpace(.sRGB) else { return nil }",
             "return hex(r: c.redComponent, g: c.greenComponent, b: c.blueComponent)",
         ])
         let bold = RichTextSpan(text: "\n\n", bold: true)
@@ -287,6 +287,7 @@ import Testing
                 "a blank line across two runs splits nothing")
         #expect(RTFColor.hex(0.079, 0.079, 0.079) == nil && RTFColor.hex(0.08, 0, 0) == "140000")
         #expect(RTFColor.hex(0.5, 0.25, 1.0) == "7F3FFF")
+        #expect(RTFColor.hex(1.093, -0.227, -0.150) == "FF0000", "a colour outside sRGB clamped to it, as #1793 has iOS do")
     }
 
     static func flattened(_ text: String) -> String {

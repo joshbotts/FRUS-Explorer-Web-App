@@ -13,13 +13,13 @@
     "platform" : {
       "arch" : "arm64",
       "locale" : "en_US",
-      "os" : "macOS 27.0.1",
+      "os" : "macOS 27.2.0",
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "1c529af846867704d8ea2ace8b06e0573731a2a7c5ff5ebb064d03c7d0d431c5",
+    "sourceDigest" : "60d61d5d2ef118790f1ae6037101065b87ba0496f8b57cb2761c730c2ffee552",
     "tool" : "tools/mac-golden render",
-    "upstreamCommit" : "503a730bfacfc06bfeeadedf9bc4069b1ca6750d"
+    "upstreamCommit" : "1c18b51ea73594664d3cd0a61e20ba11d8db9c14"
   },
   "rows" : [
     {

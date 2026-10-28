@@ -65,7 +65,10 @@ enum AppModelSource {
     }
 
     /// Whether the app assigns `property` the output of a `JSONEncoder` anywhere, as
-    /// `parametersData = try? JSONEncoder().encode(parameters)` does.
+    /// `parametersData = try? JSONEncoder().encode(parameters)` does, or the `encoded` blob of a kit
+    /// type that writes itself with a plain one, as `freshnessData =
+    /// SavedSearchFreshness.run(at:matchCount:indexedVolumeCount:).encoded` does since S17b's
+    /// FRUS-Explorer#1805.
     static func isWrittenAsJSON(_ property: String) throws -> Bool {
         // Not `\b`: Swift's regexes find words by Unicode's rules, under which `self.parametersData`
         // is one word.
@@ -73,6 +76,27 @@ enum AppModelSource {
         // The raw text first, which is quick; then only those files without their comments and strings.
         for source in try sources() where source.contains(pattern) {
             if Code(Substring(source)).blanked.contains(pattern) { return true }
+        }
+        // `Type.call(…).encoded`, its type named in the assignment.
+        let kitBlob = try Regex("(?:^|[^A-Za-z0-9_])\(property)\\s*=\\s*([A-Z][A-Za-z0-9_]*)\\.[A-Za-z0-9_]+\\([^()]*\\)\\.encoded(?![A-Za-z0-9_])")
+        for source in try sources() where source.contains(".encoded") {
+            for match in Code(Substring(source)).blanked.matches(of: kitBlob) {
+                if let type = match.output[1].substring, try kitWritesAsJSON(String(type)) { return true }
+            }
+        }
+        return false
+    }
+
+    /// Whether the kit's `type` declares its `encoded` blob as a plain `JSONEncoder`'s output.
+    static func kitWritesAsJSON(_ type: String) throws -> Bool {
+        let kit = app.deletingLastPathComponent().appendingPathComponent("FRUSCoreKit", isDirectory: true)
+        let declared = try Regex("(?:struct|enum|final class|class)\\s+\(type)\\b")
+        let encoded = try Regex("var\\s+encoded:\\s*Data\\?\\s*\\{\\s*try\\?\\s*JSONEncoder\\(\\)\\.encode\\(self\\)\\s*\\}")
+        guard let walk = FileManager.default.enumerator(at: kit, includingPropertiesForKeys: nil) else { return false }
+        for case let url as URL in walk where url.pathExtension == "swift" {
+            guard let source = try? String(contentsOf: url, encoding: .utf8), source.contains(type) else { continue }
+            let code = Code(Substring(source)).blanked
+            if code.contains(declared), code.contains(encoded) { return true }
         }
         return false
     }
