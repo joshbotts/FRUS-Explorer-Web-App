@@ -91,6 +91,30 @@ describe('the rail’s Summary', () => {
     expect(document.activeElement).toBe(older);
   });
 
+  it('says a summary from a research database is one, in its prompt’s place, and offers Delete… but not Edit… (S16e)', async () => {
+    reader({
+      [documentPaths.summaries]: documentSummaries([
+        summary({
+          id: 'R',
+          promptId: '0EB00000-0000-4000-8000-000000000002',
+          responseText: 'The newest summary the index kept.',
+          authorship: 'aiGenerated',
+          editable: false,
+          deletable: true,
+          fromResearchDatabase: true,
+        }),
+      ]),
+    });
+    renderAt('/doc/frus1961-63v06/d1?rail=research');
+    const { region } = await section();
+    await within(region()).findByText('The newest summary the index kept.');
+    const header = region().querySelector('.summary-header')!;
+    expect(header.querySelector('.summary-label')?.textContent).toBe('AI summary');
+    expect([...header.querySelectorAll('.summary-prompt')].map((part) => part.textContent)).toEqual(['· From a research database']);
+    expect(within(region()).queryByRole('button', { name: 'Edit…' })).toBeNull();
+    expect(within(region()).getByRole('button', { name: 'Delete…' })).toBeTruthy();
+  });
+
   it('previews the summary shown in its header when it is closed, and shows no control for one summary', async () => {
     reader({ [documentPaths.summaries]: documentSummaries([summary({ id: 'A', responseText: `  ${'Long words '.repeat(10)}` })]) });
     renderAt('/doc/frus1961-63v06/d1?rail=research');

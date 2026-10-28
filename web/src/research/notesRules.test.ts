@@ -13,6 +13,7 @@ function note(fields: Partial<NoteSummary> & Pick<NoteSummary, 'id'>): NoteSumma
     linkedHighlightIds: [],
     createdAt: '2026-10-24T09:00:00.000Z',
     lastModified: '2026-10-24T09:00:00.000Z',
+    fromResearchDatabase: false,
     ...fields,
   };
 }

@@ -48,7 +48,7 @@ struct ImportFixture {
         let source = try fixture.drop(SyntheticExport())
         let recorder = StepRecorder()
 
-        let index = try await fixture.importer.importExport(at: source, observer: recorder)
+        let index = try await fixture.importer.importExport(at: source, observer: recorder).index
 
         #expect(await recorder.steps == ReadinessStep.importSteps)
         #expect(await recorder.progress.last == 1)
@@ -61,7 +61,7 @@ struct ImportFixture {
 
     @Test func liveIndexIsServedWithoutSideFiles() async throws {
         let fixture = try ImportFixture()
-        let index = try await fixture.importer.importExport(at: try fixture.drop(SyntheticExport()), observer: StepRecorder())
+        let index = try await fixture.importer.importExport(at: try fixture.drop(SyntheticExport()), observer: StepRecorder()).index
         _ = index.summary
         let directory = fixture.files.liveIndex.deletingLastPathComponent().path
         let names = try FileManager.default.contentsOfDirectory(atPath: directory)
@@ -83,7 +83,7 @@ struct ImportFixture {
         let fixture = try ImportFixture()
         var export = SyntheticExport()
         export.stamped = false
-        let index = try await fixture.importer.importExport(at: try fixture.drop(export), observer: StepRecorder())
+        let index = try await fixture.importer.importExport(at: try fixture.drop(export), observer: StepRecorder()).index
         #expect(index.summary.indexVersion == IndexCompatibility.supportedIndexVersion)
         #expect(index.summary.exportedAt == nil)
     }
@@ -92,7 +92,7 @@ struct ImportFixture {
         let fixture = try ImportFixture()
         var export = SyntheticExport()
         export.walMode = true
-        let index = try await fixture.importer.importExport(at: try fixture.drop(export), observer: StepRecorder())
+        let index = try await fixture.importer.importExport(at: try fixture.drop(export), observer: StepRecorder()).index
         #expect(index.summary.documents == 3)
         let header = try Data(contentsOf: fixture.files.liveIndex).prefix(20)
         #expect(header[18] == 1, "the installed copy is switched to rollback-journal mode")
@@ -121,8 +121,8 @@ struct ImportFixture {
                     step: .checkingFormat, reason: "generation 3"),
             Refusal(name: "an unstamped copy at another version", export: export { $0.stamped = false; $0.indexVersion = 64 },
                     step: .checkingVersions, reason: "no export stamp"),
-            Refusal(name: "writing included", export: export { $0.stampsWritingIncluded = true; $0.containsWriting = true },
-                    step: .checkingWriting, reason: "includes your notes"),
+            Refusal(name: "writing, on a server that keeps no user data", export: export { $0.includesWriting = true },
+                    step: .checkingWriting, reason: "includes your notes, summaries and tags, and this server keeps no research data"),
             Refusal(name: "writing behind a stamp that denies it", export: export { $0.containsWriting = true },
                     step: .checkingWriting, reason: "says it excludes your writing"),
             Refusal(name: "an unstamped copy with writing", export: export { $0.stamped = false; $0.containsWriting = true },
@@ -153,6 +153,27 @@ struct ImportFixture {
         #expect(!fixture.exists(fixture.files.liveIndex))
         #expect(!fixture.exists(fixture.files.candidateIndex))
         #expect(fixture.exists(source))
+    }
+
+    /// A server that keeps the writing refuses an export whose stamp says it holds some but not when
+    /// it was made, before the writing is read: the strip and the store are never reached.
+    @Test func refusesWritingWhoseStampGivesNoTime() async throws {
+        let fixture = try ImportFixture()
+        let importer = IndexImporter(files: fixture.files, writer: LocalIndexWriter(files: fixture.files),
+                                     writing: WritingMove(strip: [StripStep(action: "never", sql: "SELECT 1")]) { _ in
+                                         Issue.record("the writing was kept")
+                                         throw CancellationError()
+                                     })
+        var export = SyntheticExport()
+        export.includesWriting = true
+        export.omittedStampKeys = ["exported_at"]
+        await #expect {
+            _ = try await importer.importExport(at: try fixture.drop(export), observer: StepRecorder())
+        } throws: { error in
+            guard let refusal = error as? ImportRefusal else { return false }
+            return refusal.step == .checkingWriting && refusal.reason.contains("but not when it was made")
+        }
+        #expect(!fixture.exists(fixture.files.liveIndex) && !fixture.exists(fixture.files.candidateIndex))
     }
 
     @Test func refusalLeavesTheLiveIndexServing() async throws {
@@ -238,7 +259,7 @@ struct ImportFixture {
         let fixture = try ImportFixture()
         let source = try fixture.drop(SyntheticExport())
         try Data(repeating: 0, count: bytes).write(to: URL(fileURLWithPath: source.path + "-journal"))
-        let index = try await fixture.importer.importExport(at: source, observer: StepRecorder())
+        let index = try await fixture.importer.importExport(at: source, observer: StepRecorder()).index
         #expect(index.summary.documents == SyntheticExport.documents.count)
     }
 

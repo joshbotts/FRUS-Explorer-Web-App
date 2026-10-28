@@ -677,6 +677,7 @@ const madeNote = {
   linkedHighlightIds: [],
   createdAt: null,
   lastModified: null,
+  fromResearchDatabase: false,
   runs: null,
   formattingKept: false,
 };

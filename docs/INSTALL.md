@@ -11,7 +11,8 @@ FRUS Explorer Light runs as one container on a Mac or a Linux host, serving a re
   - the image is about 400 MB, with the app's data files;
   - the index for the full corpus is 2.8 GB;
   - an import needs room for the export and a copy while it is checked;
-  - a later import keeps the previous index for rollback, so a re-import needs about four times the index while it runs.
+  - a later import keeps the previous index for rollback, so a re-import needs about four times the index while it runs;
+  - an export made with your notes, summaries and tags needs about twice the index more while the server removes them from its copy, about 20 GB in all for the full corpus.
 - **Memory.** Importing and serving the full corpus used about 130 MB, and the reader levelled off at about 170 MB over the largest volumes, so Docker Desktop's default allocation is plenty. A search ordered by date, or read in its timeline, holds up to 7,500 results, as the app's search window does, and the server keeps the last two such searches: by estimate, up to about 40 MB more. It also keeps the pages and counts of the last four searches, a few megabytes at most.
 - **A FRUS Explorer research export** from a Mac running a build that matches the server's index version: 71 today, FRUS Explorer 1.0 (build 1776). The server refuses any other version and says which it needs.
 - **The TEI volumes**, which the reader renders documents from. Without them the server still imports and serves the index.
@@ -73,7 +74,7 @@ It answers `"step":"waiting_for_export"` with status `503`: the server is runnin
 
 ## 4. Export the research database on the Mac
 
-In FRUS Explorer, open **Settings ▸ Data & Recovery ▸ Export Research Database…**. Leave **Include My Notes, Summaries, and Tags** off: in phase 1 the server holds the corpus only, and it refuses an export that includes your writing. The full corpus exports to about 2.8 GB.
+In FRUS Explorer, open **Settings ▸ Data & Recovery ▸ Export Research Database…**. Leave **Include My Notes, Summaries, and Tags** off, and bring your research with the app's JSON export instead: see [Bring your research from the Mac](#bring-your-research-from-the-mac). With it on, the server keeps your writing in your research data before it serves the index, but the index holds only part of it: for each document one block of its notes, joined, and its newest summary, and your tags. The full corpus exports to about 2.8 GB.
 
 ## 5. Import it
 
@@ -97,13 +98,15 @@ curl -s -w '  %{http_code}\n' http://localhost:8080/readyz
 | `copying_export` | Copying the export beside the live index |
 | `checking_format` | Checking that it is a FRUS Explorer research export |
 | `checking_versions` | Checking the index and FTS schema versions |
-| `checking_writing` | Checking that it holds no notes, summaries or tags |
+| `checking_writing` | Checking that it holds no notes, summaries or tags, or, for an export made with them, reading them |
+| `stripping_writing` | For an export made with your notes, summaries and tags: removing them from the copy with FRUS Explorer's own steps, each named as the app names it |
 | `checking_integrity` | Checking the database and both full-text indexes |
+| `moving_writing` | For an export made with your notes, summaries and tags: keeping them in your research data |
 | `installing_index` | Making the copy the live index, keeping the old one for rollback |
 | `opening_index` | Opening the index read-only |
 | `ready` | Serving the index |
 
-`curl http://localhost:8080/api/v1/status` shows the versions, the index's document and volume counts, and the last import's outcome.
+`curl http://localhost:8080/api/v1/status` shows the versions, the index's document and volume counts, and the last import's outcome: for an export made with your writing, what was kept in your research data. While an index is served, a new import runs behind it, and `/readyz` stays `200`, so follow a re-import there.
 
 The installed export is removed from the drop zone, so you can delete your own copy or keep it. Restarting the server copies nothing: the index stays in the volume.
 
@@ -144,6 +147,8 @@ Your notes, highlights, tags, summaries, projects, collections and the rest come
 2. In the browser, open **Settings ▸ Data**, choose the file under **Import a JSON Export**, and press **Import**.
 
 The import runs on the server and the pane follows it. Its report gives, for each kind of record, how many the file held, how many came in, how many replaced an older copy you had here, and how many were kept because the copy here was as new; and it says what a file from an older FRUS Explorer cannot carry. Each record keeps its id from the Mac, so importing the same file again changes nothing, and a later export brings only what changed. Nothing is deleted: a record you delete on the Mac stays here until you delete it here.
+
+A research database exported with **Include My Notes, Summaries, and Tags** on brings less, and the server takes it only as a last resort: for each document one note, its notes joined into one block as the index keeps them, and its newest summary, with no prompt; and your tags, on the documents that carry them. The import's report, in `/api/v1/status`, counts them. The rail and All Notes say **From a research database** of each such note, and the Summary section of each such summary. A later export's block and summary replace the earlier ones, unless you changed the block here; a tag you have here keeps the name you have here; and what a JSON import already brought is not added again. A JSON import after a research database's brings your notes and summaries beside its blocks and summaries, which you can then delete: the summary's **Delete…** is offered for those, though you cannot edit them.
 
 An export of format version 6, which FRUS Explorer wrote until the format reached version 7, and which the report names, carries no saved searches, working corpora, volume scopes, corrections, reviewed changes, Suggested Next leads or synced settings, no formatting of notes, and no structure of collections: a section heading, a note block or an apparatus block arrives as an entry the server keeps but does not show. A summary made with one of FRUS Explorer's own prompts arrives without its prompt's name, which the export does not carry.
 
@@ -231,9 +236,9 @@ A refused file stays in the drop zone. `/api/v1/status` says why, under `lastImp
 | --- | --- |
 | "This export is index version N; this server serves index version M" | Update FRUS Explorer or the server so they match, then export again |
 | "Let FRUS Explorer finish re-indexing, then export again" | Leave FRUS Explorer open until indexing ends |
-| "This export includes your notes, summaries and tags" | Export again with Include My Notes, Summaries, and Tags turned off. The refused copy holds your writing, so remove it from the drop zone with `docker compose exec frus rm /data/import/<file>` |
+| "This export includes your notes, summaries and tags, and this server keeps no research data" | The server runs with `FRUS_USER_DATA=off`. Export again with Include My Notes, Summaries, and Tags turned off. The refused copy holds your writing, so remove it from the drop zone with `docker compose exec frus rm /data/import/<file>` |
 | "The server cannot read …" | The file kept permissions only you can read. Copy it again with `docker compose cp -a`, which gives it to the server's user; it is tried again within a minute |
-| "needs about N GB free beside the index" | Free space for Docker; the import is tried again by itself |
+| "needs about N GB free beside the index" | Free space for Docker; the import is tried again by itself. Removing your writing from an export made with it needs about twice the export's size more |
 | "… is not a SQLite database" or "… is damaged" | Export again with Export Research Database… |
 | "… arrived with a -wal file", or "a -journal file that may hold an unfinished transaction" | This is a copy of a database in use. First remove that file, with `docker compose exec frus rm /data/import/<file>-wal` (or `-journal`). Then export with Export Research Database… and copy the new export in. Keep that order: a new export copied while the side file is there is refused too, and removing the side file afterwards does not try it again |
 | "… is a symbolic link, not an export" | `docker compose cp` copied the link, not the file. Run the same copy again with `docker compose cp -L`, which follows the link: the export replaces the link of the same name and is imported |

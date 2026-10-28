@@ -28,6 +28,9 @@ struct FRUSLightServer {
         } catch {
             fail("\(error)", status: 2)
         }
+        // SQLite reads its temporary folder from the environment once, before its first use, so it
+        // is set here, before anything opens a database, unless the environment names one already.
+        setenv("SQLITE_TMPDIR", DataDirectory(root: configuration.dataDirectory).temporaryDirectory.path, 0)
         // The user store's backup now, and a restore with the server stopped (S14b).
         let arguments = Array(CommandLine.arguments.dropFirst())
         switch arguments.first {
