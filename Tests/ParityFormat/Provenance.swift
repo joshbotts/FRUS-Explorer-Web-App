@@ -1,6 +1,10 @@
 // Where a golden file came from, and the fixtures every parity check runs on.
 
+#if canImport(CryptoKit)
+import CryptoKit
+#else
 import Crypto
+#endif
 import Foundation
 
 /// The three fixture volumes every parity check runs on (`fixtures/tei`).

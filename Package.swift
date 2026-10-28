@@ -242,9 +242,15 @@ let package = Package(
 
         // The parity harness (checks 2-4): golden-file formats, shared with tools/mac-golden. Since
         // S17c's pin move it splits prose into paragraphs with the kit's `CollectionProse.append`.
+        // Its SHA-256 is CryptoKit's on Apple platforms and swift-crypto's on Linux, as the kit's is:
+        // SwiftPM's Mac build plan keeps only the Linux condition of a product a target also reaches
+        // through FRUSCoreKit, so tools/mac-golden never built Crypto for it (S18c's pin move).
         .target(
             name: "ParityFormat",
-            dependencies: ["FRUSCoreKit", .product(name: "Crypto", package: "swift-crypto")],
+            dependencies: [
+                "FRUSCoreKit",
+                .product(name: "Crypto", package: "swift-crypto", condition: .when(platforms: [.linux])),
+            ],
             path: "Tests/ParityFormat",
             swiftSettings: swift6
         ),
