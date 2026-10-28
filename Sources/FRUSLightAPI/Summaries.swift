@@ -1,8 +1,8 @@
 // /api/v1/me/summaries and a document's summaries (PLAN's S15d): a document's summaries, newest first
 // by the app's order, as the Research rail shows them, each named by its prompt only while that
 // prompt is the user's, as the app names one; and the reader's own, the web's own, written, changed
-// and deleted here. Every other summary, an AI summary or an import, is read-only. Nothing here
-// generates a summary.
+// and deleted here. Every other summary, an AI summary or an import, is read-only, but that one from
+// a research database may be deleted (S16e), as its note block may. Nothing here generates a summary.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -35,6 +35,12 @@ public struct Summary: Codable, Equatable, Sendable, ResponseEncodable {
     public var lastModified: String?
     /// Whether the reader may change or delete it: one of their own (`OwnSummary.isEditable`).
     public var editable: Bool
+    /// Whether the reader may delete it: one of their own, or one from a research database
+    /// (`SummaryRecord.isDeletable`).
+    public var deletable: Bool
+    /// A document's newest summary from a research database, an export made with the owner's writing,
+    /// which keeps no other (`ResearchDatabaseMark.isFromResearchDatabase`, S16e).
+    public var fromResearchDatabase: Bool
 
     init(_ record: SummaryRecord, promptNames: [String: String]) {
         id = NoteRoutes.wire(record.id)
@@ -51,6 +57,8 @@ public struct Summary: Codable, Equatable, Sendable, ResponseEncodable {
         createdAt = record.createdAt.map(UserStoreDate.text)
         lastModified = record.lastModified.map(UserStoreDate.text)
         editable = record.isEditable
+        deletable = record.isDeletable
+        fromResearchDatabase = ResearchDatabaseMark.isFromResearchDatabase(record)
     }
 
     /// The kit's `ResponseFormat` of a stored value, by its case's name.
@@ -86,6 +94,8 @@ public struct Summary: Codable, Equatable, Sendable, ResponseEncodable {
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(lastModified, forKey: .lastModified)
         try container.encode(editable, forKey: .editable)
+        try container.encode(deletable, forKey: .deletable)
+        try container.encode(fromResearchDatabase, forKey: .fromResearchDatabase)
     }
 }
 
@@ -154,7 +164,7 @@ enum SummaryRoutes {
             }
             return Summary(summary, promptNames: names)
         }
-        // Delete… on one of the reader's own.
+        // Delete… on one of the reader's own, or on one from a research database.
         me.delete("summaries/:summaryId") { request, context -> Response in
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
@@ -187,7 +197,7 @@ enum SummaryRoutes {
             APIProblem(.notFound, code: "SUMMARY_NOT_FOUND", detail: "You have no summary with the id \(id).")
         case .readOnly(let id):
             APIProblem(.forbidden, code: "SUMMARY_READ_ONLY",
-                       detail: "The summary \(id) is not one you wrote here, so it can be read but not changed or deleted.")
+                       detail: "The summary \(id) is not one you wrote here, so it can be read but not changed, and deleted only if it came from a research database.")
         case .emptyText:
             NoteRoutes.invalidField("responseText", "a summary's text, trimmed of spaces and new lines, cannot be empty.")
         }

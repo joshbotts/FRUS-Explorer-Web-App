@@ -49,8 +49,13 @@ struct ServerComponents: Sendable {
             sessions: InMemorySessionStore(),
             jobs: jobs,
             indexWriter: writer,
-            imports: ImportCoordinator(files: files, importer: IndexImporter(files: files, writer: writer),
-                                       state: state, jobs: jobs))
+            // An export made with the owner's writing has it kept in the user store (S16e); a server
+            // that keeps no user data refuses one.
+            imports: ImportCoordinator(
+                files: files,
+                importer: IndexImporter(files: files, writer: writer,
+                                        writing: configuration.userData ? ResearchDatabaseImport.move(into: userStore) : nil),
+                state: state, jobs: jobs))
     }
 }
 
@@ -78,6 +83,9 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
         let proxies = configuration.trustedProxies.map(\.description).joined(separator: ", ")
         let admins = configuration.adminUsers.isEmpty ? "no admins" : "admins \(configuration.adminUsers.sorted().joined(separator: ", "))"
         logger.info("Sign-in through a proxy (FRUS_AUTH=header): the user is \(configuration.authHeader) on requests from \(proxies), and every other request but /healthz and /readyz is refused; \(admins)")
+    }
+    if let folder = getenv("SQLITE_TMPDIR") {
+        logger.info("SQLite's temporary files go to \(String(cString: folder))")
     }
     var app = apiApplication(
         router: buildRouter(state: components.state, resources: components.resources, reader: components.reader,

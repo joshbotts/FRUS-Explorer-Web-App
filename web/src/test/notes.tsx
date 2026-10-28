@@ -59,6 +59,7 @@ export function noteSummary(fields: Partial<NoteSummary> & Pick<NoteSummary, 'id
     linkedHighlightIds: [],
     createdAt: '2026-10-24T09:00:00.000Z',
     lastModified: '2026-10-24T09:00:00.000Z',
+    fromResearchDatabase: false,
     ...fields,
   };
 }
@@ -68,6 +69,8 @@ export function note(fields: Partial<Note> & Pick<Note, 'id'>): Note {
 }
 
 export function summary(fields: Partial<Summary> & Pick<Summary, 'id'>): Summary {
+  // One the reader may not change they may not delete either, unless the test says so.
+  const editable = fields.editable ?? true;
   return {
     volumeId: 'frus1961-63v06',
     documentId: 'd1',
@@ -81,7 +84,9 @@ export function summary(fields: Partial<Summary> & Pick<Summary, 'id'>): Summary
     projectId: null,
     createdAt: '2026-10-24T09:00:00.000Z',
     lastModified: '2026-10-24T09:00:00.000Z',
-    editable: true,
+    editable,
+    deletable: editable,
+    fromResearchDatabase: false,
     ...fields,
   };
 }

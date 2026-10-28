@@ -41,7 +41,8 @@
 // formatting bar's, Text formatting, its glyphs, Write a Summary, Edit… and Delete… for a summary
 // of one's own and the question before it, the visible Delete… on All Notes' rows, the rail's times,
 // Settings ▸ Data's title and the lines for an editor that could not load or a note, formatted or
-// plain, it could not show are the web's own, and so is the import's every other word, and from
+// plain, it could not show are the web's own, and so is the import's every other word, S16e's
+// mark of a note block or a summary from a research database, since the app imports none, and from
 // S14e the header's line naming the user and the footer's saying what the operator can read. The rest,
 // chiefly what only a server has (what it indexes, which TEI it holds), are the web's own until
 // check 10 settles them.
@@ -425,6 +426,11 @@ export const copy = {
     addToHighlight: 'Add Note to Highlight',
     add: 'Add Note',
     loading: 'Loading the notes…',
+    /**
+     * A document's note block from a research database the Mac exported with the owner's writing, which
+     * joins its notes into one (S16e): the web's own words, as the app imports no research database.
+     */
+    fromResearchDatabase: 'From a research database',
     /** One unit of the time since a note changed. */
     unit: (count: number, unit: 'year' | 'month' | 'week' | 'day' | 'hour' | 'minute' | 'second') =>
       `${count.toLocaleString('en-US')} ${count === 1 ? unit : `${unit}s`}`,
@@ -443,6 +449,8 @@ export const copy = {
     aiEdited: 'AI \u{00B7} edited',
     userWritten: 'Yours',
     prompt: (name: string) => `· ${name}`,
+    /** A document's newest summary from a research database (S16e), in the prompt's place: the web's own words. */
+    fromResearchDatabase: '· From a research database',
     olderHelp: 'Show older summary',
     older: 'Older summary',
     position: (index: number, count: number) => `${index}/${count}`,

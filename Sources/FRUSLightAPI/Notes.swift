@@ -26,6 +26,9 @@ public struct NoteSummary: Codable, Equatable, Sendable, ResponseEncodable {
     /// As the store keeps dates, or null.
     public var createdAt: String?
     public var lastModified: String?
+    /// A document's note block from a research database, an export made with the owner's writing,
+    /// which joins its notes into one (`ResearchDatabaseMark.isNoteBlock`, S16e).
+    public var fromResearchDatabase: Bool
 
     init(_ record: NoteRecord) {
         id = NoteRoutes.wire(record.id)
@@ -38,6 +41,7 @@ public struct NoteSummary: Codable, Equatable, Sendable, ResponseEncodable {
         linkedHighlightIds = record.linkedHighlightIds.map(NoteRoutes.wire)
         createdAt = record.createdAt.map(UserStoreDate.text)
         lastModified = record.lastModified.map(UserStoreDate.text)
+        fromResearchDatabase = ResearchDatabaseMark.isNoteBlock(record)
     }
 
     /// Each field, a date with none as null.
@@ -53,6 +57,7 @@ public struct NoteSummary: Codable, Equatable, Sendable, ResponseEncodable {
         try container.encode(linkedHighlightIds, forKey: .linkedHighlightIds)
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(lastModified, forKey: .lastModified)
+        try container.encode(fromResearchDatabase, forKey: .fromResearchDatabase)
     }
 }
 
@@ -68,6 +73,7 @@ public struct Note: Codable, Equatable, Sendable, ResponseEncodable {
     public var linkedHighlightIds: [String]
     public var createdAt: String?
     public var lastModified: String?
+    public var fromResearchDatabase: Bool
     /// The formatting, as the codec reads the stored RTF, in canonical form: a line break formatted
     /// as the text before it, neighbours of one formatting joined, none empty. Null for a plain note,
     /// and when `formattingKept`.
@@ -91,6 +97,7 @@ public struct Note: Codable, Equatable, Sendable, ResponseEncodable {
         linkedHighlightIds = list.linkedHighlightIds
         createdAt = list.createdAt
         lastModified = list.lastModified
+        fromResearchDatabase = list.fromResearchDatabase
         let formatting = NoteFormatting.runs(of: record)
         runs = formatting.runs
         formattingKept = formatting.kept
@@ -109,6 +116,7 @@ public struct Note: Codable, Equatable, Sendable, ResponseEncodable {
         try container.encode(linkedHighlightIds, forKey: .linkedHighlightIds)
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(lastModified, forKey: .lastModified)
+        try container.encode(fromResearchDatabase, forKey: .fromResearchDatabase)
         try container.encode(runs, forKey: .runs)
         try container.encode(formattingKept, forKey: .formattingKept)
     }
