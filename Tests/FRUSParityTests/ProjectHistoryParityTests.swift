@@ -366,6 +366,7 @@ import Testing
             #"@Query(sort: \ProjectLeadEntry.aggregateScore, order: .reverse) private var allLeads: [ProjectLeadEntry]"#,
             "allLeads.filter { $0.projectId == projectId && !$0.dismissed }",
             "lead.firstSurfacedAt > Date.now.addingTimeInterval(-7 * 24 * 3600)",
+            ".foregroundStyle(entry.isMeaningCapture ? Color.secondary : Color.orange)",
             "Text(lead.header.isEmpty ? lead.documentKey : lead.header)",
             "let searched = Set(summary.searches.compactMap(\\.appliedCorpusId))",
             "let isOpenedComplete = AppState.isResearchLoggingEnabled",

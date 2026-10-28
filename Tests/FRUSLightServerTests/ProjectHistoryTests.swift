@@ -145,6 +145,25 @@ import Testing
     /// works in; a re-run of the anchored query, in either spelling of its quotation marks, refreshes
     /// its row, and another query adds one; a search with no words is skipped, and with Log Research
     /// Sessions off nothing is recorded.
+    /// A visit to a document the index does not hold, as front matter is, or to any while no index is
+    /// served, takes the title the reader gives it from its TEI, as the app's records the head it parsed.
+    @Test func aVisitTheIndexCannotTitleTakesTheReadersTitleFromItsTEI() async throws {
+        for indexed in [true, false] {
+            let fixture = try await UserDataFixture(volumes: [Self.volume], indexed: indexed)
+            defer { withExtendedLifetime(fixture) {} }
+            try await fixture.app.test(.router) { client in
+                let owner = Browser(client: client)
+                for documentId in ["preface", "d3", "d1"] {
+                    let detail = try decode(DocumentDetail.self,
+                                            try await owner.get("/api/v1/volumes/\(Self.volume)/documents/\(documentId)"))
+                    let visit = try #require(try await Self.visit(owner, documentId).visit)
+                    #expect(visit.title == detail.document.displayTitle && visit.displayTitle == detail.document.displayTitle,
+                            "\(documentId), indexed \(indexed): the reader's title")
+                }
+            }
+        }
+    }
+
     @Test func aVisitAndASearchAreRecordedAsTheAppRecordsThem() async throws {
         let fixture = try await UserDataFixture(indexed: true)
         defer { withExtendedLifetime(fixture) {} }
@@ -380,6 +399,14 @@ import Testing
             #expect(home.coverage.count == 1 && tile.corpusName == "Treaties" && tile.engagedCount == 2 && tile.totalCount == 2)
             #expect(tile.untouched == partition.untouchedDescription(locale: SearchItem.locale))
             #expect(tile.description == partition.coverageDescription(locale: SearchItem.locale) && tile.truncationLine == nil)
+            // A corpus from an older Mac, which never recorded its capture's completeness: the kit's line,
+            // drawn orange, as the app's tile draws every line but a Meaning search's.
+            try fixture.rows.run("UPDATE working_corpora SET was_truncated_at_capture = NULL WHERE user_id = 'owner' AND upper(id) = upper(?)",
+                                 [.text(corpus.id)])
+            let unrecorded = try #require(try decode(ProjectHome.self, try await owner.get("/api/v1/me/projects/\(grain.id)/home")).coverage.first)
+            let unrecordedLine = CorpusCaptureTruncation(wasTruncated: nil, totalMatchCount: nil)
+                .line(documentCount: 2, isMeaningCapture: false, locale: SearchItem.locale)
+            #expect(unrecorded.truncationLine == unrecordedLine && unrecordedLine != nil && unrecorded.truncationWarns)
             #expect(home.leads.map(\.id) == [Self.entry(2), Self.entry(1)], "the dismissed gone, the most related first")
             #expect(home.leads.map(\.isNew) == [true, false] && home.leads.map(\.relatedCount) == [2, 1])
             #expect(home.leads.map(\.isEditorialNote) == [true, false], "the correction wins over the lead's snapshot")

@@ -413,7 +413,7 @@ enum UserDataRoutes {
         HighlightRoutes.add(to: me, services: services, resources: resources, reader: reader, provider: provider)
         SummaryRoutes.add(to: me, services: services, resources: resources)
         ProjectRoutes.add(to: me, services: services, resources: resources)
-        HistoryRoutes.add(to: me, services: services, provider: provider, resources: resources)
+        HistoryRoutes.add(to: me, services: services, provider: provider, resources: resources, reader: reader)
         PreferenceRoutes.add(to: me, services: services)
         ExportRoutes.add(to: me, services: services)
         SearchTagRoutes.add(to: me, services: services, provider: provider, resources: resources)

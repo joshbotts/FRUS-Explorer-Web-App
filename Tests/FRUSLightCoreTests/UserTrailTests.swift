@@ -179,6 +179,19 @@ import Testing
         #expect(throws: ResearchRowStoreError.unknownColumn(table: "preferences", column: "theme")) {
             try store.setPreferences(["theme": .text("dark")], initial: initial, for: "owner", at: later)
         }
+        // A merge reads the row as the write finds it, here the style set before, and writes what it gives.
+        let merged = try store.setPreferences([:], initial: initial, for: "owner", at: later, merging: { held in
+            ["list_order_json": held?.values["citation_style_raw"] ?? .null]
+        })
+        #expect(merged.values["list_order_json"] == .text("chicago") && merged.values["research_logging_enabled"] == .integer(0))
+        _ = try store.signedInUser("maker", at: Self.created)
+        let made = try store.setPreferences([:], initial: initial, for: "maker", at: later, merging: { held in
+            ["list_order_json": .text(held == nil ? "none held" : "held")]
+        })
+        #expect(made.values["list_order_json"] == .text("none held") && made.values["wc_min_length"] == .integer(3), "a first row")
+        #expect(throws: ResearchRowStoreError.unknownColumn(table: "preferences", column: "theme")) {
+            try store.setPreferences([:], initial: initial, for: "owner", at: later, merging: { _ in ["theme": .text("dark")] })
+        }
         _ = try store.signedInUser("reader", at: Self.created)
         #expect(try store.preferences(of: "reader") == nil, "each user's own")
     }

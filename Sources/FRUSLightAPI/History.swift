@@ -194,7 +194,7 @@ enum HistoryRoutes {
     static let pageIncrement = 500
 
     static func add(to me: RouterGroup<APIRequestContext>, services: UserDataServices, provider: ServedIndexProvider,
-                    resources: ServerResources) {
+                    resources: ServerResources, reader: ReaderService) {
         let store = services.store
         let now = services.now
 
@@ -230,7 +230,7 @@ enum HistoryRoutes {
                 throw APIProblem(.badRequest, code: "INVALID_FIELD", detail: "documentId: \(body.documentId) is not a document's id.")
             }
             guard try await PreferenceRoutes.isLogging(user.id, in: store) else { return RecordedVisit(outcome: "suppressed") }
-            let title = await visitTitle(volumeId: body.volumeId, documentId: body.documentId, provider: provider)
+            let title = await visitTitle(volumeId: body.volumeId, documentId: body.documentId, provider: provider, reader: reader)
             let project = try await Blocking.run { try store.activeProjectId(of: user.id) }.flatMap(UUID.init(uuidString:))
             let visit = ReadingHistoryEntryExport(id: UUID(), documentId: body.documentId, volumeId: body.volumeId,
                                                   displayTitle: title, projectId: project, accessedAt: UserStoreDate.rounded(now()))
@@ -264,17 +264,22 @@ enum HistoryRoutes {
             let table = TrailTable.searches.table
             var outcome = "inserted"
             // A re-run of the anchored query refreshes the row it wrote, its spelling, scope, counts and
-            // time this run's, unless the row has gone since, as the History screen can delete it.
-            if let anchor = body.anchor, isSameQuery(anchor.queryText, queryText),
-               try await Blocking.run({ try store.researchRow(table, id: anchor.entryId, of: user.id) }) != nil {
-                entry.id = UUID(uuidString: anchor.entryId) ?? entry.id
-                let values = MacImport.search(entry, version: ResearchDataEnvelope.currentFormatVersion).values
+            // time this run's, unless the row has gone, as the History screen can delete it, even as the
+            // run is recorded: then the run is a row of its own, as the app's writer inserts one.
+            if let anchor = body.anchor, isSameQuery(anchor.queryText, queryText), let anchoredId = UUID(uuidString: anchor.entryId) {
+                var anchored = entry
+                anchored.id = anchoredId
+                let values = MacImport.search(anchored, version: ResearchDataEnvelope.currentFormatVersion).values
                     .filter { $0.key != "id" }
-                _ = try await Blocking.run {
+                let refreshed = try await Blocking.run {
                     try store.updateResearchRow(table, id: anchor.entryId, values, for: user.id, outsideSearch: true)
                 }
-                outcome = "refreshed"
-            } else {
+                if refreshed != nil {
+                    entry = anchored
+                    outcome = "refreshed"
+                }
+            }
+            if outcome == "inserted" {
                 let values = MacImport.search(entry, version: ResearchDataEnvelope.currentFormatVersion).values
                 try await Blocking.run { try store.addResearchRow(table, values, for: user.id, outsideSearch: true) }
             }
@@ -350,13 +355,25 @@ enum HistoryRoutes {
 
     /// The title a visit is recorded under: the reader's title of the document as the index holds it,
     /// the kit's display title of its head (`DocumentViewModel.readingHistoryTitle`), or none for a
-    /// document with no head that is no editorial note, or one the index does not hold.
-    static func visitTitle(volumeId: String, documentId: String, provider: ServedIndexProvider) async -> String? {
-        guard let served = try? await provider.servedIfReady(),
-              let entry = try? await served.pipeline.document(forDocumentId: documentId, inVolume: volumeId),
-              !entry.header.isEmpty || entry.isEditorialNote else { return nil }
-        return displayTitle(header: entry.header, documentNumber: entry.documentNumber, isEditorialNote: entry.isEditorialNote,
-                            documentId: entry.documentId)
+    /// document with no head that is no editorial note; and for one the index does not hold, or any
+    /// while no index is served, the reader's title from its TEI.
+    static func visitTitle(volumeId: String, documentId: String, provider: ServedIndexProvider,
+                           reader: ReaderService) async -> String? {
+        if let served = try? await provider.servedIfReady(),
+           let entry = try? await served.pipeline.document(forDocumentId: documentId, inVolume: volumeId) {
+            guard !entry.header.isEmpty || entry.isEditorialNote else { return nil }
+            return displayTitle(header: entry.header, documentNumber: entry.documentNumber, isEditorialNote: entry.isEditorialNote,
+                                documentId: entry.documentId)
+        }
+        // A document the index does not hold, as front matter is, or any while no index is served: the
+        // title the reader gives it from its TEI (`DocumentDetail(teiOnly:)`), as the app's records the
+        // head it parsed. The kit's `extractHeader`, the app's rule for that head, is internal to it.
+        guard let parsed = try? await reader.volume(volumeId), let ast = parsed.documents[documentId] else { return nil }
+        let document = DocumentDetail(teiOnly: ast, structure: parsed.structure, volumeId: volumeId).document
+        // A section's title or a document's number names it; its bare id, the label's last resort, does not.
+        guard document.header != documentId || document.isEditorialNote else { return nil }
+        return displayTitle(header: document.header, documentNumber: document.documentNumber,
+                            isEditorialNote: document.isEditorialNote, documentId: documentId)
     }
 
     /// What the server's run of a search gives the row that records it.

@@ -124,17 +124,23 @@ enum PreferenceRoutes {
                 values["default_document_mode_raw"] = .text(mode)
             }
             if let logging = body.researchLoggingEnabled { values["research_logging_enabled"] = .integer(logging ? 1 : 0) }
-            if body.tagOrder != nil || body.projectOrder != nil {
-                let held = try await Blocking.run { try store.preferences(of: user.id) }
+            let tags = try body.tagOrder.map { try ordered($0, "tagOrder") }
+            let projects = try body.projectOrder.map { try ordered($0, "projectOrder") }
+            let reorders = tags != nil || projects != nil
+            guard !values.isEmpty || reorders else { return try await preferences(of: user.id, in: store) }
+            // A list's order replaces that list in the payload as the write finds it, so a change to the
+            // other list made meanwhile, from another tab, is kept.
+            let merge: @Sendable (ExportRow?) throws -> [String: SQLiteValue] = { held in
+                guard reorders else { return [:] }
                 var order = try held.map { ListOrder.decode(try read($0).listOrderJSON) ?? ListOrder() } ?? ListOrder()
-                if let ids = body.tagOrder { order.tags = try ordered(ids, "tagOrder") }
-                if let ids = body.projectOrder { order.projects = try ordered(ids, "projectOrder") }
-                values["list_order_json"] = .text(order.encoded)
+                if let tags { order.tags = tags }
+                if let projects { order.projects = projects }
+                return ["list_order_json": .text(order.encoded)]
             }
-            guard !values.isEmpty else { return try await preferences(of: user.id, in: store) }
             let (time, changed) = (now(), values)
             let row = try await Blocking.run {
-                try store.setPreferences(changed, initial: MacImport.preferences(initial(at: time)).values, for: user.id, at: time)
+                try store.setPreferences(changed, initial: MacImport.preferences(initial(at: time)).values, for: user.id, at: time,
+                                         merging: merge)
             }
             return Preferences(try read(row), stored: true)
         }

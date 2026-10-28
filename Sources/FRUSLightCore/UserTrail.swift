@@ -79,11 +79,22 @@ public protocol PreferenceStore: Sendable {
     func preferences(of user: String) throws -> ExportRow?
     /// Sets the columns `values` names on the user's preferences and stamps `updated_at` with `time`,
     /// first making their row, with `initial` for every column `values` leaves out, `created_at`
-    /// `time` too; and answers the row as it then stands. Throws `ResearchRowStoreError.unknownColumn`
-    /// for a column the table lacks, writing nothing.
+    /// `time` too; and answers the row as it then stands. `merging` gives more columns from the row as
+    /// it stands inside the same write, none for a user who has none, so a column a change reads before
+    /// it writes, as a list's order is, keeps any change made to it between. Throws
+    /// `ResearchRowStoreError.unknownColumn` for a column the table lacks, writing nothing.
     @discardableResult
     func setPreferences(_ values: [String: SQLiteValue], initial: [String: SQLiteValue], for user: String,
-                        at time: Date) throws -> ExportRow
+                        at time: Date, merging: @Sendable (ExportRow?) throws -> [String: SQLiteValue]) throws -> ExportRow
+}
+
+extension PreferenceStore {
+    /// `setPreferences(_:initial:for:at:merging:)`, merging nothing.
+    @discardableResult
+    public func setPreferences(_ values: [String: SQLiteValue], initial: [String: SQLiteValue], for user: String,
+                               at time: Date) throws -> ExportRow {
+        try setPreferences(values, initial: initial, for: user, at: time, merging: { _ in [:] })
+    }
 }
 
 extension RelationalUserStore: TrailStore, PreferenceStore {
@@ -134,13 +145,17 @@ extension RelationalUserStore: TrailStore, PreferenceStore {
 
     @discardableResult
     public func setPreferences(_ values: [String: SQLiteValue], initial: [String: SQLiteValue], for user: String,
-                               at time: Date) throws -> ExportRow {
+                               at time: Date, merging: @Sendable (ExportRow?) throws -> [String: SQLiteValue]) throws -> ExportRow {
         let table = Self.preferencesTable
         try Self.check(values, in: table)
         try Self.check(initial, in: table)
         let stamp = SQLiteValue.text(UserStoreDate.text(UserStoreDate.rounded(time)))
         return try writing(outsideSearch: true) { db in
-            if try Self.preferencesRow(of: user, in: db) == nil {
+            let held = try Self.preferencesRow(of: user, in: db)
+            let merged = try merging(held)
+            try Self.check(merged, in: table)
+            let values = values.merging(merged) { $1 }
+            if held == nil {
                 var first = initial.merging(values) { $1 }
                 first["created_at"] = stamp
                 first["updated_at"] = stamp

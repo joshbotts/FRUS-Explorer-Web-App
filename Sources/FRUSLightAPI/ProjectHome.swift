@@ -202,15 +202,14 @@ enum ProjectHomeRoutes {
                 let isMeaning = WorkingCorpusProvenance.isMeaningCapture(corpus.sourceDescription)
                 let truncation = CorpusCaptureTruncation(wasTruncated: corpus.wasTruncatedAtCapture,
                                                          totalMatchCount: corpus.totalMatchCountAtCapture)
-                var warns = false
-                if case .truncated = truncation { warns = !isMeaning }
+                let line = truncation.line(documentCount: partition.totalCount, isMeaningCapture: isMeaning, locale: SearchItem.locale)
                 return ProjectHome.Coverage(
                     corpusId: corpus.id.uuidString, corpusName: corpus.name, engagedCount: partition.engagedCount,
                     totalCount: partition.totalCount, untouched: partition.untouchedDescription(locale: SearchItem.locale),
                     description: partition.coverageDescription(locale: SearchItem.locale),
-                    truncationLine: truncation.line(documentCount: partition.totalCount, isMeaningCapture: isMeaning,
-                                                    locale: SearchItem.locale),
-                    truncationWarns: warns)
+                    // The tile draws any line in orange but a Meaning search's, as the app's tile does,
+                    // where the corpus lists warn of a cut capture alone.
+                    truncationLine: line, truncationWarns: line != nil && !isMeaning)
             }
         }
 
