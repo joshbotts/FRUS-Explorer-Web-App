@@ -2,20 +2,43 @@
 // no route writes, a project's tag focus, which S17f brings, and of rows only an import writes, as
 // S16c's will: a highlight with the Mac's id, time and version; a note with the Mac's RTF and ids
 // that dangle; an AI summary, a headnote draft, a prompt and a project (S15d). And what the store
-// keeps beside them: a note's columns, a highlight's note, and the rows of user_search.
+// keeps beside them: a note's columns, a highlight's note, and the rows of user_search. Since S14d
+// either store's: app.db, or the PostgreSQL store and its local copy, through the SQL both read.
 
 import FRUSLightCore
 import Foundation
 
-/// A second connection to a user store's file.
+/// A second connection to a user store, and one to the database its search attaches.
 public final class UserStoreRows: @unchecked Sendable {
-    private let db: SQLiteConnection
+    private let db: any UserStoreConnection
+    /// Where `user_search` and the tag assignments search reads are: app.db itself, or the copy.
+    private let search: any UserStoreConnection
+    private let close: () -> Void
 
+    /// app.db's, at `url`.
     public init(_ url: URL) throws {
-        db = try SQLiteConnection(url.path, readOnly: false)
+        let db = try SQLiteConnection(url.path, readOnly: false)
+        self.db = db
+        search = db
+        close = { db.close() }
     }
 
-    deinit { db.close() }
+    /// The PostgreSQL store's, in its configuration's schema, and its copy's, at `searchCopy`.
+    public init(postgreSQL configuration: PostgreSQLConfiguration, searchCopy: URL) throws {
+        let db = try PostgreSQLConnection.connect(configuration)
+        let copy = try SQLiteConnection(searchCopy.path, readOnly: false)
+        self.db = db
+        search = copy
+        close = {
+            db.close()
+            copy.close()
+        }
+    }
+
+    deinit { close() }
+
+    /// Closes the connections now. Safe to call twice.
+    public func closeConnections() { close() }
 
     /// Adds a user beside `owner`, as S14e's sign-in will.
     public func addUser(_ id: String) throws {
@@ -135,7 +158,7 @@ public final class UserStoreRows: @unchecked Sendable {
 
     /// The user's rows of user_search, by volume and document.
     public func userSearch(user: String = "owner") throws -> [UserSearchRow] {
-        try db.query(
+        try search.query(
             "SELECT volume_id, document_id, summary_text, note_text FROM user_search WHERE user_id = ? ORDER BY volume_id, document_id",
             [.text(user)]).map { UserSearchRow(volumeId: $0[0].text ?? "", documentId: $0[1].text ?? "", summaryText: $0[2].text,
                                                noteText: $0[3].text) }
@@ -143,7 +166,7 @@ public final class UserStoreRows: @unchecked Sendable {
 
     /// The documents whose row of user_search matches an FTS5 query, for the user.
     public func userSearchMatches(_ query: String, user: String = "owner") throws -> [String] {
-        try db.query("SELECT document_id FROM user_search WHERE user_search MATCH ? AND user_id = ? ORDER BY document_id",
+        try search.query("SELECT document_id FROM user_search WHERE user_search MATCH ? AND user_id = ? ORDER BY document_id",
                      [.text(query), .text(user)]).compactMap { $0[0].text }
     }
 
@@ -163,7 +186,8 @@ public final class UserStoreRows: @unchecked Sendable {
 
     /// Every assignment the user has: id, document and tag, oldest first.
     public func assignments(user: String = "owner") throws -> [(id: String, documentId: String, tagId: String)] {
-        try db.query("SELECT id, document_id, tag_id FROM tag_assignments WHERE user_id = ? ORDER BY created_at, id", [.text(user)])
+        try db.query("SELECT id, document_id, tag_id FROM tag_assignments WHERE user_id = ? ORDER BY created_at ASC NULLS FIRST, id",
+                     [.text(user)])
             .map { ($0[0].text ?? "", $0[1].text ?? "", $0[2].text ?? "") }
     }
 
@@ -174,6 +198,16 @@ public final class UserStoreRows: @unchecked Sendable {
     /// Runs a statement, for a row no route or import writes.
     public func run(_ sql: String, _ bindings: [SQLiteValue] = []) throws {
         _ = try db.query(sql, bindings)
+    }
+
+    /// Every row a query of the database search attaches gives, for what it holds beside the store.
+    public func searched(_ sql: String, _ bindings: [SQLiteValue] = []) throws -> [[SQLiteValue]] {
+        try search.query(sql, bindings)
+    }
+
+    /// Every row a query of the store gives.
+    public func stored(_ sql: String, _ bindings: [SQLiteValue] = []) throws -> [[SQLiteValue]] {
+        try db.query(sql, bindings)
     }
 
     /// The first column of each row a query gives, as text, NULL as empty.

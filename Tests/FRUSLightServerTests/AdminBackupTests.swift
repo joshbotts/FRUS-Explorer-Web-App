@@ -90,6 +90,18 @@ struct RolesResolver: UserResolver {
         }
     }
 
+    /// A PostgreSQL store's backups are its database service's (S14d): a backup of the app.db a
+    /// server kept before is never served as one of it.
+    @Test func aServerWithAPostgreSQLStoreHasNone() async throws {
+        let fixture = try await UserDataFixture(userStore: .postgreSQL(try PostgreSQLConfiguration(url: "postgres://frus@db/frus")))
+        defer { withExtendedLifetime(fixture) {} }
+        try await Self.backedUp(fixture)
+        try await fixture.app.test(.router) { client in
+            let none = try await client.execute(uri: Self.path, method: .get)
+            #expect(none.status == .notFound && problemCode(none) == "BACKUP_NOT_FOUND")
+        }
+    }
+
     /// It holds every user's data, so it is refused as the user's own is.
     @Test func itIsRefusedWhileUserDataIsOffAndToAnotherHost() async throws {
         let off = try await UserDataFixture(userData: false)

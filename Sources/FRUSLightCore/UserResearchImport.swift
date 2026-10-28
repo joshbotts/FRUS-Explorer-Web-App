@@ -3,7 +3,8 @@
 // store holds is replaced only by a newer copy, and then only in the columns the file's format version
 // carries, so what an older file cannot say is never written over; a new row takes the app's default
 // for those. An import adds and replaces and never deletes, since the export carries no deletions.
-// Last, the user's rows of `user_search` are made again from their notes and summaries.
+// Last, the user's rows of `user_search` are made again from their notes and summaries, and in the
+// PostgreSQL store's local copy their tag assignments too.
 
 import Foundation
 
@@ -147,7 +148,7 @@ public protocol ResearchImportStore: Sendable {
     func importResearch(_ batch: ResearchImportBatch, for user: String) throws -> ResearchImportResult
 }
 
-extension SQLiteUserStore: ResearchImportStore {
+extension RelationalUserStore: ResearchImportStore {
     public func importResearch(_ batch: ResearchImportBatch, for user: String) throws -> ResearchImportResult {
         let tables = try Self.check(batch)
         return try writing { db in
@@ -162,7 +163,7 @@ extension SQLiteUserStore: ResearchImportStore {
     /// `importResearch` describes, and counts what became of each table's: the import of an export
     /// made with the owner's writing writes its rows so too (S16e).
     static func write(_ batch: ResearchImportBatch, tables: [UserStoreSchema.Table], for user: String,
-                      in db: SQLiteConnection) throws -> [String: ImportCount] {
+                      in db: UserStoreTransaction) throws -> [String: ImportCount] {
         var counts: [String: ImportCount] = [:]
         for table in tables {
             var held = try Self.held(in: table, for: user, in: db)
@@ -213,14 +214,15 @@ extension SQLiteUserStore: ResearchImportStore {
 
     /// The rows of `table` the store holds, the user's or an instance-wide table's every row, by id as
     /// the store finds one, in any case, or by "" for a table keyed by user alone: read once, so that a
-    /// row's lookup does not read the table again however many rows it holds.
-    private static func held(in table: UserStoreSchema.Table, for user: String, in db: SQLiteConnection) throws -> [String: Held] {
+    /// row's lookup does not read the table again however many rows it holds. In the order of their
+    /// ids, so that where two ids differ only in case both stores find the same one.
+    private static func held(in table: UserStoreSchema.Table, for user: String, in db: UserStoreTransaction) throws -> [String: Held] {
         let stamps = ImportStamp.columns[table.name] ?? []
         let keyed = table.primaryKey.contains("id")
         let columns = (keyed ? ["id"] : []) + stamps
         let rows = try db.query(
             "SELECT \((columns.isEmpty ? ["1"] : columns).joined(separator: ", ")) FROM \(table.name)"
-                + (table.scope == .user ? " WHERE user_id = ?" : ""),
+                + (table.scope == .user ? " WHERE user_id = ?" : "") + (keyed ? " ORDER BY id" : ""),
             table.scope == .user ? [.text(user)] : [])
         var held: [String: Held] = [:]
         for row in rows {
@@ -234,7 +236,7 @@ extension SQLiteUserStore: ResearchImportStore {
     }
 
     private static func write(_ row: ImportRow, into table: UserStoreSchema.Table, for user: String, held: inout [String: Held],
-                              in db: SQLiteConnection) throws -> Outcome {
+                              in db: UserStoreTransaction) throws -> Outcome {
         let keyed = table.primaryKey.contains("id")
         let key = keyed ? UserSearchText.uuidString(row.values["id"]?.text ?? "") : ""
         let givenTime = ImportStamp.time(of: { row.values[$0] }, in: table.name)
@@ -271,7 +273,7 @@ extension SQLiteUserStore: ResearchImportStore {
 
     /// The collections among `rows` that name a saved search the user does not hold, in their order.
     private static func unlinkedCollections(among rows: [ImportRow], for user: String,
-                                            in db: SQLiteConnection) throws -> [UnlinkedCollection] {
+                                            in db: UserStoreTransaction) throws -> [UnlinkedCollection] {
         var unlinked: [String: UnlinkedCollection] = [:]
         for row in try db.query(
             """
@@ -279,6 +281,7 @@ extension SQLiteUserStore: ResearchImportStore {
                 WHERE c.user_id = ? AND c.saved_search_id IS NOT NULL
                   AND NOT EXISTS (SELECT 1 FROM saved_searches s
                                       WHERE s.user_id = c.user_id AND upper(s.id) = upper(c.saved_search_id))
+                ORDER BY c.id
             """, [.text(user)]) {
             let id = row[0].text ?? ""
             unlinked[UserSearchText.uuidString(id)] = UnlinkedCollection(id: id, name: row[1].text ?? "")

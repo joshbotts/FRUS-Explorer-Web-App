@@ -11,7 +11,8 @@ import Foundation
 public struct ExportRow: Sendable, Equatable {
     /// Each of its table's columns, by name.
     public var values: [String: SQLiteValue]
-    /// Its rowid: where it stands among its table's rows, in the order the store took them.
+    /// Its rowid: where it stands among its table's rows, in the order the store took them. SQLite
+    /// numbers a table's rows so; the PostgreSQL store's tables carry the number as a column.
     public var position: Int64
 
     public init(values: [String: SQLiteValue], position: Int64) {
@@ -61,7 +62,7 @@ public enum ResearchExportRows {
     }
 }
 
-extension SQLiteUserStore: ResearchExportStore {
+extension RelationalUserStore: ResearchExportStore {
     public func researchRows(for user: String, tables: Set<String>) throws -> ResearchRows {
         try reading { db in
             var rows: [String: [ExportRow]] = [:]

@@ -14,8 +14,8 @@ import Testing
     static let d1 = DocumentKey(volumeId: "frus1961-63v06", documentId: "d1")
     static let d2 = DocumentKey(volumeId: "frus1961-63v06", documentId: "d2")
 
-    @Test func aHighlightKeepsWhatItIsGivenVerbatim() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func aHighlightKeepsWhatItIsGivenVerbatim(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let text = "of your election\n\nas President"
         let highlight = try store.createHighlight(in: Self.d1, start: 120, end: 151, colorTag: "green", selectedText: text,
@@ -36,8 +36,8 @@ import Testing
     /// with no time first, as the app's store sorts a nil. Two of one time go by id in uppercase, the
     /// web's own order, an import's lowercase id among them: "a…" before "B…", where a plain sort of
     /// the text would put "B…" first.
-    @Test func aDocumentsHighlightsComeInTheOrderTheReaderDrawsThem() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func aDocumentsHighlightsComeInTheOrderTheReaderDrawsThem(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let made = try store.createHighlight(in: Self.d1, start: 0, end: 4, colorTag: "pink", selectedText: "", renderingVersion: "",
                                              for: "owner", at: Self.later)
@@ -64,8 +64,8 @@ import Testing
         ])
     }
 
-    @Test func anotherColourChangesOnlyTheColour() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func anotherColourChangesOnlyTheColour(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         // An import's row: a colour the app does not draw and a version of another text are kept.
         try rows.addHighlight("A0000000-0000-0000-0000-000000000000", start: 10, end: 20, colorTag: "teal", noteId: "N",
@@ -85,8 +85,8 @@ import Testing
 
     /// The reader's Remove deletes the highlight it was asked about, by id, where the app's fetch by
     /// offsets takes the first of two over the same text.
-    @Test func aDeleteTakesOneHighlightAndLeavesAnyOtherOverTheSameText() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func aDeleteTakesOneHighlightAndLeavesAnyOtherOverTheSameText(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let first = try store.createHighlight(in: Self.d1, start: 5, end: 9, colorTag: "yellow", selectedText: "same",
                                               renderingVersion: "v", for: "owner", at: Self.created)
@@ -100,8 +100,8 @@ import Testing
         #expect(try rows.highlightCount() == 1)
     }
 
-    @Test func eachUsersHighlightsAreTheirsAlone() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func eachUsersHighlightsAreTheirsAlone(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         try rows.addUser("reader")
         let theirs = try store.createHighlight(in: Self.d1, start: 0, end: 3, colorTag: "blue", selectedText: "", renderingVersion: "",

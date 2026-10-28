@@ -130,7 +130,7 @@ public protocol SummaryStore: Sendable {
     func deleteOwnSummary(_ id: String, for user: String) throws
 }
 
-extension SQLiteUserStore: SummaryStore {
+extension RelationalUserStore: SummaryStore {
     private static let summaryColumns = """
         id, volume_id, document_id, prompt_id, response_text, response_format, was_chunked, authorship, is_headnote_draft, \
         source_content_hash, project_id, created_at, last_modified
@@ -148,7 +148,8 @@ extension SQLiteUserStore: SummaryStore {
     public func prompts(for user: String) throws -> [String: String] {
         try reading { db in
             var names: [String: String] = [:]
-            for row in try db.query("SELECT id, name FROM prompts WHERE user_id = ? ORDER BY created_at, id", [.text(user)]) {
+            for row in try db.query("SELECT id, name FROM prompts WHERE user_id = ? ORDER BY created_at ASC NULLS FIRST, id",
+                                    [.text(user)]) {
                 guard let id = row[0].text, let name = row[1].text else { continue }
                 let key = UserSearchText.uuidString(id)
                 if names[key] == nil { names[key] = name }
@@ -202,13 +203,13 @@ extension SQLiteUserStore: SummaryStore {
 
     // MARK: Within a transaction
 
-    static func summaries(of document: DocumentKey, for user: String, in db: SQLiteConnection) throws -> [SummaryRecord] {
+    static func summaries(of document: DocumentKey, for user: String, in db: UserStoreTransaction) throws -> [SummaryRecord] {
         try db.query("SELECT \(summaryColumns) FROM summaries WHERE user_id = ? AND volume_id = ? AND document_id = ?",
                      [.text(user), .text(document.volumeId), .text(document.documentId)])
             .map(summary).sorted(by: SummaryOrder.ranksAbove)
     }
 
-    private static func summary(_ id: String, of user: String, in db: SQLiteConnection) throws -> SummaryRecord? {
+    private static func summary(_ id: String, of user: String, in db: UserStoreTransaction) throws -> SummaryRecord? {
         // An id in any case, as an import may write one.
         try db.query("SELECT \(summaryColumns) FROM summaries WHERE user_id = ? AND upper(id) = ?", [.text(user), .text(id)])
             .first.map(summary)
@@ -216,7 +217,7 @@ extension SQLiteUserStore: SummaryStore {
 
     /// One of the reader's own summaries, or for a deletion one from a research database too, or the
     /// refusal of any other.
-    private static func ownSummary(_ id: String, of user: String, in db: SQLiteConnection,
+    private static func ownSummary(_ id: String, of user: String, in db: UserStoreTransaction,
                                    toDelete: Bool = false) throws -> SummaryRecord {
         guard let key = TagReferences.normalized(id), let summary = try summary(key, of: user, in: db) else {
             throw SummaryStoreError.summaryNotFound(id)

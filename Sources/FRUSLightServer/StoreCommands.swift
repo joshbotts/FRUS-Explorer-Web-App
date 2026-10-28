@@ -1,5 +1,6 @@
 // `frus-light backup` and `frus-light restore` (PLAN's S14b): a backup of the user store now, in the
-// running container, and a restore of one, with the server stopped.
+// running container, and a restore of one, with the server stopped. Both are app.db's: a PostgreSQL
+// store (S14d) is backed up and restored by its database service.
 //   docker compose exec frus frus-light backup
 //   docker compose run --rm frus restore <backup>
 
@@ -10,6 +11,7 @@ enum StoreCommands {
     /// Takes a backup now, as the daily one is taken, unless the store has not changed since the
     /// newest. Exits 0 when there is one of the store as it is.
     static func backup(_ configuration: ServerConfiguration) async -> Int32 {
+        guard configuration.userStore == .sqlite else { return fail(postgreSQLStore) }
         let files = DataDirectory(root: configuration.dataDirectory)
         guard FileManager.default.fileExists(atPath: files.userStore.path) else {
             return fail("there is no store at \(files.userStore.path) to back up: the server makes it when it first starts")
@@ -45,6 +47,7 @@ enum StoreCommands {
 
     /// Restores the backup `argument` names, or with none lists those there are.
     static func restore(_ argument: String?, _ configuration: ServerConfiguration) async -> Int32 {
+        guard configuration.userStore == .sqlite else { return fail(postgreSQLStore) }
         let files = DataDirectory(root: configuration.dataDirectory)
         let copies = configuration.backupCopyDirectory
         guard let argument else {
@@ -78,6 +81,9 @@ enum StoreCommands {
             return fail("nothing was restored: \(error)")
         }
     }
+
+    /// Why neither command runs for a PostgreSQL store.
+    private static let postgreSQLStore = "FRUS_USER_STORE names a PostgreSQL store, which its database service backs up and restores, as with pg_dump and pg_restore: frus-light backup and restore are app.db's"
 
     private static func fail(_ message: String) -> Int32 {
         printError("frus-light: \(message)")

@@ -92,7 +92,7 @@ public protocol TagStore: Sendable {
     @discardableResult func removeTag(_ id: String, from document: DocumentKey, for user: String) throws -> [UserTagRecord]
 }
 
-extension SQLiteUserStore: TagStore {
+extension RelationalUserStore: TagStore {
     private static let tagColumns = "id, name, created_at, last_modified"
 
     public func tags(of user: String) throws -> [UserTagRecord] {
@@ -157,6 +157,7 @@ extension SQLiteUserStore: TagStore {
             }
             let documents = try Self.documents(carrying: key, for: user, db)
             _ = try db.query("DELETE FROM tag_assignments WHERE user_id = ? AND upper(tag_id) = ?", [.text(user), .text(key)])
+            try Self.copyTagAssignments(of: documents, for: user, in: db)
             let projects = try Self.rewriteReferences(in: "projects", column: "default_user_tag_ids", naming: key, for: user,
                                                       at: now, db) {
                 TagReferences.removing(key, from: $0)
@@ -185,7 +186,7 @@ extension SQLiteUserStore: TagStore {
             let rows = try db.query(
                 """
                 SELECT id, volume_id, document_id FROM tag_assignments WHERE user_id = ? AND upper(tag_id) = ?
-                    ORDER BY created_at, id
+                    ORDER BY created_at ASC NULLS FIRST, id
                 """, [.text(user), .text(source)])
             var documents: [DocumentKey] = []
             var seen: Set<DocumentKey> = []
@@ -208,6 +209,7 @@ extension SQLiteUserStore: TagStore {
                                      [.text(survivor), .text(user), row[0]])
                 }
             }
+            try Self.copyTagAssignments(of: documents, for: user, in: db)
             let projects = try Self.rewriteReferences(in: "projects", column: "default_user_tag_ids", naming: source,
                                                       for: user, at: now, db) {
                 TagReferences.repointing(source, to: survivor, in: $0)
@@ -234,7 +236,7 @@ extension SQLiteUserStore: TagStore {
             let rows = try db.query(
                 """
                 SELECT id, tag_id FROM tag_assignments WHERE user_id = ? AND volume_id = ? AND document_id = ?
-                    ORDER BY created_at, id
+                    ORDER BY created_at ASC NULLS FIRST, id
                 """, [.text(user), .text(document.volumeId), .text(document.documentId)])
             var kept: Set<String> = []
             for row in rows {
@@ -251,6 +253,7 @@ extension SQLiteUserStore: TagStore {
                     """, [.text(user), .text(UUID().uuidString), .text(document.volumeId), .text(document.documentId),
                           .text(tag), .text(UserStoreDate.text(now))])
             }
+            try Self.copyTagAssignments(of: [document], for: user, in: db)
             return try Self.tags(of: document, for: user, in: db)
         }
     }
@@ -264,6 +267,7 @@ extension SQLiteUserStore: TagStore {
             _ = try db.query(
                 "DELETE FROM tag_assignments WHERE user_id = ? AND volume_id = ? AND document_id = ? AND upper(tag_id) = ?",
                 [.text(user), .text(document.volumeId), .text(document.documentId), .text(key)])
+            try Self.copyTagAssignments(of: [document], for: user, in: db)
             return try Self.tags(of: document, for: user, in: db)
         }
     }
@@ -275,11 +279,11 @@ extension SQLiteUserStore: TagStore {
                       lastModified: row[3].text.flatMap(UserStoreDate.date))
     }
 
-    private static func tag(_ id: String, of user: String, in db: SQLiteConnection) throws -> UserTagRecord? {
+    private static func tag(_ id: String, of user: String, in db: UserStoreTransaction) throws -> UserTagRecord? {
         try db.query("SELECT \(tagColumns) FROM tags WHERE user_id = ? AND id = ?", [.text(user), .text(id)]).first.map(tag)
     }
 
-    private static func tags(of document: DocumentKey, for user: String, in db: SQLiteConnection) throws -> [UserTagRecord] {
+    private static func tags(of document: DocumentKey, for user: String, in db: UserStoreTransaction) throws -> [UserTagRecord] {
         ordered(try db.query(
             """
             SELECT \(tagColumns) FROM tags WHERE user_id = ? AND id IN (
@@ -288,10 +292,13 @@ extension SQLiteUserStore: TagStore {
     }
 
     /// The documents an assignment of `tag` is on, each once, oldest assignment first.
-    private static func documents(carrying tag: String, for user: String, _ db: SQLiteConnection) throws -> [DocumentKey] {
+    private static func documents(carrying tag: String, for user: String, _ db: UserStoreTransaction) throws -> [DocumentKey] {
         var seen: Set<DocumentKey> = []
         return try db.query(
-            "SELECT volume_id, document_id FROM tag_assignments WHERE user_id = ? AND upper(tag_id) = ? ORDER BY created_at, id",
+            """
+            SELECT volume_id, document_id FROM tag_assignments WHERE user_id = ? AND upper(tag_id) = ?
+                ORDER BY created_at ASC NULLS FIRST, id
+            """,
             [.text(user), .text(tag)]
         ).compactMap { row in
             let document = DocumentKey(volumeId: row[0].text ?? "", documentId: row[1].text ?? "")
@@ -304,10 +311,11 @@ extension SQLiteUserStore: TagStore {
     /// changed note or project. A list that does not decode is left as it is. Returns how many rows
     /// changed.
     private static func rewriteReferences(in table: String, column: String, naming tag: String, for user: String,
-                                          at now: Date, _ db: SQLiteConnection,
+                                          at now: Date, _ db: UserStoreTransaction,
                                           _ rewrite: ([String]) -> [String]?) throws -> Int {
-        let rows = try db.query("SELECT id, \(column) FROM \(table) WHERE user_id = ? AND instr(upper(\(column)), ?) > 0",
-                                [.text(user), .text(tag)])
+        let rows = try db.query(
+            "SELECT id, \(column) FROM \(table) WHERE user_id = ? AND \(db.dialect.position(of: "?", in: "upper(\(column))")) > 0",
+            [.text(user), .text(tag)])
         var changed = 0
         for row in rows {
             guard let ids = row[1].text.flatMap(TagReferences.decode), let rewritten = rewrite(ids) else { continue }
@@ -326,7 +334,7 @@ extension SQLiteUserStore: TagStore {
 }
 
 /// The app's two rewrites of a list of tag ids, a note's `userTagIds` or a project's
-/// `defaultUserTagIds`, kept apart from the SQL so the PostgreSQL store (S14d) writes the same lists.
+/// `defaultUserTagIds`, kept apart from the SQL.
 public enum TagReferences {
     /// An id as the store keeps it, an uppercase `uuidString`; nil for text that is not a UUID.
     public static func normalized(_ id: String) -> String? { UUID(uuidString: id)?.uuidString }

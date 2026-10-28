@@ -22,7 +22,7 @@ public protocol ProjectStore: Sendable {
     func projects(for user: String) throws -> [ProjectRecord]
 }
 
-extension SQLiteUserStore: ProjectStore {
+extension RelationalUserStore: ProjectStore {
     public func projects(for user: String) throws -> [ProjectRecord] {
         try reading { db in
             try db.query("SELECT id, name FROM projects WHERE user_id = ?", [.text(user)])

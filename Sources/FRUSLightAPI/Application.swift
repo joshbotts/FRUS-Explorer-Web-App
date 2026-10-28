@@ -14,10 +14,12 @@ struct ServerComponents: Sendable {
     let resources: ServerResources
     let reader: ReaderService
     let webClient: WebClient?
-    let userStore: SQLiteUserStore
-    /// Held shared while the server runs, so a restore never replaces the store it has open (S14b).
-    let serverLock: FileLock
-    let backups: UserStoreBackups
+    let userStore: RelationalUserStore
+    /// For app.db, held shared while the server runs, so a restore never replaces the store it has
+    /// open, and the store's daily backups (S14b); neither for a PostgreSQL store, whose backups are
+    /// its database service's.
+    let serverLock: FileLock?
+    let backups: UserStoreBackups?
     let sessions: InMemorySessionStore
     let jobs: InProcessJobQueue
     let indexWriter: LocalIndexWriter
@@ -38,35 +40,7 @@ struct ServerComponents: Sendable {
         await state.prepareToOpenExistingIndex(files: files)
         let jobs = InProcessJobQueue()
         let writer = LocalIndexWriter(files: files)
-        // Before the store is opened: a restore under way finishes first.
-        let serverLock = try FileLock(files.serverLock)
-        if try !serverLock.lock(.shared, wait: false) {
-            logger.info("A restore of app.db is under way: waiting for it to finish")
-            try await serverLock.lock(.shared)
-        }
-        let userStore = try await SQLiteUserStore(url: files.userStore, backupsDirectory: files.backupsDirectory)
-        let copies = configuration.backupCopyDirectory
-        let problem = copies.flatMap(UserStoreBackups.problem(writing:))
-        if let migration = userStore.migration {
-            let copy = migration.backup.map { ", after a copy of the store at \(migration.from) in \($0.path)" } ?? ""
-            logger.info("app.db migrated from \(migration.from) to \(migration.to)\(copy)")
-            if let backup = migration.backup, let copies, problem == nil,
-               !FileManager.default.fileExists(atPath: copies.appendingPathComponent(backup.lastPathComponent).path) {
-                do {
-                    _ = try UserStoreBackup.copyFile(backup, into: copies)
-                } catch {
-                    logger.warning("The copy from before the migration could not be copied to \(copies.path): \(error)")
-                }
-            }
-        }
-        let schedule = BackupSchedule(hour: configuration.backupHour)
-        let backups = UserStoreBackups(files: files, copyDirectory: copies, schedule: schedule,
-                                       changeMarker: { [userStore] in try userStore.changeMarker() })
-        let hour = String(format: "%02d:00", schedule.hour)
-        logger.info("app.db is backed up daily at \(hour) \(schedule.timeZone.identifier), and whenever the newest backup is a day old, into \(files.backupsDirectory.path), which keeps the newest \(UserStoreBackups.kept)\(copies.map { ", each also copied to \($0.path)" } ?? "")")
-        if let copies, let problem {
-            logger.warning("Backups cannot be copied to \(copies.path), so they stay in the volume alone: \(problem). On Linux, the host folder must be writable by UID \(getuid()): chown \(getuid()):\(getgid()) <folder>")
-        }
+        let (userStore, serverLock, backups) = try await openUserStore(configuration, files: files, logger: logger)
         return ServerComponents(
             files: files,
             state: state,
@@ -87,6 +61,66 @@ struct ServerComponents: Sendable {
                                         writing: configuration.userData ? ResearchDatabaseImport.move(into: userStore) : nil),
                 state: state, jobs: jobs))
     }
+
+    /// The user store `FRUS_USER_STORE` names, migrated to this build's schema: app.db in the data
+    /// directory, under the server's lock and with its daily backups; or the PostgreSQL store, with
+    /// its local copy for search beside app.db's place, and neither.
+    private static func openUserStore(_ configuration: ServerConfiguration, files: DataDirectory, logger: Logger)
+        async throws -> (RelationalUserStore, FileLock?, UserStoreBackups?) {
+        switch configuration.userStore {
+        case .sqlite:
+            // Before the store is opened: a restore under way finishes first.
+            let serverLock = try FileLock(files.serverLock)
+            if try !serverLock.lock(.shared, wait: false) {
+                logger.info("A restore of app.db is under way: waiting for it to finish")
+                try await serverLock.lock(.shared)
+            }
+            let userStore = try await SQLiteUserStore(url: files.userStore, backupsDirectory: files.backupsDirectory)
+            let copies = configuration.backupCopyDirectory
+            let problem = copies.flatMap(UserStoreBackups.problem(writing:))
+            if let migration = userStore.migration {
+                let copy = migration.backup.map { ", after a copy of the store at \(migration.from) in \($0.path)" } ?? ""
+                logger.info("app.db migrated from \(migration.from) to \(migration.to)\(copy)")
+                if let backup = migration.backup, let copies, problem == nil,
+                   !FileManager.default.fileExists(atPath: copies.appendingPathComponent(backup.lastPathComponent).path) {
+                    do {
+                        _ = try UserStoreBackup.copyFile(backup, into: copies)
+                    } catch {
+                        logger.warning("The copy from before the migration could not be copied to \(copies.path): \(error)")
+                    }
+                }
+            }
+            let schedule = BackupSchedule(hour: configuration.backupHour)
+            let backups = UserStoreBackups(files: files, copyDirectory: copies, schedule: schedule,
+                                           changeMarker: { [userStore] in try userStore.changeMarker() })
+            let hour = String(format: "%02d:00", schedule.hour)
+            logger.info("app.db is backed up daily at \(hour) \(schedule.timeZone.identifier), and whenever the newest backup is a day old, into \(files.backupsDirectory.path), which keeps the newest \(UserStoreBackups.kept)\(copies.map { ", each also copied to \($0.path)" } ?? "")")
+            if let copies, let problem {
+                logger.warning("Backups cannot be copied to \(copies.path), so they stay in the volume alone: \(problem). On Linux, the host folder must be writable by UID \(getuid()): chown \(getuid()):\(getgid()) <folder>")
+            }
+            return (userStore, serverLock, backups)
+        case .postgreSQL(let postgres):
+            let store: PostgreSQLUserStore
+            do {
+                store = try await PostgreSQLUserStore(configuration: postgres, searchCopy: files.userSearchCopy,
+                                                      logger: logger)
+            } catch let error as PostgreSQLError {
+                throw UserStoreUnreachable(configuration: postgres, underlying: error)
+            }
+            let migrated = store.migration.map { ", migrated from \($0.from) to \($0.to)" } ?? ""
+            logger.info("User store: PostgreSQL at \(postgres)\(migrated), searched through \(files.userSearchCopy.path). The server takes no backups of it: they are its database service's")
+            return (store, nil, nil)
+        }
+    }
+}
+
+/// The PostgreSQL user store could not be reached, or refused a statement, at start: named by its
+/// URL without the password.
+struct UserStoreUnreachable: Error, CustomStringConvertible {
+    let configuration: PostgreSQLConfiguration
+    let underlying: PostgreSQLError
+
+    var description: String { "the user store at \(configuration) could not be opened: \(underlying)" }
 }
 
 /// The server for `configuration`, with its import watcher as a service. Throws
@@ -127,8 +161,10 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
         configuration: .init(address: .hostname(configuration.host, port: configuration.port), serverName: "frus-light"),
         logger: logger)
     app.addServices(ImportWatcher(files: components.files, state: components.state,
-                                  coordinator: components.imports, interval: configuration.importPollInterval),
-                    BackupService(backups: components.backups, serverLock: components.serverLock, logger: logger))
+                                  coordinator: components.imports, interval: configuration.importPollInterval))
+    if let backups = components.backups, let serverLock = components.serverLock {
+        app.addServices(BackupService(backups: backups, serverLock: serverLock, logger: logger))
+    }
     return app
 }
 

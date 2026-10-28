@@ -35,6 +35,11 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
         // SHA-256 for the parity harness. Hummingbird already resolves 5.x; on macOS it wraps CryptoKit.
         .package(url: "https://github.com/apple/swift-crypto.git", "3.12.3"..<"6.0.0"),
+        // The PostgreSQL user store (S14d), SPEC's option B: PostgresNIO speaks PostgreSQL's protocol in
+        // Swift, so the image gains no client tools. 1.33.2 is 1.33.1 with swift-crypto 5 allowed. NIOSSL,
+        // which it already resolves, makes the TLS context a connection asks for.
+        .package(url: "https://github.com/vapor/postgres-nio.git", from: "1.33.2"),
+        .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.25.0"),
     ],
     targets: [
         // SQLite with FTS5: the system library. On Linux its header comes from libsqlite3-dev,
@@ -174,12 +179,21 @@ let package = Package(
         ),
 
         // Web-only logic: configuration, Import mode, readiness, and the five v1 interfaces. It
-        // links no shared kit, only SQLite, and swift-crypto: SHA-1 for the name-based ids of what an
-        // import takes from a research database (S16e), whose strip the kit gives it, and SHA-256 for
-        // the user store's backups (S14b).
+        // links no shared kit: SQLite; swift-crypto, for SHA-1 in the name-based ids of what an import
+        // takes from a research database (S16e), whose strip the kit gives it, and SHA-256 for the
+        // user store's backups (S14b); and since S14d PostgresNIO, for the user store's PostgreSQL
+        // implementation, with NIO's event loops and TLS beneath it.
         .target(
             name: "FRUSLightCore",
-            dependencies: ["CSQLite", .product(name: "Crypto", package: "swift-crypto")],
+            dependencies: [
+                "CSQLite",
+                .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "PostgresNIO", package: "postgres-nio"),
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOPosix", package: "swift-nio"),
+                .product(name: "NIOSSL", package: "swift-nio-ssl"),
+                .product(name: "Logging", package: "swift-log"),
+            ],
             path: "Sources/FRUSLightCore",
             swiftSettings: swift6
         ),

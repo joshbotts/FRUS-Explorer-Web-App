@@ -75,7 +75,7 @@ public protocol HighlightStore: Sendable {
     func deleteHighlight(_ id: String, for user: String) throws
 }
 
-extension SQLiteUserStore: HighlightStore {
+extension RelationalUserStore: HighlightStore {
     /// The order `highlights(of:for:)` gives.
     private static let drawingOrder = "created_at ASC NULLS FIRST, upper(id)"
 
@@ -155,7 +155,7 @@ extension SQLiteUserStore: HighlightStore {
                         renderingVersion: row[8].text ?? "", createdAt: row[9].text.flatMap(UserStoreDate.date))
     }
 
-    private static func highlight(_ id: String, of user: String, in db: SQLiteConnection) throws -> HighlightRecord? {
+    private static func highlight(_ id: String, of user: String, in db: UserStoreTransaction) throws -> HighlightRecord? {
         // An id in any case, as an import may write one.
         try db.query("SELECT \(highlightColumns) FROM highlights WHERE user_id = ? AND upper(id) = ?", [.text(user), .text(id)])
             .first.map(highlight)
