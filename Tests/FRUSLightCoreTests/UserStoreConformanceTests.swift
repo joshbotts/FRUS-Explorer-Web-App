@@ -2,7 +2,8 @@
 // PostgreSQL store. These tests hold what each store does its own way: its migrations, its users and
 // corrections, the values it keeps, and the database the kit's search attaches. The tests of each
 // protocol's methods, UserTagTests, UserNoteTests, UserHighlightTests, UserSummaryTests,
-// UserSearchTests, UserResearchImportTests and UserResearchExportTests, take a store kind too. Each
+// UserSearchTests, UserResearchImportTests and UserResearchExportTests, take a store kind too, as does
+// FRUSParityTests' AttachedUserStoreTests, the kit's search over each store's search database. Each
 // runs on every store `UserStoreKind.available` names: app.db always, and the PostgreSQL store where
 // FRUS_TEST_POSTGRES_URL names a database, as CI's swift job does. A later row's store methods join it
 // so: tests that take `_ kind: UserStoreKind` with `arguments: UserStoreKind.available`, and open

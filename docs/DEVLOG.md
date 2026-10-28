@@ -6,9 +6,9 @@ One entry per session, newest first.
 
 27 October 2026 · branch `claude/clever-banach-5614db` · [#73](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/73) · upstream `1c18b51e`, unchanged
 
-Phase 2's row S14d, on the server's track after S14c. The user store gains its second store, SPEC's option B: a PostgreSQL database beside `app.db`, which a deployment chooses with `FRUS_USER_STORE`. Every store method is one piece of code on both, and one conformance suite holds the two alike, in CI against a PostgreSQL service. No upstream pull request, no pin move, and no change to `app.db`'s migrations.
+Phase 2's row S14d, on the server's track after S14c. The user store gains its second store, SPEC's option B: a PostgreSQL database beside `app.db`, which a deployment chooses with `FRUS_USER_STORE`. Every store method is one piece of code on both, and one conformance suite holds the two alike, in CI against a PostgreSQL service. No upstream pull request, no pin move, and no change to `app.db`'s migrations. Begun over `main` at `8e6d681`, pin `503a730b`; S17c's #68 merged meanwhile, and `main` at `7722a77` was merged in, so the row lands at `1c18b51e`, whose kit its search database is held to.
 
-**What the kit's search reads,** at `1c18b51e`, the pin S17c's [#68](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/68) moves to. `SearchUserSource.attachedStore(userId:)` (FRUS-Explorer#1806) reads two tables of the file attached as `user_store`, and nothing else of it:
+**What the kit's search reads,** at `1c18b51e`, the pin since S17c's [#68](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/68). `SearchUserSource.attachedStore(userId:)` (FRUS-Explorer#1806) reads two tables of the file attached as `user_store`, and nothing else of it:
 
 - `user_search`: its `MATCH` and `bm25`, its `user_id`, `volume_id` and `document_id`, and `summary_text` and `note_text` by name, which the exact-word filter reads through the kit's own `frus_exact_word`;
 - `tag_assignments`: `user_id`, `volume_id`, `document_id` and `tag_id`, for a tag filter (`tag_id = ? COLLATE NOCASE`), a row's tags (`DISTINCT upper(tag_id)`, sorted and joined), the tag counts and a tag's documents.
@@ -63,13 +63,14 @@ So the PostgreSQL store's copy holds both tables, the row's `user_search` and th
   - `ConfigurationTests`, 1 more: `FRUS_USER_STORE` and its password file, whose problems never repeat the URL.
   - The method suites' 37 tests take a kind, so with the conformance suite's 5, 42 tests run on both stores.
 - **FRUSLightServerTests,** 172 to 174, in `HTTPTests`: a server whose `FRUS_USER_STORE` names PostgreSQL keeps a user's tags there and their assignments in its copy, and makes no `app.db`; one it cannot reach stops its start, naming the store without its password.
+- **FRUSParityTests,** 1 more: `AttachedUserStoreTests`, on both stores, the kit's own search at `1c18b51e` over the fixture index served read-only with the store's search database attached, as S17d will serve it: a user's notes, summaries and tags, written through the store's methods, found by their words, their exact words, their scopes and their tags, the other user's never, a row's tags and the tag counts as the store holds them, and each change, an assignment an import brings included, in the next search.
 - **Mutation checks,** run once and put back: without the advisory lock, `twoStoresOnOneDatabaseWriteInTurn` fails, a document carrying a tag twice; without the picker's Done's copy, `theSearchDatabaseHoldsWhatTheKitsSearchReads` fails, on PostgreSQL alone.
 
-**Checked against the kit at `1c18b51e`.** In a scratch worktree outside the repository, S17c's #68 at `3e03c12` with this branch merged and the submodule at `1c18b51e`, the kit's own `SearchUserSourceTests` ran with its store swapped for a PostgreSQL store's copy, written through the store's methods: the notes, the readers' own summaries, and the assignments by import, with their ids and the case of their tags. All 7 of its tests passed, among them "every route answers as the app's index answers over the same notes, summaries and tags" and the plan test that reads the store's rows once a statement. Nothing of it is committed; S17d's tests hold it in the repository once the pin moves.
+**Checked against the kit at `1c18b51e`,** before #68 merged, in a scratch worktree outside the repository: S17c's #68 at `3e03c12` with this branch merged, the submodule at `1c18b51e`. There the kit's own `SearchUserSourceTests` ran with its store swapped for a PostgreSQL store's copy, written through the store's methods: the notes, the readers' own summaries, and the assignments by import, with their ids and the case of their tags. All 7 of its tests passed, among them "every route answers as the app's index answers over the same notes, summaries and tags" and the plan test that reads the store's rows once a statement. Once #68 merged, `AttachedUserStoreTests` holds the same in the repository, on both stores; the scratch file is in the side sessions' notes for S17d.
 
 **Results**
 
-- **Linux, `swift:6.4-noble`, arm64,** with `scripts/swift --postgres`, PostgreSQL 18: this package's own targets build clean with no warning. All 2,376 tests pass, up from 2,359 on main, with the one named skip and nothing cancelled: FRUSLightCoreTests 121, in about 15 seconds, and FRUSLightServerTests 174, the others as on main.
+- **Linux, `swift:6.4-noble`, arm64,** with `scripts/swift --postgres`, PostgreSQL 18, before the merge with #68, at `503a730b`: this package's own targets build clean with no warning. All 2,376 tests pass, up from 2,359 on main then, with the one named skip and nothing cancelled: FRUSLightCoreTests 121, in about 15 seconds, and FRUSLightServerTests 174, the others as on main.
 
 **Records**
 
@@ -79,7 +80,7 @@ So the PostgreSQL store's copy holds both tables, the row's `user_search` and th
 - `CLAUDE.md`: `scripts/swift --postgres test`, and where a store method goes.
 - README's status and architecture; and this log.
 
-**Next: S16e,** an export that holds the owner's writing, in its own session now, whose store method this row or it ports; then **S17d** once S17c's #68 merges, searching through the kit with `searchDatabase` attached; with S14e, sign-in through a trusted proxy, and S14b, the daily backup, on the server's track.
+**Next: S16e,** an export that holds the owner's writing, in its own session now, whose store method this row or it ports; then **S17d**, which S17c's #68 has opened, searching through the kit with each store's `searchDatabase` attached, as `AttachedUserStoreTests` does; with S14e, sign-in through a trusted proxy, and S14b, the daily backup, on the server's track.
 
 ## Session 17c: pin move past FRUS-Explorer#1805, #1806 and #1807, with #1789 to #1804
 
