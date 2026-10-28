@@ -12,7 +12,7 @@ Phase 2's row S18c. The pin moves from `1c18b51e` to `32e295e5`, `v2`'s head. Th
 - S18b's follow-up's [#1811](https://github.com/joshbotts/FRUS-Explorer/pull/1811), which makes the app's own test of the capped editor's link alert wait for UIKit, merged on 28 October as `32e295e5` (tree `36279e2d`), from a branch that had taken `v2` at #1810;
 - the app's [#1808](https://github.com/joshbotts/FRUS-Explorer/pull/1808) (`3af1fc07`), which adds the website's drafts under `Planning/website-drafts/` and, in the app's plans, makes their writing and review work for after the submission. It changes no file this repository compiles or reads.
 
-The move is a pull request of its own under rule 5. `main` came in at `ae1edf9`, with #78, #79 and #80, by a merge that kept both sides of the two documents that conflicted.
+The move is a pull request of its own under rule 5. `main` came in twice, by merges that kept both sides of every document that conflicted: at `ae1edf9`, with #78, #79 and #80, and at `c209d75`, with #75, S18b's records, and #76, S17d.
 
 **What the move brought, in shared code**
 
@@ -57,13 +57,13 @@ Remade by `scripts/make-golden --export /Users/Shared/frus-index-2026-10-24.sqli
 
 **Results**
 
-- **Linux, `swift:6.4-noble`, arm64,** CI's swift job replayed with its PostgreSQL (`scripts/swift --postgres`) at `32e295e5`, over `main` at `ae1edf9`, this package's own targets built clean, with no warning, under the app's `Scripts/heavy.sh` lock: 2,534 tests, against the 2,521 CI ran on `main` at `2a31f41`, which #78 to #80 left as they were, all passing with only the named skip, in Swift Testing's results file and in the log. The checks print:
+- **Linux, `swift:6.4-noble`, arm64,** CI's swift job replayed with its PostgreSQL (`scripts/swift --postgres`) at `32e295e5`, over `main` at `c209d75`, this package's own targets built clean, with no warning, under the app's `Scripts/heavy.sh` lock: 2,548 tests, against the 2,535 S17d's log counts for `main` with #76, all passing with only the named skip, in Swift Testing's results file and in the log. The checks print:
   - "check 2 passes: 36 digests and 7 checks are the Mac's";
-  - "check 3's results pass: 482 queries, 482 identical and 0 reordered only within Mac tie groups; 318 with other score bits (information)", and through the API "482 queries, 482 identical and 0 reordered only within Mac tie groups, every record the kit's own";
+  - "check 3's results pass: 482 queries, 482 identical and 0 reordered only within Mac tie groups; 318 with other score bits (information)", and through the API "482 queries, 482 identical and 0 reordered only within Mac tie groups, every record the kit's own, each searched with the user's store attached";
   - "check 4 through the page: 393 of 393 rows identical", and the same on the reader's path and from one full parse per volume.
-- **Per target:** FRUSCoreKitTests 1,299, from 1,286, and every other target as on `main`: SourceNoteKitTests 321, FTS5StoreTests 219, FRUSLightServerTests 192, FRUSParityTests 189, FRUSLightCoreTests 152, ManifestGeneratorTests 60, FRUSRichTextTests 42, SemanticVectorsKitTests 40, CrossRefKitTests 10, GeneratorKitTests 7, FTS5CheckTests 3.
+- **Per target:** FRUSCoreKitTests 1,299, from 1,286, and every other target as on `main`: SourceNoteKitTests 321, FTS5StoreTests 219, FRUSParityTests 198, FRUSLightServerTests 196, FRUSLightCoreTests 153, ManifestGeneratorTests 60, FRUSRichTextTests 42, SemanticVectorsKitTests 40, CrossRefKitTests 10, GeneratorKitTests 7, FTS5CheckTests 3.
 - **The tests the move touches** pass: S16e's free-page test with its new control, the import's done-when on both stores, the refusal at "reclaiming freed pages", and the two parity tests that read the exporter's file.
-- **At `fef96201`,** before the re-target, the same replay over `main` at `2a31f41` ran 2,533 tests, FRUSCoreKitTests 1,298, all passing with the named skip, with the same lines from checks 2 to 4.
+- **Before `main` came in the second time,** the same replay at `32e295e5` over `main` at `ae1edf9` ran 2,534 tests, against the 2,521 on `main` at `2a31f41`; and **at `fef96201`,** before the re-target, over `main` at `2a31f41`, 2,533, FRUSCoreKitTests 1,298. Both passed with the named skip and the same lines from checks 2 to 4.
 - **Before the golden files were remade,** S18b's run over `main` at `2fac971`, with #1809 copied over the submodule, found only their staleness, 21 issues in 20 tests, since their source digest covers `FRUSCoreKit/` and `FRUSExplorer/` whole, and #1810's run on Linux over `main` found S16e's control the one test its statements failed; this session repeated neither.
 - **`tools/mac-golden`** built in release with `ParityFormat` hashing through CryptoKit, in this worktree's build folder and again into an empty one, where it built no `Crypto` module, and wrote the files above at both pins.
 - **The web job and the image** are CI's: nothing under `web/` changes but what `main` brought, and the image compiles the kit at the new pin.
@@ -79,13 +79,13 @@ Remade by `scripts/make-golden --export /Users/Shared/frus-index-2026-10-24.sqli
 
 **Notes**
 
-- **#75, S18b's records, and #76, S17d, are still open.** Whichever merges after this takes it in. #75 edits the same paragraphs of `COORDINATION.md` §2 and §5 and the same rows of `PLAN.md`: S18c's row here is its words exactly, so that row merges clean, and the second of the two to merge keeps both sides, #75's paragraph on #1809 in §2 before #1810's and this move's, and this §5 line, which adds to #75's.
+- **#75, S18b's records, and #76, S17d, merged while this was open,** and `main` came in again after them. `COORDINATION.md` §1 keeps S17d's search with the user's half beside this move's sentences on the strip and on #1809, §2 #75's paragraph on #1809 before #1810's and this move's, and §5 this move's line, which adds to #75's. `PLAN.md`'s S18c row was #75's words already, and S17d's done paragraph comes before this move's, as the README's sentence does.
 - **Mac check 14** is still "To do" in `PLAN.md`, as 9 to 13 are. The owner merged #1809, #1810 and #1811, each labelled `Mac`; their checks are the owner's to record.
 - **The heavy-job lock was seldom free.** Other sessions' Linux batches, a Mac build for #1810 and a 30-round run of the editor's link-alert test for #1811 held it between this session's first jobs, so its runs waited longer than they took.
 - **`main`'s compose job failed at `2a31f41`** in one spec of the browser suite, `notes-keyboard.spec.ts`'s note written by keyboard alone, and #75's run at `0cc13e6` failed the same spec. #80 has since found races behind it, fixed two and narrowed the third, and this branch has #80 from `main`. Nothing under `web/` changes here otherwise.
-- **Scratch:** the CI replay script and its logs in `.build/linux/s18c/`, `pin-*` at `fef96201` and `pin2-*` at `32e295e5`, and the clean tool build in the session's scratch folder; neither is committed.
+- **Scratch:** the CI replay script and its logs in `.build/linux/s18c/`, `pin-*` at `fef96201`, `pin2-*` at `32e295e5` and `pin3-*` after `main`'s second merge, and the clean tool build in the session's scratch folder; neither is committed.
 
-**Next: S18d,** collections and their editor, which puts a collection together on the server through the kit's `CollectionContentAssembly`, its store reads answered with the research data export's records. Beside it: S17d, search over the researcher's writing, with S17e and S17f.
+**Next: S18d,** collections and their editor, which puts a collection together on the server through the kit's `CollectionContentAssembly`, its store reads answered with the research data export's records. Beside it: S17e, saved searches, corpora and scopes, and S17f, projects, the history and the method appendix.
 
 ## Session 17d: search over the researcher's writing
 
