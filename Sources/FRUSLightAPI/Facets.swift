@@ -5,10 +5,10 @@
 //
 // Every answer is the kit's: `SearchService.resultSetFacets(parameters:request:documentKeys:)`
 // computes the section over the match the search would run (FRUSCoreKit, upstream #1664), which the
-// app's panel calls too, with the user half of the user the request acts for (S17d); `FacetPaging` sorts, filters and pages its rows; `FacetNarrowing` says how a
-// row of a section that narrows on a click changes the search; and `FacetSelection` with
-// `FacetSelectionApplier` resolves a staged selection of years or volumes into the filter Apply
-// sets, over the section's whole list of rows.
+// app's panel calls too, with the user half of the user the request acts for (S17d); `FacetPaging`
+// sorts, filters and pages its rows; `FacetNarrowing` says how a row of a section that narrows on a
+// click changes the search; and `FacetSelection` with `FacetSelectionApplier` resolves a staged
+// selection of years or volumes into the filter Apply sets, over the section's whole list of rows.
 
 import FRUSCoreKit
 import FRUSLightCore

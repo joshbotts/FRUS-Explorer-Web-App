@@ -185,10 +185,10 @@ enum ReadingRoutes {
     ///
     /// Its years are the Years facet over the keys of those results, the kit's route for a list it
     /// describes by its keys, which reads only the rows the keys name; `facets` keeps it beside the
-    /// panel's sections, by whose search it is, as `scoped` says. The match is not counted here, and nothing but the results kept reads it, so
-    /// the work stops when its client goes, as a search's does. A year's documents, asked for with
-    /// `documents`, are the results kept whose date the kit keys by that year, in the order `sort`
-    /// gives them.
+    /// panel's sections, by whose search it is, as `scoped` says. The match is not counted here, and
+    /// nothing but the results kept reads it, so the work stops when its client goes, as a search's
+    /// does. A year's documents, asked for with `documents`, are the results kept whose date the kit
+    /// keys by that year, in the order `sort` gives them.
     static func timeline(_ parameters: SearchParameters, sort: SearchSortOrder, documents: Bool,
                          scoped: ServedSearch, facets: FacetCache, keeping limit: Int, coverage: Coverage,
                          kept: @escaping @Sendable () async throws -> [SearchResult]) async throws -> SearchTimeline {

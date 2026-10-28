@@ -2,6 +2,69 @@
 
 One entry per session, newest first.
 
+## Session 17d: search over the researcher's writing
+
+28 October 2026 · branch `claude/silly-lewin-91841a` · [#PR](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/PR) · upstream `1c18b51e`, unchanged
+
+Phase 2's row S17d, the first of the search-and-research rows that S17c's pin move opened. A search reads the researcher's own writing beside the corpus, as the Mac's does: Search in chooses the documents, the notes and the summaries; a tag filter and a row's tags read the user's tags; and the facets, the Query Inspector's counts and the readings count the same match. It goes through the kit's search with the user store's search database attached (FRUS-Explorer#1806's `SearchUserSource.attachedStore(userId:)`), each request with the half of the user it acts for. No upstream pull request, no pin move and no schema change.
+
+**What the kit gives,** at `1c18b51e`:
+
+- `IndexingPipeline(readingIndexAt:fts5Store:resources:volumesDirectory:userStore:)` attaches a store read-only as `user_store`, and a `SearchService` made with `.attachedStore(userId:)` reads that user's rows of its `user_search` and `tag_assignments` for every statement on the user half: the match, the tag filter, the exact-word filter's note and summary text, a row's tags, the tag counts and a tag's documents. S14d's `searchDatabase` names the file, app.db or the PostgreSQL store's copy.
+- `SearchService.userTagCounts(parameters:tagIds:documentKeys:)`, the filter sheet's two routes to its tag counts.
+- The app's search window, whose view code the browser app mirrors: Search in's three chips (`ScopeChip`, `SearchSheet.scopeRow`), each a column selector, and `MacSearchError.emptyScope` with all three off; My Tags, the filter's switches of the user's tags with their counts (`SearchFilterView.userTagsSection`); the Tags token's value (`MacSearchViewModel.tagFilterLabel`); and a row's ◆ chips, the first three of `UserTag.chips(for:among:)`.
+
+**Delivered**
+
+- **The served index attaches the store** (`Sources/FRUSLightAPI/ServedIndex.swift`). When the server keeps user data, each stack opens the pipeline with the store's `searchDatabase`; `search(for:)` gives a request's search, the kit's service for that user, new for each request, which the kit makes cheap, or the index's own for no one.
+- **Whose half a search reads** (`Sources/FRUSLightAPI/UserSearch.swift`, `SearchUsers`): the user a request under `/api/v1/me` would act for, on its guard's terms. The server keeps user data, the request is sent to `FRUS_PUBLIC_URL`'s address, and the resolver names a user; behind a proxy, a request that names no one is no one's. A search for no one is the corpus's alone, with the index's own user half, which an import leaves empty.
+- **The tag filter:** `SearchRequest` takes `userTagIds`, a list, the empty value no filter. Each tag must be one of the user's, by id in any letter case, as the kit matches it, else `TAG_NOT_FOUND` (404); any tag for no one is refused too. `subjectTagIds`, inert in the kit, and `booleanMode` are still refused, each with what to use instead.
+- **Every search route** takes the user: `/search`, `/search/inspect` (GET and POST), `/search/facets`, `/search/facets/selection`, `/search/timeline` and `/search/concordance`.
+- **`GET /api/v1/me/search/tags`,** under `/me`'s guard: the user's tags in `GET /me/tags`' order, each with how many documents of a search's results carry it, over the search as it runs, as the Mac's My Tags toggles count them (`userTagCounts`, the keyword route).
+- **What a served index keeps of a search** (`RecentSearches`, `RetainedResults`, `FacetCache`, the timeline's years) is kept by whose search it is and the store's mark, `searchMark()`, before the query fields. A search for no one keeps phase 1's keys.
+- **The mark** (`Sources/FRUSLightCore/RelationalUserStore.swift`): `UserSearchStore`, the search database and its mark, which the store's count of the write transactions it has committed gives. Each store's `writing` counts its commit before its caller is answered, so every path that writes, an import and a sign-in included, moves it. The PostgreSQL store counts the copy made again after a commit it could not take, and its `searchMark()` makes a stale copy again first, so the next search reads what the store holds, as the next call does; its flag is a `Mutex` now, read without the store's lock, so a search waits for a write under way only then.
+- **The browser app** (`web/src/search`):
+  - Search in, the Mac's three chips, with its words, help and glyphs, on a server that keeps user data and wherever a link has turned one off; with all three off the Mac's "Enable at least one of Documents, Notes, or Summaries to search.", and no request;
+  - My Tags among the filters, each tag a switch, counted once opened, with the Mac's sentence under the counts and its closed summary, Any or "N selected";
+  - the Tags token, with the Mac's value, which clears the filter and gives the search box the focus;
+  - a row's tags, the first three its tags name, as the Mac's ◆ chips (`tagRules.ts`);
+  - every search the browser holds is asked again after a change to the user's notes, summaries, tags or a document's tags, and after an import (`searchesChanged`).
+
+**Decided here, each the web's own**
+
+- **A search reads the user's half on `/me`'s terms, and acts for no one otherwise, rather than refusing.** The search endpoints stay outside `/me`: they answer for the corpus without a user, as before, for scripts and for a proxy's request that names no one. But a search of a user's half reads their writing, so it needs what a read under `/me` needs: a request to the address `FRUS_PUBLIC_URL` names, since a page under another name pointed at the server could otherwise learn a user's notes through their searches. A request sent elsewhere searches the corpus alone, and a tag filter, which can only be the user's, is refused for it.
+- **A tag that is not the user's is refused, not matched as nothing,** as S14e's row asks of the tag filter: `TAG_NOT_FOUND`, the code a note's tag that is not the user's has. Where two users hold one tag's id, as two imports of one Mac export give them, each filters by their own assignments.
+- **The mark counts every write of every user.** A count per user would need every method's user; the store's own count catches every path by construction, the import's and the sign-in's included. A write anywhere lets go of every user's kept searches, which are few: four searches, two kept for the date order, and 16 sections.
+- **My Tags shows no counts while it counts,** as the Mac's toggles show none, rather than another search's.
+- **The Summaries chip's help is the web's own:** the Mac's says "generated AI summaries", which is all a Mac holds, and the web keeps a researcher's own beside them.
+
+**Tests**
+
+- **FRUSLightCoreTests,** NN to NN: `UserStoreConformanceTests.theSearchMarkMovesWithEachWriteTheStoreCommits`, on both stores: a tag, a document's tags, a note, a summary, a delete, a user made at a sign-in and an import move it; reads, a refused change, rolled back, and a user found do not.
+- **FRUSLightServerTests,** NN to NN:
+  - `UserHalfSearchTests`, 3, under `FRUS_AUTH=none`: the user's note found by its word and its exact word in the scopes searched, their summary, both with the corpus by `OR`, none with all three off (`EMPTY_QUERY`); their tag filtering in any case, the empty list no filter, a row's tags; a tag not theirs refused by all seven routes; the facets, the timeline, the date order, the inspector's counts and empty terms, the concordance and the My Tags counts over the same match. Each write found by the next search past every answer kept: a note deleted, a tag moved, a summary rewritten. A search sent to another address, and every search on a server that keeps no user data, finds none of the user's writing and refuses their tag.
+  - `SignInTests.eachUsersSearchReadsTheirWritingAlone`, the done-when's two-user half, live behind the proxy: Alice's search first, so its answers are kept, then Bob's and no one's of the same search, which find none of her note, summary or tag through any route; her tag refused for him and for no one by every route; the tag an export gives both under one id filtering each one's own documents; and hers as she left them.
+  - `SearchRequestTests`: `userTagIds` read and written back, and the refused fields' pointers.
+- **FRUSParityTests,** NN to NN:
+  - `AttachedUserStoreParityTests`, 7 on each store: S14d's scratch run of the kit's own `SearchUserSourceTests` over the PostgreSQL copy, now in the repository on both stores, the store written through its own methods. Through the store, every route, the search, its count and keys, the filter key set, the facets and the tag counts, answers as the app's index answers over the same notes, summaries and tags; and the exact words, the case of a tag's id, a missing store and the plan's subqueries, read once a statement.
+  - `SearchViewParityTests`, 2: the Mac's Search in, My Tags, the token's and the counts' words, each under its key in the app's source and in copy.ts; and `UserTag.chips`, the three chips and `tagFilterLabel`, as the app's code and `tagRules.ts` say them.
+  - `ServedAPIParityTests.checkThreePassesThroughTheAPI` now shows its searches were the single user's, with their store attached: after the 482 queries, a note the user writes is found by the next search.
+- **The web unit suite,** 309 to 321 tests in 35 files: Search in's chips, the sentence with all three off, the row hidden with no user data, My Tags' counts, switch and token, the token for several tags, the row's chips; `searchState`'s scopes and tags; `tagRules`.
+- **The browser suite:** `search-own-writing.spec.ts`, by keyboard, with axe: the note's, the summary's and the corpus's documents, d1's ◆ Berlin, Notes and Summaries off, all three off and the Mac's sentence, each on again, My Tags opened and counted, Berlin switched on, its token, and its clearing.
+
+**Results**
+
+- RESULTS
+
+**Records**
+
+- `docs/SPEC.md`: Search's S17d bullet, the API's user half of every search endpoint, `userTagIds`, the answers kept by user and mark, the refused fields, and `GET /me/search/tags` under the user's data.
+- `docs/INSTALL.md`: searching one's own writing, and the API's fields.
+- `docs/PLAN.md`: the row's done paragraph. `docs/COORDINATION.md` §1: the server searches with #1806's source.
+- README's status, and this log.
+
+**Next: S17e,** saved searches, working corpora and volume scopes, whose saved `SearchParameters` now carry the user's `userTagIds`; with **S17f**, projects, the history and the method appendix, beside it, and S18c's pin move past FRUS-Explorer#1809.
+
 ## Session 14d: the PostgreSQL store
 
 27 October 2026 · branch `claude/clever-banach-5614db` · [#73](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/73) · upstream `1c18b51e`, unchanged
