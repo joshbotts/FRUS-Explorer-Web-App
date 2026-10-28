@@ -211,8 +211,10 @@ public final class PostgreSQLUserStore: RelationalUserStore, @unchecked Sendable
         }
         if copyIsStale.withLock({ $0 }) {
             try Self.fill(copy, from: connection)
-            copyIsStale.withLock { $0 = false }
+            // The count first, then the flag, as a write sets the flag before it counts itself: a
+            // search that finds the flag clear after reading the count has a mark past the copy made again.
             didCommit()
+            copyIsStale.withLock { $0 = false }
             logger.notice("The local copy of user_search and the tag assignments was made again from the PostgreSQL store")
         }
         return connection
@@ -274,9 +276,14 @@ public final class PostgreSQLUserStore: RelationalUserStore, @unchecked Sendable
     }
 
     /// The mark, once a copy that could not take a change has been made again, so that the next search
-    /// reads what the store holds, as the next call does.
+    /// reads what the store holds, as the next call does. The count is read before the flag: a write
+    /// that leaves the copy stale sets the flag before it counts itself, and the copy made again counts
+    /// before it clears the flag, so a mark read with the flag clear after it is never one that a search
+    /// of the stale copy kept its answer by.
     override public func searchMark() throws -> Int {
-        if copyIsStale.withLock({ $0 }) { try access.withLock { _ = try ready() } }
+        let mark = try super.searchMark()
+        guard copyIsStale.withLock({ $0 }) else { return mark }
+        try access.withLock { _ = try ready() }
         return try super.searchMark()
     }
 }
