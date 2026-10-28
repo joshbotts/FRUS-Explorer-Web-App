@@ -50,7 +50,7 @@ So the PostgreSQL store's copy holds both tables, the row's `user_search` and th
 - A migration goes in `UserStoreMigrations.all` and, by the same number, in `PostgreSQLMigrations.all`. `eachStoresMigrationsMakeTheTablesTheSchemaDescribes` holds both to `UserStoreSchema`.
 - Its tests take `_ kind: UserStoreKind`, with `arguments: UserStoreKind.available`, and open their store with `UserTagTests.open(kind)`; `UserStoreRows` seeds and reads either store. `scripts/swift --postgres test` runs them on both before a push.
 - **S16e, merged first (#69), ported here:** its `keep(_:summaryFormat:for:)` moved from `extension SQLiteUserStore` to `extension RelationalUserStore`, its refactor of the import's row writer and its deletion of a summary from a research database take `UserStoreTransaction`, and its tests of what the store keeps take a kind: `aSummaryFromAResearchDatabaseMayBeDeletedButNotChanged`, and four of `ResearchDatabaseImportTests`, through the importer, whose fixture now opens either store. Its statements read on both as they were, and the `rebuildSearch` it ends with copies the tag assignments it writes into the PostgreSQL store's copy.
-- **S14b:** the daily backup is `app.db`'s, through `SQLiteUserStore.backUp`, so its service runs for that store alone.
+- **S14b, merged first too (#70), ported here:** its backup and restore are `app.db`'s. The server takes its lock and makes its backups in `openUserStore`'s SQLite case alone, and adds the backup service only then; `SQLiteUserStore` keeps its `changeMarker()`, and the corrections stay on the shared base. For a PostgreSQL store `GET /api/v1/admin/backup` is `BACKUP_NOT_FOUND`, though the volume keeps an earlier `app.db`'s backups, and `frus-light backup` and `restore` refuse, naming the database service's own tools: `AdminBackupTests.aServerWithAPostgreSQLStoreHasNone`, and the PostgreSQL server's test in `HTTPTests` asks for one too.
 - **S14e:** a user made at sign-in is a method on `RelationalUserStore`; `INSERT … ON CONFLICT DO NOTHING` reads on both.
 - **S17d:** the kit attaches `store.searchDatabase`.
 
@@ -62,7 +62,7 @@ So the PostgreSQL store's copy holds both tables, the row's `user_search` and th
   - `PostgreSQLUserStoreTests`, 6, where a database is named: a store at migration 1 reaching 2 with its corrections; a failing migration leaving the store at the one before; a store a newer build migrated, refused; each start making the copy from the store, whatever an earlier process left; a closed connection made again; two stores' writes taken in turn.
   - `ConfigurationTests`, 1 more: `FRUS_USER_STORE` and its password file, whose problems never repeat the URL.
   - The method suites' 37 tests take a kind, so with the conformance suite's 5, 42 tests run on both stores.
-- **FRUSLightServerTests,** 172 to 174, in `HTTPTests`: a server whose `FRUS_USER_STORE` names PostgreSQL keeps a user's tags there and their assignments in its copy, and makes no `app.db`; one it cannot reach stops its start, naming the store without its password.
+- **FRUSLightServerTests,** 172 to 174, in `HTTPTests`: a server whose `FRUS_USER_STORE` names PostgreSQL keeps a user's tags there and their assignments in its copy, and makes no `app.db`; one it cannot reach stops its start, naming the store without its password. After #70 that server has no backup to give, and so has `AdminBackupTests`' `aServerWithAPostgreSQLStoreHasNone`, whose configuration names a PostgreSQL store, though its volume keeps a backup of `app.db`: 187 then, S14b's among them.
 - **FRUSParityTests,** 1 more: `AttachedUserStoreTests`, on both stores, the kit's own search at `1c18b51e` over the fixture index served read-only with the store's search database attached, as S17d will serve it: a user's notes, summaries and tags, written through the store's methods, found by their words, their exact words, their scopes and their tags, the other user's never, a row's tags and the tag counts as the store holds them, and each change, an assignment an import brings included, in the next search.
 - **Mutation checks,** run once and put back: without the advisory lock, `twoStoresOnOneDatabaseWriteInTurn` fails, a document carrying a tag twice; without the picker's Done's copy, `theSearchDatabaseHoldsWhatTheKitsSearchReads` fails, on PostgreSQL alone.
 
@@ -74,16 +74,17 @@ So the PostgreSQL store's copy holds both tables, the row's `user_search` and th
 - **CI's swift job on `c2c8513`,** the first at `1c18b51e`, amd64, with its PostgreSQL service: every target passed but FRUSParityTests, the conformance suite's 42 tests on both stores among them, with FRUSLightCoreTests 121, FRUSLightServerTests 174 and FRUSCoreKitTests 1,286. FRUSParityTests' failures were all `AttachedUserStoreTests`' searches for either of two words, alike on both stores: `SearchService` reads no `booleanMode`, and the search's parser reads an `OR` written in the query, as the kit's own tests write it, so `zanzibar quixotic` asked for both. Written so (`364b9e8`), the test passes on both stores here, through the heavy-job lock.
 - **CI on #73 at `364b9e8`** is green. The swift job, amd64, with its PostgreSQL service, passes all 2,472 tests, up from 2,454 on main, with the one named skip and nothing cancelled: FRUSLightCoreTests 121, FRUSLightServerTests 174 and FRUSParityTests 189, the others as on main. The web and compose jobs pass, the compose job's image with PostgresNIO linked and no client tools, and the image builds for amd64 and arm64.
 - **After the merge with #69,** at `c4c1aa0`, on Linux, arm64, with `scripts/swift --postgres` and through the heavy-job lock: FRUSLightCoreTests 128 and FRUSLightServerTests 183, S16e's tests among them, and `AttachedUserStoreTests` pass, 48 tests on both stores: the 42 before, S16e's summary that may be deleted, four of `ResearchDatabaseImportTests` and the kit's search over each store's file.
+- **After the merge with #70,** at `1f06f29`, the same way, this package's targets built clean, with no warning: FRUSLightCoreTests 148 and FRUSLightServerTests 187, S14b's tests among them, and `AttachedUserStoreTests` pass, the PostgreSQL store's tests run, none skipped.
 
 **Records**
 
-- `docs/SPEC.md`: the user store's section, the configuration table's `FRUS_USER_STORE` and `FRUS_POSTGRES_PASSWORD_FILE`, the disk layout's copy, and what option B's phase-2 half is.
-- `docs/INSTALL.md`: A PostgreSQL user store, with a `compose.override.yaml` recipe, and a line in Settings.
+- `docs/SPEC.md`: the user store's section, the configuration table's `FRUS_USER_STORE` and `FRUS_POSTGRES_PASSWORD_FILE`, the disk layout's copy, what option B's phase-2 half is, and, after #70, a PostgreSQL store's backups in Backups and the admin's route.
+- `docs/INSTALL.md`: A PostgreSQL user store, with a `compose.override.yaml` recipe, and a line in Settings; after #70, that store's backups there, in Backups and restore, and in the errors' codes.
 - `docs/PLAN.md`: the row's done paragraph.
 - `CLAUDE.md`: `scripts/swift --postgres test`, and where a store method goes.
 - README's status and architecture; and this log.
 
-**Next: S17d,** which S17c's #68 has opened, searching through the kit with each store's `searchDatabase` attached, as `AttachedUserStoreTests` does; with S14e, sign-in through a trusted proxy, and S14b, the daily backup, on the server's track.
+**Next: S17d,** which S17c's #68 has opened, searching through the kit with each store's `searchDatabase` attached, as `AttachedUserStoreTests` does; with S14e, sign-in through a trusted proxy, on the server's track.
 
 ## Session 16e: an export with the owner's writing
 
