@@ -42,7 +42,8 @@ public struct ExportWriting: Sendable, Equatable {
         tags = try db.query("SELECT tag_id, name FROM user_tags ORDER BY rowid").map { ($0[0].text ?? "", $0[1].text ?? "") }
     }
 
-    /// Whether the file holds none of it, in its tables, in its `user_content` index or in its bytes.
+    /// Whether the file's tables hold none of it: its `user_content` index and its bytes are searched
+    /// apart, as check 5 searches them.
     public var isEmpty: Bool { summaries.isEmpty && notes.isEmpty && tags.isEmpty && assignments.isEmpty }
 
     /// Check 5's snippets of it, as scripts/check-stripped-export takes them: from the longest line of

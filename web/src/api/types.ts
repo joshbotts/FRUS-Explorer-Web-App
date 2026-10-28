@@ -17,7 +17,9 @@ export type ReadinessStep =
   | 'checking_format'
   | 'checking_versions'
   | 'checking_writing'
+  | 'stripping_writing'
   | 'checking_integrity'
+  | 'moving_writing'
   | 'installing_index'
   | 'opening_index'
   | 'index_version_mismatch'
@@ -680,6 +682,8 @@ export interface Summary {
   lastModified?: string | null;
   /** Whether the researcher may change it: only one written here is theirs to change. */
   editable: boolean;
+  /** Whether the researcher may delete it: one written here, or one from a research database. */
+  deletable: boolean;
   /** A document's newest summary from a research database the Mac exported with the owner's writing. */
   fromResearchDatabase: boolean;
 }

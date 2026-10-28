@@ -123,8 +123,6 @@ struct ImportFixture {
                     step: .checkingVersions, reason: "no export stamp"),
             Refusal(name: "writing, on a server that keeps no user data", export: export { $0.includesWriting = true },
                     step: .checkingWriting, reason: "includes your notes, summaries and tags, and this server keeps no research data"),
-            Refusal(name: "writing behind a stamp with no time", export: export { $0.includesWriting = true; $0.omittedStampKeys = ["exported_at"] },
-                    step: .checkingWriting, reason: "but not when it was made"),
             Refusal(name: "writing behind a stamp that denies it", export: export { $0.containsWriting = true },
                     step: .checkingWriting, reason: "says it excludes your writing"),
             Refusal(name: "an unstamped copy with writing", export: export { $0.stamped = false; $0.containsWriting = true },
@@ -155,6 +153,27 @@ struct ImportFixture {
         #expect(!fixture.exists(fixture.files.liveIndex))
         #expect(!fixture.exists(fixture.files.candidateIndex))
         #expect(fixture.exists(source))
+    }
+
+    /// A server that keeps the writing refuses an export whose stamp says it holds some but not when
+    /// it was made, before the writing is read: the strip and the store are never reached.
+    @Test func refusesWritingWhoseStampGivesNoTime() async throws {
+        let fixture = try ImportFixture()
+        let importer = IndexImporter(files: fixture.files, writer: LocalIndexWriter(files: fixture.files),
+                                     writing: WritingMove(strip: [StripStep(action: "never", sql: "SELECT 1")]) { _ in
+                                         Issue.record("the writing was kept")
+                                         throw CancellationError()
+                                     })
+        var export = SyntheticExport()
+        export.includesWriting = true
+        export.omittedStampKeys = ["exported_at"]
+        await #expect {
+            _ = try await importer.importExport(at: try fixture.drop(export), observer: StepRecorder())
+        } throws: { error in
+            guard let refusal = error as? ImportRefusal else { return false }
+            return refusal.step == .checkingWriting && refusal.reason.contains("but not when it was made")
+        }
+        #expect(!fixture.exists(fixture.files.liveIndex) && !fixture.exists(fixture.files.candidateIndex))
     }
 
     @Test func refusalLeavesTheLiveIndexServing() async throws {

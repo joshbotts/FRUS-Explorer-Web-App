@@ -78,19 +78,21 @@ import Testing
         #expect(writing.exportedAt == exportedAt)
     }
 
+    /// In the words of the app's export sheet, Research Notes and Tags & Assignments, counted together
+    /// as the sheet counts them, and its switch's generated summaries.
     @Test func theReportSaysWhatMovedInTheAppsWords() {
         let first = MovedWriting(notes: ImportCount(added: 1), summaries: ImportCount(added: 2), tags: ImportCount(added: 3),
                                  tagAssignments: ImportCount(added: 4), searchableDocuments: 3)
-        #expect(first.report.hasPrefix("Your notes, summaries and tags in the export were moved into your research data, and the server's copy of the index holds none of them: 1 Research Note, a document's note block; 2 Generated Summaries, each a document's newest; 3 Tags; and 4 Tag Assignments. The note blocks and summaries are marked as from a research database. A research database keeps only one note block and the newest summary for each document"))
+        #expect(first.report.hasPrefix("Your notes, summaries and tags in the export were moved into your research data, and the server's copy of the index holds none of them: 1 Research Note, a document's note block; 2 generated summaries, each a document's newest; and 7 in Tags & Assignments, 3 tags and 4 assignments. The note blocks and summaries are marked as from a research database. A research database keeps only one note block and the newest summary for each document"))
         #expect(first.report.hasSuffix("export with Settings ▸ Data & Recovery ▸ Export as JSON in FRUS Explorer, with Include AI-Generated Summaries on, and import the file in Settings ▸ Data."))
 
-        let mixed = MovedWriting(notes: ImportCount(added: 1, replaced: 1, kept: 1), summaries: ImportCount(), tags: ImportCount(kept: 2),
-                                 tagAssignments: ImportCount(), searchableDocuments: 3)
-        #expect(mixed.report.contains(": 3 Research Notes, each a document's note block (1 new here, 1 replacing an older copy, 1 you had here already); and 2 Tags (2 you had here already)."))
+        let mixed = MovedWriting(notes: ImportCount(added: 1, replaced: 1, kept: 1), summaries: ImportCount(), tags: ImportCount(kept: 1),
+                                 tagAssignments: ImportCount(added: 1), searchableDocuments: 3)
+        #expect(mixed.report.contains(": 3 Research Notes, each a document's note block (1 new here, 1 replacing an older copy, 1 kept as you have it here); and 2 in Tags & Assignments, 1 tag and 1 assignment (1 new here, 1 kept as you have it here)."))
 
         let unchanged = MovedWriting(notes: ImportCount(kept: 2), summaries: ImportCount(), tags: ImportCount(kept: 1),
                                      tagAssignments: ImportCount(), searchableDocuments: 2)
-        #expect(unchanged.report.hasPrefix("Your research data held the notes, summaries and tags in the export already, so none of them changed, and the server's copy of the index holds none of them: 2 Research Notes, each a document's note block; and 1 Tag."))
+        #expect(unchanged.report.hasPrefix("Your research data held the notes, summaries and tags in the export already, so none of them changed, and the server's copy of the index holds none of them: 2 Research Notes, each a document's note block; and 1 in Tags & Assignments, 1 tag and no assignments."))
 
         let none = MovedWriting(notes: ImportCount(), summaries: ImportCount(), tags: ImportCount(), tagAssignments: ImportCount(),
                                 searchableDocuments: 0)

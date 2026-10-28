@@ -91,7 +91,7 @@ describe('the rail’s Summary', () => {
     expect(document.activeElement).toBe(older);
   });
 
-  it('says a summary from a research database is one, in its prompt’s place, read-only (S16e)', async () => {
+  it('says a summary from a research database is one, in its prompt’s place, and offers Delete… but not Edit… (S16e)', async () => {
     reader({
       [documentPaths.summaries]: documentSummaries([
         summary({
@@ -100,6 +100,7 @@ describe('the rail’s Summary', () => {
           responseText: 'The newest summary the index kept.',
           authorship: 'aiGenerated',
           editable: false,
+          deletable: true,
           fromResearchDatabase: true,
         }),
       ]),
@@ -111,6 +112,7 @@ describe('the rail’s Summary', () => {
     expect(header.querySelector('.summary-label')?.textContent).toBe('AI summary');
     expect([...header.querySelectorAll('.summary-prompt')].map((part) => part.textContent)).toEqual(['· From a research database']);
     expect(within(region()).queryByRole('button', { name: 'Edit…' })).toBeNull();
+    expect(within(region()).getByRole('button', { name: 'Delete…' })).toBeTruthy();
   });
 
   it('previews the summary shown in its header when it is closed, and shows no control for one summary', async () => {

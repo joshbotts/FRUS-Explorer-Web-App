@@ -25,9 +25,9 @@ Phase 2's row S16e, SPEC's last resort. Import mode in phase 1 refused a Mac "Ex
 - **The writing and the store** (`Sources/FRUSLightCore/ResearchDatabaseWriting.swift`). `ResearchDatabaseWriting` is what the copy holds. `ResearchDatabaseMark` is how a record is known to be from a research database. `SQLiteUserStore.keep(_:summaryFormat:for:)` writes the records through S16c's row writer, which `importResearch` and it now share, and makes `user_search` again. `MovedWriting` and its report count four kinds, each as a JSON import counts a type.
 - **The API** (`Sources/FRUSLightAPI/ResearchDatabaseImport.swift`). Import mode's importer is given the kit's `ResearchDatabaseStrip.steps`, and the store for its single user, whenever `FRUS_USER_DATA` is on. Notes and summaries carry `fromResearchDatabase`. `/api/v1/status`'s `lastImport` gains `writing`, the counts, and its message the report.
 - **SQLite's temporary folder.** `FRUSLightServer` names `/data/tmp` in `SQLITE_TMPDIR` before anything opens a database, unless the environment names one. `compose.yaml` makes `/tmp` a tmpfs, held in memory, and `VACUUM`'s copy of the full corpus is as large as the index. The server's log names the folder.
-- **The browser app.** The rail's note rows and All Notes' rows say "From a research database" of a note block, and the Summary section's header says so of a summary, in its prompt's place.
+- **The browser app.** The rail's note rows and All Notes' rows say "From a research database" of a note block, and the Summary section's header says so of a summary, in its prompt's place, with Delete… but no Edit….
 - **The synthetic export:** `Tests/FRUSLightTestSupport/Fixtures/export-writing.sql`, two summaries, two note blocks and three tags, one of them on no document. `SyntheticExport.includesWriting` and `scripts/synthetic-export --writing` both read it, so the two cannot drift apart.
-- **The Compose smoke test.** After its JSON import, it copies an export with writing into the running container, waits for the report, and checks that it names what moved, the mark and the JSON export. It copies the installed index out and runs `scripts/check-stripped-export` over it, then reads the note block and the summary back, marked, through the API. CI pulls `swift:6.4-noble` for the script's search.
+- **The Compose smoke test.** After its JSON import, it copies an export with writing into the running container, waits for the report, and checks that it names what moved, the mark and the JSON export. It copies the installed index out and runs `scripts/check-stripped-export` over it, then reads the note block and the summary back, marked, through the API. Then it runs the image in a container of its own whose `/tmp` holds 64 KB, where a 14 MB export with writing installs, and fails to with `SQLITE_TMPDIR=/tmp`. CI pulls `swift:6.4-noble` for the script's search.
 
 **Decided here, each the web's own**
 
@@ -35,18 +35,26 @@ Phase 2's row S16e, SPEC's last resort. Import mode in phase 1 refused a Mac "Ex
   - **A summary carries the web's own prompt id,** `0EB00000-0000-4000-8000-000000000002`, which no prompt row holds. Its prompt id has to name something, since the index does not keep the real one. It is how the app knows a collection's headnote draft, by `0EAD0000-0000-4000-8000-000000000001`, and how the web knows its reader's own summaries, by `…0001`.
   - **A note has no field to hold a mark, so its id is the mark.** The id is a name-based UUID (version 5, RFC 9562) of its document, in a namespace of the web's own. It is recognized wherever the note goes, an export and an import included. A later export's block finds its earlier one and replaces it rather than standing beside it.
   - **The summary's id is named the same way,** for the same reason. So is each assignment's, which the index keeps without one.
-  - **Tags need no mark.** They are the Mac's own records under the Mac's own ids, and the documents they are on are facts the index keeps whole, so the JSON export's copies of them, imported before or after, are the same records.
+  - **Tags need no mark.** They are the Mac's own records under the Mac's own ids, which the JSON export carries too, so a JSON import before or after finds the same tags. Their assignments are the same facts under ids of their own. A research database adds none for a document that carries the tag already, but a JSON import after it adds the Mac's beside them, which every reader takes as one, as the app does with two.
 
   The API gives the mark as `fromResearchDatabase`.
-- **Every record is as new as the export,** its stamp's `exported_at`, which a new record also takes as when it was made. A record the store holds is replaced only by a newer copy, as S16c's rule has it, and only in what the export says. So the same export again changes nothing, and a later one replaces each block and summary. A block's projects and tags, which the reader may have given it here, stay, and a block the reader formatted here is plain again. A stamp with no `exported_at` is refused.
+- **A research database replaces only what one brought before, while the reader has not changed it here.** The index keeps no record's own times, so each record takes the export's `exported_at`, which over-claims: a tag the Mac has not renamed since September looks newer than one renamed here in October. So:
+  - **a block** is made at its export's time, and a change here stamps it later. A later export replaces a block only when the earlier one is unchanged here, and newer and different. A block's projects and tags stay, and a block the reader formatted here is plain again;
+  - **a summary,** which no one changes here, is replaced when the later export's is newer and different;
+  - **tags are only added,** never renamed. A Mac rename reaches the web through the JSON export, whose times are each record's own.
+
+  So the same export again writes nothing. A stamp with no `exported_at` is refused.
 - **What the user's own records hold already is not written again,** and is counted as kept:
   - a block the user's other notes on the document already are, joined as the index joins them, the standing mirror of `ResearchNote.indexedTextPerDocument`;
   - a summary whose text one of the user's summaries of the document already has;
+  - a tag they hold, which keeps its name;
   - an assignment of a tag the document already carries.
 
   So a research database imported after a JSON import of the same library adds only what the JSON export did not bring.
-- **A summary is a general one, not chunked, with no authorship.** The index keeps neither format nor authorship. Every reader takes no authorship as an AI summary, which every summary the index keeps is. A note block is a plain note.
+- **A summary is a general one, not chunked, with no authorship and no time it was made.** The index keeps none of them. Every reader takes no authorship as an AI summary, which every summary the index keeps is, and the app ranks a summary with no time last. So the document's own summaries, which a JSON import brings, come first, and `user_search` takes the newest of them. A note block is a plain note.
+- **The reader may delete a block or a summary from a research database,** but change only the block. A JSON import after a research database's brings the same notes and summaries again under the Mac's ids, so a summary that could not be deleted would stand beside its own copy for good.
 - **A server that keeps no user data refuses such an export,** as phase 1 did, in the same words with the reason. An unstamped copy that holds writing is still refused, since nothing says when it was made.
+- **Room for the strip is asked for before the copy.** An import with too little room is tried again every minute. If the room were asked for only after the copy, each try would copy the whole export to find there is none. So the importer reads the stamp from the file it was given and asks for three times the export's size, then asks again for twice the copy's before the strip.
 - **The importing user** is the store's single user, whom `FRUS_AUTH=none` acts for and who copies the export into the drop zone. S14e, which brings more than one user, decides whose the drop zone's writing is.
 - **The order puts the store last.** The brief's "moves …, then strips …, before it checks and installs it" runs here as: read the writing, strip, check, write the writing, install. Every check that can refuse a file comes before the one write outside the copy, which keeps the importer's rule that a refused file changes nothing. Only an install that fails after the store write leaves the writing kept without the index, and the import is then tried again, keeping what it kept.
 
@@ -63,25 +71,25 @@ Phase 2's row S16e, SPEC's last resort. Import mode in phase 1 refused a Mac "Ex
 
 **Tests**
 
-- **FRUSLightCoreTests,** 106 to 111. `ResearchDatabaseWritingTests`, 5:
+- **FRUSLightCoreTests,** 106 to 113. `ResearchDatabaseWritingTests`, 5:
   - the ids are version-5 UUIDs, checked against RFC 9562's own example, one for each kind and document;
   - the two marks;
   - the writing read as the index keeps it, a blank block none and an id that is no UUID given one;
   - the report's words.
 
-  `ImportTests` refuses an export with writing on a server that keeps no user data, and one whose stamp gives no time.
-- **FRUSLightServerTests,** 172 to 180. `ResearchDatabaseImportTests`, 8, through the server's own wiring, the kit's strip and the store:
+  `ImportTests` refuses an export with writing on a server that keeps no user data, and one whose stamp gives no time on a server that keeps it. `UserSummaryTests` deletes a summary from a research database, and refuses to change it.
+- **FRUSLightServerTests,** 172 to 181. `ResearchDatabaseImportTests`, 9, through the server's own wiring, the kit's strip and the store:
   - **the row's done-when.** The steps in order. The installed index holds no writing in its tables, no term in `user_content`, the stamp of a copy made without it, and none of check 5's snippets or the writing's own words in its bytes, which the controls find in the export. The store holds every block, summary, tag and assignment, marked, and `user_search` finds them;
-  - the same export again keeps everything;
-  - a later export replaces what changed and keeps the reader's tags on a block;
-  - what the user's records hold is not added again;
+  - the same export again writes nothing;
+  - a later export replaces the block and summary that changed, keeps the reader's tags on a block and a block the reader rewrote, and renames no tag;
+  - what the user's records hold is not added again, a tag among them, which keeps its name;
   - a file damaged where only `VACUUM` reads it is refused and changes nothing;
-  - too little room for the strip is the server's problem;
-  - **free pages.** Over 3,000 notes and 1,500 summaries, the kit's statements at `FAST` leave words of both in the file, and the server's strip none;
-  - the report through `/api/v1/status`, and the marked records through the user's routes.
+  - too little room is the server's problem: asked for before the copy, and again before the strip;
+  - **free pages.** Over 3,000 notes and 1,500 summaries, the kit's statements at `FAST` leave words of both in the file. The server's setting, run on a connection at `FAST`, leaves none, and so does the server's strip;
+  - the report through `/api/v1/status`, the marked records through the user's routes, and a summary from a research database deleted but not changed.
 
-  Two tests that list a note's and a summary's keys now list `fromResearchDatabase`.
-- **The web unit suite,** 304 to 307 in 33 files: the mark in the rail's rows, in All Notes and in the summary's header.
+  Two tests that list a note's and a summary's keys now list `fromResearchDatabase`, and the summary's `deletable`.
+- **The web unit suite,** 304 to 307 in 33 files: the mark in the rail's rows, in All Notes and in the summary's header, which offers Delete… but not Edit… for a summary from a research database.
 
 **Results**
 
@@ -92,7 +100,14 @@ Phase 2's row S16e, SPEC's last resort. Import mode in phase 1 refused a Mac "Ex
   - **The new phase** imported `scripts/synthetic-export --own-text --writing` into the running container, whose root is read-only and whose `/tmp` is a tmpfs. The report named what moved, the mark and the JSON export.
   - **Check 5's script** ran over the index the server installed. It found 0 of the 11 snippets in its bytes, 0 rows with a summary, note or tag, 0 tags, and 0 terms in its `user_content`, where the export with writing's holds 56. Both controls held.
   - **The API** gave back the note block and the summary, marked.
-- **CI:** to come.
+- **CI on #69** was green at `5b90631`, before the review's fixes: the swift, web and compose jobs and both image builds.
+- **A review** read the diff cold, by reading only. It found no fault in the import's order, in the candidate's cleanup on every path, in how faults are sorted, in the store's ids, or in S16c's row writer, which the refactor left as it was. It found these, and each is fixed:
+  - **duplicate summaries the reader could not remove.** The report recommends a JSON import, which brings each summary again under the Mac's id, and the research database's copy, dated at the export, ranked first and was read-only. It now has no time it was made, so it ranks last, and it can be deleted;
+  - **a full copy of the export every minute** when there was room for the copy but not for the strip. The room is now asked for before the copy;
+  - **a later export reverting the reader's own changes.** Stamped with the export's time, a research database renamed a tag the reader had renamed here, and replaced a block the reader had rewritten, as "replacing an older copy", and counted unchanged tags as replaced. Tags are now only added, a block the reader changed is kept, and what is unchanged is not rewritten;
+  - **a smoke-test check that could fail at random:** `grep -q` under `pipefail`, against a log still being written. The check also proved only the environment variable, so CI now runs the small-`/tmp` check too;
+  - **a test that could not fail on CI,** since Ubuntu's SQLite zeroes freed pages by default. It now runs the server's setting on a connection at `FAST`;
+  - **docs that said more than the code:** COORDINATION's contract and README's line still refused or misordered the writing; SPEC called the web's labels the export sheet's words (the sheet says Research Notes and Tags & Assignments), and put the journal in `/data/tmp`; and the browser app's readiness type lacked the two new steps.
 
 **Records**
 

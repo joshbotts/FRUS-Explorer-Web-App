@@ -6,7 +6,7 @@
 // of every one. A summary the researcher writes here is the web's own, as are Write a Summary and its
 // Edit… and Delete…: the app writes none by hand, and nothing here makes or remakes one by a model. A
 // summary from a research database, whose prompt the index does not keep, says so in the prompt's
-// place (S16e).
+// place, and may be deleted, as its note block may, but not edited (S16e).
 import { useQueryClient } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
@@ -105,19 +105,21 @@ export function SummarySection({
           <p id={textId} className="summary-text">
             {shown.responseText}
           </p>
-          {shown.editable && (
+          {shown.deletable && (
             <div className="summary-actions">
-              <button
-                type="button"
-                aria-haspopup="dialog"
-                aria-describedby={textId}
-                onClick={(event) => {
-                  opener.current = event.currentTarget;
-                  setWriting({ summary: shown });
-                }}
-              >
-                {copy.summary.edit}
-              </button>
+              {shown.editable && (
+                <button
+                  type="button"
+                  aria-haspopup="dialog"
+                  aria-describedby={textId}
+                  onClick={(event) => {
+                    opener.current = event.currentTarget;
+                    setWriting({ summary: shown });
+                  }}
+                >
+                  {copy.summary.edit}
+                </button>
+              )}
               <button
                 type="button"
                 className="destructive"

@@ -166,9 +166,15 @@ public struct IndexImporter: Sendable {
         if ExportChecks.hasHotJournal(beside: source) {
             throw ImportRefusal(.copyingExport, "\(name) arrived with a \(name)-journal file that may hold an unfinished transaction, so it is a copy of a database in use. Remove \(name)-journal from /data/import, then copy in an export made with Export Research Database… in FRUS Explorer's settings.")
         }
-        let needed = (Self.size(of: source) ?? 0) + 64 * 1_048_576
+        // An export made with the owner's writing is stripped beside the index too, where `VACUUM`
+        // writes a whole copy and a journal: so it needs about three times its size, asked for before
+        // anything is copied, since an import that fails for room is tried again every minute.
+        let stripped = writingMove != nil && ExportChecks.stampSaysWriting(source)
+        let needed = (stripped ? 3 : 1) * (Self.size(of: source) ?? 0) + 64 * 1_048_576
         if let free = try? files.availableCapacity(), free < needed {
-            throw ImportProblem(.copyingExport, "Importing \(name) needs about \(gigabytes(needed)) free beside the index; \(gigabytes(free)) is free.")
+            throw ImportProblem(.copyingExport, stripped
+                ? "Importing \(name), which includes your notes, summaries and tags, needs about \(gigabytes(needed)) free beside the index, for its copy and for removing them from it; \(gigabytes(free)) is free."
+                : "Importing \(name) needs about \(gigabytes(needed)) free beside the index; \(gigabytes(free)) is free.")
         }
 
         do {
@@ -206,11 +212,10 @@ public struct IndexImporter: Sendable {
             await observer.importDidReach(.checkingVersions, detail: "Checking the index and FTS schema versions", progress: nil)
             _ = try await run(.checkingVersions) { try ExportChecks.checkVersions(copy, provenance: provenance) }
 
-            let includesWriting = provenance?["my_writing_included"] == "1"
-            await observer.importDidReach(.checkingWriting, detail: includesWriting
+            let canKeep = writingMove != nil
+            await observer.importDidReach(.checkingWriting, detail: canKeep && provenance?["my_writing_included"] == "1"
                 ? "Reading your notes, summaries and tags from the export" : "Checking that it holds no notes, summaries or tags",
                 progress: nil)
-            let canKeep = writingMove != nil
             let writing = try await run(.checkingWriting) {
                 try ExportChecks.checkWriting(copy, provenance: provenance, canKeep: canKeep)
             }
@@ -270,7 +275,7 @@ public struct IndexImporter: Sendable {
             throw ImportProblem(.strippingWriting, "Removing your notes, summaries and tags from the server's copy of \(name) needs about \(gigabytes(needed)) free beside the index; \(gigabytes(free)) is free.")
         }
         do {
-            try await Blocking.run { try copy.execute("PRAGMA secure_delete = ON") }
+            try await Blocking.run { try copy.execute(ExportChecks.stripSetting) }
             for step in steps {
                 await observer.importDidReach(.strippingWriting, detail: "\(step.action.prefix(1).uppercased())\(step.action.dropFirst()) in the server's copy",
                                               progress: nil)
@@ -413,11 +418,11 @@ enum ExportChecks {
     /// whose stamp denies writing it holds, or an unstamped copy that holds some.
     static func checkWriting(_ db: SQLiteConnection, provenance: [String: String]?, canKeep: Bool) throws -> ResearchDatabaseWriting? {
         if provenance?["my_writing_included"] == "1" {
-            guard let exportedAt = provenance?["exported_at"].flatMap(UserStoreDate.date) else {
-                throw ImportRefusal(.checkingWriting, "The export's stamp says it includes your notes, summaries and tags, but not when it was made, so the server cannot tell them from newer copies. Export again.")
-            }
             guard canKeep else {
                 throw ImportRefusal(.checkingWriting, "This export includes your notes, summaries and tags, and this server keeps no research data: FRUS_USER_DATA is off. Export again with Include My Notes, Summaries, and Tags turned off.")
+            }
+            guard let exportedAt = provenance?["exported_at"].flatMap(UserStoreDate.date) else {
+                throw ImportRefusal(.checkingWriting, "The export's stamp says it includes your notes, summaries and tags, but not when it was made, so the server cannot tell them from newer copies. Export again.")
             }
             return try ResearchDatabaseWriting(reading: db, exportedAt: exportedAt)
         }
@@ -427,6 +432,18 @@ enum ExportChecks {
                 : "The export's stamp says it excludes your writing, but it holds notes, summaries or tags. Export again.")
         }
         return nil
+    }
+
+    /// The setting the kit's strip runs under: SQLite writes zeros over each page it frees, which
+    /// Ubuntu's SQLite does by default and macOS's, at `FAST`, does not (`IndexImporter.strip`).
+    static let stripSetting = "PRAGMA secure_delete = ON"
+
+    /// Whether an export's stamp says it holds the owner's writing, read before it is copied; false
+    /// for a file whose stamp cannot be read, which the checks after the copy judge.
+    static func stampSaysWriting(_ url: URL) -> Bool {
+        guard let db = try? SQLiteConnection.immutable(url) else { return false }
+        defer { db.close() }
+        return (try? provenance(db))?["my_writing_included"] == "1"
     }
 
     /// Whether the copy holds any of the owner's writing: a summary, a note or a tag on a document,

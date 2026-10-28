@@ -1,12 +1,13 @@
 // An export made with the owner's writing (PLAN's S16e): what the Mac's index keeps of it, read from
 // the server's copy before the kit's strip removes it, and the records it becomes in the importing
-// user's store. The store writes them as a JSON import writes its rows (S16c), keyed by id, a copy it
-// holds replaced only by a newer one, at the time the Mac stamped the export with; and it leaves out
-// what the user's own records hold already. A note block and a summary are marked as from a research
-// database by values the app's model has, so the store gains no column: a summary by its prompt, as the
-// app knows a collection's headnote draft and the web its reader's own summaries, and a note block by
-// its id, named for its document. The tags are the Mac's own, under their ids, and so are the
-// documents they are on.
+// user's store. The store writes them through a JSON import's row writer (S16c), keyed by id, at the
+// time the Mac stamped the export with. Since that time is the export's, not each record's, a research
+// database replaces only what one wrote before and the reader has not changed here since, a document's
+// note block or summary, and only adds the tags and assignments the user lacks; what the user's own
+// records hold already it leaves as it is. A note block and a summary are marked as from a research
+// database by values the app's model has, so the store gains no column: a summary by its prompt, as
+// the app knows a collection's headnote draft and the web its reader's own summaries, and a note block
+// by its id, named for its document. The tags are the Mac's own, under their ids.
 
 import Crypto
 import Foundation
@@ -166,11 +167,13 @@ public enum ResearchDatabaseMark {
 /// it, counted as a JSON import counts a type.
 public struct MovedWriting: Sendable, Equatable, Codable {
     /// Research Notes: a document's note block each. One the user's other notes on the document hold
-    /// already, joined as the index joins them, is kept as they are.
+    /// already, joined as the index joins them, one an earlier export brought unchanged, and one the
+    /// reader changed here, are kept as they are.
     public var notes: ImportCount
-    /// Generated Summaries: a document's newest each. One whose text a summary of the user's on the
+    /// Generated summaries: a document's newest each. One whose text a summary of the user's on the
     /// document has already is kept as it is.
     public var summaries: ImportCount
+    /// Tags: one the user holds keeps its name.
     public var tags: ImportCount
     /// One for each document and tag: an assignment the user holds already is kept.
     public var tagAssignments: ImportCount
@@ -186,25 +189,30 @@ public struct MovedWriting: Sendable, Equatable, Codable {
         self.searchableDocuments = searchableDocuments
     }
 
-    /// What the import's report says of it: what moved, in the words of the app's export sheet, what
-    /// marks it, and the JSON export the index's writing is no substitute for, as SPEC recommends.
+    /// What the import's report says of it: what moved, in the words of the app's export sheet, its
+    /// Research Notes, the generated summaries its switch names, and its Tags & Assignments, counted
+    /// together as the sheet counts them; what marks it; and the JSON export the index's writing is no
+    /// substitute for, as SPEC recommends.
     public var report: String {
-        let counts = [notes, summaries, tags, tagAssignments]
-        let unchanged = counts.allSatisfy { $0.added == 0 && $0.replaced == 0 }
-        func phrase(_ count: ImportCount, _ one: String, _ many: String) -> String? {
+        let tagsAndAssignments = ImportCount(added: tags.added + tagAssignments.added, replaced: tags.replaced + tagAssignments.replaced,
+                                             kept: tags.kept + tagAssignments.kept)
+        let unchanged = [notes, summaries, tagsAndAssignments].allSatisfy { $0.added == 0 && $0.replaced == 0 }
+        func phrase(_ count: ImportCount, _ head: String) -> String? {
             guard count.total > 0 else { return nil }
             var parts: [String] = []
             if count.added > 0, count.added < count.total { parts.append("\(count.added) new here") }
             if count.replaced > 0 { parts.append("\(count.replaced) replacing \(count.replaced == 1 ? "an older copy" : "older copies")") }
-            if count.kept > 0, !unchanged { parts.append("\(count.kept) you had here already") }
-            let head = "\(count.total) \(count.total == 1 ? one : many)"
+            if count.kept > 0, !unchanged { parts.append("\(count.kept) kept as you have \(count.kept == 1 ? "it" : "them") here") }
             return parts.isEmpty ? head : "\(head) (\(parts.joined(separator: ", ")))"
         }
+        func many(_ count: Int, _ one: String, _ many: String) -> String { count == 0 ? "no \(many)" : "\(count) \(count == 1 ? one : many)" }
         let moved = [
-            phrase(notes, "Research Note, a document's note block", "Research Notes, each a document's note block"),
-            phrase(summaries, "Generated Summary, a document's newest", "Generated Summaries, each a document's newest"),
-            phrase(tags, "Tag", "Tags"),
-            phrase(tagAssignments, "Tag Assignment", "Tag Assignments"),
+            phrase(notes, notes.total == 1 ? "1 Research Note, a document's note block"
+                                           : "\(notes.total) Research Notes, each a document's note block"),
+            phrase(summaries, summaries.total == 1 ? "1 generated summary, a document's newest"
+                                                   : "\(summaries.total) generated summaries, each a document's newest"),
+            phrase(tagsAndAssignments, "\(tagsAndAssignments.total) in Tags & Assignments, \(many(tags.total, "tag", "tags")) and "
+                + many(tagAssignments.total, "assignment", "assignments")),
         ].compactMap { $0 }
         guard !moved.isEmpty else {
             return "The export was made with Include My Notes, Summaries, and Tags, but held no notes, summaries or tags."
@@ -223,15 +231,18 @@ public struct MovedWriting: Sendable, Equatable, Codable {
 
 /// Where an export's writing is kept: the user store.
 public protocol ResearchDatabaseWritingStore: Sendable {
-    /// Writes `writing` under `user` in one transaction, as a JSON import writes its rows: each tag
-    /// under its Mac id; each tag's assignment to a document unless the user's tags on the document
-    /// include it; each document's note block as a note, plain text, under `ResearchDatabaseMark`'s id
-    /// for it, unless the user's other notes on the document, joined as the index joins them, are the
-    /// block already; and each document's summary under the mark's id and prompt, with
-    /// `summaryFormat`, the kit's `ResponseFormat.general` as its encoder writes it, unless a summary
-    /// of the user's on the document has its text. A record the store holds by its id is replaced
-    /// only by a newer copy, the export's time being each record's; a new one takes that time as when
-    /// it was made too. Then the user's rows of `user_search` are made again.
+    /// Writes `writing` under `user` in one transaction, through a JSON import's row writer, the
+    /// export's time standing for each record's:
+    /// - each tag the user lacks, under its Mac id; one they hold keeps its name;
+    /// - each tag's assignment to a document, unless the document carries the tag already;
+    /// - each document's note block as a plain note, under `ResearchDatabaseMark`'s id for it, made
+    ///   at the export's time, unless the user's other notes on the document, joined as the index
+    ///   joins them, are the block already, or the block an earlier export brought is this one or
+    ///   has been changed here since; it replaces an earlier block only when it is newer;
+    /// - each document's summary under the mark's id and prompt, with `summaryFormat`, the kit's
+    ///   `ResponseFormat.general` as its encoder writes it, and no time it was made, unless a summary
+    ///   of the user's on the document has its text; it replaces an earlier one only when newer.
+    /// What is left out is counted as kept. Then the user's rows of `user_search` are made again.
     func keep(_ writing: ResearchDatabaseWriting, summaryFormat: String, for user: String) throws -> MovedWriting
 }
 
@@ -239,35 +250,41 @@ extension SQLiteUserStore: ResearchDatabaseWritingStore {
     public func keep(_ export: ResearchDatabaseWriting, summaryFormat: String, for user: String) throws -> MovedWriting {
         let time = SQLiteValue.text(UserStoreDate.text(export.exportedAt))
         return try writing { db in
-            // What the user holds of each document, read once.
+            // What the user holds, read once: each document's notes, with their times, its summaries
+            // but headnote drafts, and its tags; and the user's tags.
             var notes: [DocumentKey: [NoteRecord]] = [:]
-            for row in try db.query("SELECT id, volume_id, document_id, body_text, created_at FROM notes WHERE user_id = ?",
-                                    [.text(user)]) {
+            for row in try db.query(
+                "SELECT id, volume_id, document_id, body_text, created_at, last_modified FROM notes WHERE user_id = ?", [.text(user)]) {
                 let document = DocumentKey(volumeId: row[1].text ?? "", documentId: row[2].text ?? "")
                 notes[document, default: []].append(NoteRecord(
                     id: row[0].text ?? "", volumeId: document.volumeId, documentId: document.documentId,
                     bodyText: row[3].text ?? "", richText: nil, projectIds: [], userTagIds: [], selectedSummaryIds: [],
-                    createdAt: row[4].text.flatMap(UserStoreDate.date), lastModified: nil))
+                    createdAt: row[4].text.flatMap(UserStoreDate.date), lastModified: row[5].text.flatMap(UserStoreDate.date)))
             }
-            var summaryTexts: [DocumentKey: [(id: String, text: String)]] = [:]
+            var summaryTexts: [DocumentKey: Set<String>] = [:]
             for row in try db.query(
-                "SELECT id, volume_id, document_id, response_text FROM summaries WHERE user_id = ? AND is_headnote_draft = 0",
-                [.text(user)]) {
-                let document = DocumentKey(volumeId: row[1].text ?? "", documentId: row[2].text ?? "")
-                summaryTexts[document, default: []].append((UserSearchText.uuidString(row[0].text ?? ""), row[3].text ?? ""))
+                "SELECT volume_id, document_id, response_text FROM summaries WHERE user_id = ? AND is_headnote_draft = 0", [.text(user)]) {
+                summaryTexts[DocumentKey(volumeId: row[0].text ?? "", documentId: row[1].text ?? ""), default: []].insert(row[2].text ?? "")
             }
             var assigned: Set<String> = []
             for row in try db.query("SELECT volume_id, document_id, tag_id FROM tag_assignments WHERE user_id = ?", [.text(user)]) {
                 assigned.insert("\(row[0].text ?? "")/\(row[1].text ?? "")/\(UserSearchText.uuidString(row[2].text ?? ""))")
             }
+            let tags = Set(try db.query("SELECT id FROM tags WHERE user_id = ?", [.text(user)]).compactMap { $0[0].text }
+                .map(UserSearchText.uuidString))
 
-            // The rows, and what the user's own records hold already.
+            // The rows, and what the user holds already, which is kept as it is.
             var batch = ResearchImportBatch(rows: ["tags": [], "tag_assignments": [], "notes": [], "summaries": []])
-            var held = (notes: 0, summaries: 0, assignments: 0)
+            var held = (tags: 0, notes: 0, summaries: 0, assignments: 0)
             for tag in export.tags {
+                // A tag the user holds keeps its name: the index cannot say when it was renamed, and the
+                // copy here may be the reader's own rename or a JSON import's, with its own times.
+                guard !tags.contains(tag.id) else {
+                    held.tags += 1
+                    continue
+                }
                 batch.rows["tags", default: []].append(ImportRow(
-                    values: ["id": .text(tag.id), "name": .text(tag.name), "last_modified": time],
-                    defaults: ["created_at": time]))
+                    values: ["id": .text(tag.id), "name": .text(tag.name), "created_at": time, "last_modified": time]))
             }
             for document in export.documents {
                 let key = document.key
@@ -284,32 +301,36 @@ extension SQLiteUserStore: ResearchDatabaseWritingStore {
                 }
                 if let block = document.noteText {
                     let id = ResearchDatabaseMark.noteId(for: key)
-                    if UserSearchText.noteText((notes[key] ?? []).filter { UserSearchText.uuidString($0.id) != id }) == block {
+                    let own = (notes[key] ?? []).filter { UserSearchText.uuidString($0.id) != id }
+                    let earlier = (notes[key] ?? []).first { UserSearchText.uuidString($0.id) == id }
+                    if UserSearchText.noteText(own) == block || earlier?.bodyText == block || earlier.map(Self.changedHere) == true {
                         held.notes += 1
                     } else {
-                        // Plain text, as the index keeps it: a block the reader formatted here is plain again.
+                        // Plain text, as the index keeps it, and made by this import: so a block the
+                        // reader changes here afterwards is known by a change after it was made.
                         batch.rows["notes", default: []].append(ImportRow(
                             values: place.merging(["id": .text(id), "body_text": .text(block), "rich_text": .null,
-                                                   "last_modified": time]) { $1 },
-                            defaults: ["created_at": time, "project_ids": .text("[]"), "user_tag_ids": .text("[]"),
-                                       "selected_summary_ids": .text("[]")]))
+                                                   "created_at": time, "last_modified": time]) { $1 },
+                            defaults: ["project_ids": .text("[]"), "user_tag_ids": .text("[]"), "selected_summary_ids": .text("[]")]))
                     }
                 }
                 if let text = document.summaryText {
                     let id = ResearchDatabaseMark.summaryId(for: key)
-                    if (summaryTexts[key] ?? []).contains(where: { $0.id != id && $0.text == text }) {
+                    if summaryTexts[key]?.contains(text) == true {
                         held.summaries += 1
                     } else {
                         // The index says nothing of how the summary was made: by the model, as every
                         // summary the app's index keeps is, none of the authorship, as a file before
-                        // version 5 gives it, which every reader takes as an AI summary.
+                        // version 5 gives it, which every reader takes as an AI summary; nor when, so
+                        // it is made at no time, and the document's own summaries, a JSON import's,
+                        // rank above it, as the app ranks one with none.
                         batch.rows["summaries", default: []].append(ImportRow(
                             values: place.merging([
                                 "id": .text(id), "prompt_id": .text(ResearchDatabaseMark.promptId), "response_text": .text(text),
                                 "response_format": .text(summaryFormat), "was_chunked": .integer(0), "authorship": .null,
-                                "is_headnote_draft": .integer(0), "last_modified": time,
+                                "is_headnote_draft": .integer(0), "created_at": .null, "last_modified": time,
                             ]) { $1 },
-                            defaults: ["created_at": time, "source_content_hash": .null, "project_id": .null]))
+                            defaults: ["source_content_hash": .null, "project_id": .null]))
                     }
                 }
             }
@@ -320,9 +341,16 @@ extension SQLiteUserStore: ResearchDatabaseWritingStore {
                 return count
             }
             return MovedWriting(notes: count("notes", held: held.notes), summaries: count("summaries", held: held.summaries),
-                                tags: count("tags", held: 0), tagAssignments: count("tag_assignments", held: held.assignments),
+                                tags: count("tags", held: held.tags), tagAssignments: count("tag_assignments", held: held.assignments),
                                 searchableDocuments: try Self.rebuildSearch(for: user, in: db))
         }
+    }
+
+    /// Whether the reader changed a note block here after the import that made it: a block is made
+    /// at its export's time, and any later change, of its text, tags or projects, stamps it later.
+    static func changedHere(_ block: NoteRecord) -> Bool {
+        guard let made = block.createdAt, let changed = block.lastModified else { return false }
+        return changed > made
     }
 }
 

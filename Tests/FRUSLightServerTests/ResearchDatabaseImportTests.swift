@@ -2,11 +2,13 @@
 // wiring: the kit's strip, `ResearchDatabaseStrip.steps`, and the user store. The installed index holds
 // none of the writing, as scripts/check-stripped-export searches a stripped export, and the store holds
 // all of it, marked as from a research database; a second import changes nothing, and a later export
-// replaces what changed; what the user's own records hold already is not added again; a refusal still
-// changes nothing; and the report says what moved, through /api/v1/status and the user's routes.
+// replaces what an earlier one brought and the reader has not changed; what the user's own records
+// hold already is not added again; a refusal still changes nothing, and too little room is asked for
+// before anything is copied; and the report says what moved, through /api/v1/status and the user's
+// routes, where a summary from a research database can be deleted but not changed.
 
 import FRUSCoreKit
-import FRUSLightCore
+@testable import FRUSLightCore
 import FRUSLightTestSupport
 import Foundation
 import Hummingbird
@@ -34,7 +36,8 @@ struct WritingImportFixture {
     let rows: UserStoreRows
     let importer: IndexImporter
 
-    init(free: Int64? = nil) async throws {
+    /// `free`, the free space each look at the disk finds in turn, the last for every later one.
+    init(free: [Int64]? = nil) async throws {
         directory = try TemporaryDirectory()
         let files = DataDirectory(root: directory.url.appendingPathComponent("data"))
         try files.prepare()
@@ -68,10 +71,17 @@ struct WritingImportFixture {
     }
 }
 
-/// A data directory that reports how much disk is free as the test says.
-struct FreeSpace: FileStore {
+/// A data directory that reports how much disk is free as the test says, one answer for each look in
+/// turn, the last for every later one.
+final class FreeSpace: FileStore, @unchecked Sendable {
     let base: DataDirectory
-    let free: Int64
+    private let lock = NSLock()
+    private var answers: [Int64]
+
+    init(base: DataDirectory, free: [Int64]) {
+        self.base = base
+        answers = free
+    }
 
     var importDirectory: URL { base.importDirectory }
     var liveIndex: URL { base.liveIndex }
@@ -82,7 +92,9 @@ struct FreeSpace: FileStore {
     var exportsDirectory: URL { base.exportsDirectory }
     var backupsDirectory: URL { base.backupsDirectory }
     func prepare() throws { try base.prepare() }
-    func availableCapacity() throws -> Int64 { free }
+    func availableCapacity() throws -> Int64 {
+        lock.withLock { answers.count > 1 ? answers.removeFirst() : answers[0] }
+    }
 }
 
 @Suite struct ResearchDatabaseImportTests {
@@ -178,15 +190,22 @@ struct FreeSpace: FileStore {
         #expect(again.writing?.report.contains("held the notes, summaries and tags in the export already") == true)
     }
 
-    /// A later export replaces each document's block and summary, and a tag's name, under the same
-    /// ids; what the reader added to a block here, its tags, stays.
-    @Test func aLaterExportReplacesWhatChanged() async throws {
+    /// A later export replaces the block and the summary an earlier one brought, under the same ids,
+    /// where they changed and the reader has not changed them here: what the reader added to a block,
+    /// its tags, stays, a block the reader rewrote here is kept, and so is every tag's name, which
+    /// the index cannot date.
+    @Test func aLaterExportReplacesWhatAnEarlierBroughtAndTheReaderKept() async throws {
         let fixture = try await WritingImportFixture()
         let (_, dropped) = try fixture.drop(WritingImportFixture.withWriting)
         _ = try await fixture.importer.importExport(at: dropped, observer: WritingStepRecorder())
         let d1 = DocumentKey(volumeId: "frus1961-63v06", documentId: "d1")
+        let d2 = DocumentKey(volumeId: "frus1961-63v06", documentId: "d2")
         let block = ResearchDatabaseMark.noteId(for: d1)
+        // A tag on d1's block, as a raw write leaves it, at the time it was made; d2's block rewritten
+        // here, a change after it was made.
         try fixture.rows.run("UPDATE notes SET user_tag_ids = '[\"5C1E0003-7E4A-4B9C-9D2E-0A1B2C3D4E5F\"]' WHERE id = ?", [.text(block)])
+        try fixture.rows.run("UPDATE notes SET body_text = 'Rewritten here.', last_modified = '2026-10-05T00:00:00.000Z' WHERE id = ?",
+                             [.text(ResearchDatabaseMark.noteId(for: d2))])
 
         var later = WritingImportFixture.withWriting
         later.exportedAt = "2026-10-20T08:00:00Z"
@@ -197,28 +216,31 @@ struct FreeSpace: FileStore {
             UPDATE document_cache SET note_text = note_text || char(10) || char(10) || 'A third note, written after the first export.',
                                       summary_text = 'A newer summary of the telegram.'
                 WHERE volume_id = 'frus1961-63v06' AND document_id = 'd1';
+            UPDATE document_cache SET note_text = 'The note on d2, revised on the Mac.' WHERE volume_id = 'frus1961-63v06' AND document_id = 'd2';
             UPDATE user_tags SET name = 'Berlin crisis, chapter two' WHERE tag_id = '5C1E0001-7E4A-4B9C-9D2E-0A1B2C3D4E5F';
             """)
         edit.close()
 
         let imported = try await fixture.importer.importExport(at: try fixture.copyIn(laterSource, as: "later.sqlite"), observer: WritingStepRecorder())
 
-        // Every record of the later export is newer than the store's copy.
-        #expect(imported.writing == MovedWriting(notes: ImportCount(replaced: 2), summaries: ImportCount(replaced: 2),
-                                                 tags: ImportCount(replaced: 3), tagAssignments: ImportCount(kept: 4),
+        #expect(imported.writing == MovedWriting(notes: ImportCount(replaced: 1, kept: 1), summaries: ImportCount(replaced: 1, kept: 1),
+                                                 tags: ImportCount(kept: 3), tagAssignments: ImportCount(kept: 4),
                                                  searchableDocuments: 3))
         let stored = try #require(try fixture.rows.storedNote(block))
         #expect(stored.bodyText.hasSuffix("A third note, written after the first export."))
-        #expect(stored.createdAt == "2026-10-03T15:14:19.000Z" && stored.lastModified == "2026-10-20T08:00:00.000Z")
+        #expect(stored.createdAt == "2026-10-20T08:00:00.000Z" && stored.lastModified == "2026-10-20T08:00:00.000Z",
+                "made again by the later export")
         #expect(stored.userTagIds == "[\"5C1E0003-7E4A-4B9C-9D2E-0A1B2C3D4E5F\"]", "a replace writes only what the export says")
+        #expect(try fixture.rows.storedNote(ResearchDatabaseMark.noteId(for: d2))?.bodyText == "Rewritten here.")
         #expect(try fixture.store.summary(ResearchDatabaseMark.summaryId(for: d1), of: "owner")?.responseText == "A newer summary of the telegram.")
-        #expect(try fixture.store.tag("5C1E0001-7E4A-4B9C-9D2E-0A1B2C3D4E5F", of: "owner")?.name == "Berlin crisis, chapter two")
+        #expect(try fixture.store.tag("5C1E0001-7E4A-4B9C-9D2E-0A1B2C3D4E5F", of: "owner")?.name == "Berlin crisis chapter")
         #expect(try fixture.rows.column("SELECT count(*) FROM notes").first == "2")
         #expect(try fixture.rows.column("SELECT count(*) FROM summaries").first == "2")
     }
 
     /// What the user's own records hold already, from a JSON import of the same library, is not added
-    /// again: notes that join into the block, a summary with its text, the document's tag.
+    /// again: notes that join into the block, a summary with its text, the document's tag, and a tag
+    /// under its Mac id, which keeps the name it has here.
     @Test func whatTheUsersOwnRecordsHoldIsNotAddedAgain() async throws {
         let fixture = try await WritingImportFixture()
         try fixture.rows.addNote("10000000-0000-4000-8000-000000000001", bodyText: "Ask the archivist whether the Vienna cables survive in the embassy files.",
@@ -228,6 +250,11 @@ struct FreeSpace: FileStore {
         try fixture.rows.addSummary("20000000-0000-4000-8000-000000000001", volumeId: "frus1894Nicaragua", documentId: "d1",
                                     responseText: #"{"overview":"Minister Baker weighs the canal concession against British claims on the Mosquito Coast."}"#)
         try fixture.rows.addAssignment("30000000-0000-4000-8000-000000000001", documentId: "d1", tagId: "5c1e0002-7e4a-4b9c-9d2e-0a1b2c3d4e5f")
+        try fixture.rows.run("""
+            INSERT INTO tags (user_id, id, name, created_at, last_modified)
+                VALUES ('owner', '5C1E0001-7E4A-4B9C-9D2E-0A1B2C3D4E5F', 'Berlin, as renamed here', '2026-04-01T00:00:00.000Z',
+                        '2026-04-02T00:00:00.000Z')
+            """)
         // A note on d2 that is not its block: the block comes in beside it.
         try fixture.rows.addNote("10000000-0000-4000-8000-000000000003", documentId: "d2", bodyText: "Another note on d2.")
 
@@ -237,6 +264,8 @@ struct FreeSpace: FileStore {
         #expect(imported.writing?.notes == ImportCount(added: 1, kept: 1))
         #expect(imported.writing?.summaries == ImportCount(added: 1, kept: 1))
         #expect(imported.writing?.tagAssignments == ImportCount(added: 3, kept: 1))
+        #expect(imported.writing?.tags == ImportCount(added: 2, kept: 1))
+        #expect(try fixture.store.tag("5C1E0001-7E4A-4B9C-9D2E-0A1B2C3D4E5F", of: "owner")?.name == "Berlin, as renamed here")
         let d1 = DocumentKey(volumeId: "frus1961-63v06", documentId: "d1")
         #expect(try fixture.rows.storedNote(ResearchDatabaseMark.noteId(for: d1)) == nil)
         #expect(try fixture.rows.storedNote(ResearchDatabaseMark.noteId(for: DocumentKey(volumeId: "frus1961-63v06", documentId: "d2"))) != nil)
@@ -266,16 +295,32 @@ struct FreeSpace: FileStore {
         }
     }
 
-    /// The strip needs about twice the copy's size free, for `VACUUM`'s copy and its journal: too
-    /// little is the server's problem, tried again later, and changes nothing.
-    @Test func tooLittleRoomToStripIsTheServersProblem() async throws {
-        let export = WritingImportFixture.withWriting
-        let probe = try TemporaryDirectory()
-        try export.write(to: probe.url.appendingPathComponent("size.sqlite"))
-        let size = try #require(try FileManager.default.attributesOfItem(atPath: probe.url.appendingPathComponent("size.sqlite").path)[.size] as? NSNumber).int64Value
-        // Room for the copy, as the first check asks, but not for the strip.
-        let fixture = try await WritingImportFixture(free: size + 64 * 1_048_576 + 1)
-        let (_, dropped) = try fixture.drop(export)
+    /// An export with writing needs about three times its size free, for its copy, `VACUUM`'s copy and
+    /// its journal: too little is the server's problem, tried again later, asked for before anything
+    /// is copied, and it changes nothing.
+    @Test func tooLittleRoomToStripIsTheServersProblemBeforeTheCopy() async throws {
+        let size = try Self.size(of: WritingImportFixture.withWriting)
+        // Room for a copy, as an export without writing asks, but not for the strip.
+        let fixture = try await WritingImportFixture(free: [size + 64 * 1_048_576 + 1])
+        let (_, dropped) = try fixture.drop(WritingImportFixture.withWriting)
+        let recorder = WritingStepRecorder()
+        await #expect {
+            _ = try await fixture.importer.importExport(at: dropped, observer: recorder)
+        } throws: { error in
+            guard let problem = error as? FRUSLightCore.ImportProblem else { return false }
+            return problem.step == .copyingExport && problem.reason.contains("which includes your notes, summaries and tags")
+                && problem.reason.contains("free beside the index")
+        }
+        #expect(await recorder.details == ["Copying export.sqlite"], "nothing was copied")
+        #expect(!FileManager.default.fileExists(atPath: fixture.files.candidateIndex.path))
+        #expect(try fixture.rows.rows(of: "notes").isEmpty)
+    }
+
+    /// The strip asks again, once the copy is made: room that went meanwhile is the server's problem.
+    @Test func roomGoneBeforeTheStripIsTheServersProblem() async throws {
+        let size = try Self.size(of: WritingImportFixture.withWriting)
+        let fixture = try await WritingImportFixture(free: [3 * size + 64 * 1_048_576, size])
+        let (_, dropped) = try fixture.drop(WritingImportFixture.withWriting)
         await #expect {
             _ = try await fixture.importer.importExport(at: dropped, observer: WritingStepRecorder())
         } throws: { error in
@@ -284,6 +329,13 @@ struct FreeSpace: FileStore {
         }
         #expect(!FileManager.default.fileExists(atPath: fixture.files.candidateIndex.path))
         #expect(try fixture.rows.rows(of: "notes").isEmpty)
+    }
+
+    static func size(of export: SyntheticExport) throws -> Int64 {
+        let probe = try TemporaryDirectory()
+        let url = probe.url.appendingPathComponent("size.sqlite")
+        try export.write(to: url)
+        return try #require(try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber).int64Value
     }
 
     /// The kit's order rebuilds both full-text indexes after `VACUUM`, which may renumber the rows they
@@ -323,6 +375,17 @@ struct FreeSpace: FileStore {
         let left = (notes: try FileBytes.count("zqnote", in: control), summaries: try FileBytes.count("xvsumm", in: control))
         #expect(left.notes > 0 && left.summaries > 0, "without secure_delete, words of the notes and summaries stay in pages the rebuild freed: \(left)")
 
+        // The server's setting, on a connection at FAST as macOS's starts, so that a change to it fails
+        // here though Ubuntu's SQLite, CI's, zeroes freed pages by default.
+        let set = fixture.directory.url.appendingPathComponent("set.sqlite")
+        try FileManager.default.copyItem(at: source, to: set)
+        let setting = try SQLiteConnection(set.path, readOnly: false)
+        try setting.execute("PRAGMA secure_delete = FAST")
+        try setting.execute(ExportChecks.stripSetting)
+        for step in ResearchDatabaseStrip.steps { try setting.execute(step.sql) }
+        setting.close()
+        #expect(try FileBytes.count("zqnote", in: set) == 0 && FileBytes.count("xvsumm", in: set) == 0)
+
         let imported = try await fixture.importer.importExport(at: try fixture.copyIn(source, as: "many.sqlite"), observer: WritingStepRecorder())
 
         #expect(try FileBytes.count("zqnote", in: fixture.files.liveIndex) == 0)
@@ -352,7 +415,7 @@ struct FreeSpace: FileStore {
             #expect(report.outcome == .installed && report.file == "with-writing.sqlite")
             #expect(report.writing?.notes == ImportCount(added: 2) && report.writing?.tagAssignments == ImportCount(added: 4))
             #expect(report.message.hasPrefix("Installed 3 documents from 2 volumes, index version \(IndexCompatibility.supportedIndexVersion). Your notes, summaries and tags in the export were moved into your research data"))
-            #expect(report.message.contains("2 Research Notes, each a document's note block; 2 Generated Summaries, each a document's newest; 3 Tags; and 4 Tag Assignments."))
+            #expect(report.message.contains("2 Research Notes, each a document's note block; 2 generated summaries, each a document's newest; and 7 in Tags & Assignments, 3 tags and 4 assignments."))
             #expect(report.message.contains("marked as from a research database"))
             #expect(report.message.contains("Settings ▸ Data & Recovery ▸ Export as JSON"))
 
@@ -362,7 +425,12 @@ struct FreeSpace: FileStore {
             let summaries = try decode(DocumentSummaries.self, try await browser.get("/api/v1/me/volumes/frus1961-63v06/documents/d1/summaries"))
             let summary = try #require(summaries.items.first)
             #expect(summaries.items.count == 1 && summary.fromResearchDatabase && !summary.editable && summary.authorship == "aiGenerated")
-            #expect(summary.promptId == ResearchDatabaseMark.promptId && summary.promptName == nil)
+            #expect(summary.promptId == ResearchDatabaseMark.promptId && summary.promptName == nil && summary.createdAt == nil)
+            // Deleted, not changed, as a note block is.
+            #expect(summary.deletable)
+            let changed = try await browser.send(.put, "/api/v1/me/summaries/\(summary.id)", #"{"responseText":"Mine now."}"#)
+            #expect(changed.status == .forbidden && problemCode(changed) == "SUMMARY_READ_ONLY")
+            #expect(try await browser.send(.delete, "/api/v1/me/summaries/\(summary.id)").status == .noContent)
             let tags = try decode(DocumentTags.self, try await browser.get("/api/v1/me/volumes/frus1961-63v06/documents/d1/tags"))
             #expect(tags.items.map(\.name) == ["Berlin crisis chapter", "Vienna summit follow-up"])
             // A note the reader writes here is not marked.
