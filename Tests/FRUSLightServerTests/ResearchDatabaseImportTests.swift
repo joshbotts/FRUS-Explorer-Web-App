@@ -32,19 +32,31 @@ actor WritingStepRecorder: ImportObserver {
 struct WritingImportFixture {
     let directory: TemporaryDirectory
     let files: DataDirectory
-    let store: SQLiteUserStore
+    let store: RelationalUserStore
     let rows: UserStoreRows
     let importer: IndexImporter
+    /// What holds the PostgreSQL store (S14d), which drops its schema once the test lets it go, or nil
+    /// for app.db.
+    let postgreSQL: TestUserStore?
 
-    /// `free`, the free space each look at the disk finds in turn, the last for every later one.
-    init(free: [Int64]? = nil) async throws {
+    /// `free`, the free space each look at the disk finds in turn, the last for every later one; and
+    /// the store the writing goes into, app.db in the data directory or the PostgreSQL store.
+    init(free: [Int64]? = nil, kind: UserStoreKind = .sqlite) async throws {
         directory = try TemporaryDirectory()
         let files = DataDirectory(root: directory.url.appendingPathComponent("data"))
         try files.prepare()
         self.files = files
-        let store = try await SQLiteUserStore(url: files.userStore, backupsDirectory: files.backupsDirectory)
-        self.store = store
-        rows = try UserStoreRows(files.userStore)
+        switch kind {
+        case .sqlite:
+            store = try await SQLiteUserStore(url: files.userStore, backupsDirectory: files.backupsDirectory)
+            rows = try UserStoreRows(files.userStore)
+            postgreSQL = nil
+        case .postgreSQL:
+            let test = try await TestUserStore.open(.postgreSQL)
+            store = test.store
+            rows = test.rows
+            postgreSQL = test
+        }
         let held: any FileStore = free.map { FreeSpace(base: files, free: $0) } ?? files
         importer = IndexImporter(files: held, writer: LocalIndexWriter(files: held),
                                  writing: ResearchDatabaseImport.move(into: store))
@@ -88,6 +100,7 @@ final class FreeSpace: FileStore, @unchecked Sendable {
     var candidateIndex: URL { base.candidateIndex }
     var previousIndex: URL { base.previousIndex }
     var userStore: URL { base.userStore }
+    var userSearchCopy: URL { base.userSearchCopy }
     var volumesDirectory: URL { base.volumesDirectory }
     var exportsDirectory: URL { base.exportsDirectory }
     var backupsDirectory: URL { base.backupsDirectory }
@@ -101,8 +114,9 @@ final class FreeSpace: FileStore, @unchecked Sendable {
     /// The row's done-when: over a synthetic export with writing, the installed index holds none of
     /// it, in its tables, its `user_content` index or its bytes, which check 5's snippets and the
     /// writing's own words search, and the store holds all of it.
-    @Test func theInstalledIndexHoldsNoneOfTheWritingAndTheStoreAllOfIt() async throws {
-        let fixture = try await WritingImportFixture()
+    @Test(arguments: UserStoreKind.available) func theInstalledIndexHoldsNoneOfTheWritingAndTheStoreAllOfIt(_ kind: UserStoreKind) async throws {
+        let fixture = try await WritingImportFixture(kind: kind)
+        defer { withExtendedLifetime(fixture) {} }
         let (source, dropped) = try fixture.drop(WritingImportFixture.withWriting)
         let writing = try ExportWriting(of: source)
         #expect(writing.summaries.count == 2 && writing.notes.count == 2 && writing.tags.count == 3 && writing.assignments.count == 4)
@@ -173,8 +187,9 @@ final class FreeSpace: FileStore, @unchecked Sendable {
     }
 
     /// The same export again changes nothing: every record is as new as the store's copy.
-    @Test func aSecondImportOfTheSameExportKeepsEverything() async throws {
-        let fixture = try await WritingImportFixture()
+    @Test(arguments: UserStoreKind.available) func aSecondImportOfTheSameExportKeepsEverything(_ kind: UserStoreKind) async throws {
+        let fixture = try await WritingImportFixture(kind: kind)
+        defer { withExtendedLifetime(fixture) {} }
         let (source, dropped) = try fixture.drop(WritingImportFixture.withWriting)
         _ = try await fixture.importer.importExport(at: dropped, observer: WritingStepRecorder())
         let before = try (fixture.rows.rows(of: "notes"), fixture.rows.rows(of: "summaries"), fixture.rows.rows(of: "tags"),
@@ -194,8 +209,9 @@ final class FreeSpace: FileStore, @unchecked Sendable {
     /// where they changed and the reader has not changed them here: what the reader added to a block,
     /// its tags, stays, a block the reader rewrote here is kept, and so is every tag's name, which
     /// the index cannot date.
-    @Test func aLaterExportReplacesWhatAnEarlierBroughtAndTheReaderKept() async throws {
-        let fixture = try await WritingImportFixture()
+    @Test(arguments: UserStoreKind.available) func aLaterExportReplacesWhatAnEarlierBroughtAndTheReaderKept(_ kind: UserStoreKind) async throws {
+        let fixture = try await WritingImportFixture(kind: kind)
+        defer { withExtendedLifetime(fixture) {} }
         let (_, dropped) = try fixture.drop(WritingImportFixture.withWriting)
         _ = try await fixture.importer.importExport(at: dropped, observer: WritingStepRecorder())
         let d1 = DocumentKey(volumeId: "frus1961-63v06", documentId: "d1")
@@ -241,8 +257,9 @@ final class FreeSpace: FileStore, @unchecked Sendable {
     /// What the user's own records hold already, from a JSON import of the same library, is not added
     /// again: notes that join into the block, a summary with its text, the document's tag, and a tag
     /// under its Mac id, which keeps the name it has here.
-    @Test func whatTheUsersOwnRecordsHoldIsNotAddedAgain() async throws {
-        let fixture = try await WritingImportFixture()
+    @Test(arguments: UserStoreKind.available) func whatTheUsersOwnRecordsHoldIsNotAddedAgain(_ kind: UserStoreKind) async throws {
+        let fixture = try await WritingImportFixture(kind: kind)
+        defer { withExtendedLifetime(fixture) {} }
         try fixture.rows.addNote("10000000-0000-4000-8000-000000000001", bodyText: "Ask the archivist whether the Vienna cables survive in the embassy files.",
                                  createdAt: "2026-05-01T00:00:00.000Z")
         try fixture.rows.addNote("10000000-0000-4000-8000-000000000002", bodyText: "Compare this account with the memoir before drafting chapter three.",

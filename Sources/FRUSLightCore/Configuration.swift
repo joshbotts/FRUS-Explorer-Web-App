@@ -12,6 +12,12 @@ import Darwin
 public struct ServerConfiguration: Sendable, Equatable {
     public enum Mode: String, Sendable, Codable { case `import`, standalone }
     public enum Auth: String, Sendable, Codable { case none, local, header }
+    /// Where users and their data are kept (`FRUS_USER_STORE`): app.db, or since S14d a PostgreSQL
+    /// database, SPEC's option B.
+    public enum UserStoreChoice: Sendable, Equatable {
+        case sqlite
+        case postgreSQL(PostgreSQLConfiguration)
+    }
 
     public var mode: Mode
     public var auth: Auth
@@ -42,6 +48,9 @@ public struct ServerConfiguration: Sendable, Equatable {
     /// Whether the server keeps user data (`FRUS_USER_DATA`): off, it is read-only, with no tags,
     /// notes, highlights or collections, as an instance others reach with no sign-in must be.
     public var userData: Bool
+    /// The user store: app.db in the data directory, or a PostgreSQL database, its password from the
+    /// URL or from `FRUS_POSTGRES_PASSWORD_FILE`.
+    public var userStore: UserStoreChoice
     /// The hour of the user store's daily backup (`FRUS_BACKUP_HOUR`), 0 to 23 in the container's
     /// time zone, which `TZ` sets: 3 by default (PLAN's S14b).
     public var backupHour: Int
@@ -78,8 +87,9 @@ public struct ServerConfiguration: Sendable, Equatable {
         host: String = "127.0.0.1", port: Int = 8080, importPollInterval: Duration = .seconds(2),
         resourcesDirectory: URL = ServerConfiguration.imageResourcesDirectory,
         webDirectory: URL = ServerConfiguration.imageWebDirectory, requiresWebDirectory: Bool = false,
-        userData: Bool = true, backupHour: Int = 3, backupCopyDirectory: URL? = nil,
-        authHeader: String = "X-Forwarded-User", trustedProxies: [AddressRange] = [], adminUsers: Set<String> = []
+        userData: Bool = true, userStore: UserStoreChoice = .sqlite, backupHour: Int = 3,
+        backupCopyDirectory: URL? = nil, authHeader: String = "X-Forwarded-User",
+        trustedProxies: [AddressRange] = [], adminUsers: Set<String> = []
     ) {
         self.mode = mode
         self.auth = auth
@@ -94,6 +104,7 @@ public struct ServerConfiguration: Sendable, Equatable {
         self.webDirectory = webDirectory
         self.requiresWebDirectory = requiresWebDirectory
         self.userData = userData
+        self.userStore = userStore
         self.backupHour = backupHour
         self.backupCopyDirectory = backupCopyDirectory
         self.authHeader = authHeader
@@ -192,6 +203,30 @@ public struct ServerConfiguration: Sendable, Equatable {
             default: problems.append("FRUS_USER_DATA must be on or off, not \(raw)")
             }
         }
+        // The URL is never echoed: it may carry the store's password.
+        let passwordFile = value("FRUS_POSTGRES_PASSWORD_FILE")
+        switch value("FRUS_USER_STORE") {
+        case nil, "sqlite":
+            if passwordFile != nil {
+                problems.append("FRUS_POSTGRES_PASSWORD_FILE is for a PostgreSQL user store, and FRUS_USER_STORE names none")
+            }
+        case let raw?:
+            do {
+                var postgres = try PostgreSQLConfiguration(url: raw)
+                if let passwordFile {
+                    if postgres.password != nil {
+                        problems.append("FRUS_POSTGRES_PASSWORD_FILE gives a password for a FRUS_USER_STORE URL that has one: give it in one place")
+                    } else if let password = Self.password(in: passwordFile) {
+                        postgres.password = password
+                    } else {
+                        problems.append("FRUS_POSTGRES_PASSWORD_FILE must name a readable file holding the password, not \(passwordFile)")
+                    }
+                }
+                config.userStore = .postgreSQL(postgres)
+            } catch {
+                problems.append("FRUS_USER_STORE must be sqlite or a postgres:// URL, and this one \(error)")
+            }
+        }
         if let raw = value("FRUS_HOST") { config.host = raw }
         if let raw = value("FRUS_PORT") {
             if let port = Int(raw), (1...65_535).contains(port) { config.port = port } else {
@@ -225,6 +260,15 @@ public struct ServerConfiguration: Sendable, Equatable {
 
         if !problems.isEmpty { throw ConfigurationError(problems: problems) }
         return config
+    }
+
+    /// The password in `file`, without the line break that ends it, or nil when it cannot be read or
+    /// holds none.
+    private static func password(in file: String) -> String? {
+        guard var text = try? String(contentsOfFile: file, encoding: .utf8) else { return nil }
+        if text.hasSuffix("\n") { text.removeLast() }
+        if text.hasSuffix("\r") { text.removeLast() }
+        return text.isEmpty ? nil : text
     }
 
     /// The parts of `raw` as `URL` reads it, so a character it escapes is seen escaped.

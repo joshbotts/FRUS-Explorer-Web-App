@@ -14,8 +14,8 @@ import Testing
     static let d1 = DocumentKey(volumeId: "frus1961-63v06", documentId: "d1")
     static let general = #"{"general":{}}"#
 
-    @Test func aReadersOwnSummaryIsTheWebsOwn() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func aReadersOwnSummaryIsTheWebsOwn(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let text = "  My own summary.\n\nIn two paragraphs.\n"
         let summary = try store.createOwnSummary(in: Self.d1, text: text, responseFormat: Self.general, for: "owner", at: Self.created)
@@ -49,8 +49,8 @@ import Testing
 
     /// `GeneratedSummary.ranksAbove`: `createdAt` descending, one with none last; then
     /// `lastModified` descending, one with none last; then the id, in uppercase as `uuidString`.
-    @Test func aDocumentsSummariesComeInTheAppsOrder() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func aDocumentsSummariesComeInTheAppsOrder(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         try rows.addSummary("10000000-0000-4000-8000-000000000001", createdAt: "2026-03-01T00:00:00.000Z")
         try rows.addSummary("20000000-0000-4000-8000-000000000002", createdAt: nil, lastModified: "2027-01-01T00:00:00.000Z")
@@ -80,8 +80,8 @@ import Testing
 
     /// A summary from a research database (S16e) is read-only, as any import is, but may be deleted, as
     /// its note block may: a JSON import of the same library brings it again under the Mac's id.
-    @Test func aSummaryFromAResearchDatabaseMayBeDeletedButNotChanged() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func aSummaryFromAResearchDatabaseMayBeDeletedButNotChanged(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let id = "80000000-0000-4000-8000-000000000008"
         try rows.addSummary(id, promptId: ResearchDatabaseMark.promptId.lowercased(), authorship: nil, createdAt: nil)
@@ -96,8 +96,8 @@ import Testing
     /// headnote draft. Everything else is read-only: an AI summary, one with no authorship, and an
     /// imported headnote draft, `userWritten` with the app's headnote prompt, whose draft flag a file
     /// older than format 7 does not carry.
-    @Test func onlyTheReadersOwnSummariesChange() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func onlyTheReadersOwnSummariesChange(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let readOnly: [(String, String, String?, Bool)] = [
             ("10000000-0000-4000-8000-000000000001", "AA000000-0000-4000-8000-000000000001", "aiGenerated", false),
@@ -128,8 +128,8 @@ import Testing
 
     /// A summary's prompt is named only while the user has it (`SummarizationPrompt.resolve`'s
     /// `.requested`), so the names are by id, in uppercase whatever the import wrote.
-    @Test func promptsAreNamedByTheirIds() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func promptsAreNamedByTheirIds(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         try rows.addUser("reader")
         try rows.addPrompt("aa000000-0000-4000-8000-000000000001", name: "Meeting Record")
@@ -142,8 +142,8 @@ import Testing
 
     /// Projects by name, as `NotesPaneSnapshot` sorts them, with the tag list's comparison; then by
     /// id in uppercase, an import's lowercase one among them.
-    @Test func projectsAreListedByNameAndEachUsersAlone() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func projectsAreListedByNameAndEachUsersAlone(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         #expect(try store.projects(for: "owner").isEmpty, "none until an import")
         try rows.addUser("reader")
@@ -160,8 +160,8 @@ import Testing
         #expect(try store.projects(for: "reader") == [ProjectRecord(id: "E0000000-0000-4000-8000-000000000006", name: "Theirs")])
     }
 
-    @Test func eachUsersSummariesAreTheirsAlone() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func eachUsersSummariesAreTheirsAlone(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         try rows.addUser("reader")
         let theirs = try store.createOwnSummary(in: Self.d1, text: "Theirs.", responseFormat: Self.general, for: "reader", at: Self.created)

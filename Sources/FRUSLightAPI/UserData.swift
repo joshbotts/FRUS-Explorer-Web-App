@@ -228,8 +228,8 @@ struct UserDataServices: Sendable {
     /// The largest export an import may send: `importBodyLimit`, or a test's smaller one.
     let importLimit: Int
     /// Where the store's backups are kept, and the folder each is copied to (S14b), for the admin's
-    /// `/api/v1/admin/backup`.
-    let backupsDirectory: URL
+    /// `/api/v1/admin/backup`: none for a PostgreSQL store, whose backups are its database service's.
+    let backupsDirectory: URL?
     let backupCopyDirectory: URL?
 
     init(store: any UserDataStore, configuration: ServerConfiguration, tokens: CSRFTokens = CSRFTokens(),
@@ -246,7 +246,8 @@ struct UserDataServices: Sendable {
             proxies = nil
             self.resolver = resolver ?? SingleUserResolver(store: store)
         }
-        backupsDirectory = DataDirectory(root: configuration.dataDirectory).backupsDirectory
+        backupsDirectory = configuration.userStore == .sqlite
+            ? DataDirectory(root: configuration.dataDirectory).backupsDirectory : nil
         backupCopyDirectory = configuration.backupCopyDirectory
         self.tokens = tokens
         address = configuration.publicAddress

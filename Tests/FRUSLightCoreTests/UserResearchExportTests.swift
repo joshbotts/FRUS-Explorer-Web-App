@@ -11,8 +11,8 @@ import Testing
 @Suite struct UserResearchExportTests {
     static func id(_ number: Int) -> String { String(format: "5E16D000-0000-4000-8000-%012X", number) }
 
-    @Test func theRowsOfTheTablesNamedAreTheUsersInTheOrderTheStoreTookThem() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func theRowsOfTheTablesNamedAreTheUsersInTheOrderTheStoreTookThem(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         try rows.addUser("reader")
         // Ids that sort against the order the rows came in.
@@ -43,8 +43,8 @@ import Testing
     /// An instance-wide table's rows are every user's to read, when named; the prompts are the
     /// researcher's own, never a standard one, which no path here writes but the export would leave
     /// out, as the app's does.
-    @Test func anInstanceTablesRowsAndOnlyTheResearchersOwnPrompts() async throws {
-        let (store, rows, directory) = try await UserTagTests.open()
+    @Test(arguments: UserStoreKind.available) func anInstanceTablesRowsAndOnlyTheResearchersOwnPrompts(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(directory) {} }
         try rows.addUser("reader")
         _ = try store.importResearch(ResearchImportBatch(rows: ["classification_overrides": [ImportRow(values: [

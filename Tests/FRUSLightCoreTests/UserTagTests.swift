@@ -16,7 +16,16 @@ import Testing
     static let d1 = DocumentKey(volumeId: "frus1961-63v06", documentId: "d1")
     static let d2 = DocumentKey(volumeId: "frus1961-63v06", documentId: "d2")
 
-    /// A new store, a second connection to its file, and its folder, which a test keeps until it ends.
+    /// A new store of `kind`, a second connection to it, and what holds them, which a test keeps until
+    /// it ends: app.db, or the PostgreSQL store where the run has a database for it. The store tests
+    /// that take a kind are the conformance suite (S14d), each run on every store `UserStoreKind.available`
+    /// names.
+    static func open(_ kind: UserStoreKind) async throws -> (RelationalUserStore, UserStoreRows, TestUserStore) {
+        let test = try await TestUserStore.open(kind)
+        return (test.store, test.rows, test)
+    }
+
+    /// A new app.db, a second connection to its file, and its folder, for what only SQLite shows.
     static func open() async throws -> (SQLiteUserStore, UserStoreRows, TemporaryDirectory) {
         let directory = try TemporaryDirectory()
         let url = directory.url.appendingPathComponent("app.db")
@@ -24,8 +33,8 @@ import Testing
         return (store, try UserStoreRows(url), directory)
     }
 
-    @Test func aTagsNameIsTrimmedAndNeverEmpty() async throws {
-        let (store, _, directory) = try await Self.open()
+    @Test(arguments: UserStoreKind.available) func aTagsNameIsTrimmedAndNeverEmpty(_ kind: UserStoreKind) async throws {
+        let (store, _, directory) = try await Self.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let tag = try store.createTag(named: "  Primary source\n", for: "owner", at: Self.created)
         #expect(tag.name == "Primary source")
@@ -42,8 +51,8 @@ import Testing
         #expect(try store.tags(of: "owner").count == 2)
     }
 
-    @Test func tagsAreListedByNameAsTheAppSortsThemAndEachUsersAlone() async throws {
-        let (store, rows, directory) = try await Self.open()
+    @Test(arguments: UserStoreKind.available) func tagsAreListedByNameAsTheAppSortsThemAndEachUsersAlone(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await Self.open(kind)
         defer { withExtendedLifetime(directory) {} }
         try rows.addUser("reader")
         for name in ["revisit", "Berlin", "berlin", "Africa", "Tag 10", "Tag 9", "Élysée"] {
@@ -61,8 +70,8 @@ import Testing
         #expect(try store.tags(of: "reader").count == 1)
     }
 
-    @Test func aRenameMovesLastModifiedOnlyWhenTheNameChanges() async throws {
-        let (store, _, directory) = try await Self.open()
+    @Test(arguments: UserStoreKind.available) func aRenameMovesLastModifiedOnlyWhenTheNameChanges(_ kind: UserStoreKind) async throws {
+        let (store, _, directory) = try await Self.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let tag = try store.createTag(named: "Revisit", for: "owner", at: Self.created)
         #expect(try store.renameTag(tag.id, to: " Revisit ", for: "owner", at: Self.later) == tag, "the editor's Save leaves it")
@@ -74,8 +83,8 @@ import Testing
 
     /// `UserTagAdmin.deleteCascading`: the id leaves every note and project, each changed one
     /// stamped as modified, and every assignment goes.
-    @Test func aDeletedTagLeavesNoReferenceBehind() async throws {
-        let (store, rows, directory) = try await Self.open()
+    @Test(arguments: UserStoreKind.available) func aDeletedTagLeavesNoReferenceBehind(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await Self.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let doomed = try store.createTag(named: "Doomed", for: "owner", at: Self.created)
         let kept = try store.createTag(named: "Kept", for: "owner", at: Self.created)
@@ -103,8 +112,8 @@ import Testing
 
     /// `UserTagAdmin.merge`: every reference to the source names the target once, and the source
     /// goes. A document that carried both keeps one assignment of the target.
-    @Test func aMergedTagsReferencesMoveToTheTagItJoins() async throws {
-        let (store, rows, directory) = try await Self.open()
+    @Test(arguments: UserStoreKind.available) func aMergedTagsReferencesMoveToTheTagItJoins(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await Self.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let source = try store.createTag(named: "Cold War", for: "owner", at: Self.created)
         let target = try store.createTag(named: "Cold war", for: "owner", at: Self.created)
@@ -135,8 +144,8 @@ import Testing
 
     /// The picker's Done: the document carries exactly the tags asked for, one assignment each, and
     /// a tag it kept keeps its assignment.
-    @Test func aDocumentsTagsAreSetOneAssignmentEach() async throws {
-        let (store, rows, directory) = try await Self.open()
+    @Test(arguments: UserStoreKind.available) func aDocumentsTagsAreSetOneAssignmentEach(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await Self.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let a = try store.createTag(named: "A", for: "owner", at: Self.created)
         let b = try store.createTag(named: "B", for: "owner", at: Self.created)
@@ -164,8 +173,8 @@ import Testing
     }
 
     /// The Research rail's ×: one tag off one document, every assignment of it there.
-    @Test func aTagIsTakenOffOneDocument() async throws {
-        let (store, rows, directory) = try await Self.open()
+    @Test(arguments: UserStoreKind.available) func aTagIsTakenOffOneDocument(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await Self.open(kind)
         defer { withExtendedLifetime(directory) {} }
         let a = try store.createTag(named: "A", for: "owner", at: Self.created)
         let b = try store.createTag(named: "B", for: "owner", at: Self.created)

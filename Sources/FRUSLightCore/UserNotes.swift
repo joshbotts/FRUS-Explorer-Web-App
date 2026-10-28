@@ -130,7 +130,7 @@ public protocol NoteStore: Sendable {
     func deleteNote(_ id: String, for user: String) throws
 }
 
-extension SQLiteUserStore: NoteStore {
+extension RelationalUserStore: NoteStore {
     /// The order `notes(of:for:)` gives.
     private static let listOrder = "last_modified DESC NULLS LAST, upper(id)"
 
@@ -234,7 +234,7 @@ extension SQLiteUserStore: NoteStore {
     // MARK: Within a transaction
 
     /// A document's notes, in the rail's order, with the links of those notes alone.
-    private static func notes(of document: DocumentKey, for user: String, in db: SQLiteConnection) throws -> [NoteRecord] {
+    private static func notes(of document: DocumentKey, for user: String, in db: UserStoreTransaction) throws -> [NoteRecord] {
         let documentNotes = "SELECT upper(id) FROM notes WHERE user_id = ? AND volume_id = ? AND document_id = ?"
         let keys: [SQLiteValue] = [.text(user), .text(document.volumeId), .text(document.documentId)]
         let links = try highlightLinks(for: user, narrowedBy: "AND upper(note_id) IN (\(documentNotes))", keys, in: db)
@@ -243,7 +243,7 @@ extension SQLiteUserStore: NoteStore {
             .map { note($0, links: links) }
     }
 
-    private static func note(_ id: String, of user: String, in db: SQLiteConnection) throws -> NoteRecord? {
+    private static func note(_ id: String, of user: String, in db: UserStoreTransaction) throws -> NoteRecord? {
         // An id in any case, as an import may write one.
         guard let row = try db.query("SELECT \(noteColumns) FROM notes WHERE user_id = ? AND upper(id) = ?",
                                      [.text(user), .text(id)]).first else { return nil }
@@ -282,7 +282,7 @@ extension SQLiteUserStore: NoteStore {
     /// test, would spare that, and would be a migration (one on `note_id` itself would not, since
     /// the queries read it in uppercase).
     private static func highlightLinks(for user: String, narrowedBy filter: String = "", _ bindings: [SQLiteValue] = [],
-                                       in db: SQLiteConnection) throws -> [String: [String]] {
+                                       in db: UserStoreTransaction) throws -> [String: [String]] {
         var links: [String: [String]] = [:]
         for row in try db.query(
             """
@@ -297,7 +297,7 @@ extension SQLiteUserStore: NoteStore {
 
     /// The links of one note, whose id is in uppercase, as `ResearchNoteExport.linkedHighlightIds`
     /// derives them: a `noteId` in any case names it.
-    private static func highlightLinks(for user: String, ofNote id: String, in db: SQLiteConnection) throws -> [String: [String]] {
+    private static func highlightLinks(for user: String, ofNote id: String, in db: UserStoreTransaction) throws -> [String: [String]] {
         try highlightLinks(for: user, narrowedBy: "AND upper(note_id) = ?", [.text(id)], in: db)
     }
 
@@ -306,7 +306,7 @@ extension SQLiteUserStore: NoteStore {
     /// lacks (and kept as it was written when it is no UUID); any other must be a UUID naming one of
     /// the user's rows, so that a stale editor cannot put back an id a delete has just taken out.
     private static func resolved(_ given: [String], _ list: NoteIdList, carried: [String], for user: String,
-                                 in db: SQLiteConnection) throws -> [String] {
+                                 in db: UserStoreTransaction) throws -> [String] {
         var kept: [String] = []
         for id in given {
             let key = TagReferences.normalized(id)

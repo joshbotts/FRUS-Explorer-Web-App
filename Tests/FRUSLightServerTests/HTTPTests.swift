@@ -221,4 +221,49 @@ func decode<T: Decodable>(_ type: T.Type, _ response: TestResponse) throws -> T 
         #expect(FileManager.default.fileExists(atPath: files.importDirectory.path))
         #expect(FileManager.default.fileExists(atPath: files.userStore.path))
     }
+
+    /// A PostgreSQL store the server cannot reach stops its start, named by its URL without the password.
+    @Test func anUnreachablePostgreSQLStoreStopsTheStart() async throws {
+        let directory = try TemporaryDirectory()
+        var config = ServerConfiguration.testing(directory.url.appendingPathComponent("data"))
+        config.userStore = .postgreSQL(try PostgreSQLConfiguration(url: "postgres://frus:secret@127.0.0.1:1/frus?sslmode=disable"))
+        await #expect {
+            _ = try await buildApplication(configuration: config)
+        } throws: { error in
+            "\(error)".hasPrefix("the user store at postgres://frus@127.0.0.1:1/frus?sslmode=disable could not be opened: PostgreSQL connection:")
+                && !"\(error)".contains("secret")
+        }
+    }
+
+    /// FRUS_USER_STORE naming a PostgreSQL database (S14d): the server keeps the user's data there,
+    /// makes no app.db, and keeps the copy search reads in the data directory, written beside each change.
+    @Test(.enabled(if: TestPostgreSQL.isConfigured, "the PostgreSQL store needs FRUS_TEST_POSTGRES_URL, as scripts/swift --postgres sets"))
+    func aServerKeepsItsUsersDataInThePostgreSQLStoreItIsGiven() async throws {
+        let directory = try TemporaryDirectory()
+        let schema = TestPostgreSQL.newSchema()
+        defer { try? TestPostgreSQL.drop(schema) }
+        var config = ServerConfiguration.testing(directory.url.appendingPathComponent("data"))
+        config.userStore = .postgreSQL(try TestPostgreSQL.configuration(schema: schema))
+        let app = try await buildApplication(configuration: config)
+        try await app.test(.router) { client in
+            let browser = Browser(client: client)
+            let made = try await browser.send(.post, "/api/v1/me/tags", #"{"name": "Laos"}"#)
+            #expect(made.status == .created)
+            let tag = try decode(UserTag.self, made)
+            let set = try await browser.send(.put, "/api/v1/me/volumes/frus1961-63v06/documents/d1/tags", #"{"tagIds": ["\#(tag.id)"]}"#)
+            #expect(set.status == .ok)
+            #expect(try decode(TagList.self, try await browser.get("/api/v1/me/tags")).items.map(\.name) == ["Laos"])
+            let backup = try await client.execute(uri: "/api/v1/admin/backup", method: .get)
+            #expect(backup.status == .notFound && problemCode(backup) == "BACKUP_NOT_FOUND",
+                    "its backups are its database service's")
+        }
+        let files = DataDirectory(root: config.dataDirectory)
+        #expect(!FileManager.default.fileExists(atPath: files.userStore.path), "no app.db")
+        let copy = try SQLiteConnection(files.userSearchCopy.path, readOnly: true)
+        defer { copy.close() }
+        #expect(try copy.query("SELECT document_id FROM tag_assignments") == [[.text("d1")]])
+        let db = try PostgreSQLConnection.connect(try TestPostgreSQL.configuration(schema: schema))
+        defer { db.close() }
+        #expect(try db.query("SELECT name FROM tags", []) == [[.text("Laos")]])
+    }
 }

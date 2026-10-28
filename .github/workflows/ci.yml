@@ -1,5 +1,6 @@
 # FRUS Explorer Light CI, on every pull request and on main.
-# - swift: build and test in swift:6.4-noble with libsqlite3-dev, the way scripts/swift runs them.
+# - swift: build and test in swift:6.4-noble with libsqlite3-dev, the way scripts/swift runs them, with
+#   a PostgreSQL service, so the user store's conformance suite runs on both of its stores (S14d).
 # - web: the browser app in web/, typechecked, linted, unit-tested and built with Node at
 #   web/.node-version, as scripts/npm runs it.
 # - compose: build the image, then scripts/compose-smoke --e2e checks the browser app, the catalogue
@@ -33,6 +34,22 @@ jobs:
     # Under amd64 emulation with 4 CPUs, a build with no cache took 12 minutes and FTS5StoreTests
     # alone 5, so the job has the compose job's headroom.
     timeout-minutes: 45
+    # The PostgreSQL store's half of the user store's conformance suite runs against this database,
+    # which the job's container reaches by the service's name; the Test step names it in
+    # FRUS_TEST_POSTGRES_URL. Without it, the suite runs on app.db alone and the PostgreSQL store's own
+    # tests are skipped, which the Test step's count of skips refuses.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: frus
+          POSTGRES_PASSWORD: frus-light-tests
+          POSTGRES_DB: frus
+        options: >-
+          --health-cmd "pg_isready -U frus -d frus"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
     steps:
       - name: Install SQLite headers
         run: apt-get update -qq && apt-get install -y -qq --no-install-recommends libsqlite3-dev
@@ -104,6 +121,8 @@ jobs:
       # "A Lot File(s) prefix is skipped, never captured into the key", whose lines a looser pattern
       # took for a skip. grep -a reads the log and the file as text even if a test prints a NUL byte.
       - name: Test
+        env:
+          FRUS_TEST_POSTGRES_URL: postgres://frus:frus-light-tests@postgres:5432/frus?sslmode=disable
         run: |
           swift test --skip-build --scratch-path .build/linux --xunit-output test-results.xml 2>&1 | tee test.log
           results=test-results-swift-testing.xml

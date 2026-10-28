@@ -246,7 +246,7 @@ public protocol ResearchDatabaseWritingStore: Sendable {
     func keep(_ writing: ResearchDatabaseWriting, summaryFormat: String, for user: String) throws -> MovedWriting
 }
 
-extension SQLiteUserStore: ResearchDatabaseWritingStore {
+extension RelationalUserStore: ResearchDatabaseWritingStore {
     public func keep(_ export: ResearchDatabaseWriting, summaryFormat: String, for user: String) throws -> MovedWriting {
         let time = SQLiteValue.text(UserStoreDate.text(export.exportedAt))
         return try writing { db in

@@ -2,8 +2,8 @@
 
 import Foundation
 
-/// The users and their data. One SQLite implementation today, so a PostgreSQL store
-/// (the managed variant's option B) can be added rather than swapped in.
+/// The users and their data: app.db, SQLite's, and since S14d the PostgreSQL store, SPEC's option B,
+/// both `RelationalUserStore`s.
 public protocol UserStore: Sendable {
     /// The newest migration applied.
     func schemaVersion() throws -> Int
@@ -87,6 +87,11 @@ public enum UserStoreOpenError: Error, CustomStringConvertible {
     case newerThanThisBuild(store: Int, build: Int)
     /// A migration failed and was rolled back.
     case migrationFailed(from: Int, to: Int, backup: URL?, underlying: any Error)
+    /// The PostgreSQL store (S14d) was made by a newer build.
+    case postgreSQLNewerThanThisBuild(store: Int, build: Int)
+    /// One of the PostgreSQL store's migrations failed and was rolled back. Each runs in a transaction
+    /// of its own, so those before it stay applied, and the store is left at the one before it.
+    case postgreSQLMigrationFailed(leftAt: Int, to: Int, underlying: any Error)
 
     public var description: String {
         switch self {
@@ -95,22 +100,25 @@ public enum UserStoreOpenError: Error, CustomStringConvertible {
         case .migrationFailed(let from, let to, let backup, let underlying):
             let copy = backup.map { " Its copy from before is \($0.path)." } ?? ""
             return "app.db could not be migrated from \(from) to \(to) (\(underlying)), so it was left at \(from).\(copy)"
+        case .postgreSQLNewerThanThisBuild(let store, let build):
+            return "The PostgreSQL store is at migration \(store), newer than this build's \(build): run the newer image, or restore the database service's backup from before it"
+        case .postgreSQLMigrationFailed(let leftAt, let to, let underlying):
+            return "The PostgreSQL store could not be migrated to \(to) (\(underlying)): migration \(leftAt + 1) was rolled back, so it was left at \(leftAt)."
         }
     }
 }
 
 /// The user store in `/data/app/app.db`, with numbered, forward-only migrations. Before an existing
 /// store is migrated, it is copied into the backups folder; the migrations a start applies run in
-/// one transaction, so a failure leaves the store as it was.
-public final class SQLiteUserStore: UserStore, CorrectionStore, @unchecked Sendable {
+/// one transaction, so a failure leaves the store as it was. Its methods are `RelationalUserStore`'s,
+/// and it is the database the kit's search attaches.
+public final class SQLiteUserStore: RelationalUserStore, @unchecked Sendable {
     private let db: SQLiteConnection
     private let url: URL
     /// Held for each use of the connection. It is shared, and a transaction is a sequence of calls
     /// one caller drives: another caller's statement in between would run inside it, and read what
     /// it has not committed.
     private let access = NSLock()
-    /// What opening the store applied, or nil when it was already at this build's schema.
-    public let migration: UserStoreMigration?
 
     /// Opens or creates the store at `url`, migrating it to this build's schema. A copy taken
     /// before a migration goes into `backupsDirectory`.
@@ -126,7 +134,8 @@ public final class SQLiteUserStore: UserStore, CorrectionStore, @unchecked Senda
         try db.execute("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;")
         self.db = db
         self.url = url
-        migration = try await Self.migrate(db, at: url, to: migrations, backupsDirectory: backupsDirectory, now: now)
+        let migration = try await Self.migrate(db, at: url, to: migrations, backupsDirectory: backupsDirectory, now: now)
+        super.init(migration: migration, searchDatabase: url)
     }
 
     private static func migrate(_ db: SQLiteConnection, at url: URL, to migrations: [String], backupsDirectory: URL,
@@ -203,41 +212,23 @@ public final class SQLiteUserStore: UserStore, CorrectionStore, @unchecked Senda
         Int(try db.scalar("SELECT coalesce(max(version), 0) FROM schema_migrations")?.integer ?? 0)
     }
 
-    public func schemaVersion() throws -> Int { try access.withLock { try Self.version(of: db) } }
-
-    public func singleUserID() throws -> String { "owner" }
-
-    public func user(_ id: String) throws -> UserAccount? {
-        try reading { db in try Self.user(id, in: db) }
-    }
-
-    public func signedInUser(_ id: String, at time: Date) throws -> UserAccount {
-        if let user = try user(id) { return user }
-        return try writing { db in
-            _ = try db.query("INSERT INTO users (user_id, display_name, created_at) VALUES (?, ?, ?) ON CONFLICT (user_id) DO NOTHING",
-                             [.text(id), .text(id), .text(UserStoreDate.text(time))])
-            return try Self.user(id, in: db) ?? UserAccount(id: id, displayName: id)
-        }
-    }
-
-    private static func user(_ id: String, in db: SQLiteConnection) throws -> UserAccount? {
-        try db.query("SELECT user_id, display_name FROM users WHERE user_id = ?", [.text(id)]).first.map {
-            UserAccount(id: $0[0].text ?? id, displayName: $0[1].text ?? "")
-        }
+    /// The store itself is the database the kit's search attaches, so its `user_search` and tag
+    /// assignments are written in the method's own transaction.
+    private var transaction: UserStoreTransaction {
+        UserStoreTransaction(store: db, search: db, copiesTagAssignments: false)
     }
 
     /// Runs `body` on the connection, holding `access`.
-    func reading<T>(_ body: (SQLiteConnection) throws -> T) throws -> T {
-        try access.withLock { try body(db) }
+    override func reading<T>(_ body: (UserStoreTransaction) throws -> T) throws -> T {
+        try access.withLock { try body(transaction) }
     }
 
-    /// Runs `body` in one write transaction, holding `access` throughout: committed when it returns,
-    /// rolled back when it throws, so a rule that changes several tables changes all or none.
-    func writing<T>(_ body: (SQLiteConnection) throws -> T) throws -> T {
+    /// Runs `body` in one write transaction, holding `access` throughout.
+    override func writing<T>(_ body: (UserStoreTransaction) throws -> T) throws -> T {
         try access.withLock {
             try db.execute("BEGIN IMMEDIATE")
             do {
-                let value = try body(db)
+                let value = try body(transaction)
                 try db.execute("COMMIT")
                 return value
             } catch {
@@ -245,6 +236,11 @@ public final class SQLiteUserStore: UserStore, CorrectionStore, @unchecked Senda
                 throw error
             }
         }
+    }
+
+    /// Runs `body` on the connection itself, holding `access`: the tests' way to trace its statements.
+    func withConnection<T>(_ body: (SQLiteConnection) throws -> T) throws -> T {
+        try access.withLock { try body(db) }
     }
 
     /// Whether the store's connection enforces foreign keys, as it does once it is open.
@@ -266,64 +262,6 @@ public final class SQLiteUserStore: UserStore, CorrectionStore, @unchecked Senda
             UserStoreChangeMarker(changes: try db.scalar("SELECT total_changes()")?.integer ?? 0,
                                   others: try db.scalar("PRAGMA data_version")?.integer ?? 0)
         }
-    }
-
-    @discardableResult
-    public func record(_ correction: ClassificationOverride) throws -> ClassificationOverride {
-        try access.withLock { try upsert(correction) }
-    }
-
-    private static let overrideColumns = "id, volume_id, document_id, is_editorial_note, parsed_is_editorial_note, created_at"
-
-    private func upsert(_ given: ClassificationOverride) throws -> ClassificationOverride {
-        // To the store's precision, so what is returned is what is stored.
-        var correction = given
-        correction.createdAt = given.createdAt.map(UserStoreDate.rounded)
-        let time: SQLiteValue = correction.createdAt.map { .text(UserStoreDate.text($0)) } ?? .null
-        try db.execute("BEGIN IMMEDIATE")
-        do {
-            // The newest for the document, as the app's fetch sorted by createdAt, newest first,
-            // finds it: one with no time last. Two of one time fall to their ids, an order the
-            // PostgreSQL store (S14d) can keep too.
-            let existing = try db.query(
-                """
-                SELECT \(Self.overrideColumns) FROM classification_overrides WHERE volume_id = ? AND document_id = ?
-                    ORDER BY created_at DESC, id DESC LIMIT 1
-                """,
-                [.text(correction.volumeId), .text(correction.documentId)]).first.map(Self.correction)
-            var stored = correction
-            if let existing {
-                stored = existing
-                stored.isEditorialNote = correction.isEditorialNote
-                stored.createdAt = correction.createdAt
-                _ = try db.query("UPDATE classification_overrides SET is_editorial_note = ?, created_at = ? WHERE id = ?",
-                                 [.integer(correction.isEditorialNote ? 1 : 0), time, .text(existing.id)])
-            } else {
-                _ = try db.query(
-                    "INSERT INTO classification_overrides (\(Self.overrideColumns)) VALUES (?, ?, ?, ?, ?, ?)",
-                    [.text(correction.id), .text(correction.volumeId), .text(correction.documentId),
-                     .integer(correction.isEditorialNote ? 1 : 0), .integer(correction.parsedIsEditorialNote ? 1 : 0),
-                     time])
-            }
-            try db.execute("COMMIT")
-            return stored
-        } catch {
-            try? db.execute("ROLLBACK")
-            throw error
-        }
-    }
-
-    public func classificationOverrides() throws -> [ClassificationOverride] {
-        try access.withLock {
-            try db.query("SELECT \(Self.overrideColumns) FROM classification_overrides ORDER BY created_at, id")
-                .map(Self.correction)
-        }
-    }
-
-    private static func correction(_ row: [SQLiteValue]) -> ClassificationOverride {
-        ClassificationOverride(id: row[0].text ?? "", volumeId: row[1].text ?? "", documentId: row[2].text ?? "",
-                               isEditorialNote: row[3].integer == 1, parsedIsEditorialNote: row[4].integer == 1,
-                               createdAt: row[5].text.flatMap(UserStoreDate.date))
     }
 }
 

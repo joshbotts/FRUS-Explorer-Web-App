@@ -2,6 +2,7 @@
 # FRUS Explorer Light: runs swift inside swift:6.4-noble, with this repository mounted at /src.
 #   scripts/swift build | test | run | package ...   any swift arguments
 #   scripts/swift --exec <command> ...                any other command in the same container
+#   scripts/swift --postgres test ...                 either, with a PostgreSQL for the user store's tests
 # Works in a cloud session and on a Mac (macOS ships bash 3.2, so no newer bash features).
 #
 # - The image has no SQLite headers, so a small derived image adds libsqlite3-dev. It is built
@@ -12,7 +13,17 @@
 # - FRUS_RESOURCES_DIR names the submodule's FRUSExplorer/Resources, so `scripts/swift run
 #   FRUSLightServer` finds the app's data files in the folder the image copies to
 #   /usr/share/frus-light/resources.
+# - --postgres starts PostgreSQL in a container of its own, frus-light-postgres, on the same network,
+#   or uses the one running, and names it in FRUS_TEST_POSTGRES_URL, so the user store's conformance
+#   suite runs on the PostgreSQL store too, as CI's swift job runs it (S14d). Each test makes a schema
+#   of its own, so several runs may share the container. docker rm -f frus-light-postgres removes it.
 set -euo pipefail
+
+postgres=""
+if [ "${1:-}" = "--postgres" ]; then
+  postgres=1
+  shift
+fi
 
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 base=swift:6.4-noble
@@ -62,6 +73,25 @@ done
 run_args+=(-e FRUS_RESOURCES_DIR=/src/upstream/FRUS-Explorer/FRUSExplorer/Resources)
 # And the browser app from web/dist, when scripts/npm run build has made it.
 if [ -f "$root/web/dist/index.html" ]; then run_args+=(-e FRUS_WEB_DIR=/src/web/dist); fi
+
+if [ -n "$postgres" ]; then
+  pg_name=frus-light-postgres
+  pg_port=55432
+  if [ "$(docker container inspect --format '{{.State.Running}}' "$pg_name" 2>/dev/null)" != true ]; then
+    # Another run may make it at the same moment, and then this one starts it.
+    docker start "$pg_name" >/dev/null 2>&1 \
+      || docker run -d --name "$pg_name" --network host -e POSTGRES_USER=frus -e POSTGRES_PASSWORD=frus-light-tests \
+           -e POSTGRES_DB=frus postgres:18-alpine -c port="$pg_port" >/dev/null 2>&1 \
+      || docker start "$pg_name" >/dev/null
+  fi
+  ready=""
+  for _ in $(seq 1 60); do
+    if docker exec "$pg_name" pg_isready -q -h 127.0.0.1 -p "$pg_port" -U frus -d frus; then ready=1; break; fi
+    sleep 1
+  done
+  if [ -z "$ready" ]; then echo "scripts/swift: $pg_name did not take connections within a minute" >&2; exit 1; fi
+  run_args+=(-e "FRUS_TEST_POSTGRES_URL=postgres://frus:frus-light-tests@127.0.0.1:$pg_port/frus?sslmode=disable")
+fi
 
 # A session CA bundle may hold only the proxy's certificate, so add it to the image's own bundle.
 ca=""
