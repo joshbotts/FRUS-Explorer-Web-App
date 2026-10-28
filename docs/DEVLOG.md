@@ -4,7 +4,7 @@ One entry per session, newest first.
 
 ## Session 18b, follow-up: the link-alert test's random failure, upstream
 
-28 October 2026 · branch `claude/elated-lederberg-fc1c0a` · records only · upstream `1c18b51e`, unchanged; [FRUS-Explorer#1811](https://github.com/joshbotts/FRUS-Explorer/pull/1811), open
+28 October 2026 · branch `claude/elated-lederberg-fc1c0a` · [#79](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/79) · upstream `1c18b51e`, unchanged; [FRUS-Explorer#1811](https://github.com/joshbotts/FRUS-Explorer/pull/1811), open
 
 The Mac checks of FRUS-Explorer#1785, #1807 and #1809 each lost a re-run to `RichTextRestingCapTests`' link-alert test (#1360's capped editor), which failed at random at `v2` as at each branch. The checks of #1785 and #1809 also lost one to its colour-picker test. S18b's session asked for one pull request that stops the link-alert test failing, from `claude/link-alert-test-waits-for-its-presentation`, cut from `v2` at `fef96201`. It is labelled `Mac`, its body says "Mac verification requested", and it is not merged. It changes one file of the app's test target, which this repository neither compiles nor hashes into its golden files, and the app's plan, so no pin move needs it, and this repository changes only its records.
 
