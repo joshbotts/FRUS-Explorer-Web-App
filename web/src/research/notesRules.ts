@@ -1,9 +1,12 @@
-// The few lines of the app's view code that the browser app's notes mirror (PLAN's S15d, and its
-// rule for view code: "mirrored with a parity test that reads the app's source at the pin"), until
-// S17b moves All Notes' rules into the kit. FRUSParityTests' NoteViewParityTests reads this file and
-// the app's source, and holds each to the other: All Notes' rows and filters to `NotesPaneSnapshot`
-// and `AllNotesScreen`, and the rail's note rows and summary preview to `ResearchRailView`. A
-// character is a grapheme, as a Swift `Character` is, and lines and spaces are Foundation's sets.
+// The few lines of the app's code that the browser app's notes mirror (PLAN's S15d, and its rule for
+// view code: "mirrored with a parity test that reads the app's source at the pin"). All Notes' rows
+// and filters are the kit's `NotesPaneSnapshot` since S17b's FRUS-Explorer#1805, and are mirrored
+// here still, since the browser app filters the notes it holds as each key is typed.
+// FRUSParityTests' NoteViewParityTests reads this file
+// and the pinned source, and holds each to the other: All Notes' rows and filters to the kit's
+// `NotesPaneSnapshot` and the app's `AllNotesScreen`, and the rail's note rows and summary preview to
+// `ResearchRailView`. A character is a grapheme, as a Swift `Character` is, and lines and spaces are
+// Foundation's sets.
 import type { NoteSummary } from '../api/types';
 import { copy } from '../copy';
 
