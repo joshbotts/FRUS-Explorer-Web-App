@@ -2,6 +2,74 @@
 
 One entry per session, newest first.
 
+## Session 18c: pin move past FRUS-Explorer#1809, with #1808
+
+28 October 2026 · branch `claude/nervous-mccarthy-21018c` · [#77](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/77) · upstream `fef96201`
+
+Phase 2's row S18c. The pin moves from `1c18b51e` to `fef96201`, `v2`'s head, past S18b's [FRUS-Explorer#1809](https://github.com/joshbotts/FRUS-Explorer/pull/1809), a collection resolved through a data source in the kit, which the owner merged on 27 October as `fef96201`, a squash with its branch head's tree (`d1b45392`). `PLAN.md`'s rule has the move take every merge since the pin, and there is one more: the app's [#1808](https://github.com/joshbotts/FRUS-Explorer/pull/1808) (`3af1fc07`), which adds the website's drafts under `Planning/website-drafts/` and, in the app's plans, makes their writing and review work for after the submission. It changes no file this repository compiles or reads. No other upstream pull request was open when the session began; the one S16e's follow-up is preparing, which runs the export's strip with SQLite's `secure_delete` on, waits for a later move. The move is a pull request of its own under rule 5.
+
+**What the move brought, in shared code**
+
+- **#1809, in `FRUSCoreKit/SourceExplorer/`:** the archival indexes `ArchivalResolver` reads, `CentralFilesIndex`, `VolumeSourcesIndex` and `LotClaimantsIndex`, public with their decoders, and its document resolution over `ArchivalIndexes`, the three as one value. The stores that read the app's bundle stay in the app.
+- **#1809, in `FRUSCoreKit/Collections/`:** the five apparatus blocks (`CollectionGeneratedBlocks`) with their data source and a locale for the chronology; a collection's composition from the research data export's values (`CollectionExportOptions(composing:)`, `CollectionBodyDepth.available(summariesAvailable:)`); a smart collection's saved search and snapshot (`SmartCollectionSnapshot`); the assembly, `CollectionContentAssembly`, behind `CollectionContentDataSource`; and the `.fruscollection` file over values (`NativeCollectionFormat.swift`).
+- **In the kit's tests:** `CollectionResolutionTests.swift`, with two suites, `CollectionResolutionTests` and `CollectionValuesTests`. FRUSCoreKitTests runs 1,298, from 1,286.
+- The rest is the app's: `CollectionContentResolver` as the data source over SwiftData and `AppState`, the bundle's three index stores, the exporter's mapping through the models' new initialisers (`Models/Collection.swift`), the trip packet, the manuals and the plans.
+
+**No repair to the build.** `Package.swift` compiles `FRUSCoreKit/` by folder, so the new `SourceExplorer/` needed no change, and `tools/mac-golden` lists the kit whole. These are unchanged:
+- the build (1.0, 1776), so `scripts/release-tag` still says `1.0-1776`;
+- the index version (71) and the FTS generation (4), so `Compatibility.swift` and the install guide's versions stand;
+- the export's schema: `IndexingPipeline.swift` is unchanged, `setupDatabase(_:)` at lines 8010–8665, and FTS5Store too, so the 47 `CREATE TABLE` and `ALTER TABLE` statements stand;
+- `IndexingResources.indexResourceNames`, `FRUSExplorer/Resources`, the export's format version (7), the app's source folders in `project.yml`, and CI's allow-list.
+
+**On §5's indexing path,** `git diff 1c18b51e fef96201` over the parser's folder (`FRUSCoreKit/TEI`), `FRUSCoreKit/Search`, where `IndexingPipeline.swift` and its seams are, FTS5Store, SourceNoteKit, `FRUSExplorer/Resources` and `project.yml` is empty. #1809's kit code is in `FRUSCoreKit/Collections/` and `FRUSCoreKit/SourceExplorer/`, and nothing in the parser's folder, `FRUSCoreKit/Search`, FTS5Store or SourceNoteKit names a type it adds or moves. So the owner's seventh three-volume export, made on 24 October from a build of `503a730b`, holds what the indexer at `fef96201` would write, as it held what the indexer at `1c18b51e` would, and the golden files were remade from it, on the owner's word.
+
+**No parity test needed pointing anywhere,** as S18b's run over `main` at `2fac971` foresaw. Every check that reads the app's source passed at the new pin. `ExportParityTests`' mirror of the exporter still finds each line it reads, though #1809 moved a collection's fields into the app's `CollectionExport.init(_:entries:)` and `CollectionEntryExport.init(_:)` (`Models/Collection.swift`), the same fields as before; `ImportParityTests`' reads of `Models/Collection.swift` found theirs too.
+
+**`tools/mac-golden` from a folder that never built `Crypto`.** The first run of `scripts/make-golden`, from the app's source alone, made nothing: the tool did not build, since `ParityFormat`'s `import Crypto` found no module. The tool had never been built in this worktree, and a second build failed the same way. `swift package dump-pif` shows why. In SwiftPM's plan for the Mac's build system, `ParityFormat` reaches swift-crypto's `Crypto` twice, directly and through FRUSCoreKit, whose dependency on it is Linux's alone, and the plan keeps only the Linux condition. So on a Mac nothing in the tool's graph builds `Crypto`, and the dependency scan of `ParityFormat` fails. Putting `Crypto` first among the target's dependencies changes nothing in the plan.
+- **Since S17c's move,** which made `ParityFormat` depend on the kit, a tool built where `Crypto` was never built fails this way. S17c's own build presumably found `Crypto` left in its folder by a build before that change; its worktree is gone, so that cannot be checked.
+- **The root package's plan** gives `ParityFormat` the same Linux-only edge, and FRUSParity and FRUSRichText too. Its Mac build of `frus-parity` passed: FRUSLightCore, which FRUSParity links, needs `Crypto` everywhere, so that build makes it, though nothing there orders it before `ParityFormat`.
+- **The repair:** `ParityFormat` hashes as the kit does, with CryptoKit where it can import it and with swift-crypto, a dependency on Linux alone, where it cannot. `SHA256.hash(data:)` is the same call in both, and no golden file hashes the harness's own source, so none changes for it. The tool then built, and `make-golden` made every file. A build of the tool into an empty scratch folder then passed as well, in 241 seconds, and built no `Crypto` module.
+
+**The golden files**
+
+Remade by `scripts/make-golden --export /Users/Shared/frus-index-2026-10-24.sqlite`, under the app's `Scripts/heavy.sh` lock, on this Mac (macOS 27.2, Xcode 27.1): from the app's source, and, by the owner's choice, from the seventh three-volume export, which S16b's and S17c's moves were made from. The script works on a copy of the export. No new export was made, and no library was touched.
+- **The render and the expressions:** the 393 rows' HTML is byte for byte as before, and the manifest and the expressions change only in provenance: `sourceDigest` (`60d61d5d2ef1` to `bf053f59eb1d`) and `upstreamCommit`.
+- **The results** change only in that provenance. Every query's count, first 50 results and tie tail are as before.
+- **The index summary's** format and gating sections are unchanged. Beside the same provenance, its information section moves only in the summarizer's timings.
+- **The golden spans** change only in that provenance. The RTF the app's editor writes keeps S17c's `\cocoartf2908`, on the same macOS, and `fixtures/rich-text/web`, the codec's own RTF, is unchanged.
+- `frus-parity check-golden` passes, and `PENDING` stays empty.
+- `make-golden` left `tools/mac-golden/Package.resolved` changed again, pinning this package's 25 dependencies under Xcode 27.1's SwiftPM, as S17c's note says; the tool's own two pins, swift-crypto 5.0.0 and swift-asn1 1.7.3, are unchanged, and the change is left out.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** CI's swift job replayed with its PostgreSQL (`scripts/swift --postgres`) over `main` at `2a31f41`, this package's own targets built clean, with no warning, under the app's `Scripts/heavy.sh` lock: 2,533 tests, against the 2,521 CI ran on `main` at `2a31f41`, all passing with only the named skip, in Swift Testing's results file and in the log. The checks print:
+  - "check 2 passes: 36 digests and 7 checks are the Mac's";
+  - "check 3's results pass: 482 queries, 482 identical and 0 reordered only within Mac tie groups; 318 with other score bits (information)", and through the API "482 queries, 482 identical and 0 reordered only within Mac tie groups, every record the kit's own";
+  - "check 4 through the page: 393 of 393 rows identical", and the same on the reader's path and from one full parse per volume.
+- **Per target:** FRUSCoreKitTests 1,298, from 1,286, and every other target as on `main`: SourceNoteKitTests 321, FTS5StoreTests 219, FRUSLightServerTests 192, FRUSParityTests 189, FRUSLightCoreTests 152, ManifestGeneratorTests 60, FRUSRichTextTests 42, SemanticVectorsKitTests 40, CrossRefKitTests 10, GeneratorKitTests 7, FTS5CheckTests 3.
+- **Before the golden files were remade,** S18b's run over `main` at `2fac971`, with #1809 copied over the submodule, found only their staleness, 21 issues in 20 tests, since their source digest covers `FRUSCoreKit/` and `FRUSExplorer/` whole; this session did not repeat it.
+- **`tools/mac-golden`** built in release with `ParityFormat` hashing through CryptoKit, in this worktree's build folder and again into an empty one, where it built no `Crypto` module, and wrote the files above.
+- **The web job and the image** are CI's: nothing under `web/` changes, and the image compiles the kit at the new pin.
+
+**The daily watch.** Its issue for the last range, [#56](https://github.com/joshbotts/FRUS-Explorer-Web-App/issues/56), was closed by hand after S17c's merge, and its scheduled run had not yet come today when this was written; the last three ran between 11:00 and 13:15 UTC. If this has not merged by its next run, it opens an issue for `v2`'s two commits past `1c18b51e`, which this pull request takes, and its first run after the merge finds nothing past the pin and closes it.
+
+**Records**
+
+- `PLAN.md`: S18c's done paragraph after S14d's, S12d's row (from `fef96201`), S18c's row in #75's words, the golden-files checkpoint, and the risk rows' kit counts and merges.
+- `SPEC.md`: the compatibility contract, and `setupDatabase(_:)`'s lines.
+- `COORDINATION.md`: the pin; §1's use of the kit and its count; this move in §2; §5's list of app changes; §6's exports.
+- `docs/prep/README.md`: the pin. The README's Known gaps, its Next, and this log.
+
+**Notes**
+
+- **#75, S18b's records, is still open.** It edits the same paragraphs of `COORDINATION.md` §2 and §5 and the same rows of `PLAN.md`: S18c's row here is its words exactly, so that row merges clean, and whichever of the two merges second keeps both sides, #75's paragraph on #1809 in §2 before this move's, and this §5 line, which adds to #75's.
+- **Mac check 14** is still "To do" in `PLAN.md`, as 9 to 13 are. The owner merged #1809; its check is the owner's to record.
+- **The heavy-job lock was seldom free.** Other sessions' Linux batches, a Mac build for the export's `secure_delete` follow-up and a 30-round run of the editor's link-alert test held it between this session's jobs, so its runs waited longer than they took.
+- **`main`'s compose job failed at `2a31f41`** in one spec of the browser suite, `notes-keyboard.spec.ts`'s note written by keyboard alone, whose Link dialog's text box was never focused, and #75's run at `0cc13e6` failed the same spec; #73's run at `f9a078a` and both of #76's passed it. Nothing under `web/` changes here.
+- **Scratch:** the CI replay script and its logs in `.build/linux/s18c/`, and the clean tool build in the session's scratch folder; neither is committed.
+
+**Next: S18d,** collections and their editor, which puts a collection together on the server through the kit's `CollectionContentAssembly`, its store reads answered with the research data export's records. Beside it: S17d, search over the researcher's writing, with S17e and S17f.
+
 ## Session 14d: the PostgreSQL store
 
 27 October 2026 · branch `claude/clever-banach-5614db` · [#73](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/73) · upstream `1c18b51e`, unchanged
