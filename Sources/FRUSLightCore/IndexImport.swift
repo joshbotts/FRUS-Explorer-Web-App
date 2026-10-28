@@ -261,13 +261,13 @@ public struct IndexImporter: Sendable {
     /// names it, then stamps the copy as the app stamps one it made without the writing. A copy that
     /// still holds some is refused.
     ///
-    /// The statements run with SQLite's `secure_delete` on, which leaves zeros where they free a
-    /// page. The kit's order reclaims the freed pages before the two full-text indexes are rebuilt,
-    /// as it must, since `VACUUM` may renumber the rows they index; so the pages the rebuild of
-    /// `user_content` frees, which held the words of the notes and summaries, would otherwise stay
-    /// in the file. `VACUUM` writes a whole copy of the database beside it, in SQLite's temporary
-    /// folder (`FRUSLightServer` puts it under the data directory), and the pages it replaces in the
-    /// journal, so the strip needs about twice the copy's size free.
+    /// The statements run in their order on `copy` alone, since the kit's first, which turns SQLite's
+    /// `secure_delete` on so that zeros are written over every page freed after it, is a setting of
+    /// the connection's. The kit empties `user_content`, which held the words of the notes and
+    /// summaries, before the `VACUUM` reclaims the freed pages (FRUS-Explorer#1810). `VACUUM` writes a
+    /// whole copy of the database beside it, in SQLite's temporary folder (`FRUSLightServer` puts it
+    /// under the data directory), and the pages it replaces in the journal, so the strip needs about
+    /// twice the copy's size free.
     private func strip(_ copy: SQLiteConnection, of name: String, with steps: [StripStep],
                        observer: some ImportObserver) async throws {
         let needed = 2 * (Self.size(of: files.candidateIndex) ?? 0) + 64 * 1_048_576
@@ -275,7 +275,6 @@ public struct IndexImporter: Sendable {
             throw ImportProblem(.strippingWriting, "Removing your notes, summaries and tags from the server's copy of \(name) needs about \(gigabytes(needed)) free beside the index; \(gigabytes(free)) is free.")
         }
         do {
-            try await Blocking.run { try copy.execute(ExportChecks.stripSetting) }
             for step in steps {
                 await observer.importDidReach(.strippingWriting, detail: "\(step.action.prefix(1).uppercased())\(step.action.dropFirst()) in the server's copy",
                                               progress: nil)
@@ -433,10 +432,6 @@ enum ExportChecks {
         }
         return nil
     }
-
-    /// The setting the kit's strip runs under: SQLite writes zeros over each page it frees, which
-    /// Ubuntu's SQLite does by default and macOS's, at `FAST`, does not (`IndexImporter.strip`).
-    static let stripSetting = "PRAGMA secure_delete = ON"
 
     /// Whether an export's stamp says it holds the owner's writing, read before it is copied; false
     /// for a file whose stamp cannot be read, which the checks after the copy judge.

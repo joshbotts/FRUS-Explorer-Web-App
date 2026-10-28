@@ -357,10 +357,12 @@ final class FreeSpace: FileStore, @unchecked Sendable {
 
     /// The kit's order rebuilds both full-text indexes after `VACUUM`, which may renumber the rows they
     /// index, so the pages the rebuild of `user_content` frees, holding the words of the notes and
-    /// summaries, stay in the file. The server runs the statements with `secure_delete` on, which
-    /// leaves zeros there, as Ubuntu's SQLite does by default but macOS's does not: its default is
-    /// `FAST`, which zeroes no freed page. The control runs the same statements in `FAST` mode, over
-    /// an export whose many notes and summaries give `user_content` pages to free, and finds the words.
+    /// summaries, stay in the file unless SQLite writes zeros over them, as Ubuntu's does by default
+    /// but macOS's does not: its default is `FAST`, which zeroes no freed page. Since
+    /// FRUS-Explorer#1810 the kit's statements turn `secure_delete` on first and empty `user_content`
+    /// before the `VACUUM`, so the server runs them alone. Each copy here is stripped on a connection
+    /// at `FAST`, as macOS's starts, over an export whose many notes and summaries give `user_content`
+    /// pages to free. The control runs the statements without those two and finds the words.
     @Test func theStripLeavesNoWordOfTheWritingInFreedPages() async throws {
         let fixture = try await WritingImportFixture()
         let source = fixture.directory.url.appendingPathComponent("many.sqlite")
@@ -382,26 +384,26 @@ final class FreeSpace: FileStore, @unchecked Sendable {
             """)
         edit.close()
 
-        let control = fixture.directory.url.appendingPathComponent("control.sqlite")
-        try FileManager.default.copyItem(at: source, to: control)
-        let stripped = try SQLiteConnection(control.path, readOnly: false)
-        try stripped.execute("PRAGMA secure_delete = FAST")
-        for step in ResearchDatabaseStrip.steps { try stripped.execute(step.sql) }
-        stripped.close()
-        #expect(try ExportWriting(of: control).isEmpty)
-        let left = (notes: try FileBytes.count("zqnote", in: control), summaries: try FileBytes.count("xvsumm", in: control))
-        #expect(left.notes > 0 && left.summaries > 0, "without secure_delete, words of the notes and summaries stay in pages the rebuild freed: \(left)")
-
-        // The server's setting, on a connection at FAST as macOS's starts, so that a change to it fails
-        // here though Ubuntu's SQLite, CI's, zeroes freed pages by default.
-        let set = fixture.directory.url.appendingPathComponent("set.sqlite")
-        try FileManager.default.copyItem(at: source, to: set)
-        let setting = try SQLiteConnection(set.path, readOnly: false)
-        try setting.execute("PRAGMA secure_delete = FAST")
-        try setting.execute(ExportChecks.stripSetting)
-        for step in ResearchDatabaseStrip.steps { try setting.execute(step.sql) }
-        setting.close()
-        #expect(try FileBytes.count("zqnote", in: set) == 0 && FileBytes.count("xvsumm", in: set) == 0)
+        // At FAST, so that a change to the statements fails here though Ubuntu's SQLite, CI's, zeroes
+        // freed pages by default.
+        func wordsLeft(stripping name: String, with steps: [ResearchDatabaseStrip.Step]) throws -> (notes: Int, summaries: Int) {
+            let copy = fixture.directory.url.appendingPathComponent(name)
+            try FileManager.default.copyItem(at: source, to: copy)
+            let stripped = try SQLiteConnection(copy.path, readOnly: false)
+            try stripped.execute("PRAGMA secure_delete = FAST")
+            for step in steps { try stripped.execute(step.sql) }
+            stripped.close()
+            #expect(try ExportWriting(of: copy).isEmpty)
+            return (notes: try FileBytes.count("zqnote", in: copy), summaries: try FileBytes.count("xvsumm", in: copy))
+        }
+        // #1810's two statements, which keep the writing out of freed pages.
+        let added = ["PRAGMA secure_delete = ON", "INSERT INTO user_content(user_content) VALUES('delete-all')"]
+        let before = ResearchDatabaseStrip.steps.filter { !added.contains($0.sql) }
+        #expect(before.count == ResearchDatabaseStrip.steps.count - added.count, "the kit's statements hold #1810's two")
+        let left = try wordsLeft(stripping: "control.sqlite", with: before)
+        #expect(left.notes > 0 && left.summaries > 0, "without the two, words of the notes and summaries stay in pages the rebuild freed: \(left)")
+        let kits = try wordsLeft(stripping: "kit.sqlite", with: ResearchDatabaseStrip.steps)
+        #expect(kits.notes == 0 && kits.summaries == 0, "the kit's statements alone: \(kits)")
 
         let imported = try await fixture.importer.importExport(at: try fixture.copyIn(source, as: "many.sqlite"), observer: WritingStepRecorder())
 
