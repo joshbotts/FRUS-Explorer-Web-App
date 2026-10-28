@@ -13,7 +13,7 @@ import { errorMessage } from '../api/client';
 import type { Summary } from '../api/types';
 import { createSummary, deleteSummary, updateSummary } from '../api/userData';
 import { copy } from '../copy';
-import { Modal } from '../shell/Modal';
+import { closeAtOnce, Modal } from '../shell/Modal';
 
 /** The app's rail shows the 20 newest (`DocumentViewModel.loadSummaries`' fetch limit). */
 export const shownSummaries = 20;
@@ -206,7 +206,7 @@ function SummaryEditor({
     try {
       if (summary) await updateSummary(client, summary, text);
       else await createSummary(client, volumeId, documentId, text);
-      onClose(true);
+      closeAtOnce(() => onClose(true));
     } catch (error) {
       setFailure(errorMessage(error));
       setBusy(false);
@@ -251,7 +251,7 @@ function DeleteSummary({ summary, onClose }: { summary: Summary; onClose: (delet
     setFailure(null);
     try {
       await deleteSummary(client, summary);
-      onClose(true);
+      closeAtOnce(() => onClose(true));
     } catch (error) {
       setFailure(errorMessage(error));
       setBusy(false);

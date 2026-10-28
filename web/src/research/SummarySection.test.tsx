@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DocumentDetail, Summary } from '../api/types';
 import { resetPreferences } from '../settings/preferences';
+import { framesAtOnce } from '../test/frames';
 import { documentPaths, me, sent, summary } from '../test/notes';
 import { coverage, ready, renderAt, stubServer } from '../test/renderRoute';
 
@@ -201,6 +202,33 @@ describe('the rail’s Summary', () => {
       ['PUT', '/api/v1/me/summaries/MINE', { responseText: 'Second draft.' }],
       ['DELETE', '/api/v1/me/summaries/MINE', undefined],
     ]);
+  });
+
+  it('sends focus back once a saved or deleted summary’s dialog has gone, though a frame comes before React’s next task', async () => {
+    let items: Summary[] = [summary({ id: 'MINE', responseText: 'First draft.' })];
+    reader({
+      [documentPaths.summaries]: () => documentSummaries(items),
+      'PUT /api/v1/me/summaries/MINE': (_: URL, init?: RequestInit) => {
+        items = [summary({ id: 'MINE', responseText: sent(init).body.responseText })];
+        return items[0];
+      },
+      'DELETE /api/v1/me/summaries/MINE': () => {
+        items = [];
+        return null;
+      },
+    });
+    renderAt('/doc/frus1961-63v06/d1?rail=research');
+    const { region } = await section();
+    await userEvent.click(await within(region()).findByRole('button', { name: 'Edit…' }));
+    framesAtOnce();
+    let dialog = await screen.findByRole('dialog', { name: 'Edit Summary' });
+    await userEvent.type(within(dialog).getByRole('textbox'), ' Revised.');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(document.activeElement).toBe(within(region()).getByRole('button', { name: 'Edit…' })));
+    await userEvent.click(within(region()).getByRole('button', { name: 'Delete…' }));
+    dialog = await screen.findByRole('alertdialog', { name: 'Delete Summary?' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(document.activeElement).toBe(within(region()).getByRole('button', { name: 'Write a Summary' })));
   });
 
   it('shows at most the 20 newest, as the app’s rail does', async () => {
