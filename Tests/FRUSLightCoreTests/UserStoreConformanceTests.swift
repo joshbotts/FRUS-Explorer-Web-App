@@ -1,6 +1,6 @@
 // The user store's conformance suite (S14d): every store method answers alike on app.db and on the
-// PostgreSQL store. These tests hold what is the stores' own, each store's migrations, its users and
-// corrections, the values it keeps, and the database the kit's search attaches; the tests of each
+// PostgreSQL store. These tests hold what each store does its own way: its migrations, its users and
+// corrections, the values it keeps, and the database the kit's search attaches. The tests of each
 // protocol's methods, UserTagTests, UserNoteTests, UserHighlightTests, UserSummaryTests,
 // UserSearchTests, UserResearchImportTests and UserResearchExportTests, take a store kind too. Each
 // runs on every store `UserStoreKind.available` names: app.db always, and the PostgreSQL store where
@@ -8,7 +8,6 @@
 // so: tests that take `_ kind: UserStoreKind` with `arguments: UserStoreKind.available`, and open
 // their store with `UserTagTests.open(kind)`.
 
-import CSQLite
 @testable import FRUSLightCore
 import FRUSLightTestSupport
 import Foundation

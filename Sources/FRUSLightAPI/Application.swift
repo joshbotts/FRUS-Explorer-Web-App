@@ -62,13 +62,27 @@ struct ServerComponents: Sendable {
             }
             return store
         case .postgreSQL(let configuration):
-            let store = try await PostgreSQLUserStore(configuration: configuration, searchCopy: files.userSearchCopy,
+            let store: PostgreSQLUserStore
+            do {
+                store = try await PostgreSQLUserStore(configuration: configuration, searchCopy: files.userSearchCopy,
                                                       logger: logger)
+            } catch let error as PostgreSQLError {
+                throw UserStoreUnreachable(configuration: configuration, underlying: error)
+            }
             let migrated = store.migration.map { ", migrated from \($0.from) to \($0.to)" } ?? ""
             logger.info("User store: PostgreSQL at \(configuration)\(migrated), searched through \(files.userSearchCopy.path)")
             return store
         }
     }
+}
+
+/// The PostgreSQL user store could not be reached, or refused a statement, at start: named by its
+/// URL without the password.
+struct UserStoreUnreachable: Error, CustomStringConvertible {
+    let configuration: PostgreSQLConfiguration
+    let underlying: PostgreSQLError
+
+    var description: String { "the user store at \(configuration) could not be opened: \(underlying)" }
 }
 
 /// The server for `configuration`, with its import watcher as a service. Throws

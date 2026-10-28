@@ -2,6 +2,86 @@
 
 One entry per session, newest first.
 
+## Session 14d: the PostgreSQL store
+
+27 October 2026 · branch `claude/clever-banach-5614db` · PR_LINK · upstream `503a730b`, unchanged
+
+Phase 2's row S14d, on the server's track after S14c. The user store gains its second store, SPEC's option B: a PostgreSQL database beside `app.db`, which a deployment chooses with `FRUS_USER_STORE`. Every store method is one piece of code on both, and one conformance suite holds the two alike, in CI against a PostgreSQL service. No upstream pull request, no pin move, and no change to `app.db`'s migrations.
+
+**What the kit's search reads,** at `1c18b51e`, the pin S17c's [#68](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/68) moves to. `SearchUserSource.attachedStore(userId:)` (FRUS-Explorer#1806) reads two tables of the file attached as `user_store`, and nothing else of it:
+
+- `user_search`: its `MATCH` and `bm25`, its `user_id`, `volume_id` and `document_id`, and `summary_text` and `note_text` by name, which the exact-word filter reads through the kit's own `frus_exact_word`;
+- `tag_assignments`: `user_id`, `volume_id`, `document_id` and `tag_id`, for a tag filter (`tag_id = ? COLLATE NOCASE`), a row's tags (`DISTINCT upper(tag_id)`, sorted and joined), the tag counts and a tag's documents.
+
+So the PostgreSQL store's copy holds both tables, the row's `user_search` and the tag assignments beside it, and the assignments keep their ids and the case of their tags.
+
+**Delivered**
+
+- **One implementation of every store method** (`Sources/FRUSLightCore/RelationalUserStore.swift`). The users, the corrections, and the tag, note, highlight, summary, project, import and export methods move from `SQLiteUserStore` onto `RelationalUserStore`, which both stores subclass. Each store gives its own connection, its read and its write transaction, and its own migrations. The statements are the SQL both read:
+  - a `?` for each value;
+  - NULLs placed by `NULLS FIRST` or `NULLS LAST` wherever an order can meet one, where six orders left them to SQLite's default before, which PostgreSQL reverses;
+  - `rowid` for a row's place among its table's rows;
+  - one function through the connection's dialect, SQLite's `instr` or PostgreSQL's `strpos`.
+
+  An import reads the rows the store holds in the order of their ids, so where two ids differ only in case both stores find the same one. `UserStoreTransaction` carries the store's connection and the database the kit's search attaches: app.db itself, or the copy.
+- **The PostgreSQL connection** (`PostgreSQLConnection.swift`), over PostgresNIO 1.33.2, which is 1.33.1 with the swift-crypto 5 the server resolves allowed. Its future-based queries are waited for on the caller's thread, as a SQLite call is: the routes run store calls through `Blocking.run`, off the cooperative pool, and NIO's event loops answer them.
+  - A `?` goes as `$n`, outside quotes and comments. A value goes as SQLite keeps it, a text cut at a NUL as SQLite's binding cuts it, and a row comes back as SQLite gives it.
+  - TLS by libpq's `sslmode` names, `verify-full` by default, with `sslrootcert`; `prefer`, `allow` and any other parameter are refused. Each connection gives `application_name` `frus-light`.
+  - `PostgreSQLError` keeps PostgreSQL's SQLSTATE and message, where PostgresNIO's own errors print a placeholder.
+- **The store** (`PostgreSQLUserStore.swift`) and **its migrations** (`PostgreSQLMigrations.swift`): `app.db`'s two, by number, in PostgreSQL's SQL. They make the 23 tables with their columns, keys and indexes, each with `rowid` as an identity column and every text in the "C" collation, and fold `index_corrections` into classification overrides. Each runs in a transaction of its own, under an advisory lock, which every write transaction takes too. A read is one `REPEATABLE READ` snapshot. A connection that has closed is made again for the next call. A store a newer build migrated is refused, and a failed migration says where it left the store.
+- **The copy,** `/data/app/user-search.db`: removed, with any journal beside it, and made from the store at each start; then written beside each write, in a transaction committed after the store's. A note's or a summary's change writes its document's row of `user_search`; a tag change, the assignments of each document it touches; an import, all of the user's. A change the store took and the copy could not makes the copy again before the next call. `searchDatabase` names the file for the kit to attach: app.db for the SQLite store.
+- **Configuration:** `FRUS_USER_STORE`, `sqlite` or the database's URL, and `FRUS_POSTGRES_PASSWORD_FILE`. A problem with either never repeats the URL. The server opens the store named (`Application.swift`) and logs its URL without the password.
+- **`scripts/swift --postgres`** starts `frus-light-postgres`, PostgreSQL 18, on the Docker host's network, or uses the one running, and passes `FRUS_TEST_POSTGRES_URL` into the build container.
+- **CI:** a `postgres:18-alpine` service on the swift job, which the Test step names in `FRUS_TEST_POSTGRES_URL`. Without it the PostgreSQL store's own tests are skipped, and the step's count of skips fails the job, so the service cannot go missing unseen. No job is added, so `main`'s required checks are still `swift` and `compose`.
+
+**Decided here**
+
+- **One implementation, not two.** A PostgreSQL copy of each method would leave every later row two methods to write and keep alike. Written once, a row writes a method once, in SQL both read, and its tests once.
+- **Values as `app.db` keeps them,** a `Bool` as 0 or 1 in a `BIGINT` and a date as text, rather than PostgreSQL's `boolean` and `timestamptz`. One SQL text then serves both, a row moves between them unchanged, and an order of dates is an order of texts on both. The "C" collation makes PostgreSQL compare and order texts by their bytes, as SQLite does, and its `upper` fold ASCII alone.
+- **Writes take turns,** by the advisory lock: so a rule that reads before it writes, the picker's Done, a merge, an import, meets no other process's write between, as under SQLite's write lock. Its key is a constant with the hash of the store's schema, so the tests' schemas do not wait for each other.
+- **Each PostgreSQL migration in a transaction of its own,** as SPEC's Upgrades already said; `app.db`'s still run in one.
+- **One server per PostgreSQL store** until phase 6's change feed: a copy follows its own process's writes alone (SPEC, option B).
+- **PostgreSQL 14 or later,** in INSTALL. Nothing here needs more than 13 but a test's `pg_terminate_backend(pid, timeout)`, and 13 is past its end of life. CI tests 18.
+- **An empty RTF stays empty** on both stores, never none: SQLite keeps a zero-length blob, and the test that first said otherwise was wrong.
+
+**How a later row joins the suite**
+
+- A store method goes in an extension of `RelationalUserStore`, in SQL both stores read: a `?` for every value; `NULLS FIRST` or `NULLS LAST` in every order that can meet a NULL; `rowid` for the order rows came in; a function only one store has, only through `UserStoreDialect`; and each value of the kind `UserStoreSchema` gives its column, `.integer` 0 or 1 for a `Bool`, `.text` for a date or JSON, `.blob` for bytes. A change to notes or summaries calls `refreshSearch(of:for:in:)`, a change to a document's tag assignments `copyTagAssignments(of:for:in:)`, and one across a user's rows `rebuildSearch(for:in:)`, which copies the assignments too.
+- A migration goes in `UserStoreMigrations.all` and, by the same number, in `PostgreSQLMigrations.all`. `eachStoresMigrationsMakeTheTablesTheSchemaDescribes` holds both to `UserStoreSchema`.
+- Its tests take `_ kind: UserStoreKind`, with `arguments: UserStoreKind.available`, and open their store with `UserTagTests.open(kind)`; `UserStoreRows` seeds and reads either store. `scripts/swift --postgres test` runs them on both before a push.
+- **S16e, running beside this row:** its `keep(_:summaryFormat:for:)` moves from `extension SQLiteUserStore` to `extension RelationalUserStore`, its `SQLiteConnection` parameters become `UserStoreTransaction`, its refactor of the import's row writer takes the same parameter, and its store tests take a kind. Its statements already read on both, and the `rebuildSearch` it ends with copies the tag assignments it writes. Whichever merges second ports the other.
+- **S14b:** the daily backup is `app.db`'s, through `SQLiteUserStore.backUp`, so its service runs for that store alone.
+- **S14e:** a user made at sign-in is a method on `RelationalUserStore`; `INSERT … ON CONFLICT DO NOTHING` reads on both.
+- **S17d:** the kit attaches `store.searchDatabase`.
+
+**Tests**
+
+- **FRUSLightCoreTests,** 106 to 121:
+  - `UserStoreConformanceTests`, 5, each on both stores: each store's migrations held to `UserStoreSchema`, and a store opened again migrating nothing; a document's newest correction taking a change, the corrections oldest first and one with no time first of all; values in several scripts, a NUL, an RTF's bytes, an empty RTF, an integer at its end and a double; and the database search attaches after every kind of change, read through the kit's own statements at `1c18b51e`.
+  - `PostgreSQLConfigurationTests`, 3: a URL's parts, the URLs refused, and the placeholders' numbers.
+  - `PostgreSQLUserStoreTests`, 6, where a database is named: a store at migration 1 reaching 2 with its corrections; a failing migration leaving the store at the one before; a store a newer build migrated, refused; each start making the copy from the store, whatever an earlier process left; a closed connection made again; two stores' writes taken in turn.
+  - `ConfigurationTests`, 1 more: `FRUS_USER_STORE` and its password file, whose problems never repeat the URL.
+  - The method suites' 37 tests take a kind, so with the conformance suite's 5, 42 tests run on both stores.
+- **FRUSLightServerTests,** 172 to 174, in `HTTPTests`: a server whose `FRUS_USER_STORE` names PostgreSQL keeps a user's tags there and their assignments in its copy, and makes no `app.db`; one it cannot reach stops its start, naming the store without its password.
+- **Mutation checks,** run once and put back: without the advisory lock, `twoStoresOnOneDatabaseWriteInTurn` fails, a document carrying a tag twice; without the picker's Done's copy, `theSearchDatabaseHoldsWhatTheKitsSearchReads` fails, on PostgreSQL alone.
+
+**Checked against the kit at `1c18b51e`.** In a scratch worktree outside the repository, S17c's #68 at `3e03c12` with this branch merged and the submodule at `1c18b51e`, the kit's own `SearchUserSourceTests` ran with its store swapped for a PostgreSQL store's copy, written through the store's methods: the notes, the readers' own summaries, and the assignments by import, with their ids and the case of their tags. All 7 of its tests passed, among them "every route answers as the app's index answers over the same notes, summaries and tags" and the plan test that reads the store's rows once a statement. Nothing of it is committed; S17d's tests hold it in the repository once the pin moves.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** with `scripts/swift --postgres`, PostgreSQL 18: this package's own targets build clean with no warning. All 2,376 tests pass, up from 2,359 on main, with the one named skip and nothing cancelled: FRUSLightCoreTests 121, in about 15 seconds, and FRUSLightServerTests 174, the others as on main.
+- **CI on CI_LINK** CI_RESULT
+
+**Records**
+
+- `docs/SPEC.md`: the user store's section, the configuration table's `FRUS_USER_STORE` and `FRUS_POSTGRES_PASSWORD_FILE`, the disk layout's copy, and what option B's phase-2 half is.
+- `docs/INSTALL.md`: A PostgreSQL user store, with a `compose.override.yaml` recipe, and a line in Settings.
+- `docs/PLAN.md`: the row's done paragraph.
+- `CLAUDE.md`: `scripts/swift --postgres test`, and where a store method goes.
+- README's status and architecture; and this log.
+
+**Next: S16e,** an export that holds the owner's writing, in its own session now, whose store method this row or it ports; then **S17d** once S17c's #68 merges, searching through the kit with `searchDatabase` attached; with S14e, sign-in through a trusted proxy, and S14b, the daily backup, on the server's track.
+
 ## Session 18a: collections render from values in FRUSCoreKit, upstream
 
 25–27 October 2026 · branch `claude/wonderful-dewdney-bda10e` · [#67](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/67) · upstream `503a730b`, unchanged; [FRUS-Explorer#1807](https://github.com/joshbotts/FRUS-Explorer/pull/1807), open

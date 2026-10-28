@@ -222,6 +222,19 @@ func decode<T: Decodable>(_ type: T.Type, _ response: TestResponse) throws -> T 
         #expect(FileManager.default.fileExists(atPath: files.userStore.path))
     }
 
+    /// A PostgreSQL store the server cannot reach stops its start, named by its URL without the password.
+    @Test func anUnreachablePostgreSQLStoreStopsTheStart() async throws {
+        let directory = try TemporaryDirectory()
+        var config = ServerConfiguration.testing(directory.url.appendingPathComponent("data"))
+        config.userStore = .postgreSQL(try PostgreSQLConfiguration(url: "postgres://frus:secret@127.0.0.1:1/frus?sslmode=disable"))
+        await #expect {
+            _ = try await buildApplication(configuration: config)
+        } throws: { error in
+            "\(error)".hasPrefix("the user store at postgres://frus@127.0.0.1:1/frus?sslmode=disable could not be opened: PostgreSQL connection:")
+                && !"\(error)".contains("secret")
+        }
+    }
+
     /// FRUS_USER_STORE naming a PostgreSQL database (S14d): the server keeps the user's data there,
     /// makes no app.db, and keeps the copy search reads in the data directory, written beside each change.
     @Test(.enabled(if: TestPostgreSQL.isConfigured, "the PostgreSQL store needs FRUS_TEST_POSTGRES_URL, as scripts/swift --postgres sets"))
