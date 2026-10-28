@@ -10,6 +10,7 @@ import type { Volume } from '../api/types';
 import { copy } from '../copy';
 import { Badge } from '../shell/Badge';
 import { useDocumentTitle } from '../shell/useDocumentTitle';
+import { BrowseAxes } from './BrowseAxes';
 
 const route = getRouteApi('/browse');
 
@@ -88,6 +89,7 @@ export function CatalogueScreen() {
   return (
     <section className="screen browse">
       <h1 tabIndex={-1}>{copy.browse.title}</h1>
+      <BrowseAxes current="volumes" />
       <div className="catalogue-filters" role="search">
         <label htmlFor={filterId}>{copy.browse.filter}</label>
         <input

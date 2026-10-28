@@ -142,45 +142,73 @@ enum ReadingRoutes {
         // Each runs while its client is connected, as a search does: the results kept of a search and
         // the page stop with it. The facet over the keys kept is a cheap pass, and runs to its end.
         router.get("/api/v1/search/timeline") { request, context -> SearchTimeline in
-            let form = try FormQuery(request.uri.query)
-            let search = try SearchRequest(form: form, alsoTaking: timelineFields)
-            let documents = try form.bool("documents") ?? false
-            let user = try await users.user(searching: search.parameters, for: request, context: context)
-            let served = try await provider.served()
-            let parameters = try await users.inside(search.workingCorpusId, search.parameters, for: user, served: served)
-            let scoped = try served.search(for: user)
-            let coverage = Coverage(index: served.corpus, resources: resources)
-            return try await context.whileClientConnected {
-                do {
-                    // In Checklist Mode, of the results kept less those it hides, as the Mac's timeline
-                    // plots what its checklist leaves (S17e).
-                    return try await timeline(parameters, sort: search.sort, documents: documents, scoped: scoped,
-                                              facets: served.facets, keeping: SearchRequest.retainedLimit, reviewed: search.reviewed,
-                                              coverage: coverage) {
-                        try await served.retained.results(of: parameters, in: scoped).filter { !search.hides($0) }
-                    }
-                } catch let error as FTS5Error {
-                    throw SearchRoutes.refusal(error)
-                }
-            }
+            try await timeline(try FormQuery(request.uri.query), request: request, context: context, provider: provider,
+                               resources: resources, users: users)
+        }
+        // Each with its query in the body too, for one whose Checklist Mode hides more results than an
+        // address holds (S17e), as `POST /api/v1/search` takes one.
+        router.post("/api/v1/search/timeline") { request, context -> SearchTimeline in
+            try await timeline(try await postedForm(request), request: request, context: context, provider: provider,
+                               resources: resources, users: users)
         }
         router.get("/api/v1/search/concordance") { request, context -> SearchConcordance in
-            let form = try FormQuery(request.uri.query)
-            if let draft = draftConcordanceFields.first(where: { !form.values($0.name).isEmpty }) {
-                throw APIProblem(.badRequest, code: "UNSUPPORTED_PARAMETER", detail: "\(draft.name): \(draft.detail)")
-            }
-            var asked = try SearchRequest(form: form)
-            let user = try await users.user(searching: asked.parameters, for: request, context: context)
-            let served = try await provider.served()
-            asked.parameters = try await users.inside(asked.workingCorpusId, asked.parameters, for: user, served: served)
-            let search = asked
-            let scoped = try served.search(for: user)
-            return try await context.whileClientConnected {
-                do {
-                    return try await concordance(search, served: served, scoped: scoped, resources: resources)
-                } catch let error as FTS5Error {
-                    throw SearchRoutes.refusal(error)
+            try await concordance(try FormQuery(request.uri.query), request: request, context: context, provider: provider,
+                                  resources: resources, users: users)
+        }
+        router.post("/api/v1/search/concordance") { request, context -> SearchConcordance in
+            try await concordance(try await postedForm(request), request: request, context: context, provider: provider,
+                                  resources: resources, users: users)
+        }
+    }
+
+    /// A POST's form: its body, or for an empty one its address's query.
+    static func postedForm(_ request: Request) async throws -> FormQuery {
+        let body = try await request.body.collect(upTo: SearchRoutes.postedSearchLimit)
+        return try FormQuery(body.readableBytes > 0 ? String(buffer: body) : request.uri.query)
+    }
+
+    /// The timeline of the search `form` says, for the user `request` acts for.
+    static func timeline(_ form: FormQuery, request: Request, context: APIRequestContext, provider: ServedIndexProvider,
+                         resources: ServerResources, users: SearchUsers) async throws -> SearchTimeline {
+        let search = try SearchRequest(form: form, alsoTaking: timelineFields)
+        let documents = try form.bool("documents") ?? false
+        let user = try await users.user(searching: search.parameters, for: request, context: context)
+        let served = try await provider.served()
+        let parameters = try await users.inside(search.workingCorpusId, search.parameters, for: user, served: served)
+        let scoped = try served.search(for: user)
+        let coverage = Coverage(index: served.corpus, resources: resources)
+        return try await context.whileClientConnected {
+            do {
+                // In Checklist Mode, of the results kept less those it hides, as the Mac's timeline
+                // plots what its checklist leaves (S17e).
+                return try await timeline(parameters, sort: search.sort, documents: documents, scoped: scoped,
+                                          facets: served.facets, keeping: SearchRequest.retainedLimit, reviewed: search.reviewed,
+                                          coverage: coverage) {
+                    try await served.retained.results(of: parameters, in: scoped).filter { !search.hides($0) }
                 }
+            } catch let error as FTS5Error {
+                throw SearchRoutes.refusal(error)
+            }
+        }
+    }
+
+    /// The concordance of the page of the search `form` says, for the user `request` acts for.
+    static func concordance(_ form: FormQuery, request: Request, context: APIRequestContext, provider: ServedIndexProvider,
+                            resources: ServerResources, users: SearchUsers) async throws -> SearchConcordance {
+        if let draft = draftConcordanceFields.first(where: { !form.values($0.name).isEmpty }) {
+            throw APIProblem(.badRequest, code: "UNSUPPORTED_PARAMETER", detail: "\(draft.name): \(draft.detail)")
+        }
+        var asked = try SearchRequest(form: form)
+        let user = try await users.user(searching: asked.parameters, for: request, context: context)
+        let served = try await provider.served()
+        asked.parameters = try await users.inside(asked.workingCorpusId, asked.parameters, for: user, served: served)
+        let search = asked
+        let scoped = try served.search(for: user)
+        return try await context.whileClientConnected {
+            do {
+                return try await concordance(search, served: served, scoped: scoped, resources: resources)
+            } catch let error as FTS5Error {
+                throw SearchRoutes.refusal(error)
             }
         }
     }

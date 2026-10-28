@@ -118,8 +118,8 @@ export const copy = {
     rowTags: 'Your tags',
     volumes: 'Volumes',
     removeVolume: (title: string) => `Remove ${title}`,
-    /** A filter token's field, as the Mac's search window names it. */
-    filterFields: { years: 'Years', person: 'Person', tags: 'Tags', subject: 'Subject' },
+    /** A filter token's field, as the Mac's search window names it; a recalled search's phrase, prefix and excluded terms are the web's own. */
+    filterFields: { years: 'Years', person: 'Person', tags: 'Tags', subject: 'Subject', phrase: 'Phrase', prefix: 'Prefix', excluding: 'Excluding' },
     /** Up to three years by name, as the Mac's Years token shows them. */
     years: (years: readonly string[]) =>
       years.length === 0 ? 'none' : years.length <= 3 ? years.join(', ') : `${years.length.toLocaleString('en-US')} years`,
@@ -154,6 +154,172 @@ export const copy = {
       dateAscending: 'Sort by document date, oldest first. Undated documents go to the end.',
       dateDescending: 'Sort by document date, most recent first. Undated documents go to the end.',
     } as Record<string, string>,
+  },
+  /**
+   * Saved searches (S17e), in the words of the Mac's Save Search sheet (`SaveSearchSheet`), its toolbar's two
+   * bookmark buttons and its Saved Searches sheet (`SavedSearchesView`), with the NEW capsule and "+N since last
+   * run". The sheet's empty line, which names the Mac's bookmark button, and the line for what a Mac's saved
+   * search sets that a recall here runs without, are the web's own.
+   */
+  savedSearches: {
+    save: 'Save this search',
+    saveHelp: 'Save this search so you can quickly run it again',
+    open: 'Saved searches',
+    openHelp: 'Browse and re-run your saved searches',
+    saveTitle: 'Save Search',
+    nameLabel: 'Name',
+    namePlaceholder: 'Name this search',
+    queryLabel: 'Query',
+    saveButton: 'Save',
+    cancel: 'Cancel',
+    title: 'Saved Searches',
+    emptyTitle: 'No Saved Searches',
+    emptyDetail: 'Use Save this search in Search to save a search for quick access later.',
+    done: 'Done',
+    rename: 'Rename',
+    renameTitle: 'Rename',
+    renamePlaceholder: 'Name',
+    renameSave: 'Save',
+    renameCancel: 'Cancel',
+    delete: 'Delete',
+    newBadge: 'NEW',
+    fresh: (count: number) => `+${count.toLocaleString('en-US')} since last run`,
+    notRecalled: (names: readonly string[]) => `Runs here without what only the Mac’s search sets: ${names.join(', ')}.`,
+    notRecalledNames: {
+      booleanMode: 'any of the words',
+      personRef: 'a person in one volume',
+      projectId: 'a project',
+      subjectRef: 'a topic',
+    } as Record<string, string>,
+  },
+  /**
+   * Working corpora (S17e), in the words of the Mac's Save as Working Corpus (`SaveWorkingCorpusSheet`), the
+   * banner over a search inside one, the filter's My Working Corpora, and Browse's Working Corpora
+   * (`CorporaIndexView`, `CorpusDocumentsView`), where "this device" becomes this server; the lines that name the
+   * semantic map, iCloud and Settings are the web's own, and so are Rename and Delete, which the Mac keeps in its
+   * Settings.
+   */
+  corpora: {
+    save: 'Save as Working Corpus…',
+    saveHelp: 'Save these results as a named working corpus you can search inside later',
+    saveTitle: 'Save Working Corpus',
+    nameHeader: 'Name',
+    namePlaceholder: 'Corpus name',
+    duplicate: 'You already have a corpus with this name. Both will be kept.',
+    captured: 'Captured',
+    documents: 'Documents',
+    from: 'From',
+    narrowedBy: 'Narrowed by',
+    indexedNow: 'Volumes indexed now',
+    footer:
+      'The set is fixed at capture. Re-running the query later may find different documents; this corpus will not change, which is what makes counts taken inside it reproducible.',
+    cancel: 'Cancel',
+    saveButton: 'Save',
+    preparing: 'Counting what this search shows…',
+    inside: (name: string) => `Inside “${name}”`,
+    insideUnknown: 'Inside a working corpus',
+    leaveHelp: 'Leave this working corpus and search the full scope again',
+    leave: 'Leave this working corpus',
+    filterTitle: 'My Working Corpora',
+    filterFooter: 'A working corpus is a fixed set of documents. Applying one searches only inside it. Manage them in Browse.',
+    clear: 'Clear working corpus',
+    noneIndexed: (name: string) => `None of “${name}” is indexed on this server.`,
+    coverage: (indexed: number, total: number) =>
+      `${indexed.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} ${total === 1 ? 'document' : 'documents'} indexed on this server`,
+    title: 'Working Corpora',
+    emptyTitle: 'No Working Corpora',
+    emptyDetail: 'A working corpus is a fixed set of documents captured from a result set — use “Save as Working Corpus” on Search results.',
+    listFooter: 'A corpus is captured from a result set, in Search results, and kept on this server for you. There is nothing to create here.',
+    untitled: 'Untitled Corpus',
+    rowCount: (count: number) => `${count.toLocaleString('en-US')} documents`,
+    capturedFrom: (query: string) => `captured from “${query}”`,
+    rowLabel: (name: string, count: number) => `${name}, ${count.toLocaleString('en-US')} documents`,
+    rowHelp: 'Browse this corpus’s documents, grouped by volume',
+    unavailableTitle: 'Corpus Unavailable',
+    unavailableDetail: 'This corpus no longer exists — it may have been deleted.',
+    notIndexed: 'Not indexed on this server',
+    rename: 'Rename Corpus',
+    renameTitle: 'Rename Working Corpus',
+    delete: 'Delete Corpus',
+    deleteTitle: 'Delete Working Corpus?',
+    deleteMessage: 'The corpus is deleted. Its documents, and searches saved inside it, are not.',
+    deleteConfirm: 'Delete',
+  },
+  /**
+   * Volume scopes (S17e), in the words of the Mac's filter's My Volume Scopes, Browse's My Scopes
+   * (`ScopeIndexView`) and its scope editor (`ScopeEditorView`), where "this device" becomes this server; the
+   * lines that name Save as Scope, iCloud and Settings are the web's own, and so is Delete Scope, which the Mac
+   * keeps in its Settings.
+   */
+  scopes: {
+    filterTitle: 'My Volume Scopes',
+    filterFooter: 'Applying a scope fills the volume picker with its indexed members. Manage scopes in Browse.',
+    indexedOf: (indexed: number, total: number) =>
+      `${indexed.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} volumes indexed`,
+    noneIndexedRow: 'No indexed volumes',
+    applyHint: 'Fills the volume picker with this scope’s indexed volumes',
+    noneIndexed: (name: string) => `No volumes of “${name}” are indexed on this server.`,
+    title: 'My Scopes',
+    emptyTitle: 'No Scopes Yet',
+    emptyDetail: 'A scope is a set of volumes you assemble yourself. Create one here.',
+    coverage: 'Volume sets you assemble yourself, most recently edited first. Scopes also narrow Search.',
+    new: 'New Scope',
+    newHelp: 'Create an empty scope and choose its volumes',
+    untitled: 'Untitled Scope',
+    rowEmpty: 'No volumes yet',
+    rowCaption: (count: number, edited?: string) =>
+      `${count.toLocaleString('en-US')} volumes${edited ? ` · edited ${edited}` : ''}`,
+    rowLabel: (name: string, count: number) => `${name}, ${count.toLocaleString('en-US')} volumes`,
+    edit: (name: string) => `Edit ${name}`,
+    editHelp: 'Rename this scope or change its volumes',
+    drillCaption: (count: number) => `${count.toLocaleString('en-US')} volumes in this scope, by volume number.`,
+    drillMissing: (count: number) => `Entries referencing volumes outside this server’s catalogue: ${count.toLocaleString('en-US')}.`,
+    editTitle: 'Edit Scope',
+    nameHeader: 'Name',
+    namePrompt: 'Scope name',
+    clearName: 'Clear the scope name',
+    volumesHeader: (count: number) => `Volumes (${count.toLocaleString('en-US')})`,
+    addVolumes: 'Add Volumes…',
+    addVolumesHelp: 'Choose volumes from the All Volumes catalogue',
+    editorFooter: 'Removing a volume never deletes it from this server.',
+    remove: (volumeId: string) => `Remove ${volumeId} from this scope`,
+    unresolved: 'Not in this server’s catalogue',
+    pickerTitle: 'Add Volumes',
+    pickerDone: 'Done',
+    pickerCancel: 'Cancel',
+    done: 'Done',
+    unavailableTitle: 'Scope Unavailable',
+    unavailableDetail: 'This scope no longer exists — it may have been deleted.',
+    delete: 'Delete Scope',
+    deleteTitle: 'Delete Scope?',
+    deleteMessage: 'The scope is deleted. Its volumes are not.',
+    deleteConfirm: 'Delete',
+    deleteCancel: 'Cancel',
+  },
+  /** Checklist Mode (S17e), the Mac's toolbar toggle, strip, row action and empty state (`ChecklistCopy`). */
+  checklist: {
+    toggle: 'Checklist',
+    toggleName: 'Checklist Mode',
+    onHelp: 'Checklist review mode — hide results as you review them',
+    offHelp: 'Turn off Checklist Mode and show every result',
+    hidden: (count: number) => `${count.toLocaleString('en-US')} reviewed hidden`,
+    nothingHidden: 'Nothing hidden',
+    markPage: 'Mark Page Reviewed',
+    markPageHelp: 'Hide every result on this page as reviewed',
+    undo: 'Undo',
+    undoHelp: 'Bring back the results the last Mark Page Reviewed hid',
+    marked: (count: number) => `${count.toLocaleString('en-US')} ${count === 1 ? 'result' : 'results'} marked reviewed`,
+    undone: (count: number) => `${count.toLocaleString('en-US')} ${count === 1 ? 'result is' : 'results are'} back in the list`,
+    markReviewed: 'Mark Reviewed',
+    allReviewedTitle: 'All Results Reviewed',
+    allReviewedDetail: 'You’ve reviewed every result. Turn off Checklist Mode to see them again.',
+  },
+  /** Browse's axes, as the Mac's sidebar names the three the web has; the group's name is the web's own. */
+  axes: {
+    label: 'Browse by',
+    volumes: 'All Volumes',
+    corpora: 'Working Corpora',
+    scopes: 'My Scopes',
   },
   /** The Reading picker, as the Mac's window titles it, and the set each reading covers, from its tooltip. */
   readings: {

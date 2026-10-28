@@ -2,13 +2,19 @@
 // app's own, which the API never sees: whether the facet panel is open, a subject filter's name, and
 // the reading the results are shown in, with the timeline's mode and the concordance's order, so
 // Back to a search from a document it opened shows it as it was, as the Mac's window stays. Since
-// S17d it holds Search in, the three scopes the Mac's chips choose, and the user's tags it filters by.
+// S17d it holds Search in, the three scopes the Mac's chips choose, and the user's tags it filters by;
+// since S17e the working corpus it runs inside, and the phrase, prefix and excluded terms a recalled
+// saved search can carry, which the Mac's Advanced fields set.
 import type { FormValue } from '../api/form';
 import type { ConcordanceOrder, DocumentType, SearchChange, SortOrder } from '../api/types';
 
 export interface SearchState {
   /** The search box's text, exactly as typed; absent until a search is made. */
   keywords?: string;
+  /** A phrase, a prefix and terms left out, beside the box's text, as a recalled saved search can carry them. */
+  phrase?: string;
+  prefixWildcard?: string;
+  excludedTerms?: string[];
   /** Absent for every type of document. */
   documentType?: Exclude<DocumentType, 'all'>;
   dateRangeEarliest?: string;
@@ -21,6 +27,8 @@ export interface SearchState {
   includeSummaries?: false;
   /** The user's tags, every one of which a document must carry; absent for no tag filter. */
   userTagIds?: string[];
+  /** The user's working corpus the search runs inside, by its id; absent for none. */
+  workingCorpusId?: string;
   volumeIds?: string[];
   /** The years an Apply in the facet panel chose; the empty list matches nothing. */
   yearKeys?: string[];
@@ -81,6 +89,7 @@ export function isPartialEvidence(total: number): boolean {
 export const documentTypes: readonly DocumentType[] = ['all', 'documentsOnly', 'editorialNotesOnly'];
 
 const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+const uuid = /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/;
 const year = /^\d{4}$/;
 const wholeNumber = /^\d{1,10}$/;
 
@@ -125,6 +134,8 @@ export function validateSearch(raw: Record<string, unknown>): SearchState {
   const latest = single(raw.dateRangeLatest);
   const volumes = list(raw.volumeIds).filter((volume) => volume !== '');
   const tags = [...new Set(list(raw.userTagIds).filter((tag) => tag !== ''))];
+  const excluded = list(raw.excludedTerms).filter((term) => term !== '');
+  const corpus = single(raw.workingCorpusId);
   const rawLimit = Number(single(raw.limit));
   const limit = (pageSizes as readonly number[]).includes(rawLimit) && rawLimit !== defaultLimit ? rawLimit : undefined;
   const offset = clampOffset(Number(single(raw.offset)), limit ?? defaultLimit);
@@ -137,6 +148,9 @@ export function validateSearch(raw: Record<string, unknown>): SearchState {
   const align = single(raw.align);
   return {
     keywords,
+    phrase: single(raw.phrase) || undefined,
+    prefixWildcard: single(raw.prefixWildcard) || undefined,
+    excludedTerms: excluded.length > 0 ? excluded : undefined,
     documentType: type === 'documentsOnly' || type === 'editorialNotesOnly' ? type : undefined,
     dateRangeEarliest: earliest && isoDate.test(earliest) ? earliest : undefined,
     dateRangeLatest: latest && isoDate.test(latest) ? latest : undefined,
@@ -145,6 +159,7 @@ export function validateSearch(raw: Record<string, unknown>): SearchState {
     includeNotes: single(raw.includeNotes) === 'false' ? false : undefined,
     includeSummaries: single(raw.includeSummaries) === 'false' ? false : undefined,
     userTagIds: tags.length > 0 ? tags : undefined,
+    workingCorpusId: corpus && uuid.test(corpus) ? corpus.toUpperCase() : undefined,
     volumeIds: volumes.length > 0 ? volumes : undefined,
     yearKeys: yearKeys(raw.yearKeys),
     personRollupId,
@@ -176,6 +191,9 @@ export function clampOffset(offset: number, limit: number): number {
 export function filterFields(state: SearchState): Record<string, FormValue> {
   return {
     keywords: state.keywords,
+    phrase: state.phrase,
+    prefixWildcard: state.prefixWildcard,
+    excludedTerms: state.excludedTerms && state.excludedTerms.length > 0 ? state.excludedTerms : undefined,
     documentType: state.documentType,
     dateRangeEarliest: state.dateRangeEarliest,
     dateRangeLatest: state.dateRangeLatest,
@@ -184,6 +202,7 @@ export function filterFields(state: SearchState): Record<string, FormValue> {
     includeNotes: state.includeNotes,
     includeSummaries: state.includeSummaries,
     userTagIds: state.userTagIds && state.userTagIds.length > 0 ? state.userTagIds : undefined,
+    workingCorpusId: state.workingCorpusId,
     volumeIds: state.volumeIds && state.volumeIds.length > 0 ? state.volumeIds : undefined,
     yearKeys: state.yearKeys,
     personRollupId: state.personRollupId,
@@ -253,4 +272,23 @@ export function searchesAnywhere(state: SearchState): boolean {
 /** How many pages a search's count gives, within the results it keeps. */
 export function pageCount(total: number, limit: number): number {
   return Math.max(1, Math.ceil(Math.min(total, retainedLimit) / limit));
+}
+
+/**
+ * The search a saved search recalls, from its query fields, inside the working corpus applied now, as
+ * the Mac's window runs a recalled search inside its applied corpus and under no gate of its own
+ * (`SearchParameters.runningInside(workingCorpus:)`): it starts at its first page, keeps the order,
+ * the page size and the reading shown, and closes the facet panel, as a new search does.
+ */
+export function recalledSearch(search: Record<string, string[]>, current: SearchState): SearchState {
+  return {
+    ...validateSearch(search),
+    workingCorpusId: current.workingCorpusId,
+    reading: current.reading,
+    timelineMode: current.timelineMode,
+    align: current.align,
+    sort: current.sort,
+    limit: current.limit,
+    offset: undefined,
+  };
 }

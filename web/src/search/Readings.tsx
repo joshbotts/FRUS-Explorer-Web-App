@@ -59,19 +59,25 @@ export function TimelineReading({
   titles,
   mode,
   onMode,
+  reviewed = [],
+  total,
 }: {
   state: SearchState;
   titles: Map<string, string>;
   mode: TimelineMode;
   onMode: (mode: TimelineMode) => void;
+  /** The results Checklist Mode hides (S17e), which the timeline leaves out, as the Mac's plots what it leaves. */
+  reviewed?: readonly string[];
+  /** The match's count, which says whether the results kept were cut, however many the checklist hides. */
+  total?: number;
 }) {
-  const timeline = useQuery(timelineQuery(state, mode === 'list'));
+  const timeline = useQuery(timelineQuery(state, mode === 'list', reviewed));
   const data = timeline.data;
   // The list needs each year's documents; a chart's answer standing in while they load has none.
   const shown = data && (mode === 'chart' || data.years.every((year) => year.documents !== undefined)) ? data : undefined;
   const modeLabel = useId();
   // The Mac's caption follows its rule for a keyword search: the results kept reached their ceiling.
-  const partial = data !== undefined && data.retainedCount >= data.retainedLimit;
+  const partial = data !== undefined && (data.retainedCount >= data.retainedLimit || (total ?? 0) >= data.retainedLimit);
   return (
     <div className="timeline" aria-busy={timeline.isFetching}>
       {/* The modes stay while the list's documents load, so the one chosen keeps its focus. */}
@@ -300,14 +306,17 @@ export function ConcordanceReading({
   total,
   order,
   onOrder,
+  reviewed = [],
 }: {
   state: SearchState;
   /** The match's count, which the list shows: whether the results have more than one page. */
   total: number;
   order: ConcordanceOrder;
   onOrder: (order: ConcordanceOrder) => void;
+  /** The results Checklist Mode hides (S17e), which leave the page the concordance reads. */
+  reviewed?: readonly string[];
 }) {
-  const concordance = useQuery(concordanceQuery(state));
+  const concordance = useQuery(concordanceQuery(state, reviewed));
   const data = concordance.data;
   const alignId = useId();
   // Lines wider than the screen open with their terms in view, the column a concordance is read down.

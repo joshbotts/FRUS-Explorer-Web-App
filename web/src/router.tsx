@@ -1,12 +1,14 @@
 // The app's routes (SPEC, Shell and navigation): /browse, /search and /doc/{volumeId}/{documentId}
 // in phase 1, /settings, whose first pane, Tags, came with S14c and whose Data came with S15d,
-// /research, which opens All Notes until S19b's Research page, and /lookup, Citation Lookup, from
-// S19a, under the path the server serves the app at. Query strings have the API's form semantics, so
+// /research, which opens All Notes until S19b's Research page, /lookup, Citation Lookup, from
+// S19a, and Browse's Working Corpora and My Scopes from S17e, under the path the server serves the app at. Query strings have the API's form semantics, so
 // a search's URL reads as its request does.
 import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/react-router';
 import { basePath } from './api/base';
 import { formDecode, formEncode, type FormValue } from './api/form';
 import { CatalogueScreen, type CatalogueSearch, validateCatalogueSearch } from './browse/CatalogueScreen';
+import { CorporaScreen, CorpusScreen } from './browse/CorporaScreen';
+import { ScopeEditorScreen, ScopeScreen, ScopesScreen } from './browse/ScopesScreen';
 import { LookupScreen } from './lookup/LookupScreen';
 import { SectionScreen } from './browse/SectionScreen';
 import { VolumeScreen } from './browse/VolumeScreen';
@@ -52,6 +54,37 @@ const browseRoute = createRoute({
   path: '/browse',
   validateSearch: (raw: Record<string, unknown>): CatalogueSearch => validateCatalogueSearch(raw),
   component: CatalogueScreen,
+});
+
+// Browse's Working Corpora and My Scopes (S17e), whose fixed paths a volume's id never is.
+const corporaRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/browse/corpora',
+  component: CorporaScreen,
+});
+
+const corpusRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/browse/corpora/$corpusId',
+  component: CorpusScreen,
+});
+
+const scopesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/browse/scopes',
+  component: ScopesScreen,
+});
+
+const scopeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/browse/scopes/$scopeId',
+  component: ScopeScreen,
+});
+
+const scopeEditorRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/browse/scopes/$scopeId/edit',
+  component: ScopeEditorScreen,
 });
 
 const volumeRoute = createRoute({
@@ -142,6 +175,11 @@ const settingsDataRoute = createRoute({
 export const routeTree = rootRoute.addChildren([
   indexRoute,
   browseRoute,
+  corporaRoute,
+  corpusRoute,
+  scopesRoute,
+  scopeRoute,
+  scopeEditorRoute,
   volumeRoute,
   sectionRoute,
   searchRoute,
