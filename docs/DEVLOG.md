@@ -4,7 +4,7 @@ One entry per session, newest first.
 
 ## Session 14e: sign-in through a trusted proxy
 
-27 October 2026 · branch `claude/zen-volhard-bf9e37` · [#PR](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/PR) · upstream `503a730b`, unchanged
+27 October 2026 · branch `claude/zen-volhard-bf9e37` · [#71](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/71) · upstream `503a730b`, unchanged
 
 Phase 2's row S14e, the last of the three asks of the shared deployment behind an organisation's reverse proxy and single sign-on, after S14f's path and S14g's releases. With `FRUS_AUTH=header` a proxy that signs people in names each in a header, the server takes the header from the proxy's address alone, and each user's research is theirs. No upstream pull request, no pin move and no schema change: the `users` table S2 made takes the new users.
 
@@ -39,9 +39,9 @@ Phase 2's row S14e, the last of the three asks of the shared deployment behind a
 **Results**
 
 - **Linux, `swift:6.4-noble`, arm64:** `scripts/swift test` on the branch: all 2,365 tests pass, up from 2,359 at #64, with the one named skip and nothing cancelled: FRUSLightCoreTests 109 and FRUSLightServerTests 175; the others as at #64.
-- **The web job's steps,** through `scripts/npm`: typecheck and lint are clean, and the unit suite passes 306 tests in 34 files.
-- **`scripts/compose-smoke --e2e`** on the branch's image: RESULTS.
-- **CI on #PR:** CI.
+- **The web job's steps,** through `scripts/npm`: typecheck, lint and the build are clean, and the unit suite passes 306 tests in 34 files.
+- **`scripts/compose-smoke --e2e`** on the branch's image, on this Mac while other sessions' builds held its load average between 40 and 170: a scratch copy of the script that left out the two runs of the whole suite passed every step of its own over the same image, the new phase's among them, and the sign-in spec. Each of two whole runs failed two of the 47 tests at the root, a different pair each time, among `highlights-keyboard`, `notes-keyboard` and `summaries`, each on focus that came late or a shortcut's dialog that had not opened. The same three specs, three runs each over the same image, failed four of nine in the same ways with the browser app built from `main`'s shell, and one of nine with this branch's, so the load is the cause and not this branch; CI's runner, unloaded, decides.
+- **CI on #71** is green at `b100cd0`: the swift job, at the same 2,365 tests per target, with the one named skip; the web job; the image built for amd64 and arm64; and the compose job, whose unloaded runner passed the 47 browser tests at the root and the 47 under the path, then the sign-in phase and its spec, in 13 minutes.
 
 **Records**
 
