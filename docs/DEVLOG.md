@@ -4,9 +4,9 @@ One entry per session, newest first.
 
 ## Session 14b, follow-up: a request cancelled while another waits, tested in a set order
 
-27 October 2026 · branch `claude/magical-spence-fdd44c` · [#72](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/72) · upstream `503a730b`, unchanged
+27 October 2026 · branch `claude/magical-spence-fdd44c` · [#72](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/72) · upstream `1c18b51e`, unchanged
 
-S14b's session found it (#70, its notes), and the session that ran S14b asked for the fix in a pull request of its own. `RecentComputationsTests.aRequestCancelledWhileAnotherWaitsLeavesAtOnceAndTheValueIsKept` failed now and then, each time on the same two expectations: once in S14b's full `scripts/swift test`, while other sessions' builds loaded the Mac, and once in three runs of its suite alone. It predates S14b, and `main`'s CI had passed it every time. This pull request changes the test and this log, and `RecentComputations` is unchanged.
+S14b's session found it (#70, its notes), and the session that ran S14b asked for the fix in a pull request of its own. `RecentComputationsTests.aRequestCancelledWhileAnotherWaitsLeavesAtOnceAndTheValueIsKept` failed now and then, each time on the same two expectations: once in S14b's full `scripts/swift test`, while other sessions' builds loaded the Mac, and once in three runs of its suite alone. It predates S14b, and `main`'s CI had passed it every time. This pull request changes the test and this log, and `RecentComputations` is unchanged. #68, S17c's pin move to `1c18b51e`, merged while this one waited for its CI, so `main` was merged in at `7722a77`, and the tests were run again there.
 
 **What was wrong**
 
@@ -25,10 +25,11 @@ S14b's session found it (#70, its notes), and the session that ran S14b asked fo
 
 **Results**
 
-All in `swift:6.4-noble` on arm64, while other sessions' builds loaded the Mac. Its load average was between 75 and 169 during the runs after the fix.
+All in `swift:6.4-noble` on arm64, while other sessions' builds loaded the Mac.
 - Each run is its own process of `FRUSLightServerTests`' test runner, unless it says otherwise.
 - "Beside busy loops" means with 12 shell loops in the container, which has 10 CPUs.
 
+First at `503a730b`, over `main` at `8e6d681`. The Mac's load average was between 75 and 169 during the runs after the fix.
 - **Before the fix:**
   - 5 of 50 runs failed, and 4 of 50 beside busy loops, each on the same two expectations;
   - one `swift test --maximum-repetitions 2000 --repeat-until fail` process beside busy loops failed at its 12th repetition, and the diagnostic run at its 17th.
@@ -37,6 +38,11 @@ All in `swift:6.4-noble` on arm64, while other sessions' builds loaded the Mac. 
   - the whole suite, its four tests, passed 100 of 100 runs beside busy loops;
   - one process repeating the test 5,000 times beside busy loops passed every repetition;
   - `scripts/swift test --filter FRUSLightServerTests` passed all 172 tests in 29 suites.
+
+Then at `1c18b51e`, with `main` merged in at `7722a77` and this package's own targets rebuilt clean, with no warning. The load average was between 36 and 50.
+- 100 of 100 runs passed beside busy loops, and the whole suite passed 50 of 50.
+- One process repeating the test 2,000 times beside busy loops passed every repetition.
+- `scripts/swift test --filter FRUSLightServerTests` passed all 172 tests in 29 suites.
 
 **Notes**
 
@@ -48,9 +54,10 @@ All in `swift:6.4-noble` on arm64, while other sessions' builds loaded the Mac. 
     - C came 100 ms after that, within the grace that B's leaving began, found the computation stopped, and began another (started 2, cancelled 1).
   - Only `RetainedResults` has a grace, of 250 ms. So the cost is a date order's results computed again, in a narrow window, when the reader turns the order round twice in quick succession.
   - A fix would let each wait stop only the abandonment that began it. Its test would want a grace it can end by hand, since a test that sleeps around a grace depends on timing.
+  - The owner started it as a session of its own the same evening.
 - **Scratch:** the runs' scripts and logs are under `.build/linux/flake/` in the worktree `magical-spence-fdd44c`, and the grace's check is under `.build/linux/grace-check/`.
 
-**Next: S17d,** search over the researcher's writing, once S17c's pin move (#68) is merged. Beside it: S18b's upstream pull request, S16e (#69) and S14b (#70), and S14e and S14d on the server's track.
+**Next: S17d,** search over the researcher's writing, now that S17c's pin move (#68) is merged. Beside it: S18b's upstream pull request, S16e (#69), and on the server's track S14b (#70), S14e (#71) and S14d (#73).
 
 ## Session 17c: pin move past FRUS-Explorer#1805, #1806 and #1807, with #1789 to #1804
 
