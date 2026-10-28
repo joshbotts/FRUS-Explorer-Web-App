@@ -203,16 +203,22 @@ public struct SearchRequest: Equatable, Sendable {
         return fields
     }
 
-    /// The search `parameters` say, as one string: its query fields in order of name, each with its
-    /// values, and the documents a working corpus gates it to (S17e), which no field says. Two searches
-    /// the API tells apart never share one, so what is computed for a search can be kept by it.
+    /// The search `parameters` say, as one string: the whole of `SearchParameters`, as JSON with its
+    /// keys sorted and a gate's documents in order. Two searches the kit runs apart never share one, so
+    /// what is computed for a search can be kept by it: a search through the API's fields, one inside a
+    /// working corpus, whose documents no field says, and since S17e a saved search counted with its
+    /// whole parameters, which a Mac's can give fields the API does not take, such as `booleanMode`,
+    /// `subjectRef` or a project's `excludeDocumentIds`.
     static func signature(_ parameters: SearchParameters) -> String {
+        var keyed = parameters
+        keyed.documentIds = parameters.documentIds?.sorted()
+        keyed.excludeDocumentIds = parameters.excludeDocumentIds?.sorted()
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        if let data = try? encoder.encode(keyed) { return String(decoding: data, as: UTF8.self) }
+        // Not reached, as the value always encodes: its query fields, which tell apart what the API reads.
         let fields = formFields(parameters)
-        var signature = fields.keys.sorted().map { "\($0)=\(fields[$0, default: []])" }.joined(separator: "&")
-        if let documents = parameters.documentIds {
-            signature += "&documentIds=\(documents.count):\(documents.sorted().joined(separator: ","))"
-        }
-        return signature
+        return "fields " + fields.keys.sorted().map { "\($0)=\(fields[$0, default: []])" }.joined(separator: "&")
     }
 
     /// A date bound: nil for an empty value, otherwise `yyyy-MM-dd`, which the kit compares as text.

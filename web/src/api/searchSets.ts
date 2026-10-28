@@ -218,19 +218,36 @@ export const volumeScopesQuery = queryOptions({
   retry: false,
 });
 
+/** One of the user's scopes, by its id in any letter case, as its page and its editor read it. */
+export function volumeScopeQuery(id: string) {
+  return queryOptions({
+    queryKey: ['volumeScope', id.toUpperCase()],
+    queryFn: ({ signal }) => getJSON<VolumeScope>(`/api/v1/me/volume-scopes/${segment(id)}`, undefined, signal),
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+/** Each change to a scope answers the scope as it then stands, which its page and editor show at once. */
+function scopeChanged(client: QueryClient, scope: VolumeScope) {
+  client.setQueryData(volumeScopeQuery(scope.id).queryKey, scope);
+  void client.invalidateQueries({ queryKey: ['volumeScopes'] });
+}
+
 export async function createScope(client: QueryClient, fields: { name?: string; volumeIds?: string[] } = {}): Promise<VolumeScope> {
   const scope = (await change<VolumeScope>(client, 'POST', '/api/v1/me/volume-scopes', fields))!;
-  void client.invalidateQueries({ queryKey: ['volumeScopes'] });
+  scopeChanged(client, scope);
   return scope;
 }
 
 export async function editScope(client: QueryClient, id: string, fields: { name?: string; volumeIds?: string[] }): Promise<VolumeScope> {
   const scope = (await change<VolumeScope>(client, 'PATCH', `/api/v1/me/volume-scopes/${segment(id)}`, fields))!;
-  void client.invalidateQueries({ queryKey: ['volumeScopes'] });
+  scopeChanged(client, scope);
   return scope;
 }
 
 export async function deleteScope(client: QueryClient, id: string): Promise<void> {
   await change(client, 'DELETE', `/api/v1/me/volume-scopes/${segment(id)}`);
+  client.removeQueries({ queryKey: volumeScopeQuery(id).queryKey });
   void client.invalidateQueries({ queryKey: ['volumeScopes'] });
 }

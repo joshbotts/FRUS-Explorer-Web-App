@@ -438,6 +438,6 @@ export function researchImported(client: QueryClient) {
   for (const key of ['tags', 'documentTags', 'notes', 'documentNotes', 'note', 'documentSummaries', 'documentHighlights', 'projects', 'exportContents']) {
     void client.invalidateQueries({ queryKey: [key] });
   }
-  for (const key of ['savedSearches', 'workingCorpora', 'workingCorpus', 'volumeScopes']) void client.invalidateQueries({ queryKey: [key] });
+  for (const key of ['savedSearches', 'workingCorpora', 'workingCorpus', 'volumeScopes', 'volumeScope']) void client.invalidateQueries({ queryKey: [key] });
   searchesChanged(client);
 }

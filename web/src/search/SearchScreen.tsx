@@ -20,7 +20,7 @@ import { recordRun, type SavedSearch } from '../api/searchSets';
 import { meQuery, searchTagsQuery, tagsQuery } from '../api/userData';
 import { copy } from '../copy';
 import { Badge } from '../shell/Badge';
-import { anchorFor, checklistStore, hiddenKeys, isSameSearch, reviewedKey, useChecklist } from './checklist';
+import { anchorFor, type ChecklistAnchor, checklistStore, hiddenKeys, isSameSearch, reviewedKey, useChecklist } from './checklist';
 import { ChecklistStrip } from './ChecklistStrip';
 import { SavedSearchesDialog, SaveSearchDialog } from './SavedSearches';
 import { CorpusBanner, CorpusFilter, SaveCorpusDialog, ScopeFilter } from './WorkingCorpora';
@@ -63,6 +63,14 @@ export function SearchScreen() {
   const settle = useEffectEvent(() => checklistStore.settle(state));
   useEffect(() => settle(), [anchorKey]);
   const results = useQuery(searchQuery(state, reviewed));
+  // The search whose rows are on screen: until the next search's arrive, the last one's stay, and a mark
+  // made of them would be kept under the next and hide its documents, so marks wait for them, as the
+  // Mac's `canMarkReviewed` makes them wait (#1683).
+  const [rowsAnchor, setRowsAnchor] = useState<ChecklistAnchor | null>(null);
+  if (results.data && !results.isPlaceholderData && (rowsAnchor === null || JSON.stringify(rowsAnchor) !== anchorKey)) {
+    setRowsAnchor(anchor);
+  }
+  const canMark = settled && checklist.anchor !== undefined && rowsAnchor !== null && isSameSearch(checklist.anchor, rowsAnchor);
   const volumes = useQuery(volumesQuery);
   const queryClient = useQueryClient();
   // The user's tags, for the filter, its token and the rows' chips, on a server that keeps user data.
@@ -169,14 +177,25 @@ export function SearchScreen() {
     });
   }
 
-  // What Undo brought back, said once the page it changed has loaded.
+  // What Undo brought back, said once the page it changed has loaded: how many fewer results are hidden,
+  // where the count before it was known, else the rows of the mark no opening hides.
   const [announcement, setAnnouncement] = useState('');
-  const [undone, setUndone] = useState<number | null>(null);
-  const hiddenNow = shown?.hidden ?? 0;
+  const [undone, setUndone] = useState<{ before?: number; rows: number } | null>(null);
   if (undone !== null && shown && !results.isFetching) {
-    setAnnouncement(copy.checklist.undone(Math.max(0, undone - hiddenNow)));
+    const restored = undone.before !== undefined ? Math.max(0, undone.before - (shown.hidden ?? 0)) : undone.rows;
+    setAnnouncement(copy.checklist.undone(restored));
     setUndone(null);
   }
+
+  // A mark that leaves the page past the last shown, as on the last page, goes back to the first, as the
+  // Mac's checklist resets its page (`clampCurrentPage`).
+  const pastTheEnd = shown !== undefined && shown.hidden !== undefined && shown.items.length === 0 && (state.offset ?? 0) > 0;
+  const toFirstPage = useEffectEvent(() => {
+    void navigate({ search: (previous: SearchState) => ({ ...previous, offset: undefined }), replace: true });
+  });
+  useEffect(() => {
+    if (pastTheEnd) toFirstPage();
+  }, [pastTheEnd]);
 
   // Kept from render to render, so the readings' long lists render again only when they change.
   const titles = useMemo(
@@ -234,17 +253,18 @@ export function SearchScreen() {
               checklist.on
                 ? {
                     announcement,
+                    canMark,
                     canUndo: settled && [...checklist.marks.lastBulkBatch].some((key) => !checklist.readSinceEnabled.has(key)),
                     markOne: (key) => {
-                      if (settled) checklistStore.mark(key);
+                      if (canMark) checklistStore.mark(key);
                     },
                     markPage: (keys) => {
-                      if (!settled) return;
+                      if (!canMark) return;
                       setAnnouncement(copy.checklist.marked(checklistStore.markPage(keys)));
                     },
                     undo: () => {
-                      setUndone(hiddenNow);
-                      checklistStore.undo();
+                      const before = shown?.hidden;
+                      setUndone({ before, rows: checklistStore.undo() });
                     },
                   }
                 : undefined
@@ -678,6 +698,8 @@ function FilterToken({ field, value, onClear }: { field: string; value: string; 
 /** What the results need of Checklist Mode while it is on. */
 interface ChecklistControls {
   announcement: string;
+  /** Whether a mark can be made of the rows on screen: they are the search the checklist is anchored to. */
+  canMark: boolean;
   canUndo: boolean;
   markOne: (key: string) => void;
   markPage: (keys: string[]) => void;
@@ -766,7 +788,7 @@ function Results({
         <ChecklistStrip
           hiddenCount={hidden}
           // Both act on a page: the timeline has none.
-          pageRowCount={list && !failed && isPaged(reading) ? list.items.length : 0}
+          pageRowCount={list && !failed && isPaged(reading) && checklist.canMark ? list.items.length : 0}
           canUndo={isPaged(reading) && checklist.canUndo}
           announcement={checklist.announcement}
           onMarkPage={() => checklist.markPage((list?.items ?? []).map((item) => reviewedKey(item.volumeId, item.documentId)))}
@@ -852,6 +874,8 @@ function Results({
                       type="button"
                       className="mark-reviewed"
                       aria-label={`${copy.checklist.markReviewed}: ${item.displayTitle}`}
+                      // Not while another search's rows are on screen: the mark would be kept under the next.
+                      disabled={!checklist.canMark}
                       onClick={() => {
                         focusAfterMark.current = index;
                         checklist.markOne(reviewedKey(item.volumeId, item.documentId));

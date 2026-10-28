@@ -9,7 +9,7 @@ import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
 import { useId, useRef, useState } from 'react';
 import { ApiError, errorMessage } from '../api/client';
 import { volumesQuery } from '../api/endpoints';
-import { createScope, deleteScope, editScope, volumeScopesQuery, type VolumeScope } from '../api/searchSets';
+import { createScope, deleteScope, editScope, volumeScopeQuery, volumeScopesQuery, type VolumeScope } from '../api/searchSets';
 import type { Volume } from '../api/types';
 import { copy } from '../copy';
 import { useHeadingReady } from '../shell/headingFocus';
@@ -106,11 +106,11 @@ export function ScopesScreen() {
   );
 }
 
-/** The user's scope this route names, from their list, and whether it is gone. */
+/** The user's scope this route names, and whether it is gone: deleted, or never theirs. */
 function useScope(scopeId: string): { scope: VolumeScope | undefined; gone: boolean; pending: boolean; error: unknown } {
-  const scopes = useQuery(volumeScopesQuery);
-  const scope = scopes.data?.items.find((item) => item.id === scopeId.toUpperCase());
-  return { scope, gone: scopes.data !== undefined && scope === undefined, pending: scopes.isPending, error: scopes.error };
+  const scope = useQuery(volumeScopeQuery(scopeId));
+  const gone = scope.error instanceof ApiError && scope.error.code === 'SCOPE_NOT_FOUND';
+  return { scope: scope.data, gone, pending: scope.isPending, error: gone ? null : scope.error };
 }
 
 const scopeRoute = getRouteApi('/browse/scopes/$scopeId');
@@ -176,34 +176,51 @@ export function ScopeEditorScreen() {
   useDocumentTitle(copy.scopes.editTitle);
   useHeadingReady(!pending);
   const [name, setName] = useState<string | null>(null);
+  // The members as the editor last set them, which the page shows at once while the server takes them;
+  // until the first edit, the scope's.
+  const [members, setMembers] = useState<string[] | null>(null);
   const [picking, setPicking] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const addButton = useRef<HTMLButtonElement>(null);
   const deleteButton = useRef<HTMLButtonElement>(null);
   const nameField = useRef<HTMLInputElement>(null);
+  // Each change is sent once the one before it has been answered, so two made quickly reach the server
+  // in their order.
+  const sending = useRef<Promise<void>>(Promise.resolve());
   const catalogue = new Map((volumes.data?.items ?? []).map((volume) => [volume.volumeId, volume]));
   const shownName = name ?? scope?.name ?? '';
+  const shownMembers = members ?? scope?.volumeIds ?? [];
 
-  async function edit(fields: { name?: string; volumeIds?: string[] }) {
+  function edit(fields: { name?: string; volumeIds?: string[] }) {
     if (!scope) return;
     setFailure(null);
-    try {
-      await editScope(client, scope.id, fields);
-    } catch (error) {
-      setFailure(errorMessage(error));
-    }
+    const id = scope.id;
+    sending.current = sending.current.then(async () => {
+      try {
+        await editScope(client, id, fields);
+      } catch (error) {
+        setFailure(errorMessage(error));
+        // What the server holds stands again.
+        setMembers(null);
+      }
+    });
   }
 
   /** The name as typed, written when the field is left, as the editor's binding writes it. */
   function commitName() {
-    if (name !== null && scope && name !== scope.name) void edit({ name });
+    if (name !== null && scope && name !== scope.name) edit({ name });
+  }
+
+  /** The members as one sorted set, as the editor writes them. */
+  function setVolumes(volumeIds: string[]) {
+    setMembers(volumeIds);
+    edit({ volumeIds });
   }
 
   function remove(volumeId: string, index: number) {
-    if (!scope) return;
-    void edit({ volumeIds: scope.volumeIds.filter((id) => id !== volumeId) });
-    // Focus to the row that takes its place, or Add Volumes… past the last.
+    setVolumes(shownMembers.filter((id) => id !== volumeId));
+    // Focus to the row that takes its place, or Add Volumes… past the last, once the list has gone without it.
     requestAnimationFrame(() => {
       const rows = document.querySelectorAll<HTMLButtonElement>('.scope-members button.remove');
       (rows[Math.min(index, rows.length - 1)] ?? addButton.current)?.focus();
@@ -246,7 +263,7 @@ export function ScopeEditorScreen() {
                 aria-label={copy.scopes.clearName}
                 onClick={() => {
                   setName('');
-                  void edit({ name: '' });
+                  edit({ name: '' });
                   nameField.current?.focus();
                 }}
               >
@@ -254,9 +271,9 @@ export function ScopeEditorScreen() {
               </button>
             )}
           </div>
-          <h2>{copy.scopes.volumesHeader(scope.volumeIds.length)}</h2>
+          <h2>{copy.scopes.volumesHeader(shownMembers.length)}</h2>
           <ul className="scope-members">
-            {scope.volumeIds.map((volumeId, index) => {
+            {shownMembers.map((volumeId, index) => {
               const volume = catalogue.get(volumeId);
               return (
                 <li key={volumeId}>
@@ -307,9 +324,9 @@ export function ScopeEditorScreen() {
           {picking && (
             <VolumePicker
               volumes={volumes.data?.items ?? []}
-              chosen={scope.volumeIds}
+              chosen={shownMembers}
               onDone={(chosen) => {
-                if (chosen) void edit({ volumeIds: chosen });
+                if (chosen) setVolumes(chosen);
               }}
               onClose={() => {
                 setPicking(false);

@@ -154,6 +154,16 @@ import Testing
                 let missing = try await owner.send(.post, "/api/v1/me/saved-searches/\(Self.stranger)/\(path)")
                 #expect(missing.status == .notFound && problemCode(missing) == "SAVED_SEARCH_NOT_FOUND")
             }
+
+            // A Mac's saved search can set what the API's fields do not, here a project's "only new",
+            // which leaves out a document; its count is of its whole search, and the same words through
+            // the API, counted after it, are counted apart (the cold review's finding).
+            let focus = SavedSearchExport(id: UUID(), name: "Only new", parameters: SearchParameters(
+                keywords: "treaties", excludeDocumentIds: ["\(Self.volume)/d2"]), createdAt: UserDataFixture.now)
+            try fixture.store.addSearchSet(.savedSearches, MacImport.savedSearch(focus).values, for: "owner")
+            let only = try decode(SavedSearch.self, try await owner.send(.post, "/api/v1/me/saved-searches/\(focus.id)/run"))
+            #expect(only.matchCountAtLastRun == 1)
+            #expect(try await UserHalfSearchTests.search(owner, "keywords=treaties").total == 2)
         }
     }
 

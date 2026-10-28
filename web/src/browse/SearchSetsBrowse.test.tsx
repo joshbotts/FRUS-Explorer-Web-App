@@ -149,6 +149,8 @@ describe('Browse’s My Scopes', () => {
         ],
       },
       'POST /api/v1/me/volume-scopes': scope({ id: 'NEW', name: '' }),
+      // Never answered: the editor opens on the scope the POST gave, not on a list that lacks it.
+      '/api/v1/me/volume-scopes/NEW': () => new Promise(() => {}),
     });
     const { router } = renderAt('/browse/scopes');
     const rows = within(await screen.findByRole('list', { name: 'My Scopes' })).getAllByRole('listitem');
@@ -160,11 +162,14 @@ describe('Browse’s My Scopes', () => {
     await userEvent.click(screen.getByRole('button', { name: 'New Scope' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/browse/scopes/NEW/edit'));
     expect(sent(fetch.mock.calls.find(([, init]) => init?.method === 'POST')![1]).body).toEqual({});
+    expect(await screen.findByRole('heading', { level: 1, name: 'Edit Scope' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Volumes (0)' })).toBeTruthy();
+    expect(screen.queryByText('Scope Unavailable')).toBeNull();
   });
 
   it('opens a scope’s volumes the catalogue lists, and counts those it does not', async () => {
     server({
-      '/api/v1/me/volume-scopes': { total: 1, items: [scope({ id: scopeId, name: 'Cuba', volumeIds: ['frus-gone', 'frus1961-63v10'], cataloguedCount: 1 })] },
+      [`/api/v1/me/volume-scopes/${scopeId}`]: scope({ id: scopeId, name: 'Cuba', volumeIds: ['frus-gone', 'frus1961-63v10'], cataloguedCount: 1 }),
     });
     renderAt(`/browse/scopes/${scopeId}`);
     expect(await screen.findByText(/1 volumes in this scope, by volume number\./)).toBeTruthy();
@@ -177,6 +182,7 @@ describe('Browse’s My Scopes', () => {
     const edits: unknown[] = [];
     server({
       '/api/v1/me/volume-scopes': () => ({ total: 1, items: [current] }),
+      [`/api/v1/me/volume-scopes/${scopeId}`]: () => current,
       [`PATCH /api/v1/me/volume-scopes/${scopeId}`]: (_url: URL, init?: RequestInit) => {
         const body = sent(init).body;
         edits.push(body);
@@ -209,5 +215,34 @@ describe('Browse’s My Scopes', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Delete Scope' }));
     await userEvent.click(within(await screen.findByRole('alertdialog', { name: 'Delete Scope?' })).getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/browse/scopes'));
+  });
+});
+
+describe('the scope editor’s edits', () => {
+  it('removes two volumes in quick succession without putting the first back, sending each change after the last is answered', async () => {
+    let current = scope({ id: scopeId, name: 'Three', volumeIds: ['frus1894Nicaragua', 'frus1961-63v06', 'frus1961-63v10'] });
+    const edits: unknown[] = [];
+    let release: (() => void) | undefined;
+    server({
+      [`/api/v1/me/volume-scopes/${scopeId}`]: () => current,
+      [`PATCH /api/v1/me/volume-scopes/${scopeId}`]: async (_url: URL, init?: RequestInit) => {
+        const body = sent(init).body;
+        edits.push(body);
+        // The first change is answered only once the second has been asked for.
+        if (edits.length === 1) await new Promise<void>((resolve) => (release = resolve));
+        current = { ...current, ...body };
+        return current;
+      },
+    });
+    renderAt(`/browse/scopes/${scopeId}/edit`);
+    await userEvent.click(await screen.findByRole('button', { name: 'Remove frus1894Nicaragua from this scope' }));
+    expect(screen.getByRole('heading', { name: 'Volumes (2)' })).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Remove frus1961-63v06 from this scope' })));
+    await userEvent.click(screen.getByRole('button', { name: 'Remove frus1961-63v06 from this scope' }));
+    expect(screen.getByRole('heading', { name: 'Volumes (1)' })).toBeTruthy();
+    await waitFor(() => expect(edits).toHaveLength(1));
+    release?.();
+    await waitFor(() => expect(edits).toEqual([{ volumeIds: ['frus1961-63v06', 'frus1961-63v10'] }, { volumeIds: ['frus1961-63v10'] }]));
+    await waitFor(() => expect(current.volumeIds).toEqual(['frus1961-63v10']));
   });
 });

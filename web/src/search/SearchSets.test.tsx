@@ -324,6 +324,61 @@ describe('Checklist Mode', () => {
     expect(await screen.findByRole('link', { name: 'Telegram' })).toBeTruthy();
   });
 
+  it('makes no mark of the last search’s rows while the next search’s are coming, as the Mac waits for them', async () => {
+    server({
+      '/api/v1/search': (url: URL) =>
+        url.searchParams.get('keywords') === 'canal' ? new Promise(() => {}) : list([item('d1', 'Telegram'), item('d2', 'Memorandum')]),
+    });
+    const { router } = renderAt('/search?keywords=treaties');
+    await userEvent.click(await screen.findByRole('button', { name: 'Checklist Mode' }));
+    const mark = await screen.findByRole('button', { name: 'Mark Reviewed: Telegram' });
+    expect((mark as HTMLButtonElement).disabled).toBe(false);
+    await router.navigate({ to: '/search', search: { keywords: 'canal' } });
+    // The last search's rows stay on screen, and nothing can be marked of them.
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Mark Reviewed: Telegram' }) as HTMLButtonElement).disabled).toBe(true));
+    const strip = screen.getByRole('group', { name: 'Checklist Mode' });
+    expect((within(strip).getByRole('button', { name: 'Mark Page Reviewed' }) as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.click(screen.getByRole('button', { name: 'Mark Reviewed: Telegram' }));
+    expect(checklistStore.get().marks.keys.size).toBe(0);
+  });
+
+  it('says what Undo brought back by its mark when the list the mark changed had not yet loaded', async () => {
+    server({
+      // The page after Mark Page Reviewed never comes.
+      'POST /api/v1/search': () => new Promise(() => {}),
+      '/api/v1/search': list([item('d1', 'Telegram'), item('d2', 'Memorandum')]),
+    });
+    renderAt('/search?keywords=treaties');
+    await userEvent.click(await screen.findByRole('button', { name: 'Checklist Mode' }));
+    const strip = screen.getByRole('group', { name: 'Checklist Mode' });
+    await userEvent.click(within(strip).getByRole('button', { name: 'Mark Page Reviewed' }));
+    expect(within(strip).getByRole('status').textContent).toBe('2 results marked reviewed');
+    await userEvent.click(within(strip).getByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(within(strip).getByRole('status').textContent).toBe('2 results are back in the list'));
+    expect(await screen.findByRole('link', { name: 'Telegram' })).toBeTruthy();
+  });
+
+  it('goes back to the first page when its marks leave the page past the last, as the Mac’s checklist resets its page', async () => {
+    const rows = Array.from({ length: 12 }, (_, index) => item(`d${index + 1}`, `Document ${index + 1}`));
+    server({
+      'POST /api/v1/search': (_url: URL, init?: RequestInit) => {
+        const fields = new URLSearchParams(String(init?.body));
+        const reviewed = fields.getAll('reviewed');
+        const offset = Number(fields.get('offset'));
+        const left = rows.filter((row) => !reviewed.includes(`${row.volumeId}/${row.documentId}`));
+        return list(left.slice(offset, offset + 10), { total: 12, hidden: rows.length - left.length, limit: 10, offset });
+      },
+      '/api/v1/search': list(rows.slice(10), { total: 12, limit: 10, offset: 10 }),
+    });
+    const { router } = renderAt('/search?keywords=treaties&limit=10&offset=10');
+    await userEvent.click(await screen.findByRole('button', { name: 'Checklist Mode' }));
+    await screen.findByRole('link', { name: 'Document 11' });
+    const strip = screen.getByRole('group', { name: 'Checklist Mode' });
+    await userEvent.click(within(strip).getByRole('button', { name: 'Mark Page Reviewed' }));
+    await waitFor(() => expect(router.state.matches.at(-1)?.search).toMatchObject({ keywords: 'treaties', limit: 10, offset: undefined }));
+    expect(await screen.findByRole('link', { name: 'Document 1' })).toBeTruthy();
+  });
+
   it('starts again for another search, and keeps its marks through a narrowing of the same one', async () => {
     server({
       'POST /api/v1/search': (_url: URL, init?: RequestInit) =>

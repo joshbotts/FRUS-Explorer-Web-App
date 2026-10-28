@@ -150,17 +150,24 @@ export function SavedSearchesDialog({ onRecall, onClose }: { onRecall: (search: 
     body.current?.closest('dialog')?.close();
   }
 
-  /** Focus back on a row's Rename once its form has gone, or on the heading once the row has. */
-  const [refocus, setRefocus] = useState<string | null>(null);
+  /**
+   * Where the focus goes once a row has changed, and only once: back on a row's Rename when its form has
+   * gone, or on the heading when a deleted row has left the list.
+   */
+  const refocus = useRef<{ id: string; deleted: boolean } | null>(null);
   useEffect(() => {
-    if (refocus === null) return;
-    const row = body.current?.querySelector<HTMLElement>(`[data-rename="${CSS.escape(refocus)}"]`);
-    (row ?? body.current?.querySelector<HTMLElement>('h2'))?.focus();
-  }, [refocus, items]);
+    const target = refocus.current;
+    if (target === null) return;
+    const row = body.current?.querySelector<HTMLElement>(`[data-rename="${CSS.escape(target.id)}"]`);
+    // A deleted row stays until the list is read again.
+    if (target.deleted && row) return;
+    refocus.current = null;
+    (target.deleted ? body.current?.querySelector<HTMLElement>('h2') : row)?.focus();
+  }, [renaming, items]);
 
   function stopRenaming(id: string) {
+    refocus.current = { id, deleted: false };
     setRenaming(null);
-    setRefocus(id);
   }
 
   async function rename(id: string, name: string) {
@@ -176,9 +183,10 @@ export function SavedSearchesDialog({ onRecall, onClose }: { onRecall: (search: 
   async function remove(id: string) {
     setFailure(null);
     try {
+      refocus.current = { id, deleted: true };
       await deleteSavedSearch(client, id);
-      setRefocus(`deleted ${id}`);
     } catch (error) {
+      refocus.current = null;
       setFailure(errorMessage(error));
     }
   }
