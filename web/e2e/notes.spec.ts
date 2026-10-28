@@ -4,10 +4,10 @@
 // link, removes the link, edits it plain with the Formatting switch off, which drops its formatting,
 // and deletes it from the editor's own Delete; makes a highlight and a note for it from the rail's
 // Add Note to Highlight, which the highlight takes as its note; opens Note from a footnote's bar,
-// which offers it alone; and pastes styled HTML into the editor, with the formatting its styles give
-// and its line breaks, with no policy violation; on Chromium with no axe violations. By keyboard, it
-// is notes-keyboard.spec.ts. Against the image, whose user store starts with no notes, and which each
-// test leaves with none.
+// which offers it alone; puts a new note's text in focus when the editor's code comes late; and
+// pastes styled HTML into the editor, with the formatting its styles give and its line breaks, with
+// no policy violation; on Chromium with no axe violations. By keyboard, it is notes-keyboard.spec.ts.
+// Against the image, whose user store starts with no notes, and which each test leaves with none.
 import type { Locator, Page } from '@playwright/test';
 import { axeCheck } from './axe';
 import { d1Text } from './expected';
@@ -316,6 +316,25 @@ test('a footnote’s selection offers Note alone, which opens a new note on the 
   await bar.getByRole('button', { name: 'Note' }).click();
   const editor = page.getByRole('dialog', { name: 'New Research Note' });
   await expect(editor).toBeVisible();
+  await editor.getByRole('button', { name: 'Discard' }).click();
+  await expect(editor).toHaveCount(0);
+  expect(await notes(page)).toEqual([]);
+});
+
+test('puts a new note’s text in focus once the editor’s code has come, however late, after the dialog has focused its heading', async ({ page }) => {
+  // Half a second, as a slow machine or network brings it: React then shows the editor in a render it
+  // may pause after making the editor and before placing it in the dialog, and CI's 260 ms did the same.
+  await page.route(/\/assets\/RichTextEditor-[^/]+\.js$/, async (route) => {
+    await new Promise((done) => setTimeout(done, 500));
+    await route.continue();
+  });
+  await openDocument(page);
+  await dragOver(page, phrase);
+  await page.getByRole('toolbar', { name: 'Selection' }).getByRole('button', { name: 'Note' }).click();
+  const editor = page.getByRole('dialog', { name: 'New Research Note' });
+  await expect(editor.getByText('Loading the editor…')).toBeVisible();
+  await expect(editor.getByRole('heading', { name: 'New Research Note' })).toBeFocused();
+  await expect(editor.getByRole('textbox', { name: 'Research note body' })).toBeFocused();
   await editor.getByRole('button', { name: 'Discard' }).click();
   await expect(editor).toHaveCount(0);
   expect(await notes(page)).toEqual([]);

@@ -1,9 +1,11 @@
 import type { Editor } from '@tiptap/core';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createRef } from 'react';
+import { createRef, startTransition } from 'react';
+import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { NoteRun } from '../api/types';
+import { framesAtOnce } from '../test/frames';
 import { darkThemeColor } from './noteExtensions';
 import RichTextEditor, { type RichTextEditorHandle } from './RichTextEditor';
 
@@ -378,6 +380,70 @@ describe('the note editor’s text', () => {
       run('accent', { linkURL: 'https://de.wikipedia.org/wiki/Au%C3%9Fenpolitik' }),
       run(' script relative'),
     ]);
+  });
+});
+
+// Node's, with which React's scheduler queues its tasks here, as it posts a message in a browser.
+const { setImmediate } = globalThis as unknown as { setImmediate: (callback: () => void) => void };
+
+/** The next task, after those React's scheduler has queued. */
+const nextTask = () => new Promise<void>((done) => setImmediate(done));
+
+/** A sibling as slow to render as the editor is on a slow machine, past the 5 ms after which React pauses a render it time-slices. */
+function Slow() {
+  const end = performance.now() + 10;
+  while (performance.now() < end);
+  return null;
+}
+
+describe('a new note’s text', () => {
+  it('takes focus once React has placed it in the dialog, though React paused after making it and Tiptap’s first timer and a frame came first', async () => {
+    framesAtOnce();
+    // Tiptap's timers run when the test says, in the order Chromium ran them when the browser suite
+    // failed: the first in the pause, the second only once React's effects had cleared it.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const environment = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+    const actEnvironment = environment.IS_REACT_ACT_ENVIRONMENT;
+    // React's own scheduler, which act would replace with renders it never pauses.
+    environment.IS_REACT_ACT_ENVIRONMENT = false;
+    // The note editor's dialog, its heading focused as it opens.
+    const dialog = document.body.appendChild(document.createElement('dialog'));
+    const heading = dialog.appendChild(document.createElement('h2'));
+    heading.tabIndex = -1;
+    const container = dialog.appendChild(document.createElement('div'));
+    dialog.showModal();
+    heading.focus();
+    const root = createRoot(container);
+    try {
+      // A render React time-slices, as it does the retry that shows the editor once its code has come.
+      startTransition(() =>
+        root.render(
+          <>
+            <RichTextEditor id="note-body" label="Research note body" runs={null} text="" autoFocus onChange={vi.fn()} onDiscard={vi.fn()} onUnreadable={vi.fn()} />
+            <Slow />
+            <p />
+          </>,
+        ),
+      );
+      while (vi.getTimerCount() === 0) await nextTask();
+      // React has made the editor and paused before placing it; Tiptap's first timer comes, and the frame it asks for.
+      expect(container.querySelector('.ProseMirror')).toBeNull();
+      vi.advanceTimersToNextTimer();
+      await Promise.resolve();
+      while (!container.querySelector('.ProseMirror')) await nextTask();
+      // React's effects, in the task after it placed the editor.
+      await nextTask();
+      vi.runOnlyPendingTimers();
+      await nextTask();
+      expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Research note body' }));
+    } finally {
+      root.unmount();
+      // The editor's destruction, which Tiptap times too.
+      vi.runOnlyPendingTimers();
+      vi.useRealTimers();
+      dialog.remove();
+      environment.IS_REACT_ACT_ENVIRONMENT = actEnvironment;
+    }
   });
 });
 
