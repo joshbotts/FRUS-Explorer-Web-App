@@ -15,7 +15,7 @@ import { copy } from '../copy';
 import { useHeadingReady } from '../shell/headingFocus';
 import { Modal } from '../shell/Modal';
 import { useDocumentTitle } from '../shell/useDocumentTitle';
-import { dateFocusText, leadContext } from './projectRules';
+import { dateFocusText, leadContext, trimmedQuestion } from './projectRules';
 
 const route = getRouteApi('/projects/$projectId');
 
@@ -109,12 +109,12 @@ function Question({ projectId, question }: { projectId: string; question: string
   const client = useQueryClient();
   const [draft, setDraft] = useState(question);
   const [failure, setFailure] = useState<string | null>(null);
-  const saved = useRef(question.trim());
+  const saved = useRef(trimmedQuestion(question));
   const timer = useRef<number | undefined>(undefined);
 
   async function commit(text: string) {
     window.clearTimeout(timer.current);
-    const trimmed = text.trim();
+    const trimmed = trimmedQuestion(text);
     if (trimmed === saved.current) return;
     saved.current = trimmed;
     try {

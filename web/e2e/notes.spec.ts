@@ -143,7 +143,7 @@ test('writes a formatted note from the bar’s Note, edits it in the rail, and f
 
   // The filters: the project picker's own two, then the user's projects by name, which only an
   // import brings (import.spec.ts leaves its own); the tag; the text.
-  const project = page.getByRole('combobox', { name: 'Project' });
+  const project = page.getByRole('combobox', { name: 'Project', exact: true });
   const projects = ((await (await page.request.get('api/v1/me/projects')).json()) as { items: { name: string }[] }).items;
   await expect(project.locator('option')).toHaveText(['All projects', 'Not in a project', ...projects.map((each) => each.name)]);
   await project.selectOption({ label: 'Not in a project' });

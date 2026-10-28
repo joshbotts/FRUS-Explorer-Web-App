@@ -304,11 +304,50 @@ export async function deleteTrail(client: QueryClient): Promise<{ visits: number
   return deleted;
 }
 
+/**
+ * The preference changes sent and not yet answered. Each shows at once over the server's copy, as a
+ * control's own choice does, until the newest is answered: then the server's copy stands, or, when the
+ * server refuses it, its copy as it was. An older answer arriving after a newer change is sent is not
+ * the copy, since it lacks the newer change.
+ */
+let pendingPreferences: PreferenceChange = {};
+let preferenceChangesSent = 0;
+const pendingListeners = new Set<() => void>();
+
+function setPendingPreferences(next: PreferenceChange) {
+  pendingPreferences = next;
+  for (const listener of pendingListeners) listener();
+}
+
+export function subscribePendingPreferences(listener: () => void): () => void {
+  pendingListeners.add(listener);
+  return () => {
+    pendingListeners.delete(listener);
+  };
+}
+
+export function pendingPreferenceChanges(): PreferenceChange {
+  return pendingPreferences;
+}
+
 export async function updatePreferences(client: QueryClient, changed: PreferenceChange): Promise<Preferences> {
-  const preferences = (await change<Preferences>(client, 'PATCH', '/api/v1/me/preferences', changed))!;
-  client.setQueryData(preferencesQuery.queryKey, preferences);
-  if (changed.researchLoggingEnabled !== undefined) trailChanged(client);
-  return preferences;
+  const sent = ++preferenceChangesSent;
+  setPendingPreferences({ ...pendingPreferences, ...changed });
+  try {
+    const preferences = (await change<Preferences>(client, 'PATCH', '/api/v1/me/preferences', changed))!;
+    if (sent === preferenceChangesSent) {
+      client.setQueryData(preferencesQuery.queryKey, preferences);
+      setPendingPreferences({});
+    }
+    if (changed.researchLoggingEnabled !== undefined) trailChanged(client);
+    return preferences;
+  } catch (error) {
+    if (sent === preferenceChangesSent) {
+      setPendingPreferences({});
+      void client.invalidateQueries({ queryKey: preferencesQuery.queryKey });
+    }
+    throw error;
+  }
 }
 
 /** The method appendix's address, in `format`, its dates in this browser's time zone. */

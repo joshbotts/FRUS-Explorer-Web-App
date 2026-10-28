@@ -14,7 +14,7 @@ import { copy } from '../copy';
 import { useHeadingReady } from '../shell/headingFocus';
 import { useNow } from '../shell/useNow';
 import { useDocumentTitle } from '../shell/useDocumentTitle';
-import { exportMatches, searchMatches, showingCount, visitMatches } from './historyRules';
+import { exportMatches, isFiltering, searchMatches, showingCount, visitMatches } from './historyRules';
 import { timeSince } from './notesRules';
 import { ResearchNav } from './ResearchNav';
 
@@ -36,7 +36,7 @@ export function HistoryScreen() {
   if (page && scope !== 'all' && scope !== 'unfiled' && !page.projects.some((project) => project.id === scope)) {
     setScope('all');
   }
-  const filtering = scope !== 'all' || query.trim() !== '';
+  const filtering = isFiltering(scope, query);
   const now = useNow();
 
   async function remove(kind: 'documents' | 'searches' | 'exports', id: string, row: HTMLElement | null) {

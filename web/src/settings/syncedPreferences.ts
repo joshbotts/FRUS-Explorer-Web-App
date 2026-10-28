@@ -1,24 +1,27 @@
 // The synced preferences the browser app reads (PLAN's S17f): on a server that keeps user data, the
 // user's own, the Mac's `SyncedPreferences`, which follow them to any browser; on one that keeps
-// none, this browser's storage, as before S17f. The citation style the browser kept in its own storage
-// is given to the server once, the first time it is read while the server has none. The research
-// panel's last state, which Remember Last reopens, stays in this browser, as the Mac keeps it on each
-// device.
+// none, this browser's storage, as before S17f. A change shows at once, before the server answers it
+// (`updatePreferences`). The citation style the browser kept in its own storage is given to the
+// server once, the first time it is read while the server has none. The research panel's last state,
+// which Remember Last reopens, stays in this browser, as the Mac keeps it on each device.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import type { CitationStyleName } from '../api/types';
-import { preferencesQuery, updatePreferences } from '../api/research';
+import { pendingPreferenceChanges, preferencesQuery, subscribePendingPreferences, updatePreferences } from '../api/research';
 import { meQuery } from '../api/userData';
 import { useCitationStyle } from './preferences';
 
 const styles: readonly CitationStyleName[] = ['historyAtState', 'chicago', 'turabian'];
 
-/** The user's synced preferences, while the server keeps user data. */
+/** The user's synced preferences, with the changes not yet answered, while the server keeps user data. */
 export function useSyncedPreferences() {
   const me = useQuery(meQuery);
   const keepsUserData = me.data?.userData === true;
   const preferences = useQuery({ ...preferencesQuery, enabled: keepsUserData });
-  return { keepsUserData, preferences: keepsUserData ? preferences.data : undefined };
+  const pending = useSyncExternalStore(subscribePendingPreferences, pendingPreferenceChanges);
+  const held = keepsUserData ? preferences.data : undefined;
+  const shown = useMemo(() => (held ? { ...held, ...pending } : undefined), [held, pending]);
+  return { keepsUserData, preferences: shown };
 }
 
 /** Log Research Sessions: on until it is turned off, and on wherever nothing is kept to say otherwise. */

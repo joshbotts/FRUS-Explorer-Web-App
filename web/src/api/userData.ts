@@ -379,17 +379,24 @@ export const exportContentsQuery = queryOptions({
   retry: false,
 });
 
-/** Export as JSON's address: every summary with the app's switch on. */
-export function exportPath(includeGeneratedSummaries: boolean): string {
-  return '/api/v1/me/export' + (includeGeneratedSummaries ? '?includeGeneratedSummaries=true' : '');
+/**
+ * Export as JSON's address: every summary with the app's switch on, and from S17f the project the
+ * user works in, which its header names, as the Mac's names its active project.
+ */
+export function exportPath(includeGeneratedSummaries: boolean, projectId?: string): string {
+  const query = new URLSearchParams();
+  if (includeGeneratedSummaries) query.set('includeGeneratedSummaries', 'true');
+  if (projectId) query.set('projectId', projectId);
+  const fields = query.toString();
+  return '/api/v1/me/export' + (fields ? `?${fields}` : '');
 }
 
 /**
  * Export as JSON: the user's research as the Mac's export, the kit's envelope with the web's one key
  * more, under the name the server gives it, the app's export sheet's.
  */
-export function fetchExport(includeGeneratedSummaries: boolean): Promise<{ blob: Blob; name: string }> {
-  return getFile(exportPath(includeGeneratedSummaries), 'frus-research-export.json');
+export function fetchExport(includeGeneratedSummaries: boolean, projectId?: string): Promise<{ blob: Blob; name: string }> {
+  return getFile(exportPath(includeGeneratedSummaries, projectId), 'frus-research-export.json');
 }
 
 /** The user's projects, by name, for the note editor's Projects and All Notes' filter, and since S17f the one they work in. */

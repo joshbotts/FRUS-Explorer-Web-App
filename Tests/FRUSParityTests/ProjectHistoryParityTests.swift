@@ -278,8 +278,9 @@ import Testing
         #expect(blocks["reading"]?.contains("modes: { read: 'Read', research: 'Research', rememberLast: 'Remember Last' }") == true)
     }
 
-    /// The reader's own order and the History screen's filter, as the app's source writes them and the
-    /// web's mirrors say them, with the kit's quotation marks.
+    /// The reader's own order, the History screen's filter, Project Home's and "Working on:"'s lines and
+    /// the checklist's, as the app's source writes them and the web's mirrors say them, with the kit's
+    /// quotation marks.
     @Test func theListsRulesAreTheApps() throws {
         NoteViewParityTests.expect(try Self.app("Models/ListOrderPreferences.swift"), holds: [
             "let rank = Dictionary(order.enumerated().map { ($0.element, $0.offset) }, uniquingKeysWith: { first, _ in first })",
@@ -306,7 +307,43 @@ import Testing
             "return term === '' || holds(normalizingQuotationMarks(row.queryText), normalizingQuotationMarks(term));",
             "return term === '' || holds(row.title, term) || holds(row.format, term) || holds(row.formatName, term);",
             "return shown < total ? copy.history.showing(shown, total) : undefined;",
+            #"const whitespaces = /^[\t\p{Zs}]+|[\t\p{Zs}]+$/gu;"#, "return scope !== 'all' || trimmed(query) !== '';",
         ], file: "historyRules.ts")
+        NoteViewParityTests.expect(try Self.app("History/HistoryView.swift"), holds: [
+            "scope != .all || !query.trimmingCharacters(in: .whitespaces).isEmpty",
+        ], file: "HistoryView.swift")
+        NoteViewParityTests.expect(try Self.app("ProjectContext/ProjectHomeView.swift"), holds: [
+            "let cal = Calendar.current func year(_ date: Date?) -> Int? { date.map { cal.component(.year, from: $0) } }",
+            #"case let (start?, end?): return "\(start)–\(end)""#,
+            #"case let (start?, nil): return String(localized: "project.home.dateFrom", defaultValue: "From \(start, format: plain)")"#,
+            #"case let (nil, end?): return String(localized: "project.home.dateTo", defaultValue: "Through \(end, format: plain)")"#,
+            "case (nil, nil): return nil",
+            "guard effectiveIsEditorialNote(for: lead) else { return related }",
+            #"return related + " · " + String(localized: "project.home.leads.editorial", defaultValue: "Editorial note")"#,
+        ], file: "ProjectHomeView.swift")
+        NoteViewParityTests.expect(try Self.app("ProjectContext/ProjectPickerMenu.swift"), holds: [
+            "guard let pid = activeProjectId, let project = projects.first(where: { $0.id == pid }),",
+            "let question = project.researchQuestion?.trimmingCharacters(in: .whitespacesAndNewlines), !question.isEmpty else { return nil }",
+        ], file: "ProjectPickerMenu.swift")
+        NoteViewParityTests.expect(try Self.web("research/projectRules.ts"), holds: [
+            "return Number.isNaN(time.getTime()) ? undefined : time.getFullYear();",
+            "if (start !== undefined && end !== undefined) return `${start}–${end}`;",
+            "if (start !== undefined) return copy.projectHome.dateFrom(start);", "if (end !== undefined) return copy.projectHome.dateTo(end);",
+            #"const whitespacesAndNewlines = /^[\t\n\v\f\r\u{0085}\u{2028}\u{2029}\p{Zs}]+|[\t\n\v\f\r\u{0085}\u{2028}\u{2029}\p{Zs}]+$/gu;"#,
+            "const project = projects.find((item) => item.id.toUpperCase() === activeProjectId.toUpperCase());",
+            "const question = trimmedQuestion(project?.researchQuestion ?? ''); return question === '' ? undefined : question;",
+            "const related = lead.relatedCount === 1 ? copy.projectHome.relatedOne : copy.projectHome.relatedMany(lead.relatedCount);",
+            "return lead.isEditorialNote ? `${related} · ${copy.projectHome.editorialNote}` : related;",
+        ], file: "projectRules.ts")
+        NoteViewParityTests.expect(try Self.web("research/ProjectHomeScreen.tsx"), holds: [
+            "const trimmed = trimmedQuestion(text); if (trimmed === saved.current) return;",
+        ], file: "ProjectHomeScreen.tsx")
+        NoteViewParityTests.expect(try Self.app("Search/SearchModels.swift"), holds: [
+            "guard checklistMode, !loggingEnabled else { return nil }",
+        ], file: "SearchModels.swift")
+        NoteViewParityTests.expect(try Self.web("search/SearchScreen.tsx"), holds: [
+            "loggingNotice: logging ? undefined : copy.checklist.loggingOff,",
+        ], file: "SearchScreen.tsx")
         NoteViewParityTests.expect(try Self.web("api/research.ts"), holds: [
             "export const historyPageLimit = 500;", "export const historyPageIncrement = 500;",
             "export const sessionLogLimit = 1000;", "export const sessionLogIncrement = 1000;",

@@ -7,7 +7,7 @@ import type { SessionLog } from '../api/research';
 import type { ProjectList } from '../api/types';
 import { preferences } from '../test/research';
 import { exportContents, me, sent } from '../test/notes';
-import { ready, renderAt, stubServer } from '../test/renderRoute';
+import { ProblemAnswer, ready, renderAt, stubServer } from '../test/renderRoute';
 import { activityText, sessionLength, summaryText } from './SessionsSettings';
 
 afterEach(() => {
@@ -164,6 +164,23 @@ describe('Settings ▸ Reading', () => {
       const bodies = fetch.mock.calls.filter(([url, init]) => String(url).endsWith('/preferences') && init?.method === 'PATCH').map(([, init]) => sent(init).body);
       expect(bodies).toEqual([{ defaultDocumentMode: 'research' }, { citationStyle: 'chicago' }]);
     });
+  });
+
+  it('shows a choice before the server answers it, and the server’s copy again when it refuses one', async () => {
+    let answer: (given: unknown) => void = () => {};
+    stubServer({
+      '/readyz': ready,
+      '/api/v1/me': me,
+      '/api/v1/me/preferences': preferences,
+      'PATCH /api/v1/me/preferences': () => new Promise((resolve) => (answer = resolve)),
+    });
+    const user = userEvent.setup();
+    renderAt('/settings/reading');
+    const style = (await screen.findByRole('combobox', { name: 'Citation Style' })) as HTMLSelectElement;
+    await user.selectOptions(style, 'chicago');
+    expect(style.value).toBe('chicago');
+    answer(new ProblemAnswer(400, 'INVALID_PREFERENCE', 'No such style.'));
+    await waitFor(() => expect(style.value).toBe('historyAtState'));
   });
 });
 

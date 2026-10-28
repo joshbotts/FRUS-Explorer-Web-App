@@ -81,7 +81,7 @@ export async function summaries(page: Page): Promise<Summary[]> {
 }
 
 /** A change sent from a page of the app, with the token the server gave it; answers its JSON, if any. */
-export async function send(page: Page, method: 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<unknown> {
+export async function send(page: Page, method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown> {
   return page.evaluate(
     async ({ method, path, body }) => {
       const base = document.baseURI;

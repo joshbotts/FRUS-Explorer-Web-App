@@ -29,9 +29,17 @@ function holds(text: string, term: string): boolean {
   return fold(text).includes(fold(term));
 }
 
-/** The term the search field gives: trimmed of spaces, and nothing for nothing. */
+/** `trimmingCharacters(in: .whitespaces)`: the tab and every space separator. */
+const whitespaces = /^[\t\p{Zs}]+|[\t\p{Zs}]+$/gu;
+
+/** The term the search field gives, trimmed of its whitespaces; an empty one matches every row. */
 function trimmed(term: string): string {
-  return term.replace(/^[ \t]+|[ \t]+$/g, '');
+  return term.replace(whitespaces, '');
+}
+
+/** Whether the screen narrows its rows, a project chosen or a term typed (`HistoryView.isFiltering`). */
+export function isFiltering(scope: string, query: string): boolean {
+  return scope !== 'all' || trimmed(query) !== '';
 }
 
 export function visitMatches(row: DocumentVisit, raw: string): boolean {

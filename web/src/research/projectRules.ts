@@ -23,6 +23,14 @@ export function dateFocusText(project: Pick<Project, 'defaultDateRangeStart' | '
   return undefined;
 }
 
+/** `trimmingCharacters(in: .whitespacesAndNewlines)`. */
+const whitespacesAndNewlines = /^[\t\n\v\f\r\u{0085}\u{2028}\u{2029}\p{Zs}]+|[\t\n\v\f\r\u{0085}\u{2028}\u{2029}\p{Zs}]+$/gu;
+
+/** A research question as the app saves and shows one: trimmed of its whitespaces and newlines. */
+export function trimmedQuestion(text: string): string {
+  return text.replace(whitespacesAndNewlines, '');
+}
+
 /**
  * The question "Working on:" shows: the active project's research question, trimmed, or none for
  * Global Context, a project the list no longer holds, or a question that is empty.
@@ -30,8 +38,8 @@ export function dateFocusText(project: Pick<Project, 'defaultDateRangeStart' | '
 export function workingOnQuestion(activeProjectId: string | undefined, projects: readonly Project[]): string | undefined {
   if (!activeProjectId) return undefined;
   const project = projects.find((item) => item.id.toUpperCase() === activeProjectId.toUpperCase());
-  const question = project?.researchQuestion?.trim();
-  return question ? question : undefined;
+  const question = trimmedQuestion(project?.researchQuestion ?? '');
+  return question === '' ? undefined : question;
 }
 
 /** "Related to N of your documents", and "· Editorial note" for one. */
