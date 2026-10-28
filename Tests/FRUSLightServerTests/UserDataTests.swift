@@ -25,10 +25,11 @@ struct UserDataFixture {
 
     /// `volumes` from fixtures/tei are in the server's TEI folder, for the routes that read a page;
     /// `indexed`, the server serves the synthetic export, for the routes that read the index;
-    /// `importLimit`, an import's largest file; `auth`, `trustedProxies` and `adminUsers`, sign-in
-    /// through a proxy (S14e).
+    /// `importLimit`, an import's largest file; `resolver`, who a request acts for, the store's single
+    /// user by default, or with `auth`, `trustedProxies` and `adminUsers`, the one a proxy names (S14e).
     init(publicURL: String = "http://localhost:8080", userData: Bool = true, volumes: [String] = [],
-         indexed: Bool = false, importLimit: Int = UserDataServices.importBodyLimit, auth: ServerConfiguration.Auth = .none,
+         indexed: Bool = false, importLimit: Int = UserDataServices.importBodyLimit,
+         resolver: (any UserResolver)? = nil, auth: ServerConfiguration.Auth = .none,
          trustedProxies: [AddressRange] = [], adminUsers: Set<String> = []) async throws {
         server = try await indexed ? servingSyntheticExport(volumes: volumes) : ServerFixture(volumes: volumes)
         let url = server.files.userStore
@@ -38,7 +39,7 @@ struct UserDataFixture {
                                             trustedProxies: trustedProxies, adminUsers: adminUsers)
         jobs = InProcessJobQueue()
         services = UserDataServices(store: store, configuration: configuration, jobs: jobs, importLimit: importLimit,
-                                    now: { Self.now })
+                                    resolver: resolver, now: { Self.now })
     }
 
     var app: some ApplicationProtocol {

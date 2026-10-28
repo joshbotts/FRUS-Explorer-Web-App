@@ -9,9 +9,11 @@
 # under that path (PLAN's S14f), where it imports a Mac JSON export of more than 4 MiB through
 # nginx (S16c), then an export made with the owner's writing, whose installed index
 # scripts/check-stripped-export searches for it, and one whose strip outgrows a 64 KB /tmp, in a
-# container of its own (S16e). docs/INSTALL.md's nginx recipes, for the root and for a path, run in
-# nginx on the Compose network in each phase. Last, the server signs people in through the proxy
-# (S14e), with FRUS_AUTH=header and nginx's address alone in FRUS_TRUSTED_PROXIES: the install
+# container of its own (S16e). Then it backs up the user store with frus-light backup, fetches the
+# backup through GET /api/v1/admin/backup, removes the store, restores it with frus-light restore and
+# reads the same research back (S14b). docs/INSTALL.md's nginx recipes, for the root and for a path,
+# run in nginx on the Compose network in each phase. Last, the server signs people in through the
+# proxy (S14e), with FRUS_AUTH=header and nginx's address alone in FRUS_TRUSTED_PROXIES: the install
 # guide's recipe for it runs with a stand-in for its session check, a header from outside the list
 # is refused, and two users' tags stay apart. Its TEI folder holds fixtures/tei's volumes and the
 # kit's fixture for a section's own text,
@@ -58,6 +60,13 @@ passed=""
 mkdir "$work/tei"
 cp fixtures/tei/*.xml fixtures/own-text/frus1969-76v01.xml "$work/tei/"
 export FRUS_TEI_DIR="$work/tei"
+# The host folder each backup is copied to (S14b), which the server's user, UID 10001, must be able
+# to write: docs/INSTALL.md has a Linux host chown it, and Docker Desktop lets any user write one.
+mkdir "$work/backups"
+chmod 0777 "$work/backups"
+export FRUS_BACKUP_DIR="$work/backups"
+# The daily backup's hour is the container's time zone's, which the image's own data must know.
+export TZ=America/New_York
 
 cleanup() {
   if [ -z "$passed" ]; then
@@ -129,11 +138,27 @@ uid=$(docker compose exec -T frus id -u)
 [ "$(docker inspect --format '{{.HostConfig.ReadonlyRootfs}}' "$container")" = true ] || fail "the root filesystem is not read-only"
 if docker compose exec -T -u 0 frus touch /probe 2>/dev/null; then fail "root can write to the root filesystem"; fi
 docker compose exec -T frus sh -c 'touch /data/probe && rm /data/probe && touch /tmp/probe' || fail "/data or /tmp is not writable"
+docker compose exec -T frus sh -c 'touch /backups/probe && rm /backups/probe' || fail "the backups folder is not writable"
 docker compose exec -T frus test -r /data/volumes/frus1894Nicaragua.xml || fail "the TEI folder is not mounted"
 if docker compose exec -T -u 0 frus touch /data/volumes/probe 2>/dev/null; then fail "the TEI folder is writable"; fi
 published=$(docker compose port frus 8080)
 [ "${published%:*}" = 127.0.0.1 ] || fail "the port is published on $published, not 127.0.0.1"
-echo "   UID 10001; root read-only; /data and /tmp writable; TEI read-only; port on 127.0.0.1"
+echo "   UID 10001; root read-only; /data, /backups and /tmp writable; TEI read-only; port on 127.0.0.1"
+
+echo "== the daily backup's first look"
+# At its start the server looks at its backups, and finds a new store that holds no research yet,
+# which it does not back up: its first backup comes at the look after the first write (S14b).
+looked=""
+for _ in $(seq 1 60); do
+  looked=$(docker compose logs --no-color frus 2>&1 | grep -c "app.db holds no research yet, so no backup was taken" || true)
+  [ "$looked" -gt 0 ] && break
+  sleep 0.25
+done
+[ "$looked" -gt 0 ] || fail "the server did not look at its backups: $(docker compose logs --no-color frus 2>&1 | grep -i backup | tail -3)"
+[ -z "$(ls -A "$work/backups")" ] || fail "a new store was backed up: $(ls "$work/backups")"
+docker compose logs --no-color frus 2>&1 | grep -q "backed up daily at 03:00 America/New_York" \
+  || fail "the server does not name the backup's hour in TZ's time zone: $(docker compose logs --no-color frus 2>&1 | grep -i 'backed up daily' | tail -1)"
+echo "   none of a new store; daily at 03:00 America/New_York"
 
 echo "== the browser app"
 # The app's page and every client route answer with the same index.html and the app's policy; a
@@ -436,6 +461,50 @@ for folder in volume tmp; do
   esac
 done
 echo "   $(wc -c < "$work/large.sqlite" | tr -d ' ') bytes: installed with them in /data/tmp, and not with them in /tmp"
+
+echo "== a backup, through the API, and its restore"
+# What the import and the browser suite wrote, as the export gives every record of the user's,
+# without the time it was made: the research to read back after the restore.
+research() {
+  curl -s --max-time 30 -H "Host: localhost:8080" "$under/api/v1/me/export?includeGeneratedSummaries=true" | grep -v '"exportedAt"'
+}
+research > "$work/before.json"
+grep -q '"notes" : \[$' "$work/before.json" || fail "the export holds no notes: $(head -c 300 "$work/before.json")"
+# The server's own look may have taken one of the store as it stands, while the browser suite ran.
+taken=$(docker compose exec -T frus frus-light backup) || fail "frus-light backup failed: $taken"
+backup=$(printf '%s\n' "$taken" | sed -nE -e 's|^Backed up app\.db to /data/backups/(app-[0-9TZ-]+\.db)\.$|\1|p' \
+  -e 's|^app\.db has not changed since (app-[0-9TZ-]+\.db), the newest backup.*|\1|p')
+[ -n "$backup" ] || fail "frus-light backup took none: $taken"
+[ -f "$work/backups/$backup" ] || fail "$backup was not copied to the host folder"
+again=$(docker compose exec -T frus frus-light backup) || fail "frus-light backup failed again: $again"
+case "$again" in *"has not changed since $backup"*) ;; *) fail "a second backup of the same store answered: $again" ;; esac
+# The API gives the newest with its manifest, as a tar archive: the copy in the host folder, byte
+# for byte, which the manifest's SHA-256 names.
+answer=$(curl -s --max-time 30 -H "Host: localhost:8080" -o "$work/backup.tar" -w '%{http_code} %{content_type}' \
+  "$under/api/v1/admin/backup" || true)
+[ "$answer" = "200 application/x-tar" ] || fail "GET /api/v1/admin/backup answered $answer"
+mkdir "$work/archive"
+tar -xf "$work/backup.tar" -C "$work/archive" || fail "the API's archive is not a tar file tar reads"
+cmp -s "$work/archive/$backup" "$work/backups/$backup" || fail "the API's backup is not $backup"
+sum=$(shasum -a 256 "$work/archive/$backup" | cut -d' ' -f1)
+grep -q "\"sha256\" : \"$sum\"" "$work/archive/manifest.json" || fail "the manifest does not name $backup's SHA-256: $(cat "$work/archive/manifest.json")"
+# A restore waits for the server to stop: the store is the server's while it runs.
+if docker compose run --rm --no-deps frus restore "$backup" > /dev/null 2> "$work/refused.txt"; then
+  fail "a restore ran while the server was running"
+fi
+grep -q "stop it first" "$work/refused.txt" || fail "a restore beside the server said: $(cat "$work/refused.txt")"
+docker compose stop frus > /dev/null 2>&1
+docker compose run --rm --no-deps --entrypoint rm frus -f /data/app/app.db /data/app/app.db-wal /data/app/app.db-shm \
+  > /dev/null 2>&1 || fail "the store could not be removed"
+restored=$(docker compose run --rm --no-deps frus restore "$backup" 2> "$work/restore.txt") \
+  || fail "the restore failed: $(cat "$work/restore.txt")"
+case "$restored" in *"Restored /data/backups/$backup, at migration "*) ;; *) fail "the restore said: $restored" ;; esac
+docker compose start frus > /dev/null 2>&1
+wait_for_200 "$base/readyz" 60 || fail "/readyz did not reach 200 after the restore"
+research > "$work/after.json"
+cmp -s "$work/before.json" "$work/after.json" \
+  || fail "the restored store's research differs: $(diff "$work/before.json" "$work/after.json" | head -20)"
+echo "   $backup, also in the host folder and through the API with its SHA-256; refused beside the server; the store removed, restored and its research read back whole"
 
 echo "== health check under the path"
 wait_healthy

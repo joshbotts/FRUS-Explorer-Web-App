@@ -20,6 +20,14 @@ public struct RequestUser: Sendable, Equatable {
     public let id: String
     public let displayName: String
     public let roles: [Role]
+
+    /// Refuses a request of a user who does not hold `role`: the check the server makes for an
+    /// instance's data, whose corrections are a curator's (S16c) and whose backups an admin's (S14b).
+    func require(_ role: Role) throws {
+        guard roles.contains(role) else {
+            throw APIProblem(.forbidden, code: "ROLE_REQUIRED", detail: "This needs the \(role.rawValue) role, which \(displayName) does not hold.")
+        }
+    }
 }
 
 /// Resolves the user a request acts for: the one step that S14e's sign-in through a proxy and phase
@@ -219,21 +227,27 @@ struct UserDataServices: Sendable {
     let imports: ResearchImports
     /// The largest export an import may send: `importBodyLimit`, or a test's smaller one.
     let importLimit: Int
+    /// Where the store's backups are kept, and the folder each is copied to (S14b), for the admin's
+    /// `/api/v1/admin/backup`.
+    let backupsDirectory: URL
+    let backupCopyDirectory: URL?
 
     init(store: any UserDataStore, configuration: ServerConfiguration, tokens: CSRFTokens = CSRFTokens(),
          jobs: any JobQueue = InProcessJobQueue(), importLimit: Int = UserDataServices.importBodyLimit,
-         now: @escaping @Sendable () -> Date = Date.init) {
+         resolver: (any UserResolver)? = nil, now: @escaping @Sendable () -> Date = Date.init) {
         self.store = store
         if configuration.auth == .header {
             let proxies = TrustedProxies(configuration.trustedProxies)
             self.proxies = proxies
-            resolver = ProxyHeaderResolver(
+            self.resolver = resolver ?? ProxyHeaderResolver(
                 store: store, header: HTTPFields.Element.Name(configuration.authHeader) ?? HTTPFields.Element.Name("X-Forwarded-User")!,
                 proxies: proxies, admins: configuration.adminUsers, now: now)
         } else {
             proxies = nil
-            resolver = SingleUserResolver(store: store)
+            self.resolver = resolver ?? SingleUserResolver(store: store)
         }
+        backupsDirectory = DataDirectory(root: configuration.dataDirectory).backupsDirectory
+        backupCopyDirectory = configuration.backupCopyDirectory
         self.tokens = tokens
         address = configuration.publicAddress
         enabled = configuration.userData
@@ -267,7 +281,8 @@ struct UserDataServices: Sendable {
     static let importBodyLimit = 128 * 1_024 * 1_024
 }
 
-/// The guard on every route under /api/v1/me, in its group, before the route runs:
+/// The guard on every route under /api/v1/me, and from S14b under /api/v1/admin, whose backups hold
+/// every user's data, in its group, before the route runs:
 /// 1. the request's `Host` names `FRUS_PUBLIC_URL`'s address, for a read as for a write, since a
 ///    page under a name pointed at this server could otherwise read a user's data;
 /// 2. the user it acts for is resolved, into its context;

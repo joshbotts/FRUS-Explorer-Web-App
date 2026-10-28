@@ -42,6 +42,12 @@ public struct ServerConfiguration: Sendable, Equatable {
     /// Whether the server keeps user data (`FRUS_USER_DATA`): off, it is read-only, with no tags,
     /// notes, highlights or collections, as an instance others reach with no sign-in must be.
     public var userData: Bool
+    /// The hour of the user store's daily backup (`FRUS_BACKUP_HOUR`), 0 to 23 in the container's
+    /// time zone, which `TZ` sets: 3 by default (PLAN's S14b).
+    public var backupHour: Int
+    /// A folder each finished backup is also copied to (`FRUS_BACKUP_COPY_DIR`), such as the host
+    /// folder Compose mounts at `/backups`, which outlives the volume; none by default.
+    public var backupCopyDirectory: URL?
     /// In `header` mode, the header the proxy names the user in (`FRUS_AUTH_HEADER`).
     public var authHeader: String
     /// In `header` mode, the proxies a request may come from (`FRUS_TRUSTED_PROXIES`); a request
@@ -72,8 +78,8 @@ public struct ServerConfiguration: Sendable, Equatable {
         host: String = "127.0.0.1", port: Int = 8080, importPollInterval: Duration = .seconds(2),
         resourcesDirectory: URL = ServerConfiguration.imageResourcesDirectory,
         webDirectory: URL = ServerConfiguration.imageWebDirectory, requiresWebDirectory: Bool = false,
-        userData: Bool = true, authHeader: String = "X-Forwarded-User", trustedProxies: [AddressRange] = [],
-        adminUsers: Set<String> = []
+        userData: Bool = true, backupHour: Int = 3, backupCopyDirectory: URL? = nil,
+        authHeader: String = "X-Forwarded-User", trustedProxies: [AddressRange] = [], adminUsers: Set<String> = []
     ) {
         self.mode = mode
         self.auth = auth
@@ -88,6 +94,8 @@ public struct ServerConfiguration: Sendable, Equatable {
         self.webDirectory = webDirectory
         self.requiresWebDirectory = requiresWebDirectory
         self.userData = userData
+        self.backupHour = backupHour
+        self.backupCopyDirectory = backupCopyDirectory
         self.authHeader = authHeader
         self.trustedProxies = trustedProxies
         self.adminUsers = adminUsers
@@ -196,6 +204,15 @@ public struct ServerConfiguration: Sendable, Equatable {
             } else {
                 problems.append("FRUS_IMPORT_POLL_SECONDS must be a number of seconds from 0.05 to 3600, not \(raw)")
             }
+        }
+
+        if let raw = value("FRUS_BACKUP_HOUR") {
+            if let hour = Int(raw), (0...23).contains(hour) { config.backupHour = hour } else {
+                problems.append("FRUS_BACKUP_HOUR must be an hour from 0 to 23, not \(raw)")
+            }
+        }
+        if let raw = value("FRUS_BACKUP_COPY_DIR") {
+            config.backupCopyDirectory = URL(fileURLWithPath: raw, isDirectory: true)
         }
 
         if let raw = value("FRUS_RESOURCES_DIR") {
