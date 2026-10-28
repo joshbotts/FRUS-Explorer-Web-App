@@ -2,6 +2,40 @@
 
 One entry per session, newest first.
 
+## Session 18b, third follow-up: the pointer notes spec's random failure
+
+28 October 2026 · branch `claude/amazing-wright-703c3a` · [#82](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/82) · upstream `32e295e5`, unchanged
+
+`web/e2e/notes.spec.ts`'s first test failed at random in CI's `compose` job, which `main` requires: #77's run 40678882702, its first attempt, at about 11:28 UTC. At line 58, once the selection bar's Note had opened the editor, the new note's text never took focus, and `toBeFocused` timed out after 10 s; the suite's 47 other tests passed. #77 changes nothing under `web/`, and the same web code passed on `main` at `c209d75`. The cause is in the note editor's own focus: a race between Tiptap's timer and React's render, which the editor's code coming late brings. It is fixed and tested. No upstream change, no pin move.
+
+**What the trace showed.** The run's `playwright-report` holds the test's trace. The dialog opened with the click, and the editor's code, a lazy chunk, was asked for at the same moment and took 259 ms to come. The text appeared about 315 ms after the click and never took focus.
+
+**The cause, found before anything changed.** A diagnostic spec, never committed, ran the test's opening and logged every `focus()` call, with its caller and whether its element was in the page, beside the dialogs' open and close, focus events, the editor's timers and frames, and the text's arrival. `page.route` delayed the editor's code. Against an image of `main`, at the root:
+- **Delayed 150 to 330 ms, in 40 runs:** every delay of 234 ms or more failed, 28 of 28, and every one of 228 ms or less passed, 12 of 12. Delays of 350 to 700 ms failed 12 of 12.
+- **A failing run, delayed 255 ms:** Tiptap made the editor at 679.8 ms, in React's render, and its autofocus timer ran at 680.7. The frame that timer asked for ran at 681.7 and called `focus()` on the text while it was not yet in the page, which did nothing. React placed the text at 685.5. Tiptap's other timer, which destroys an editor no effect has claimed so that its hook makes another, never ran: React's effects had cleared it.
+
+So, in Tiptap 3.31, `useEditor` makes the editor while React renders, mounted on an element outside the page, and runs `autofocus` on `setTimeout(0)`, which calls `view.focus()` in a frame. `EditorContent` moves the editor into the page when React commits it. When the code comes late, React shows the editor in a retry render, which it time-slices: once 5 ms have gone it pauses, here right after making the editor. The timer and the frame came in the pause, and focus went to an element not in the page, and so nowhere. Whether a run fails turns on when the code comes. Ten runs with no delay all passed, by two paths, told apart by when the editor was made and placed; in two of them, the stack where Tiptap set its timer named the render that made it:
+- **Early,** in 7 of the 10: the code came with the dialog's own data, its tags, projects and summaries, and the editor was made 24 to 27 ms after its loading text appeared and placed 3 to 4 ms later, before Tiptap's timer ran. Its stack names a synchronous render, flushed in a microtask, as that data's arrival brings one: React Query gives React its data through `useSyncExternalStore`, whose renders React never pauses.
+- **Held,** in the other 3: the retry render made the editor first, at about the same time, and React held its content until 300 ms after the loading text, as it holds a retried boundary's. Tiptap's other timer ran in the hold and destroyed the editor, which no effect had claimed, so the frame found nothing to focus. Once React had placed the content, the hook made the editor again, at 307 to 317 ms, and that one's own timer focused it.
+- **Late:** a retry render that ends 290 ms or more after the loading text is placed at once. When it paused after making the editor, as every such run here did, the timer and the frame came in the pause, as above. CI's chunk took 259 ms, which puts the render at that edge, so the test failed at random.
+
+**The fix.** `RichTextEditor` no longer passes `autofocus` to Tiptap. An effect calls `editor.commands.focus('end')` for a new note once React has committed the editor, after `EditorContent` has placed it in its own mount, and again for an editor the hook makes anew. Focus still comes in a frame, after the dialog has focused its heading. `NoteEditor` is unchanged.
+
+**The tests.**
+- **A unit test,** `RichTextEditor.test.tsx`'s "a new note's text", reproduces the race. With React's own scheduler, which `act` would replace with renders it never pauses, a transition renders the editor in an open dialog, and a slow sibling makes React pause after making it. `framesAtOnce` gives the frame at once, and Tiptap's timers, faked, run in Chromium's order: the first in the pause, the second only once React's effects have cleared it. With the editor as it was, it fails 10 of 10, its frame focusing the text while it is not in the page; with the fix it passes 10 of 10. The web app's unit tests go from 325 to 326, in 35 files.
+- **A browser test** in `notes.spec.ts` delays the editor's code by half a second, and checks that the heading has focus while it loads and the text once it has come. Against `main`'s image it failed 10 of 10, 5 at the root and 5 under the path, at the text's focus; with the fix it passed 10 of 10. The browser suite goes from 48 tests to 49.
+
+**How it was checked,** on the owner's Mac at load averages of 2 to 4, with images and a port of this session's own, through a scratch copy of `scripts/compose-smoke` that runs one spec, repeated, in both passes:
+- **The diagnostic spec with the fix:** 40 of 40 with the code delayed by 150 to 330 ms, and 12 of 12 at 350 to 700 ms.
+- **`notes.spec.ts:41`,** the test that failed: 20 of 20 at the root and 20 of 20 under the path.
+- **Both notes specs,** by pointer and by keyboard, three rounds in each pass: 21 of 21 at the root and 21 of 21 under the path.
+- **`scripts/compose-smoke --e2e`** with this branch's image: passed, the browser suite's 49 tests in each pass and the sign-in spec.
+- **`scripts/npm run typecheck`, `run lint`, `test`:** clean; 326 tests in 35 files.
+
+**Delivered:** the editor's focus from an effect, the two tests and this log. The session's notes, its diagnostic spec and its copy of the smoke test are in the shared notes folder, as `notes-focus-late-editor.md` and `notes-focus-late-editor/`.
+
+**Next:** phase 2 goes on with S18d, collections and their editor, beside S17e and S17f. `v2` is one commit past the pin ([#81](https://github.com/joshbotts/FRUS-Explorer-Web-App/issues/81)): FRUS-Explorer#1812, the person authority's lane design, in the app's plans alone. It changes nothing this repository compiles, so the next pin move takes it with records alone.
+
 ## Session 18c: pin move past FRUS-Explorer#1809, #1810 and #1811, with #1808
 
 28 October 2026 · branch `claude/nervous-mccarthy-21018c` · [#77](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/77) · upstream `32e295e5`
