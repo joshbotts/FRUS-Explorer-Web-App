@@ -112,6 +112,64 @@ import Testing
         #expect(PublicAddress("ftp://example.org") == nil && PublicAddress("http://") == nil)
     }
 
+    /// Sign-in through a proxy (S14e): its header, its proxies and its admins, each read as listed.
+    @Test func headerModeReadsItsHeaderProxiesAndAdmins() throws {
+        let config = try ServerConfiguration.fromEnvironment([
+            "FRUS_AUTH": "header", "FRUS_TRUSTED_PROXIES": "172.18.0.5, 10.0.0.0/8 fd00::/8,::1",
+            "FRUS_ADMIN_USERS": " alice@example.org , bob ,", "FRUS_AUTH_HEADER": "X-Auth-Request-Email",
+        ])
+        #expect(config.auth == .header && config.authHeader == "X-Auth-Request-Email")
+        #expect(config.trustedProxies.map(\.description) == ["172.18.0.5", "10.0.0.0/8", "fd00::/8", "::1"])
+        #expect(config.adminUsers == ["alice@example.org", "bob"])
+        let plain = try ServerConfiguration.fromEnvironment(["FRUS_AUTH": "header", "FRUS_TRUSTED_PROXIES": "127.0.0.1"])
+        #expect(plain.authHeader == "X-Forwarded-User" && plain.adminUsers.isEmpty)
+        #expect(ServerConfiguration().authHeader == "X-Forwarded-User" && ServerConfiguration().trustedProxies.isEmpty)
+    }
+
+    /// Header mode with no proxy, or one that trusts every peer, and sign-in's settings with no
+    /// sign-in to use them, which would leave every visitor one user, are refused.
+    @Test func headerModeRefusesWhatCouldNotWork() {
+        for environment in [
+            ["FRUS_AUTH": "header"],
+            ["FRUS_AUTH": "header", "FRUS_TRUSTED_PROXIES": "proxy.example"],
+            ["FRUS_AUTH": "header", "FRUS_TRUSTED_PROXIES": "10.0.0.0/33"],
+            ["FRUS_AUTH": "header", "FRUS_TRUSTED_PROXIES": "10.0.0.256"],
+            ["FRUS_AUTH": "header", "FRUS_TRUSTED_PROXIES": "0.0.0.0/0"],
+            ["FRUS_AUTH": "header", "FRUS_TRUSTED_PROXIES": "::/0"],
+            ["FRUS_AUTH": "header", "FRUS_TRUSTED_PROXIES": "::ffff:0:0/96"],
+            ["FRUS_AUTH": "header", "FRUS_TRUSTED_PROXIES": "127.0.0.1", "FRUS_AUTH_HEADER": "X User"],
+            ["FRUS_AUTH": "header", "FRUS_TRUSTED_PROXIES": "127.0.0.1", "FRUS_AUTH_HEADER": "X-User:"],
+            ["FRUS_TRUSTED_PROXIES": "127.0.0.1"],
+            ["FRUS_AUTH": "none", "FRUS_ADMIN_USERS": "alice"],
+            ["FRUS_AUTH_HEADER": "X-Forwarded-User"],
+        ] {
+            #expect(throws: ConfigurationError.self, "\(environment)") { try ServerConfiguration.fromEnvironment(environment) }
+        }
+    }
+
+    /// A proxy's address or range, as FRUS_TRUSTED_PROXIES names it, and the peers it holds, an IPv4
+    /// peer in either of the forms a socket gives it.
+    @Test func anAddressRangeHoldsThePeersItNames() throws {
+        let one = try #require(AddressRange("127.0.0.1"))
+        #expect(one.contains("127.0.0.1") && one.contains("::ffff:127.0.0.1") && !one.contains("127.0.0.2") && !one.contains("::1"))
+        let network = try #require(AddressRange("172.18.0.1/16"))
+        #expect(network.contains("172.18.0.1") && network.contains("172.18.255.254") && !network.contains("172.19.0.1"))
+        let odd = try #require(AddressRange("10.0.0.0/9"))
+        #expect(odd.contains("10.127.255.255") && !odd.contains("10.128.0.0"))
+        let v6 = try #require(AddressRange("fd00::/8"))
+        #expect(v6.contains("fd12:3456::1") && !v6.contains("fe80::1") && !v6.contains("10.0.0.1"))
+        let loopback = try #require(AddressRange("::1"))
+        #expect(loopback.contains("::1") && !loopback.contains("::2") && !loopback.contains("127.0.0.1"))
+        for peer in ["localhost", "", "10.0.0", "unix:/tmp/socket"] { #expect(!network.contains(peer), "\(peer)") }
+        for text in ["", "10.0.0.0/", "/8", "10.0.0.0/-1", "10.0.0.0/8/8", "fd00::/129", "fe80::1%eth0", "proxy.example"] {
+            #expect(AddressRange(text) == nil, "\(text)")
+        }
+        let everyV4 = try #require(AddressRange("0.0.0.0/0"))
+        let everyV6 = try #require(AddressRange("::/0"))
+        let half = try #require(AddressRange("0.0.0.0/1"))
+        #expect(everyV4.isEveryAddress && everyV6.isEveryAddress && !half.isEveryAddress && !network.isEveryAddress)
+    }
+
     @Test func reportsEveryProblemAtOnce() {
         #expect {
             _ = try ServerConfiguration.fromEnvironment([

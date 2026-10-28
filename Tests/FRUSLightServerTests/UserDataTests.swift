@@ -26,15 +26,17 @@ struct UserDataFixture {
     /// `volumes` from fixtures/tei are in the server's TEI folder, for the routes that read a page;
     /// `indexed`, the server serves the synthetic export, for the routes that read the index;
     /// `importLimit`, an import's largest file; `resolver`, who a request acts for, the store's single
-    /// user by default.
+    /// user by default, or with `auth`, `trustedProxies` and `adminUsers`, the one a proxy names (S14e).
     init(publicURL: String = "http://localhost:8080", userData: Bool = true, volumes: [String] = [],
          indexed: Bool = false, importLimit: Int = UserDataServices.importBodyLimit,
-         resolver: (any UserResolver)? = nil) async throws {
+         resolver: (any UserResolver)? = nil, auth: ServerConfiguration.Auth = .none,
+         trustedProxies: [AddressRange] = [], adminUsers: Set<String> = []) async throws {
         server = try await indexed ? servingSyntheticExport(volumes: volumes) : ServerFixture(volumes: volumes)
         let url = server.files.userStore
         store = try await SQLiteUserStore(url: url, backupsDirectory: server.files.backupsDirectory)
         rows = try UserStoreRows(url)
-        configuration = ServerConfiguration(dataDirectory: server.files.root, publicURL: publicURL, userData: userData)
+        configuration = ServerConfiguration(auth: auth, dataDirectory: server.files.root, publicURL: publicURL, userData: userData,
+                                            trustedProxies: trustedProxies, adminUsers: adminUsers)
         jobs = InProcessJobQueue()
         services = UserDataServices(store: store, configuration: configuration, jobs: jobs, importLimit: importLimit,
                                     resolver: resolver, now: { Self.now })
@@ -47,25 +49,45 @@ struct UserDataFixture {
     }
 }
 
-/// What the browser app sends: its origin, the token, and JSON.
+/// What the browser app sends: its origin, the token, and JSON; and behind a proxy that signs people
+/// in (S14e), what the proxy adds, the user it names.
 struct Browser {
     let client: any TestClientProtocol
     var origin: String? = "http://localhost:8080"
     var base = ""
+    /// The user the proxy names in `X-Forwarded-User`, or nil for no header.
+    var user: String?
+
+    /// The header the proxy names the user in, `FRUS_AUTH_HEADER`'s default.
+    static let userHeader = HTTPFields.Element.Name("X-Forwarded-User")!
+
+    init(client: any TestClientProtocol, origin: String? = "http://localhost:8080", base: String = "", user: String? = nil) {
+        self.client = client
+        self.origin = origin
+        self.base = base
+        self.user = user
+    }
+
+    /// The headers every request carries: the proxy's.
+    private var proxied: HTTPFields {
+        var headers: HTTPFields = [:]
+        if let user { headers[Self.userHeader] = user }
+        return headers
+    }
 
     func me() async throws -> Me {
-        try decode(Me.self, try await client.execute(uri: base + "/api/v1/me", method: .get))
+        try decode(Me.self, try await client.execute(uri: base + "/api/v1/me", method: .get, headers: proxied))
     }
 
     func get(_ path: String) async throws -> TestResponse {
-        try await client.execute(uri: base + path, method: .get)
+        try await client.execute(uri: base + path, method: .get, headers: proxied)
     }
 
     /// A request that changes state, with the user's token unless `token` names another, and `json`
     /// as its body.
     func send(_ method: HTTPRequest.Method, _ path: String, _ json: String? = nil, token: String? = nil,
               contentType: String? = "application/json") async throws -> TestResponse {
-        var headers: HTTPFields = [:]
+        var headers = proxied
         if let origin { headers[.origin] = origin }
         if let token { headers[CSRFTokens.header] = token } else { headers[CSRFTokens.header] = try await me().csrfToken }
         if let contentType, json != nil { headers[.contentType] = contentType }
