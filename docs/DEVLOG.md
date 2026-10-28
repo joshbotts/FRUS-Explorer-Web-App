@@ -4,7 +4,7 @@ One entry per session, newest first.
 
 ## Session 18b: a collection resolves through a data source in FRUSCoreKit, upstream
 
-27 October 2026 · branch `claude/optimistic-blackwell-d0048f` · [#WEBPR](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/WEBPR) · upstream `503a730b`, unchanged by this row; `1c18b51e` once `main` with S17c's pin move was merged in · [FRUS-Explorer#1809](https://github.com/joshbotts/FRUS-Explorer/pull/1809), open
+27 October 2026 · branch `claude/optimistic-blackwell-d0048f` · [#75](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/75) · upstream `503a730b`, unchanged by this row; `1c18b51e` once `main` with S17c's pin move was merged in · [FRUS-Explorer#1809](https://github.com/joshbotts/FRUS-Explorer/pull/1809), open
 
 This is phase 2's row S18b, the second of the two upstream collection rows, and Mac check 14 verifies it. S18a's #1807 made what renders a collection the kit's; this row makes what resolves one the kit's, so S18d to S18f can put a collection together on the server from its own store, as the app does from SwiftData.
 
