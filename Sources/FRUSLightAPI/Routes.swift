@@ -1,6 +1,6 @@
 // The routes: health, readiness and status, the API under /api/v1 (docs/SPEC.md, HTTP API), the
-// user's own under /api/v1/me, the reader's host script, and the browser app, at the root or under
-// the server's base path.
+// user's own under /api/v1/me and an admin's under /api/v1/admin, the reader's host script, and the
+// browser app, at the root or under the server's base path.
 
 import FRUSLightCore
 import Foundation
@@ -37,7 +37,10 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     CitationRoutes.add(to: router, reader: reader, provider: provider, resources: resources)
     CitationLookupRoutes.add(to: router, provider: provider, resources: resources)
     ReaderLinkRoutes.add(to: router, state: state, provider: provider, reader: reader, resources: resources)
-    if let userData { UserDataRoutes.add(to: router, services: userData, resources: resources, reader: reader, provider: provider) }
+    if let userData {
+        UserDataRoutes.add(to: router, services: userData, resources: resources, reader: reader, provider: provider)
+        AdminRoutes.add(to: router, services: userData)
+    }
     // Last, so it wraps only the requests no route answers.
     if let webClient { router.add(middleware: WebClientMiddleware(webClient, logger: logger)) }
     return router

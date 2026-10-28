@@ -40,6 +40,10 @@ public struct DataDirectory: FileStore {
     public var volumesDirectory: URL { root.appendingPathComponent("volumes", isDirectory: true) }
     public var exportsDirectory: URL { root.appendingPathComponent("exports", isDirectory: true) }
     public var backupsDirectory: URL { root.appendingPathComponent("backups", isDirectory: true) }
+    /// Held shared by each server while it runs, and exclusively by a restore (S14b).
+    public var serverLock: URL { root.appendingPathComponent("app/server.lock") }
+    /// Held by a backup while it runs, so two never run at once (S14b).
+    public var backupLock: URL { root.appendingPathComponent("app/backup.lock") }
     /// SQLite's temporary files, on the index's volume: the copy `VACUUM` writes when an import strips
     /// the owner's writing from an export (S16e) is as large as the index, where `/tmp` is a tmpfs in
     /// `compose.yaml`, held in memory. `FRUSLightServer` names it in `SQLITE_TMPDIR`.
