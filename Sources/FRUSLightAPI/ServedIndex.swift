@@ -37,6 +37,9 @@ public final class ServedIndex: Sendable {
     public let retained = RetainedResults()
     /// The pages and counts of the searches run lately by relevance over this index.
     public let recent = RecentSearches()
+    /// The volumes the index holds documents of: what a working corpus and a volume scope resolve
+    /// against (PLAN's S17e), as the app resolves them against the volumes its device has indexed.
+    public let indexedVolumeIds: Set<String>
 
     /// Opens the stack, with `userStore` attached when it names the user store's search database,
     /// and refuses it unless the path still named the file `corpus` opened before the first open and
@@ -53,9 +56,10 @@ public final class ServedIndex: Sendable {
         attachesUserStore = userStore != nil
         pages = try PageRangeStore(readingDatabaseAt: corpus.url)
         persons = try PersonMentionStore(readingDatabaseAt: corpus.url)
+        indexedVolumeIds = Set(corpus.documentsByVolume.filter { $0.value > 0 }.keys)
         citations = CitationMatchingEngine(manifestStore: FixedVolumeCatalogue(entries: resources.manifest),
                                            searchService: service, pageRangeStore: pages,
-                                           downloadedVolumeIds: Set(corpus.documentsByVolume.filter { $0.value > 0 }.keys))
+                                           downloadedVolumeIds: indexedVolumeIds)
         guard let expected = corpus.file, before == expected, FileIdentity(corpus.url) == expected else {
             throw APIProblem(.serviceUnavailable, code: "INDEX_NOT_READY",
                              detail: "A new index is being installed; ask again in a moment.")

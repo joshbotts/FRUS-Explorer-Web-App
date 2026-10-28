@@ -30,9 +30,16 @@ import Foundation
 ///   shows; and `subjectBucket`, a subject's place in the subject vocabulary, with
 ///   `subjectBucketKey`, its durable name, which wins. The facets set these (`FacetNarrowing`).
 ///
+/// - `workingCorpusId`, one of the user's working corpora (PLAN's S17e), which the search runs inside,
+///   as the Mac's runs inside the corpus it has applied: `SearchUsers` resolves it for the request's
+///   user over the served index (`WorkingCorpusResolver`), into the parameters' document gate
+///   (`SearchParameters.runningInside(workingCorpus:)`). One that is not the user's is refused.
+///
 /// `limit` is 1 to 100, 20 by default, and `offset` is at least 0; together they stay within the
 /// 7,500 results the app keeps of a search. `sort` is a `SearchSortOrder` raw value, `relevance` by
-/// default. The draft's `booleanMode` and `personRef` arrive later and are refused until then, as is
+/// default. `reviewed`, a list of `volumeId/documentId` keys, is what Checklist Mode hides (S17e): the
+/// page is cut from the results kept less those, as the Mac's window pages what its checklist leaves
+/// (`MacSearchViewModel.displayedResults`), and the count is the match's, unchanged. The draft's `booleanMode` and `personRef` arrive later and are refused until then, as is
 /// `subjectTagIds`, which the kit has kept inert since the subject taxonomy was retired, and the
 /// draft's `facets`, which is a resource of its own here (`/api/v1/search/facets`), and any name not
 /// listed here.
@@ -41,21 +48,29 @@ public struct SearchRequest: Equatable, Sendable {
     public static let defaultLimit = 20
     /// How many of a search's results the app keeps (`MacSearchViewModel`); the count is exact.
     public static let retainedLimit = 7_500
-    /// The fields that choose a page and its order, beside the search's.
-    static let pageFields: Set<String> = ["limit", "offset", "sort"]
+    /// The fields that choose a page and its order, beside the search's, and the results Checklist
+    /// Mode hides from it.
+    static let pageFields: Set<String> = ["limit", "offset", "sort", "reviewed"]
 
     public var parameters: SearchParameters
     public var limit: Int
     public var offset: Int
     /// The order of the results the app keeps, which the page is cut from.
     public var sort: SearchSortOrder
+    /// The working corpus the search runs inside, by its id in upper case, or nil.
+    public var workingCorpusId: String?
+    /// The results Checklist Mode hides, by `volumeId/documentId`: none outside it.
+    public var reviewed: Set<String>
 
     public static let fields: Set<String> = [
         "keywords", "phrase", "prefixWildcard", "excludedTerms", "dateRangeEarliest", "dateRangeLatest",
         "volumeIds", "yearKeys", "documentType",
         "includeDocumentText", "includeSummaries", "includeNotes", "includeFrontMatter", "userTagIds",
-        "personRollupId", "personLabel", "subjectBucket", "subjectBucketKey",
+        "personRollupId", "personLabel", "subjectBucket", "subjectBucketKey", "workingCorpusId",
     ]
+
+    /// The most keys `reviewed` may hold: the results a search keeps.
+    public static let reviewedLimit = retainedLimit
 
     /// The draft's parameters this build does not take, and why.
     public static let laterFields: [(name: String, detail: String)] = [
@@ -81,6 +96,42 @@ public struct SearchRequest: Equatable, Sendable {
             throw APIProblem.invalidParameter("offset", "with limit, it must stay within the \(Self.retainedLimit) results a search keeps: offset + limit is \(offset + limit)")
         }
         sort = try form.choice("sort", among: SearchSortOrder.allCases) ?? .relevance
+        workingCorpusId = try Self.workingCorpusId(in: form)
+        reviewed = try Self.reviewed(in: form)
+    }
+
+    /// The working corpus `form` names, its id in upper case, or nil for none.
+    static func workingCorpusId(in form: FormQuery) throws(APIProblem) -> String? {
+        guard let value = try form.single("workingCorpusId"), !value.isEmpty else { return nil }
+        guard let id = UUID(uuidString: value) else {
+            throw APIProblem.invalidParameter("workingCorpusId", "must be a working corpus's id, a UUID, not \(value)")
+        }
+        return id.uuidString
+    }
+
+    /// The results `form` says Checklist Mode hides: each a `volumeId/documentId` key, at most
+    /// `reviewedLimit` of them.
+    static func reviewed(in form: FormQuery) throws(APIProblem) -> Set<String> {
+        try reviewed(try form.list("reviewed")?.filter { !$0.isEmpty } ?? [])
+    }
+
+    /// `keys` as the results Checklist Mode hides, each checked as ``reviewed(in:)`` checks it.
+    static func reviewed(_ keys: [String]) throws(APIProblem) -> Set<String> {
+        guard keys.count <= reviewedLimit else {
+            throw APIProblem.invalidParameter("reviewed", "names at most \(reviewedLimit) results, the results a search keeps, not \(keys.count)")
+        }
+        for key in keys {
+            let parts = key.split(separator: "/", omittingEmptySubsequences: false)
+            guard parts.count == 2, parts.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 256 }) else {
+                throw APIProblem.invalidParameter("reviewed", "each is a result's volumeId/documentId, not \(key)")
+            }
+        }
+        return Set(keys)
+    }
+
+    /// Whether a result is one Checklist Mode hides.
+    func hides(_ result: SearchResult) -> Bool {
+        !reviewed.isEmpty && reviewed.contains("\(result.volumeId)/\(result.documentId)")
     }
 
     /// The search `form` describes. An endpoint that takes more than the search names its own
@@ -153,11 +204,15 @@ public struct SearchRequest: Equatable, Sendable {
     }
 
     /// The search `parameters` say, as one string: its query fields in order of name, each with its
-    /// values. Two searches the API tells apart never share one, so what is computed for a search can
-    /// be kept by it.
+    /// values, and the documents a working corpus gates it to (S17e), which no field says. Two searches
+    /// the API tells apart never share one, so what is computed for a search can be kept by it.
     static func signature(_ parameters: SearchParameters) -> String {
         let fields = formFields(parameters)
-        return fields.keys.sorted().map { "\($0)=\(fields[$0, default: []])" }.joined(separator: "&")
+        var signature = fields.keys.sorted().map { "\($0)=\(fields[$0, default: []])" }.joined(separator: "&")
+        if let documents = parameters.documentIds {
+            signature += "&documentIds=\(documents.count):\(documents.sorted().joined(separator: ","))"
+        }
+        return signature
     }
 
     /// A date bound: nil for an empty value, otherwise `yyyy-MM-dd`, which the kit compares as text.

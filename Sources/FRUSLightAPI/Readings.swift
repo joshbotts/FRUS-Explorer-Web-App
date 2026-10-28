@@ -145,16 +145,19 @@ enum ReadingRoutes {
             let form = try FormQuery(request.uri.query)
             let search = try SearchRequest(form: form, alsoTaking: timelineFields)
             let documents = try form.bool("documents") ?? false
-            let parameters = search.parameters
-            let user = try await users.user(searching: parameters, for: request, context: context)
+            let user = try await users.user(searching: search.parameters, for: request, context: context)
             let served = try await provider.served()
+            let parameters = try await users.inside(search.workingCorpusId, search.parameters, for: user, served: served)
             let scoped = try served.search(for: user)
             let coverage = Coverage(index: served.corpus, resources: resources)
             return try await context.whileClientConnected {
                 do {
+                    // In Checklist Mode, of the results kept less those it hides, as the Mac's timeline
+                    // plots what its checklist leaves (S17e).
                     return try await timeline(parameters, sort: search.sort, documents: documents, scoped: scoped,
-                                              facets: served.facets, keeping: SearchRequest.retainedLimit, coverage: coverage) {
-                        try await served.retained.results(of: parameters, in: scoped)
+                                              facets: served.facets, keeping: SearchRequest.retainedLimit, reviewed: search.reviewed,
+                                              coverage: coverage) {
+                        try await served.retained.results(of: parameters, in: scoped).filter { !search.hides($0) }
                     }
                 } catch let error as FTS5Error {
                     throw SearchRoutes.refusal(error)
@@ -166,9 +169,11 @@ enum ReadingRoutes {
             if let draft = draftConcordanceFields.first(where: { !form.values($0.name).isEmpty }) {
                 throw APIProblem(.badRequest, code: "UNSUPPORTED_PARAMETER", detail: "\(draft.name): \(draft.detail)")
             }
-            let search = try SearchRequest(form: form)
-            let user = try await users.user(searching: search.parameters, for: request, context: context)
+            var asked = try SearchRequest(form: form)
+            let user = try await users.user(searching: asked.parameters, for: request, context: context)
             let served = try await provider.served()
+            asked.parameters = try await users.inside(asked.workingCorpusId, asked.parameters, for: user, served: served)
+            let search = asked
             let scoped = try served.search(for: user)
             return try await context.whileClientConnected {
                 do {
@@ -190,11 +195,15 @@ enum ReadingRoutes {
     /// does. A year's documents, asked for with `documents`, are the results kept whose date the kit
     /// keys by that year, in the order `sort` gives them.
     static func timeline(_ parameters: SearchParameters, sort: SearchSortOrder, documents: Bool,
-                         scoped: ServedSearch, facets: FacetCache, keeping limit: Int, coverage: Coverage,
+                         scoped: ServedSearch, facets: FacetCache, keeping limit: Int, reviewed: Set<String> = [],
+                         coverage: Coverage,
                          kept: @escaping @Sendable () async throws -> [SearchResult]) async throws -> SearchTimeline {
         let retained = try await kept()
         let keys = retained.map { (volumeId: $0.volumeId, documentId: $0.documentId) }
-        let breakdown = try await facets.section(.years, search: "\(scoped.key)retained \(limit) \(SearchRequest.signature(parameters))") {
+        // Kept by the results it counts: those Checklist Mode leaves are another set's.
+        let hidden = reviewed.isEmpty ? "" : " reviewed \(reviewed.sorted().joined(separator: ","))"
+        let breakdown = try await facets.section(.years,
+                                                 search: "\(scoped.key)retained \(limit) \(SearchRequest.signature(parameters))\(hidden)") {
             try await scoped.service.resultSetFacets(parameters: parameters, request: .one(.years), documentKeys: keys)
         }
         var byYear: [String: [TimelineDocument]] = [:]
