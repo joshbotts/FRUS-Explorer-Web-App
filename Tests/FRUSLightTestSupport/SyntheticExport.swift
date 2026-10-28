@@ -17,6 +17,10 @@ public struct SyntheticExport: Sendable {
     public var stampsWritingIncluded = false
     /// Puts a note in the copy, whatever the stamp says.
     public var containsWriting = false
+    /// The owner's writing of `Fixtures/export-writing.sql`, and the stamp that says the export holds
+    /// it: an export made with Include My Notes, Summaries, and Tags on (PLAN's S16e), as
+    /// `scripts/synthetic-export --writing` writes it.
+    public var includesWriting = false
     /// Changes a document's text behind the full-text index's back.
     public var corruptFullTextIndex = false
     /// Leaves the file's header in write-ahead-log mode, though fully checkpointed, with no -wal.
@@ -121,6 +125,9 @@ public struct SyntheticExport: Sendable {
             _ = try db.query("INSERT INTO volume_structures (volume_id, structure_json) VALUES (?, ?)",
                              [.text(volume), .text(try Self.ownTextOutline())])
         }
+        if includesWriting {
+            try db.execute(try Self.fixture("export-writing"))
+        }
         if !stamped {
             // A .backup of the live index: the exporter adds the stamp and these views to its copy only.
             try db.execute("""
@@ -130,7 +137,7 @@ public struct SyntheticExport: Sendable {
         } else {
             let stamp: [(String, String)] = [
                 ("exported_at", exportedAt),
-                ("my_writing_included", stampsWritingIncluded ? "1" : "0"),
+                ("my_writing_included", stampsWritingIncluded || includesWriting ? "1" : "0"),
                 ("app_version", "0.2"),
                 ("app_build", "49"),
                 ("installed_index_version", String(installedIndexVersion ?? indexVersion)),
@@ -169,8 +176,11 @@ public struct SyntheticExport: Sendable {
     }
 
     /// The real export's schema.
-    public static func schema() throws -> String {
-        guard let url = Bundle.module.url(forResource: "export-v69-schema", withExtension: "sql", subdirectory: "Fixtures") else {
+    public static func schema() throws -> String { try fixture("export-v69-schema") }
+
+    /// One of the SQL files in `Fixtures`.
+    static func fixture(_ name: String) throws -> String {
+        guard let url = Bundle.module.url(forResource: name, withExtension: "sql", subdirectory: "Fixtures") else {
             throw CocoaError(.fileNoSuchFile)
         }
         return try String(contentsOf: url, encoding: .utf8)

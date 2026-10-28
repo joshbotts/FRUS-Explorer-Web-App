@@ -50,6 +50,11 @@ public struct SummaryRecord: Sendable, Equatable {
 
     /// Whether the reader may change or delete it: `OwnSummary.isEditable`.
     public var isEditable: Bool { OwnSummary.isEditable(self) }
+
+    /// Whether the reader may delete it: one of their own, or a document's summary from a research
+    /// database (S16e), a copy that a JSON import of the same library brings again under the Mac's id,
+    /// as the reader may delete a research database's note block.
+    public var isDeletable: Bool { isEditable || ResearchDatabaseMark.isFromResearchDatabase(self) }
 }
 
 /// The summaries the web's reader writes, the web's own: no app screen writes a document's summary,
@@ -119,8 +124,9 @@ public protocol SummaryStore: Sendable {
                                              at now: Date) throws -> SummaryRecord
     /// Replaces the text of one of the reader's own summaries, stamping `lastModified`.
     @discardableResult func updateOwnSummary(_ id: String, text: String, for user: String, at now: Date) throws -> SummaryRecord
-    /// Deletes one of the reader's own summaries. A note that selected it keeps its id, as the app
-    /// leaves a dangling one.
+    /// Deletes one of the reader's own summaries, or one from a research database
+    /// (`SummaryRecord.isDeletable`). A note that selected it keeps its id, as the app leaves a
+    /// dangling one.
     func deleteOwnSummary(_ id: String, for user: String) throws
 }
 
@@ -188,7 +194,7 @@ extension RelationalUserStore: SummaryStore {
 
     public func deleteOwnSummary(_ id: String, for user: String) throws {
         try writing { db in
-            let summary = try Self.ownSummary(id, of: user, in: db)
+            let summary = try Self.ownSummary(id, of: user, in: db, toDelete: true)
             _ = try db.query("DELETE FROM summaries WHERE user_id = ? AND upper(id) = ?",
                              [.text(user), .text(UserSearchText.uuidString(summary.id))])
             try Self.refreshSearch(of: summary.document, for: user, in: db)
@@ -209,12 +215,14 @@ extension RelationalUserStore: SummaryStore {
             .first.map(summary)
     }
 
-    /// One of the reader's own summaries, or the refusal of any other.
-    private static func ownSummary(_ id: String, of user: String, in db: UserStoreTransaction) throws -> SummaryRecord {
+    /// One of the reader's own summaries, or for a deletion one from a research database too, or the
+    /// refusal of any other.
+    private static func ownSummary(_ id: String, of user: String, in db: UserStoreTransaction,
+                                   toDelete: Bool = false) throws -> SummaryRecord {
         guard let key = TagReferences.normalized(id), let summary = try summary(key, of: user, in: db) else {
             throw SummaryStoreError.summaryNotFound(id)
         }
-        guard summary.isEditable else { throw SummaryStoreError.readOnly(id) }
+        guard toDelete ? summary.isDeletable : summary.isEditable else { throw SummaryStoreError.readOnly(id) }
         return summary
     }
 

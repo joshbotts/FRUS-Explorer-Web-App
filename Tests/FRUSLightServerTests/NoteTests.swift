@@ -106,7 +106,7 @@ struct NoteJSON: Encodable {
             let raw = try #require(try JSONSerialization.jsonObject(with: Data(buffer: listed.body)) as? [String: Any])
             let item = try #require((raw["items"] as? [[String: Any]])?.first)
             #expect(Set(item.keys) == ["id", "volumeId", "documentId", "bodyText", "projectIds", "userTagIds", "selectedSummaryIds",
-                                       "linkedHighlightIds", "createdAt", "lastModified"])
+                                       "linkedHighlightIds", "createdAt", "lastModified", "fromResearchDatabase"])
             let all = try decode(NoteList.self, try await browser.get("/api/v1/me/notes"))
             #expect(all.total == 1 && all.items == document.items)
 
