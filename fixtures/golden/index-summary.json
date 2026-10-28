@@ -658,9 +658,9 @@
     "timings" : {
       "cross_references" : 0.001,
       "cross_references.sequence" : 0,
-      "document_cache" : 0.006,
+      "document_cache" : 0.005,
       "document_cache.sequence" : 0,
-      "document_dates" : 0.001,
+      "document_dates" : 0,
       "document_dates.sequence" : 0,
       "document_revisions" : 0,
       "document_revisions.sequence" : 0,
@@ -675,9 +675,9 @@
       "frus_documents.config" : 0,
       "frus_documents.docsize" : 0,
       "frus_documents.vocab_col" : 0.008,
-      "frus_documents.vocab_instance" : 0.403,
-      "frus_documents.vocab_row" : 0.011,
-      "integrity" : 0.029,
+      "frus_documents.vocab_instance" : 0.399,
+      "frus_documents.vocab_row" : 0.012,
+      "integrity" : 0.027,
       "page_ranges" : 0.001,
       "page_ranges.sequence" : 0.001,
       "person_cluster_candidate" : 0,
@@ -692,7 +692,7 @@
       "schema.export_only" : 0,
       "terms" : 0,
       "terms.sequence" : 0,
-      "total" : 0.484,
+      "total" : 0.478,
       "user_content.averages" : 0,
       "user_content.config" : 0,
       "user_content.docsize" : 0,
@@ -702,7 +702,7 @@
       "user_tags" : 0,
       "volume_sources" : 0,
       "volume_sources.sequence" : 0,
-      "volume_structures" : 0,
+      "volume_structures" : 0.001,
       "volume_structures.json" : 0
     },
     "volumeOrder" : [
@@ -737,8 +737,8 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "60d61d5d2ef118790f1ae6037101065b87ba0496f8b57cb2761c730c2ffee552",
+    "sourceDigest" : "bf053f59eb1d2f3f785163ccbed0b94b5b5751e95ed6fa1342bc43694f64b703",
     "tool" : "frus-parity summarize",
-    "upstreamCommit" : "1c18b51ea73594664d3cd0a61e20ba11d8db9c14"
+    "upstreamCommit" : "fef96201158b031d2e2c579d3bf5d4224eddc616"
   }
 }
