@@ -105,12 +105,12 @@ public actor ImportCoordinator {
         let observer = StateThenOthers(state: state, others: alsoNotify)
         return await jobs.submit("import \(file.lastPathComponent)") { [importer, state, removeFile] in
             do {
-                let index = try await importer.importExport(at: file, observer: observer)
+                let imported = try await importer.importExport(at: file, observer: observer)
                 var note: String?
                 do { try removeFile(file) } catch {
                     note = "The file could not be removed from /data/import: \(error.localizedDescription)"
                 }
-                await state.importFinished(file: file.lastPathComponent, index: index, note: note)
+                await state.importFinished(file: file.lastPathComponent, index: imported.index, writing: imported.writing, note: note)
                 await self.finished(file: file, signature: signature, retry: false)
             } catch {
                 await state.importFailed(file: file.lastPathComponent, error: error)

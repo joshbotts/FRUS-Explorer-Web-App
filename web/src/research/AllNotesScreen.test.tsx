@@ -75,6 +75,15 @@ describe('All Notes', () => {
     expect(document.title).toBe('All Notes – FRUS Explorer Light');
   });
 
+  it('marks a document’s note block from a research database in its row (S16e)', async () => {
+    server({}, [
+      noteSummary({ id: 'R', bodyText: 'Ask the archivist.\n\nCompare the memoir.', fromResearchDatabase: true, lastModified: '2026-10-03T15:14:19.000Z' }),
+    ]);
+    renderAt('/research/notes');
+    await screen.findByRole('list', { name: 'All Notes' });
+    expect(shown()).toEqual([['Ask the archivist.', 'frus1961-63v06 / d1', 'From a research database', 'Oct 3, 2026']]);
+  });
+
   it('filters by project, where Not in a project is a note with none, by tag, and by text, and counts what it shows of all', async () => {
     server();
     const { router } = renderAt('/research/notes');

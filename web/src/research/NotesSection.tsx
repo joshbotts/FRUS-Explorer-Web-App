@@ -2,7 +2,8 @@
 // last changed first, each its plain text to three lines, or Empty note, and the time since it
 // changed, a row that opens the note in the editor; then, just after a highlight is made, Add Note
 // to Highlight, which makes a note that the highlight takes as its own, as the app's link; and Add
-// Note. No row is deleted here, as none is in the app's rail: All Notes and the editor delete.
+// Note. No row is deleted here, as none is in the app's rail: All Notes and the editor delete. A
+// document's note block from a research database says so under its text (S16e), the web's own line.
 import { useEffect, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
 import type { NoteSummary } from '../api/types';
@@ -90,6 +91,7 @@ export function NotesSection({
                 }}
               >
                 <span className={note.bodyText === '' ? 'note-row-text empty' : 'note-row-text'}>{railText(note.bodyText)}</span>
+                {note.fromResearchDatabase && <span className="note-row-origin">{copy.notes.fromResearchDatabase}</span>}
                 <time className="note-row-time" dateTime={note.lastModified ?? undefined}>
                   {timeSince(note.lastModified, now)}
                 </time>

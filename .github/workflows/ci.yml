@@ -217,6 +217,11 @@ jobs:
       - name: Pull the Playwright image
         run: docker pull "$(scripts/npm --playwright-image)"
 
+      # scripts/check-stripped-export, which the smoke test runs on the index it installs from an
+      # export with the owner's writing (PLAN's S16e), searches with GNU grep in this image.
+      - name: Pull the image check 5's search runs in
+        run: docker pull swift:6.4-noble
+
       - name: Compose smoke test and the browser suite
         run: FRUS_IMAGE=frus-light:ci scripts/compose-smoke --e2e
 

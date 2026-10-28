@@ -7,7 +7,11 @@ public enum ReadinessStep: String, Sendable, Codable, CaseIterable {
     case checkingFormat = "checking_format"
     case checkingVersions = "checking_versions"
     case checkingWriting = "checking_writing"
+    /// Removing the owner's writing from the copy, with the kit's own statements (S16e).
+    case strippingWriting = "stripping_writing"
     case checkingIntegrity = "checking_integrity"
+    /// Keeping the writing it held in the importing user's store (S16e).
+    case movingWriting = "moving_writing"
     case installingIndex = "installing_index"
     case openingIndex = "opening_index"
     case indexVersionMismatch = "index_version_mismatch"
@@ -17,6 +21,12 @@ public enum ReadinessStep: String, Sendable, Codable, CaseIterable {
     public static let importSteps: [ReadinessStep] = [
         .copyingExport, .checkingFormat, .checkingVersions, .checkingWriting,
         .checkingIntegrity, .installingIndex, .openingIndex,
+    ]
+
+    /// The steps of an import of an export made with the owner's writing, in order.
+    public static let writingImportSteps: [ReadinessStep] = [
+        .copyingExport, .checkingFormat, .checkingVersions, .checkingWriting, .strippingWriting,
+        .checkingIntegrity, .movingWriting, .installingIndex, .openingIndex,
     ]
 }
 

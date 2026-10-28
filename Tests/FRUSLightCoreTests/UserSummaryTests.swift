@@ -78,6 +78,20 @@ import Testing
         }
     }
 
+    /// A summary from a research database (S16e) is read-only, as any import is, but may be deleted, as
+    /// its note block may: a JSON import of the same library brings it again under the Mac's id.
+    @Test func aSummaryFromAResearchDatabaseMayBeDeletedButNotChanged() async throws {
+        let (store, rows, directory) = try await UserTagTests.open()
+        defer { withExtendedLifetime(directory) {} }
+        let id = "80000000-0000-4000-8000-000000000008"
+        try rows.addSummary(id, promptId: ResearchDatabaseMark.promptId.lowercased(), authorship: nil, createdAt: nil)
+        let summary = try #require(try store.summary(id, of: "owner"))
+        #expect(!summary.isEditable && summary.isDeletable)
+        #expect(throws: SummaryStoreError.readOnly(id)) { try store.updateOwnSummary(id, text: "Mine now.", for: "owner", at: Self.later) }
+        try store.deleteOwnSummary(id, for: "owner")
+        #expect(try store.summary(id, of: "owner") == nil)
+    }
+
     /// The one rule for what the reader may change: the web's prompt id, `userWritten` and no
     /// headnote draft. Everything else is read-only: an AI summary, one with no authorship, and an
     /// imported headnote draft, `userWritten` with the app's headnote prompt, whose draft flag a file
@@ -96,7 +110,7 @@ import Testing
         for (id, prompt, authorship, draft) in readOnly {
             try rows.addSummary(id, promptId: prompt, authorship: authorship, isHeadnoteDraft: draft)
             let summary = try #require(try store.summary(id, of: "owner"))
-            #expect(!summary.isEditable, "\(id)")
+            #expect(!summary.isEditable && !summary.isDeletable, "\(id)")
             #expect(throws: SummaryStoreError.readOnly(id)) { try store.updateOwnSummary(id, text: "Mine now.", for: "owner", at: Self.later) }
             #expect(throws: SummaryStoreError.readOnly(id)) { try store.deleteOwnSummary(id, for: "owner") }
             #expect(try store.summary(id, of: "owner") == summary, "unchanged")

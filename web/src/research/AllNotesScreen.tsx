@@ -2,7 +2,8 @@
 // /research/notes until S19b's Research page holds it: its Project, Tag and search filters, which
 // the URL keeps, the count its sheet gives, and its rows, the last changed first, each opening the
 // note in the editor, as the app's opens its sheet. Each row's Delete… asks the app's Delete Note?
-// question; it is a button of its own, the web's own, where the app's is in a context menu.
+// question; it is a button of its own, the web's own, where the app's is in a context menu. A
+// document's note block from a research database says so in its row (S16e), the web's own line.
 import { useQuery } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
 import { useId, useRef, useState } from 'react';
@@ -242,6 +243,7 @@ function NoteRow({ note, detail, onOpen, onDelete }: { note: NoteSummary; detail
           {noteTitle(note.bodyText)}
         </span>
         <span className="all-notes-detail">{detail}</span>
+        {note.fromResearchDatabase && <span className="all-notes-origin">{copy.notes.fromResearchDatabase}</span>}
         {date && <span className="all-notes-date">{date}</span>}
       </button>
       <button type="button" className="destructive delete-note" data-id={note.id} aria-haspopup="dialog" aria-describedby={titleId} onClick={onDelete}>
