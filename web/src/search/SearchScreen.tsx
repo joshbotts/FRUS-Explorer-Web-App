@@ -4,13 +4,16 @@
 // in their place: the timeline or the concordance. A result is named as the Mac's search
 // window names it, with the document's label beside its volume unless the title already opens with
 // its number. A facet's narrowing shows as a filter token, and a search that found nothing names
-// the term responsible, as the Mac's do.
+// the term responsible, as the Mac's do. On a server that keeps user data (S17d), Search in chooses
+// the documents, the user's notes and their summaries, as the Mac's chips do; My Tags filters by the
+// user's tags, counted over the results, and shows as a token; and a row carries its document's tags.
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { type FormEvent, type ReactNode, type RefObject, useId, useMemo, useRef, useState } from 'react';
 import { ApiError } from '../api/client';
 import { concordanceQuery, inspectQuery, searchQuery, timelineQuery, volumesQuery } from '../api/endpoints';
-import type { ConcordanceOrder, DocumentType, SearchResultList, SortOrder, Volume } from '../api/types';
+import type { ConcordanceOrder, DocumentType, SearchResultList, SortOrder, UserTag, Volume } from '../api/types';
+import { meQuery, searchTagsQuery, tagsQuery } from '../api/userData';
 import { copy } from '../copy';
 import { Badge } from '../shell/Badge';
 import { FacetPanel, useFacetPanelState } from './FacetPanel';
@@ -26,8 +29,13 @@ import {
   pageSizes,
   type Reading,
   retainedLimit,
+  scopeChange,
+  scopes,
+  searches,
+  searchesAnywhere,
   type SearchState,
 } from './searchState';
+import { rowChipLimit, tagChips, tagFilterLabel } from './tagRules';
 import { useDocumentTitle } from '../shell/useDocumentTitle';
 import { Snippet } from './Snippet';
 
@@ -39,6 +47,11 @@ export function SearchScreen() {
   const results = useQuery(searchQuery(state));
   const volumes = useQuery(volumesQuery);
   const queryClient = useQueryClient();
+  // The user's tags, for the filter, its token and the rows' chips, on a server that keeps user data.
+  const me = useQuery(meQuery);
+  const keepsUserData = me.data?.userData === true;
+  const tags = useQuery({ ...tagsQuery, enabled: keepsUserData });
+  const userTags = keepsUserData ? tags.data?.items : undefined;
 
   /** A new search, or a changed filter, starts at the first page. */
   function update(changes: Partial<SearchState>) {
@@ -123,12 +136,19 @@ export function SearchScreen() {
   return (
     <section className="screen search">
       <h1 tabIndex={-1}>{copy.search.title}</h1>
-      <SearchEntry state={state} titles={titles} update={update} onSearch={search} />
-      {state.keywords !== undefined && (
+      <SearchEntry state={state} titles={titles} keepsUserData={keepsUserData} userTags={userTags} update={update} onSearch={search} />
+      {state.keywords !== undefined && !searchesAnywhere(state) && (
+        // As the Mac's window says it, rather than search nowhere.
+        <p className="error" role="alert">
+          {copy.search.emptyScope}
+        </p>
+      )}
+      {state.keywords !== undefined && searchesAnywhere(state) && (
         <div className={panelOpen ? 'search-body with-facets' : 'search-body'}>
           <Results
             state={state}
             titles={titles}
+            userTags={userTags}
             results={results}
             // Said only when the narrowing made the match smaller, as the Mac says it.
             narrowedFrom={
@@ -167,11 +187,16 @@ export function SearchScreen() {
 function SearchEntry({
   state,
   titles,
+  keepsUserData,
+  userTags,
   update,
   onSearch,
 }: {
   state: SearchState;
   titles: Map<string, string>;
+  keepsUserData: boolean;
+  /** The user's tags, while the server keeps user data and has given them. */
+  userTags: UserTag[] | undefined;
   update: (changes: Partial<SearchState>) => void;
   onSearch: (keywords: string) => void;
 }) {
@@ -190,7 +215,14 @@ function SearchEntry({
   return (
     <>
       <SearchForm inputRef={searchBox} text={text} onTextChange={setText} onSubmit={onSearch} />
-      <Filters state={state} titles={titles} update={update} onCleared={() => searchBox.current?.focus()} />
+      <Filters
+        state={state}
+        titles={titles}
+        keepsUserData={keepsUserData}
+        userTags={userTags}
+        update={update}
+        onCleared={() => searchBox.current?.focus()}
+      />
       <QueryInspectorStrip fields={inspectorFields(state, text)} expanded={inspectorExpanded} onExpandedChange={setInspectorExpanded} />
     </>
   );
@@ -248,18 +280,26 @@ function SearchForm({
 function Filters({
   state,
   titles,
+  keepsUserData,
+  userTags,
   update,
   onCleared,
 }: {
   state: SearchState;
   titles: Map<string, string>;
+  keepsUserData: boolean;
+  userTags: UserTag[] | undefined;
   update: (changes: Partial<SearchState>) => void;
   /** Called when a chip or a token has cleared its filter, and so removed itself. */
   onCleared: () => void;
 }) {
+  // Search in has notes and summaries to choose only where the server keeps them; a scope a link
+  // turned off is shown anywhere, so that it can be turned on again.
+  const showsSearchIn = keepsUserData || !scopes.every((scope) => searches(state, scope));
   return (
     <fieldset className="filters">
       <legend>{copy.search.filters}</legend>
+      {showsSearchIn && <SearchIn state={state} update={update} />}
       <label>
         {copy.search.documentType}{' '}
         <select
@@ -323,7 +363,8 @@ function Filters({
           })}
         </div>
       )}
-      {(state.yearKeys || state.personRollupId || state.subjectBucket || state.subjectBucketKey) && (
+      {userTags !== undefined && userTags.length > 0 && <MyTags state={state} tags={userTags} update={update} />}
+      {(state.yearKeys || state.personRollupId || state.userTagIds || state.subjectBucket || state.subjectBucketKey) && (
         <div className="chips" role="group" aria-label={copy.search.narrowedBy}>
           {state.yearKeys && (
             <FilterToken
@@ -345,6 +386,16 @@ function Filters({
               }}
             />
           )}
+          {state.userTagIds && (
+            <FilterToken
+              field={copy.search.filterFields.tags}
+              value={tagFilterLabel(state.userTagIds, userTags)}
+              onClear={() => {
+                update({ userTagIds: undefined });
+                onCleared();
+              }}
+            />
+          )}
           {(state.subjectBucket || state.subjectBucketKey) && (
             <FilterToken
               field={copy.search.filterFields.subject}
@@ -361,6 +412,85 @@ function Filters({
   );
 }
 
+/**
+ * Search in, as the Mac's window offers it above its filters: Documents, Notes and Summaries, each a
+ * chip that turns its place on or off, its state in its glyph as well as its colour (`ScopeChip`).
+ */
+function SearchIn({ state, update }: { state: SearchState; update: (changes: Partial<SearchState>) => void }) {
+  const labelId = useId();
+  return (
+    <div className="search-in" role="group" aria-labelledby={labelId}>
+      <span id={labelId}>{copy.search.searchIn}</span>
+      {scopes.map((scope) => {
+        const on = searches(state, scope);
+        return (
+          <button
+            key={scope}
+            type="button"
+            className="scope-chip"
+            aria-pressed={on}
+            title={copy.search.scopeHelp[scope]}
+            onClick={() => update(scopeChange(scope, !on))}
+          >
+            <span className="scope-glyph" aria-hidden="true">
+              {on ? '✓' : '○'}
+            </span>
+            {copy.search.scopes[scope]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * My Tags, as the Mac's filter lists them: a switch for each of the user's tags, every one switched
+ * on a document must carry, and beside each how many of the results carry it, counted once the list
+ * is opened, as the Mac counts them when its filter opens, never before.
+ */
+function MyTags({ state, tags, update }: { state: SearchState; tags: UserTag[]; update: (changes: Partial<SearchState>) => void }) {
+  const [open, setOpen] = useState(false);
+  const counted = open && state.keywords !== undefined && searchesAnywhere(state);
+  const counts = useQuery(searchTagsQuery(state, counted));
+  const shown = counted && counts.data !== undefined && !counts.isError ? counts.data : undefined;
+  const chosen = new Set(state.userTagIds ?? []);
+  function toggle(id: string, on: boolean) {
+    const next = on ? [...chosen, id] : [...chosen].filter((other) => other !== id);
+    update({ userTagIds: next.length > 0 ? next : undefined });
+  }
+  return (
+    <details className="my-tags" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary>
+        {copy.search.myTags} <span className="count">{copy.search.myTagsSummary(chosen.size)}</span>
+      </summary>
+      <ul>
+        {tags.map((tag) => {
+          const count = shown?.items.find((item) => item.id === tag.id)?.count;
+          return (
+            <li key={tag.id}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={chosen.has(tag.id)}
+                  aria-label={count === undefined ? tag.name : copy.search.myTagCount(tag.name, count)}
+                  onChange={(event) => toggle(tag.id, event.target.checked)}
+                />{' '}
+                {tag.name}
+              </label>
+              {count !== undefined && (
+                <span className="count" aria-hidden="true">
+                  {count.toLocaleString('en-US')}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {shown && <p className="caption">{copy.search.myTagsCountFooter}</p>}
+    </details>
+  );
+}
+
 /** A filter a facet set, by its field and value, as the Mac's token shows it; a click clears it. */
 function FilterToken({ field, value, onClear }: { field: string; value: string; onClear: () => void }) {
   return (
@@ -373,6 +503,7 @@ function FilterToken({ field, value, onClear }: { field: string; value: string; 
 function Results({
   state,
   titles,
+  userTags,
   results,
   narrowedFrom,
   onReading,
@@ -382,6 +513,7 @@ function Results({
 }: {
   state: SearchState;
   titles: Map<string, string>;
+  userTags: UserTag[] | undefined;
   results: UseQueryResult<SearchResultList, unknown>;
   /** The count the last facet narrowed from, while the panel shows it. */
   narrowedFrom: number | undefined;
@@ -481,6 +613,7 @@ function Results({
                   <p className="snippet">
                     <Snippet text={item.snippet} />
                   </p>
+                  <RowTags tagIds={item.userTagIds} tags={userTags} />
                 </li>
               ))}
             </ol>
@@ -490,6 +623,22 @@ function Results({
         </>
       )}
     </section>
+  );
+}
+
+/** A row's tags, as the Mac's row draws its first three ◆ chips, for the ids the user's tags name. */
+function RowTags({ tagIds, tags }: { tagIds: string[]; tags: UserTag[] | undefined }) {
+  const chips = tags ? tagChips(tagIds, tags).slice(0, rowChipLimit) : [];
+  if (chips.length === 0) return null;
+  return (
+    <ul className="row-tags" aria-label={copy.search.rowTags}>
+      {chips.map((tag) => (
+        <li key={tag.id}>
+          <span aria-hidden="true">◆ </span>
+          {tag.name}
+        </li>
+      ))}
+    </ul>
   );
 }
 

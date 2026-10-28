@@ -41,6 +41,7 @@ import Testing
             "volumeIds=frus1961-63v06", "volumeIds=frus1894Nicaragua", "yearKeys=1962",
             "documentType=editorialNotesOnly",
             "includeDocumentText=false", "includeSummaries=false", "includeNotes=false", "includeFrontMatter=false",
+            "userTagIds=5E14D000-0000-4000-8000-000000000001", "userTagIds=5e14d000-0000-4000-8000-000000000002",
             "limit=100", "offset=7400",
         ].joined(separator: "&"))
         var expected = SearchParameters(keywords: "cuba missile")
@@ -55,8 +56,14 @@ import Testing
         expected.includeSummaries = false
         expected.includeNotes = false
         expected.includeFrontMatter = false
+        expected.userTagIds = ["5E14D000-0000-4000-8000-000000000001", "5e14d000-0000-4000-8000-000000000002"]
         #expect(request.parameters == expected)
         #expect(request.limit == 100 && request.offset == 7_400)
+        // And back, as a facet's change and a kept answer's key say a search.
+        #expect(SearchRequest.formFields(expected)["userTagIds"] == expected.userTagIds)
+        #expect(try decode(SearchRequest.formFields(expected).flatMap { name, values in
+            values.map { "\(name)=\($0.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? $0)" }
+        }.joined(separator: "&")).parameters == expected)
     }
 
     @Test func plusIsASpaceAndAnEncodedPlusIsAPlus() throws {
@@ -81,6 +88,7 @@ import Testing
         #expect(try decode("yearKeys=").parameters.yearKeys == [])
         #expect(try decode("volumeIds=").parameters.volumeIds == [])
         #expect(try decode("excludedTerms=").parameters.excludedTerms == [])
+        #expect(try decode("userTagIds=").parameters.userTagIds == [], "no tag filter, as the kit's empty list is")
         #expect(try decode("keywords=x").parameters.yearKeys == nil)
         #expect(try decode("keywords=x").parameters.volumeIds == nil)
         #expect(refusal("volumeIds=&volumeIds=frus1894Nicaragua")?.code == "INVALID_PARAMETER")
@@ -114,6 +122,9 @@ import Testing
             ("sort=relevance&sort=dateAscending", "INVALID_PARAMETER", "sort"),
             ("facets=year", "UNSUPPORTED_PARAMETER", "/api/v1/search/facets"),
             ("personRef=p1", "UNSUPPORTED_PARAMETER", "personRef"),
+            ("subjectTagIds=cuba", "UNSUPPORTED_PARAMETER", "userTagIds"),
+            ("booleanMode=or", "UNSUPPORTED_PARAMETER", "OR"),
+            ("userTagIds=&userTagIds=5E14D000-0000-4000-8000-000000000001", "INVALID_PARAMETER", "userTagIds"),
             ("personRollupId=x", "INVALID_PARAMETER", "personRollupId"),
             ("personRollupId=-1", "INVALID_PARAMETER", "personRollupId"),
             ("subjectBucket=1.5", "INVALID_PARAMETER", "subjectBucket"),

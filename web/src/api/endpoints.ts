@@ -27,7 +27,7 @@ import type {
   VolumeSectionPage,
 } from './types';
 import type { SearchState } from '../search/searchState';
-import { filterFields, searchFields } from '../search/searchState';
+import { filterFields, searchesAnywhere, searchFields } from '../search/searchState';
 
 const segment = encodeURIComponent;
 
@@ -116,7 +116,8 @@ export function searchQuery(state: SearchState) {
   return queryOptions({
     queryKey: ['search', searchFields(state)],
     queryFn: ({ signal }) => getJSON<SearchResultList>('/api/v1/search', formEncode(searchFields(state)), signal),
-    enabled: state.keywords !== undefined,
+    // With all of Search in off there is nothing to search, which the screen says, as the Mac's window does.
+    enabled: state.keywords !== undefined && searchesAnywhere(state),
     staleTime: 5 * 60_000,
     // The page before stays while the next loads, so the results and the pager stay mounted.
     placeholderData: keepPreviousData,

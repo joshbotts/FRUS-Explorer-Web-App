@@ -1,10 +1,14 @@
 // The user's own data, under /api/v1/me (PLAN's S14c): who the server takes the browser to be, with
 // the token every change carries, the user's tags, theirs and a document's, a document's highlights
 // (S15c), the user's research notes, a document's summaries and the user's projects (S15d), the
-// import of a Mac JSON export (S16c), and the export and what it carries (S16d). A change that the
-// server refuses for its token, as after a restart, asks for a new one and is sent once more.
+// import of a Mac JSON export (S16c), the export and what it carries (S16d), and the user's tags
+// counted over a search (S17d). A change that the server refuses for its token, as after a restart,
+// asks for a new one and is sent once more. A change to the user's notes, summaries or tags changes
+// what their searches find, so every search the browser holds is asked again.
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
 import { ApiError, getFile, getJSON, sendFile, sendJSON } from './client';
+import { formEncode } from './form';
+import { filterFields, type SearchState } from '../search/searchState';
 import type {
   DocumentHighlights,
   DocumentNotes,
@@ -20,6 +24,7 @@ import type {
   NoteRun,
   NoteSummary,
   ProjectList,
+  SearchTagCounts,
   Summary,
   TagList,
   UserTag,
@@ -54,6 +59,33 @@ export function documentTagsQuery(volumeId: string, documentId: string) {
   });
 }
 
+/**
+ * The user's tags, each counted over the search's results, as the Mac's My Tags toggles count them
+ * when the filter is opened, never before. Another search's counts never stand in while the next
+ * load, as the Mac's toggles show none while they count.
+ */
+export function searchTagsQuery(state: SearchState, enabled: boolean) {
+  const search = filterFields(state);
+  return queryOptions<SearchTagCounts, unknown, SearchTagCounts, unknown[]>({
+    queryKey: ['searchTags', search],
+    queryFn: ({ signal }) => getJSON<SearchTagCounts>('/api/v1/me/search/tags', formEncode(search), signal),
+    enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+/**
+ * After a change to what the user's searches read, their notes, summaries, tags and a document's,
+ * every search the browser holds is read again: its results, readings, facets and inspector counts,
+ * and the tags' counts.
+ */
+export function searchesChanged(client: QueryClient) {
+  for (const key of ['search', 'timeline', 'concordance', 'facets', 'inspect', 'searchTags']) {
+    void client.invalidateQueries({ queryKey: [key] });
+  }
+}
+
 /** Sends a change with the user's token, and once more with a new one if the server no longer knows it. */
 async function change<T>(client: QueryClient, method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown) {
   const me = await client.ensureQueryData(meQuery);
@@ -74,11 +106,13 @@ function tagsChanged(client: QueryClient) {
   void client.invalidateQueries({ queryKey: ['tags'] });
   void client.invalidateQueries({ queryKey: ['documentTags'] });
   for (const key of ['notes', 'documentNotes', 'note']) void client.invalidateQueries({ queryKey: [key] });
+  searchesChanged(client);
 }
 
 export async function createTag(client: QueryClient, name: string): Promise<UserTag> {
   const tag = (await change<UserTag>(client, 'POST', '/api/v1/me/tags', { name }))!;
   void client.invalidateQueries({ queryKey: ['tags'] });
+  void client.invalidateQueries({ queryKey: ['searchTags'] });
   return tag;
 }
 
@@ -105,6 +139,7 @@ export async function mergeTag(client: QueryClient, id: string, into: string): P
 export async function setDocumentTags(client: QueryClient, volumeId: string, documentId: string, tagIds: string[]) {
   const tags = (await change<DocumentTags>(client, 'PUT', documentTagsPath(volumeId, documentId), { tagIds }))!;
   client.setQueryData(documentTagsQuery(volumeId, documentId).queryKey, tags);
+  searchesChanged(client);
   return tags;
 }
 
@@ -112,6 +147,7 @@ export async function setDocumentTags(client: QueryClient, volumeId: string, doc
 export async function removeDocumentTag(client: QueryClient, volumeId: string, documentId: string, tagId: string) {
   const tags = (await change<DocumentTags>(client, 'DELETE', `${documentTagsPath(volumeId, documentId)}/${segment(tagId)}`))!;
   client.setQueryData(documentTagsQuery(volumeId, documentId).queryKey, tags);
+  searchesChanged(client);
   return tags;
 }
 
@@ -241,6 +277,7 @@ export const noteGone = (error: unknown) => error instanceof ApiError && error.c
  * the change is done, so a screen that moves focus after it finds the rows as they now are.
  */
 async function notesChanged(client: QueryClient, volumeId: string, documentId: string) {
+  searchesChanged(client);
   await Promise.all([
     client.invalidateQueries({ queryKey: notesQuery.queryKey }),
     client.invalidateQueries({ queryKey: documentNotesQuery(volumeId, documentId).queryKey }),
@@ -301,6 +338,7 @@ export function documentSummariesQuery(volumeId: string, documentId: string) {
 const summaryGone = (error: unknown) => error instanceof ApiError && error.code === 'SUMMARY_NOT_FOUND';
 
 function summariesChanged(client: QueryClient, volumeId: string, documentId: string) {
+  searchesChanged(client);
   return client.invalidateQueries({ queryKey: documentSummariesQuery(volumeId, documentId).queryKey });
 }
 
@@ -400,4 +438,5 @@ export function researchImported(client: QueryClient) {
   for (const key of ['tags', 'documentTags', 'notes', 'documentNotes', 'note', 'documentSummaries', 'documentHighlights', 'projects', 'exportContents']) {
     void client.invalidateQueries({ queryKey: [key] });
   }
+  searchesChanged(client);
 }

@@ -95,10 +95,31 @@ export const copy = {
     dateTo: 'To',
     dateNote: 'A date range leaves out undated documents.',
     frontMatter: 'Include front matter',
+    /** Search in, as the Mac's window offers it (`ScopeChip`): its lead-in, each chip and its help, and the refusal with all three off. */
+    searchIn: 'Search in',
+    scopes: { documents: 'Documents', notes: 'Notes', summaries: 'Summaries' },
+    scopeHelp: {
+      documents: 'Search the full text of FRUS documents (header, dateline, source note, body)',
+      notes: 'Search the body text of your research notes',
+      // The web's own: the Mac's "Search the text of generated AI summaries" is all a Mac holds, and
+      // the web keeps the summaries a researcher writes too.
+      summaries: 'Search the text of generated AI summaries and your own',
+    },
+    emptyScope: 'Enable at least one of Documents, Notes, or Summaries to search.',
+    /** The Mac's My Tags, the filter's toggles of the user's tags, with each one's count over the results. */
+    myTags: 'My Tags',
+    /** What the closed filter says of its toggles, as the Mac's collapsed section does. */
+    myTagsSummary: (count: number) => (count === 0 ? 'Any' : `${count.toLocaleString('en-US')} selected`),
+    myTagsCountFooter: 'Counts are documents in your current results carrying that tag.',
+    myTagCount: (name: string, count: number) => `${name}: ${count.toLocaleString('en-US')} documents in your current results`,
+    /** The Tags token's value, as the Mac's `tagFilterLabel` gives it, when the list does not name its one tag, or for several. */
+    tagsToken: { unresolved: '1 tag', count: (count: number) => `${count.toLocaleString('en-US')} tags` },
+    /** A row's tags, the web's name for the list of the Mac's ◆ chips. */
+    rowTags: 'Your tags',
     volumes: 'Volumes',
     removeVolume: (title: string) => `Remove ${title}`,
     /** A filter token's field, as the Mac's search window names it. */
-    filterFields: { years: 'Years', person: 'Person', subject: 'Subject' },
+    filterFields: { years: 'Years', person: 'Person', tags: 'Tags', subject: 'Subject' },
     /** Up to three years by name, as the Mac's Years token shows them. */
     years: (years: readonly string[]) =>
       years.length === 0 ? 'none' : years.length <= 3 ? years.join(', ') : `${years.length.toLocaleString('en-US')} years`,

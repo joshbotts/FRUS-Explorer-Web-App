@@ -7,6 +7,7 @@
 
 import Foundation
 import Logging
+import Synchronization
 
 /// The user store in a PostgreSQL database, with app.db's numbered, forward-only migrations, each in a
 /// transaction of its own, and a local copy for search. One connection serves it, held for each call
@@ -23,8 +24,9 @@ public final class PostgreSQLUserStore: RelationalUserStore, @unchecked Sendable
     /// The local copy's connection.
     private let copy: SQLiteConnection
     /// Set when a change the store took could not be committed to the copy, which is then made again
-    /// before the next call.
-    private var copyIsStale = false
+    /// before the next call, and before the next search reads it (`searchMark()`), which reads this
+    /// without `access` and so waits for a write under way only to make the copy again.
+    private let copyIsStale = Mutex(false)
     private var isClosed = false
 
     /// Opens the store, migrating it to this build's schema, and makes its local copy at `searchCopy`
@@ -207,9 +209,10 @@ public final class PostgreSQLUserStore: RelationalUserStore, @unchecked Sendable
             logger.notice("The PostgreSQL store's connection closed; connecting again")
             connection = try PostgreSQLConnection.connect(configuration, logger: logger)
         }
-        if copyIsStale {
+        if copyIsStale.withLock({ $0 }) {
             try Self.fill(copy, from: connection)
-            copyIsStale = false
+            copyIsStale.withLock { $0 = false }
+            didCommit()
             logger.notice("The local copy of user_search and the tag assignments was made again from the PostgreSQL store")
         }
         return connection
@@ -251,7 +254,7 @@ public final class PostgreSQLUserStore: RelationalUserStore, @unchecked Sendable
                 } catch {
                     try? copy.execute("ROLLBACK")
                     // A commit that failed may have reached the store, whose connection is then gone.
-                    if committing { copyIsStale = true }
+                    if committing { copyIsStale.withLock { $0 = true } }
                     throw error
                 }
             } catch {
@@ -262,10 +265,18 @@ public final class PostgreSQLUserStore: RelationalUserStore, @unchecked Sendable
                 try copy.execute("COMMIT")
             } catch {
                 try? copy.execute("ROLLBACK")
-                copyIsStale = true
+                copyIsStale.withLock { $0 = true }
                 logger.error("The local copy of user_search could not take a change the PostgreSQL store took (\(error)); it is made again before the next call")
             }
+            didCommit()
             return value
         }
+    }
+
+    /// The mark, once a copy that could not take a change has been made again, so that the next search
+    /// reads what the store holds, as the next call does.
+    override public func searchMark() throws -> Int {
+        if copyIsStale.withLock({ $0 }) { try access.withLock { _ = try ready() } }
+        return try super.searchMark()
     }
 }

@@ -6,6 +6,18 @@
 // tables carry as a column. Where the two must differ, a statement asks its connection's dialect.
 
 import Foundation
+import Synchronization
+
+/// What the kit's search reads of a user store (PLAN's S17d): the SQLite file it attaches for one
+/// user's half, and a mark of how far that file has moved, so that an answer computed under one mark
+/// may be given again while the mark stands.
+public protocol UserSearchStore: Sendable {
+    /// The file holding `user_search` and the tag assignments.
+    var searchDatabase: URL { get }
+    /// A number that moves whenever the store commits a write, and so whenever `searchDatabase` may
+    /// hold other rows: two that are equal say that nothing was written between them.
+    func searchMark() throws -> Int
+}
 
 /// A connection a user store's statements run on: SQLite's to app.db, or one to the PostgreSQL store.
 public protocol UserStoreConnection {
@@ -60,17 +72,29 @@ struct UserStoreTransaction: UserStoreConnection {
 /// transaction, and its own migrations; every method of every store protocol is written once, here and
 /// in this class's extensions, so the two answer alike, as the conformance suite holds them. A later
 /// row's methods go in an extension of this class, in SQL both read, and their tests in that suite.
-public class RelationalUserStore: UserStore, CorrectionStore, @unchecked Sendable {
+public class RelationalUserStore: UserStore, CorrectionStore, UserSearchStore, @unchecked Sendable {
     /// What opening the store applied, or nil when it was already at this build's schema.
     public let migration: UserStoreMigration?
     /// The SQLite file holding `user_search` and the tag assignments, which the kit's search attaches
     /// for one user's half (`SearchUserSource.attachedStore(userId:)`, S17d): app.db itself, or the
     /// PostgreSQL store's local copy.
     public let searchDatabase: URL
+    /// How many write transactions the store has committed while it has been open: `searchMark()`.
+    private let commits = Mutex(0)
 
     init(migration: UserStoreMigration?, searchDatabase: URL) {
         self.migration = migration
         self.searchDatabase = searchDatabase
+    }
+
+    /// Counts a write transaction committed. Each store's `writing(_:)` calls it once the write is in
+    /// `searchDatabase`, before the write's caller is answered.
+    func didCommit() {
+        commits.withLock { $0 += 1 }
+    }
+
+    public func searchMark() throws -> Int {
+        commits.withLock { $0 }
     }
 
     /// Runs `body` on the store's connection, for reads: what has been committed. Each store's own.

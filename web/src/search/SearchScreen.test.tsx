@@ -179,3 +179,111 @@ describe('SearchScreen', () => {
     expect(screen.queryByText(/^Showing /)).toBeNull();
   });
 });
+
+describe('the researcher’s own writing in a search', () => {
+  const me = { userId: 'owner', displayName: 'Owner', auth: 'none', roles: ['reader', 'curator', 'admin'], userData: true, csrfToken: 't' };
+  const berlin = { id: '5E17D000-0000-4000-8000-00000000000A', name: 'Berlin' };
+  const cuba = { id: '5E17D000-0000-4000-8000-00000000000B', name: 'Cuba' };
+  const laos = { id: '5E17D000-0000-4000-8000-00000000000C', name: 'Laos' };
+  const wall = { id: '5E17D000-0000-4000-8000-00000000000D', name: 'Wall' };
+  const list = (items: SearchItem[]): SearchResultList => ({
+    total: items.length,
+    countBasis: 'exact',
+    limit: 20,
+    offset: 0,
+    retainedLimit: 7500,
+    sort: 'relevance',
+    sortChoices,
+    coverage,
+    items,
+  });
+  const server = (answers: Record<string, unknown> = {}) =>
+    stubServer({
+      '/readyz': ready,
+      '/api/v1/volumes': { total: 0, limit: 1000, offset: 0, items: [], coverage },
+      '/api/v1/search/inspect': { inspection: undefined },
+      '/api/v1/me': me,
+      '/api/v1/me/tags': { total: 0, items: [] },
+      '/api/v1/search': list([item({ displayTitle: 'Telegram' })]),
+      ...answers,
+    });
+  const urls = (fetch: ReturnType<typeof stubServer>) => fetch.mock.calls.map(([url]) => String(url));
+
+  it('offers Search in as the Mac’s chips, each turning its place off and on again', async () => {
+    const fetch = server();
+    const { router } = renderAt('/search?keywords=treaties');
+    const group = await screen.findByRole('group', { name: 'Search in' });
+    expect(within(group).getAllByRole('button').map((chip) => [chip.textContent, chip.getAttribute('aria-pressed'), chip.title])).toEqual([
+      ['✓Documents', 'true', 'Search the full text of FRUS documents (header, dateline, source note, body)'],
+      ['✓Notes', 'true', 'Search the body text of your research notes'],
+      ['✓Summaries', 'true', 'Search the text of generated AI summaries and your own'],
+    ]);
+    await userEvent.click(within(group).getByRole('button', { name: 'Notes' }));
+    await waitFor(() => expect(router.state.matches.at(-1)?.search).toMatchObject({ keywords: 'treaties', includeNotes: false }));
+    expect(within(group).getByRole('button', { name: 'Notes' }).textContent).toBe('○Notes');
+    await waitFor(() => expect(urls(fetch)).toContain('/api/v1/search?keywords=treaties&includeNotes=false&limit=20&offset=0'));
+    await userEvent.click(within(group).getByRole('button', { name: 'Notes' }));
+    await waitFor(() => expect(router.state.matches.at(-1)?.search).toMatchObject({ includeNotes: undefined }));
+  });
+
+  it('says, as the Mac’s window does, that a search with all of Search in off has nowhere to search, and asks for none', async () => {
+    const fetch = server();
+    renderAt('/search?keywords=treaties&includeDocumentText=false&includeNotes=false&includeSummaries=false');
+    expect((await screen.findByRole('alert')).textContent).toBe('Enable at least one of Documents, Notes, or Summaries to search.');
+    expect(urls(fetch).some((url) => url.startsWith('/api/v1/search?'))).toBe(false);
+  });
+
+  it('leaves Search in out where the server keeps no user data, unless a link turned a place off', async () => {
+    server({ '/api/v1/me': { ...me, userData: false } });
+    renderAt('/search?keywords=treaties');
+    await screen.findByRole('link', { name: 'Telegram' });
+    expect(screen.queryByRole('group', { name: 'Search in' })).toBeNull();
+    cleanup();
+    renderAt('/search?keywords=treaties&includeNotes=false');
+    expect(await screen.findByRole('group', { name: 'Search in' })).toBeTruthy();
+  });
+
+  it('lists My Tags, counts them once opened, filters by those switched on, and shows the filter as a token that clears it', async () => {
+    const fetch = server({
+      '/api/v1/me/tags': { total: 2, items: [berlin, cuba] },
+      '/api/v1/me/search/tags': { items: [{ ...berlin, count: 1 }, { ...cuba, count: 0 }], coverage },
+    });
+    const { router } = renderAt('/search?keywords=treaties');
+    const summary = await screen.findByText('My Tags');
+    expect(summary.closest('summary')?.textContent).toBe('My Tags Any');
+    expect(urls(fetch).some((url) => url.startsWith('/api/v1/me/search/tags'))).toBe(false);
+    await userEvent.click(summary);
+    const berlinSwitch = await screen.findByRole('checkbox', { name: 'Berlin: 1 documents in your current results' });
+    expect(screen.getByRole('checkbox', { name: 'Cuba: 0 documents in your current results' })).toBeTruthy();
+    expect(screen.getByText('Counts are documents in your current results carrying that tag.')).toBeTruthy();
+    expect(urls(fetch)).toContain('/api/v1/me/search/tags?keywords=treaties');
+    await userEvent.click(berlinSwitch);
+    await waitFor(() => expect(router.state.matches.at(-1)?.search).toMatchObject({ userTagIds: [berlin.id], offset: undefined }));
+    await waitFor(() => expect(urls(fetch)).toContain(`/api/v1/search?keywords=treaties&userTagIds=${berlin.id}&limit=20&offset=0`));
+    expect(summary.closest('summary')?.textContent).toBe('My Tags 1 selected');
+    const token = screen.getByRole('button', { name: 'Tags Berlin, clear this filter' });
+    await userEvent.click(token);
+    await waitFor(() => expect(router.state.matches.at(-1)?.search).toMatchObject({ userTagIds: undefined }));
+    expect(document.activeElement).toBe(screen.getByRole('searchbox'));
+  });
+
+  it('names a filter of several tags, or of one the list does not name, by how many, as the Mac’s token does', async () => {
+    server({ '/api/v1/me/tags': { total: 2, items: [berlin, cuba] } });
+    renderAt(`/search?keywords=treaties&userTagIds=${berlin.id}&userTagIds=${cuba.id}`);
+    expect(await screen.findByRole('button', { name: 'Tags 2 tags, clear this filter' })).toBeTruthy();
+  });
+
+  it('draws a row’s tags, the first three the user’s tags name, as the Mac’s ◆ chips', async () => {
+    server({
+      '/api/v1/me/tags': { total: 4, items: [berlin, cuba, laos, wall] },
+      '/api/v1/search': list([
+        item({ displayTitle: 'Telegram', userTagIds: [cuba.id, '5E17D000-0000-4000-8000-0000000000FF', berlin.id, wall.id, laos.id] }),
+        item({ documentId: 'd2', displayTitle: 'Memorandum', userTagIds: [] }),
+      ]),
+    });
+    renderAt('/search?keywords=treaties');
+    const chips = within(await screen.findByRole('list', { name: 'Your tags' })).getAllByRole('listitem');
+    expect(chips.map((chip) => chip.textContent)).toEqual(['◆ Cuba', '◆ Berlin', '◆ Wall']);
+    expect(screen.getAllByRole('list', { name: 'Your tags' })).toHaveLength(1);
+  });
+});

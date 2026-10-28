@@ -8,7 +8,7 @@ import Foundation
 /// A search request: the kit's `SearchParameters`, and the page wanted, in the order wanted.
 ///
 /// The query string has form semantics (`FormQuery`). A field left out keeps `SearchParameters`'
-/// default, which is the app's. Seventeen names set sixteen of its fields, by the draft's names,
+/// default, which is the app's. Eighteen names set seventeen of its fields, by the draft's names,
 /// and by `SearchParameters`' own for those the draft lacks (`yearKeys`, `includeDocumentText`,
 /// `includeFrontMatter`, and the four a facet narrows by):
 ///
@@ -22,16 +22,20 @@ import Foundation
 /// - `yearKeys`, a list of start years: the empty list matches nothing;
 /// - `documentType`, a `DocumentTypeFilter` raw value;
 /// - `includeDocumentText`, `includeSummaries`, `includeNotes` and `includeFrontMatter`, `true`
-///   or `false`;
+///   or `false`: the first three are the Mac's Search in, the document text, the summaries and the
+///   notes, and the last two read the user's own, which is the request's user's (S17d, `SearchUsers`);
+/// - `userTagIds`, a list of the user's tags, every one of which a document must carry: the empty
+///   list means no filter, and a tag that is not the user's is refused where the user is known;
 /// - `personRollupId`, a person's rollup in the served index, with `personLabel`, the name a filter
 ///   shows; and `subjectBucket`, a subject's place in the subject vocabulary, with
 ///   `subjectBucketKey`, its durable name, which wins. The facets set these (`FacetNarrowing`).
 ///
 /// `limit` is 1 to 100, 20 by default, and `offset` is at least 0; together they stay within the
 /// 7,500 results the app keeps of a search. `sort` is a `SearchSortOrder` raw value, `relevance` by
-/// default. The draft's `booleanMode`, `subjectTagIds` and `personRef` arrive later and are refused
-/// until then, as is the draft's `facets`, which is a resource of its own here
-/// (`/api/v1/search/facets`), and any name not listed here.
+/// default. The draft's `booleanMode` and `personRef` arrive later and are refused until then, as is
+/// `subjectTagIds`, which the kit has kept inert since the subject taxonomy was retired, and the
+/// draft's `facets`, which is a resource of its own here (`/api/v1/search/facets`), and any name not
+/// listed here.
 public struct SearchRequest: Equatable, Sendable {
     public static let maximumLimit = 100
     public static let defaultLimit = 20
@@ -49,15 +53,15 @@ public struct SearchRequest: Equatable, Sendable {
     public static let fields: Set<String> = [
         "keywords", "phrase", "prefixWildcard", "excludedTerms", "dateRangeEarliest", "dateRangeLatest",
         "volumeIds", "yearKeys", "documentType",
-        "includeDocumentText", "includeSummaries", "includeNotes", "includeFrontMatter",
+        "includeDocumentText", "includeSummaries", "includeNotes", "includeFrontMatter", "userTagIds",
         "personRollupId", "personLabel", "subjectBucket", "subjectBucketKey",
     ]
 
     /// The draft's parameters this build does not take, and why.
     public static let laterFields: [(name: String, detail: String)] = [
         ("facets", "facets are a resource of their own here: GET /api/v1/search/facets, one section a request"),
-        ("booleanMode", "booleanMode arrives in a later build"),
-        ("subjectTagIds", "subjectTagIds arrives in a later build"),
+        ("booleanMode", "booleanMode arrives in a later build; write OR between terms, as the search box reads it"),
+        ("subjectTagIds", "subjectTagIds filters nothing in FRUS Explorer, whose subject taxonomy was retired; a user's tags are userTagIds"),
         ("personRef", "personRef arrives in a later build; a person is narrowed to by personRollupId"),
     ]
 
@@ -106,6 +110,7 @@ public struct SearchRequest: Equatable, Sendable {
         if let value = try form.bool("includeSummaries") { parameters.includeSummaries = value }
         if let value = try form.bool("includeNotes") { parameters.includeNotes = value }
         if let value = try form.bool("includeFrontMatter") { parameters.includeFrontMatter = value }
+        if let tags = try form.list("userTagIds") { parameters.userTagIds = tags }
         parameters.personRollupId = try form.optionalInteger("personRollupId", in: 0...Int(Int32.max))
         parameters.personLabel = try form.single("personLabel")
         parameters.subjectBucket = try form.optionalInteger("subjectBucket", in: 0...Int(Int32.max))
@@ -139,6 +144,7 @@ public struct SearchRequest: Equatable, Sendable {
         flag("includeSummaries", parameters.includeSummaries, defaults.includeSummaries)
         flag("includeNotes", parameters.includeNotes, defaults.includeNotes)
         flag("includeFrontMatter", parameters.includeFrontMatter, defaults.includeFrontMatter)
+        if !parameters.userTagIds.isEmpty { fields["userTagIds"] = parameters.userTagIds }
         single("personRollupId", parameters.personRollupId.map(String.init))
         single("personLabel", parameters.personLabel)
         single("subjectBucket", parameters.subjectBucket.map(String.init))

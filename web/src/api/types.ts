@@ -218,6 +218,7 @@ export interface SearchItem {
   isEditorialNote: boolean;
   isFrontMatter: boolean;
   subjectTagIds: string[];
+  /** The user's tags on the document, each once, its id in upper case, as the kit reads them; none for no one. */
   userTagIds: string[];
 }
 
@@ -551,6 +552,15 @@ export interface UserTag {
 export interface TagList {
   total: number;
   items: UserTag[];
+}
+
+/**
+ * The user's tags, in the tag list's order, each with how many documents of a search's results carry
+ * it (GET /me/search/tags), as the Mac's My Tags toggles count them.
+ */
+export interface SearchTagCounts {
+  items: (UserTag & { count: number })[];
+  coverage: Coverage;
 }
 
 /** The tags one document carries, in the tag list's order. */

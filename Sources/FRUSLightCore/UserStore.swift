@@ -230,6 +230,7 @@ public final class SQLiteUserStore: RelationalUserStore, @unchecked Sendable {
             do {
                 let value = try body(transaction)
                 try db.execute("COMMIT")
+                didCommit()
                 return value
             } catch {
                 try? db.execute("ROLLBACK")
