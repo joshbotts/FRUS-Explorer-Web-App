@@ -3,7 +3,8 @@
 // come from the address FRUS_PUBLIC_URL names, to it, with the token GET /api/v1/me gives, as JSON
 // of a capped size; and a read of a user's data must be sent to that address. Since S15d a note's
 // writes may be larger than the rest, as a note carries its text twice and a Mac note can be long,
-// and since S16c an import's larger still, as it carries a whole Mac JSON export.
+// and since S16c an import's larger still, as it carries a whole Mac JSON export. Since S14e the user
+// may be the one a proxy that signs people in names in a header, on a request from that proxy alone.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -64,6 +65,115 @@ struct SingleUserResolver: UserResolver {
     }
 }
 
+/// `FRUS_AUTH=header` (PLAN's S14e): the user is the value of `FRUS_AUTH_HEADER` on a request whose
+/// peer is one of `FRUS_TRUSTED_PROXIES`, the proxy that signs people in and sets the header, in
+/// place of any a client sent. A request from any other peer is refused, whatever it names, so that
+/// no one names themselves. A user is made the first time the header names them, with their id as
+/// their name; the users `FRUS_ADMIN_USERS` names hold the three roles, and everyone else is a
+/// reader (SPEC, Tenancy and roles).
+struct ProxyHeaderResolver: UserResolver {
+    let store: any UserStore
+    let header: HTTPFields.Element.Name
+    let proxies: TrustedProxies
+    let admins: Set<String>
+    let now: @Sendable () -> Date
+    /// Each user once read, so that a request asks the store only for what it reads, as the single
+    /// user's does, and need not wait while an import writes.
+    private let known = KnownUsers()
+
+    init(store: any UserStore, header: HTTPFields.Element.Name, proxies: TrustedProxies, admins: Set<String>,
+         now: @escaping @Sendable () -> Date) {
+        self.store = store
+        self.header = header
+        self.proxies = proxies
+        self.admins = admins
+        self.now = now
+    }
+
+    /// The longest name the header may give, in UTF-8 bytes.
+    static let longestName = 256
+
+    func user(for request: Request, context: APIRequestContext) async throws -> RequestUser {
+        try proxies.check(context)
+        let id = try userID(request.headers[values: header])
+        if let user = known.users.withLock({ $0[id] }) { return user }
+        let (store, time) = (store, now())
+        let account = try await Blocking.run { try store.signedInUser(id, at: time) }
+        let user = RequestUser(id: account.id, displayName: account.displayName,
+                               roles: admins.contains(account.id) ? [.reader, .curator, .admin] : [.reader])
+        known.users.withLock { users in
+            // A bound on what a proxy's names can make it hold; the store keeps every one.
+            if users.count >= 10_000 { users.removeAll() }
+            users[id] = user
+        }
+        return user
+    }
+
+    /// The user the header's values name: one value, which is a name of `longestName` bytes at most,
+    /// with no control characters and nothing that was not UTF-8.
+    func userID(_ values: [String]) throws -> String {
+        func refused(_ why: String) -> APIProblem {
+            APIProblem(.forbidden, code: "NOT_SIGNED_IN",
+                       detail: "This server takes its user from \(header), which the proxy in front of it sets once it has signed you in, and \(why).")
+        }
+        guard values.count <= 1 else { throw refused("this request carried it more than once") }
+        guard let value = values.first?.trimmingCharacters(in: .whitespaces), !value.isEmpty else {
+            throw refused("this request named no one")
+        }
+        guard value.utf8.count <= Self.longestName,
+              !value.unicodeScalars.contains(where: { $0.properties.generalCategory == .control || $0 == "\u{FFFD}" }) else {
+            throw refused("the name this request carried is not one: a user's name is at most \(Self.longestName) bytes of UTF-8, with no control characters")
+        }
+        return value
+    }
+
+    private final class KnownUsers: Sendable {
+        let users = Mutex<[String: RequestUser]>([:])
+    }
+}
+
+/// `FRUS_TRUSTED_PROXIES` (PLAN's S14e): the peers a request may come from behind a proxy that signs
+/// people in. The server's log names each peer it refuses the first time, so that the proxy's
+/// address, as the server sees it, can be found and named.
+final class TrustedProxies: Sendable {
+    let ranges: [AddressRange]
+    /// The peers refused and logged so far, up to `loggedPeers`.
+    private let refused = Mutex<Set<String>>([])
+    private static let loggedPeers = 64
+
+    init(_ ranges: [AddressRange]) {
+        self.ranges = ranges
+    }
+
+    /// Refuses a request whose peer the ranges do not hold, or that has none known, as a request in
+    /// the router's tests has.
+    func check(_ context: APIRequestContext) throws {
+        let peer = context.peerAddress
+        if let peer, ranges.contains(where: { $0.contains(peer) }) { return }
+        let name = peer ?? "an unknown peer"
+        if refused.withLock({ $0.count < Self.loggedPeers && $0.insert(name).inserted }) {
+            context.logger.warning("Refused a request from \(name): FRUS_TRUSTED_PROXIES (\(ranges.map(\.description).joined(separator: ", "))) does not name it. Name the proxy's address there if this was the proxy.")
+        }
+        throw APIProblem(.forbidden, code: "PROXY_NOT_TRUSTED",
+                         detail: "This server is reached through the proxy that signs people in, and this request came from elsewhere.")
+    }
+}
+
+/// `FRUS_AUTH=header`'s guard on every route but /healthz and /readyz (PLAN's S14e): the request
+/// comes from a proxy that `FRUS_TRUSTED_PROXIES` names, so that the server is reached only through
+/// the proxy that signs people in. The corpus, the reader and the browser app need no user, so the
+/// proxy may forward what a page asks for that carries no sign-in, as the reader's sandboxed frame
+/// asks for its scripts and figures; under /api/v1/me the user is the one its header names.
+struct TrustedProxyGuard: RouterMiddleware {
+    typealias Context = APIRequestContext
+    let proxies: TrustedProxies
+
+    func handle(_ request: Request, context: Context, next: (Request, Context) async throws -> Response) async throws -> Response {
+        try proxies.check(context)
+        return try await next(request, context)
+    }
+}
+
 /// Each user's token for requests that change state, made when it is first asked for and kept
 /// while the process runs: a restart makes new ones, and the browser app asks again when a write
 /// is refused for its token. A page of another origin cannot read `GET /api/v1/me`, so it cannot
@@ -102,6 +212,8 @@ typealias UserDataStore = UserStore & TagStore & HighlightStore & NoteStore & Su
 struct UserDataServices: Sendable {
     let store: any UserDataStore
     let resolver: any UserResolver
+    /// Under `FRUS_AUTH=header`, the proxies every request but /healthz and /readyz must come from.
+    let proxies: TrustedProxies?
     let tokens: CSRFTokens
     /// `FRUS_PUBLIC_URL`'s address.
     let address: PublicAddress
@@ -124,7 +236,16 @@ struct UserDataServices: Sendable {
          jobs: any JobQueue = InProcessJobQueue(), importLimit: Int = UserDataServices.importBodyLimit,
          resolver: (any UserResolver)? = nil, now: @escaping @Sendable () -> Date = Date.init) {
         self.store = store
-        self.resolver = resolver ?? SingleUserResolver(store: store)
+        if configuration.auth == .header {
+            let proxies = TrustedProxies(configuration.trustedProxies)
+            self.proxies = proxies
+            self.resolver = resolver ?? ProxyHeaderResolver(
+                store: store, header: HTTPFields.Element.Name(configuration.authHeader) ?? HTTPFields.Element.Name("X-Forwarded-User")!,
+                proxies: proxies, admins: configuration.adminUsers, now: now)
+        } else {
+            proxies = nil
+            self.resolver = resolver ?? SingleUserResolver(store: store)
+        }
         backupsDirectory = configuration.userStore == .sqlite
             ? DataDirectory(root: configuration.dataDirectory).backupsDirectory : nil
         backupCopyDirectory = configuration.backupCopyDirectory
@@ -268,7 +389,7 @@ enum JSONBody {
 public struct Me: Codable, Equatable, Sendable, ResponseEncodable {
     public var userId: String
     public var displayName: String
-    /// `FRUS_AUTH`: `none` for a server with no sign-in.
+    /// `FRUS_AUTH`: `none` for a server with no sign-in, `header` behind a proxy that signs people in.
     public var auth: String
     public var roles: [RequestUser.Role]
     /// `FRUS_USER_DATA`: false when the server keeps none, and every resource under /me is refused.

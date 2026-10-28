@@ -36,6 +36,22 @@ import Testing
         #expect(try reopened.tags(of: "owner") == [tag])
     }
 
+    /// A sign-in through a proxy makes its user the first time, with their id as their name, at the
+    /// time it came, and finds them after; a user the store holds keeps their name (S14e).
+    @Test(arguments: UserStoreKind.available)
+    func aSignedInUserIsMadeOnceWithTheirIdAsTheirName(_ kind: UserStoreKind) async throws {
+        let (store, rows, test) = try await UserTagTests.open(kind)
+        defer { withExtendedLifetime(test) {} }
+        let id = "reader@example.org"
+        let reader = UserAccount(id: id, displayName: id)
+        #expect(try store.signedInUser(id, at: Self.created) == reader)
+        #expect(try store.signedInUser(id, at: Self.created.addingTimeInterval(60)) == reader)
+        #expect(try store.user(id) == reader)
+        #expect(try rows.stored("SELECT created_at FROM users WHERE user_id = ?", [.text(id)])
+                == [[.text(UserStoreDate.text(Self.created))]], "made once, at the first sign-in")
+        #expect(try store.signedInUser("owner", at: Self.created) == UserAccount(id: "owner", displayName: "Owner"))
+    }
+
     /// Each store's migrations make the 23 tables, each column as `UserStoreSchema` describes it and of
     /// the type its kind is kept as, with `user_id` first in a user table's key, and nothing else but
     /// the users and the migrations: app.db with `user_search` beside them, the PostgreSQL store with

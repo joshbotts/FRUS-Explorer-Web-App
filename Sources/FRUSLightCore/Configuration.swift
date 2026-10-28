@@ -1,8 +1,14 @@
 // Server configuration from the environment variables in docs/SPEC.md (Deployment > Configuration).
 
 import Foundation
+#if canImport(Glibc)
+import Glibc
+#elseif canImport(Darwin)
+import Darwin
+#endif
 
-/// The settings a server process runs with. Phase 1 supports Import mode with no sign-in.
+/// The settings a server process runs with: Import mode, with no sign-in or, from PLAN's S14e,
+/// sign-in through a trusted proxy.
 public struct ServerConfiguration: Sendable, Equatable {
     public enum Mode: String, Sendable, Codable { case `import`, standalone }
     public enum Auth: String, Sendable, Codable { case none, local, header }
@@ -40,7 +46,7 @@ public struct ServerConfiguration: Sendable, Equatable {
     /// Set when `FRUS_WEB_DIR` names the folder, so a server without the app refuses to start.
     public var requiresWebDirectory: Bool
     /// Whether the server keeps user data (`FRUS_USER_DATA`): off, it is read-only, with no tags,
-    /// notes, highlights or collections, as an instance others reach must be until sign-in.
+    /// notes, highlights or collections, as an instance others reach with no sign-in must be.
     public var userData: Bool
     /// The user store: app.db in the data directory, or a PostgreSQL database, its password from the
     /// URL or from `FRUS_POSTGRES_PASSWORD_FILE`.
@@ -51,6 +57,14 @@ public struct ServerConfiguration: Sendable, Equatable {
     /// A folder each finished backup is also copied to (`FRUS_BACKUP_COPY_DIR`), such as the host
     /// folder Compose mounts at `/backups`, which outlives the volume; none by default.
     public var backupCopyDirectory: URL?
+    /// In `header` mode, the header the proxy names the user in (`FRUS_AUTH_HEADER`).
+    public var authHeader: String
+    /// In `header` mode, the proxies a request may come from (`FRUS_TRUSTED_PROXIES`); a request
+    /// from any other peer is refused.
+    public var trustedProxies: [AddressRange]
+    /// In `header` mode, the users who hold the admin role (`FRUS_ADMIN_USERS`), as the header
+    /// names them.
+    public var adminUsers: Set<String>
 
     /// The path the server answers under, `FRUS_PUBLIC_URL`'s: the root unless it ends in a path.
     public var basePath: BasePath {
@@ -74,7 +88,8 @@ public struct ServerConfiguration: Sendable, Equatable {
         resourcesDirectory: URL = ServerConfiguration.imageResourcesDirectory,
         webDirectory: URL = ServerConfiguration.imageWebDirectory, requiresWebDirectory: Bool = false,
         userData: Bool = true, userStore: UserStoreChoice = .sqlite, backupHour: Int = 3,
-        backupCopyDirectory: URL? = nil
+        backupCopyDirectory: URL? = nil, authHeader: String = "X-Forwarded-User",
+        trustedProxies: [AddressRange] = [], adminUsers: Set<String> = []
     ) {
         self.mode = mode
         self.auth = auth
@@ -92,6 +107,9 @@ public struct ServerConfiguration: Sendable, Equatable {
         self.userStore = userStore
         self.backupHour = backupHour
         self.backupCopyDirectory = backupCopyDirectory
+        self.authHeader = authHeader
+        self.trustedProxies = trustedProxies
+        self.adminUsers = adminUsers
     }
 
     /// Reads the configuration, reporting every problem at once.
@@ -118,8 +136,38 @@ public struct ServerConfiguration: Sendable, Equatable {
                 problems.append("FRUS_AUTH must be none, local or header, not \(raw)")
             }
         }
-        if config.auth != .none {
-            problems.append("FRUS_AUTH=\(config.auth.rawValue) arrives in a later phase; this build supports none")
+        if config.auth == .local {
+            problems.append("FRUS_AUTH=local arrives in phase 3; this build supports none and header")
+        }
+        if let raw = value("FRUS_AUTH_HEADER") {
+            if Self.isFieldName(raw) { config.authHeader = raw } else {
+                problems.append("FRUS_AUTH_HEADER must be a header's name, such as X-Forwarded-User, not \(raw)")
+            }
+        }
+        if let raw = value("FRUS_TRUSTED_PROXIES") {
+            for item in raw.split(whereSeparator: { $0 == "," || $0.isWhitespace }).map(String.init) {
+                if let range = AddressRange(item) {
+                    if range.isEveryAddress {
+                        problems.append("FRUS_TRUSTED_PROXIES must name the proxy, not every address, as \(item) does")
+                    } else {
+                        config.trustedProxies.append(range)
+                    }
+                } else {
+                    problems.append("FRUS_TRUSTED_PROXIES must list IPv4 or IPv6 addresses or CIDR ranges, such as 172.18.0.1 or 10.0.0.0/8, not \(item)")
+                }
+            }
+        }
+        if let raw = value("FRUS_ADMIN_USERS") {
+            config.adminUsers = Set(raw.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+        }
+        if config.auth == .header, config.trustedProxies.isEmpty, value("FRUS_TRUSTED_PROXIES") == nil {
+            problems.append("FRUS_AUTH=header needs FRUS_TRUSTED_PROXIES: the addresses of the proxy that signs people in and sets \(config.authHeader)")
+        }
+        if config.auth != .header {
+            // Sign-in's settings without sign-in: every visitor would share one user's research.
+            for name in ["FRUS_AUTH_HEADER", "FRUS_TRUSTED_PROXIES", "FRUS_ADMIN_USERS"] where value(name) != nil {
+                problems.append("\(name) is for sign-in through a proxy, and FRUS_AUTH is \(config.auth.rawValue): set FRUS_AUTH=header, or leave \(name) out")
+            }
         }
         if let raw = value("FRUS_DATA_DIR") {
             config.dataDirectory = URL(fileURLWithPath: raw, isDirectory: true)
@@ -231,6 +279,70 @@ public struct ServerConfiguration: Sendable, Equatable {
     private static func isHTTPOrigin(_ raw: String) -> Bool {
         guard let url = URL(string: raw), let scheme = url.scheme?.lowercased(), url.host != nil else { return false }
         return (scheme == "http" || scheme == "https") && PublicAddress(raw) != nil
+    }
+
+    /// Whether `raw` is a header's name: a token, as RFC 9110 writes one.
+    private static func isFieldName(_ raw: String) -> Bool {
+        let allowed = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&'*+-.^_`|~")
+        return raw.allSatisfy(allowed.contains)
+    }
+}
+
+/// An IPv4 or IPv6 address, or a CIDR range of them, as `FRUS_TRUSTED_PROXIES` names the proxies a
+/// request behind sign-in may come from (PLAN's S14e). An IPv4 address is held as IPv6 maps it,
+/// `::ffff:a.b.c.d`, so a range of IPv4 addresses takes a peer that a server listening on IPv6 sees
+/// in that form.
+public struct AddressRange: Sendable, Equatable, CustomStringConvertible {
+    /// The range's first address, in 16 bytes, those after its prefix zero.
+    private let network: [UInt8]
+    /// How many of an address's 128 bits the range fixes.
+    private let prefix: Int
+    public let description: String
+
+    /// An address, `172.18.0.1` or `::1`, which is a range of one, or a range, `10.0.0.0/8` or
+    /// `fd00::/8`; nil for anything else, a host name included. The bits after a range's prefix
+    /// are ignored, so `172.18.0.1/16` is `172.18.0.0/16`.
+    public init?(_ text: String) {
+        let parts = text.split(separator: "/", maxSplits: 1, omittingEmptySubsequences: false)
+        guard let address = Self.bytes(of: String(parts[0])) else { return nil }
+        let width = parts[0].contains(":") ? 128 : 32
+        var length = width
+        if parts.count == 2 {
+            guard !parts[1].isEmpty, parts[1].count <= 3, parts[1].allSatisfy({ $0.isASCII && $0.isNumber }),
+                  let given = Int(parts[1]), given <= width else { return nil }
+            length = given
+        }
+        prefix = 128 - width + length
+        network = Self.masked(address, to: prefix)
+        description = text
+    }
+
+    /// Whether the range is every address of its kind, as `0.0.0.0/0` is, which trusts any peer.
+    public var isEveryAddress: Bool { prefix == 0 || (prefix == 96 && network[10] == 0xff && network[11] == 0xff) }
+
+    /// Whether `address`, as a socket names its peer, `127.0.0.1` or `::ffff:127.0.0.1` or `::1`, is
+    /// in the range.
+    public func contains(_ address: String) -> Bool {
+        guard let bytes = Self.bytes(of: address) else { return false }
+        return Self.masked(bytes, to: prefix) == network
+    }
+
+    /// The 16 bytes of an IPv4 or IPv6 address, an IPv4 one mapped into IPv6; nil for anything else.
+    private static func bytes(of text: String) -> [UInt8]? {
+        var v4 = in_addr()
+        if inet_pton(AF_INET, text, &v4) == 1 {
+            return [UInt8](repeating: 0, count: 10) + [0xff, 0xff] + withUnsafeBytes(of: &v4) { Array($0) }
+        }
+        var v6 = in6_addr()
+        if inet_pton(AF_INET6, text, &v6) == 1 { return withUnsafeBytes(of: &v6) { Array($0) } }
+        return nil
+    }
+
+    private static func masked(_ bytes: [UInt8], to prefix: Int) -> [UInt8] {
+        bytes.enumerated().map { index, byte in
+            let kept = min(max(prefix - index * 8, 0), 8)
+            return kept == 8 ? byte : byte & ~(0xff >> kept)
+        }
     }
 }
 

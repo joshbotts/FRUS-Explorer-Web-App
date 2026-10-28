@@ -93,10 +93,21 @@ public class RelationalUserStore: UserStore, CorrectionStore, @unchecked Sendabl
     public func singleUserID() throws -> String { "owner" }
 
     public func user(_ id: String) throws -> UserAccount? {
-        try reading { db in
-            try db.query("SELECT user_id, display_name FROM users WHERE user_id = ?", [.text(id)]).first.map {
-                UserAccount(id: $0[0].text ?? id, displayName: $0[1].text ?? "")
-            }
+        try reading { db in try Self.user(id, in: db) }
+    }
+
+    public func signedInUser(_ id: String, at time: Date) throws -> UserAccount {
+        if let user = try user(id) { return user }
+        return try writing { db in
+            _ = try db.query("INSERT INTO users (user_id, display_name, created_at) VALUES (?, ?, ?) ON CONFLICT (user_id) DO NOTHING",
+                             [.text(id), .text(id), .text(UserStoreDate.text(time))])
+            return try Self.user(id, in: db) ?? UserAccount(id: id, displayName: id)
+        }
+    }
+
+    private static func user(_ id: String, in db: UserStoreTransaction) throws -> UserAccount? {
+        try db.query("SELECT user_id, display_name FROM users WHERE user_id = ?", [.text(id)]).first.map {
+            UserAccount(id: $0[0].text ?? id, displayName: $0[1].text ?? "")
         }
     }
 

@@ -11,6 +11,9 @@ public protocol UserStore: Sendable {
     func singleUserID() throws -> String
     /// The user with this id, or nil when the store has none.
     func user(_ id: String) throws -> UserAccount?
+    /// The user a sign-in through a proxy names (PLAN's S14e), made at `time` the first time, with
+    /// their id as their name.
+    func signedInUser(_ id: String, at time: Date) throws -> UserAccount
 }
 
 /// A user the store holds, as its `users` table keeps them.

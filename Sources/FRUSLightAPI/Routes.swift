@@ -25,6 +25,9 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
         let readiness = await state.readiness()
         return EditedResponse(status: readiness.ready ? .ok : .serviceUnavailable, response: readiness)
     }
+    // Behind a proxy that signs people in (S14e), everything after the health endpoints, the paths no
+    // route answers and the browser app included, comes through the proxy.
+    if let proxies = userData?.proxies { router.add(middleware: TrustedProxyGuard(proxies: proxies)) }
     router.get("/api/v1/status") { request, _ in
         try FormQuery(request.uri.query).refuseUnknown([])
         return await state.status()
