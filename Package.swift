@@ -183,9 +183,11 @@ let package = Package(
             swiftSettings: swift6
         ),
         // The rich-text codec (S15d): RTF to the runs the app reads from it, and runs to RTF, held to
-        // the app's reading by the golden spans. Foundation only, so tools/mac-golden links it too.
+        // the app's reading by the golden spans. Foundation and the kit's span rules only (since S17c's
+        // pin move, FRUS-Explorer#1807's `CollectionProse.hex`), so tools/mac-golden links it too.
         .target(
             name: "FRUSRichText",
+            dependencies: ["FRUSCoreKit"],
             path: "Sources/FRUSRichText",
             swiftSettings: swift6
         ),
@@ -223,10 +225,11 @@ let package = Package(
             swiftSettings: swift6
         ),
 
-        // The parity harness (checks 2-4): golden-file formats, shared with tools/mac-golden.
+        // The parity harness (checks 2-4): golden-file formats, shared with tools/mac-golden. Since
+        // S17c's pin move it splits prose into paragraphs with the kit's `CollectionProse.append`.
         .target(
             name: "ParityFormat",
-            dependencies: [.product(name: "Crypto", package: "swift-crypto")],
+            dependencies: ["FRUSCoreKit", .product(name: "Crypto", package: "swift-crypto")],
             path: "Tests/ParityFormat",
             swiftSettings: swift6
         ),

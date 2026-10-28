@@ -147,7 +147,8 @@ private func codePageReadings() throws -> [RichTextCodePageReading] {
     }
 }
 
-/// Each attribute run of `decoded`, read by `CollectionProse.paragraphs(fromDecoded:)`'s rules.
+/// Each attribute run of `decoded`, read by the rules of `CollectionProse.paragraphs(fromDecoded:)`, in
+/// the app's `Collections/CollectionExporter+App.swift`.
 private func spanRuns(_ decoded: NSAttributedString) -> [RichTextSpan] {
     var runs: [RichTextSpan] = []
     let plain = decoded.string as NSString
@@ -166,11 +167,13 @@ private func spanRuns(_ decoded: NSAttributedString) -> [RichTextSpan] {
     return runs
 }
 
-/// `CollectionProse.hexColor(_:)` on macOS, which is private.
+/// `CollectionProse.hexColor(_:)` on macOS, in the app's `Collections/CollectionExporter+App.swift`,
+/// which is private: the colour in sRGB, here under the aqua appearance every case is read under, as
+/// the app's resolves it under aqua, and its hex the kit's `CollectionProse.hex(r:g:b:)`, which the
+/// app's calls.
 private func hexColor(_ color: NSColor) -> String? {
     guard let c = color.usingColorSpace(.sRGB) else { return nil }
-    if c.redComponent < 0.08, c.greenComponent < 0.08, c.blueComponent < 0.08 { return nil }
-    return String(format: "%02X%02X%02X", Int(c.redComponent * 255), Int(c.greenComponent * 255), Int(c.blueComponent * 255))
+    return CollectionProse.hex(r: c.redComponent, g: c.greenComponent, b: c.blueComponent)
 }
 
 /// Each key of the System colour list, as RTF names it in `\cname`, read as the app reads a colour.

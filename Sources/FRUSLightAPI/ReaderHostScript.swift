@@ -11,20 +11,22 @@ import FRUSCoreKit
 /// nowhere.
 ///
 /// Highlights (PLAN's S15c): the parent sends the document's highlights (`{source: 'frus-app',
-/// kind: 'highlights', highlights}`, each the kit's `ReaderHighlight`), and the host draws them with
-/// the kit's renderer, as the app's reader evaluates `FRUSHighlights.render` after each load. It
-/// first tries each with the kit's own `buildRanges`, and passes the renderer only those that build:
-/// the kit's renderer stops at one that ends on a line break, whose range cannot end after a `<br>`,
-/// and would draw none of the others. It answers `highlightsRendered`, with how many it drew and
-/// the indexes of those it could not. `{kind: 'collapseSelection'}` collapses the selection to its
-/// end once a colour is chosen, as the app's iPhone and iPad reader clears it, so the new colour is
-/// not hidden under the selection's. With a selection in the text, which the kit's own bridge
-/// places (`rangeEndpointToOffset`, `selectionGeometry`), ⇧⌘H, or Ctrl+Shift+H, the app's shortcut
-/// for Highlight Selection ▸ Yellow, is posted as `highlightShortcut`, and Alt+F10, the web's own key
-/// for a toolbar, as `selectionBarShortcut`, each with the selection's offsets and rectangle; Escape
-/// with any selection is posted as `selectionEscape`, which hides the bar. The parent page acts on
-/// them, since the frame's keys never reach it; for Alt+F10 pressed in the parent page it asks
-/// (`{kind: 'selectionBarRequest'}`), and the host answers as for the key in the frame.
+/// kind: 'highlights', highlights}`, each the kit's `ReaderHighlight`), and the host draws them
+/// with the kit's renderer, as the app's reader evaluates `FRUSHighlights.render` after each load.
+/// It first tries each with the kit's own `buildRanges`, and passes the renderer only those that
+/// build, so that it can name the others: the kit's renderer has drawn a highlight that ends on a
+/// line break since FRUS-Explorer#1789, and skips one whose range throws, alone, since #1793, but
+/// says nothing of what it skipped. It answers `highlightsRendered`, with how many it drew and the
+/// indexes of those it could not, which the rail names. `{kind: 'collapseSelection'}` collapses the
+/// selection to its end once a colour is chosen, as the app's iPhone and iPad reader clears it, so
+/// the new colour is not hidden under the selection's. With a selection in the text, which the
+/// kit's own bridge places (`rangeEndpointToOffset`, `selectionGeometry`), ⇧⌘H, or Ctrl+Shift+H,
+/// the app's shortcut for Highlight Selection ▸ Yellow, is posted as `highlightShortcut`, and
+/// Alt+F10, the web's own key for a toolbar, as `selectionBarShortcut`, each with the selection's
+/// offsets and rectangle; Escape with any selection is posted as `selectionEscape`, which hides the
+/// bar. The parent page acts on them, since the frame's keys never reach it; for Alt+F10 pressed in
+/// the parent page it asks (`{kind: 'selectionBarRequest'}`), and the host answers as for the key
+/// in the frame.
 /// A tap the kit reports is passed on unless it came from the keyboard, whose click has no point
 /// for the kit's hit test to read, or from a reader link, which is followed instead: a link inside
 /// a highlight would otherwise open its card and the question to remove the highlight at once.
@@ -78,7 +80,7 @@ enum ReaderHostScript {
             return { start: start, end: end, rect: selectionGeometry(range).rect };
           }
           // FRUS Explorer's highlights, drawn by the kit's renderer: those whose ranges the kit can
-          // build, so that one it cannot does not keep the others from the page.
+          // build, and the indexes of the others, for the parent to name.
           function drawHighlights(highlights) {
             if (!window.FRUSHighlights || !window.FRUSOffsets || typeof buildRanges !== 'function') { return; }
             var drawable = [];
