@@ -1,8 +1,8 @@
 // S17e's done-when (docs/PLAN.md, the same as S11c's): Playwright uses saved searches, working corpora,
 // volume scopes and Checklist Mode, by keyboard, on Chromium with no axe violations. Against the image,
 // with the synthetic export imported (frus1961-63v06's d1 and d2, and frus1894Nicaragua's d1), and the
-// single user's store, which starts with none of the three. Each test leaves the store as it found it,
-// since the suite runs twice on one store.
+// single user's store, which may hold the saved search, corpus and scope import.spec.ts brings. Each
+// test removes what it made, and nothing else, since the suite runs twice on one store.
 import type { Page } from '@playwright/test';
 import { axeCheck } from './axe';
 import { treatiesResults } from './expected';
@@ -12,9 +12,10 @@ import { getJSON, removeNotesAndSummaries, send } from './notes';
 
 const nicaraguaNotes = 'api/v1/me/volumes/frus1894Nicaragua/documents/d1/notes';
 
-async function removeAll(page: Page, path: string): Promise<void> {
-  const list = await getJSON<{ items: { id: string }[] }>(page, path);
-  for (const item of list.items) await send(page, 'DELETE', `${path}/${item.id}`);
+/** Removes the user's records under `path` named `name`, those a test made. */
+async function removeNamed(page: Page, path: string, name: string): Promise<void> {
+  const list = await getJSON<{ items: { id: string; name: string }[] }>(page, path);
+  for (const item of list.items) if (item.name === name) await send(page, 'DELETE', `${path}/${item.id}`);
 }
 
 test('saves a search, recalls it, and says what it has gained since, by keyboard alone', async ({ page }) => {
@@ -43,7 +44,7 @@ test('saves a search, recalls it, and says what it has gained since, by keyboard
     await tabTo(page, open);
     await page.keyboard.press('Enter');
     const list = page.getByRole('dialog', { name: 'Saved Searches' });
-    await expect(list.getByRole('heading', { name: 'Saved Searches' })).toBeFocused();
+    await expect(list.getByRole('heading', { name: 'Saved Searches', exact: true })).toBeFocused();
     const row = list.getByRole('button', { name: /^treaties talks/ });
     await expect(row).toBeVisible();
     await axeCheck(page);
@@ -57,11 +58,13 @@ test('saves a search, recalls it, and says what it has gained since, by keyboard
       .toBe(2);
 
     // A note with the word on another document: the saved search matches one more than at its run.
+    // The focus came back to Saved searches as the sheet closed.
     await send(page, 'POST', nicaraguaNotes, { bodyText: 'Treaties with the canal company', runs: null, userTagIds: [], projectIds: [], selectedSummaryIds: [] });
-    await tabTo(page, open);
+    await expect(open).toBeFocused();
     await page.keyboard.press('Enter');
-    await expect(list.getByText('+1 since last run')).toBeVisible();
-    await expect(list.getByText('NEW', { exact: true })).toBeVisible();
+    const item = list.getByRole('listitem').filter({ has: page.getByRole('button', { name: /^treaties talks/ }) });
+    await expect(item.getByText('+1 since last run')).toBeVisible();
+    await expect(item.getByText('NEW', { exact: true })).toBeVisible();
     await axeCheck(page);
 
     // Rename, as given, and Delete, from the row.
@@ -76,13 +79,13 @@ test('saves a search, recalls it, and says what it has gained since, by keyboard
     await expect(rename).toBeFocused();
     await tabTo(page, list.getByRole('button', { name: 'Delete Treaties' }));
     await page.keyboard.press('Enter');
-    await expect(list.getByText('No Saved Searches')).toBeVisible();
-    await expect(list.getByRole('heading', { name: 'Saved Searches' })).toBeFocused();
+    await expect(list.getByRole('button', { name: /^Treaties/ })).toHaveCount(0);
+    await expect(list.getByRole('heading', { name: 'Saved Searches', exact: true })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(list).toHaveCount(0);
     await expect(open).toBeFocused();
   } finally {
-    await removeAll(page, 'api/v1/me/saved-searches');
+    for (const name of ['treaties talks', 'Treaties']) await removeNamed(page, 'api/v1/me/saved-searches', name);
     await removeNotesAndSummaries(page);
   }
 });
@@ -138,16 +141,16 @@ test('saves the rows a search shows as a working corpus, opens it in Browse, and
     await expect(page).not.toHaveURL(/workingCorpusId=/);
     await expect(titles).toHaveCount(3);
   } finally {
-    await removeAll(page, 'api/v1/me/working-corpora');
+    await removeNamed(page, 'api/v1/me/working-corpora', 'Treaty talks');
   }
 });
 
 test('makes a scope in My Scopes, gives it a volume, and fills a search’s volume filter with it, by keyboard alone', async ({ page }) => {
   await page.goto('browse/scopes');
   try {
-    await expect(page.getByText('No Scopes Yet')).toBeVisible();
-    await axeCheck(page);
     const create = page.getByRole('button', { name: 'New Scope' });
+    await expect(create).toBeVisible();
+    await axeCheck(page);
     await tabTo(page, create);
     await page.keyboard.press('Enter');
     await expect(page.getByRole('heading', { level: 1, name: 'Edit Scope' })).toBeVisible();
@@ -188,7 +191,9 @@ test('makes a scope in My Scopes, gives it a volume, and fills a search’s volu
     await expect(titles).toHaveText(['No. 1. Mr. Baker to Mr. Gresham']);
     await axeCheck(page);
   } finally {
-    await removeAll(page, 'api/v1/me/volume-scopes');
+    await removeNamed(page, 'api/v1/me/volume-scopes', 'Isthmus');
+    // New Scope makes one unnamed, which the test names at once; one left unnamed by a failure goes too.
+    await removeNamed(page, 'api/v1/me/volume-scopes', '');
   }
 });
 

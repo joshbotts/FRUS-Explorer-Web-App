@@ -2,6 +2,65 @@
 
 One entry per session, newest first.
 
+## Session 17e: saved searches, working corpora, volume scopes and Checklist Mode
+
+28 October 2026 · branch `claude/elastic-ptolemy-767148` · PR pending · upstream `32e295e5`, unchanged
+
+Phase 2's row S17e, the second of the search-and-research rows that S17c's pin move opened. A search is saved and recalled with the Mac's "+N since last run"; the rows a search shows are saved as a working corpus, which Browse lists and opens and a search runs inside; My Scopes keeps the reader's sets of volumes, and a scope fills a search's volume filter; and Checklist Mode hides the results reviewed, kept in the browser's memory for the session. Each is the kit's code where #1805 moved it there, and app code mirrored, held to the app's source, where it is the Mac's view or view model. No upstream pull request, no pin move and no schema change: the three tables are migration 2's.
+
+**What the kit gives,** at `32e295e5`, from FRUS-Explorer#1805:
+- `SavedSearchFreshness`: the mark a run writes (`run(at:matchCount:indexedVolumeCount:)`), its blob, and "+N since last run" (`evaluation(currentCount:)`, with the backfill of a baseline never learned, and no badge for fewer results).
+- `WorkingCorpusResolver.resolve(documentKeys:)`, by volume, with its coverage; `SearchParameters.runningInside(workingCorpus:)`, a search's only document gate; `CorpusCaptureTruncation` and its line; `WorkingCorpusProvenance.isMeaningCapture`.
+- `CustomScopeResolver`'s two grains, `indexedResolution(memberVolumeIds:indexed:)`, which never gives a bare empty set, and `manifestVolumeIds(memberVolumeIds:manifestIds:)`.
+- And from earlier pins: `QueryQuoting.quotable`, and `SearchScopeSignature`'s `signature(for:)` and `describe(_:resources:locale:)`, which a capture's narrowing is said in.
+
+**Delivered**
+
+- **The store** (`Sources/FRUSLightCore/UserSearchSets.swift`, `SearchSetStore`): each user's rows of `saved_searches`, `working_corpora` and `volume_scopes`, listed, found by the Mac's id in any letter case, added, changed in the columns named alone, and deleted, written once on `RelationalUserStore` in SQL both stores read. What a row's columns hold is the API's: it writes a row as the import writes a Mac's record (`MacImport.savedSearch`, `.corpus`, `.scope`) and reads one as the export does (`ResearchExport.savedSearch`, …), so each is as the app's initialiser and getters make it, which the parity tests already hold.
+- **`/api/v1/me/saved-searches`** (`SavedSearches.swift`): the list, newest first, as the Mac's sheet; Save, the whole `SearchParameters` archived beside the scalar columns, as `SavedSearch.init(name:parameters:)` writes them, the name trimmed of spaces and never empty, and a working corpus the search ran inside composed into its gate, as the Mac's window saves its parameters; Rename, as given, and Delete; `POST …/{id}/run`, a recall's stamp, from the saved search's own count, of its whole parameters, as `SavedSearchFreshnessEvaluator.recordRun` counts it; and `POST …/{id}/freshness`, the kit's evaluation, its backfill written. A saved search gives its recall's search as the API's query fields, its own gates left out, and names what it sets that the API does not take (`notRecalled`).
+- **`/api/v1/me/working-corpora`** (`WorkingCorpora.swift`): the list, the most recently captured first, each with the kit's resolver's coverage over the served index, its truncation line and its words as the kit quotes them; a corpus opened, one section a volume, in `CorporaAxis`' order, with titles and dates from the index; Rename and Delete; and the capture, `POST …/capture` for the sheet and `POST` to save, of a search's retained rows less those Checklist Mode hides, with what `ResultSetScope` says of them for a keyword search, mirrored in `CorpusCapture`: the provenance sentence, the two warnings, `isCapturePartial` and the narrowing, in the kit's words for a scope.
+- **`/api/v1/me/volume-scopes`** (`VolumeScopes.swift`): the list, the most recently edited first; New Scope, unnamed and empty; the editor's name, as typed, and its members, each once and sorted; Delete; each scope with the kit's two grains.
+- **A search inside a corpus:** every search route takes `workingCorpusId`, which `SearchUsers.inside` resolves for the request's user over the served index, by the kit's resolver, into the parameters' gate (`runningInside(workingCorpus:)`); `CORPUS_NOT_FOUND` for a corpus not theirs, or any of a search that acts for no one. `SearchRequest.signature` takes the documents of a gate, so every answer kept of a search inside a corpus is kept apart from the same search's outside it.
+- **Checklist Mode's rows:** `/search`, `/search/timeline` and `/search/concordance` take `reviewed`, the results hidden, and cut their pages, in either order, from the results kept less those, as `MacSearchViewModel.displayedResults` is paged; `/search` says how many it hid (`hidden`). Each of the three also answers a POST of its query string, for a checklist that outgrows an address.
+- **The browser app:**
+  - Search's Save this search and Saved searches, the Mac's two sheets, each row's watermark evaluated in turn as the sheet opens, with the NEW capsule and "+N since last run"; a recall inside the corpus applied, with its run stamped; Rename and Delete in the row;
+  - Save as Working Corpus…, its sheet over what the server would capture, with the Mac's rows and warnings; the "Inside" banner with its ✕; and among the filters, My Working Corpora and My Volume Scopes, each refused with the Mac's warning for one the server holds none of;
+  - a recalled search's phrase, prefix and excluded terms in the search's state, as tokens that clear them;
+  - Checklist Mode (`search/checklist.ts`, `ChecklistStrip.tsx`): the toggle, the strip with Mark Page Reviewed and Undo, a row's Mark Reviewed and All Results Reviewed, its marks and the search they belong to the app's `ReviewedMarks` and `ChecklistAnchor`, mirrored; a document opened in the reader while it is on leaves the list too;
+  - Browse's axes, with Working Corpora, its list and its drill by volume, and My Scopes, its list, New Scope, a scope's volumes and the editor with Add Volumes… and Delete.
+
+**Decided here, each the web's own**
+
+- **Checklist Mode lives in the browser, and the server pages what it leaves.** The row keeps it in the browser's memory for the session, as on the Mac, where its marks live for the launch; but the Mac pages the 7,500 results it holds less the reviewed, and the browser holds a page. So the browser sends the reviewed with each request, and the server cuts the page from the results it keeps less those, as the Mac's view model does, by POST once the list outgrows an address. Nothing of it is stored.
+- **A document opened is noted in the same memory.** The Mac hides one opened since the mode came on through its reading history, which S17f brings; until then the reader notes it beside the marks, as the Mac does with Log Research Sessions on, its default, and the Mac's line for the switch turned off waits for the switch.
+- **The capture is the server's.** The rows a search shows can be 7,500, more than a body under `/me` takes, so the browser names the search and the reviewed, and the server captures its retained rows; it also says what the Mac's sheet says before Save, so the sheet shows the server's own count.
+- **A saved search's tag the user has since deleted** keeps S17d's rule in a search: the recall is refused, with the Tags token to clear it. The run's count and the badge's read it as matching nothing, as the Mac's re-resolution does.
+- **What a recall here cannot carry is said.** A Mac's saved search can set `booleanMode`, a person in one volume, a project or a topic, which the API does not take; the sheet's row says a recall runs without them, and its count is of the whole search.
+- **Rename and Delete of a corpus, and Delete Scope,** which the Mac keeps in its Settings, are in Browse, beside the drill and the editor, where the web lists them.
+
+**Tests**
+
+- **FRUSLightCoreTests,** 153 to 158: `UserSearchSetTests`, 5 on each store: each user's rows, their columns as written, an update of the columns named alone, a delete, and the refusals.
+- **FRUSLightServerTests,** 196 to 203: `SearchSetTests`, 7: a saved search's whole search and columns, its list, rename and delete; a recall's stamp and "+N since last run", the backfill, fewer results, a deleted tag; a capture, its account and its corpus listed and opened by volume; a search inside a corpus through every route, kept apart, a corpus of nothing indexed, and refusals, a request to another address among them; Checklist Mode's pages in either order, the timeline, the concordance and the POST; a scope's two grains; and two users' sets apart, live behind the proxy.
+- **FRUSParityTests,** 198 to 203: `SearchSetParityTests`, 5: every Mac word the web takes, under its key in the app's source and in copy.ts; the lists' orders, the app's queries' and the server's; the checklist's rules, the app's and checklist.ts's, with the kit's quotation marks; the capture's account, `ResultSetScope`'s and the server's; and a recall.
+- **The web unit suite,** 326 to 352 tests in 38 files: `checklist.test.ts`, `SearchSets.test.tsx` (the sheets, the recall, the capture, the corpus and scope filters, a refusal, Checklist Mode) and `SearchSetsBrowse.test.tsx` (the axes, Working Corpora and its drill, My Scopes, New Scope and the editor), and `searchState`'s new fields.
+- **The browser suite,** 49 to 53 tests, at the root and under the path: `search-sets.spec.ts`, by keyboard, with axe, saves, recalls and renames a search and sees "+1 since last run", saves a corpus, opens it in Browse and searches inside it, makes a scope and applies it, and hides results in Checklist Mode, marked, a page at a stroke, undone and opened.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** with `scripts/swift --postgres`, PostgreSQL 18, through the heavy-job lock: this package's own targets build clean with no warning. All 2,565 tests pass, up from 2,548 on `main`, with the one named skip: FRUSLightCoreTests 158, FRUSLightServerTests 203, FRUSParityTests 203, FRUSCoreKitTests 1,299, the others as on `main`. (The full run gave 2,560, before `SearchSetParityTests` was added; it and `SearchSetTests` ran again on the last commit.)
+- **The web job's steps,** through `scripts/npm`: typecheck, lint and the build are clean, and the unit suite passes 352 tests in 38 files. The app's script is 545 kB, from `main`'s 504 kB, which already passed Vite's 500 kB warning.
+- **The browser suite,** over an image of the branch under a tag and port of its own (`frus-light:s17e`): a scratch copy of the smoke test, its root phase alone, ran the whole suite; 51 of 53 passed and two of the new spec's tests failed on the spec itself, one tabbing away from a button the closed sheet had given the focus back to, one expecting an empty My Scopes where `import.spec.ts` leaves the kit's fixture's scope. Fixed, the new spec passes 4 of 4 alone, and each of its tests now removes only what it made.
+
+**Records**
+
+- `docs/SPEC.md`: Browse's axes, Search's saved searches, corpora, scopes and Checklist Mode, the API's `workingCorpusId`, `reviewed` and POSTs, and the three resources under `/me`.
+- `docs/INSTALL.md`: the features, and the API's routes and fields.
+- `docs/PLAN.md`: the row's done paragraph. `docs/COORDINATION.md` §1: the kit's code the server calls for them, and the mirrors.
+- README's status, and this log. The hand-over note for S17f and S18f is `s17e-saved-searches.md` in the shared notes folder.
+
+**Next: S18d,** collections and their editor, with **S17f**, projects, the history and the method appendix, beside it; S17f's history can hide a checklist's opened documents by the Mac's switch, and S18f's smart collections run the saved searches this row keeps.
+
 ## Session 18b, third follow-up: the pointer notes spec's random failure
 
 28 October 2026 · branch `claude/amazing-wright-703c3a` · [#82](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/82) · upstream `32e295e5`, unchanged
