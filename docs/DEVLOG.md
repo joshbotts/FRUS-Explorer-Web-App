@@ -2,6 +2,33 @@
 
 One entry per session, newest first.
 
+## Session 18b, second follow-up: the keyboard notes spec's random failure
+
+28 October 2026 · branch `claude/nice-kalam-7067e1` · [#80](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/80) · upstream `1c18b51e`, unchanged
+
+`web/e2e/notes-keyboard.spec.ts`'s one test failed at random in CI's `compose` job, and `main` requires that check. S18b's session cited two runs: `main`'s own at `2a31f41` and #75's first attempt, a docs-only pull request on the same code. The job's logs hold five failures of the test in two days, at three of its steps: Save's focus on the reader's frame three times (line 100), Delete's focus on All Notes' heading once (line 150), and the link dialog once (line 69). One cause, in the app's focus handling, accounts for four; a second, in the spec's waits, failed ⌘K in local runs; the fifth's cause is narrowed, not proven. No upstream change, no pin move.
+
+**Focus sent back before the dialog had gone, four of the five.** Each dialog's parent sends focus back in an animation frame, on the rule that the dialog has gone by then: "while it is open, all else is inert". A close from a press or a key holds to that, since React commits it before the next frame. A close after the dialog's request has been answered does not: React commits it in a later task. When a frame comes first, the parent's `focus()` lands on the page still inert behind the modal dialog and does nothing, and focus falls to the page's body when the dialog goes. The spec's Save and Delete are two such closes. A local run that logged every `focus()` call and every dialog caught it: All Notes' heading was asked to take focus while Delete Note? was open, the dialog went 0.4 ms later, and the active element was the body. The same holds for six closes, each after its request: the note editor's Save and Delete, Delete Note?, Remove Highlight, the summary editor's Save and Delete Summary?.
+- **`closeAtOnce`** (`web/src/shell/Modal.tsx`) calls a dialog's close in `flushSync`, as the note editor's Escape already was, so the dialog has gone before any frame. The six closes use it.
+- **`framesAtOnce`** (`web/src/test/frames.ts`) gives a unit test the quickest browser: each frame comes as soon as the task that asked for it is done, and focus outside an open modal dialog is refused. jsdom has neither. Four tests use it: the reader's Save and Remove Highlight, All Notes' Delete Note? and the editor's Delete, and the summary editor's Save and Delete Summary?. Each fails with its closes as they were, the two-step ones at their second step alone, and passes with `closeAtOnce`. The web app's unit tests go from 309 to 313.
+
+**Keys pressed while ProseMirror still treats the editor as just focused.** For 200 ms after the editor takes focus, prosemirror-view's `DOMObserver.flush` takes a caret at the start of the text for the browser's own reset on focus, and puts the editor's selection back. In two local failures the spec pressed Home 144 and 177 ms after the editor took focus back from the link dialog, so Home was undone, Ctrl+Shift+→ collapsed the selection again, and ⌘K had nothing to link. `settle()`'s 60 ms covered only ProseMirror's 20 ms one.
+- **`settle()`** (`web/e2e/notes.ts`) waits 250 ms and two frames, and its comment names the 200 ms. `notes.spec.ts`'s `selectInLine` presses Home the same way after focusing the editor.
+- **The spec waits for the editor to hold a selection** before ⌘B and ⌘K: the formatting bar's Link is offered only over one, and over the first word it shows no link. A selection the editor never takes fails there by name, not at the missing dialog two steps on.
+- **It settles once the new note's editor has focus,** before typing, as `settle()`'s rule asks and `notes.spec.ts` does.
+
+**The fifth, narrowed.** In `main`'s run at `2a31f41`, ⌘B found no selection and set Bold for what would be typed next, so Link stayed unoffered and its Enter did nothing. The trace's frames show "note" selected in the text 10 ms after Ctrl+Shift+←, with Link still unoffered, and 16 ms later the caret back at the end: ProseMirror put its own selection back before it read the new one. Typing had begun 10 ms after the editor took focus, at the end of a 260 ms task that loaded the editor's code. Locally typing began 100 ms after focus, and 26 to 130 ms with the CPU throttled four times over, and the step never failed: 0 of 30 runs, then 0 of 50 throttled. The settle before typing keeps the keys out of the editor's first 250 ms, which hold both of the times ProseMirror puts its selection back.
+
+**How it was checked,** on the owner's Mac with other sessions building (load averages 6 to 110), with images and ports of this session's own, through a scratch copy of `scripts/compose-smoke` that runs one spec, repeated, in both passes:
+- **`main`'s app:** 15 of 15 at the root, 12 of 15 under the path. The three failures were Delete's focus once and ⌘K twice.
+- **This branch,** twice: 20 of 20 at the root and 19 of 20 under the path, then 20 of 20 in each at a load average of 2 to 4. The one failure was the test's 30 s timeout, in a spike to a load average of 110: every step up to it passed, at 10 to 60 times its usual time. In CI the test takes 6.5 to 7.7 s, and the longer `settle()` adds about 1 s.
+- **`scripts/compose-smoke --e2e`** with this branch's image: passed, the browser suite's 47 tests in each pass and the sign-in spec, at a load average of 4 to 15.
+- **`scripts/npm run typecheck`, `run lint`, `test`:** clean; 313 tests in 34 files.
+
+**Delivered:** the six closes committed at once, the spec's waits, the four unit tests and this log. The session's notes are in the shared notes folder, as `notes-keyboard-flake.md`.
+
+**Next:** phase 2 goes on as it stood: S18c, the pin move past FRUS-Explorer#1809 ([#77](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/77)), then S18d; S17e and S17f after S17d's [#76](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/76). Should the first ⌘B's failure come back, a run with the shared note's diagnostic hook would show what put the selection back.
+
 ## Session 18b, follow-up: the link-alert test's random failure, upstream
 
 28 October 2026 · branch `claude/elated-lederberg-fc1c0a` · [#79](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/79) · upstream `1c18b51e`, unchanged; [FRUS-Explorer#1811](https://github.com/joshbotts/FRUS-Explorer/pull/1811), open
