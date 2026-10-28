@@ -2,6 +2,49 @@
 
 One entry per session, newest first.
 
+## Session 16e, follow-up: a stripped export's free pages, upstream
+
+27–28 October 2026 · branch `claude/magical-taussig-4755a7` · [#78](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/78) · upstream `1c18b51e`, unchanged; [FRUS-Explorer#1810](https://github.com/joshbotts/FRUS-Explorer/pull/1810), open
+
+S16e (#69) found that the Mac's Export Research Database…, with Include My Notes, Summaries, and Tags off, keeps words of the notes and summaries in the copy's free pages, and named the fix as an upstream pull request. The session that ran it asked for that pull request: `claude/strip-secure-delete`, cut from `v2` at `3af1fc07`, rebased onto `fef96201` once S18b's #1809 merged, labelled `Mac` with "Mac verification requested", and not merged. Under rule 4 it changes shared files, and this repository changes only its records.
+
+**What the leak was, measured further.** The kit's strip nulled the columns and rebuilt `user_content` only after `VACUUM`, as it must, since `VACUUM` may renumber the rows the index is keyed on. So the pages that held the index of the notes and summaries were freed after the `VACUUM`, and macOS's SQLite, at `FAST`, writes nothing over a freed page. Those pages are the whole index:
+- **Decoding FTS5's leaf format in them** gives back every term of the writing, with the rows and positions it was at: all 1,000 of the notes' terms and 1,000 of the summaries' in a 40-document copy, where a byte search found 6 and 5, and all 300,000 and 100,000 in a 30,000-document one.
+- **Size decides it more than how the writing was written.** S16e's log puts its test's need for one write down to FTS5's automerge. Written a document at a time, the same 40 notes and summaries leave as much: 13 and 14 words found, and every term decoded. An index that fits in its table's root page leaves nothing, since a rebuild clears that page rather than frees it, and `FAST` zeroes what is deleted inside a page. The fixtures' one note and one summary are that small; any library whose writing outgrew a page leaked.
+- **The app's own exports:** every one made with the switch off that this session read, raw and read-only, has free pages, every one holding data. The three golden exports of 13, 22 and 24 October, from a library with no writing, have 6, 3 and 5, the corpus's own terms, which the `frus_documents` rebuild freed. Theirs are the only counts quoted: a full export's free pages measure the owner's writing.
+
+**#1810, in one commit and a records commit:**
+- **Your-content index is emptied before the `VACUUM`** (`INSERT INTO user_content(user_content) VALUES('delete-all')`, "emptying your-content index"), after the `UPDATE`. The `VACUUM` then reclaims its pages with every other free page, and the rebuild after it rebuilds the index over empty columns. The copy is smaller by the size of the index: 2,481 pages against 4,722 in the 30,000-document copy, in the same time.
+- **`PRAGMA secure_delete = ON` comes first** ("preparing to overwrite freed space"). SQLite writes zeros over whatever is freed on that connection after it, the pages the `frus_documents` rebuild frees among them. Either statement alone keeps the writing out; together, the space is reclaimed and nothing freed afterwards keeps what it held.
+- **In the kit, not in the app's runner.** This server's own `secure_delete` before the kit's steps was a rule of the strip kept outside the kit. The steps' doc now says they run on one connection. A second `VACUUM` after the rebuilds would have dropped their pages too, but it could renumber the rows again.
+- **The app's note 3** said the strip is an erase because of the `VACUUM`. It says now that everything that held the writing is freed before it, and what `secure_delete` adds.
+- **Tests:** `ResearchDatabaseStripTests` pins the seven statements, and strips four copies of a 40-document index whose notes and summaries name 1,000 words each, all from `FAST`. The strip as it was leaves words of both in the copy's bytes and data in its free pages; the strip now, the pragma alone and the index emptied alone leave none, each held to what it does. `IndexDatabaseExporterTests` runs the export's own path at the platform's own setting. `FRUSCoreKitTests` goes from 1,298 tests to 1,299, and the iOS unit target from 7,752 to 7,754.
+
+**How it was checked,** each heavy job under the app's lock, from a clone at a real path, beside `v2` at `fef96201` built and run the same way, Xcode 27.1, clean and unsigned:
+- **The full iOS unit run:** 7,754 tests in 929 suites against `v2`'s 7,752, both failing only the 8 Keychain tests an unsigned build fails, with the same 6 known issues and the same 17 tests and 2 suites skipped. A run before the rebase also failed `RichTextRestingCapTests`' colour-picker and link-alert tests, which S18b found flaky on both heads that night; this one passed them.
+- **`swift test`:** 3,192 tests in 389 suites against 3,191, all passed.
+- **The symbol diff,** normalized as before: no name removed and none added, raw or normalized. The change is a static array's contents, doc comments and tests.
+- **On `v2`'s code,** with the two test files copied alone into a `v2` worktree at `3af1fc07`, where the code they exercise is as at `fef96201`: the iOS unit target failed `stepsInOrder`, the kit's free-page test ("stripped: 6 and 5 of the words, 92 pages, 9 free, 8 free leaves holding data, secure_delete 2") and the export's own test, the control passing; `swift test` failed the same two kit tests. So the simulator's SQLite, like macOS's, writes nothing over a freed page.
+- **Linux,** in a scratch worktree of this repository's `main` at `2a31f41` (the pin `1c18b51e`), with `v2` and then the branch copied over the submodule, each built clean with no warning:
+  - at `v2`, 2,533 tests, every target passing but FRUSParityTests, whose 20 failing tests are golden-file staleness, since `v2` is past the pin;
+  - at the branch, 2,534: `FRUSCoreKitTests` 1,299, the strip's suite among them, the same 20 stale tests, and S16e's `theStripLeavesNoWordOfTheWritingInFreedPages`, whose control expects the kit's steps at `FAST` to leave the writing's words ("Expectation failed: left.notes > 0 && left.summaries > 0");
+  - skipped at both, the one named skip and the PostgreSQL store's seven tests, which need the database `scripts/swift --postgres` gives and this run did not.
+- **A review** read the diff cold. It found that the leak's size, not how the writing was written, decides whether a test sees it, which corrects S16e's explanation and this pull request's first test docs; that the steps depend on one connection; and the second statement, `delete-all` before the `VACUUM`, which this pull request took. It also found that the copy is built on the destination's volume, which the pull request files.
+
+**What the pin move past it brings:**
+- **The server's own pragma can go.** `IndexImporter`'s strip runs `ExportChecks.stripSetting` before the kit's steps, and past this pull request the first step does the same.
+- **S16e's free-page test needs its control changed.** `theStripLeavesNoWordOfTheWritingInFreedPages` runs all the kit's statements at `FAST` and expects words left, and over this branch it fails, as above. The control should run the steps without the two new ones, as the kit's own test does, or be left to the kit's test.
+- **`/readyz` names two more steps** while it strips: "Preparing to overwrite freed space in the server's copy" and "Emptying your-content index in the server's copy". S16e's first test reads the names from the kit's steps, so it passes as it is.
+- **The golden files' export may be reused,** by the owner's choice: nothing on §5's indexing path changes, and from a library with no writing an export made past this pull request differs from one made before it only in what its free pages hold.
+- **Check 5 could count free pages.** The pull request's `free-pages.py` counts a file's free leaf pages that hold any byte but zero, which needs no word of the writing. A Mac export made past this pull request should have none; `scripts/check-stripped-export` could add that count, where its snippets cannot see a single word.
+
+**Delivered here**
+
+- `COORDINATION.md`: the pull request in §2, and in §5's list of app changes the web edition needs.
+- This log.
+
+**Next:** the owner's Mac check of FRUS-Explorer#1810 and its merge; the first pin move after it takes it, drops the server's own pragma and changes S16e's control. On the plan's track, S17d.
+
 ## Session 14d: the PostgreSQL store
 
 27 October 2026 · branch `claude/clever-banach-5614db` · [#73](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/73) · upstream `1c18b51e`, unchanged
