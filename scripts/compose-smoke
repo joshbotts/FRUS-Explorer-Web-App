@@ -407,13 +407,19 @@ for folder in volume tmp; do
   docker volume create "$side" >/dev/null
   docker run -d --name "$side" --read-only --tmpfs /tmp:size=64k -v "$side:/data" -e FRUS_MODE=import -e FRUS_AUTH=none \
     -e FRUS_IMPORT_POLL_SECONDS=0.2 ${forced[@]+"${forced[@]}"} "$FRUS_IMAGE" >/dev/null || fail "the image did not start with a small /tmp"
-  docker cp "$work/large.sqlite" "$side:/data/import/large.sqlite" >/dev/null
+  # The server makes the drop zone in its new volume as it starts.
+  for _ in $(seq 1 120); do
+    docker exec "$side" test -d /data/import 2>/dev/null && break
+    sleep 0.25
+  done
+  docker cp "$work/large.sqlite" "$side:/data/import/large.sqlite" >/dev/null || fail "the export could not be copied into the drop zone"
   outcome=""
   for _ in $(seq 1 240); do
     side_log=$(docker logs "$side" 2>&1)
     case "$side_log" in
       *"Installed "*) outcome=installed; break ;;
       *"Import of large.sqlite failed"*) outcome=failed; break ;;
+      *"Import of large.sqlite refused"*) outcome=refused; break ;;
     esac
     sleep 0.25
   done

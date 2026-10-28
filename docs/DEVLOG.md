@@ -4,7 +4,7 @@ One entry per session, newest first.
 
 ## Session 16e: an export with the owner's writing
 
-27 October 2026 · branch `claude/reverent-lumiere-6a5062` · [#69](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/69) · upstream `503a730b`, unchanged
+27 October 2026 · branch `claude/reverent-lumiere-6a5062` · [#69](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/69) · upstream `503a730b`, unchanged by this row; `1c18b51e` once `main` with S17c's pin move was merged in
 
 Phase 2's row S16e, SPEC's last resort. Import mode in phase 1 refused a Mac "Export Research Database…" file made with Include My Notes, Summaries, and Tags on. It now takes one: the writing goes into the importing user's store, marked as from a research database, and the server's copy is stripped with the kit's own statements before it is checked and installed, the step S2 deferred. No upstream pull request, no pin move and no schema change.
 
