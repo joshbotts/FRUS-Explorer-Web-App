@@ -97,6 +97,11 @@ public struct APIRequestContext: RequestContext {
         channel = source.channel
     }
 
+    /// The address of the peer the request came on a connection from, such as `172.18.0.5` or
+    /// `::1`: behind a proxy, the proxy's (PLAN's S14e). Nil where the channel has none, as in the
+    /// router's tests.
+    var peerAddress: String? { channel.remoteAddress?.ipAddress }
+
     /// Runs `work` while the request's client is connected. When the client closes its side first,
     /// `work` is cancelled, and this throws `ClientClosedConnection` once it has stopped: a search
     /// stops its statement at the progress handler's next call, usually within a millisecond. A

@@ -83,8 +83,9 @@ if [ "$mode" = playwright ]; then
   # scripts/compose-smoke --e2e passes container:<server>, so the app is http://localhost:8080, a
   # secure context, which the clipboard needs.
   # FRUS_CHECK6_SAMPLES: check 6 on another file of samples (web/e2e/highlights-check6.spec.ts).
+  # FRUS_E2E_SIGN_IN: the sign-in spec alone, through a proxy that signs people in (web/e2e/sign-in.spec.ts).
   run_args+=(--ipc=host --network "${FRUS_E2E_NETWORK:-host}" -e FRUS_E2E_BASE_URL -e FRUS_CHECK6_SAMPLES
-             -e PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1)
+             -e FRUS_E2E_SIGN_IN -e PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1)
   exec docker run "${run_args[@]}" "$image" npx playwright test "$@"
 fi
 
