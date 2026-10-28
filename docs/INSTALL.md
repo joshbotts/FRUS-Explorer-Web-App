@@ -313,7 +313,7 @@ docker compose exec frus ls /data/backups
 curl -sOJ http://localhost:8080/api/v1/admin/backup
 ```
 
-It saves `frus-light-backup-<time>.tar`, holding the backup and `manifest.json`: the backup's name, size and SHA-256, the store's migration in it, the server's version, and every backup and copy the server keeps. `tar -xf` opens it, and a restore takes it as it is. It needs the admin role, which the one user of a server without sign-in holds, and answers only while the server keeps research data.
+It saves `frus-light-backup-<time>.tar`, holding the backup and `manifest.json`: the backup's name, size and SHA-256, the store's migration in it, the server's version, and every backup and copy the server keeps. `tar -xf` opens it, and a restore takes it as it is. It needs the admin role, which the one user of a server without sign-in holds, and behind a proxy that signs people in the users `FRUS_ADMIN_USERS` names, who download it at the proxy's address, signed in; and it answers only while the server keeps research data.
 
 ### Restore a backup
 

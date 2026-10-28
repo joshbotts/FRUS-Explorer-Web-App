@@ -156,8 +156,12 @@ for _ in $(seq 1 60); do
 done
 [ "$looked" -gt 0 ] || fail "the server did not look at its backups: $(docker compose logs --no-color frus 2>&1 | grep -i backup | tail -3)"
 [ -z "$(ls -A "$work/backups")" ] || fail "a new store was backed up: $(ls "$work/backups")"
-docker compose logs --no-color frus 2>&1 | grep -q "backed up daily at 03:00 America/New_York" \
-  || fail "the server does not name the backup's hour in TZ's time zone: $(docker compose logs --no-color frus 2>&1 | grep -i 'backed up daily' | tail -1)"
+# The whole log first: grep -q would stop reading it at its match, and under pipefail the writer's
+# broken pipe would fail the check.
+server_log=$(docker compose logs --no-color frus 2>&1)
+case "$server_log" in *"backed up daily at 03:00 America/New_York"*) ;;
+  *) fail "the server does not name the backup's hour in TZ's time zone: $(printf '%s\n' "$server_log" | grep -i 'backed up daily' | tail -1)" ;;
+esac
 echo "   none of a new store; daily at 03:00 America/New_York"
 
 echo "== the browser app"
@@ -586,8 +590,10 @@ token=$(printf '%s' "$alice" | sed -nE 's/.*"csrfToken":"([0-9a-f]+)".*/\1/p')
 made=$(as alice --header 'Content-Type: application/json' --header "X-CSRF-Token: $token" --header 'Origin: http://localhost:8080' \
   --post-data '{"name":"Smoke"}' "http://localhost:8080/frus-explorer/api/v1/me/tags") || fail "alice's tag was not made"
 case "$made" in *'"name":"Smoke"'*) ;; *) fail "making alice's tag answered $made" ;; esac
-as alice http://localhost:8080/frus-explorer/api/v1/me/tags | grep -Eq '"total":1[,}]' || fail "alice's tags are not the one she made"
-as bob http://localhost:8080/frus-explorer/api/v1/me/tags | grep -Eq '"total":0[,}]' || fail "bob's tags hold alice's"
+tags=$(as alice http://localhost:8080/frus-explorer/api/v1/me/tags) || fail "alice's tags did not answer through nginx"
+case "$tags" in *'"total":1'[,}]*) ;; *) fail "alice's tags are not the one she made: $tags" ;; esac
+tags=$(as bob http://localhost:8080/frus-explorer/api/v1/me/tags) || fail "bob's tags did not answer through nginx"
+case "$tags" in *'"total":0'[,}]*) ;; *) fail "bob's tags hold alice's: $tags" ;; esac
 # What the reader's sandboxed frame asks for carries no cookie, and the recipe forwards it with no
 # session: a figure the TEI lacks is the server's own 404, where the sign-in page would be a 200.
 code=$(through_proxy /frus-explorer/api/v1/volumes/frus1961-63v06/figures/none.png || true)
