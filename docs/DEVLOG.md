@@ -271,6 +271,77 @@ Then at `1c18b51e`, with `main` merged in at `7722a77` and this package's own ta
 
 **Next: S17d,** search over the researcher's writing, now that S17c's pin move (#68) is merged. Beside it: S18b's upstream pull request, S16e (#69), and on the server's track S14b (#70), S14e (#71) and S14d (#73).
 
+## Session 14b: the user store's daily backup and its restore
+
+27 October 2026 · branch `claude/nice-austin-7a6810` · [#70](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/70) · upstream `503a730b`, then `1c18b51e` with main at #68
+
+Phase 2's row S14b, on the server's track after S14a. Since S15c the store holds the researcher's own writing, which may exist nowhere else. Now the server backs it up every day: seven copies in the volume, seven in a folder on the host. The API gives the newest, and a command puts one back with the server stopped. No upstream pull request, no pin move, no schema change.
+
+**Delivered**
+
+- **The daily backup** (`Sources/FRUSLightCore/UserStoreBackups.swift`), run by the server's `BackupService`.
+  - **When.** The server looks when it starts, every five minutes, and when the hour begins: 03:00 by default, in the container's time zone (`FRUS_BACKUP_HOUR`, `TZ`). A backup is due when there is none, when the hour has begun since the newest, or when the newest is more than 24 hours old. So a Mac asleep at 03:00 backs up at the first look after it wakes.
+  - **Unchanged since the newest.** Then no backup is taken. A SHA-256 of what each copy holds decides: every schema object's SQL and every table's rows in order, read in one transaction, a row at a time (`UserStoreBackup.fingerprint`). The newest backup is read once. The store is read again only when SQLite's count of its changes has moved since the last look: its own connection's `total_changes()`, and `data_version` for every other. S14a's `holdTheSame` is now that comparison.
+  - **No research yet.** No backup is taken of a store that holds none. A new store's backup at the server's start would hold nothing, and would hold off the first that does, after the first import, until 03:00.
+  - **The copy** is S14a's, through the backup API, named `app-<time>.db`. Seven are kept, and the copies before a migration or a restore are never among them.
+  - **The host folder.** Each finished copy also goes, byte for byte through a `.partial` name and flushed, to `FRUS_BACKUP_COPY_DIR`. Compose sets it to `/backups`, mounted from `./backups` (`FRUS_BACKUP_DIR`). That folder keeps the newest seven of its own and the volume's, so a new volume's backups give up an old volume's one at a time. A folder that could not be written is filled at the next backup. A copy before a migration goes there too, at the start that makes it.
+  - **`frus-light backup`,** run in the container, takes one now. The server's backups and the command's share `/data/app/backup.lock`.
+- **The restore** (`UserStoreRestore.swift`): `frus-light restore <backup>`, with the server stopped, in a container of its own (`docker compose run --rm frus restore …`).
+  - **The lock.** A server holds `/data/app/server.lock` shared, taken before it opens the store. The restore takes it exclusively or refuses, and a server that starts meanwhile waits. It is `flock`, on a file of its own: closing any descriptor of the store would drop the POSIX locks SQLite holds on it. It holds between containers on one Docker host.
+  - **The check.** The backup, named in either folder or given by a path, is copied beside the store and checked there: `integrity_check`, `foreign_key_check`, the store's tables, and a migration from 1 to this build's. It may have no `-wal` or `-journal` beside it, and an archive's backup must match its manifest's size and SHA-256.
+  - **The store it replaces** is kept as `app-<time>-before-restore.db`, through the backup API, `-wal` and all, and copied to the host folder. A store the API cannot read, as a damaged one may be, has its files moved there as they are.
+  - **In place.** The store's side files are removed, so no `-wal` of another store is ever read with the backup, and one rename puts the backup in place. The next start migrates it forward, after S14a's copy.
+- **`GET /api/v1/admin/backup`** (`Sources/FRUSLightAPI/AdminBackup.swift`, `Sources/FRUSLightCore/BackupArchive.swift`): the newest daily backup as one tar archive, `manifest.json` and then the backup, streamed from the handle that hashed it.
+  - The manifest names the backup, its size, SHA-256 and migration; the server's version, migration, index version and SQLite; and every backup and copy kept, with whether the host folder holds each.
+  - It needs the admin role, by the check S16c's import makes for the instance's corrections (`RequestUser.require`), and passes `/api/v1/me`'s guard. Its refusals are `ROLE_REQUIRED`, `USER_DATA_OFF`, `HOST_NOT_ALLOWED`, and `BACKUP_NOT_FOUND` before the first backup.
+- **Compose:** `./backups` mounted at `/backups`, with `FRUS_BACKUP_COPY_DIR`, `FRUS_BACKUP_HOUR` and `TZ`.
+- **The Compose smoke test** (`scripts/compose-smoke`):
+  - At the start, the host folder is writable, the server names its backup's hour in `TZ`'s zone, America/New_York, and a new store is not backed up.
+  - After the import through nginx and, since the merge with #69, S16e's exports, it backs up with `frus-light backup`, and a second run takes none.
+  - It fetches the archive through the API: `tar -xf` opens it, its backup is the host folder's byte for byte, and the manifest names its SHA-256.
+  - A restore beside the running server is refused.
+  - It stops the server, removes the store, restores it, starts again, and reads the whole export back byte for byte, but for its time.
+- **Tests:**
+  - **FRUSLightCoreTests,** 106 to 126.
+    - `UserStoreBackupTests`, 13: the hour and the day-old rule, in UTC and across New York's two clock changes; none when nothing changed, by the server's mark and by the command's read; none of a store that holds no research; one soon after a missed hour; seven kept beside the other copies; the host folder's own seven, a new volume's giving up one at a time, and one filled once it can be written; two at once taking one; the fingerprint and the mark; the names.
+    - `UserStoreRestoreTests`, 6: a restore that keeps the replaced store, its log's last change among it, and leaves nothing beside the backup; an older backup migrated forward at the next start; every refusal leaving the store as it was; an archive restored as it is, read by tar, and refused once changed; a damaged store kept as its files; names and paths.
+    - `ConfigurationTests`, 1.
+  - **FRUSLightServerTests,** 172 to 175: `AdminBackupTests`, 3. The archive and its manifest, against the store; an admin alone; refused with user data off and to another host.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64:** this package's own targets built clean, with no warnings. All 2,382 tests pass, up from 2,359 at #63, with the one named skip and nothing cancelled: FRUSLightCoreTests 126 and FRUSLightServerTests 175, the others as at #63. The first full run, before the rule for an empty store, also hit the flake under Notes. On the merges with main, at #68, S17c's pin move to `1c18b51e`, and then at #69, S16e's, the package's own targets built clean again, and all 2,493 tests pass, up from 2,470 at #69, with the one named skip and nothing cancelled: FRUSLightCoreTests 133 and FRUSLightServerTests 184, the others as at #69, FRUSCoreKitTests 1,286 among them.
+- **`scripts/compose-smoke`,** on this branch's image built as `frus-light:smoke`, in a Compose project and on a port of its own (18094), both removed afterwards: passes.
+  - The first look named 03:00 America/New_York, and took no backup of the new store.
+  - After the import through nginx, `frus-light backup` took `app-20261027T232048Z.db` and copied it to the host folder, and a second run took none.
+  - `GET /api/v1/admin/backup` gave the archive, which `tar -xf` opened: its backup was the host folder's byte for byte, with its SHA-256 in the manifest.
+  - A restore beside the running server was refused.
+  - The store was removed and restored, and the export after the start was the export before, byte for byte but for its time.
+  - CI's compose job also runs the browser suite (`--e2e`), at the root and under the path, before those steps.
+
+**Records**
+
+- `SPEC.md`: the Backups section (the schedule, the two rules for none, the names, the command, the restore and its lock); the configuration table's `FRUS_BACKUP_HOUR`, `TZ` and `FRUS_BACKUP_COPY_DIR`; the disk layout; the Compose sketch; and a new "An admin's data" section of the HTTP API.
+- `INSTALL.md`: a Linux host's `chown` before the first start; Backups and restore, with taking one now, listing, the API, a restore and a restore after a lost volume; going back to an older server, now a restore; fetching the Compose file again on an upgrade; the settings; the error codes.
+- `PLAN.md`: S14b done, after S16d's paragraph, and the Compose section's backups line. The README's Status and Next, and this log.
+
+**Notes**
+
+- **Three readings of the row,** as PLAN's done paragraph gives them:
+  - a store that holds no research yet is not backed up;
+  - "the newest with a manifest of versions" is one tar archive of the backup and its manifest;
+  - "the role check the server already has" is S16c's, here for the admin role.
+
+  The first saves a new install from a backup of nothing at its start, which would hold off the first real one, after the import, until 03:00. After a lost volume, it would also have been the newest in the host folder and pushed out a real one.
+- **`TZ` without tzdata.** The runtime image has no tzdata package and needs none: the server links Foundation's ICU statically, and ICU's own data knows every zone, as the smoke test's New York shows. Nothing else the server writes depends on the zone, since every date it writes is UTC ISO 8601.
+- **A host folder on Linux.** Docker makes a missing bind-mount source as root, and UID 10001 cannot write it. The server then warns at its start, and the backups stay in the volume. `INSTALL.md` has a Linux host `chown` the folder first. Docker Desktop lets any container user write one, and the smoke test makes its own folder writable by all.
+- **`RecentComputationsTests`' `aRequestCancelledWhileAnotherWaitsLeavesAtOnceAndTheValueIsKept`** failed in the first full run, while other sessions' builds loaded the Mac, and in 1 of 3 runs alone. Nothing here touches it, and main's CI has passed it. A session of its own found the test's two tasks reaching the cache in either order, and [#72](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/72) fixes the test.
+- **The build** reused S16d's `.build/linux` through an APFS clone (`cp -c`), at the same pin, and rebuilt this package's own targets clean; after the merge with main, S17c's at `1c18b51e`.
+- **Another session's smoke test** rebuilt the shared `frus-light:smoke` tag during a local `--e2e` run, and its "under a path" step then recreated the container from the other image. Run beside other sessions with an image tag of your own (`FRUS_IMAGE`); CI passes its own.
+- **The owner's install** (`frus-light`, port 8080) was not touched.
+
+**Next: the owner's restore drill** (PLAN's owner checkpoints), after the merge, on the owner's install; the pull request's body gives its steps. Beside it on the server's track: S14d and S14e, after S14c. S17d follows S17c's pin move, and S16e and S18b are in flight.
+
 ## Session 17c: pin move past FRUS-Explorer#1805, #1806 and #1807, with #1789 to #1804
 
 27 October 2026 · branch `claude/cranky-murdock-f76a42` · [#68](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/68) · upstream `1c18b51e`

@@ -64,6 +64,18 @@ import Testing
         for path in ["frus-explorer/", "/a b/", "/%41/", "/a/./"] { #expect(BasePath(path) == nil, "\(path)") }
     }
 
+    /// The daily backup's hour, and the folder each backup is copied to (S14b).
+    @Test func theBackupsHourAndSecondFolder() throws {
+        let defaults = try ServerConfiguration.fromEnvironment([:])
+        #expect(defaults.backupHour == 3 && defaults.backupCopyDirectory == nil)
+        let config = try ServerConfiguration.fromEnvironment(["FRUS_BACKUP_HOUR": "0", "FRUS_BACKUP_COPY_DIR": "/backups"])
+        #expect(config.backupHour == 0 && config.backupCopyDirectory?.path == "/backups")
+        #expect(try ServerConfiguration.fromEnvironment(["FRUS_BACKUP_HOUR": "23"]).backupHour == 23)
+        for hour in ["24", "-1", "3:00", "three"] {
+            #expect(throws: ConfigurationError.self, "\(hour)") { try ServerConfiguration.fromEnvironment(["FRUS_BACKUP_HOUR": hour]) }
+        }
+    }
+
     @Test func userDataIsOnUnlessTurnedOff() throws {
         #expect(try ServerConfiguration.fromEnvironment([:]).userData)
         #expect(try ServerConfiguration.fromEnvironment(["FRUS_USER_DATA": "on"]).userData)

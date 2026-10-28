@@ -45,6 +45,12 @@ public struct ServerConfiguration: Sendable, Equatable {
     /// The user store: app.db in the data directory, or a PostgreSQL database, its password from the
     /// URL or from `FRUS_POSTGRES_PASSWORD_FILE`.
     public var userStore: UserStoreChoice
+    /// The hour of the user store's daily backup (`FRUS_BACKUP_HOUR`), 0 to 23 in the container's
+    /// time zone, which `TZ` sets: 3 by default (PLAN's S14b).
+    public var backupHour: Int
+    /// A folder each finished backup is also copied to (`FRUS_BACKUP_COPY_DIR`), such as the host
+    /// folder Compose mounts at `/backups`, which outlives the volume; none by default.
+    public var backupCopyDirectory: URL?
 
     /// The path the server answers under, `FRUS_PUBLIC_URL`'s: the root unless it ends in a path.
     public var basePath: BasePath {
@@ -67,7 +73,8 @@ public struct ServerConfiguration: Sendable, Equatable {
         host: String = "127.0.0.1", port: Int = 8080, importPollInterval: Duration = .seconds(2),
         resourcesDirectory: URL = ServerConfiguration.imageResourcesDirectory,
         webDirectory: URL = ServerConfiguration.imageWebDirectory, requiresWebDirectory: Bool = false,
-        userData: Bool = true, userStore: UserStoreChoice = .sqlite
+        userData: Bool = true, userStore: UserStoreChoice = .sqlite, backupHour: Int = 3,
+        backupCopyDirectory: URL? = nil
     ) {
         self.mode = mode
         self.auth = auth
@@ -83,6 +90,8 @@ public struct ServerConfiguration: Sendable, Equatable {
         self.requiresWebDirectory = requiresWebDirectory
         self.userData = userData
         self.userStore = userStore
+        self.backupHour = backupHour
+        self.backupCopyDirectory = backupCopyDirectory
     }
 
     /// Reads the configuration, reporting every problem at once.
@@ -182,6 +191,15 @@ public struct ServerConfiguration: Sendable, Equatable {
             } else {
                 problems.append("FRUS_IMPORT_POLL_SECONDS must be a number of seconds from 0.05 to 3600, not \(raw)")
             }
+        }
+
+        if let raw = value("FRUS_BACKUP_HOUR") {
+            if let hour = Int(raw), (0...23).contains(hour) { config.backupHour = hour } else {
+                problems.append("FRUS_BACKUP_HOUR must be an hour from 0 to 23, not \(raw)")
+            }
+        }
+        if let raw = value("FRUS_BACKUP_COPY_DIR") {
+            config.backupCopyDirectory = URL(fileURLWithPath: raw, isDirectory: true)
         }
 
         if let raw = value("FRUS_RESOURCES_DIR") {

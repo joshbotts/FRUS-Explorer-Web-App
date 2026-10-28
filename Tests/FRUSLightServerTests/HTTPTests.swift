@@ -253,6 +253,9 @@ func decode<T: Decodable>(_ type: T.Type, _ response: TestResponse) throws -> T 
             let set = try await browser.send(.put, "/api/v1/me/volumes/frus1961-63v06/documents/d1/tags", #"{"tagIds": ["\#(tag.id)"]}"#)
             #expect(set.status == .ok)
             #expect(try decode(TagList.self, try await browser.get("/api/v1/me/tags")).items.map(\.name) == ["Laos"])
+            let backup = try await client.execute(uri: "/api/v1/admin/backup", method: .get)
+            #expect(backup.status == .notFound && problemCode(backup) == "BACKUP_NOT_FOUND",
+                    "its backups are its database service's")
         }
         let files = DataDirectory(root: config.dataDirectory)
         #expect(!FileManager.default.fileExists(atPath: files.userStore.path), "no app.db")

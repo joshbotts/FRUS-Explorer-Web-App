@@ -63,6 +63,12 @@ public protocol CorrectionStore: Sendable {
     func classificationOverrides() throws -> [ClassificationOverride]
 }
 
+/// `SQLiteUserStore.changeMarker()`'s mark.
+public struct UserStoreChangeMarker: Sendable, Equatable {
+    let changes: Int64
+    let others: Int64
+}
+
 /// What opening the store did when it had migrations to apply.
 public struct UserStoreMigration: Sendable, Equatable {
     /// The migration the store was at, 0 for a new one.
@@ -242,6 +248,17 @@ public final class SQLiteUserStore: RelationalUserStore, @unchecked Sendable {
     /// Copies the store into `directory` as `name`, through the backup API: what has been committed.
     public func backUp(into directory: URL, named name: String) async throws -> URL {
         try await UserStoreBackup.copy(of: url, into: directory, named: name)
+    }
+
+    /// A mark of how far the store has changed while it has been open (S14b): two that are equal
+    /// say that nothing was written in between, so a daily backup need not read the store again to
+    /// tell. Two that differ say only that something may have been.
+    public func changeMarker() throws -> UserStoreChangeMarker {
+        try access.withLock {
+            // The rows this connection has written, and a count SQLite moves when another commits.
+            UserStoreChangeMarker(changes: try db.scalar("SELECT total_changes()")?.integer ?? 0,
+                                  others: try db.scalar("PRAGMA data_version")?.integer ?? 0)
+        }
     }
 }
 

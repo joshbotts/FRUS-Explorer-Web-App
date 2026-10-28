@@ -56,6 +56,12 @@ Without `FRUS_TEI_DIR`, Compose mounts an empty `tei` folder beside `compose.yam
 
 ## 3. Start the server
 
+**On Linux,** first make the folder that receives a copy of each daily backup of your research, and let the server's user write to it (on a Mac, Docker Desktop makes it):
+
+```bash
+mkdir backups && sudo chown 10001:10001 backups
+```
+
 ```bash
 docker compose up -d
 ```
@@ -220,7 +226,7 @@ curl -s -X POST http://localhost:8080/api/v1/me/tags -H "X-CSRF-Token: $token" -
 
 `GET /api/v1/me/tags` lists them, and `PUT /api/v1/me/volumes/frus1961-63v06/documents/d1/tags` with `{"tagIds": [...]}` gives a document exactly those. `GET /api/v1/me/volumes/frus1961-63v06/documents/d1/highlights` lists a document's highlights, with the document's `renderingVersion`. A `POST` there with `{"startOffset", "endOffset", "colorTag", "renderingVersion"}` makes one over those offsets into the document's text, in that version of the text, and `PATCH` or `DELETE /api/v1/me/highlights/{id}` changes its `colorTag` or removes it. `GET /api/v1/me/notes` lists your notes, and `/api/v1/me/volumes/frus1961-63v06/documents/d1/notes` a document's, where a `POST` with `{"bodyText", "runs": null, "userTagIds": [], "projectIds": [], "selectedSummaryIds": []}` makes a plain one; `GET`, `PUT` and `DELETE /api/v1/me/notes/{id}` read, save and delete one, and `GET /api/v1/me/notes/export` gives every note as a ZIP of Markdown files. `GET /api/v1/me/volumes/frus1961-63v06/documents/d1/summaries` lists a document's summaries, where a `POST` with `{"responseText"}` writes your own. A `POST /api/v1/me/import` with a JSON export as its body, `application/json`, imports it as a job and answers where to follow it, `GET /api/v1/me/import/{id}`, which gives the report once it is done. `GET /api/v1/me/export` gives the export, with `?includeGeneratedSummaries=true` your summaries too, and `GET /api/v1/me/export/contents` how many records of each kind it carries. A note's text may be 1 MiB, in a change of 4 MiB at most; an export 128 MiB; any other change may be 64 KiB. The token lasts until the server restarts.
 
-An error names its cause in a `code`: `INDEX_NOT_READY` for a search before an import has finished, `EMPTY_QUERY` for a query with nothing left to search, `TEI_NOT_AVAILABLE` when the volume is not in your TEI folder, and `DOCUMENT_NOT_FOUND`, `SECTION_NOT_FOUND`, `VOLUME_NOT_FOUND`, `TAG_NOT_FOUND`, `HIGHLIGHT_NOT_FOUND`, `NOTE_NOT_FOUND` or `SUMMARY_NOT_FOUND` for an id the volume, the catalogue, your tags, highlights, notes or summaries lack, `SUMMARY_READ_ONLY` for a change to a summary you did not write here, `TOO_MANY_CITATIONS` for a block of more than 500 citations, `DOCUMENT_CHANGED` for a highlight asked for in a version of the document's text the server no longer has, `INVALID_EXPORT` for a file that is not a JSON export or whose records cannot be read, `UNSUPPORTED_FORMAT_VERSION` for an export newer than the server reads, `IMPORT_IN_PROGRESS` while another of your imports runs, and `IMPORT_NOT_FOUND` for an import the server does not know, as after a restart. Under `/api/v1/me` the guard refuses a request, read or change, that was not sent to the address in `FRUS_PUBLIC_URL` as `HOST_NOT_ALLOWED`, such as one to http://127.0.0.1:8081 for a server at http://localhost:8080; and a change without the current token as `CSRF_TOKEN_INVALID`, and from another page as `ORIGIN_NOT_ALLOWED`.
+An error names its cause in a `code`: `INDEX_NOT_READY` for a search before an import has finished, `EMPTY_QUERY` for a query with nothing left to search, `TEI_NOT_AVAILABLE` when the volume is not in your TEI folder, and `DOCUMENT_NOT_FOUND`, `SECTION_NOT_FOUND`, `VOLUME_NOT_FOUND`, `TAG_NOT_FOUND`, `HIGHLIGHT_NOT_FOUND`, `NOTE_NOT_FOUND` or `SUMMARY_NOT_FOUND` for an id the volume, the catalogue, your tags, highlights, notes or summaries lack, `SUMMARY_READ_ONLY` for a change to a summary you did not write here, `TOO_MANY_CITATIONS` for a block of more than 500 citations, `DOCUMENT_CHANGED` for a highlight asked for in a version of the document's text the server no longer has, `INVALID_EXPORT` for a file that is not a JSON export or whose records cannot be read, `UNSUPPORTED_FORMAT_VERSION` for an export newer than the server reads, `IMPORT_IN_PROGRESS` while another of your imports runs, `IMPORT_NOT_FOUND` for an import the server does not know, as after a restart, `BACKUP_NOT_FOUND` from `/api/v1/admin/backup` before the first backup, or with a PostgreSQL user store, and `ROLE_REQUIRED` for a request that needs a role the user does not hold, such as the admin's for a backup. Under `/api/v1/me` and `/api/v1/admin` the guard refuses a request, read or change, that was not sent to the address in `FRUS_PUBLIC_URL` as `HOST_NOT_ALLOWED`, such as one to http://127.0.0.1:8081 for a server at http://localhost:8080; and a change without the current token as `CSRF_TOKEN_INVALID`, and from another page as `ORIGIN_NOT_ALLOWED`.
 
 ## If an import is refused
 
@@ -241,6 +247,12 @@ A refused file stays in the drop zone. `/api/v1/status` says why, under `lastImp
 
 ```bash
 docker compose pull && docker compose up -d
+```
+
+When the Compose file changes too, as it did when the daily backup's folder on this machine arrived, fetch it again first, as in [1. Get the Compose file](#1-get-the-compose-file). Your settings are in `.env`, which it leaves alone:
+
+```bash
+cd ~/frus-light && curl -fsSLO https://raw.githubusercontent.com/joshbotts/FRUS-Explorer-Web-App/main/compose.yaml
 ```
 
 `edge` is the newest build of the project's main branch that passed its smoke test on both architectures. The index stays in the volume. If the new server serves a different index version, `/readyz` answers `index_version_mismatch`, naming both versions: export again from a matching FRUS Explorer build and copy it in. The first such change came with FRUS Explorer build 50, which moved the index from version 65 to 69, and the second with 1.0 (build 1776), which moved it to 71.
@@ -266,13 +278,84 @@ Before releases began, `:1.0-1776` moved with `edge`.
 
 To hear of each release, watch the repository on GitHub for releases only (Watch, then Custom, then Releases), or follow its feed, `https://github.com/joshbotts/FRUS-Explorer-Web-App/releases.atom`. When a release's notes say the index version changed, export again from the FRUS Explorer build they name, upgrade, and copy the new export in as in [5. Import it](#5-import-it); until then `/readyz` answers `index_version_mismatch`.
 
+## Backups and restore
+
+Your research, the tags, highlights, notes and summaries you keep here and what you import from the Mac, is in the server's store, `/data/app/app.db` in the Docker volume, unless you keep it in PostgreSQL, as [A PostgreSQL user store](#a-postgresql-user-store) sets out. The server backs `app.db` up:
+
+- **every day at 03:00**, in the time zone `TZ` names in `.env`, UTC unless you set one, such as `TZ=America/New_York`; and whenever the newest backup is more than a day old, which it checks every five minutes, so a Mac that slept through 03:00 backs up within minutes of waking. `FRUS_BACKUP_HOUR` sets another hour, from 0 to 23;
+- **unless nothing has changed** since the newest backup, so seven backups can span more than a week. A store that holds no research yet is not backed up: the first backup comes within five minutes of your first import or tag;
+- into **`/data/backups`** in the volume, which keeps the newest seven;
+- and into **`backups` beside `compose.yaml`**, or the folder `FRUS_BACKUP_DIR` names in `.env`, which keeps its own seven. That folder outlives the Docker volume, which a reset of Docker Desktop removes, and your Mac's own backup, such as Time Machine, sees it with the rest of your files. If the server cannot write there, its log says so, and the backups stay in the volume alone.
+
+Each backup is one SQLite file named for the time it was taken, in UTC, such as `app-20261027T070000Z.db`. `docker compose logs frus` names each one the server takes.
+
+**Take a backup now,** for example before importing a large export. It says which file it wrote, or that nothing has changed since the newest:
+
+```bash
+docker compose exec frus frus-light backup
+```
+
+**List the backups,** the copies in your folder, then those in the volume:
+
+```bash
+ls backups
+```
+
+```bash
+docker compose exec frus ls /data/backups
+```
+
+`/data/backups` also keeps two other kinds of copy, until you remove them: the store as it was before an upgrade changed its layout, named `app-…-before-migration-….db`, and the store a restore replaced, `app-…-before-restore.db`, which goes to your folder too.
+
+**Download the newest through the API,** as a script on this machine can:
+
+```bash
+curl -sOJ http://localhost:8080/api/v1/admin/backup
+```
+
+It saves `frus-light-backup-<time>.tar`, holding the backup and `manifest.json`: the backup's name, size and SHA-256, the store's migration in it, the server's version, and every backup and copy the server keeps. `tar -xf` opens it, and a restore takes it as it is. It needs the admin role, which the one user of a server without sign-in holds, and answers only while the server keeps research data.
+
+### Restore a backup
+
+A restore replaces the store with a backup, with the server stopped:
+
+```bash
+docker compose stop frus
+```
+
+```bash
+docker compose run --rm frus restore app-20261027T070000Z.db
+```
+
+```bash
+docker compose start frus
+```
+
+Name a backup in `/data/backups` or in your backups folder, or give a path, such as `/backups/frus-light-backup-20261027T070000Z.tar` for an archive from the API saved into your backups folder, which the container sees as `/backups`. `docker compose run --rm frus restore` with no name lists the backups there are.
+
+The restore checks the backup first: a whole SQLite file that passes SQLite's integrity check, holding this server's store, at a version of it this server knows, and for an archive, the file its manifest describes. Then it keeps the store it replaces, as `app-<time>-before-restore.db` in `/data/backups` and your backups folder, and puts the backup in its place. When it refuses, nothing has changed. A backup from an older server is brought up to date when the server starts, after a copy of it, as an upgrade's store is. While the server runs, a restore refuses and says to stop it.
+
+**After the volume is lost,** for example when Docker Desktop was reset, `docker compose up -d` makes a new, empty store, which takes no backup until it holds research, so your backups folder keeps the last seven. Restore the newest of them by its path in the container, then import the research database again, as in [5. Import it](#5-import-it):
+
+```bash
+docker compose stop frus
+```
+
+```bash
+docker compose run --rm frus restore /backups/app-20261027T070000Z.db
+```
+
+```bash
+docker compose start frus
+```
+
 ## Stopping and removing
 
 | Command | Effect |
 | --- | --- |
 | `docker compose stop` | Stops the server, keeping everything |
 | `docker compose down` | Removes the container, keeping the index in the volume |
-| `docker compose down --volumes` | Removes the index and your research data too; you would import again, and your tags, highlights, notes and summaries would be gone |
+| `docker compose down --volumes` | Removes the index and your research data too; you would import again, and restore your research from the backups folder, which stays |
 
 ## Behind a reverse proxy
 
@@ -330,7 +413,7 @@ The Compose install keeps your research data in `/data/app/app.db`, in the volum
 - **The URL,** in the form PostgreSQL's own tools take: `postgres://frus@db.example.org:5432/frus`. Its connection uses TLS and checks the server's certificate and name against the system's trusted roots, `sslmode=verify-full`, unless the URL says otherwise: `sslrootcert=` names a PEM file of a provider's own roots, mounted into the container, for a service whose certificates the system does not trust; `sslmode=verify-ca` checks the certificate but not its name, `require` neither; `disable` is for a database on the same host or a private network only. The server refuses any other parameter.
 - **The password** is best kept in a file named by `FRUS_POSTGRES_PASSWORD_FILE`, as a Compose secret mounts one, rather than in the URL, which `docker inspect` shows. The log names the URL without it.
 - **One server for each database,** for now: each server's copy for search follows its own writes alone, so a second server sharing the database would search what it had seen. A later phase adds the feed that keeps several in step.
-- **Backups are the database service's.** The copies the server takes into `/data/backups` before a migration, and the daily ones later in phase 2, are of `app.db`.
+- **Backups are the database service's,** with `pg_dump` and `pg_restore` or its own snapshots. The server takes none of a PostgreSQL store, `frus-light backup` and `restore` refuse one, and `/api/v1/admin/backup` has none to give: the backups in `/data/backups` and your backups folder are of `app.db`.
 - **To move your research** from `app.db` to PostgreSQL, export it with Settings ▸ Data ▸ Export as JSON, with Include AI-Generated Summaries on, start the server with the PostgreSQL store, and import the file in the same pane.
 
 With Compose, give the settings to the server in `compose.override.yaml` beside `compose.yaml`, which Compose reads with it:
@@ -357,6 +440,9 @@ These go in `.env` beside `compose.yaml`. A PostgreSQL user store's go in `compo
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `FRUS_TEI_DIR` | `./tei` | Folder of TEI volumes, mounted read-only |
+| `FRUS_BACKUP_DIR` | `./backups` | Folder that receives a copy of each daily backup of your research, which keeps its own seven: see Backups and restore. On Linux it must be writable by UID 10001 |
+| `FRUS_BACKUP_HOUR` | `3` | Hour of the daily backup, 0 to 23, in `TZ`'s time zone |
+| `TZ` | `UTC` | The container's time zone, which the backup's hour is in, such as `America/New_York` |
 | `FRUS_HOST_PORT` | `8080` | Port on this machine's 127.0.0.1 |
 | `FRUS_PUBLIC_URL` | `http://localhost:8080`, on `FRUS_HOST_PORT` | The address people open. Behind a reverse proxy, its address, which may end in a path such as `/frus-explorer/`: see Behind a reverse proxy. A change to your research data is taken only from a page at this address; on this machine, `localhost`, `127.0.0.1` and `[::1]` at its port are one address |
 | `FRUS_USER_DATA` | `on` | `off` makes a read-only server, which keeps no tags, highlights, notes or other research data and refuses any change |
@@ -367,14 +453,17 @@ These go in `.env` beside `compose.yaml`. A PostgreSQL user store's go in `compo
 
 - **Only this machine can reach the server,** unless a reverse proxy on it forwards to it, as Behind a reverse proxy sets out. The server has no sign-in of its own until phase 3's local accounts; sign-in through the proxy comes before them, in phase 2.
 - **Keep `/data` in the Docker volume.** On a Mac, a folder shared from macOS is not a local filesystem to SQLite. On Linux, replacing the volume with a host folder in `compose.yaml` works if that folder is writable by UID 10001, the server's user.
-- **On Linux,** the TEI files must be readable by UID 10001; a clone made with the usual umask is. On a host with SELinux enforcing, add `,z` after `ro` in the TEI volume line of `compose.yaml`. To run `docker` without `sudo`, your user must be in the `docker` group.
-- **Backups** of your research data, which the server keeps in `/data/app/app.db` in the volume, start later in phase 2 with a daily copy. Until then, keep the volume, and the index can always be imported again. Already, an upgrade that changes the layout of the server's own store, `/data/app/app.db`, first copies it into `/data/backups`. If the change fails, the server leaves the store as it was and does not start, and its log names the copy; Compose starts it again, and it tries again without taking another copy.
-- **Going back to an older server** after such an upgrade: the older server cannot open the changed store, and does not start. Put the copy back first, with the server stopped. List the copies with `docker compose run --rm --no-deps --entrypoint ls frus /data/backups`, then, naming the newest `app-…-before-migration-….db`:
+- **On Linux,** the TEI files must be readable by UID 10001; a clone made with the usual umask is. The backups folder must be writable by it, as step 3 makes it. On a host with SELinux enforcing, add `,z` after `ro` in the TEI volume line of `compose.yaml`, and `:z` after `/backups` in the backups line. To run `docker` without `sudo`, your user must be in the `docker` group.
+- **Backups** of your research data are daily, as Backups and restore sets out; the index is not among them, since it can always be imported again. An upgrade that changes the layout of the server's own store, `/data/app/app.db`, first copies it into `/data/backups`, and into your backups folder. If the change fails, the server leaves the store as it was and does not start, and its log names the copy; Compose starts it again, and it tries again without taking another copy.
+- **Going back to an older server** after such an upgrade: the older server cannot open the changed store, and does not start. Restore the copy from before the upgrade first, with the newer server's image, and the server stopped. `docker compose run --rm frus restore` lists the copies; name the newest `app-…-before-migration-….db`:
 
   ```bash
   docker compose stop
-  docker compose run --rm --no-deps --entrypoint sh frus -c 'rm -f /data/app/app.db-wal /data/app/app.db-shm && cp /data/backups/<copy> /data/app/app.db'
   ```
 
-  Then set `FRUS_IMAGE` to the older server and run `docker compose up -d`.
+  ```bash
+  docker compose run --rm frus restore app-20261027T070000Z-before-migration-3.db
+  ```
+
+  Then set `FRUS_IMAGE` to the older server and run `docker compose up -d`. A server from before the daily backups has no `restore`, so restore with the newer image first, as here.
 - **Podman and Colima** run the same Compose file; this guide has not been tested with them yet.
