@@ -43,6 +43,7 @@ export default function RichTextEditor({
   runs: NoteRun[] | null;
   /** The note's plain text, which the editor must show exactly. */
   text: string;
+  /** Focus in the text, at its end, once the editor is in the page: a new note's. */
   autoFocus: boolean;
   /** Each change to the text or its formatting, as runs. */
   onChange: (runs: NoteRun[]) => void;
@@ -66,7 +67,6 @@ export default function RichTextEditor({
   const editor = useEditor({
     extensions,
     content,
-    autofocus: autoFocus ? 'end' : false,
     injectCSS: false,
     // The app's editor makes nothing of **, _ or a pasted address: what is typed is the text.
     enableInputRules: false,
@@ -97,6 +97,14 @@ export default function RichTextEditor({
     onUpdate: ({ editor: changed }) => onChange(docToRuns(changed.getJSON())),
     shouldRerenderOnTransaction: false,
   });
+
+  // Focus at the text's end once React has placed the editor in the page, not by Tiptap's autofocus,
+  // which runs on a timer from the editor's making. React makes the editor in a render it may pause
+  // before placing it, as it pauses the one that shows the editor when its code comes late, and the
+  // timer and the frame it asks for could come in the pause and focus an element not yet in the page.
+  useEffect(() => {
+    if (autoFocus && editor && !editor.isDestroyed) editor.commands.focus('end');
+  }, [autoFocus, editor]);
 
   // The editor's own keys: Escape discards, and ⌘K opens the link dialog over a selection, as the
   // bar's Link does; over none it does nothing.
