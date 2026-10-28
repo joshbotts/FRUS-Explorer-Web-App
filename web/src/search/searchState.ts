@@ -1,7 +1,8 @@
 // A search, as the app's URL holds it: the API's own parameter names, defaults left out, and the
 // app's own, which the API never sees: whether the facet panel is open, a subject filter's name, and
 // the reading the results are shown in, with the timeline's mode and the concordance's order, so
-// Back to a search from a document it opened shows it as it was, as the Mac's window stays.
+// Back to a search from a document it opened shows it as it was, as the Mac's window stays. Since
+// S17d it holds Search in, the three scopes the Mac's chips choose, and the user's tags it filters by.
 import type { FormValue } from '../api/form';
 import type { ConcordanceOrder, DocumentType, SearchChange, SortOrder } from '../api/types';
 
@@ -14,6 +15,12 @@ export interface SearchState {
   dateRangeLatest?: string;
   /** Absent, front matter included; false leaves it out. */
   includeFrontMatter?: false;
+  /** Search in, as the Mac's three chips choose it: absent, each is searched; false leaves it out. */
+  includeDocumentText?: false;
+  includeNotes?: false;
+  includeSummaries?: false;
+  /** The user's tags, every one of which a document must carry; absent for no tag filter. */
+  userTagIds?: string[];
   volumeIds?: string[];
   /** The years an Apply in the facet panel chose; the empty list matches nothing. */
   yearKeys?: string[];
@@ -117,6 +124,7 @@ export function validateSearch(raw: Record<string, unknown>): SearchState {
   const earliest = single(raw.dateRangeEarliest);
   const latest = single(raw.dateRangeLatest);
   const volumes = list(raw.volumeIds).filter((volume) => volume !== '');
+  const tags = [...new Set(list(raw.userTagIds).filter((tag) => tag !== ''))];
   const rawLimit = Number(single(raw.limit));
   const limit = (pageSizes as readonly number[]).includes(rawLimit) && rawLimit !== defaultLimit ? rawLimit : undefined;
   const offset = clampOffset(Number(single(raw.offset)), limit ?? defaultLimit);
@@ -133,6 +141,10 @@ export function validateSearch(raw: Record<string, unknown>): SearchState {
     dateRangeEarliest: earliest && isoDate.test(earliest) ? earliest : undefined,
     dateRangeLatest: latest && isoDate.test(latest) ? latest : undefined,
     includeFrontMatter: single(raw.includeFrontMatter) === 'false' ? false : undefined,
+    includeDocumentText: single(raw.includeDocumentText) === 'false' ? false : undefined,
+    includeNotes: single(raw.includeNotes) === 'false' ? false : undefined,
+    includeSummaries: single(raw.includeSummaries) === 'false' ? false : undefined,
+    userTagIds: tags.length > 0 ? tags : undefined,
     volumeIds: volumes.length > 0 ? volumes : undefined,
     yearKeys: yearKeys(raw.yearKeys),
     personRollupId,
@@ -168,6 +180,10 @@ export function filterFields(state: SearchState): Record<string, FormValue> {
     dateRangeEarliest: state.dateRangeEarliest,
     dateRangeLatest: state.dateRangeLatest,
     includeFrontMatter: state.includeFrontMatter,
+    includeDocumentText: state.includeDocumentText,
+    includeNotes: state.includeNotes,
+    includeSummaries: state.includeSummaries,
+    userTagIds: state.userTagIds && state.userTagIds.length > 0 ? state.userTagIds : undefined,
     volumeIds: state.volumeIds && state.volumeIds.length > 0 ? state.volumeIds : undefined,
     yearKeys: state.yearKeys,
     personRollupId: state.personRollupId,
@@ -208,6 +224,30 @@ export function applySearchChange(state: SearchState, change: SearchChange): Sea
     limit: state.limit,
     offset: undefined,
   };
+}
+
+/** The three places Search in chooses among, as the Mac's chips name them, in their order. */
+export const scopes = ['documents', 'notes', 'summaries'] as const;
+export type Scope = (typeof scopes)[number];
+
+const scopeField = { documents: 'includeDocumentText', notes: 'includeNotes', summaries: 'includeSummaries' } as const;
+
+/** Whether the search reads `scope`, which it does unless the reader turned it off. */
+export function searches(state: SearchState, scope: Scope): boolean {
+  return state[scopeField[scope]] !== false;
+}
+
+/** The change that turns `scope` on or off: on is the default, which the URL leaves out. */
+export function scopeChange(scope: Scope, on: boolean): Partial<SearchState> {
+  return { [scopeField[scope]]: on ? undefined : false };
+}
+
+/**
+ * Whether the search reads anywhere at all: with all three of Search in off there is nothing to
+ * search, and the Mac's window says so rather than searching (`MacSearchError.emptyScope`).
+ */
+export function searchesAnywhere(state: SearchState): boolean {
+  return scopes.some((scope) => searches(state, scope));
 }
 
 /** How many pages a search's count gives, within the results it keeps. */

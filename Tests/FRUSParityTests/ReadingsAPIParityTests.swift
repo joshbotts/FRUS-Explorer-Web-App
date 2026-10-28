@@ -181,14 +181,14 @@ import Testing
             let kept = try await kit.search(parameters: parameters, limit: limit, offset: 0)
             let dates = try await built.index.pipeline.datesByDocumentKey(kept.map { (volumeId: $0.volumeId, documentId: $0.documentId) })
             for order in SearchSortOrder.allCases {
-                let timeline = try await ReadingRoutes.timeline(parameters, sort: order, documents: true, service: kit, facets: FacetCache(),
+                let timeline = try await ReadingRoutes.timeline(parameters, sort: order, documents: true, scoped: ServedSearch(service: kit, key: ""), facets: FacetCache(),
                                                                 keeping: limit, coverage: coverage) { kept }
                 let mac = Self.macTimeline(order.sorted(kept), dates: dates)
                 #expect(Self.years(timeline) == Self.years(mac), "\(keywords) \(order.rawValue)")
                 #expect(timeline.undatedCount == mac.undated && timeline.retainedCount == limit, "\(keywords) \(order.rawValue)")
             }
             let whole = try await kit.resultSetFacets(parameters: parameters, request: .one(.years))
-            let bare = try await ReadingRoutes.timeline(parameters, sort: .relevance, documents: false, service: kit, facets: FacetCache(),
+            let bare = try await ReadingRoutes.timeline(parameters, sort: .relevance, documents: false, scoped: ServedSearch(service: kit, key: ""), facets: FacetCache(),
                                                         keeping: limit, coverage: coverage) { kept }
             if bare.years.map({ "\($0.year) \($0.count)" }) != whole.years.map({ "\($0.key) \($0.count)" }).sorted() { narrower += 1 }
         }

@@ -87,6 +87,81 @@ Remade by `scripts/make-golden --export /Users/Shared/frus-index-2026-10-24.sqli
 
 **Next: S18d,** collections and their editor, which puts a collection together on the server through the kit's `CollectionContentAssembly`, its store reads answered with the research data export's records. Beside it: S17d, search over the researcher's writing, with S17e and S17f.
 
+## Session 17d: search over the researcher's writing
+
+28 October 2026 · branch `claude/silly-lewin-91841a` · [#76](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/76) · upstream `1c18b51e`, unchanged
+
+Phase 2's row S17d, the first of the search-and-research rows that S17c's pin move opened. A search reads the researcher's own writing beside the corpus, as the Mac's does: Search in chooses the documents, the notes and the summaries; a tag filter and a row's tags read the user's tags; and the facets, the Query Inspector's counts and the readings count the same match. It goes through the kit's search with the user store's search database attached (FRUS-Explorer#1806's `SearchUserSource.attachedStore(userId:)`), each request with the half of the user it acts for. No upstream pull request, no pin move and no schema change.
+
+**What the kit gives,** at `1c18b51e`:
+
+- `IndexingPipeline(readingIndexAt:fts5Store:resources:volumesDirectory:userStore:)` attaches a store read-only as `user_store`, and a `SearchService` made with `.attachedStore(userId:)` reads that user's rows of its `user_search` and `tag_assignments` for every statement on the user half: the match, the tag filter, the exact-word filter's note and summary text, a row's tags, the tag counts and a tag's documents. S14d's `searchDatabase` names the file, app.db or the PostgreSQL store's copy.
+- `SearchService.userTagCounts(parameters:tagIds:documentKeys:)`, the filter sheet's two routes to its tag counts.
+- The app's search window, whose view code the browser app mirrors: Search in's three chips (`ScopeChip`, `SearchSheet.scopeRow`), each a column selector, and `MacSearchError.emptyScope` with all three off; My Tags, the filter's switches of the user's tags with their counts (`SearchFilterView.userTagsSection`); the Tags token's value (`MacSearchViewModel.tagFilterLabel`); and a row's ◆ chips, the first three of `UserTag.chips(for:among:)`.
+
+**Delivered**
+
+- **The served index attaches the store** (`Sources/FRUSLightAPI/ServedIndex.swift`). When the server keeps user data, each stack opens the pipeline with the store's `searchDatabase`; `search(for:)` gives a request's search, the kit's service for that user, new for each request, which the kit makes cheap, or the index's own for no one.
+- **Whose half a search reads** (`Sources/FRUSLightAPI/UserSearch.swift`, `SearchUsers`): the user a request under `/api/v1/me` would act for, on its guard's terms. The server keeps user data, the request is sent to `FRUS_PUBLIC_URL`'s address, and the resolver names a user; behind a proxy, a request that names no one is no one's. A search for no one is the corpus's alone, with the index's own user half, which an import leaves empty.
+- **The tag filter:** `SearchRequest` takes `userTagIds`, a list, the empty value no filter. Each tag must be one of the user's, by id in any letter case, as the kit matches it, else `TAG_NOT_FOUND` (404); any tag for no one is refused too. `subjectTagIds`, inert in the kit, and `booleanMode` are still refused, each with what to use instead.
+- **Every search route** takes the user: `/search`, `/search/inspect` (GET and POST), `/search/facets`, `/search/facets/selection`, `/search/timeline` and `/search/concordance`.
+- **`GET /api/v1/me/search/tags`,** under `/me`'s guard: the user's tags in `GET /me/tags`' order, each with how many documents of a search's results carry it, over the search as it runs, as the Mac's My Tags toggles count them (`userTagCounts`, the keyword route).
+- **What a served index keeps of a search** (`RecentSearches`, `RetainedResults`, `FacetCache`, the timeline's years) is kept by whose search it is and the store's mark, `searchMark()`, before the query fields. A search for no one keeps phase 1's keys.
+- **The mark** (`Sources/FRUSLightCore/RelationalUserStore.swift`): `UserSearchStore`, the search database and its mark, which the store's count of the write transactions it has committed gives. Each store's `writing` counts its commit before its caller is answered, so every path that writes, an import and a sign-in included, moves it. The PostgreSQL store counts the copy made again after a commit it could not take, and its `searchMark()` makes a stale copy again first, so the next search reads what the store holds, as the next call does; its flag is a `Mutex` now, read without the store's lock, so a search waits for a write under way only then. The mark is read before the flag, and the copy made again is counted before the flag is cleared, as a write that leaves the copy stale sets the flag before it counts itself: so a mark read with the flag clear is never one a search of the stale copy kept its answer by.
+- **The browser app** (`web/src/search`):
+  - Search in, the Mac's three chips, with its words, help and glyphs, on a server that keeps user data and wherever a link has turned one off; with all three off the Mac's "Enable at least one of Documents, Notes, or Summaries to search.", and no request;
+  - My Tags among the filters, each tag a switch, counted once opened, with the Mac's sentence under the counts and its closed summary, Any or "N selected";
+  - the Tags token, with the Mac's value, which clears the filter and gives the search box the focus;
+  - a row's tags, the first three its tags name, as the Mac's ◆ chips (`tagRules.ts`);
+  - every search the browser holds is asked again after a change to the user's notes, summaries, tags or a document's tags, and after an import (`searchesChanged`).
+
+**Decided here, each the web's own**
+
+- **A search reads the user's half on `/me`'s terms, and acts for no one otherwise, rather than refusing.** The search endpoints stay outside `/me`: they answer for the corpus without a user, as before, for scripts and for a proxy's request that names no one. But a search of a user's half reads their writing, so it needs what a read under `/me` needs: a request to the address `FRUS_PUBLIC_URL` names, since a page under another name pointed at the server could otherwise learn a user's notes through their searches. A request sent elsewhere searches the corpus alone, and a tag filter, which can only be the user's, is refused for it.
+- **A tag that is not the user's is refused, not matched as nothing,** as S14e's row asks of the tag filter: `TAG_NOT_FOUND`, the code a note's tag that is not the user's has. Where two users hold one tag's id, as two imports of one Mac export give them, each filters by their own assignments. A search by a tag the user has since deleted or merged is refused the same way, where the Mac's matches nothing: the browser app shows the refusal in the results' place, and the Tags token, which then names "1 tag", clears it.
+- **The mark counts every write of every user.** A count per user would need every method's user; the store's own count catches every path by construction, the import's and the sign-in's included. A write anywhere lets go of every user's kept searches, which are few: four searches, two kept for the date order, and 16 sections.
+- **My Tags shows no counts while it counts,** as the Mac's toggles show none, rather than another search's.
+- **The Summaries chip's help is the web's own:** the Mac's says "generated AI summaries", which is all a Mac holds, and the web keeps a researcher's own beside them.
+
+**Tests**
+
+- **FRUSLightCoreTests,** 152 to 153: `UserStoreConformanceTests.theSearchMarkMovesWithEachWriteTheStoreCommits`, on both stores: a tag, a document's tags, a note, a summary, a delete, a user made at a sign-in and an import move it; reads, a refused change, rolled back, and a user found do not.
+- **FRUSLightServerTests,** 192 to 196:
+  - `UserHalfSearchTests`, 3, under `FRUS_AUTH=none`: the user's note found by its word and its exact word in the scopes searched, their summary, both with the corpus by `OR`, none with all three off (`EMPTY_QUERY`); their tag filtering in any case, the empty list no filter, a row's tags; a tag not theirs refused by all seven routes; the facets, the timeline, the date order, the inspector's counts and empty terms, the concordance and the My Tags counts over the same match. Each write found by the next search past every answer kept: a note deleted, a tag moved, a summary rewritten. A search sent to another address, and every search on a server that keeps no user data, finds none of the user's writing and refuses their tag.
+  - `SignInTests.eachUsersSearchReadsTheirWritingAlone`, the done-when's two-user half, live behind the proxy: Alice's search first, so its answers are kept, then Bob's and no one's of the same search, which find none of her note, summary or tag through any route; her tag refused for him and for no one by every route; the tag an export gives both under one id filtering each one's own documents; and hers as she left them.
+  - `SearchRequestTests`: `userTagIds` read and written back, and the refused fields' pointers.
+- **FRUSParityTests,** 189 to 198:
+  - `AttachedUserStoreParityTests`, 7 on each store: S14d's scratch run of the kit's own `SearchUserSourceTests` over the PostgreSQL copy, now in the repository on both stores, the store written through its own methods. Through the store, every route, the search, its count and keys, the filter key set, the facets and the tag counts, answers as the app's index answers over the same notes, summaries and tags; and the exact words, the case of a tag's id, a missing store and the plan's subqueries, read once a statement.
+  - `SearchViewParityTests`, 2: the Mac's Search in, My Tags, the token's and the counts' words, each under its key in the app's source and in copy.ts; and `UserTag.chips`, the three chips and `tagFilterLabel`, as the app's code and `tagRules.ts` say them.
+  - `ServedAPIParityTests.checkThreePassesThroughTheAPI` now shows its searches were the single user's, with their store attached: after the 482 queries, a note the user writes is found by the next search.
+- **The web unit suite,** 309 to 321 tests in 35 files: Search in's chips, the sentence with all three off, the row hidden with no user data, My Tags' counts, switch and token, the token for several tags, the row's chips; `searchState`'s scopes and tags; `tagRules`.
+- **The browser suite,** 47 to 48 tests, at the root and under the path: `search-own-writing.spec.ts`, by keyboard, with axe: the note's, the summary's and the corpus's documents, d1's ◆ Berlin, Notes and Summaries off, all three off and the Mac's sentence, each on again, My Tags opened and counted, Berlin switched on, its token, and its clearing.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** with `scripts/swift --postgres`, PostgreSQL 18, through the heavy-job lock: this package's own targets build clean with no warning. All 2,535 tests pass, up from 2,521 on `main`, with the one named skip and nothing cancelled, the 58 that take a store kind on both: FRUSLightCoreTests 153, FRUSLightServerTests 196 and FRUSParityTests 198, the others as on `main`. The checks print:
+  - "check 3 through the API: 482 queries, 482 identical and 0 reordered only within Mac tie groups, every record the kit's own, each searched with the user's store attached; 482 compiled as the golden file says, 43 refused; the live index unchanged", the row's done-when;
+  - the Query Inspector's 482 queries inspected through the API as the kit inspects them, with their scoped counts and empty terms, and the facets, the timeline and the concordance through the API as the kit's, each now through the single user's attached store, which holds nothing of theirs there.
+- **Mutation checks,** run once and put back, each through the lock:
+  - with the user left out of a kept answer's key, `eachUsersSearchReadsTheirWritingAlone` fails, Bob given Alice's kept answers, and `eachWriteIsInTheNextSearch` fails;
+  - with the mark frozen, `eachWriteIsInTheNextSearch` fails, a deleted note still found, and so does `theSearchMarkMovesWithEachWriteTheStoreCommits`, on both stores;
+  - without the address check, `aSearchThatActsForNoOneFindsNoOnesWriting` fails, a search sent to another address finding the user's note.
+- **A review** read the diff cold. It found one defect, in the PostgreSQL store alone. `ready()` cleared the stale copy's flag before it counted the copy made again, and `searchMark()` read the flag before the count. So a search in that gap, after a write whose copy failed to commit, could be given an answer kept from the stale copy under the new mark. Fixed as above; it needs a commit to the copy to fail, so no test reaches it. The review found the routes, the keys, the guard's terms and the browser app's state sound.
+- **The web job's steps,** through `scripts/npm`: typecheck, lint and the build are clean, and the unit suite passes 321 tests in 35 files.
+- **The browser suite,** over an image of the branch under a tag and port of its own (`frus-light:s17d`): a scratch copy of the smoke test, its root phase alone, passes, with the new spec and the search specs beside it, `facets`, `inspector-order`, `readings`, `search-read-cite` and `tags`, 10 of 10 in Chromium, axe finding no violation. The whole suite, twice, and the sign-in phase are CI's compose job's.
+- **CI on #76 at `02fd64b`:** the swift job, amd64, with its PostgreSQL service, passes with the same counts per target and the one named skip, and prints check 3 through the API as above, 482 identical; the web job and the image builds for amd64 and arm64 pass; and the compose job passes in 16 minutes, the browser suite's 48 tests at the root and 48 under the path, the new spec among them, then the sign-in phase and its spec. The review's fix and these records follow it.
+- **CI on #76 at `1740ce3`,** the review's fix and these records: every job passes as at `02fd64b`, at the same counts, the compose job in 12 minutes.
+- **At the merges with `main`,** at `6b413b0` (#78, S16e's follow-up's records) and then at `ae1edf9` (#79, S18b's follow-up's records, and #80, the notes spec's races), each conflict was this log's top entry, and every entry is kept, this row's above theirs. #78 and #79 bring records alone; CI on #76 at `df50174`, after the first, passes every job. #80 brings the browser app's fixes for the notes spec's races, in files this row leaves alone, and a longer wait in the e2e helpers' `settle`, which the new spec does not call; over the merge the web job's steps pass, the unit suite's 325 tests in 35 files among them. The Swift code is `1740ce3`'s, so its runs above stand.
+
+**Records**
+
+- `docs/SPEC.md`: Search's S17d bullet, the API's user half of every search endpoint, `userTagIds`, the answers kept by user and mark, the refused fields, and `GET /me/search/tags` under the user's data.
+- `docs/INSTALL.md`: searching one's own writing, and the API's fields.
+- `docs/PLAN.md`: the row's done paragraph. `docs/COORDINATION.md` §1: the server searches with #1806's source.
+- README's status, and this log.
+
+**Next: S17e,** saved searches, working corpora and volume scopes, whose saved `SearchParameters` now carry the user's `userTagIds`; with **S17f**, projects, the history and the method appendix, beside it, and S18c's pin move past FRUS-Explorer#1809.
+
 ## Session 18b, second follow-up: the keyboard notes spec's random failure
 
 28 October 2026 · branch `claude/nice-kalam-7067e1` · [#80](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/80) · upstream `1c18b51e`, unchanged
@@ -116,9 +191,9 @@ Remade by `scripts/make-golden --export /Users/Shared/frus-index-2026-10-24.sqli
 
 ## Session 18b, follow-up: the link-alert test's random failure, upstream
 
-28 October 2026 · branch `claude/elated-lederberg-fc1c0a` · [#79](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/79) · upstream `1c18b51e`, unchanged; [FRUS-Explorer#1811](https://github.com/joshbotts/FRUS-Explorer/pull/1811), open
+28 October 2026 · branch `claude/elated-lederberg-fc1c0a` · [#79](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/79) · upstream `1c18b51e`, unchanged; [FRUS-Explorer#1811](https://github.com/joshbotts/FRUS-Explorer/pull/1811), merged as `32e295e5`
 
-The Mac checks of FRUS-Explorer#1785, #1807 and #1809 each lost a re-run to `RichTextRestingCapTests`' link-alert test (#1360's capped editor), which failed at random at `v2` as at each branch. The checks of #1785 and #1809 also lost one to its colour-picker test. S18b's session asked for one pull request that stops the link-alert test failing, from `claude/link-alert-test-waits-for-its-presentation`, cut from `v2` at `fef96201`. It is labelled `Mac`, its body says "Mac verification requested", and it is not merged. It changes one file of the app's test target, which this repository neither compiles nor hashes into its golden files, and the app's plan, so no pin move needs it, and this repository changes only its records.
+The Mac checks of FRUS-Explorer#1785, #1807 and #1809 each lost a re-run to `RichTextRestingCapTests`' link-alert test (#1360's capped editor), which failed at random at `v2` as at each branch, and #1810's first full run failed it too. The colour-picker test failed in #1785's, #1809's and #1810's. S18b's session asked for one pull request that stops the link-alert test failing, from `claude/link-alert-test-waits-for-its-presentation`, cut from `v2` at `fef96201`. It was labelled `Mac`, its body said "Mac verification requested", and the owner merged it on 28 October. It changes one file of the app's test target, which this repository neither compiles nor hashes into its golden files, and the app's plan, so no pin move needs it, and this repository changes only its records.
 
 **The cause, found before anything changed.** A diagnostic build, never committed, gave the test a millisecond timeline: a 5 ms sampler of the alert's presentation state, the root's transition coordinator and both first responders, with the keyboard and editing notifications and the dismissal's completion. It followed 30 runs of the suite alone on the iPhone 18 Pro Max simulator (iOS 27.0) of S18b's runs.
 - The test host's `dismissPresented()` dismisses the alert with `dismiss(animated: false)` and waited 3 s for it to go, its `settle`'s default. #1807's and #1809's bodies say 5 s; the file's other hosts allow 5, but this one 3.
@@ -127,7 +202,7 @@ The Mac checks of FRUS-Explorer#1785, #1807 and #1809 each lost a re-run to `Ric
 - The test asked for the dismissal while UIKit was still presenting the alert, in 16 runs of 16. That is not the cause: asked once the presentation had ended, a dismissal took 2.1 to 2.7 s, and with the alert's field resigned first, 2.3 to 2.7 s.
 - The colour-picker test fails in the host's other such wait, 3 s for the system colour picker to appear.
 
-**#1811, in a commit and two records commits,** in `FRUSExplorerTests/CollectionTests.swift` and the app's plan:
+**#1811, in a commit, two records commits and a merge of `v2`,** in `FRUSExplorerTests/CollectionTests.swift` and the app's plan:
 - `RestingCapEditorHost.presentationTimeout`, 15 s, for `presented(_:)` and `dismissPresented()`. It bounds a hang, not a pace: each wait ends when UIKit is done. `settle`'s 3 s stays for the suite's waits on SwiftUI's sizing.
 - A new `finishedPresenting(_:)`, which the link-alert test waits for before its half-second hold over the alert and its Cancel. It costs the test 0.8 s a run.
 - A log line with each dismissal's time, and the suite's version history.
@@ -138,12 +213,13 @@ The Mac checks of FRUS-Explorer#1785, #1807 and #1809 each lost a re-run to `Ric
 - **The full iOS unit run:** 7,752 tests in 929 suites at both heads, both failing only the 8 Keychain tests an unsigned build fails, with the 6 known issues of #1606, and skipping the same 17 tests and 2 suites. The editor suite passed at both.
 - **`swift test`:** 3,191 tests in 389 suites at both, all passed; `FRUSCoreKitTests` 1,298.
 - **The Mac app's symbols** are `v2`'s, name for name, and both builds had `v2`'s five and seven warning lines.
+- **Again once #1810 had merged.** `v2` moved to `e1d68919`, and #1811 then conflicted in the app's plan alone, where both pull requests end with a session entry. A merge of `v2`, `2d0c80b8`, kept both entries, #1810's first; against `e1d68919` the branch changes the same lines as against `fef96201`. The whole check ran again there, beside `v2` at `e1d68919`: the same builds, symbols and issues on both, with 7,754 tests in 929 suites in the full iOS run and 3,192 in `swift test`. The runs of the suite alone were not repeated, since #1810 changes nothing the suite exercises. The owner merged #1811 at `2d0c80b8` while that check ran. `32e295e5`'s tree is `2d0c80b8`'s, so the check is of what merged. A records commit with its results, `10cb8dff`, reached the branch after the merge and is not in `v2`; #1811's body has them.
 
 **Filed, not fixed.** After a cold boot, or on a new simulator, the system colour picker sometimes never appears. A variant of the host that allowed 60 s, never committed, saw it miss the first run on each of two new simulators, and one cold boot in three of the long-used one, though Text Color's action was delivered; the next run on each new simulator presented it within 2 s. No bound fixes that, so the colour-picker test can still fail on a simulator just created or booted, at either head.
 
 **Delivered here:** this log. The session's notes, scripts and logs are in `~/Library/Caches/frus-linkalert/`; the diagnostic is on that clone's local branch `diag/link-alert-timeline`, never pushed.
 
-**Next:** the owner's Mac check of #1811, then its merge, which asks nothing of this repository. Phase 2 goes on with S18c, the pin move past #1809 ([#77](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/77)).
+**Next:** nothing for #1811. The first pin move past `32e295e5` takes it with nothing to change here, since this repository compiles none of it and its golden files hash none of it. Phase 2 goes on with S18c, the pin move past #1809 ([#77](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/77)), and then the move past #1810, whose needs #78's entry lists.
 
 ## Session 16e, follow-up: a stripped export's free pages, upstream
 
@@ -187,6 +263,79 @@ S16e (#69) found that the Mac's Export Research Database…, with Include My Not
 - This log.
 
 **Next:** the owner's Mac check of FRUS-Explorer#1810 and its merge; the first pin move after it takes it, drops the server's own pragma and changes S16e's control. On the plan's track, S17d.
+
+## Session 18b: a collection resolves through a data source in FRUSCoreKit, upstream
+
+27 October 2026 · branch `claude/optimistic-blackwell-d0048f` · [#75](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/75) · upstream `503a730b`, unchanged by this row; `1c18b51e` once `main` with S17c's pin move was merged in · [FRUS-Explorer#1809](https://github.com/joshbotts/FRUS-Explorer/pull/1809), merged as `fef96201`
+
+This is phase 2's row S18b, the second of the two upstream collection rows, and Mac check 14 verifies it. S18a's #1807 made what renders a collection the kit's; this row makes what resolves one the kit's, so S18d to S18f can put a collection together on the server from its own store, as the app does from SwiftData.
+
+This session opened one pull request on `FRUS-Explorer`, from `claude/collections-resolve-through-a-data-source`, branched from `v2` at `3af1fc07` (#1807's merge, `1c18b51e`, with #1808's website drafts). It is labelled `Mac` and its body says "Mac verification requested". The owner merged it the same day as `fef96201`, a squash with the branch head's tree (`d1b45392`). Under rule 4 the pull request changes shared files, and this repository changes only its records.
+
+**#1809, in seven commits of moves and tests, and a records commit:**
+- **The archival indexes and the document resolution** (`FRUSCoreKit/SourceExplorer/`): `CentralFilesIndex`, `VolumeSourcesIndex` and `LotClaimantsIndex`, public with their decoders, and `ArchivalResolver`'s document resolution over `ArchivalIndexes`, the three as one value. The stores that read the app's bundle and the front-matter resolution stay in the app, which passes `ArchivalIndexes.bundled`.
+- **The five apparatus blocks** (`CollectionGeneratedBlocks`), public with their data source and records. The chronology's dates print in a locale the caller passes, and the tag union the thematic index reads is the kit's.
+- **A collection's values and its composition's rules:** `CollectionExportOptions(composing:)` over the research data export's `CollectionExport`, `CollectionFootnoteStyle`'s two legacy mappings, `CollectionBodyDepth.available(summariesAvailable:)`, and the app's initialisers from its models to those values, which `ResearchDataExporter` now maps through, writing the same records.
+- **The smart collection:** `SmartCollectionSnapshot.documentRefs(parameters:searchService:limit:)`, at most `resultLimit`, 1,000, and `snapshot(of:results:)`, the snapshot's values. The app inserts them.
+- **The assembly,** `CollectionContentAssembly`: which notes and highlights an entry takes, the overrides cascaded through sections, body depth, headnotes, excerpts, the "See also:" line, the blocks, the Zotero items and the summary phase, over the collection's values, the entries' (a prose block's spans decoded by the host) and the notes as `ResearchNoteExport`.
+  - `CollectionContentDataSource` is what it reads besides. The store's answers are the export's records, which this server's store already maps its rows to for S16d's export.
+  - Its four export methods are the saved search's run, the volumes' download, the figure images' fetch and the summaries' generation. The assembly asks for them only for `.export`.
+  - The app's `CollectionContentResolver` keeps every entry point and is the data source, each read the fetch it made before.
+- **The `.fruscollection` file:** `FRUSCollectionFile`, its error, `encode`, `decode`, `makeFile(from:includeNotes:resolveNoteTexts:)` over a `CollectionExport` and `importedValues(from:)` into a `NativeCollectionImport`. Inserting SwiftData models, the file system and the index stay in the app.
+- **Tests:** `CollectionResolutionTests` resolves a fixture collection over a volume the kit's own pipeline indexes and a store the test supplies, through every entry point, and pins the preview's items by SHA-256. `CollectionValuesTests` covers the rules over values. `FRUSCoreKitTests` goes from 1,286 tests to 1,298, and the iOS unit target from 7,739 to 7,752.
+
+**How it was checked.** Each heavy job ran under the app's lock, from a clone at a real path, beside `v2` at `3af1fc07` built and run the same way: Xcode 27.1 on macOS 27.2, clean and unsigned, on an iPhone 18 Pro Max simulator (iOS 27.0). Other sessions' Docker jobs shared the lock throughout.
+- **The seven commits,** made one by one in a worktree from `v2`, each built the kit with `swift build` and the Mac app with Xcode before the cold review's fixes (below); after them, the first five were built so again. The sixth differs from the seventh, the head built and tested in full, only by the seventh's test file, so its kit and Mac builds compile the head's sources.
+- **The full iOS unit run:** 7,752 tests in 929 suites, against `v2`'s 7,739 in 927.
+  - Both fail the 8 Keychain tests an unsigned build fails, and show the 6 known issues of `v2`'s system-log test.
+  - The branch's run also failed `RichTextRestingCapTests`' colour-picker and link-alert tests, #1360's editor, which this does not touch. Run alone afterwards, alternating the heads from the same builds, the colour-picker test passed every time, and the link-alert test failed 4 of 18 runs at the branch and 2 of 18 at `v2`, each on the 5 s wait #1807 describes, which is within chance; the last six rounds, with `v2` first, passed at both.
+  - Both skip the same 17 tests and 2 suites.
+  - The branch's run took 996 s against 634. The difference is spread over 40 suites, led by indexing tests and one that hosts the real collection editor, whose two siblings took the same time at both heads; the two new suites took half a second.
+- **`swift test`:** 3,191 tests against 3,179, all passed; `FRUSCoreKitTests` 1,298 against 1,286.
+- **The symbol diff,** normalized as before: 251,475 names on `v2` and 251,932 on the branch, 614 removed and 1,071 added.
+  - 416 of the removed are the resolver's private machinery, which reappears in the kit's assembly.
+  - 148 name the resolver's `SmartDocumentRef` or `ResolvePurpose`, now the kit's types, with every entry point whose signature names them.
+  - The other 50 are the blocks' functions that gained a locale, closures whose code moved into the kit, and `lotResolution`, internal now.
+  - No moved type that keeps its name changes its mangled name.
+- **Both builds** had `v2`'s five and seven warning lines.
+- **Every test collection, resolving as before.** A scratch suite, appended to `CollectionTests.swift` for each run and never committed, built test collections in SwiftData over a volume a real pipeline indexed, resolved them through every entry point of `CollectionContentResolver` (preview, capped preview, export, summary-only, documents only, entry by entry, the smart path and its capped preview), and wrote the `.fruscollection` file, its import and a smart snapshot.
+  - It ran three times at each head, alternating, and every file was the same at both.
+  - The one difference was the order in which an unsorted SwiftData fetch returned one document's two highlights. It changed from run to run at `v2` itself, and every exporter sorts highlights by offset before drawing them.
+- **Linux,** in a scratch worktree of this repository's `main` at `8e6d681`, with the branch and then `v2` copied over the submodule:
+  - **the kit:** `FRUSCoreKitTests` ran 1,298 tests, against 1,286 at `v2`, with the one named skip. The fixture collection resolves over the kit's own index there, and its pin holds;
+  - **the rest:** every other target passed but the parity suites, whose 42 issues are the same tests at the branch and at `v2`;
+  - **2,466 tests in all,** against 2,454;
+  - **public access:** a scratch file in `FRUSLightAPI`, never committed, imported FRUSCoreKit without `@testable`, implemented the data source and used every name the pull request makes public, and the target built.
+- **Linux again, over `main` at `2fac971`,** after S17c's pin move to `1c18b51e`, which this branch starts from: the package built clean with no warning, and ran 2,482 tests against the 2,470 CI ran at that commit: `FRUSCoreKitTests` 1,298 against 1,286, every other target's count the same. Every target passed but the parity suites, whose 21 issues in 20 tests are all the golden files' staleness: their provenance's source digest hashes `FRUSCoreKit/` and `FRUSExplorer/` whole, so the five files read as made from other app sources until the pin move runs `scripts/make-golden`. Every parity check that reads the app's source passed, `ExportParityTests`' mirror of the exporter and `ImportParityTests`' reads of `Models/Collection.swift` among them, and the public-access file built again.
+- **The records:** `CodingStandardsAuditTests` and `EditableContentKeyTests` passed again at the records head, 84 tests in 2 suites.
+
+**For S18c, the pin move past #1809 alone** (S17c's move took #1807):
+- **No parity test needs pointing anywhere.** Over `main` at `2fac971`, with this branch copied in, every parity check that reads the app's source passed. `ExportParityTests`' mirror of the exporter still finds its line: the collection mapping is now `CollectionExport(collection, entries: (entriesByCollection[collection.id] ?? []) .sorted { $0.sortOrder < $1.sortOrder } .map(CollectionEntryExport.init))`, the fields themselves in the app's new `CollectionEntryExport.init(_:)` and `CollectionExport.init(_:entries:)` (`Models/Collection.swift`), the same fields as before.
+- **The golden files need `scripts/make-golden`:** their source digest hashes `FRUSCoreKit/` and `FRUSExplorer/` whole, so all five read as stale past this pull request, and those 21 issues were the run's only failures.
+- **Nothing on §5's indexing path changes.** No file of the parser, `IndexingPipeline.swift`, FTS5Store, SourceNoteKit, `FRUSExplorer/Resources`, `project.yml` or `Package.swift` changes, so the golden files' export may be reused, by the owner's choice.
+- **`Package.swift` needs no change:** the kit's new `SourceExplorer/` folder is compiled by folder, and `tools/mac-golden` lists `FRUSCoreKit` whole.
+- **What S18d to S18f call:**
+  - `CollectionContentAssembly`, with `Entry(_:proseParagraphs:)` (the codec decodes a prose block's RTF, and the introduction's, into spans) and `CollectionContentDataSource`, whose store reads answer with the export's records (`DocumentHighlightExport`, `GeneratedSummaryExport`, `UserTagExport`, `DocumentTagAssignmentExport`), the notes passed in as `ResearchNoteExport`.
+  - The assembly and its data source are `@MainActor`, as `BatchCitationRunner` is, so the server resolves a collection on the main actor. Passing `locale: Locale(identifier: "en_US")` prints the chronology's dates as the app does.
+  - The data source's export methods are the server's: `smartDocumentRefs()` runs the saved search through `SmartCollectionSnapshot.documentRefs(parameters:searchService:)` with the user's search service, in either purpose; `prepareVolumesForExport` has nothing to do on a server that holds every volume; `fetchAbsentFigureImages` reaches the server's figure store, or nothing; `generateSummaries` answers stored summaries, and refuses the rest, since the server has no summarizer.
+  - `ArchivalIndexes`, from the three files in `upstream/FRUS-Explorer/FRUSExplorer/Resources/` (`central-files-index.json`, `volume-sources-index.json`, `lot-claimants-index.json`), which the image will need to carry.
+  - `NativeCollectionSerializer.makeFile(from:includeNotes:resolveNoteTexts:)`, `encode`, `decode` and `importedValues(from:)`; `SmartCollectionSnapshot.snapshot(of:results:)`; `CollectionExportOptions(composing:)` over a `CollectionExport`; `CollectionBodyDepth.available(summariesAvailable:)`.
+
+**Delivered here**
+
+- `COORDINATION.md`: #1809 in §2, merged, with its runs, and in §5's list.
+- `PLAN.md`: S18c's row names #1809, and keeps S15d's notes export on its own ZIP writer, as S18a's log found.
+- This log.
+
+**Notes**
+
+- **A cold review of the diff,** given the code and none of the session's conclusions, found no defect in what the app resolves, and six things that were fixed before the runs quoted: the `.fruscollection` writer looked each entry's notes up by id, so two synced copies of one id with different selections would share the first's; a smart collection's own entries were read, healing a legacy prose blob; a static export read the collection before its volumes' download, which can take minutes, where it read it after; the data source's doc said the saved search runs only for an export; the app's and the kit's composition rules were two copies (the app's now reads the kit's); and the divided-lot test passed without the rule it tests.
+- **An unsorted SwiftData fetch varies its order from run to run.** Two highlights on one document came back in either order at the same head, so the comparison puts a document's highlights in offset order, as every exporter does before drawing them.
+- **`main` moved during the session,** from `8e6d681` to `17507cb`: S17c's pin move (#68), the follow-up to S14b (#72), S16e's records (#69), S14b (#70) and its second follow-up (#74), S14e (#71), S14d (#73), and the records of the follow-ups to S16e (#78) and to this session (#79). This branch was brought up to it, and the Linux run repeated over `2fac971`, at S17c's pin.
+- **Other sessions' Docker jobs shared the heavy-job lock all evening,** so the runs took longer than their own time.
+- **Scratch:** under `~/Library/Caches/frus-s18b`: the clone and its WIP commits, the rebuilt commits' worktree, `v2`'s worktree, the logs, the scripts, the dumps, and a scratch worktree of this repository (`web-linux`).
+
+**Next: S18c,** the pin move past #1809, merged as `fef96201` ([#77](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/77)). Beside it: S17d, search over the researcher's writing ([#76](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/76)), with S17e and S17f.
 
 ## Session 14d: the PostgreSQL store
 

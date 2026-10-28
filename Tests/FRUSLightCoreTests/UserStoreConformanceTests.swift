@@ -178,7 +178,8 @@ import Testing
     /// FTS5 table app.db's migration 2 makes, a row of each user's text for each document; and the tag
     /// assignments, whose user, volume, document and tag are the store's. For app.db it is the store;
     /// for the PostgreSQL store, its local copy, written beside each change. The kit's statements of
-    /// that source run on it here as they are written there, until S17d searches through the kit.
+    /// that source run on it here as they are written there; FRUSParityTests' AttachedUserStoreTests
+    /// runs the kit's own over each store's file, and S17d's search routes search through it.
     @Test(arguments: UserStoreKind.available) func theSearchDatabaseHoldsWhatTheKitsSearchReads(_ kind: UserStoreKind) async throws {
         let (store, rows, test) = try await UserTagTests.open(kind)
         defer { withExtendedLifetime(test) {} }
@@ -268,5 +269,48 @@ import Testing
         #expect(try rows.userSearch().map(\.documentId) == ["d1", "d2"])
         try store.deleteNote(note.id, for: "owner")
         #expect(try index.query(matches, [.text("negotiate"), .text("owner")]).isEmpty, "a delete reaches it at once")
+    }
+
+    /// The search mark (S17d), by which the server keeps a search's answers no longer than the store
+    /// stands as it was: it moves with each write the store commits, whatever it writes, a user made at
+    /// a sign-in and an import among them, and with none it does not, nor with a read or a write the
+    /// store refuses.
+    @Test(arguments: UserStoreKind.available) func theSearchMarkMovesWithEachWriteTheStoreCommits(_ kind: UserStoreKind) async throws {
+        let (store, _, test) = try await UserTagTests.open(kind)
+        defer { withExtendedLifetime(test) {} }
+        var mark = try store.searchMark()
+        /// Whether the mark moved since the last call, and keeps the new one.
+        func moved() throws -> Bool {
+            let now = try store.searchMark()
+            defer { mark = now }
+            return now != mark
+        }
+        let laos = try store.createTag(named: "Laos", for: "owner", at: Self.created)
+        #expect(try moved(), "a tag made")
+        try store.setTags([laos.id], of: Self.d1, for: "owner", at: Self.created)
+        #expect(try moved(), "a document's tags")
+        _ = try store.tags(of: "owner")
+        _ = try store.tags(of: Self.d1, for: "owner")
+        #expect(try !moved(), "reads")
+        #expect(throws: TagStoreError.self) { try store.setTags(["5E17D000-0000-4000-8000-0000000000FF"], of: Self.d2,
+                                                                for: "owner", at: Self.created) }
+        #expect(try !moved(), "a change refused and rolled back")
+        let note = try UserNoteTests.make(store, "Negotiating the Laos settlement.", at: Self.created)
+        #expect(try moved(), "a note")
+        _ = try store.createOwnSummary(in: Self.d2, text: "Cabled instructions.", responseFormat: #"{"general":{}}"#, for: "owner",
+                                       at: Self.created)
+        #expect(try moved(), "a summary")
+        try store.deleteNote(note.id, for: "owner")
+        #expect(try moved(), "a note deleted")
+        _ = try store.signedInUser("reader@example.org", at: Self.created)
+        #expect(try moved(), "a user made")
+        _ = try store.signedInUser("reader@example.org", at: Self.created)
+        #expect(try !moved(), "a user found")
+        _ = try store.importResearch(ResearchImportBatch(rows: ["tag_assignments": [ImportRow(values: [
+            "id": .text("5E17D000-0000-4000-8000-000000000010"), "volume_id": .text("frus1961-63v06"), "document_id": .text("d2"),
+            "tag_id": .text(laos.id), "created_at": .text("2026-01-01T00:00:00.000Z"),
+        ])]]), for: "owner")
+        #expect(try moved(), "an import")
+        #expect(try store.searchMark() == mark, "and asked again, the same")
     }
 }

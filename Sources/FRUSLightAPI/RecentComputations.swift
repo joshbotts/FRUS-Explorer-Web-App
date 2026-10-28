@@ -12,10 +12,10 @@ import Foundation
 /// keeps what it fetched and pages it, asks for neither twice, and nor does the server while it keeps
 /// them.
 ///
-/// Each is kept by the query fields that say its search, and a page by its limit and offset too. A
-/// page holds at most 100 results with their snippets, well under a megabyte. A page or a count no
-/// request waits for any more is stopped at once, with no grace, as `/search` stopped its own when its
-/// client went before it kept them (#1698).
+/// Each is kept by whose search it is (`ServedSearch.key`, S17d) and the query fields that say it, and a
+/// page by its limit and offset too. A page holds at most 100 results with their snippets, well under a
+/// megabyte. A page or a count no request waits for any more is stopped at once, with no grace, as
+/// `/search` stopped its own when its client went before it kept them (#1698).
 public struct RecentSearches: Sendable {
     let pages: RecentComputations<[SearchResult]>
     let counts: RecentComputations<Int>
@@ -25,26 +25,26 @@ public struct RecentSearches: Sendable {
         counts = RecentComputations(capacity: capacity, stopsAbandoned: true, grace: .zero)
     }
 
-    /// The page `search` asks for, by relevance, as kept lately or as the search service ranks it.
-    func page(of search: SearchRequest, service: SearchService) async throws -> [SearchResult] {
-        try await pages.value(for: "\(search.limit) \(search.offset) \(SearchRequest.signature(search.parameters))") {
-            try await service.search(parameters: search.parameters, limit: search.limit, offset: search.offset)
+    /// The page `search` asks for, by relevance, as kept lately or as `scoped` ranks it.
+    func page(of search: SearchRequest, in scoped: ServedSearch) async throws -> [SearchResult] {
+        try await pages.value(for: "\(scoped.key)\(search.limit) \(search.offset) \(SearchRequest.signature(search.parameters))") {
+            try await scoped.service.search(parameters: search.parameters, limit: search.limit, offset: search.offset)
         }
     }
 
-    /// The count of every document the search `parameters` say matches, as kept lately or as the search
-    /// service counts it.
-    func count(of parameters: SearchParameters, service: SearchService) async throws -> Int {
-        try await counts.value(for: SearchRequest.signature(parameters)) {
-            try await service.searchCount(parameters: parameters)
+    /// The count of every document the search `parameters` say matches, as kept lately or as `scoped`
+    /// counts it.
+    func count(of parameters: SearchParameters, in scoped: ServedSearch) async throws -> Int {
+        try await counts.value(for: scoped.key + SearchRequest.signature(parameters)) {
+            try await scoped.service.searchCount(parameters: parameters)
         }
     }
 }
 
 /// The results the app keeps of each search ordered lately by date over one served index: the first
 /// 7,500 the kit ranks, as the Mac's search window keeps them, which the date order sorts whole
-/// (`SearchSortOrder.sorted(_:)`). Each is kept by the query fields that say its search, so its other
-/// pages, in either order of the date, fetch them once.
+/// (`SearchSortOrder.sorted(_:)`). Each is kept by whose search it is and the query fields that say it,
+/// so its other pages, in either order of the date, fetch them once.
 ///
 /// Two are kept: one holds up to 7,500 results with their snippets, as the Mac's window holds one,
 /// about 20 MB by estimate over the whole corpus. A search no request waits for any more is
@@ -57,10 +57,10 @@ public struct RetainedResults: Sendable {
     }
 
     /// The results the app keeps of the search `parameters` say, best first, as kept lately or as
-    /// the search service ranks them.
-    func results(of parameters: SearchParameters, service: SearchService) async throws -> [SearchResult] {
-        try await kept.value(for: SearchRequest.signature(parameters)) {
-            try await service.search(parameters: parameters, limit: SearchRequest.retainedLimit, offset: 0)
+    /// `scoped` ranks them.
+    func results(of parameters: SearchParameters, in scoped: ServedSearch) async throws -> [SearchResult] {
+        try await kept.value(for: scoped.key + SearchRequest.signature(parameters)) {
+            try await scoped.service.search(parameters: parameters, limit: SearchRequest.retainedLimit, offset: 0)
         }
     }
 }

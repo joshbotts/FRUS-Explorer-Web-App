@@ -2,7 +2,7 @@
 // the server sees: the user is the one the header names on a request from FRUS_TRUSTED_PROXIES,
 // made the first time, an admin if FRUS_ADMIN_USERS names them; a request from any other peer is
 // refused, whatever it names; and two users' data stay apart through every route under /api/v1/me,
-// the import and the export included.
+// the import and the export included, and through every search (S17d).
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -88,7 +88,7 @@ import Testing
     /// The done-when's first half: two users, signed in through the proxy, each write through every
     /// route under /me, and neither reads, changes or exports the other's, by list or by id; the
     /// same Mac export imported by both gives each a copy of their own under the Mac's ids. The
-    /// search's own half, the user text in a search, comes with S17d, whose row holds it to this.
+    /// search's own half is `eachUsersSearchReadsTheirWritingAlone`'s.
     @Test func twoUsersDataStayApartThroughTheAPI() async throws {
         let fixture = try await UserDataFixture(volumes: ["frus1961-63v06"], auth: .header, trustedProxies: Self.loopback)
         defer { withExtendedLifetime(fixture) {} }
@@ -194,5 +194,91 @@ import Testing
             #expect(try decode(ProjectList.self, try await alice.get("/api/v1/me/projects")).items.map(\.name) == ["Bay of Pigs review"])
         }
         #expect(try fixture.store.notes(for: "owner").isEmpty && fixture.store.tags(of: "owner").isEmpty, "and the single user's none")
+    }
+
+    /// The same for the search's user half (S17d): one user's search finds none of another's notes,
+    /// summaries or tags, through every route that reads a search's match, even just after the other
+    /// asked the same search, whose answers the server keeps; the tag filter refuses another user's
+    /// tag, and the tag a Mac export gives both, under one id, is each one's own. A request from the
+    /// proxy that names no one searches the corpus alone.
+    @Test func eachUsersSearchReadsTheirWritingAlone() async throws {
+        let fixture = try await UserDataFixture(indexed: true, auth: .header, trustedProxies: Self.loopback)
+        defer { withExtendedLifetime(fixture) {} }
+        try await fixture.app.test(.live) { client in
+            let alice = Browser(client: client, user: "alice")
+            let bob = Browser(client: client, user: "bob")
+            let nobody = Browser(client: client)
+            let hers = try await UserHalfSearchTests.write(alice)
+            let tag = SearchUsers.caseFolded(hers.tag.id)
+
+            // Hers first, so that each answer of hers is kept when the others ask the same search.
+            let either = "keywords=zanzibar+OR+quixotic+OR+canal"
+            let aliceAnswers = try await UserHalfSearchTests.answers(alice, either)
+            #expect(aliceAnswers.total == 3 && aliceAnswers.retained == 3 && aliceAnswers.termCounts == [1, 1, 1])
+            #expect(aliceAnswers.tags["\(UserHalfSearchTests.volume)/d1"] == [tag] && aliceAnswers.myTags == ["Berlin": 1])
+            let corpusAlone = UserHalfSearchTests.Answers(total: 1, page: ["frus1894Nicaragua/d1"], tags: ["frus1894Nicaragua/d1": []],
+                                                      byDate: ["frus1894Nicaragua/d1"], retained: 1, volumes: ["frus1894Nicaragua": 1],
+                                                      termCounts: [0, 0, 1])
+            var bobsAnswers = corpusAlone
+            bobsAnswers.myTags = [:]
+            #expect(try await UserHalfSearchTests.answers(bob, either) == bobsAnswers, "none of hers, though hers are kept")
+            #expect(try await UserHalfSearchTests.answers(nobody, either, myTags: false) == corpusAlone)
+            #expect(problemCode(try await nobody.get("/api/v1/me/search/tags?\(either)")) == "NOT_SIGNED_IN")
+            for words in ["zanzibar", "%3Dzanzibar", "quixotic"] {
+                #expect(try await UserHalfSearchTests.search(bob, "keywords=\(words)").total == 0, "\(words)")
+            }
+            let inspected = try await UserHalfSearchTests.answer(SearchInspection.self, bob,
+                                                             "/api/v1/search/inspect?keywords=zanzibar+treaties&emptyConjuncts=true")
+            #expect(inspected.emptyConjuncts?.map(\.text) == ["zanzibar"], "her note's word matches nothing of his")
+            #expect(UserHalfSearchTests.rowTags(try await UserHalfSearchTests.search(bob, "keywords=treaties")).values.allSatisfy(\.isEmpty))
+
+            // Her tag filters no search of his, nor of no one's, by any route.
+            for browser in [bob, nobody] {
+                for path in ["/api/v1/search?", "/api/v1/search/inspect?", "/api/v1/search/facets?section=volumes&",
+                             "/api/v1/search/timeline?", "/api/v1/search/concordance?"] {
+                    let refused = try await browser.get("\(path)keywords=treaties&userTagIds=\(hers.tag.id)")
+                    #expect(refused.status == .notFound && problemCode(refused) == "TAG_NOT_FOUND", "\(path)")
+                }
+            }
+            #expect(problemCode(try await bob.get("/api/v1/me/search/tags?keywords=treaties&userTagIds=\(hers.tag.id)")) == "TAG_NOT_FOUND")
+            // His tag of the same name is his own, on none of her documents.
+            let his = try decode(UserTag.self, try await bob.send(.post, "/api/v1/me/tags", #"{"name": "Berlin"}"#))
+            #expect(try await UserHalfSearchTests.search(bob, "keywords=treaties&userTagIds=\(his.id)").total == 0)
+
+            // One id, two users: a Mac export's tag, imported by each onto another document.
+            for (browser, document) in [(alice, "d1"), (bob, "d2")] {
+                let started = try await browser.send(.post, ImportRouteTests.path, try Self.export(tagging: document))
+                #expect(started.status == .accepted)
+                await fixture.jobs.waitUntilIdle()
+                #expect(try decode(ImportStatus.self, try await browser.get(try #require(started.headers[.location]))).state == .succeeded)
+            }
+            let cuba = Self.sharedTag.uuidString
+            #expect(UserHalfSearchTests.documents(try await UserHalfSearchTests.search(alice, "keywords=treaties&userTagIds=\(cuba)"))
+                    == ["\(UserHalfSearchTests.volume)/d1"])
+            #expect(UserHalfSearchTests.documents(try await UserHalfSearchTests.search(bob, "keywords=treaties&userTagIds=\(cuba)"))
+                    == ["\(UserHalfSearchTests.volume)/d2"])
+            #expect(try await UserHalfSearchTests.answer(SearchTagCounts.self, bob, "/api/v1/me/search/tags?keywords=treaties").items
+                    .map(\.count) == [0, 1], "his Berlin on nothing, his Cuba on d2")
+
+            // Hers are as she left them, imported tag aside.
+            var after = aliceAnswers
+            after.tags["\(UserHalfSearchTests.volume)/d1"] = [tag, cuba].sorted()
+            after.myTags = ["Berlin": 1, "Cuba": 1]
+            #expect(try await UserHalfSearchTests.answers(alice, either) == after)
+        }
+    }
+
+    /// The tag every export of `export(tagging:)` holds, by one id.
+    static let sharedTag = UUID(uuidString: "5E17D000-0000-4000-8000-000000000001")!
+
+    /// A Mac export holding one tag, Cuba, on frus1961-63v06's `document`.
+    static func export(tagging document: String) throws -> String {
+        let time = ImportRouteTests.date("2026-10-24T20:00:00Z")
+        let envelope = ResearchDataEnvelope(
+            formatVersion: 7, exportedAt: time, notes: [],
+            tags: [UserTagExport(id: sharedTag, name: "Cuba", createdAt: time)],
+            tagAssignments: [DocumentTagAssignmentExport(id: UUID(), volumeId: "frus1961-63v06", documentId: document, tagId: sharedTag)],
+            highlights: [], collections: [], prompts: [], projects: [], summaries: [], classificationOverrides: [])
+        return String(decoding: try envelope.jsonData(), as: UTF8.self)
     }
 }

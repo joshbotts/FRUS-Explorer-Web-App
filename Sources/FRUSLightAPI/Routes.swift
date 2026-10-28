@@ -12,7 +12,11 @@ import Logging
 func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderService,
                  provider: ServedIndexProvider? = nil, webClient: WebClient? = nil, userData: UserDataServices? = nil,
                  base: BasePath = .root, logger: Logger = Logger(label: "frus-light")) -> Router<APIRequestContext> {
-    let provider = provider ?? ServedIndexProvider(state: state, resources: resources, volumesDirectory: reader.volumesDirectory)
+    // With user data on, each stack attaches the user store's search database, for each user's half of
+    // a search (S17d).
+    let provider = provider ?? ServedIndexProvider(state: state, resources: resources, volumesDirectory: reader.volumesDirectory,
+                                                   userStore: userData.flatMap { $0.enabled ? $0.store.searchDatabase : nil })
+    let users = SearchUsers(services: userData)
     // Every GET route answers HEAD too, so HEAD /readyz says what GET says rather than falling to
     // the browser app's fallback.
     let router = Router(context: APIRequestContext.self, options: .autoGenerateHeadEndpoints)
@@ -33,9 +37,9 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
         return await state.status()
     }
     CatalogRoutes.add(to: router, state: state, provider: provider, resources: resources, reader: reader)
-    SearchRoutes.add(to: router, provider: provider, resources: resources)
-    FacetRoutes.add(to: router, provider: provider, resources: resources)
-    ReadingRoutes.add(to: router, provider: provider, resources: resources)
+    SearchRoutes.add(to: router, provider: provider, resources: resources, users: users)
+    FacetRoutes.add(to: router, provider: provider, resources: resources, users: users)
+    ReadingRoutes.add(to: router, provider: provider, resources: resources, users: users)
     ReaderRoutes.add(to: router, reader: reader, provider: provider, resources: resources, base: base)
     CitationRoutes.add(to: router, reader: reader, provider: provider, resources: resources)
     CitationLookupRoutes.add(to: router, provider: provider, resources: resources)

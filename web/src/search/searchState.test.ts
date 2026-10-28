@@ -8,6 +8,9 @@ import {
   pageCount,
   readings,
   retainedLimit,
+  scopeChange,
+  searches,
+  searchesAnywhere,
   searchFields,
   validateSearch,
 } from './searchState';
@@ -42,6 +45,41 @@ describe('validateSearch', () => {
       keywords: '',
     });
     expect(validateSearch({ volumeIds: 'frus1894Nicaragua', limit: '7' })).toEqual({ volumeIds: ['frus1894Nicaragua'] });
+  });
+});
+
+describe('Search in and the tags', () => {
+  it('keeps a scope turned off and the tags, once each, and leaves out what is the default', () => {
+    expect(
+      validateSearch({
+        keywords: 'zanzibar',
+        includeDocumentText: 'false',
+        includeNotes: 'true',
+        includeSummaries: 'no',
+        userTagIds: ['5E17D000-0000-4000-8000-000000000001', '', '5E17D000-0000-4000-8000-000000000001', 'cuba'],
+      }),
+    ).toEqual({
+      keywords: 'zanzibar',
+      includeDocumentText: false,
+      userTagIds: ['5E17D000-0000-4000-8000-000000000001', 'cuba'],
+    });
+    expect(validateSearch({ userTagIds: '' }).userTagIds).toBeUndefined();
+  });
+
+  it('says which places a search reads, as the Mac’s chips do, and whether it reads any', () => {
+    const state = validateSearch({ keywords: 'x', includeNotes: 'false' });
+    expect([searches(state, 'documents'), searches(state, 'notes'), searches(state, 'summaries')]).toEqual([true, false, true]);
+    expect(scopeChange('notes', true)).toEqual({ includeNotes: undefined });
+    expect(scopeChange('summaries', false)).toEqual({ includeSummaries: false });
+    expect(searchesAnywhere(state)).toBe(true);
+    expect(searchesAnywhere({ ...state, includeDocumentText: false, includeSummaries: false })).toBe(false);
+  });
+
+  it('sends a scope turned off and the tags, and keeps both through a facet’s change', () => {
+    const state = { keywords: 'x', includeSummaries: false as const, userTagIds: ['A', 'B'] };
+    expect(filterFields(state)).toMatchObject({ includeSummaries: false, userTagIds: ['A', 'B'] });
+    expect(filterFields({ keywords: 'x', userTagIds: [] }).userTagIds).toBeUndefined();
+    expect(applySearchChange(state, { yearKeys: ['1962'] })).toMatchObject({ includeSummaries: false, userTagIds: ['A', 'B'], yearKeys: ['1962'] });
   });
 });
 
