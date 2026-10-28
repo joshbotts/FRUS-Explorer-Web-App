@@ -2,6 +2,37 @@
 
 One entry per session, newest first.
 
+## Session 18b, follow-up: the link-alert test's random failure, upstream
+
+28 October 2026 · branch `claude/elated-lederberg-fc1c0a` · records only · upstream `1c18b51e`, unchanged; [FRUS-Explorer#1811](https://github.com/joshbotts/FRUS-Explorer/pull/1811), open
+
+The Mac checks of FRUS-Explorer#1785, #1807 and #1809 each lost a re-run to `RichTextRestingCapTests`' link-alert test (#1360's capped editor), which failed at random at `v2` as at each branch. The checks of #1785 and #1809 also lost one to its colour-picker test. S18b's session asked for one pull request that stops the link-alert test failing, from `claude/link-alert-test-waits-for-its-presentation`, cut from `v2` at `fef96201`. It is labelled `Mac`, its body says "Mac verification requested", and it is not merged. It changes one file of the app's test target, which this repository neither compiles nor hashes into its golden files, and the app's plan, so no pin move needs it, and this repository changes only its records.
+
+**The cause, found before anything changed.** A diagnostic build, never committed, gave the test a millisecond timeline: a 5 ms sampler of the alert's presentation state, the root's transition coordinator and both first responders, with the keyboard and editing notifications and the dismissal's completion. It followed 30 runs of the suite alone on the iPhone 18 Pro Max simulator (iOS 27.0) of S18b's runs.
+- The test host's `dismissPresented()` dismisses the alert with `dismiss(animated: false)` and waited 3 s for it to go, its `settle`'s default. #1807's and #1809's bodies say 5 s; the file's other hosts allow 5, but this one 3.
+- A non-animated dismissal took 2.1 to 4.4 s to finish, while the keyboard went back from the alert's field to the text view and its formatting bar. In the first 16 runs, the 4 dismissals over 3 s were the 4 failures, and the 12 that passed took 2.22 to 2.90 s.
+- The alert always went, and focus always came back: the editor is not at fault.
+- The test asked for the dismissal while UIKit was still presenting the alert, in 16 runs of 16. That is not the cause: asked once the presentation had ended, a dismissal took 2.1 to 2.7 s, and with the alert's field resigned first, 2.3 to 2.7 s.
+- The colour-picker test fails in the host's other such wait, 3 s for the system colour picker to appear.
+
+**#1811, in a commit and two records commits,** in `FRUSExplorerTests/CollectionTests.swift` and the app's plan:
+- `RestingCapEditorHost.presentationTimeout`, 15 s, for `presented(_:)` and `dismissPresented()`. It bounds a hang, not a pace: each wait ends when UIKit is done. `settle`'s 3 s stays for the suite's waits on SwiftUI's sizing.
+- A new `finishedPresenting(_:)`, which the link-alert test waits for before its half-second hold over the alert and its Cancel. It costs the test 0.8 s a run.
+- A log line with each dismissal's time, and the suite's version history.
+
+**How it was checked,** each heavy job under the app's lock, from a clone at a real path, beside `v2` at `fef96201` built and run the same way, the same day, with Xcode 27.1, clean and unsigned:
+- **The suite alone, 30 rounds alternating with `v2` in one hold of the lock:** the branch passed 30 runs of 30, and `v2` 30 of 30, the Mac being quiet then (load average 4 to 8). The branch's dismissals took 1.74 to 2.35 s.
+- **On two simulators created for the run,** the condition the app's A4c and A4d sessions met, with their first boot's work loading the Mac (load average 20 to 330): `v2` failed 6 runs of 6 on the dismissal. The branch passed 5 of 6, its dismissals taking 3.0 to 6.1 s. Its sixth failed because the colour picker did not appear.
+- **The full iOS unit run:** 7,752 tests in 929 suites at both heads, both failing only the 8 Keychain tests an unsigned build fails, with the 6 known issues of #1606, and skipping the same 17 tests and 2 suites. The editor suite passed at both.
+- **`swift test`:** 3,191 tests in 389 suites at both, all passed; `FRUSCoreKitTests` 1,298.
+- **The Mac app's symbols** are `v2`'s, name for name, and both builds had `v2`'s five and seven warning lines.
+
+**Filed, not fixed.** After a cold boot, or on a new simulator, the system colour picker sometimes never appears. A variant of the host that allowed 60 s, never committed, saw it miss the first run on each of two new simulators, and one cold boot in three of the long-used one, though Text Color's action was delivered; the next run on each new simulator presented it within 2 s. No bound fixes that, so the colour-picker test can still fail on a simulator just created or booted, at either head.
+
+**Delivered here:** this log. The session's notes, scripts and logs are in `~/Library/Caches/frus-linkalert/`; the diagnostic is on that clone's local branch `diag/link-alert-timeline`, never pushed.
+
+**Next:** the owner's Mac check of #1811, then its merge, which asks nothing of this repository. Phase 2 goes on with S18c, the pin move past #1809 ([#77](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/77)).
+
 ## Session 14d: the PostgreSQL store
 
 27 October 2026 · branch `claude/clever-banach-5614db` · [#73](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/73) · upstream `1c18b51e`, unchanged
