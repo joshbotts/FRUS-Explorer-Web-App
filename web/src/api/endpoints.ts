@@ -112,10 +112,20 @@ export function linkQuery(volumeId: string, documentId: string, href: string) {
   });
 }
 
-export function searchQuery(state: SearchState) {
+/**
+ * A search's request, with the results Checklist Mode hides (S17e), `reviewed`, which leave its pages:
+ * an address, or with any hidden, a POST of the same fields, since the reviewed can outgrow an address.
+ */
+function searchRequest<T>(path: string, fields: Record<string, FormValue>, reviewed: readonly string[], signal: AbortSignal): Promise<T> {
+  return reviewed.length > 0
+    ? postForm<T>(path, formEncode({ ...fields, reviewed: [...reviewed].sort() }), signal)
+    : getJSON<T>(path, formEncode(fields), signal);
+}
+
+export function searchQuery(state: SearchState, reviewed: readonly string[] = []) {
   return queryOptions({
-    queryKey: ['search', searchFields(state)],
-    queryFn: ({ signal }) => getJSON<SearchResultList>('/api/v1/search', formEncode(searchFields(state)), signal),
+    queryKey: ['search', searchFields(state), reviewed],
+    queryFn: ({ signal }) => searchRequest<SearchResultList>('/api/v1/search', searchFields(state), reviewed, signal),
     // With all of Search in off there is nothing to search, which the screen says, as the Mac's window does.
     enabled: state.keywords !== undefined && searchesAnywhere(state),
     staleTime: 5 * 60_000,
@@ -135,12 +145,12 @@ function sameSearch(query: { queryKey: readonly unknown[] } | undefined, search:
  * order chosen. The same search's last timeline stays while the next loads, as the results' last
  * page does; another search's never stands in, since it would describe a match no longer shown.
  */
-export function timelineQuery(state: SearchState, documents: boolean) {
+export function timelineQuery(state: SearchState, documents: boolean, reviewed: readonly string[] = []) {
   const search = filterFields(state);
   const fields = { ...search, ...(documents ? { documents: true, sort: state.sort } : {}) };
   return queryOptions<SearchTimeline, unknown, SearchTimeline, unknown[]>({
-    queryKey: ['timeline', search, documents ? (state.sort ?? 'relevance') : null],
-    queryFn: ({ signal }) => getJSON<SearchTimeline>('/api/v1/search/timeline', formEncode(fields), signal),
+    queryKey: ['timeline', search, documents ? (state.sort ?? 'relevance') : null, reviewed],
+    queryFn: ({ signal }) => searchRequest<SearchTimeline>('/api/v1/search/timeline', fields, reviewed, signal),
     enabled: state.keywords !== undefined,
     staleTime: 5 * 60_000,
     placeholderData: (previous, query) => (sameSearch(query, search) ? previous : undefined),
@@ -152,12 +162,12 @@ export function timelineQuery(state: SearchState, documents: boolean) {
  * The concordance of the page the results show, by its fields. The same search's last page stays
  * while the next loads, as the results' does; another search's never stands in.
  */
-export function concordanceQuery(state: SearchState) {
+export function concordanceQuery(state: SearchState, reviewed: readonly string[] = []) {
   const search = filterFields(state);
   const fields = searchFields(state);
   return queryOptions<SearchConcordance, unknown, SearchConcordance, unknown[]>({
-    queryKey: ['concordance', search, fields],
-    queryFn: ({ signal }) => getJSON<SearchConcordance>('/api/v1/search/concordance', formEncode(fields), signal),
+    queryKey: ['concordance', search, fields, reviewed],
+    queryFn: ({ signal }) => searchRequest<SearchConcordance>('/api/v1/search/concordance', fields, reviewed, signal),
     enabled: state.keywords !== undefined,
     staleTime: 5 * 60_000,
     placeholderData: (previous, query) => (sameSearch(query, search) ? previous : undefined),

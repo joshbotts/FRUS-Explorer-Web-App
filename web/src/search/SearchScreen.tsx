@@ -7,15 +7,23 @@
 // the term responsible, as the Mac's do. On a server that keeps user data (S17d), Search in chooses
 // the documents, the user's notes and their summaries, as the Mac's chips do; My Tags filters by the
 // user's tags, counted over the results, and shows as a token; and a row carries its document's tags.
+// Since S17e a search is saved and recalled, as the Mac's bookmark buttons do; it runs inside a working
+// corpus, named over the results, and its rows are saved as one; a volume scope fills the volume filter;
+// and Checklist Mode hides the results reviewed, kept in the browser's memory for the session.
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
-import { type FormEvent, type ReactNode, type RefObject, useId, useMemo, useRef, useState } from 'react';
+import { type FormEvent, type ReactNode, type RefObject, useEffect, useEffectEvent, useId, useMemo, useRef, useState } from 'react';
 import { ApiError } from '../api/client';
 import { concordanceQuery, inspectQuery, searchQuery, timelineQuery, volumesQuery } from '../api/endpoints';
 import type { ConcordanceOrder, DocumentType, SearchResultList, SortOrder, UserTag, Volume } from '../api/types';
+import { recordRun, type SavedSearch } from '../api/searchSets';
 import { meQuery, searchTagsQuery, tagsQuery } from '../api/userData';
 import { copy } from '../copy';
 import { Badge } from '../shell/Badge';
+import { anchorFor, type ChecklistAnchor, checklistStore, hiddenKeys, isSameSearch, reviewedKey, useChecklist } from './checklist';
+import { ChecklistStrip } from './ChecklistStrip';
+import { SavedSearchesDialog, SaveSearchDialog } from './SavedSearches';
+import { CorpusBanner, CorpusFilter, SaveCorpusDialog, ScopeFilter } from './WorkingCorpora';
 import { FacetPanel, useFacetPanelState } from './FacetPanel';
 import { inspectorFields, QueryInspectorStrip, ZeroResult } from './QueryInspector';
 import { ConcordanceReading, ReadingPicker, TimelineReading, type TimelineMode } from './Readings';
@@ -28,6 +36,7 @@ import {
   pageCount,
   pageSizes,
   type Reading,
+  recalledSearch,
   retainedLimit,
   scopeChange,
   scopes,
@@ -44,7 +53,24 @@ const route = getRouteApi('/search');
 export function SearchScreen() {
   const state = route.useSearch();
   const navigate = route.useNavigate();
-  const results = useQuery(searchQuery(state));
+  // Checklist Mode's reviewed results leave the pages, once the checklist is this search's: another
+  // search's marks hide nothing while it settles on this one, as the Mac settles it as a search runs.
+  const checklist = useChecklist();
+  const anchor = anchorFor(state);
+  const anchorKey = JSON.stringify(anchor);
+  const settled = checklist.on && checklist.anchor !== undefined && isSameSearch(checklist.anchor, anchor);
+  const reviewed = useMemo(() => (settled ? [...hiddenKeys(checklist)].sort() : []), [settled, checklist]);
+  const settle = useEffectEvent(() => checklistStore.settle(state));
+  useEffect(() => settle(), [anchorKey]);
+  const results = useQuery(searchQuery(state, reviewed));
+  // The search whose rows are on screen: until the next search's arrive, the last one's stay, and a mark
+  // made of them would be kept under the next and hide its documents, so marks wait for them, as the
+  // Mac's `canMarkReviewed` makes them wait (#1683).
+  const [rowsAnchor, setRowsAnchor] = useState<ChecklistAnchor | null>(null);
+  if (results.data && !results.isPlaceholderData && (rowsAnchor === null || JSON.stringify(rowsAnchor) !== anchorKey)) {
+    setRowsAnchor(anchor);
+  }
+  const canMark = settled && checklist.anchor !== undefined && rowsAnchor !== null && isSameSearch(checklist.anchor, rowsAnchor);
   const volumes = useQuery(volumesQuery);
   const queryClient = useQueryClient();
   // The user's tags, for the filter, its token and the rows' chips, on a server that keeps user data.
@@ -73,16 +99,18 @@ export function SearchScreen() {
     // refusal or a server fault, or once an index is ready. So does the account of a search that
     // found nothing.
     if (keywords === state.keywords && state.offset === undefined) {
-      void queryClient.refetchQueries({ queryKey: searchQuery(state).queryKey, exact: true });
+      void queryClient.refetchQueries({ queryKey: searchQuery(state, reviewed).queryKey, exact: true });
       void queryClient.refetchQueries({
         queryKey: inspectQuery(inspectorFields(state, keywords), { emptyConjuncts: true }).queryKey,
         exact: true,
       });
       // And the reading shown, which may have failed where the list did.
       if (state.reading === 'timeline') {
-        void queryClient.refetchQueries({ queryKey: timelineQuery(state, state.timelineMode === 'list').queryKey, exact: true });
+        void queryClient.refetchQueries({ queryKey: timelineQuery(state, state.timelineMode === 'list', reviewed).queryKey, exact: true });
       }
-      if (state.reading === 'concordance') void queryClient.refetchQueries({ queryKey: concordanceQuery(state).queryKey, exact: true });
+      if (state.reading === 'concordance') {
+        void queryClient.refetchQueries({ queryKey: concordanceQuery(state, reviewed).queryKey, exact: true });
+      }
     } else {
       update({ keywords });
     }
@@ -126,6 +154,49 @@ export function SearchScreen() {
     void navigate({ search: (previous: SearchState) => ({ ...previous, align: order === 'leftContext' ? undefined : order }), replace: true });
   }
 
+  // The sheets the search opens, each closed back to the control that opened it.
+  const [sheet, setSheet] = useState<'saveSearch' | 'savedSearches' | 'saveCorpus' | null>(null);
+  const opener = useRef<HTMLElement | null>(null);
+  function open(which: 'saveSearch' | 'savedSearches' | 'saveCorpus', from: HTMLElement) {
+    opener.current = from;
+    setSheet(which);
+  }
+  function closed() {
+    setSheet(null);
+    opener.current?.focus();
+  }
+
+  /**
+   * A saved search recalled: its search, inside the corpus applied now, and its run stamped from its
+   * own count, which the server takes, as the Mac stamps a recall.
+   */
+  function recall(saved: SavedSearch) {
+    void navigate({ search: recalledSearch(saved.search, state) });
+    recordRun(queryClient, saved.id).catch(() => {
+      // A stamp that fails leaves the badge where it was, as a count that fails does on the Mac.
+    });
+  }
+
+  // What Undo brought back, said once the page it changed has loaded: how many fewer results are hidden,
+  // where the count before it was known, else the rows of the mark no opening hides.
+  const [announcement, setAnnouncement] = useState('');
+  const [undone, setUndone] = useState<{ before?: number; rows: number } | null>(null);
+  if (undone !== null && shown && !results.isFetching) {
+    const restored = undone.before !== undefined ? Math.max(0, undone.before - (shown.hidden ?? 0)) : undone.rows;
+    setAnnouncement(copy.checklist.undone(restored));
+    setUndone(null);
+  }
+
+  // A mark that leaves the page past the last shown, as on the last page, goes back to the first, as the
+  // Mac's checklist resets its page (`clampCurrentPage`).
+  const pastTheEnd = shown !== undefined && shown.hidden !== undefined && shown.items.length === 0 && (state.offset ?? 0) > 0;
+  const toFirstPage = useEffectEvent(() => {
+    void navigate({ search: (previous: SearchState) => ({ ...previous, offset: undefined }), replace: true });
+  });
+  useEffect(() => {
+    if (pastTheEnd) toFirstPage();
+  }, [pastTheEnd]);
+
   // Kept from render to render, so the readings' long lists render again only when they change.
   const titles = useMemo(
     () => new Map((volumes.data?.items ?? []).map((volume: Volume) => [volume.volumeId, volume.title])),
@@ -136,7 +207,34 @@ export function SearchScreen() {
   return (
     <section className="screen search">
       <h1 tabIndex={-1}>{copy.search.title}</h1>
-      <SearchEntry state={state} titles={titles} keepsUserData={keepsUserData} userTags={userTags} update={update} onSearch={search} />
+      <SearchEntry
+        state={state}
+        titles={titles}
+        keepsUserData={keepsUserData}
+        userTags={userTags}
+        update={update}
+        onSearch={search}
+        aids={
+          keepsUserData && (
+            <>
+              <button
+                type="button"
+                title={copy.savedSearches.saveHelp}
+                disabled={(state.keywords ?? '').trim() === ''}
+                onClick={(event) => open('saveSearch', event.currentTarget)}
+              >
+                <span aria-hidden="true">☆ </span>
+                {copy.savedSearches.save}
+              </button>
+              <button type="button" title={copy.savedSearches.openHelp} onClick={(event) => open('savedSearches', event.currentTarget)}>
+                <span aria-hidden="true">★ </span>
+                {copy.savedSearches.open}
+              </button>
+            </>
+          )
+        }
+      />
+      {keepsUserData && <CorpusBanner state={state} onLeave={() => update({ workingCorpusId: undefined })} />}
       {state.keywords !== undefined && !searchesAnywhere(state) && (
         // As the Mac's window says it, rather than search nowhere.
         <p className="error" role="alert">
@@ -150,6 +248,54 @@ export function SearchScreen() {
             titles={titles}
             userTags={userTags}
             results={results}
+            reviewed={reviewed}
+            checklist={
+              checklist.on
+                ? {
+                    announcement,
+                    canMark,
+                    canUndo: settled && [...checklist.marks.lastBulkBatch].some((key) => !checklist.readSinceEnabled.has(key)),
+                    markOne: (key) => {
+                      if (canMark) checklistStore.mark(key);
+                    },
+                    markPage: (keys) => {
+                      if (!canMark) return;
+                      setAnnouncement(copy.checklist.marked(checklistStore.markPage(keys)));
+                    },
+                    undo: () => {
+                      const before = shown?.hidden;
+                      setUndone({ before, rows: checklistStore.undo() });
+                    },
+                  }
+                : undefined
+            }
+            actions={
+              <>
+                {keepsUserData && (
+                  <button
+                    type="button"
+                    title={copy.corpora.saveHelp}
+                    disabled={!shown || shown.items.length === 0}
+                    onClick={(event) => open('saveCorpus', event.currentTarget)}
+                  >
+                    {copy.corpora.save}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  aria-pressed={checklist.on}
+                  title={checklist.on ? copy.checklist.offHelp : copy.checklist.onHelp}
+                  aria-label={copy.checklist.toggleName}
+                  onClick={() => {
+                    setAnnouncement('');
+                    checklistStore.setOn(!checklist.on, state);
+                  }}
+                >
+                  <span aria-hidden="true">☑ </span>
+                  {copy.checklist.toggle}
+                </button>
+              </>
+            }
             // Said only when the narrowing made the match smaller, as the Mac says it.
             narrowedFrom={
               panelOpen && shown && narrowed?.signature === signature && narrowed.from > shown.total ? narrowed.from : undefined
@@ -175,6 +321,9 @@ export function SearchScreen() {
           {panelOpen && <FacetPanel state={state} total={shown?.total} panel={facetPanel} onSearch={narrowTo} />}
         </div>
       )}
+      {sheet === 'saveSearch' && <SaveSearchDialog state={state} onClose={closed} />}
+      {sheet === 'savedSearches' && <SavedSearchesDialog onRecall={recall} onClose={closed} />}
+      {sheet === 'saveCorpus' && <SaveCorpusDialog state={state} reviewed={reviewed} onClose={closed} />}
     </section>
   );
 }
@@ -191,6 +340,7 @@ function SearchEntry({
   userTags,
   update,
   onSearch,
+  aids,
 }: {
   state: SearchState;
   titles: Map<string, string>;
@@ -199,6 +349,8 @@ function SearchEntry({
   userTags: UserTag[] | undefined;
   update: (changes: Partial<SearchState>) => void;
   onSearch: (keywords: string) => void;
+  /** The controls beside the search box's aids: Save this search and Saved searches. */
+  aids?: ReactNode;
 }) {
   // A filter's token removes itself, so focus goes to the search box rather than nowhere.
   const searchBox = useRef<HTMLInputElement>(null);
@@ -214,7 +366,7 @@ function SearchEntry({
   const [inspectorExpanded, setInspectorExpanded] = useState(false);
   return (
     <>
-      <SearchForm inputRef={searchBox} text={text} onTextChange={setText} onSubmit={onSearch} />
+      <SearchForm inputRef={searchBox} text={text} onTextChange={setText} onSubmit={onSearch} aids={aids} />
       <Filters
         state={state}
         titles={titles}
@@ -233,12 +385,14 @@ function SearchForm({
   text,
   onTextChange,
   onSubmit,
+  aids,
 }: {
   inputRef: RefObject<HTMLInputElement | null>;
   /** The box's text, which the search entry holds. */
   text: string;
   onTextChange: (text: string) => void;
   onSubmit: (keywords: string) => void;
+  aids?: ReactNode;
 }) {
   const inputId = useId();
 
@@ -272,6 +426,7 @@ function SearchForm({
         <Link to="/lookup" className="find-by-citation" title={copy.lookup.findByCitationHelp}>
           {copy.lookup.findByCitation}
         </Link>
+        {aids && <span className="saved-search-buttons">{aids}</span>}
       </div>
     </form>
   );
@@ -364,7 +519,16 @@ function Filters({
         </div>
       )}
       {userTags !== undefined && userTags.length > 0 && <MyTags state={state} tags={userTags} update={update} />}
-      {(state.yearKeys || state.personRollupId || state.userTagIds || state.subjectBucket || state.subjectBucketKey) && (
+      {keepsUserData && <ScopeFilter update={update} />}
+      {keepsUserData && <CorpusFilter state={state} update={update} />}
+      {(state.yearKeys ||
+        state.personRollupId ||
+        state.userTagIds ||
+        state.subjectBucket ||
+        state.subjectBucketKey ||
+        state.phrase ||
+        state.prefixWildcard ||
+        state.excludedTerms) && (
         <div className="chips" role="group" aria-label={copy.search.narrowedBy}>
           {state.yearKeys && (
             <FilterToken
@@ -402,6 +566,37 @@ function Filters({
               value={state.subjectLabel ?? state.subjectBucketKey ?? `#${state.subjectBucket}`}
               onClear={() => {
                 update({ subjectBucket: undefined, subjectBucketKey: undefined, subjectLabel: undefined });
+                onCleared();
+              }}
+            />
+          )}
+          {/* A recalled saved search's phrase, prefix and excluded terms, which the Mac's Advanced fields set. */}
+          {state.phrase && (
+            <FilterToken
+              field={copy.search.filterFields.phrase}
+              value={`“${state.phrase}”`}
+              onClear={() => {
+                update({ phrase: undefined });
+                onCleared();
+              }}
+            />
+          )}
+          {state.prefixWildcard && (
+            <FilterToken
+              field={copy.search.filterFields.prefix}
+              value={`${state.prefixWildcard}*`}
+              onClear={() => {
+                update({ prefixWildcard: undefined });
+                onCleared();
+              }}
+            />
+          )}
+          {state.excludedTerms && (
+            <FilterToken
+              field={copy.search.filterFields.excluding}
+              value={state.excludedTerms.join(', ')}
+              onClear={() => {
+                update({ excludedTerms: undefined });
                 onCleared();
               }}
             />
@@ -500,6 +695,17 @@ function FilterToken({ field, value, onClear }: { field: string; value: string; 
   );
 }
 
+/** What the results need of Checklist Mode while it is on. */
+interface ChecklistControls {
+  announcement: string;
+  /** Whether a mark can be made of the rows on screen: they are the search the checklist is anchored to. */
+  canMark: boolean;
+  canUndo: boolean;
+  markOne: (key: string) => void;
+  markPage: (keys: string[]) => void;
+  undo: () => void;
+}
+
 function Results({
   state,
   titles,
@@ -510,6 +716,9 @@ function Results({
   onTimelineMode,
   onAlign,
   facets,
+  actions,
+  checklist,
+  reviewed,
 }: {
   state: SearchState;
   titles: Map<string, string>;
@@ -522,6 +731,12 @@ function Results({
   onAlign: (order: ConcordanceOrder) => void;
   /** The control that opens the facet panel. */
   facets: ReactNode;
+  /** Save as Working Corpus… and Checklist, beside the readings. */
+  actions: ReactNode;
+  /** Checklist Mode's controls, while it is on. */
+  checklist: ChecklistControls | undefined;
+  /** The results it hides, which the readings leave out too. */
+  reviewed: readonly string[];
 }) {
   // The last page stays on screen while the next loads, so the pager keeps its focus and the
   // count stays one live region.
@@ -531,6 +746,20 @@ function Results({
   const first = list && list.items.length > 0 ? list.offset + 1 : 0;
   const last = list ? list.offset + list.items.length : 0;
   const reading: Reading = state.reading ?? 'list';
+  // A row marked reviewed leaves the list once the page has loaded again, and its button with it: the
+  // focus goes to the Mark Reviewed of the row that takes its place, or past the last to Mark Page Reviewed.
+  const listElement = useRef<HTMLOListElement>(null);
+  const focusAfterMark = useRef<number | null>(null);
+  useEffect(() => {
+    const index = focusAfterMark.current;
+    if (index === null || results.isFetching || results.isPlaceholderData) return;
+    focusAfterMark.current = null;
+    const buttons = listElement.current?.querySelectorAll<HTMLButtonElement>('button.mark-reviewed') ?? [];
+    (buttons[index] ?? document.querySelector<HTMLButtonElement>('.checklist-strip button[data-mark-page]'))?.focus();
+  }, [list, results.isFetching, results.isPlaceholderData]);
+  const hidden = list?.hidden ?? 0;
+  // What the pages reach: the results kept, less those Checklist Mode hides.
+  const shownTotal = list ? Math.max(0, Math.min(list.total, retainedLimit) - hidden) : 0;
   return (
     <section className="results" aria-labelledby="results-heading" aria-busy={results.isFetching}>
       <h2 id="results-heading" className="visually-hidden">
@@ -552,8 +781,20 @@ function Results({
         {list && !failed && <SortOrders state={state} list={list} />}
         {/* Each reading reads what a search found, so the picker waits for a match, as the Mac's does. */}
         {list && !failed && <ReadingPicker reading={reading} disabled={list.total === 0} onChange={onReading} />}
+        {actions}
         {facets}
       </div>
+      {checklist && (
+        <ChecklistStrip
+          hiddenCount={hidden}
+          // Both act on a page: the timeline has none.
+          pageRowCount={list && !failed && isPaged(reading) && checklist.canMark ? list.items.length : 0}
+          canUndo={isPaged(reading) && checklist.canUndo}
+          announcement={checklist.announcement}
+          onMarkPage={() => checklist.markPage((list?.items ?? []).map((item) => reviewedKey(item.volumeId, item.documentId)))}
+          onUndo={checklist.undo}
+        />
+      )}
       {list && !failed && isPartialEvidence(list.total) && (
         // As the Mac's window says it on every page: an order, a page or a reading of what a search
         // keeps is of its most relevant 7,500, not of the whole match.
@@ -578,7 +819,13 @@ function Results({
       )}
       {list && !failed && (
         <>
-          {list.items.length === 0 && list.total === 0 ? (
+          {checklist && list.total > 0 && hidden > 0 && shownTotal === 0 ? (
+            // Checklist Mode has hidden every result, as the Mac's window says.
+            <div className="empty">
+              <h3>{copy.checklist.allReviewedTitle}</h3>
+              <p>{copy.checklist.allReviewedDetail}</p>
+            </div>
+          ) : list.items.length === 0 && list.total === 0 ? (
             // A search that found nothing says so in any reading, as the Mac's window does.
             results.isPlaceholderData ? null : (state.keywords ?? '').trim() !== '' ? (
               // Only once the search shown is this one, as the Mac's window waits for its search.
@@ -587,14 +834,21 @@ function Results({
               <p>{copy.search.none}</p>
             )
           ) : reading === 'timeline' ? (
-            <TimelineReading state={state} titles={titles} mode={state.timelineMode ?? 'chart'} onMode={onTimelineMode} />
+            <TimelineReading
+              state={state}
+              titles={titles}
+              mode={state.timelineMode ?? 'chart'}
+              onMode={onTimelineMode}
+              reviewed={reviewed}
+              total={list.total}
+            />
           ) : list.items.length === 0 ? (
             <p>{copy.search.pastEnd}</p>
           ) : reading === 'concordance' ? (
-            <ConcordanceReading state={state} total={list.total} order={state.align ?? 'leftContext'} onOrder={onAlign} />
+            <ConcordanceReading state={state} total={list.total} order={state.align ?? 'leftContext'} onOrder={onAlign} reviewed={reviewed} />
           ) : (
-            <ol className="result-list" aria-label={copy.search.results} start={first}>
-              {list.items.map((item) => (
+            <ol ref={listElement} className="result-list" aria-label={copy.search.results} start={first}>
+              {list.items.map((item, index) => (
                 <li key={`${item.volumeId}/${item.documentId}`} className="result">
                   <h3>
                     <Link to="/doc/$volumeId/$documentId" params={{ volumeId: item.volumeId, documentId: item.documentId }}>
@@ -614,12 +868,28 @@ function Results({
                     <Snippet text={item.snippet} />
                   </p>
                   <RowTags tagIds={item.userTagIds} tags={userTags} />
+                  {checklist && (
+                    // Hides the result without opening it, as the Mac's row menu offers while the mode is on.
+                    <button
+                      type="button"
+                      className="mark-reviewed"
+                      aria-label={`${copy.checklist.markReviewed}: ${item.displayTitle}`}
+                      // Not while another search's rows are on screen: the mark would be kept under the next.
+                      disabled={!checklist.canMark}
+                      onClick={() => {
+                        focusAfterMark.current = index;
+                        checklist.markOne(reviewedKey(item.volumeId, item.documentId));
+                      }}
+                    >
+                      {copy.checklist.markReviewed}
+                    </button>
+                  )}
                 </li>
               ))}
             </ol>
           )}
           {/* The timeline covers every result the search keeps, so it has no page to turn. */}
-          {isPaged(reading) && <Pager state={state} list={list} />}
+          {isPaged(reading) && <Pager state={state} list={list} shownTotal={shownTotal} />}
         </>
       )}
     </section>
@@ -672,10 +942,11 @@ function SortOrders({ state, list }: { state: SearchState; list: SearchResultLis
   );
 }
 
-function Pager({ state, list }: { state: SearchState; list: SearchResultList }) {
+function Pager({ state, list, shownTotal }: { state: SearchState; list: SearchResultList; shownTotal: number }) {
   const navigate = route.useNavigate();
   const limit = state.limit ?? defaultLimit;
-  const pages = pageCount(list.total, limit);
+  // Over what the pages reach, which Checklist Mode makes fewer than the results kept.
+  const pages = pageCount(list.hidden !== undefined ? shownTotal : list.total, limit);
   // An offset past the last result, from an edited URL or a changed index, counts as past the
   // last page, and Previous goes to the last page.
   const page = Math.floor(list.offset / limit) + 1;

@@ -17,6 +17,7 @@ import { copy } from '../copy';
 import { NoteEditor } from '../research/NoteEditor';
 import { ResearchRail } from '../research/ResearchRail';
 import type { ReaderSearch } from '../router';
+import { checklistStore, reviewedKey } from '../search/checklist';
 import { useReadingWidth, useTextSize } from '../settings/preferences';
 import { useScheme } from '../shell/AppShell';
 import { useHeadingReady } from '../shell/headingFocus';
@@ -48,6 +49,8 @@ async function checkPage(url: string, signal: AbortSignal): Promise<{ renderingV
 
 export function ReaderScreen() {
   const { volumeId, documentId } = route.useParams();
+  // A document opened while Checklist Mode is on leaves its list (S17e), as the Mac's reading history hides it.
+  useEffect(() => checklistStore.opened(reviewedKey(volumeId, documentId)), [volumeId, documentId]);
   const { rail, note } = route.useSearch();
   const navigate = route.useNavigate();
   const queryClient = useQueryClient();

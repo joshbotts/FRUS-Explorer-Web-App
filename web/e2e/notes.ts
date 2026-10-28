@@ -59,7 +59,7 @@ export function run(text: string, format: Partial<Run> = {}): Run {
   return { text, bold: false, italic: false, underline: false, ...format };
 }
 
-async function getJSON<T>(page: Page, path: string): Promise<T> {
+export async function getJSON<T>(page: Page, path: string): Promise<T> {
   const response = await page.request.get(path);
   expect(response.ok(), path).toBe(true);
   return (await response.json()) as T;

@@ -120,6 +120,9 @@ public struct SearchResultList: Codable, Equatable, Sendable {
     /// The orders a search offers, with the kit's label for each (`SearchSortOrder.label`).
     public var sortChoices: [Choice]
     public var items: [SearchItem]
+    /// With `reviewed` (S17e): how many of the results kept the pages leave out as reviewed, as the
+    /// Mac's Checklist Mode counts its hidden rows; absent outside it.
+    public var hidden: Int?
     public var coverage: Coverage
 }
 
@@ -306,29 +309,15 @@ enum SearchRoutes {
         // connection, and the kit then stops its statements, the count's, the page's and those of the
         // results kept for an order of the date, so the next search does not wait behind them (#1698).
         router.get("/api/v1/search") { request, context -> SearchResultList in
-            let search = try SearchRequest(formEncoded: request.uri.query)
-            let user = try await users.user(searching: search.parameters, for: request, context: context)
-            let served = try await provider.served()
-            let scoped = try served.search(for: user)
-            return try await context.whileClientConnected {
-                do {
-                    // One count of the whole match, and the page: both through the pipeline's one
-                    // connection, and each kept a while, so another page of the search, or the
-                    // concordance of this one, asks for neither again. The page is asked for first, so
-                    // that in an order of the date the request joins at once the results kept of its
-                    // search, as a request that replaces another for the same search must to share
-                    // them: its count waits behind them.
-                    async let items = page(search, served: served, scoped: scoped)
-                    let total = try await served.recent.count(of: search.parameters, in: scoped)
-                    return SearchResultList(total: total, countBasis: "exact", limit: search.limit, offset: search.offset,
-                                            retainedLimit: SearchRequest.retainedLimit, sort: search.sort.rawValue,
-                                            sortChoices: SearchSortOrder.allCases.map { Choice(value: $0.rawValue, title: $0.label) },
-                                            items: try await items.map(SearchItem.init),
-                                            coverage: Coverage(index: served.corpus, resources: resources))
-                } catch let error as FTS5Error {
-                    throw refusal(error)
-                }
-            }
+            try await search(try FormQuery(request.uri.query), request: request, context: context, provider: provider,
+                             resources: resources, users: users)
+        }
+        // The same, with its query in the body, for one whose Checklist Mode hides more results than
+        // an address holds (S17e), as /search/inspect takes a long query.
+        router.post("/api/v1/search") { request, context -> SearchResultList in
+            let body = try await request.body.collect(upTo: postedSearchLimit)
+            let form = try FormQuery(body.readableBytes > 0 ? String(buffer: body) : request.uri.query)
+            return try await search(form, request: request, context: context, provider: provider, resources: resources, users: users)
         }
         // The inspector compiles without reading the index, so it answers before an import too. Its
         // expensive passes count each term, which stops as a search does.
@@ -336,6 +325,7 @@ enum SearchRoutes {
             let form = try FormQuery(request.uri.query)
             return try await context.whileClientConnected {
                 try await inspect(form, provider: provider) { try await users.user(searching: $0, for: request, context: context) }
+                    inside: { try await users.inside($0, $1, for: $2, served: $3) }
             }
         }
         router.post("/api/v1/search/inspect") { request, context -> SearchInspection in
@@ -343,6 +333,42 @@ enum SearchRoutes {
             let form = try FormQuery(body.readableBytes > 0 ? String(buffer: body) : request.uri.query)
             return try await context.whileClientConnected {
                 try await inspect(form, provider: provider) { try await users.user(searching: $0, for: request, context: context) }
+                    inside: { try await users.inside($0, $1, for: $2, served: $3) }
+            }
+        }
+    }
+
+    /// The largest body `POST /api/v1/search` takes: room for every key `reviewed` may name, each
+    /// escaped as a form escapes it, beside the search's fields.
+    static let postedSearchLimit = 1_024 * 1_024
+
+    /// A page of the search `form` says, with its exact count, for the user `request` acts for.
+    static func search(_ form: FormQuery, request: Request, context: APIRequestContext, provider: ServedIndexProvider,
+                       resources: ServerResources, users: SearchUsers) async throws -> SearchResultList {
+        var asked = try SearchRequest(form: form)
+        let user = try await users.user(searching: asked.parameters, for: request, context: context)
+        let served = try await provider.served()
+        asked.parameters = try await users.inside(asked.workingCorpusId, asked.parameters, for: user, served: served)
+        let search = asked
+        let scoped = try served.search(for: user)
+        return try await context.whileClientConnected {
+            do {
+                // One count of the whole match, and the page: both through the pipeline's one
+                // connection, and each kept a while, so another page of the search, or the
+                // concordance of this one, asks for neither again. The page is asked for first, so
+                // that in an order of the date the request joins at once the results kept of its
+                // search, as a request that replaces another for the same search must to share
+                // them: its count waits behind them.
+                async let cut = cutPage(search, served: served, scoped: scoped)
+                let total = try await served.recent.count(of: search.parameters, in: scoped)
+                let page = try await cut
+                return SearchResultList(total: total, countBasis: "exact", limit: search.limit, offset: search.offset,
+                                        retainedLimit: SearchRequest.retainedLimit, sort: search.sort.rawValue,
+                                        sortChoices: SearchSortOrder.allCases.map { Choice(value: $0.rawValue, title: $0.label) },
+                                        items: page.results.map(SearchItem.init), hidden: page.hidden,
+                                        coverage: Coverage(index: served.corpus, resources: resources))
+            } catch let error as FTS5Error {
+                throw refusal(error)
             }
         }
     }
@@ -352,12 +378,23 @@ enum SearchRoutes {
     /// all of them in that order, as the Mac's window sorts what it keeps and pages it
     /// (`SearchSortOrder.sorted(_:)`).
     static func page(_ search: SearchRequest, served: ServedIndex, scoped: ServedSearch) async throws -> [SearchResult] {
+        try await cutPage(search, served: served, scoped: scoped).results
+    }
+
+    /// The page `search` asks for, as ``page(_:served:scoped:)`` cuts it, and how many of the results
+    /// kept it leaves out as reviewed. Outside Checklist Mode that is nil, and the page is as before.
+    /// In it, the page is cut, in either order, from the results the app keeps of the search less those
+    /// `reviewed` names, as the Mac's window pages its `displayedResults`, and the count is of those.
+    static func cutPage(_ search: SearchRequest, served: ServedIndex, scoped: ServedSearch) async throws
+        -> (results: [SearchResult], hidden: Int?) {
         switch search.sort {
-        case .relevance:
-            return try await served.recent.page(of: search, in: scoped)
-        case .dateAscending, .dateDescending:
+        case .relevance where search.reviewed.isEmpty:
+            return (try await served.recent.page(of: search, in: scoped), nil)
+        case .relevance, .dateAscending, .dateDescending:
             let kept = try await served.retained.results(of: search.parameters, in: scoped)
-            return Array(search.sort.sorted(kept).dropFirst(search.offset).prefix(search.limit))
+            let shown = search.sort.sorted(kept).filter { !search.hides($0) }
+            return (Array(shown.dropFirst(search.offset).prefix(search.limit)),
+                    search.reviewed.isEmpty ? nil : kept.count - shown.count)
         }
     }
 
@@ -389,11 +426,13 @@ enum SearchRoutes {
     /// A query of more terms than `inspectedTermLimit` is compiled, and not looked up. The passes
     /// count as the search does, with the user half of the user `user` gives for the parameters.
     static func inspect(_ form: FormQuery, provider: ServedIndexProvider,
-                        user: (SearchParameters) async throws -> SearchUser?) async throws -> SearchInspection {
+                        user: (SearchParameters) async throws -> SearchUser?,
+                        inside: (String?, SearchParameters, SearchUser?, ServedIndex?) async throws -> SearchParameters)
+        async throws -> SearchInspection {
         let search = try SearchRequest(form: form, alsoTaking: passFields)
         let countsInScope = try form.bool("scopedCounts") ?? false
         let blames = try form.bool("emptyConjuncts") ?? false
-        let parameters = search.parameters
+        var parameters = search.parameters
         let searcher = try await user(parameters)
         let parse = FTS5InlineQueryParser.parseDetailed(parameters.keywords ?? "", columnPrefix: "",
                                                         structured: parameters.structuredQueryParts)
@@ -414,7 +453,13 @@ enum SearchRoutes {
             return inspected
         }
         let served = countsInScope || blames ? try await provider.served() : try await provider.servedIfReady()
-        guard let served else { return inspected }
+        guard let served else {
+            // A corpus is the user's whatever is served, and the passes that read it wait for an index.
+            _ = try await inside(search.workingCorpusId, parameters, searcher, nil)
+            return inspected
+        }
+        // Its counts are taken inside the working corpus the search runs inside, as the search counts.
+        parameters = try await inside(search.workingCorpusId, parameters, searcher, served)
         let inspector = QueryInspector(searchService: try served.search(for: searcher).service)
         var inspection = await inspector.inspect(parameters: parameters, indexedVolumeCount: served.corpus.summary.volumes)
         if countsInScope {

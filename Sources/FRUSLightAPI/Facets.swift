@@ -119,11 +119,14 @@ enum FacetRoutes {
                     users: SearchUsers) {
         router.get("/api/v1/search/facets") { request, context -> SearchFacetSection in
             let form = try FormQuery(request.uri.query)
-            let parameters = try SearchRequest.parameters(from: form, alsoTaking: sectionFields)
+            let asked = try SearchRequest.parameters(from: form, alsoTaking: sectionFields)
             let section = try requiredSection(form, among: FacetSection.allCases)
             let display = try displayState(form, for: section)
-            let user = try await users.user(searching: parameters, for: request, context: context)
+            let user = try await users.user(searching: asked, for: request, context: context)
             let served = try await provider.served()
+            // Inside the working corpus the search runs inside (S17e), whose gate no field says, so a
+            // row's narrowing is of the fields alone.
+            let parameters = try await users.inside(SearchRequest.workingCorpusId(in: form), asked, for: user, served: served)
             let facets = try await computed(section, parameters: parameters, served: served, scoped: try served.search(for: user))
             let page = FacetPaging.page(buckets(section, in: facets), with: display)
             let narrowable = FacetNarrowing.isNarrowable(section) && !FacetSelectionApplier.stagedSections.contains(section)
@@ -162,7 +165,7 @@ enum FacetRoutes {
 
         router.get("/api/v1/search/facets/selection") { request, context -> SearchFacetSelection in
             let form = try FormQuery(request.uri.query)
-            let parameters = try SearchRequest.parameters(from: form, alsoTaking: selectionFields)
+            let asked = try SearchRequest.parameters(from: form, alsoTaking: selectionFields)
             let staged = FacetSection.allCases.filter(FacetSelectionApplier.stagedSections.contains)
             let section = try requiredSection(form, among: staged)
             let included = try form.list("include") ?? []
@@ -170,8 +173,9 @@ enum FacetRoutes {
             if let both = included.first(where: excluded.contains) {
                 throw APIProblem.invalidParameter("exclude", "\(both) is included too; a row is one or the other")
             }
-            let user = try await users.user(searching: parameters, for: request, context: context)
+            let user = try await users.user(searching: asked, for: request, context: context)
             let served = try await provider.served()
+            let parameters = try await users.inside(SearchRequest.workingCorpusId(in: form), asked, for: user, served: served)
             // Over the section's whole list, not the page shown: an exclusion alone means every row
             // but those, as the app's panel resolves it.
             let facets = try await computed(section, parameters: parameters, served: served, scoped: try served.search(for: user))

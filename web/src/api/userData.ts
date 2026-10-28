@@ -87,7 +87,7 @@ export function searchesChanged(client: QueryClient) {
 }
 
 /** Sends a change with the user's token, and once more with a new one if the server no longer knows it. */
-async function change<T>(client: QueryClient, method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown) {
+export async function change<T>(client: QueryClient, method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown) {
   const me = await client.ensureQueryData(meQuery);
   try {
     return await sendJSON<T>(method, path, me.csrfToken, body);
@@ -433,10 +433,11 @@ export function importStatusQuery(id: string) {
   });
 }
 
-/** After an import, every list of the user's may hold what it brought. */
+/** After an import, every list of the user's may hold what it brought, the saved searches, corpora and scopes among them (S17e). */
 export function researchImported(client: QueryClient) {
   for (const key of ['tags', 'documentTags', 'notes', 'documentNotes', 'note', 'documentSummaries', 'documentHighlights', 'projects', 'exportContents']) {
     void client.invalidateQueries({ queryKey: [key] });
   }
+  for (const key of ['savedSearches', 'workingCorpora', 'workingCorpus', 'volumeScopes', 'volumeScope']) void client.invalidateQueries({ queryKey: [key] });
   searchesChanged(client);
 }

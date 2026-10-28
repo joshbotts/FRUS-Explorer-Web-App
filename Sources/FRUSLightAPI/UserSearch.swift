@@ -72,6 +72,34 @@ struct SearchUsers: Sendable {
         }
     }
 
+    /// `parameters` inside the working corpus `corpusId` (PLAN's S17e), one of `user`'s: the corpus's
+    /// documents the served index holds, as the kit's resolver finds them by volume
+    /// (`WorkingCorpusResolver.resolve(documentKeys:)`), as the search's only document gate
+    /// (`SearchParameters.runningInside(workingCorpus:)`), as the Mac runs a search inside the corpus
+    /// its window has applied. A corpus none of whose documents the index holds gates the search to
+    /// nothing, the kit's empty gate. No corpus leaves `parameters` as they are; one that is not the
+    /// user's, or any for no one, is refused as `CORPUS_NOT_FOUND`. With no index served the corpus is
+    /// only found, for a request that reads none, such as the Query Inspector's compile.
+    func inside(_ corpusId: String?, _ parameters: SearchParameters, for user: SearchUser?,
+                served: ServedIndex?) async throws -> SearchParameters {
+        guard let corpusId else { return parameters }
+        guard let services, let user else {
+            throw APIProblem(.notFound, code: "CORPUS_NOT_FOUND",
+                             detail: "No working corpus with the id \(corpusId) is yours to search inside: this request acts for no one, and a search runs inside the corpora of the user a request under /api/v1/me acts for.")
+        }
+        return try await Self.inside(corpusId, parameters, for: user.id, in: services.store, served: served)
+    }
+
+    /// `parameters` inside the user `id`'s working corpus `corpusId`, as ``inside(_:_:for:served:)``.
+    static func inside(_ corpusId: String?, _ parameters: SearchParameters, for id: String, in store: any UserDataStore,
+                       served: ServedIndex?) async throws -> SearchParameters {
+        guard let corpusId else { return parameters }
+        let corpus = try await WorkingCorpusRoutes.corpus(corpusId, of: id, in: store)
+        guard let served else { return parameters }
+        let resolution = WorkingCorpusResolver(indexedVolumeIds: served.indexedVolumeIds).resolve(documentKeys: corpus.documentKeys)
+        return parameters.runningInside(workingCorpus: resolution.indexedKeys)
+    }
+
     /// A tag's id with its ASCII letters in upper case: the kit matches a tag's id as SQLite's
     /// `COLLATE NOCASE` does, so a filter by an id in any case finds the user's tag.
     static func caseFolded(_ id: String) -> String {
@@ -103,12 +131,14 @@ enum SearchTagRoutes {
         // A search's fields, and its page and order, which change nothing it counts, so a search's
         // address can be read as it stands, as /search/inspect reads it.
         me.get("/search/tags") { request, context -> SearchTagCounts in
-            let parameters = try SearchRequest(formEncoded: request.uri.query).parameters
+            let request = try SearchRequest(formEncoded: request.uri.query)
             let user = try context.requireUser()
-            let search = try await SearchUsers.user(user.id, searching: parameters, in: services.store)
+            let search = try await SearchUsers.user(user.id, searching: request.parameters, in: services.store)
             let store = services.store
             let tags = try await Blocking.run { try store.tags(of: user.id) }
             let served = try await provider.served()
+            let parameters = try await SearchUsers.inside(request.workingCorpusId, request.parameters, for: user.id, in: store,
+                                                         served: served)
             let counts: [String: Int]
             do {
                 counts = try await served.search(for: search).service.userTagCounts(parameters: parameters, tagIds: tags.map(\.id))

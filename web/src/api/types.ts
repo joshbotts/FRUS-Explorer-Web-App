@@ -242,6 +242,8 @@ export interface SearchResultList {
   /** The three orders, with the kit's label for each. */
   sortChoices: Choice[];
   items: SearchItem[];
+  /** In Checklist Mode (S17e), how many of the results kept the pages leave out as reviewed. */
+  hidden?: number;
   coverage: Coverage;
 }
 

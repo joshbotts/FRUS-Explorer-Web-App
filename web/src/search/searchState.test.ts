@@ -7,6 +7,7 @@ import {
   isPartialEvidence,
   pageCount,
   readings,
+  recalledSearch,
   retainedLimit,
   scopeChange,
   searches,
@@ -209,5 +210,37 @@ describe('the reading', () => {
 
   it('pages the list and the concordance, which show one page, and not the timeline, which shows all the search keeps', () => {
     expect(readings.filter(isPaged)).toEqual(['list', 'concordance']);
+  });
+});
+
+describe('a working corpus and a recalled saved search (S17e)', () => {
+  const corpus = '0C6B1D0E-5E2B-4E40-9A43-8E1A5D1E2F01';
+
+  it('keeps a working corpus by its id, in upper case, and drops what is no id', () => {
+    expect(validateSearch({ keywords: 'x', workingCorpusId: corpus.toLowerCase() })).toEqual({ keywords: 'x', workingCorpusId: corpus });
+    expect(validateSearch({ keywords: 'x', workingCorpusId: 'talks' })).toEqual({ keywords: 'x' });
+    expect(filterFields({ keywords: 'x', workingCorpusId: corpus })).toMatchObject({ workingCorpusId: corpus });
+  });
+
+  it('keeps a phrase, a prefix and excluded terms, and sends them', () => {
+    const state = validateSearch({ keywords: 'x', phrase: 'iron curtain', prefixWildcard: 'negoti', excludedTerms: ['canal', ''] });
+    expect(state).toEqual({ keywords: 'x', phrase: 'iron curtain', prefixWildcard: 'negoti', excludedTerms: ['canal'] });
+    expect(filterFields(state)).toMatchObject({ phrase: 'iron curtain', prefixWildcard: 'negoti', excludedTerms: ['canal'] });
+  });
+
+  it('recalls a saved search’s fields inside the corpus applied now, from the first page, keeping the reading and the order', () => {
+    const recalled = recalledSearch(
+      { keywords: ['treaties'], volumeIds: ['frus1961-63v06'], includeNotes: ['false'] },
+      { keywords: 'canal', workingCorpusId: corpus, reading: 'timeline', sort: 'dateAscending', limit: 50, offset: 100, panel: 'facets', yearKeys: ['1960'] },
+    );
+    expect(recalled).toEqual({
+      keywords: 'treaties',
+      volumeIds: ['frus1961-63v06'],
+      includeNotes: false,
+      workingCorpusId: corpus,
+      reading: 'timeline',
+      sort: 'dateAscending',
+      limit: 50,
+    });
   });
 });

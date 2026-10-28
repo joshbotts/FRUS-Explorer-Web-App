@@ -206,7 +206,7 @@ final class CSRFTokens: Sendable {
 
 /// What the user store keeps for the routes under /api/v1/me.
 typealias UserDataStore = UserStore & TagStore & HighlightStore & NoteStore & SummaryStore & ProjectStore & ResearchImportStore
-    & ResearchExportStore & UserSearchStore
+    & ResearchExportStore & UserSearchStore & SearchSetStore
 
 /// What the routes under /api/v1/me need.
 struct UserDataServices: Sendable {
@@ -415,6 +415,13 @@ enum UserDataRoutes {
         ProjectRoutes.add(to: me, services: services)
         ExportRoutes.add(to: me, services: services)
         SearchTagRoutes.add(to: me, services: services, provider: provider, resources: resources)
+        SavedSearchRoutes.add(to: me, services: services, provider: provider)
+        VolumeScopeRoutes.add(to: me, services: services, provider: provider, resources: resources)
+        // A working corpus's capture carries the results Checklist Mode hides, so its two routes have
+        // a group of their own, with its larger limit (S17e).
+        let captures = router.group("/api/v1/me")
+            .add(middleware: UserDataGuard(services: services, bodyLimit: WorkingCorpusRoutes.bodyLimit))
+        WorkingCorpusRoutes.add(to: me, captures: captures, services: services, provider: provider, resources: resources)
         // The same guard with a note's larger limit, over a group of its own, so that the limit is
         // the route's.
         let notes = router.group("/api/v1/me")
