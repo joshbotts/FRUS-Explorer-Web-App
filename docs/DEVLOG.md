@@ -4,7 +4,7 @@ One entry per session, newest first.
 
 ## Session 14b: the user store's daily backup and its restore
 
-27 October 2026 · branch `claude/nice-austin-7a6810` · [#70](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/70) · upstream `503a730b`, unchanged
+27 October 2026 · branch `claude/nice-austin-7a6810` · [#70](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/70) · upstream `503a730b`, then `1c18b51e` with main at #68
 
 Phase 2's row S14b, on the server's track after S14a. Since S15c the store holds the researcher's own writing, which may exist nowhere else. Now the server backs it up every day: seven copies in the volume, seven in a folder on the host. The API gives the newest, and a command puts one back with the server stopped. No upstream pull request, no pin move, no schema change.
 
@@ -41,7 +41,7 @@ Phase 2's row S14b, on the server's track after S14a. Since S15c the store holds
 
 **Results**
 
-- **Linux, `swift:6.4-noble`, arm64:** this package's own targets built clean, with no warnings. All 2,382 tests pass, up from 2,359 at #63, with the one named skip and nothing cancelled: FRUSLightCoreTests 126 and FRUSLightServerTests 175, the others as at #63. The first full run, before the rule for an empty store, also hit the flake under Notes.
+- **Linux, `swift:6.4-noble`, arm64:** this package's own targets built clean, with no warnings. All 2,382 tests pass, up from 2,359 at #63, with the one named skip and nothing cancelled: FRUSLightCoreTests 126 and FRUSLightServerTests 175, the others as at #63. The first full run, before the rule for an empty store, also hit the flake under Notes. On the merge with main at #68, S17c's pin move to `1c18b51e`, the package's own targets built clean again, and all 2,477 tests pass, up from 2,454 at #68, with the one named skip and nothing cancelled; the others are as at #68, FRUSCoreKitTests 1,286 among them.
 - **`scripts/compose-smoke`,** on this branch's image built as `frus-light:smoke`, in a Compose project and on a port of its own (18094), both removed afterwards: passes.
   - The first look named 03:00 America/New_York, and took no backup of the new store.
   - After the import through nginx, `frus-light backup` took `app-20261027T232048Z.db` and copied it to the host folder, and a second run took none.
@@ -66,8 +66,9 @@ Phase 2's row S14b, on the server's track after S14a. Since S15c the store holds
   The first saves a new install from a backup of nothing at its start, which would hold off the first real one, after the import, until 03:00. After a lost volume, it would also have been the newest in the host folder and pushed out a real one.
 - **`TZ` without tzdata.** The runtime image has no tzdata package and needs none: the server links Foundation's ICU statically, and ICU's own data knows every zone, as the smoke test's New York shows. Nothing else the server writes depends on the zone, since every date it writes is UTC ISO 8601.
 - **A host folder on Linux.** Docker makes a missing bind-mount source as root, and UID 10001 cannot write it. The server then warns at its start, and the backups stay in the volume. `INSTALL.md` has a Linux host `chown` the folder first. Docker Desktop lets any container user write one, and the smoke test makes its own folder writable by all.
-- **`RecentComputationsTests`' `aRequestCancelledWhileAnotherWaitsLeavesAtOnceAndTheValueIsKept`** failed in the first full run, while other sessions' builds loaded the Mac, and in 1 of 3 runs alone. It races a cancel against a second waiter, nothing here touches it, and main's CI has passed it. It is left as a follow-up.
-- **The build** reused S16d's `.build/linux` through an APFS clone (`cp -c`), at the same pin, and rebuilt this package's own targets clean.
+- **`RecentComputationsTests`' `aRequestCancelledWhileAnotherWaitsLeavesAtOnceAndTheValueIsKept`** failed in the first full run, while other sessions' builds loaded the Mac, and in 1 of 3 runs alone. Nothing here touches it, and main's CI has passed it. A session of its own found the test's two tasks reaching the cache in either order, and [#72](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/72) fixes the test.
+- **The build** reused S16d's `.build/linux` through an APFS clone (`cp -c`), at the same pin, and rebuilt this package's own targets clean; after the merge with main, S17c's at `1c18b51e`.
+- **Another session's smoke test** rebuilt the shared `frus-light:smoke` tag during a local `--e2e` run, and its "under a path" step then recreated the container from the other image. Run beside other sessions with an image tag of your own (`FRUS_IMAGE`); CI passes its own.
 - **The owner's install** (`frus-light`, port 8080) was not touched.
 
 **Next: the owner's restore drill** (PLAN's owner checkpoints), after the merge, on the owner's install; the pull request's body gives its steps. Beside it on the server's track: S14d and S14e, after S14c. S17d follows S17c's pin move, and S16e and S18b are in flight.
