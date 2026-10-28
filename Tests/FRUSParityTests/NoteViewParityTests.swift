@@ -6,7 +6,8 @@
 // report counts, the export sheet's, each in the copy.ts block the browser app reads it from, and
 // its format strings as functions; from S16d the sheet's Contents, its rows' order and counts, its
 // switch and its JSON row; All Notes' rows, filters and count, which
-// web/src/research/notesRules.ts mirrors until S17b moves them into the kit; the rail's note rows,
+// web/src/research/notesRules.ts mirrors, the kit's since S17b's FRUS-Explorer#1805 and read here
+// from the kit's file, since the browser app applies them to the notes it holds; the rail's note rows,
 // its summary preview and history control, and its sections' open states; and the editor's rules
 // for a summary inserted, a tag made, the formatting bar's toggles and its link. A pin move that
 // changes one fails here until the web follows it. The server's mirrors of the app's model code are
@@ -18,7 +19,8 @@ import Foundation
 import Testing
 
 @Suite struct NoteViewParityTests {
-    static let app = RepositoryFiles.root.appendingPathComponent("upstream/FRUS-Explorer/FRUSExplorer")
+    static let upstream = RepositoryFiles.root.appendingPathComponent("upstream/FRUS-Explorer")
+    static let app = upstream.appendingPathComponent("FRUSExplorer")
     static let web = RepositoryFiles.root.appendingPathComponent("web/src")
 
     static func read(_ base: URL, _ path: String) throws -> String {
@@ -49,7 +51,11 @@ import Testing
     final class Sources {
         private var read: [String: String] = [:]
 
-        func app(_ path: String) throws -> String { try source(NoteViewParityTests.app, path) }
+        /// The app's source at `path` in its folder, or, for a path under `FRUSCoreKit/`, the app's
+        /// code that moved into the kit.
+        func app(_ path: String) throws -> String {
+            try source(path.hasPrefix("FRUSCoreKit/") ? NoteViewParityTests.upstream : NoteViewParityTests.app, path)
+        }
         func web(_ path: String) throws -> String { try source(NoteViewParityTests.web, path) }
 
         private func source(_ base: URL, _ path: String) throws -> String {
@@ -124,7 +130,7 @@ import Testing
             ("Research/AllNotesScreen.swift", "settings.notes.filter.tag", "Tag", "allNotes", "tag"),
             ("Research/AllNotesScreen.swift", "settings.notes.filter.tag.all", "All tags", "allNotes", "allTags"),
             ("Research/AllNotesScreen.swift", "settings.notes.filter.search", "Search notes…", "allNotes", "search"),
-            ("Models/NotesPaneSnapshot.swift", "settings.notes.emptyNote", "Empty note", "allNotes", "emptyNote"),
+            ("FRUSCoreKit/Models/NotesPaneSnapshot.swift", "settings.notes.emptyNote", "Empty note", "allNotes", "emptyNote"),
             ("Research/AllNotesScreen.swift", "settings.notes.none.title", "No Notes", "allNotes", "noneTitle"),
             ("Research/AllNotesScreen.swift", "settings.notes.empty", "No notes yet. Notes you write from a document appear here.", "allNotes", "empty"),
             ("Research/AllNotesScreen.swift", "settings.notes.none.filtered", "No notes match the selected filters.", "allNotes", "noneFiltered"),
@@ -191,10 +197,12 @@ import Testing
              "position: (index: number, count: number) => `${index}/${count}`,"),
             ("App/SupportingViews.swift", "summary.history.position.a11y %lld %lld", "Summary %lld of %lld", "summary",
              "positionLabel: (index: number, count: number) => `Summary ${index} of ${count}`,"),
-            ("Models/NotesPaneSnapshot.swift", "settings.notes.showing %lld %@", "Showing %lld of %@", "allNotes",
+            ("FRUSCoreKit/Models/NotesPaneSnapshot.swift", "settings.notes.showing %lld %@", "Showing %lld of %@", "allNotes",
              "showing: (shown: number, total: string) => `Showing ${shown} of ${total}`,"),
-            ("Models/ResearchItemCounts.swift", "settings.list.count.note.one", "%@ note", "allNotes", "noteOne: (count: string) => `${count} note`,"),
-            ("Models/ResearchItemCounts.swift", "settings.list.count.note.many", "%@ notes", "allNotes", "noteMany: (count: string) => `${count} notes`,"),
+            ("FRUSCoreKit/Models/ResearchItemCounts.swift", "settings.list.count.note.one", "%@ note", "allNotes",
+             "noteOne: (count: string) => `${count} note`,"),
+            ("FRUSCoreKit/Models/ResearchItemCounts.swift", "settings.list.count.note.many", "%@ notes", "allNotes",
+             "noteMany: (count: string) => `${count} notes`,"),
             // The app interpolates the count, which a localized string groups.
             ("Export/ResearchDataExportView.swift", "settings.export.markdown.action", #"Export Notes as Markdown (\(markdownExportURLs.count))"#, "dataSettings",
              "exportMarkdown: (count: number) => `Export Notes as Markdown (${count.toLocaleString('en-US')})`,"),
@@ -210,7 +218,7 @@ import Testing
             #expect(Self.writes(try sources.app(format.file), format.key, format.value), "\(format.file) writes \(format.key) as \(format.value)")
             #expect(try Self.block(format.block, of: copy).contains(Self.flattened(format.web)), "copy.\(format.block) holds \(format.web)")
         }
-        #expect(try sources.app("Models/ResearchItemCounts.swift").contains("CountCopy.phrase(count,"))
+        #expect(try sources.app("FRUSCoreKit/Models/ResearchItemCounts.swift").contains("CountCopy.phrase(count,"))
         // The values web/src/research/notesRules.test.ts expects of noteCount.
         let english = Locale(identifier: "en_US")
         #expect([1, 0, 1_204].map { CountCopy.phrase($0, one: "%@ note", many: "%@ notes", locale: english) }
@@ -224,7 +232,9 @@ import Testing
     /// The export sheet's Contents (S16d), as `DataExportSections` lists it, in its order, each row
     /// counting what the web's row counts, and `ExportSection.tsx`'s rows in the same order: the
     /// researcher's own prompts, as the export carries them; tags with their assignments in one row;
-    /// the trail's three and the eight of version 7 by the counts the sheet takes from its read.
+    /// the trail's three and the eight of version 7 by the counts the sheet takes from its read. Since
+    /// #1792 each counts distinct ids (`DuplicateCopies.count`), the records the file writes, as the
+    /// web counts the store's rows, one for each id.
     @Test func theExportSheetsContentsAreTheWebs() throws {
         let sources = Sources()
         let sheet = try sources.app("Export/ResearchDataExportView.swift")
@@ -234,11 +244,13 @@ import Testing
         let rows = contents.matches(of: /LabeledContent\(String\(localized: "settings\.export\.(\w+)", defaultValue: "[^"]*"\), value: "\\\((.*?)\)"\)/)
             .map { (String($0.1), String($0.2)) }
         let expected: [(key: String, count: String, types: [String])] = [
-            ("notes", "notes.count", ["ResearchNote"]),
-            ("tags", "tags.count + tagAssignments.count", ["UserTag", "DocumentTagAssignment"]),
-            ("highlights", "highlights.count", ["DocumentHighlight"]), ("collections", "collections.count", ["Collection"]),
-            ("prompts", "userPromptCount", ["SummarizationPrompt"]), ("projects", "projects.count", ["Project"]),
-            ("archiveVisits", "archiveVisits.count", ["ArchiveVisitPlan"]),
+            ("notes", #"DuplicateCopies.count(notes, id: \.id)"#, ["ResearchNote"]),
+            ("tags", #"DuplicateCopies.count(tags, id: \.id) + DuplicateCopies.count(tagAssignments, id: \.id)"#,
+             ["UserTag", "DocumentTagAssignment"]),
+            ("highlights", #"DuplicateCopies.count(highlights, id: \.id)"#, ["DocumentHighlight"]),
+            ("collections", #"DuplicateCopies.count(collections, id: \.id)"#, ["Collection"]),
+            ("prompts", "userPromptCount", ["SummarizationPrompt"]), ("projects", #"DuplicateCopies.count(projects, id: \.id)"#, ["Project"]),
+            ("archiveVisits", #"DuplicateCopies.count(archiveVisits, id: \.id)"#, ["ArchiveVisitPlan"]),
             ("savedSearches", "inventoryCounts.savedSearches", ["SavedSearch"]),
             ("workingCorpora", "inventoryCounts.workingCorpora", ["WorkingCorpus"]),
             ("volumeScopes", "inventoryCounts.volumeScopes", ["CustomVolumeScope"]),
@@ -251,7 +263,7 @@ import Testing
             ("exportHistory", "trailCounts.exports", ["ExportHistoryEntry"]),
         ]
         #expect(rows.map(\.0) == expected.map(\.key) && rows.map(\.1) == expected.map(\.count), "\(rows)")
-        #expect(sheet.contains("private var userPromptCount: Int { prompts.filter { !$0.isStandard }.count }"))
+        #expect(sheet.contains(#"private var userPromptCount: Int { DuplicateCopies.count(prompts.filter { !$0.isStandard }, id: \.id) }"#))
         let web = try sources.web("settings/ExportSection.tsx")
         let webRows = web.matches(of: /\{ types: \[('[^\]]*)\]/).map { match in
             match.1.split(separator: ",").map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "' ")) }
@@ -262,15 +274,16 @@ import Testing
         #expect(web.contains("<td>{String(row.types.reduce((sum, type) => sum + countOf(contents.data, type), 0))}</td>"))
     }
 
-    /// All Notes' rows, as `NotesPaneSnapshot` builds them, and its filters and count, as it and
-    /// `AllNotesScreen` apply them, in web/src/research/notesRules.ts: the first line with anything
+    /// All Notes' rows, as the kit's `NotesPaneSnapshot` builds them, and its filters and count, as it
+    /// and `AllNotesScreen` apply them, in web/src/research/notesRules.ts: the first line with anything
     /// in it by Foundation's newlines, trimmed of its whitespaces, cut at 90 characters; where the
     /// note is, then its projects' names and its tags' in its order, the gone ones left out; the day
     /// it changed; Not in a project as no project at all; the search's text trimmed of its whitespaces
-    /// only, in the note, its volume's id or its document's; and the count of every note.
+    /// only, in the note, its volume's id or its document's; and the count of every note, one row for
+    /// each id, as the app's fetch reads one copy of each since #1792 and the store keeps one.
     @Test func allNotesRowsAndFiltersAreTheApps() throws {
         let sources = Sources()
-        Self.expect(try sources.app("Models/NotesPaneSnapshot.swift"), holds: [
+        Self.expect(try sources.app("FRUSCoreKit/Models/NotesPaneSnapshot.swift"), holds: [
             "static let titleLimit = 90",
             #".components(separatedBy: .newlines) .lazy .map { $0.trimmingCharacters(in: .whitespaces) } .first { !$0.isEmpty } ?? """#,
             "guard firstLine.count > Self.titleLimit else { return firstLine }",
@@ -279,12 +292,15 @@ import Testing
             "projectNames: note.projectIds.compactMap { projectNamesById[$0] }, tagNames: note.userTagIds.compactMap { tagNamesById[$0] },",
             "case .any: matchesProject = true case .unfiled: matchesProject = row.projectIds.isEmpty case .id(let projectId): matchesProject = row.projectIds.contains(projectId)",
             "let matchesTag = tagId.map { row.userTagIds.contains($0) } ?? true",
-            #"FetchDescriptor<ResearchNote>(sortBy: [SortDescriptor(\.lastModified, order: .reverse)])"#,
-            "guard shown < total else { return noteCount(total) }",
-        ], file: "NotesPaneSnapshot.swift")
-        Self.expect(try sources.app("Research/AllNotesScreen.swift"), holds: [
             "let trimmed = query.trimmingCharacters(in: .whitespaces)",
             "$0.bodyText.localizedCaseInsensitiveContains(trimmed) || $0.volumeId.localizedCaseInsensitiveContains(trimmed) || $0.documentId.localizedCaseInsensitiveContains(trimmed)",
+            "guard shown < total else { return noteCount(total) }",
+        ], file: "NotesPaneSnapshot.swift")
+        Self.expect(try sources.app("Models/NotesPaneSnapshot+App.swift"), holds: [
+            #"let notes = ResearchNote.oneCopyEach((try? context.fetch(FetchDescriptor<ResearchNote>(sortBy: [SortDescriptor(\.lastModified, order: .reverse)]))) ?? [])"#,
+        ], file: "NotesPaneSnapshot+App.swift")
+        Self.expect(try sources.app("Research/AllNotesScreen.swift"), holds: [
+            "current.filtered(project: projectFilter, tagId: tagFilter, query: query)",
             "$0.formatted(date: .abbreviated, time: .omitted)",
             "NotesPaneSnapshot.showingCount(shown: filtered.count, of: current.total)",
         ], file: "AllNotesScreen.swift")

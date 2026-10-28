@@ -1,12 +1,16 @@
 // How the app reads an RTF colour (S15d): AppKit's reader makes an NSColor from the colour table, and
-// CollectionProse.hexColor takes it through usingColorSpace(.sRGB), truncates each channel to a
-// byte and reads (near-)black as no colour. Measured on macOS 27 over the golden spans and dense
-// sweeps (docs/DEVLOG.md, S15d): an sRGB entry is its stored values, and a catalog name the system's
-// colour of that name, exactly; a gray entry, Display P3, Generic RGB and the legacy \colortbl, which
-// AppKit reads as Generic RGB, are converted by ColorSync, which this reproduces within one step per
-// channel.
+// CollectionProse.hexColor takes it through usingColorSpace(.sRGB) as the light appearance draws it
+// (FRUS-Explorer#1790), and the kit's CollectionProse.hex truncates each channel to a byte and reads
+// (near-)black as no colour. Measured on macOS 27 over the golden spans and dense sweeps
+// (docs/DEVLOG.md, S15d): an sRGB entry is its stored values, and a catalog name the system's colour
+// of that name in the light appearance, exactly; a gray entry, Display P3, Generic RGB and the legacy
+// \colortbl, which AppKit reads as Generic RGB, are converted by ColorSync, which this reproduces
+// within one step per channel.
 
 import Foundation
+// The kit's span rules, hidden from this module's clients: tools/mac-golden links the codec beside
+// the app module, which compiles the kit's files itself.
+internal import FRUSCoreKit
 
 /// One entry of a document's colour tables, as the reader resolves it.
 struct RTFColorEntry: Equatable, Sendable {
@@ -34,10 +38,10 @@ struct RTFResolvedColor: Equatable, Sendable {
 }
 
 public enum RTFColor {
-    /// The app's `hex(r:g:b:)`: nil when every channel is under 0.08, else each channel truncated.
+    /// The app's `hex(r:g:b:)`, the kit's `CollectionProse.hex` since FRUS-Explorer#1807: nil when
+    /// every channel is under 0.08, else each channel clamped to 0…1 and truncated.
     static func hex(_ r: Double, _ g: Double, _ b: Double) -> String? {
-        if r < 0.08, g < 0.08, b < 0.08 { return nil }
-        return [r, g, b].map { byteHex(Int(clamp($0) * 255)) }.joined()
+        CollectionProse.hex(r: CGFloat(r), g: CGFloat(g), b: CGFloat(b))
     }
 
     /// Whether the app reads a colour the writer gives these bytes as (near-)black, so as none: the
@@ -51,11 +55,6 @@ public enum RTFColor {
         guard hex.utf8.count == 6, hex.utf8.allSatisfy({ (0x30...0x39).contains($0) || (0x41...0x46).contains($0) }),
               let value = Int(hex, radix: 16) else { return nil }
         return ((value >> 16) & 0xFF, (value >> 8) & 0xFF, value & 0xFF)
-    }
-
-    static func byteHex(_ value: Int) -> String {
-        let digits = Array("0123456789ABCDEF")
-        return String([digits[(value >> 4) & 0xF], digits[value & 0xF]])
     }
 
     static func clamp(_ value: Double) -> Double { min(1, max(0, value)) }

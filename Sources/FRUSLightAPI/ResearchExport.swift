@@ -373,9 +373,9 @@ public enum ResearchExport {
     }
 
     static func savedSearch(_ row: Fields) throws -> SavedSearchExport {
-        // The watermark as `SavedSearch.freshness` reads it: none when there is none or it is no
-        // object, each field none that does not read.
-        let freshness = row.appJSON(Freshness.self, "freshness_data")
+        // The watermark as `SavedSearch.freshness` reads it, with the kit's decoder since S17c's pin
+        // move: none when there is none or it is no object, each field none that does not read.
+        let freshness = SavedSearchFreshness.decoded(from: row.optionalText("freshness_data").map { Data($0.utf8) })
         return SavedSearchExport(
             id: try row.uuid("id"), name: try row.text("name"), parameters: try searchParameters(row),
             lastRunAt: freshness?.lastRunAt, matchCountAtLastRun: freshness?.matchCountAtLastRun,
@@ -412,23 +412,6 @@ public enum ResearchExport {
             dateRange: dateRange, subjectTagIds: list(try row.text("subject_tag_ids_csv")),
             includeDocumentText: flags & 1 != 0, includeSummaries: flags & 2 != 0, includeNotes: flags & 4 != 0,
             documentTypeFilter: documentType, personRef: try text("person_ref"))
-    }
-
-    /// `SavedSearchFreshness` as the app decodes it, app code mirrored: each field on its own, none
-    /// for one that does not read, so a blob with a field it does not know keeps the rest.
-    struct Freshness: Decodable {
-        var lastRunAt: Date?
-        var matchCountAtLastRun: Int?
-        var indexedVolumeCountAtLastRun: Int?
-
-        enum CodingKeys: String, CodingKey { case lastRunAt, matchCountAtLastRun, indexedVolumeCountAtLastRun }
-
-        init(from decoder: any Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            lastRunAt = try? container.decodeIfPresent(Date.self, forKey: .lastRunAt)
-            matchCountAtLastRun = try? container.decodeIfPresent(Int.self, forKey: .matchCountAtLastRun)
-            indexedVolumeCountAtLastRun = try? container.decodeIfPresent(Int.self, forKey: .indexedVolumeCountAtLastRun)
-        }
     }
 
     static func corpus(_ row: Fields) throws -> WorkingCorpusExport {
