@@ -77,6 +77,64 @@ Phase 2's row S17d, the first of the search-and-research rows that S17c's pin mo
 
 **Next: S17e,** saved searches, working corpora and volume scopes, whose saved `SearchParameters` now carry the user's `userTagIds`; with **S17f**, projects, the history and the method appendix, beside it, and S18c's pin move past FRUS-Explorer#1809.
 
+## Session 18b, second follow-up: the keyboard notes spec's random failure
+
+28 October 2026 · branch `claude/nice-kalam-7067e1` · [#80](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/80) · upstream `1c18b51e`, unchanged
+
+`web/e2e/notes-keyboard.spec.ts`'s one test failed at random in CI's `compose` job, and `main` requires that check. S18b's session cited two runs: `main`'s own at `2a31f41` and #75's first attempt, a docs-only pull request on the same code. The job's logs hold five failures of the test in two days, at three of its steps: Save's focus on the reader's frame three times (line 100), Delete's focus on All Notes' heading once (line 150), and the link dialog once (line 69). One cause, in the app's focus handling, accounts for four; a second, in the spec's waits, failed ⌘K in local runs; the fifth's cause is narrowed, not proven. No upstream change, no pin move.
+
+**Focus sent back before the dialog had gone, four of the five.** Each dialog's parent sends focus back in an animation frame, on the rule that the dialog has gone by then: "while it is open, all else is inert". A close from a press or a key holds to that, since React commits it before the next frame. A close after the dialog's request has been answered does not: React commits it in a later task. When a frame comes first, the parent's `focus()` lands on the page still inert behind the modal dialog and does nothing, and focus falls to the page's body when the dialog goes. The spec's Save and Delete are two such closes. A local run that logged every `focus()` call and every dialog caught it: All Notes' heading was asked to take focus while Delete Note? was open, the dialog went 0.4 ms later, and the active element was the body. The same holds for six closes, each after its request: the note editor's Save and Delete, Delete Note?, Remove Highlight, the summary editor's Save and Delete Summary?.
+- **`closeAtOnce`** (`web/src/shell/Modal.tsx`) calls a dialog's close in `flushSync`, as the note editor's Escape already was, so the dialog has gone before any frame. The six closes use it.
+- **`framesAtOnce`** (`web/src/test/frames.ts`) gives a unit test the quickest browser: each frame comes as soon as the task that asked for it is done, and focus outside an open modal dialog is refused. jsdom has neither. Four tests use it: the reader's Save and Remove Highlight, All Notes' Delete Note? and the editor's Delete, and the summary editor's Save and Delete Summary?. Each fails with its closes as they were, the two-step ones at their second step alone, and passes with `closeAtOnce`. The web app's unit tests go from 309 to 313.
+
+**Keys pressed while ProseMirror still treats the editor as just focused.** For 200 ms after the editor takes focus, prosemirror-view's `DOMObserver.flush` takes a caret at the start of the text for the browser's own reset on focus, and puts the editor's selection back. In two local failures the spec pressed Home 144 and 177 ms after the editor took focus back from the link dialog, so Home was undone, Ctrl+Shift+→ collapsed the selection again, and ⌘K had nothing to link. `settle()`'s 60 ms covered only ProseMirror's 20 ms one.
+- **`settle()`** (`web/e2e/notes.ts`) waits 250 ms and two frames, and its comment names the 200 ms. `notes.spec.ts`'s `selectInLine` presses Home the same way after focusing the editor.
+- **The spec waits for the editor to hold a selection** before ⌘B and ⌘K: the formatting bar's Link is offered only over one, and over the first word it shows no link. A selection the editor never takes fails there by name, not at the missing dialog two steps on.
+- **It settles once the new note's editor has focus,** before typing, as `settle()`'s rule asks and `notes.spec.ts` does.
+
+**The fifth, narrowed.** In `main`'s run at `2a31f41`, ⌘B found no selection and set Bold for what would be typed next, so Link stayed unoffered and its Enter did nothing. The trace's frames show "note" selected in the text 10 ms after Ctrl+Shift+←, with Link still unoffered, and 16 ms later the caret back at the end: ProseMirror put its own selection back before it read the new one. Typing had begun 10 ms after the editor took focus, at the end of a 260 ms task that loaded the editor's code. Locally typing began 100 ms after focus, and 26 to 130 ms with the CPU throttled four times over, and the step never failed: 0 of 30 runs, then 0 of 50 throttled. The settle before typing keeps the keys out of the editor's first 250 ms, which hold both of the times ProseMirror puts its selection back.
+
+**How it was checked,** on the owner's Mac with other sessions building (load averages 6 to 110), with images and ports of this session's own, through a scratch copy of `scripts/compose-smoke` that runs one spec, repeated, in both passes:
+- **`main`'s app:** 15 of 15 at the root, 12 of 15 under the path. The three failures were Delete's focus once and ⌘K twice.
+- **This branch,** twice: 20 of 20 at the root and 19 of 20 under the path, then 20 of 20 in each at a load average of 2 to 4. The one failure was the test's 30 s timeout, in a spike to a load average of 110: every step up to it passed, at 10 to 60 times its usual time. In CI the test takes 6.5 to 7.7 s, and the longer `settle()` adds about 1 s.
+- **`scripts/compose-smoke --e2e`** with this branch's image: passed, the browser suite's 47 tests in each pass and the sign-in spec, at a load average of 4 to 15.
+- **`scripts/npm run typecheck`, `run lint`, `test`:** clean; 313 tests in 34 files.
+
+**Delivered:** the six closes committed at once, the spec's waits, the four unit tests and this log. The session's notes are in the shared notes folder, as `notes-keyboard-flake.md`.
+
+**Next:** phase 2 goes on as it stood: S18c, the pin move past FRUS-Explorer#1809 ([#77](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/77)), then S18d; S17e and S17f after S17d's [#76](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/76). Should the first ⌘B's failure come back, a run with the shared note's diagnostic hook would show what put the selection back.
+
+## Session 18b, follow-up: the link-alert test's random failure, upstream
+
+28 October 2026 · branch `claude/elated-lederberg-fc1c0a` · [#79](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/79) · upstream `1c18b51e`, unchanged; [FRUS-Explorer#1811](https://github.com/joshbotts/FRUS-Explorer/pull/1811), open
+
+The Mac checks of FRUS-Explorer#1785, #1807 and #1809 each lost a re-run to `RichTextRestingCapTests`' link-alert test (#1360's capped editor), which failed at random at `v2` as at each branch. The checks of #1785 and #1809 also lost one to its colour-picker test. S18b's session asked for one pull request that stops the link-alert test failing, from `claude/link-alert-test-waits-for-its-presentation`, cut from `v2` at `fef96201`. It is labelled `Mac`, its body says "Mac verification requested", and it is not merged. It changes one file of the app's test target, which this repository neither compiles nor hashes into its golden files, and the app's plan, so no pin move needs it, and this repository changes only its records.
+
+**The cause, found before anything changed.** A diagnostic build, never committed, gave the test a millisecond timeline: a 5 ms sampler of the alert's presentation state, the root's transition coordinator and both first responders, with the keyboard and editing notifications and the dismissal's completion. It followed 30 runs of the suite alone on the iPhone 18 Pro Max simulator (iOS 27.0) of S18b's runs.
+- The test host's `dismissPresented()` dismisses the alert with `dismiss(animated: false)` and waited 3 s for it to go, its `settle`'s default. #1807's and #1809's bodies say 5 s; the file's other hosts allow 5, but this one 3.
+- A non-animated dismissal took 2.1 to 4.4 s to finish, while the keyboard went back from the alert's field to the text view and its formatting bar. In the first 16 runs, the 4 dismissals over 3 s were the 4 failures, and the 12 that passed took 2.22 to 2.90 s.
+- The alert always went, and focus always came back: the editor is not at fault.
+- The test asked for the dismissal while UIKit was still presenting the alert, in 16 runs of 16. That is not the cause: asked once the presentation had ended, a dismissal took 2.1 to 2.7 s, and with the alert's field resigned first, 2.3 to 2.7 s.
+- The colour-picker test fails in the host's other such wait, 3 s for the system colour picker to appear.
+
+**#1811, in a commit and two records commits,** in `FRUSExplorerTests/CollectionTests.swift` and the app's plan:
+- `RestingCapEditorHost.presentationTimeout`, 15 s, for `presented(_:)` and `dismissPresented()`. It bounds a hang, not a pace: each wait ends when UIKit is done. `settle`'s 3 s stays for the suite's waits on SwiftUI's sizing.
+- A new `finishedPresenting(_:)`, which the link-alert test waits for before its half-second hold over the alert and its Cancel. It costs the test 0.8 s a run.
+- A log line with each dismissal's time, and the suite's version history.
+
+**How it was checked,** each heavy job under the app's lock, from a clone at a real path, beside `v2` at `fef96201` built and run the same way, the same day, with Xcode 27.1, clean and unsigned:
+- **The suite alone, 30 rounds alternating with `v2` in one hold of the lock:** the branch passed 30 runs of 30, and `v2` 30 of 30, the Mac being quiet then (load average 4 to 8). The branch's dismissals took 1.74 to 2.35 s.
+- **On two simulators created for the run,** the condition the app's A4c and A4d sessions met, with their first boot's work loading the Mac (load average 20 to 330): `v2` failed 6 runs of 6 on the dismissal. The branch passed 5 of 6, its dismissals taking 3.0 to 6.1 s. Its sixth failed because the colour picker did not appear.
+- **The full iOS unit run:** 7,752 tests in 929 suites at both heads, both failing only the 8 Keychain tests an unsigned build fails, with the 6 known issues of #1606, and skipping the same 17 tests and 2 suites. The editor suite passed at both.
+- **`swift test`:** 3,191 tests in 389 suites at both, all passed; `FRUSCoreKitTests` 1,298.
+- **The Mac app's symbols** are `v2`'s, name for name, and both builds had `v2`'s five and seven warning lines.
+
+**Filed, not fixed.** After a cold boot, or on a new simulator, the system colour picker sometimes never appears. A variant of the host that allowed 60 s, never committed, saw it miss the first run on each of two new simulators, and one cold boot in three of the long-used one, though Text Color's action was delivered; the next run on each new simulator presented it within 2 s. No bound fixes that, so the colour-picker test can still fail on a simulator just created or booted, at either head.
+
+**Delivered here:** this log. The session's notes, scripts and logs are in `~/Library/Caches/frus-linkalert/`; the diagnostic is on that clone's local branch `diag/link-alert-timeline`, never pushed.
+
+**Next:** the owner's Mac check of #1811, then its merge, which asks nothing of this repository. Phase 2 goes on with S18c, the pin move past #1809 ([#77](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/77)).
+
 ## Session 16e, follow-up: a stripped export's free pages, upstream
 
 27–28 October 2026 · branch `claude/magical-taussig-4755a7` · [#78](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/78) · upstream `1c18b51e`, unchanged; [FRUS-Explorer#1810](https://github.com/joshbotts/FRUS-Explorer/pull/1810), open
