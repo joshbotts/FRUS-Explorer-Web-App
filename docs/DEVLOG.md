@@ -2,6 +2,63 @@
 
 One entry per session, newest first.
 
+## Session 14b, follow-up: a request cancelled while another waits, tested in a set order
+
+27 October 2026 · branch `claude/magical-spence-fdd44c` · [#72](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/72) · upstream `1c18b51e`, unchanged
+
+S14b's session found it (#70, its notes), and the session that ran S14b asked for the fix in a pull request of its own. `RecentComputationsTests.aRequestCancelledWhileAnotherWaitsLeavesAtOnceAndTheValueIsKept` failed now and then, each time on the same two expectations: once in S14b's full `scripts/swift test`, while other sessions' builds loaded the Mac, and once in three runs of its suite alone. It predates S14b, and `main`'s CI had passed it every time. This pull request changes the test and this log, and `RecentComputations` is unchanged. #68, S17c's pin move to `1c18b51e`, merged while this one waited for its CI, so `main` was merged in at `7722a77`, and the tests were run again there.
+
+**What was wrong**
+
+- The test begins two tasks that ask `RecentComputations` for the key `a`, each with a computation of its own, which gives 1 for the first and 2 for the second. It waits until both requests wait, cancels the first, and opens the gate. It then expects 1 from the second, and 1 when `a` is asked again, with one computation started and none cancelled.
+- The two tasks run on the global executor, so they reach the actor in no set order. When the second came first, its own computation began and the first joined it.
+- From then on everything went as designed. The first left at once, and the computation ran on for the second and was kept, started once and never cancelled.
+  - But it gave 2, so the two expectations of 1 failed, the two that failed in S14b's runs.
+  - A diagnostic run, never committed, printed it: "second.value 2, asked again 2, started 1, cancelled 0".
+- So nothing was stopped or begun again, and the first's cancel did not land too soon. The test already waited for both requests, and `value(for:compute:)` registers a request in the same turn of the actor that finds or begins the computation.
+- The test has assumed its order since S12c wrote it (`ad48ebb`, #43). S12c's review (`9d5074e`) replaced its 20 ms sleep with the wait for both requests, which left the order open.
+
+**The fix**
+
+- The test begins the second task only once the first waits (`waitingCount(for: "a") == 1`). `aRequestThatComesWithinTheGraceJoinsTheComputation` already waits this way, and so does the facets' `aSectionAskedForWhileItIsComputedWaitsForThatComputation`.
+- Its expectations, and their values, are as they were.
+
+**Results**
+
+All in `swift:6.4-noble` on arm64, while other sessions' builds loaded the Mac.
+- Each run is its own process of `FRUSLightServerTests`' test runner, unless it says otherwise.
+- "Beside busy loops" means with 12 shell loops in the container, which has 10 CPUs.
+
+First at `503a730b`, over `main` at `8e6d681`. The Mac's load average was between 75 and 169 during the runs after the fix.
+- **Before the fix:**
+  - 5 of 50 runs failed, and 4 of 50 beside busy loops, each on the same two expectations;
+  - one `swift test --maximum-repetitions 2000 --repeat-until fail` process beside busy loops failed at its 12th repetition, and the diagnostic run at its 17th.
+- **After it:**
+  - 200 of 200 runs passed, and 200 of 200 beside busy loops;
+  - the whole suite, its four tests, passed 100 of 100 runs beside busy loops;
+  - one process repeating the test 5,000 times beside busy loops passed every repetition;
+  - `scripts/swift test --filter FRUSLightServerTests` passed all 172 tests in 29 suites.
+
+Then at `1c18b51e`, with `main` merged in at `7722a77` and this package's own targets rebuilt clean, with no warning. The load average was between 36 and 50.
+- 100 of 100 runs passed beside busy loops, and the whole suite passed 50 of 50.
+- One process repeating the test 2,000 times beside busy loops passed every repetition.
+- `scripts/swift test --filter FRUSLightServerTests` passed all 172 tests in 29 suites.
+
+**Notes**
+
+- **`RecentComputations`' grace runs from the first request to leave, not the last.** This was found while reading the actor for this fix, and has nothing to do with the flake.
+  - Each request that leaves a computation with no one waiting starts a wait of `grace`. The first wait to end stops the computation if no one waits at that moment, however recently the last request left.
+  - A scratch check over a copy of the actor, with a grace of 300 ms, showed it in 5 runs of 5:
+    - A began the computation and left;
+    - B joined it and left 250 ms later;
+    - C came 100 ms after that, within the grace that B's leaving began, found the computation stopped, and began another (started 2, cancelled 1).
+  - Only `RetainedResults` has a grace, of 250 ms. So the cost is a date order's results computed again, in a narrow window, when the reader turns the order round twice in quick succession.
+  - A fix would let each wait stop only the abandonment that began it. Its test would want a grace it can end by hand, since a test that sleeps around a grace depends on timing.
+  - The owner started it as a session of its own the same evening.
+- **Scratch:** the runs' scripts and logs are under `.build/linux/flake/` in the worktree `magical-spence-fdd44c`, and the grace's check is under `.build/linux/grace-check/`.
+
+**Next: S17d,** search over the researcher's writing, now that S17c's pin move (#68) is merged. Beside it: S18b's upstream pull request, S16e (#69), and on the server's track S14b (#70), S14e (#71) and S14d (#73).
+
 ## Session 17c: pin move past FRUS-Explorer#1805, #1806 and #1807, with #1789 to #1804
 
 27 October 2026 · branch `claude/cranky-murdock-f76a42` · [#68](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/68) · upstream `1c18b51e`
