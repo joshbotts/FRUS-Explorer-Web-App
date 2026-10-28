@@ -1,6 +1,7 @@
 // The kit's stack over the live index, opened read-only and immutable: search and browse (upstream
 // #1575), the page ranges and persons the reader's links need (upstream #1579), and the citation
-// matcher over both that Citation Lookup asks (PLAN's S19a).
+// matcher over both that Citation Lookup asks (PLAN's S19a); with the user store's search database
+// attached, read-only, for each user's half of a search (upstream #1806, PLAN's S17d).
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -10,11 +11,18 @@ import Foundation
 /// The live index as the kit reads it, for one installed `CorpusIndex`: `FTS5Store(readingDatabaseAt:)`,
 /// the pipeline's read-only open and a `SearchService` over both, and the page-range and person
 /// stores' read-only opens. Nothing here writes to the file: every connection is
-/// `mode=ro&immutable=1`, as `CorpusIndex`'s own.
+/// `mode=ro&immutable=1`, as `CorpusIndex`'s own. The pipeline's connection also attaches the user
+/// store's search database, when the server keeps user data, read-only and never immutable, as the
+/// kit attaches a store its host writes to while it is served (`attachedUserStoreSchema`).
 public final class ServedIndex: Sendable {
     public let corpus: CorpusIndex
     public let pipeline: IndexingPipeline
+    /// The corpus's search, whose user half is the index's own, which an import leaves empty: a search
+    /// that acts for no one, Citation Lookup's matcher, and what compiles a query.
     public let service: SearchService
+    private let fts5: FTS5Store
+    /// Whether the user store's search database is attached, so that a search can read a user's half.
+    let attachesUserStore: Bool
     /// Which document holds a printed page, for a page link.
     public let pages: PageRangeStore
     /// The persons' mentions and rollups, for a person card's count.
@@ -30,16 +38,19 @@ public final class ServedIndex: Sendable {
     /// The pages and counts of the searches run lately by relevance over this index.
     public let recent = RecentSearches()
 
-    /// Opens the stack, and refuses it unless the path still named the file `corpus` opened before
-    /// the first open and after the last: an import renames its new file over the path before the
-    /// server starts serving it, and a stack over that file would answer as the old index.
-    init(corpus: CorpusIndex, resources: ServerResources, volumesDirectory: URL) throws {
+    /// Opens the stack, with `userStore` attached when it names the user store's search database,
+    /// and refuses it unless the path still named the file `corpus` opened before the first open and
+    /// after the last: an import renames its new file over the path before the server starts serving
+    /// it, and a stack over that file would answer as the old index.
+    init(corpus: CorpusIndex, resources: ServerResources, volumesDirectory: URL, userStore: URL? = nil) throws {
         self.corpus = corpus
         let before = FileIdentity(corpus.url)
         let store = try FTS5Store(readingDatabaseAt: corpus.url)
         pipeline = try IndexingPipeline(readingIndexAt: corpus.url, fts5Store: store,
-                                        resources: resources.indexing, volumesDirectory: volumesDirectory)
+                                        resources: resources.indexing, volumesDirectory: volumesDirectory, userStore: userStore)
         service = SearchService(fts5Store: store, pipeline: pipeline)
+        fts5 = store
+        attachesUserStore = userStore != nil
         pages = try PageRangeStore(readingDatabaseAt: corpus.url)
         persons = try PersonMentionStore(readingDatabaseAt: corpus.url)
         citations = CitationMatchingEngine(manifestStore: FixedVolumeCatalogue(entries: resources.manifest),
@@ -50,6 +61,27 @@ public final class ServedIndex: Sendable {
                              detail: "A new index is being installed; ask again in a moment.")
         }
     }
+
+    /// A search as `user` makes it, with their half from the attached store, or the corpus's alone for
+    /// no one. Its service is new for each request, which the kit makes cheap, as the pipeline is shared.
+    func search(for user: SearchUser?) throws -> ServedSearch {
+        guard let user else { return ServedSearch(service: service, key: "") }
+        guard attachesUserStore else {
+            throw APIProblem(.internalServerError, code: "INTERNAL_ERROR", detail: "The served index has no user store attached.")
+        }
+        return ServedSearch(service: SearchService(fts5Store: fts5, pipeline: pipeline, userSource: .attachedStore(userId: user.id)),
+                            key: user.key)
+    }
+}
+
+/// A search over the served index as one user makes it (PLAN's S17d): the kit's service with that
+/// user's half, or the corpus's alone, and what begins the key each of its answers is kept by
+/// (`RecentSearches`, `RetainedResults`, `FacetCache`), so that no answer is given to another user,
+/// nor once their store has moved.
+struct ServedSearch: Sendable {
+    let service: SearchService
+    /// Nothing for the corpus's search, whose keys are as they were before S17d.
+    let key: String
 }
 
 /// Gives each request the stack for the index being served, built once per installed index.
@@ -65,15 +97,18 @@ public actor ServedIndexProvider {
     let state: ServerState
     let resources: ServerResources
     let volumesDirectory: URL
+    /// The user store's search database, which each stack attaches (S17d), or nil for none.
+    let userStore: URL?
     private var current: (corpus: ObjectIdentifier, served: ServedIndex)?
     private var opening: (corpus: ObjectIdentifier, task: Task<ServedIndex, any Error>)?
     /// How many stacks have been opened, for the tests.
     private(set) var opened = 0
 
-    public init(state: ServerState, resources: ServerResources, volumesDirectory: URL) {
+    public init(state: ServerState, resources: ServerResources, volumesDirectory: URL, userStore: URL? = nil) {
         self.state = state
         self.resources = resources
         self.volumesDirectory = volumesDirectory
+        self.userStore = userStore
     }
 
     /// The stack for the index being served. Throws a 503 `INDEX_NOT_READY` problem naming the
@@ -87,9 +122,11 @@ public actor ServedIndexProvider {
         let key = ObjectIdentifier(corpus)
         if let current, current.corpus == key { return current.served }
         if let opening, opening.corpus == key { return try await opening.task.value }
-        let (resources, volumesDirectory) = (self.resources, self.volumesDirectory)
+        let (resources, volumesDirectory, userStore) = (self.resources, self.volumesDirectory, self.userStore)
         let task = Task<ServedIndex, any Error> {
-            try await Blocking.run { try ServedIndex(corpus: corpus, resources: resources, volumesDirectory: volumesDirectory) }
+            try await Blocking.run {
+                try ServedIndex(corpus: corpus, resources: resources, volumesDirectory: volumesDirectory, userStore: userStore)
+            }
         }
         opening = (key, task)
         opened += 1

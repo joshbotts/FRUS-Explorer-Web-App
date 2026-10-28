@@ -137,7 +137,8 @@ enum ReadingRoutes {
         ("documentKeys", "a concordance reads the page of a search that limit, offset and sort choose, as the Mac's reads the page on screen"),
     ]
 
-    static func add(to router: Router<APIRequestContext>, provider: ServedIndexProvider, resources: ServerResources) {
+    static func add(to router: Router<APIRequestContext>, provider: ServedIndexProvider, resources: ServerResources,
+                    users: SearchUsers) {
         // Each runs while its client is connected, as a search does: the results kept of a search and
         // the page stop with it. The facet over the keys kept is a cheap pass, and runs to its end.
         router.get("/api/v1/search/timeline") { request, context -> SearchTimeline in
@@ -145,13 +146,15 @@ enum ReadingRoutes {
             let search = try SearchRequest(form: form, alsoTaking: timelineFields)
             let documents = try form.bool("documents") ?? false
             let parameters = search.parameters
+            let user = try await users.user(searching: parameters, for: request, context: context)
             let served = try await provider.served()
+            let scoped = try served.search(for: user)
             let coverage = Coverage(index: served.corpus, resources: resources)
             return try await context.whileClientConnected {
                 do {
-                    return try await timeline(parameters, sort: search.sort, documents: documents, service: served.service,
+                    return try await timeline(parameters, sort: search.sort, documents: documents, scoped: scoped,
                                               facets: served.facets, keeping: SearchRequest.retainedLimit, coverage: coverage) {
-                        try await served.retained.results(of: parameters, service: served.service)
+                        try await served.retained.results(of: parameters, in: scoped)
                     }
                 } catch let error as FTS5Error {
                     throw SearchRoutes.refusal(error)
@@ -164,10 +167,12 @@ enum ReadingRoutes {
                 throw APIProblem(.badRequest, code: "UNSUPPORTED_PARAMETER", detail: "\(draft.name): \(draft.detail)")
             }
             let search = try SearchRequest(form: form)
+            let user = try await users.user(searching: search.parameters, for: request, context: context)
             let served = try await provider.served()
+            let scoped = try served.search(for: user)
             return try await context.whileClientConnected {
                 do {
-                    return try await concordance(search, served: served, resources: resources)
+                    return try await concordance(search, served: served, scoped: scoped, resources: resources)
                 } catch let error as FTS5Error {
                     throw SearchRoutes.refusal(error)
                 }
@@ -180,17 +185,17 @@ enum ReadingRoutes {
     ///
     /// Its years are the Years facet over the keys of those results, the kit's route for a list it
     /// describes by its keys, which reads only the rows the keys name; `facets` keeps it beside the
-    /// panel's sections. The match is not counted here, and nothing but the results kept reads it, so
-    /// the work stops when its client goes, as a search's does. A year's documents, asked for with
-    /// `documents`, are the results kept whose date the kit keys by that year, in the order `sort`
-    /// gives them.
+    /// panel's sections, by whose search it is, as `scoped` says. The match is not counted here, and
+    /// nothing but the results kept reads it, so the work stops when its client goes, as a search's
+    /// does. A year's documents, asked for with `documents`, are the results kept whose date the kit
+    /// keys by that year, in the order `sort` gives them.
     static func timeline(_ parameters: SearchParameters, sort: SearchSortOrder, documents: Bool,
-                         service: SearchService, facets: FacetCache, keeping limit: Int, coverage: Coverage,
+                         scoped: ServedSearch, facets: FacetCache, keeping limit: Int, coverage: Coverage,
                          kept: @escaping @Sendable () async throws -> [SearchResult]) async throws -> SearchTimeline {
         let retained = try await kept()
         let keys = retained.map { (volumeId: $0.volumeId, documentId: $0.documentId) }
-        let breakdown = try await facets.section(.years, search: "retained \(limit) \(SearchRequest.signature(parameters))") {
-            try await service.resultSetFacets(parameters: parameters, request: .one(.years), documentKeys: keys)
+        let breakdown = try await facets.section(.years, search: "\(scoped.key)retained \(limit) \(SearchRequest.signature(parameters))") {
+            try await scoped.service.resultSetFacets(parameters: parameters, request: .one(.years), documentKeys: keys)
         }
         var byYear: [String: [TimelineDocument]] = [:]
         if documents {
@@ -216,9 +221,10 @@ enum ReadingRoutes {
     /// The concordance of the page `search` asks for, as `/search` cuts it, and as `/search` kept it
     /// lately, so the page on screen is not fetched again. It counts nothing: the list it is a page of
     /// has its count from `/search`.
-    static func concordance(_ search: SearchRequest, served: ServedIndex, resources: ServerResources) async throws -> SearchConcordance {
-        let results = try await SearchRoutes.page(search, served: served)
-        let built = try await served.service.concordance(for: results, parameters: search.parameters)
+    static func concordance(_ search: SearchRequest, served: ServedIndex, scoped: ServedSearch,
+                            resources: ServerResources) async throws -> SearchConcordance {
+        let results = try await SearchRoutes.page(search, served: served, scoped: scoped)
+        let built = try await scoped.service.concordance(for: results, parameters: search.parameters)
         let titles = Dictionary(results.map { ("\($0.volumeId)/\($0.documentId)", SearchItem($0).displayTitle) },
                                 uniquingKeysWith: { first, _ in first })
         let position = Dictionary(built.lines.enumerated().map { ($0.element.id, $0.offset) }, uniquingKeysWith: { first, _ in first })

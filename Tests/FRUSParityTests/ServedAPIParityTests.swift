@@ -98,9 +98,14 @@ struct ServedFile: Equatable {
     /// `frus.db` alone, in rollback-journal mode, and the searches leave it byte for byte as it was.
     /// While the golden results wait for the owner's export, the test still checks what needs none:
     /// the records against the kit's own, the expressions, and the live index.
+    ///
+    /// Since S17d each search is the server's single user's, whose half the kit reads from the user
+    /// store attached to the index (`SearchUserSource.attachedStore(userId:)`), where the kit in process
+    /// reads the index's own: after the queries, a note the user writes is found by the next search,
+    /// which shows they ran through the store.
     @Test func checkThreePassesThroughTheAPI() async throws {
         let queries = try QueryList.load(Repository.layout.queries)
-        let (status, records, inspections, anomalies, before, after, live) = try await ServedFixture.run { client, files in
+        let (status, records, inspections, anomalies, before, after, live, attached) = try await ServedFixture.run { client, files in
             let status = try ServedFixture.decode(ServerStatus.self, try await client.execute(uri: "/api/v1/status", method: .get))
             let before = try ServedFile(files)
             var records: [ResultRecord] = []
@@ -141,13 +146,15 @@ struct ServedFile: Equatable {
                 let response = try await client.execute(uri: path, method: .get)
                 return (Int(response.status.code), Data(response.body.readableBytesView))
             }
-            return (status, records, inspections, anomalies, before, try ServedFile(files), live)
+            let after = try ServedFile(files)
+            return (status, records, inspections, anomalies, before, after, live, try await Self.searchesReadTheUsersStore(client))
         }
 
         #expect(status.index?.documents == 393 && status.index?.volumes == 3 && status.index?.exportedAt == nil)
         #expect(status.lastImport?.outcome == .installed)
         #expect(before.names == ["frus.db"] && before.versions == [1, 1])
         #expect(after == before, "the searches changed the live index or its folder")
+        #expect(attached, "the searches did not read the single user's store")
         #expect(anomalies.isEmpty, "\(anomalies.joined(separator: "\n"))")
         #expect(live.records == records && live.anomalies.isEmpty, "LiveAPI.results reads other records: \(live.anomalies)")
 
@@ -173,11 +180,29 @@ struct ServedFile: Equatable {
             #expect(report.passes, "\(report.differences.map(\.description).joined(separator: "\n"))")
             #expect(report.queryCount == queries.count)
             if report.passes, mismatches.isEmpty, differing.isEmpty {
-                print("check 3 through the API: \(report.queryCount) queries, \(report.identical.count) identical and \(report.permuted.count) reordered only within Mac tie groups, every record the kit's own; \(queries.count) compiled as the golden file says, \(refused) refused; the live index unchanged")
+                print("check 3 through the API: \(report.queryCount) queries, \(report.identical.count) identical and \(report.permuted.count) reordered only within Mac tie groups, every record the kit's own, each searched with the user's store attached; \(queries.count) compiled as the golden file says, \(refused) refused; the live index unchanged")
             }
         case .pending(let reason):
             print("\(GoldenFile.results.rawValue) is pending: it waits for \(reason)")
         }
+    }
+
+    /// Whether the server's searches read its single user's store: none finds a word no document holds
+    /// until the user writes it in a note, and then the next one does, in the note.
+    static func searchesReadTheUsersStore(_ client: any TestClientProtocol) async throws -> Bool {
+        func found() async throws -> Int {
+            let response = try await client.execute(uri: "/api/v1/search?keywords=zanzibarquux", method: .get)
+            return try ServedFixture.decode(SearchResultList.self, response).total
+        }
+        guard try await found() == 0 else { return false }
+        let me = try ServedFixture.decode(Me.self, try await client.execute(uri: "/api/v1/me", method: .get))
+        let note = #"{"bodyText": "A zanzibarquux cable", "runs": null, "userTagIds": [], "projectIds": [], "selectedSummaryIds": []}"#
+        let written = try await client.execute(
+            uri: "/api/v1/me/volumes/frus1961-63v06/documents/d1/notes", method: .post,
+            headers: [.origin: "http://localhost:8080", .contentType: "application/json", CSRFTokens.header: me.csrfToken],
+            body: ByteBuffer(string: note))
+        guard written.status == .created else { throw APIParityError("the note was refused: \(String(buffer: written.body))") }
+        return try await found() == 1
     }
 
     /// Check 4 through the page. Every golden row, read as the page the browser loads, holds the

@@ -5,10 +5,10 @@
 //
 // Every answer is the kit's: `SearchService.resultSetFacets(parameters:request:documentKeys:)`
 // computes the section over the match the search would run (FRUSCoreKit, upstream #1664), which the
-// app's panel calls too; `FacetPaging` sorts, filters and pages its rows; `FacetNarrowing` says how a
-// row of a section that narrows on a click changes the search; and `FacetSelection` with
-// `FacetSelectionApplier` resolves a staged selection of years or volumes into the filter Apply
-// sets, over the section's whole list of rows.
+// app's panel calls too, with the user half of the user the request acts for (S17d); `FacetPaging`
+// sorts, filters and pages its rows; `FacetNarrowing` says how a row of a section that narrows on a
+// click changes the search; and `FacetSelection` with `FacetSelectionApplier` resolves a staged
+// selection of years or volumes into the filter Apply sets, over the section's whole list of rows.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -115,14 +115,16 @@ enum FacetRoutes {
     /// The fields `/search/facets/selection` takes beside the search's.
     static let selectionFields: Set<String> = ["section", "include", "exclude"]
 
-    static func add(to router: Router<APIRequestContext>, provider: ServedIndexProvider, resources: ServerResources) {
-        router.get("/api/v1/search/facets") { request, _ -> SearchFacetSection in
+    static func add(to router: Router<APIRequestContext>, provider: ServedIndexProvider, resources: ServerResources,
+                    users: SearchUsers) {
+        router.get("/api/v1/search/facets") { request, context -> SearchFacetSection in
             let form = try FormQuery(request.uri.query)
             let parameters = try SearchRequest.parameters(from: form, alsoTaking: sectionFields)
             let section = try requiredSection(form, among: FacetSection.allCases)
             let display = try displayState(form, for: section)
+            let user = try await users.user(searching: parameters, for: request, context: context)
             let served = try await provider.served()
-            let facets = try await computed(section, parameters: parameters, served: served)
+            let facets = try await computed(section, parameters: parameters, served: served, scoped: try served.search(for: user))
             let page = FacetPaging.page(buckets(section, in: facets), with: display)
             let narrowable = FacetNarrowing.isNarrowable(section) && !FacetSelectionApplier.stagedSections.contains(section)
             let rows = page.rows.map { bucket -> SearchFacetSection.Row in
@@ -158,7 +160,7 @@ enum FacetRoutes {
                 coverage: Coverage(index: served.corpus, resources: resources))
         }
 
-        router.get("/api/v1/search/facets/selection") { request, _ -> SearchFacetSelection in
+        router.get("/api/v1/search/facets/selection") { request, context -> SearchFacetSelection in
             let form = try FormQuery(request.uri.query)
             let parameters = try SearchRequest.parameters(from: form, alsoTaking: selectionFields)
             let staged = FacetSection.allCases.filter(FacetSelectionApplier.stagedSections.contains)
@@ -168,10 +170,11 @@ enum FacetRoutes {
             if let both = included.first(where: excluded.contains) {
                 throw APIProblem.invalidParameter("exclude", "\(both) is included too; a row is one or the other")
             }
+            let user = try await users.user(searching: parameters, for: request, context: context)
             let served = try await provider.served()
             // Over the section's whole list, not the page shown: an exclusion alone means every row
             // but those, as the app's panel resolves it.
-            let facets = try await computed(section, parameters: parameters, served: served)
+            let facets = try await computed(section, parameters: parameters, served: served, scoped: try served.search(for: user))
             let universe = buckets(section, in: facets).map(\.key)
             // The app's rows are the list it resolves over, so the kit drops an unknown key without a
             // word, and a volume selection of nothing but such keys would clear the filter. Rows the
@@ -218,12 +221,13 @@ enum FacetRoutes {
         return display
     }
 
-    /// One section of the search's facets, computed over its whole match, or as computed lately. A
-    /// query the kit refuses, such as one with nothing left to search, is the request's fault, as it is
-    /// for a search.
-    static func computed(_ section: FacetSection, parameters: SearchParameters, served: ServedIndex) async throws -> ResultSetFacets {
+    /// One section of the search's facets as `scoped` searches, computed over its whole match, or as
+    /// computed lately. A query the kit refuses, such as one with nothing left to search, is the
+    /// request's fault, as it is for a search.
+    static func computed(_ section: FacetSection, parameters: SearchParameters, served: ServedIndex,
+                         scoped: ServedSearch) async throws -> ResultSetFacets {
         do {
-            return try await served.facets.section(section, of: parameters, service: served.service)
+            return try await served.facets.section(section, of: parameters, in: scoped)
         } catch let error as FTS5Error {
             throw SearchRoutes.refusal(error)
         }
@@ -246,8 +250,8 @@ enum FacetRoutes {
 
 /// The facet sections computed lately over one served index, so a section's next page, sort or
 /// filter, and Apply over it, cost no second computation: the app's panel, too, computes a section
-/// once for a search and cuts it as it is shown. Each is kept by its section and the query fields that
-/// say its search (`SearchRequest.signature(_:)`).
+/// once for a search and cuts it as it is shown. Each is kept by its section, whose search it is
+/// (`ServedSearch.key`) and the query fields that say it (`SearchRequest.signature(_:)`).
 public struct FacetCache: Sendable {
     let kept: RecentComputations<ResultSetFacets>
 
@@ -255,10 +259,10 @@ public struct FacetCache: Sendable {
         kept = RecentComputations(capacity: capacity)
     }
 
-    /// One section of the search `parameters` say, as computed lately, or by the search service.
-    func section(_ section: FacetSection, of parameters: SearchParameters, service: SearchService) async throws -> ResultSetFacets {
-        try await self.section(section, search: SearchRequest.signature(parameters)) {
-            try await service.resultSetFacets(parameters: parameters, request: .one(section))
+    /// One section of the search `parameters` say, as computed lately, or as `scoped` computes it.
+    func section(_ section: FacetSection, of parameters: SearchParameters, in scoped: ServedSearch) async throws -> ResultSetFacets {
+        try await self.section(section, search: scoped.key + SearchRequest.signature(parameters)) {
+            try await scoped.service.resultSetFacets(parameters: parameters, request: .one(section))
         }
     }
 
