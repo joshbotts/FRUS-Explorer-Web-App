@@ -65,8 +65,9 @@ import Testing
         #expect(Self.keys(try await owner.search(parameters: SearchParameters(keywords: "=Zanzibar", includeDocumentText: false)))
                 == Self.keys("d1"), "the exact word reads the note's own text")
 
-        // Tags: the filter, a row's tags and the counts, from the assignments the store holds.
-        let either = SearchParameters(keywords: "zanzibar quixotic", booleanMode: .or, includeDocumentText: false)
+        // Tags: the filter, a row's tags and the counts, from the assignments the store holds. The
+        // query's own OR, which the search's parser reads, as the app's searches write it.
+        let either = SearchParameters(keywords: "zanzibar OR quixotic", includeDocumentText: false)
         var tagged = either
         tagged.userTagIds = [laos.id]
         #expect(Self.keys(try await owner.search(parameters: tagged)) == Self.keys("d1", "d3"))
