@@ -174,10 +174,11 @@ import Testing
             #expect(history.exports.map(\.collectionName) == [nil, "Briefing", "Briefing"], "an unnamed collection's export names none")
             #expect(history.exports.allSatisfy { $0.projectId == project.id && $0.exportedAt == UserStoreDate.text(UserDataFixture.now) })
 
-            _ = try await owner.send(.patch, "/api/v1/me/preferences", #"{"researchLoggingEnabled": false}"#)
-            #expect(try await Self.export(owner, briefing.id, "bibtex").status == .ok)
             let refused = try await Self.export(owner, briefing.id, "pdf")
             #expect(refused.status == .badRequest)
+            #expect(try decode(HistoryPage.self, try await owner.get("/api/v1/me/history")).totalExports == 3, "a refusal is kept nowhere")
+            _ = try await owner.send(.patch, "/api/v1/me/preferences", #"{"researchLoggingEnabled": false}"#)
+            #expect(try await Self.export(owner, briefing.id, "bibtex").status == .ok)
             _ = try await owner.send(.patch, "/api/v1/me/preferences", #"{"researchLoggingEnabled": true}"#)
             #expect(try decode(HistoryPage.self, try await owner.get("/api/v1/me/history")).totalExports == 3)
         }
@@ -214,6 +215,13 @@ import Testing
             let page = String(buffer: try await Self.export(owner, brief.id, "html").body)
             #expect(page.contains("Kennedy writes to Khrushchev.") && page.contains("AI-generated"))
             #expect(!page.contains("Summary will be generated at export"))
+            #expect(try decode(HistoryPage.self, try await owner.get("/api/v1/me/history")).exports.map(\.format) == ["html"],
+                    "only the export that was made")
+
+            // The app fetches the prompt first: one the user no longer has refuses, summaries stored or not.
+            try fixture.rows.run("DELETE FROM prompts")
+            let gone = try await Self.export(owner, brief.id, "html")
+            #expect(gone.status == .conflict && problemCode(gone) == "EXPORT_NOT_RENDERED")
         }
     }
 
@@ -291,29 +299,42 @@ import Testing
         }
     }
 
-    /// A document is parsed once, as the app's resolver parses one its cache misses, and again only when
-    /// its volume's file changes; a volume outside the manifest is never opened, and a document its
-    /// volume lacks is none.
-    @Test func aDocumentIsParsedOnceUntilItsVolumeChanges() async throws {
+    /// A volume is read once for the documents a resolve asks of it, the reader's own pass, each built as
+    /// the parser builds one asked for alone; a division that is no document, as the preface is, is parsed
+    /// alone, as the app parses one; each is kept, a cache of two keeping the last two, until its volume's
+    /// file changes; and a volume outside the manifest or the folder is never opened.
+    @Test func aVolumeIsReadOnceForTheDocumentsAResolveAsksOfIt() async throws {
         let fixture = try await ServerFixture(volumes: [Self.volume])
-        let parses = CollectionDocumentParses(volumesDirectory: fixture.files.volumesDirectory, resources: fixture.resources, capacity: 2)
-        let first = try #require(await parses.document(volumeId: Self.volume, documentId: "d1"))
-        let fresh = try await FRUSDocumentParser().parseDocument(documentId: "d1",
-                                                                 volumeURL: fixture.files.volumesDirectory.appendingPathComponent("\(Self.volume).xml"))
-        #expect(first.documentId == "d1" && first.nodes.count == fresh?.nodes.count)
-        _ = await parses.document(volumeId: Self.volume, documentId: "d1")
-        #expect(await parses.parseCount == 1)
-        #expect(await parses.document(volumeId: Self.volume, documentId: "d999") == nil)
-        #expect(await parses.document(volumeId: "frus1894Nicaragua", documentId: "d1") == nil, "not mounted")
-        #expect(await parses.document(volumeId: "../\(Self.volume)", documentId: "d1") == nil, "no manifest id")
-        #expect(await parses.parseCount == 2)
-        // Two more documents push d1 out of a cache of two; and a changed file is parsed again.
-        _ = await parses.document(volumeId: Self.volume, documentId: "d2")
-        _ = await parses.document(volumeId: Self.volume, documentId: "d1")
-        #expect(await parses.parseCount == 4)
+        let parses = CollectionDocumentParses(reader: fixture.reader, resources: fixture.resources, capacity: 2)
         let file = fixture.files.volumesDirectory.appendingPathComponent("\(Self.volume).xml")
+        let found = await parses.documents(volumeId: Self.volume, documentIds: ["d1", "d2"])
+        let (read, alone) = (await parses.volumeCount, await parses.parseCount)
+        #expect(Set(found.keys) == ["d1", "d2"] && read == 1 && alone == 0)
+        // Each as the app's parse of it alone renders it.
+        let wide = CollectionDocumentParses(reader: fixture.reader, resources: fixture.resources)
+        let spread = ["d1", "d2", "d40", "d80", "d120"]
+        let passed = await wide.documents(volumeId: Self.volume, documentIds: Set(spread))
+        for id in spread {
+            let alone = try #require(try await FRUSDocumentParser().parseDocument(documentId: id, volumeURL: file), "\(id)")
+            var converter = ASTToRenderNodeConverter(volumeId: Self.volume)
+            var other = ASTToRenderNodeConverter(volumeId: Self.volume)
+            let html = { (model: FRUSDocumentRenderModel) in FRUSRenderNodeHTMLSerializer().serialize(model) }
+            #expect(html(converter.convert(try #require(passed[id], "\(id)"))) == html(other.convert(alone)), "\(id)")
+        }
+
+        // Kept: asked again, nothing is read.
+        _ = await parses.documents(volumeId: Self.volume, documentIds: ["d1", "d2"])
+        #expect(await parses.volumeCount == 1)
+        // A division that is no document, the preface, or an id the volume lacks, is parsed alone.
+        let preface = await parses.documents(volumeId: Self.volume, documentIds: ["preface", "d999"])
+        #expect(await parses.parseCount == 2 && preface["preface"] != nil && preface["d999"] == nil)
+        #expect(await parses.documents(volumeId: "frus1894Nicaragua", documentIds: ["d1"]).isEmpty, "not mounted")
+        #expect(await parses.documents(volumeId: "../\(Self.volume)", documentIds: ["d1"]).isEmpty, "no manifest id")
+        // The cache keeps two: d1 went for the preface and d999, and is read again; so is a changed file.
+        _ = await parses.documents(volumeId: Self.volume, documentIds: ["d1"])
+        #expect(await parses.volumeCount == 3)
         try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1_000_000)], ofItemAtPath: file.path)
-        _ = await parses.document(volumeId: Self.volume, documentId: "d1")
-        #expect(await parses.parseCount == 5)
+        _ = await parses.documents(volumeId: Self.volume, documentIds: ["d1"])
+        #expect(await parses.volumeCount == 4)
     }
 }

@@ -1332,6 +1332,8 @@ export const copy = {
     unavailable: 'Preview Unavailable',
     capNotice: (shown: number, total: number) => `Showing first ${shown} of ${total} documents`,
     renderAll: 'Render All',
+    /** What the preview says once Render All has taken its bar away, the web's own. */
+    renderingAll: (count: number) => `Showing all ${count} documents`,
     missingVolumes: (count: number) => `${count} volume${count === 1 ? '' : 's'} not downloaded`,
     fidelityNote: 'Preview of the HTML export — PDF and Word pagination will differ',
     frameTitle: 'Preview of the collection’s HTML export',

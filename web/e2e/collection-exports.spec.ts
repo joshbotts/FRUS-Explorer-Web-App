@@ -50,7 +50,9 @@ const letters = (count: number) => Array.from({ length: count }, (_, at) => ({ v
 
 test('previews a collection beside its contents, the first 20 documents until Render All', async ({ page }) => {
   const id = await made(page, 'Twenty-two letters', letters(22));
-  await page.goto(`collections/${id}`);
+  await page.goto('collections');
+  await page.getByRole('link', { name: 'Twenty-two letters' }).click();
+  await expect(page).toHaveURL(new RegExp(`/collections/${id}$`, 'i'));
   const frame = page.frameLocator('iframe.preview-frame');
   await expect(frame.locator('header h1')).toHaveText('Twenty-two letters');
   await expect(frame.locator('section[id^="doc-"]')).toHaveCount(20);
@@ -62,6 +64,9 @@ test('previews a collection beside its contents, the first 20 documents until Re
   await page.getByRole('button', { name: 'Render All' }).click();
   await expect(frame.locator('section[id^="doc-"]')).toHaveCount(22);
   await expect(page.getByText('Showing first 20 of 22 documents')).toBeHidden();
+  // Its bar gone, focus is on the preview, which says what it shows.
+  await expect(page.getByRole('region', { name: 'Preview' })).toBeFocused();
+  await expect(page.getByText('Showing all 22 documents')).toBeAttached();
 
   // A change shows in the page once it settles: a new name.
   await page.getByRole('button', { name: 'Collection settings' }).click();
@@ -70,6 +75,9 @@ test('previews a collection beside its contents, the first 20 documents until Re
   await settings.getByRole('button', { name: 'Done' }).click();
   await expect(frame.locator('header h1')).toHaveText('Twenty-two letters, renamed');
   await expect(frame.locator('section[id^="doc-"]')).toHaveCount(22, { timeout: 1_000 });
+  // Each page took the frame's own place in the history: Back leaves the editor.
+  await page.goBack();
+  await expect(page).toHaveURL(/\/collections$/);
 
   // A volume the server's folder lacks: its document as the citation card, and the bar names it.
   const away = await made(page, 'A volume away', [{ volumeId: 'frus1961-63v05', documentId: 'd1' }]);

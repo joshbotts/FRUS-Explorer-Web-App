@@ -71,19 +71,28 @@ function server(answers: Record<string, unknown>) {
   return stubServer({ '/readyz': ready, '/api/v1/me': me, '/api/v1/me/projects': { items: [] }, '/api/v1/me/preferences': {}, ...answers });
 }
 
-/** The preview frame's address, read as the server reads it. */
+/** Where the preview's frame has been sent, each address in turn, in its own place in the history. */
+let navigations: string[] = [];
+
+/** The address the frame was last sent to, read as the server reads it. */
 function frameAddress(): URL {
-  const frame = screen.getByTitle('Preview of the collection’s HTML export') as HTMLIFrameElement;
-  return new URL(frame.getAttribute('src') ?? '', 'http://localhost');
+  return new URL(navigations.at(-1) ?? '', 'http://localhost');
 }
+
+const pause = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 beforeEach(() => {
   vi.stubGlobal('matchMedia', (query: string) => ({ matches: false, media: query, addEventListener() {}, removeEventListener() {} }));
+  navigations = [];
+  vi.spyOn(HTMLIFrameElement.prototype, 'contentWindow', 'get').mockReturnValue({
+    location: { replace: (address: string) => navigations.push(address) },
+  } as unknown as Window);
 });
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
@@ -113,30 +122,37 @@ describe('the live preview', () => {
     expect(screen.getByText('1 volume not downloaded')).toBeTruthy();
     expect(screen.getByText('Preview of the HTML export — PDF and Word pagination will differ')).toBeTruthy();
 
-    // Render All, at once, for as long as the editor is open.
-    await userEvent.click(screen.getByRole('button', { name: 'Render All' }));
+    // Render All, at once, for as long as the editor is open; its bar goes, and focus with it to the
+    // preview, which says what it shows.
+    const renderAll = screen.getByRole('button', { name: 'Render All' });
+    renderAll.focus();
+    await userEvent.keyboard('{Enter}');
     await waitFor(() => expect(frameAddress().searchParams.get('renderAll')).toBe('true'));
     expect(screen.queryByText('Showing first 20 of 22 documents')).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('region', { name: 'Preview' })));
+    expect(screen.getByText('Showing all 22 documents')).toBeTruthy();
+    expect(navigations).toHaveLength(2);
   });
 
-  it('builds the page again a second after the collection changes, once its changes are answered', async () => {
+  it('builds the page again a second after a change is answered, and once, never while the change waits', async () => {
+    let answer: (value: unknown) => void = () => {};
     const fetch = server({
       [path]: detail(),
-      [`PATCH ${path}`]: detail({ includeColophon: true }),
+      // The server's answer, held until the test gives it, a stamp unlike the change shown at once.
+      [`PATCH ${path}`]: () => new Promise((resolve) => (answer = resolve)),
     });
     renderAt(`/collections/${berlinId}`);
-    await waitFor(() => expect(frameAddress().pathname).toBe(`${path}/preview`));
-    const sets: string[] = [];
-    const set = vi.spyOn(HTMLIFrameElement.prototype, 'src', 'set').mockImplementation((value: string) => {
-      sets.push(value);
-    });
+    await waitFor(() => expect(navigations).toHaveLength(1));
+    expect(frameAddress().pathname).toBe(`${path}/preview`);
     await userEvent.click(screen.getByRole('button', { name: 'Collection settings' }));
     await userEvent.click(within(screen.getByRole('dialog', { name: 'Collection settings' })).getByRole('switch', { name: 'Include colophon' }));
     await waitFor(() => expect(fetch.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(true));
-    expect(sets).toEqual([]);
-    await waitFor(() => expect(sets).toHaveLength(1), { timeout: 2500 });
-    expect(new URL(sets[0]!, 'http://localhost').pathname).toBe(`${path}/preview`);
-    set.mockRestore();
+    await pause(1_300);
+    expect(navigations, 'not while the change waits for its answer').toHaveLength(1);
+    answer(detail({ includeColophon: true, lastModified: '2026-10-29T12:00:00.000Z' }));
+    await waitFor(() => expect(navigations).toHaveLength(2), { timeout: 2_500 });
+    await pause(1_300);
+    expect(navigations, 'once').toHaveLength(2);
   });
 
   it('says a smart collection has no preview here, and loads none', async () => {

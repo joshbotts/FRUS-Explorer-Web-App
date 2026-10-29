@@ -13,6 +13,7 @@ import FRUSCoreKit
 import FRUSLightCore
 import FRUSLightTestSupport
 import FRUSParity
+import FRUSRichText
 import FTS5Store
 import Foundation
 import Hummingbird
@@ -103,6 +104,10 @@ import Testing
                 "startOffset": 12, "endOffset": 60, "colorTag": "green", "renderingVersion": v1,
             ]))
             _ = try await session.send(.post, "/api/v1/me/volumes/\(Self.kennedy)/documents/d3/summaries",
+                                       try Self.json(["responseText": "An older summary of the answer."]))
+            // A second apart at least, since the JSON export the reference reads writes its times to the second.
+            try await Task.sleep(for: .milliseconds(1_100))
+            _ = try await session.send(.post, "/api/v1/me/volumes/\(Self.kennedy)/documents/d3/summaries",
                                        try Self.json(["responseText": "Khrushchev answers the President."]))
 
             // Every part of a composition: the title page, the introduction, the colophon, the project and
@@ -160,7 +165,9 @@ import Testing
             let check = try ServedFixture.decode(ExcerptCheck.self, try await session.get("\(path)/excerpt-check"))
             #expect(check.summary == nil && check.verified == 1 && !check.hasFailures, "\(frozen): \(check)")
 
-            let kit = try await KitReference(files: files, session: session, project: project.id)
+            let active = try ServedFixture.decode(ProjectList.self, try await session.get("/api/v1/me/projects")).activeProjectId
+            #expect(active == project.id)
+            let kit = try await KitReference(files: files, session: session, activeProject: active)
             for collection in [rich.id, plain.id, many.id, away.id] {
                 for format in CollectionExportFormat.allCases {
                     try await Self.sameDay { day in
@@ -387,9 +394,16 @@ import Testing
             #"throw APIProblem(.conflict, code: "NOTHING_TO_EXPORT", detail: "This collection has no documents to send.")"#,
             "let metadata = CollectionExportMetadata(name: collection.name, note: collection.note)",
         ], file: "CollectionExports.swift")
+        NoteViewParityTests.expect(try CollectionParityTests.server("Sources/FRUSLightAPI/CollectionExports.swift"), holds: [
+            "if let stored, let reading = RTFReader.read([UInt8](stored)) { return paragraphs(reading.text, reading.runs) } let plain = text ?? \"\" return paragraphs(plain, [RichTextRun(text: plain)])",
+            "if let stored = collection.introductionRichText, let reading = RTFReader.read([UInt8](stored)), !reading.text.isEmpty {",
+            "guard let plain = collection.introductionText, !plain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }",
+            "guard !text.isEmpty else { return [] } var paragraphs: [[ProseFormattedSpan]] = [[]] for run in runs {",
+        ], file: "CollectionExports.swift")
         NoteViewParityTests.expect(try CollectionParityTests.server("Sources/FRUSLightAPI/CollectionContent.swift"), holds: [
+            "guard research.promptIds.contains(promptId) else { throw ExportError.renderingFailed }",
             "COALESCE(target_volume_id, source_volume_id) AS resolved_target_volume, target_document_id FROM cross_references WHERE source_document_id = ? AND source_volume_id = ? AND is_broken = 0 AND target_document_id != ''",
-            "try? await FRUSDocumentParser().parseDocument(documentId: documentId, volumeURL: url)",
+            "ast = try? await FRUSDocumentParser().parseDocument(documentId: id, volumeURL: url)",
             "if let name = names[assignment.tagId] { tagNames.insert(name) }",
             "return tagNames.sorted()",
         ], file: "CollectionContent.swift")
@@ -449,9 +463,14 @@ struct KitReference: Sendable {
     let persons: PersonMentionStore
     let references: SQLiteConnection
 
-    init(files: DataDirectory, session: CollectionExportParityTests.Session, project: String) async throws {
-        let file = try await session.get("/api/v1/me/export?includeGeneratedSummaries=true&projectId=\(project)")
-        envelope = try ResearchDataEnvelope.makeDecoder().decode(ResearchDataEnvelope.self, from: Data(buffer: file.body))
+    /// The project the user works in, as the app's `AppState.activeProjectId` names it.
+    let activeProject: ProjectExport?
+
+    init(files: DataDirectory, session: CollectionExportParityTests.Session, activeProject: String?) async throws {
+        let file = try await session.get("/api/v1/me/export?includeGeneratedSummaries=true")
+        let envelope = try ResearchDataEnvelope.makeDecoder().decode(ResearchDataEnvelope.self, from: Data(buffer: file.body))
+        self.envelope = envelope
+        self.activeProject = activeProject.flatMap { id in envelope.projects.first { $0.id.uuidString == id } }
         self.files = files
         resources = try ServerResources.load(from: ServedFixture.resources)
         pipeline = try IndexingPipeline(readingIndexAt: files.liveIndex, fts5Store: try FTS5Store(readingDatabaseAt: files.liveIndex),
@@ -477,7 +496,7 @@ struct KitReference: Sendable {
             url = try await ZoteroCollectionExporter().export(metadata: CollectionExportMetadata(name: collection.name, note: collection.note),
                                                               documents: documents, options: options)
         default:
-            let items = try await assembly(collection).resolve(entries: entries(collection), introduction: CollectionExportRoutes.introduction(of: collection),
+            let items = try await assembly(collection).resolve(entries: entries(collection), introduction: Self.introduction(of: collection),
                                                                purpose: .export, printsFigureImages: format != .bibtex)
             let exporter: any CollectionExporter = switch format {
             case .html: HTMLCollectionExporter(figureImages: figures)
@@ -495,11 +514,26 @@ struct KitReference: Sendable {
     func preview(_ id: String, renderAll: Bool, on day: Date) async throws -> String {
         let collection = try collection(id)
         let all = collection.entries.sorted { $0.sortOrder < $1.sortOrder }
-        let shown = renderAll ? all : CollectionExportRoutes.capped(all, cap: CollectionExportRoutes.initialDocumentCap)
-        let items = try await assembly(collection).resolve(entries: shown.map(Self.entry), introduction: CollectionExportRoutes.introduction(of: collection),
+        // `capEntries(_:cap:)`, at `initialDocumentCap`, 20.
+        var documentCount = 0
+        var shown: [CollectionEntryExport] = []
+        for entry in all {
+            if entry.entryKind == .document { documentCount += 1 }
+            if !renderAll, documentCount > 20 {
+                if entry.entryKind == .generated { shown.append(entry) }
+                continue
+            }
+            shown.append(entry)
+        }
+        let items = try await assembly(collection).resolve(entries: shown.map(Self.entry), introduction: Self.introduction(of: collection),
                                                            purpose: .preview)
         let needed = Set(all.filter { $0.entryKind == .document && !$0.volumeId.isEmpty }.map(\.volumeId))
-        var renderer = CollectionItemHTMLRenderer(options: CollectionExportRoutes.previewOptions(collection))
+        // `previewOptions()`: the composition's, no word cloud.
+        let composed = CollectionExportOptions(composing: collection)
+        var renderer = CollectionItemHTMLRenderer(options: CollectionExportOptions(
+            tocStyle: composed.tocStyle, includeFootnotes: composed.includeFootnotes, includeSourceNote: composed.includeSourceNote,
+            applyHighlights: composed.applyHighlights, includeNotes: composed.includeNotes, summaryPromptId: composed.summaryPromptId,
+            includeWordCloud: false))
         renderer.figureImages = figures
         renderer.citationOnlyVolumeIds = needed.filter {
             !FileManager.default.fileExists(atPath: files.volumesDirectory.appendingPathComponent("\($0).xml").path)
@@ -526,16 +560,48 @@ struct KitReference: Sendable {
     }
 
     static func entry(_ entry: CollectionEntryExport) -> CollectionContentAssembly.Entry {
-        .init(entry, proseParagraphs: entry.entryKind == .prose ? CollectionExportRoutes.proseParagraphs(stored: entry.richText, text: entry.text) : nil)
+        guard entry.entryKind == .prose else { return .init(entry, proseParagraphs: nil) }
+        // `exportRTF(from:)`: the stored RTF when it reads, else the text as plain RTF, one plain run.
+        if let stored = entry.richText, let reading = RTFReader.read([UInt8](stored)) {
+            return .init(entry, proseParagraphs: paragraphs(reading.text, reading.runs.map(Self.span)))
+        }
+        return .init(entry, proseParagraphs: paragraphs(entry.text ?? "", [(entry.text ?? "", false, false, false, nil, nil)]))
+    }
+
+    /// `exportRTF(richText:plainText:)`: the stored RTF when it reads as some text, else the plain text
+    /// when it holds more than spaces, else none.
+    static func introduction(of collection: CollectionExport) -> [[ProseFormattedSpan]]? {
+        if let stored = collection.introductionRichText, let reading = RTFReader.read([UInt8](stored)), reading.text.utf16.count > 0 {
+            return paragraphs(reading.text, reading.runs.map(Self.span))
+        }
+        guard let plain = collection.introductionText, !plain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return paragraphs(plain, [(plain, false, false, false, nil, nil)])
+    }
+
+    typealias Span = (text: String, bold: Bool, italic: Bool, underline: Bool, colorHex: String?, linkURL: String?)
+
+    static func span(_ run: RichTextRun) -> Span {
+        (run.text, run.bold, run.italic, run.underline, run.colorHex, run.linkURL)
+    }
+
+    /// `paragraphs(fromRTF:)`: none for no text, else each run appended by the kit's rule.
+    static func paragraphs(_ text: String, _ runs: [Span]) -> [[ProseFormattedSpan]] {
+        guard text.utf16.count > 0 else { return [] }
+        var paragraphs: [[ProseFormattedSpan]] = [[]]
+        for run in runs {
+            CollectionProse.append(text: run.text, bold: run.bold, italic: run.italic, underline: run.underline,
+                                   colorHex: run.colorHex, linkURL: run.linkURL, to: &paragraphs)
+        }
+        return paragraphs
     }
 
     /// `CollectionExportMetadata.forExport`: the project the export was made under, the method appendix
     /// of the searches run under it, dated in the app's `en_US`, in UTC.
     private func metadata(_ collection: CollectionExport, on day: Date) throws -> CollectionExportMetadata {
+        let project = activeProject
         let provenance = CollectionExportMetadata.projectProvenance(enabled: collection.includeProjectProvenance ?? false,
-                                                                    projectName: envelope.exportedForProjectName,
-                                                                    researchQuestion: envelope.exportedForProjectResearchQuestion)
-        let project = envelope.projects.first { $0.name == envelope.exportedForProjectName }
+                                                                    projectName: project?.name,
+                                                                    researchQuestion: project?.researchQuestion)
         var lines: [String] = []
         if collection.includeMethodAppendix ?? false {
             let appendix = QueryMethodAppendix.make(recordedSearches: envelope.searchHistory.map(HistoryRoutes.recorded), corpusNames: [:],
@@ -582,8 +648,19 @@ struct KitSource: CollectionContentDataSource {
     }
 
     func crossReferenceTargets(volumeId: String, documentId: String) async -> [(volumeId: String, documentId: String)]? {
-        ((try? reference.references.query(ServedIndex.outboundEdgesQuery, [.text(documentId), .text(volumeId)])) ?? []).compactMap { row in
-            guard let volume = row[0].text, let document = row[1].text else { return nil }
+        let query = """
+            SELECT source_volume_id, source_document_id,
+                   COALESCE(target_volume_id, source_volume_id) AS resolved_target_volume,
+                   target_document_id,
+                   reference_type, context
+            FROM cross_references
+            WHERE source_document_id = ?
+              AND source_volume_id = ?
+              AND is_broken = 0
+              AND target_document_id != ''
+            """
+        return ((try? reference.references.query(query, [.text(documentId), .text(volumeId)])) ?? []).compactMap { row in
+            guard let volume = row[2].text, let document = row[3].text else { return nil }
             return (volumeId: volume, documentId: document)
         }
     }
@@ -607,7 +684,12 @@ struct KitSource: CollectionContentDataSource {
 
     /// A document's summaries newest first, the web's order where the app's fetch sets none.
     private func summaries(_ volumeId: String, _ documentId: String) -> [GeneratedSummaryExport] {
-        reference.envelope.summaries.filter { $0.volumeId == volumeId && $0.documentId == documentId }.sorted(by: CollectionResearch.ranksAbove)
+        reference.envelope.summaries.filter { $0.volumeId == volumeId && $0.documentId == documentId }.sorted { a, b in
+            let (ca, cb) = (a.createdAt ?? .distantPast, b.createdAt ?? .distantPast)
+            if ca != cb { return ca > cb }
+            let (la, lb) = (a.lastModified ?? .distantPast, b.lastModified ?? .distantPast)
+            return la != lb ? la > lb : a.id.uuidString < b.id.uuidString
+        }
     }
 
     func headnoteSummaries(volumeId: String, documentId: String) -> [GeneratedSummaryExport] {
@@ -636,6 +718,7 @@ struct KitSource: CollectionContentDataSource {
 
     func generateSummaries(for documents: [CollectionExportDocument], promptId: UUID,
                            bodyTexts: [String: String]) async throws -> [String: String] {
+        guard reference.envelope.prompts.contains(where: { $0.id == promptId }) else { throw ExportError.renderingFailed }
         var result: [String: String] = [:]
         for document in documents {
             guard let stored = summary(volumeId: document.volumeId, documentId: document.documentId, promptId: promptId) else {

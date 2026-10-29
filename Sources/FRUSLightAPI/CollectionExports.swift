@@ -117,7 +117,7 @@ enum CollectionExportRoutes {
                     reader: ReaderService, provider: ServedIndexProvider) {
         let store = services.store
         let now = services.now
-        let parses = CollectionDocumentParses(volumesDirectory: reader.volumesDirectory, resources: resources)
+        let parses = CollectionDocumentParses(reader: reader, resources: resources)
         let figures = ServedFigureImages(volumesDirectory: reader.volumesDirectory, resources: resources)
 
         // The live preview, as the app's pane renders it, for the editor's frame: a problem is a page
@@ -136,7 +136,9 @@ enum CollectionExportRoutes {
                 let research = try await Blocking.run { try CollectionResearch.read(for: user.id, in: store) }
                 let metadata = try await metadata(of: collection, research: research, for: user.id, in: store,
                                                   resources: resources, at: time, timeZone: timeZone)
-                let served = try? await provider.servedIfReady()
+                // None while no index is installed; one being installed is a 503, as for a search.
+                let served = try await provider.servedIfReady()
+                try await warm(collection, resources: resources)
                 let entries = renderAll ? collection.entries : capped(collection.entries, cap: initialDocumentCap)
                 let items = try await context.whileClientConnected {
                     try await resolve(collection, entries: entries, research: research, served: served, resources: resources,
@@ -154,6 +156,14 @@ enum CollectionExportRoutes {
             } catch let problem as APIProblem {
                 return Response(status: problem.status, headers: previewHeaders,
                                 body: .init(byteBuffer: ByteBuffer(string: unavailablePage(problem.detail))))
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let closed as ClientClosedConnection {
+                throw closed
+            } catch {
+                context.logger.error("A collection's preview could not be built: \(error)")
+                return Response(status: .internalServerError, headers: previewHeaders,
+                                body: .init(byteBuffer: ByteBuffer(string: unavailablePage("The server could not build the preview."))))
             }
         }
 
@@ -176,7 +186,8 @@ enum CollectionExportRoutes {
             }
             let time = now()
             let research = try await Blocking.run { try CollectionResearch.read(for: user.id, in: store) }
-            let served = try? await provider.servedIfReady()
+            let served = try await provider.servedIfReady()
+            try await warm(collection, resources: resources)
             let options = format.exportOptions(for: collection)
             let file: (data: Data, documents: Int, name: String)
             if format == .zoteroJSON {
@@ -194,15 +205,21 @@ enum CollectionExportRoutes {
             } else {
                 let metadata = try await metadata(of: collection, research: research, for: user.id, in: store,
                                                   resources: resources, at: time, timeZone: timeZone)
-                let items = try await context.whileClientConnected {
-                    try await resolve(collection, entries: collection.entries, research: research, served: served,
-                                      resources: resources, parses: parses, purpose: .export,
-                                      printsFigureImages: format.printsFigureImages)
+                file = try await context.whileClientConnected {
+                    let items = try await resolve(collection, entries: collection.entries, research: research, served: served,
+                                                  resources: resources, parses: parses, purpose: .export,
+                                                  printsFigureImages: format.printsFigureImages)
+                    let data = try await Blocking.run { rendered(items, metadata: metadata, format: format, options: options, figures: figures) }
+                    return (data, items.documents.count, CollectionExportNaming.fileName(savedName: metadata.name, suffix: format.suffix))
                 }
-                let data = try await Blocking.run { rendered(items, metadata: metadata, format: format, options: options, figures: figures) }
-                file = (data, items.documents.count, CollectionExportNaming.fileName(savedName: metadata.name, suffix: format.suffix))
             }
-            try await record(format, documents: file.documents, of: collection, for: user.id, in: store, at: time)
+            // Kept as the app keeps it once the file is written; a row that cannot be written is said in the
+            // log, as the file is the export.
+            do {
+                try await record(format, documents: file.documents, of: collection, for: user.id, in: store, at: now())
+            } catch {
+                context.logger.error("A collection's export could not be kept in the history: \(error)")
+            }
             var headers = HTTPFields()
             headers[.contentType] = format.mediaType
             headers[.contentDisposition] = attachment(file.name)
@@ -216,7 +233,7 @@ enum CollectionExportRoutes {
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
             let collection = try await CollectionRoutes.collection(try context.parameters.require("collectionId"), of: user.id, in: store)
-            return await excerptCheck(collection.entries, provider: provider)
+            return try await excerptCheck(collection.entries, provider: provider)
         }
     }
 
@@ -229,9 +246,10 @@ enum CollectionExportRoutes {
     static func resolve(_ collection: CollectionExport, entries: [CollectionEntryExport], research: CollectionResearch,
                         served: ServedIndex?, resources: ServerResources, parses: CollectionDocumentParses,
                         purpose: CollectionContentAssembly.Purpose, printsFigureImages: Bool = false) async throws -> [CollectionExportItem] {
+        let entries = entries.map(entry)
         do {
-            return try await assembly(collection, research: research, served: served, resources: resources, parses: parses)
-                .resolve(entries: entries.map(entry), introduction: introduction(of: collection), purpose: purpose,
+            return try await assembly(collection, entries: entries, research: research, served: served, resources: resources, parses: parses)
+                .resolve(entries: entries, introduction: introduction(of: collection), purpose: purpose,
                          printsFigureImages: printsFigureImages)
         } catch {
             throw refusal(error)
@@ -242,9 +260,10 @@ enum CollectionExportRoutes {
     @MainActor
     static func resolveDocuments(_ collection: CollectionExport, research: CollectionResearch, served: ServedIndex?,
                                  resources: ServerResources, parses: CollectionDocumentParses) async throws -> [CollectionExportDocument] {
+        let entries = collection.entries.map(entry)
         do {
-            return try await assembly(collection, research: research, served: served, resources: resources, parses: parses)
-                .resolveDocuments(entries: collection.entries.map(entry), purpose: .export)
+            return try await assembly(collection, entries: entries, research: research, served: served, resources: resources, parses: parses)
+                .resolveDocuments(entries: entries, purpose: .export)
         } catch {
             throw refusal(error)
         }
@@ -266,12 +285,21 @@ enum CollectionExportRoutes {
     }
 
     @MainActor
-    private static func assembly(_ collection: CollectionExport, research: CollectionResearch, served: ServedIndex?,
-                                 resources: ServerResources, parses: CollectionDocumentParses) -> CollectionContentAssembly {
+    private static func assembly(_ collection: CollectionExport, entries: [CollectionContentAssembly.Entry], research: CollectionResearch,
+                                 served: ServedIndex?, resources: ServerResources,
+                                 parses: CollectionDocumentParses) -> CollectionContentAssembly {
         CollectionContentAssembly(
             collection: collection, notes: research.notes,
-            source: CollectionContentSource(research: research, served: served, resources: resources, parses: parses),
+            source: CollectionContentSource(research: research, served: served, resources: resources, parses: parses,
+                                            batch: CollectionDocumentBatch(entries)),
             locale: locale)
+    }
+
+    /// The archival indexes, decoded before a collection with a Sources & Archives block is resolved,
+    /// off the main actor the assembly runs on, which would otherwise decode them there the first time.
+    static func warm(_ collection: CollectionExport, resources: ServerResources) async throws {
+        guard collection.entries.contains(where: { $0.generatedBlockType == CollectionGeneratedBlockType.archivalSources.rawValue }) else { return }
+        _ = try await Blocking.run { resources.archivalIndexes }
     }
 
     /// An entry as the assembly reads it: its values, and a prose block's paragraphs.
@@ -469,16 +497,17 @@ enum CollectionExportRoutes {
 
     /// `verifyExcerpts()`: each excerpt's stored text checked against its document's body text as the
     /// served index holds it, a document whose revision says an update removed it told apart from one
-    /// the index does not hold, and every one uncheckable while no index is served. A read that fails
-    /// is no verdict: the app reads it as nothing indexed, and so does this.
-    static func excerptCheck(_ entries: [CollectionEntryExport], provider: ServedIndexProvider) async -> ExcerptCheck {
+    /// the index does not hold, and every one uncheckable while no index is installed. A read that fails
+    /// is no verdict: the app reads it as nothing indexed, and so does this; an index being installed is
+    /// the 503 a search answers then.
+    static func excerptCheck(_ entries: [CollectionEntryExport], provider: ServedIndexProvider) async throws -> ExcerptCheck {
         let requests = entries.compactMap { entry -> ExcerptVerifier.Request? in
             guard entry.entryKind == .excerpt, let text = entry.text, !text.isEmpty,
                   !entry.volumeId.isEmpty, !entry.documentId.isEmpty else { return nil }
             return ExcerptVerifier.Request(volumeId: entry.volumeId, documentId: entry.documentId, text: text)
         }
         guard !requests.isEmpty else { return check(nil) }
-        guard let served = try? await provider.servedIfReady() else {
+        guard let served = try await provider.servedIfReady() else {
             return check(ExcerptVerificationReport(outcomes: Dictionary(requests.map { ($0, .documentNotIndexed) },
                                                                         uniquingKeysWith: { first, _ in first })))
         }

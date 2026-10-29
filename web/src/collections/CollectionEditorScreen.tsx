@@ -193,6 +193,9 @@ function Editor({ detail }: { detail: CollectionDetail }) {
     setFocusEntry(null);
   }
 
+  // Nor does one the narrow window's Preview hides with the whole outline: nothing there takes it.
+  if (focusEntry && narrow && pane !== 'outline') setFocusEntry(null);
+
   // A new entry takes focus once it is drawn: a heading's title, a note block's editor.
   useEffect(() => {
     if (!focusEntry) return;
@@ -282,9 +285,9 @@ function Editor({ detail }: { detail: CollectionDetail }) {
         <fieldset className="pane-picker">
           <legend className="visually-hidden">{copy.collectionEditor.pane}</legend>
           {(['outline', 'preview'] as const).map((each) => (
-            <label key={each} className={each === pane ? 'selected' : undefined}>
+            <label key={each}>
               <input type="radio" name={`${contentsId}-pane`} checked={each === pane} onChange={() => setPane(each)} />
-              {copy.collectionEditor[each]}
+              <span>{copy.collectionEditor[each]}</span>
             </label>
           ))}
         </fieldset>

@@ -295,7 +295,12 @@ export interface ExcerptCheck {
 
 /** The browser's time zone, which an export's dates are read in, as the app reads them in the device's. */
 export function browserTimeZone(): string {
-  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    // A browser that names no zone gets UTC's dates, as the method appendix does.
+    return 'UTC';
+  }
 }
 
 /**
@@ -307,11 +312,14 @@ export function previewURL(id: string, renderAll: boolean): string {
   return `${servedPath(`${base}/${segment(id)}/preview`)}?${query.toString()}`;
 }
 
-/** The quotation check, run each time the export sheet opens, as the app's sheet runs its own. */
+/** The quotation check, run each time the export sheet opens, as the app's sheet runs its own, over the collection the server holds once the changes sent are answered. */
 export function excerptCheckQuery(id: string) {
   return queryOptions({
     queryKey: ['collectionExcerptCheck', keyOf(id)],
-    queryFn: ({ signal }) => getJSON<ExcerptCheck>(`${base}/${segment(id)}/excerpt-check`, undefined, signal),
+    queryFn: async ({ signal }) => {
+      await whenAnswered(id);
+      return getJSON<ExcerptCheck>(`${base}/${segment(id)}/excerpt-check`, undefined, signal);
+    },
     staleTime: 0,
     gcTime: 0,
     retry: false,
