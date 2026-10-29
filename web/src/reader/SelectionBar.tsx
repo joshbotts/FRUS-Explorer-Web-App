@@ -2,8 +2,8 @@
 // floating selection bar"), as the Mac's `FloatingSelectionBar` draws it: a dark pill above the
 // selection with the verbs the selection allows, in the kit's order. In the web edition so far those
 // are the four colours, each a dot named as VoiceOver reads the app's, "Highlight Yellow", and from
-// S15d Note, which opens a new note on the document, as the app's does; a footnote's selection
-// allows Note alone. A toolbar for the keyboard, which Alt+F10 reaches from the text: the arrow keys,
+// S15d Note, which opens a new note on the document, as the app's does, and from S18d Excerpt, which
+// freezes the selection into a collection; a footnote's selection allows Note alone. A toolbar for the keyboard, which Alt+F10 reaches from the text: the arrow keys,
 // Home and End move between its buttons, Return or Space chooses one, and Escape puts the bar away.
 import { type RefObject, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
 import type { HighlightColor } from '../api/types';
@@ -19,6 +19,7 @@ export function SelectionBar({
   onFocused = () => {},
   onChoose,
   onNote = () => {},
+  onExcerpt = () => {},
   onDismiss,
 }: {
   /** The selection's rectangle in the frame's viewport, as the kit's bridge measured it. */
@@ -32,13 +33,14 @@ export function SelectionBar({
   onFocused?: (request: number) => void;
   onChoose: (color: HighlightColor) => void;
   onNote?: () => void;
+  onExcerpt?: () => void;
   onDismiss: () => void;
 }) {
   const bar = useRef<HTMLDivElement>(null);
   const dots = useRef<(HTMLButtonElement | null)[]>([]);
   const [active, setActive] = useState(0);
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
-  const verbs = offeredVerbs(inText).filter((verb) => verb.kind === 'highlight' || verb.kind === 'note');
+  const verbs = offeredVerbs(inText).filter((verb) => verb.kind === 'highlight' || verb.kind === 'excerpt' || verb.kind === 'note');
   // The button in the Tab order, kept among those offered when a selection offers fewer.
   const at = Math.min(active, verbs.length - 1);
 
@@ -113,6 +115,10 @@ export function SelectionBar({
             title={copy.highlights.colors[verb.color]}
             onClick={() => onChoose(verb.color)}
           />
+        ) : verb.kind === 'excerpt' ? (
+          <button key={verb.kind} type="button" {...place} className="selection-verb" onClick={onExcerpt}>
+            {copy.collections.excerpt}
+          </button>
         ) : (
           <button key={verb.kind} type="button" {...place} className="selection-verb" onClick={onNote}>
             {copy.notes.note}

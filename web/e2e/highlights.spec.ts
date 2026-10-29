@@ -19,12 +19,12 @@ test('highlights a phrase, recolours it, reloads and removes it, by pointer', as
   await expect(page.frameLocator('iframe.reader-frame').getByText(d1Text)).toBeVisible();
   expect(await listed(page)).toEqual([]);
 
-  // The bar comes with a selection in the text: the four colours, then Note, in the app's order.
+  // The bar comes with a selection in the text: the four colours, then Excerpt and Note, in the app's order.
   await dragOver(page, phrase);
   const bar = page.getByRole('toolbar', { name: 'Selection' });
   await expect(bar).toBeVisible();
-  await expect(bar.getByRole('button')).toHaveCount(5);
-  for (const [index, name] of ['Highlight Yellow', 'Highlight Green', 'Highlight Blue', 'Highlight Pink', 'Note'].entries()) {
+  await expect(bar.getByRole('button')).toHaveCount(6);
+  for (const [index, name] of ['Highlight Yellow', 'Highlight Green', 'Highlight Blue', 'Highlight Pink', 'Excerpt', 'Note'].entries()) {
     await expect(bar.getByRole('button').nth(index)).toHaveAccessibleName(name);
   }
   // It sits over the frame, as the Mac's sits over its web view.

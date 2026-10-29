@@ -457,5 +457,9 @@ export function researchImported(client: QueryClient) {
   for (const key of ['savedSearches', 'workingCorpora', 'workingCorpus', 'volumeScopes', 'volumeScope']) void client.invalidateQueries({ queryKey: [key] });
   // And the project worked in, Project Home, the trail and the synced preferences (S17f).
   for (const key of ['projectHome', 'history', 'sessionLog', 'preferences']) void client.invalidateQueries({ queryKey: [key] });
+  // And the collections (S18d).
+  for (const key of ['collections', 'collection', 'collectionInspector', 'documentCollections']) {
+    void client.invalidateQueries({ queryKey: [key] });
+  }
   searchesChanged(client);
 }

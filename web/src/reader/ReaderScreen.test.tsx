@@ -719,6 +719,7 @@ describe('the reader’s notes', () => {
       'Highlight Green',
       'Highlight Blue',
       'Highlight Pink',
+      'Excerpt',
       'Note',
     ]);
     await userEvent.click(within(bar()!).getByRole('button', { name: 'Note' }));

@@ -15,6 +15,7 @@ import type { ReaderLinkTarget } from '../api/types';
 import { recordVisit } from '../api/research';
 import { meQuery } from '../api/userData';
 import { CitePanel } from '../cite/CitePanel';
+import { CollectionPicker, type ExcerptCapture } from '../collections/CollectionPicker';
 import { copy } from '../copy';
 import { NoteEditor } from '../research/NoteEditor';
 import { ResearchRail } from '../research/ResearchRail';
@@ -96,6 +97,8 @@ export function ReaderScreen() {
   // whether the bar's Note has the editor open.
   const [pendingHighlight, setPendingHighlight] = useState<{ documentKey: string; id: string } | null>(null);
   const [composing, setComposing] = useState(false);
+  // The selection the bar's Excerpt freezes, while the Add Excerpt to Collection picker is open (S18d).
+  const [excerpting, setExcerpting] = useState<ExcerptCapture | null>(null);
   const [shownKey, setShownKey] = useState(documentKey);
   if (shownKey !== documentKey) {
     setShownKey(documentKey);
@@ -103,6 +106,7 @@ export function ReaderScreen() {
     setCard(null);
     setPendingHighlight(null);
     setComposing(false);
+    setExcerpting(null);
   }
   // Each arrival at a document, once its account has loaded, as the app's reader records a visit after
   // its load (S17f): the trail records it while Log Research Sessions is on, and while that is on a
@@ -156,6 +160,7 @@ export function ReaderScreen() {
     say: setNotice,
     onHighlightMade: (made) => setPendingHighlight({ documentKey: `${made.volumeId}/${made.documentId}`, id: made.id }),
     onNote: () => setComposing(true),
+    onExcerpt: (selection) => setExcerpting({ volumeId, documentId, ...selection }),
   });
 
   /** Opens a link's destination: a note of this document in place, else its document, if this server has it. */
@@ -454,6 +459,16 @@ export function ReaderScreen() {
           onClose={() => {
             setComposing(false);
             // Back to the text, once the dialog has gone: while it is open, the frame is inert.
+            requestAnimationFrame(() => frame.current?.focus({ preventScroll: true }));
+          }}
+        />
+      )}
+      {excerpting && (
+        <CollectionPicker
+          document={{ volumeId, documentId }}
+          excerpt={excerpting}
+          onClose={() => {
+            setExcerpting(null);
             requestAnimationFrame(() => frame.current?.focus({ preventScroll: true }));
           }}
         />

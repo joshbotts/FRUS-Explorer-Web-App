@@ -6,10 +6,14 @@
 // which the app has no way to do, and Remove…, which asks as a tap on the highlight does and is the
 // keyboard's way to remove one: the app's review sheet removes a stale one, but the app has no
 // keyboard way to remove one that is not. From S15d, above them, the app's Summary and Notes
-// sections, open until they are closed, as the app's are.
+// sections, open until they are closed, as the app's are. From S18d, below Tags, the app's Collections
+// section: the collections that hold the document, by name, and Add to Collection.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { useEffect, useId, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
+import { documentCollectionsQuery } from '../api/collections';
+import { CollectionPicker } from '../collections/CollectionPicker';
 import { type Highlight, type HighlightColor, highlightColors, type UserTag } from '../api/types';
 import {
   documentHighlightsQuery,
@@ -22,7 +26,13 @@ import {
 import { copy } from '../copy';
 import { reviewOrder, staleLine } from '../reader/highlightRules';
 import { RemoveHighlight } from '../reader/RemoveHighlight';
-import { useHighlightsSectionOpen, useNotesSectionOpen, useSummarySectionOpen, useTagsSectionOpen } from '../settings/preferences';
+import {
+  useCollectionsSectionOpen,
+  useHighlightsSectionOpen,
+  useNotesSectionOpen,
+  useSummarySectionOpen,
+  useTagsSectionOpen,
+} from '../settings/preferences';
 import { NotesSection } from './NotesSection';
 import { noteCount, summaryPreview } from './notesRules';
 import { shownSummaries, SummarySection } from './SummarySection';
@@ -59,10 +69,13 @@ export function ResearchRail({
   const [notesOpen, setNotesOpen] = useNotesSectionOpen();
   const [tagsOpen, setTagsOpen] = useTagsSectionOpen();
   const [highlightsOpen, setHighlightsOpen] = useHighlightsSectionOpen();
+  const [collectionsOpen, setCollectionsOpen] = useCollectionsSectionOpen();
   const summaries = useQuery(documentSummariesQuery(volumeId, documentId));
   const notes = useQuery(documentNotesQuery(volumeId, documentId));
   const tags = useQuery(documentTagsQuery(volumeId, documentId));
   const highlights = useQuery(documentHighlightsQuery(volumeId, documentId));
+  const collections = useQuery(documentCollectionsQuery(volumeId, documentId));
+  const collectionCount = collections.data?.items.length ?? 0;
   const count = tags.data?.items.length ?? 0;
   const highlightCount = highlights.data?.items.length ?? 0;
   const notesCount = notes.data?.items.length ?? 0;
@@ -239,7 +252,97 @@ export function ResearchRail({
           </div>
         )}
       </section>
+      <section className="rail-section">
+        <h3>
+          <button
+            type="button"
+            className="disclosure"
+            aria-expanded={collectionsOpen === 'open'}
+            aria-controls="research-collections"
+            aria-label={collectionCount > 0 ? `${copy.collections.railTitle}, ${copy.collections.railCount(collectionCount)}` : undefined}
+            onClick={() => setCollectionsOpen(collectionsOpen === 'open' ? 'closed' : 'open')}
+          >
+            <span className="disclosure-mark" aria-hidden="true">
+              {collectionsOpen === 'open' ? '▾' : '▸'}
+            </span>
+            {copy.collections.railTitle}
+            {collectionCount > 0 && (
+              <span className="badge" aria-hidden="true">
+                {collectionCount.toLocaleString('en-US')}
+              </span>
+            )}
+          </button>
+        </h3>
+        {collectionsOpen === 'open' && (
+          <div id="research-collections">
+            <CollectionsSection
+              key={documentKey}
+              volumeId={volumeId}
+              documentId={documentId}
+              items={collections.data?.items}
+              error={collections.error}
+            />
+          </div>
+        )}
+      </section>
     </aside>
+  );
+}
+
+/**
+ * The rail's Collections section, as the app's: the collections holding the document among their
+ * documents, by the name each row prints, each a link to its editor, the web's own; or the app's line
+ * for none; and Add to Collection.
+ */
+function CollectionsSection({
+  volumeId,
+  documentId,
+  items,
+  error,
+}: {
+  volumeId: string;
+  documentId: string;
+  items?: { id: string; listName: string }[];
+  error: unknown;
+}) {
+  const addButton = useRef<HTMLButtonElement>(null);
+  const [picking, setPicking] = useState(false);
+  if (error) {
+    return (
+      <p className="error" role="alert">
+        {errorMessage(error)}
+      </p>
+    );
+  }
+  if (!items) return <p role="status">{copy.collections.railLoading}</p>;
+  return (
+    <>
+      {items.length === 0 ? (
+        <p className="note">{copy.collections.railEmpty}</p>
+      ) : (
+        <ul className="rail-collections">
+          {items.map((item) => (
+            <li key={item.id}>
+              <Link to="/collections/$collectionId" params={{ collectionId: item.id }}>
+                {item.listName}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button ref={addButton} type="button" className="add-to-collection" onClick={() => setPicking(true)}>
+        {copy.collections.railAdd}
+      </button>
+      {picking && (
+        <CollectionPicker
+          document={{ volumeId, documentId }}
+          onClose={() => {
+            setPicking(false);
+            requestAnimationFrame(() => addButton.current?.focus());
+          }}
+        />
+      )}
+    </>
   );
 }
 
