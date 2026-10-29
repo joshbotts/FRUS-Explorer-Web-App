@@ -6,7 +6,10 @@
 // overrides, and a document's notes and highlights included or not, as the row and the inspector
 // write them; a row deleted, a heading alone or with its section; a section indented or outdented; a
 // row moved, a heading taking its section; Sort by Date across the collection or within its sections;
-// and the inspector's view of a document or a section.
+// and the inspector's view of a document or a section. From PLAN's S18f, the inspector's headnote card,
+// which writes the researcher's headnote as the app's card writes one, a draft of the entry's own, and
+// shows an imported one with who wrote it; and Summary only refused for a document with no summary
+// stored, with the app's reason.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -50,6 +53,21 @@ public struct EntryInspector: Codable, Equatable, Sendable, ResponseEncodable {
     public var excerpts: [Excerpt]
     /// The document's archival source note, where the index has one.
     public var sourceNote: String?
+    /// Whether the document has a summary stored that is no draft, for a document: only then is its
+    /// Summary only offered, since the server writes none (PLAN's S18f).
+    public var summaryOnlyOffered: Bool?
+    /// The summary the headnote card shows, for a document: `currentHeadnoteSummary`, absent for none.
+    public var headnote: Headnote?
+
+    public struct Headnote: Codable, Equatable, Sendable {
+        public var summaryId: String
+        public var text: String
+        /// Who wrote it, the kit's `SummaryAuthorship`, a missing one `aiGenerated`, which the card's chip
+        /// reads as AI draft, AI · edited or Yours.
+        public var authorship: String
+        /// Whether it is a headnote draft, a collection's own, rather than one of the document's summaries.
+        public var isDraft: Bool
+    }
 
     public struct NoteChoice: Codable, Equatable, Sendable {
         public var id: String
@@ -126,6 +144,9 @@ enum CollectionEntryRoutes {
         let id: String
         let included: Bool
     }
+
+    /// The headnote card's Save: the text the researcher wrote.
+    struct HeadnoteText: Decodable, Sendable { let text: String }
 
     /// A change to one entry, each field absent to leave it: an override null for Default, a title
     /// override null or empty to clear it, and a heading's text refused as null.
@@ -400,12 +421,19 @@ enum CollectionEntryRoutes {
             if let text = body.text { _ = try CollectionRoutes.checked(text, "text") }
             if let title = body.titleOverride { _ = try CollectionRoutes.checked(title, "titleOverride") }
             let summaryOnly = CollectionBodyDepth.summaryOnly.rawValue
-            let summaryOnlyOffered: Bool
+            // Summary only where a summary can be had: a document's own, a section's where the collection has
+            // one, each refused with the app's reason.
+            let summaryOnlyRefused: APIProblem?
             if body.bodyDepthOverride == .some(summaryOnly) {
-                summaryOnlyOffered = CollectionRoutes.summariesAvailable(
-                    held, summarized: try await CollectionRoutes.summarizedDocuments(of: user.id, in: store))
+                let summarized = try await CollectionRoutes.summarizedDocuments(of: user.id, in: store)
+                if kind == .document {
+                    summaryOnlyRefused = summarized.contains("\(entry.volumeId)/\(entry.documentId)") ? nil : CollectionRoutes.documentDepthNotOffered()
+                } else {
+                    summaryOnlyRefused = CollectionRoutes.summariesAvailable(held, summarized: summarized)
+                        ? nil : CollectionRoutes.depthNotOffered(smart: held.savedSearchId != nil)
+                }
             } else {
-                summaryOnlyOffered = true
+                summaryOnlyRefused = nil
             }
             let prompts = body.summaryPromptIdOverride != nil ? try await CollectionRoutes.promptIds(of: user.id, in: store) : []
             let document = DocumentKey(volumeId: entry.volumeId, documentId: entry.documentId)
@@ -431,9 +459,7 @@ enum CollectionEntryRoutes {
                         throw CollectionRoutes.invalidField("bodyDepthOverride", "\(depth) is no body depth: full, summaryOnly or index.")
                     }
                     // Offered by the kit's rule, as the collection's own is; an override the entry holds stands.
-                    guard depth != summaryOnly || summaryOnlyOffered || edited.bodyDepthOverride == depth else {
-                        throw CollectionRoutes.depthNotOffered()
-                    }
+                    if depth == summaryOnly, edited.bodyDepthOverride != depth, let summaryOnlyRefused { throw summaryOnlyRefused }
                     edited.bodyDepthOverride = depth
                 }
                 if let value = body.applyHighlightsOverride { edited.applyHighlightsOverride = value }
@@ -488,6 +514,22 @@ enum CollectionEntryRoutes {
             }
             return try await detail(rows, user.id)
         }
+        // A smart collection's Remove These Entries (`removeEntriesFromBeforeLink(of:outline:modelContext:)`): the
+        // entries it leaves out, added before its link, with their headnote drafts, then the outline renumbered and
+        // normalized, as `finishOutlineMutation()` leaves it; nothing for a collection that keeps them (S18f).
+        me.post("collections/:collectionId/entries-from-before-link/remove") { request, context -> CollectionDetail in
+            try FormQuery(request.uri.query).refuseUnknown([])
+            let user = try context.requireUser()
+            let id = try context.parameters.require("collectionId")
+            let rows = try await CollectionRoutes.changed(id, for: user.id, in: store, at: UserStoreDate.rounded(now())) { collection in
+                let savedSearchId = collection.savedSearchId
+                let kept = collection.entries.filter { !CollectionEditing.leavesOut($0.entryKind, savedSearchId: savedSearchId) }
+                guard kept.count != collection.entries.count else { return }
+                collection.entries = kept
+                CollectionEditing.finishOutlineMutation(&collection.entries)
+            }
+            return try await detail(rows, user.id)
+        }
         // A heading's Indent and Outdent, refused where the menu would not offer them.
         for (path, indent) in [("indent", true), ("outdent", false)] {
             me.post("collections/:collectionId/entries/:entryId/\(path)") { request, context -> CollectionDetail in
@@ -513,6 +555,49 @@ enum CollectionEntryRoutes {
                 }
                 return try await detail(rows, user.id)
             }
+        }
+        // The headnote card's Save, `commitHeadnote(seed:)`: the text trimmed, saved as a draft of the entry's
+        // own in place of the one it named, AI · edited when the summary it was written over is the model's,
+        // else Yours; nothing for no text or the summary's own. The card's seed is read before the write and
+        // held to it, so a save another made meanwhile is read again, three tries at most.
+        me.put("collections/:collectionId/entries/:entryId/headnote") { request, context -> CollectionDetail in
+            try FormQuery(request.uri.query).refuseUnknown([])
+            let user = try context.requireUser()
+            let id = try context.parameters.require("collectionId")
+            let entryId = try context.parameters.require("entryId")
+            let body = try await JSONBody.decode(HeadnoteText.self, from: request, fields: ["text"], limit: UserDataServices.noteBodyLimit)
+            _ = try CollectionRoutes.checked(body.text, "text")
+            for _ in 0..<3 {
+                let held = try await CollectionRoutes.collection(id, of: user.id, in: store)
+                let at = try index(of: entryId, in: held)
+                let entry = held.entries[at]
+                guard entry.entryKind == .document else {
+                    throw APIProblem(.conflict, code: "NOT_A_DOCUMENT", detail: "Only a document entry has a headnote.")
+                }
+                let seed = try await headnote(of: at, in: held, for: user.id, in: store)
+                let prompt = Self.headnotePrompt(of: at, in: held)
+                guard let commit = CollectionEditing.headnoteCommit(body.text, seed: seed) else {
+                    return try await CollectionRoutes.detail(held, for: user.id, in: store, resources: resources, provider: provider)
+                }
+                let time = UserStoreDate.rounded(now())
+                let draft = CollectionEditing.headnoteDraft(commit.text, authorship: commit.authorship, of: entry, at: time)
+                let named = entry.headnoteSummaryId
+                do {
+                    let rows = try await CollectionRoutes.changed(id, for: user.id, in: store, at: time, addingSummaries: [draft],
+                                                                  deletingSummaries: named.map { [$0] } ?? []) { collection in
+                        let position = try index(of: entryId, in: collection)
+                        // The seed was found by the summary the entry names, else by its prompt: either moved, it is read again.
+                        guard collection.entries[position].headnoteSummaryId == named, Self.headnotePrompt(of: position, in: collection) == prompt else {
+                            throw HeadnoteMoved()
+                        }
+                        collection.entries[position].headnoteSummaryId = draft.id
+                    }
+                    return try await detail(rows, user.id)
+                } catch is HeadnoteMoved {
+                    continue
+                }
+            }
+            throw APIProblem(.conflict, code: "COLLECTION_CHANGING", detail: "The headnote kept changing while it was being saved. Try again.")
         }
         me.get("collections/:collectionId/entries/:entryId/inspector") { request, context -> EntryInspector in
             try FormQuery(request.uri.query).refuseUnknown([])
@@ -569,6 +654,7 @@ enum CollectionEntryRoutes {
         let facts = await CollectionRoutes.documentFacts([document], provider: provider)["\(document.volumeId)/\(document.documentId)"]
         let volume = resources.volume(entry.volumeId)
         let resolved = CollectionEditing.resolvedDefaults(of: index, in: collection)
+        let headnote = try await self.headnote(of: index, in: collection, for: user, in: store, stored: summaries)
         return EntryInspector(
             entryId: entry.id.uuidString, kind: CollectionEntryKind.document.rawValue, sectionTitle: nil,
             documentId: entry.documentId, volumeId: entry.volumeId, header: facts?.header, volumeTitle: volume?.title,
@@ -593,8 +679,37 @@ enum CollectionEntryRoutes {
             excerpts: collection.entries.filter {
                 $0.entryKind == .excerpt && $0.volumeId == entry.volumeId && $0.documentId == entry.documentId
             }.map { .init(id: $0.id.uuidString, text: $0.text ?? "") },
-            sourceNote: facts?.sourceNote)
+            sourceNote: facts?.sourceNote,
+            summaryOnlyOffered: !shown.isEmpty,
+            headnote: headnote.map {
+                .init(summaryId: $0.id, text: $0.responseText,
+                      authorship: ($0.authorship.flatMap(SummaryAuthorship.init(rawValue:)) ?? .aiGenerated).rawValue,
+                      isDraft: $0.isHeadnoteDraft)
+            })
     }
+
+    /// The summary an entry's headnote card shows, `currentHeadnoteSummary`: its own pick, read by its id,
+    /// else one of `stored`, the document's, read here when none are given, under the entry's prompt, its
+    /// override else what Default resolves to.
+    static func headnote(of index: Int, in collection: CollectionExport, for user: String, in store: any UserDataStore,
+                         stored: [SummaryRecord]? = nil) async throws -> SummaryRecord? {
+        let entry = collection.entries[index]
+        let document = DocumentKey(volumeId: entry.volumeId, documentId: entry.documentId)
+        let (chosen, summaries) = try await Blocking.run {
+            (try entry.headnoteSummaryId.flatMap { try store.summary($0.uuidString, of: user) },
+             try stored ?? store.summaries(of: document, for: user))
+        }
+        return CollectionEditing.currentHeadnoteSummary(chosen: chosen, stored: summaries, promptId: headnotePrompt(of: index, in: collection))
+    }
+
+    /// The prompt a headnote's seed is found by where the entry names none: its override, else what Default
+    /// resolves to.
+    static func headnotePrompt(of index: Int, in collection: CollectionExport) -> UUID? {
+        collection.entries[index].summaryPromptIdOverride ?? CollectionEditing.resolvedDefaults(of: index, in: collection)?.summaryPromptId
+    }
+
+    /// A headnote the card was written over that another save replaced before this one's write.
+    struct HeadnoteMoved: Error {}
 
     /// The inspector's `derivedTitlePlaceholder`: the citation `exportCitation` builds from the
     /// manifest's volume and the printed number, else the volume's title and the document's id.

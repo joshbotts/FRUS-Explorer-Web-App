@@ -10,6 +10,7 @@
 // `listNameMatches`). The outline itself, each entry's depth and each heading's section, is the
 // kit's, which the server sends.
 import type { CollectionDetail, CollectionEntry, CollectionListItem } from '../api/collections';
+import { copy } from '../copy';
 
 /** `Collection.managerDefaultShowAllCollections`: the list opens on every project's collections. */
 export const managerDefaultShowAllCollections = true;
@@ -151,6 +152,17 @@ export function bodyDepthOptions(offered: readonly string[], current: string | u
   return current && !offered.includes(current) ? [...offered, current] : [...offered];
 }
 
+/**
+ * A body depth picker's choices: `bodyDepthOptions`, and Summary only where it is not offered, after Full,
+ * disabled, so that the line under the picker can say why, the web's own (PLAN's S18f), where the app's
+ * picker leaves it out.
+ */
+export function bodyDepthChoices(offered: readonly string[], current: string | undefined): { depth: string; disabled: boolean }[] {
+  const choices = bodyDepthOptions(offered, current).map((depth) => ({ depth, disabled: false }));
+  if (!choices.some((choice) => choice.depth === 'summaryOnly')) choices.splice(Math.min(1, choices.length), 0, { depth: 'summaryOnly', disabled: true });
+  return choices;
+}
+
 /** `CollectionPickerRow`: whether a collection takes the document or excerpt: a smart one takes none. */
 export function pickerTakesEntries(collection: Pick<CollectionListItem, 'isSmart'>): boolean {
   return !collection.isSmart;
@@ -184,4 +196,39 @@ export function listNameMatches(listName: string, searchText: string): boolean {
 /** `CollectionDocumentDiscovery.documentKey`: `volumeId/documentId`. */
 export function documentKey(volumeId: string, documentId: string): string {
   return `${volumeId}/${documentId}`;
+}
+
+/**
+ * `SmartCollectionRule.entriesFromBeforeLink(in:savedSearchId:)`: a smart collection's entries of the kinds it
+ * leaves out, added before its link, in their order.
+ */
+export function entriesFromBeforeLink(collection: Pick<CollectionDetail, 'entries' | 'savedSearchId'>): CollectionEntry[] {
+  return collection.savedSearchId ? collection.entries.filter((entry) => entry.leftOut) : [];
+}
+
+/** `SmartCollectionEntriesFromBeforeLink.title(for:)`: a row's words in that group. */
+export function earlierTitle(entry: CollectionEntry): string {
+  const text = (entry.text ?? '').trim();
+  switch (entry.kind) {
+    case 'document':
+      return entry.header ?? entry.documentId;
+    case 'heading':
+      return text === '' ? copy.collectionEditor.untitledSection : text;
+    case 'prose':
+      return text === '' ? copy.collectionEditor.earlierEmptyNote : text;
+    case 'excerpt':
+      return text;
+    default:
+      return '';
+  }
+}
+
+/** `SmartCollectionEntriesFromBeforeLink.caption(for:documentHeader:)`: a document's or a passage's ids under its words. */
+export function earlierCaption(entry: CollectionEntry): string | undefined {
+  const parts =
+    entry.kind === 'document' ? [entry.header !== undefined ? entry.documentId : undefined, entry.volumeId]
+    : entry.kind === 'excerpt' ? [entry.documentId, entry.volumeId]
+    : [];
+  const named = parts.filter((part): part is string => part !== undefined && part !== '');
+  return named.length === 0 ? undefined : named.join(' · ');
 }

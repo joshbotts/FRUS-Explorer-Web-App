@@ -143,13 +143,23 @@ export async function saveSearch(client: QueryClient, name: string, state: Searc
 
 export async function renameSavedSearch(client: QueryClient, id: string, name: string): Promise<SavedSearch> {
   const saved = (await change<SavedSearch>(client, 'PATCH', `/api/v1/me/saved-searches/${segment(id)}`, { name }))!;
-  void client.invalidateQueries({ queryKey: ['savedSearches'] });
+  savedSearchesChanged(client);
   return saved;
 }
 
 export async function deleteSavedSearch(client: QueryClient, id: string): Promise<void> {
   await change(client, 'DELETE', `/api/v1/me/saved-searches/${segment(id)}`);
+  savedSearchesChanged(client);
+}
+
+/**
+ * After a saved search is renamed or deleted: the list, and the collections a smart collection's link names it
+ * in, with their results (S18f).
+ */
+function savedSearchesChanged(client: QueryClient) {
   void client.invalidateQueries({ queryKey: ['savedSearches'] });
+  void client.invalidateQueries({ queryKey: ['collection'] });
+  void client.invalidateQueries({ queryKey: ['collectionResults'] });
 }
 
 /** A recall's stamp, from the saved search's own count, which its badge is measured against. */

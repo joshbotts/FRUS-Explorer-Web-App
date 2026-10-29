@@ -168,12 +168,7 @@ extension RelationalUserStore: NoteStore {
                 id: UUID().uuidString, volumeId: document.volumeId, documentId: document.documentId, bodyText: bodyText,
                 richText: richText, projectIds: projects, userTagIds: tags, selectedSummaryIds: summaries,
                 createdAt: time, lastModified: time)
-            _ = try db.query(
-                "INSERT INTO notes (user_id, \(Self.noteColumns)) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                [.text(user), .text(note.id), .text(note.volumeId), .text(note.documentId), .text(bodyText),
-                 Self.blob(richText), .text(TagReferences.encode(note.projectIds)), .text(TagReferences.encode(note.userTagIds)),
-                 .text(TagReferences.encode(note.selectedSummaryIds)), .text(UserStoreDate.text(time)),
-                 .text(UserStoreDate.text(time))])
+            try Self.insertNote(note, for: user, in: db)
             // `linkNoteToHighlight`: the highlight's `noteId`, last write winning, as the app's plain id.
             if let highlight = linkedHighlightId.flatMap(TagReferences.normalized),
                try db.scalar("SELECT 1 FROM highlights WHERE user_id = ? AND upper(id) = ?", [.text(user), .text(highlight)]) != nil {
@@ -232,6 +227,17 @@ extension RelationalUserStore: NoteStore {
     }
 
     // MARK: Within a transaction
+
+    /// Writes a note's row as it is given, its id and both its times among it, leaving `user_search` to
+    /// the caller.
+    static func insertNote(_ note: NoteRecord, for user: String, in db: UserStoreTransaction) throws {
+        _ = try db.query(
+            "INSERT INTO notes (user_id, \(Self.noteColumns)) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [.text(user), .text(note.id), .text(note.volumeId), .text(note.documentId), .text(note.bodyText),
+             Self.blob(note.richText), .text(TagReferences.encode(note.projectIds)), .text(TagReferences.encode(note.userTagIds)),
+             .text(TagReferences.encode(note.selectedSummaryIds)), note.createdAt.map { .text(UserStoreDate.text($0)) } ?? .null,
+             note.lastModified.map { .text(UserStoreDate.text($0)) } ?? .null])
+    }
 
     /// A document's notes, in the rail's order, with the links of those notes alone.
     private static func notes(of document: DocumentKey, for user: String, in db: UserStoreTransaction) throws -> [NoteRecord] {

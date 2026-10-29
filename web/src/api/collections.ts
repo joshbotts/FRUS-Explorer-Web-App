@@ -4,12 +4,13 @@
 // picker and the Research rail's Collections section are read again after a change, and after an
 // import, which can bring collections (`researchImported`). Since S18e, a collection's live preview,
 // a page of the server's for the editor's frame, its exports, which the history keeps, and the
-// quotation check its export sheet runs.
+// quotation check its export sheet runs. Since S18f, a `.fruscollection` file both ways, a smart
+// collection's link to a saved search and its results, Create Static Snapshot, and the headnote card.
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
 import { servedPath } from './base';
-import { ApiError, getJSON, sendForFile } from './client';
+import { ApiError, getJSON, sendFile, sendForFile } from './client';
 import type { NoteRun } from './types';
-import { change, meQuery } from './userData';
+import { change, meQuery, searchesChanged } from './userData';
 
 const segment = encodeURIComponent;
 
@@ -114,6 +115,8 @@ export interface CollectionDetail {
   includeMethodAppendix: boolean;
   projectIds: string[];
   savedSearchId?: string;
+  /** The linked saved search's name; absent for none, or for one the user no longer has. */
+  savedSearchName?: string;
   takesHandAddedEntries: boolean;
   defaultBodyDepth: string;
   includeFootnotes: boolean;
@@ -172,6 +175,10 @@ export interface EntryInspector {
   };
   excerpts: { id: string; text: string }[];
   sourceNote?: string;
+  /** For a document: whether it has a summary stored, without which Summary only is not offered. */
+  summaryOnlyOffered?: boolean;
+  /** For a document: the summary its headnote card shows, with who wrote it. */
+  headnote?: { summaryId: string; text: string; authorship: string; isDraft: boolean };
 }
 
 /** The collections that hold a document among their documents. */
@@ -201,6 +208,8 @@ export interface CollectionChanges {
   includeWordCloud?: boolean;
   defaultIncludeHeadnote?: boolean;
   summaryPromptId?: string | null;
+  /** Link to Saved Search…'s pick, or null for Unlink. */
+  savedSearchId?: string | null;
 }
 
 /** An entry's fields as its row and the inspector send a change to them; null is Default. */
@@ -278,8 +287,27 @@ export function documentCollectionsQuery(volumeId: string, documentId: string) {
 export const collectionGone = (error: unknown) => error instanceof ApiError && error.code === 'COLLECTION_NOT_FOUND';
 
 /** The formats a collection exports to here, the app's `ExportFormat` raw values, in its grid's order. */
-export const exportFormats = ['html', 'docx', 'bibtex', 'zoteroJSON'] as const;
+export const exportFormats = ['html', 'docx', 'bibtex', 'zoteroJSON', 'fruscollection'] as const;
 export type ExportFormat = (typeof exportFormats)[number];
+
+/** A smart collection's results, which the preview's bar counts. */
+export interface SmartResults {
+  total: number;
+  items: DocumentRef[];
+}
+
+/** A smart collection's results, run again each time the preview is built. */
+export function smartResultsQuery(id: string) {
+  return queryOptions({
+    queryKey: ['collectionResults', keyOf(id)],
+    queryFn: async ({ signal }) => {
+      await whenAnswered(id);
+      return getJSON<SmartResults>(`${base}/${segment(id)}/results`, undefined, signal);
+    },
+    staleTime: 0,
+    retry: false,
+  });
+}
 
 /** `CollectionPreviewView.initialDocumentCap`: the documents the preview shows until Render All. */
 export const previewDocumentCap = 20;
@@ -330,9 +358,15 @@ export function excerptCheckQuery(id: string) {
  * Exports a collection as the sheet's chosen format, once the changes sent to it are answered: the
  * file the server's exporter writes, with the name it gives, which the history then lists.
  */
-export async function exportCollection(client: QueryClient, id: string, format: ExportFormat): Promise<{ blob: Blob; name: string }> {
+export async function exportCollection(
+  client: QueryClient,
+  id: string,
+  format: ExportFormat,
+  includeNotes = false,
+): Promise<{ blob: Blob; name: string }> {
   await whenAnswered(id);
-  const body = { format, timeZone: browserTimeZone() };
+  // Only the native file carries notes, and only when the sheet's switch says so.
+  const body = format === 'fruscollection' ? { format, timeZone: browserTimeZone(), includeNotes } : { format, timeZone: browserTimeZone() };
   const path = `${base}/${segment(id)}/export`;
   const me = await client.ensureQueryData(meQuery);
   let file: { blob: Blob; name: string };
@@ -357,6 +391,7 @@ function collectionChanged(client: QueryClient, detail?: CollectionDetail) {
   void client.invalidateQueries({ queryKey: ['collections'] });
   void client.invalidateQueries({ queryKey: ['documentCollections'] });
   void client.invalidateQueries({ queryKey: ['collectionInspector'] });
+  void client.invalidateQueries({ queryKey: ['collectionResults'] });
   void client.invalidateQueries({ queryKey: ['projectHome'] });
   void client.invalidateQueries({ queryKey: ['projects'], refetchType: 'none' });
 }
@@ -404,7 +439,7 @@ function shown(id: string, detail: CollectionDetail): CollectionDetail {
 async function send<T extends CollectionDetail | CollectionEdit>(
   client: QueryClient,
   id: string,
-  method: 'POST' | 'PATCH' | 'DELETE',
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   path: string,
   body?: unknown,
   settle?: () => void,
@@ -428,7 +463,7 @@ async function send<T extends CollectionDetail | CollectionEdit>(
 function changed<T extends CollectionDetail | CollectionEdit>(
   client: QueryClient,
   id: string,
-  method: 'POST' | 'PATCH' | 'DELETE',
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   path: string,
   body?: unknown,
 ): Promise<T> {
@@ -526,6 +561,39 @@ export async function duplicateCollection(client: QueryClient, id: string): Prom
   return made;
 }
 
+/** Import Collection…: a `.fruscollection` file as it is, which becomes a new collection, with any notes it carries. */
+export async function importCollectionFile(client: QueryClient, file: Blob): Promise<CollectionDetail> {
+  const path = `${base}/import`;
+  const me = await client.ensureQueryData(meQuery);
+  let made: CollectionDetail;
+  try {
+    made = await sendFile<CollectionDetail>(path, me.csrfToken, file, 'application/json');
+  } catch (error) {
+    if (!(error instanceof ApiError && error.code === 'CSRF_TOKEN_INVALID')) throw error;
+    const fresh = await client.fetchQuery({ ...meQuery, staleTime: 0 });
+    made = await sendFile<CollectionDetail>(path, fresh.csrfToken, file, 'application/json');
+  }
+  collectionChanged(client, made);
+  // The notes it brought are the reader's now, on their documents, and the search finds them.
+  for (const key of ['notes', 'documentNotes', 'note']) void client.invalidateQueries({ queryKey: [key] });
+  searchesChanged(client);
+  return made;
+}
+
+/** Create Static Snapshot: the smart collection's results now, as a new collection of their documents. */
+export async function snapshotCollection(client: QueryClient, id: string): Promise<CollectionDetail> {
+  // Of the collection as the server holds it once the changes sent are answered, its name among them.
+  await whenAnswered(id);
+  const made = (await change<CollectionDetail>(client, 'POST', `${base}/${segment(id)}/snapshot`))!;
+  collectionChanged(client, made);
+  return made;
+}
+
+/** Link to Saved Search…'s pick, or null for Unlink, which changes what the collection takes. */
+export function linkSavedSearch(client: QueryClient, id: string, savedSearchId: string | null): Promise<CollectionDetail> {
+  return changed(client, id, 'PATCH', `${base}/${segment(id)}`, { savedSearchId });
+}
+
 export function applyPreset(client: QueryClient, id: string, preset: PresetId): Promise<CollectionDetail> {
   return changed(client, id, 'POST', `${base}/${segment(id)}/preset`, { preset });
 }
@@ -614,6 +682,16 @@ export function updateEntry(client: QueryClient, id: string, entryId: string, ch
     );
   }
   return showing(client, id, patch, 'PATCH', `${base}/${segment(id)}/entries/${segment(entryId)}`, changes);
+}
+
+/** A smart collection's Remove These Entries: those added before its link, which it leaves out. */
+export function removeEntriesFromBeforeLink(client: QueryClient, id: string): Promise<CollectionDetail> {
+  return changed(client, id, 'POST', `${base}/${segment(id)}/entries-from-before-link/remove`);
+}
+
+/** The headnote card's Save: the researcher's text, a draft of the entry's own. */
+export function saveHeadnote(client: QueryClient, id: string, entryId: string, text: string): Promise<CollectionDetail> {
+  return changed(client, id, 'PUT', `${base}/${segment(id)}/entries/${segment(entryId)}/headnote`, { text });
 }
 
 /** A row's delete: the one entry, a heading alone. */

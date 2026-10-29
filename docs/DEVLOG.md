@@ -2,6 +2,93 @@
 
 One entry per session, newest first.
 
+## Session 18f: `.fruscollection` both ways, smart collections and headnotes
+
+29 October 2026 · branch `claude/upbeat-nash-1f07ea` · [#90](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/90) · upstream `32e295e5`, unchanged
+
+Phase 2's row S18f, the last of the collection rows. A collection's `.fruscollection` file is written by the kit's writer and read by its reader: Export… saves one, its prose the RTF the store keeps, with the reader's notes only when they are included, and Import Collection… makes a collection of one, with the notes it brings. A collection linked to a saved search from Collection settings is a smart collection, whose documents are the search's results in the preview and in each export, and Create Static Snapshot freezes them; its entries from before the link are listed apart, to be removed. Summary only is refused with the app's reason where a document has no summary stored, and the inspector's headnote card writes the researcher's headnote and shows an imported one with its authorship. Every file, and every export and preview of a smart collection, is the kit's to the byte. No upstream pull request, no pin move and no schema change: everything the row calls was public at `32e295e5`, since #1809.
+
+**What the kit gives,** at `32e295e5`, since #1809:
+- `NativeCollectionSerializer`: `makeFile(from:includeNotes:resolveNoteTexts:)` over a `CollectionExport`, `encode`, `decode` under the tolerant-reader rule, and `importedValues(from:)` into a `NativeCollectionImport`, with `NativeCollectionError`'s sentences.
+- `SmartCollectionSnapshot`: `documentRefs(parameters:searchService:limit:)` at `resultLimit`, 1,000, and `snapshot(of:results:)`.
+- `CollectionContentAssembly`'s smart path: `resolve(smartRefs:introduction:purpose:fullRefs:)`, and `smartDocumentRefs()` asked of the data source for a full resolve; `CollectionResolveError`'s sentences.
+
+**Delivered**
+
+- **The file** (`Sources/FRUSLightAPI/CollectionFiles.swift`):
+  - the export's fifth format, `fruscollection`, `application/json`, named as `writeTemporaryFile(_:)` names it: the kit's file of the collection's values, a pre-RTF prose blob healed first, and with `includeNotes` each document entry's notes as the sheet's `resolveNoteTexts` gives them; refused for a smart collection in the app's words; kept in the history with its document entries;
+  - `POST /api/v1/me/collections/import`, in a route group of its own, 16 MiB, 5,000 entries and 5,000 notes at most: the kit's `decode` and `importedValues(from:)`, off the cooperative pool, each text and id held to what an editor keeps, filed under the project worked in; the collection, its entries and the notes it carries in one write, which rewrites their documents' rows of `user_search`; a headnote draft of the user's an entry names copied for it.
+- **Smart collections:**
+  - `CollectionSmartSearch` (`CollectionContent.swift`): the saved search's parameters as stored, through the user's search over the served index, at the kit's `resultLimit`, the kit's sentences when no index is served or the search is gone; the routes run it before the resolve and give the data source the results, so each volume is read once;
+  - the preview's smart path, capped at 20 before any result is resolved, with no volume named as missing; each export's; and `GET …/results`, which the preview's bar counts;
+  - Link to Saved Search… and Unlink, `PATCH` `savedSearchId`, with `savedSearchName` in the detail; `POST …/entries-from-before-link/remove`; and `POST …/snapshot`, the kit's snapshot with the model's initial values, filed under the project worked in.
+- **Summary only:** an export at Summary only names the documents with no summary stored under their prompt, with the app's reason (`SUMMARY_NOT_STORED`); a document's own Summary only is refused where its document has none (`DEPTH_NOT_OFFERED`), and the inspector says whether it is offered.
+- **The headnote card:** `PUT …/entries/{entryId}/headnote`, the app's `commitHeadnote(seed:)` and `swapHeadnoteDraft`: a draft of the entry's own in place of the one it named, in one write, AI · edited over the model's, Yours otherwise; the inspector's `headnote`, the app's `currentHeadnoteSummary`, with its authorship.
+- **The store** (`FRUSLightCore`): `CollectionChange.deletedSummaries`, headnote drafts a change deletes, and `addedNotes`, a new collection's notes, which only `addCollection` writes, moving the search mark; a write's new ids checked against one read of the user's; on both stores.
+- **The browser app:**
+  - the export sheet's `.fruscollection` card, last, with Include my research notes and its hint, dropped for a smart collection, whose Export is offered with no entry;
+  - the Collections tab's Import Collection…, which opens the collection it makes, and Create Static Snapshot on a smart collection's row, which opens the snapshot, a refusal under the app's alert's title;
+  - Collection settings' Smart Collection rows and the Link to Saved Search picker; Summary only listed but not offered, with the reason;
+  - the editor's group of entries from before the link, with Remove These Entries, which asks first;
+  - the preview's count of a smart collection's results;
+  - the inspector's headnote card, New Note…, and a document's Summary only.
+
+**Decided here, each the web's own**
+
+- **Summary only's reason is the app's Summary prompt hint.** "Summaries are generated on demand for documents that don't already have one for this prompt. Requires Apple Intelligence." The app's own refusal, without Apple Intelligence, is to leave the depth out of the picker and fail the export as "The export could not be rendered."; the web lists the depth, disabled, with that sentence under the picker, and names the documents with no summary in the export's refusal.
+- **A document's Summary only is offered where its document has a summary stored;** a section's and the collection's where one of the collection's documents has, as S18d offers them.
+- **A pre-RTF prose blob is healed to the codec's RTF of its own text.** The app heals July 2026's `AttributedString` JSON with its bold and italic; the web reads that blob as its text, as S18e decided, and writes it so. Other JSON is left as it is, as the app leaves what it cannot read.
+- **A file that is no JSON is "no collection".** The app shows Foundation's sentence for a file it cannot decode; the web the kit's `notACollectionFile`, 422 for both.
+- **The import takes 16 MiB at most,** room for a collection of a thousand documents with their notes.
+- **A smart collection's results are counted by a route of their own,** which the preview's bar asks each time the page is built, since the page in its frame cannot tell the editor.
+- **No Generate in the headnote card:** the server writes no summary, as on a device without Apple Intelligence, whose card shows Edit alone.
+- **The headnote card's seed is read before its write and held to it:** a save that finds the summary the entry names, or the prompt its seed was found by, changed meanwhile reads it again, three times at most.
+- **An import copies each headnote draft of the user's its entries name,** as Duplicate copies one, so a file brought back into the account it came from shares no draft with its source. The app's import keeps the id, which on another person's device names nothing, and on the author's own shares the draft, so that a save or a delete of either collection's headnote takes the other's: a fix for the app to weigh, which the PR names for the owner.
+- **A file brings 5,000 entries and 5,000 notes at most,** five times the 1,000 results a snapshot makes a collection of: the store every user shares is held while it is written.
+- **A smart collection can have Summary only where the user has a summary stored:** its documents are its search's results, which change with the index and are not run for a collection's view, and an export names each result with none.
+
+**Tests**
+
+- **FRUSLightCoreTests,** 168 to 169: `UserCollectionTests`' `aChangeSwapsADraftAndAnImportBringsItsNotes`, on each store: a change that adds one draft and deletes the one the entry named, never a summary that is no draft; and an import's add with its notes, which the search finds at once, moving the mark, refused whole for a note under an id the user holds.
+- **FRUSLightServerTests,** 231 to 239: `CollectionFileTests`, 8.
+  - The file the kit writes, its prose RTF, a pre-RTF blob healed and any other JSON kept, its notes only when included, refused for a smart collection, kept in the history.
+  - An import, as the app's makes it, whose file written again is the same file, with the kit's refusals, a text, an id and a file past its 5,000 entries refused, and an import that copies the drafts its entries name.
+  - A smart collection's link, preview, results, exports, snapshot and Unlink, its Summary only, a search gone, no index served, and Remove These Entries.
+  - Summary only refused with the app's reason; and the headnote card's authorship, swaps and no-ops.
+- **FRUSParityTests,** 219 to 222: `CollectionFileParityTests`, 3.
+  - The done-when: each file, with and without notes, the kit's to the byte, over the user's JSON export; each, imported, as the kit's `importedValues` reads it, and written again the same file.
+  - A smart collection's four exports and two previews, the kit's to the byte, over the assembly with the kit's search run on the same index with the user's store attached, one result a note of the user's finds; and a snapshot, the kit's.
+  - Every word the screens take, under its key in the app's source and in copy.ts, and the server's and the browser app's mirrors, each held to the app's source.
+- **The web unit suite,** 442 to 452 tests in 47 to 48 files: `CollectionFiles.test.tsx`, 9, and `CollectionExport.test.tsx`'s smart preview and native file.
+- **The browser suite:** `collection-files.spec.ts`, 3, with axe: the file with its notes by keyboard and its import by pointer; a smart collection linked, its earlier entries removed, previewed, exported and snapshotted; and Summary only's reason, the headnote card and New Note…. `collections.spec.ts` reads the Body depth picker's description with Summary only's reason, and the suite's axe check scans again once the preview's frame holds its next page when that frame is all it could not reach, since a scan that met the preview rebuilding a second after a change found the frame between two pages.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** with `scripts/swift --postgres`, PostgreSQL 18: the build gives no warning. All 2,631 tests pass, up from 2,619 on `main`, with the one named skip and nothing cancelled: FRUSLightServerTests 239, FRUSParityTests 222, FRUSLightCoreTests 169, FRUSCoreKitTests 1,299, the others as on `main`.
+- **The web job's steps,** through `scripts/npm`: typecheck, lint and the build are clean, and the unit suite passes 452 tests in 48 files. The app's script is 701 kB, from 688 kB.
+- **The browser suite,** with `scripts/compose-smoke --e2e` over an image of the branch under a tag and port of its own (`frus-light:s18f`, 18188): 69 tests at the root and 69 under the path, and the sign-in phase's spec. Of the two runs before it, one failed `collections.spec.ts` on the Body depth picker's description, which now carries Summary only's reason, and one its axe check, which met the preview between two pages (Tests).
+- **The owner's checkpoint file,** `s18f-web-written.fruscollection` in the shared notes folder, was written by that image's server through the API (`s18f-sample.sh` beside it): format 2, minimum reader 1, the title page, two sections, documents of the three fixture volumes, a note block, an excerpt, two apparatus blocks and a note.
+- **A review** read the diff cold, the server's and the browser app's apart. Each finding was checked against the code before it was fixed.
+  - **Server:**
+    - **an import could hold the store every user shares for minutes:** each entry's and note's id was checked by a scan of the user's rows, so a file of many small entries cost the square of their number, and the editor's view resolved the outline again for each heading; a file is capped, read off the cooperative pool, its ids checked against one read, and the view resolves the outline once;
+    - **a file brought back into the account it came from shared its headnote drafts** with its source (Decided here);
+    - **a smart collection could never have Summary only,** whether summaries can be had being read from its own entries;
+    - **the headnote card's seed was held only to the summary the entry named,** not to the prompt it was found by;
+    - **any JSON was taken for a pre-RTF blob, and healed from the entry's text,** where the app heals an `AttributedString`'s from its own;
+    - **an imported id was not held to the routes' rules,** and **a saved search that cannot run answered 400;**
+    - **the smart byte-for-byte check ran the search without the user's half,** so it could not see a divergence there.
+  - **Browser:**
+    - **New Note… on an entry taking every note left the collection's row and the preview stale;**
+    - **a refused link left focus on the page's body,** and focus after Link, Unlink and the card's Save was moved in a frame that could come before the control it named was drawn;
+    - **the card showed the old headnote after Save,** until the inspector was read again, so a second Edit started from it;
+    - **a saved search renamed or deleted elsewhere left the Smart Collection rows stale,** and an import left the search's kept answers;
+    - **a snapshot did not wait for the changes sent,** a rename among them;
+    - **the heading row's Section body left Summary only out,** unlike the other pickers;
+    - **the smart preview's test passed whatever the preview counted.**
+  - **Kept:** Cancel in New Note… while its save is on the way still makes the note, as New Collection's sheet does.
+
+**Next:** phase 2's sign-off, with the owner's check of a `.fruscollection` the web wrote in the Mac app (PLAN's checkpoint "A web collection in the Mac"; the PR says which file and what to look at). The pin move to `fb542514`, another session's card, is still open, and so are its two follow-ups: S18d's, Add Documents' Citations and Tags over FRUS-Explorer#1814, and S17f's, Project Home's subjects and a lead's line over #1813. When the move lands, `CollectionFileParityTests` and `CollectionExportParityTests` run again over it.
+
 ## Session 19b: the Research page
 
 29 October 2026 · branch `claude/determined-heyrovsky-aa03fd` · [#89](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/89) · upstream `32e295e5`, unchanged

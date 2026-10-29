@@ -9,8 +9,8 @@
 // (`CollectionEditorView.swift`); the document and excerpt appends (`CollectionDocumentDiscovery`,
 // `CollectionExcerpts`); `Collection.duplicate(in:)`, the footnote flags, `documentCount` and
 // `SmartCollectionRule` (`Models/Collection.swift`); `CollectionPreset.applyFields(to:)` and
-// `matches(_:)` (`CollectionExporter+App.swift`); and the inspector's selections and resolved
-// defaults (`CollectionEntryInspector.swift`).
+// `matches(_:)` (`CollectionExporter+App.swift`); and the inspector's selections, resolved defaults
+// and, from PLAN's S18f, its headnote card (`CollectionEntryInspector.swift`).
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -80,8 +80,13 @@ enum CollectionEditing {
     /// `CollectionOutline.canIndent(_:in:)`: a heading below the cap whose nearest preceding heading
     /// sits at its level or deeper; the first heading never.
     static func canIndent(_ index: Int, in outline: [CollectionEntryExport]) -> Bool {
+        canIndent(index, in: outline, depths: depths(outline))
+    }
+
+    /// The same over the outline's depths resolved already, as the editor's view gives each heading, so the
+    /// view resolves the outline once rather than once for each heading (S18f).
+    static func canIndent(_ index: Int, in outline: [CollectionEntryExport], depths resolved: [Int]) -> Bool {
         guard outline.indices.contains(index), outline[index].entryKind == .heading else { return false }
-        let resolved = depths(outline)
         let level = resolved[index]
         guard level < CollectionOutline.maxLevel else { return false }
         for i in stride(from: index - 1, through: 0, by: -1) where outline[i].entryKind == .heading {
@@ -92,8 +97,12 @@ enum CollectionEditing {
 
     /// `CollectionOutline.canOutdent(_:in:)`: any heading deeper than level 1.
     static func canOutdent(_ index: Int, in outline: [CollectionEntryExport]) -> Bool {
+        canOutdent(index, in: outline, depths: depths(outline))
+    }
+
+    static func canOutdent(_ index: Int, in outline: [CollectionEntryExport], depths resolved: [Int]) -> Bool {
         guard outline.indices.contains(index), outline[index].entryKind == .heading else { return false }
-        return depths(outline)[index] > 1
+        return resolved[index] > 1
     }
 
     /// `CollectionOutline.indentSection(at:in:)`: the heading and every heading of its section a level
@@ -583,5 +592,43 @@ enum CollectionEditing {
             related: section { $0.includeRelatedDocuments } ?? false,
             summaryPromptId: section { $0.summaryPromptIdOverride } ?? collection.summaryPromptId,
             headnote: collection.defaultIncludeHeadnote ?? false)
+    }
+
+    // MARK: - The headnote card (`CollectionEntryInspector`, PLAN's S18f)
+
+    /// `headnoteDraftPromptId`: the prompt every headnote draft carries, which no prompt holds.
+    static let headnoteDraftPromptId = UUID(uuidString: "0EAD0000-0000-4000-8000-000000000001")!
+
+    /// `currentHeadnoteSummary`: the entry's own pick, a draft among them, when it holds text; else the
+    /// document's stored summaries but drafts and those with no text, the one under the entry's prompt,
+    /// its override else what Default resolves to, else the first, here the newest by `ranksAbove`, the
+    /// store's order, where the app's fetch sets none.
+    static func currentHeadnoteSummary(chosen: SummaryRecord?, stored: [SummaryRecord], promptId: UUID?) -> SummaryRecord? {
+        if let chosen, !chosen.responseText.isEmpty { return chosen }
+        let candidates = stored.filter { !$0.isHeadnoteDraft && !$0.responseText.isEmpty }
+        return promptId.flatMap { pid in candidates.first { UUID(uuidString: $0.promptId) == pid } } ?? candidates.first
+    }
+
+    /// What `commitHeadnote(seed:)` saves, nil for nothing: the text trimmed, nothing when that is empty or
+    /// the seed's own text trimmed; AI · edited when the seed is the model's, generated or edited, and holds
+    /// text, else Yours. A seed with no authorship is the model's, as every reader takes one.
+    static func headnoteCommit(_ text: String, seed: SummaryRecord?) -> (text: String, authorship: SummaryAuthorship)? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, seed?.responseText.trimmingCharacters(in: .whitespacesAndNewlines) != trimmed else { return nil }
+        let seedAuthorship = seed.map { $0.authorship.flatMap(SummaryAuthorship.init(rawValue:)) ?? .aiGenerated }
+        let seedIsAIDerived = seedAuthorship == .aiGenerated || seedAuthorship == .aiEdited
+        let authorship: SummaryAuthorship = (seedIsAIDerived && !(seed?.responseText.isEmpty ?? true)) ? .aiEdited : .userWritten
+        return (trimmed, authorship)
+    }
+
+    /// `swapHeadnoteDraft(text:authorship:)`'s new draft on the entry's document:
+    /// `GeneratedSummary(documentId:volumeId:promptId:responseText:authorship:isHeadnoteDraft:)` under the
+    /// drafts' prompt, made now, every other field at its initial value. The draft the entry named before
+    /// is deleted with the write that makes this one, if it is a draft.
+    static func headnoteDraft(_ text: String, authorship: SummaryAuthorship, of entry: CollectionEntryExport,
+                              at time: Date) -> GeneratedSummaryExport {
+        GeneratedSummaryExport(id: UUID(), documentId: entry.documentId, volumeId: entry.volumeId, promptId: headnoteDraftPromptId,
+                               responseText: text, responseFormat: .general, wasChunked: false, projectId: nil, createdAt: time,
+                               lastModified: time, authorship: authorship, isHeadnoteDraft: true)
     }
 }

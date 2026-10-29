@@ -1,16 +1,19 @@
 // The export sheet (PLAN's S18e), the app's `ExportSheetView`: the sentence of what an export carries,
-// the format grid, HTML, Word, BibTeX and RIS, and Export {Format}, which saves the file the server's
-// exporter writes, the kit's; the quotation check, run as the sheet opens, warning without blocking,
-// in orange when a quotation is not found, as the app's; and a refusal in red, in the app's words. The
-// saved file's line, the word cloud's note and a smart collection's sentence are the web's own.
+// the format grid, HTML, Word, BibTeX, RIS and from S18f `.fruscollection`, which a smart collection's
+// grid drops, and Export {Format}, which saves the file the server writes, the kit's; for the native
+// file, the app's switch that includes the reader's notes, off until turned on, and what the file
+// carries; the quotation check, run as the sheet opens, warning without blocking, in orange when a
+// quotation is not found, as the app's; and a refusal in red, in the app's words. The saved file's
+// line and the word cloud's note are the web's own.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { errorMessage } from '../api/client';
-import { excerptCheckQuery, exportCollection, exportFormats, type CollectionDetail, type ExportFormat } from '../api/collections';
+import { excerptCheckQuery, exportCollection, type CollectionDetail, type ExportFormat } from '../api/collections';
 import { copy } from '../copy';
 import { Modal } from '../shell/Modal';
 import { saveFile } from '../shell/saveFile';
-import { compositionSentence } from './exportRules';
+import { Switch } from './CollectionSettings';
+import { compositionSentence, gridFormats } from './exportRules';
 
 const words = copy.collectionExport;
 
@@ -18,13 +21,17 @@ export function CollectionExportSheet({ detail, onClose }: { detail: CollectionD
   const client = useQueryClient();
   const id = useId();
   const check = useQuery(excerptCheckQuery(detail.id));
-  const [format, setFormat] = useState<ExportFormat>('html');
+  const smart = !detail.takesHandAddedEntries;
+  const formats = gridFormats(smart);
+  const [chosen, setFormat] = useState<ExportFormat>('html');
+  // A format the grid no longer offers, as the native file once the collection is linked, is HTML again.
+  const format = formats.includes(chosen) ? chosen : 'html';
+  const [includeNotes, setIncludeNotes] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
-  const smart = !detail.takesHandAddedEntries;
-  // The app's Export is disabled for a collection with nothing in it.
-  const unavailable = smart || detail.entries.length === 0;
+  // The app's Export is disabled for a collection with nothing in it that is not smart.
+  const unavailable = detail.entries.length === 0 && !smart;
   const label = words.grid[format]!.label;
 
   async function run() {
@@ -33,7 +40,7 @@ export function CollectionExportSheet({ detail, onClose }: { detail: CollectionD
     setFailure(null);
     setSaved(null);
     try {
-      const file = await exportCollection(client, detail.id, format);
+      const file = await exportCollection(client, detail.id, format, includeNotes);
       saveFile(file.blob, file.name);
       setSaved(file.name);
     } catch (error) {
@@ -51,10 +58,9 @@ export function CollectionExportSheet({ detail, onClose }: { detail: CollectionD
       </h2>
       <p>{compositionSentence(detail)}</p>
       {detail.includeWordCloud && <p className="note">{words.noWordCloud}</p>}
-      {smart && <p className="note">{words.smart}</p>}
-      <fieldset className="format-grid" disabled={smart}>
+      <fieldset className="format-grid">
         <legend className="visually-hidden">{words.formats}</legend>
-        {exportFormats.map((each) => (
+        {formats.map((each) => (
           <label key={each} className={each === format ? 'format-card selected' : 'format-card'}>
             {/* Named as the app's card is, its title and its caption. */}
             <input
@@ -70,6 +76,11 @@ export function CollectionExportSheet({ detail, onClose }: { detail: CollectionD
           </label>
         ))}
       </fieldset>
+      {format === 'fruscollection' && (
+        <div className="native-options">
+          <Switch label={words.includeNotes} detail={words.nativeHint} checked={includeNotes} onChange={setIncludeNotes} />
+        </div>
+      )}
       {/* The quotation check: a statement about the work, above the error about this attempt. */}
       <div role="status">
         {summary && (

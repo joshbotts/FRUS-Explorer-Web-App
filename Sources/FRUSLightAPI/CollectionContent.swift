@@ -9,15 +9,21 @@
 // next resolve (`CollectionDocumentParses`). What only an export does on the app, download its
 // volumes, fetch its figures and generate its summaries, a server does not: its volumes and figures
 // are the folder an administrator mounts, and it has no summarizer, so a summary only an export would
-// generate is refused, as the app refuses one where Apple Intelligence is not.
+// generate is refused, as the app refuses one where Apple Intelligence is not, naming the documents
+// that have none, with the app's reason (PLAN's S18f). A smart collection's documents are its saved
+// search's results, run before the resolve as the app's preview runs them (`CollectionSmartSearch`).
 //
-// App code mirrored here, held to its source by CollectionExportParityTests:
+// App code mirrored here, held to its source by CollectionExportParityTests and CollectionFileParityTests:
 // - `ZoteroJSONExporter.fetchTagsAndNotes`'s tags: the names of the document's own tags and of its
 //   notes' tags, sorted;
-// - `CrossReferenceStore.outboundEdges`: a document's edges that are not broken and name a document.
+// - `CrossReferenceStore.outboundEdges`: a document's edges that are not broken and name a document;
+// - `CollectionContentResolver.smartRefs(for:)`: the saved search run as it is stored, at
+//   `SearchViewModel.searchHardLimit`, which is the kit's `SmartCollectionSnapshot.resultLimit`, with the
+//   kit's sentence when no index is open or the search is gone.
 
 import FRUSCoreKit
 import FRUSLightCore
+import FTS5Store
 import Foundation
 
 /// What a resolve reads of one user's store, read at one moment before it starts: the notes every
@@ -114,6 +120,8 @@ struct CollectionContentSource: CollectionContentDataSource {
     let parses: CollectionDocumentParses
     /// The resolve's documents, by volume, each volume's read in one pass when the first is asked for.
     let batch: CollectionDocumentBatch
+    /// A smart collection's results, its saved search run before the resolve; none for another.
+    var smartRefs: [SmartCollectionDocumentRef]?
 
     var manifestEntries: [VolumeManifestEntry] { resources.manifest }
 
@@ -156,9 +164,11 @@ struct CollectionContentSource: CollectionContentDataSource {
 
     func tagAssignments() -> [DocumentTagAssignmentExport] { research.assignments }
 
-    /// A smart collection's saved search is S18f's to run; the routes refuse one before it resolves.
+    /// The saved search's results the route ran before the resolve, so that the batch reads each of their
+    /// volumes once; a smart collection resolved without them has lost its search.
     func smartDocumentRefs() async throws -> [SmartCollectionDocumentRef] {
-        throw CollectionRoutes.smartWaits()
+        guard let smartRefs else { throw CollectionResolveError.savedSearchMissing }
+        return smartRefs
     }
 
     /// Nothing to download: the server's volumes are the folder it is given.
@@ -168,20 +178,84 @@ struct CollectionContentSource: CollectionContentDataSource {
     func fetchAbsentFigureImages(_ images: [FigureImageName]) async {}
 
     /// The summaries the app's `resolveSummaries` takes, those stored, where it can write the rest: the
-    /// prompt must still be the user's, as the app fetches it first, and each document must have one
-    /// stored under it, since this server writes none. Either missing fails the export as the app's
-    /// fails where it cannot write one (`ExportError.renderingFailed`); without Apple Intelligence the
-    /// app refuses every Summary only export, stored summaries and all.
+    /// prompt must still be the user's, as the app fetches it first, failing the export as the app's
+    /// does (`ExportError.renderingFailed`); and each document must have one stored under it, since this
+    /// server writes none, the documents with none refused together (`SummariesNotStored`) with the
+    /// app's reason, where the app would generate them with Apple Intelligence. Without it the app
+    /// refuses every Summary only export, stored summaries and all.
     func generateSummaries(for documents: [CollectionExportDocument], promptId: UUID,
                            bodyTexts: [String: String]) async throws -> [String: String] {
         guard research.promptIds.contains(promptId) else { throw ExportError.renderingFailed }
         var result: [String: String] = [:]
+        var missing: [CollectionExportDocument] = []
         for document in documents {
-            guard let stored = summary(volumeId: document.volumeId, documentId: document.documentId, promptId: promptId),
-                  !stored.responseText.isEmpty else { throw ExportError.renderingFailed }
-            result["\(document.volumeId)/\(document.documentId)"] = stored.responseText
+            let key = "\(document.volumeId)/\(document.documentId)"
+            if let stored = summary(volumeId: document.volumeId, documentId: document.documentId, promptId: promptId),
+               !stored.responseText.isEmpty {
+                result[key] = stored.responseText
+            } else if !missing.contains(where: { $0.volumeId == document.volumeId && $0.documentId == document.documentId }) {
+                missing.append(document)
+            }
         }
+        guard missing.isEmpty else { throw SummariesNotStored(documents: missing) }
         return result
+    }
+}
+
+/// Summary only's refusal (PLAN's S18f): documents at that depth with no summary stored under their
+/// prompt, which the app generates on demand with Apple Intelligence and this server cannot, in the
+/// order the kit asked for them.
+struct SummariesNotStored: Error {
+    let documents: [CollectionExportDocument]
+
+    /// `composition.summaryPrompt.hint`, the app's reason a summary must be generated, which it says
+    /// beside the Summary prompt picker.
+    static let appsReason = "Summaries are generated on demand for documents that don’t already have one for this prompt. Requires Apple Intelligence."
+
+    /// The refusal: the documents by their titles, three at most, joined as US English joins a list,
+    /// then the app's reason.
+    var detail: String {
+        let titles = documents.prefix(3).map { "“\($0.title)”" }
+        let named = switch documents.count {
+        case 1: "\(titles[0]) has no summary"
+        case 2: "\(titles[0]) and \(titles[1]) have no summary"
+        case 3: "\(titles[0]), \(titles[1]), and \(titles[2]) have no summary"
+        default: "\(titles.joined(separator: ", ")), and \(documents.count - 3) other \(documents.count == 4 ? "document" : "documents") have no summary"
+        }
+        return "\(named) stored for this prompt. \(Self.appsReason)"
+    }
+}
+
+/// A smart collection's saved search, run as the app's resolver runs it for the preview, an export and
+/// a snapshot (`CollectionContentResolver.smartRefs(for:)`, `snapshotSmartCollection(_:)`): its
+/// parameters as they are stored, with the gates they carry, through the user's search over the served
+/// index, at the kit's `SmartCollectionSnapshot.resultLimit`, 1,000, which is the app's
+/// `SearchViewModel.searchHardLimit`.
+enum CollectionSmartSearch {
+    /// The results in relevance order, each its place among them; none for a collection with no saved
+    /// search. The kit's sentences while no index is served, which the app says before its search
+    /// service opens, and for a saved search the user no longer has; an index being installed is the
+    /// 503 a search answers then.
+    static func refs(of collection: CollectionExport, for user: String, in store: any UserDataStore,
+                     provider: ServedIndexProvider) async throws -> [SmartCollectionDocumentRef] {
+        guard let searchId = collection.savedSearchId else { return [] }
+        guard let served = try await provider.servedIfReady() else { throw CollectionResolveError.searchServiceUnavailable }
+        let saved: SavedSearchExport
+        do {
+            saved = try await SavedSearchRoutes.savedSearch(searchId.uuidString, of: user, in: store)
+        } catch let problem as APIProblem where problem.code == "SAVED_SEARCH_NOT_FOUND" {
+            throw CollectionResolveError.savedSearchMissing
+        }
+        let mark = try await Blocking.run { try store.searchMark() }
+        let search = try served.search(for: SearchUser(id: user, mark: mark))
+        do {
+            return try await SmartCollectionSnapshot.documentRefs(parameters: saved.parameters, searchService: search.service)
+        } catch let error as FTS5Error {
+            // A saved search that cannot run, as one left with no terms, is the collection's conflict, in the search's words.
+            let refusal = SearchRoutes.refusal(error)
+            guard let problem = refusal as? APIProblem else { throw refusal }
+            throw APIProblem(.conflict, code: problem.code, detail: problem.detail, searchError: problem.searchError)
+        }
     }
 }
 

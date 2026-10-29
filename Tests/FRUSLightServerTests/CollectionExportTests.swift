@@ -2,9 +2,10 @@
 // preview is the HTML export's page for the editor's sandboxed frame, the first 20 documents until
 // Render All, a volume the server's folder lacks as its citation card; each export is the file the
 // app's sheet writes, named as it names it, and kept in the history while Log Research Sessions is on;
-// Summary only takes the summaries stored and refuses the rest; the check warns and never blocks; a
-// smart collection waits for S18f; and each user's collections are theirs alone. That each file is
-// the kit's to the byte is FRUSParityTests' CollectionExportParityTests, over the kit's own index.
+// Summary only takes the summaries stored and refuses the rest, naming them (S18f); the check warns and
+// never blocks; a smart collection needs an index to run its search (S18f's CollectionFileTests has the
+// rest); and each user's collections are theirs alone. That each file is the kit's to the byte is
+// FRUSParityTests' CollectionExportParityTests, over the kit's own index.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -80,8 +81,9 @@ import Testing
                 #expect(text.contains("<h1>Preview Unavailable</h1>") && text.contains(words), "\(address): \(text)")
             }
             try fixture.rows.run("UPDATE collections SET saved_search_id = '\(CollectionTests.stranger)' WHERE upper(id) = '\(berlin.id)'")
+            // A smart collection's search needs an index, which this fixture does not serve (S18f).
             let smart = try await owner.get("\(path)/preview")
-            #expect(smart.status == .conflict && String(buffer: smart.body).contains("This is a smart collection."))
+            #expect(smart.status == .serviceUnavailable && String(buffer: smart.body).contains("Search is not ready yet. Try again in a moment."))
         }
     }
 
@@ -122,7 +124,7 @@ import Testing
                 }
             }
 
-            for format in ["pdf", "fruscollection", "HTML"] {
+            for format in ["pdf", "HTML"] {
                 let refused = try await Self.export(owner, cafe.id, format)
                 #expect(refused.status == .badRequest && problemCode(refused) == "INVALID_FIELD", "\(format)")
             }
@@ -145,7 +147,7 @@ import Testing
 
             try fixture.rows.run("UPDATE collections SET saved_search_id = '\(CollectionTests.stranger)' WHERE upper(id) = '\(cafe.id)'")
             let smart = try await Self.export(owner, cafe.id, "html")
-            #expect(smart.status == .conflict && problemCode(smart) == "SMART_COLLECTION_NOT_RESOLVED")
+            #expect(smart.status == .serviceUnavailable && problemCode(smart) == "SEARCH_NOT_READY", "no index serves its search")
         }
     }
 
@@ -185,8 +187,8 @@ import Testing
     }
 
     /// Summary only takes each document's stored summary under the collection's prompt, with the kit's
-    /// attribution; a document with none fails the export as the app's does where it cannot write one,
-    /// and shows the kit's placeholder in the preview; and with no prompt it is the kit's refusal.
+    /// attribution; a document with none fails the export, named, with the app's reason (S18f), and shows
+    /// the kit's placeholder in the preview; and with no prompt it is the kit's refusal.
     @Test func summaryOnlyTakesTheSummariesStoredAndRefusesTheRest() async throws {
         let fixture = try await UserDataFixture(volumes: [Self.volume])
         defer { withExtendedLifetime(fixture) {} }
@@ -206,8 +208,10 @@ import Testing
 
             _ = try await CollectionTests.detail(owner, .patch, path, #"{"summaryPromptId": "\#(prompt)"}"#)
             let unwritten = try await Self.export(owner, brief.id, "docx")
-            #expect(unwritten.status == .conflict && problemCode(unwritten) == "EXPORT_NOT_RENDERED")
-            #expect(try decode(APIProblem.Body.self, unwritten).detail == "The export could not be rendered.")
+            #expect(unwritten.status == .conflict && problemCode(unwritten) == "SUMMARY_NOT_STORED")
+            let named = try decode(APIProblem.Body.self, unwritten).detail
+            #expect(named.hasPrefix("“") && named.hasSuffix("” has no summary stored for this prompt. \(SummariesNotStored.appsReason)"),
+                    "d2 alone has none: \(named)")
             let preview = String(buffer: try await owner.get("\(path)/preview").body)
             #expect(preview.contains("Kennedy writes to Khrushchev.") && preview.contains("Summary will be generated at export"))
 

@@ -412,11 +412,16 @@ test('freezes an excerpt from the selection bar, adds the document from the rail
   await expect(inspector.getByText('No research notes')).toBeVisible();
   const depth = inspector.getByRole('combobox', { name: 'Body depth' });
   await expect(depth).toHaveValue('');
-  await expect(depth).toHaveAccessibleDescription('Default → Full document');
+  // What Default comes to, then, as no summary of the document is stored, why Summary only is not offered (S18f).
+  await expect(depth).toHaveAccessibleDescription(
+    'Default → Full document Summary only is not offered: this document has no summary stored. Summaries are generated on demand for documents that don’t already have one for this prompt. Requires Apple Intelligence.',
+  );
   await expect(inspector.getByRole('region', { name: 'Excerpts in This Collection' })).toContainText(phrase);
   await axeCheck(page);
   await depth.selectOption({ label: 'Index / outline' });
-  await expect(depth).toHaveAccessibleDescription('');
+  await expect(depth).toHaveAccessibleDescription(
+    'Summary only is not offered: this document has no summary stored. Summaries are generated on demand for documents that don’t already have one for this prompt. Requires Apple Intelligence.',
+  );
   await inspector.getByRole('button', { name: 'Done' }).click();
   await expect(inspector).toHaveCount(0);
   await expect(configure).toBeFocused();

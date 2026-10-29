@@ -3,6 +3,8 @@
 // user's alone; changed in one write that writes only what differs, adds and deletes entries, and
 // takes a deleted entry's headnote draft with it but never a document's own summary; rolled back when
 // the change throws; deleted with its entries and their drafts; and listed for the documents it holds.
+// From S18f, a change that swaps an entry's headnote draft for another, and a new collection made with
+// the notes a `.fruscollection` file brings, written with it, which the search reads at once.
 
 @testable import FRUSLightCore
 import FRUSLightTestSupport
@@ -157,6 +159,58 @@ import Testing
             }
         }
         #expect(try store.changeCollection(Self.other, for: "owner") { _ in Issue.record("not asked"); return nil } == nil)
+    }
+
+    /// The headnote card's swap: a change adds the new draft and deletes the one the entry named, in one
+    /// write, and leaves a summary named for deletion that is no draft; and an import's add makes the
+    /// notes its file brings with the collection, each document's row of `user_search` with them, which
+    /// moves the search mark as a note's write does, and a note under an id the user holds refuses the
+    /// whole add; a change may make none.
+    @Test(arguments: UserStoreKind.available)
+    func aChangeSwapsADraftAndAnImportBringsItsNotes(_ kind: UserStoreKind) async throws {
+        let (store, rows, test) = try await UserTagTests.open(kind)
+        defer { withExtendedLifetime(test) {} }
+        let own = try Self.makeOwnSummary(in: store)
+        let next = "D2AF0000-0000-4000-8000-000000000003"
+        try store.addCollection(CollectionChange(
+            collection: Self.collectionRow(Self.collection, "Berlin"),
+            entries: [Self.entryRow(1, of: Self.collection, document: "d1", order: 0, headnote: Self.draft)],
+            addedSummaries: [Self.summaryRow(Self.draft, draft: true)]), for: "owner")
+        let mark = try store.searchMark()
+        let swapped = try #require(try store.changeCollection(Self.collection, for: "owner") { held in
+            var entries = held.entries.map(\.values)
+            entries[0]["headnote_summary_id"] = .text(next)
+            return CollectionChange(collection: held.collection.values, entries: entries,
+                                    addedSummaries: [Self.summaryRow(next, draft: true)],
+                                    deletedSummaries: [Self.draft.lowercased(), own])
+        })
+        #expect(swapped.entries[0].values["headnote_summary_id"] == .text(next))
+        #expect(Set(try rows.rows(of: "summaries").compactMap { $0["id"]?.text }) == [own, next], "the old draft gone, the own summary kept")
+        #expect(try store.searchMark() == mark)
+
+        let note = NoteRecord(id: "4E0E0000-0000-4000-8000-000000000001", volumeId: "frus1961-63v06", documentId: "d2",
+                              bodyText: "Zanzibar, brought by a file.", richText: nil, projectIds: [], userTagIds: [],
+                              selectedSummaryIds: [], createdAt: Self.created, lastModified: Self.created)
+        var imported = Self.entryRow(2, of: Self.other, document: "d2", order: 0)
+        imported["selected_note_ids"] = .text(#"["\#(note.id)"]"#)
+        try store.addCollection(CollectionChange(collection: Self.collectionRow(Self.other, "Shared"), entries: [imported],
+                                                 addedNotes: [note]), for: "owner")
+        #expect(try store.notes(for: "owner").map(\.bodyText) == ["Zanzibar, brought by a file."])
+        #expect(try store.note(note.id, of: "owner")?.createdAt == Self.created)
+        #expect(try rows.userSearchMatches("zanzibar") == ["d2"], "searched at once")
+        #expect(try store.searchMark() > mark, "a write the search reads moves the mark")
+
+        var again = Self.collectionRow("C0110000-0000-4000-8000-000000000009", "Again")
+        again["name"] = .text("Again")
+        #expect(throws: ResearchRowStoreError.invalidId(table: "notes", id: note.id)) {
+            try store.addCollection(CollectionChange(collection: again, entries: [], addedNotes: [note]), for: "owner")
+        }
+        #expect(try store.collectionRows("C0110000-0000-4000-8000-000000000009", of: "owner") == nil, "nothing written")
+        #expect(throws: ResearchRowStoreError.notesInAChange) {
+            try store.changeCollection(Self.other, for: "owner") { held in
+                CollectionChange(collection: held.collection.values, entries: held.entries.map(\.values), addedNotes: [note])
+            }
+        }
     }
 
     @Test(arguments: UserStoreKind.available)

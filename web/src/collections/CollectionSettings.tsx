@@ -4,16 +4,17 @@
 // turned, as the app's commits each field from its binding.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Component, lazy, type ReactNode, Suspense, useEffect, useId, useRef, useState } from 'react';
-import { applyPreset, type CollectionChanges, type CollectionDetail, tocStyles, updateCollection } from '../api/collections';
+import { applyPreset, type CollectionChanges, type CollectionDetail, linkSavedSearch, tocStyles, updateCollection } from '../api/collections';
 import { errorMessage } from '../api/client';
+import { type SavedSearch, savedSearchesQuery } from '../api/searchSets';
 import type { NoteRun } from '../api/types';
 import { projectsQuery } from '../api/userData';
 import { copy } from '../copy';
 import { runsText } from '../editor/runs';
-import { Modal } from '../shell/Modal';
+import { closeAtOnce, Modal } from '../shell/Modal';
 import { useActiveProjectId } from '../shell/ProjectPicker';
 import { ChosenCheckbox, ChosenSelect } from './chosen';
-import { bodyDepthOptions } from './collectionRules';
+import { bodyDepthChoices } from './collectionRules';
 import { useSaver } from './useSaver';
 
 const RichTextEditor = lazy(() => import('../editor/RichTextEditor'));
@@ -162,6 +163,8 @@ export function CollectionSettings({ detail, onClose }: { detail: CollectionDeta
     updateCollection(client, detail.id, { introductionText: body.text, introductionRuns: body.runs }),
   );
   const words = copy.collectionSettings;
+  // Summary only, which the server offers only where a document has a summary stored, and the collection does not hold.
+  const summaryOnlyRefused = !detail.bodyDepths.includes('summaryOnly') && detail.defaultBodyDepth !== 'summaryOnly';
 
   async function change(changes: CollectionChanges) {
     setFailure(null);
@@ -333,13 +336,23 @@ export function CollectionSettings({ detail, onClose }: { detail: CollectionDeta
         <p className="note">{words.documentContentHelp}</p>
         <div className="field">
           <label htmlFor={depthId}>{words.bodyDepth}</label>
-          <ChosenSelect id={depthId} value={detail.defaultBodyDepth} onChoose={(defaultBodyDepth) => void change({ defaultBodyDepth })}>
-            {bodyDepthOptions(detail.bodyDepths, detail.defaultBodyDepth).map((depth) => (
-              <option key={depth} value={depth}>
+          <ChosenSelect
+            id={depthId}
+            value={detail.defaultBodyDepth}
+            aria-describedby={summaryOnlyRefused ? `${depthId}-reason` : undefined}
+            onChoose={(defaultBodyDepth) => void change({ defaultBodyDepth })}
+          >
+            {bodyDepthChoices(detail.bodyDepths, detail.defaultBodyDepth).map(({ depth, disabled }) => (
+              <option key={depth} value={depth} disabled={disabled}>
                 {words.bodyDepths[depth] ?? depth}
               </option>
             ))}
           </ChosenSelect>
+          {summaryOnlyRefused && (
+            <p id={`${depthId}-reason`} className="note">
+              {words.summaryOnlyUnavailable} {words.summaryOnlyReason}
+            </p>
+          )}
         </div>
         {detail.defaultBodyDepth === 'summaryOnly' && (
           <div className="field">
@@ -392,6 +405,141 @@ export function CollectionSettings({ detail, onClose }: { detail: CollectionDeta
           </ChosenSelect>
         </div>
       </section>
+      <SmartCollectionRows detail={detail} />
+    </Modal>
+  );
+}
+
+/**
+ * The Smart Collection rows, last in the iPad's sheet: a linked collection's search, or Saved search not
+ * found, with Unlink and what the link does (`SmartCollectionLinkRows`); else Link to Saved Search…, dimmed
+ * with the app's line when no search is saved (`SmartCollectionLinkButton`), which opens the picker. Focus
+ * goes to the row that takes the pressed one's place once the change is answered.
+ */
+function SmartCollectionRows({ detail }: { detail: CollectionDetail }) {
+  const client = useQueryClient();
+  const headingId = useId();
+  const searches = useQuery(savedSearchesQuery);
+  const [picking, setPicking] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  // The row that takes the pressed one's place, focused once the answer has drawn it.
+  const focusNext = useRef<'link' | 'unlink' | null>(null);
+  const linking = useRef(false);
+  const linkButton = useRef<HTMLButtonElement>(null);
+  const unlinkButton = useRef<HTMLButtonElement>(null);
+  const words = copy.collectionSettings;
+  const held = searches.data?.items ?? [];
+  const linked = Boolean(detail.savedSearchId);
+
+  useEffect(() => {
+    if (focusNext.current === 'unlink' && linked) unlinkButton.current?.focus();
+    else if (focusNext.current === 'link' && !linked) linkButton.current?.focus();
+    else return;
+    focusNext.current = null;
+  }, [linked]);
+
+  /** Links or unlinks once the answer comes, the picker open until then, holding the pressed row's focus. */
+  async function link(savedSearchId: string | null) {
+    if (linking.current) return;
+    linking.current = true;
+    setFailure(null);
+    try {
+      await linkSavedSearch(client, detail.id, savedSearchId);
+      focusNext.current = savedSearchId ? 'unlink' : 'link';
+      closeAtOnce(() => setPicking(false));
+    } catch (error) {
+      // Refused, the rows stay as they were: a pick goes back to Link to Saved Search…, and Unlink keeps its focus.
+      closeAtOnce(() => setPicking(false));
+      setFailure(errorMessage(error));
+      if (savedSearchId) linkButton.current?.focus();
+    } finally {
+      linking.current = false;
+    }
+  }
+
+  return (
+    <section aria-labelledby={`${headingId}-smart`}>
+      <h3 id={`${headingId}-smart`}>{words.smartHeader}</h3>
+      {failure && (
+        <p className="error" role="alert">
+          {failure}
+        </p>
+      )}
+      {detail.savedSearchId ? (
+        <>
+          <div className="smart-link">
+            <p className={detail.savedSearchName === undefined ? 'note' : undefined}>{detail.savedSearchName ?? words.smartMissing}</p>
+            <button ref={unlinkButton} type="button" className="destructive" onClick={() => void link(null)}>
+              {words.smartUnlink}
+            </button>
+          </div>
+          <p className="note">{detail.savedSearchName === undefined ? words.smartMissingExplanation : words.smartExplanation}</p>
+        </>
+      ) : (
+        <>
+          {/* aria-disabled, not disabled, so that the line under it is reached with it. */}
+          <button
+            ref={linkButton}
+            type="button"
+            aria-disabled={held.length === 0}
+            aria-describedby={searches.data && held.length === 0 ? `${headingId}-none` : undefined}
+            onClick={() => held.length > 0 && setPicking(true)}
+          >
+            {words.smartLink}
+          </button>
+          {searches.data && held.length === 0 && (
+            <p id={`${headingId}-none`} className="note">
+              {words.smartNoSearches}
+            </p>
+          )}
+        </>
+      )}
+      {picking && (
+        <LinkSavedSearchPicker
+          searches={held}
+          onLink={(id) => void link(id)}
+          onCancel={() => {
+            setPicking(false);
+            requestAnimationFrame(() => linkButton.current?.focus());
+          }}
+        />
+      )}
+    </section>
+  );
+}
+
+/** `LinkSavedSearchPicker`: the saved searches, newest first, each its name over its words, and Cancel. */
+function LinkSavedSearchPicker({
+  searches,
+  onLink,
+  onCancel,
+}: {
+  searches: readonly SavedSearch[];
+  onLink: (id: string) => void;
+  onCancel: () => void;
+}) {
+  const headingId = useId();
+  const words = copy.collectionSettings;
+  return (
+    <Modal className="link-saved-search" labelledBy={headingId} onCancel={onCancel} onClose={() => {}}>
+      <h2 id={headingId} tabIndex={-1}>
+        {words.smartPickerTitle}
+      </h2>
+      <ul className="saved-search-picker">
+        {searches.map((search) => (
+          <li key={search.id}>
+            <button type="button" onClick={() => onLink(search.id)}>
+              <span className="search-name">{search.name}</span>
+              {search.queryText !== '' && <span className="meta">{search.queryText}</span>}
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="dialog-actions">
+        <button type="button" onClick={onCancel}>
+          {words.smartPickerCancel}
+        </button>
+      </div>
     </Modal>
   );
 }

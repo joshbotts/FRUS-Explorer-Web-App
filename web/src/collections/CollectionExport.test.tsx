@@ -1,8 +1,9 @@
 // A collection's live preview and its export sheet (S18e), against a stubbed server: the frame sent to
 // the server's page, the first 20 documents until Render All, again a second after a change, the bars
-// for the cap and the volumes the server lacks, and a smart collection's sentence; the sheet's sentence,
-// grid and quotation check, Export {Format} saving the server's file under its name, a refusal in the
-// app's words, and focus back on Export… when it closes.
+// for the cap and the volumes the server lacks, and a smart collection's results counted (S18f); the
+// sheet's sentence, grid and quotation check, Export {Format} saving the server's file under its name,
+// the native file with its notes switch, which a smart collection's grid drops (S18f), a refusal in
+// the app's words, and focus back on Export… when it closes.
 import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -155,15 +156,25 @@ describe('the live preview', () => {
     expect(navigations, 'once').toHaveLength(2);
   });
 
-  it('says a smart collection has no preview here, and loads none', async () => {
-    server({ [path]: detail({ savedSearchId: 'S0000000-0000-4000-8000-000000000001', takesHandAddedEntries: false }) });
+  it('previews a smart collection’s results, and counts them in the bar as the app counts those it fetched', async () => {
+    const results = Array.from({ length: 25 }, (_, at) => ({ volumeId: 'frus1961-63v06', documentId: `d${at + 1}` }));
+    server({
+      // A volume named, which the preview does not count for a smart collection, as the app counts none.
+      [path]: detail({
+        savedSearchId: 'S0000000-0000-4000-8000-000000000001',
+        takesHandAddedEntries: false,
+        entries: [],
+        volumesNotHeld: ['frus1961-63v05'],
+      }),
+      [`${path}/results`]: { total: results.length, items: results },
+    });
     renderAt(`/collections/${berlinId}`);
-    expect(
-      await screen.findByText(
-        'A smart collection’s documents come from its saved search, which this server does not resolve yet, so it has no preview here.',
-      ),
-    ).toBeTruthy();
-    expect(screen.queryByTitle('Preview of the collection’s HTML export')).toBeNull();
+    await waitFor(() => expect(frameAddress().pathname).toBe(`${path}/preview`));
+    expect(await screen.findByText('Showing first 20 of 25 documents')).toBeTruthy();
+    expect(screen.queryByText(/not downloaded/)).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Render All' }));
+    await waitFor(() => expect(frameAddress().searchParams.get('renderAll')).toBe('true'));
+    expect(screen.getByText('Showing all 25 documents')).toBeTruthy();
   });
 });
 
@@ -200,7 +211,9 @@ describe('the export sheet', () => {
       'WordEditable .docx',
       'BibTeXReference manager',
       'RISZotero / EndNote',
+      '.fruscollectionEditable copy for a colleague',
     ]);
+    expect(within(sheet).queryByRole('switch', { name: 'Include my research notes' })).toBeNull();
     const check = await within(sheet).findByText('One quotation was not found in the document it cites.');
     expect(check.closest('p')?.className).toBe('excerpt-check warning');
 
@@ -214,6 +227,50 @@ describe('the export sheet', () => {
 
     await userEvent.click(within(sheet).getByRole('button', { name: 'Close' }));
     await waitFor(() => expect(document.activeElement).toBe(open));
+    click.mockRestore();
+  });
+
+  it('writes the native file, with the reader’s notes only when they are included, and drops it for a smart collection', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:export');
+    URL.revokeObjectURL = vi.fn();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const fetch = server({
+      [path]: detail(),
+      [`${path}/excerpt-check`]: { hasFailures: false, verified: 0 },
+      [`POST ${path}/export`]: () =>
+        new Response('{}', { headers: { 'content-type': 'application/json', 'content-disposition': 'attachment; filename="Berlin.fruscollection"' } }),
+    });
+    renderAt(`/collections/${berlinId}`);
+    await userEvent.click(await screen.findByRole('button', { name: 'Export…' }));
+    let sheet = screen.getByRole('dialog', { name: 'Export collection' });
+    await userEvent.click(within(sheet).getByRole('radio', { name: /fruscollection/ }));
+    const notes = within(sheet).getByRole('switch', { name: 'Include my research notes' }) as HTMLInputElement;
+    expect(notes.checked).toBe(false);
+    expect(within(sheet).getByText(/Shares an editable copy of this collection/).id).toBe(notes.getAttribute('aria-describedby'));
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Export .fruscollection' }));
+    await waitFor(() => expect(within(sheet).getByText('Export Complete: Berlin.fruscollection')).toBeTruthy());
+    await userEvent.click(notes);
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Export .fruscollection' }));
+    await waitFor(() => expect(fetch.mock.calls.filter(([url]) => String(url).endsWith('/export'))).toHaveLength(2));
+    const bodies = fetch.mock.calls.filter(([url]) => String(url).endsWith('/export')).map(([, init]) => sent(init).body);
+    expect(bodies.map((body) => [(body as { format: string }).format, (body as { includeNotes?: boolean }).includeNotes])).toEqual([
+      ['fruscollection', false],
+      ['fruscollection', true],
+    ]);
+    cleanup();
+
+    // A smart collection's grid has no native file, and its Export is offered with no entry, as its results are its documents.
+    server({
+      [path]: detail({ savedSearchId: 'S0000000-0000-4000-8000-000000000001', takesHandAddedEntries: false, entries: [] }),
+      [`${path}/results`]: { total: 0, items: [] },
+      [`${path}/excerpt-check`]: { hasFailures: false, verified: 0 },
+    });
+    renderAt(`/collections/${berlinId}`);
+    await userEvent.click(await screen.findByRole('button', { name: 'Export…' }));
+    sheet = screen.getByRole('dialog', { name: 'Export collection' });
+    expect(within(sheet).getAllByRole('radio')).toHaveLength(4);
+    expect(within(sheet).queryByRole('radio', { name: /fruscollection/ })).toBeNull();
+    expect(within(sheet).getByRole('button', { name: 'Export HTML' }).getAttribute('aria-disabled')).toBe('false');
     click.mockRestore();
   });
 

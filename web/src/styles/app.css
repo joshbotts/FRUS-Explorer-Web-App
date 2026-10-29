@@ -3572,3 +3572,127 @@ dialog.export-sheet {
   color: var(--text-secondary);
   font-size: 0.875rem;
 }
+
+/* S18f: the export sheet's native file, with its notes switch and what the file carries. */
+.native-options {
+  margin-top: 0.75rem;
+}
+
+/* The headnote card, the app's purple "key takeaway" card. */
+.headnote-card {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--tone-purple);
+  border-radius: 10px;
+  background: var(--tone-purple-tint);
+}
+
+.headnote-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.headnote-title {
+  margin: 0;
+  color: var(--tone-purple);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.headnote-chip {
+  color: var(--tone-purple);
+  font-size: 0.75rem;
+}
+
+.headnote-text {
+  margin: 0.5rem 0;
+  font-style: italic;
+}
+
+.headnote-card textarea,
+dialog.new-note textarea {
+  width: 100%;
+  margin-top: 0.5rem;
+  font: inherit;
+}
+
+dialog.new-note,
+dialog.link-saved-search {
+  width: min(30rem, calc(100vw - 2rem));
+  max-width: min(30rem, calc(100vw - 2rem));
+}
+
+/* Collection settings' Smart Collection rows: the linked search, with Unlink beside it. */
+.smart-link {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.smart-link p {
+  margin: 0;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.smart-link p.note {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+/* Link to Saved Search's picker: each search a row, its name over its words. */
+.saved-search-picker {
+  margin: 0.75rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.saved-search-picker button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  text-align: start;
+}
+
+.saved-search-picker .meta {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+/* A smart collection's entries from before its link, apart from Contents and dimmed. */
+.earlier-entries {
+  margin-top: 1rem;
+  color: var(--text-secondary);
+}
+
+.earlier-entries h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.earlier-entries ul {
+  margin: 0 0 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.earlier-row {
+  display: flex;
+  flex-direction: column;
+  padding: 0.25rem 0;
+}
+
+.earlier-row.kind-excerpt .earlier-title {
+  font-style: italic;
+}
+
+.earlier-row .meta {
+  font-size: 0.75rem;
+}
