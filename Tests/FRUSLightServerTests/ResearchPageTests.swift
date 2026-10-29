@@ -21,21 +21,27 @@ import Testing
     static func id(_ number: Int) -> UUID { UUID(uuidString: String(format: "5E19B000-0000-4000-8000-%012d", number))! }
     static func day(_ day: Int) -> Date { Date(timeIntervalSince1970: 1_767_225_600 + Double(day - 1) * 86_400) }  // 2026-01-<day>
 
-    static let berlin = id(1), revisit = id(2), unused = id(3), alpha = id(4)
-    static let briefing = id(50), unnamed = id(51), empty = id(52), smart = id(53), atlas = id(54)
+    static let berlin = id(1), revisit = id(2), unused = id(3), alpha = id(4), twin = id(5), otherTwin = id(6)
+    static let briefing = id(50), unnamed = id(51), empty = id(52), smart = id(53), atlas = id(54), twins = id(55), otherTwins = id(56)
 
-    /// The owner's research, as a Mac's export brings it: notes, the newest of one document's empty;
-    /// highlights of each colour, one of a colour this build does not know and one with no words; a
-    /// document tagged directly, and one with a tag the user does not have; summaries, one a headnote
-    /// draft; a visit plan; and collections, curated, unnamed, empty and smart.
+    /// The owner's research, as a Mac's export brings it: notes, the newest of one document's empty,
+    /// two of another's changed at one time, and one on no document; highlights of each colour, one of
+    /// a colour this build does not know, one with no words and two made at one time; a document tagged
+    /// directly, and one with a tag the user does not have; tags and collections whose names tie, and
+    /// whose case would order them otherwise; summaries, one a headnote draft; a visit plan; and
+    /// collections, curated, unnamed, empty and smart. Each tie comes in the order its id would not.
     static func envelope() -> ResearchDataEnvelope {
         let notes = [
             ResearchNoteExport(id: id(10), documentId: "d1", volumeId: v06, bodyText: "First thought", projectIds: [], userTagIds: [berlin],
                                selectedSummaryIds: [], linkedHighlightIds: [], createdAt: day(2), lastModified: day(2)),
             ResearchNoteExport(id: id(11), documentId: "d1", volumeId: v06, bodyText: "", projectIds: [], userTagIds: [],
                                selectedSummaryIds: [], linkedHighlightIds: [], createdAt: day(5), lastModified: day(5)),
+            ResearchNoteExport(id: id(14), documentId: "d2", volumeId: v06, bodyText: "Again on d2", projectIds: [], userTagIds: [],
+                               selectedSummaryIds: [], linkedHighlightIds: [], createdAt: day(3), lastModified: day(3)),
             ResearchNoteExport(id: id(12), documentId: "d2", volumeId: v06, bodyText: "On d2", projectIds: [], userTagIds: [revisit],
                                selectedSummaryIds: [], linkedHighlightIds: [], createdAt: day(3), lastModified: day(3)),
+            ResearchNoteExport(id: id(15), documentId: "", volumeId: "", bodyText: "On no document", projectIds: [], userTagIds: [],
+                               selectedSummaryIds: [], linkedHighlightIds: [], createdAt: day(1), lastModified: day(1)),
             ResearchNoteExport(id: id(13), documentId: "d1", volumeId: nicaragua, bodyText: "Managua", projectIds: [],
                                userTagIds: [berlin, revisit], selectedSummaryIds: [], linkedHighlightIds: []),
         ]
@@ -48,15 +54,19 @@ import Testing
             highlight(21, "d1", "pink", "", day(1)),
             highlight(22, "d1", "purple", "Purple text", day(6)),
             highlight(23, "d1", "green", "Green text", nil),
+            highlight(25, "d9", "blue", "Blue again", day(7)),
             highlight(24, "d9", "blue", "Blue text", day(7)),
         ]
         let tags = [UserTagExport(id: berlin, name: "Berlin"), UserTagExport(id: revisit, name: "revisit"),
-                    UserTagExport(id: unused, name: "Unused"), UserTagExport(id: alpha, name: "alpha")]
+                    UserTagExport(id: unused, name: "Unused"), UserTagExport(id: alpha, name: "alpha"),
+                    UserTagExport(id: otherTwin, name: "Twin"), UserTagExport(id: twin, name: "Twin")]
         let assignments = [
             DocumentTagAssignmentExport(id: id(30), volumeId: v06, documentId: "d3", tagId: berlin),
             DocumentTagAssignmentExport(id: id(31), volumeId: v06, documentId: "d4", tagId: id(39)),
             DocumentTagAssignmentExport(id: id(32), volumeId: v06, documentId: "d2", tagId: alpha),
             DocumentTagAssignmentExport(id: id(33), volumeId: v06, documentId: "d3", tagId: alpha),
+            DocumentTagAssignmentExport(id: id(34), volumeId: v06, documentId: "d2", tagId: otherTwin),
+            DocumentTagAssignmentExport(id: id(35), volumeId: v06, documentId: "d3", tagId: twin),
         ]
         let summary = { (n: Int, document: String, draft: Bool) in
             GeneratedSummaryExport(id: id(n), documentId: document, volumeId: v06, promptId: id(49), responseText: "A summary.",
@@ -82,6 +92,8 @@ import Testing
                 collection(empty, "Empty", nil, [entry(67, "", "heading", 0)]),
                 collection(smart, "Smart", id(98), [entry(68, "d10", "document", 0)]),
                 collection(atlas, "atlas", nil, [entry(69, "d2", "document", 0)]),
+                collection(otherTwins, "Twins", nil, [entry(76, "d3", "document", 0)]),
+                collection(twins, "Twins", nil, [entry(75, "d3", "document", 0)]),
             ],
             prompts: [], projects: [],
             summaries: [summary(40, "d1", false), summary(41, "d1", false), summary(42, "d5", false), summary(43, "d6", true)])
@@ -123,18 +135,22 @@ import Testing
             let response = try await Browser(client: client).get("/api/v1/me/research")
             #expect(response.status == .ok, "\(String(buffer: response.body))")
             let page = try decode(ResearchPage.self, response)
-            #expect(page.allAnnotated == 10)
-            #expect(page.hasNotes == 3 && page.notes == 4)
+            #expect(page.allAnnotated == 10, "a note on no document none of them")
+            #expect(page.hasNotes == 4 && page.notes == 6, "Contains Notes counting the note on no document, as the app's badge does")
             #expect(page.collections == [
                 .init(id: Self.atlas.uuidString, name: "atlas", count: 1),
                 .init(id: Self.briefing.uuidString, name: "Briefing book", count: 2),
+                .init(id: Self.twins.uuidString, name: "Twins", count: 1),
+                .init(id: Self.otherTwins.uuidString, name: "Twins", count: 1),
                 .init(id: Self.unnamed.uuidString, name: "Untitled Collection", count: 1),
-            ])
+            ], "by name whatever the case, then by id")
             #expect(page.tags == [
                 .init(id: Self.berlin.uuidString, name: "Berlin", count: 3),
                 .init(id: Self.alpha.uuidString, name: "alpha", count: 2),
                 .init(id: Self.revisit.uuidString, name: "revisit", count: 2),
-            ])
+                .init(id: Self.twin.uuidString, name: "Twin", count: 1),
+                .init(id: Self.otherTwin.uuidString, name: "Twin", count: 1),
+            ], "the most used first, then by name whatever the case, then by id")
             #expect(page.highlightColors.map(\.color) == ["yellow", "green", "blue", "pink"])
             #expect(page.highlightColors.allSatisfy { $0.count == 1 })
             #expect(try await Browser(client: client).get("/api/v1/me/research?group=hasNotes").status == .badRequest,
@@ -168,8 +184,12 @@ import Testing
                 highlightCount: 4, tags: [.init(id: Self.berlin.uuidString, name: "Berlin")],
                 collections: [.init(id: Self.briefing.uuidString, name: "Briefing book")]))
             let d2 = try #require(all.items.first { $0.documentId == "d2" })
-            #expect(d2.latestNote == "On d2" && d2.noteCount == 1 && d2.annotatedAt == UserStoreDate.text(Self.day(3)))
-            #expect(d2.tags.map(\.name) == ["alpha", "revisit"], "by name, whatever the case")
+            #expect(d2.latestNote == "On d2", "of two notes changed at one time, the first by id")
+            #expect(d2.noteCount == 2 && d2.annotatedAt == UserStoreDate.text(Self.day(3)))
+            #expect(d2.tags.map(\.name) == ["alpha", "revisit", "Twin"], "by name, whatever the case")
+            let d3 = try #require(all.items.first { $0.volumeId == Self.v06 && $0.documentId == "d3" })
+            #expect(d3.tags.map(\.name) == ["alpha", "Berlin", "Twin"], "whatever the case, where case would put Berlin first")
+            #expect(d3.collections.map(\.id) == [Self.twins.uuidString, Self.otherTwins.uuidString], "two of one name, by id")
             #expect(d2.collections.map(\.name) == ["atlas", "Untitled Collection"], "by the name each prints")
             let managua = try #require(all.items.first { $0.volumeId == Self.nicaragua })
             #expect(managua.title == "No. 1. Mr. Baker to Mr. Gresham" && managua.annotatedAt == nil && managua.latestNote == "Managua")
@@ -177,7 +197,8 @@ import Testing
             // A document the index does not hold is named by its id; one only in a smart collection is
             // in it; one with only a summary, a plan or a tag the user lacks has its one fact.
             let d9 = try #require(all.items.first { $0.documentId == "d9" })
-            #expect(d9.title == "d9" && d9.highlights.map(\.color) == ["blue"] && d9.highlightCount == 1)
+            #expect(d9.title == "d9" && d9.highlights.map(\.selectedText) == ["Blue text", "Blue again"] && d9.highlightCount == 2,
+                    "two made at one time, by id")
             #expect(all.items.first { $0.documentId == "d10" }?.collections.map(\.name) == ["Smart"])
             #expect(all.items.first { $0.documentId == "d5" }?.summaryCount == 1)
             #expect(all.items.first { $0.documentId == "d7" }?.isInVisitPlan == true)
@@ -193,7 +214,9 @@ import Testing
         defer { withExtendedLifetime(fixture) {} }
         try await fixture.app.test(.router) { client in
             let browser = Browser(client: client)
-            #expect(Self.keys(try await Self.list(browser, "hasNotes")) == ["\(Self.v06)/d1", "\(Self.v06)/d2", "\(Self.nicaragua)/d1"])
+            // The note on no document, which Contains Notes' badge counts, the app's list leaves out.
+            let noted = try await Self.list(browser, "hasNotes")
+            #expect(Self.keys(noted) == ["\(Self.v06)/d1", "\(Self.v06)/d2", "\(Self.nicaragua)/d1"] && noted.total == 3)
             let tag = try await Self.list(browser, "tag.\(Self.berlin.uuidString.lowercased())")
             #expect(tag.name == "Berlin" && Self.keys(tag) == ["\(Self.v06)/d1", "\(Self.nicaragua)/d1", "\(Self.v06)/d3"])
             let collection = try await Self.list(browser, "collection.\(Self.briefing.uuidString)")
@@ -250,7 +273,7 @@ import Testing
             #expect(all.items.first { $0.volumeId == Self.v06 && $0.documentId == "d1" }?.title == "d1")
             #expect(!Self.keys(all).contains("\(Self.v06)/d42") && !Self.keys(all).contains("\(Self.v06)/d43"))
             let page = try decode(ResearchPage.self, try await browser.get("/api/v1/me/research"))
-            #expect(page.allAnnotated == 10 && page.notes == 4 && page.highlightColors.allSatisfy { $0.count == 1 })
+            #expect(page.allAnnotated == 10 && page.notes == 6 && page.highlightColors.allSatisfy { $0.count == 1 })
         }
     }
 }

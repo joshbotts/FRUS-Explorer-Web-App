@@ -2,16 +2,18 @@
 // annotated, with a note, a tag, a collection entry, a highlight, a summary or a place in a visit plan,
 // as the kit's `ResearchDocumentAggregation` gathers them (S17b's FRUS-Explorer#1805); the documents
 // a note is on, every note's count, and the documents of each collection, tag and highlight colour;
-// and each document's row. Read once a request from the store, as the export reads its records
-// (`ResearchExport`). What the kit holds is called: the six sources' union, a collection's distinct
-// documents, the kinds of entry that count and the summaries a row may name. What the app's view
-// computes for itself is a few lines of view code, mirrored here, held to its source by
-// ResearchPageParityTests:
+// and each document's row. Read once a request from the store, the rows the export reads with the
+// few columns the page reads of them. What the kit holds is called: the six sources' union, a
+// collection's distinct documents, the kinds of entry that count and the summaries a row may name.
+// What the app's view computes for itself is a few lines of view code, mirrored here, held to its
+// source by ResearchPageParityTests:
 // - `documentsWithNotesCount`, `directlyTaggedDocs` and `collectionMemberships`;
 // - the three sections, `sortedCollectionsWithCounts`, `sortedTagsWithCounts` and
 //   `sortedHighlightColorsWithCounts`, with `DocumentHighlight.color`'s reading of a colour;
 // - `documents(for:)`, which documents a category lists and each row's facts, with their order;
-// - the row's newest annotation, its three highlights, and its tags' and collections' order.
+// - the row's newest annotation, its three highlights, and its tags' and collections' order;
+// - `CrossReferenceStore.documentTitleFacts(for:)`, the served index's query for a row's title, with
+//   `documentChunks`, its ids by volume, each once, 400 to a query.
 // Changed by an update reads the index's `reviewed_at`, which a served index's reader cannot write, so
 // it waits for phase 3's review of changed text, and its list says so (`UPDATE_REVIEW_NOT_OFFERED`).
 
@@ -137,37 +139,105 @@ enum ResearchGroup: Equatable, Sendable {
     }
 }
 
-/// What the page reads of one user's store at one moment, as the export reads its records: the six
-/// sources the kit's aggregation reads, and the tags' names.
+/// What the page reads of one user's store at one moment: the rows the export reads of the six sources
+/// the kit's aggregation reads and of the tags, with the columns the page reads of them, as values.
 struct ResearchSources: Sendable {
-    var notes: [ResearchNoteExport]
-    var tags: [UserTagExport]
-    var tagAssignments: [DocumentTagAssignmentExport]
-    /// Each collection with its entries.
-    var collections: [CollectionExport]
-    var highlights: [DocumentHighlightExport]
-    /// Every summary, headnote drafts among them.
-    var summaries: [GeneratedSummaryExport]
+    /// A note's identity, document, text, tags and last change.
+    struct Note: Sendable {
+        var id: UUID
+        var volumeId: String
+        var documentId: String
+        var bodyText: String
+        var userTagIds: [UUID]
+        var lastModified: Date?
+    }
+
+    struct Tag: Sendable {
+        var id: UUID
+        var name: String
+    }
+
+    /// A direct document-tag assignment.
+    struct Assignment: Sendable {
+        var volumeId: String
+        var documentId: String
+        var tagId: UUID
+    }
+
+    /// A collection, with its entries as the kit's rules read them.
+    struct Collection: Sendable {
+        var id: UUID
+        var name: String
+        var savedSearchId: UUID?
+        var entries: [ResearchDocumentAggregation.Entry]
+    }
+
+    struct Highlight: Sendable {
+        var id: UUID
+        var volumeId: String
+        var documentId: String
+        var colorTag: String
+        var selectedText: String
+        var createdAt: Date?
+    }
+
+    var notes: [Note]
+    var tags: [Tag]
+    var tagAssignments: [Assignment]
+    var collections: [Collection]
+    var highlights: [Highlight]
+    /// Every summary, headnote drafts among them, as the kit's rules read them.
+    var summaries: [ResearchDocumentAggregation.Summary]
     /// Every visit plan's documents, as their `documentKey`s.
     var visitDocumentKeys: [String]
 
-    static let tables: Set<String> = ["notes", "tags", "tag_assignments", "collections", "collection_entries", "highlights",
-                                      "summaries", "visit_documents"]
+    /// The columns read of each table: a collection's entries those the kit's rules read, and a
+    /// summary's its document and whether it is a headnote draft, never its text.
+    static let columns: [String: Set<String>] = [
+        "notes": ["id", "volume_id", "document_id", "body_text", "user_tag_ids", "last_modified"],
+        "tags": ["id", "name"],
+        "tag_assignments": ["volume_id", "document_id", "tag_id"],
+        "collections": ["id", "name", "saved_search_id"],
+        "collection_entries": ["collection_id", "kind", "volume_id", "document_id"],
+        "highlights": ["id", "volume_id", "document_id", "color_tag", "selected_text", "created_at"],
+        "summaries": ["volume_id", "document_id", "is_headnote_draft"],
+        "visit_documents": ["document_key"],
+    ]
 
     static func read(for user: String, in store: any UserDataStore) async throws -> ResearchSources {
-        let rows = try await Blocking.run { try store.researchRows(for: user, tables: tables) }
+        let rows = try await Blocking.run { try store.researchRows(for: user, columns: columns) }
         do {
-            let entries = try ResearchExport.children(rows["collection_entries"], in: "collection_entries", of: "collection_id")
+            let fields = { (table: String) in rows[table].map { ResearchExport.Fields(table, $0) } }
+            var entries: [UUID: [ResearchDocumentAggregation.Entry]] = [:]
+            for entry in fields("collection_entries") {
+                entries[try entry.uuid("collection_id"), default: []].append(ResearchDocumentAggregation.Entry(
+                    kind: try entry.text("kind"), volumeId: try entry.text("volume_id"), documentId: try entry.text("document_id")))
+            }
             return ResearchSources(
-                notes: try ResearchExport.records(rows, "notes") { try ResearchExport.note($0, links: [:]) },
-                tags: try ResearchExport.records(rows, "tags", ResearchExport.tag),
-                tagAssignments: try ResearchExport.records(rows, "tag_assignments", ResearchExport.assignment),
-                collections: try ResearchExport.records(rows, "collections") { row in
-                    try ResearchExport.collection(row, entries: entries[try row.uuid("id")] ?? [])
+                notes: try fields("notes").map {
+                    Note(id: try $0.uuid("id"), volumeId: try $0.text("volume_id"), documentId: try $0.text("document_id"),
+                         bodyText: try $0.text("body_text"), userTagIds: try $0.uuids("user_tag_ids"),
+                         lastModified: try $0.optionalDate("last_modified"))
                 },
-                highlights: try ResearchExport.records(rows, "highlights", ResearchExport.highlight),
-                summaries: try ResearchExport.records(rows, "summaries", ResearchExport.summary),
-                visitDocumentKeys: try rows["visit_documents"].map { try ResearchExport.Fields("visit_documents", $0).text("document_key") })
+                tags: try fields("tags").map { Tag(id: try $0.uuid("id"), name: try $0.text("name")) },
+                tagAssignments: try fields("tag_assignments").map {
+                    Assignment(volumeId: try $0.text("volume_id"), documentId: try $0.text("document_id"), tagId: try $0.uuid("tag_id"))
+                },
+                collections: try fields("collections").map {
+                    let id = try $0.uuid("id")
+                    return Collection(id: id, name: try $0.text("name"), savedSearchId: try $0.optionalUUID("saved_search_id"),
+                                      entries: entries[id] ?? [])
+                },
+                highlights: try fields("highlights").map {
+                    Highlight(id: try $0.uuid("id"), volumeId: try $0.text("volume_id"), documentId: try $0.text("document_id"),
+                              colorTag: try $0.text("color_tag"), selectedText: try $0.text("selected_text"),
+                              createdAt: try $0.optionalDate("created_at"))
+                },
+                summaries: try fields("summaries").map {
+                    ResearchDocumentAggregation.Summary(volumeId: try $0.text("volume_id"), documentId: try $0.text("document_id"),
+                                                        isHeadnoteDraft: try $0.bool("is_headnote_draft"))
+                },
+                visitDocumentKeys: try fields("visit_documents").map { try $0.text("document_key") })
         } catch let error as ResearchExportError {
             throw APIProblem(.internalServerError, code: "STORE_DAMAGED", detail: "Your research could not be read: \(error.description)")
         }
@@ -186,7 +256,7 @@ struct ResearchGroups {
         let volumeId: String
         let documentId: String
         /// The most recently changed note, or nil for none.
-        let latestNote: ResearchNoteExport?
+        let latestNote: ResearchSources.Note?
         let noteCount: Int
         var summaryCount: Int = 0
         var isInVisitPlan: Bool = false
@@ -194,7 +264,7 @@ struct ResearchGroups {
         let allTagIds: Set<UUID>
         let collectionIds: Set<UUID>
         /// Newest first.
-        let highlights: [DocumentHighlightExport]
+        let highlights: [ResearchSources.Highlight]
 
         /// The row's date: its newest annotation's, the later of its newest note's and its newest
         /// highlight's.
@@ -205,19 +275,6 @@ struct ResearchGroups {
 
     // MARK: The kit's
 
-    /// An entry's values, as the app's `Entry(of:)` hands them to the kit; a record with no kind is a
-    /// document, as the kit's `entryKind` reads one.
-    static func entry(_ entry: CollectionEntryExport) -> ResearchDocumentAggregation.Entry {
-        ResearchDocumentAggregation.Entry(kind: entry.kind ?? CollectionEntryKind.document.rawValue, volumeId: entry.volumeId,
-                                          documentId: entry.documentId)
-    }
-
-    /// A summary's values, as the app's `Summary(of:)` hands them to the kit.
-    static func summary(_ summary: GeneratedSummaryExport) -> ResearchDocumentAggregation.Summary {
-        ResearchDocumentAggregation.Summary(volumeId: summary.volumeId, documentId: summary.documentId,
-                                            isHeadnoteDraft: summary.isHeadnoteDraft ?? false)
-    }
-
     /// Every document carrying any annotation, across the six sources: the kit's
     /// `annotatedKeys(among:)` over the records' values, as the app's overload passes its models'.
     var allAnnotatedKeys: Set<String> {
@@ -226,15 +283,15 @@ struct ResearchGroups {
             tagAssignments: sources.tagAssignments.map {
                 ResearchDocumentAggregation.DocumentRef(volumeId: $0.volumeId, documentId: $0.documentId)
             },
-            collections: sources.collections.map { $0.entries.map(Self.entry) },
+            collections: sources.collections.map(\.entries),
             highlights: sources.highlights.map { ResearchDocumentAggregation.DocumentRef(volumeId: $0.volumeId, documentId: $0.documentId) },
-            summaries: sources.summaries.map(Self.summary),
+            summaries: sources.summaries,
             visitDocumentKeys: sources.visitDocumentKeys))
     }
 
     /// Summary counts by document key, drafts left out: the kit's `summaryCounts(among:)`.
     var summarizedDocs: [String: Int] {
-        ResearchDocumentAggregation.summaryCounts(among: sources.summaries.map(Self.summary))
+        ResearchDocumentAggregation.summaryCounts(among: sources.summaries)
     }
 
     // MARK: The app's view
@@ -259,7 +316,7 @@ struct ResearchGroups {
         var result: [String: Set<UUID>] = [:]
         for collection in sources.collections {
             for entry in collection.entries {
-                guard ResearchDocumentAggregation.countsAsAnnotation(Self.entry(entry).kind) else { continue }
+                guard ResearchDocumentAggregation.countsAsAnnotation(entry.kind) else { continue }
                 guard !entry.volumeId.isEmpty, !entry.documentId.isEmpty else { continue }
                 result["\(entry.volumeId)/\(entry.documentId)", default: []].insert(collection.id)
             }
@@ -269,11 +326,11 @@ struct ResearchGroups {
 
     /// The collections, but smart ones and those with no document, each with its distinct documents, by
     /// the name each row prints, then by id.
-    var sortedCollectionsWithCounts: [(collection: CollectionExport, count: Int)] {
+    var sortedCollectionsWithCounts: [(collection: ResearchSources.Collection, count: Int)] {
         sources.collections.compactMap { collection in
             // Exclude smart collections — their document list is dynamic, not curated entries.
             guard collection.savedSearchId == nil else { return nil }
-            let count = ResearchDocumentAggregation.distinctDocumentKeys(among: collection.entries.map(Self.entry)).count
+            let count = ResearchDocumentAggregation.distinctDocumentKeys(among: collection.entries).count
             guard count > 0 else { return nil }
             return (collection: collection, count: count)
         }
@@ -286,7 +343,7 @@ struct ResearchGroups {
 
     /// The tags on a document, each with its distinct documents (its notes' and its own), the most used
     /// first, then by name, then by id.
-    var sortedTagsWithCounts: [(tag: UserTagExport, count: Int)] {
+    var sortedTagsWithCounts: [(tag: ResearchSources.Tag, count: Int)] {
         let directlyTaggedDocs = directlyTaggedDocs
         return sources.tags.compactMap { tag in
             let fromNotes = Set(
@@ -325,7 +382,7 @@ struct ResearchGroups {
 
     /// A highlight's colour, as `DocumentHighlight.color` reads its tag: one this build does not know
     /// is yellow.
-    static func color(of highlight: DocumentHighlightExport) -> HighlightColor {
+    static func color(of highlight: ResearchSources.Highlight) -> HighlightColor {
         HighlightColor(rawValue: highlight.colorTag) ?? .yellow
     }
 
@@ -335,8 +392,8 @@ struct ResearchGroups {
     }
 
     /// Each document's highlights, in the store's order.
-    var highlightedDocs: [String: [DocumentHighlightExport]] {
-        var result: [String: [DocumentHighlightExport]] = [:]
+    var highlightedDocs: [String: [ResearchSources.Highlight]] {
+        var result: [String: [ResearchSources.Highlight]] = [:]
         for h in sources.highlights {
             let key = "\(h.volumeId)/\(h.documentId)"
             result[key, default: []].append(h)
@@ -373,7 +430,7 @@ struct ResearchGroups {
 
         // The store holds one copy of each note, one row for each user and id, as the app's
         // `ResearchNote.oneCopyEach` keeps one.
-        var grouped: [String: [ResearchNoteExport]] = [:]
+        var grouped: [String: [ResearchSources.Note]] = [:]
         for key in matchingKeys { grouped[key] = [] }
         for note in sources.notes {
             let key = "\(note.volumeId)/\(note.documentId)"
@@ -500,7 +557,7 @@ enum ResearchRoutes {
             if item == .updated { throw updateReviewNotOffered() }
             let groups = ResearchGroups(sources: try await ResearchSources.read(for: user.id, in: store))
             let entries = groups.documents(for: item)
-            let facts = await titleFacts(entries.map { DocumentKey(volumeId: $0.volumeId, documentId: $0.documentId) }, provider: provider)
+            let facts = await titleFacts(entries.map { (volumeId: $0.volumeId, documentId: $0.documentId) }, provider: provider)
             let items = entries.map { entry in
                 ResearchDocument(
                     volumeId: entry.volumeId, documentId: entry.documentId,
@@ -523,23 +580,12 @@ enum ResearchRoutes {
         }
     }
 
-    /// What the served index holds of each document a list names, for its title, as the app's
-    /// `CrossReferenceStore.documentTitleFacts(for:)` reads `document_cache`, an empty head or number
-    /// none: nothing while no index is served, or for a document it does not hold.
-    static func titleFacts(_ keys: [DocumentKey], provider: ServedIndexProvider) async -> [String: DocumentDisplayTitle.Facts] {
+    /// What the served index holds of each document a list names, for its title: the app's
+    /// `documentTitleFacts(for:)`, nothing while no index is served or for a document it does not hold.
+    static func titleFacts(_ keys: [(volumeId: String, documentId: String)], provider: ServedIndexProvider) async
+        -> [String: DocumentDisplayTitle.Facts] {
         guard !keys.isEmpty, let served = try? await provider.servedIfReady() else { return [:] }
-        var facts: [String: DocumentDisplayTitle.Facts] = [:]
-        for (volumeId, documents) in Dictionary(grouping: keys, by: \.volumeId) where served.indexedVolumeIds.contains(volumeId) {
-            let wanted = Set(documents.map(\.documentId))
-            guard let entries = try? await served.pipeline.documents(forVolume: volumeId) else { continue }
-            for entry in entries where wanted.contains(entry.documentId) {
-                facts["\(volumeId)/\(entry.documentId)"] = DocumentDisplayTitle.Facts(
-                    header: entry.header.isEmpty ? nil : entry.header,
-                    documentNumber: entry.documentNumber.flatMap { $0.isEmpty ? nil : $0 },
-                    isEditorialNote: entry.isEditorialNote)
-            }
-        }
-        return facts
+        return (try? await Blocking.run { try served.documentTitleFacts(for: keys) }) ?? [:]
     }
 
     /// Changed by an update's list, which reads the index's `reviewed_at`, a column a served index's
@@ -547,5 +593,52 @@ enum ResearchRoutes {
     static func updateReviewNotOffered() -> APIProblem {
         APIProblem(.conflict, code: "UPDATE_REVIEW_NOT_OFFERED",
                    detail: "Changed by an update lists the documents you annotated that an update changed, for a review of their new text, which this server does not offer yet.")
+    }
+}
+
+extension ServedIndex {
+    /// `CrossReferenceStore.documentTitleFacts(for:)`, app code: what a display title needs of each
+    /// document, one query for each volume's ids, 400 at a time, a head or a number that is empty none.
+    /// A key's presence says the index holds the document.
+    func documentTitleFacts(for keys: [(volumeId: String, documentId: String)]) throws -> [String: DocumentDisplayTitle.Facts] {
+        var result: [String: DocumentDisplayTitle.Facts] = [:]
+        for (volumeId, documentIds) in Self.documentChunks(keys) {
+            let sql = """
+                SELECT document_id, header, document_number, is_editorial_note
+                  FROM document_cache
+                 WHERE volume_id = ? AND document_id IN (\(Array(repeating: "?", count: documentIds.count).joined(separator: ", ")))
+                """
+            for row in try references.query(sql, [.text(volumeId)] + documentIds.map { .text($0) }) {
+                guard let doc = row[0].text else { continue }
+                let head = row[1].text.flatMap { $0.isEmpty ? nil : $0 }
+                let number = row[2].text.flatMap { $0.isEmpty ? nil : $0 }
+                result["\(volumeId)/\(doc)"] = DocumentDisplayTitle.Facts(header: head, documentNumber: number,
+                                                                          isEditorialNote: (row[3].integer ?? 0) != 0)
+            }
+        }
+        return result
+    }
+
+    /// How many document ids ride in one `IN (…)` list: the app's `documentChunkSize`.
+    static let documentChunkSize = 400
+
+    /// `CrossReferenceStore.documentChunks(_:)`, app code: the keys by volume, in the order each volume
+    /// first comes, each key once, its ids `documentChunkSize` at a time.
+    static func documentChunks(_ keys: [(volumeId: String, documentId: String)]) -> [(volumeId: String, documentIds: [String])] {
+        var byVolume: [String: [String]] = [:]
+        var order: [String] = []
+        var seen: Set<String> = []
+        for (vol, doc) in keys where seen.insert("\(vol)/\(doc)").inserted {
+            if byVolume[vol] == nil { order.append(vol) }
+            byVolume[vol, default: []].append(doc)
+        }
+        var out: [(volumeId: String, documentIds: [String])] = []
+        for volumeId in order {
+            let ids = byVolume[volumeId] ?? []
+            for start in stride(from: 0, to: ids.count, by: documentChunkSize) {
+                out.append((volumeId, Array(ids[start..<min(start + documentChunkSize, ids.count)])))
+            }
+        }
+        return out
     }
 }

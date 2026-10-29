@@ -3,7 +3,8 @@
 // table's rows, the order the store took them in, which the export reads as the order the app's
 // store fetches its records in. Of the prompts, the researcher's own only, and of a collection's
 // entries and a plan's documents and targets, those whose parent the store holds, as the app's export
-// carries them. And how many rows of each an export would carry, for the browser app's Contents.
+// carries them. And how many rows of each an export would carry, for the browser app's Contents; and
+// the same rows with a few of their columns, for the Research page (S19b).
 
 import Foundation
 
@@ -39,6 +40,10 @@ public protocol ResearchExportStore: Sendable {
     /// table's rows of the user's, an instance-wide table's every row. A name that is none of the
     /// 23 tables is passed over.
     func researchRows(for user: String, tables: Set<String>) throws -> ResearchRows
+    /// The same rows of each table `columns` names, with only the columns it names of each, of
+    /// those the table has, for a reader that needs a few of them: the Research page (S19b), which
+    /// would otherwise read every note's RTF and every summary's text to count them.
+    func researchRows(for user: String, columns: [String: Set<String>]) throws -> ResearchRows
     /// How many rows of each of `tables` `researchRows` would read, by table.
     func researchCounts(for user: String, tables: Set<String>) throws -> [String: Int]
 }
@@ -64,13 +69,24 @@ public enum ResearchExportRows {
 
 extension RelationalUserStore: ResearchExportStore {
     public func researchRows(for user: String, tables: Set<String>) throws -> ResearchRows {
+        try exportRows(for: user, UserStoreSchema.tables.filter { tables.contains($0.name) }.map { ($0, $0.columns.map(\.name)) })
+    }
+
+    public func researchRows(for user: String, columns: [String: Set<String>]) throws -> ResearchRows {
+        try exportRows(for: user, UserStoreSchema.tables.compactMap { table in
+            columns[table.name].map { named in (table, table.columns.map(\.name).filter(named.contains)) }
+        })
+    }
+
+    /// The rows an export of `user`'s carries of each table, with the columns given for it, in its
+    /// own order, read at one moment.
+    private func exportRows(for user: String, _ selection: [(table: UserStoreSchema.Table, columns: [String])]) throws -> ResearchRows {
         try reading { db in
             var rows: [String: [ExportRow]] = [:]
-            for table in UserStoreSchema.tables where tables.contains(table.name) {
-                let columns = table.columns.map(\.name)
+            for (table, columns) in selection {
                 let (filter, bindings) = Self.exportFilter(table, user: user)
                 rows[table.name] = try db.query(
-                    "SELECT rowid, \(columns.joined(separator: ", ")) FROM \(table.name)\(filter) ORDER BY rowid", bindings)
+                    "SELECT \((["rowid"] + columns).joined(separator: ", ")) FROM \(table.name)\(filter) ORDER BY rowid", bindings)
                     .map { row in
                         ExportRow(values: Dictionary(uniqueKeysWithValues: zip(columns, row.dropFirst())),
                                   position: row[0].integer ?? 0)

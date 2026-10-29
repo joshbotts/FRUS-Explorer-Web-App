@@ -224,6 +224,80 @@ import Testing
             "var color: Color { Color(rawValue: colorTag) ?? .yellow }",
         ], file: "DocumentHighlight.swift")
         #expect(ResearchRoutes.shownHighlights == 3)
+        // And the server's own copy of each line, so that neither side moves alone.
+        NoteViewParityTests.expect(try Self.server("Sources/FRUSLightAPI/Research.swift"), holds: [
+            #"Set(sources.notes.map { "\($0.volumeId)/\($0.documentId)" }).count"#,
+            #"let key = "\(a.volumeId)/\(a.documentId)" result[key, default: []].append(a.tagId)"#,
+            "guard ResearchDocumentAggregation.countsAsAnnotation(entry.kind) else { continue }",
+            "guard !entry.volumeId.isEmpty, !entry.documentId.isEmpty else { continue }",
+            "guard collection.savedSearchId == nil else { return nil }",
+            "let count = ResearchDocumentAggregation.distinctDocumentKeys(among: collection.entries).count",
+            "guard count > 0 else { return nil }",
+            "let names = CollectionEditorNaming.listOrder($0.collection.name, $1.collection.name)",
+            "return names != .orderedSame ? names == .orderedAscending : $0.collection.id.uuidString < $1.collection.id.uuidString",
+            ".filter { $0.userTagIds.contains(tag.id) }", #"directlyTaggedDocs .filter { $0.value.contains(tag.id) } .map(\.key)"#,
+            "let count = fromNotes.union(fromDirect).count", "if $0.count != $1.count { return $0.count > $1.count }",
+            "let names = $0.tag.name.localizedCaseInsensitiveCompare($1.tag.name)",
+            "return names != .orderedSame ? names == .orderedAscending : $0.tag.id.uuidString < $1.tag.id.uuidString",
+            "HighlightColor.allCases.compactMap { color in", ".filter { Self.color(of: $0) == color }",
+            "return docs.isEmpty ? nil : (color: color, count: docs.count)", "HighlightColor(rawValue: highlight.colorTag) ?? .yellow",
+            "ResearchDocumentAggregation.summaryCounts(among: sources.summaries)",
+            #"Set(sources.visitDocumentKeys.filter { !$0.isEmpty })"#,
+            "case .allAnnotated: matchingKeys = allAnnotatedKeys",
+            #"case .hasNotes: matchingKeys = Set(sources.notes.map { "\($0.volumeId)/\($0.documentId)" })"#,
+            #"let fromDirect = Set(directlyTaggedDocs.filter { $0.value.contains(id) }.map(\.key))"#, "matchingKeys = fromNotes.union(fromDirect)",
+            #"matchingKeys = Set(collectionMemberships.filter { $0.value.contains(collId) }.map(\.key))"#,
+            "for key in matchingKeys { grouped[key] = [] }",
+            #"let parts = key.split(separator: "/", maxSplits: 1).map(String.init)"#, "guard parts.count == 2 else { return nil }",
+            "let l = $0.lastModified ?? .distantPast, r = $1.lastModified ?? .distantPast",
+            "return l != r ? l > r : $0.id.uuidString < $1.id.uuidString",
+            "let directTagIds = Set(directlyTaggedDocs[key] ?? [])", "let noteTagIds = Set(notes.flatMap { $0.userTagIds })",
+            "let colIds = collectionMemberships[key] ?? []", "let l = $0.createdAt ?? .distantPast, r = $1.createdAt ?? .distantPast",
+            "latestNote: sortedNotes.first, noteCount: notes.count, summaryCount: summarizedDocs[key] ?? 0, isInVisitPlan: visitPlanDocs.contains(key),",
+            "allTagIds: noteTagIds.union(directTagIds), collectionIds: colIds, highlights: docHighlights",
+            "let lhsDate = [lhs.latestNote?.lastModified, lhs.highlights.first?.createdAt].compactMap { $0 }.max() ?? .distantPast",
+            "if lhsDate != rhsDate { return lhsDate > rhsDate }", "return lhs.id < rhs.id",
+            "[latestNote?.lastModified, highlights.first?.createdAt].compactMap { $0 }.max()",
+            "highlights: entry.highlights.prefix(shownHighlights).map {",
+            "latestNote: entry.latestNote.flatMap { $0.bodyText.isEmpty ? nil : $0.bodyText },",
+            "let names = $0.name.localizedCaseInsensitiveCompare($1.name)",
+            "return names != .orderedSame ? names == .orderedAscending : $0.id.uuidString < $1.id.uuidString",
+            "let names = CollectionEditorNaming.listOrder($0.name, $1.name)",
+            #"let name = sources.collections.first(where: { $0.id == id })?.name ?? """#, "return CollectionEditorNaming.listName(savedName: name)",
+        ], file: "Research.swift")
+    }
+
+    /// A row's title, as the app's `CrossReferenceStore.documentTitleFacts(for:)` reads it from the
+    /// index: its query, a head or a number that is empty none, and its ids by volume, each once, 400
+    /// to a query.
+    @Test func aRowsTitleIsTheAppsQuery() throws {
+        let store = try Self.app("CrossReference/CrossReferenceStore.swift")
+        let server = try Self.server("Sources/FRUSLightAPI/Research.swift")
+        let shared = [
+            "SELECT document_id, header, document_number, is_editorial_note FROM document_cache WHERE volume_id = ? AND document_id IN (",
+            #"for (vol, doc) in keys where seen.insert("\(vol)/\(doc)").inserted {"#, "if byVolume[vol] == nil { order.append(vol) }",
+            "for start in stride(from: 0, to: ids.count, by: documentChunkSize) {",
+            "out.append((volumeId, Array(ids[start..<min(start + documentChunkSize, ids.count)])))",
+        ]
+        NoteViewParityTests.expect(store, holds: shared + [
+            "let head = columnString(stmt, 1).flatMap { $0.isEmpty ? nil : $0 }",
+            "let number = columnString(stmt, 2).flatMap { $0.isEmpty ? nil : $0 }",
+            #"result["\(volumeId)/\(doc)"] = DocumentTitleFacts("#, "isEditorialNote: sqlite3_column_int(stmt, 3) != 0)",
+            "private static let documentChunkSize = 400",
+        ], file: "CrossReferenceStore.swift")
+        NoteViewParityTests.expect(server, holds: shared + [
+            "let head = row[1].text.flatMap { $0.isEmpty ? nil : $0 }", "let number = row[2].text.flatMap { $0.isEmpty ? nil : $0 }",
+            #"result["\(volumeId)/\(doc)"] = DocumentDisplayTitle.Facts("#, "isEditorialNote: (row[3].integer ?? 0) != 0)",
+        ], file: "Research.swift")
+        #expect(ServedIndex.documentChunkSize == 400)
+        // The partition: by volume in the order each first comes, each key once, 400 ids at a time.
+        let keys = (0..<401).map { (volumeId: "v1", documentId: "d\($0)") }
+            + [(volumeId: "v2", documentId: "d1"), (volumeId: "v1", documentId: "d0"), (volumeId: "v2", documentId: "d1")]
+        let chunks = ServedIndex.documentChunks(keys)
+        #expect(chunks.map(\.volumeId) == ["v1", "v1", "v2"])
+        #expect(chunks.map(\.documentIds.count) == [400, 1, 1])
+        #expect(chunks[1].documentIds == ["d400"] && chunks[2].documentIds == ["d1"])
+        #expect(ServedIndex.documentChunks([]).isEmpty)
     }
 
     /// The lines the browser app mirrors: a row's highlights and the line for the rest, its footer,
