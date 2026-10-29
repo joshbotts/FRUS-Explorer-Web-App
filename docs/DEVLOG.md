@@ -2,6 +2,58 @@
 
 One entry per session, newest first.
 
+## Session 18d, follow-up: Add Documents' Citations and Tags, upstream
+
+28–29 October 2026 · branch `claude/heuristic-antonelli-1c5617` · [#87](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/87) · upstream `32e295e5`, unchanged; [FRUS-Explorer#1814](https://github.com/joshbotts/FRUS-Explorer/pull/1814), open
+
+S18d ([#86](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/86), merged as `a17b339` after this entry was first pushed) gives each user the Mac's collections and their editor, and leaves two of the four tabs of Add Documents out, since the kit code that makes them is internal at `32e295e5`: Citations, which resolves each line of a paste to a document, and Tags, which gathers the documents a tag reaches. S18d's session asked for the pull request that makes that code public: `claude/collection-add-documents-citations-and-tags-public`, cut from `v2` at `76b82e70`, labelled `Mac`, its body saying "Mac verification requested", and not merged. `76b82e70` is FRUS-Explorer#1813, S17f's follow-up, which the owner merged at 02:57 UTC on 29 October, with its records, #85, a few seconds later. Under rule 4 the pull request changes shared files, and this repository changes only its records.
+
+**What the two tabs read, found before anything changed:**
+- **Citations** (`CollectionAddDocumentsSheet.resolveCitations()`) builds `CollectionCitationLineResolver(parse:match:)` over `CitationParser.parse` and the matching engine's `match(input:)`, resolves the paste with `resolve(text:)`, and lists each `LineResult` by its `Outcome`: resolved, ambiguous with a note, or unresolved with a reason. With no engine it makes a row for each of `lines(from:)`. The resolver has been the kit's since part 2, and the engine, the parser and every type in its signatures are public; the resolver and its two nested types were internal.
+- **Tags** (`tagRefCount(_:)`, `openTag(_:)`) counts and gathers each tag's documents through the app's `CollectionDocumentDiscovery.tagDocumentRefs`, which maps the notes and assignments to values and asks the kit's `CollectionGeneratedBlocks.tagDocumentRefs(tagId:noteTags:assignments:)`, the union the Thematic Index reads too, internal since S18b moved it into the kit.
+- **Nothing else either tab calls is out of reach:** the heads on its rows are the index's `document_cache.header`, which the app reads through its `CrossReferenceStore` and S18d's routes through `documentFacts`; a volume's title is the catalogue's; the rest is the view's, mirrored as S18d mirrors the editor.
+
+**FRUS-Explorer#1814, in two commits, a test suite and a records commit:**
+- `CollectionCitationLineResolver` public: the type, its initialiser over the two stages, `lines(from:)`, `resolve(text:)`, `resolve(line:)`, `Outcome`, and `LineResult` with its fields and its initialiser. The two initialisers are spelled out as the compiler made them, so no call site changes. `unsearchableLinkDocument(_:volumeOnly:)`, a step of `resolve(line:)`, stays internal.
+- `CollectionGeneratedBlocks.tagDocumentRefs(tagId:noteTags:assignments:)` public, its doc warning that it takes `(volumeId, documentId)` and answers `(documentId, volumeId)`.
+- `CollectionAddDocumentsHostTests`, a kit suite of six tests, calls both as the server will: a paste's lines, whatever breaks them; the rows the sheet lists with no matcher; the resolver over the catalogue alone, as the server's matcher is while it serves no index, and over an index the pipeline builds with the held volumes as the downloaded ones, as the served index's matcher is, each bucket with its words; and the tag union's order over values. `FRUSCoreKitTests` goes from 1,307 tests to 1,313.
+
+**How it was checked,** each heavy job under the app's lock, from a clone at a real path, beside `v2` at `76b82e70` built and run the same way the same night, Xcode 27.1, clean and unsigned, on an iPhone Air simulator (iOS 27.0):
+- **The full iOS unit run:** 7,768 tests in 931 suites against `v2`'s 7,762 in 930, both failing only the 8 Keychain tests an unsigned build fails, with the same 6 known issues and the same 17 tests and 2 suites skipped; the new suite passed. Both app builds had `v2`'s five and seven warning lines.
+- **`swift test`:** 3,206 tests in 391 suites against 3,200 in 390, all passed, none skipped; `FRUSCoreKitTests` 1,313 in 179 against 1,307 in 178. The first two commits each built the kit with no warning.
+- **The Mac app's symbols:** every one of `v2`'s 251,932 normalized names, and two more, both non-external: `outlined destroy of CollectionCitationLineResolver` and `… .Outcome`, which the two spelled-out initialisers call, as their disassembly shows. The initialisers keep `v2`'s names.
+- **On `v2`'s code,** the suite passed, 6 tests of 6, in Xcode and under `swift test`, as an access change leaves it: the kit's suites import it `@testable`.
+- **Linux,** in a scratch worktree of this repository's `main` at `63515e3` (the pin `32e295e5`), with `v2` and then the branch copied over the submodule, each built clean, with PostgreSQL as CI's swift job has it:
+  - at `v2`, 2,588 tests, all passed but the parity suites' 21 issues, all the golden files' staleness, since #1813 changed the kit's and the app's folders, which their source digest hashes;
+  - at the branch, 2,594: `FRUSCoreKitTests` 1,313, the new suite passing, and every other target as at `v2`, the same 21 issues and no other;
+  - skipped at both, the one named skip, FTS5StoreTests' `backupExclusion()`.
+- **Public access:** a scratch file in `FRUSLightAPI`, never committed, imports FRUSCoreKit without `@testable` and uses every name the pull request makes public, as Add Documents will. It built over the branch with no warning. Over `v2` it did not: "cannot find 'CollectionCitationLineResolver' in scope" and "'tagDocumentRefs' is inaccessible due to 'internal' protection level".
+- **The records commit** (`e7b676ce`, `CLAUDE.md` and the plan's session entry): the two audits that read the repository's text passed again at it, 84 tests.
+
+**What the pin move past it brings:**
+- **One move to `v2`'s head takes #1813 with it,** by PLAN's first-move-takes-it rule; `s17f-followup-project-home-kit.md` in the shared notes says what #1813's part needs.
+- **The golden files need `scripts/make-golden`,** since their source digest hashes `FRUSCoreKit/` and `FRUSExplorer/` whole. Nothing on §5's indexing path changes here, so the seventh three-volume export may be used again, by the owner's choice.
+- **No parity test needs pointing anywhere:** over `main` with the branch copied in, every parity test that reads the app's source passed, and none reads either kit file the pull request changes. S18d's `CollectionParityTests` (in #86) reads `CollectionAddDocumentsSheet.swift`, which the pull request leaves alone.
+- **`Package.swift` and the CI's allow-list need no change:** no new kit folder, and the suite skips nothing.
+
+**What S18d's follow-up does with it,** after that move (the shared notes have the detail):
+- a Citations route: the paste resolved with the kit's resolver over the matcher Citation Lookup's routes already pick (the served index's, or the catalogue's alone), bounded as Batch is, with each row's head and volume title; and a Tags route: the user's tags in `tags(of:)`'s order, each with its count, and a tag's documents, the kit's union over the user's notes in `notes(for:)`'s order and their assignments;
+- in `web/src/collections/AddDocuments.tsx`, the two tabs beside Search and Browse, with the sheet's words, its counts of resolved lines and of lines to review, and its choosing at once of what resolved, as S18d mirrors the rest, held to the app's source.
+- **One thing a host gets that SPEC should say:** a link into a catalogued volume the served index does not hold resolves by its id, as the app adds a link into a volume it has not downloaded, so its entry names a document the server cannot open until an export holds it. The suite holds that.
+
+**Delivered here**
+
+- `COORDINATION.md`: the pull request in §2, and in §5's list of app changes the web edition needs, with #1813's merge in both; and, once `main` with #86 was merged in, S18d's §1 sentence pointing at it.
+- This log.
+
+**Notes**
+
+- **A cold review** of the upstream diff, with none of the session's conclusions, found no change of behaviour and nothing the change breaks. It found that the suite's doc overstated its gap, since the kit's `CitationLookupIndexedTests` already runs the resolver's links over the real engine on Linux; three loose assertions; a doc claiming the sheet calls `resolve(line:)`; `CLAUDE.md`'s missing sentence, with S18b's sentence there implying the union was already public; and the union's crossed tuple order. The fixes were folded into the commits before the branch's own check, which every number above is from.
+- **Filed in the pull request:** a citation that names a subseries and a document but no volume resolves to the first volume of the subseries that holds the number, chosen at once, since the engine stops at its first hit that meets every cited field and the resolver demotes only a line that names neither (found by a probe over the suite's index; Citation Lookup labels such a match "Exact match" too); the union's crossed tuples; and that a paste is resolved line by line with no bound, which the server sets.
+- **Scratch:** under `~/Library/Caches/frus-collection-add-kit`: the clone and its `v2`, `commits` and `probe` worktrees, the logs and scripts, the drafts, and a scratch worktree of this repository (`web-linux`) with the public-access file.
+
+**Next:** the owner's Mac check of FRUS-Explorer#1814 and its merge; then a pin move of its own to `v2`'s head, which takes #1813 too; then S18d's follow-up, which adds Add Documents' Citations and Tags tabs to `web/src/collections/AddDocuments.tsx` over new server routes. On the plan's track, S18e.
+
 ## Session 18d: collections and their editor
 
 28 October 2026 · branch `claude/inspiring-volhard-81ec2e` · [#86](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/86) · upstream `32e295e5`, unchanged
