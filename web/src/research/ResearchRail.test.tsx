@@ -474,6 +474,30 @@ describe('the Research rail’s Highlights', () => {
     ]);
   });
 
+  it('passes over the removed row’s own Remove… when a frame comes before the rows are drawn again', async () => {
+    window.localStorage.setItem('frus.research.highlights', 'open');
+    let items = [highlight({ id: 'A', startOffset: 12, selectedText: 'Allow me' }), highlight({ id: 'B', startOffset: 30, selectedText: 'to say' })];
+    reader({
+      [highlightsPath]: () => documentHighlights(items),
+      'DELETE /api/v1/me/highlights/A': () => {
+        items = items.filter((item) => item.id !== 'A');
+        return null;
+      },
+    });
+    renderAt('/doc/frus1961-63v06/d1?rail=research');
+    await screen.findByText('Allow me');
+    await userEvent.click(removeIn('Allow me'));
+    const question = await screen.findByRole('alertdialog', { name: 'Remove Highlight' });
+    // The next frame before React draws the rows again, as a browser's can come.
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      queueMicrotask(() => callback(0));
+      return 0;
+    });
+    await userEvent.click(within(question).getByRole('button', { name: 'Remove' }));
+    await waitFor(() => expect(screen.queryByText('Allow me')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(removeIn('to say')));
+  });
+
   it('cancels the question by Cancel or by Escape, which leaves the rail open, and focus goes back to the Remove… that asked', async () => {
     window.localStorage.setItem('frus.research.highlights', 'open');
     const fetch = reader({
