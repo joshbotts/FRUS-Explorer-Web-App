@@ -1291,6 +1291,9 @@ export const copy = {
     proseLoading: 'Loading the editor…',
     proseFailed: 'The formatting editor could not be loaded. Reload the page to edit this note block.',
     proseKept: 'This note block keeps formatting the web cannot show. Editing it here keeps its text and drops that formatting.',
+    /** A note block the formatting editor cannot show as its text reads, the web's own, as the note editor says of a note. */
+    proseUnreadable:
+      'This note block could not be shown with its formatting, so it is open as plain text. Its formatting is kept until its text is changed here.',
     /** The five apparatus blocks (`CollectionGeneratedBlockType.displayName`). */
     blocks: {
       bibliography: 'Bibliography',
@@ -1369,6 +1372,8 @@ export const copy = {
     tocStyles: { citation: 'Citation', headerAndDateline: 'Header & Dateline' } as Record<string, string>,
     introductionLoading: 'Loading the editor…',
     introductionKept: 'The introduction keeps formatting the web cannot show. Editing it here keeps its text and drops that formatting.',
+    introductionUnreadable:
+      'The introduction could not be shown with its formatting, so it is open as plain text. Its formatting is kept until its text is changed here.',
   },
   /**
    * The entry inspector, Document Details and Section Details, in the app's words: its identity and title

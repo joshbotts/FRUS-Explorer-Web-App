@@ -3,7 +3,7 @@
 // document the collection holds shows In collection and can be chosen again, as the app's can. Its
 // Citations and Tags tabs wait for the kit's line resolver and tag union, internal to it at the pin.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { type ReactNode, useId, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { addDocuments, type CollectionDetail, type DocumentRef } from '../api/collections';
 import { errorMessage } from '../api/client';
 import { readingOrderQuery, searchQuery, volumesQuery } from '../api/endpoints';
@@ -155,13 +155,29 @@ function BrowseTab({ row }: { row: (pick: Chosen, extra?: string) => ReactNode }
   const volumes = useQuery(volumesQuery);
   const [filter, setFilter] = useState('');
   const [volumeId, setVolumeId] = useState<string | null>(null);
+  const back = useRef<HTMLButtonElement>(null);
+  const volumeList = useRef<HTMLUListElement>(null);
+  // The volume Volumes came back from, whose button takes focus again.
+  const cameFrom = useRef<string | null>(null);
+  // Focus follows the view a press replaced: into a volume, its Volumes; back, the volume left.
+  useEffect(() => {
+    if (volumeId) back.current?.focus();
+    else if (cameFrom.current) volumeList.current?.querySelector<HTMLElement>(`button[data-volume="${CSS.escape(cameFrom.current)}"]`)?.focus();
+  }, [volumeId]);
   const words = copy.addDocuments;
   const volume = volumes.data?.items.find((item) => item.volumeId === volumeId);
   const documents = useQuery({ ...readingOrderQuery(volumeId ?? ''), enabled: volumeId !== null && volume?.indexed === true });
   if (volumeId && volume) {
     return (
       <div className="tab-panel">
-        <button type="button" onClick={() => setVolumeId(null)}>
+        <button
+          ref={back}
+          type="button"
+          onClick={() => {
+            cameFrom.current = volumeId;
+            setVolumeId(null);
+          }}
+        >
           {words.back}
         </button>
         <h3>{volume.title}</h3>
@@ -197,10 +213,10 @@ function BrowseTab({ row }: { row: (pick: Chosen, extra?: string) => ReactNode }
       ) : !volumes.data ? (
         <p role="status">{words.loading}</p>
       ) : (
-        <ul className="pick-volumes" aria-label={words.browse}>
+        <ul ref={volumeList} className="pick-volumes" aria-label={words.browse}>
           {listed.map((item) => (
             <li key={item.volumeId}>
-              <button type="button" onClick={() => setVolumeId(item.volumeId)}>
+              <button type="button" data-volume={item.volumeId} onClick={() => setVolumeId(item.volumeId)}>
                 {item.title}
               </button>
               <span className="meta"> {item.volumeId}</span>

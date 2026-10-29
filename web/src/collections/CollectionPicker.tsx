@@ -56,10 +56,13 @@ export function CollectionPicker({
   const shown = search === '' ? listed : listed.filter((item) => listNameMatches(item.listName, search));
   const closing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(closing.current), []);
+  // Set at the press, as the app sets its added collection at once, so a second press adds nothing.
+  const choosing = useRef(false);
 
   async function choose(id: string) {
     // One add to a presentation: the picker closes a moment after it.
-    if (added) return;
+    if (choosing.current) return;
+    choosing.current = true;
     setFailure(null);
     try {
       let pause = addedPause;
@@ -68,6 +71,7 @@ export function CollectionPicker({
       setAdded(id);
       closing.current = setTimeout(() => closeAtOnce(onClose), pause);
     } catch (error) {
+      choosing.current = false;
       setFailure(errorMessage(error));
     }
   }

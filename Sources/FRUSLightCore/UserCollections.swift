@@ -68,6 +68,12 @@ public protocol CollectionStore: Sendable {
     /// The user's collections that hold the document as one of their documents, a `document` entry, as
     /// the Research rail's Collections section reads them (`membershipPredicate`), in the store's order.
     func collections(holding volumeId: String, _ documentId: String, of user: String) throws -> [ExportRow]
+    /// How many notes the user has on each document, by `volumeId/documentId`, for a document row's
+    /// chip, counted without reading the notes.
+    func noteCounts(of user: String) throws -> [String: Int]
+    /// The documents, by `volumeId/documentId`, the user has a summary of that holds text and is no
+    /// headnote draft: where a collection can offer summaries, read without the summaries' text.
+    func summarizedDocuments(of user: String) throws -> Set<String>
 }
 
 extension RelationalUserStore: CollectionStore {
@@ -171,6 +177,31 @@ extension RelationalUserStore: CollectionStore {
                 user_id = ? AND upper(id) IN (SELECT upper(collection_id) FROM collection_entries
                     WHERE user_id = ? AND volume_id = ? AND document_id = ? AND kind = 'document')
                 """, [.text(user), .text(user), .text(volumeId), .text(documentId)], in: db)
+        }
+    }
+
+    public func noteCounts(of user: String) throws -> [String: Int] {
+        try reading { db in
+            var counts: [String: Int] = [:]
+            for row in try db.query("SELECT volume_id, document_id, count(*) FROM notes WHERE user_id = ? GROUP BY volume_id, document_id",
+                                    [.text(user)]) {
+                guard row.count == 3, let volume = row[0].text, let document = row[1].text else { continue }
+                counts["\(volume)/\(document)"] = Int(row[2].integer ?? 0)
+            }
+            return counts
+        }
+    }
+
+    public func summarizedDocuments(of user: String) throws -> Set<String> {
+        try reading { db in
+            let rows = try db.query("""
+                SELECT DISTINCT volume_id, document_id FROM summaries
+                WHERE user_id = ? AND is_headnote_draft <> 1 AND response_text <> ''
+                """, [.text(user)])
+            return Set(rows.compactMap { row in
+                guard row.count == 2, let volume = row[0].text, let document = row[1].text else { return nil }
+                return "\(volume)/\(document)"
+            })
         }
     }
 

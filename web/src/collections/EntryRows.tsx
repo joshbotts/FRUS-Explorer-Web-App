@@ -6,11 +6,13 @@
 // Down among them, and the remove the app gives by a swipe or a trash button.
 import { useNavigate } from '@tanstack/react-router';
 import { Component, lazy, type ReactNode, Suspense, useEffect, useId, useRef, useState } from 'react';
+import { errorMessage } from '../api/client';
 import type { CollectionDetail, CollectionEntry, EntryChanges } from '../api/collections';
 import type { NoteRun } from '../api/types';
 import { copy } from '../copy';
 import { runsText } from '../editor/runs';
 import { MenuButton, type MenuEntry } from '../shell/MenuButton';
+import { ChosenSelect } from './chosen';
 import { bodyDepthOptions, entryChips, type EntryChip } from './collectionRules';
 import { useSaver } from './useSaver';
 
@@ -149,6 +151,7 @@ export function HeadingRow({
   const bodyId = useId();
   const [text, setText] = useState(entry.text ?? '');
   const [focused, setFocused] = useState(false);
+  const [bodyFailure, setBodyFailure] = useState<string | null>(null);
   const saver = useSaver((value: string) => actions.onChange({ text: value }));
   // The title the server holds, while the field is not being typed in.
   if (!focused && !saver.pending && (entry.text ?? '') !== text) setText(entry.text ?? '');
@@ -214,10 +217,15 @@ export function HeadingRow({
       </div>
       <div className="section-body">
         <label htmlFor={bodyId}>{copy.collectionEditor.sectionBody}</label>
-        <select
+        <ChosenSelect
           id={bodyId}
           value={entry.bodyDepthOverride ?? ''}
-          onChange={(event) => void actions.onChange({ bodyDepthOverride: event.target.value === '' ? null : event.target.value })}
+          onChoose={(chosen) => {
+            setBodyFailure(null);
+            actions
+              .onChange({ bodyDepthOverride: chosen === '' ? null : chosen })
+              .catch((error: unknown) => setBodyFailure(errorMessage(error)));
+          }}
         >
           <option value="">{copy.collectionEditor.sectionBodyDefault}</option>
           {bodyDepthOptions(collection.bodyDepths, entry.bodyDepthOverride).map((depth) => (
@@ -225,11 +233,11 @@ export function HeadingRow({
               {copy.collectionSettings.bodyDepths[depth] ?? depth}
             </option>
           ))}
-        </select>
+        </ChosenSelect>
       </div>
-      {saver.failure && (
+      {(saver.failure ?? bodyFailure) && (
         <p className="error" role="alert">
-          {saver.failure}
+          {saver.failure ?? bodyFailure}
         </p>
       )}
     </div>
@@ -251,6 +259,9 @@ class EditorBoundary extends Component<{ children: ReactNode }, { failed: boolea
 
 /** A note block's row (`CollectionProseRow`): its text at rest, at most six lines, and its editor in place. */
 export function ProseRow({ entry, actions, autoFocus }: { entry: CollectionEntry; actions: RowActions; autoFocus: boolean }) {
+  // A block the formatting editor cannot show as its text reads is edited plain, as a note is.
+  const [plain, setPlain] = useState<string | null>(null);
+  const plainField = useRef<HTMLTextAreaElement>(null);
   const [editing, setEditing] = useState(autoFocus);
   // A note block just added opens its editor, as the app's opens in place.
   const [asked, setAsked] = useState(autoFocus);
@@ -260,37 +271,64 @@ export function ProseRow({ entry, actions, autoFocus }: { entry: CollectionEntry
   }
   const editorId = useId();
   const editButton = useRef<HTMLButtonElement>(null);
-  const saver = useSaver((runs: NoteRun[]) => actions.onChange({ text: runsText(runs), runs }));
+  const saver = useSaver((body: { text: string; runs: NoteRun[] | null }) => actions.onChange(body));
   const text = entry.text ?? '';
+  const isPlain = plain !== null;
+  useEffect(() => {
+    if (isPlain) plainField.current?.focus();
+  }, [isPlain]);
   const label = text.trim() === '' ? copy.collectionEditor.proseEmpty : text;
   return (
     <div className="entry prose-entry">
       {editing ? (
         <div className="prose-editor">
-          {entry.formattingKept && <p className="note">{copy.collectionEditor.proseKept}</p>}
-          <EditorBoundary>
-            <Suspense fallback={<p role="status">{copy.collectionEditor.proseLoading}</p>}>
-              <RichTextEditor
+          {plain !== null ? (
+            <>
+              <p className="note">{copy.collectionEditor.proseUnreadable}</p>
+              <textarea
+                ref={plainField}
                 id={editorId}
-                label={copy.collectionEditor.proseLabel}
-                runs={entry.runs ?? null}
-                text={text}
-                autoFocus
-                onChange={(runs) => saver.change(runs)}
-                onDiscard={() => {
-                  saver.flush();
-                  setEditing(false);
-                  requestAnimationFrame(() => editButton.current?.focus());
+                className="note-body plain"
+                aria-label={copy.collectionEditor.proseLabel}
+                value={plain}
+                rows={6}
+                // Typed plain, the formatting goes, as the note editor's plain field drops it.
+                onChange={(event) => {
+                  const value = event.target.value.replace(/\0/g, ' ');
+                  setPlain(value);
+                  saver.change({ text: value, runs: null });
                 }}
-                onUnreadable={() => {}}
               />
-            </Suspense>
-          </EditorBoundary>
+            </>
+          ) : (
+            <>
+              {entry.formattingKept && <p className="note">{copy.collectionEditor.proseKept}</p>}
+              <EditorBoundary>
+                <Suspense fallback={<p role="status">{copy.collectionEditor.proseLoading}</p>}>
+                  <RichTextEditor
+                    id={editorId}
+                    label={copy.collectionEditor.proseLabel}
+                    runs={entry.runs ?? null}
+                    text={text}
+                    autoFocus
+                    onChange={(runs) => saver.change({ text: runsText(runs), runs })}
+                    onDiscard={() => {
+                      saver.flush();
+                      setEditing(false);
+                      requestAnimationFrame(() => editButton.current?.focus());
+                    }}
+                    onUnreadable={() => setPlain(text)}
+                  />
+                </Suspense>
+              </EditorBoundary>
+            </>
+          )}
           <button
             type="button"
             onClick={() => {
               saver.flush();
               setEditing(false);
+              setPlain(null);
               requestAnimationFrame(() => editButton.current?.focus());
             }}
           >

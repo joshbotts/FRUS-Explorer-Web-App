@@ -458,6 +458,88 @@ import Testing
         }
     }
 
+    /// What the server's own code adds around the app's rules: a text a collection or an entry keeps is
+    /// refused with U+0000, where SQLite's text ends, or past a note's limit; null clears a note, a
+    /// subtitle, an author line or a title override, and is refused for a field that cannot be none;
+    /// Summary only, set field by field, is refused where Briefing packet's card is, and a depth held
+    /// stands; an entry a newer build wrote does not move; an add after the highest position an edited
+    /// import can leave renumbers the entries first, where the app's arithmetic would trap; and a
+    /// duplicate leaves out a draft the server cannot read rather than share it.
+    @Test func theServerRefusesWhatItCannotKeepAndAddsPastAnyPosition() async throws {
+        let fixture = try await UserDataFixture()
+        defer { withExtendedLifetime(fixture) {} }
+        try await fixture.app.test(.router) { client in
+            let owner = Browser(client: client)
+            let made = try await Self.made(owner, "Edges")
+            let path = "\(Self.base)/\(made.id)"
+            let d1 = try #require(try await Self.edit(owner, "\(path)/documents", try Self.documents(["d1"])).entryIds.first)
+            let heading = try #require(try await Self.edit(owner, "\(path)/blocks", #"{"kind": "heading"}"#).entryIds.first)
+
+            // U+0000, and a text past a note's limit.
+            let nul = "Intro" + String(decoding: [0], as: UTF8.self) + "duction"
+            let long = String(repeating: "a", count: UserDataServices.noteTextLimit + 1)
+            for (method, target, body): (HTTPRequest.Method, String, String) in [
+                (.post, Self.base, try Self.json(["name": nul])), (.patch, path, try Self.json(["name": nul])),
+                (.patch, path, try Self.json(["subtitle": nul])), (.patch, path, try Self.json(["authorLine": long])),
+                (.patch, "\(path)/entries/\(heading)", try Self.json(["text": nul])),
+                (.patch, "\(path)/entries/\(heading)", try Self.json(["text": long])),
+                (.patch, "\(path)/entries/\(d1)", try Self.json(["titleOverride": nul])),
+            ] {
+                let refused = try await owner.send(method, target, body)
+                #expect(refused.status == .badRequest && problemCode(refused) == "INVALID_FIELD", "\(target) \(body.prefix(40))")
+            }
+
+            // Null clears what can be none, and is refused for what cannot.
+            _ = try await Self.detail(owner, .patch, path, #"{"subtitle": "A reader", "note": "Kept", "authorLine": "J. Doe"}"#)
+            let cleared = try await Self.detail(owner, .patch, path, #"{"subtitle": null, "note": null, "authorLine": null}"#)
+            #expect(cleared.subtitle == nil && cleared.note == nil && cleared.authorLine == nil)
+            _ = try await Self.detail(owner, .patch, "\(path)/entries/\(d1)", #"{"titleOverride": "The telegram"}"#)
+            let untitled = try await Self.detail(owner, .patch, "\(path)/entries/\(d1)", #"{"titleOverride": null}"#)
+            #expect(untitled.entries.first { $0.id == d1 }?.titleOverride == nil)
+            for (target, body) in [(path, #"{"name": null}"#), (path, #"{"includeColophon": null}"#),
+                                   (path, #"{"defaultBodyDepth": null}"#), ("\(path)/entries/\(heading)", #"{"text": null}"#)] {
+                let refused = try await owner.send(.patch, target, body)
+                #expect(refused.status == .badRequest && problemCode(refused) == "INVALID_FIELD", "\(body)")
+            }
+
+            // Summary only, field by field, where Briefing packet's card is offered; a depth held stands.
+            for (target, body) in [(path, #"{"defaultBodyDepth": "summaryOnly"}"#),
+                                   ("\(path)/entries/\(d1)", #"{"bodyDepthOverride": "summaryOnly"}"#)] {
+                let refused = try await owner.send(.patch, target, body)
+                #expect(refused.status == .conflict && problemCode(refused) == "DEPTH_NOT_OFFERED", "\(body)")
+            }
+            try fixture.rows.addSummary("D2AF0000-0000-4000-8000-0000000000A1", documentId: "d1", responseText: "A summary.",
+                                        isHeadnoteDraft: false)
+            let summarized = try await Self.detail(owner, .patch, path, #"{"defaultBodyDepth": "summaryOnly"}"#)
+            #expect(summarized.defaultBodyDepth == "summaryOnly" && summarized.bodyDepths == ["full", "summaryOnly", "index"])
+            let overridden = try await Self.detail(owner, .patch, "\(path)/entries/\(d1)", #"{"bodyDepthOverride": "summaryOnly"}"#)
+            #expect(overridden.entries.first { $0.id == d1 }?.bodyDepthOverride == "summaryOnly")
+            try fixture.rows.run("DELETE FROM summaries")
+            #expect(try await Self.detail(owner, .patch, path, #"{"defaultBodyDepth": "summaryOnly"}"#).defaultBodyDepth == "summaryOnly",
+                    "the depth the collection holds stands")
+
+            // An entry a newer build wrote stays where it is.
+            try fixture.rows.run("UPDATE collection_entries SET kind = 'timeline' WHERE id = '\(heading)'")
+            let moved = try await owner.send(.post, "\(path)/move", try Self.json(["entryId": heading, "before": d1]))
+            #expect(moved.status == .conflict && problemCode(moved) == "ENTRY_NOT_SUPPORTED")
+
+            // An add after the highest position an edited import can leave renumbers the entries first.
+            try fixture.rows.run("UPDATE collection_entries SET sort_order = 9223372036854775807 WHERE id = '\(d1)'")
+            let appended = try await Self.edit(owner, "\(path)/documents", try Self.documents(["d2"]))
+            #expect(appended.collection.entries.map(\.sortOrder) == [0, 1, 2])
+            #expect(appended.collection.entries.map(\.id) == [heading, d1] + appended.entryIds)
+
+            // A duplicate leaves out a draft it cannot read rather than share it.
+            let draft = "D2AF0000-0000-4000-8000-0000000000A2"
+            try fixture.rows.addSummary(draft, documentId: "d2", responseText: "A draft.", isHeadnoteDraft: true)
+            try fixture.rows.run("UPDATE summaries SET prompt_id = 'not a prompt' WHERE id = '\(draft)'")
+            try fixture.rows.run("UPDATE collection_entries SET headnote_summary_id = '\(draft)' WHERE id = '\(appended.entryIds[0])'")
+            let copy = try decode(CollectionDetail.self, try await owner.send(.post, "\(path)/duplicate", "{}"))
+            #expect(copy.entries.map(\.documentId).suffix(2) == ["d1", "d2"] && copy.entries.last?.headnoteSummaryId == nil)
+            #expect(try fixture.rows.column("SELECT id FROM summaries WHERE is_headnote_draft = 1") == [draft], "the original keeps its own")
+        }
+    }
+
     /// The Research rail lists the collections that hold a document among their documents, by the name
     /// each row prints; and two users' collections stay apart, live behind the proxy.
     @Test func theRailListsADocumentsCollectionsAndEachUsersAreTheirsAlone() async throws {

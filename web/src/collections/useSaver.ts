@@ -35,15 +35,20 @@ export function useSaver<T>(save: (value: T) => Promise<unknown>): {
     const { value } = waiting.current;
     waiting.current = null;
     sending.current = true;
+    let refused = false;
     try {
       await latest.current(value);
       setFailure(null);
     } catch (error) {
+      refused = true;
       setFailure(errorMessage(error));
+      // Kept to be sent again, by the next keystroke, which replaces it, or a leave; never at once.
+      waiting.current ??= { value };
     } finally {
       sending.current = false;
-      if (waiting.current) void send();
-      else setPending(false);
+      if (waiting.current && !refused) void send();
+      // Pending while a value waits, so the field keeps what was typed and not the server's.
+      else if (!waiting.current) setPending(false);
     }
   }
 

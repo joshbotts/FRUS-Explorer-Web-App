@@ -127,7 +127,8 @@ enum CollectionEntryRoutes {
         let included: Bool
     }
 
-    /// A change to one entry, each field absent to leave it, a nullable one null for Default.
+    /// A change to one entry, each field absent to leave it: an override null for Default, a title
+    /// override null or empty to clear it, and a heading's text refused as null.
     struct Change: Decodable, Sendable {
         var text: String?
         /// A note block's text with its runs, null for a plain edit.
@@ -168,10 +169,11 @@ enum CollectionEntryRoutes {
                     throw DecodingError.dataCorrupted(.init(codingPath: [CodingKeys.runs], debugDescription: "runs come with the text they format."))
                 }
                 prose = (try container.decode(String.self, forKey: .text), try NoteFormatting.decodeRuns(from: container, forKey: .runs))
-            } else {
-                text = try container.decodeIfPresent(String.self, forKey: .text)
+            } else if container.contains(.text) {
+                text = try container.decode(String.self, forKey: .text)
             }
-            titleOverride = try container.decodeIfPresent(String.self, forKey: .titleOverride)
+            titleOverride = container.contains(.titleOverride)
+                ? (try container.decodeIfPresent(String.self, forKey: .titleOverride) ?? "") : nil
             bodyDepthOverride = try nullable(.bodyDepthOverride)
             applyHighlightsOverride = try nullable(.applyHighlightsOverride)
             includeNotesOverride = try nullable(.includeNotesOverride)
@@ -210,10 +212,18 @@ enum CollectionEntryRoutes {
             try await CollectionRoutes.detail(CollectionRoutes.values(rows), for: user, in: store, resources: resources, provider: provider)
         }
 
-        /// The ids of the entries `after` holds that `before` did not, in its order.
-        @Sendable func added(_ rows: CollectionRows, since before: CollectionExport) throws -> [String] {
-            let held = Set(before.entries.map(\.id))
-            return try CollectionRoutes.values(rows).entries.filter { !held.contains($0.id) }.map(\.id.uuidString)
+        /// A change that adds entries, and the ids of those it made, in order, read inside its write, so
+        /// that an entry another request added meanwhile is never among them.
+        @Sendable func adding(_ id: String, for user: String, at time: Date,
+                              _ edit: @escaping @Sendable (inout CollectionExport) throws -> Void) async throws -> (CollectionRows, [String]) {
+            let made = Mutex<[String]>([])
+            let rows = try await CollectionRoutes.changed(id, for: user, in: store, at: time) { collection in
+                let held = Set(collection.entries.map(\.id))
+                try edit(&collection)
+                let ids = collection.entries.filter { !held.contains($0.id) }.map(\.id.uuidString)
+                made.withLock { $0 = ids }
+            }
+            return (rows, made.withLock { $0 })
         }
 
         // Add Documents' add, `CollectionDocumentDiscovery.appendEntries`: at the end, in the order
@@ -225,12 +235,11 @@ enum CollectionEntryRoutes {
             let body = try await JSONBody.decode(Documents.self, from: request, fields: ["documents"],
                                                  limit: UserDataServices.noteBodyLimit)
             let documents = try keys(body.documents, resources: resources)
-            let before = try await CollectionRoutes.collection(id, of: user.id, in: store)
             let time = UserStoreDate.rounded(now())
-            let rows = try await CollectionRoutes.changed(id, for: user.id, in: store, at: time) { collection in
+            let (rows, made) = try await adding(id, for: user.id, at: time) { collection in
                 guard CollectionEditing.appendEntries(documents, to: &collection, at: time) else { throw CollectionRoutes.smart() }
             }
-            return CollectionEdit(collection: try await detail(rows, user.id), entryIds: try added(rows, since: before))
+            return CollectionEdit(collection: try await detail(rows, user.id), entryIds: made)
         }
         // The Add to Collection picker's add of one document: nothing again for one it holds.
         me.post("collections/:collectionId/document") { request, context -> CollectionAddResult in
@@ -255,15 +264,14 @@ enum CollectionEntryRoutes {
             let user = try context.requireUser()
             let id = try context.parameters.require("collectionId")
             let body = try await JSONBody.decode(Block.self, from: request, fields: ["kind", "generatedBlockType"])
-            let before = try await CollectionRoutes.collection(id, of: user.id, in: store)
             let time = UserStoreDate.rounded(now())
-            let rows: CollectionRows
+            let added: (rows: CollectionRows, made: [String])
             switch (body.kind, body.generatedBlockType) {
             case (let kind?, nil):
                 guard let block = CollectionEntryKind(rawValue: kind), [.heading, .prose].contains(block) else {
                     throw CollectionRoutes.invalidField("kind", "\(kind) is no block the Add menu adds: heading or prose.")
                 }
-                rows = try await CollectionRoutes.changed(id, for: user.id, in: store, at: time) { collection in
+                added = try await adding(id, for: user.id, at: time) { collection in
                     guard CollectionEditing.appendBlock(block, to: &collection, at: time) != nil else { throw CollectionRoutes.smart() }
                 }
             case (nil, let raw?):
@@ -271,13 +279,13 @@ enum CollectionEntryRoutes {
                     let names = CollectionGeneratedBlockType.allCases.map(\.rawValue)
                     throw CollectionRoutes.invalidField("generatedBlockType", "\(raw) is no apparatus block: \(names.joined(separator: ", ")).")
                 }
-                rows = try await CollectionRoutes.changed(id, for: user.id, in: store, at: time) { collection in
+                added = try await adding(id, for: user.id, at: time) { collection in
                     CollectionEditing.addGeneratedEntry(type, to: &collection, at: time)
                 }
             default:
                 throw CollectionRoutes.invalidField("kind", "a block is a kind, heading or prose, or a generatedBlockType, and not both.")
             }
-            return CollectionEdit(collection: try await detail(rows, user.id), entryIds: try added(rows, since: before))
+            return CollectionEdit(collection: try await detail(added.rows, user.id), entryIds: added.made)
         }
         // Excerpts: of the reader's selection, frozen from the page's own model as the app's
         // `selectionExcerptCapture` freezes one, with its offsets and version; or of highlights, as
@@ -314,12 +322,11 @@ enum CollectionEntryRoutes {
                 captures = [try await selectionCapture(volumeId: volumeId, documentId: documentId, start: start, end: end,
                                                        version: version, resources: resources, reader: reader, provider: provider)]
             }
-            let before = try await CollectionRoutes.collection(id, of: user.id, in: store)
             let time = UserStoreDate.rounded(now())
-            let rows = try await CollectionRoutes.changed(id, for: user.id, in: store, at: time) { collection in
+            let (rows, made) = try await adding(id, for: user.id, at: time) { collection in
                 guard CollectionEditing.appendExcerpts(captures, to: &collection, at: time) else { throw CollectionRoutes.smart() }
             }
-            return CollectionEdit(collection: try await detail(rows, user.id), entryIds: try added(rows, since: before))
+            return CollectionEdit(collection: try await detail(rows, user.id), entryIds: made)
         }
         // A row moved, a heading with its section, through the kit's move: before the entry named, or to
         // the end. One the kit refuses, into its own section or onto itself, changes nothing, as the
@@ -332,6 +339,8 @@ enum CollectionEntryRoutes {
             let time = UserStoreDate.rounded(now())
             let rows = try await CollectionRoutes.changed(id, for: user.id, in: store, at: time) { collection in
                 let from = try index(of: body.entryId, in: collection)
+                // An entry a newer build wrote offers nothing to do, as `UnrecognizedEntryRow` offers nothing.
+                guard collection.entries[from].entryKind != .unrecognized else { throw unsupported() }
                 let to = try body.before.map { try index(of: $0, in: collection) } ?? collection.entries.count
                 CollectionEditing.move(from: from, to: to, in: &collection)
             }
@@ -347,16 +356,29 @@ enum CollectionEntryRoutes {
             guard let scope = CollectionEditing.DateSortScope(rawValue: body.scope) else {
                 throw CollectionRoutes.invalidField("scope", "\(body.scope) is no scope: wholeCollection or withinSections.")
             }
-            let held = try await CollectionRoutes.collection(id, of: user.id, in: store)
-            let keys = held.entries.map { DocumentKey(volumeId: $0.volumeId, documentId: $0.documentId) }
-            let facts = await CollectionRoutes.documentFacts(keys, provider: provider)
-            let dates = facts.compactMapValues(\.dateISO)
             let manifest = resources.manifest
-            let time = UserStoreDate.rounded(now())
-            let rows = try await CollectionRoutes.changed(id, for: user.id, in: store, at: time) { collection in
-                CollectionEditing.sortByDate(scope, in: &collection, documentDates: dates, manifest: manifest)
+            /// The dates were read for other entries than the write found.
+            struct Stale: Error {}
+            for attempt in 1... {
+                let held = try await CollectionRoutes.collection(id, of: user.id, in: store)
+                let keys = held.entries.map { DocumentKey(volumeId: $0.volumeId, documentId: $0.documentId) }
+                let read = Set(keys.map { "\($0.volumeId)/\($0.documentId)" })
+                let dates = await CollectionRoutes.documentFacts(keys, provider: provider).compactMapValues(\.dateISO)
+                let time = UserStoreDate.rounded(now())
+                do {
+                    let rows = try await CollectionRoutes.changed(id, for: user.id, in: store, at: time) { collection in
+                        guard collection.entries.allSatisfy({ read.contains("\($0.volumeId)/\($0.documentId)") }) else { throw Stale() }
+                        CollectionEditing.sortByDate(scope, in: &collection, documentDates: dates, manifest: manifest)
+                    }
+                    return try await detail(rows, user.id)
+                } catch is Stale where attempt < 3 {
+                    continue
+                } catch is Stale {
+                    throw APIProblem(.conflict, code: "COLLECTION_CHANGING",
+                                     detail: "The collection kept changing while its documents' dates were read. Sort it again.")
+                }
             }
-            return try await detail(rows, user.id)
+            fatalError("unreachable: the loop returns or throws")
         }
         // A row's edit and the inspector's: each field its kind takes, as the row's and the inspector's
         // bindings write them.
@@ -374,6 +396,16 @@ enum CollectionEntryRoutes {
             }
             if kind == .prose, body.given.contains("text"), body.prose == nil {
                 throw CollectionRoutes.invalidField("runs", "required with a note block's text: its runs, or null for a plain one.")
+            }
+            if let text = body.text { _ = try CollectionRoutes.checked(text, "text") }
+            if let title = body.titleOverride { _ = try CollectionRoutes.checked(title, "titleOverride") }
+            let summaryOnly = CollectionBodyDepth.summaryOnly.rawValue
+            let summaryOnlyOffered: Bool
+            if body.bodyDepthOverride == .some(summaryOnly) {
+                summaryOnlyOffered = CollectionRoutes.summariesAvailable(
+                    held, summarized: try await CollectionRoutes.summarizedDocuments(of: user.id, in: store))
+            } else {
+                summaryOnlyOffered = true
             }
             let prompts = body.summaryPromptIdOverride != nil ? try await CollectionRoutes.promptIds(of: user.id, in: store) : []
             let document = DocumentKey(volumeId: entry.volumeId, documentId: entry.documentId)
@@ -397,6 +429,10 @@ enum CollectionEntryRoutes {
                 if let depth = body.bodyDepthOverride {
                     if let depth, CollectionBodyDepth(rawValue: depth) == nil {
                         throw CollectionRoutes.invalidField("bodyDepthOverride", "\(depth) is no body depth: full, summaryOnly or index.")
+                    }
+                    // Offered by the kit's rule, as the collection's own is; an override the entry holds stands.
+                    guard depth != summaryOnly || summaryOnlyOffered || edited.bodyDepthOverride == depth else {
+                        throw CollectionRoutes.depthNotOffered()
                     }
                     edited.bodyDepthOverride = depth
                 }
@@ -524,7 +560,9 @@ enum CollectionEntryRoutes {
         for note in notes {
             for id in note.userTagIds { if let name = names[UserSearchText.uuidString(id)] { tagNames.insert(name) } }
         }
-        // The summary shown: one with the collection's prompt, else the first; no draft and none empty.
+        // The summary shown: one with the collection's prompt, else the newest by the app's
+        // `ranksAbove`, where the app takes the first its fetch returns, in no order it sets; no draft
+        // and none empty.
         let shown = summaries.filter { !$0.responseText.isEmpty && !$0.isHeadnoteDraft }
         let collectionPrompt = collection.summaryPromptId?.uuidString
         let summary = collectionPrompt.flatMap { prompt in shown.first { UserSearchText.uuidString($0.promptId) == prompt } } ?? shown.first

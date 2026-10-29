@@ -16,6 +16,7 @@ import {
 } from '../api/collections';
 import { copy } from '../copy';
 import { Modal } from '../shell/Modal';
+import { ChosenCheckbox, ChosenSelect } from './chosen';
 import { bodyDepthOptions } from './collectionRules';
 import { SavedText } from './CollectionSettings';
 
@@ -39,16 +40,16 @@ function OverridePicker({
   return (
     <div className="field override">
       <label htmlFor={id}>{label}</label>
-      <select
+      <ChosenSelect
         id={id}
         value={value === undefined ? '' : value ? 'on' : 'off'}
         aria-describedby={value === undefined && resolved !== undefined ? `${id}-resolves` : undefined}
-        onChange={(event) => onChange(event.target.value === '' ? null : event.target.value === 'on')}
+        onChoose={(chosen) => onChange(chosen === '' ? null : chosen === 'on')}
       >
         <option value="">{words.default}</option>
         <option value="on">{words.on}</option>
         <option value="off">{words.off}</option>
-      </select>
+      </ChosenSelect>
       {value === undefined && resolved !== undefined && (
         <p id={`${id}-resolves`} className="note">
           {resolved ? words.resolvesOn : words.resolvesOff}
@@ -80,12 +81,18 @@ export function EntryInspector({ detail, entryId, onClose }: { detail: Collectio
     }
   }
 
+  // The highlights being inserted, set at the press, so a second press before the answer adds none.
+  const inserting = useRef(new Set<string>());
+
   async function insert(highlightId: string) {
+    if (inserting.current.has(highlightId)) return;
+    inserting.current.add(highlightId);
     setFailure(null);
     try {
       await addExcerpts(client, detail.id, { highlightIds: [highlightId] });
       setInserted((held) => new Set(held).add(highlightId));
     } catch (error) {
+      inserting.current.delete(highlightId);
       setFailure(errorMessage(error));
     }
   }
@@ -124,11 +131,11 @@ export function EntryInspector({ detail, entryId, onClose }: { detail: Collectio
         />
         <div className="field override">
           <label htmlFor={`${headingId}-prompt`}>{words.prompt}</label>
-          <select
+          <ChosenSelect
             id={`${headingId}-prompt`}
             value={entry.summaryPromptIdOverride ?? ''}
             aria-describedby={!entry.summaryPromptIdOverride && resolved ? `${headingId}-prompt-resolves` : undefined}
-            onChange={(event) => void change({ summaryPromptIdOverride: event.target.value === '' ? null : event.target.value })}
+            onChoose={(chosen) => void change({ summaryPromptIdOverride: chosen === '' ? null : chosen })}
           >
             <option value="">{words.default}</option>
             {detail.prompts.map((prompt) => (
@@ -136,7 +143,7 @@ export function EntryInspector({ detail, entryId, onClose }: { detail: Collectio
                 {prompt.name}
               </option>
             ))}
-          </select>
+          </ChosenSelect>
           {!entry.summaryPromptIdOverride && resolved && (
             <p id={`${headingId}-prompt-resolves`} className="note">
               {words.resolvesTo(promptName(resolved.summaryPromptId))}
@@ -217,11 +224,10 @@ export function EntryInspector({ detail, entryId, onClose }: { detail: Collectio
                   {data.notes.map((note) => (
                     <li key={note.id}>
                       <label>
-                        <input
-                          type="checkbox"
+                        <ChosenCheckbox
                           checked={note.included}
                           aria-label={`${words.noteInclude}: ${note.preview}`}
-                          onChange={(event) => void change({ note: { id: note.id, included: event.target.checked } })}
+                          onChoose={(included) => void change({ note: { id: note.id, included } })}
                         />{' '}
                         {note.preview}
                       </label>
@@ -238,24 +244,25 @@ export function EntryInspector({ detail, entryId, onClose }: { detail: Collectio
                   {data.highlights.map((highlight) => (
                     <li key={highlight.id} className={`hl-row hl-${highlight.colorTag}`}>
                       <label>
-                        <input
-                          type="checkbox"
+                        <ChosenCheckbox
                           checked={highlight.included}
                           aria-label={`${words.highlightInclude}: ${highlight.text ?? copy.highlights.noPassage}`}
-                          onChange={(event) => void change({ highlight: { id: highlight.id, included: event.target.checked } })}
+                          onChoose={(included) => void change({ highlight: { id: highlight.id, included } })}
                         />{' '}
                         <span className={`color-dot hl-${highlight.colorTag}`} aria-hidden="true" />
                         {highlight.text ?? <em>{words.noText}</em>}
                       </label>
-                      {highlight.text &&
-                        detail.takesHandAddedEntries &&
-                        (inserted.has(highlight.id) ? (
-                          <span className="inserted">{words.inserted}</span>
-                        ) : (
-                          <button type="button" onClick={() => void insert(highlight.id)}>
-                            {words.insertExcerpt}
-                          </button>
-                        ))}
+                      {highlight.text && detail.takesHandAddedEntries && (
+                        // One button, which says Inserted once pressed, so the focus it holds stays.
+                        <button
+                          type="button"
+                          className={inserted.has(highlight.id) ? 'inserted' : undefined}
+                          aria-disabled={inserted.has(highlight.id) || undefined}
+                          onClick={() => !inserted.has(highlight.id) && void insert(highlight.id)}
+                        >
+                          {inserted.has(highlight.id) ? words.inserted : words.insertExcerpt}
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -279,11 +286,11 @@ export function EntryInspector({ detail, entryId, onClose }: { detail: Collectio
             <h3 id={`${headingId}-overrides`}>{words.overrides}</h3>
             <div className="field override">
               <label htmlFor={`${headingId}-depth`}>{words.bodyDepth}</label>
-              <select
+              <ChosenSelect
                 id={`${headingId}-depth`}
                 value={entry.bodyDepthOverride ?? ''}
                 aria-describedby={!entry.bodyDepthOverride && data.resolved ? `${headingId}-depth-resolves` : undefined}
-                onChange={(event) => void change({ bodyDepthOverride: event.target.value === '' ? null : event.target.value })}
+                onChoose={(chosen) => void change({ bodyDepthOverride: chosen === '' ? null : chosen })}
               >
                 <option value="">{words.bodyDepthDefault}</option>
                 {bodyDepthOptions(detail.bodyDepths, entry.bodyDepthOverride).map((depth) => (
@@ -291,7 +298,7 @@ export function EntryInspector({ detail, entryId, onClose }: { detail: Collectio
                     {copy.collectionSettings.bodyDepths[depth] ?? depth}
                   </option>
                 ))}
-              </select>
+              </ChosenSelect>
               {!entry.bodyDepthOverride && data.resolved && (
                 <p id={`${headingId}-depth-resolves`} className="note">
                   {words.resolvesTo(copy.collectionSettings.bodyDepths[data.resolved.bodyDepth] ?? data.resolved.bodyDepth)}

@@ -34,6 +34,16 @@ enum CollectionEditing {
         (entries.map(\.sortOrder).max() ?? -1) + 1
     }
 
+    /// The first of `count` positions after the last entry, `nextSortOrder`'s. The web's own where the
+    /// highest position leaves no room for them, as an import of an edited file can: the entries are
+    /// renumbered in their order first, where the app's arithmetic would trap, and with it a server
+    /// every user shares.
+    static func appendOrder(making count: Int, in collection: inout CollectionExport) -> Int {
+        let highest = collection.entries.map(\.sortOrder).max() ?? -1
+        if highest >= Int.max - count { renumber(&collection.entries) }
+        return nextSortOrder(collection.entries)
+    }
+
     /// `CollectionEntryOrdering.renumber(_:in:)` over the whole outline, which holds every entry the
     /// store does: `0..<n` in its order.
     static func renumber(_ outline: inout [CollectionEntryExport]) {
@@ -175,7 +185,7 @@ enum CollectionEditing {
     @discardableResult
     static func appendBlock(_ kind: CollectionEntryKind, to collection: inout CollectionExport, at time: Date) -> CollectionEntryExport? {
         guard takesHandAddedEntries(collection) else { return nil }
-        var entry = newEntry(documentId: "", volumeId: "", sortOrder: nextSortOrder(collection.entries), at: time)
+        var entry = newEntry(documentId: "", volumeId: "", sortOrder: appendOrder(making: 1, in: &collection), at: time)
         entry.kind = kind.rawValue
         entry.text = ""
         collection.entries.append(entry)
@@ -207,7 +217,7 @@ enum CollectionEditing {
     @discardableResult
     static func appendEntries(_ documents: [DocumentKey], to collection: inout CollectionExport, at time: Date) -> Bool {
         guard takesHandAddedEntries(collection) else { return false }
-        var next = nextSortOrder(collection.entries)
+        var next = appendOrder(making: documents.count, in: &collection)
         for document in documents {
             collection.entries.append(newEntry(documentId: document.documentId, volumeId: document.volumeId,
                                                sortOrder: next, at: time))
@@ -224,8 +234,8 @@ enum CollectionEditing {
         guard !collection.entries.contains(where: {
             $0.entryKind == .document && $0.documentId == document.documentId && $0.volumeId == document.volumeId
         }) else { return false }
-        collection.entries.append(newEntry(documentId: document.documentId, volumeId: document.volumeId,
-                                           sortOrder: nextSortOrder(collection.entries), at: time))
+        let order = appendOrder(making: 1, in: &collection)
+        collection.entries.append(newEntry(documentId: document.documentId, volumeId: document.volumeId, sortOrder: order, at: time))
         return true
     }
 
@@ -270,7 +280,7 @@ enum CollectionEditing {
     @discardableResult
     static func appendExcerpts(_ captures: [ExcerptCapture], to collection: inout CollectionExport, at time: Date) -> Bool {
         guard takesHandAddedEntries(collection) else { return false }
-        var next = nextSortOrder(collection.entries)
+        var next = appendOrder(making: captures.count, in: &collection)
         for capture in captures {
             collection.entries.append(makeEntry(from: capture, sortOrder: next, at: time))
             next += 1
@@ -433,8 +443,9 @@ enum CollectionEditing {
     /// copied, but not the two export stamps the app's copy leaves at their defaults; and a copy of every
     /// entry in order, each field as it was, under new ids, each entry's own headnote draft copied for
     /// it (`GeneratedSummary.duplicateHeadnoteDraft(from:to:in:)`), a document's own summary it chose
-    /// left shared.
-    static func duplicate(_ source: CollectionExport, drafts: [UUID: GeneratedSummaryExport],
+    /// left shared. A draft the store holds but the server cannot read, among `unreadable`, the copy
+    /// leaves out, the web's own: shared, a delete of either entry would take the other's.
+    static func duplicate(_ source: CollectionExport, drafts: [UUID: GeneratedSummaryExport], unreadable: Set<UUID> = [],
                           at time: Date) -> (collection: CollectionExport, drafts: [GeneratedSummaryExport]) {
         // The kit's "Untitled Collection" for an empty name, which the app's copy does not trim.
         let base = source.name.isEmpty ? CollectionEditorNaming.listName(savedName: "") : source.name
@@ -464,6 +475,8 @@ enum CollectionEditing {
                 draft.lastModified = time
                 copiedDrafts.append(draft)
                 e.headnoteSummaryId = draft.id
+            } else if let draftId = entry.headnoteSummaryId, unreadable.contains(draftId) {
+                e.headnoteSummaryId = nil
             }
             copy.entries.append(e)
         }

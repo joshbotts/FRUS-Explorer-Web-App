@@ -15,7 +15,7 @@ import {
   deleteSection,
   generatedBlockTypes,
   indentSection,
-  moveEntry,
+  moveEntryBy,
   sortByDate,
   updateEntry,
   type CollectionDetail,
@@ -29,7 +29,7 @@ import { useDocumentTitle } from '../shell/useDocumentTitle';
 import { AddDocuments } from './AddDocuments';
 import { AddHighlights } from './AddHighlights';
 import { CollectionSettings } from './CollectionSettings';
-import { canMoveDown, contentsRows, moveDown, moveRequest, moveUp, outlineSteps, type ContentsRow, type OutlineMove } from './collectionRules';
+import { canMoveDown, contentsRows, moveDown, moveRequest, moveUp, outlineSteps, type ContentsRow } from './collectionRules';
 import { EntryInspector } from './EntryInspector';
 import { DocumentRow, ExcerptRow, GeneratedRow, HeadingRow, ProseRow, type RowActions, UnrecognizedRow } from './EntryRows';
 
@@ -45,7 +45,10 @@ export function CollectionEditorScreen() {
   useHeadingReady(!query.isPending);
   return (
     <section className="screen collection-editor">
-      <h1 tabIndex={-1}>{title}</h1>
+      {/* Focused once it names the collection, not while it says Collections. */}
+      <h1 tabIndex={-1} data-loading={query.isPending ? 'true' : undefined}>
+        {title}
+      </h1>
       {gone ? (
         <p>{copy.collectionEditor.unavailableDetail}</p>
       ) : query.isError ? (
@@ -73,6 +76,8 @@ function Editor({ detail }: { detail: CollectionDetail }) {
   const [said, setSaid] = useState<string | null>(null);
   const list = useRef<HTMLOListElement>(null);
   const addMenu = useRef<HTMLDivElement>(null);
+  // What opened the dialog showing, which focus goes back to when it closes: Modal leaves that to us.
+  const opener = useRef<HTMLElement | null>(null);
   const contentsId = useId();
   const entries = detail.entries;
   const rows = contentsRows(detail, collapsed);
@@ -95,10 +100,49 @@ function Editor({ detail }: { detail: CollectionDetail }) {
     if (answer?.entryIds[0]) setFocusEntry(answer.entryIds[0]);
   }
 
-  function move(outline: OutlineMove | null) {
-    if (!outline) return;
-    const { entryId, before } = moveRequest(entries, outline);
-    void run(() => moveEntry(client, detail.id, entryId, before));
+  function openDialog(which: 'settings' | 'documents' | 'highlights') {
+    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setDialog(which);
+  }
+
+  function closeDialog() {
+    setDialog(null);
+    requestAnimationFrame(() => opener.current?.focus());
+  }
+
+  /** Says `text` in the live region, again when it is what it last said. */
+  function say(text: string) {
+    setSaid(null);
+    requestAnimationFrame(() => setSaid(text));
+  }
+
+  /** The row's menu button, focused. */
+  function focusRowMenu(entryId: string) {
+    list.current?.querySelector<HTMLElement>(`li[data-id="${CSS.escape(entryId)}"] .row-menu > button`)?.focus();
+  }
+
+  /**
+   * Move Up or Move Down, worked out as it is sent, from the collection the moves before it left;
+   * React places a moved row anew, which can take focus from its menu's button, so a focus the move
+   * dropped goes back to it once the rows are drawn.
+   */
+  function move(entryId: string, direction: 'up' | 'down') {
+    const held = collapsed;
+    void run(async () => {
+      const answer = await moveEntryBy(client, detail.id, (latest) => {
+        const latestRows = contentsRows(latest, held);
+        const at = latestRows.findIndex((row) => row.entry.id === entryId);
+        if (at < 0) return null;
+        const outline = direction === 'up' ? moveUp(latestRows, at, latest.entries.length) : moveDown(latestRows, latest.entries, at);
+        return outline ? moveRequest(latest.entries, outline) : null;
+      });
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          if (document.activeElement === document.body) focusRowMenu(entryId);
+        }),
+      );
+      return answer;
+    });
   }
 
   /** After a row goes, focus goes to the next row's menu, else the one before, else the Add menu; never the removed row's. */
@@ -118,12 +162,19 @@ function Editor({ detail }: { detail: CollectionDetail }) {
 
   function actions(row: ContentsRow, pos: number): RowActions {
     const unrecognized = row.entry.kind === 'unrecognized';
+    const id = row.entry.id;
     return {
-      onMoveUp: unrecognized ? undefined : (moveUp(rows, pos, entries.length) ? () => move(moveUp(rows, pos, entries.length)) : undefined),
-      onMoveDown: unrecognized || !canMoveDown(rows, entries, pos) ? undefined : () => move(moveDown(rows, entries, pos)),
+      onMoveUp: unrecognized || !moveUp(rows, pos, entries.length) ? undefined : () => move(id, 'up'),
+      onMoveDown: unrecognized || !canMoveDown(rows, entries, pos) ? undefined : () => move(id, 'down'),
       onRemove: unrecognized ? undefined : () => void remove(row.entry, pos),
       onChange: (changes) => updateEntry(client, detail.id, row.entry.id, changes),
     };
+  }
+
+  // A new entry a collapsed section hides asks nothing, so its row does not take focus when the
+  // section is opened later.
+  if (focusEntry && entries.some((entry) => entry.id === focusEntry) && !rows.some((row) => row.entry.id === focusEntry)) {
+    setFocusEntry(null);
   }
 
   // A new entry takes focus once it is drawn: a heading's title, a note block's editor.
@@ -138,7 +189,7 @@ function Editor({ detail }: { detail: CollectionDetail }) {
   }, [focusEntry, entries]);
 
   const addEntries = [
-    { kind: 'item' as const, label: copy.collectionEditor.addDocuments, onSelect: () => setDialog('documents'), disabled: !hand },
+    { kind: 'item' as const, label: copy.collectionEditor.addDocuments, onSelect: () => openDialog('documents'), disabled: !hand },
     { kind: 'separator' as const },
     {
       kind: 'item' as const,
@@ -155,7 +206,7 @@ function Editor({ detail }: { detail: CollectionDetail }) {
     {
       kind: 'item' as const,
       label: copy.collectionEditor.addHighlights,
-      onSelect: () => setDialog('highlights'),
+      onSelect: () => openDialog('highlights'),
       disabled: documents.length === 0 || !hand,
     },
     { kind: 'separator' as const },
@@ -196,7 +247,7 @@ function Editor({ detail }: { detail: CollectionDetail }) {
             },
           ]}
         />
-        <button type="button" onClick={() => setDialog('settings')}>
+        <button type="button" onClick={() => openDialog('settings')}>
           {copy.collectionEditor.settings}
         </button>
       </div>
@@ -260,23 +311,23 @@ function Editor({ detail }: { detail: CollectionDetail }) {
       </section>
       {hand && (
         <div className="add-documents">
-          <button type="button" onClick={() => setDialog('documents')}>
+          <button type="button" onClick={() => openDialog('documents')}>
             {copy.collectionEditor.addDocuments}
           </button>
           <p className="note">{copy.collectionEditor.addDocumentsFooter}</p>
         </div>
       )}
-      {dialog === 'settings' && <CollectionSettings detail={detail} onClose={() => setDialog(null)} />}
+      {dialog === 'settings' && <CollectionSettings detail={detail} onClose={closeDialog} />}
       {dialog === 'documents' && (
         <AddDocuments
           detail={detail}
           onClose={(count) => {
-            setDialog(null);
-            if (count) setSaid(count === 1 ? copy.collectionEditor.addedOne : copy.collectionEditor.addedMany(count));
+            closeDialog();
+            if (count) say(count === 1 ? copy.collectionEditor.addedOne : copy.collectionEditor.addedMany(count));
           }}
         />
       )}
-      {dialog === 'highlights' && <AddHighlights detail={detail} onClose={() => setDialog(null)} />}
+      {dialog === 'highlights' && <AddHighlights detail={detail} onClose={closeDialog} />}
       {inspecting && (
         <EntryInspector
           detail={detail}
@@ -297,16 +348,16 @@ function Editor({ detail }: { detail: CollectionDetail }) {
             const heading = deletingSection;
             setDeletingSection(null);
             if (!confirmed) {
-              requestAnimationFrame(() =>
-                list.current?.querySelector<HTMLElement>(`li[data-id="${CSS.escape(heading.id)}"] .row-menu > button`)?.focus(),
-              );
+              requestAnimationFrame(() => focusRowMenu(heading.id));
               return;
             }
             const at = rows.findIndex((row) => row.entry.id === heading.id);
             const start = entries.findIndex((entry) => entry.id === heading.id);
             const removed = entries.slice(start, heading.sectionEnd ?? start + 1).map((entry) => entry.id);
             const answer = await run(() => deleteSection(client, detail.id, heading.id));
+            // Refused, the heading stays, and its menu takes focus back.
             if (answer) focusAfter(removed, at);
+            else requestAnimationFrame(() => focusRowMenu(heading.id));
           }}
         />
       )}

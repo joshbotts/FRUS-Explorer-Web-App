@@ -222,6 +222,9 @@ export interface DocumentRef {
 
 const base = '/api/v1/me/collections';
 
+/** A collection's id as the cache and the queues hold it, in the Mac's uppercase, whatever case an address gives it. */
+const keyOf = (id: string) => id.toUpperCase();
+
 /** The user's collections, the most recently changed first. */
 export const collectionsQuery = queryOptions({
   queryKey: ['collections'],
@@ -233,7 +236,7 @@ export const collectionsQuery = queryOptions({
 /** One collection, as the editor shows it. */
 export function collectionQuery(id: string) {
   return queryOptions({
-    queryKey: ['collection', id],
+    queryKey: ['collection', keyOf(id)],
     queryFn: ({ signal }) => getJSON<CollectionDetail>(`${base}/${segment(id)}`, undefined, signal),
     staleTime: 30_000,
     retry: false,
@@ -243,7 +246,7 @@ export function collectionQuery(id: string) {
 /** The inspector of one entry, read afresh each time it opens. */
 export function entryInspectorQuery(collectionId: string, entryId: string) {
   return queryOptions({
-    queryKey: ['collectionInspector', collectionId, entryId],
+    queryKey: ['collectionInspector', keyOf(collectionId), keyOf(entryId)],
     queryFn: ({ signal }) =>
       getJSON<EntryInspector>(`${base}/${segment(collectionId)}/entries/${segment(entryId)}/inspector`, undefined, signal),
     staleTime: 0,
@@ -275,7 +278,7 @@ export const collectionGone = (error: unknown) => error instanceof ApiError && e
  * Home's tally of what a project files.
  */
 function collectionChanged(client: QueryClient, detail?: CollectionDetail) {
-  if (detail) client.setQueryData(collectionQuery(detail.id).queryKey, detail);
+  if (detail) client.setQueryData(collectionQuery(detail.id).queryKey, shown(detail.id, detail));
   void client.invalidateQueries({ queryKey: ['collections'] });
   void client.invalidateQueries({ queryKey: ['documentCollections'] });
   void client.invalidateQueries({ queryKey: ['collectionInspector'] });
@@ -291,20 +294,57 @@ function collectionChanged(client: QueryClient, detail?: CollectionDetail) {
 const queues = new Map<string, Promise<unknown>>();
 
 function inTurn<T>(id: string, send: () => Promise<T>): Promise<T> {
-  const before = queues.get(id) ?? Promise.resolve();
+  const key = keyOf(id);
+  const before = queues.get(key) ?? Promise.resolve();
   const next = before.then(send, send);
   const settled = next.then(
     () => undefined,
     () => undefined,
   );
-  queues.set(id, settled);
+  queues.set(key, settled);
   void settled.then(() => {
-    if (queues.get(id) === settled) queues.delete(id);
+    if (queues.get(key) === settled) queues.delete(key);
   });
   return next;
 }
 
-/** A collection's change, its answer taking the held one's place; one deleted elsewhere leaves. */
+/**
+ * The changes sent and not yet answered, for each collection, each shown at once over the copy held,
+ * so that a switch or a choice shows what was chosen, and a second press reads it, until the server's
+ * answer stands; an answer to an earlier change is shown with the later ones over it.
+ */
+const unanswered = new Map<string, ((detail: CollectionDetail) => CollectionDetail)[]>();
+
+/** `detail` with the collection's unanswered changes over it. */
+function shown(id: string, detail: CollectionDetail): CollectionDetail {
+  return (unanswered.get(keyOf(id)) ?? []).reduce((held, patch) => patch(held), detail);
+}
+
+/** Sends a collection's change, its answer taking the held one's place; one deleted elsewhere leaves. */
+async function send<T extends CollectionDetail | CollectionEdit>(
+  client: QueryClient,
+  id: string,
+  method: 'POST' | 'PATCH' | 'DELETE',
+  path: string,
+  body?: unknown,
+  settle?: () => void,
+): Promise<T> {
+  try {
+    const answer = (await change<T>(client, method, path, body))!;
+    settle?.();
+    collectionChanged(client, 'collection' in answer ? answer.collection : answer);
+    return answer;
+  } catch (error) {
+    settle?.();
+    if (collectionGone(error)) {
+      client.removeQueries({ queryKey: collectionQuery(id).queryKey });
+      collectionChanged(client);
+    }
+    throw error;
+  }
+}
+
+/** A collection's change, sent in its turn. */
 function changed<T extends CollectionDetail | CollectionEdit>(
   client: QueryClient,
   id: string,
@@ -312,20 +352,64 @@ function changed<T extends CollectionDetail | CollectionEdit>(
   path: string,
   body?: unknown,
 ): Promise<T> {
-  return inTurn(id, async () => {
-    try {
-      const answer = (await change<T>(client, method, path, body))!;
-      collectionChanged(client, 'collection' in answer ? answer.collection : answer);
-      return answer;
-    } catch (error) {
-      if (collectionGone(error)) {
-        client.removeQueries({ queryKey: collectionQuery(id).queryKey });
-        collectionChanged(client);
-      }
-      throw error;
-    }
+  return inTurn(id, () => send<T>(client, id, method, path, body));
+}
+
+/**
+ * A change shown at once, `patch` over the copy held until its answer comes; a refusal reads the
+ * collection again, as the server holds it.
+ */
+function showing(
+  client: QueryClient,
+  id: string,
+  patch: (detail: CollectionDetail) => CollectionDetail,
+  method: 'POST' | 'PATCH',
+  path: string,
+  body: unknown,
+): Promise<CollectionDetail> {
+  const key = keyOf(id);
+  unanswered.set(key, [...(unanswered.get(key) ?? []), patch]);
+  const query = collectionQuery(id).queryKey;
+  const held = client.getQueryData<CollectionDetail>(query);
+  if (held) client.setQueryData(query, patch(held));
+  const settle = () => {
+    const rest = (unanswered.get(key) ?? []).filter((pending) => pending !== patch);
+    if (rest.length > 0) unanswered.set(key, rest);
+    else unanswered.delete(key);
+  };
+  return inTurn(id, () => send<CollectionDetail>(client, id, method, path, body, settle)).catch((error: unknown) => {
+    void client.invalidateQueries({ queryKey: query });
+    throw error;
   });
 }
+
+/** The fields of a collection's own a switch or a choice sets, which a change shows at once. */
+const shownCollectionFields = [
+  'includeColophon',
+  'includeProjectProvenance',
+  'includeMethodAppendix',
+  'defaultBodyDepth',
+  'includeFootnotes',
+  'includeSourceNote',
+  'tocStyle',
+  'applyHighlights',
+  'includeNotes',
+  'includeWordCloud',
+  'defaultIncludeHeadnote',
+  'summaryPromptId',
+] as const;
+
+/** An entry's overrides, which a change shows at once; null is Default, which the entry holds as none. */
+const shownEntryFields = [
+  'bodyDepthOverride',
+  'applyHighlightsOverride',
+  'includeNotesOverride',
+  'includeSourceNoteOverride',
+  'includeFootnotesOverride',
+  'summaryPromptIdOverride',
+  'includeRelatedDocuments',
+  'includeHeadnote',
+] as const;
 
 /** The Mac's New Collection: a name, in the project the user works in. */
 export async function createCollection(client: QueryClient, name: string): Promise<CollectionDetail> {
@@ -335,7 +419,14 @@ export async function createCollection(client: QueryClient, name: string): Promi
 }
 
 export function updateCollection(client: QueryClient, id: string, changes: CollectionChanges): Promise<CollectionDetail> {
-  return changed(client, id, 'PATCH', `${base}/${segment(id)}`, changes);
+  const patch = (detail: CollectionDetail): CollectionDetail => {
+    const next: Record<string, unknown> = { ...detail };
+    for (const field of shownCollectionFields) {
+      if (field in changes) next[field] = changes[field] ?? undefined;
+    }
+    return next as unknown as CollectionDetail;
+  };
+  return showing(client, id, patch, 'PATCH', `${base}/${segment(id)}`, changes);
 }
 
 /** Deletes a collection, its entries and their headnote drafts; one deleted elsewhere is deleted. */
@@ -398,9 +489,22 @@ export function addExcerpts(
   return changed(client, id, 'POST', `${base}/${segment(id)}/excerpts`, excerpt);
 }
 
-/** A row moved before another, or to the end; a heading takes its section. */
-export function moveEntry(client: QueryClient, id: string, entryId: string, before: string | null): Promise<CollectionDetail> {
-  return changed(client, id, 'POST', `${base}/${segment(id)}/move`, { entryId, before });
+/**
+ * A row moved before another, or to the end, a heading with its section: worked out by `request` from
+ * the collection as it stands once the changes before it are answered, so a move pressed again before
+ * the last one's answer moves the row on from where that one left it. Nothing is sent where the row
+ * can move no further.
+ */
+export function moveEntryBy(
+  client: QueryClient,
+  id: string,
+  request: (detail: CollectionDetail) => { entryId: string; before: string | null } | null,
+): Promise<CollectionDetail | undefined> {
+  return inTurn(id, async () => {
+    const held = client.getQueryData<CollectionDetail>(collectionQuery(id).queryKey);
+    const asked = held ? request(held) : null;
+    return asked ? send<CollectionDetail>(client, id, 'POST', `${base}/${segment(id)}/move`, asked) : undefined;
+  });
 }
 
 export function sortByDate(client: QueryClient, id: string, scope: 'wholeCollection' | 'withinSections'): Promise<CollectionDetail> {
@@ -408,7 +512,28 @@ export function sortByDate(client: QueryClient, id: string, scope: 'wholeCollect
 }
 
 export function updateEntry(client: QueryClient, id: string, entryId: string, changes: EntryChanges): Promise<CollectionDetail> {
-  return changed(client, id, 'PATCH', `${base}/${segment(id)}/entries/${segment(entryId)}`, changes);
+  const patch = (detail: CollectionDetail): CollectionDetail => ({
+    ...detail,
+    entries: detail.entries.map((entry) => {
+      if (keyOf(entry.id) !== keyOf(entryId)) return entry;
+      const next: Record<string, unknown> = { ...entry };
+      for (const field of shownEntryFields) {
+        if (field in changes) next[field] = changes[field] ?? undefined;
+      }
+      return next as unknown as CollectionEntry;
+    }),
+  });
+  // The inspector's inclusions, shown at once in its rows until it is read again.
+  const inclusion = changes.note ?? changes.highlight;
+  if (inclusion) {
+    const rows = changes.note ? 'notes' : 'highlights';
+    client.setQueryData<EntryInspector>(entryInspectorQuery(id, entryId).queryKey, (held) =>
+      held
+        ? { ...held, [rows]: held[rows].map((row) => (keyOf(row.id) === keyOf(inclusion.id) ? { ...row, included: inclusion.included } : row)) }
+        : held,
+    );
+  }
+  return showing(client, id, patch, 'PATCH', `${base}/${segment(id)}/entries/${segment(entryId)}`, changes);
 }
 
 /** A row's delete: the one entry, a heading alone. */

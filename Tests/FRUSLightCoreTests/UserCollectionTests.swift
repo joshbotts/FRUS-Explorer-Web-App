@@ -180,6 +180,39 @@ import Testing
         #expect(try !store.deleteCollection(Self.collection, for: "owner"))
     }
 
+    /// The two reads a collection's answer makes of the user's other rows, each without reading them
+    /// whole: their notes counted by document, and the documents they hold a summary of that has text
+    /// and is no headnote draft; each the user's alone.
+    @Test(arguments: UserStoreKind.available)
+    func notesAreCountedAndSummarizedDocumentsFoundByDocument(_ kind: UserStoreKind) async throws {
+        let (store, _, test) = try await UserTagTests.open(kind)
+        defer { withExtendedLifetime(test) {} }
+        _ = try store.signedInUser("reader", at: Self.created)
+        let d1 = DocumentKey(volumeId: "frus1961-63v06", documentId: "d1")
+        let d2 = DocumentKey(volumeId: "frus1961-63v06", documentId: "d2")
+        for (document, user) in [(d1, "owner"), (d1, "owner"), (d2, "owner"), (d2, "reader")] {
+            _ = try store.createNote(in: document, bodyText: "A note.", richText: nil, projectIds: [], userTagIds: [], selectedSummaryIds: [],
+                                     linkedHighlightId: nil, for: user, at: Self.created)
+        }
+        #expect(try store.noteCounts(of: "owner") == ["frus1961-63v06/d1": 2, "frus1961-63v06/d2": 1])
+        #expect(try store.noteCounts(of: "reader") == ["frus1961-63v06/d2": 1])
+        #expect(try store.noteCounts(of: "nobody").isEmpty)
+
+        // d1's own summary counts; d2's headnote draft and d3's empty summary do not.
+        _ = try Self.makeOwnSummary(in: store)
+        var draft = Self.summaryRow(Self.draft, draft: true)
+        draft["document_id"] = .text("d2")
+        try store.addCollection(CollectionChange(collection: Self.collectionRow(Self.collection, "Berlin"),
+                                                 entries: [Self.entryRow(1, of: Self.collection, document: "d2", order: 0, headnote: Self.draft)],
+                                                 addedSummaries: [draft]), for: "owner")
+        var empty = Self.summaryRow("D2AF0000-0000-4000-8000-000000000003", draft: false)
+        empty["document_id"] = .text("d3")
+        empty["response_text"] = .text("")
+        try store.addResearchRow(try #require(UserStoreSchema.table(for: "GeneratedSummary")), empty, for: "owner", outsideSearch: false)
+        #expect(try store.summarizedDocuments(of: "owner") == ["frus1961-63v06/d1"])
+        #expect(try store.summarizedDocuments(of: "reader").isEmpty)
+    }
+
     /// The Research rail's collections: those holding the document as a document entry, an excerpt of
     /// it not counting, each once.
     @Test(arguments: UserStoreKind.available)

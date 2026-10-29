@@ -345,8 +345,9 @@ test('freezes an excerpt from the selection bar, adds the document from the rail
   const choices = picker.getByRole('list', { name: 'Collections' }).getByRole('button');
   await expect(choices.first()).toContainText('Excerpts for teaching0 documents');
   await axeCheck(page);
+  // Added shows for 0.6 s, which a slow answer can leave between two of Playwright's checks; the
+  // picker's close a moment after it, and the server's copy, are what the spec waits for.
   await choices.first().click();
-  await expect(choices.first()).toContainText('Added');
   await expect(picker).toHaveCount(0);
   const [mine] = (await listed(page)).filter((item) => !before.has(item.id));
   expect((await collection(page, mine.id)).entries.map((entry) => [entry.kind, entry.documentId, entry.text])).toEqual([['excerpt', 'd1', phrase]]);

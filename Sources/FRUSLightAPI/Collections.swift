@@ -185,7 +185,8 @@ enum CollectionRoutes {
 
     struct PresetChoice: Decodable { let preset: String }
 
-    /// A change to a collection's own fields, each absent to leave it, and a nullable one null to clear it.
+    /// A change to a collection's own fields, each absent to leave it: a note, subtitle or author line
+    /// null or empty to clear it, a summary prompt null for none, and any other field refused as null.
     struct Change: Decodable, Sendable {
         var name: String?
         var note: String?
@@ -220,10 +221,18 @@ enum CollectionRoutes {
 
         init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            name = try container.decodeIfPresent(String.self, forKey: .name)
-            note = try container.decodeIfPresent(String.self, forKey: .note)
-            subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle)
-            authorLine = try container.decodeIfPresent(String.self, forKey: .authorLine)
+            /// A field the change names, which may not be null.
+            func given<T: Decodable>(_ key: CodingKeys) throws -> T? {
+                container.contains(key) ? try container.decode(T.self, forKey: key) : nil
+            }
+            /// A text null clears, as an empty one does.
+            func clearable(_ key: CodingKeys) throws -> String? {
+                container.contains(key) ? (try container.decodeIfPresent(String.self, forKey: key) ?? "") : nil
+            }
+            name = try given(.name)
+            note = try clearable(.note)
+            subtitle = try clearable(.subtitle)
+            authorLine = try clearable(.authorLine)
             switch (container.contains(.introductionText), container.contains(.introductionRuns)) {
             case (true, true):
                 introduction = (try container.decode(String.self, forKey: .introductionText),
@@ -237,17 +246,17 @@ enum CollectionRoutes {
             case (false, false):
                 introduction = nil
             }
-            includeColophon = try container.decodeIfPresent(Bool.self, forKey: .includeColophon)
-            includeProjectProvenance = try container.decodeIfPresent(Bool.self, forKey: .includeProjectProvenance)
-            includeMethodAppendix = try container.decodeIfPresent(Bool.self, forKey: .includeMethodAppendix)
-            defaultBodyDepth = try container.decodeIfPresent(String.self, forKey: .defaultBodyDepth)
-            includeFootnotes = try container.decodeIfPresent(Bool.self, forKey: .includeFootnotes)
-            includeSourceNote = try container.decodeIfPresent(Bool.self, forKey: .includeSourceNote)
-            tocStyle = try container.decodeIfPresent(String.self, forKey: .tocStyle)
-            applyHighlights = try container.decodeIfPresent(Bool.self, forKey: .applyHighlights)
-            includeNotes = try container.decodeIfPresent(Bool.self, forKey: .includeNotes)
-            includeWordCloud = try container.decodeIfPresent(Bool.self, forKey: .includeWordCloud)
-            defaultIncludeHeadnote = try container.decodeIfPresent(Bool.self, forKey: .defaultIncludeHeadnote)
+            includeColophon = try given(.includeColophon)
+            includeProjectProvenance = try given(.includeProjectProvenance)
+            includeMethodAppendix = try given(.includeMethodAppendix)
+            defaultBodyDepth = try given(.defaultBodyDepth)
+            includeFootnotes = try given(.includeFootnotes)
+            includeSourceNote = try given(.includeSourceNote)
+            tocStyle = try given(.tocStyle)
+            applyHighlights = try given(.applyHighlights)
+            includeNotes = try given(.includeNotes)
+            includeWordCloud = try given(.includeWordCloud)
+            defaultIncludeHeadnote = try given(.defaultIncludeHeadnote)
             summaryPromptId = container.contains(.summaryPromptId)
                 ? .some(try container.decodeIfPresent(String.self, forKey: .summaryPromptId)) : nil
         }
@@ -269,7 +278,7 @@ enum CollectionRoutes {
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
             let body = try await JSONBody.decode(NewCollection.self, from: request, fields: ["name"])
-            let name = body.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = try checked(body.name, "name").trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty else {
                 throw invalidField("name", "a new collection's name, trimmed, cannot be empty.")
             }
@@ -299,6 +308,18 @@ enum CollectionRoutes {
             let id = try context.parameters.require("collectionId")
             let body = try await JSONBody.decode(Change.self, from: request, fields: Change.fields,
                                                  limit: UserDataServices.noteBodyLimit)
+            for case let (text?, field) in [(body.name, "name"), (body.note, "note"), (body.subtitle, "subtitle"),
+                                            (body.authorLine, "authorLine")] {
+                _ = try checked(text, field)
+            }
+            let summaryOnly = CollectionBodyDepth.summaryOnly.rawValue
+            let summaryOnlyOffered: Bool
+            if body.defaultBodyDepth == summaryOnly {
+                let held = try await collection(id, of: user.id, in: store)
+                summaryOnlyOffered = summariesAvailable(held, summarized: try await summarizedDocuments(of: user.id, in: store))
+            } else {
+                summaryOnlyOffered = true
+            }
             let promptIds = body.summaryPromptId != nil ? try await promptIds(of: user.id, in: store) : []
             let active = try await Blocking.run { try store.activeProjectId(of: user.id) }.flatMap(UUID.init(uuidString:))
             let time = UserStoreDate.rounded(now())
@@ -336,6 +357,8 @@ enum CollectionRoutes {
                     guard CollectionBodyDepth(rawValue: depth) != nil else {
                         throw invalidField("defaultBodyDepth", "\(depth) is no body depth: full, summaryOnly or index.")
                     }
+                    // Offered by the kit's rule, as Briefing packet is; a depth the collection holds stands.
+                    guard depth != summaryOnly || summaryOnlyOffered || collection.defaultBodyDepth == depth else { throw depthNotOffered() }
                     collection.defaultBodyDepth = depth
                 }
                 if let footnotes = body.includeFootnotes {
@@ -375,8 +398,8 @@ enum CollectionRoutes {
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
             let source = try await collection(try context.parameters.require("collectionId"), of: user.id, in: store)
-            let drafts = try await headnoteDrafts(of: user.id, in: store)
-            let (copy, copied) = CollectionEditing.duplicate(source, drafts: drafts, at: UserStoreDate.rounded(now()))
+            let (drafts, unreadable) = try await headnoteDrafts(of: user.id, in: store)
+            let (copy, copied) = CollectionEditing.duplicate(source, drafts: drafts, unreadable: unreadable, at: UserStoreDate.rounded(now()))
             let rows = try await Blocking.run { try store.addCollection(change(copy, addedSummaries: copied), for: user.id) }
             let location = context.basePath.prefixing("/api/v1/me/collections/\(copy.id.uuidString)")
             return EditedResponse(status: .created, headers: [.location: location],
@@ -540,15 +563,13 @@ enum CollectionRoutes {
     /// What the editor shows of a collection.
     static func detail(_ collection: CollectionExport, for user: String, in store: any UserDataStore,
                        resources: ServerResources, provider: ServedIndexProvider) async throws -> CollectionDetail {
-        let (prompts, notes) = try await Blocking.run { (try store.prompts(for: user), try store.notes(for: user)) }
+        let (prompts, noteCounts) = try await Blocking.run { (try store.prompts(for: user), try store.noteCounts(of: user)) }
         let summarized = try await summarizedDocuments(of: user, in: store)
         let available = summariesAvailable(collection, summarized: summarized)
         let entries = collection.entries
         let keys = entries.filter { $0.entryKind == .document || $0.entryKind == .excerpt }
             .map { DocumentKey(volumeId: $0.volumeId, documentId: $0.documentId) }
         let facts = await documentFacts(keys, provider: provider)
-        var noteCounts: [String: Int] = [:]
-        for note in notes { noteCounts["\(note.volumeId)/\(note.documentId)", default: 0] += 1 }
         let depths = CollectionEditing.depths(entries)
         let duplicates = CollectionEditing.duplicateDocumentKeys(in: entries)
         let introduction = NoteFormatting.runs(of: collection.introductionRichText.map { [UInt8]($0) },
@@ -627,25 +648,24 @@ enum CollectionRoutes {
 
     /// The documents the user has a summary of that is no headnote draft and holds text, by key.
     static func summarizedDocuments(of user: String, in store: any UserDataStore) async throws -> Set<String> {
-        let rows = try await Blocking.run { try store.researchRows(UserStoreSchema.table(for: "GeneratedSummary")!, of: user) }
-        var keys = Set<String>()
-        for row in rows where row.values["is_headnote_draft"]?.integer != 1 {
-            guard let text = row.values["response_text"]?.text, !text.isEmpty,
-                  let volume = row.values["volume_id"]?.text, let document = row.values["document_id"]?.text else { continue }
-            keys.insert("\(volume)/\(document)")
-        }
-        return keys
+        try await Blocking.run { try store.summarizedDocuments(of: user) }
     }
 
-    /// The user's headnote drafts, by id, which a duplicate's entries take copies of.
-    static func headnoteDrafts(of user: String, in store: any UserDataStore) async throws -> [UUID: GeneratedSummaryExport] {
+    /// The user's headnote drafts, by id, which a duplicate's entries take copies of, and the ids of
+    /// those the export's reader cannot read, which a copy leaves out.
+    static func headnoteDrafts(of user: String, in store: any UserDataStore) async throws
+        -> (drafts: [UUID: GeneratedSummaryExport], unreadable: Set<UUID>) {
         let rows = try await Blocking.run { try store.researchRows(UserStoreSchema.table(for: "GeneratedSummary")!, of: user) }
         var drafts: [UUID: GeneratedSummaryExport] = [:]
+        var unreadable = Set<UUID>()
         for row in rows where row.values["is_headnote_draft"]?.integer == 1 {
-            guard let summary = try? ResearchExport.summary(ResearchExport.Fields("summaries", row)) else { continue }
+            guard let summary = try? ResearchExport.summary(ResearchExport.Fields("summaries", row)) else {
+                if let id = row.values["id"]?.text.flatMap(UUID.init(uuidString:)) { unreadable.insert(id) }
+                continue
+            }
             if drafts[summary.id] == nil { drafts[summary.id] = summary }
         }
-        return drafts
+        return (drafts, unreadable.subtracting(drafts.keys))
     }
 
     /// What the served index says of each document: its header, as `CrossReferenceStore.documentHeaders`
@@ -695,6 +715,22 @@ enum CollectionRoutes {
 
     static func invalidField(_ name: String, _ detail: String) -> APIProblem {
         APIProblem(.badRequest, code: "INVALID_FIELD", detail: "\(name): \(detail)")
+    }
+
+    /// A text a collection or an entry keeps as it is given: refused, as a note's is, with U+0000, where
+    /// SQLite's text ends, or past `UserDataServices.noteTextLimit` in UTF-8.
+    static func checked(_ text: String, _ field: String) throws -> String {
+        guard text.utf8.count <= UserDataServices.noteTextLimit else {
+            throw invalidField(field, "may hold at most \(UserDataServices.noteTextLimit / 1_048_576) MiB of text, in UTF-8.")
+        }
+        guard !text.unicodeScalars.contains("\0") else { throw invalidField(field, "cannot hold U+0000.") }
+        return text
+    }
+
+    /// Summary only, set where the kit's rule does not offer it, as Briefing packet's card is refused.
+    static func depthNotOffered() -> APIProblem {
+        APIProblem(.conflict, code: "DEPTH_NOT_OFFERED",
+                   detail: "Summary only shows a summary of each document, and none of this collection's documents has one stored.")
     }
 
     static func notFound(_ id: String) -> APIProblem {
