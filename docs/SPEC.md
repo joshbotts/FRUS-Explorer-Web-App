@@ -1182,10 +1182,12 @@ Build in six phases, plus an optional seventh for the managed variant. Phase 1 a
 | 2. Research layer | Notes, highlights, tags, projects, saved searches, corpora, scopes, history and method appendix. JSON and `.fruscollection` import. Collections with HTML, Word, BibTeX, RIS and `.fruscollection` export. Citation Lookup. The daily backup and its restore. For a shared deployment: sign-in through a trusted proxy, serving under a path, and releases cut by hand | Check 6 green; a Mac JSON export imports every model type it carries without loss, 15 at `formatVersion` 6 and 23 at 7 |
 | 3. Library and archives | Standalone mode: download, index, sideload, remove, corrections check and update review. Source Explorer, NARA and Zotero, the cross-reference graph, analytics, About the Series, PDF through Gotenberg, multi-user sign-in | Checks 2, 7 and 8 green on the full corpus |
 | 4. Semantic and language | Shards, the semantic Related signal, the map, meaning search, the Linux lemmatizer and its baseline, live word clouds, collocates, Archives Visits packets | Check 9 green |
-| 5. Hardening | Backup and restore drill, upgrade path, accessibility audit, 20-user load test | Checks 11 and 12 green |
+| 5. Hardening | The first release, moved here from phase 2 on the owner's word; backup and restore drill, upgrade path, accessibility audit, 20-user load test | Checks 11 and 12 green |
 | 6. Managed variant (optional) | Snapshot mode, the build job and the overlay; option A on ECS with Fargate; option B and its recipes where uptime or other platforms need it | The acceptance checks under Managed platform variant |
 
 Only phase 0 can be sized now: roughly two to four weeks, the range the June porting assessment gave its own spike. Estimates for later phases should follow its measurements.
+
+So far: phase 0 ended on 5 October 2026, when checks 2–4 passed on Linux; phase 1 was signed off on 13 October; and phase 2 on 29 October, on check 6 and the owner's own version-7 JSON export imported without loss. The first release moved to phase 5, on the owner's word. PLAN's Owner checkpoints record each.
 
 ### Changes requested in the Mac app
 

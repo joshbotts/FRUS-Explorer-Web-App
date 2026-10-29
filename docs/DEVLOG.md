@@ -2,6 +2,35 @@
 
 One entry per session, newest first.
 
+## Phase 2's sign-off
+
+29 October 2026 · branch `claude/phase-2-docs-update-6aad70` · [#92](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/92) · upstream `fb542514`, unchanged
+
+The owner signed phase 2 off, and this pull request records it. No code changes, and nothing under `web/`, `Sources/` or `fixtures/`.
+
+**What the sign-off rests on,** each run on 29 October:
+- **Check 6** passes in CI's compose job over the 393 fixture rows, and on the owner's own JSON export of that day, at format version 7 from a `v2` build, never committed: `frus-parity check-highlights` held each of its highlights to the kit over a clone of HistoryAtState/frus, none to review, and the browser half passed on a Compose install of `main`'s `edge`, `b9562a4`.
+- **The import without loss:** `frus-parity import-check` brought in all 23 types, every record held as the file has it, none replaced, kept, set aside or repeated, its one formatted note read by the codec; `export-check` found the server's export of it the same, but for `frusExplorerLight`.
+- **A web collection in the Mac:** S18f's `.fruscollection` opened whole in the Mac app, its title page, both sections, the five documents, the note block, the excerpt, a document's note, a headnote's fallback and the apparatus.
+- **The restore drill,** run by S18f's session on the owner's install at the owner's request: `frus-light backup`, the server stopped, `restore`, which kept the store it replaced, and the server started again at migration 3. The export sheet's counts, and a digest of a JSON export, 242 records, were the same before and after.
+
+**The first release waits for phase 5,** on the owner's word: nothing in phase 2's exit needs one, and `edge` moves with each merge. `:1.0-1776` still names `e15d651`, `main` at #49 on 23 October, the last build `image.yml` moved it to before S14g left that tag to releases, so the install guide now says to follow `edge` until the first release.
+
+**Records**
+
+- `PLAN.md`: where the plan stands, in the Summary; the phase-2 paragraph after the session table; the sign-off's paragraph after the last pin move's, with what is left past it; S12d's done-when, whose release waits for phase 5; the Owner checkpoints, where the watch's first run, the restore drill, Mac checks 9–14, the web collection in the Mac and the sign-off read done, and the first release deferred; and the owner's answers of 29 October.
+- `README.md`: the status, with what works today grouped by the corpus, the research layer and running it, and the phase-2 features the old Next paragraph named alone (saved searches, corpora and scopes; projects and the trail; collections; the JSON export written back; the PostgreSQL store); Known gaps and Next; and a new section, Development plan, with each phase's scope, exit and status.
+- `SPEC.md`: the delivery plan's progress, and the first release in phase 5's row.
+- `INSTALL.md`: Releases says where `:1.0-1776` stopped, and to follow `edge` until the first release.
+
+**Notes**
+
+- **Mac checks 9–14 were recorded from the merges,** which follow each check: the owner merges a web-authored upstream pull request only once its Mac check passes.
+- **The risk row "Highlights beyond Chromium"** asks for another browser by hand before sign-off. No session recorded one, and the sign-off's paragraph names it as left.
+- **The Settings and 1861 export checkpoints** still read To do, as before: this pull request records only what phase 2's sign-off settled.
+
+**Next:** the two follow-ups the last pin move unblocked, each a pull request of its own: Project Home's focus subjects, their editor, a lead's line and a visit's head (S17f's); and Add Documents' Citations and Tags (S18d's). Then phase 3's plan, its rows read from the app's code at the pin, as phase 2's were on 23 October. S12d moves the pin to 1861 once `version-1.0` is tagged.
+
 ## Pin move: FRUS-Explorer#1813 and #1814, with #1812
 
 29 October 2026 · branch `claude/gracious-jennings-5d5f55` · [#91](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/91) · upstream `fb542514`
