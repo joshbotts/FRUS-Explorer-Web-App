@@ -89,15 +89,18 @@ import Testing
             #expect(shared.entries[1].notes == ["Read beside the second letter."])
             #expect(shared.entries[2].notes == ["Chosen alone."])
 
-            // A pre-RTF blob, July 2026's JSON, healed to RTF of its text.
+            // A pre-RTF blob, July 2026's `AttributedString` JSON, healed to RTF of its own text; any other JSON kept.
             try fixture.rows.run("UPDATE collection_entries SET rich_text = ? WHERE upper(id) = ?",
-                                 [.blob(Array(#"["Read together.",{}]"#.utf8)), .text(prose.entryIds[0])])
+                                 [.blob(Array(#"["Read ",{"a":1},"from the blob.",{}]"#.utf8)), .text(prose.entryIds[0])])
             let healed = try Self.file(try await Self.native(owner, berlin.id))
-            #expect(RTFReader.read([UInt8](try #require(healed.entries[3].richText)))?.text == "Read together.")
+            #expect(RTFReader.read([UInt8](try #require(healed.entries[3].richText)))?.text == "Read from the blob.")
+            try fixture.rows.run("UPDATE collection_entries SET rich_text = ? WHERE upper(id) = ?",
+                                 [.blob(Array(#"{"text": "no runs"}"#.utf8)), .text(prose.entryIds[0])])
+            #expect(try Self.file(try await Self.native(owner, berlin.id)).entries[3].richText == Data(#"{"text": "no runs"}"#.utf8))
 
             let history = try decode(HistoryPage.self, try await owner.get("/api/v1/me/history"))
-            #expect(history.exports.map(\.format) == ["fruscollection", "fruscollection", "fruscollection"])
-            #expect(history.exports.map(\.documentCount) == [2, 2, 2] && history.exports.first?.formatName == "FRUS Collection (shareable)")
+            #expect(history.exports.map(\.format) == ["fruscollection", "fruscollection", "fruscollection", "fruscollection"])
+            #expect(history.exports.map(\.documentCount) == [2, 2, 2, 2] && history.exports.first?.formatName == "FRUS Collection (shareable)")
 
             let notes = try await owner.send(.post, "\(path)/export", #"{"format": "html", "includeNotes": true}"#)
             #expect(notes.status == .badRequest && problemCode(notes) == "INVALID_FIELD")
@@ -167,6 +170,14 @@ import Testing
             nul.entries[0].text = "Let\u{0}ters"
             let refusedText = try await Self.importing(owner, try NativeCollectionSerializer.encode(nul))
             #expect(refusedText.status == .badRequest && problemCode(refusedText) == "INVALID_FIELD")
+            var climbing = try NativeCollectionSerializer.decode(exported)
+            climbing.entries[1].documentId = "../d1"
+            let refusedId = try await Self.importing(owner, try NativeCollectionSerializer.encode(climbing))
+            #expect(refusedId.status == .badRequest && problemCode(refusedId) == "INVALID_FIELD")
+            var many = try NativeCollectionSerializer.decode(exported)
+            many.entries = Array(repeating: FRUSCollectionFile.Entry(kind: "heading", text: "A"), count: CollectionFileRoutes.entryLimit + 1)
+            let tooMany = try await Self.importing(owner, try NativeCollectionSerializer.encode(many))
+            #expect(tooMany.status == .unprocessableContent && problemCode(tooMany) == "COLLECTION_FILE_TOO_LARGE")
             let plainText = try await owner.send(.post, "\(Self.base)/import", "{}", contentType: "text/plain")
             #expect(plainText.status == .unsupportedMediaType)
             #expect(try decode(CollectionList.self, try await owner.get(Self.base)).total == 2, "a refused file makes nothing")
@@ -192,6 +203,13 @@ import Testing
             let linked = try await CollectionTests.detail(owner, .patch, path, try CollectionTests.json(["savedSearchId": search.id.lowercased()]))
             #expect(linked.savedSearchId == search.id && linked.savedSearchName == "Treaties" && !linked.takesHandAddedEntries)
             #expect(linked.volumesNotHeld.isEmpty && linked.documentCount == 0)
+            // Its documents are its results, so Summary only is had where the user has any summary stored.
+            #expect(!linked.summariesAvailable && !linked.bodyDepths.contains("summaryOnly"))
+            let none = try await owner.send(.patch, path, #"{"defaultBodyDepth": "summaryOnly"}"#)
+            let noneDetail = try decode(APIProblem.Body.self, none).detail
+            #expect(problemCode(none) == "DEPTH_NOT_OFFERED" && noneDetail.contains("you have no summary stored"), "\(noneDetail)")
+            try fixture.rows.addSummary("5A000000-0000-4000-8000-000000000009", documentId: "d2", responseText: "A summary of d2.")
+            #expect(try await CollectionTests.detail(owner, .get, path).bodyDepths == ["full", "summaryOnly", "index"])
 
             let results = try decode(CollectionExportRoutes.Results.self, try await owner.get("\(path)/results"))
             #expect(results.total == 2 && Set(results.items.map(\.documentId)) == ["d1", "d2"])
@@ -250,6 +268,33 @@ import Testing
             let removed = try await CollectionTests.detail(owner, .post, "\(path)/entries-from-before-link/remove")
             #expect(removed.entries.map(\.kind) == ["generated"] && removed.entries.map(\.sortOrder) == [0])
             #expect(try fixture.rows.column("SELECT id FROM summaries WHERE is_headnote_draft = 1").isEmpty, "the entry's draft went with it")
+        }
+    }
+
+    /// A file brought back into the account it came from takes a copy of each headnote draft its entries
+    /// name, the web's own, so that the headnote it shares with its source is not lost by a save or a delete
+    /// of either.
+    @Test func anImportCopiesTheHeadnoteDraftsItsEntriesName() async throws {
+        let fixture = try await UserDataFixture(volumes: [Self.volume])
+        defer { withExtendedLifetime(fixture) {} }
+        try await fixture.app.test(.router) { client in
+            let owner = Browser(client: client)
+            let berlin = try await CollectionTests.made(owner, "Berlin")
+            let path = "\(Self.base)/\(berlin.id)"
+            let letters = try await CollectionTests.edit(owner, "\(path)/documents", try CollectionTests.documents(["d1"]))
+            _ = try await owner.send(.patch, "\(path)/entries/\(letters.entryIds[0])", #"{"includeHeadnote": true}"#)
+            let written = try await CollectionTests.detail(owner, .put, "\(path)/entries/\(letters.entryIds[0])/headnote", #"{"text": "Mine."}"#)
+            let original = try #require(written.entries[0].headnoteSummaryId)
+            let file = Data(buffer: try await Self.native(owner, berlin.id).body)
+            #expect(try NativeCollectionSerializer.decode(file).entries[0].headnoteSummaryId?.uuidString == original)
+            let imported = try decode(CollectionDetail.self, try await Self.importing(owner, file))
+            let copy = try #require(imported.entries[0].headnoteSummaryId)
+            #expect(copy != original)
+            #expect(try fixture.rows.column("SELECT response_text || ' ' || authorship FROM summaries WHERE is_headnote_draft = 1")
+                == ["Mine. userWritten", "Mine. userWritten"])
+            _ = try await CollectionTests.detail(owner, .put, "\(Self.base)/\(imported.id)/entries/\(imported.entries[0].id)/headnote", #"{"text": "Theirs."}"#)
+            _ = try await owner.send(.delete, "\(Self.base)/\(imported.id)")
+            #expect(try fixture.rows.column("SELECT upper(id) FROM summaries WHERE is_headnote_draft = 1") == [original], "the source's headnote stays")
         }
     }
 

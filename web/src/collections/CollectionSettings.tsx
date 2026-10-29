@@ -11,7 +11,7 @@ import type { NoteRun } from '../api/types';
 import { projectsQuery } from '../api/userData';
 import { copy } from '../copy';
 import { runsText } from '../editor/runs';
-import { Modal } from '../shell/Modal';
+import { closeAtOnce, Modal } from '../shell/Modal';
 import { useActiveProjectId } from '../shell/ProjectPicker';
 import { ChosenCheckbox, ChosenSelect } from './chosen';
 import { bodyDepthChoices } from './collectionRules';
@@ -422,19 +422,38 @@ function SmartCollectionRows({ detail }: { detail: CollectionDetail }) {
   const searches = useQuery(savedSearchesQuery);
   const [picking, setPicking] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  // The row that takes the pressed one's place, focused once the answer has drawn it.
+  const focusNext = useRef<'link' | 'unlink' | null>(null);
+  const linking = useRef(false);
   const linkButton = useRef<HTMLButtonElement>(null);
   const unlinkButton = useRef<HTMLButtonElement>(null);
   const words = copy.collectionSettings;
   const held = searches.data?.items ?? [];
+  const linked = Boolean(detail.savedSearchId);
 
+  useEffect(() => {
+    if (focusNext.current === 'unlink' && linked) unlinkButton.current?.focus();
+    else if (focusNext.current === 'link' && !linked) linkButton.current?.focus();
+    else return;
+    focusNext.current = null;
+  }, [linked]);
+
+  /** Links or unlinks once the answer comes, the picker open until then, holding the pressed row's focus. */
   async function link(savedSearchId: string | null) {
-    setPicking(false);
+    if (linking.current) return;
+    linking.current = true;
     setFailure(null);
     try {
       await linkSavedSearch(client, detail.id, savedSearchId);
-      requestAnimationFrame(() => (savedSearchId ? unlinkButton : linkButton).current?.focus());
+      focusNext.current = savedSearchId ? 'unlink' : 'link';
+      closeAtOnce(() => setPicking(false));
     } catch (error) {
+      // Refused, the rows stay as they were: a pick goes back to Link to Saved Search…, and Unlink keeps its focus.
+      closeAtOnce(() => setPicking(false));
       setFailure(errorMessage(error));
+      if (savedSearchId) linkButton.current?.focus();
+    } finally {
+      linking.current = false;
     }
   }
 

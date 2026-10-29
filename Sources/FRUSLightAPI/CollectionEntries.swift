@@ -429,7 +429,8 @@ enum CollectionEntryRoutes {
                 if kind == .document {
                     summaryOnlyRefused = summarized.contains("\(entry.volumeId)/\(entry.documentId)") ? nil : CollectionRoutes.documentDepthNotOffered()
                 } else {
-                    summaryOnlyRefused = CollectionRoutes.summariesAvailable(held, summarized: summarized) ? nil : CollectionRoutes.depthNotOffered()
+                    summaryOnlyRefused = CollectionRoutes.summariesAvailable(held, summarized: summarized)
+                        ? nil : CollectionRoutes.depthNotOffered(smart: held.savedSearchId != nil)
                 }
             } else {
                 summaryOnlyRefused = nil
@@ -574,6 +575,7 @@ enum CollectionEntryRoutes {
                     throw APIProblem(.conflict, code: "NOT_A_DOCUMENT", detail: "Only a document entry has a headnote.")
                 }
                 let seed = try await headnote(of: at, in: held, for: user.id, in: store)
+                let prompt = Self.headnotePrompt(of: at, in: held)
                 guard let commit = CollectionEditing.headnoteCommit(body.text, seed: seed) else {
                     return try await CollectionRoutes.detail(held, for: user.id, in: store, resources: resources, provider: provider)
                 }
@@ -584,7 +586,10 @@ enum CollectionEntryRoutes {
                     let rows = try await CollectionRoutes.changed(id, for: user.id, in: store, at: time, addingSummaries: [draft],
                                                                   deletingSummaries: named.map { [$0] } ?? []) { collection in
                         let position = try index(of: entryId, in: collection)
-                        guard collection.entries[position].headnoteSummaryId == named else { throw HeadnoteMoved() }
+                        // The seed was found by the summary the entry names, else by its prompt: either moved, it is read again.
+                        guard collection.entries[position].headnoteSummaryId == named, Self.headnotePrompt(of: position, in: collection) == prompt else {
+                            throw HeadnoteMoved()
+                        }
                         collection.entries[position].headnoteSummaryId = draft.id
                     }
                     return try await detail(rows, user.id)
@@ -694,8 +699,13 @@ enum CollectionEntryRoutes {
             (try entry.headnoteSummaryId.flatMap { try store.summary($0.uuidString, of: user) },
              try stored ?? store.summaries(of: document, for: user))
         }
-        let promptId = entry.summaryPromptIdOverride ?? CollectionEditing.resolvedDefaults(of: index, in: collection)?.summaryPromptId
-        return CollectionEditing.currentHeadnoteSummary(chosen: chosen, stored: summaries, promptId: promptId)
+        return CollectionEditing.currentHeadnoteSummary(chosen: chosen, stored: summaries, promptId: headnotePrompt(of: index, in: collection))
+    }
+
+    /// The prompt a headnote's seed is found by where the entry names none: its override, else what Default
+    /// resolves to.
+    static func headnotePrompt(of index: Int, in collection: CollectionExport) -> UUID? {
+        collection.entries[index].summaryPromptIdOverride ?? CollectionEditing.resolvedDefaults(of: index, in: collection)?.summaryPromptId
     }
 
     /// A headnote the card was written over that another save replaced before this one's write.

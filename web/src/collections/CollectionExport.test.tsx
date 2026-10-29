@@ -159,7 +159,13 @@ describe('the live preview', () => {
   it('previews a smart collection’s results, and counts them in the bar as the app counts those it fetched', async () => {
     const results = Array.from({ length: 25 }, (_, at) => ({ volumeId: 'frus1961-63v06', documentId: `d${at + 1}` }));
     server({
-      [path]: detail({ savedSearchId: 'S0000000-0000-4000-8000-000000000001', takesHandAddedEntries: false, entries: [] }),
+      // A volume named, which the preview does not count for a smart collection, as the app counts none.
+      [path]: detail({
+        savedSearchId: 'S0000000-0000-4000-8000-000000000001',
+        takesHandAddedEntries: false,
+        entries: [],
+        volumesNotHeld: ['frus1961-63v05'],
+      }),
       [`${path}/results`]: { total: results.length, items: results },
     });
     renderAt(`/collections/${berlinId}`);

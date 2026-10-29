@@ -241,15 +241,24 @@ extension RelationalUserStore: CollectionStore {
         values.filter { $0.key != "id" && held[$0.key] != $0.value }
     }
 
-    /// Adds entries, each refused, and the write with it, under an id one of the user's entries holds.
+    /// Adds entries, each refused, and the write with it, under an id one of the user's entries holds. The
+    /// user's ids are read once, in uppercase, so an add of many entries, as an import's, costs one read of
+    /// them rather than one for each entry (S18f).
     static func insertEntries(_ entries: [[String: SQLiteValue]], for user: String, in db: UserStoreTransaction) throws {
+        guard !entries.isEmpty else { return }
+        var held = try heldIds(of: entriesTable.name, for: user, in: db)
         for entry in entries {
             guard let id = entry["id"]?.text else { throw ResearchRowStoreError.invalidId(table: entriesTable.name, id: nil) }
-            guard try row(entriesTable, id: id, of: user, in: db) == nil else {
+            guard held.insert(UserSearchText.uuidString(id)).inserted else {
                 throw ResearchRowStoreError.invalidId(table: entriesTable.name, id: id)
             }
             try insert(entry, into: entriesTable, for: user, in: db)
         }
+    }
+
+    /// The ids of the user's rows of `table`, in uppercase.
+    static func heldIds(of table: String, for user: String, in db: UserStoreTransaction) throws -> Set<String> {
+        Set(try db.query("SELECT upper(id) FROM \(table) WHERE user_id = ?", [.text(user)]).compactMap { $0.first?.text })
     }
 
     /// Adds headnote drafts, each refused, and the write with it, when it is no draft or under an id one
@@ -280,14 +289,16 @@ extension RelationalUserStore: CollectionStore {
     /// Makes a new collection's notes, each refused, and the write with it, under an id one of the user's
     /// notes holds, and rewrites the row of `user_search` of each document they are on, once.
     static func insertNotes(_ notes: [NoteRecord], for user: String, in db: UserStoreTransaction) throws {
+        guard !notes.isEmpty else { return }
+        var held = try heldIds(of: "notes", for: user, in: db)
         var documents: [DocumentKey] = []
+        var seen = Set<DocumentKey>()
         for note in notes {
-            guard try db.scalar("SELECT 1 FROM notes WHERE user_id = ? AND upper(id) = ?",
-                                [.text(user), .text(UserSearchText.uuidString(note.id))]) == nil else {
+            guard held.insert(UserSearchText.uuidString(note.id)).inserted else {
                 throw ResearchRowStoreError.invalidId(table: "notes", id: note.id)
             }
             try insertNote(note, for: user, in: db)
-            if !documents.contains(note.document) { documents.append(note.document) }
+            if seen.insert(note.document).inserted { documents.append(note.document) }
         }
         for document in documents { try refreshSearch(of: document, for: user, in: db) }
     }

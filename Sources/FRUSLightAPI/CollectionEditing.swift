@@ -80,8 +80,13 @@ enum CollectionEditing {
     /// `CollectionOutline.canIndent(_:in:)`: a heading below the cap whose nearest preceding heading
     /// sits at its level or deeper; the first heading never.
     static func canIndent(_ index: Int, in outline: [CollectionEntryExport]) -> Bool {
+        canIndent(index, in: outline, depths: depths(outline))
+    }
+
+    /// The same over the outline's depths resolved already, as the editor's view gives each heading, so the
+    /// view resolves the outline once rather than once for each heading (S18f).
+    static func canIndent(_ index: Int, in outline: [CollectionEntryExport], depths resolved: [Int]) -> Bool {
         guard outline.indices.contains(index), outline[index].entryKind == .heading else { return false }
-        let resolved = depths(outline)
         let level = resolved[index]
         guard level < CollectionOutline.maxLevel else { return false }
         for i in stride(from: index - 1, through: 0, by: -1) where outline[i].entryKind == .heading {
@@ -92,8 +97,12 @@ enum CollectionEditing {
 
     /// `CollectionOutline.canOutdent(_:in:)`: any heading deeper than level 1.
     static func canOutdent(_ index: Int, in outline: [CollectionEntryExport]) -> Bool {
+        canOutdent(index, in: outline, depths: depths(outline))
+    }
+
+    static func canOutdent(_ index: Int, in outline: [CollectionEntryExport], depths resolved: [Int]) -> Bool {
         guard outline.indices.contains(index), outline[index].entryKind == .heading else { return false }
-        return depths(outline)[index] > 1
+        return resolved[index] > 1
     }
 
     /// `CollectionOutline.indentSection(at:in:)`: the heading and every heading of its section a level

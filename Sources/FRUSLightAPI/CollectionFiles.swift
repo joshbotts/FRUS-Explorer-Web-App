@@ -20,7 +20,8 @@
 //   heals a pre-RTF prose blob to RTF first;
 // - `CollectionListView.importCollection(from:)` and `apply(_:into:)`: the collection filed under the
 //   project the user works in, its notes made on their documents with no project, and each field the
-//   values leave out at the model's initial value;
+//   values leave out at the model's initial value; a headnote draft of the user's an entry names copied
+//   for it, the web's own, as `Collection.duplicate(in:)` copies one, where the app's import shares it;
 // - `CollectionListView.snapshotSmartCollection(_:)` and `SmartCollectionSnapshot.create(from:results:into:)`:
 //   the snapshot filed under the project the user works in too, its fields at the model's initial values
 //   where the kit's values leave them out.
@@ -35,6 +36,10 @@ import NIOCore
 enum CollectionFileRoutes {
     /// The largest file an import takes: room for a collection of a thousand documents, each with notes.
     static let fileLimit = 16 * 1_024 * 1_024
+    /// The most entries, and the most notes, one file brings: five times a smart collection's 1,000 results,
+    /// which the app's snapshot makes a collection of, so that no file holds the store, which every user
+    /// shares, for long.
+    static let entryLimit = 5_000
 
     /// `export.native.smartUnsupported`: a smart collection's documents are its search's, which no file carries.
     static let smartUnsupported = "Smart collections can’t be shared as a file yet."
@@ -57,11 +62,15 @@ enum CollectionFileRoutes {
                 throw JSONBody.tooLarge(fileLimit)
             }
             let active = try await Blocking.run { try store.activeProjectId(of: user.id) }.flatMap(UUID.init(uuidString:))
-            let made = try imported(data, projectId: active, at: UserStoreDate.rounded(now()))
+            let time = UserStoreDate.rounded(now())
+            // Read off the cooperative pool, as a Mac JSON export's import reads its file.
+            var made = try await Blocking.run { try imported(data, projectId: active, at: time) }
+            let (drafts, unreadable) = try await CollectionRoutes.headnoteDrafts(of: user.id, in: store)
+            let copies = copyingDrafts(&made.collection, drafts: drafts, unreadable: unreadable, at: time)
             let rows: CollectionRows
             do {
-                rows = try await Blocking.run {
-                    try store.addCollection(CollectionRoutes.change(made.collection, notes: made.notes), for: user.id)
+                rows = try await Blocking.run { [made] in
+                    try store.addCollection(CollectionRoutes.change(made.collection, addedSummaries: copies, notes: made.notes), for: user.id)
                 }
             } catch let error as ResearchRowStoreError {
                 throw APIProblem(.internalServerError, code: "STORE_REFUSED", detail: error.description)
@@ -139,17 +148,33 @@ enum CollectionFileRoutes {
     }
 
     /// A prose entry as the file carries it, `ProseRichText.migrateLegacyJSONIfNeeded`'s: RTF as it is
-    /// kept, and a pre-RTF blob, July 2026's JSON, as RTF, the codec's of its text, where the app writes
-    /// its bold and italic too, which the web reads as its text alone; anything else as it is, as the
-    /// app leaves what it cannot read.
+    /// kept, and a pre-RTF blob, July 2026's `AttributedString` JSON, as RTF, the codec's of the blob's own
+    /// text, where the app writes its bold and italic too, which the web reads as its text alone; anything
+    /// else as it is, as the app leaves what it cannot read.
     static func healed(_ entry: CollectionEntryExport) -> CollectionEntryExport {
-        guard entry.entryKind == .prose, let stored = entry.richText, !stored.isEmpty,
-              RTFReader.read([UInt8](stored)) == nil, (try? JSONSerialization.jsonObject(with: stored)) != nil else { return entry }
-        let text = entry.text ?? ""
-        guard RichTextRuns.textProblem(text) == nil else { return entry }
+        guard entry.entryKind == .prose, let stored = entry.richText, !stored.isEmpty, RTFReader.read([UInt8](stored)) == nil,
+              let text = legacyText(stored), RichTextRuns.textProblem(text) == nil else { return entry }
         var healed = entry
         healed.richText = Data(RTFWriter.write([RichTextRun(text: text)]))
         return healed
+    }
+
+    /// The text of a legacy blob, an `AttributedString`'s `Codable` JSON: an array of its runs' strings, each
+    /// followed by its attributes, an object; nil for any other JSON or none.
+    static func legacyText(_ data: Data) -> String? {
+        guard let runs = try? JSONSerialization.jsonObject(with: data) as? [Any], !runs.isEmpty, runs.count.isMultiple(of: 2) else {
+            return nil
+        }
+        var text = ""
+        for (index, element) in runs.enumerated() {
+            if index.isMultiple(of: 2) {
+                guard let run = element as? String else { return nil }
+                text += run
+            } else if !(element is [String: Any]) {
+                return nil
+            }
+        }
+        return text
     }
 
     // MARK: - The collection a file makes
@@ -171,6 +196,10 @@ enum CollectionFileRoutes {
                              detail: NativeCollectionError.notACollectionFile.errorDescription ?? "\(error)")
         }
         let values = NativeCollectionSerializer.importedValues(from: file)
+        guard values.collection.entries.count <= entryLimit, values.notes.count <= entryLimit else {
+            throw APIProblem(.unprocessableContent, code: "COLLECTION_FILE_TOO_LARGE",
+                             detail: "A collection file may bring at most \(entryLimit) entries and \(entryLimit) notes; this one brings \(values.collection.entries.count) entries and \(values.notes.count) notes.")
+        }
         var collection = values.collection
         try checkTexts(of: collection)
         collection.projectIds = projectId.map { [$0] } ?? []
@@ -203,7 +232,38 @@ enum CollectionFileRoutes {
                                   (entry.generatedBlockType, "generatedBlockType")] {
                 if let text { _ = try CollectionRoutes.checked(text, "entries[\(index)].\(field)") }
             }
+            // A document's and a volume's ids as the routes that add one take them, a volume's any FRUS id.
+            for (id, field) in [(entry.documentId, "documentId"), (entry.volumeId, "volumeId")] where !id.isEmpty {
+                guard id.utf8.count <= 256, FRUSURLScheme.isSafeComponent(id) else {
+                    throw CollectionRoutes.invalidField("entries[\(index)].\(field)", "\(id.prefix(60)) is not a document's or a volume's id.")
+                }
+            }
         }
+    }
+
+    /// The web's own: each headnote draft of the user's an imported entry names, copied for it, as
+    /// `Collection.duplicate(in:)` copies one, so that a file brought back into the account it came from
+    /// shares no draft with the collection it was written from, whose headnote a save or a delete of either
+    /// would take. The app's import keeps the id, which on another person's device names nothing. A draft
+    /// the server cannot read the entry names no longer, as a duplicate's names none.
+    static func copyingDrafts(_ collection: inout CollectionExport, drafts: [UUID: GeneratedSummaryExport], unreadable: Set<UUID>,
+                              at time: Date) -> [GeneratedSummaryExport] {
+        var copies: [GeneratedSummaryExport] = []
+        for index in collection.entries.indices {
+            guard let draftId = collection.entries[index].headnoteSummaryId else { continue }
+            if var draft = drafts[draftId] {
+                draft.id = UUID()
+                draft.authorship = draft.authorship ?? .aiGenerated
+                draft.isHeadnoteDraft = true
+                draft.createdAt = time
+                draft.lastModified = time
+                copies.append(draft)
+                collection.entries[index].headnoteSummaryId = draft.id
+            } else if unreadable.contains(draftId) {
+                collection.entries[index].headnoteSummaryId = nil
+            }
+        }
+        return copies
     }
 
     // MARK: - The snapshot

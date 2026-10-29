@@ -464,7 +464,8 @@ struct KitReference: Sendable {
     let pipeline: IndexingPipeline
     let persons: PersonMentionStore
     let references: SQLiteConnection
-    /// The kit's search over the index, as the app's `AppState.searchService` runs a saved search.
+    /// The kit's search over the index with the user's store attached, the user's notes and summaries its
+    /// half, as the server runs the user's saved search (S18f).
     let search: SearchService
 
     /// The project the user works in, as the app's `AppState.activeProjectId` names it.
@@ -480,7 +481,10 @@ struct KitReference: Sendable {
         let fts5 = try FTS5Store(readingDatabaseAt: files.liveIndex)
         pipeline = try IndexingPipeline(readingIndexAt: files.liveIndex, fts5Store: fts5,
                                         resources: resources.indexing, volumesDirectory: files.volumesDirectory)
-        search = SearchService(fts5Store: fts5, pipeline: pipeline)
+        let user = try ServedFixture.decode(Me.self, try await session.get("/api/v1/me")).userId
+        let searching = try IndexingPipeline(readingIndexAt: files.liveIndex, fts5Store: fts5, resources: resources.indexing,
+                                             volumesDirectory: files.volumesDirectory, userStore: files.userStore)
+        search = SearchService(fts5Store: fts5, pipeline: searching, userSource: .attachedStore(userId: user))
         persons = try PersonMentionStore(readingDatabaseAt: files.liveIndex)
         references = try SQLiteConnection.immutable(files.liveIndex)
     }

@@ -10,7 +10,7 @@ import { queryOptions, type QueryClient } from '@tanstack/react-query';
 import { servedPath } from './base';
 import { ApiError, getJSON, sendFile, sendForFile } from './client';
 import type { NoteRun } from './types';
-import { change, meQuery } from './userData';
+import { change, meQuery, searchesChanged } from './userData';
 
 const segment = encodeURIComponent;
 
@@ -574,13 +574,16 @@ export async function importCollectionFile(client: QueryClient, file: Blob): Pro
     made = await sendFile<CollectionDetail>(path, fresh.csrfToken, file, 'application/json');
   }
   collectionChanged(client, made);
-  // The notes it brought are the reader's now, on their documents.
+  // The notes it brought are the reader's now, on their documents, and the search finds them.
   for (const key of ['notes', 'documentNotes', 'note']) void client.invalidateQueries({ queryKey: [key] });
+  searchesChanged(client);
   return made;
 }
 
 /** Create Static Snapshot: the smart collection's results now, as a new collection of their documents. */
 export async function snapshotCollection(client: QueryClient, id: string): Promise<CollectionDetail> {
+  // Of the collection as the server holds it once the changes sent are answered, its name among them.
+  await whenAnswered(id);
   const made = (await change<CollectionDetail>(client, 'POST', `${base}/${segment(id)}/snapshot`))!;
   collectionChanged(client, made);
   return made;

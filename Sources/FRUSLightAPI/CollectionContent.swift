@@ -251,7 +251,10 @@ enum CollectionSmartSearch {
         do {
             return try await SmartCollectionSnapshot.documentRefs(parameters: saved.parameters, searchService: search.service)
         } catch let error as FTS5Error {
-            throw SearchRoutes.refusal(error)
+            // A saved search that cannot run, as one left with no terms, is the collection's conflict, in the search's words.
+            let refusal = SearchRoutes.refusal(error)
+            guard let problem = refusal as? APIProblem else { throw refusal }
+            throw APIProblem(.conflict, code: problem.code, detail: problem.detail, searchError: problem.searchError)
         }
     }
 }

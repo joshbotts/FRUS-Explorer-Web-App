@@ -13,6 +13,7 @@ import { errorMessage } from '../api/client';
 import {
   addExcerpts,
   type CollectionDetail,
+  collectionQuery,
   type EntryChanges,
   entryInspectorQuery,
   type EntryInspector as Inspected,
@@ -374,7 +375,12 @@ export function EntryInspector({ detail, entryId, onClose }: { detail: Collectio
             // The note is on this document, so an entry with every note (none chosen) already takes it; a
             // partial selection is given it, as the app's sheet appends it.
             if (entry.selectedNoteIds.length > 0) await change({ note: { id: noteId, included: true } });
-            else void client.invalidateQueries({ queryKey: entryInspectorQuery(detail.id, entryId).queryKey });
+            else {
+              // Every note is the entry's already: the inspector, and the collection, whose row counts the
+              // document's notes and whose preview shows them, are read again.
+              void client.invalidateQueries({ queryKey: entryInspectorQuery(detail.id, entryId).queryKey });
+              void client.invalidateQueries({ queryKey: collectionQuery(detail.id).queryKey });
+            }
           }}
           onClose={() => {
             setCreatingNote(false);
@@ -403,9 +409,10 @@ function HeadnoteCard({ collectionId, entryId, headnote }: { collectionId: strin
   const words = copy.collectionInspector;
   const empty = draft.trim() === '';
 
+  /** Leaves editing, drawn at once, so that Edit, which takes the pressed button's place, takes its focus. */
   function leave() {
-    setEditing(false);
-    requestAnimationFrame(() => editButton.current?.focus());
+    closeAtOnce(() => setEditing(false));
+    editButton.current?.focus();
   }
 
   async function save() {
@@ -414,6 +421,8 @@ function HeadnoteCard({ collectionId, entryId, headnote }: { collectionId: strin
     setFailure(null);
     try {
       await saveHeadnote(client, collectionId, entryId, draft);
+      // The card shows what was saved, and who wrote it, before it leaves editing, so a second Edit starts from it.
+      await client.refetchQueries({ queryKey: entryInspectorQuery(collectionId, entryId).queryKey });
       leave();
     } catch (error) {
       setFailure(errorMessage(error));

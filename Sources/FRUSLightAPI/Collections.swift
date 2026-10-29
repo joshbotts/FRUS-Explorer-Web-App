@@ -382,7 +382,9 @@ enum CollectionRoutes {
                         throw invalidField("defaultBodyDepth", "\(depth) is no body depth: full, summaryOnly or index.")
                     }
                     // Offered by the kit's rule, as Briefing packet is; a depth the collection holds stands.
-                    guard depth != summaryOnly || summaryOnlyOffered || collection.defaultBodyDepth == depth else { throw depthNotOffered() }
+                    guard depth != summaryOnly || summaryOnlyOffered || collection.defaultBodyDepth == depth else {
+                    throw depthNotOffered(smart: collection.savedSearchId != nil)
+                }
                     collection.defaultBodyDepth = depth
                 }
                 if let footnotes = body.includeFootnotes {
@@ -443,8 +445,8 @@ enum CollectionRoutes {
             let held = try await collection(id, of: user.id, in: store)
             let summaries = try await summarizedDocuments(of: user.id, in: store)
             guard offeredPresets(summariesAvailable: summariesAvailable(held, summarized: summaries)).contains(preset) else {
-                throw APIProblem(.conflict, code: "PRESET_NOT_OFFERED",
-                                 detail: "Briefing packet composes a summary of each document, and none of this collection's documents has one stored.")
+                let none = held.savedSearchId != nil ? "you have no summary stored" : "none of this collection's documents has one stored"
+                throw APIProblem(.conflict, code: "PRESET_NOT_OFFERED", detail: "Briefing packet composes a summary of each document, and \(none).")
             }
             let time = UserStoreDate.rounded(now())
             let rows = try await changed(id, for: user.id, in: store, at: time) { collection in
@@ -604,7 +606,9 @@ enum CollectionRoutes {
         let keys = entries.filter { $0.entryKind == .document || $0.entryKind == .excerpt }
             .map { DocumentKey(volumeId: $0.volumeId, documentId: $0.documentId) }
         let facts = await documentFacts(keys, provider: provider)
+        // The outline resolved once for the whole view, each heading's facts read from it.
         let depths = CollectionEditing.depths(entries)
+        let refs = entries.map(CollectionEditing.ref)
         let duplicates = CollectionEditing.duplicateDocumentKeys(in: entries)
         let introduction = NoteFormatting.runs(of: collection.introductionRichText.map { [UInt8]($0) },
                                                text: collection.introductionText ?? "")
@@ -656,9 +660,9 @@ enum CollectionRoutes {
                     excerptStart: entry.excerptStart, excerptEnd: entry.excerptEnd,
                     excerptRenderingVersion: entry.excerptRenderingVersion, excerptColorTag: entry.excerptColorTag,
                     generatedBlockType: entry.generatedBlockType,
-                    sectionEnd: kind == .heading ? CollectionEditing.sectionRange(of: index, in: entries).upperBound : nil,
-                    canIndent: CollectionEditing.canIndent(index, in: entries),
-                    canOutdent: CollectionEditing.canOutdent(index, in: entries),
+                    sectionEnd: kind == .heading ? CollectionOutline.sectionRange(of: index, refs: refs).upperBound : nil,
+                    canIndent: CollectionEditing.canIndent(index, in: entries, depths: depths),
+                    canOutdent: CollectionEditing.canOutdent(index, in: entries, depths: depths),
                     leftOut: CollectionEditing.leavesOut(kind, savedSearchId: collection.savedSearchId),
                     isDuplicate: kind == .document && duplicates.contains(key),
                     header: carriesDocument ? facts[key]?.header : nil,
@@ -678,9 +682,12 @@ enum CollectionRoutes {
     /// Whether summaries can be had for a collection on a server that writes none: whether a document
     /// entry's document has a summary stored that is not a headnote draft. The kit's
     /// `CollectionBodyDepth.available(summariesAvailable:)` reads it, as a host without a summarizer
-    /// passes whether it has summaries to show.
+    /// passes whether it has summaries to show. A smart collection's documents are its search's results,
+    /// which change with the index and are not run for this, so it can have them where the user has any
+    /// summary stored (S18f), an export naming each result with none.
     static func summariesAvailable(_ collection: CollectionExport, summarized: Set<String>) -> Bool {
-        collection.entries.contains { $0.entryKind == .document && summarized.contains("\($0.volumeId)/\($0.documentId)") }
+        if collection.savedSearchId != nil { return !summarized.isEmpty }
+        return collection.entries.contains { $0.entryKind == .document && summarized.contains("\($0.volumeId)/\($0.documentId)") }
     }
 
     /// The documents the user has a summary of that is no headnote draft and holds text, by key.
@@ -774,9 +781,10 @@ enum CollectionRoutes {
 
     /// Summary only, set where the kit's rule does not offer it, as Briefing packet's card is refused, with the
     /// app's reason a summary must be had (PLAN's S18f).
-    static func depthNotOffered() -> APIProblem {
-        APIProblem(.conflict, code: "DEPTH_NOT_OFFERED",
-                   detail: "Summary only shows a summary of each document, and none of this collection's documents has one stored. \(SummariesNotStored.appsReason)")
+    static func depthNotOffered(smart: Bool = false) -> APIProblem {
+        let none = smart ? "you have no summary stored" : "none of this collection's documents has one stored"
+        return APIProblem(.conflict, code: "DEPTH_NOT_OFFERED",
+                          detail: "Summary only shows a summary of each document, and \(none). \(SummariesNotStored.appsReason)")
     }
 
     /// Summary only, set on a document whose document has no summary stored, with the app's reason.

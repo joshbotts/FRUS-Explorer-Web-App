@@ -81,8 +81,12 @@ import Testing
             _ = try await note("d2", "The second letter's second note.")
             _ = try await session.send(.patch, "\(path)/entries/\(letters.entryIds[1])", try Self.json(["note": ["id": leftOut.id, "included": false]]))
 
-            // A smart collection of a saved search past the preview's cap, with two apparatus blocks; and a plain one.
-            let saved = try await session.json(SavedSearch.self, .post, "/api/v1/me/saved-searches", ["name": "Vienna", "search": "keywords=vienna"])
+            // A smart collection of a saved search past the preview's cap, with two apparatus blocks, one of whose
+            // results only a note of the user's finds; and a plain one.
+            _ = try await session.json(Note.self, .post, "/api/v1/me/volumes/frus1894Nicaragua/documents/d1/notes",
+                                       ["bodyText": "Compare the Vienna talks.", "runs": nil, "userTagIds": [], "projectIds": [], "selectedSummaryIds": []])
+            let saved = try await session.json(SavedSearch.self, .post, "/api/v1/me/saved-searches",
+                                               ["name": "Vienna", "search": "keywords=vienna&includeNotes=true"])
             let smart = try await session.json(CollectionDetail.self, .post, base, ["name": "Vienna, as searched"])
             for type in ["chronology", "personsIndex"] {
                 _ = try await session.send(.post, "\(base)/\(smart.id)/blocks", try Self.json(["generatedBlockType": type]))
@@ -132,6 +136,7 @@ import Testing
             // A smart collection's exports and previews, the kit's for its saved search's results.
             let results = try ServedFixture.decode(CollectionExportRoutes.Results.self, try await session.get("\(base)/\(smart.id)/results"))
             #expect(results.total > 20 && results.total < 40, "past the preview's cap: \(results.total)")
+            #expect(results.items.contains { $0.volumeId == "frus1894Nicaragua" && $0.documentId == "d1" }, "a result the user's note finds")
             for format in CollectionExportFormat.allCases where format != .fruscollection {
                 try await CollectionExportParityTests.sameDay { day in
                     let served = Data(buffer: try await session.send(.post, "\(base)/\(smart.id)/export",
@@ -328,7 +333,7 @@ import Testing
             "(seedIsAIDerived && !(seed?.responseText.isEmpty ?? true)) ? .aiEdited : .userWritten",
         ], file: "CollectionEditing.swift")
         #expect(try CollectionParityTests.server("Sources/FRUSLightAPI/CollectionEntries.swift")
-            .contains("let promptId = entry.summaryPromptIdOverride ?? CollectionEditing.resolvedDefaults(of: index, in: collection)?.summaryPromptId"))
+            .contains("collection.entries[index].summaryPromptIdOverride ?? CollectionEditing.resolvedDefaults(of: index, in: collection)?.summaryPromptId"))
         #expect(try CollectionParityTests.server("Sources/FRUSLightAPI/Collections.swift")
             .contains("if let link, collection.savedSearchId != link { collection.savedSearchId = link committed = true }"))
     }

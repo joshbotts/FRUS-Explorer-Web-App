@@ -13,7 +13,7 @@ import { copy } from '../copy';
 import { runsText } from '../editor/runs';
 import { MenuButton, type MenuEntry } from '../shell/MenuButton';
 import { ChosenSelect } from './chosen';
-import { bodyDepthOptions, entryChips, type EntryChip } from './collectionRules';
+import { bodyDepthChoices, entryChips, type EntryChip } from './collectionRules';
 import { useSaver } from './useSaver';
 
 const RichTextEditor = lazy(() => import('../editor/RichTextEditor'));
@@ -149,6 +149,8 @@ export function HeadingRow({
 }) {
   const field = useRef<HTMLInputElement>(null);
   const bodyId = useId();
+  // Summary only, which the server offers only where a document of the collection has a summary stored.
+  const summaryOnlyRefused = !collection.bodyDepths.includes('summaryOnly') && entry.bodyDepthOverride !== 'summaryOnly';
   const [text, setText] = useState(entry.text ?? '');
   const [focused, setFocused] = useState(false);
   const [bodyFailure, setBodyFailure] = useState<string | null>(null);
@@ -220,6 +222,7 @@ export function HeadingRow({
         <ChosenSelect
           id={bodyId}
           value={entry.bodyDepthOverride ?? ''}
+          aria-describedby={summaryOnlyRefused ? `${bodyId}-reason` : undefined}
           onChoose={(chosen) => {
             setBodyFailure(null);
             actions
@@ -228,12 +231,18 @@ export function HeadingRow({
           }}
         >
           <option value="">{copy.collectionEditor.sectionBodyDefault}</option>
-          {bodyDepthOptions(collection.bodyDepths, entry.bodyDepthOverride).map((depth) => (
-            <option key={depth} value={depth}>
+          {bodyDepthChoices(collection.bodyDepths, entry.bodyDepthOverride).map(({ depth, disabled }) => (
+            <option key={depth} value={depth} disabled={disabled}>
               {copy.collectionSettings.bodyDepths[depth] ?? depth}
             </option>
           ))}
         </ChosenSelect>
+        {/* Summary only, listed but not offered (S18f): the row is short, so its reason is the picker's description. */}
+        {summaryOnlyRefused && (
+          <span id={`${bodyId}-reason`} className="visually-hidden">
+            {copy.collectionSettings.summaryOnlyUnavailable} {copy.collectionSettings.summaryOnlyReason}
+          </span>
+        )}
       </div>
       {(saver.failure ?? bodyFailure) && (
         <p className="error" role="alert">
