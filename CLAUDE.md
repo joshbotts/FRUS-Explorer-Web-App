@@ -11,6 +11,7 @@ The self-hosted web edition of FRUS Explorer. `docs/PLAN.md` is the plan, `docs/
 5. The submodule pin moves only to a merged `FRUS-Explorer` commit, in a pull request of its own.
 6. Never commit Mac exports, TEI beyond `fixtures/`, EmbeddingGemma, credentials, `.build/` or `node_modules/`.
 7. Sessions never publish images. CI publishes from `main`.
+8. Sessions run beside each other under `docs/PLAN.md`'s arrangement (Phase 3, How sessions run beside each other): branch from `main` once, and merge `main` only when GitHub reports a conflict, once, when the pull request is otherwise ready; fill your row's stub in `docs/DEVLOG.md` and in `docs/PLAN.md` rather than inserting at the top; touch only the files your row names, a registration line beside its kin; run the suites locally and push when the row is done, so that a pull request costs one CI run.
 
 `upstream/FRUS-Explorer/CLAUDE.md` is the Mac app's guide, and it governs only pull requests on that repository. Synchronization with the app is this repository's work, at its sessions' cost: `docs/COORDINATION.md` says what web sessions take on and the four rules app sessions follow.
 

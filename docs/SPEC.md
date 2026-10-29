@@ -1187,7 +1187,7 @@ Build in six phases, plus an optional seventh for the managed variant. Phase 1 a
 
 Only phase 0 can be sized now: roughly two to four weeks, the range the June porting assessment gave its own spike. Estimates for later phases should follow its measurements.
 
-So far: phase 0 ended on 5 October 2026, when checks 2–4 passed on Linux; phase 1 was signed off on 13 October; and phase 2 on 29 October, on check 6 and the owner's own version-7 JSON export imported without loss. The first release moved to phase 5, on the owner's word. PLAN's Owner checkpoints record each.
+So far: phase 0 ended on 5 October 2026, when checks 2–4 passed on Linux; phase 1 was signed off on 13 October; and phase 2 on 29 October, on check 6 and the owner's own version-7 JSON export imported without loss. The first release moved to phase 5, on the owner's word. Phase 3 was planned on 29 October, in PLAN's Phase 3, with an arrangement for the sessions that run beside each other. PLAN's Owner checkpoints record each.
 
 ### Changes requested in the Mac app
 
