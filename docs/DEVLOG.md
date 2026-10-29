@@ -2,6 +2,63 @@
 
 One entry per session, newest first.
 
+## Session 17f, follow-up: Project Home's subjects and a lead's line, upstream
+
+28 October 2026 · branch `claude/admiring-bardeen-a3d5e2` · [#85](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/85) · upstream `32e295e5`, unchanged; [FRUS-Explorer#1813](https://github.com/joshbotts/FRUS-Explorer/pull/1813), open
+
+S17f ([#84](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/84)) gave each user the Mac's Project Home and left two of its parts out, since the kit code that makes them is internal at `32e295e5`: the Focus subjects, with the editor they open, and the line under each lead in Suggested Next. S17f's session asked for the pull request that makes that code public: `claude/project-home-subjects-and-snippets-public`, cut from `v2` at `d7130e9b` (#1812, which adds a plan under `Planning/` and nothing else), labelled `Mac`, its body saying "Mac verification requested", and not merged. Under rule 4 it changes shared files, and this repository changes only its records. S17f's own records, written meanwhile and merged before this entry, put one more piece in the same pull request, the head the app titles a visit by, so it gained a seventh commit after its first runs, and an eighth, the head's host-style test, which S17f's session then asked for; the whole check ran again at each.
+
+**What the two views read, found before anything changed:**
+- **Project Home's Focus subjects** (`ProjectHomeView.focusSubjectsSection`) are the kit's `VolumeSubjectProfiles.allSubjects`, from the bundled `volume-subject-profiles-index.json` through the app's loader, `VolumeSubjectProfilesStore`, filtered by the project's `defaultSubjectTagIds`: each chosen subject's name, in the vocabulary's order.
+- **Their editor** (`ProjectFocusSubjectsEditor`) lists the same vocabulary, each subject with its category, subcategory and the number of volumes it reaches, and above it "Suggested from your volumes": `ProjectFocusSuggestions.suggestions(engagedVolumeIds:profiles:excluding:limit:)`. That rule is pure, over the kit's type, but it was the app's, so making the vocabulary public alone would have left the server to copy it. The engaged volumes it starts from are `ProjectEngagedDocuments`', which reads SwiftData.
+- **A lead's line** (`ProjectHomeView.loadLeadSnippets()`) is `IndexingPipeline.documentSnippets(forKeys:)`: the summary in the index's `summary_text`, or else the document's text from its head on, folded and cut at the last word within 240 characters.
+- **A visit's head,** which S17f's History needs: the app titles a visit by `DocumentDisplayTitle` over the head `IndexingPipeline.extractHeader(from:)` reads from the parsed TEI (`DocumentViewModel.load`), internal too; S17f takes the reader's TEI title meanwhile for a document the index does not hold.
+
+**#1813, in four commits, a commit of the review's fixes, a records commit, a seventh commit with records of its own, and an eighth commit, a test:**
+- `VolumeSubjectProfiles`, its decoding, `allSubjects` and `SubjectOption`, with its five fields and `id`, public. `ResolvedSubject`, the per-volume queries and the reverse index stay internal, and the loader stays in the app.
+- `ProjectFocusSuggestions` moved into the kit, `FRUSCoreKit/ProjectContext/`, public, its body unchanged, keeping its file name, which the app's scan of the arithmetic on a subject's score names.
+- `IndexingPipeline.documentSnippets(forKeys:maxLength:)` public, its doc saying that the summary it prefers is the index's own column.
+- `IndexingPipeline.extractHeader(from:)` public, in the seventh commit, its body unchanged; the indexer stores what it returns as `header`, as before.
+- `ProjectHomeHostTests`, a kit suite, calls all three as a host does: the vocabulary from a fixture and from the bundled file, the editor's suggestions with their default of eight, and the lines over the app's index and over a copy stripped with `ResearchDatabaseStrip.steps` and opened read-only, where every line is the document's text; and, in an eighth commit, which S17f's session asked for, the head a visit is titled by, from the parsed TEI, which is the header the index stores. `FRUSCoreKitTests` goes from 1,299 tests to 1,307.
+
+**How it was checked,** each heavy job under the app's lock, from a clone at a real path, beside `v2` at `d7130e9b` built and run the same way the same evening, Xcode 27.1, clean and unsigned, on an iPhone Air simulator (iOS 27.0), first at the fifth commit, with the review's fixes:
+- **The full iOS unit run:** 7,761 tests in 930 suites against `v2`'s 7,754 in 929, both failing only the 8 Keychain tests an unsigned build fails, with the same 6 known issues and the same 17 tests and 2 suites skipped. The kit's boundary test, the EditableContent ranges, the coding-standards audit, the score scan and the lead-snippet source checks passed.
+- **`swift test`:** 3,199 tests in 390 suites against 3,192 in 389, all passed; `FRUSCoreKitTests` 1,306 in 178. Each commit before the head built the kit.
+- **The Mac app's symbols** are `v2`'s, 251,932 normalized names on each, none removed or added, raw or normalized; both builds had `v2`'s five and seven warning lines.
+- **On `v2`'s code,** the new suite passed in Xcode, where the app compiles the kit into its own module, 7 tests of 7; against the kit alone it did not build: "cannot find 'ProjectFocusSuggestions' in scope".
+- **Linux,** in a scratch worktree of this repository's `main` at `3cef58e` (the pin `32e295e5`), with `v2` and then the branch copied over the submodule, each built clean:
+  - at `v2`, 2,565 tests, all passed, since `v2` differs from the pin only under `Planning/`, which the golden files' digest leaves out;
+  - at the branch, 2,572: `FRUSCoreKitTests` 1,306, the new suite passing, and every other target as at `v2` but the parity suites' 21 issues, all the golden files' staleness, since their source digest hashes `FRUSCoreKit/` and `FRUSExplorer/` whole;
+  - skipped at both, the one named skip and the PostgreSQL store's seven tests, which need the database `scripts/swift --postgres` gives and this run did not.
+- **Public access:** a scratch file in `FRUSLightAPI`, never committed, imports FRUSCoreKit without `@testable` and uses every name the pull request makes public, as Project Home will. It built over the branch. Over `v2` it did not: "cannot find type 'VolumeSubjectProfiles' in scope", "cannot find 'ProjectFocusSuggestions' in scope" and "'documentSnippets' is inaccessible due to 'internal' protection level".
+- **Again at the seventh commit** (`76b92f2d`): both builds and the symbols as before; the full iOS unit run 7,761 tests, failing only the 8 Keychain tests; `swift test` 3,199 tests, all passed; and on Linux the same 2,572, only the golden files' staleness failing, with the public-access file handing `extractHeader(from:)` a parsed document's nodes too.
+- **Again at the eighth commit** (`f5149034`), which adds the head's test: the symbols `v2`'s; the full iOS unit run 7,762 tests in 930 suites, failing only the 8 Keychain tests; `swift test` 3,200 tests, all passed, `FRUSCoreKitTests` 1,307; on `v2`'s code the suite's eight tests passed in Xcode and the kit alone could not build it; and on Linux 2,573 tests, only the golden files' staleness failing.
+- **A cold review** read the diff with none of the session's conclusions. It found no change of behaviour, no scan the move breaks, and the project file byte for byte what XcodeGen writes. It found that the docs and the suite said a host gets the app's lead line, which it cannot (below); that the editor's default limit and the bundled file's counts were not held by the suite itself; and that one test checked its own copy of `ProjectHomeView`'s filter. The fifth commit fixes those, and the whole Mac check and the Linux run were repeated at it.
+
+**What the pin move past it brings:**
+- **The golden files need `scripts/make-golden`,** since their source digest hashes `FRUSCoreKit/` and `FRUSExplorer/` whole. On §5's indexing path `IndexingPipeline.swift` changes in two declarations' access, their docs and the file's version history; `extractHeader(from:)` is the indexer's own, and what it stores is unchanged, so the seventh three-volume export may be used again, by the owner's choice.
+- **No parity test needs pointing anywhere:** over `main` with the branch copied in, every parity check that reads the app's source passed. None reads the moved file's old path or the lines this changes.
+- **`Package.swift` needs no change:** the kit's new `ProjectContext/` folder is compiled by the kit's path. The CI's allow-list needs none either: the suite skips nothing.
+
+**What Project Home's follow-up does with it,** after that move (the shared notes have the detail):
+- the server decodes the vocabulary from the image's copy of `FRUSExplorer/Resources`, which already holds the file, and Project Home's answer gains the focus subjects, filtered as `ProjectHomeView` filters them, a mirror held to its source;
+- the editor's three sections and their words, its suggestions from the kit's rule over the volumes the project engages, which are `ProjectEngagedDocuments`' rule mirrored on the server, not `DocumentEngagementService.gather`'s, which counts highlights too; and the project's `defaultSubjectTagIds` written through `PATCH /api/v1/me/projects/{id}`;
+- a lead's line from the served index's `documentSnippets(forKeys:)`;
+- and, in History, a visit to a document the served index does not hold titled by the kit's `extractHeader(from:)` over the parsed TEI, with `DocumentDisplayTitle` as the app's reader titles it. The app's number falls back to `extractDocumentNumber(from:)`, still internal, where a document has no `@n`; every shipped document has one.
+- **One difference stays,** filed in the pull request: the served copy never holds a summary in `summary_text`, so a lead the user has summarised shows its opening text on the web where the Mac shows the summary. A `userSource:` as `semanticResultRows(forKeys:userSource:)` has would close it, once measured over `user_search`, whose `user_id` FTS5 does not index.
+
+**Delivered here**
+
+- `COORDINATION.md`: the pull request in §2, and in §5's list of app changes the web edition needs.
+- This log.
+
+**Notes**
+
+- **The scope grew twice.** The brief named `VolumeSubjectProfiles` and `documentSnippets`. Reading the editor found its suggestions to be app code, so the pull request moves them into the kit too, unchanged; S17f's session was asked before the runs, with that move as the default and the summary's difference left as a follow-up, and had not answered when the pull request opened. Then S17f's records, merged while this ran, put `extractHeader(from:)` in the same pull request, which its seventh commit does; S17f's session then asked for it directly, with a host-style test, the eighth.
+- **Scratch:** under `~/Library/Caches/frus-project-home-kit`: the clone and its `v2` and commit worktrees, the logs and scripts, the drafts, and a scratch worktree of this repository (`web-linux`) with the public-access file.
+
+**Next:** the owner's Mac check of FRUS-Explorer#1813 and its merge; then a pin move of its own, and Project Home's focus subjects, their editor and a lead's line. On the plan's track, S18d.
+
 ## Session 17f: projects, the history and the method appendix
 
 28 October 2026 · branch `claude/jovial-albattani-6a881b` · [#84](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/84) · upstream `32e295e5`, unchanged
