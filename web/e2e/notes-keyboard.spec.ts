@@ -134,10 +134,15 @@ test('writes, formats, links and saves a note from the bar’s Note, discards an
   await expect(row).toBeFocused();
   expect((await notes(page))[0].bodyText).toBe('Keyboard note');
 
-  // All Notes, from the header: Delete… asks, Cancel first, and Delete deletes.
+  // All Notes, from the header's Research and the Research page's row (S19b): Delete… asks, Cancel
+  // first, and Delete deletes.
   await page.keyboard.press('Escape');
   await expect(rail).toHaveCount(0);
   await backTabTo(page, page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Research' }));
+  await page.keyboard.press('Enter');
+  const allNotes = page.getByRole('navigation', { name: 'Categories' }).getByRole('link', { name: /^All Notes\b/ });
+  await expect(allNotes).toBeVisible();
+  await tabTo(page, allNotes);
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { level: 1, name: 'All Notes' })).toBeVisible();
   const remove = page.getByRole('list', { name: 'All Notes' }).getByRole('button', { name: 'Delete…' });

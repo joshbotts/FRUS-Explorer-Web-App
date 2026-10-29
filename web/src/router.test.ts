@@ -34,9 +34,16 @@ describe('the router', () => {
     expect(searchOf(landing).note).toBe('fnote-x-d16fn2');
   });
 
-  it('opens Research at All Notes, whose filters are checked fields, and Settings at its first pane', async () => {
+  it('opens the Research page with a category it names, All Notes with checked filters, and Settings at its first pane', async () => {
     const research = await routerAt('/research');
-    expect(research.state.location.pathname).toBe('/research/notes');
+    expect(research.state.matches.at(-1)?.routeId).toBe('/research');
+    expect(searchOf(research).group).toBeUndefined();
+    const tag = '5E17F000-0000-4000-8000-0000000000A1';
+    expect(searchOf(await routerAt(`/research?group=tag.${tag}`)).group).toBe(`tag.${tag}`);
+    expect(searchOf(await routerAt('/research?group=highlightColor.pink')).group).toBe('highlightColor.pink');
+    for (const unknown of ['tag.Berlin', 'highlightColor.red', 'notes', 'history', 'collection.']) {
+      expect(searchOf(await routerAt(`/research?group=${unknown}`)).group, unknown).toBeUndefined();
+    }
     const notes = await routerAt('/research/notes?project=unfiled&tag=&q=Berlin');
     expect(searchOf(notes)).toMatchObject({ project: 'unfiled', tag: undefined, q: 'Berlin' });
     expect((await routerAt('/settings')).state.location.pathname).toBe('/settings/tags');

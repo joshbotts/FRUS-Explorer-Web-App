@@ -37,7 +37,8 @@
 // Citation Lookup's window, its modes, fields, prompts, Look Up, its results, errors and empty states,
 // View Document, and Batch's table with its sort and its rows' labels; and from S16c the names of the
 // records an import's report counts, its export sheet's Contents, and its sentence for a smart
-// collection whose saved search is gone. The selection bar's name, Selection, the
+// collection whose saved search is gone; and from S19b the Research page's rows and sections, its lists'
+// titles and empty states, and its rows' lines. The selection bar's name, Selection, the
 // formatting bar's, Text formatting, its glyphs, Write a Summary, Edit… and Delete… for a summary
 // of one's own and the question before it, the visible Delete… on All Notes' rows, the rail's times,
 // Settings ▸ Data's title and the lines for an editor that could not load or a note, formatted or
@@ -54,7 +55,7 @@ export const copy = {
     navigation: 'Main',
     browse: 'Browse',
     search: 'Search',
-    /** The Research tab's name, the app's: All Notes until S19b's Research page. */
+    /** The Research tab's name, the app's: the Research page since S19b. */
     research: 'Research',
     /** From S18d, between Research and Settings, as the app's tabs order them. */
     collections: 'Collections',
@@ -1046,6 +1047,48 @@ export const copy = {
     resultCount: (count: number) => `${count.toLocaleString('en-US')} results`,
     documentCount: (count: number) => `${count.toLocaleString('en-US')} documents`,
     loading: 'Loading the history…',
+  },
+  /**
+   * The Research page (PLAN's S19b), in the words of the app's `ResearchView`: its sidebar's rows and
+   * sections, a list's title and what it says of no documents, and a row's lines, its counts printed
+   * as the app's `String(format:)` prints them, the sidebar's as SwiftUI's `Text` groups them. The
+   * categories' name, the narrow window's way back to them, the loading line, a highlight's colour and
+   * a row's tags and collections named for a screen reader, and what Changed by an update says on a
+   * server that does not review changed text are the web's own.
+   */
+  researchPage: {
+    title: 'Research',
+    categories: 'Categories',
+    allAnnotated: 'All Research Documents',
+    hasNotes: 'Contains Notes',
+    notes: 'All Notes',
+    updated: 'Changed by an update',
+    updatedWaits:
+      'Documents an update changed after you annotated them wait for a review of their new text, which this server does not offer yet, so none is listed here.',
+    history: 'History',
+    historyDetail: 'Documents opened and searches run',
+    collections: 'By Collection',
+    tags: 'By Tag',
+    highlights: 'By Highlight',
+    count: (count: number) => count.toLocaleString('en-US'),
+    highlightList: (color: string) => `${color} Highlights`,
+    unknownTag: 'Tag',
+    noDocs: 'No Documents',
+    emptyAllAnnotated: 'Research notes, tags, highlights, and collections you add from the document view will appear here.',
+    emptyHasNotes:
+      'Notes you write on a document will appear here. A document you have only tagged, highlighted, or collected appears under All Research Documents instead.',
+    emptyTag: 'No documents have notes or tags matching this tag.',
+    emptyCollection: 'This collection has no documents.',
+    emptyHighlight: 'No documents have highlights in this color.',
+    summaries: (count: number) => `${count} summaries`,
+    inVisitPlan: 'In a visit plan',
+    moreHighlights: (count: number) => `and ${count} more`,
+    noteCount: (count: number) => `${count} notes`,
+    noText: 'Highlighted passage',
+    highlightColor: (color: string) => `${color} highlight: `,
+    tagLabel: 'Tag: ',
+    collectionLabel: 'Collection: ',
+    loading: 'Loading your research…',
   },
   /** Settings ▸ Research Sessions and the Session Log, in the app's words. */
   sessions: {

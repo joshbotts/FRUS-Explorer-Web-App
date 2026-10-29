@@ -127,8 +127,9 @@ test('imports the kit’s export of every type, imports it again and keeps it, t
   expect(newer.find((type) => type.type === 'ResearchNote')).toMatchObject({ inFile: 3, replaced: 1, kept: 2 });
   expect((await tableRows(page))[0]).toEqual(['Research Notes', '3', '0', '1', '2']);
 
-  // All Notes, filtered by the projects the file brought.
+  // All Notes, filtered by the projects the file brought, from the Research page's row (S19b).
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Research' }).click();
+  await page.getByRole('navigation', { name: 'Categories' }).getByRole('link', { name: /^All Notes\b/ }).click();
   const titles = page.getByRole('list', { name: 'All Notes' }).locator('.all-notes-title');
   await expect(titles).toHaveText(['In no project.', 'The OAS meeting.', 'Planners on Zapata.']);
   const project = page.getByRole('combobox', { name: 'Project', exact: true });

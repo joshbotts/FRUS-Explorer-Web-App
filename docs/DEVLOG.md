@@ -2,6 +2,64 @@
 
 One entry per session, newest first.
 
+## Session 19b: the Research page
+
+29 October 2026 · branch `claude/determined-heyrovsky-aa03fd` · [#89](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/89) · upstream `32e295e5`, unchanged
+
+Phase 2's row S19b, the last before the phase's sign-off. The header's **Research** opens the Research page, where it opened All Notes: every document the researcher has annotated under All Research Documents, then Contains Notes and the documents of each collection, tag and highlight colour, each with its count, as the app's Research tab lists them, with All Notes and History among its rows. Which documents count is the kit's code, S17b's FRUS-Explorer#1805; the rest is a few lines of the app's view, mirrored and held to its source. Changed by an update waits for phase 3's review of changed text, and says so. No upstream pull request, no pin move and no schema change: everything the row calls was public at `32e295e5`.
+
+**What the kit gives,** at `32e295e5`:
+- `ResearchDocumentAggregation` (#1805): `annotatedKeys(among:)`, the union of the six sources, notes, direct tags, collection entries, highlights, summaries but headnote drafts, and visit plans; `distinctDocumentKeys(among:)`, a collection's documents, each once; `countsAsAnnotation`, the kinds of entry that name a document, a document and an excerpt; and `summaryCounts(among:)`, the summaries a row names. Its `changeLine(for:)` and `rowDestination(revision:isVanished:)` wait with Changed by an update.
+- `CollectionEditorNaming.listName(savedName:)` and `listOrder(_:_:)`, `DocumentDisplayTitle.text(_:documentId:)` and `HighlightColor`.
+
+**Delivered**
+
+- **The routes** (`Sources/FRUSLightAPI/Research.swift`):
+  - `GET /api/v1/me/research`: the counts of All Research Documents, Contains Notes and All Notes, and By Collection, By Tag and By Highlight, each in the app's order.
+  - `GET /api/v1/me/research/documents?group=`: a category's rows, the category named as the app's row identifier names it (`allAnnotated`, `hasNotes`, `tag.{id}`, `collection.{id}`, `highlightColor.{color}`). Each row is the app's: the title, the volume, the newest annotation's time, the newest note, the counts, three highlights, and the tags and collections in their orders. `updated` is `UPDATE_REVIEW_NOT_OFFERED` (409).
+  - Each reads the user's store once, the rows the export reads with only the dozen columns the page shows (`researchRows(for:columns:)`, beside the export's own reader on `RelationalUserStore`, in SQL both stores read), and the served index for the titles, by the app's own `documentTitleFacts` query, 400 ids at a time.
+  - App code mirrored, held to the app's source by `ResearchPageParityTests`: `ResearchView`'s badges, `directlyTaggedDocs` and `collectionMemberships`; the three sections with their orders; `documents(for:)` with each row's facts and the rows' order; the row's tags and collections; `listTitle(for:)`'s names; `DocumentHighlight.color`; and `CrossReferenceStore.documentTitleFacts(for:)` with `documentChunks`.
+- **The browser app:**
+  - `web/src/research/ResearchScreen.tsx` at `/research`, `?group=` naming the category. On a wide window it is the Mac's split, with All Research Documents shown until another is chosen. Below 900 px it is the iPhone's stack, with **Categories** above a list to go back.
+  - `researchRules.ts` gives a category's key, a list's title and what it says of none; then `api/researchPage.ts`, copy.ts's `researchPage` block and the styles.
+  - `ResearchNav`, above All Notes and History, now leads with the page, and the router's redirect to All Notes is gone. `notes.spec.ts`, `import.spec.ts` and `notes-keyboard.spec.ts` reach All Notes through the page's row.
+
+**Decided here, each the web's own**
+
+- **Changed by an update lists nothing, and its row says why.** Its list reads the index's `reviewed_at`, which a served index's reader cannot write, and the review sheet is phase 3's. Reading the Mac's unreviewed rows from the index would show changes no one here can review, and leave out the review ledger an import brings. So the row is a line, not a link, where the app's row would be.
+- **A choice sends focus to the list's title,** and the way back in a narrow window to the category left. Back and Forward, which can hide where focus was, send it to what shows: the list's title, or the category left. A click the browser sends to a new tab moves nothing. The split marks All Research Documents chosen until another is; the stack marks none until one is, as the iPhone's list.
+- **A highlight's colour, and a row's tags and collections, are named for a screen reader,** since the bar's colour and the chips' glyphs say them only to the eye.
+- **No Project Home, Archives Visits or Research Guide rows,** which the iPhone's and iPad's lists put above the categories: the header's picker opens Project Home, Archives Visits wait for phase 4, and the guide is the app's.
+- **The row's summaries read "1 summaries" for one,** as the app's do, for want of a plural in its `research.row.summaries %lld`.
+- **A list is not paged,** as the app's is not; each row carries its newest note's text and its three highlights' words, which the browser cuts to two lines, as the app's `lineLimit(2)` does.
+
+**Tests**
+
+- **FRUSLightServerTests,** 226 to 231: `ResearchPageTests`, 5. The fixture is a Mac export imported as the owner's: the categories and their counts; every row; each category's documents; the refusals and Changed by an update; the rows without an index, and another user's research none of the owner's. It ties notes, highlights, tags and collections, orders names whose case would order them otherwise, and holds a note on no document, which Contains Notes counts and does not list, as the app's does.
+- **FRUSParityTests,** 213 to 219: `ResearchPageParityTests`, 6. The page's groups are the kit's over the import's file of every type. The suite also holds every word under its key, the category keys, the server's mirrors and the browser app's, each line on both sides, and the title query with its partition.
+- **FRUSLightCoreTests,** 167 to 168: `UserResearchExportTests`' column-restricted read, on both stores.
+- **The web unit suite,** 433 to 442 tests in 46 to 47 files: `ResearchScreen.test.tsx`, 9, with the router's and All Notes' tests changed for the page.
+- **The browser suite,** 64 to 66 tests at the root and under the path: `research.spec.ts`, 2, with axe. One test chooses categories by keyboard and pointer, opens a row's document and goes back, and visits All Notes and History. The other is the narrow window's stack and its way back, by keyboard.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** with `scripts/swift --postgres`, PostgreSQL 18: the build gives no warning. All 2,619 tests pass, up from 2,607 on `main`, with the one named skip and nothing cancelled: FRUSLightServerTests 231, FRUSParityTests 219, FRUSLightCoreTests 168, FRUSCoreKitTests 1,299, the others as on `main`.
+- **The web job's steps,** through `scripts/npm`: typecheck, lint and the build are clean, and the unit suite passes 442 tests in 47 files. The app's script is 688 kB, from 676 kB.
+- **The browser suite,** with `scripts/compose-smoke --e2e` over an image of the branch under a tag and port of its own (`frus-light:s19b`, 18191): 66 tests at the root and 66 under the path, and the sign-in phase's spec, over an image of the final code. The first run failed one spec, `notes-keyboard.spec.ts`, which went to All Notes by the header's Research and now goes by the page's row; the next, before the browser review's fixes, passed whole.
+- **A cold review,** two reviewers reading the diff without the session's conclusions, the server and the browser app apart; each finding was checked against the code before it was fixed.
+  - **Server:** no behaviour differs from the app's view, line by line, its quirks with it. But each request read every column of eight tables, every note's RTF and summary's text among them; a row's title read each volume's whole document list; and the parity suite held only the app's side of each mirrored line, while the tests tied no sort and told no case apart. Each is fixed, as **Delivered** and **Tests** say.
+  - **Browser:** no state or caching bug, and these, each fixed:
+    - the narrow window's way back was announced as the current page, since the router marked it active over every `/research` address;
+    - the router's reset of the scroll could leave the category that focus went back to off the screen;
+    - the stack marked All Research Documents chosen before anything was;
+    - a click the browser sends to a new tab or window moved focus, and could leave a choice waiting to pull focus on the next Back;
+    - Back from a list sent focus to the heading, not to the category it left;
+    - a list that could not be read, of a tag the categories do not name, kept "Loading" as its title;
+    - in forced colours the chosen row's mark hid focus, and a highlight's bar lost its colour.
+  - Unit tests cover the way back, a modified click, seen to fail with its guard taken out, the stack's unmarked categories and a failed list's title. The narrow spec checks the way back's state, the category in view and Back's focus. The forced colours have no test.
+
+**Next:** S18f, `.fruscollection` both ways, smart collections resolved at export with Create Static Snapshot, Summary only refused with the app's reason, and headnotes the researcher writes; then phase 2's sign-off, the owner's checkpoint: the site used with the owner's imported writing, check 6 and the import without loss confirmed. The pin move to `fb542514` may land before either; this branch has nothing that it changes.
+
 ## Session 18e: a collection's live preview and its exports
 
 29 October 2026 · branch `claude/silly-ramanujan-5e0960` · [#88](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/88) · upstream `32e295e5`, unchanged
