@@ -2719,7 +2719,8 @@ a.research-category[aria-current='page'] {
   font-size: 0.875rem;
 }
 
-/* A highlight's words beside a bar of its colour, two lines at most, as the app's strip. */
+/* A highlight's words beside a bar of its colour, two lines at most, as the app's strip. The bar is its
+   own box, so that forced colours, which repaint a border, leave it the colour it names. */
 .research-highlights {
   display: grid;
   gap: 0.25rem;
@@ -2729,16 +2730,24 @@ a.research-category[aria-current='page'] {
 }
 
 .research-highlight {
+  position: relative;
   display: -webkit-box;
-  padding: 0.125rem 0.5rem;
+  padding: 0.125rem 0.5rem 0.125rem calc(0.5rem + 3px);
   overflow: hidden;
-  border-left: 3px solid var(--hl, var(--control-border));
   border-radius: 2px;
   background: var(--surface);
   color: var(--text-secondary);
   font-size: 0.875rem;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+.research-highlight::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--hl, var(--control-border));
 }
 
 .research-more {
@@ -2762,13 +2771,15 @@ a.research-category[aria-current='page'] {
 }
 
 @media (forced-colors: active) {
-  /* The dots are the colours they name, as the rail's are; the chosen row keeps a mark of its own. */
-  .research-color::before {
+  /* The dots and bars are the colours they name; the chosen row has a bar of its own, which leaves the
+     outline to focus. */
+  .research-color::before,
+  .research-highlight::before {
     forced-color-adjust: none;
   }
 
   a.research-category[aria-current='page'] {
-    outline: 2px solid CanvasText;
+    border-inline-start: 4px solid CanvasText;
   }
 }
 

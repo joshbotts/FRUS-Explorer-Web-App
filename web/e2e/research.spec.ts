@@ -153,16 +153,20 @@ test('stacks the categories and a list in a narrow window, with the way back', a
     await page.reload();
     const categories = page.getByRole('navigation', { name: 'Categories' });
     await expect(categories.getByRole('link', { name: 'Research page tag' })).toBeVisible();
-    // The categories alone, as the iPhone's root, until one is chosen.
-    await expect(page.getByRole('region', { name: 'All Research Documents' })).toHaveCount(0);
+    // The categories alone, as the iPhone's root, none chosen until one is.
+    await expect(page.locator('section.research-list')).toHaveCount(1);
+    await expect(page.locator('section.research-list')).toBeHidden();
+    await expect(categories.getByRole('link', { name: /^All Research Documents/ })).not.toHaveAttribute('aria-current', 'page');
     await axeCheck(page);
 
     await tabTo(page, categories.getByRole('link', { name: 'Research page tag' }));
     await page.keyboard.press('Enter');
     const tagged = page.getByRole('region', { name: 'Research page tag' });
     await expect(tagged.getByRole('heading', { level: 2 })).toBeFocused();
+    await expect(page.locator('nav.research-categories')).toHaveCount(1);
     await expect(categories).toBeHidden();
     await expect(tagged.getByRole('link', { name: d2Header, exact: true })).toBeVisible();
+    await expect(tagged.getByRole('link', { name: 'Categories', exact: true })).not.toHaveAttribute('aria-current', 'page');
     await axeCheck(page);
 
     // The way back, to the category left.
@@ -170,13 +174,14 @@ test('stacks the categories and a list in a narrow window, with the way back', a
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/research$/);
     await expect(categories.getByRole('link', { name: 'Research page tag' })).toBeFocused();
+    await expect(categories.getByRole('link', { name: 'Research page tag' })).toBeInViewport();
 
-    // Back from a list in the browser shows the categories again, focus on its heading.
+    // Back from a list in the browser shows the categories again, focus on the category it left.
     await categories.getByRole('link', { name: 'Research page collection' }).click();
     await expect(page.getByRole('region', { name: 'Research page collection' }).getByRole('heading', { level: 2 })).toBeFocused();
     await page.goBack();
     await expect(categories).toBeVisible();
-    await expect(page.getByRole('heading', { level: 1, name: 'Research' })).toBeFocused();
+    await expect(categories.getByRole('link', { name: 'Research page collection' })).toBeFocused();
   } finally {
     await remove(page, research);
   }

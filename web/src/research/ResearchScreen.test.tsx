@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ResearchDocument, ResearchDocumentList, ResearchPage } from '../api/researchPage';
 import { resetPreferences } from '../settings/preferences';
 import { me } from '../test/notes';
-import { ready, renderAt, stubServer } from '../test/renderRoute';
+import { ProblemAnswer, ready, renderAt, stubServer } from '../test/renderRoute';
 
 const berlin = 'B0000000-0000-4000-8000-000000000000';
 const briefing = 'D0000000-0000-4000-8000-000000000000';
@@ -85,6 +85,7 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe('the Research page', () => {
@@ -164,6 +165,61 @@ describe('the Research page', () => {
     within(categories).getByRole('link', { name: /^Pink/ }).focus();
     await userEvent.click(within(categories).getByRole('link', { name: /^Berlin/ }));
     expect(document.activeElement).toBe(heading);
+  });
+
+  it('leaves the way back unmarked beside a list, and follows no click the browser sends elsewhere', async () => {
+    server({ [`tag.${berlin}`]: { name: 'Berlin', items: [kennedy] } });
+    const { router } = renderAt(`/research?group=tag.${berlin}`);
+    const back = await screen.findByRole('link', { name: 'Categories' });
+    expect(back.getAttribute('href')).toBe('/research');
+    expect(back.getAttribute('aria-current'), 'the way back is no current page').toBeNull();
+    const categories = screen.getByRole('navigation', { name: 'Categories' });
+    const shownTag = await within(categories).findByRole('link', { name: /^Berlin/ });
+    expect(shownTag.getAttribute('aria-current')).toBe('page');
+
+    // A click with a modifier is the browser's, for a new tab or window: focus stays where the click
+    // put it, on the one shown as on another, and nothing waits to move it once the address changes.
+    // Every element has a box here, as in a browser, where jsdom lays out none.
+    vi.spyOn(Element.prototype, 'getClientRects').mockReturnValue([new DOMRect(0, 0, 10, 10)] as unknown as DOMRectList);
+    const user = userEvent.setup();
+    await user.keyboard('{Control>}');
+    await user.click(shownTag);
+    expect(document.activeElement).toBe(shownTag);
+    const pink = within(categories).getByRole('link', { name: /^Pink/ });
+    await user.click(pink);
+    await user.keyboard('{/Control}');
+    expect(document.activeElement).toBe(pink);
+    expect(router.state.location.search).toEqual({ group: `tag.${berlin}` });
+    await router.navigate({ to: '/research', search: { group: 'hasNotes' } });
+    await screen.findByRole('heading', { level: 2, name: 'Contains Notes' });
+    expect(document.activeElement, 'Back or Forward leaves focus that still shows').toBe(pink);
+  });
+
+  it('marks no category in the narrow window’s stack until one is chosen, as the iPhone’s list', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({ matches: query === '(max-width: 899.98px)', addEventListener: () => {}, removeEventListener: () => {} })),
+    );
+    server({ allAnnotated: { items: [kennedy] } });
+    renderAt('/research');
+    const categories = await screen.findByRole('navigation', { name: 'Categories' });
+    const all = await within(categories).findByRole('link', { name: /^All Research Documents/ });
+    expect(all.getAttribute('aria-current')).toBeNull();
+    expect(within(categories).queryAllByRole('link').filter((link) => link.getAttribute('aria-current'))).toEqual([]);
+  });
+
+  it('titles a list it could not read, of a tag the categories do not name, as the app titles one it cannot find', async () => {
+    const gone = 'E0000000-0000-4000-8000-000000000000';
+    server({ [`tag.${gone}`]: { items: [] } });
+    stubServer({
+      '/readyz': ready,
+      '/api/v1/me': me,
+      '/api/v1/me/research': page,
+      '/api/v1/me/research/documents': new ProblemAnswer(500, 'STORE_DAMAGED', 'Your research could not be read.'),
+    });
+    renderAt(`/research?group=tag.${gone}`);
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'Tag' })).toBeTruthy();
   });
 
   it('titles each list as the app does, and says what a list of none would hold', async () => {

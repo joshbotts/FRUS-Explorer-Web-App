@@ -10,7 +10,7 @@
 // yet; a choice sends focus to the list's title; and a highlight's colour named for a screen reader.
 import { type UseQueryResult, useQuery } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
-import { type ReactNode, useEffect, useId, useRef } from 'react';
+import { type MouseEvent, type ReactNode, useEffect, useId, useRef, useSyncExternalStore } from 'react';
 import { ApiError, errorMessage } from '../api/client';
 import { type ResearchDocument, type ResearchDocumentList, researchDocumentsQuery, type ResearchPage, researchPageQuery } from '../api/researchPage';
 import { meQuery } from '../api/userData';
@@ -35,7 +35,28 @@ export function validateResearchSearch(raw: Record<string, unknown>): ResearchSe
 }
 
 /** Where focus goes once a choice has rendered: the list's title, or back to the categories. */
-type Pending = { to: 'list' } | { to: 'categories'; from: string | undefined } | null;
+type Pending = 'list' | 'categories' | null;
+
+/** The iPhone's stack, below 900 px, as the stylesheet lays the page out. */
+const narrowQuery = '(max-width: 899.98px)';
+
+/** Whether the window is narrow enough for the stack; never, where the browser cannot say. */
+function useNarrow(): boolean {
+  return useSyncExternalStore(
+    (changed) => {
+      if (typeof window.matchMedia !== 'function') return () => {};
+      const list = window.matchMedia(narrowQuery);
+      list.addEventListener('change', changed);
+      return () => list.removeEventListener('change', changed);
+    },
+    () => typeof window.matchMedia === 'function' && window.matchMedia(narrowQuery).matches,
+  );
+}
+
+/** A click that follows the link here: not one the browser sends to a new tab or window. */
+function followsHere(event: MouseEvent): boolean {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.defaultPrevented;
+}
 
 export function ResearchScreen() {
   const { group } = route.useSearch();
@@ -50,38 +71,40 @@ export function ResearchScreen() {
   const categories = useRef<HTMLElement>(null);
   const listId = useId();
   const now = useNow();
+  const narrow = useNarrow();
   useDocumentTitle(copy.researchPage.title);
   useHeadingReady(!me.isPending);
 
   // A choice sends focus to the list's title, and the way back to the category it left, once each has
-  // rendered; Back and Forward, which can hide where focus was in a narrow window, send it to what shows.
+  // rendered. Back and Forward, which can hide where focus was in a narrow window, send it to what shows:
+  // the list's title, or the category left where the categories show again.
   const pending = useRef<Pending>(null);
   const previous = useRef(group);
   useEffect(() => {
     if (previous.current === group) return;
+    const from = previous.current;
     previous.current = group;
     const want = pending.current;
     pending.current = null;
-    if (want?.to === 'list') {
+    if (want === 'list') {
       listHeading.current?.focus();
       return;
     }
-    if (want?.to === 'categories') {
-      const left = [...(categories.current?.querySelectorAll<HTMLAnchorElement>('a[data-group]') ?? [])].find(
-        (link) => want.from !== undefined && sameGroup(link.dataset.group ?? '', want.from),
-      );
-      (left && left.getClientRects().length > 0 ? left : heading.current)?.focus();
-      return;
+    const left = [...(categories.current?.querySelectorAll<HTMLAnchorElement>('a[data-group]') ?? [])].find(
+      (link) => from !== undefined && sameGroup(link.dataset.group ?? '', from) && link.getClientRects().length > 0,
+    );
+    if (want !== 'categories') {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && active !== document.body && active.getClientRects().length > 0) return;
     }
-    const active = document.activeElement;
-    if (active instanceof HTMLElement && active !== document.body && active.getClientRects().length > 0) return;
-    (group !== undefined ? listHeading.current : heading.current)?.focus();
+    (group !== undefined && want !== 'categories' ? listHeading.current : (left ?? heading.current))?.focus();
   }, [group]);
 
   /** A category chosen: its list's title takes focus, at once when it is the one shown. */
-  function choose(key: string) {
+  function choose(event: MouseEvent, key: string) {
+    if (!followsHere(event)) return;
     if (group !== undefined && sameGroup(key, group)) listHeading.current?.focus();
-    else pending.current = { to: 'list' };
+    else pending.current = 'list';
   }
 
   let body: ReactNode;
@@ -100,6 +123,9 @@ export function ResearchScreen() {
     if (shown.kind === 'tag' || shown.kind === 'collection') {
       const rows = shown.kind === 'tag' ? page.data?.tags : page.data?.collections;
       title = documents.data ? listTitle(shown, documents.data.name) : rows?.find((item) => sameGroup(item.id, shown.id))?.name;
+      // A list that could not be read, of a tag or collection the categories do not name, is titled
+      // as the app titles one it cannot find.
+      if (title === undefined && documents.isError) title = listTitle(shown, undefined) ?? copy.collectionEditor.untitled;
     } else {
       title = listTitle(shown, undefined);
     }
@@ -113,16 +139,22 @@ export function ResearchScreen() {
           ) : !page.data ? (
             <p role="status">{copy.researchPage.loading}</p>
           ) : (
-            <Categories page={page.data} current={shownKey} onChoose={choose} />
+            // The Mac's split shows All Research Documents until another is chosen; the iPhone's stack
+            // has none chosen until one is.
+            <Categories page={page.data} current={group ?? (narrow ? undefined : shownKey)} onChoose={choose} />
           )}
         </nav>
         <section className="research-list" aria-labelledby={listId}>
+          {/* Exact, so the router does not call it the current page beside a list, and with the scroll
+              left alone, so the category focus goes back to is where the page shows it. */}
           <Link
             to="/research"
             search={{}}
+            activeOptions={{ exact: true }}
+            resetScroll={false}
             className="research-back"
-            onClick={() => {
-              pending.current = { to: 'categories', from: group };
+            onClick={(event) => {
+              if (followsHere(event)) pending.current = 'categories';
             }}
           >
             <span aria-hidden="true">‹ </span>
@@ -151,7 +183,15 @@ export function ResearchScreen() {
  * The categories, as the app's sidebar lists them: All Research Documents, Contains Notes and All Notes
  * with their counts, Changed by an update's line and History; then each section with something in it.
  */
-function Categories({ page, current, onChoose }: { page: ResearchPage; current: string; onChoose: (key: string) => void }) {
+function Categories({
+  page,
+  current,
+  onChoose,
+}: {
+  page: ResearchPage;
+  current: string | undefined;
+  onChoose: (event: MouseEvent, key: string) => void;
+}) {
   const collectionsId = useId();
   const tagsId = useId();
   const highlightsId = useId();
@@ -162,8 +202,8 @@ function Categories({ page, current, onChoose }: { page: ResearchPage; current: 
         search={{ group: key }}
         className="research-category"
         data-group={key}
-        aria-current={sameGroup(key, current) ? 'page' : undefined}
-        onClick={() => onChoose(key)}
+        aria-current={current !== undefined && sameGroup(key, current) ? 'page' : undefined}
+        onClick={(event) => onChoose(event, key)}
       >
         <span className="research-category-name">{name}</span>
         <span className="visually-hidden">, </span>
