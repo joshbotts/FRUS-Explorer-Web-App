@@ -53,9 +53,9 @@ afterEach(() => {
 });
 
 describe('All Notes', () => {
-  it('is Research’s destination, linked from the header between Search and Settings, and lists every note as the app’s rows', async () => {
+  it('is a Research screen, under the header’s Research between Search and Settings, and lists every note as the app’s rows', async () => {
     server();
-    const { router } = renderAt('/research');
+    const { router } = renderAt('/research/notes');
     expect(await screen.findByRole('heading', { level: 1, name: 'All Notes' })).toBeTruthy();
     expect(router.state.location.pathname).toBe('/research/notes');
     const nav = screen.getByRole('navigation', { name: 'Main' });
@@ -265,6 +265,6 @@ describe('All Notes', () => {
     expect(await screen.findByText('This server keeps no tags or other research data of yours: it is read-only.')).toBeTruthy();
     expect(fetch.mock.calls.some(([url]) => String(url) !== '/api/v1/me' && String(url).startsWith('/api/v1/me'))).toBe(false);
     // The header keeps its Research link, as it keeps Settings.
-    expect(screen.getByRole('link', { name: 'Research' })).toBeTruthy();
+    expect(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name: 'Research' })).toBeTruthy();
   });
 });

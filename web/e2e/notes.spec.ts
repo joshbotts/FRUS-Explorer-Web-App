@@ -128,8 +128,9 @@ test('writes a formatted note from the bar’s Note, edits it in the rail, and f
   expect((await noteWithRuns(page, edited.id)).runs?.at(-1)).toEqual(run('.\nSecond line.'));
   await expect(rail.locator('#research-notes').getByRole('button', { name: /^Kennedy writes warmly\.\s+Second line\./ })).toBeVisible();
 
-  // All Notes, from the header's Research.
+  // All Notes, from the header's Research, by the Research page's row (S19b).
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Research' }).click();
+  await page.getByRole('navigation', { name: 'Categories' }).getByRole('link', { name: /^All Notes\b/ }).click();
   await expect(page).toHaveURL(/\/research\/notes$/);
   await expect(page.getByRole('heading', { level: 1, name: 'All Notes' })).toBeVisible();
   const list = page.getByRole('list', { name: 'All Notes' });

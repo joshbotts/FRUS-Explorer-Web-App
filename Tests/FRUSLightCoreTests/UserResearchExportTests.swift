@@ -40,6 +40,42 @@ import Testing
         #expect(try store.researchCounts(for: "reader", tables: ["tags"]) == ["tags": 1])
     }
 
+    /// A few columns of the same rows, for the Research page (S19b): those named that the table has, in
+    /// the table's order, of the user's rows in the store's order, under the export's conditions, a
+    /// collection's entries those whose collection the user holds.
+    @Test(arguments: UserStoreKind.available) func aFewColumnsOfTheSameRows(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
+        defer { withExtendedLifetime(directory) {} }
+        try rows.addUser("reader")
+        _ = try store.importResearch(ResearchImportBatch(rows: ["tags": [
+            UserResearchImportTests.tag(Self.id(3), name: "Came first", modified: "2026-02-01T00:00:00.000Z"),
+            UserResearchImportTests.tag(Self.id(1), name: "Came second", modified: nil),
+        ]]), for: "owner")
+        _ = try store.importResearch(ResearchImportBatch(rows: ["tags": [
+            UserResearchImportTests.tag(Self.id(2), name: "The reader's", modified: nil),
+        ]]), for: "reader")
+        try rows.addNote(Self.id(10), bodyText: "A note.")
+
+        let read = try store.researchRows(for: "owner", columns: [
+            "tags": ["name", "id", "no_such_column", "user_id"], "notes": ["document_id"], "users": ["user_id"], "no_such_table": ["id"],
+        ])
+        #expect(Set(read.rows.keys) == ["tags", "notes"], "the research tables named, and nothing else")
+        #expect(read["tags"].map { $0.values } == [["id": .text(Self.id(3)), "name": .text("Came first")],
+                                                   ["id": .text(Self.id(1)), "name": .text("Came second")]])
+        #expect(read["tags"].map(\.position) == (try store.researchRows(for: "owner", tables: ["tags"]))["tags"].map(\.position),
+                "the same rows as the whole read, at the same places")
+        #expect(read["notes"].map { $0.values } == [["document_id": .text("d1")]])
+        #expect(try store.researchRows(for: "reader", columns: ["tags": ["name"]])["tags"].map { $0.values["name"]?.text } == ["The reader's"])
+
+        // A collection's entry is read only while its collection is the user's, as the export reads it.
+        try rows.run("""
+            INSERT INTO collection_entries (user_id, id, collection_id, document_id, volume_id, sort_order, level, selected_note_ids,
+                                            selected_highlight_ids, kind)
+                VALUES ('owner', ?, ?, 'd1', 'frus1961-63v06', 0, 1, '[]', '[]', 'document')
+            """, [.text(Self.id(21)), .text(Self.id(20))])
+        #expect(try store.researchRows(for: "owner", columns: ["collection_entries": ["kind"]])["collection_entries"].isEmpty)
+    }
+
     /// An instance-wide table's rows are every user's to read, when named; the prompts are the
     /// researcher's own, never a standard one, which no path here writes but the export would leave
     /// out, as the app's does.

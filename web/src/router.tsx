@@ -1,6 +1,6 @@
 // The app's routes (SPEC, Shell and navigation): /browse, /search and /doc/{volumeId}/{documentId}
 // in phase 1, /settings, whose first pane, Tags, came with S14c and whose Data came with S15d,
-// /research, which opens All Notes until S19b's Research page, /lookup, Citation Lookup, from
+// /research, which opened All Notes until S19b's Research page, /lookup, Citation Lookup, from
 // S19a, Browse's Working Corpora and My Scopes from S17e, and from S17f Project Home, the History
 // screen and Settings' Projects, Research Sessions and Reading, and from S18d the Collections tab and a
 // collection's editor, under the path the server serves the app at. Query strings have the API's form semantics, so
@@ -20,6 +20,7 @@ import { ReaderScreen } from './reader/ReaderScreen';
 import { AllNotesScreen, type NotesSearch, validateNotesSearch } from './research/AllNotesScreen';
 import { HistoryScreen } from './research/HistoryScreen';
 import { ProjectHomeScreen } from './research/ProjectHomeScreen';
+import { ResearchScreen, type ResearchSearch, validateResearchSearch } from './research/ResearchScreen';
 import { validateSearch } from './search/searchState';
 import { SearchScreen } from './search/SearchScreen';
 import { DataSettingsScreen } from './settings/DataSettings';
@@ -144,13 +145,12 @@ const lookupRoute = createRoute({
   component: LookupScreen,
 });
 
-// Research opens at All Notes until S19b's Research page, as the app's sidebar lists it there.
+// The Research page (S19b), the app's Research tab, with the category it shows in the address.
 const researchRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/research',
-  beforeLoad: () => {
-    throw redirect({ to: '/research/notes' });
-  },
+  validateSearch: (raw: Record<string, unknown>): ResearchSearch => validateResearchSearch(raw),
+  component: ResearchScreen,
 });
 
 const researchNotesRoute = createRoute({
