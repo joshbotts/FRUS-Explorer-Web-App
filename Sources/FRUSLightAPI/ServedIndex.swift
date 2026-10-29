@@ -1,7 +1,9 @@
 // The kit's stack over the live index, opened read-only and immutable: search and browse (upstream
 // #1575), the page ranges and persons the reader's links need (upstream #1579), and the citation
 // matcher over both that Citation Lookup asks (PLAN's S19a); with the user store's search database
-// attached, read-only, for each user's half of a search (upstream #1806, PLAN's S17d).
+// attached, read-only, for each user's half of a search (upstream #1806, PLAN's S17d); and a
+// connection of its own for what the app reads with its own queries, a collection document's
+// cross-references (PLAN's S18e).
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -25,8 +27,11 @@ public final class ServedIndex: Sendable {
     let attachesUserStore: Bool
     /// Which document holds a printed page, for a page link.
     public let pages: PageRangeStore
-    /// The persons' mentions and rollups, for a person card's count.
+    /// The persons' mentions and rollups, for a person card's count, and a collection's Persons Index.
     public let persons: PersonMentionStore
+    /// The index read as the app's own stores read it, where the kit offers no read: a collection
+    /// document's cross-references (PLAN's S18e, `outboundTargets`).
+    let references: SQLiteConnection
     /// The kit's citation matcher over this index and the published catalogue, with the volumes
     /// the index holds as the device's downloaded ones, as the reader's page links take them: the
     /// app builds its engine over its own index, its catalogue and the volumes on its disk.
@@ -56,6 +61,7 @@ public final class ServedIndex: Sendable {
         attachesUserStore = userStore != nil
         pages = try PageRangeStore(readingDatabaseAt: corpus.url)
         persons = try PersonMentionStore(readingDatabaseAt: corpus.url)
+        references = try SQLiteConnection.immutable(corpus.url)
         indexedVolumeIds = Set(corpus.documentsByVolume.filter { $0.value > 0 }.keys)
         citations = CitationMatchingEngine(manifestStore: FixedVolumeCatalogue(entries: resources.manifest),
                                            searchService: service, pageRangeStore: pages,

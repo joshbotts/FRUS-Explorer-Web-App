@@ -326,9 +326,7 @@ enum HistoryRoutes {
                 throw APIProblem.invalidParameter("timeZone", "\(zone) is not a time zone this server knows.")
             }
             let appendix = try await methodAppendix(of: user.id, in: store, generatedAt: now())
-            let host = QueryMethodAppendix.Host(appVersion: "Light \(FRUSLightVersion.string)", resources: resources.indexing,
-                                                locale: SearchItem.locale, calendar: Calendar(identifier: .gregorian),
-                                                timeZone: timeZone)
+            let host = appendixHost(resources: resources, timeZone: timeZone)
             let (text, type, name) = format == "csv"
                 ? (appendix.csv(for: host), "text/csv; charset=utf-8", "frus-query-log.csv")
                 : (appendix.markdown(for: host), "text/markdown; charset=utf-8", "frus-query-log.md")
@@ -481,6 +479,14 @@ enum HistoryRoutes {
                 = (format, ExportFormatName.displayName(format), documentCount, collectionName)
         }
         return made
+    }
+
+    /// What the appendix is rendered for, here: the server's name and version on its Generated line,
+    /// its data files, US English, the Gregorian calendar and the browser's time zone. A collection's
+    /// export prints it for the same host (S18e).
+    static func appendixHost(resources: ServerResources, timeZone: TimeZone) -> QueryMethodAppendix.Host {
+        QueryMethodAppendix.Host(appVersion: "Light \(FRUSLightVersion.string)", resources: resources.indexing,
+                                 locale: SearchItem.locale, calendar: Calendar(identifier: .gregorian), timeZone: timeZone)
     }
 
     /// The method appendix of the whole trail, as `ResearchDataExporter.methodAppendix` makes it: every

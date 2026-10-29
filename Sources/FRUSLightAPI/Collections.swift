@@ -91,6 +91,10 @@ public struct CollectionDetail: Codable, Equatable, Sendable, ResponseEncodable 
     /// The user's summary prompts, which the Summary prompt pickers offer, by name.
     public var prompts: [Prompt]
     public var documentCount: Int
+    /// The volumes of its documents the server cannot open, sorted: those its folder of volumes
+    /// lacks, or outside the catalogue, whose documents the preview prints as citations, as the app's
+    /// prints those of a volume not downloaded (PLAN's S18e).
+    public var volumesNotHeld: [String]
     public var entries: [Entry]
     public var createdAt: String?
     public var lastModified: String?
@@ -598,6 +602,7 @@ enum CollectionRoutes {
                 $0.name != $1.name ? $0.name.localizedStandardCompare($1.name) == .orderedAscending : $0.id < $1.id
             },
             documentCount: CollectionEditing.documentCount(entries),
+            volumesNotHeld: CollectionExportRoutes.volumesNotHeld(entries, resources: resources, in: provider.volumesDirectory).sorted(),
             entries: entries.enumerated().map { index, entry in
                 let key = "\(entry.volumeId)/\(entry.documentId)"
                 let kind = entry.entryKind
@@ -735,6 +740,13 @@ enum CollectionRoutes {
 
     static func notFound(_ id: String) -> APIProblem {
         APIProblem(.notFound, code: "COLLECTION_NOT_FOUND", detail: "You have no collection with the id \(id).")
+    }
+
+    /// A smart collection's preview or export, which waits for its saved search to be resolved here
+    /// (PLAN's S18f).
+    static func smartWaits() -> APIProblem {
+        APIProblem(.conflict, code: "SMART_COLLECTION_NOT_RESOLVED",
+                   detail: "This is a smart collection. Its documents come from its saved search, which this server does not resolve yet, so it has no preview or export here.")
     }
 
     /// The Add to Collection picker's refusal of a smart collection, in its words

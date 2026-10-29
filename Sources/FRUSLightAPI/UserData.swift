@@ -434,6 +434,7 @@ enum UserDataRoutes {
             .add(middleware: UserDataGuard(services: services, bodyLimit: UserDataServices.noteBodyLimit))
         CollectionRoutes.add(to: collections, services: services, resources: resources, provider: provider)
         CollectionEntryRoutes.add(to: collections, services: services, resources: resources, reader: reader, provider: provider)
+        CollectionExportRoutes.add(to: collections, services: services, resources: resources, reader: reader, provider: provider)
         // And an import's, the export itself.
         let imports = router.group("/api/v1/me")
             .add(middleware: UserDataGuard(services: services, bodyLimit: services.importLimit))

@@ -82,11 +82,16 @@ public enum SummaryOrder {
     /// in uppercase, as the app compares `uuidString`s. The API's list and `user_search` both order
     /// by it.
     public static func ranksAbove(_ a: SummaryRecord, _ b: SummaryRecord) -> Bool {
-        let ca = a.createdAt ?? .distantPast, cb = b.createdAt ?? .distantPast
+        ranksAbove(createdAt: (a.createdAt, b.createdAt), lastModified: (a.lastModified, b.lastModified), ids: (a.id, b.id))
+    }
+
+    /// The same, over two summaries' times and ids, for a summary read as the export's record (S18e).
+    public static func ranksAbove(createdAt: (Date?, Date?), lastModified: (Date?, Date?), ids: (String, String)) -> Bool {
+        let ca = createdAt.0 ?? .distantPast, cb = createdAt.1 ?? .distantPast
         if ca != cb { return ca > cb }
-        let la = a.lastModified ?? .distantPast, lb = b.lastModified ?? .distantPast
+        let la = lastModified.0 ?? .distantPast, lb = lastModified.1 ?? .distantPast
         if la != lb { return la > lb }
-        return UserSearchText.uuidString(a.id) < UserSearchText.uuidString(b.id)
+        return UserSearchText.uuidString(ids.0) < UserSearchText.uuidString(ids.1)
     }
 }
 

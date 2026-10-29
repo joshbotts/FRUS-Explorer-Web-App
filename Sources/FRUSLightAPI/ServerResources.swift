@@ -1,4 +1,5 @@
-// The app's data files, FRUSExplorer/Resources from the pinned commit, read once at start.
+// The app's data files, FRUSExplorer/Resources from the pinned commit, read once at start, and the
+// archival indexes a collection's Sources & Archives block reads once it first asks (PLAN's S18e).
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -24,6 +25,9 @@ public final class ServerResources: Sendable {
     public let citedPages: CitedPageMap
     /// The five files that change what an index holds, for the kit's search stack.
     public let indexing: IndexingResources
+    /// The three indexes a collection's Sources & Archives block links a lot through (PLAN's S18e),
+    /// decoded on first use.
+    private let archival = ArchivalIndexFiles()
 
     /// The files the server cannot start without: those it reads here, and the five
     /// `IndexingResources` requires.
@@ -74,6 +78,32 @@ public final class ServerResources: Sendable {
     /// volume. Only a manifest id is ever joined into a path.
     public func volume(_ volumeId: String) -> VolumeManifestEntry? {
         positions[volumeId].map { manifest[$0] }
+    }
+
+    /// `ArchivalIndexes.bundled`, app code: `central-files-index.json`, `volume-sources-index.json` and
+    /// `lot-claimants-index.json`, each decoded once, as its store in the app decodes it, and none for a
+    /// file missing or malformed, which the block reads as the app's does, linking what the others can.
+    public var archivalIndexes: ArchivalIndexes { archival.indexes(in: directory) }
+}
+
+/// The archival indexes, decoded the first time a collection asks for them: 4.5 MB of JSON that a
+/// server with no Sources & Archives block never reads.
+private final class ArchivalIndexFiles: @unchecked Sendable {
+    private let lock = NSLock()
+    private var loaded: ArchivalIndexes?
+
+    func indexes(in directory: URL) -> ArchivalIndexes {
+        lock.lock()
+        defer { lock.unlock() }
+        if let loaded { return loaded }
+        func decode<T: Decodable>(_ type: T.Type, _ name: String) -> T? {
+            (try? Data(contentsOf: directory.appendingPathComponent(name))).flatMap { try? JSONDecoder().decode(type, from: $0) }
+        }
+        let indexes = ArchivalIndexes(centralFiles: decode(CentralFilesIndex.self, "central-files-index.json"),
+                                      volumeSources: decode(VolumeSourcesIndex.self, "volume-sources-index.json"),
+                                      claimants: decode(LotClaimantsIndex.self, "lot-claimants-index.json"))
+        loaded = indexes
+        return indexes
     }
 }
 
