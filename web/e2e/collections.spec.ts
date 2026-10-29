@@ -129,7 +129,9 @@ test('makes a collection three sections deep, with documents, a note block and a
   /** Indents the heading titled `title` from its row's menu, the web's way to the app's context menu. */
   async function indent(title: string) {
     const actions = contents.getByRole('button', { name: `Actions: ${title}` });
-    await tabTo(page, actions);
+    // Its menu pressed again where it has focus, as after its last Indent: a Tab would go round the
+    // whole page, the preview's frame beside Contents included (S18e).
+    if (!(await actions.evaluate((element) => element === element.ownerDocument.activeElement))) await tabTo(page, actions);
     await page.keyboard.press('Enter');
     const rowMenu = page.getByRole('menu', { name: `Actions: ${title}` });
     await expect(rowMenu.getByRole('menuitem', { name: 'Rename' })).toBeFocused();

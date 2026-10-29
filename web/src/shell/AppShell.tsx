@@ -44,7 +44,9 @@ export function AppShell() {
       <a className="skip-link" href="#main" onClick={skipToMain}>
         {copy.app.skipToContent}
       </a>
-      <header className="app-header">
+      {/* Named, as its footer is, since a collection's preview frames the kit's page, whose own header and
+          footer are a banner and a page's footer too, and two of a kind need names to be told apart (S18e). */}
+      <header className="app-header" aria-label={copy.app.name}>
         <Link to="/search" className="brand">
           {copy.app.name}
         </Link>
@@ -85,7 +87,7 @@ export function AppShell() {
       <main id="main" tabIndex={-1}>
         <Outlet />
       </main>
-      <footer className="app-footer">
+      <footer className="app-footer" aria-label={copy.app.footerLabel}>
         <p>{copy.app.footer}</p>
         {signedIn && <p>{copy.app.operatorReads}</p>}
       </footer>

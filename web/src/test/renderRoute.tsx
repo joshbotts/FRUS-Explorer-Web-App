@@ -37,8 +37,9 @@ export class ProblemAnswer {
 /**
  * Answers each request with what `answers` holds for it: under `METHOD /path` for any method, or
  * under its path alone for a GET. An answer is JSON, a `ProblemAnswer`, `null` for 204 No Content,
- * or a function of the request's URL and its init that gives one, at once or by a promise. Any
- * other request is a 404 problem. Returns the stub, whose calls name the URLs asked for and how.
+ * a `Response` as it is, or a function of the request's URL and its init that gives one, at once or
+ * by a promise. Any other request is a 404 problem. Returns the stub, whose calls name the URLs
+ * asked for and how.
  */
 export function stubServer(answers: Record<string, Answer>) {
   const fetch = vi.fn(async (input: string, init?: RequestInit) => {
@@ -52,6 +53,8 @@ export function stubServer(answers: Record<string, Answer>) {
           ? answers[url.pathname]
           : new ProblemAnswer(404, 'NOT_FOUND', `No answer for ${key}.`);
     const given: unknown = await (typeof answer === 'function' ? (answer as (url: URL, init?: RequestInit) => Answer)(url, init) : answer);
+    // A file, with its headers, as a collection's export answers (S18e).
+    if (given instanceof Response) return given;
     if (given instanceof ProblemAnswer) {
       const problem = { type: 'about:blank', title: 'Problem', status: given.status, detail: given.detail, instance: url.pathname, code: given.code };
       return new Response(JSON.stringify(problem), { status: given.status, headers: { 'content-type': 'application/problem+json' } });

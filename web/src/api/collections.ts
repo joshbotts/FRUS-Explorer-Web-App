@@ -2,11 +2,14 @@
 // as the editor shows it, and every change the editor makes, each answered with the collection as it
 // then stands, which takes the place of the one held. The Collections list, the Add to Collection
 // picker and the Research rail's Collections section are read again after a change, and after an
-// import, which can bring collections (`researchImported`).
+// import, which can bring collections (`researchImported`). Since S18e, a collection's live preview,
+// a page of the server's for the editor's frame, its exports, which the history keeps, and the
+// quotation check its export sheet runs.
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
-import { ApiError, getJSON } from './client';
+import { servedPath } from './base';
+import { ApiError, getJSON, sendForFile } from './client';
 import type { NoteRun } from './types';
-import { change } from './userData';
+import { change, meQuery } from './userData';
 
 const segment = encodeURIComponent;
 
@@ -130,6 +133,8 @@ export interface CollectionDetail {
   /** The user's summary prompts, by name. */
   prompts: { id: string; name: string }[];
   documentCount: number;
+  /** The volumes of its documents the server's folder lacks, which the preview shows as citations (S18e). */
+  volumesNotHeld: string[];
   entries: CollectionEntry[];
   createdAt?: string;
   lastModified?: string;
@@ -272,6 +277,76 @@ export function documentCollectionsQuery(volumeId: string, documentId: string) {
 /** Whether the server has no such collection: deleted elsewhere. */
 export const collectionGone = (error: unknown) => error instanceof ApiError && error.code === 'COLLECTION_NOT_FOUND';
 
+/** The formats a collection exports to here, the app's `ExportFormat` raw values, in its grid's order. */
+export const exportFormats = ['html', 'docx', 'bibtex', 'zoteroJSON'] as const;
+export type ExportFormat = (typeof exportFormats)[number];
+
+/** `CollectionPreviewView.initialDocumentCap`: the documents the preview shows until Render All. */
+export const previewDocumentCap = 20;
+
+/** What the export sheet's check of a collection's quotations says. */
+export interface ExcerptCheck {
+  /** The sentence above Export, or none when there is nothing to say. */
+  summary?: string;
+  /** A quotation was not found in the document it names. */
+  hasFailures: boolean;
+  verified: number;
+}
+
+/** The browser's time zone, which an export's dates are read in, as the app reads them in the device's. */
+export function browserTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    // A browser that names no zone gets UTC's dates, as the method appendix does.
+    return 'UTC';
+  }
+}
+
+/**
+ * The address of a collection's live preview, the server's page for the editor's frame: the first 20
+ * documents, or all of them after Render All. The frame is sent to it again after each change.
+ */
+export function previewURL(id: string, renderAll: boolean): string {
+  const query = new URLSearchParams({ renderAll: String(renderAll), timeZone: browserTimeZone() });
+  return `${servedPath(`${base}/${segment(id)}/preview`)}?${query.toString()}`;
+}
+
+/** The quotation check, run each time the export sheet opens, as the app's sheet runs its own, over the collection the server holds once the changes sent are answered. */
+export function excerptCheckQuery(id: string) {
+  return queryOptions({
+    queryKey: ['collectionExcerptCheck', keyOf(id)],
+    queryFn: async ({ signal }) => {
+      await whenAnswered(id);
+      return getJSON<ExcerptCheck>(`${base}/${segment(id)}/excerpt-check`, undefined, signal);
+    },
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  });
+}
+
+/**
+ * Exports a collection as the sheet's chosen format, once the changes sent to it are answered: the
+ * file the server's exporter writes, with the name it gives, which the history then lists.
+ */
+export async function exportCollection(client: QueryClient, id: string, format: ExportFormat): Promise<{ blob: Blob; name: string }> {
+  await whenAnswered(id);
+  const body = { format, timeZone: browserTimeZone() };
+  const path = `${base}/${segment(id)}/export`;
+  const me = await client.ensureQueryData(meQuery);
+  let file: { blob: Blob; name: string };
+  try {
+    file = await sendForFile(path, me.csrfToken, body, 'Untitled Collection');
+  } catch (error) {
+    if (!(error instanceof ApiError && error.code === 'CSRF_TOKEN_INVALID')) throw error;
+    const fresh = await client.fetchQuery({ ...meQuery, staleTime: 0 });
+    file = await sendForFile(path, fresh.csrfToken, body, 'Untitled Collection');
+  }
+  void client.invalidateQueries({ queryKey: ['history'] });
+  return file;
+}
+
 /**
  * After a change to a collection: the one held takes the answer's place, and the lists that name
  * collections are read again where they are next shown: the list, the rail's memberships, Project
@@ -306,6 +381,11 @@ function inTurn<T>(id: string, send: () => Promise<T>): Promise<T> {
     if (queues.get(key) === settled) queues.delete(key);
   });
   return next;
+}
+
+/** Once every change sent to the collection so far is answered, so that what the server holds is what was shown. */
+export function whenAnswered(id: string): Promise<void> {
+  return queues.get(keyOf(id))?.then(() => undefined) ?? Promise.resolve();
 }
 
 /**

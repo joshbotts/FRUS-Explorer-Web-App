@@ -61,6 +61,8 @@ export const copy = {
     settings: 'Settings',
     /** The browser tab's title for a screen. */
     title: (screen: string) => `${screen} – FRUS Explorer Light`,
+    /** The footer's name, beside the header's, the app's name (S18e). */
+    footerLabel: 'About this instance',
     footer:
       'FRUS Explorer Light is a self-hosted edition of FRUS Explorer, with documents published by the Office of the Historian. This instance is not an Office of the Historian service.',
     /** Behind a proxy that signs people in (PLAN's S14e): who the proxy named. */
@@ -1313,6 +1315,67 @@ export const copy = {
     },
     addedOne: 'Added 1 document',
     addedMany: (count: number) => `Added ${count} documents`,
+    /** The toolbar's Export…, and the iPhone's Outline | Preview control, which a narrow window shows (S18e). */
+    export: 'Export…',
+    pane: 'View',
+    outline: 'Outline',
+    preview: 'Preview',
+  },
+  /**
+   * The live preview beside Contents (PLAN's S18e), the app's `CollectionPreviewView`: the HTML
+   * export's page, the first 20 documents until Render All, with the app's bars and caption. The
+   * frame's name, the missing volumes' note and a smart collection's sentence are the web's own, as
+   * a server downloads no volume and does not yet resolve a saved search.
+   */
+  collectionPreview: {
+    loading: 'Building preview…',
+    unavailable: 'Preview Unavailable',
+    capNotice: (shown: number, total: number) => `Showing first ${shown} of ${total} documents`,
+    renderAll: 'Render All',
+    /** What the preview says once Render All has taken its bar away, the web's own. */
+    renderingAll: (count: number) => `Showing all ${count} documents`,
+    missingVolumes: (count: number) => `${count} volume${count === 1 ? '' : 's'} not downloaded`,
+    fidelityNote: 'Preview of the HTML export — PDF and Word pagination will differ',
+    frameTitle: 'Preview of the collection’s HTML export',
+    missingVolumesNote: 'This server’s folder of volumes does not hold them, so their documents show as citations.',
+    smart: 'A smart collection’s documents come from its saved search, which this server does not resolve yet, so it has no preview here.',
+  },
+  /**
+   * The export sheet (PLAN's S18e), the app's `ExportSheetView`: the composition's sentence, the format
+   * grid, the quotation check and Export {Format}, in the app's words. Its PDF waits for phase 3, its
+   * `.fruscollection` for S18f and its Send to Zotero Library for phase 3's secrets; the word cloud's
+   * note, the saved file's line and a smart collection's sentence are the web's own.
+   */
+  collectionExport: {
+    title: 'Export collection',
+    close: 'Close',
+    exportFormat: (format: string) => `Export ${format}`,
+    exporting: 'Exporting…',
+    complete: 'Export Complete',
+    formats: 'Format',
+    grid: {
+      html: { label: 'HTML', caption: 'Web page' },
+      docx: { label: 'Word', caption: 'Editable .docx' },
+      bibtex: { label: 'BibTeX', caption: 'Reference manager' },
+      zoteroJSON: { label: 'RIS', caption: 'Zotero / EndNote' },
+    } as Record<string, { label: string; caption: string }>,
+    /** `Collection.compositionSummarySentence`: the default body depth, then what the composition turns on. */
+    lead: {
+      full: 'Exports the full text of each document',
+      summaryOnly: 'Exports an AI summary of each document',
+      index: 'Exports a citation-only index',
+    } as Record<string, string>,
+    included: {
+      headnotes: 'headnotes',
+      notes: 'your notes',
+      footnotes: 'footnotes',
+      sourceNotes: 'source notes',
+      highlights: 'highlights',
+      wordCloud: 'a word-cloud overview',
+    },
+    withIncluded: (lead: string, list: string) => `${lead}, with ${list}.`,
+    noWordCloud: 'An export from this server draws no word cloud: the app draws it with a renderer of its own.',
+    smart: 'A smart collection’s documents come from its saved search, which this server does not resolve yet, so it cannot be exported here.',
   },
   /**
    * Collection settings, the iPad editor's ⚙ sheet: the name and note, the title page and
