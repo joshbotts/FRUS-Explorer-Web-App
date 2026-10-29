@@ -1,16 +1,21 @@
 // Settings ▸ Tags (SPEC, Settings and administration), as the app's Tags pane lays it out
 // (`SettingsTagsPane`): a row for each tag, which opens the tag's editor, and New Tag… at the end of
 // the list, which makes a tag named New Tag and opens it in the editor to be named. The editor
-// renames, merges and deletes, each by the server's rules, which are the app's.
+// renames, merges and deletes, each by the server's rules, which are the app's. From S17f the rows are
+// in the reader's own order over the alphabetical one, which each row's Move to Top, Move Up and Move
+// Down set, as the app's rows' commands do.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type MouseEvent, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
 import type { UserTag } from '../api/types';
+import { updatePreferences } from '../api/research';
 import { createTag, meQuery, tagsQuery } from '../api/userData';
 import { copy } from '../copy';
 import { useHeadingReady } from '../shell/headingFocus';
 import { useDocumentTitle } from '../shell/useDocumentTitle';
+import { applyOrder, type MoveStep, moving } from '../research/listOrder';
 import { SettingsPanes } from './SettingsPanes';
+import { useListOrder } from './syncedPreferences';
 import { MergeTagDialog, TagEditor } from './TagEditor';
 
 export function TagsSettingsScreen() {
@@ -29,7 +34,24 @@ export function TagsSettingsScreen() {
   useDocumentTitle(copy.settings.tags);
   useHeadingReady(!me.isPending);
 
-  const items = tags.data?.items ?? [];
+  const { tagOrder } = useListOrder();
+  const items = applyOrder(tags.data?.items ?? [], tagOrder, (tag) => tag.id);
+
+  function move(tag: UserTag, step: MoveStep, button: HTMLButtonElement) {
+    const next = moving(tag.id, step, items.map((item) => item.id));
+    if (!next) return;
+    const list = button.closest('ul');
+    setFailure(null);
+    void updatePreferences(client, { tagOrder: next })
+      .then(() =>
+        // The focus stays with the tag's row, on the command it can still take.
+        requestAnimationFrame(() => {
+          const row = list?.querySelector<HTMLElement>(`li[data-id="${tag.id}"]`);
+          (row?.querySelector<HTMLButtonElement>(`button[data-step="${step}"]`) ?? row?.querySelector<HTMLButtonElement>('button.settings-row'))?.focus();
+        }),
+      )
+      .catch((error: unknown) => setFailure(errorMessage(error)));
+  }
 
   async function newTag(event: MouseEvent<HTMLButtonElement>) {
     if (creating) return;
@@ -78,7 +100,7 @@ export function TagsSettingsScreen() {
         ) : (
           <ul className="settings-list" aria-label={copy.settings.tags}>
             {items.map((tag) => (
-              <li key={tag.id}>
+              <li key={tag.id} data-id={tag.id}>
                 <button
                   type="button"
                   className="settings-row"
@@ -91,6 +113,26 @@ export function TagsSettingsScreen() {
                   {tag.name}
                   <span aria-hidden="true">›</span>
                 </button>
+                {items.length > 1 && (
+                  <span className="move-commands">
+                    {(['toTop', 'up', 'down'] as const)
+                      .filter((step) => moving(tag.id, step, items.map((item) => item.id)) !== undefined)
+                      .map((step) => {
+                        const command = step === 'toTop' ? copy.listOrder.moveToTop : step === 'up' ? copy.listOrder.moveUp : copy.listOrder.moveDown;
+                        return (
+                          <button
+                            key={step}
+                            type="button"
+                            data-step={step}
+                            aria-label={copy.listOrder.moveLabel(command, tag.name)}
+                            onClick={(event) => move(tag, step, event.currentTarget)}
+                          >
+                            {command}
+                          </button>
+                        );
+                      })}
+                  </span>
+                )}
               </li>
             ))}
           </ul>
@@ -104,6 +146,7 @@ export function TagsSettingsScreen() {
           </p>
         )}
         <p className="note">{copy.settings.tagsFooter}</p>
+        {items.length > 1 && <p className="note">{copy.settings.tagsOrderFooter}</p>}
       </>
     );
   }

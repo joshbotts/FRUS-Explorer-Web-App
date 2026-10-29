@@ -310,7 +310,7 @@ extension RelationalUserStore: TagStore {
     /// `rewrite` gives it, and records the row as modified at `now`, as the app's save stamps a
     /// changed note or project. A list that does not decode is left as it is. Returns how many rows
     /// changed.
-    private static func rewriteReferences(in table: String, column: String, naming tag: String, for user: String,
+    static func rewriteReferences(in table: String, column: String, naming tag: String, for user: String,
                                           at now: Date, _ db: UserStoreTransaction,
                                           _ rewrite: ([String]) -> [String]?) throws -> Int {
         let rows = try db.query(
@@ -350,6 +350,18 @@ public enum TagReferences {
     public static func repointing(_ source: String, to target: String, in ids: [String]) -> [String]? {
         guard var kept = removing(source, from: ids) else { return nil }
         if !kept.contains(where: { names($0, target) }) { kept.append(target) }
+        return kept
+    }
+
+    /// `ids` with each `source` replaced by `target` where it stands, each id once, the first kept, as
+    /// `ProjectAdminService.merge` re-points an Archives Visit's projects, whose first is its owner;
+    /// nil when they do not name `source`.
+    public static func replacing(_ source: String, with target: String, in ids: [String]) -> [String]? {
+        guard ids.contains(where: { names($0, source) }) else { return nil }
+        var kept: [String] = []
+        for id in ids.map({ names($0, source) ? target : $0 }) where !kept.contains(where: { names($0, normalized(id) ?? id) }) {
+            kept.append(id)
+        }
         return kept
     }
 

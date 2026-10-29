@@ -711,11 +711,26 @@ export interface DocumentSummaries {
 export interface Project {
   id: string;
   name: string;
+  /** From S17f, the rest of the Mac's project: its research question, absent for none. */
+  researchQuestion?: string;
+  /** The date focus Project Home's header shows, as an import brings it. */
+  defaultDateRangeStart?: string;
+  defaultDateRangeEnd?: string;
+  /** Its focus subjects' refs, as an import brings them. */
+  defaultSubjectTagIds?: string[];
+  /** Its focus tags, the ids of the user's tags. */
+  defaultUserTagIds?: string[];
+  createdAt?: string;
+  lastModified?: string;
+  /** In the list alone, what is filed under it, in the kit's words: "12 notes · 3 collections". */
+  tally?: string;
 }
 
 export interface ProjectList {
   total: number;
   items: Project[];
+  /** The project the user works in (S17f); absent for Global Context. */
+  activeProjectId?: string;
 }
 
 /** The app's model types, as an import's report names them (PLAN's S16c). */

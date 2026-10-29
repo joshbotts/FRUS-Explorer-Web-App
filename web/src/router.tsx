@@ -1,7 +1,8 @@
 // The app's routes (SPEC, Shell and navigation): /browse, /search and /doc/{volumeId}/{documentId}
 // in phase 1, /settings, whose first pane, Tags, came with S14c and whose Data came with S15d,
 // /research, which opens All Notes until S19b's Research page, /lookup, Citation Lookup, from
-// S19a, and Browse's Working Corpora and My Scopes from S17e, under the path the server serves the app at. Query strings have the API's form semantics, so
+// S19a, Browse's Working Corpora and My Scopes from S17e, and from S17f Project Home, the History
+// screen and Settings' Projects, Research Sessions and Reading, under the path the server serves the app at. Query strings have the API's form semantics, so
 // a search's URL reads as its request does.
 import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/react-router';
 import { basePath } from './api/base';
@@ -14,9 +15,14 @@ import { SectionScreen } from './browse/SectionScreen';
 import { VolumeScreen } from './browse/VolumeScreen';
 import { ReaderScreen } from './reader/ReaderScreen';
 import { AllNotesScreen, type NotesSearch, validateNotesSearch } from './research/AllNotesScreen';
+import { HistoryScreen } from './research/HistoryScreen';
+import { ProjectHomeScreen } from './research/ProjectHomeScreen';
 import { validateSearch } from './search/searchState';
 import { SearchScreen } from './search/SearchScreen';
 import { DataSettingsScreen } from './settings/DataSettings';
+import { ProjectsSettingsScreen } from './settings/ProjectsSettings';
+import { ReadingSettingsScreen } from './settings/ReadingSettings';
+import { SessionLogScreen, SessionsSettingsScreen } from './settings/SessionsSettings';
 import { TagsSettingsScreen } from './settings/TagsSettings';
 import { AppShell } from './shell/AppShell';
 import { NotFound } from './shell/NotFound';
@@ -151,6 +157,20 @@ const researchNotesRoute = createRoute({
   component: AllNotesScreen,
 });
 
+// The History screen (S17f), which the app's Research tab pushes.
+const researchHistoryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/research/history',
+  component: HistoryScreen,
+});
+
+// Project Home (S17f), which the app opens in a window of its own.
+const projectHomeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/projects/$projectId',
+  component: ProjectHomeScreen,
+});
+
 // Settings opens at its first pane, Tags.
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -172,6 +192,31 @@ const settingsDataRoute = createRoute({
   component: DataSettingsScreen,
 });
 
+// From S17f: Projects, Research Sessions with its Session Log, and Reading.
+const settingsProjectsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings/projects',
+  component: ProjectsSettingsScreen,
+});
+
+const settingsSessionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings/sessions',
+  component: SessionsSettingsScreen,
+});
+
+const settingsSessionLogRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings/sessions/log',
+  component: SessionLogScreen,
+});
+
+const settingsReadingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings/reading',
+  component: ReadingSettingsScreen,
+});
+
 export const routeTree = rootRoute.addChildren([
   indexRoute,
   browseRoute,
@@ -187,9 +232,15 @@ export const routeTree = rootRoute.addChildren([
   lookupRoute,
   researchRoute,
   researchNotesRoute,
+  researchHistoryRoute,
+  projectHomeRoute,
   settingsRoute,
   settingsTagsRoute,
   settingsDataRoute,
+  settingsProjectsRoute,
+  settingsSessionsRoute,
+  settingsSessionLogRoute,
+  settingsReadingRoute,
 ]);
 
 export function makeRouter(basepath: string = basePath) {

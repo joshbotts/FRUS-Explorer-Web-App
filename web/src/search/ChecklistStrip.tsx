@@ -3,7 +3,8 @@
 // were, so that a reader working down a list presses Mark Page Reviewed again and again; Undo dimmed
 // until there is a page mark to take back, when the focus goes on to Mark Page Reviewed. Both act on a
 // page, so under the timeline, which has none, both are dimmed. What each did is announced, as the Mac
-// tells VoiceOver.
+// tells VoiceOver. From S17f, while Log Research Sessions is off, the Mac's line under it saying that an
+// opened result stays (`ChecklistLoggingNotice`).
 import { copy } from '../copy';
 
 export function ChecklistStrip({
@@ -13,6 +14,7 @@ export function ChecklistStrip({
   announcement,
   onMarkPage,
   onUndo,
+  loggingNotice,
 }: {
   /** Results hidden as reviewed. */
   hiddenCount: number;
@@ -23,6 +25,7 @@ export function ChecklistStrip({
   announcement: string;
   onMarkPage: () => void;
   onUndo: () => void;
+  loggingNotice?: string;
 }) {
   return (
     <div className="checklist-strip" role="group" aria-label={copy.checklist.toggleName}>
@@ -50,6 +53,12 @@ export function ChecklistStrip({
       <span className="visually-hidden" role="status">
         {announcement}
       </span>
+      {loggingNotice && (
+        <p className="logging-notice">
+          <span aria-hidden="true">ⓘ </span>
+          {loggingNotice}
+        </p>
+      )}
     </div>
   );
 }

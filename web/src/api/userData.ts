@@ -106,6 +106,8 @@ function tagsChanged(client: QueryClient) {
   void client.invalidateQueries({ queryKey: ['tags'] });
   void client.invalidateQueries({ queryKey: ['documentTags'] });
   for (const key of ['notes', 'documentNotes', 'note']) void client.invalidateQueries({ queryKey: [key] });
+  // Project Home names its focus tags, and shows them once the reader has a tag (S17f).
+  void client.invalidateQueries({ queryKey: ['projectHome'] });
   searchesChanged(client);
 }
 
@@ -113,6 +115,7 @@ export async function createTag(client: QueryClient, name: string): Promise<User
   const tag = (await change<UserTag>(client, 'POST', '/api/v1/me/tags', { name }))!;
   void client.invalidateQueries({ queryKey: ['tags'] });
   void client.invalidateQueries({ queryKey: ['searchTags'] });
+  void client.invalidateQueries({ queryKey: ['projectHome'] });
   return tag;
 }
 
@@ -167,6 +170,8 @@ export function documentHighlightsQuery(volumeId: string, documentId: string) {
 
 /** After a change to one of a document's highlights, its list is read again: the server says what is stale. */
 function highlightsChanged(client: QueryClient, volumeId: string, documentId: string) {
+  // A highlight is a document annotated, which Project Home's coverage counts (S17f).
+  void client.invalidateQueries({ queryKey: ['projectHome'] });
   return client.invalidateQueries({ queryKey: documentHighlightsQuery(volumeId, documentId).queryKey });
 }
 
@@ -278,6 +283,10 @@ export const noteGone = (error: unknown) => error instanceof ApiError && error.c
  */
 async function notesChanged(client: QueryClient, volumeId: string, documentId: string) {
   searchesChanged(client);
+  // Project Home counts and lists the notes filed under it, and a project's tally counts them (S17f):
+  // the tally is read again where it is next shown, not at each save of a note's words.
+  void client.invalidateQueries({ queryKey: ['projectHome'] });
+  void client.invalidateQueries({ queryKey: ['projects'], refetchType: 'none' });
   await Promise.all([
     client.invalidateQueries({ queryKey: notesQuery.queryKey }),
     client.invalidateQueries({ queryKey: documentNotesQuery(volumeId, documentId).queryKey }),
@@ -379,20 +388,27 @@ export const exportContentsQuery = queryOptions({
   retry: false,
 });
 
-/** Export as JSON's address: every summary with the app's switch on. */
-export function exportPath(includeGeneratedSummaries: boolean): string {
-  return '/api/v1/me/export' + (includeGeneratedSummaries ? '?includeGeneratedSummaries=true' : '');
+/**
+ * Export as JSON's address: every summary with the app's switch on, and from S17f the project the
+ * user works in, which its header names, as the Mac's names its active project.
+ */
+export function exportPath(includeGeneratedSummaries: boolean, projectId?: string): string {
+  const query = new URLSearchParams();
+  if (includeGeneratedSummaries) query.set('includeGeneratedSummaries', 'true');
+  if (projectId) query.set('projectId', projectId);
+  const fields = query.toString();
+  return '/api/v1/me/export' + (fields ? `?${fields}` : '');
 }
 
 /**
  * Export as JSON: the user's research as the Mac's export, the kit's envelope with the web's one key
  * more, under the name the server gives it, the app's export sheet's.
  */
-export function fetchExport(includeGeneratedSummaries: boolean): Promise<{ blob: Blob; name: string }> {
-  return getFile(exportPath(includeGeneratedSummaries), 'frus-research-export.json');
+export function fetchExport(includeGeneratedSummaries: boolean, projectId?: string): Promise<{ blob: Blob; name: string }> {
+  return getFile(exportPath(includeGeneratedSummaries, projectId), 'frus-research-export.json');
 }
 
-/** The user's projects, by name, for the note editor's Projects and All Notes' filter. */
+/** The user's projects, by name, for the note editor's Projects and All Notes' filter, and since S17f the one they work in. */
 export const projectsQuery = queryOptions({
   queryKey: ['projects'],
   queryFn: ({ signal }) => getJSON<ProjectList>('/api/v1/me/projects', undefined, signal),
@@ -439,5 +455,7 @@ export function researchImported(client: QueryClient) {
     void client.invalidateQueries({ queryKey: [key] });
   }
   for (const key of ['savedSearches', 'workingCorpora', 'workingCorpus', 'volumeScopes', 'volumeScope']) void client.invalidateQueries({ queryKey: [key] });
+  // And the project worked in, Project Home, the trail and the synced preferences (S17f).
+  for (const key of ['projectHome', 'history', 'sessionLog', 'preferences']) void client.invalidateQueries({ queryKey: [key] });
   searchesChanged(client);
 }

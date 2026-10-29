@@ -4,11 +4,11 @@
 // export with the web's one key more, and saves it, saying while it is prepared and, as the app's row
 // does, why it could not be. The counts come from one read of the server's, as the sheet counts from
 // the read that writes its file; the file is written when it is asked for.
-import type { UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { errorMessage } from '../api/client';
 import type { ExportContents, ResearchType } from '../api/types';
-import { fetchExport } from '../api/userData';
+import { fetchExport, projectsQuery } from '../api/userData';
 import { copy } from '../copy';
 
 const words = copy.dataSettings;
@@ -55,6 +55,8 @@ function save(file: Blob, name: string) {
 export function ExportSection({ contents }: { contents: UseQueryResult<ExportContents> }) {
   const id = useId();
   const [includeSummaries, setIncludeSummaries] = useState(false);
+  // Asked once the server has said it keeps user data, by answering for the export's Contents.
+  const projects = useQuery({ ...projectsQuery, enabled: contents.data !== undefined });
   const [preparing, setPreparing] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -62,7 +64,8 @@ export function ExportSection({ contents }: { contents: UseQueryResult<ExportCon
     setPreparing(true);
     setProblem(null);
     try {
-      const file = await fetchExport(includeSummaries);
+      // Under the project the user works in (S17f), which the file's header names.
+      const file = await fetchExport(includeSummaries, projects.data?.activeProjectId);
       save(file.blob, file.name);
     } catch (error) {
       setProblem(errorMessage(error));

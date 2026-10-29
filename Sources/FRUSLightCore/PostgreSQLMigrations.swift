@@ -13,7 +13,7 @@
 /// reads as the order the store took its rows in. `user_search` is not here: search reads FTS5, in
 /// the store's local SQLite copy (`PostgreSQLUserStore`).
 enum PostgreSQLMigrations {
-    static let all: [[String]] = [one, two]
+    static let all: [[String]] = [one, two, three]
 
     /// S2's: the single user, and corrections as override rows.
     static let one = [
@@ -477,5 +477,10 @@ enum PostgreSQLMigrations {
         ORDER BY recorded_at, rowid
         """,
         "DROP TABLE index_corrections",
+    ]
+
+    /// S17f's: the project each user works in, as app.db's migration 3 keeps it.
+    static let three = [
+        #"ALTER TABLE users ADD COLUMN active_project_id TEXT COLLATE "C""#,
     ]
 }

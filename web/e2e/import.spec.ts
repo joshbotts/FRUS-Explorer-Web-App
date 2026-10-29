@@ -130,7 +130,7 @@ test('imports the kit’s export of every type, imports it again and keeps it, t
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Research' }).click();
   const titles = page.getByRole('list', { name: 'All Notes' }).locator('.all-notes-title');
   await expect(titles).toHaveText(['In no project.', 'The OAS meeting.', 'Planners on Zapata.']);
-  const project = page.getByRole('combobox', { name: 'Project' });
+  const project = page.getByRole('combobox', { name: 'Project', exact: true });
   await expect(project.locator('option')).toContainText(['All projects', 'Not in a project', 'Bay of Pigs review', 'Cuba and the OAS']);
   await project.selectOption({ label: 'Bay of Pigs review' });
   await expect(titles).toHaveText(['The OAS meeting.', 'Planners on Zapata.']);
