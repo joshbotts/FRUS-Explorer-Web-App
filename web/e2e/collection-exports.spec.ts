@@ -159,10 +159,11 @@ test('shows Outline or Preview, one at a time, in a narrow window', async ({ pag
   await expect(view.getByRole('radio', { name: 'Outline' })).toBeChecked();
   await expect(page.getByRole('heading', { name: 'Contents' })).toBeVisible();
   await expect(page.locator('iframe.preview-frame')).toHaveCount(0);
-  await view.getByText('Preview', { exact: true }).click();
+  // The radio lies over its whole label, as Citation Lookup's, so a pointer presses it.
+  await view.getByRole('radio', { name: 'Preview' }).click();
   await expect(page.frameLocator('iframe.preview-frame').locator('header h1')).toHaveText('Narrow letters');
   await expect(page.getByRole('heading', { name: 'Contents' })).toHaveCount(0);
   await axeCheck(page);
-  await view.getByText('Outline', { exact: true }).click();
+  await view.getByRole('radio', { name: 'Outline' }).click();
   await expect(page.getByRole('heading', { name: 'Contents' })).toBeVisible();
 });

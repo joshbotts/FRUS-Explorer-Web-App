@@ -2,6 +2,100 @@
 
 One entry per session, newest first.
 
+## Session 18e: a collection's live preview and its exports
+
+29 October 2026 · branch `claude/silly-ramanujan-5e0960` · [#88](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/88) · upstream `32e295e5`, unchanged
+
+Phase 2's row S18e, the second of the collection rows S18c's pin move opened. A collection's editor shows the live preview beside Contents, the HTML export's page, the first 20 documents until Render All; Export… opens the app's sheet, which checks every quotation as it opens, warning without blocking, and saves HTML, Word, BibTeX or RIS; and History's Collections Exported keeps each export. Every byte of the page and of each file is the kit's: the kit's assembly resolves the collection over a data source of the server's, and the kit's renderers and exporters write it. No upstream pull request, no pin move and no schema change: everything the row calls was public at `32e295e5`, since #1807 and #1809.
+
+**What the kit gives,** at `32e295e5`:
+- `CollectionContentAssembly`, over a `CollectionContentDataSource` whose store reads answer with the research data export's records (#1809): which notes and highlights each entry takes, the overrides through sections, body depth, headnotes, excerpts, the See also line, the five apparatus blocks over `ArchivalIndexes`, the Zotero items and the summary phase, for the preview and for an export.
+- The renderers (#1807): `CollectionItemHTMLRenderer.pageHTML`, the page the HTML exporter writes and the preview shows, with its preview-only citation card and summary placeholder; `DocxCollectionExporter.documentData`; `BibTeXCollectionExporter.bibTeX(for:options:)`; `ZoteroCollectionExporter.ris(for:options:)`; `CollectionExportNaming.fileName`; `CollectionExportMetadata` with `CollectionExportDate`; `CollectionExportOptions(composing:)`; and `FigureImageSource`.
+- The quotation check (#1807): `ExcerptVerifier`, `upgradingVanished` and `ExcerptVerificationReport`'s sentence, over `IndexingPipeline.documentBodyTextsByKey(forKeys:)` and `documentRevision(volumeId:documentId:)`.
+
+**Delivered**
+
+- **The data source** (`Sources/FRUSLightAPI/CollectionContent.swift`): `CollectionContentSource`, the app's `AppContentSource` over this server.
+  - The user's research is read once before a resolve, as the export's records: the notes newest first, as the editor's `@Query` lists them; highlights; summaries, a document's by `SummaryOrder.ranksAbove`; tags, assignments, prompts and the project worked in.
+  - The library: the manifest, the served index, its `PersonMentionStore`, a document's cross-references by the app's `CrossReferenceStore.outboundEdges` query on a connection of the served index's own, the TEI folder's figures, and the app's three archival indexes, decoded on first use, off the main actor.
+  - Documents (`CollectionDocumentParses`): one pass of each volume a resolve asks of, the reader's own, for its `<div type="document">`s; any other division is parsed alone, as the app parses one; 256 are kept.
+  - Of what only an export does on the app, nothing: no download, no fetch, and Summary only from stored summaries alone.
+- **The routes** (`Sources/FRUSLightAPI/CollectionExports.swift`):
+  - `GET /api/v1/me/collections/{id}/preview`, the page for the editor's frame, under a policy that runs no script of its own, a problem answered as the app's Preview Unavailable page;
+  - `POST …/export`, the file each exporter writes, named as it names it, in ASCII and in UTF-8, kept in `trail_export` as `ExportHistoryRecorder` keeps it while Log Research Sessions is on;
+  - `GET …/excerpt-check`, the sheet's check;
+  - and the detail's `volumesNotHeld`, which the preview's bar counts.
+- **The browser app:**
+  - the editor's two columns, Contents and the preview, the iPad's, or the iPhone's Outline | Preview below 900 px;
+  - `CollectionPreview.tsx`: the sandboxed frame, sent to the page again a second after a change once it is answered, each page in the frame's own place in the history; the app's cap bar and Render All, kept while the editor is open; the missing volumes' bar; the app's caption;
+  - `CollectionExportSheet.tsx`: the composition's sentence (`exportRules.ts`, mirroring `compositionSummarySentence`), the grid of the four formats, the check's line, Export {Format}, and Export Complete with the file's name;
+  - Export… in the toolbar; copy.ts's `collectionPreview` and `collectionExport` blocks; `shell/saveFile.ts`, which S16d's JSON export now shares; and a download's name read from `filename*`.
+
+**Decided here, each the web's own**
+
+- **The preview is a page of the server's in a sandboxed frame.** The app's own policy forbids inline styles, which the kit's page needs, and the page can say its own problems. Its policy runs no script of its own; the frame's sandbox allows scripts, as the reader's does, so that the browser's own tools, axe among them, reach it.
+- **A volume is read once for a resolve.** Each document taken from one pass of its volume, the reader's `parseVolumeFull`, is built as `parseDocument` builds it alone, since the breaks a container carries go only to sections (`finishParse()`). The app's own reader caches window parses that its exports read. A division that is no document is parsed alone. So the cost of a collection is a pass of each of its volumes, never one for each document.
+- **A volume the server cannot open is "not downloaded",** in the app's words, the kit's citation card in the page and the bar counting them, with no Download, since a server's volumes are its administrator's.
+- **Summary only exports the summaries stored.** The server writes none, so a document without one fails the export with the app's sentence, as the app's does where it cannot write one, and so does a prompt the user no longer has. Without Apple Intelligence the app refuses every Summary only export.
+- **A document's summaries are newest first** where the app's fetch sets no order, as the inspector shows them.
+- **No word cloud:** its drawing is the app's SwiftUI, so the HTML and Word exports draw none, and the sheet says so under the app's sentence, which names the collection's setting.
+- **The export is a POST,** since it writes the history, and the browser saves the file it answers.
+- **The sheet offers HTML, Word, BibTeX and RIS,** HTML first: PDF waits for phase 3's Gotenberg, `.fruscollection` for S18f and Send to Zotero Library for phase 3's secrets. It stays open after a save, saying Export Complete, the Mac's words, with the file's name.
+- **A collection with nothing in it is refused** (`COLLECTION_EMPTY`), as the app's Export is disabled, and a smart one's preview and exports wait for S18f.
+- **A pre-RTF prose blob,** July 2026's, which the app heals to RTF, reads as its text.
+- **The app's banner and footer have names,** "FRUS Explorer Light" and "About this instance". The kit's page in the frame has a header and a footer of its own, and axe holds a page's landmarks across its frames.
+- **Render All sends focus to the preview,** which says "Showing all N documents", since the bar goes with its button.
+
+**Tests**
+
+- **FRUSLightServerTests,** 219 to 226: `CollectionExportTests`, 7.
+  - The preview's page, policy, cap and citation card; its problems as pages; a smart collection's.
+  - Each format's file, media type and name, and the refusals.
+  - The history kept as the app keeps it, a refusal kept nowhere, nothing while logging is off.
+  - Summary only from stored summaries, with the kit's refusals; the check's four outcomes in the report's sentence, never blocking; and each user's collections apart, live behind the proxy.
+  - One pass of a volume for a resolve's documents, each rendering as the app's parse of it alone does, a division that is no document parsed alone, and the cache.
+- **FRUSParityTests,** 209 to 213: `CollectionExportParityTests`, 4.
+  - The done-when: four collections in each of the four formats, and previewed capped and whole, each the kit's to the byte. One collection holds every kind of entry and every part of a composition: documents of three volumes, one with its figure, See also lines, a headnote, highlights, a note block, an excerpt, the five apparatus blocks, the title page, the introduction, the colophon, the project and the method appendix. The reference is the kit's own exporters and renderer, over its assembly with a data source that answers from the user's JSON export, the index and the TEI.
+  - Every Mac word the preview and the sheet take, under its key and in copy.ts.
+  - The server's mirrors, and the browser app's, each held to the app's source.
+- **The web unit suite,** 427 to 433 tests in 45 to 46 files: `CollectionExport.test.tsx`, 6.
+  - The sentence; the frame sent to the page, capped until Render All, which sends focus to the preview.
+  - A page built a second after a change is answered, once, never while it waits.
+  - A smart collection's sentence; the sheet's grid, check and save, a refusal, and an empty collection.
+- **The browser suite,** 61 to 64 tests at the root and under the path: `collection-exports.spec.ts`, 3, with axe.
+  - The preview beside Contents, Render All and its focus, a change shown, Back leaving the editor, and a volume away as its card.
+  - Each export by keyboard and pointer after the check's warning, each the file its exporter names, and each in History.
+  - The narrow window's Outline | Preview.
+  - `sign-in.spec.ts` opens a collection's preview through INSTALL's proxy recipe, with the session the frame's own navigation carries. `collections.spec.ts`' keyboard test presses a row's menu again where it has focus, since a Tab round of the page now passes the preview.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** with `scripts/swift --postgres`, PostgreSQL 18: the build gives no warning. All 2,607 tests pass, up from 2,596 on `main`, with the one named skip and nothing cancelled: FRUSLightServerTests 226, FRUSParityTests 213, FRUSLightCoreTests 167, FRUSCoreKitTests 1,299, the others as on `main`.
+- **The web job's steps,** through `scripts/npm`: typecheck, lint and the build are clean, and the unit suite passes 433 tests in 46 files. The app's script is 676 kB, from 668 kB.
+- **The browser suite,** with `scripts/compose-smoke --e2e` over an image of the branch under a tag and port of its own (`frus-light:s18e`, 18187): 64 tests at the root and 64 under the path, and the sign-in phase's spec, after the review as before it.
+- **A review** read the diff cold, the server's and the browser app's apart. Each finding was checked against the code before it was fixed. Tests cover the fixes of the parse, Summary only's prompt, the refusals kept out of the history, and the browser app's history, Render All's focus and its single rebuild; the last three were seen to fail with their fix undone. The rest have none: the 503, the error page, the warm-up, the stamp, the hidden outline's focus, the layout and the forced colours.
+  - **Server:**
+    - **a collection cost a parse for each document,** each from its volume's start, so a large collection of one volume was quadratic on a server every user shares; one pass of each volume now gives its documents;
+    - **an index being installed was taken as none,** and the export went ahead thinner, kept in the history; it is the 503 a search answers;
+    - **a history row** was stamped before the resolve, and could fail the file it recorded; it is stamped when the file is made and cannot;
+    - **Summary only took summaries under a prompt the user no longer had,** which the app refuses;
+    - **an error other than a problem reached the frame as JSON;**
+    - **the archival indexes were decoded on the main actor;**
+    - **three tests could not fail:** a refusal sent while logging was off; a reference that called the server's own mirrors; a project read from the export's header.
+  - **The resolve still reads the user's notes, highlights and summaries whole,** since the assembly takes every note and the tags' union; this is kept, as are the main actor the kit's assembly runs on and the order of a document's summaries.
+  - **Browser:**
+    - **each rebuild of the page took a place in the browser's history,** so Back went to the old preview;
+    - **Render All dropped focus to the page;**
+    - **an answer that came after the settling second rebuilt the page twice;**
+    - **a new entry's focus outlived the outline the narrow window's Preview hid;**
+    - **the debounce test passed whatever the debounce;**
+    - **the preview could run below a short window;**
+    - **the chosen pane and format were lost in forced colours;**
+    - **the quotation check did not wait for the changes sent.**
+  - **The sentence that names a word cloud** stays above the note that says none is drawn, the app's sentence about the collection's setting.
+
+**Next:** S18f: `.fruscollection` both ways, smart collections resolved at export with Create Static Snapshot, Summary only refused with the app's reason where a document has no summary, and headnotes the researcher writes. The pin move to `fb542514`, another session's, may land first; this branch's byte-for-byte checks run again over it.
+
 ## Session 18d, follow-up: Add Documents' Citations and Tags, upstream
 
 28–29 October 2026 · branch `claude/heuristic-antonelli-1c5617` · [#87](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/87) · upstream `32e295e5`, unchanged; [FRUS-Explorer#1814](https://github.com/joshbotts/FRUS-Explorer/pull/1814), open
