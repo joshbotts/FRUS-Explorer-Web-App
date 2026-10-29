@@ -42,11 +42,11 @@ test('writes a formatted note from the bar’s Note, edits it in the rail, and f
   await openDocument(page);
   expect(await notes(page)).toEqual([]);
 
-  // The bar's verbs: the four colours, then Note, as the app's bar orders them.
+  // The bar's verbs: the four colours, then Excerpt and Note, as the app's bar orders them.
   await dragOver(page, phrase);
   const bar = page.getByRole('toolbar', { name: 'Selection' });
-  await expect(bar.getByRole('button')).toHaveCount(5);
-  await expect(bar.getByRole('button').nth(4)).toHaveAccessibleName('Note');
+  await expect(bar.getByRole('button')).toHaveCount(6);
+  await expect(bar.getByRole('button').nth(5)).toHaveAccessibleName('Note');
   await axeCheck(page);
   await bar.getByRole('button', { name: 'Note' }).click();
 

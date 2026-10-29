@@ -8,7 +8,8 @@
 // bar's Note, offered for a footnote's selection too, lets the selection go and opens a new note on
 // the document, as the app's does; and each highlight made is reported, for the rail's Add Note to
 // Highlight. A footnote's Note has no key of its own: the host script asks the bar only over the
-// text, and the rail's Add Note makes the same note.
+// text, and the rail's Add Note makes the same note. From S18d the bar's Excerpt hands the selection's
+// offsets and the page's version on, to freeze it into a collection, and lets the selection go.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, type RefObject, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { ApiError, errorMessage } from '../api/client';
@@ -56,6 +57,7 @@ export function useReaderHighlights({
   say,
   onHighlightMade,
   onNote,
+  onExcerpt,
 }: {
   volumeId: string;
   documentId: string;
@@ -72,6 +74,8 @@ export function useReaderHighlights({
   onHighlightMade?: (highlight: Highlight) => void;
   /** The bar's Note was chosen: a new note on the document. */
   onNote?: () => void;
+  /** The bar's Excerpt was chosen over a selection in the text: its offsets, in the page's version. */
+  onExcerpt?: (selection: { startOffset: number; endOffset: number; renderingVersion: string }) => void;
 }) {
   const client = useQueryClient();
   const highlights = useQuery({ ...documentHighlightsQuery(volumeId, documentId), enabled });
@@ -255,6 +259,14 @@ export function useReaderHighlights({
             forget();
             post({ kind: 'collapseSelection' });
             onNote?.();
+          }}
+          onExcerpt={() => {
+            // The selection's offsets, in the text the page holds, as the app's capture takes them.
+            if (!selected || !hasOffsets(selected.start, selected.end) || !version) return;
+            const excerpt = { startOffset: selected.start, endOffset: selected.end, renderingVersion: version };
+            forget();
+            post({ kind: 'collapseSelection' });
+            onExcerpt?.(excerpt);
           }}
           onDismiss={() => {
             setBarShown(false);

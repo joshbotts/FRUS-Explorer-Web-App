@@ -36,6 +36,7 @@ function bar({
   frame = { current: iframe },
   onChoose = vi.fn<(color: HighlightColor) => void>(),
   onNote = vi.fn<() => void>(),
+  onExcerpt = vi.fn<() => void>(),
   onDismiss = vi.fn<() => void>(),
 }: {
   at?: SelectionRect;
@@ -44,29 +45,48 @@ function bar({
   frame?: { current: HTMLIFrameElement | null };
   onChoose?: (color: HighlightColor) => void;
   onNote?: () => void;
+  onExcerpt?: () => void;
   onDismiss?: () => void;
 } = {}) {
   return (
-    <SelectionBar rect={at} frame={frame} inText={inText} focusRequest={focusRequest} onChoose={onChoose} onNote={onNote} onDismiss={onDismiss} />
+    <SelectionBar
+      rect={at}
+      frame={frame}
+      inText={inText}
+      focusRequest={focusRequest}
+      onChoose={onChoose}
+      onNote={onNote}
+      onExcerpt={onExcerpt}
+      onDismiss={onDismiss}
+    />
   );
 }
 
 const dots = () => within(screen.getByRole('toolbar', { name: 'Selection' })).getAllByRole('button');
-const dot = (color: string) => screen.getByRole('button', { name: color === 'Note' ? 'Note' : `Highlight ${color}` });
+const dot = (color: string) =>
+  screen.getByRole('button', { name: color === 'Note' || color === 'Excerpt' ? color : `Highlight ${color}` });
 
 describe('the selection bar', () => {
-  it('is a toolbar named Selection with the four colours, as VoiceOver reads the app’s dots, and Note, in the kit’s order', () => {
+  it('is a toolbar named Selection with the four colours, as VoiceOver reads the app’s dots, Excerpt and Note, in the kit’s order', () => {
     render(bar());
     expect(dots().map((button) => button.getAttribute('aria-label') ?? button.textContent)).toEqual([
       'Highlight Yellow',
       'Highlight Green',
       'Highlight Blue',
       'Highlight Pink',
+      'Excerpt',
       'Note',
     ]);
-    expect(dots().map((button) => button.title)).toEqual(['Yellow', 'Green', 'Blue', 'Pink', '']);
+    expect(dots().map((button) => button.title)).toEqual(['Yellow', 'Green', 'Blue', 'Pink', '', '']);
     // One stop in the Tab order: the first dot.
-    expect(dots().map((button) => button.tabIndex)).toEqual([0, -1, -1, -1, -1]);
+    expect(dots().map((button) => button.tabIndex)).toEqual([0, -1, -1, -1, -1, -1]);
+  });
+
+  it('hands Excerpt on, which needs the selection in the text', async () => {
+    const onExcerpt = vi.fn<() => void>();
+    render(bar({ onExcerpt }));
+    await userEvent.click(dot('Excerpt'));
+    expect(onExcerpt).toHaveBeenCalledTimes(1);
   });
 
   it('offers Note alone for a selection outside the text, as a footnote’s, and Note opens a note', async () => {
@@ -83,7 +103,7 @@ describe('the selection bar', () => {
 
   it('keeps its one Tab stop on Note when a selection that offered the colours offers it alone', async () => {
     const { rerender } = render(bar({ focusRequest: 1 }));
-    await userEvent.keyboard('{End}{ArrowLeft}');
+    await userEvent.keyboard('{End}{ArrowLeft}{ArrowLeft}');
     expect(document.activeElement).toBe(dot('Pink'));
     rerender(bar({ focusRequest: 1, inText: false }));
     expect(dots().map((button) => button.tabIndex)).toEqual([0]);
@@ -98,7 +118,9 @@ describe('the selection bar', () => {
       ['{ArrowUp}', 'Green'],
       ['{ArrowLeft}', 'Yellow'],
       ['{ArrowLeft}', 'Note'],
+      ['{ArrowLeft}', 'Excerpt'],
       ['{ArrowLeft}', 'Pink'],
+      ['{ArrowRight}', 'Excerpt'],
       ['{ArrowRight}', 'Note'],
       ['{ArrowRight}', 'Yellow'],
       ['{End}', 'Note'],
@@ -123,7 +145,7 @@ describe('the selection bar', () => {
   it('makes a dot focused another way, as by pointer, its Tab stop', () => {
     render(bar());
     fireEvent.focus(dot('Blue'));
-    expect(dots().map((button) => button.tabIndex)).toEqual([-1, -1, 0, -1, -1]);
+    expect(dots().map((button) => button.tabIndex)).toEqual([-1, -1, 0, -1, -1, -1]);
   });
 
   it('chooses a colour by click, by Return and by Space, and Note likewise', async () => {
@@ -134,7 +156,7 @@ describe('the selection bar', () => {
     expect(onChoose).toHaveBeenLastCalledWith('green');
     await userEvent.keyboard('{ArrowRight}{Enter}');
     expect(onChoose).toHaveBeenLastCalledWith('blue');
-    await userEvent.keyboard('{End}{ArrowLeft} ');
+    await userEvent.keyboard('{End}{ArrowLeft}{ArrowLeft} ');
     expect(onChoose).toHaveBeenLastCalledWith('pink');
     expect(onChoose).toHaveBeenCalledTimes(3);
     await userEvent.keyboard('{End} ');
@@ -170,7 +192,7 @@ describe('the selection bar', () => {
     // A new request comes back to the first dot, which becomes the Tab stop again.
     rerender(bar({ focusRequest: 2 }));
     expect(document.activeElement).toBe(dot('Yellow'));
-    expect(dots().map((button) => button.tabIndex)).toEqual([0, -1, -1, -1, -1]);
+    expect(dots().map((button) => button.tabIndex)).toEqual([0, -1, -1, -1, -1, -1]);
     // The same request again leaves focus where it is.
     await userEvent.keyboard('{ArrowRight}');
     rerender(bar({ focusRequest: 2 }));

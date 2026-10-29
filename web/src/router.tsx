@@ -2,13 +2,16 @@
 // in phase 1, /settings, whose first pane, Tags, came with S14c and whose Data came with S15d,
 // /research, which opens All Notes until S19b's Research page, /lookup, Citation Lookup, from
 // S19a, Browse's Working Corpora and My Scopes from S17e, and from S17f Project Home, the History
-// screen and Settings' Projects, Research Sessions and Reading, under the path the server serves the app at. Query strings have the API's form semantics, so
+// screen and Settings' Projects, Research Sessions and Reading, and from S18d the Collections tab and a
+// collection's editor, under the path the server serves the app at. Query strings have the API's form semantics, so
 // a search's URL reads as its request does.
 import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/react-router';
 import { basePath } from './api/base';
 import { formDecode, formEncode, type FormValue } from './api/form';
 import { CatalogueScreen, type CatalogueSearch, validateCatalogueSearch } from './browse/CatalogueScreen';
 import { CorporaScreen, CorpusScreen } from './browse/CorporaScreen';
+import { CollectionEditorScreen } from './collections/CollectionEditorScreen';
+import { CollectionsScreen } from './collections/CollectionsScreen';
 import { ScopeEditorScreen, ScopeScreen, ScopesScreen } from './browse/ScopesScreen';
 import { LookupScreen } from './lookup/LookupScreen';
 import { SectionScreen } from './browse/SectionScreen';
@@ -171,6 +174,20 @@ const projectHomeRoute = createRoute({
   component: ProjectHomeScreen,
 });
 
+// The Collections tab (S18d), between Research and Settings, as the app's tabs order them, and a
+// collection's editor, which the tab pushes.
+const collectionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/collections',
+  component: CollectionsScreen,
+});
+
+const collectionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/collections/$collectionId',
+  component: CollectionEditorScreen,
+});
+
 // Settings opens at its first pane, Tags.
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -234,6 +251,8 @@ export const routeTree = rootRoute.addChildren([
   researchNotesRoute,
   researchHistoryRoute,
   projectHomeRoute,
+  collectionsRoute,
+  collectionRoute,
   settingsRoute,
   settingsTagsRoute,
   settingsDataRoute,

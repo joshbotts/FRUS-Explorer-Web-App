@@ -140,20 +140,31 @@ enum NoteFormatting {
     /// The runs a stored note's RTF reads as, canonical, and whether RTF is kept that they cannot
     /// carry. Every value this gives a save can send back.
     static func runs(of record: NoteRecord) -> (runs: [RichTextRun]?, kept: Bool) {
-        guard let bytes = record.richText else { return (nil, false) }
-        guard let reading = RTFReader.read(bytes), reading.text.utf16.elementsEqual(record.bodyText.utf16) else {
+        runs(of: record.richText, text: record.bodyText)
+    }
+
+    /// The same for any RTF the app keeps beside its plain text, as a collection's note block and its
+    /// introduction keep theirs (S18d).
+    static func runs(of rtf: [UInt8]?, text: String) -> (runs: [RichTextRun]?, kept: Bool) {
+        guard let bytes = rtf else { return (nil, false) }
+        guard let reading = RTFReader.read(bytes), reading.text.utf16.elementsEqual(text.utf16) else {
             return (nil, true)
         }
         let runs = RichTextRuns.canonical(reading.runs)
         // A link the writer could not write again, from RTF the Mac did not write, or a character a
         // note's runs may not hold: kept as bytes rather than offered to a save that would refuse it.
-        guard RichTextRuns.problem(runs, bodyText: record.bodyText) == nil else { return (nil, true) }
+        guard RichTextRuns.problem(runs, bodyText: text) == nil else { return (nil, true) }
         return (runs, false)
     }
 
     /// The links a stored note's RTF holds, which a save may send back whatever their scheme.
     static func links(of record: NoteRecord) -> Set<String> {
-        guard let bytes = record.richText, let reading = RTFReader.read(bytes) else { return [] }
+        links(of: record.richText)
+    }
+
+    /// The links any RTF the app keeps holds.
+    static func links(of rtf: [UInt8]?) -> Set<String> {
+        guard let bytes = rtf, let reading = RTFReader.read(bytes) else { return [] }
         return Set(reading.runs.compactMap(\.linkURL))
     }
 

@@ -64,6 +64,9 @@ export const useHighlightsSectionOpen = () =>
   usePreference<'open' | 'closed'>('frus.research.highlights', ['open', 'closed'], 'closed');
 /** Open until it is closed, as the app's rail keeps its Summary section. */
 export const useSummarySectionOpen = () => usePreference<'open' | 'closed'>('frus.research.summary', ['open', 'closed'], 'open');
+/** Closed until it is opened, and then as it was left, as the app's rail keeps its Collections section (S18d). */
+export const useCollectionsSectionOpen = () =>
+  usePreference<'open' | 'closed'>('frus.research.collections', ['open', 'closed'], 'closed');
 /** Open until it is closed, as the app's rail keeps its Notes section. */
 export const useNotesSectionOpen = () => usePreference<'open' | 'closed'>('frus.research.notes', ['open', 'closed'], 'open');
 /**

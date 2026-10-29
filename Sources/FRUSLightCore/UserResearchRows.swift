@@ -14,6 +14,9 @@ public enum ResearchRowStoreError: Error, Equatable, CustomStringConvertible {
     case invalidId(table: String, id: String?)
     /// The table is not one of a user's tables keyed by the Mac's id.
     case notKeyedById(table: String)
+    /// A collection's write was given a summary that is no headnote draft, which the search reads and
+    /// only a summary's own write may add.
+    case notAHeadnoteDraft(id: String?)
 
     public var description: String {
         switch self {
@@ -21,6 +24,7 @@ public enum ResearchRowStoreError: Error, Equatable, CustomStringConvertible {
         case .invalidId(let table, let id?): "\(table) holds a row with the id \(id) already"
         case .invalidId(let table, nil): "a row of \(table) needs an id"
         case .notKeyedById(let table): "\(table) is not a table of a user's rows keyed by the Mac's id"
+        case .notAHeadnoteDraft(let id): "the summary \(id ?? "with no id") is no headnote draft"
         }
     }
 }
