@@ -12,7 +12,14 @@ const tags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-prac
  * then its known failures were allowed in the frame.
  */
 export async function axeCheck(page: Page): Promise<void> {
-  const results = await new AxeBuilder({ page }).withTags(tags).analyze();
+  let results = await new AxeBuilder({ page }).withTags(tags).analyze();
+  // A collection's live preview builds its page again a second after a change (S18e), and a scan that
+  // meets its frame between two pages cannot reach it: the scan is made again once the frame holds its
+  // next page (S18f). A frame that stays out of reach still fails below.
+  if (results.incomplete.some((result) => result.id === 'frame-tested') && (await page.locator('iframe.preview-frame').count()) > 0) {
+    await settledPreview(page);
+    results = await new AxeBuilder({ page }).withTags(tags).analyze();
+  }
   // A node in the frame has a target path through it: the iframe's selector, then its own.
   const lines = (inFrame: boolean) =>
     results.violations.flatMap((violation) =>
@@ -24,4 +31,15 @@ export async function axeCheck(page: Page): Promise<void> {
   expect(lines(true), 'violations in the reader’s frame').toEqual([]);
   // A frame axe could not reach is reported as incomplete, not as a violation; none may be.
   expect(results.incomplete.filter((result) => result.id === 'frame-tested')).toEqual([]);
+}
+
+/**
+ * Once the preview has built what the last change asks: no page on its way, then the second the preview
+ * waits for edits to settle and a little more, then none on its way again.
+ */
+async function settledPreview(page: Page): Promise<void> {
+  const idle = () => page.waitForFunction(() => !document.querySelector('.preview-surface[aria-busy="true"]'));
+  await idle();
+  await page.waitForTimeout(1_500);
+  await idle();
 }
