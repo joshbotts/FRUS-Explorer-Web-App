@@ -55,7 +55,7 @@ afterEach(() => {
 });
 
 describe('the Research rail’s sections', () => {
-  it('are Summary, Notes, Highlights and Tags, in that order, Summary and Notes open until they are closed, as the app’s', async () => {
+  it('are Summary, Notes, Highlights, Tags and Collections, in that order, Summary and Notes open until they are closed, as the app’s', async () => {
     reader({});
     renderAt('/doc/frus1961-63v06/d1?rail=research');
     const rail = await screen.findByRole('complementary', { name: 'Research' });
@@ -65,6 +65,7 @@ describe('the Research rail’s sections', () => {
       ['Notes', 'true'],
       ['Highlights', 'false'],
       ['Tags', 'false'],
+      ['Collections', 'false'],
     ]);
     await userEvent.click(headers()[1]!);
     expect(window.localStorage.getItem('frus.research.notes')).toBe('closed');

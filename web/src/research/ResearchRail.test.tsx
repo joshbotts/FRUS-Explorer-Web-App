@@ -278,9 +278,11 @@ describe('the Research rail’s Highlights', () => {
     const rail = await screen.findByRole('complementary', { name: 'Research' });
     const section = await within(rail).findByRole('button', { name: 'Highlights, 2 highlights' });
     await within(rail).findByRole('button', { name: 'Tags, 1 tag' });
-    expect(within(rail).getAllByRole('button', { expanded: false }).map((button) => button.getAttribute('aria-label'))).toEqual([
+    const closed = within(rail).getAllByRole('button', { expanded: false });
+    expect(closed.map((button) => button.getAttribute('aria-label') ?? button.textContent?.replace(/[▾▸]/, ''))).toEqual([
       'Highlights, 2 highlights',
       'Tags, 1 tag',
+      'Collections',
     ]);
     expect(within(rail).queryByRole('button', { name: 'Remove…' })).toBeNull();
     await userEvent.click(section);

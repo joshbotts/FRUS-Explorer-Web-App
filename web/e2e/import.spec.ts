@@ -3,8 +3,9 @@
 // as the server gives it; imported again, every record kept; and once more with a note changed later,
 // that note replaced. Then what S15d's tests could only seed in Swift: All Notes filtered by a real
 // project, and a document's imported summaries in the Research rail with the app's authorship words
-// and their prompt's name, one of a standard prompt the file does not name. By pointer and by
-// keyboard, on Chromium with no axe violations. The file's notes, tags and highlights are removed
+// and their prompt's name, one of a standard prompt the file does not name; and from S18d, the
+// collections it brought, in the Collections tab and the editor as the Mac left them. By pointer and
+// by keyboard, on Chromium with no axe violations. The file's notes, tags and highlights are removed
 // after each test; what the API cannot remove, its projects, prompts and summaries on documents no
 // other spec opens, stays for the run under the path, which finds them kept.
 import { readFileSync } from 'node:fs';
@@ -12,7 +13,7 @@ import type { Page } from '@playwright/test';
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
 import { drawn } from './highlights';
-import { removeNotesAndSummaries, send } from './notes';
+import { getJSON, removeNotesAndSummaries, run, type Run, send } from './notes';
 
 const exported = readFileSync(new URL('../../fixtures/import/research-export.json', import.meta.url), 'utf8');
 const fileName = 'research-export.json';
@@ -168,6 +169,27 @@ test('imports the kit’s export of every type, imports it again and keeps it, t
   await axeCheck(page);
   // The note the highlight is linked to.
   await expect(rail.locator('#research-notes')).toContainText('Planners on Zapata.');
+
+  // The collections it brought (S18d): a smart one says so, and the Briefing book keeps its
+  // document, heading, note block, excerpt and bibliography, its note block's RTF read as the Mac
+  // wrote it.
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Collections', exact: true }).click();
+  const collections = page.getByRole('list', { name: 'Collections', exact: true });
+  await expect(collections.getByRole('listitem').filter({ hasText: 'Every covert action' })).toContainText('Smart collection');
+  await collections.getByRole('link', { name: 'Briefing book', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Briefing book');
+  const contents = page.getByRole('list', { name: 'Contents' });
+  await expect(contents.getByRole('group', { name: 'Document d3' })).toBeVisible();
+  await expect(contents.getByRole('textbox', { name: 'Section heading' })).toHaveValue('Planning');
+  await expect(contents.locator('.prose-text')).toHaveText('A bold note.');
+  await expect(contents.getByRole('group', { name: 'Excerpt from d3: Kept verbatim' })).toBeVisible();
+  await expect(contents.getByRole('group', { name: 'Generated block: Bibliography' })).toBeVisible();
+  await axeCheck(page);
+  const briefing = await getJSON<{ entries: { kind: string; runs?: Run[] | null }[] }>(
+    page,
+    'api/v1/me/collections/5E16C000-0000-4000-8000-000000000032',
+  );
+  expect(briefing.entries.find((entry) => entry.kind === 'prose')?.runs).toEqual([run('A '), run('bold', { bold: true }), run(' note.')]);
 });
 
 test('chooses the export and imports it by keyboard alone', async ({ page }) => {

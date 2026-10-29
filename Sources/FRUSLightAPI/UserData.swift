@@ -206,7 +206,7 @@ final class CSRFTokens: Sendable {
 
 /// What the user store keeps for the routes under /api/v1/me.
 typealias UserDataStore = UserStore & TagStore & HighlightStore & NoteStore & SummaryStore & ProjectStore & ResearchImportStore
-    & ResearchExportStore & UserSearchStore & SearchSetStore & ResearchRowStore & TrailStore & PreferenceStore
+    & ResearchExportStore & UserSearchStore & SearchSetStore & ResearchRowStore & TrailStore & PreferenceStore & CollectionStore
 
 /// What the routes under /api/v1/me need.
 struct UserDataServices: Sendable {
@@ -429,6 +429,11 @@ enum UserDataRoutes {
         let notes = router.group("/api/v1/me")
             .add(middleware: UserDataGuard(services: services, bodyLimit: UserDataServices.noteBodyLimit))
         NoteRoutes.add(to: notes, services: services, resources: resources, provider: provider)
+        // Collections take a note block's text and an introduction, as long as a note's (S18d).
+        let collections = router.group("/api/v1/me")
+            .add(middleware: UserDataGuard(services: services, bodyLimit: UserDataServices.noteBodyLimit))
+        CollectionRoutes.add(to: collections, services: services, resources: resources, provider: provider)
+        CollectionEntryRoutes.add(to: collections, services: services, resources: resources, reader: reader, provider: provider)
         // And an import's, the export itself.
         let imports = router.group("/api/v1/me")
             .add(middleware: UserDataGuard(services: services, bodyLimit: services.importLimit))

@@ -35,12 +35,13 @@ describe('the selection’s verbs', () => {
     ]);
   });
 
-  it('offer the four colours and Note for a selection in the text, and Note alone for a footnote’s', () => {
+  it('offer the four colours, Excerpt and Note for a selection in the text, and Note alone for a footnote’s', () => {
     expect(offeredVerbs(true)).toEqual([
       { kind: 'highlight', color: 'yellow', needsDocumentOffsets: true },
       { kind: 'highlight', color: 'green', needsDocumentOffsets: true },
       { kind: 'highlight', color: 'blue', needsDocumentOffsets: true },
       { kind: 'highlight', color: 'pink', needsDocumentOffsets: true },
+      { kind: 'excerpt', needsDocumentOffsets: true },
       { kind: 'note', needsDocumentOffsets: false },
     ]);
     expect(offeredVerbs(false)).toEqual([{ kind: 'note', needsDocumentOffsets: false }]);

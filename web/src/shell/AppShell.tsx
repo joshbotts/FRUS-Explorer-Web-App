@@ -25,6 +25,7 @@ export function AppShell() {
   // Signed in, through the proxy: a server with no sign-in has one user, its operator.
   const me = useQuery(meQuery);
   const signedIn = me.data && me.data.auth !== 'none' ? me.data : undefined;
+  const keepsUserData = me.data?.userData === true;
 
   // A new screen takes focus at its heading, so a screen reader announces where it arrived. The
   // router says when the new screen has rendered; a new search on the same screen keeps its focus,
@@ -58,6 +59,12 @@ export function AppShell() {
           <Link to="/research" activeProps={{ 'aria-current': 'page' }}>
             {copy.app.research}
           </Link>
+          {/* From S18d, the app's Collections tab, on a server that keeps user data. */}
+          {keepsUserData && (
+            <Link to="/collections" activeProps={{ 'aria-current': 'page' }}>
+              {copy.app.collections}
+            </Link>
+          )}
           <Link to="/settings" activeProps={{ 'aria-current': 'page' }}>
             {copy.app.settings}
           </Link>

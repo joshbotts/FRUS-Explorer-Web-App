@@ -24,10 +24,10 @@ export const selectionVerbs: readonly SelectionVerb[] = [
 ];
 
 /**
- * The verbs the web edition has so far: the colours, and from S15d Note, which needs no offsets, so a
- * footnote's selection offers it alone. Excerpt comes with S18d, and Look Up in NARA with phase 3.
+ * The verbs the web edition has so far: the colours, from S15d Note, which needs no offsets, so a
+ * footnote's selection offers it alone, and from S18d Excerpt. Look Up in NARA comes with phase 3.
  */
-const available = new Set<SelectionVerb['kind']>(['highlight', 'note']);
+const available = new Set<SelectionVerb['kind']>(['highlight', 'excerpt', 'note']);
 
 /**
  * What the bar offers a selection: every verb the web has, but a verb that needs offsets only for a
