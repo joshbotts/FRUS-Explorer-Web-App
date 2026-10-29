@@ -414,6 +414,7 @@ enum UserDataRoutes {
         SummaryRoutes.add(to: me, services: services, resources: resources)
         ProjectRoutes.add(to: me, services: services, resources: resources)
         HistoryRoutes.add(to: me, services: services, provider: provider, resources: resources, reader: reader)
+        ResearchRoutes.add(to: me, services: services, resources: resources, provider: provider)
         PreferenceRoutes.add(to: me, services: services)
         ExportRoutes.add(to: me, services: services)
         SearchTagRoutes.add(to: me, services: services, provider: provider, resources: resources)

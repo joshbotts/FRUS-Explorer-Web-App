@@ -2571,6 +2571,207 @@ button.dismiss {
   display: block;
 }
 
+/* ─── The Research page (PLAN's S19b) ────────────────────────────────────── */
+
+/* The Mac's split: the categories beside the chosen one's documents. Below 900 px the iPhone's stack:
+   the categories alone until one is chosen, then its list alone, with the way back. */
+.research-columns {
+  display: grid;
+  grid-template-columns: minmax(14rem, 20rem) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.research-back {
+  display: none;
+}
+
+@media (max-width: 899.98px) {
+  .research-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .research-page:not([data-chosen]) .research-list,
+  .research-page[data-chosen] .research-categories {
+    display: none;
+  }
+
+  .research-back {
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+}
+
+.research-categories h2 {
+  margin: 1.25rem 0 0.25rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.research-categories-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.research-categories-list li {
+  border-bottom: 1px solid var(--border);
+}
+
+/* A row, as the sidebar's: the name, and its count or caption beside or under it. */
+.research-category,
+.research-waits {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 0.75rem;
+  padding: 0.375rem 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+a.research-category {
+  color: var(--text);
+  text-decoration: none;
+}
+
+a.research-category:hover .research-category-name {
+  text-decoration: underline;
+}
+
+a.research-category[aria-current='page'] {
+  border-radius: 6px;
+  background: var(--surface);
+  font-weight: 600;
+}
+
+.research-category-count {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.research-category-detail {
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: normal;
+}
+
+.research-waits .research-category-name {
+  color: var(--text-secondary);
+}
+
+/* A colour's row: a dot of the colour before its name. */
+.research-color::before {
+  content: '';
+  display: inline-block;
+  width: 0.625em;
+  height: 0.625em;
+  margin-right: 0.5em;
+  border-radius: 50%;
+  background: var(--hl);
+}
+
+.research-list h2 {
+  margin: 0 0 0.5rem;
+}
+
+.research-list h2:focus {
+  outline: none;
+}
+
+.research-documents {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.research-document {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.research-document p {
+  margin: 0;
+}
+
+.research-document-title {
+  font-weight: 600;
+}
+
+.research-document-volume {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0 0.75rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.research-document-counts,
+.research-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+/* A highlight's words beside a bar of its colour, two lines at most, as the app's strip. */
+.research-highlights {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.125rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.research-highlight {
+  display: -webkit-box;
+  padding: 0.125rem 0.5rem;
+  overflow: hidden;
+  border-left: 3px solid var(--hl, var(--control-border));
+  border-radius: 2px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.research-more {
+  padding-left: 0.625rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.research-note {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-style: italic;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.research-tag {
+  color: var(--accent);
+}
+
+@media (forced-colors: active) {
+  /* The dots are the colours they name, as the rail's are; the chosen row keeps a mark of its own. */
+  .research-color::before {
+    forced-color-adjust: none;
+  }
+
+  a.research-category[aria-current='page'] {
+    outline: 2px solid CanvasText;
+  }
+}
+
 .move-commands {
   display: flex;
   flex-wrap: wrap;
