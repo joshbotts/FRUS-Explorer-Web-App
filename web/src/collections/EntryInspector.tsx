@@ -1,8 +1,12 @@
 // The entry inspector (PLAN's S18d), the app's `CollectionEntryInspector` as the iPad's Configure sheet
 // shows it: for a document, its identity and title override, the reader's annotations with what the
-// entry includes and Insert as Excerpt, its export overrides, each showing what Default resolves to,
-// its headnote's switch, its excerpts here and its provenance; for a section heading, its section
-// defaults. Each control writes as it is changed. The headnote's card, which writes one, is S18f's.
+// entry includes, New Note… and Insert as Excerpt, its export overrides, each showing what Default
+// resolves to, its headnote's switch and card, its excerpts here and its provenance; for a section
+// heading, its section defaults. Each control writes as it is changed. From S18f the headnote card, the
+// app's: the summary the headnote shows, with who wrote it, which Edit writes over as the researcher's
+// own, AI · edited over the model's, with no Generate, since the server writes no summary; New Note…,
+// the app's inline sheet, which a partial selection of notes takes; and Summary only offered for a
+// document only where it has a summary stored, the line under the picker the web's own.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
@@ -12,12 +16,15 @@ import {
   type EntryChanges,
   entryInspectorQuery,
   type EntryInspector as Inspected,
+  saveHeadnote,
   updateEntry,
 } from '../api/collections';
+import { createNote, projectsQuery } from '../api/userData';
 import { copy } from '../copy';
-import { Modal } from '../shell/Modal';
+import { closeAtOnce, Modal } from '../shell/Modal';
+import { useActiveProjectId } from '../shell/ProjectPicker';
 import { ChosenCheckbox, ChosenSelect } from './chosen';
-import { bodyDepthOptions } from './collectionRules';
+import { bodyDepthChoices } from './collectionRules';
 import { SavedText } from './CollectionSettings';
 
 type Tri = boolean | null;
@@ -67,6 +74,8 @@ export function EntryInspector({ detail, entryId, onClose }: { detail: Collectio
   const entry = detail.entries.find((candidate) => candidate.id === entryId);
   const [failure, setFailure] = useState<string | null>(null);
   const [inserted, setInserted] = useState<ReadonlySet<string>>(new Set());
+  const [creatingNote, setCreatingNote] = useState(false);
+  const newNoteButton = useRef<HTMLButtonElement>(null);
   const words = copy.collectionInspector;
   const heading = entry?.kind === 'heading';
   // The collection's name, the generic role while it has none (`collectionDisplayTitle`).
@@ -99,6 +108,9 @@ export function EntryInspector({ detail, entryId, onClose }: { detail: Collectio
 
   const data: Inspected | undefined = inspected.data;
   const promptName = (id: string | undefined) => detail.prompts.find((prompt) => prompt.id === id)?.name ?? words.promptNone;
+  // A document's Summary only, offered only where its document has a summary stored.
+  const documentDepths = data?.summaryOnlyOffered === false ? detail.bodyDepths.filter((depth) => depth !== 'summaryOnly') : detail.bodyDepths;
+  const summaryOnlyRefused = !documentDepths.includes('summaryOnly') && entry?.bodyDepthOverride !== 'summaryOnly';
 
   /** The six override controls (`overrideControls`), a document's own or a section's defaults. */
   function overrides(resolved: Inspected['resolved']) {
@@ -237,6 +249,9 @@ export function EntryInspector({ detail, entryId, onClose }: { detail: Collectio
                 <p className="note">{words.noteCaption}</p>
               </>
             )}
+            <button ref={newNoteButton} type="button" onClick={() => setCreatingNote(true)}>
+              {words.newNote}
+            </button>
             <p>{words.highlightCount(data.highlights.length)}</p>
             {data.highlights.length > 0 && (
               <>
@@ -289,12 +304,19 @@ export function EntryInspector({ detail, entryId, onClose }: { detail: Collectio
               <ChosenSelect
                 id={`${headingId}-depth`}
                 value={entry.bodyDepthOverride ?? ''}
-                aria-describedby={!entry.bodyDepthOverride && data.resolved ? `${headingId}-depth-resolves` : undefined}
+                aria-describedby={
+                  [
+                    !entry.bodyDepthOverride && data.resolved ? `${headingId}-depth-resolves` : '',
+                    summaryOnlyRefused ? `${headingId}-depth-reason` : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ') || undefined
+                }
                 onChoose={(chosen) => void change({ bodyDepthOverride: chosen === '' ? null : chosen })}
               >
                 <option value="">{words.bodyDepthDefault}</option>
-                {bodyDepthOptions(detail.bodyDepths, entry.bodyDepthOverride).map((depth) => (
-                  <option key={depth} value={depth}>
+                {bodyDepthChoices(documentDepths, entry.bodyDepthOverride).map(({ depth, disabled }) => (
+                  <option key={depth} value={depth} disabled={disabled}>
                     {copy.collectionSettings.bodyDepths[depth] ?? depth}
                   </option>
                 ))}
@@ -302,6 +324,11 @@ export function EntryInspector({ detail, entryId, onClose }: { detail: Collectio
               {!entry.bodyDepthOverride && data.resolved && (
                 <p id={`${headingId}-depth-resolves`} className="note">
                   {words.resolvesTo(copy.collectionSettings.bodyDepths[data.resolved.bodyDepth] ?? data.resolved.bodyDepth)}
+                </p>
+              )}
+              {summaryOnlyRefused && (
+                <p id={`${headingId}-depth-reason`} className="note">
+                  {words.summaryOnlyUnavailable} {copy.collectionSettings.summaryOnlyReason}
                 </p>
               )}
             </div>
@@ -316,6 +343,9 @@ export function EntryInspector({ detail, entryId, onClose }: { detail: Collectio
               resolved={data.resolved?.headnote}
               onChange={(value) => void change({ includeHeadnote: value })}
             />
+            {(entry.includeHeadnote ?? data.resolved?.headnote ?? false) && (
+              <HeadnoteCard collectionId={detail.id} entryId={entryId} headnote={data.headnote} />
+            )}
           </section>
           {data.excerpts.length > 0 && (
             <section aria-labelledby={`${headingId}-excerpts`}>
@@ -336,6 +366,179 @@ export function EntryInspector({ detail, entryId, onClose }: { detail: Collectio
           </section>
         </>
       )}
+      {creatingNote && entry && (
+        <NewNoteSheet
+          volumeId={entry.volumeId}
+          documentId={entry.documentId}
+          onCreated={async (noteId) => {
+            // The note is on this document, so an entry with every note (none chosen) already takes it; a
+            // partial selection is given it, as the app's sheet appends it.
+            if (entry.selectedNoteIds.length > 0) await change({ note: { id: noteId, included: true } });
+            else void client.invalidateQueries({ queryKey: entryInspectorQuery(detail.id, entryId).queryKey });
+          }}
+          onClose={() => {
+            setCreatingNote(false);
+            requestAnimationFrame(() => newNoteButton.current?.focus());
+          }}
+        />
+      )}
+    </Modal>
+  );
+}
+
+/**
+ * The headnote card (`headnoteCard`): Key takeaway · headnote, the chip of who wrote the summary it shows,
+ * its text, or the app's line for none, and Edit, which opens the text to change, Cancel and Save, Save
+ * dimmed while the text is empty. What it saves is the server's, `commitHeadnote(seed:)`'s rule.
+ */
+function HeadnoteCard({ collectionId, entryId, headnote }: { collectionId: string; entryId: string; headnote: Inspected['headnote'] }) {
+  const client = useQueryClient();
+  const fieldId = useId();
+  const editButton = useRef<HTMLButtonElement>(null);
+  const field = useRef<HTMLTextAreaElement>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const words = copy.collectionInspector;
+  const empty = draft.trim() === '';
+
+  function leave() {
+    setEditing(false);
+    requestAnimationFrame(() => editButton.current?.focus());
+  }
+
+  async function save() {
+    if (empty || saving) return;
+    setSaving(true);
+    setFailure(null);
+    try {
+      await saveHeadnote(client, collectionId, entryId, draft);
+      leave();
+    } catch (error) {
+      setFailure(errorMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="headnote-card">
+      <div className="headnote-header">
+        <p className="headnote-title">{words.headnoteKeyTakeaway}</p>
+        {headnote && <span className="headnote-chip">{words.headnoteChips[headnote.authorship] ?? words.headnoteChips.aiGenerated}</span>}
+      </div>
+      {failure && (
+        <p className="error" role="alert">
+          {failure}
+        </p>
+      )}
+      {editing ? (
+        <>
+          <label htmlFor={fieldId} className="visually-hidden">
+            {words.headnoteText}
+          </label>
+          <textarea ref={field} id={fieldId} rows={4} value={draft} onChange={(event) => setDraft(event.target.value)} />
+          <div className="dialog-actions">
+            <button type="button" onClick={leave}>
+              {words.headnoteCancel}
+            </button>
+            {/* aria-disabled, not disabled, so Save pressed by keyboard keeps its focus while it is saved. */}
+            <button type="button" className="primary" aria-disabled={empty || saving} onClick={() => void save()}>
+              {words.headnoteSave}
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          {headnote ? <p className="headnote-text">{headnote.text}</p> : <p className="note">{words.headnoteEmpty}</p>}
+          <button
+            ref={editButton}
+            type="button"
+            onClick={() => {
+              setDraft(headnote?.text ?? '');
+              setEditing(true);
+              requestAnimationFrame(() => field.current?.focus());
+            }}
+          >
+            {words.headnoteEdit}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * New Note…'s sheet, the app's `InlineNoteCreateSheet`: New Research Note, the note's text, Cancel and Save
+ * Note, dimmed until the text holds more than spaces; the note made on the document, its text trimmed, in
+ * the project the user works in.
+ */
+function NewNoteSheet({
+  volumeId,
+  documentId,
+  onCreated,
+  onClose,
+}: {
+  volumeId: string;
+  documentId: string;
+  onCreated: (noteId: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const client = useQueryClient();
+  const headingId = useId();
+  const fieldId = useId();
+  const field = useRef<HTMLTextAreaElement>(null);
+  const projects = useQuery(projectsQuery);
+  const active = useActiveProjectId(projects.data);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const words = copy.collectionInspector;
+  const trimmed = text.trim();
+
+  async function save() {
+    if (trimmed === '' || busy) return;
+    setBusy(true);
+    setFailure(null);
+    try {
+      const note = await createNote(client, volumeId, documentId, {
+        bodyText: trimmed,
+        runs: null,
+        userTagIds: [],
+        projectIds: active ? [active] : [],
+        selectedSummaryIds: [],
+      });
+      await onCreated(note.id);
+      closeAtOnce(onClose);
+    } catch (error) {
+      setFailure(errorMessage(error));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal className="new-note" labelledBy={headingId} initial={field} onCancel={onClose} onClose={() => {}}>
+      <h2 id={headingId} tabIndex={-1}>
+        {words.newNoteTitle}
+      </h2>
+      <label htmlFor={fieldId} className="visually-hidden">
+        {words.newNoteText}
+      </label>
+      <textarea ref={field} id={fieldId} rows={6} value={text} onChange={(event) => setText(event.target.value)} />
+      {failure && (
+        <p className="error" role="alert">
+          {failure}
+        </p>
+      )}
+      <div className="dialog-actions">
+        <button type="button" onClick={onClose}>
+          {words.newNoteCancel}
+        </button>
+        <button type="button" className="primary" aria-disabled={trimmed === '' || busy} onClick={() => void save()}>
+          {words.newNoteSave}
+        </button>
+      </div>
     </Modal>
   );
 }

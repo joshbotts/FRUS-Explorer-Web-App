@@ -2,13 +2,24 @@
 // the most recently changed first, each by the name its row prints, with its count of documents, or
 // Smart collection for one linked to a saved search, and the day it last changed; every project's at
 // first, with the banner that scopes the list to the project the user works in, and back; New
-// Collection, the Mac's sheet, which names it and opens its editor; and on each row Duplicate, the
-// app's, and Delete…, which asks first, the web's own where the app deletes by a swipe.
+// Collection, the Mac's sheet, which names it and opens its editor; Import Collection…, which makes a
+// collection of a `.fruscollection` file and opens it (S18f); and on each row Duplicate, the app's,
+// Create Static Snapshot for a smart collection, which opens the snapshot, as the app's context menu
+// does (S18f), and Delete…, which asks first, the web's own where the app deletes by a swipe. A failed
+// import or snapshot says why under the app's alert's title, the web's own place for it.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useId, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
-import { collectionsQuery, createCollection, deleteCollection, duplicateCollection, type CollectionListItem } from '../api/collections';
+import {
+  collectionsQuery,
+  createCollection,
+  deleteCollection,
+  duplicateCollection,
+  importCollectionFile,
+  snapshotCollection,
+  type CollectionListItem,
+} from '../api/collections';
 import { projectsQuery } from '../api/userData';
 import { shortDate } from '../browse/CorporaScreen';
 import { copy } from '../copy';
@@ -37,7 +48,10 @@ export function CollectionsScreen() {
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<{ collection: CollectionListItem; index: number } | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  // 'import' while a file is imported, or the id of the smart collection being snapshotted.
+  const [busy, setBusy] = useState<string | null>(null);
   const newButton = useRef<HTMLButtonElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLUListElement>(null);
   const all = collections.data?.items;
   const shown = all ? visibleCollections(all, active, showAll) : undefined;
@@ -53,6 +67,36 @@ export function CollectionsScreen() {
     }
   }
 
+  /** `importCollection(from:)`: the file chosen made a collection, whose editor then opens. */
+  async function importFile(file: File) {
+    if (busy) return;
+    setBusy('import');
+    setFailure(null);
+    try {
+      const made = await importCollectionFile(client, file);
+      void navigate({ to: '/collections/$collectionId', params: { collectionId: made.id } });
+    } catch (error) {
+      setFailure(`${copy.collections.importFailedTitle}: ${errorMessage(error)}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** `snapshotSmartCollection(_:)`: the smart collection's results made a collection, whose editor then opens. */
+  async function snapshot(collection: CollectionListItem) {
+    if (busy) return;
+    setBusy(collection.id);
+    setFailure(null);
+    try {
+      const made = await snapshotCollection(client, collection.id);
+      void navigate({ to: '/collections/$collectionId', params: { collectionId: made.id } });
+    } catch (error) {
+      setFailure(`${copy.collections.snapshotFailedTitle}: ${errorMessage(error)}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <section className="screen collections">
       <div className="screen-header">
@@ -60,7 +104,27 @@ export function CollectionsScreen() {
         <button ref={newButton} type="button" onClick={() => setCreating(true)}>
           {copy.collections.new}
         </button>
+        {/* aria-disabled, not disabled, so the button keeps its focus while the file is read. */}
+        <button type="button" aria-disabled={busy !== null} onClick={() => busy === null && fileInput.current?.click()}>
+          {copy.collections.importCollection}
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          className="visually-hidden"
+          tabIndex={-1}
+          aria-hidden="true"
+          accept=".fruscollection,application/json"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            event.currentTarget.value = '';
+            if (file) void importFile(file);
+          }}
+        />
       </div>
+      <p className="visually-hidden" role="status">
+        {busy === 'import' ? copy.collections.importing : busy ? copy.collections.snapshotting : ''}
+      </p>
       {active && all && (
         <div className="scope-banner">
           {showAll ? (
@@ -117,6 +181,16 @@ export function CollectionsScreen() {
                 <button type="button" aria-label={`${copy.collections.duplicate} ${collection.listName}`} onClick={() => void duplicate(collection)}>
                   {copy.collections.duplicate}
                 </button>
+                {collection.isSmart && (
+                  <button
+                    type="button"
+                    aria-label={`${copy.collections.snapshot}: ${collection.listName}`}
+                    aria-disabled={busy !== null}
+                    onClick={() => void snapshot(collection)}
+                  >
+                    {copy.collections.snapshot}
+                  </button>
+                )}
                 <button
                   type="button"
                   className="destructive"

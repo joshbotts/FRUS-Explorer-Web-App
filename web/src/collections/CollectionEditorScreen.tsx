@@ -16,6 +16,7 @@ import {
   deleteSection,
   generatedBlockTypes,
   indentSection,
+  removeEntriesFromBeforeLink,
   moveEntryBy,
   sortByDate,
   updateEntry,
@@ -32,7 +33,18 @@ import { AddHighlights } from './AddHighlights';
 import { CollectionExportSheet } from './CollectionExportSheet';
 import { CollectionPreview } from './CollectionPreview';
 import { CollectionSettings } from './CollectionSettings';
-import { canMoveDown, contentsRows, moveDown, moveRequest, moveUp, outlineSteps, type ContentsRow } from './collectionRules';
+import {
+  canMoveDown,
+  contentsRows,
+  earlierCaption,
+  earlierTitle,
+  entriesFromBeforeLink,
+  moveDown,
+  moveRequest,
+  moveUp,
+  outlineSteps,
+  type ContentsRow,
+} from './collectionRules';
 import { EntryInspector } from './EntryInspector';
 import { DocumentRow, ExcerptRow, GeneratedRow, HeadingRow, ProseRow, type RowActions, UnrecognizedRow } from './EntryRows';
 
@@ -87,6 +99,9 @@ function Editor({ detail }: { detail: CollectionDetail }) {
   const [pane, setPane] = useState<'outline' | 'preview'>('outline');
   const [inspecting, setInspecting] = useState<string | null>(null);
   const [deletingSection, setDeletingSection] = useState<CollectionEntry | null>(null);
+  const [removingEarlier, setRemovingEarlier] = useState(false);
+  const removeEarlier = useRef<HTMLButtonElement>(null);
+  const contentsHeading = useRef<HTMLHeadingElement>(null);
   const [focusEntry, setFocusEntry] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
@@ -296,7 +311,9 @@ function Editor({ detail }: { detail: CollectionDetail }) {
         {(!narrow || pane === 'outline') && (
           <div className="editor-outline">
             <section className="contents" aria-labelledby={`${contentsId}-heading`}>
-              <h2 id={`${contentsId}-heading`}>{copy.collectionEditor.contents}</h2>
+              <h2 ref={contentsHeading} id={`${contentsId}-heading`} tabIndex={-1}>
+                {copy.collectionEditor.contents}
+              </h2>
               {!hand && <p className="smart-sentence">{copy.collections.smartSentence}</p>}
               {entries.length === 0 && hand && <p className="note">{copy.collectionEditor.empty}</p>}
               {rows.length > 0 && (
@@ -344,6 +361,24 @@ function Editor({ detail }: { detail: CollectionDetail }) {
                   })}
                 </ol>
               )}
+              {entriesFromBeforeLink(detail).length > 0 && (
+                // A smart collection's entries from before its link, apart, dimmed, with the button that removes them
+                // once the reader confirms (`SmartCollectionEntriesFromBeforeLink`).
+                <section className="earlier-entries" aria-labelledby={`${contentsId}-earlier`}>
+                  <h3 id={`${contentsId}-earlier`}>{copy.collectionEditor.earlierHeading}</h3>
+                  <ul aria-label={copy.collectionEditor.earlierLabel}>
+                    {entriesFromBeforeLink(detail).map((entry) => (
+                      <li key={entry.id} className={`earlier-row kind-${entry.kind}`}>
+                        <span className="earlier-title">{earlierTitle(entry)}</span>
+                        {earlierCaption(entry) && <span className="meta">{earlierCaption(entry)}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                  <button ref={removeEarlier} type="button" className="destructive" onClick={() => setRemovingEarlier(true)}>
+                    {copy.collectionEditor.earlierRemove}
+                  </button>
+                </section>
+              )}
             </section>
             {hand && (
               <div className="add-documents">
@@ -384,6 +419,21 @@ function Editor({ detail }: { detail: CollectionDetail }) {
           }}
         />
       )}
+      {removingEarlier && (
+        <RemoveEarlierEntries
+          count={entriesFromBeforeLink(detail).length}
+          onClose={async (confirmed) => {
+            setRemovingEarlier(false);
+            if (!confirmed) {
+              requestAnimationFrame(() => removeEarlier.current?.focus());
+              return;
+            }
+            const answer = await run(() => removeEntriesFromBeforeLink(client, detail.id));
+            // The group goes with them, and focus to Contents; refused, it stays, with its button.
+            requestAnimationFrame(() => (answer ? contentsHeading : removeEarlier).current?.focus());
+          }}
+        />
+      )}
       {deletingSection && (
         <DeleteSection
           count={Math.max(0, (deletingSection.sectionEnd ?? 0) - entries.findIndex((entry) => entry.id === deletingSection.id) - 1)}
@@ -405,6 +455,37 @@ function Editor({ detail }: { detail: CollectionDetail }) {
         />
       )}
     </>
+  );
+}
+
+/** Remove These Entries' question, the app's `confirmationDialog`. */
+function RemoveEarlierEntries({ count, onClose }: { count: number; onClose: (confirmed: boolean) => void }) {
+  const headingId = useId();
+  const messageId = useId();
+  const cancel = useRef<HTMLButtonElement>(null);
+  return (
+    <Modal
+      className="confirm"
+      role="alertdialog"
+      labelledBy={headingId}
+      describedBy={messageId}
+      initial={cancel}
+      onCancel={() => onClose(false)}
+      onClose={() => {}}
+    >
+      <h2 id={headingId} tabIndex={-1}>
+        {copy.collectionEditor.earlierRemoveTitle}
+      </h2>
+      <p id={messageId}>{copy.collectionEditor.earlierRemoveMessage(count)}</p>
+      <div className="dialog-actions">
+        <button ref={cancel} type="button" onClick={() => onClose(false)}>
+          {copy.collectionEditor.earlierRemoveCancel}
+        </button>
+        <button type="button" className="destructive" onClick={() => closeAtOnce(() => onClose(true))}>
+          {copy.collectionEditor.earlierRemove}
+        </button>
+      </div>
+    </Modal>
   );
 }
 

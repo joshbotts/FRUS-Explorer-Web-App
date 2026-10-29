@@ -169,7 +169,8 @@ import Testing
             #expect(active == project.id)
             let kit = try await KitReference(files: files, session: session, activeProject: active)
             for collection in [rich.id, plain.id, many.id, away.id] {
-                for format in CollectionExportFormat.allCases {
+                // The native file is CollectionFileParityTests'.
+                for format in CollectionExportFormat.allCases where format != .fruscollection {
                     try await Self.sameDay { day in
                         let served = Data(buffer: try await session.send(.post, "\(base)/\(collection)/export",
                                                                          try Self.json(["format": format.rawValue, "timeZone": "UTC"])).body)
@@ -273,13 +274,13 @@ import Testing
             #expect(format.source.contains(NoteViewParityTests.flattened(format.line)), "the app holds \(format.line)")
             #expect(blocks[format.block]?.contains(format.web) == true, "copy.ts's \(format.block) block holds \(format.web)")
         }
-        // The grid's labels the app writes as they are, and its order, which the web's omits PDF and the native file from.
+        // The grid's labels the app writes as they are, and its order, which the web's omits PDF from (the native file since S18f).
         NoteViewParityTests.expect(formats, holds: [
             #"case .html: return "HTML""#, #"case .bibtex: return "BibTeX""#,
             "let ordered: [ExportFormat] = [.pdf, .html, .docx, .bibtex, .zoteroJSON, .fruscollection]",
         ], file: "CollectionExporter+App.swift")
         NoteViewParityTests.expect(try CollectionParityTests.web("api/collections.ts"), holds: [
-            "export const exportFormats = ['html', 'docx', 'bibtex', 'zoteroJSON'] as const;",
+            "export const exportFormats = ['html', 'docx', 'bibtex', 'zoteroJSON', 'fruscollection'] as const;",
             "export const previewDocumentCap = 20;",
         ], file: "api/collections.ts")
     }
@@ -427,7 +428,7 @@ import Testing
             "if (detail.applyHighlights) included.push(words.included.highlights); if (detail.includeWordCloud) included.push(words.included.wordCloud);",
             "if (included.length === 0) return `${lead}.`;",
             "new Intl.ListFormat('en-US', { style: 'long', type: 'conjunction' }).format(included)",
-            "return !renderAll && detail.documentCount > previewDocumentCap;",
+            "return !renderAll && documentCount > previewDocumentCap;",
             "export const previewSettleMilliseconds = 1_000;",
         ], file: "collections/exportRules.ts")
         // The editor's columns: Contents at most 460 points, as the iPad's.
@@ -454,7 +455,8 @@ extension Calendar {
 }
 
 /// What the kit writes for a collection, from the user's JSON export, the index and the TEI, as the
-/// app's export sheet and preview write it from SwiftData, its index and its volumes.
+/// app's export sheet and preview write it from SwiftData, its index and its volumes; a smart
+/// collection's documents its saved search's results over the index (S18f).
 struct KitReference: Sendable {
     let envelope: ResearchDataEnvelope
     let files: DataDirectory
@@ -462,6 +464,8 @@ struct KitReference: Sendable {
     let pipeline: IndexingPipeline
     let persons: PersonMentionStore
     let references: SQLiteConnection
+    /// The kit's search over the index, as the app's `AppState.searchService` runs a saved search.
+    let search: SearchService
 
     /// The project the user works in, as the app's `AppState.activeProjectId` names it.
     let activeProject: ProjectExport?
@@ -473,8 +477,10 @@ struct KitReference: Sendable {
         self.activeProject = activeProject.flatMap { id in envelope.projects.first { $0.id.uuidString == id } }
         self.files = files
         resources = try ServerResources.load(from: ServedFixture.resources)
-        pipeline = try IndexingPipeline(readingIndexAt: files.liveIndex, fts5Store: try FTS5Store(readingDatabaseAt: files.liveIndex),
+        let fts5 = try FTS5Store(readingDatabaseAt: files.liveIndex)
+        pipeline = try IndexingPipeline(readingIndexAt: files.liveIndex, fts5Store: fts5,
                                         resources: resources.indexing, volumesDirectory: files.volumesDirectory)
+        search = SearchService(fts5Store: fts5, pipeline: pipeline)
         persons = try PersonMentionStore(readingDatabaseAt: files.liveIndex)
         references = try SQLiteConnection.immutable(files.liveIndex)
     }
@@ -513,6 +519,19 @@ struct KitReference: Sendable {
     @MainActor
     func preview(_ id: String, renderAll: Bool, on day: Date) async throws -> String {
         let collection = try collection(id)
+        if collection.savedSearchId != nil {
+            // The smart path: the results, capped before any is resolved, the whole set their membership, no
+            // volume named as missing.
+            let refs = try await KitSource(reference: self, savedSearchId: collection.savedSearchId).smartDocumentRefs()
+            let capped = renderAll || refs.count <= 20 ? refs : Array(refs.prefix(20))
+            let items = try await assembly(collection).resolve(smartRefs: capped, introduction: Self.introduction(of: collection),
+                                                               purpose: .preview, fullRefs: refs)
+            var renderer = CollectionItemHTMLRenderer(options: Self.previewOptions(collection))
+            renderer.figureImages = figures
+            renderer.citationOnlyVolumeIds = []
+            renderer.showsSummaryPlaceholders = true
+            return renderer.pageHTML(metadata: try metadata(collection, on: day), items: items)
+        }
         let all = collection.entries.sorted { $0.sortOrder < $1.sortOrder }
         // `capEntries(_:cap:)`, at `initialDocumentCap`, 20.
         var documentCount = 0
@@ -528,18 +547,22 @@ struct KitReference: Sendable {
         let items = try await assembly(collection).resolve(entries: shown.map(Self.entry), introduction: Self.introduction(of: collection),
                                                            purpose: .preview)
         let needed = Set(all.filter { $0.entryKind == .document && !$0.volumeId.isEmpty }.map(\.volumeId))
-        // `previewOptions()`: the composition's, no word cloud.
-        let composed = CollectionExportOptions(composing: collection)
-        var renderer = CollectionItemHTMLRenderer(options: CollectionExportOptions(
-            tocStyle: composed.tocStyle, includeFootnotes: composed.includeFootnotes, includeSourceNote: composed.includeSourceNote,
-            applyHighlights: composed.applyHighlights, includeNotes: composed.includeNotes, summaryPromptId: composed.summaryPromptId,
-            includeWordCloud: false))
+        var renderer = CollectionItemHTMLRenderer(options: Self.previewOptions(collection))
         renderer.figureImages = figures
         renderer.citationOnlyVolumeIds = needed.filter {
             !FileManager.default.fileExists(atPath: files.volumesDirectory.appendingPathComponent("\($0).xml").path)
         }
         renderer.showsSummaryPlaceholders = true
         return renderer.pageHTML(metadata: try metadata(collection, on: day), items: items)
+    }
+
+    /// `previewOptions()`: the composition's, no word cloud.
+    static func previewOptions(_ collection: CollectionExport) -> CollectionExportOptions {
+        let composed = CollectionExportOptions(composing: collection)
+        return CollectionExportOptions(
+            tocStyle: composed.tocStyle, includeFootnotes: composed.includeFootnotes, includeSourceNote: composed.includeSourceNote,
+            applyHighlights: composed.applyHighlights, includeNotes: composed.includeNotes, summaryPromptId: composed.summaryPromptId,
+            includeWordCloud: false)
     }
 
     @MainActor
@@ -552,7 +575,8 @@ struct KitReference: Sendable {
                                userTagIds: $0.userTagIds, selectedSummaryIds: [], linkedHighlightIds: [])
         }
         return CollectionContentAssembly(collection: collection, notes: notes,
-                                         source: KitSource(reference: self), locale: Locale(identifier: "en_US"))
+                                         source: KitSource(reference: self, savedSearchId: collection.savedSearchId),
+                                         locale: Locale(identifier: "en_US"))
     }
 
     private func entries(_ collection: CollectionExport) -> [CollectionContentAssembly.Entry] {
@@ -637,6 +661,8 @@ struct KitReference: Sendable {
 @MainActor
 struct KitSource: CollectionContentDataSource {
     let reference: KitReference
+    /// The collection's saved search, for a smart one.
+    var savedSearchId: UUID?
 
     var manifestEntries: [VolumeManifestEntry] { reference.resources.manifest }
     var indexingPipeline: IndexingPipeline? { reference.pipeline }
@@ -712,7 +738,15 @@ struct KitSource: CollectionContentDataSource {
 
     func userTags() -> [UserTagExport] { reference.envelope.tags }
     func tagAssignments() -> [DocumentTagAssignmentExport] { reference.envelope.tagAssignments }
-    func smartDocumentRefs() async throws -> [SmartCollectionDocumentRef] { [] }
+    /// `CollectionContentResolver.smartRefs(for:)`: the saved search the export holds, run as it is stored,
+    /// at the app's `SearchViewModel.searchHardLimit`.
+    func smartDocumentRefs() async throws -> [SmartCollectionDocumentRef] {
+        guard let savedSearchId else { return [] }
+        guard let saved = reference.envelope.savedSearches.first(where: { $0.id == savedSearchId }) else {
+            throw CollectionResolveError.savedSearchMissing
+        }
+        return try await SmartCollectionSnapshot.documentRefs(parameters: saved.parameters, searchService: reference.search, limit: 1_000)
+    }
     func prepareVolumesForExport(_ volumeIds: Set<String>) async {}
     func fetchAbsentFigureImages(_ images: [FigureImageName]) async {}
 

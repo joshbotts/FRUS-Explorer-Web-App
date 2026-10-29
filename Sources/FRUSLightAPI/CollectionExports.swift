@@ -12,22 +12,27 @@
 //   and `ZoteroCollectionExporter.ris`, the bytes each exporter writes to its file, named as it names
 //   it, which the browser saves. Each is kept in the history as the app's `ExportHistoryRecorder`
 //   keeps it, while Log Research Sessions is on. No word cloud is drawn, since its drawing is the
-//   app's (SwiftUI); PDF waits for phase 3, `.fruscollection` for S18f.
+//   app's (SwiftUI); PDF waits for phase 3. From PLAN's S18f, `.fruscollection` too, the file the kit's
+//   `NativeCollectionSerializer` writes of the collection's source, which resolves nothing
+//   (CollectionFiles.swift).
 // - The quotation check, `GET /api/v1/me/collections/{id}/excerpt-check`, which the export sheet runs
 //   as it opens and which warns without blocking: the kit's `ExcerptVerifier` over the served index's
 //   body texts, a document an update removed told apart by its revision, and the report's sentence.
-// A smart collection's documents come from its saved search, which S18f resolves: until then neither
-// is offered for one.
+// A smart collection's documents are its saved search's results (PLAN's S18f), run before the resolve
+// (`CollectionSmartSearch`): the preview caps them before any is parsed, as the app's does, and
+// `GET /api/v1/me/collections/{id}/results` counts them for its bar; an export resolves them all.
 //
 // App code mirrored here, held to its source by CollectionExportParityTests:
 // - `CollectionPreviewView`: its cap, `capEntries(_:cap:)`, `previewOptions()` and the volumes it
-//   names as not downloaded, here those the server's folder of volumes lacks;
-// - `ExportFormat`: the four formats' raw values, suffixes and `exportOptions(for:)`;
+//   names as not downloaded, here those the server's folder of volumes lacks, none for a smart
+//   collection, whose results it caps before they are resolved;
+// - `ExportFormat`: the five formats' raw values, suffixes and `exportOptions(for:)`;
 // - `CollectionExportMetadata.forExport(of:activeProject:modelContext:)`, with its method appendix
 //   (`ResearchDataExporter.collectionMethodAppendixLines`);
 // - `ProseRichText.exportRTF` read by `CollectionProse.paragraphs(fromRTF:)`, through the web's codec;
-// - `ExportSheetView`'s `verifyExcerpts()`, `exportZoteroRIS()` and `recordExport`, with
-//   `ExportHistoryRecorder.record`.
+// - `ExportSheetView`'s `verifyExcerpts()`, `exportZoteroRIS()`, `runNativeExport()` and
+//   `recordExport`, with `ExportHistoryRecorder.record`; its Export, disabled for a collection with no
+//   entry that is not smart.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -63,26 +68,30 @@ public struct ExcerptQuotation: Codable, Equatable, Sendable {
 }
 
 /// The formats a collection exports to here, the app's `ExportFormat` cases but PDF, which waits for
-/// phase 3's Chromium, and `.fruscollection`, S18f's.
+/// phase 3's Chromium.
 enum CollectionExportFormat: String, CaseIterable, Sendable {
-    case html, docx, bibtex, zoteroJSON
+    case html, docx, bibtex, zoteroJSON, fruscollection
 
-    /// The end of the file's name, as each exporter names its file (`CollectionExportNaming.fileName`).
+    /// The end of the file's name, as each exporter names its file (`CollectionExportNaming.fileName`),
+    /// and the native file `writeTemporaryFile(_:)` names.
     var suffix: String {
         switch self {
         case .html: ".html"
         case .docx: ".docx"
         case .bibtex: ".bib"
         case .zoteroJSON: "-zotero.ris"
+        case .fruscollection: "." + NativeCollectionSerializer.fileExtension
         }
     }
 
+    /// The native file's is JSON's, which the app's `UTType.fruscollection` conforms to.
     var mediaType: String {
         switch self {
         case .html: "text/html; charset=utf-8"
         case .docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         case .bibtex: "application/x-bibtex; charset=utf-8"
         case .zoteroJSON: "application/x-research-info-systems; charset=utf-8"
+        case .fruscollection: "application/json; charset=utf-8"
         }
     }
 
@@ -111,6 +120,19 @@ enum CollectionExportRoutes {
     struct Export: Decodable {
         let format: String
         let timeZone: String?
+        /// The native file's "Include my research notes", off unless asked, as the app's sheet has it.
+        let includeNotes: Bool?
+    }
+
+    /// A smart collection's results, which the preview's bar counts.
+    struct Results: Codable, Equatable, Sendable, ResponseEncodable {
+        var total: Int
+        var items: [CollectionExportRoutes.Result]
+    }
+
+    struct Result: Codable, Equatable, Sendable {
+        var volumeId: String
+        var documentId: String
     }
 
     static func add(to me: RouterGroup<APIRequestContext>, services: UserDataServices, resources: ServerResources,
@@ -131,7 +153,6 @@ enum CollectionExportRoutes {
                 let timeZone = try zone(try query.single("timeZone"), field: "timeZone")
                 let collection = try await CollectionRoutes.collection(try context.parameters.require("collectionId"),
                                                                        of: user.id, in: store)
-                guard collection.savedSearchId == nil else { throw CollectionRoutes.smartWaits() }
                 let time = now()
                 let research = try await Blocking.run { try CollectionResearch.read(for: user.id, in: store) }
                 let metadata = try await metadata(of: collection, research: research, for: user.id, in: store,
@@ -139,12 +160,26 @@ enum CollectionExportRoutes {
                 // None while no index is installed; one being installed is a 503, as for a search.
                 let served = try await provider.servedIfReady()
                 try await warm(collection, resources: resources)
-                let entries = renderAll ? collection.entries : capped(collection.entries, cap: initialDocumentCap)
-                let items = try await context.whileClientConnected {
-                    try await resolve(collection, entries: entries, research: research, served: served, resources: resources,
-                                      parses: parses, purpose: .preview)
+                let items: [CollectionExportItem]
+                let missing: Set<String>
+                if collection.savedSearchId != nil {
+                    // The smart path: the results first, an FTS5 query, capped before any is parsed, the whole set
+                    // the membership the apparatus counts; no volume named as missing, as the app names none.
+                    items = try await context.whileClientConnected {
+                        let refs = try await smartRefs(of: collection, for: user.id, in: store, provider: provider)
+                        let shown = renderAll || refs.count <= initialDocumentCap ? refs : Array(refs.prefix(initialDocumentCap))
+                        return try await resolve(collection, smartRefs: shown, fullRefs: refs, research: research, served: served,
+                                                 resources: resources, parses: parses, purpose: .preview)
+                    }
+                    missing = []
+                } else {
+                    let entries = renderAll ? collection.entries : capped(collection.entries, cap: initialDocumentCap)
+                    items = try await context.whileClientConnected {
+                        try await resolve(collection, entries: entries, research: research, served: served, resources: resources,
+                                          parses: parses, purpose: .preview)
+                    }
+                    missing = volumesNotHeld(collection.entries, resources: resources, in: reader.volumesDirectory)
                 }
-                let missing = volumesNotHeld(collection.entries, resources: resources, in: reader.volumesDirectory)
                 let page = try await Blocking.run {
                     var renderer = CollectionItemHTMLRenderer(options: previewOptions(collection))
                     renderer.figureImages = figures
@@ -172,29 +207,41 @@ enum CollectionExportRoutes {
         me.post("collections/:collectionId/export") { request, context -> Response in
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
-            let body = try await JSONBody.decode(Export.self, from: request, fields: ["format", "timeZone"])
+            let body = try await JSONBody.decode(Export.self, from: request, fields: ["format", "timeZone", "includeNotes"])
             guard let format = CollectionExportFormat(rawValue: body.format) else {
                 let names = CollectionExportFormat.allCases.map(\.rawValue).joined(separator: ", ")
                 throw CollectionRoutes.invalidField("format", "\(body.format) is not a format this server exports: \(names).")
             }
+            if body.includeNotes != nil, format != .fruscollection {
+                throw CollectionRoutes.invalidField("includeNotes", "only a .fruscollection file carries research notes.")
+            }
             let timeZone = try zone(body.timeZone, field: "timeZone")
             let collection = try await CollectionRoutes.collection(try context.parameters.require("collectionId"), of: user.id, in: store)
-            guard collection.savedSearchId == nil else { throw CollectionRoutes.smartWaits() }
-            // The sheet's Export is disabled for a collection with no entry, as its button is.
-            guard !collection.entries.isEmpty else {
+            // The sheet's Export is disabled for a collection with no entry that is not smart, as its button is.
+            guard !collection.entries.isEmpty || collection.savedSearchId != nil else {
                 throw APIProblem(.conflict, code: "COLLECTION_EMPTY", detail: "This collection has nothing in it to export yet.")
+            }
+            let file: (data: Data, documents: Int, name: String)
+            if format == .fruscollection {
+                // `runNativeExport()`: the collection's source, which resolves nothing and needs no index.
+                file = try await CollectionFileRoutes.nativeFile(collection, includeNotes: body.includeNotes ?? false,
+                                                                 for: user.id, in: store)
+                try await recordKept(format, documents: file.documents, of: collection, for: user.id, in: store, at: now(), context: context)
+                return download(file.data, named: file.name, as: format)
             }
             let time = now()
             let research = try await Blocking.run { try CollectionResearch.read(for: user.id, in: store) }
             let served = try await provider.servedIfReady()
             try await warm(collection, resources: resources)
             let options = format.exportOptions(for: collection)
-            let file: (data: Data, documents: Int, name: String)
             if format == .zoteroJSON {
                 // `exportZoteroRIS()`: the documents alone, no summary phase, and metadata of the name and
                 // note, which names the file; none to send is the sheet's refusal.
                 let documents = try await context.whileClientConnected {
-                    try await resolveDocuments(collection, research: research, served: served, resources: resources, parses: parses)
+                    let refs = collection.savedSearchId == nil ? nil
+                        : try await smartRefs(of: collection, for: user.id, in: store, provider: provider)
+                    return try await resolveDocuments(collection, smartRefs: refs, research: research, served: served, resources: resources,
+                                                      parses: parses)
                 }
                 guard !documents.isEmpty else {
                     throw APIProblem(.conflict, code: "NOTHING_TO_EXPORT", detail: "This collection has no documents to send.")
@@ -206,26 +253,33 @@ enum CollectionExportRoutes {
                 let metadata = try await metadata(of: collection, research: research, for: user.id, in: store,
                                                   resources: resources, at: time, timeZone: timeZone)
                 file = try await context.whileClientConnected {
-                    let items = try await resolve(collection, entries: collection.entries, research: research, served: served,
-                                                  resources: resources, parses: parses, purpose: .export,
+                    let refs = collection.savedSearchId == nil ? nil
+                        : try await smartRefs(of: collection, for: user.id, in: store, provider: provider)
+                    let items = try await resolve(collection, entries: collection.entries, smartRefs: refs, research: research,
+                                                  served: served, resources: resources, parses: parses, purpose: .export,
                                                   printsFigureImages: format.printsFigureImages)
                     let data = try await Blocking.run { rendered(items, metadata: metadata, format: format, options: options, figures: figures) }
                     return (data, items.documents.count, CollectionExportNaming.fileName(savedName: metadata.name, suffix: format.suffix))
                 }
             }
-            // Kept as the app keeps it once the file is written; a row that cannot be written is said in the
-            // log, as the file is the export.
-            do {
-                try await record(format, documents: file.documents, of: collection, for: user.id, in: store, at: now())
-            } catch {
-                context.logger.error("A collection's export could not be kept in the history: \(error)")
+            try await recordKept(format, documents: file.documents, of: collection, for: user.id, in: store, at: now(), context: context)
+            return download(file.data, named: file.name, as: format)
+        }
+
+        // A smart collection's results, counted for the preview's bar, "Showing first 20 of N documents",
+        // as the app's preview counts the results it fetched.
+        me.get("collections/:collectionId/results") { request, context -> Results in
+            try FormQuery(request.uri.query).refuseUnknown([])
+            let user = try context.requireUser()
+            let collection = try await CollectionRoutes.collection(try context.parameters.require("collectionId"), of: user.id, in: store)
+            guard collection.savedSearchId != nil else {
+                throw APIProblem(.conflict, code: "COLLECTION_NOT_SMART",
+                                 detail: "This collection is not linked to a saved search, so it has no results to count.")
             }
-            var headers = HTTPFields()
-            headers[.contentType] = format.mediaType
-            headers[.contentDisposition] = attachment(file.name)
-            headers[.cacheControl] = "no-store"
-            headers[.xContentTypeOptions] = "nosniff"
-            return Response(status: .ok, headers: headers, body: .init(byteBuffer: ByteBuffer(bytes: file.data)))
+            let refs = try await context.whileClientConnected {
+                try await smartRefs(of: collection, for: user.id, in: store, provider: provider)
+            }
+            return Results(total: refs.count, items: refs.map { Result(volumeId: $0.volumeId, documentId: $0.documentId) })
         }
 
         // The quotation check the export sheet runs as it opens (`verifyExcerpts()`), which never blocks.
@@ -241,14 +295,16 @@ enum CollectionExportRoutes {
 
     /// The collection's items, as the app's resolver gives them to the preview or the export sheet: its
     /// entries as their values, a prose block's paragraphs decoded, the introduction leading, with this
-    /// user's research and the library as the data source.
+    /// user's research and the library as the data source; for a smart collection, its results, run
+    /// before (`smartRefs`), in the entries' place.
     @MainActor
-    static func resolve(_ collection: CollectionExport, entries: [CollectionEntryExport], research: CollectionResearch,
-                        served: ServedIndex?, resources: ServerResources, parses: CollectionDocumentParses,
+    static func resolve(_ collection: CollectionExport, entries: [CollectionEntryExport], smartRefs: [SmartCollectionDocumentRef]? = nil,
+                        research: CollectionResearch, served: ServedIndex?, resources: ServerResources, parses: CollectionDocumentParses,
                         purpose: CollectionContentAssembly.Purpose, printsFigureImages: Bool = false) async throws -> [CollectionExportItem] {
         let entries = entries.map(entry)
         do {
-            return try await assembly(collection, entries: entries, research: research, served: served, resources: resources, parses: parses)
+            return try await assembly(collection, reading: smartRefs.map { $0.map(CollectionContentAssembly.Entry.init) } ?? entries,
+                                      smartRefs: smartRefs, research: research, served: served, resources: resources, parses: parses)
                 .resolve(entries: entries, introduction: introduction(of: collection), purpose: purpose,
                          printsFigureImages: printsFigureImages)
         } catch {
@@ -256,27 +312,62 @@ enum CollectionExportRoutes {
         }
     }
 
+    /// The preview's smart path, `resolve(smartRefs:introduction:purpose:fullRefs:)`: the results shown,
+    /// with every result the membership the apparatus counts.
+    @MainActor
+    static func resolve(_ collection: CollectionExport, smartRefs: [SmartCollectionDocumentRef], fullRefs: [SmartCollectionDocumentRef],
+                        research: CollectionResearch, served: ServedIndex?, resources: ServerResources, parses: CollectionDocumentParses,
+                        purpose: CollectionContentAssembly.Purpose) async throws -> [CollectionExportItem] {
+        do {
+            return try await assembly(collection, reading: smartRefs.map(CollectionContentAssembly.Entry.init), smartRefs: fullRefs,
+                                      research: research, served: served, resources: resources, parses: parses)
+                .resolve(smartRefs: smartRefs, introduction: introduction(of: collection), purpose: purpose, fullRefs: fullRefs)
+        } catch {
+            throw refusal(error)
+        }
+    }
+
     /// The collection's documents alone, for RIS, as `resolveDocuments(collection:entries:allNotes:purpose:)`.
     @MainActor
-    static func resolveDocuments(_ collection: CollectionExport, research: CollectionResearch, served: ServedIndex?,
-                                 resources: ServerResources, parses: CollectionDocumentParses) async throws -> [CollectionExportDocument] {
+    static func resolveDocuments(_ collection: CollectionExport, smartRefs: [SmartCollectionDocumentRef]? = nil, research: CollectionResearch,
+                                 served: ServedIndex?, resources: ServerResources,
+                                 parses: CollectionDocumentParses) async throws -> [CollectionExportDocument] {
         let entries = collection.entries.map(entry)
         do {
-            return try await assembly(collection, entries: entries, research: research, served: served, resources: resources, parses: parses)
+            return try await assembly(collection, reading: smartRefs.map { $0.map(CollectionContentAssembly.Entry.init) } ?? entries,
+                                      smartRefs: smartRefs, research: research, served: served, resources: resources, parses: parses)
                 .resolveDocuments(entries: entries, purpose: .export)
         } catch {
             throw refusal(error)
         }
     }
 
+    /// A smart collection's results (`CollectionSmartSearch`), its refusals as the sheet shows them.
+    static func smartRefs(of collection: CollectionExport, for user: String, in store: any UserDataStore,
+                          provider: ServedIndexProvider) async throws -> [SmartCollectionDocumentRef] {
+        do {
+            return try await CollectionSmartSearch.refs(of: collection, for: user, in: store, provider: provider)
+        } catch {
+            throw refusal(error)
+        }
+    }
+
     /// The kit's refusal of an export as the sheet shows it, in the app's words: no summary prompt for
-    /// Summary only, or a summary only an export would write, as on a device without Apple
-    /// Intelligence. Any other error is as it was.
+    /// Summary only; a smart collection's saved search gone, or no index open to run it, in the kit's
+    /// sentences; a summary only an export would write, as on a device without Apple Intelligence; and,
+    /// the web's own, the documents at Summary only with none stored, named, with the app's reason.
+    /// Any other error is as it was.
     static func refusal(_ error: any Error) -> any Error {
         switch error {
+        case let error as SummariesNotStored:
+            return APIProblem(.conflict, code: "SUMMARY_NOT_STORED", detail: error.detail)
         case let error as CollectionResolveError:
-            let code = if case .summaryPromptMissing = error { "SUMMARY_PROMPT_MISSING" } else { "COLLECTION_NOT_RESOLVED" }
-            return APIProblem(.conflict, code: code, detail: error.errorDescription ?? "\(error)")
+            let detail = error.errorDescription ?? "\(error)"
+            switch error {
+            case .summaryPromptMissing: return APIProblem(.conflict, code: "SUMMARY_PROMPT_MISSING", detail: detail)
+            case .savedSearchMissing: return APIProblem(.conflict, code: "SAVED_SEARCH_MISSING", detail: detail)
+            case .searchServiceUnavailable: return APIProblem(.serviceUnavailable, code: "SEARCH_NOT_READY", detail: detail)
+            }
         case let error as ExportError:
             return APIProblem(.conflict, code: "EXPORT_NOT_RENDERED", detail: error.errorDescription ?? "\(error)")
         default:
@@ -284,15 +375,16 @@ enum CollectionExportRoutes {
         }
     }
 
+    /// The assembly over this server's data source, its batch reading the documents of `reading` a volume
+    /// at a time, and a smart collection's results its saved search's.
     @MainActor
-    private static func assembly(_ collection: CollectionExport, entries: [CollectionContentAssembly.Entry], research: CollectionResearch,
-                                 served: ServedIndex?, resources: ServerResources,
-                                 parses: CollectionDocumentParses) -> CollectionContentAssembly {
-        CollectionContentAssembly(
-            collection: collection, notes: research.notes,
-            source: CollectionContentSource(research: research, served: served, resources: resources, parses: parses,
-                                            batch: CollectionDocumentBatch(entries)),
-            locale: locale)
+    private static func assembly(_ collection: CollectionExport, reading: [CollectionContentAssembly.Entry],
+                                 smartRefs: [SmartCollectionDocumentRef]?, research: CollectionResearch, served: ServedIndex?,
+                                 resources: ServerResources, parses: CollectionDocumentParses) -> CollectionContentAssembly {
+        var source = CollectionContentSource(research: research, served: served, resources: resources, parses: parses,
+                                             batch: CollectionDocumentBatch(reading))
+        source.smartRefs = smartRefs
+        return CollectionContentAssembly(collection: collection, notes: research.notes, source: source, locale: locale)
     }
 
     /// The archival indexes, decoded before a collection with a Sources & Archives block is resolved,
@@ -421,7 +513,31 @@ enum CollectionExportRoutes {
             return Data(BibTeXCollectionExporter().bibTeX(for: items, options: options).utf8)
         case .zoteroJSON:
             return Data(ZoteroCollectionExporter().ris(for: items, options: options).utf8)
+        case .fruscollection:
+            // Written from the collection's source, never from resolved items (`CollectionFileRoutes.nativeFile`).
+            return Data()
         }
+    }
+
+    /// Keeps the export in the history once its file is made, as the app keeps it then; a row that cannot be
+    /// written is said in the log, as the file is the export.
+    static func recordKept(_ format: CollectionExportFormat, documents: Int, of collection: CollectionExport, for user: String,
+                           in store: any UserDataStore, at time: Date, context: APIRequestContext) async throws {
+        do {
+            try await record(format, documents: documents, of: collection, for: user, in: store, at: time)
+        } catch {
+            context.logger.error("A collection's export could not be kept in the history: \(error)")
+        }
+    }
+
+    /// The file as the browser saves it: its media type, and its name as an attachment's.
+    static func download(_ data: Data, named name: String, as format: CollectionExportFormat) -> Response {
+        var headers = HTTPFields()
+        headers[.contentType] = format.mediaType
+        headers[.contentDisposition] = attachment(name)
+        headers[.cacheControl] = "no-store"
+        headers[.xContentTypeOptions] = "nosniff"
+        return Response(status: .ok, headers: headers, body: .init(byteBuffer: ByteBuffer(bytes: data)))
     }
 
     /// `recordExport(format:documentCount:)`, through `ExportHistoryRecorder.record`: the format's raw

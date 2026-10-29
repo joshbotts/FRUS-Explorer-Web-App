@@ -435,6 +435,10 @@ enum UserDataRoutes {
         CollectionRoutes.add(to: collections, services: services, resources: resources, provider: provider)
         CollectionEntryRoutes.add(to: collections, services: services, resources: resources, reader: reader, provider: provider)
         CollectionExportRoutes.add(to: collections, services: services, resources: resources, reader: reader, provider: provider)
+        // A `.fruscollection` file's import takes the file whole, with its notes, in a group of its own (S18f).
+        let collectionFiles = router.group("/api/v1/me")
+            .add(middleware: UserDataGuard(services: services, bodyLimit: CollectionFileRoutes.fileLimit))
+        CollectionFileRoutes.add(to: collections, imports: collectionFiles, services: services, resources: resources, provider: provider)
         // And an import's, the export itself.
         let imports = router.group("/api/v1/me")
             .add(middleware: UserDataGuard(services: services, bodyLimit: services.importLimit))

@@ -68,6 +68,9 @@ public struct CollectionDetail: Codable, Equatable, Sendable, ResponseEncodable 
     public var includeMethodAppendix: Bool
     public var projectIds: [String]
     public var savedSearchId: String?
+    /// The linked saved search's name, which Collection settings' Smart Collection rows show; absent for
+    /// none, or for a link to a search the user no longer has, "Saved search not found".
+    public var savedSearchName: String?
     /// Whether it takes documents, headings, note blocks and passages by hand: not a smart one.
     public var takesHandAddedEntries: Bool
     /// The composition: a `CollectionBodyDepth`, the effective footnote flags, a `CollectionToCStyle`.
@@ -93,7 +96,7 @@ public struct CollectionDetail: Codable, Equatable, Sendable, ResponseEncodable 
     public var documentCount: Int
     /// The volumes of its documents the server cannot open, sorted: those its folder of volumes
     /// lacks, or outside the catalogue, whose documents the preview prints as citations, as the app's
-    /// prints those of a volume not downloaded (PLAN's S18e).
+    /// prints those of a volume not downloaded (PLAN's S18e); none for a smart collection.
     public var volumesNotHeld: [String]
     public var entries: [Entry]
     public var createdAt: String?
@@ -210,17 +213,20 @@ enum CollectionRoutes {
         var includeWordCloud: Bool?
         var defaultIncludeHeadnote: Bool?
         var summaryPromptId: String??
+        /// Link to Saved Search…'s pick, or null for Unlink (PLAN's S18f).
+        var savedSearchId: String??
 
         static let fields: Set<String> = [
             "name", "note", "subtitle", "authorLine", "introductionText", "introductionRuns", "includeColophon",
             "includeProjectProvenance", "includeMethodAppendix", "defaultBodyDepth", "includeFootnotes", "includeSourceNote",
             "tocStyle", "applyHighlights", "includeNotes", "includeWordCloud", "defaultIncludeHeadnote", "summaryPromptId",
+            "savedSearchId",
         ]
 
         enum CodingKeys: String, CodingKey {
             case name, note, subtitle, authorLine, introductionText, introductionRuns, includeColophon, includeProjectProvenance
             case includeMethodAppendix, defaultBodyDepth, includeFootnotes, includeSourceNote, tocStyle, applyHighlights
-            case includeNotes, includeWordCloud, defaultIncludeHeadnote, summaryPromptId
+            case includeNotes, includeWordCloud, defaultIncludeHeadnote, summaryPromptId, savedSearchId
         }
 
         init(from decoder: any Decoder) throws {
@@ -263,6 +269,8 @@ enum CollectionRoutes {
             defaultIncludeHeadnote = try given(.defaultIncludeHeadnote)
             summaryPromptId = container.contains(.summaryPromptId)
                 ? .some(try container.decodeIfPresent(String.self, forKey: .summaryPromptId)) : nil
+            savedSearchId = container.contains(.savedSearchId)
+                ? .some(try container.decodeIfPresent(String.self, forKey: .savedSearchId)) : nil
         }
     }
 
@@ -325,6 +333,13 @@ enum CollectionRoutes {
                 summaryOnlyOffered = true
             }
             let promptIds = body.summaryPromptId != nil ? try await promptIds(of: user.id, in: store) : []
+            // Link to Saved Search… offers the user's saved searches, so a link names one of them.
+            let link: UUID??
+            switch body.savedSearchId {
+            case .none: link = nil
+            case .some(.none): link = .some(nil)
+            case .some(.some(let raw)): link = .some(try await savedSearchLink(raw, of: user.id, in: store))
+            }
             let active = try await Blocking.run { try store.activeProjectId(of: user.id) }.flatMap(UUID.init(uuidString:))
             let time = UserStoreDate.rounded(now())
             let rows = try await changed(id, for: user.id, in: store, at: time) { collection in
@@ -347,6 +362,11 @@ enum CollectionRoutes {
                                         (body.includeMethodAppendix, \.includeMethodAppendix)] {
                     guard let flag, collection[keyPath: keyPath] != flag else { continue }
                     collection[keyPath: keyPath] = flag
+                    committed = true
+                }
+                // `CollectionEditorCommit.savedSearch(_:to:)`: the link, or none, when it differs from the saved one.
+                if let link, collection.savedSearchId != link {
+                    collection.savedSearchId = link
                     committed = true
                 }
                 // `recordEdit()`, after a commit of one of the editor's own fields.
@@ -490,20 +510,25 @@ enum CollectionRoutes {
         }
     }
 
-    /// The rows the store keeps for `collection`, as the import writes a Mac's record at the export's version.
-    static func change(_ collection: CollectionExport, addedSummaries: [GeneratedSummaryExport] = []) -> CollectionChange {
+    /// The rows the store keeps for `collection`, as the import writes a Mac's record at the export's version,
+    /// with the headnote drafts the write adds and deletes, and the notes a new collection's file brings.
+    static func change(_ collection: CollectionExport, addedSummaries: [GeneratedSummaryExport] = [],
+                       deletedSummaries: [UUID] = [], notes: [NoteRecord] = []) -> CollectionChange {
         let version = ResearchDataEnvelope.currentFormatVersion
         return CollectionChange(collection: MacImport.collection(collection, version: version).values,
                                 entries: collection.entries.map { MacImport.entry($0, of: collection, version: version).values },
-                                addedSummaries: addedSummaries.map { MacImport.summary($0, version: version).values })
+                                addedSummaries: addedSummaries.map { MacImport.summary($0, version: version).values },
+                                deletedSummaries: deletedSummaries.map(\.uuidString), addedNotes: notes)
     }
 
     /// Changes the user's collection in one write: `edit` makes what it becomes from the values as the
     /// write finds them, and each entry it changes is stamped now, and the collection when its own
     /// fields change or an entry joins or leaves it, as the app's save stamps each model it changed
-    /// (`ModelModificationStamper`). Throws what `edit` throws, writing nothing.
+    /// (`ModelModificationStamper`), with the headnote drafts the write adds and those it deletes. Throws
+    /// what `edit` throws, writing nothing.
     @discardableResult
     static func changed(_ id: String, for user: String, in store: any UserDataStore, at time: Date,
+                        addingSummaries added: [GeneratedSummaryExport] = [], deletingSummaries deleted: [UUID] = [],
                         _ edit: @escaping @Sendable (inout CollectionExport) throws -> Void) async throws -> CollectionRows {
         let rows: CollectionRows?
         do {
@@ -512,7 +537,7 @@ enum CollectionRoutes {
                     let before = try values(held)
                     var after = before
                     try edit(&after)
-                    return change(stamped(after, from: before, at: time))
+                    return change(stamped(after, from: before, at: time), addedSummaries: added, deletedSummaries: deleted)
                 }
             }
         } catch let error as ResearchRowStoreError {
@@ -568,6 +593,11 @@ enum CollectionRoutes {
     static func detail(_ collection: CollectionExport, for user: String, in store: any UserDataStore,
                        resources: ServerResources, provider: ServedIndexProvider) async throws -> CollectionDetail {
         let (prompts, noteCounts) = try await Blocking.run { (try store.prompts(for: user), try store.noteCounts(of: user)) }
+        var savedSearchName: String?
+        if let id = collection.savedSearchId,
+           let row = try await Blocking.run({ try store.searchSet(.savedSearches, id: id.uuidString, of: user) }) {
+            savedSearchName = try? SavedSearchRoutes.read(row).name
+        }
         let summarized = try await summarizedDocuments(of: user, in: store)
         let available = summariesAvailable(collection, summarized: summarized)
         let entries = collection.entries
@@ -585,7 +615,7 @@ enum CollectionRoutes {
             introductionFormattingKept: introduction.kept, includeColophon: collection.includeColophon ?? false,
             includeProjectProvenance: collection.includeProjectProvenance ?? false,
             includeMethodAppendix: collection.includeMethodAppendix ?? false, projectIds: collection.projectIds.map(\.uuidString),
-            savedSearchId: collection.savedSearchId?.uuidString,
+            savedSearchId: collection.savedSearchId?.uuidString, savedSearchName: savedSearchName,
             takesHandAddedEntries: CollectionEditing.takesHandAddedEntries(collection),
             defaultBodyDepth: collection.defaultBodyDepth ?? CollectionBodyDepth.full.rawValue,
             includeFootnotes: CollectionEditing.effectiveIncludeFootnotes(collection),
@@ -602,7 +632,9 @@ enum CollectionRoutes {
                 $0.name != $1.name ? $0.name.localizedStandardCompare($1.name) == .orderedAscending : $0.id < $1.id
             },
             documentCount: CollectionEditing.documentCount(entries),
-            volumesNotHeld: CollectionExportRoutes.volumesNotHeld(entries, resources: resources, in: provider.volumesDirectory).sorted(),
+            // None for a smart collection, whose documents are its search's results, as the app names none.
+            volumesNotHeld: collection.savedSearchId != nil ? []
+                : CollectionExportRoutes.volumesNotHeld(entries, resources: resources, in: provider.volumesDirectory).sorted(),
             entries: entries.enumerated().map { index, entry in
                 let key = "\(entry.volumeId)/\(entry.documentId)"
                 let kind = entry.entryKind
@@ -709,6 +741,14 @@ enum CollectionRoutes {
         Set(try await Blocking.run { try store.prompts(for: user) }.keys)
     }
 
+    /// The saved search a link names, one the user holds.
+    static func savedSearchLink(_ raw: String, of user: String, in store: any UserDataStore) async throws -> UUID {
+        guard let id = UUID(uuidString: raw), try await Blocking.run({ try store.searchSet(.savedSearches, id: id.uuidString, of: user) }) != nil else {
+            throw invalidField("savedSearchId", "you have no saved search with the id \(raw).")
+        }
+        return id
+    }
+
     /// A prompt the user holds, or none for null.
     static func promptId(_ raw: String?, among held: Set<String>, field: String) throws -> UUID? {
         guard let raw else { return nil }
@@ -732,21 +772,21 @@ enum CollectionRoutes {
         return text
     }
 
-    /// Summary only, set where the kit's rule does not offer it, as Briefing packet's card is refused.
+    /// Summary only, set where the kit's rule does not offer it, as Briefing packet's card is refused, with the
+    /// app's reason a summary must be had (PLAN's S18f).
     static func depthNotOffered() -> APIProblem {
         APIProblem(.conflict, code: "DEPTH_NOT_OFFERED",
-                   detail: "Summary only shows a summary of each document, and none of this collection's documents has one stored.")
+                   detail: "Summary only shows a summary of each document, and none of this collection's documents has one stored. \(SummariesNotStored.appsReason)")
+    }
+
+    /// Summary only, set on a document whose document has no summary stored, with the app's reason.
+    static func documentDepthNotOffered() -> APIProblem {
+        APIProblem(.conflict, code: "DEPTH_NOT_OFFERED",
+                   detail: "Summary only shows this document's summary, and it has none stored. \(SummariesNotStored.appsReason)")
     }
 
     static func notFound(_ id: String) -> APIProblem {
         APIProblem(.notFound, code: "COLLECTION_NOT_FOUND", detail: "You have no collection with the id \(id).")
-    }
-
-    /// A smart collection's preview or export, which waits for its saved search to be resolved here
-    /// (PLAN's S18f).
-    static func smartWaits() -> APIProblem {
-        APIProblem(.conflict, code: "SMART_COLLECTION_NOT_RESOLVED",
-                   detail: "This is a smart collection. Its documents come from its saved search, which this server does not resolve yet, so it has no preview or export here.")
     }
 
     /// The Add to Collection picker's refusal of a smart collection, in its words

@@ -8,7 +8,9 @@
 // columns hold is the API's, which writes a row as the import writes a Mac's record
 // (`MacImport.collection`, `.entry`) and reads one as the export does (`ResearchExport.collection`,
 // `.entry`). No collection write changes `user_search` or the tag assignments, a headnote draft being
-// no summary the search reads (`UserSearchText.summaryText`), so none moves the search mark.
+// no summary the search reads (`UserSearchText.summaryText`), so none moves the search mark, but the
+// add of a collection a `.fruscollection` file brings with notes (PLAN's S18f), which makes them and
+// rewrites their documents' rows of `user_search` in the same write, as a note's own write does.
 
 import Foundation
 
@@ -32,13 +34,25 @@ public struct CollectionChange: Sendable {
     /// one whose id the user holds no entry under is added; one held and left out is deleted, with
     /// its headnote draft.
     public var entries: [[String: SQLiteValue]]
-    /// Summaries added with the write: the headnote drafts a duplicate's entries take copies of.
+    /// Summaries added with the write: the headnote drafts a duplicate's entries take copies of, and the
+    /// one the inspector's headnote card saves.
     public var addedSummaries: [[String: SQLiteValue]]
+    /// The headnote drafts the write deletes, by id, in any letter case: the one an entry's headnote
+    /// named before the card saved another, as `swapHeadnoteDraft(text:authorship:)` deletes it. A
+    /// summary with such an id that is no draft is left, as the app deletes only a draft.
+    public var deletedSummaries: [String]
+    /// Notes made with a new collection: those a `.fruscollection` file's document entries carry, as the
+    /// app's `apply(_:into:)` makes them. Only `addCollection` writes them, rewriting each one's document's
+    /// row of `user_search`, so its write moves the search mark; `changeCollection` refuses them.
+    public var addedNotes: [NoteRecord]
 
-    public init(collection: [String: SQLiteValue], entries: [[String: SQLiteValue]], addedSummaries: [[String: SQLiteValue]] = []) {
+    public init(collection: [String: SQLiteValue], entries: [[String: SQLiteValue]], addedSummaries: [[String: SQLiteValue]] = [],
+                deletedSummaries: [String] = [], addedNotes: [NoteRecord] = []) {
         self.collection = collection
         self.entries = entries
         self.addedSummaries = addedSummaries
+        self.deletedSummaries = deletedSummaries
+        self.addedNotes = addedNotes
     }
 }
 
@@ -50,9 +64,9 @@ public protocol CollectionStore: Sendable {
     func collectionRows(of user: String) throws -> (collections: [ExportRow], entries: [ExportRow])
     /// One of the user's collections with its entries, or nil when they hold none with this id.
     func collectionRows(_ id: String, of user: String) throws -> CollectionRows?
-    /// Adds a collection with its entries, and the summaries the change adds, in one write, and answers
-    /// its rows. Throws `ResearchRowStoreError`, writing nothing, for a column a table lacks or an id
-    /// that is missing or the user's already.
+    /// Adds a collection with its entries, and the summaries and notes the change adds, in one write, and
+    /// answers its rows. Throws `ResearchRowStoreError`, writing nothing, for a column a table lacks or an
+    /// id that is missing or the user's already.
     @discardableResult
     func addCollection(_ change: CollectionChange, for user: String) throws -> CollectionRows
     /// Reads the user's collection with this id and its entries inside one write, asks `change` what
@@ -100,13 +114,16 @@ extension RelationalUserStore: CollectionStore {
         guard let id = change.collection["id"]?.text else {
             throw ResearchRowStoreError.invalidId(table: Self.collectionsTable.name, id: nil)
         }
-        return try writing(outsideSearch: true) { db in
+        // Only an add with notes changes what the search reads.
+        return try writing(outsideSearch: change.addedNotes.isEmpty) { db in
             guard try Self.row(Self.collectionsTable, id: id, of: user, in: db) == nil else {
                 throw ResearchRowStoreError.invalidId(table: Self.collectionsTable.name, id: id)
             }
             try Self.insert(change.collection, into: Self.collectionsTable, for: user, in: db)
             try Self.insertEntries(change.entries, for: user, in: db)
             try Self.insertSummaries(change.addedSummaries, for: user, in: db)
+            try Self.deleteHeadnoteDrafts(change.deletedSummaries, of: user, in: db)
+            try Self.insertNotes(change.addedNotes, for: user, in: db)
             guard let rows = try Self.collectionRows(id, of: user, in: db) else {
                 throw ResearchRowStoreError.invalidId(table: Self.collectionsTable.name, id: id)
             }
@@ -120,6 +137,7 @@ extension RelationalUserStore: CollectionStore {
         try writing(outsideSearch: true) { db in
             guard let held = try Self.collectionRows(id, of: user, in: db) else { return nil }
             guard let made = try change(held) else { return held }
+            guard made.addedNotes.isEmpty else { throw ResearchRowStoreError.notesInAChange }
             try Self.check(made.collection, in: Self.collectionsTable)
             for entry in made.entries { try Self.check(entry, in: Self.entriesTable) }
             for summary in made.addedSummaries { try Self.check(summary, in: Self.summariesTable) }
@@ -156,6 +174,8 @@ extension RelationalUserStore: CollectionStore {
                 try Self.deleteEntry(entry, of: user, in: db)
             }
             try Self.insertEntries(added, for: user, in: db)
+            // The draft an entry no longer names goes before the one that takes its place is added.
+            try Self.deleteHeadnoteDrafts(made.deletedSummaries, of: user, in: db)
             try Self.insertSummaries(made.addedSummaries, for: user, in: db)
             return try Self.collectionRows(id, of: user, in: db)
         }
@@ -246,6 +266,30 @@ extension RelationalUserStore: CollectionStore {
             }
             try insert(summary, into: summariesTable, for: user, in: db)
         }
+    }
+
+    /// Deletes the user's headnote drafts with these ids, in any letter case, leaving a summary that is
+    /// no draft, as `swapHeadnoteDraft(text:authorship:)` deletes only a draft.
+    static func deleteHeadnoteDrafts(_ ids: [String], of user: String, in db: UserStoreTransaction) throws {
+        for id in ids {
+            _ = try db.query("DELETE FROM summaries WHERE user_id = ? AND upper(id) = ? AND is_headnote_draft = 1",
+                             [.text(user), .text(UserSearchText.uuidString(id))])
+        }
+    }
+
+    /// Makes a new collection's notes, each refused, and the write with it, under an id one of the user's
+    /// notes holds, and rewrites the row of `user_search` of each document they are on, once.
+    static func insertNotes(_ notes: [NoteRecord], for user: String, in db: UserStoreTransaction) throws {
+        var documents: [DocumentKey] = []
+        for note in notes {
+            guard try db.scalar("SELECT 1 FROM notes WHERE user_id = ? AND upper(id) = ?",
+                                [.text(user), .text(UserSearchText.uuidString(note.id))]) == nil else {
+                throw ResearchRowStoreError.invalidId(table: "notes", id: note.id)
+            }
+            try insertNote(note, for: user, in: db)
+            if !documents.contains(note.document) { documents.append(note.document) }
+        }
+        for document in documents { try refreshSearch(of: document, for: user, in: db) }
     }
 
     /// Deletes an entry and the headnote draft its `headnote_summary_id` names, as

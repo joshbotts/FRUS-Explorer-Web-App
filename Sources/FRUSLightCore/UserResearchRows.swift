@@ -17,6 +17,9 @@ public enum ResearchRowStoreError: Error, Equatable, CustomStringConvertible {
     /// A collection's write was given a summary that is no headnote draft, which the search reads and
     /// only a summary's own write may add.
     case notAHeadnoteDraft(id: String?)
+    /// A change to a collection was given notes, which only a new collection's write makes, since only
+    /// it rewrites what the search reads.
+    case notesInAChange
 
     public var description: String {
         switch self {
@@ -25,6 +28,7 @@ public enum ResearchRowStoreError: Error, Equatable, CustomStringConvertible {
         case .invalidId(let table, nil): "a row of \(table) needs an id"
         case .notKeyedById(let table): "\(table) is not a table of a user's rows keyed by the Mac's id"
         case .notAHeadnoteDraft(let id): "the summary \(id ?? "with no id") is no headnote draft"
+        case .notesInAChange: "a change to a collection makes no notes; only a new collection's write does"
         }
     }
 }

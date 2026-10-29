@@ -7,11 +7,12 @@
 // browser's history, so Back leaves the editor; the page it holds stays while the next is built,
 // under a spinner. It shows the first 20 documents until Render All, which the editor keeps; a bar
 // names the volumes the server's folder lacks, whose documents the page shows as citations; and the
-// app's caption says what the preview is. A smart collection waits for its saved search to be
-// resolved here.
-import { useQueryClient } from '@tanstack/react-query';
+// app's caption says what the preview is. A smart collection's page is its saved search's results,
+// which the server caps as the app's preview does, and the bar counts them, as the app's counts the
+// results it fetched (S18f); no volume is named as missing for it, as the app names none.
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import { collectionQuery, previewDocumentCap, previewURL, whenAnswered, type CollectionDetail } from '../api/collections';
+import { collectionQuery, previewDocumentCap, previewURL, smartResultsQuery, whenAnswered, type CollectionDetail } from '../api/collections';
 import { copy } from '../copy';
 import { previewSettleMilliseconds, showsCapBar } from './exportRules';
 
@@ -31,9 +32,10 @@ export function CollectionPreview({ detail, renderAll, onRenderAll }: { detail: 
   const first = useRef(true);
   const atOnce = useRef(false);
   const smart = !detail.takesHandAddedEntries;
+  const results = useQuery({ ...smartResultsQuery(detail.id), enabled: smart });
+  const documentCount = smart ? (results.data?.total ?? 0) : detail.documentCount;
 
   useEffect(() => {
-    if (smart) return;
     const wait = first.current || atOnce.current ? 0 : previewSettleMilliseconds;
     let stopped = false;
     const timer = setTimeout(() => {
@@ -55,17 +57,9 @@ export function CollectionPreview({ detail, renderAll, onRenderAll }: { detail: 
       stopped = true;
       clearTimeout(timer);
     };
-  }, [fingerprint, renderAll, detail.id, smart, client]);
+  }, [fingerprint, renderAll, detail.id, client]);
 
-  if (smart) {
-    return (
-      <section className="collection-preview" aria-label={copy.collectionEditor.preview}>
-        <p className="note">{words.smart}</p>
-      </section>
-    );
-  }
-
-  const missing = detail.volumesNotHeld.length;
+  const missing = smart ? 0 : detail.volumesNotHeld.length;
   return (
     <section ref={region} className="collection-preview" aria-label={copy.collectionEditor.preview} tabIndex={-1}>
       <p className="visually-hidden" role="status">
@@ -77,9 +71,9 @@ export function CollectionPreview({ detail, renderAll, onRenderAll }: { detail: 
           <p className="note">{words.missingVolumesNote}</p>
         </div>
       )}
-      {showsCapBar(detail, renderAll) && (
+      {showsCapBar(documentCount, renderAll) && (
         <div className="preview-bar">
-          <p>{words.capNotice(previewDocumentCap, detail.documentCount)}</p>
+          <p>{words.capNotice(previewDocumentCap, documentCount)}</p>
           <button
             type="button"
             onClick={() => {
@@ -87,7 +81,7 @@ export function CollectionPreview({ detail, renderAll, onRenderAll }: { detail: 
               onRenderAll();
               // The bar goes with its button: focus goes to the preview, which says what it now shows.
               requestAnimationFrame(() => region.current?.focus());
-              setSaid(words.renderingAll(detail.documentCount));
+              setSaid(words.renderingAll(documentCount));
             }}
           >
             {words.renderAll}

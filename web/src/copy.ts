@@ -1217,6 +1217,15 @@ export const copy = {
     railLoading: 'Loading the collections…',
     /** The selection bar's Excerpt. */
     excerpt: 'Excerpt',
+    /** Import Collection… and Create Static Snapshot (S18f), with their alerts' titles. */
+    importCollection: 'Import Collection…',
+    importFailedTitle: 'Couldn’t Import Collection',
+    snapshot: 'Create Static Snapshot',
+    snapshotFailedTitle: 'Couldn’t Create Snapshot',
+    alertOK: 'OK',
+    /** What a row's buttons say while their file or snapshot is made, the web's own. */
+    importing: 'Importing the collection…',
+    snapshotting: 'Running the saved search…',
   },
   /**
    * The collection editor, in the words of the app's iPad editor: its Contents and Add menu, Sort by
@@ -1315,6 +1324,20 @@ export const copy = {
     },
     addedOne: 'Added 1 document',
     addedMany: (count: number) => `Added ${count} documents`,
+    /** A smart collection's entries from before its link (S18f), `SmartCollectionRule`'s words. */
+    earlierHeading: 'Not part of the smart collection: added before it was linked to its saved search.',
+    earlierRemove: 'Remove These Entries',
+    earlierRemoveTitle: 'Remove These Entries?',
+    earlierRemoveMessage: (count: number) =>
+      count === 1
+        ? 'Removes the entry added before this collection was linked to its saved search.'
+        : `Removes the ${count.toLocaleString('en-US')} entries added before this collection was linked to its saved search.`,
+    earlierRemoveCancel: 'Cancel',
+    earlierEmptyNote: 'Empty note block',
+    /** `CollectionEditorNaming.untitledSection`, a heading with no text. */
+    untitledSection: 'Untitled section',
+    /** The group's name, the web's own. */
+    earlierLabel: 'Entries added before the link',
     /** The toolbar's Export…, and the iPhone's Outline | Preview control, which a narrow window shows (S18e). */
     export: 'Export…',
     pane: 'View',
@@ -1323,9 +1346,9 @@ export const copy = {
   },
   /**
    * The live preview beside Contents (PLAN's S18e), the app's `CollectionPreviewView`: the HTML
-   * export's page, the first 20 documents until Render All, with the app's bars and caption. The
-   * frame's name, the missing volumes' note and a smart collection's sentence are the web's own, as
-   * a server downloads no volume and does not yet resolve a saved search.
+   * export's page, the first 20 documents until Render All, with the app's bars and caption, a smart
+   * collection's results counted as the app counts them (S18f). The frame's name and the missing
+   * volumes' note are the web's own, as a server downloads no volume.
    */
   collectionPreview: {
     loading: 'Building preview…',
@@ -1338,13 +1361,12 @@ export const copy = {
     fidelityNote: 'Preview of the HTML export — PDF and Word pagination will differ',
     frameTitle: 'Preview of the collection’s HTML export',
     missingVolumesNote: 'This server’s folder of volumes does not hold them, so their documents show as citations.',
-    smart: 'A smart collection’s documents come from its saved search, which this server does not resolve yet, so it has no preview here.',
   },
   /**
    * The export sheet (PLAN's S18e), the app's `ExportSheetView`: the composition's sentence, the format
-   * grid, the quotation check and Export {Format}, in the app's words. Its PDF waits for phase 3, its
-   * `.fruscollection` for S18f and its Send to Zotero Library for phase 3's secrets; the word cloud's
-   * note, the saved file's line and a smart collection's sentence are the web's own.
+   * grid, the quotation check and Export {Format}, in the app's words, and from S18f `.fruscollection`
+   * with its notes switch and hint. Its PDF waits for phase 3 and its Send to Zotero Library for phase
+   * 3's secrets; the word cloud's note and the saved file's line are the web's own.
    */
   collectionExport: {
     title: 'Export collection',
@@ -1358,7 +1380,12 @@ export const copy = {
       docx: { label: 'Word', caption: 'Editable .docx' },
       bibtex: { label: 'BibTeX', caption: 'Reference manager' },
       zoteroJSON: { label: 'RIS', caption: 'Zotero / EndNote' },
+      fruscollection: { label: '.fruscollection', caption: 'Editable copy for a colleague' },
     } as Record<string, { label: string; caption: string }>,
+    /** `nativeShareOptions`: the notes' switch, off unless turned on, and what the file carries. */
+    includeNotes: 'Include my research notes',
+    nativeHint:
+      'Shares an editable copy of this collection: its documents, composition, sections, and prose. Recipients open it in FRUS Explorer and download any volumes they don’t have. Your research notes stay private unless you include them above.',
     /** `Collection.compositionSummarySentence`: the default body depth, then what the composition turns on. */
     lead: {
       full: 'Exports the full text of each document',
@@ -1375,12 +1402,13 @@ export const copy = {
     },
     withIncluded: (lead: string, list: string) => `${lead}, with ${list}.`,
     noWordCloud: 'An export from this server draws no word cloud: the app draws it with a renderer of its own.',
-    smart: 'A smart collection’s documents come from its saved search, which this server does not resolve yet, so it cannot be exported here.',
   },
   /**
    * Collection settings, the iPad editor's ⚙ sheet: the name and note, the title page and
-   * introduction, the presets and the three composition groups, in the app's words. The summary
-   * prompt's hint is the web's own, as the server writes no summary.
+   * introduction, the presets, the three composition groups and, from S18f, the Smart Collection rows
+   * with Link to Saved Search…, in the app's words. The summary prompt's hint is the web's own, as the
+   * server writes no summary, and so is the line under a Summary only it does not offer, which ends in
+   * the app's reason.
    */
   collectionSettings: {
     title: 'Collection settings',
@@ -1421,6 +1449,19 @@ export const copy = {
     summaryPrompt: 'Summary prompt',
     summaryPromptNone: 'Select…',
     summaryPromptHint: 'Summary only shows the summary stored for each document under this prompt: this server writes none.',
+    /** `composition.summaryPrompt.hint`, the app's reason a summary must be had, which the web says where Summary only is not offered. */
+    summaryOnlyReason: 'Summaries are generated on demand for documents that don’t already have one for this prompt. Requires Apple Intelligence.',
+    summaryOnlyUnavailable: 'Summary only is not offered: none of this collection’s documents has a summary stored.',
+    smartHeader: 'Smart Collection',
+    smartLink: 'Link to Saved Search…',
+    smartUnlink: 'Unlink',
+    smartMissing: 'Saved search not found',
+    smartMissingExplanation:
+      'The linked saved search could not be found. It may have been deleted. Unlink it to add to this collection by hand.',
+    smartExplanation: 'Documents are resolved from this saved search at export time. Static entries are ignored.',
+    smartNoSearches: 'Save a search from the Search tab to enable smart collections.',
+    smartPickerTitle: 'Link to Saved Search',
+    smartPickerCancel: 'Cancel',
     footnotes: 'Footnotes',
     sourceNote: 'Archival source note',
     annotations: 'Your annotations',
@@ -1440,9 +1481,10 @@ export const copy = {
   },
   /**
    * The entry inspector, Document Details and Section Details, in the app's words: its identity and title
-   * override, the reader's annotations with what the entry includes and Insert as Excerpt, the export
-   * overrides and section defaults with what Default resolves to, the headnote's switch, the excerpts here
-   * and the provenance. The headnote's card, which writes one, is S18f's.
+   * override, the reader's annotations with what the entry includes, New Note… and Insert as Excerpt, the
+   * export overrides and section defaults with what Default resolves to, the headnote's switch and its
+   * card (S18f), the excerpts here and the provenance. The line under a Summary only the web does not
+   * offer is its own, ending in the app's reason.
    */
   collectionInspector: {
     sectionTitle: 'Section Details',
@@ -1492,6 +1534,23 @@ export const copy = {
     excerptsCaption: 'Reorder or delete excerpts in the collection list. Insert new ones from the highlight rows above.',
     headnote: 'Headnote',
     headnoteToggle: 'Show a summary above the document',
+    /** The headnote card: its title, its chip of who wrote it, its words with none, Edit, Cancel and Save. */
+    headnoteKeyTakeaway: 'Key takeaway · headnote',
+    headnoteChips: { aiGenerated: 'AI draft', aiEdited: 'AI · edited', userWritten: 'Yours' } as Record<string, string>,
+    headnoteEmpty: 'No headnote yet. Edit to write a key takeaway, or generate a document summary to seed one.',
+    headnoteEdit: 'Edit',
+    headnoteCancel: 'Cancel',
+    headnoteSave: 'Save',
+    /** The card's editor's name, the web's own. */
+    headnoteText: 'Headnote text',
+    /** New Note…, and `InlineNoteCreateSheet`'s title and Save. */
+    newNote: 'New Note…',
+    newNoteTitle: 'New Research Note',
+    newNoteCancel: 'Cancel',
+    newNoteSave: 'Save Note',
+    /** The note's field's name, the web's own. */
+    newNoteText: 'Note text',
+    summaryOnlyUnavailable: 'Summary only is not offered: this document has no summary stored.',
     provenance: 'Provenance',
     noSource: 'No archival source note indexed',
     tags: 'Tags',
