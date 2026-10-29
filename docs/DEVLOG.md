@@ -1,6 +1,184 @@
 # Development log
 
-One entry per session, newest first.
+One entry per session, newest first. Phase 3's rows have their entries' places reserved below, in the order the plan expects them to end, and each session fills its own in place (`PLAN.md`, How sessions run beside each other); a session the plan does not name puts its entry directly above the entry it follows.
+
+## Session 25b: phase 3's sign-off
+
+Not started: `PLAN.md`'s row S25b. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 24i: the Word Cloud
+
+Not started: `PLAN.md`'s row S24i. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 24h: Archival Analytics and About the Series
+
+Not started: `PLAN.md`'s row S24h. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 24g: Person and Cross-Reference Analytics
+
+Not started: `PLAN.md`'s row S24g. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 24f: Corpus Analytics and Chronology
+
+Not started: `PLAN.md`'s row S24f. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 21g: corrections on the web, and the People screen
+
+Not started: `PLAN.md`'s row S21g. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 24e: pin move past the third batch
+
+Not started: `PLAN.md`'s row S24e. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 22e: NARA, Look Up and Zotero
+
+Not started: `PLAN.md`'s row S22e. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 21f: the corrections check and the update review
+
+Not started: `PLAN.md`'s row S21f. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 24d: WordCloudKit on Linux, upstream
+
+Not started: `PLAN.md`'s row S24d. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 24c: the archival derivations, upstream
+
+Not started: `PLAN.md`'s row S24c. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 22d: Source Explorer, and check 8
+
+Not started: `PLAN.md`'s row S22d. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 21e: sideload, remove, compact and the upgrade
+
+Not started: `PLAN.md`'s row S21e. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 24b: the person maths, Chronology and About the Series, upstream
+
+Not started: `PLAN.md`'s row S24b. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 24a: Corpus Analytics and the method block, upstream
+
+Not started: `PLAN.md`'s row S24a. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 23e: the cross-reference graph
+
+Not started: `PLAN.md`'s row S23e. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 23c: pin move past the second batch
+
+Not started: `PLAN.md`'s row S23c. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 21d: indexing on the server
+
+Not started: `PLAN.md`'s row S21d. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 23b: the graph's data and stats, upstream
+
+Not started: `PLAN.md`'s row S23b. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 22c: the NARA and Zotero clients, upstream
+
+Not started: `PLAN.md`'s row S22c. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 23d: Related Documents and Suggested Next
+
+Not started: `PLAN.md`'s row S23d. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 21c: the library's downloads
+
+Not started: `PLAN.md`'s row S21c. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 21b: pin move past the first batch
+
+Not started: `PLAN.md`'s row S21b. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 20d: administration and jobs
+
+Not started: `PLAN.md`'s row S20d. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 22b: the classifier and one resolution record, upstream
+
+Not started: `PLAN.md`'s row S22b. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 23a: Related Documents' engine, upstream
+
+Not started: `PLAN.md`'s row S23a. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 20c: the secrets table and Settings ▸ Keys
+
+Not started: `PLAN.md`'s row S20c. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 22a: Source Explorer's readers and resolvers, upstream
+
+Not started: `PLAN.md`'s row S22a. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 21a: the library's rules, upstream
+
+Not started: `PLAN.md`'s row S21a. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 25a: PDF through Gotenberg
+
+Not started: `PLAN.md`'s row S25a. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 20b: local accounts, migration 4
+
+Not started: `PLAN.md`'s row S20b. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 20a: CI and the files for parallel sessions
+
+Not started: `PLAN.md`'s row S20a. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Phase 3's plan: the library, the archives and local accounts, and how sessions run beside each other
+
+29 October 2026 · branch `claude/phase-3-concurrency-ci-plan-d279ac` · [#93](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/93) · upstream `fb542514`, unchanged
+
+The owner asked for phase 3 to be planned in rows sized one pull request each, as phase 2's were on 23 October, and for the plan to balance how many sessions run at once against the tokens and the CI runs that rebasing parallel pull requests cost, so that they merge one after another. This session changes records only: nothing under `web/`, `Sources/`, `fixtures/` or `.github/`.
+
+**What phase 2 cost,** read on 29 October from the repository and from GitHub:
+
+- **40 pull requests,** #51 to #92, merged between 24 and 29 October, all by the owner.
+- **129 CI runs on pull requests:** 41 cancelled by a later push to the same branch, 5 failed, 83 served, about two a pull request; a run takes about twenty minutes, the swift job sixteen and the compose job ten, side by side. `main` ran 52 times, 3 of them red.
+- **Forty-one merges of `main` into twenty-three of the forty branches,** to resolve a conflict or to take a change another row had merged; the files they combined were `docs/DEVLOG.md` in nearly every one, and COORDINATION §5's list, the README's Status, `UserData.swift`, `Routes.swift`, `Application.swift`, `router.tsx`, `copy.ts` and `app.css`. One branch (#73) merged `main` six times and ran CI eight; another (#71) five times and six.
+- **The files most changed:** the log by 95 commits, COORDINATION 41, SPEC 40, PLAN 36, INSTALL 31, README 30, `copy.ts` 20, `app.css` 19, `UserData.swift` 19, `api/userData.ts` 15, `api/types.ts` 14, `compose-smoke` 13.
+- **`main`'s protection** requires `swift` and `compose`, not `web`, and does not require a branch to be up to date, so a green pull request whose files `main` has not touched merges as it is.
+
+**Tested, with `git merge`** in a scratch repository: two branches that each insert an entry at the top of a file conflict; two that each replace a stub of their own merge clean in either order, with one blank line between the stubs and whatever each writes into its own; two that append after the same paragraph, or edit adjacent rows of a table, conflict; one that inserts directly above a stub while another fills it conflicts, so a follow-up's entry goes above its row's entry only once that has merged. GitHub's documentation confirms that a required check whose job is skipped by its own `if` reports success, where a workflow skipped by a path filter stays pending and blocks the merge: S20a's shape.
+
+**Checked against the app's code at the pin** (`docs/prep/README.md`, Phase 3), by four read-only surveys, each claim then read again here:
+
+- **The indexer is the kit's and the web drives it already:** `indexVolume`, `indexAllVolumes`, the progress streams with `IndexingStage.failed`, `removeVolume`, `vacuumIndex`, the revision table and its review calls, and `HighlightReanchor` are public, and `Tests/FRUSParity/ParityIndex.swift` indexes the fixtures on Linux with an in-memory stamp store. Downloads, the corrections check, the sideload validator, the review sheet and the recovery ladder are app code; the served index is opened immutable, which cannot see a write in progress.
+- **Source Explorer's resolvers are about 4,200 lines of Foundation-only app code,** internal and loaded through `Bundle.main`, with no view model: a 3,193-line SwiftUI view runs the resolution; SourceNoteKit is a grammar. `NARACatalogClient` (935 lines) and `ZoteroAPIClient` (236) are Foundation-only app actors; check 8's comparator, `SourceExplorerExportGeneratorCore`, is Linux-capable and not compiled here.
+- **Related Documents is 4,500 lines of app code over a pure ranker,** every generator and scorer taking `AppState`, with the kit calls they need public; the graph's data is `CrossReferenceStore`, a public app actor over the index's `cross_references`, and a 2,070-line view model holds the layouts.
+- **Analytics:** the person store's queries are the kit's and public; Corpus Analytics' service, the cross-reference stats and PageRank, the archival derivations, Chronology's grouping over two internal queries, About the Series' four readers and the CSV method block are about 12,000 lines of app code, Foundation-only but one caption measure and one colour. WordCloudKit imports NaturalLanguage unguarded, so none of it compiles on Linux.
+- **The server:** `Configuration` already names `local` and `standalone` and refuses them; the session and job types exist and nothing uses them, the job queue is in memory, serial and without a route; no Argon2 is in the dependency tree, while swift-crypto's extras offer scrypt; the `pdf` profile with Gotenberg 8 is already in `compose.yaml`, and `FRUS_PDF_URL` is parsed and read by nothing.
+
+**The plan** (`PLAN.md`, Phase 3) has 32 rows in six groups, on three tracks:
+
+- **S20, accounts, secrets and administration (server):** CI and the files for parallel sessions (S20a), local accounts with migration 4 (S20b), the secrets table and Settings ▸ Keys (S20c), administration and jobs (S20d).
+- **S21, the library:** the library's rules upstream (S21a), the first pin move (S21b), the downloads (S21c), indexing on the server (S21d), sideload, remove, compact and the upgrade (S21e), the corrections check and the update review (S21f), corrections on the web and the People screen (S21g).
+- **S22, Source Explorer and the archives:** three upstream pull requests (S22a, S22b, S22c), then Source Explorer with check 8 (S22d) and NARA, Look Up and Zotero (S22e).
+- **S23, Related Documents and the graph:** two upstream pull requests (S23a, S23b), the second pin move (S23c), Related Documents with Suggested Next (S23d) and the graph (S23e).
+- **S24, analytics, About the Series and the Word Cloud:** four upstream pull requests (S24a to S24d), the third pin move (S24e), and four feature rows (S24f to S24i).
+- **S25:** PDF through Gotenberg (S25a) and the sign-off (S25b).
+
+Ten upstream pull requests in three batches, three pin moves, fifteen owner checkpoints, seven risks, the decisions and eight open questions. The arrangement, How sessions run beside each other, has eight rules and a table of waves: four sessions at once on three tracks, a branch merged from `main` only on a reported conflict, the owner's merge sitting in the table's order, each row's files its own with one line a row in the registration files, the records written into stubs and by each group's last row, one CI run a pull request, what a session reads, and upstream batches of three. Its measure: at most two runs a pull request on average, and merges of `main` only where GitHub reported a conflict.
+
+**Records**
+
+- **`PLAN.md`:** the Phase 3 section, with its flowchart, the rows, the arrangement, the waves and a stub for each row's done paragraph; the Summary's line on where the plan stands; the session plan's line on phase 3; rule 8 in the list the first session took; eight owner checkpoints and the golden-files row; seven risks; and the two answer sections.
+- **`CLAUDE.md`:** rule 8, the arrangement in four clauses.
+- **`docs/DEVLOG.md`:** the intro's line on the stubs, and a stub for each row above this entry, in the order the plan expects them to end.
+- **`docs/prep/README.md`:** the Phase 3 section, the surveys' claims with file and line.
+- **`docs/COORDINATION.md` §5:** phase 3's ten moves into the kit, in the list of app changes.
+- **`docs/SPEC.md`:** the delivery plan's progress line. **`README.md`:** the status's Next and the development plan's phase-3 row.
+
+**Results**
+
+- No code changed. CI runs as on any pull request, at the pin.
+
+**Next: S20a,** CI and the files for parallel sessions, alone, since every later records-only pull request depends on it. Then wave 1: S20b and S25a here, and S21a and S22a upstream.
 
 ## Phase 2's sign-off
 
