@@ -58,8 +58,35 @@ export async function getJSON<T>(path: string, params?: URLSearchParams, signal?
 export async function getFile(path: string, name: string): Promise<{ blob: Blob; name: string }> {
   const response = await fetch(servedPath(path), { headers: { Accept: 'application/json' } });
   if (!response.ok) throw await ApiError.from(response);
-  const given = /filename="([^"]+)"/.exec(response.headers.get('content-disposition') ?? '')?.[1];
-  return { blob: await response.blob(), name: given ?? name };
+  return { blob: await response.blob(), name: fileName(response, name) };
+}
+
+/**
+ * The name a download's `Content-Disposition` gives: its UTF-8 `filename*` whole where it has one, as
+ * a collection's export names a file in any script (S18e), else its `filename`, else `name`.
+ */
+export function fileName(response: Response, name: string): string {
+  const header = response.headers.get('content-disposition') ?? '';
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header)?.[1];
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      // A name that does not decode falls back to the plain one.
+    }
+  }
+  return /filename="([^"]+)"/.exec(header)?.[1] ?? name;
+}
+
+/**
+ * A request that changes state and answers a file, as a collection's export does, which the history
+ * records (S18e): `body` as JSON, `token` in `X-CSRF-Token`. Throws an `ApiError` for an error status.
+ */
+export async function sendForFile(path: string, token: string, body: unknown, name: string): Promise<{ blob: Blob; name: string }> {
+  const headers = { Accept: 'application/json', 'X-CSRF-Token': token, 'Content-Type': 'application/json' };
+  const response = await fetch(servedPath(path), { method: 'POST', headers, body: JSON.stringify(body) });
+  if (!response.ok) throw await ApiError.from(response);
+  return { blob: await response.blob(), name: fileName(response, name) };
 }
 
 /**

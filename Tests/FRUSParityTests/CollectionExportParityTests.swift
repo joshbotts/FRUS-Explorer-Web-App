@@ -195,6 +195,232 @@ import Testing
         }
     }
 
+    /// The app's words the preview and the export sheet take, each where the app's source writes it
+    /// under its key and in copy.ts's block; and each line of app code the routes and the browser app
+    /// mirror, where the app's source writes it and where the web's does.
+    @Test func theAppsPreviewAndExportSheetAreTheWebs() throws {
+        let raw = try NoteViewParityTests.read(NoteViewParityTests.web, "copy.ts")
+        let blocks = try Dictionary(uniqueKeysWithValues: ["collectionEditor", "collectionPreview", "collectionExport"].map {
+            ($0, try NoteViewParityTests.block($0, of: raw))
+        })
+        let preview = try CollectionParityTests.app("Collections/CollectionPreviewView.swift")
+        let sheet = try CollectionParityTests.app("Collections/CollectionExportSheet.swift")
+        let formats = try CollectionParityTests.app("Collections/CollectionExporter+App.swift")
+        let model = try CollectionParityTests.app("Models/Collection.swift")
+        let editor = try CollectionParityTests.app("Collections/CollectionEditorView.swift")
+        let words: [(source: String, file: String, key: String, value: String, block: String, web: String)] = [
+            (editor, "CollectionEditorView", "collection.editor.actions.export", "Export…", "collectionEditor", "export: 'Export…'"),
+            (editor, "CollectionEditorView", "collection.editor.pane.picker", "View", "collectionEditor", "pane: 'View'"),
+            (editor, "CollectionEditorView", "collection.editor.pane.outline", "Outline", "collectionEditor", "outline: 'Outline'"),
+            (editor, "CollectionEditorView", "collection.editor.pane.preview", "Preview", "collectionEditor", "preview: 'Preview'"),
+            (preview, "CollectionPreviewView", "collection.preview.loading", "Building preview…", "collectionPreview", "loading: 'Building preview…'"),
+            (preview, "CollectionPreviewView", "collection.preview.error.title", "Preview Unavailable", "collectionPreview",
+             "unavailable: 'Preview Unavailable'"),
+            (preview, "CollectionPreviewView", "collection.preview.renderAll", "Render All", "collectionPreview", "renderAll: 'Render All'"),
+            (preview, "CollectionPreviewView", "collection.preview.fidelityNote", "Preview of the HTML export — PDF and Word pagination will differ",
+             "collectionPreview", "fidelityNote: 'Preview of the HTML export — PDF and Word pagination will differ'"),
+            (sheet, "CollectionExportSheet", "export.nav.title", "Export collection", "collectionExport", "title: 'Export collection'"),
+            (sheet, "CollectionExportSheet", "export.close", "Close", "collectionExport", "close: 'Close'"),
+            (sheet, "CollectionExportSheet", "export.progress.label", "Exporting…", "collectionExport", "exporting: 'Exporting…'"),
+            (sheet, "CollectionExportSheet", "export.mac.success.title", "Export Complete", "collectionExport", "complete: 'Export Complete'"),
+            (formats, "CollectionExporter+App", "export.grid.html.caption.v2", "Web page", "collectionExport", "html: { label: 'HTML', caption: 'Web page' }"),
+            (formats, "CollectionExporter+App", "export.grid.docx.title", "Word", "collectionExport", "docx: { label: 'Word', caption: 'Editable .docx' }"),
+            (formats, "CollectionExporter+App", "export.grid.docx.caption", "Editable .docx", "collectionExport",
+             "docx: { label: 'Word', caption: 'Editable .docx' }"),
+            (formats, "CollectionExporter+App", "export.grid.bibtex.caption", "Reference manager", "collectionExport",
+             "bibtex: { label: 'BibTeX', caption: 'Reference manager' }"),
+            (formats, "CollectionExporter+App", "export.grid.ris.title", "RIS", "collectionExport",
+             "zoteroJSON: { label: 'RIS', caption: 'Zotero / EndNote' }"),
+            (formats, "CollectionExporter+App", "export.grid.ris.caption", "Zotero / EndNote", "collectionExport",
+             "zoteroJSON: { label: 'RIS', caption: 'Zotero / EndNote' }"),
+            (model, "Collection", "collection.export.summary.lead.full", "Exports the full text of each document", "collectionExport",
+             "full: 'Exports the full text of each document'"),
+            (model, "Collection", "collection.export.summary.lead.summary", "Exports an AI summary of each document", "collectionExport",
+             "summaryOnly: 'Exports an AI summary of each document'"),
+            (model, "Collection", "collection.export.summary.lead.index", "Exports a citation-only index", "collectionExport",
+             "index: 'Exports a citation-only index'"),
+            (model, "Collection", "collection.export.summary.headnotes", "headnotes", "collectionExport", "headnotes: 'headnotes'"),
+            (model, "Collection", "collection.export.summary.notes", "your notes", "collectionExport", "notes: 'your notes'"),
+            (model, "Collection", "collection.export.summary.footnotes", "footnotes", "collectionExport", "footnotes: 'footnotes'"),
+            (model, "Collection", "collection.export.summary.sourceNotes", "source notes", "collectionExport", "sourceNotes: 'source notes'"),
+            (model, "Collection", "collection.export.summary.highlights", "highlights", "collectionExport", "highlights: 'highlights'"),
+            (model, "Collection", "collection.export.summary.wordCloud", "a word-cloud overview", "collectionExport",
+             "wordCloud: 'a word-cloud overview'"),
+        ]
+        for word in words {
+            #expect(NoteViewParityTests.writes(word.source, word.key, word.value), "\(word.file) writes \(word.key) as \(word.value)")
+            #expect(blocks[word.block]?.contains(word.web) == true, "copy.ts's \(word.block) block holds \(word.web)")
+        }
+        // The words with a count or a name in them, as the app formats them and copy.ts's functions say them.
+        let counted: [(source: String, line: String, block: String, web: String)] = [
+            (preview, #"defaultValue: "\(count) volume\(count == 1 ? "" : "s") not downloaded")"#, "collectionPreview",
+             "missingVolumes: (count: number) => `${count} volume${count === 1 ? '' : 's'} not downloaded`"),
+            (preview, #"defaultValue: "Showing first \(Self.initialDocumentCap) of \(totalDocumentCount) documents")"#, "collectionPreview",
+             "capNotice: (shown: number, total: number) => `Showing first ${shown} of ${total} documents`"),
+            (sheet, #"String(format: String(localized: "export.button.format %@", defaultValue: "Export %@"), selectedFormat.gridLabel)"#,
+             "collectionExport", "exportFormat: (format: string) => `Export ${format}`"),
+            (model, #"String(format: String(localized: "collection.export.summary.with %1$@ %2$@", defaultValue: "%1$@, with %2$@."), lead, list)"#,
+             "collectionExport", "withIncluded: (lead: string, list: string) => `${lead}, with ${list}.`"),
+        ]
+        for format in counted {
+            #expect(format.source.contains(NoteViewParityTests.flattened(format.line)), "the app holds \(format.line)")
+            #expect(blocks[format.block]?.contains(format.web) == true, "copy.ts's \(format.block) block holds \(format.web)")
+        }
+        // The grid's labels the app writes as they are, and its order, which the web's omits PDF and the native file from.
+        NoteViewParityTests.expect(formats, holds: [
+            #"case .html: return "HTML""#, #"case .bibtex: return "BibTeX""#,
+            "let ordered: [ExportFormat] = [.pdf, .html, .docx, .bibtex, .zoteroJSON, .fruscollection]",
+        ], file: "CollectionExporter+App.swift")
+        NoteViewParityTests.expect(try CollectionParityTests.web("api/collections.ts"), holds: [
+            "export const exportFormats = ['html', 'docx', 'bibtex', 'zoteroJSON'] as const;",
+            "export const previewDocumentCap = 20;",
+        ], file: "api/collections.ts")
+    }
+
+    /// The server's mirrors of the app's preview and sheet, of its resolver and of what they read, each
+    /// held by the lines the app's source writes them in and the server's own.
+    @Test func theServersMirrorsAreTheApps() throws {
+        let preview = try CollectionParityTests.app("Collections/CollectionPreviewView.swift")
+        NoteViewParityTests.expect(preview, holds: [
+            "static let initialDocumentCap = 20",
+            // capEntries
+            "var documentCount = 0 var out: [CollectionEntry] = [] for entry in entries.sorted(by: { $0.sortOrder < $1.sortOrder }) {",
+            "if entry.entryKind == .document { documentCount += 1 } if documentCount > cap { if entry.entryKind == .generated { out.append(entry) } continue } out.append(entry) } return out",
+            // previewOptions
+            "CollectionExportOptions(tocStyle: CollectionToCStyle(rawValue: collection.tocStyle) ?? .citation, includeFootnotes: collection.effectiveIncludeFootnotes, includeSourceNote: collection.effectiveIncludeSourceNote, applyHighlights: collection.applyHighlights, includeNotes: collection.includeNotes, summaryPromptId: collection.summaryPromptId, includeWordCloud: false)",
+            // what the preview resolves and renders
+            "entries.filter { $0.entryKind == .document && !$0.volumeId.isEmpty } .map(\\.volumeId))",
+            "renderer.citationOnlyVolumeIds = missing renderer.showsSummaryPlaceholders = true",
+            "let page = renderer.pageHTML(metadata: metadata, items: items)",
+            "let resolved = try await resolver.resolve( collection: collection, entries: cappedEntries, allNotes: allNotes, purpose: .preview)",
+            // the cap bar and the debounce
+            "if !renderAll && totalDocumentCount > Self.initialDocumentCap {",
+            "try? await Task.sleep(nanoseconds: 1_000_000_000)",
+        ], file: "CollectionPreviewView.swift")
+        let sheet = try CollectionParityTests.app("Collections/CollectionExportSheet.swift")
+        NoteViewParityTests.expect(sheet, holds: [
+            // runExport
+            "let items = try await makeResolver().resolve( collection: collection, entries: entries, allNotes: allNotes, purpose: .export, printsFigureImages: selectedFormat.printsFigureImages)",
+            "let url = try await exporter.export( metadata: metadata, items: items, options: selectedFormat.exportOptions(for: collection))",
+            "recordExport(format: selectedFormat.rawValue, documentCount: items.documents.count)",
+            // exportZoteroRIS
+            #"guard !docs.isEmpty else { exportError = String(localized: "export.zotero.empty", defaultValue: "This collection has no documents to send.") return }"#,
+            "let metadata = CollectionExportMetadata(name: collection.name, note: collection.note)",
+            "recordExport(format: ExportFormat.zoteroJSON.rawValue, documentCount: docs.count)",
+            "try await makeResolver().resolveDocuments( collection: collection, entries: entries, allNotes: allNotes, purpose: .export)",
+            // the button
+            ".disabled(entries.isEmpty && collection.savedSearchId == nil)",
+            // verifyExcerpts
+            "guard entry.entryKind == .excerpt, let text = entry.text, !text.isEmpty, !entry.volumeId.isEmpty, !entry.documentId.isEmpty else { return nil }",
+            "let bodies = (try? await pipeline.documentBodyTextsByKey(forKeys: Array(keys))) ?? [:] let outcomes = ExcerptVerifier.verify(requests, bodyTexts: bodies)",
+            #"changeKinds[key] = row?.changeKind ?? """#,
+            "outcomes: ExcerptVerifier.upgradingVanished(outcomes, changeKinds: changeKinds))",
+            ".foregroundStyle(verification?.hasFailures == true ? Color.orange : Color.secondary)",
+            // forExport
+            "let provenance = projectProvenance( enabled: collection.includeProjectProvenance, projectName: activeProject?.name, researchQuestion: activeProject?.researchQuestion)",
+            "return CollectionExportMetadata( name: collection.name, note: collection.note, subtitle: collection.subtitle, authorLine: collection.authorLine, projectName: provenance.name, projectResearchQuestion: provenance.question, includeColophon: collection.includeColophon, methodAppendixLines: appendixLines)",
+        ], file: "CollectionExportSheet.swift")
+        let formats = try CollectionParityTests.app("Collections/CollectionExporter+App.swift")
+        NoteViewParityTests.expect(formats, holds: [
+            "var options = CollectionExportOptions(composing: collection) options.includeWordCloud = options.includeWordCloud && drawsWordCloud return options",
+            "var printsFigureImages: Bool { switch self { case .pdf, .html, .docx: return true",
+            "var drawsWordCloud: Bool { switch self { case .pdf, .html, .docx: return true",
+            "guard enabled, let appendix, !appendix.rows.isEmpty else { return [] } return appendix.plainTextLines",
+            "if let ns = ProseRichText.decodedRTF(rtf) { return ns.length > 0 ? paragraphs(fromDecoded: ns) : [] }",
+            "var paragraphs: [[ProseFormattedSpan]] = [[]]",
+        ], file: "CollectionExporter+App.swift")
+        NoteViewParityTests.expect(try CollectionParityTests.app("Collections/CollectionRichTextEditor.swift"), holds: [
+            "if let stored = richText, let decoded = decodedRTF(stored), decoded.length > 0 { return stored } guard let plain = plainText, !plain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil } return rtfData(from: NSAttributedString(string: plain))",
+            #"if let stored = entry.richText, decodedRTF(stored) != nil { return stored } let ns = NSAttributedString(string: entry.text ?? "") return rtfData(from: ns) ?? Data()"#,
+        ], file: "CollectionRichTextEditor.swift")
+        NoteViewParityTests.expect(try CollectionParityTests.app("Export/ResearchDataExporter.swift"), holds: [
+            "let appendix = methodAppendix(modelContext: modelContext, activeProjectId: activeProject?.id) .scoped(toProject: activeProject?.id) return CollectionExportMetadata.methodAppendix(enabled: true, appendix: appendix)",
+        ], file: "ResearchDataExporter.swift")
+        let resolver = try CollectionParityTests.app("Collections/CollectionContentResolver.swift")
+        NoteViewParityTests.expect(resolver, holds: [
+            "ResearchNoteExport(id: note.id, documentId: note.documentId, volumeId: note.volumeId, bodyText: note.bodyText, projectIds: [], userTagIds: note.userTagIds, selectedSummaryIds: [], linkedHighlightIds: [])",
+            "guard let ast = try? await FRUSDocumentParser().parseDocument( documentId: documentId, volumeURL: volumeURL) else { return nil }",
+            "s.volumeId == vid && s.documentId == did && s.isHeadnoteDraft == false",
+            "let edges = (try? await store.outboundEdges(forDocumentId: documentId, volumeId: volumeId)) ?? [] return edges.map { (volumeId: $0.targetVolumeId, documentId: $0.targetDocumentId) }",
+            "var archivalIndexes: ArchivalIndexes { .bundled }",
+            "if let existing = storedSummary(volumeId: doc.volumeId, documentId: doc.documentId, promptId: promptId) { result[key] = existing continue }",
+            "guard AppleIntelligenceProvider.shared.isAvailable else { throw ExportError.renderingFailed }",
+        ], file: "CollectionContentResolver.swift")
+        NoteViewParityTests.expect(try CollectionParityTests.app("CrossReference/CrossReferenceStore.swift"), holds: [
+            #"static let namesADocumentPredicate = "target_document_id != ''""#,
+            "SELECT source_volume_id, source_document_id, COALESCE(target_volume_id, source_volume_id) AS resolved_target_volume, target_document_id, reference_type, context FROM cross_references WHERE source_document_id = ? AND source_volume_id = ? AND is_broken = 0 AND \\(Self.namesADocumentPredicate)",
+        ], file: "CrossReferenceStore.swift")
+        NoteViewParityTests.expect(try CollectionParityTests.app("SourceExplorer/ArchivalResolver+App.swift"), holds: [
+            "ArchivalIndexes(centralFiles: CentralFilesIndexStore.shared, volumeSources: VolumeSourcesIndexStore.shared, claimants: LotClaimantsIndexStore.shared)",
+        ], file: "ArchivalResolver+App.swift")
+        for (file, type) in [("CentralFilesIndexStore", "CentralFilesIndex"), ("VolumeSourcesIndexStore", "VolumeSourcesIndex"),
+                             ("LotClaimantsIndexStore", "LotClaimantsIndex")] {
+            #expect(try CollectionParityTests.app("SourceExplorer/\(file).swift").contains("JSONDecoder().decode(\(type).self,"), "\(file) decodes with a plain JSONDecoder")
+        }
+        NoteViewParityTests.expect(try CollectionParityTests.app("Models/ExportHistoryEntry.swift"), holds: [
+            "guard AppState.isResearchLoggingEnabled(in: defaults) else {",
+            "let name = collectionName?.trimmingCharacters(in: .whitespacesAndNewlines) let record = ExportHistoryEntry( format: format, documentCount: documentCount, collectionName: (name?.isEmpty ?? true) ? nil : name, projectId: projectId )",
+        ], file: "ExportHistoryEntry.swift")
+        NoteViewParityTests.expect(try CollectionParityTests.app("Citation/ZoteroJSONExporter+App.swift"), holds: [
+            "for assignment in assignments { if let name = tagNameById[assignment.tagId] { tagNames.insert(name) } }",
+            "for note in notes { for tagId in note.userTagIds { if let name = tagNameById[tagId] { tagNames.insert(name) } } }",
+            "return (tags: tagNames.sorted(), notes: noteBodies)",
+        ], file: "ZoteroJSONExporter+App.swift")
+        // Each exporter's file name, as the kit's exporters write theirs.
+        for (exporter, suffix) in [("HTMLCollectionExporter", ".html"), ("DocxCollectionExporter", ".docx"),
+                                   ("BibTeXCollectionExporter", ".bib"), ("ZoteroCollectionExporter", "-zotero.ris")] {
+            #expect(try CollectionParityTests.kit("FRUSCoreKit/Collections/\(exporter).swift")
+                .contains("CollectionExportNaming.temporaryFileURL(savedName: metadata.name, suffix: \"\(suffix)\")"), "\(exporter) names its file with \(suffix)")
+        }
+        // And the server's own lines for each.
+        NoteViewParityTests.expect(try CollectionParityTests.server("Sources/FRUSLightAPI/CollectionExports.swift"), holds: [
+            "static let initialDocumentCap = 20",
+            "var documentCount = 0 var out: [CollectionEntryExport] = [] for entry in entries.sorted(by: { $0.sortOrder < $1.sortOrder }) {",
+            "if entry.entryKind == .document { documentCount += 1 } if documentCount > cap { if entry.entryKind == .generated { out.append(entry) } continue } out.append(entry) } return out",
+            "includeNotes: composed.includeNotes, summaryPromptId: composed.summaryPromptId, includeWordCloud: false)",
+            "var options = CollectionExportOptions(composing: collection) options.includeWordCloud = options.includeWordCloud && drawsWordCloud return options",
+            #"case .html: ".html" case .docx: ".docx" case .bibtex: ".bib" case .zoteroJSON: "-zotero.ris""#,
+            "guard entry.entryKind == .excerpt, let text = entry.text, !text.isEmpty, !entry.volumeId.isEmpty, !entry.documentId.isEmpty else { return nil }",
+            #"changeKinds[key] = row?.changeKind ?? """#,
+            "collectionName: name.isEmpty ? nil : name, projectId: project,",
+            "guard try await PreferenceRoutes.isLogging(user, in: store) else { return }",
+            #"throw APIProblem(.conflict, code: "NOTHING_TO_EXPORT", detail: "This collection has no documents to send.")"#,
+            "let metadata = CollectionExportMetadata(name: collection.name, note: collection.note)",
+        ], file: "CollectionExports.swift")
+        NoteViewParityTests.expect(try CollectionParityTests.server("Sources/FRUSLightAPI/CollectionContent.swift"), holds: [
+            "COALESCE(target_volume_id, source_volume_id) AS resolved_target_volume, target_document_id FROM cross_references WHERE source_document_id = ? AND source_volume_id = ? AND is_broken = 0 AND target_document_id != ''",
+            "try? await FRUSDocumentParser().parseDocument(documentId: documentId, volumeURL: url)",
+            "if let name = names[assignment.tagId] { tagNames.insert(name) }",
+            "return tagNames.sorted()",
+        ], file: "CollectionContent.swift")
+    }
+
+    /// The browser app's mirrors of the app's sheet and preview, each held by the lines the app's
+    /// source writes them in and the web's own.
+    @Test func theBrowsersMirrorsAreTheApps() throws {
+        let model = try CollectionParityTests.app("Models/Collection.swift")
+        NoteViewParityTests.expect(model, holds: [
+            "switch CollectionBodyDepth(rawValue: defaultBodyDepth) ?? .full {",
+            #"if defaultIncludeHeadnote { included.append(String(localized: "collection.export.summary.headnotes", defaultValue: "headnotes")) } if includeNotes {"#,
+            #"if effectiveIncludeFootnotes { included.append(String(localized: "collection.export.summary.footnotes", defaultValue: "footnotes")) } if effectiveIncludeSourceNote {"#,
+            #"if applyHighlights { included.append(String(localized: "collection.export.summary.highlights", defaultValue: "highlights")) } if includeWordCloud {"#,
+            #"guard !included.isEmpty else { return lead + "." } let list = ListFormatter.localizedString(byJoining: included)"#,
+        ], file: "Collection.swift")
+        NoteViewParityTests.expect(try CollectionParityTests.web("collections/exportRules.ts"), holds: [
+            "const lead = words.lead[detail.defaultBodyDepth] ?? words.lead.full!;",
+            "if (detail.defaultIncludeHeadnote) included.push(words.included.headnotes); if (detail.includeNotes) included.push(words.included.notes);",
+            "if (detail.includeFootnotes) included.push(words.included.footnotes); if (detail.includeSourceNote) included.push(words.included.sourceNotes);",
+            "if (detail.applyHighlights) included.push(words.included.highlights); if (detail.includeWordCloud) included.push(words.included.wordCloud);",
+            "if (included.length === 0) return `${lead}.`;",
+            "new Intl.ListFormat('en-US', { style: 'long', type: 'conjunction' }).format(included)",
+            "return !renderAll && detail.documentCount > previewDocumentCap;",
+            "export const previewSettleMilliseconds = 1_000;",
+        ], file: "collections/exportRules.ts")
+        // The editor's columns: Contents at most 460 points, as the iPad's.
+        #expect(try CollectionParityTests.app("Collections/CollectionEditorView.swift").contains(".formStyle(.grouped) .frame(maxWidth: 460)"))
+        #expect(try CollectionParityTests.server("web/src/styles/app.css").contains("grid-template-columns: minmax(0, 28.75rem) minmax(0, 1fr);"))
+    }
+
     /// Runs `body` again when the day it dated its comparison by is gone before it ends.
     static func sameDay(_ body: (Date) async throws -> Void) async throws {
         for _ in 0..<2 {

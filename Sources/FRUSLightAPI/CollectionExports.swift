@@ -424,12 +424,14 @@ enum CollectionExportRoutes {
 
     // MARK: - The preview's page
 
-    /// The preview's page loads nothing from elsewhere, runs no script, styles itself and embeds its
-    /// figures; only the server's own app may frame it, and it is sandboxed wherever it is opened,
-    /// with its links to history.state.gov opening a tab of their own.
+    /// The preview's page loads nothing from elsewhere, runs no script of its own, styles itself and
+    /// embeds its figures; only the server's own app may frame it, and it is sandboxed wherever it is
+    /// opened, with its links to history.state.gov opening a tab of their own. The sandbox allows
+    /// scripts, as the reader's frame does, so that a browser's own tools, an accessibility check
+    /// among them, reach the page, where the policy lets none of the page's run.
     static let previewPolicy = [
-        "default-src 'none'", "style-src 'unsafe-inline'", "img-src data:", "base-uri 'none'", "form-action 'none'",
-        "frame-ancestors 'self'", "sandbox allow-popups allow-popups-to-escape-sandbox",
+        "default-src 'none'", "script-src 'none'", "style-src 'unsafe-inline'", "img-src data:", "base-uri 'none'",
+        "form-action 'none'", "frame-ancestors 'self'", "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox",
     ].joined(separator: "; ")
 
     static var previewHeaders: HTTPFields {

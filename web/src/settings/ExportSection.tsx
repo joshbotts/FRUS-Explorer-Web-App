@@ -10,6 +10,7 @@ import { errorMessage } from '../api/client';
 import type { ExportContents, ResearchType } from '../api/types';
 import { fetchExport, projectsQuery } from '../api/userData';
 import { copy } from '../copy';
+import { saveFile } from '../shell/saveFile';
 
 const words = copy.dataSettings;
 
@@ -40,18 +41,6 @@ export function countOf(contents: ExportContents, type: ResearchType): number {
   return contents.types.find((count) => count.type === type)?.count ?? 0;
 }
 
-/** Hands `file` to the browser to save as `name`, through an address of its own that lasts until the save has begun. */
-function save(file: Blob, name: string) {
-  const address = URL.createObjectURL(file);
-  const link = document.createElement('a');
-  link.href = address;
-  link.download = name;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(address), 60_000);
-}
-
 export function ExportSection({ contents }: { contents: UseQueryResult<ExportContents> }) {
   const id = useId();
   const [includeSummaries, setIncludeSummaries] = useState(false);
@@ -66,7 +55,7 @@ export function ExportSection({ contents }: { contents: UseQueryResult<ExportCon
     try {
       // Under the project the user works in (S17f), which the file's header names.
       const file = await fetchExport(includeSummaries, projects.data?.activeProjectId);
-      save(file.blob, file.name);
+      saveFile(file.blob, file.name);
     } catch (error) {
       setProblem(errorMessage(error));
     } finally {

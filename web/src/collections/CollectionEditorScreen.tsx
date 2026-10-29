@@ -1,11 +1,12 @@
 // A collection's editor (PLAN's S18d), as the app's iPad editor lays it out: its name over the toolbar's
-// Add menu, Sort by Date and Collection settings; and Contents, the outline the kit derives, three deep,
-// each row the app's, a collapsed heading hiding its section, with Add Documents… under it. A smart
-// collection says what it is first and takes nothing by hand but its apparatus. The live preview
-// beside the outline is S18e's, with the exports.
+// Add menu, Sort by Date, Collection settings and Export…; Contents, the outline the kit derives, three
+// deep, each row the app's, a collapsed heading hiding its section, with Add Documents… under it; and,
+// since S18e, the live preview beside it, the collection as its HTML export renders it. Narrower than
+// 900 px the two are the iPhone's Outline | Preview. A smart collection says what it is first and takes
+// nothing by hand but its apparatus.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { errorMessage } from '../api/client';
 import {
   addBlock,
@@ -28,12 +29,23 @@ import { MenuButton } from '../shell/MenuButton';
 import { useDocumentTitle } from '../shell/useDocumentTitle';
 import { AddDocuments } from './AddDocuments';
 import { AddHighlights } from './AddHighlights';
+import { CollectionExportSheet } from './CollectionExportSheet';
+import { CollectionPreview } from './CollectionPreview';
 import { CollectionSettings } from './CollectionSettings';
 import { canMoveDown, contentsRows, moveDown, moveRequest, moveUp, outlineSteps, type ContentsRow } from './collectionRules';
 import { EntryInspector } from './EntryInspector';
 import { DocumentRow, ExcerptRow, GeneratedRow, HeadingRow, ProseRow, type RowActions, UnrecognizedRow } from './EntryRows';
 
 const route = getRouteApi('/collections/$collectionId');
+
+/** Below the width the iPad's two columns need, the iPhone's one pane at a time, as the reader's rail goes. */
+const narrowQuery = '(max-width: 899.98px)';
+
+function subscribeToWidth(onChange: () => void): () => void {
+  const list = window.matchMedia?.(narrowQuery);
+  list?.addEventListener('change', onChange);
+  return () => list?.removeEventListener('change', onChange);
+}
 
 export function CollectionEditorScreen() {
   const { collectionId } = route.useParams();
@@ -68,7 +80,11 @@ export function CollectionEditorScreen() {
 function Editor({ detail }: { detail: CollectionDetail }) {
   const client = useQueryClient();
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
-  const [dialog, setDialog] = useState<null | 'settings' | 'documents' | 'highlights'>(null);
+  const [dialog, setDialog] = useState<null | 'settings' | 'documents' | 'highlights' | 'export'>(null);
+  // Render All, kept while the editor is open, as the app's editor keeps it across its panes.
+  const [renderAll, setRenderAll] = useState(false);
+  const narrow = useSyncExternalStore(subscribeToWidth, () => window.matchMedia?.(narrowQuery).matches ?? false, () => false);
+  const [pane, setPane] = useState<'outline' | 'preview'>('outline');
   const [inspecting, setInspecting] = useState<string | null>(null);
   const [deletingSection, setDeletingSection] = useState<CollectionEntry | null>(null);
   const [focusEntry, setFocusEntry] = useState<string | null>(null);
@@ -100,7 +116,7 @@ function Editor({ detail }: { detail: CollectionDetail }) {
     if (answer?.entryIds[0]) setFocusEntry(answer.entryIds[0]);
   }
 
-  function openDialog(which: 'settings' | 'documents' | 'highlights') {
+  function openDialog(which: 'settings' | 'documents' | 'highlights' | 'export') {
     opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setDialog(which);
   }
@@ -250,6 +266,9 @@ function Editor({ detail }: { detail: CollectionDetail }) {
         <button type="button" onClick={() => openDialog('settings')}>
           {copy.collectionEditor.settings}
         </button>
+        <button type="button" onClick={() => openDialog('export')}>
+          {copy.collectionEditor.export}
+        </button>
       </div>
       {failure && (
         <p className="error" role="alert">
@@ -259,65 +278,86 @@ function Editor({ detail }: { detail: CollectionDetail }) {
       <p className="visually-hidden" role="status">
         {said}
       </p>
-      <section className="contents" aria-labelledby={`${contentsId}-heading`}>
-        <h2 id={`${contentsId}-heading`}>{copy.collectionEditor.contents}</h2>
-        {!hand && <p className="smart-sentence">{copy.collections.smartSentence}</p>}
-        {entries.length === 0 && hand && <p className="note">{copy.collectionEditor.empty}</p>}
-        {rows.length > 0 && (
-          <ol ref={list} id={contentsId} className="contents-list" aria-labelledby={`${contentsId}-heading`}>
-            {rows.map((row, pos) => {
-              const entry = row.entry;
-              const rowActions = actions(row, pos);
-              const hiddenCount = entry.kind === 'heading' ? Math.max(0, (entry.sectionEnd ?? row.index + 1) - row.index - 1) : 0;
-              return (
-                <li key={entry.id} data-id={entry.id} className={`contents-row indent-${outlineSteps(row)} kind-${entry.kind}`}>
-                  {entry.kind === 'document' ? (
-                    <DocumentRow entry={entry} collection={detail} actions={rowActions} onConfigure={() => setInspecting(entry.id)} />
-                  ) : entry.kind === 'heading' ? (
-                    <HeadingRow
-                      entry={entry}
-                      collection={detail}
-                      actions={rowActions}
-                      collapsed={collapsed.has(entry.id)}
-                      hiddenCount={hiddenCount}
-                      onToggle={() =>
-                        setCollapsed((held) => {
-                          const next = new Set(held);
-                          if (next.has(entry.id)) next.delete(entry.id);
-                          else next.add(entry.id);
-                          return next;
-                        })
-                      }
-                      onIndent={() => void run(() => indentSection(client, detail.id, entry.id, true))}
-                      onOutdent={() => void run(() => indentSection(client, detail.id, entry.id, false))}
-                      onDefaults={() => setInspecting(entry.id)}
-                      onDeleteSection={() => setDeletingSection(entry)}
-                      autoFocus={focusEntry === entry.id}
-                    />
-                  ) : entry.kind === 'prose' ? (
-                    <ProseRow entry={entry} actions={rowActions} autoFocus={focusEntry === entry.id} />
-                  ) : entry.kind === 'excerpt' ? (
-                    <ExcerptRow entry={entry} actions={rowActions} />
-                  ) : entry.kind === 'generated' ? (
-                    <GeneratedRow entry={entry} collection={detail} actions={rowActions} />
-                  ) : (
-                    <UnrecognizedRow />
-                  )}
-                </li>
-              );
-            })}
-          </ol>
-        )}
-      </section>
-      {hand && (
-        <div className="add-documents">
-          <button type="button" onClick={() => openDialog('documents')}>
-            {copy.collectionEditor.addDocuments}
-          </button>
-          <p className="note">{copy.collectionEditor.addDocumentsFooter}</p>
-        </div>
+      {narrow && (
+        <fieldset className="pane-picker">
+          <legend className="visually-hidden">{copy.collectionEditor.pane}</legend>
+          {(['outline', 'preview'] as const).map((each) => (
+            <label key={each} className={each === pane ? 'selected' : undefined}>
+              <input type="radio" name={`${contentsId}-pane`} checked={each === pane} onChange={() => setPane(each)} />
+              {copy.collectionEditor[each]}
+            </label>
+          ))}
+        </fieldset>
       )}
+      <div className="editor-panes">
+        {(!narrow || pane === 'outline') && (
+          <div className="editor-outline">
+            <section className="contents" aria-labelledby={`${contentsId}-heading`}>
+              <h2 id={`${contentsId}-heading`}>{copy.collectionEditor.contents}</h2>
+              {!hand && <p className="smart-sentence">{copy.collections.smartSentence}</p>}
+              {entries.length === 0 && hand && <p className="note">{copy.collectionEditor.empty}</p>}
+              {rows.length > 0 && (
+                <ol ref={list} id={contentsId} className="contents-list" aria-labelledby={`${contentsId}-heading`}>
+                  {rows.map((row, pos) => {
+                    const entry = row.entry;
+                    const rowActions = actions(row, pos);
+                    const hiddenCount = entry.kind === 'heading' ? Math.max(0, (entry.sectionEnd ?? row.index + 1) - row.index - 1) : 0;
+                    return (
+                      <li key={entry.id} data-id={entry.id} className={`contents-row indent-${outlineSteps(row)} kind-${entry.kind}`}>
+                        {entry.kind === 'document' ? (
+                          <DocumentRow entry={entry} collection={detail} actions={rowActions} onConfigure={() => setInspecting(entry.id)} />
+                        ) : entry.kind === 'heading' ? (
+                          <HeadingRow
+                            entry={entry}
+                            collection={detail}
+                            actions={rowActions}
+                            collapsed={collapsed.has(entry.id)}
+                            hiddenCount={hiddenCount}
+                            onToggle={() =>
+                              setCollapsed((held) => {
+                                const next = new Set(held);
+                                if (next.has(entry.id)) next.delete(entry.id);
+                                else next.add(entry.id);
+                                return next;
+                              })
+                            }
+                            onIndent={() => void run(() => indentSection(client, detail.id, entry.id, true))}
+                            onOutdent={() => void run(() => indentSection(client, detail.id, entry.id, false))}
+                            onDefaults={() => setInspecting(entry.id)}
+                            onDeleteSection={() => setDeletingSection(entry)}
+                            autoFocus={focusEntry === entry.id}
+                          />
+                        ) : entry.kind === 'prose' ? (
+                          <ProseRow entry={entry} actions={rowActions} autoFocus={focusEntry === entry.id} />
+                        ) : entry.kind === 'excerpt' ? (
+                          <ExcerptRow entry={entry} actions={rowActions} />
+                        ) : entry.kind === 'generated' ? (
+                          <GeneratedRow entry={entry} collection={detail} actions={rowActions} />
+                        ) : (
+                          <UnrecognizedRow />
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+            </section>
+            {hand && (
+              <div className="add-documents">
+                <button type="button" onClick={() => openDialog('documents')}>
+                  {copy.collectionEditor.addDocuments}
+                </button>
+                <p className="note">{copy.collectionEditor.addDocumentsFooter}</p>
+              </div>
+            )}
+          </div>
+        )}
+        {(!narrow || pane === 'preview') && (
+          <CollectionPreview detail={detail} renderAll={renderAll} onRenderAll={() => setRenderAll(true)} />
+        )}
+      </div>
       {dialog === 'settings' && <CollectionSettings detail={detail} onClose={closeDialog} />}
+      {dialog === 'export' && <CollectionExportSheet detail={detail} onClose={closeDialog} />}
       {dialog === 'documents' && (
         <AddDocuments
           detail={detail}

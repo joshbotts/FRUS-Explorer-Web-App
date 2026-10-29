@@ -84,6 +84,7 @@ function detail(fields: Partial<CollectionDetail> = {}): CollectionDetail {
     presets: [],
     prompts: [],
     documentCount: 0,
+    volumesNotHeld: [],
     entries: [],
     ...fields,
   };
