@@ -348,9 +348,9 @@ S18c's pin move, on 28 October, to `32e295e5`, `v2`'s head, past #1809, #1810 an
 - a lead's line, `IndexingPipeline.documentSnippets(forKeys:maxLength:)`;
 - and, for the title S17f gives a visit to a document the served index does not hold, the head the app titles it by, `IndexingPipeline.extractHeader(from:)`.
 
-`ProjectHomeHostTests` calls the first three as the server will, over the app's index and over a copy stripped and opened read-only; the kit's own tests hold the head. Cut from `v2` at `d7130e9b`, and run beside it, first without the head's commit and then, the whole check again, with it:
-- the full iOS unit run failed only as `v2`'s did, at 7,761 tests against 7,754;
-- `swift test` ran 3,199 tests against 3,192, `FRUSCoreKitTests` 1,306 against 1,299;
+`ProjectHomeHostTests` calls them as the server will: the vocabulary from the bundled file, the suggestions, the lines over the app's index and over a copy stripped and opened read-only, and the head from the parsed TEI, which is the header the index stores. Cut from `v2` at `d7130e9b`, and run beside it, first without the head's two commits and then, the whole check again, with each, the numbers here the last:
+- the full iOS unit run failed only as `v2`'s did, at 7,762 tests against 7,754;
+- `swift test` ran 3,200 tests against 3,192, `FRUSCoreKitTests` 1,307 against 1,299;
 - the Mac app's symbols were `v2`'s, 251,932 names on each, none removed or added;
 - on `v2`'s code, the new suite passed in Xcode, and did not build against the kit alone, which lacked the suggestions;
 - on Linux over `main`, everything passed or failed as at `v2` but the golden files' staleness, and a file of the server's that names every newly public declaration without `@testable` built, where over `v2` it did not.
