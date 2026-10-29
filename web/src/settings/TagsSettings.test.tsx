@@ -37,7 +37,14 @@ describe('Settings ▸ Tags', () => {
     expect(router.state.location.pathname).toBe('/settings/tags');
     expect(within(screen.getByRole('navigation', { name: 'Settings' })).getByRole('link', { name: 'Tags' }).getAttribute('aria-current')).toBe('page');
     const list = await screen.findByRole('list', { name: 'Tags' });
-    expect(within(list).getAllByRole('button').map((row) => row.textContent)).toEqual(['Berlin›', 'Cold War›']);
+    const rows = within(list).getAllByRole('button').filter((button) => button.classList.contains('settings-row'));
+    expect(rows.map((row) => row.textContent)).toEqual(['Berlin›', 'Cold War›']);
+    // Each row's Move commands, those that would move it (S17f).
+    expect(within(list).getAllByRole('button', { name: /^Move/ }).map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Move Down: Berlin',
+      'Move to Top: Cold War',
+      'Move Up: Cold War',
+    ]);
     expect(screen.getByRole('button', { name: 'New Tag…' })).toBeTruthy();
     expect(screen.getByText('Tags are global labels you apply to research notes and documents. They are not scoped to a project.')).toBeTruthy();
   });

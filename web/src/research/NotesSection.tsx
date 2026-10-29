@@ -4,25 +4,16 @@
 // to Highlight, which makes a note that the highlight takes as its own, as the app's link; and Add
 // Note. No row is deleted here, as none is in the app's rail: All Notes and the editor delete. A
 // document's note block from a research database says so under its text (S16e), the web's own line.
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
 import type { NoteSummary } from '../api/types';
 import { copy } from '../copy';
 import { NoteEditor } from './NoteEditor';
 import { railText, timeSince } from './notesRules';
+import { useNow } from '../shell/useNow';
 
 /** What the editor is open on: a note, a new one, or a new one for the pending highlight. */
 type Composing = { note: NoteSummary } | { linkedHighlightId?: string };
-
-/** The time now, again every 15 seconds while the rows show times since. */
-function useNow(): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const tick = setInterval(() => setNow(Date.now()), 15_000);
-    return () => clearInterval(tick);
-  }, []);
-  return now;
-}
 
 export function NotesSection({
   volumeId,

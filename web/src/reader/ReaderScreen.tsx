@@ -4,13 +4,15 @@
 // Research, the second only on a server that keeps user data, and what the page's
 // links lead to: another document or a note in one, the document on a printed page, a whole
 // volume in Browse or, outside the catalogue, on history.state.gov, or a card for a person, a term
-// or an unresolved reference.
+// or an unresolved reference. From S17f each document opened is recorded in the trail, and opens in
+// the mode Settings ▸ Reading names when the link that opened it names no rail.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from 'react';
 import { ApiError } from '../api/client';
 import { documentQuery, linkQuery, type ReadingWidth, readerPageURL, type TextSize, volumesQuery } from '../api/endpoints';
 import type { ReaderLinkTarget } from '../api/types';
+import { recordVisit } from '../api/research';
 import { meQuery } from '../api/userData';
 import { CitePanel } from '../cite/CitePanel';
 import { copy } from '../copy';
@@ -19,6 +21,7 @@ import { ResearchRail } from '../research/ResearchRail';
 import type { ReaderSearch } from '../router';
 import { checklistStore, reviewedKey } from '../search/checklist';
 import { useReadingWidth, useTextSize } from '../settings/preferences';
+import { lastPanelVisible, rememberPanelVisible, useDocumentMode, useSyncedPreferences } from '../settings/syncedPreferences';
 import { useScheme } from '../shell/AppShell';
 import { useHeadingReady } from '../shell/headingFocus';
 import { plainTitle, useDocumentTitle } from '../shell/useDocumentTitle';
@@ -49,8 +52,6 @@ async function checkPage(url: string, signal: AbortSignal): Promise<{ renderingV
 
 export function ReaderScreen() {
   const { volumeId, documentId } = route.useParams();
-  // A document opened while Checklist Mode is on leaves its list (S17e), as the Mac's reading history hides it.
-  useEffect(() => checklistStore.opened(reviewedKey(volumeId, documentId)), [volumeId, documentId]);
   const { rail, note } = route.useSearch();
   const navigate = route.useNavigate();
   const queryClient = useQueryClient();
@@ -60,6 +61,8 @@ export function ReaderScreen() {
   const me = useQuery(meQuery);
   const keepsUserData = me.data?.userData === true;
   const shownRail = rail === 'research' && !keepsUserData ? undefined : rail;
+  const { preferences } = useSyncedPreferences();
+  const mode = useDocumentMode();
   const scheme = useScheme();
   const [textSize, setTextSize] = useTextSize();
   const [readingWidth, setReadingWidth] = useReadingWidth();
@@ -101,6 +104,35 @@ export function ReaderScreen() {
     setPendingHighlight(null);
     setComposing(false);
   }
+  // Each arrival at a document, once its account has loaded, as the app's reader records a visit after
+  // its load (S17f): the trail records it while Log Research Sessions is on, and while that is on a
+  // document opened during Checklist Mode leaves its list (S17e), as the Mac's reading history hides it.
+  // With no user data kept, it leaves the list, as before the switch.
+  const visited = useRef<string | null>(null);
+  const loaded = detail.isSuccess || detail.isError;
+  useEffect(() => {
+    if (!me.data || !loaded || visited.current === documentKey) return;
+    if (keepsUserData && !preferences) return;
+    visited.current = documentKey;
+    if (!keepsUserData || preferences?.researchLoggingEnabled) checklistStore.opened(reviewedKey(volumeId, documentId));
+    if (keepsUserData && detail.isSuccess) void recordVisit(queryClient, volumeId, documentId).catch(() => {});
+  }, [me.data, loaded, documentKey, keepsUserData, preferences, detail.isSuccess, volumeId, documentId, queryClient]);
+  // Open Documents In (S17f): a document a link opens with no rail named opens with the Research rail
+  // in Research mode, as last left in Remember Last, and without it in Read; a rail the link names, as
+  // the rail's own toggle does, wins. The rail as the reader leaves it is what Remember Last reopens.
+  const arrivedMode = useRef<string | null>(null);
+  useEffect(() => {
+    if (!keepsUserData || !preferences) return;
+    if (arrivedMode.current !== documentKey) {
+      arrivedMode.current = documentKey;
+      const wanted = mode === 'research' || (mode === 'rememberLast' && lastPanelVisible());
+      if (rail === undefined && wanted) {
+        void navigate({ search: (previous: ReaderSearch) => ({ ...previous, rail: 'research' }), replace: true });
+        return;
+      }
+    }
+    if (rail !== 'cite') rememberPanelVisible(rail === 'research');
+  }, [keepsUserData, preferences, documentKey, mode, rail, navigate]);
   // A note is landed on once each time the reader arrives at it, by a link or by Back and Forward.
   // A page loaded again for another text size, reading width or appearance leaves focus on the
   // control that asked for it (WCAG 3.2.2), and the frame's URL fragment keeps the note in view.

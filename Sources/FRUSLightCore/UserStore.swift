@@ -224,13 +224,13 @@ public final class SQLiteUserStore: RelationalUserStore, @unchecked Sendable {
     }
 
     /// Runs `body` in one write transaction, holding `access` throughout.
-    override func writing<T>(_ body: (UserStoreTransaction) throws -> T) throws -> T {
+    override func writing<T>(outsideSearch: Bool = false, _ body: (UserStoreTransaction) throws -> T) throws -> T {
         try access.withLock {
             try db.execute("BEGIN IMMEDIATE")
             do {
                 let value = try body(transaction)
                 try db.execute("COMMIT")
-                didCommit()
+                if !outsideSearch { didCommit() }
                 return value
             } catch {
                 try? db.execute("ROLLBACK")

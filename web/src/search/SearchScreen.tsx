@@ -42,10 +42,14 @@ import {
   scopes,
   searches,
   searchesAnywhere,
+  searchFields,
   type SearchState,
 } from './searchState';
 import { rowChipLimit, tagChips, tagFilterLabel } from './tagRules';
 import { useDocumentTitle } from '../shell/useDocumentTitle';
+import { applyOrder } from '../research/listOrder';
+import { useListOrder, useLoggingEnabled } from '../settings/syncedPreferences';
+import { recordSearchRun } from './searchHistory';
 import { Snippet } from './Snippet';
 
 const route = getRouteApi('/search');
@@ -78,6 +82,13 @@ export function SearchScreen() {
   const keepsUserData = me.data?.userData === true;
   const tags = useQuery({ ...tagsQuery, enabled: keepsUserData });
   const userTags = keepsUserData ? tags.data?.items : undefined;
+  const logging = useLoggingEnabled();
+  // Each run the screen shows goes into the trail (S17f), as the Mac's window records each it completes.
+  const record = useEffectEvent(() => recordSearchRun(queryClient, state));
+  const shownRun = results.data && !results.isPlaceholderData ? JSON.stringify(searchFields(state)) : undefined;
+  useEffect(() => {
+    if (keepsUserData && shownRun !== undefined) record();
+  }, [keepsUserData, shownRun]);
 
   /** A new search, or a changed filter, starts at the first page. */
   function update(changes: Partial<SearchState>) {
@@ -266,6 +277,8 @@ export function SearchScreen() {
                       const before = shown?.hidden;
                       setUndone({ before, rows: checklistStore.undo() });
                     },
+                    // While the trail records nothing, an opened result stays, and the strip says so (S17f).
+                    loggingNotice: logging ? undefined : copy.checklist.loggingOff,
                   }
                 : undefined
             }
@@ -643,7 +656,10 @@ function SearchIn({ state, update }: { state: SearchState; update: (changes: Par
  * on a document must carry, and beside each how many of the results carry it, counted once the list
  * is opened, as the Mac counts them when its filter opens, never before.
  */
-function MyTags({ state, tags, update }: { state: SearchState; tags: UserTag[]; update: (changes: Partial<SearchState>) => void }) {
+function MyTags({ state, tags: byName, update }: { state: SearchState; tags: UserTag[]; update: (changes: Partial<SearchState>) => void }) {
+  // In the reader's own order (S17f), as the app's My Tags filter lists them.
+  const { tagOrder } = useListOrder();
+  const tags = applyOrder(byName, tagOrder, (tag) => tag.id);
   const [open, setOpen] = useState(false);
   const counted = open && state.keywords !== undefined && searchesAnywhere(state);
   const counts = useQuery(searchTagsQuery(state, counted));
@@ -704,6 +720,8 @@ interface ChecklistControls {
   markOne: (key: string) => void;
   markPage: (keys: string[]) => void;
   undo: () => void;
+  /** The Mac's line while Log Research Sessions is off (`ChecklistLoggingNotice`). */
+  loggingNotice?: string;
 }
 
 function Results({
@@ -793,6 +811,7 @@ function Results({
           announcement={checklist.announcement}
           onMarkPage={() => checklist.markPage((list?.items ?? []).map((item) => reviewedKey(item.volumeId, item.documentId)))}
           onUndo={checklist.undo}
+          loggingNotice={checklist.loggingNotice}
         />
       )}
       {list && !failed && isPartialEvidence(list.total) && (

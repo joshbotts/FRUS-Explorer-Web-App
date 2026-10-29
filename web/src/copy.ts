@@ -313,6 +313,8 @@ export const copy = {
     markReviewed: 'Mark Reviewed',
     allReviewedTitle: 'All Results Reviewed',
     allReviewedDetail: 'You’ve reviewed every result. Turn off Checklist Mode to see them again.',
+    // S17f: the strip's line while the history records nothing, which is what hides an opened result.
+    loggingOff: 'Opening a result does not hide it while Log Research Sessions is off in Settings. Mark Reviewed still hides a result.',
   },
   /** Browse's axes, as the Mac's sidebar names the three the web has; the group's name is the web's own. */
   axes: {
@@ -733,6 +735,8 @@ export const copy = {
     tagsEmpty:
       'No tags yet. Tags are the labels you apply to research notes and documents as you read — create one here, or from any note.',
     tagsFooter: 'Tags are global labels you apply to research notes and documents. They are not scoped to a project.',
+    // S17f: the reader's own order, which the Move commands set.
+    tagsOrderFooter: 'This order is also the order of your tags in the note editor, the document tag picker and Search.',
     newTag: 'New Tag…',
     newTagDefault: 'New Tag',
     edit: (name: string) => `Edit ${name}`,
@@ -855,6 +859,14 @@ export const copy = {
         : `${count.toLocaleString('en-US')} collection entries have no document. A version-6 export does not say what they were, section headings, note blocks or apparatus blocks, so they are kept as entries this server does not show.`,
     unlinkedLead: 'These smart collections keep their link to a saved search this export does not carry:',
     missingSearch: 'The linked saved search could not be found. It may have been deleted.',
+    // The method appendix (PLAN's S17f), in the words of the app's export sheet; the two files' own
+    // links are the web's, since a browser saves one file at a time.
+    appendixAction: 'Export Query Log as a Method Appendix',
+    appendixEmpty: 'No searches recorded yet.',
+    appendixFooter:
+      'Every search you ran, in a Markdown table and a CSV. Each row gives the scope the search ran under and how many volumes were indexed at the time. Counts that hit the app’s row ceiling appear as “at least N”, so a partial result is never printed as a total.',
+    appendixMarkdown: 'Markdown table (frus-query-log.md)',
+    appendixCSV: 'CSV (frus-query-log.csv)',
     /** What the app's lists call a collection with no name (`CollectionEditorNaming.listName`). */
     untitledCollection: 'Untitled Collection',
     types: {
@@ -882,6 +894,216 @@ export const copy = {
       ExportHistoryEntry: 'Collections Exported',
       GeneratedSummary: 'Generated Summaries',
     },
+  },
+  /**
+   * The project picker and the "Working on:" line (PLAN's S17f), in the app's words. The picker's
+   * visible label, Project, is the History scope picker's; the app's menu has none.
+   */
+  projectPicker: {
+    label: 'Project',
+    global: 'Global Context',
+    globalShort: 'Global',
+    manage: 'Manage Projects',
+    a11y: 'Switch project context',
+    workingOn: 'Working on:',
+    home: 'Project Home',
+  },
+  /** Settings ▸ Projects, the project editor and Merge Project, in the app's words. */
+  projects: {
+    title: 'Projects',
+    activeLabel: 'Active Project',
+    global: 'Global Context',
+    home: 'Project Home',
+    activeFooter: 'The active project scopes the notes, collections, history, and searches you see. Global Context shows everything.',
+    empty: 'No projects yet. A project keeps one line of research — its notes, collections, history and searches — separate from the rest.',
+    listHeader: 'All Projects',
+    new: 'New Project…',
+    listFooter: "This order is also the order of the Active Project picker, the project switcher and the note editor's project list.",
+    active: 'active',
+    edit: 'Edit',
+    mergeShort: 'Merge into…',
+    relatedHeader: 'Related',
+    tags: 'Tags',
+    scopes: 'Volume Scopes',
+    relatedFooter: 'Open Tags to rename, merge or delete a tag. Open Volume Scopes to edit or delete a scope — scopes cannot be merged.',
+    noneYet: 'None yet',
+    tagCount: (count: number) => (count === 1 ? '1 tag' : `${count.toLocaleString('en-US')} tags`),
+    scopeCount: (count: number) => (count === 1 ? '1 scope' : `${count.toLocaleString('en-US')} scopes`),
+    editorNew: 'New Project',
+    editorEdit: 'Edit Project',
+    cancel: 'Cancel',
+    save: 'Save',
+    nameHeader: 'Name',
+    namePlaceholder: 'Project name',
+    nameField: 'Project name',
+    questionHeader: 'Research Question',
+    questionField: 'Research question',
+    manage: 'Manage',
+    merge: 'Merge into Another Project…',
+    delete: 'Delete Project',
+    manageFooterOnly:
+      'Merging needs a second project to merge into. Deleting keeps your notes, collections, and history — it only unlinks them from this project.',
+    manageFooter:
+      'Merging moves everything filed here into the project you choose. Deleting keeps your notes, collections, and history — it only unlinks them from this project.',
+    deleteTitle: 'Delete Project?',
+    deleteMessage: 'Activity records are kept but unlinked from this project.',
+    deleteConfirm: 'Delete',
+    deleteCancel: 'Cancel',
+    mergeTitle: 'Merge Project',
+    mergeInto: (name: string) => `Merge “${name}” into:`,
+    mergeExplanation: (name: string) =>
+      `All notes, collections, summaries, and reading history assigned to “${name}” will be re-assigned to the selected project. “${name}” will be deleted.`,
+    mergeCancel: 'Cancel',
+    mergeConfirm: 'Merge',
+    loading: 'Loading the projects…',
+  },
+  /** The Move commands of the Settings lists, in the app's words. */
+  listOrder: {
+    moveToTop: 'Move to Top',
+    moveUp: 'Move Up',
+    moveDown: 'Move Down',
+    moveLabel: (command: string, name: string) => `${command}: ${name}`,
+  },
+  /**
+   * Project Home, in the words of the app's view. What Suggested Next says of the Mac's leads, which the
+   * web keeps but cannot compute until Related Documents, is the web's own.
+   */
+  projectHome: {
+    title: 'Project Home',
+    missingTitle: 'No Project Selected',
+    missingDetail: 'Choose a project from the project picker to see its workspace.',
+    questionPlaceholder: 'What is this project’s research question?',
+    dateFrom: (year: number) => `From ${year}`,
+    dateTo: (year: number) => `Through ${year}`,
+    statCollections: 'Collections',
+    statNotes: 'Notes',
+    statVisited: 'Documents Visited',
+    statSearches: 'Searches Run',
+    focusTags: 'Focus tags',
+    focusAdd: 'Add',
+    focusEdit: 'Edit',
+    focusEmpty: 'Choose tags whose documents should anchor this project’s suggestions.',
+    focusTagsTitle: 'Focus Tags',
+    focusTagsNoneTitle: 'No Tags',
+    focusTagsNone: 'Tag documents while you research, then choose which tags focus this project’s suggestions here.',
+    focusTagsFooter: 'Documents you’ve tagged with the chosen tags anchor this project’s Suggested Next.',
+    focusTagsDone: 'Done',
+    leadsTitle: 'Suggested Next',
+    leadsPlaceholder:
+      'As you add documents to this project’s collections, related documents you haven’t gathered yet will surface here.',
+    leadsFromMac:
+      'These are the leads FRUS Explorer found on the Mac. This server does not yet find leads of its own, so they change only when you dismiss one or import a newer export.',
+    leadNew: 'NEW',
+    relatedOne: 'Related to 1 of your documents',
+    relatedMany: (count: number) => `Related to ${count.toLocaleString('en-US')} of your documents`,
+    editorialNote: 'Editorial note',
+    dismiss: 'Dismiss this lead',
+    dismissNamed: (title: string) => `Dismiss this lead: ${title}`,
+    recentTitle: 'Recent Activity',
+    recentEmpty:
+      'No activity in this project yet. Read documents, take notes, or build a collection while this project is active and it will appear here.',
+    recentDocuments: 'Recently Read',
+    recentNotes: 'Recent Notes',
+    recentSearches: 'Recent Searches',
+    untitledSearch: '(no query text)',
+    results: (count: number) => `${count.toLocaleString('en-US')} results`,
+    actionCollections: 'Collections',
+    actionResearch: 'Research',
+    actionSearch: 'Search',
+    loading: 'Loading Project Home…',
+  },
+  /** The History screen, in the app's words. */
+  history: {
+    title: 'History',
+    scopeLabel: 'Project',
+    scopeAll: 'All Projects',
+    scopeUnfiled: 'Not in a Project',
+    scopeA11y: 'Filter history by project',
+    scopeHelp: 'Show only history recorded while a specific project was active',
+    search: 'Search history…',
+    searchA11y: 'Search history',
+    filteredTitle: 'No Matches',
+    filteredDetail: 'No history matches the current filters.',
+    documents: 'Documents Visited',
+    documentsEmptyTitle: 'No Documents Visited',
+    documentsEmpty: 'Documents you open will appear here.',
+    searches: 'Searches Executed',
+    searchesEmptyTitle: 'No Searches Executed',
+    searchesEmpty: 'Searches you run will appear here.',
+    exports: 'Collections Exported',
+    exportsEmptyTitle: 'No Collections Exported',
+    exportsEmpty: 'Collections you export will appear here.',
+    showing: (shown: number, total: number) => `Showing ${shown} of ${total}`,
+    loggingOff:
+      'Research logging is off, so new activity is not being recorded. Turn it back on in Settings under Research Sessions.',
+    showMore: 'Show More',
+    delete: 'Delete',
+    deleteNamed: (title: string) => `Delete ${title}`,
+    resultCount: (count: number) => `${count.toLocaleString('en-US')} results`,
+    documentCount: (count: number) => `${count.toLocaleString('en-US')} documents`,
+    loading: 'Loading the history…',
+  },
+  /** Settings ▸ Research Sessions and the Session Log, in the app's words. */
+  sessions: {
+    title: 'Research Sessions',
+    recording: 'Recording',
+    logging: 'Log Research Sessions',
+    loggingFooter:
+      'Despite the name, this switch covers everything the app can track about your work. That means the documents you open, the text of the searches you run, and the collections you export. The app keeps one record of each. The History screen, a project’s Recently Read and Recent Searches cards, its Documents Visited and Searches Run counts, and the Session Log all read those same records. The Session Log groups them into sessions, and a session ends after 30 minutes of inactivity. The records stay on this device, and in your private iCloud database if iCloud sync is on. Turn the switch off and all of that recording stops. Those surfaces will thin out and eventually empty. That is the switch working, not a fault. Anything recorded before you turned it off stays until you delete it.',
+    activity: 'Recorded Activity',
+    log: 'Session Log',
+    activityEmpty: 'Nothing has been recorded yet. Open a document or run a search and it will appear here.',
+    activityFooter:
+      'The app infers sessions from the times you opened documents, ran searches, and exported collections. A gap of 30 minutes starts a new session. The same records fill the History screen and a project’s Recents.',
+    manage: 'Manage',
+    deleteAll: 'Delete Recorded Sessions…',
+    manageFooter:
+      'This deletes the whole record of your work: every document you opened, every search you ran, and every collection you exported. It goes from this device, and from your iCloud database if iCloud sync is on. Your notes, highlights, tags, and collections are not touched. To delete single entries instead, use the History screen.',
+    deleteTitle: 'Delete Recorded Sessions?',
+    deleteMessage: (events: string) =>
+      `${events} will be permanently deleted from this device. If iCloud sync is on, the same records go from iCloud too. A session is made of every document you opened, every search you ran, and every collection you exported. Your notes, highlights, tags, and collections are not affected.`,
+    deleteConfirm: 'Delete',
+    deleteCancel: 'Cancel',
+    nothingRecorded: 'Nothing recorded yet',
+    sessionCount: (count: number, exact: boolean) =>
+      exact
+        ? count === 1
+          ? '1 session'
+          : `${count} sessions`
+        : count === 1
+          ? 'at least 1 session'
+          : `at least ${count} sessions`,
+    eventCount: (count: number) => (count === 1 ? '1 event' : `${count} events`),
+    lastToday: (time: string) => `last today ${time}`,
+    lastOlder: (date: string) => `last ${date}`,
+    emptyTitle: 'No Sessions Yet',
+    emptyDetail: 'Your research activity will appear here as you open documents, run searches, and export collections.',
+    showMore: 'Show More',
+    showingRecent: (shown: number, total: number) => `Showing the most recent ${shown} of ${total} recorded activities.`,
+    oldestPartial: 'The oldest session listed may reach further back than the activity loaded.',
+    ongoing: 'Ongoing',
+    results: (count: number) => (count === 1 ? '1 result' : `${count} results`),
+    searchLine: (query: string, results: string) => `“${query}” — ${results}`,
+    documents: (count: number) => (count === 1 ? '1 document' : `${count} documents`),
+    exportLine: (format: string, documents: string) => `Exported ${format} — ${documents}`,
+    loading: 'Loading the sessions…',
+  },
+  /**
+   * Settings ▸ Reading, the web's own pane for the app's Display ▸ Reading and Citations sections, in
+   * their words.
+   */
+  reading: {
+    title: 'Reading',
+    openIn: 'Open Documents In',
+    openInA11y: 'Default document mode',
+    modes: { read: 'Read', research: 'Research', rememberLast: 'Remember Last' },
+    footer:
+      '“Remember Last” reopens documents in the mode you used last, Read or Research. Research mode shows the Research rail in a side panel beside the document. Read mode hides the rail so you can just read. The rail toggle inside a document always wins for that document.',
+    citations: 'Citations',
+    citationStyle: 'Citation Style',
+    citationFooter: 'Used when copying or sharing a citation.',
+    /** The kit's names for the styles in Settings (`CitationStyle.displayName`). */
+    styles: { historyAtState: 'History at State (Recommended)', chicago: 'Chicago', turabian: 'Turabian' },
   },
   /**
    * Citation Lookup, in the words of the app's window and of Search's Find by Citation, with the kit's

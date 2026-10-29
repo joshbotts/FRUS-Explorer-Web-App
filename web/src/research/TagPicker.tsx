@@ -8,6 +8,8 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
 import type { UserTag } from '../api/types';
 import { createTag, deleteTag, setDocumentTags, tagsQuery } from '../api/userData';
+import { useListOrder } from '../settings/syncedPreferences';
+import { applyOrder } from './listOrder';
 import { copy } from '../copy';
 import { Badge } from '../shell/Badge';
 
@@ -61,7 +63,9 @@ export function TagPicker({
   });
 
   const madeIds = new Set(made.map((tag) => tag.id));
-  const listed = all.data?.items ?? [];
+  // In the reader's own order (S17f), as the app's document tag picker shows its tags.
+  const { tagOrder } = useListOrder();
+  const listed = applyOrder(all.data?.items ?? [], tagOrder, (tag) => tag.id);
   const listedIds = new Set(listed.map((tag) => tag.id));
   // The tags made here first, newest first, then the rest by name, as the app pins them (#242). A tag
   // the document carries is listed even before the list has it, so Done never drops one unseen.

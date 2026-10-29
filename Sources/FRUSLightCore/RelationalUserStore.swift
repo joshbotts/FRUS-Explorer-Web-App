@@ -88,7 +88,8 @@ public class RelationalUserStore: UserStore, CorrectionStore, UserSearchStore, @
     }
 
     /// Counts a write transaction committed. Each store's `writing(_:)` calls it once the write is in
-    /// `searchDatabase`, before the write's caller is answered.
+    /// `searchDatabase`, before the write's caller is answered, unless the write is one the search
+    /// reads nothing of (`writing(outsideSearch:_:)`).
     func didCommit() {
         commits.withLock { $0 += 1 }
     }
@@ -103,8 +104,12 @@ public class RelationalUserStore: UserStore, CorrectionStore, UserSearchStore, @
     }
 
     /// Runs `body` in one write transaction: committed when it returns, rolled back when it throws, so
-    /// a rule that changes several tables changes all or none. Each store's own.
-    func writing<T>(_ body: (UserStoreTransaction) throws -> T) throws -> T {
+    /// a rule that changes several tables changes all or none. Each store's own. Its commit moves the
+    /// search mark, but for a write `outsideSearch`: one that changes none of the rows the kit's search
+    /// reads, `user_search` and the tag assignments (S17f's trail, preferences and projects), which so
+    /// leaves every user's kept searches standing, as a search that read the store again would find
+    /// what they hold.
+    func writing<T>(outsideSearch: Bool = false, _ body: (UserStoreTransaction) throws -> T) throws -> T {
         preconditionFailure("\(Self.self) writes on a connection of its own")
     }
 

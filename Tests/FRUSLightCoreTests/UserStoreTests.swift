@@ -34,8 +34,8 @@ import Testing
         let directory = try TemporaryDirectory()
         let store = try await Self.open(directory)
         #expect(try store.schemaVersion() == UserStoreMigrations.all.count)
-        #expect(UserStoreMigrations.all.count == 2)
-        #expect(store.migration == UserStoreMigration(from: 0, to: 2, backup: nil))
+        #expect(UserStoreMigrations.all.count == 3)
+        #expect(store.migration == UserStoreMigration(from: 0, to: 3, backup: nil))
         #expect(try Self.backups(in: directory).isEmpty, "a new store has nothing to copy")
         #expect(try store.singleUserID() == "owner")
         #expect(try store.enforcesForeignKeys(), "on again once the migrations are done")
@@ -45,7 +45,7 @@ import Testing
         #expect(try Self.backups(in: directory).isEmpty)
     }
 
-    @Test func aStoreAtMigrationOneReachesTwoAfterACopyOfItself() async throws {
+    @Test func aStoreAtMigrationOneReachesTheLatestAfterACopyOfItself() async throws {
         let directory = try TemporaryDirectory()
         let first = try await Self.store(at: 1, in: directory)
         #expect(try first.schemaVersion() == 1)
@@ -59,10 +59,10 @@ import Testing
         let before = try StoreDump(directory.url.appendingPathComponent("app.db"))
 
         let store = try await Self.open(directory)
-        #expect(try store.schemaVersion() == 2)
+        #expect(try store.schemaVersion() == 3)
         #expect(try store.enforcesForeignKeys())
         let backup = try #require(store.migration?.backup)
-        #expect(store.migration == UserStoreMigration(from: 1, to: 2, backup: backup))
+        #expect(store.migration == UserStoreMigration(from: 1, to: 3, backup: backup))
         #expect(backup.lastPathComponent == "app-20261024T000000Z-before-migration-2.db")
         #expect(try Self.backups(in: directory) == [backup.lastPathComponent], "one whole copy, and no partial one")
         #expect(try StoreDump(backup) == before, "the copy is the store at migration 1")
@@ -90,7 +90,7 @@ import Testing
         let url = directory.url.appendingPathComponent("app.db")
         let before = try StoreDump(url)
 
-        // Migration 3 creates a table, changes a row and then fails: all of it is undone.
+        // Migration 4 creates a table, changes a row and then fails: all of it is undone.
         let failing = """
             CREATE TABLE added_by_three (a TEXT);
             UPDATE classification_overrides SET is_editorial_note = 1;
@@ -107,15 +107,15 @@ import Testing
             Issue.record("expected a failed migration, got \(error)")
             return
         }
-        #expect(from == 2 && to == 3)
+        #expect(from == 3 && to == 4)
         let copy = try #require(backup)
-        #expect(String(describing: error).contains("left at 2"))
+        #expect(String(describing: error).contains("left at 3"))
         #expect(String(describing: error).contains(copy.path))
 
         #expect(try StoreDump(url) == before, "the store is as it was")
         #expect(try StoreDump(copy) == before, "and so is its copy")
         let reopened = try await Self.open(directory)
-        #expect(try reopened.schemaVersion() == 2)
+        #expect(try reopened.schemaVersion() == 3)
         #expect(try reopened.classificationOverrides().map(\.isEditorialNote) == [false])
     }
 
@@ -169,13 +169,14 @@ import Testing
         // SQLite's procedure for changing a table: make the new one, copy, drop the old, rename.
         // With foreign keys on, dropping users would delete every row that refers to it.
         let rebuild = """
-            CREATE TABLE users_new (user_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, created_at TEXT NOT NULL);
-            INSERT INTO users_new SELECT user_id, display_name, created_at FROM users;
+            CREATE TABLE users_new (user_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, created_at TEXT NOT NULL,
+                                    active_project_id TEXT);
+            INSERT INTO users_new SELECT user_id, display_name, created_at, active_project_id FROM users;
             DROP TABLE users;
             ALTER TABLE users_new RENAME TO users;
             """
         let rebuilt = try await Self.open(directory, migrations: UserStoreMigrations.all + [rebuild])
-        #expect(try rebuilt.schemaVersion() == 3)
+        #expect(try rebuilt.schemaVersion() == UserStoreMigrations.all.count + 1)
         let check = try SQLiteConnection(directory.url.appendingPathComponent("app.db").path, readOnly: true)
         defer { check.close() }
         #expect(try check.query("SELECT user_id, id FROM tags") == [[.text("owner"), .text("A")]],
@@ -188,7 +189,7 @@ import Testing
         _ = try await Self.open(directory)
         _ = try await Self.open(directory, migrations: UserStoreMigrations.all + ["CREATE TABLE later (a TEXT);"])
         await #expect(throws: UserStoreOpenError.self) { _ = try await Self.open(directory) }
-        #expect(try Self.backups(in: directory).count == 1, "the copy before migration 3, and none for the refusal")
+        #expect(try Self.backups(in: directory).count == 1, "the copy before migration 4, and none for the refusal")
     }
 
     @Test func aBackupNameAlreadyTakenGetsANumber() async throws {

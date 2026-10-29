@@ -206,7 +206,7 @@ final class CSRFTokens: Sendable {
 
 /// What the user store keeps for the routes under /api/v1/me.
 typealias UserDataStore = UserStore & TagStore & HighlightStore & NoteStore & SummaryStore & ProjectStore & ResearchImportStore
-    & ResearchExportStore & UserSearchStore & SearchSetStore
+    & ResearchExportStore & UserSearchStore & SearchSetStore & ResearchRowStore & TrailStore & PreferenceStore
 
 /// What the routes under /api/v1/me need.
 struct UserDataServices: Sendable {
@@ -412,7 +412,9 @@ enum UserDataRoutes {
         TagRoutes.add(to: me, services: services, resources: resources)
         HighlightRoutes.add(to: me, services: services, resources: resources, reader: reader, provider: provider)
         SummaryRoutes.add(to: me, services: services, resources: resources)
-        ProjectRoutes.add(to: me, services: services)
+        ProjectRoutes.add(to: me, services: services, resources: resources)
+        HistoryRoutes.add(to: me, services: services, provider: provider, resources: resources, reader: reader)
+        PreferenceRoutes.add(to: me, services: services)
         ExportRoutes.add(to: me, services: services)
         SearchTagRoutes.add(to: me, services: services, provider: provider, resources: resources)
         SavedSearchRoutes.add(to: me, services: services, provider: provider)

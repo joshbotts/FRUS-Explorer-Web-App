@@ -558,7 +558,8 @@ struct NoteJSON: Encodable {
         }
     }
 
-    /// The projects a note may name, by name, read only; none until an import.
+    /// The projects a note may name, by name; none until an import or New Project (S17f), whose tests
+    /// are ProjectHistoryTests'.
     @Test func projectsAreListedByName() async throws {
         let fixture = try await UserDataFixture()
         defer { withExtendedLifetime(fixture) {} }
@@ -572,14 +573,12 @@ struct NoteJSON: Encodable {
             #expect(list.total == 2 && list.items.map(\.name) == ["Laos 9", "Laos 10"])
             #expect(list.items.map(\.id) == ["AA000000-0000-4000-8000-000000000001", "BB000000-0000-4000-8000-000000000002"])
             #expect(problemCode(try await browser.get("/api/v1/me/projects?x=1")) == "UNKNOWN_PARAMETER")
-            let write = try await browser.send(.post, "/api/v1/me/projects", #"{"name": "x"}"#)
-            #expect([.notFound, .methodNotAllowed].contains(write.status), "read only: no route makes one")
         }
         let empty = try await UserDataFixture()
         defer { withExtendedLifetime(empty) {} }
         try await empty.app.test(.router) { client in
             let none = try decode(ProjectList.self, try await Browser(client: client).get("/api/v1/me/projects"))
-            #expect(none == ProjectList(total: 0, items: []))
+            #expect(none == ProjectList(total: 0, items: [], activeProjectId: nil))
         }
     }
 }

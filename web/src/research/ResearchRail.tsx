@@ -352,10 +352,16 @@ function HighlightsSection({
     }
   }
 
-  /** After a removal, focus goes to the next row's Remove…, else the one before it, else the section. */
-  function focusAfterRemoving(index: number) {
+  /**
+   * After a removal, focus goes to the next row's Remove…, else the one before it, else the section.
+   * The removed row's own is passed over: the rows are the reader's, drawn again only once its list is
+   * read again, which a frame can come before.
+   */
+  function focusAfterRemoving(removedId: string, index: number) {
     requestAnimationFrame(() => {
-      const buttons = list.current?.querySelectorAll<HTMLButtonElement>('button.remove-highlight') ?? [];
+      const buttons = [...(list.current?.querySelectorAll<HTMLButtonElement>('button.remove-highlight') ?? [])].filter(
+        (button) => button.dataset.id !== removedId,
+      );
       (buttons[index] ?? buttons[index - 1] ?? toggle.current)?.focus();
     });
   }
@@ -396,7 +402,7 @@ function HighlightsSection({
             const { highlight, index } = removing;
             setRemoving(null);
             // Once the question has gone: while a modal dialog is open, all else is inert.
-            if (removed) focusAfterRemoving(index);
+            if (removed) focusAfterRemoving(highlight.id, index);
             else
               requestAnimationFrame(() =>
                 list.current?.querySelector<HTMLButtonElement>(`button.remove-highlight[data-id="${CSS.escape(highlight.id)}"]`)?.focus(),
