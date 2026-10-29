@@ -2,6 +2,74 @@
 
 One entry per session, newest first.
 
+## Pin move: FRUS-Explorer#1813 and #1814, with #1812
+
+29 October 2026 · branch `claude/gracious-jennings-5d5f55` · [#91](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/91) · upstream `fb542514`
+
+The pin moves from `32e295e5` to `fb542514`, `v2`'s head, in a pull request of its own under rule 5. No row of `PLAN.md` is a pin move but S12d's, which waits for `version-1.0`, and the first pin move after a phase-2 upstream pull request merges takes it, so this move takes the two that merged on 29 October, each a squash with its branch head's tree, and the app's one commit before them:
+- S17f's follow-up's [#1813](https://github.com/joshbotts/FRUS-Explorer/pull/1813), which makes Project Home's subject vocabulary, the subjects its editor suggests, a lead's line and a document's head public in the kit, merged as `76b82e70` (tree `529e303d`, its head `19618a34`'s);
+- S18d's follow-up's [#1814](https://github.com/joshbotts/FRUS-Explorer/pull/1814), which does the same for Add Documents' resolution of a paste and the union of a tag's documents, cut from #1813's merge and merged as `fb542514` (tree `eee19574`, its head `e7b676ce`'s);
+- the app's [#1812](https://github.com/joshbotts/FRUS-Explorer/pull/1812) (`d7130e9b`), which adds a design for the person authority's deferred work to `Planning/`, with the plan's entry for it. It changes no file this repository compiles or reads.
+
+**What the move brought, in shared code,** all of it made public with no change of behaviour:
+- **#1813, in FRUSCoreKit:** the subject vocabulary a project's focus is chosen from, `VolumeSubjectProfiles` with `init(from:)`, `allSubjects` and `SubjectOption` (`Browser/VolumeSubjectProfiles.swift`); the subjects the editor suggests, `ProjectFocusSuggestions.suggestions(engagedVolumeIds:profiles:excluding:limit:)`, moved unchanged from the app's `FRUSExplorer/ProjectContext/` into a new `ProjectContext/` folder of the kit; and in `IndexingPipeline.swift`, a lead's line, `documentSnippets(forKeys:maxLength:)`, and the head a document is titled by, `extractHeader(from:)`.
+- **#1814, in `FRUSCoreKit/Collections/`:** `CollectionCitationLineResolver`, with its initialiser over the kit's parser and matcher, `lines(from:)`, `resolve(text:)` and `resolve(line:)`, and `Outcome` and `LineResult`, whose two initialisers are spelled out as the compiler made them; and `CollectionGeneratedBlocks.tagDocumentRefs(tagId:noteTags:assignments:)`.
+- **In the kit's tests:** two suites that call the new public code as a host will, `ProjectHomeHostTests` (8 tests, #1813) and `CollectionAddDocumentsHostTests` (6, #1814). FRUSCoreKitTests runs 1,313, from 1,299.
+- The rest is the app's: its `CLAUDE.md`'s FRUSCoreKit entry, the Xcode project's file list, and the plans.
+
+The server calls none of it yet: two pull requests of their own will (Next).
+
+**No repair to the build.** `Package.swift` compiles `FRUSCoreKit/` by folder, so the new `ProjectContext/` needed no change, and `tools/mac-golden` lists the kit whole. These are unchanged:
+- the build (1.0, 1776): no `CURRENT_PROJECT_VERSION` changed, so `scripts/release-tag` still says `1.0-1776`;
+- the index version (71) and the FTS generation (4), so `Compatibility.swift` and the install guide's versions stand;
+- the export's schema: FTS5Store is unchanged, and so is `setupDatabase(_:)`, the same text eleven lines down, at lines 8021–8676, so the 47 `CREATE TABLE` and `ALTER TABLE` statements stand;
+- `IndexingResources.indexResourceNames`, `FRUSExplorer/Resources`, the export's format version (7), the app's source folders in `project.yml`, and so `tools/mac-golden`'s digest list, and CI's allow-list: neither new suite skips a test or calls `Test.cancel`.
+
+**On §5's indexing path,** `git diff 32e295e5 fb542514` over the parser's folder (`FRUSCoreKit/TEI`), `FRUSCoreKit/Search`, where `IndexingPipeline.swift` and its seams are, FTS5Store, SourceNoteKit, `FRUSExplorer/Resources` and `project.yml` touches one file, `IndexingPipeline.swift`, in two declarations' access, their doc comments and a line of its version history (4.49). `documentSnippets(forKeys:maxLength:)` is a read no indexing runs; `extractHeader(from:)` is the indexer's own, the head it stores in `document_cache.header`, and its body is unchanged. Access changes nothing for the app, which compiles the kit into its own module. So the owner's seventh three-volume export, made on 24 October from a build of `503a730b`, holds what the indexer at `fb542514` would write, as it held what the indexer at `32e295e5` would. The owner chose it in this session, and the golden files were remade from it.
+
+**No parity test needed pointing anywhere,** as #1813's and #1814's runs over `main` foresaw. Nothing in this repository reads `ProjectFocusSuggestions.swift`'s old path, and of the app files the parity tests read, `ProjectHistoryParityTests`' `ProjectHomeView.swift` and `ProjectEditorView.swift` and `CollectionParityTests`' `CollectionAddDocumentsSheet.swift` among them, none changed.
+
+**The golden files**
+
+Remade by `scripts/make-golden --export /Users/Shared/frus-index-2026-10-24.sqlite`, under the app's `Scripts/heavy.sh` lock, on this Mac (macOS 27.2, Xcode 27.1): from the app's source at `fb542514` and, by the owner's choice, from the seventh three-volume export, which S16b's, S17c's and S18c's moves were made from. The script works on a copy of the export; no new export was made, and no library was touched. Against `main`'s, at `32e295e5`:
+- **The render and the expressions:** the 393 rows' HTML is byte for byte as before, and the manifest and the expressions change only in provenance: `sourceDigest` (`9347d9b686bf` to `1c104b472611`) and `upstreamCommit`.
+- **The results** change only in that provenance. Every query's count, first 50 results and tie tail are as before.
+- **The index summary's** format and gating sections are unchanged. Beside the same provenance, its information section moves only in the summarizer's timings.
+- **The golden spans** change only in that provenance: the RTF the app's editor writes keeps its `\cocoartf` stamps, and `fixtures/rich-text/web`, the codec's own RTF, is unchanged.
+- `frus-parity check-golden` passes, and `PENDING` stays empty.
+- `make-golden` left `tools/mac-golden/Package.resolved` changed again, pinning this package's dependencies under Xcode 27.1's SwiftPM, as S17c's and S18c's logs say, and the change is left out.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** CI's swift job replayed with its PostgreSQL (`scripts/swift --postgres`) at `fb542514`, over `main` at `b9562a4`, this package's own targets built clean, with no warning, under the app's `Scripts/heavy.sh` lock: 2,645 tests, against the 2,631 S18f's log counts for `main`, all passing with only the named skip, in Swift Testing's results file and in the log, and no target calls `Test.cancel`. The checks print:
+  - "check 2 passes: 36 digests and 7 checks are the Mac's";
+  - "check 3's results pass: 482 queries, 482 identical and 0 reordered only within Mac tie groups; 318 with other score bits (information)", and through the API "482 queries, 482 identical and 0 reordered only within Mac tie groups, every record the kit's own, each searched with the user's store attached";
+  - "check 4 through the page: 393 of 393 rows identical", and the same on the reader's path and from one full parse per volume.
+- **Per target:** FRUSCoreKitTests 1,313 in 179 suites, from 1,299 in 177, and every other target as on `main`: SourceNoteKitTests 321, FRUSLightServerTests 239, FRUSParityTests 222, FTS5StoreTests 219, FRUSLightCoreTests 169, ManifestGeneratorTests 60, FRUSRichTextTests 42, SemanticVectorsKitTests 40, CrossRefKitTests 10, GeneratorKitTests 7, FTS5CheckTests 3.
+- **The tests the move bears on** pass: the two new kit suites, on Linux; `CompatibilityTests`, which reads the index version and the FTS generation from the submodule; the parity tests that read the app's project and collection views, `ProjectHistoryParityTests` and `CollectionParityTests`; and `CollectionFileParityTests` and `CollectionExportParityTests`, which S18f's log asked to run again over this move.
+- **`tools/mac-golden`** built in release, with the app's two known warnings for `GeneratedSummary`'s redundant `Sendable`, and wrote the files above. It and `frus-parity` were built under the lock while the owner chose the export, so the script itself took 46 seconds.
+- **The web job and the image** are CI's: nothing under `web/` changes, and the image compiles the kit at the new pin.
+
+**The daily watch.** Its issue for `v2`'s commits past `32e295e5`, [#81](https://github.com/joshbotts/FRUS-Explorer-Web-App/issues/81), is open, last brought up to date at 13:30 UTC with the three this move takes. Its first run after the merge finds nothing past the pin and closes it.
+
+**Records**
+
+- `PLAN.md`: the move's done paragraph after S19b's, S12d's row (from `fb542514`), the golden-files checkpoint, and the risk row's kit count.
+- `SPEC.md`: the compatibility contract's commits, `setupDatabase(_:)`'s lines, and Project Home's subjects and lead lines, a visit's head and Add Documents' two tabs, which wait for pull requests of their own over code the kit now makes public.
+- `COORDINATION.md`: the pin; §1's count, and its two sentences that named #1813 and #1814 open; #1814, merged, and this move in §2; §5's list of app changes; §6's exports.
+- `docs/prep/README.md`: the pin. The README's Known gaps, its Next, and this log.
+
+**Notes**
+
+- **Two of the server's comments still call the kit's code internal:** the head of `Sources/FRUSLightAPI/ProjectHome.swift`, on the focus subjects and the leads' snippets, and `History.swift`'s, on a visit's head. This pull request changes no code, and the follow-ups replace what both describe.
+- **Mac checks:** the owner merged #1813 and #1814, each labelled `Mac`; their checks are the owner's to record.
+
+**Next:** the two follow-ups this pin unblocks, each a pull request of its own:
+- **Project Home's focus subjects, their editor and a lead's line** (S17f's follow-up): the focus subjects from the bundled vocabulary through `VolumeSubjectProfiles`, the Focus Subjects editor with `ProjectFocusSuggestions`' suggestions and a project's `defaultSubjectTagIds` written, a lead's line through `documentSnippets(forKeys:maxLength:)` over the served index, and a visit's head through `extractHeader(from:)`. `s17f-followup-project-home-kit.md` in the shared notes folder says what each needs.
+- **Add Documents' Citations and Tags tabs** (S18d's follow-up): a paste resolved line by line with `CollectionCitationLineResolver` over Citation Lookup's matcher, bounded as Batch is, and a tag's documents gathered with `CollectionGeneratedBlocks.tagDocumentRefs`, beside the sheet's Search and Browse. `s18d-followup-kit-access.md` in the shared notes folder says what each needs.
+
+Then phase 2's sign-off, with the owner's check of a `.fruscollection` the web wrote in the Mac app (S18f).
+
 ## Session 18f: `.fruscollection` both ways, smart collections and headnotes
 
 29 October 2026 · branch `claude/upbeat-nash-1f07ea` · [#90](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/90) · upstream `32e295e5`, unchanged
