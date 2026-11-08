@@ -13,6 +13,7 @@ import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
 import { tabTo } from './keyboard';
 import { getJSON, notes, send } from './notes';
+import { firstFormat, offersPdf } from './pdf';
 
 interface Detail {
   id: string;
@@ -68,9 +69,11 @@ test('writes a collection’s file with its notes by keyboard, and imports it as
   await tabTo(page, open);
   await page.keyboard.press('Enter');
   const sheet = page.getByRole('dialog', { name: 'Export collection' });
-  await expect(sheet.getByRole('radio', { name: 'HTML, Web page' })).toBeChecked();
-  await tabTo(page, sheet.getByRole('radio', { name: 'HTML, Web page' }));
-  for (let step = 0; step < 4; step += 1) await page.keyboard.press('ArrowRight');
+  // The native file is the grid's last card, after PDF while the server offers it (S25a).
+  const pdf = await offersPdf(page);
+  await expect(sheet.getByRole('radio', { name: firstFormat(pdf) })).toBeChecked();
+  await tabTo(page, sheet.getByRole('radio', { name: firstFormat(pdf) }));
+  for (let step = 0; step < (pdf ? 5 : 4); step += 1) await page.keyboard.press('ArrowRight');
   await expect(sheet.getByRole('radio', { name: '.fruscollection, Editable copy for a colleague' })).toBeChecked();
   const notesSwitch = sheet.getByRole('switch', { name: 'Include my research notes' });
   await expect(notesSwitch).not.toBeChecked();
@@ -147,7 +150,11 @@ test('links a collection to a saved search, previews and exports its results, an
   await expect(frame.locator('section[id^="doc-"]')).toHaveCount(2);
   await page.getByRole('button', { name: 'Export…' }).click();
   const sheet = page.getByRole('dialog', { name: 'Export collection' });
-  await expect(sheet.getByRole('radio')).toHaveCount(4);
+  // No native file in a smart collection's grid; PDF first while the server offers it (S25a), so HTML is chosen.
+  const pdf = await offersPdf(page);
+  await expect(sheet.getByRole('radio')).toHaveCount(pdf ? 5 : 4);
+  if (pdf) await sheet.getByText('HTML', { exact: true }).click();
+  await expect(sheet.getByRole('radio', { name: 'HTML, Web page' })).toBeChecked();
   const saving = page.waitForEvent('download');
   await sheet.getByRole('button', { name: 'Export HTML' }).click();
   const html = await readFile(await (await saving).path(), 'utf8');

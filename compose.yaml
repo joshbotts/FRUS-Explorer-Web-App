@@ -26,7 +26,8 @@
 #                    header, with FRUS_TRUSTED_PROXIES, the proxy's addresses, and optionally
 #                    FRUS_AUTH_HEADER (X-Forwarded-User by default) and FRUS_ADMIN_USERS
 #   FRUS_IMAGE       image to run, ghcr.io/joshbotts/frus-explorer-light:edge by default
-#   COMPOSE_PROFILES set to pdf to start Gotenberg, for PDF export when it arrives (phase 3)
+#   COMPOSE_PROFILES set to pdf to start the pdf service below, Gotenberg's Chromium, which prints a
+#                    collection's PDF; the export sheet offers PDF while it answers
 
 services:
   frus:
@@ -48,19 +49,46 @@ services:
       FRUS_BACKUP_COPY_DIR: /backups  # the backups folder above
       FRUS_BACKUP_HOUR: ${FRUS_BACKUP_HOUR:-3}
       TZ: ${TZ:-UTC}
-      FRUS_PDF_URL: http://pdf:3000   # the optional pdf service below
+      FRUS_PDF_URL: http://pdf:3000   # the optional pdf service below, offered while it answers
     read_only: true          # the server writes only to /data, /backups and /tmp
     tmpfs:
       - /tmp
     cap_drop: [ALL]          # it binds port 8080 and needs no Linux capabilities
     security_opt:
       - no-new-privileges:true
+    networks: [default, pdf]
     restart: unless-stopped
 
-  pdf:                       # optional, and off unless COMPOSE_PROFILES=pdf: a 700 MB download
-    image: gotenberg/gotenberg:8
+  # Optional, and off unless COMPOSE_PROFILES=pdf: Gotenberg 8 with Chromium alone, about a 500 MB download.
+  # The server posts it a collection's HTML export, a page that loads nothing from elsewhere, which its
+  # Chromium prints. It is on a network of its own with the server alone, which reaches nothing beyond
+  # them, and its Chromium runs no script and fetches no address, should a page name one.
+  pdf:
+    image: gotenberg/gotenberg:8-chromium
     profiles: [pdf]
+    command:
+      - gotenberg
+      - --api-timeout=300s                       # a long collection's print; the server waits as long
+      - --api-disable-download-from              # it prints what it is sent, and downloads nothing
+      - --chromium-disable-javascript
+      - --chromium-deny-private-ips
+      - --chromium-deny-public-ips
+      - --pdfengines-disable-routes              # the server uses Chromium's route alone
+      - --webhook-disable
+      - --prometheus-disable-collect
+    networks: [pdf]
+    read_only: true          # Chromium writes only to /tmp
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
+
+networks:
+  # The server and the pdf service, and nothing beyond them.
+  pdf:
+    internal: true
 
 volumes:
   frus-data: {}

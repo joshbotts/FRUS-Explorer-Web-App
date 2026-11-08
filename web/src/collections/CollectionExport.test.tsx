@@ -3,14 +3,15 @@
 // for the cap and the volumes the server lacks, and a smart collection's results counted (S18f); the
 // sheet's sentence, grid and quotation check, Export {Format} saving the server's file under its name,
 // the native file with its notes switch, which a smart collection's grid drops (S18f), a refusal in
-// the app's words, and focus back on Export… when it closes.
+// the app's words, and focus back on Export… when it closes; and from S25a PDF, first and chosen as the
+// sheet opens while the server's PDF service answers, and absent while it does not.
 import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CollectionDetail, CollectionEntry } from '../api/collections';
 import { sent } from '../test/notes';
 import { ProblemAnswer, ready, renderAt, stubServer } from '../test/renderRoute';
-import { compositionSentence } from './exportRules';
+import { compositionSentence, gridFormats } from './exportRules';
 
 const me = { userId: 'owner', displayName: 'Owner', auth: 'none', roles: ['reader', 'curator', 'admin'], userData: true, csrfToken: 't' };
 const berlinId = 'C0110000-0000-4000-8000-000000000001';
@@ -110,6 +111,15 @@ describe('the sheet’s sentence of what an export carries', () => {
   });
 });
 
+describe('the grid’s formats', () => {
+  it('are the app’s, in its order, with PDF while the server’s PDF service answers and no native file for a smart collection', () => {
+    expect(gridFormats(false, true)).toEqual(['pdf', 'html', 'docx', 'bibtex', 'zoteroJSON', 'fruscollection']);
+    expect(gridFormats(false, false)).toEqual(['html', 'docx', 'bibtex', 'zoteroJSON', 'fruscollection']);
+    expect(gridFormats(true, true)).toEqual(['pdf', 'html', 'docx', 'bibtex', 'zoteroJSON']);
+    expect(gridFormats(true, false)).toEqual(['html', 'docx', 'bibtex', 'zoteroJSON']);
+  });
+});
+
 describe('the live preview', () => {
   it('sends its frame to the server’s page, the first 20 documents until Render All, and names the volumes the server lacks', async () => {
     server({ [path]: detail({ entries: documents(22), volumesNotHeld: ['frus1961-63v05'] }) });
@@ -206,7 +216,8 @@ describe('the export sheet', () => {
     const sheet = screen.getByRole('dialog', { name: 'Export collection' });
     expect(within(sheet).getByText('Exports the full text of each document, with your notes, footnotes, and a word-cloud overview.')).toBeTruthy();
     expect(within(sheet).getByText('An export from this server draws no word cloud: the app draws it with a renderer of its own.')).toBeTruthy();
-    expect(within(sheet).getAllByRole('radio').map((radio) => radio.closest('label')?.textContent)).toEqual([
+    // The grid comes once the server has said whether it makes PDFs: this one cannot say, so it has none.
+    expect((await within(sheet).findAllByRole('radio')).map((radio) => radio.closest('label')?.textContent)).toEqual([
       'HTMLWeb page',
       'WordEditable .docx',
       'BibTeXReference manager',
@@ -243,7 +254,7 @@ describe('the export sheet', () => {
     renderAt(`/collections/${berlinId}`);
     await userEvent.click(await screen.findByRole('button', { name: 'Export…' }));
     let sheet = screen.getByRole('dialog', { name: 'Export collection' });
-    await userEvent.click(within(sheet).getByRole('radio', { name: /fruscollection/ }));
+    await userEvent.click(await within(sheet).findByRole('radio', { name: /fruscollection/ }));
     const notes = within(sheet).getByRole('switch', { name: 'Include my research notes' }) as HTMLInputElement;
     expect(notes.checked).toBe(false);
     expect(within(sheet).getByText(/Shares an editable copy of this collection/).id).toBe(notes.getAttribute('aria-describedby'));
@@ -268,7 +279,7 @@ describe('the export sheet', () => {
     renderAt(`/collections/${berlinId}`);
     await userEvent.click(await screen.findByRole('button', { name: 'Export…' }));
     sheet = screen.getByRole('dialog', { name: 'Export collection' });
-    expect(within(sheet).getAllByRole('radio')).toHaveLength(4);
+    expect(await within(sheet).findAllByRole('radio')).toHaveLength(4);
     expect(within(sheet).queryByRole('radio', { name: /fruscollection/ })).toBeNull();
     expect(within(sheet).getByRole('button', { name: 'Export HTML' }).getAttribute('aria-disabled')).toBe('false');
     click.mockRestore();
@@ -283,6 +294,7 @@ describe('the export sheet', () => {
     renderAt(`/collections/${berlinId}`);
     await userEvent.click(await screen.findByRole('button', { name: 'Export…' }));
     const sheet = screen.getByRole('dialog', { name: 'Export collection' });
+    await within(sheet).findAllByRole('radio');
     await userEvent.click(within(sheet).getByRole('button', { name: 'Export HTML' }));
     expect((await within(sheet).findByRole('alert')).textContent).toBe('The export could not be rendered.');
     cleanup();
@@ -293,5 +305,81 @@ describe('the export sheet', () => {
     expect(within(screen.getByRole('dialog', { name: 'Export collection' })).getByRole('button', { name: 'Export HTML' }).getAttribute('aria-disabled')).toBe(
       'true',
     );
+  });
+
+  it('offers PDF first while the server’s PDF service answers, opens on it as the app’s sheet does, and saves its file', async () => {
+    const saved: { name: string; type: string }[] = [];
+    URL.createObjectURL = vi.fn((file: Blob) => {
+      saved.push({ name: '', type: file.type });
+      return 'blob:export';
+    });
+    URL.revokeObjectURL = vi.fn();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      saved[saved.length - 1]!.name = this.download;
+    });
+    const fetch = server({
+      [path]: detail(),
+      '/api/v1/pdf': { available: true },
+      [`${path}/excerpt-check`]: { hasFailures: false, verified: 0 },
+      [`POST ${path}/export`]: () =>
+        new Response('%PDF-1.4', { headers: { 'content-type': 'application/pdf', 'content-disposition': 'attachment; filename="Berlin.pdf"' } }),
+    });
+    renderAt(`/collections/${berlinId}`);
+    await userEvent.click(await screen.findByRole('button', { name: 'Export…' }));
+    const sheet = screen.getByRole('dialog', { name: 'Export collection' });
+    expect((await within(sheet).findAllByRole('radio')).map((radio) => radio.closest('label')?.textContent)).toEqual([
+      'PDFFormatted reader',
+      'HTMLWeb page',
+      'WordEditable .docx',
+      'BibTeXReference manager',
+      'RISZotero / EndNote',
+      '.fruscollectionEditable copy for a colleague',
+    ]);
+    expect((within(sheet).getByRole('radio', { name: 'PDF, Formatted reader' }) as HTMLInputElement).checked).toBe(true);
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Export PDF' }));
+    await waitFor(() => expect(within(sheet).getByText('Export Complete: Berlin.pdf')).toBeTruthy());
+    const exported = fetch.mock.calls.find(([url, init]) => String(url).endsWith('/export') && init?.method === 'POST');
+    // The format alone, with the browser's zone, as for HTML: only the native file carries notes.
+    expect(sent(exported?.[1]).body).toMatchObject({ format: 'pdf' });
+    expect(Object.keys(sent(exported?.[1]).body as object).sort()).toEqual(['format', 'timeZone']);
+    expect(saved).toEqual([{ name: 'Berlin.pdf', type: 'application/pdf' }]);
+    // Asked as the editor opened, and not again for the sheet, within the ten seconds an answer holds.
+    expect(fetch.mock.calls.filter(([url]) => new URL(String(url), 'http://localhost').pathname === '/api/v1/pdf')).toHaveLength(1);
+    click.mockRestore();
+  });
+
+  it('stops offering PDF once an export finds the server’s PDF service not answering, and says why', async () => {
+    let answering = true;
+    const unanswered = 'The server’s PDF service is not answering, so no PDF was made. Try again in a moment, or choose another format.';
+    const fetch = server({
+      [path]: detail(),
+      '/api/v1/pdf': () => ({ available: answering }),
+      [`${path}/excerpt-check`]: { hasFailures: false, verified: 0 },
+      [`POST ${path}/export`]: () => {
+        answering = false;
+        return new ProblemAnswer(503, 'PDF_SERVICE_UNAVAILABLE', unanswered);
+      },
+    });
+    renderAt(`/collections/${berlinId}`);
+    await userEvent.click(await screen.findByRole('button', { name: 'Export…' }));
+    const sheet = screen.getByRole('dialog', { name: 'Export collection' });
+    await within(sheet).findByRole('radio', { name: 'PDF, Formatted reader' });
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Export PDF' }));
+    expect((await within(sheet).findByRole('alert')).textContent).toBe(unanswered);
+    // Asked again at once, the server says no, and the grid is the app's less PDF, on HTML.
+    await waitFor(() => expect(within(sheet).queryByRole('radio', { name: 'PDF, Formatted reader' })).toBeNull());
+    expect((within(sheet).getByRole('radio', { name: 'HTML, Web page' }) as HTMLInputElement).checked).toBe(true);
+    expect(fetch.mock.calls.filter(([url]) => new URL(String(url), 'http://localhost').pathname === '/api/v1/pdf')).toHaveLength(2);
+  });
+
+  it('offers no PDF while the server’s PDF service does not answer, and opens on HTML', async () => {
+    server({ [path]: detail(), '/api/v1/pdf': { available: false }, [`${path}/excerpt-check`]: { hasFailures: false, verified: 0 } });
+    renderAt(`/collections/${berlinId}`);
+    await userEvent.click(await screen.findByRole('button', { name: 'Export…' }));
+    const sheet = screen.getByRole('dialog', { name: 'Export collection' });
+    const radios = (await within(sheet).findAllByRole('radio')) as HTMLInputElement[];
+    expect(radios.map((radio) => radio.value)).toEqual(['html', 'docx', 'bibtex', 'zoteroJSON', 'fruscollection']);
+    expect(radios[0]!.checked).toBe(true);
+    expect(within(sheet).getByRole('button', { name: 'Export HTML' }).getAttribute('aria-disabled')).toBe('false');
   });
 });

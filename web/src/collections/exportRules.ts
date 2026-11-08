@@ -2,7 +2,8 @@
 // app's source by FRUSParityTests' CollectionExportParityTests: the sheet's sentence of what an export
 // carries (`Collection.compositionSummarySentence`), the bar the preview shows past its cap
 // (`CollectionPreviewView.capBar`'s condition) and the time the preview waits for edits to settle; and
-// from S18f the grid's formats for a smart collection (`ExportFormat.gridFormats(smartCollection:)`).
+// from S18f the grid's formats for a smart collection (`ExportFormat.gridFormats(smartCollection:)`),
+// with PDF from S25a while the server's PDF service answers.
 import { exportFormats, previewDocumentCap, type CollectionDetail, type ExportFormat } from '../api/collections';
 import { copy } from '../copy';
 
@@ -35,10 +36,12 @@ export function showsCapBar(documentCount: number, renderAll: boolean): boolean 
 
 /**
  * `ExportFormat.gridFormats(smartCollection:)`: the grid in the app's order, the native file dropped for a
- * smart collection, whose documents no file carries.
+ * smart collection, whose documents no file carries; and, the web's own, PDF dropped unless the server's
+ * PDF service answers (S25a), which the app's grid always offers.
  */
-export function gridFormats(smartCollection: boolean): readonly ExportFormat[] {
-  return smartCollection ? exportFormats.filter((format) => format !== 'fruscollection') : exportFormats;
+export function gridFormats(smartCollection: boolean, pdf: boolean): readonly ExportFormat[] {
+  const formats = smartCollection ? exportFormats.filter((format) => format !== 'fruscollection') : exportFormats;
+  return pdf ? formats : formats.filter((format) => format !== 'pdf');
 }
 
 /** `CollectionPreviewView.refresh()`'s debounce: how long edits settle before the page is built again. */

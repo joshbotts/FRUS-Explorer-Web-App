@@ -439,10 +439,10 @@ import Testing
         // The browser app's mirrors: the grid's order, the notes' switch off until turned on, the preview's count of
         // a smart collection's results, the Export a smart collection offers with no entry, and New Note…'s rule.
         NoteViewParityTests.expect(try CollectionParityTests.web("api/collections.ts"), holds: [
-            "export const exportFormats = ['html', 'docx', 'bibtex', 'zoteroJSON', 'fruscollection'] as const;",
+            "export const exportFormats = ['pdf', 'html', 'docx', 'bibtex', 'zoteroJSON', 'fruscollection'] as const;",
         ], file: "api/collections.ts")
         NoteViewParityTests.expect(try CollectionParityTests.web("collections/exportRules.ts"), holds: [
-            "return smartCollection ? exportFormats.filter((format) => format !== 'fruscollection') : exportFormats;",
+            "const formats = smartCollection ? exportFormats.filter((format) => format !== 'fruscollection') : exportFormats;",
         ], file: "collections/exportRules.ts")
         NoteViewParityTests.expect(try CollectionParityTests.web("collections/CollectionExportSheet.tsx"), holds: [
             "const [includeNotes, setIncludeNotes] = useState(false);",

@@ -12,9 +12,11 @@
 //   and `ZoteroCollectionExporter.ris`, the bytes each exporter writes to its file, named as it names
 //   it, which the browser saves. Each is kept in the history as the app's `ExportHistoryRecorder`
 //   keeps it, while Log Research Sessions is on. No word cloud is drawn, since its drawing is the
-//   app's (SwiftUI); PDF waits for phase 3. From PLAN's S18f, `.fruscollection` too, the file the kit's
+//   app's (SwiftUI). From PLAN's S18f, `.fruscollection` too, the file the kit's
 //   `NativeCollectionSerializer` writes of the collection's source, which resolves nothing
-//   (CollectionFiles.swift).
+//   (CollectionFiles.swift). From PLAN's S25a, PDF, while the server has a PDF service
+//   (`FRUS_PDF_URL`): the HTML export's page, printed by the service's Chromium with its print CSS
+//   (PDFService.swift), named as the app's `PDFCollectionExporter` names its file.
 // - The quotation check, `GET /api/v1/me/collections/{id}/excerpt-check`, which the export sheet runs
 //   as it opens and which warns without blocking: the kit's `ExcerptVerifier` over the served index's
 //   body texts, a document an update removed told apart by its revision, and the report's sentence.
@@ -26,7 +28,7 @@
 // - `CollectionPreviewView`: its cap, `capEntries(_:cap:)`, `previewOptions()` and the volumes it
 //   names as not downloaded, here those the server's folder of volumes lacks, none for a smart
 //   collection, whose results it caps before they are resolved;
-// - `ExportFormat`: the five formats' raw values, suffixes and `exportOptions(for:)`;
+// - `ExportFormat`: the six formats' raw values, suffixes and `exportOptions(for:)`;
 // - `CollectionExportMetadata.forExport(of:activeProject:modelContext:)`, with its method appendix
 //   (`ResearchDataExporter.collectionMethodAppendixLines`);
 // - `ProseRichText.exportRTF` read by `CollectionProse.paragraphs(fromRTF:)`, through the web's codec;
@@ -67,15 +69,16 @@ public struct ExcerptQuotation: Codable, Equatable, Sendable {
     public var text: String
 }
 
-/// The formats a collection exports to here, the app's `ExportFormat` cases but PDF, which waits for
-/// phase 3's Chromium.
+/// The formats a collection exports to here, the app's `ExportFormat` cases, PDF while the server has a
+/// PDF service (PLAN's S25a).
 enum CollectionExportFormat: String, CaseIterable, Sendable {
-    case html, docx, bibtex, zoteroJSON, fruscollection
+    case pdf, html, docx, bibtex, zoteroJSON, fruscollection
 
     /// The end of the file's name, as each exporter names its file (`CollectionExportNaming.fileName`),
     /// and the native file `writeTemporaryFile(_:)` names.
     var suffix: String {
         switch self {
+        case .pdf: ".pdf"
         case .html: ".html"
         case .docx: ".docx"
         case .bibtex: ".bib"
@@ -87,6 +90,7 @@ enum CollectionExportFormat: String, CaseIterable, Sendable {
     /// The native file's is JSON's, which the app's `UTType.fruscollection` conforms to.
     var mediaType: String {
         switch self {
+        case .pdf: "application/pdf"
         case .html: "text/html; charset=utf-8"
         case .docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         case .bibtex: "application/x-bibtex; charset=utf-8"
@@ -95,11 +99,16 @@ enum CollectionExportFormat: String, CaseIterable, Sendable {
         }
     }
 
-    /// `ExportFormat.printsFigureImages`: HTML and Word print a figure's image.
-    var printsFigureImages: Bool { self == .html || self == .docx }
+    /// `ExportFormat.printsFigureImages`: PDF, HTML and Word print a figure's image.
+    var printsFigureImages: Bool { self == .pdf || self == .html || self == .docx }
 
-    /// `ExportFormat.drawsWordCloud`: HTML and Word draw the word cloud when the collection asks.
-    var drawsWordCloud: Bool { self == .html || self == .docx }
+    /// `ExportFormat.drawsWordCloud`: PDF, HTML and Word draw the word cloud when the collection asks.
+    var drawsWordCloud: Bool { self == .pdf || self == .html || self == .docx }
+
+    /// The formats this server exports: PDF only while it has a PDF service, whether or not it answers now.
+    static func offered(pdf: PDFService?) -> [CollectionExportFormat] {
+        allCases.filter { $0 != .pdf || pdf != nil }
+    }
 
     /// `ExportFormat.exportOptions(for:)`: the collection's composition, the word cloud asked of a
     /// format that draws one.
@@ -140,6 +149,8 @@ enum CollectionExportRoutes {
         let store = services.store
         let now = services.now
         let parses = CollectionDocumentParses(reader: reader, resources: resources)
+        // The server's PDF service, which its state holds (PLAN's S25a).
+        let pdf = provider.state.pdf
         let figures = ServedFigureImages(volumesDirectory: reader.volumesDirectory, resources: resources)
 
         // The live preview, as the app's pane renders it, for the editor's frame: a problem is a page
@@ -208,8 +219,9 @@ enum CollectionExportRoutes {
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
             let body = try await JSONBody.decode(Export.self, from: request, fields: ["format", "timeZone", "includeNotes"])
-            guard let format = CollectionExportFormat(rawValue: body.format) else {
-                let names = CollectionExportFormat.allCases.map(\.rawValue).joined(separator: ", ")
+            let offered = CollectionExportFormat.offered(pdf: pdf)
+            guard let format = CollectionExportFormat(rawValue: body.format), offered.contains(format) else {
+                let names = offered.map(\.rawValue).joined(separator: ", ")
                 throw CollectionRoutes.invalidField("format", "\(body.format) is not a format this server exports: \(names).")
             }
             if body.includeNotes != nil, format != .fruscollection {
@@ -221,6 +233,8 @@ enum CollectionExportRoutes {
             guard !collection.entries.isEmpty || collection.savedSearchId != nil else {
                 throw APIProblem(.conflict, code: "COLLECTION_EMPTY", detail: "This collection has nothing in it to export yet.")
             }
+            // A PDF only while the service answers, asked before the collection is resolved for it.
+            if format == .pdf, await pdf?.isAvailable() != true { throw PDFRoutes.unavailable }
             let file: (data: Data, documents: Int, name: String)
             if format == .fruscollection {
                 // `runNativeExport()`: the collection's source, which resolves nothing and needs no index.
@@ -258,7 +272,8 @@ enum CollectionExportRoutes {
                     let items = try await resolve(collection, entries: collection.entries, smartRefs: refs, research: research,
                                                   served: served, resources: resources, parses: parses, purpose: .export,
                                                   printsFigureImages: format.printsFigureImages)
-                    let data = try await Blocking.run { rendered(items, metadata: metadata, format: format, options: options, figures: figures) }
+                    let page = try await Blocking.run { rendered(items, metadata: metadata, format: format, options: options, figures: figures) }
+                    let data = format == .pdf ? try await printed(page, by: pdf, context: context) : page
                     return (data, items.documents.count, CollectionExportNaming.fileName(savedName: metadata.name, suffix: format.suffix))
                 }
             }
@@ -499,11 +514,11 @@ enum CollectionExportRoutes {
 
     /// The file `format`'s exporter writes for `items`: the HTML exporter's page, with no word cloud,
     /// which its drawing alone could add, and the Word exporter's package, both with the folder's
-    /// figures; BibTeX's text.
+    /// figures; BibTeX's text. For PDF, the HTML export's page, which the PDF service prints.
     static func rendered(_ items: [CollectionExportItem], metadata: CollectionExportMetadata, format: CollectionExportFormat,
                          options: CollectionExportOptions, figures: any FigureImageSource) -> Data {
         switch format {
-        case .html:
+        case .html, .pdf:
             var renderer = CollectionItemHTMLRenderer(options: options)
             renderer.figureImages = figures
             return Data(renderer.pageHTML(metadata: metadata, items: items, wordCloudPNGBase64: nil).utf8)
@@ -516,6 +531,18 @@ enum CollectionExportRoutes {
         case .fruscollection:
             // Written from the collection's source, never from resolved items (`CollectionFileRoutes.nativeFile`).
             return Data()
+        }
+    }
+
+    /// The HTML export's `page` printed as a PDF by the server's PDF service, Gotenberg's Chromium, with its
+    /// print CSS; what goes wrong is said in the log and is the sheet's refusal.
+    static func printed(_ page: Data, by service: PDFService?, context: APIRequestContext) async throws -> Data {
+        guard let service else { throw PDFRoutes.unavailable }
+        do {
+            return try await service.pdf(fromHTML: page)
+        } catch let error as PDFServiceError {
+            context.logger.error("The PDF service at \(service.url) made no PDF of a collection: \(error)")
+            throw PDFRoutes.problem(error)
         }
     }
 

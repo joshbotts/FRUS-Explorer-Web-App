@@ -3,12 +3,15 @@
 // grid drops, and Export {Format}, which saves the file the server writes, the kit's; for the native
 // file, the app's switch that includes the reader's notes, off until turned on, and what the file
 // carries; the quotation check, run as the sheet opens, warning without blocking, in orange when a
-// quotation is not found, as the app's; and a refusal in red, in the app's words. The saved file's
-// line and the word cloud's note are the web's own.
+// quotation is not found, as the app's; and a refusal in red, in the app's words. From S25a, PDF first,
+// the app's choice as the sheet opens, while the server's PDF service answers, which the sheet asks
+// before it shows the grid; without it the grid has no PDF and opens on HTML. The saved file's line and
+// the word cloud's note are the web's own.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
-import { errorMessage } from '../api/client';
+import { ApiError, errorMessage } from '../api/client';
 import { excerptCheckQuery, exportCollection, type CollectionDetail, type ExportFormat } from '../api/collections';
+import { offersPdf, pdfServiceQuery } from '../api/pdf';
 import { copy } from '../copy';
 import { Modal } from '../shell/Modal';
 import { saveFile } from '../shell/saveFile';
@@ -22,10 +25,14 @@ export function CollectionExportSheet({ detail, onClose }: { detail: CollectionD
   const id = useId();
   const check = useQuery(excerptCheckQuery(detail.id));
   const smart = !detail.takesHandAddedEntries;
-  const formats = gridFormats(smart);
-  const [chosen, setFormat] = useState<ExportFormat>('html');
-  // A format the grid no longer offers, as the native file once the collection is linked, is HTML again.
-  const format = formats.includes(chosen) ? chosen : 'html';
+  // The grid waits for the server to say whether it makes PDFs, so that it never changes under the reader.
+  const pdf = useQuery(pdfServiceQuery);
+  const known = !pdf.isPending;
+  const formats = gridFormats(smart, offersPdf(pdf.data));
+  const [chosen, setFormat] = useState<ExportFormat | null>(null);
+  // The app's sheet opens on PDF, the grid's first; without it, on HTML, the first then. A format the grid
+  // no longer offers, as the native file once the collection is linked, is the first again.
+  const format = chosen !== null && formats.includes(chosen) ? chosen : formats[0]!;
   const [includeNotes, setIncludeNotes] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -35,7 +42,7 @@ export function CollectionExportSheet({ detail, onClose }: { detail: CollectionD
   const label = words.grid[format]!.label;
 
   async function run() {
-    if (unavailable || exporting) return;
+    if (unavailable || exporting || !known) return;
     setExporting(true);
     setFailure(null);
     setSaved(null);
@@ -45,6 +52,8 @@ export function CollectionExportSheet({ detail, onClose }: { detail: CollectionD
       setSaved(file.name);
     } catch (error) {
       setFailure(errorMessage(error));
+      // A PDF service that has stopped answering is asked again, and the grid offers PDF no longer.
+      if (error instanceof ApiError && error.code === 'PDF_SERVICE_UNAVAILABLE') void client.invalidateQueries({ queryKey: pdfServiceQuery.queryKey });
     } finally {
       setExporting(false);
     }
@@ -58,23 +67,24 @@ export function CollectionExportSheet({ detail, onClose }: { detail: CollectionD
       </h2>
       <p>{compositionSentence(detail)}</p>
       {detail.includeWordCloud && <p className="note">{words.noWordCloud}</p>}
-      <fieldset className="format-grid">
+      <fieldset className="format-grid" aria-busy={!known || undefined}>
         <legend className="visually-hidden">{words.formats}</legend>
-        {formats.map((each) => (
-          <label key={each} className={each === format ? 'format-card selected' : 'format-card'}>
-            {/* Named as the app's card is, its title and its caption. */}
-            <input
-              type="radio"
-              name={`${id}-format`}
-              value={each}
-              aria-label={`${words.grid[each]!.label}, ${words.grid[each]!.caption}`}
-              checked={each === format}
-              onChange={() => setFormat(each)}
-            />
-            <span className="format-label">{words.grid[each]!.label}</span>
-            <span className="format-caption">{words.grid[each]!.caption}</span>
-          </label>
-        ))}
+        {known &&
+          formats.map((each) => (
+            <label key={each} className={each === format ? 'format-card selected' : 'format-card'}>
+              {/* Named as the app's card is, its title and its caption. */}
+              <input
+                type="radio"
+                name={`${id}-format`}
+                value={each}
+                aria-label={`${words.grid[each]!.label}, ${words.grid[each]!.caption}`}
+                checked={each === format}
+                onChange={() => setFormat(each)}
+              />
+              <span className="format-label">{words.grid[each]!.label}</span>
+              <span className="format-caption">{words.grid[each]!.caption}</span>
+            </label>
+          ))}
       </fieldset>
       {format === 'fruscollection' && (
         <div className="native-options">
@@ -103,7 +113,7 @@ export function CollectionExportSheet({ detail, onClose }: { detail: CollectionD
           {words.close}
         </button>
         {/* aria-disabled, not disabled, so Export pressed by keyboard keeps its focus while the file is made. */}
-        <button type="button" className="primary" aria-disabled={unavailable || exporting} onClick={() => void run()}>
+        <button type="button" className="primary" aria-disabled={unavailable || exporting || !known} onClick={() => void run()}>
           {words.exportFormat(label)}
         </button>
       </div>

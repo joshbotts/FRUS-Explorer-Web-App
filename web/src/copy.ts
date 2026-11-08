@@ -1301,8 +1301,9 @@ export const copy = {
   /**
    * The export sheet (PLAN's S18e), the app's `ExportSheetView`: the composition's sentence, the format
    * grid, the quotation check and Export {Format}, in the app's words, and from S18f `.fruscollection`
-   * with its notes switch and hint. Its PDF waits for phase 3 and its Send to Zotero Library for phase
-   * 3's secrets; the word cloud's note and the saved file's line are the web's own.
+   * with its notes switch and hint, and from S25a PDF, while the server's PDF service answers. Its Send
+   * to Zotero Library waits for phase 3's secrets; the word cloud's note and the saved file's line are
+   * the web's own.
    */
   collectionExport: {
     title: 'Export collection',
@@ -1312,6 +1313,7 @@ export const copy = {
     complete: 'Export Complete',
     formats: 'Format',
     grid: {
+      pdf: { label: 'PDF', caption: 'Formatted reader' },
       html: { label: 'HTML', caption: 'Web page' },
       docx: { label: 'Word', caption: 'Editable .docx' },
       bibtex: { label: 'BibTeX', caption: 'Reference manager' },

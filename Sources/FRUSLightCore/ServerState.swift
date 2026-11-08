@@ -42,6 +42,8 @@ public struct ServerStatus: Sendable, Equatable, Codable {
 
 public actor ServerState: ImportObserver {
     public let configuration: ServerConfiguration
+    /// The PDF service `FRUS_PDF_URL` names (PLAN's S25a), none when it is unset, which hides PDF.
+    public nonisolated let pdf: PDFService?
     private let startedAt = Date()
     public private(set) var index: CorpusIndex?
     private var importing: ImportProgress?
@@ -56,6 +58,7 @@ public actor ServerState: ImportObserver {
 
     public init(configuration: ServerConfiguration, log: @escaping @Sendable (String) -> Void = { _ in }) {
         self.configuration = configuration
+        pdf = configuration.pdfURL.flatMap { PDFService(url: $0, log: log) }
         self.log = log
     }
 

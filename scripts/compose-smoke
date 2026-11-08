@@ -17,7 +17,11 @@
 # guide's recipe for it runs with a stand-in for its session check, a header from outside the list
 # is refused, and two users' tags stay apart. Its TEI folder holds fixtures/tei's volumes and the
 # kit's fixture for a section's own text,
-# fixtures/own-text/frus1969-76v01.xml, whose rows the export holds too.
+# fixtures/own-text/frus1969-76v01.xml, whose rows the export holds too. Between the research steps and
+# nginx at the root it starts the pdf profile, once, for the rest of the run: before it, the server
+# offers no PDF; with it, a collection's PDF comes through Gotenberg's Chromium and holds the titles its
+# HTML export gives its documents, which scripts/pdf-text reads, and the browser suite exports one by
+# keyboard (PLAN's S25a). It needs python3, for scripts/pdf-text.
 #   scripts/compose-smoke                       builds the image as frus-light:smoke first
 #   FRUS_IMAGE=<image> scripts/compose-smoke    tests an image already built
 #   scripts/compose-smoke --e2e                 also runs web/e2e, Playwright on Chromium, against the
@@ -80,7 +84,8 @@ cleanup() {
   fi
   docker rm -f "$proxy" "$COMPOSE_PROJECT_NAME-tmp-volume" "$COMPOSE_PROJECT_NAME-tmp-tmp" >/dev/null 2>&1 || true
   docker volume rm "$COMPOSE_PROJECT_NAME-tmp-volume" "$COMPOSE_PROJECT_NAME-tmp-tmp" >/dev/null 2>&1 || true
-  docker compose down --volumes --remove-orphans >/dev/null 2>&1 || true
+  # With the pdf profile, whether or not a step started it, so that its container and network go too.
+  COMPOSE_PROFILES=pdf docker compose down --volumes --remove-orphans >/dev/null 2>&1 || true
   rm -rf "$work"
 }
 trap cleanup EXIT
@@ -291,6 +296,73 @@ code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' -X DELETE "${as_app[@
   "$base/api/v1/me/highlights/$highlight" || true)
 [ "$code" = 204 ] || fail "deleting the highlight answered $code"
 echo "   made over d1's first nine characters at version $version, listed and not stale, and removed"
+
+echo "== collections: no PDF while the pdf profile is off"
+# Compose names http://pdf:3000 in FRUS_PDF_URL whether or not the profile runs Gotenberg there: the
+# server offers PDF only while it answers (PLAN's S25a).
+offered=$(curl -s --max-time 10 "$base/api/v1/pdf") || fail "/api/v1/pdf did not answer"
+case "$offered" in *'"available":false'*) ;; *) fail "the server offers PDF with no pdf service: $offered" ;; esac
+made=$(curl -s --max-time 5 -X POST "${as_app[@]}" -H "X-CSRF-Token: $token" -H 'Content-Type: application/json' \
+  --data '{"name":"Smoke letters"}' "$base/api/v1/me/collections") || fail "the collection was not made"
+collection=$(printf '%s' "$made" | sed -nE 's/.*"id":"([0-9A-F-]+)".*/\1/p' | head -1)
+[ -n "$collection" ] || fail "making a collection answered $made"
+added=$(curl -s --max-time 30 -X POST "${as_app[@]}" -H "X-CSRF-Token: $token" -H 'Content-Type: application/json' \
+  --data '{"documents":[{"volumeId":"frus1961-63v06","documentId":"d1"},{"volumeId":"frus1961-63v06","documentId":"d2"}]}' \
+  -o /dev/null -w '%{http_code}' "$base/api/v1/me/collections/$collection/documents" || true)
+[ "$added" = 200 ] || fail "adding the collection's documents answered $added"
+export_as() {  # $1: the format; $2: the file it writes, with its headers beside it. Prints the status and the type.
+  curl -s --max-time 330 -X POST "${as_app[@]}" -H "X-CSRF-Token: $token" -H 'Content-Type: application/json' \
+    --data "{\"format\":\"$1\",\"timeZone\":\"America/New_York\"}" -D "$2.headers" -o "$2" -w '%{http_code} %{content_type}' \
+    "$base/api/v1/me/collections/$collection/export" || true
+}
+answer=$(export_as pdf "$work/refused.json")
+case "$answer $(cat "$work/refused.json")" in '503 application/problem+json'*'"code":"PDF_SERVICE_UNAVAILABLE"'*) ;;
+  *) fail "a PDF with no pdf service answered $answer: $(cat "$work/refused.json")" ;; esac
+echo "   /api/v1/pdf offers none, and a collection's PDF is refused as PDF_SERVICE_UNAVAILABLE"
+
+echo "== collections: a collection's PDF through the pdf profile's Gotenberg, holding its documents' titles"
+python3 scripts/pdf-text selftest >/dev/null || fail "scripts/pdf-text cannot read the PDF its selftest writes"
+COMPOSE_PROFILES=pdf docker compose up -d pdf >/dev/null 2>&1 || fail "the pdf profile did not start"
+# Kept for the rest of the run, so that the steps after this, the browser suite's PDF and the clean-up
+# keep the pdf service in the project.
+export COMPOSE_PROFILES=pdf
+[ "$(docker inspect --format '{{.HostConfig.ReadonlyRootfs}}' "$(docker compose ps -q pdf)")" = true ] || fail "the pdf service's root filesystem is not read-only"
+offered=""
+for _ in $(seq 1 120); do  # the server asks the service again ten seconds after its last answer
+  offered=$(curl -s --max-time 10 "$base/api/v1/pdf" || true)
+  case "$offered" in *'"available":true'*) break ;; esac
+  sleep 0.5
+done
+case "$offered" in *'"available":true'*) ;; *) fail "the server does not offer PDF with the pdf service up: $offered; $(docker compose logs --no-color pdf 2>&1 | tail -5)" ;; esac
+# On the pdf network alone, which Compose makes internal: it reaches the server and nothing else.
+networks=$(docker inspect --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}' "$(docker compose ps -q pdf)")
+[ "$networks" = "${COMPOSE_PROJECT_NAME}_pdf " ] || fail "the pdf service is on the networks $networks"
+[ "$(docker network inspect --format '{{.Internal}}' "${COMPOSE_PROJECT_NAME}_pdf")" = true ] || fail "the pdf network is not internal"
+# The titles the HTML export gives the collection's documents, each its section's heading, are the
+# PDF's to hold: it prints that page.
+answer=$(export_as html "$work/collection.html")
+[ "$answer" = "200 text/html; charset=utf-8" ] || fail "the collection's HTML answered $answer"
+titles=()
+while IFS= read -r title; do titles+=(--contains "$title"); done < <(python3 - "$work/collection.html" <<'PY'
+import html, re, sys
+page = open(sys.argv[1], encoding='utf-8').read()
+for heading in re.findall(r'<section id="doc-[^"]*">\s*<h2>(.*?)</h2>', page, re.S):
+    print(' '.join(html.unescape(re.sub(r'<[^>]+>', '', heading)).split()))
+PY
+)
+[ "${#titles[@]}" = 4 ] || fail "the HTML export gives ${#titles[@]} titles' arguments, not two documents' titles"
+answer=$(export_as pdf "$work/collection.pdf")
+[ "$answer" = "200 application/pdf" ] || fail "the collection's PDF answered $answer: $(head -c 300 "$work/collection.pdf")"
+grep -qi '^content-disposition: attachment; filename="Smoke letters.pdf"' "$work/collection.pdf.headers" \
+  || fail "the PDF is not named as the app names it: $(grep -i '^content-disposition' "$work/collection.pdf.headers")"
+[ "$(head -c 5 "$work/collection.pdf")" = "%PDF-" ] || fail "the collection's PDF is no PDF"
+python3 scripts/pdf-text "$work/collection.pdf" "${titles[@]}" || fail "the PDF does not hold its documents' titles: $(python3 scripts/pdf-text "$work/collection.pdf" | head -5)"
+kept=$(curl -s --max-time 5 "${as_app[@]}" "$base/api/v1/me/history") || fail "the history did not answer"
+case "$kept" in *'"format":"pdf"'*'"formatName":"PDF"'*|*'"formatName":"PDF"'*'"format":"pdf"'*) ;; *) fail "the history does not keep the PDF: $kept" ;; esac
+code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' -X DELETE "${as_app[@]}" -H "X-CSRF-Token: $token" \
+  "$base/api/v1/me/collections/$collection" || true)
+[ "$code" = 204 ] || fail "deleting the collection answered $code"
+echo "   $(wc -c < "$work/collection.pdf" | tr -d ' ') bytes, named Smoke letters.pdf, holding the titles $(printf '%s' "${titles[1]}") and $(printf '%s' "${titles[3]}"), and kept in the history; Gotenberg read-only and on its own network"
 
 echo "== install: behind nginx at the root, with docs/INSTALL.md's recipe"
 start_proxy "at the root" /healthz
