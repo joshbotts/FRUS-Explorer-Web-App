@@ -1,5 +1,5 @@
 // The Collections tab, a collection's editor and the Add to Collection picker (S18d), against a stubbed
-// server: the list's rows, its scope banner, New Collection, Duplicate and Delete…; the editor's rows
+// server: the list's rows, its scope banner, New Collection, Rename, Duplicate and Delete…; the editor's rows
 // by kind, the Add menu, a heading's menu and its Delete Section, Move Down, Collection settings'
 // presets, and the inspector's inclusions; and the picker's add of a document and of an excerpt.
 import { cleanup, screen, waitFor, within } from '@testing-library/react';
@@ -163,7 +163,7 @@ describe('the Collections tab', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Grain' })).toBeTruthy();
   });
 
-  it('asks before Delete…, and sends focus on to the next row', async () => {
+  it('asks before Delete… in the app’s words, naming the collection, and sends focus on to the next row', async () => {
     let items = [listed({ id: berlinId, name: 'Berlin' }), listed({ id: cubaId, name: 'Cuba' })];
     const fetch = server({
       '/api/v1/me/collections': () => ({ total: items.length, items }),
@@ -174,10 +174,140 @@ describe('the Collections tab', () => {
     });
     renderAt('/collections');
     await userEvent.click(await screen.findByRole('button', { name: 'Delete… Berlin' }));
-    const question = screen.getByRole('alertdialog', { name: 'Delete Collection?' });
+    const question = screen.getByRole('alertdialog', { name: 'Delete “Berlin”?' });
+    expect(question.getAttribute('aria-describedby')).toBeTruthy();
+    expect(within(question).getByText(
+      'Its section headings, note blocks and headnotes go with it, on your other devices too once they sync. The documents in it, and your notes and highlights on them, stay.',
+    )).toBeTruthy();
+    expect(within(question).getAllByRole('button').map((button) => button.textContent)).toEqual(['Cancel', 'Delete']);
     await userEvent.click(within(question).getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(fetch.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(true));
     await waitFor(() => expect(document.activeElement?.getAttribute('aria-label')).toBe('Delete… Cuba'));
+  });
+
+  /** The server's rename as a stub: the name trimmed, one left empty keeping the old, and the renamed first. */
+  function renaming() {
+    let items = [listed({ id: berlinId, name: 'Berlin' }), listed({ id: cubaId, name: 'Cuba' })];
+    const fetch = server({
+      '/api/v1/me/collections': () => ({ total: items.length, items }),
+      [`POST /api/v1/me/collections/${cubaId}/rename`]: (_url: URL, init?: RequestInit) => {
+        const name = (sent(init).body as { name: string }).name.trim();
+        if (name !== '') items = [listed({ id: cubaId, name }), ...items.filter((item) => item.id !== cubaId)];
+        return detail({ id: cubaId, name: name || 'Cuba', listName: name || 'Cuba' });
+      },
+    });
+    return fetch;
+  }
+
+  it('renames a collection by the app’s Rename Collection alert, the field holding its saved name, and keeps focus on its Rename', async () => {
+    const fetch = renaming();
+    renderAt('/collections');
+    const rows = await screen.findByRole('list', { name: 'Collections' });
+    expect(within(within(rows).getAllByRole('listitem')[0]!).getAllByRole('button').map((button) => button.textContent)).toEqual([
+      'Rename',
+      'Duplicate',
+      'Delete…',
+    ]);
+    await userEvent.click(screen.getByRole('button', { name: 'Rename Cuba' }));
+    const alert = screen.getByRole('dialog', { name: 'Rename Collection' });
+    const field = within(alert).getByRole('textbox', { name: 'Collection Name' });
+    expect(field).toHaveProperty('value', 'Cuba');
+    expect(field.getAttribute('placeholder')).toBe('Collection Name');
+    await waitFor(() => expect(document.activeElement).toBe(field));
+    await userEvent.clear(field);
+    await userEvent.type(field, ' Havana {Enter}');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Rename Collection' })).toBeNull());
+    const renamed = fetch.mock.calls.find(([url]) => String(url).endsWith('/rename'));
+    expect(sent(renamed?.[1]).body).toEqual({ name: ' Havana ' });
+    await waitFor(() => expect(within(rows).getAllByRole('link').map((link) => link.textContent)).toEqual(['Havana', 'Berlin']));
+    await waitFor(() => expect(document.activeElement?.getAttribute('aria-label')).toBe('Rename Havana'));
+  });
+
+  it('keeps the old name for a name left empty, Save offered as the app’s alert offers it, and sends nothing for Cancel or the name as it opened', async () => {
+    const fetch = renaming();
+    renderAt('/collections');
+    await userEvent.click(await screen.findByRole('button', { name: 'Rename Cuba' }));
+    let alert = screen.getByRole('dialog', { name: 'Rename Collection' });
+    await userEvent.type(within(alert).getByRole('textbox', { name: 'Collection Name' }), 'n');
+    await userEvent.click(within(alert).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(document.activeElement?.getAttribute('aria-label')).toBe('Rename Cuba'));
+    // Save on the name as it opened writes nothing, so a rename made elsewhere since the list was read stands.
+    await userEvent.click(screen.getByRole('button', { name: 'Rename Cuba' }));
+    alert = screen.getByRole('dialog', { name: 'Rename Collection' });
+    expect(within(alert).getByRole('textbox', { name: 'Collection Name' })).toHaveProperty('value', 'Cuba');
+    await userEvent.click(within(alert).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Rename Collection' })).toBeNull());
+    await waitFor(() => expect(document.activeElement?.getAttribute('aria-label')).toBe('Rename Cuba'));
+    expect(fetch.mock.calls.some(([url]) => String(url).endsWith('/rename'))).toBe(false);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Rename Cuba' }));
+    alert = screen.getByRole('dialog', { name: 'Rename Collection' });
+    expect(within(alert).getByRole('textbox', { name: 'Collection Name' })).toHaveProperty('value', 'Cuba');
+    await userEvent.clear(within(alert).getByRole('textbox', { name: 'Collection Name' }));
+    const save = within(alert).getByRole('button', { name: 'Save' });
+    expect(save.getAttribute('aria-disabled')).toBe('false');
+    await userEvent.click(save);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Rename Collection' })).toBeNull());
+    expect(sent(fetch.mock.calls.find(([url]) => String(url).endsWith('/rename'))?.[1]).body).toEqual({ name: '' });
+    expect(within(screen.getByRole('list', { name: 'Collections' })).getAllByRole('link').map((link) => link.textContent)).toEqual([
+      'Berlin',
+      'Cuba',
+    ]);
+    await waitFor(() => expect(document.activeElement?.getAttribute('aria-label')).toBe('Rename Cuba'));
+  });
+
+  /** A list of Berlin and Cuba whose answer to `change` waits until the test gives it. */
+  function answeredLater(change: string) {
+    let answer: (value: unknown) => void = () => {};
+    const items = [listed({ id: berlinId, name: 'Berlin' }), listed({ id: cubaId, name: 'Cuba' })];
+    const fetch = server({
+      '/api/v1/me/collections': { total: items.length, items },
+      [change]: () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    });
+    const lists = () => fetch.mock.calls.filter(([url]) => String(url).endsWith('/api/v1/me/collections')).length;
+    return { answer: (value: unknown) => answer(value), lists };
+  }
+
+  it('leaves a dialog opened since alone when a rename is answered after its Cancel', async () => {
+    const later = answeredLater(`POST /api/v1/me/collections/${cubaId}/rename`);
+    renderAt('/collections');
+    await userEvent.click(await screen.findByRole('button', { name: 'Rename Cuba' }));
+    const cuba = screen.getByRole('dialog', { name: 'Rename Collection' });
+    await userEvent.type(within(cuba).getByRole('textbox', { name: 'Collection Name' }), 'n{Enter}');
+    await userEvent.click(within(cuba).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(document.activeElement?.getAttribute('aria-label')).toBe('Rename Cuba'));
+    await userEvent.click(screen.getByRole('button', { name: 'Rename Berlin' }));
+    const berlin = within(screen.getByRole('dialog', { name: 'Rename Collection' })).getByRole('textbox', { name: 'Collection Name' });
+    await waitFor(() => expect(document.activeElement).toBe(berlin));
+    const read = later.lists();
+    later.answer(detail({ id: cubaId, name: 'Cuban', listName: 'Cuban' }));
+    // Once the answer has been taken, the list is read again; Berlin's alert stays, its field focused.
+    await waitFor(() => expect(later.lists()).toBeGreaterThan(read));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(berlin.isConnected).toBe(true);
+    expect(document.activeElement).toBe(berlin);
+  });
+
+  it('leaves a question asked since alone when a delete is answered after its Cancel', async () => {
+    const later = answeredLater(`DELETE /api/v1/me/collections/${berlinId}`);
+    renderAt('/collections');
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete… Berlin' }));
+    const berlin = screen.getByRole('alertdialog', { name: 'Delete “Berlin”?' });
+    await userEvent.click(within(berlin).getByRole('button', { name: 'Delete' }));
+    await userEvent.click(within(berlin).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(document.activeElement?.getAttribute('aria-label')).toBe('Delete… Berlin'));
+    await userEvent.click(screen.getByRole('button', { name: 'Delete… Cuba' }));
+    const cuba = screen.getByRole('alertdialog', { name: 'Delete “Cuba”?' });
+    await waitFor(() => expect(document.activeElement).toBe(within(cuba).getByRole('button', { name: 'Cancel' })));
+    const read = later.lists();
+    later.answer(null);
+    await waitFor(() => expect(later.lists()).toBeGreaterThan(read));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(cuba.isConnected).toBe(true);
+    expect(document.activeElement).toBe(within(cuba).getByRole('button', { name: 'Cancel' }));
   });
 });
 

@@ -3,8 +3,9 @@
 // outline, moved, indented, outdented and deleted as the editors do; documents, note blocks, apparatus
 // and frozen excerpts are added as the app adds them; the presets are the kit's recipes, Briefing
 // packet offered only where a summary is stored; Sort by Date orders by the index's days; the inspector
-// shows and writes what the app's does; a duplicate is the app's copy; the Research rail lists the
-// collections holding a document; and each user's collections are theirs alone.
+// shows and writes what the app's does; a rename is the list's Rename alert; a duplicate is the app's
+// copy; the Research rail lists the collections holding a document; and each user's collections are
+// theirs alone.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -422,6 +423,55 @@ import Testing
         }
     }
 
+    /// The list's Rename is the app's Rename Collection alert (FRUS-Explorer#1831): its Save writes the
+    /// name trimmed and stamps the collection, which the list then reads first; a name left empty keeps
+    /// the old one, as a name the same once trimmed does, and neither writes; and, unlike the editor's
+    /// Name, it files the collection under no project. A collection the user holds none of is not found.
+    @Test func aRenameIsTheListsAlert() async throws {
+        let fixture = try await UserDataFixture()
+        defer { withExtendedLifetime(fixture) {} }
+        try await fixture.app.test(.router) { client in
+            let owner = Browser(client: client)
+            _ = try await Self.made(owner, "Berlin")
+            let cuba = try await Self.made(owner, "Cuba")
+            // The user then works in a project, which a rename from the list leaves the collection out of.
+            _ = try decode(Project.self, try await owner.send(.post, "/api/v1/me/projects", #"{"name": "Cold War"}"#))
+            let earlier = "2026-10-01T00:00:00.000Z"
+            try fixture.rows.run("UPDATE collections SET last_modified = '\(earlier)'")
+            let listed = { () async throws -> [String] in try decode(CollectionList.self, try await owner.get(Self.base)).items.map(\.name) }
+            #expect(try await listed() == ["Berlin", "Cuba"], "a tie in the store's order")
+            let path = "\(Self.base)/\(cuba.id.lowercased())/rename"
+
+            // Left empty, or the same once trimmed: the old name, and nothing written.
+            for name in ["", "   \n", "  Cuba "] {
+                let kept = try await Self.detail(owner, .post, path, try Self.json(["name": name]))
+                #expect(kept.name == "Cuba" && kept.lastModified == earlier, "\(name.debugDescription)")
+            }
+            #expect(try await listed() == ["Berlin", "Cuba"])
+
+            // Saved: trimmed and stamped, so first in the list now, and in the projects it was in.
+            let renamed = try await Self.detail(owner, .post, path, try Self.json(["name": "\tHavana\n"]))
+            #expect(renamed.name == "Havana" && renamed.listName == "Havana")
+            #expect(renamed.lastModified == UserStoreDate.text(UserDataFixture.now))
+            #expect(renamed.projectIds.isEmpty, "the alert saves without the editor's recordEdit()")
+            #expect(try await listed() == ["Havana", "Berlin"])
+            // The editor's Name, by contrast, files it under the project worked in.
+            let named = try await Self.detail(owner, .patch, "\(Self.base)/\(cuba.id)", #"{"name": "Havana, 1962"}"#)
+            #expect(named.name == "Havana, 1962" && named.projectIds.count == 1)
+
+            // Refusals: no name, a null one, another field, and a collection the user holds none of.
+            for body in ["{}", #"{"name": null}"#] {
+                let refused = try await owner.send(.post, path, body)
+                #expect(refused.status == .badRequest && problemCode(refused) == "INVALID_FIELD", "\(body)")
+            }
+            let unknown = try await owner.send(.post, path, #"{"name": "Bonn", "note": "A note"}"#)
+            #expect(unknown.status == .badRequest && problemCode(unknown) == "UNKNOWN_FIELD")
+            let missing = try await owner.send(.post, "\(Self.base)/\(Self.stranger)/rename", #"{"name": "Bonn"}"#)
+            #expect(missing.status == .notFound && problemCode(missing) == "COLLECTION_NOT_FOUND")
+            #expect(try decode(CollectionDetail.self, try await owner.get("\(Self.base)/\(cuba.id)")).name == "Havana, 1962")
+        }
+    }
+
     /// The list's Duplicate is the app's copy: "copy" after the name, every entry and field copied under
     /// new ids, each entry's headnote draft copied for it and a document's own summary left shared, and
     /// the two export stamps left at their defaults.
@@ -480,6 +530,7 @@ import Testing
             let long = String(repeating: "a", count: UserDataServices.noteTextLimit + 1)
             for (method, target, body): (HTTPRequest.Method, String, String) in [
                 (.post, Self.base, try Self.json(["name": nul])), (.patch, path, try Self.json(["name": nul])),
+                (.post, "\(path)/rename", try Self.json(["name": nul])), (.post, "\(path)/rename", try Self.json(["name": long])),
                 (.patch, path, try Self.json(["subtitle": nul])), (.patch, path, try Self.json(["authorLine": long])),
                 (.patch, "\(path)/entries/\(heading)", try Self.json(["text": nul])),
                 (.patch, "\(path)/entries/\(heading)", try Self.json(["text": long])),
@@ -561,10 +612,10 @@ import Testing
             #expect(try decode(CollectionList.self, try await bob.get(Self.base)).total == 0)
             for (method, path) in [(HTTPRequest.Method.get, "\(Self.base)/\(zebra.id)"), (.patch, "\(Self.base)/\(zebra.id)"),
                                    (.delete, "\(Self.base)/\(zebra.id)"), (.post, "\(Self.base)/\(zebra.id)/duplicate"),
-                                   (.post, "\(Self.base)/\(zebra.id)/blocks")] {
+                                   (.post, "\(Self.base)/\(zebra.id)/rename"), (.post, "\(Self.base)/\(zebra.id)/blocks")] {
                 let body: String? = switch method {
                 case .patch: #"{"name": "Mine"}"#
-                case .post: path.hasSuffix("blocks") ? #"{"kind": "heading"}"# : "{}"
+                case .post: path.hasSuffix("blocks") ? #"{"kind": "heading"}"# : path.hasSuffix("rename") ? #"{"name": "Mine"}"# : "{}"
                 default: nil
                 }
                 let response = method == .get ? try await bob.get(path) : try await bob.send(method, path, body)

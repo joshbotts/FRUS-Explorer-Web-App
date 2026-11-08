@@ -130,6 +130,54 @@ Not started: `PLAN.md`'s row S20b. The session that does it replaces this line, 
 
 Not started: `PLAN.md`'s row S20a. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
 
+## Pin move to `fe9325b2`, follow-up: the Collections list's Rename, and its question before a delete
+
+7 November 2026 · branch `claude/sleepy-bartik-7f0fbf` · [#95](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/95) · upstream `fe9325b2`, unchanged
+
+The pin move left the app's [#1831](https://github.com/joshbotts/FRUS-Explorer/pull/1831) for a pull request of its own: both of the app's Collections managers rename, duplicate and delete a collection, and every delete asks first. The web's list had Duplicate, Create Static Snapshot and a Delete… that asked in the web's own words, and no Rename. This follows the iPhone and iPad list, `CollectionListView`, which the Collections tab mirrors; the Mac's Collection menu and Manage Collections sheet have no counterpart here. It is outside `PLAN.md`'s table, so its entry sits above the one it follows. No upstream change, no pin move.
+
+**What the app's list does since #1831,** at `fe9325b2`, unchanged since by any later commit:
+- A row's menu offers Rename, Duplicate, Word Cloud, Create Static Snapshot for a smart collection, then Delete.
+- Rename presents the Rename Collection alert (`collectionRenameAlert`): a field holding the name as saved, its placeholder Collection Name, then Cancel and Save. Save commits through `CollectionEditorCommit.rename`, the editor's `name` except that a name left empty keeps the old one, and saves. It does not call the editor's `recordEdit()`, so the collection stays in the projects it was in.
+- Every delete asks first (`collectionDeleteConfirmation`), in `CollectionDeletion`'s words: its title, Delete “Cold War Readers”? for one, named as its row prints it, and Delete 3 collections? for several; its message; and Delete and Cancel. The swipe, the menu and Edit's Delete of several rows all ask.
+
+**What the web does now**
+- **Rename,** first on each row. The alert is a dialog: its field holds the name as saved and takes focus, Escape is its Cancel and Enter its Save, and Save takes an empty name, as the alert's does, where New Collection's Create waits for one. Focus comes back to the row's Rename, wherever the renamed row now sits. Save on the name as it opened sends nothing, as the alert writes nothing for it, which also keeps a rename made in another window after the list was read from being undone.
+- **The server's route,** `POST /api/v1/me/collections/{id}/rename` with `{"name"}`, commits it by `CollectionEditing.rename`, over `CollectionEditing.name`, the editor's commit, which `PATCH` now calls too. `PATCH`'s name could not serve: it writes an empty name as empty, as the editor's Name does, and it files the collection under the project the user works in, as the editor's `recordEdit()` does, which the app's Rename never does. The route is `changed(_:for:in:at:_:)`'s one write, which stamps the collection only where the name changed, so the list then reads it first. It takes `PATCH`'s body limit, so a name with U+0000 or past a note's limit, any other field, and another user's collection are refused as `PATCH` refuses them.
+- **Delete…** asks the app's question for the one collection a row deletes: Delete “Berlin”?, the app's message, then Cancel, which takes focus, and Delete. The button stays the web's own Delete…, as All Notes' rows have one for the app's menu item. The web deletes one collection at a time, so the app's title and message for several are not taken.
+- **Left out:** the menu's Word Cloud, until the web has a word cloud (S24i); and Edit's choice of several rows, which the web's list has never had.
+
+**Held to the app's source.** `CollectionParityTests` gains, beside its lines for the list:
+- in `theAppsWordsAreTheWebs`, Rename, the alert's title, placeholder, Cancel and Save, and the question's title, message, Delete and Cancel, each under its key and in copy.ts's `collections` block;
+- in `theServersMirrorsAreTheApps`, the app's `name` and `rename`, and the alert's Save, which saves what `rename` commits and no more; that the alert never reaches the editor's `recordEdit()`, nor any project of the collection's; the server's `CollectionEditing` lines beside them; and the mirror's answers for an empty name, the same name and a new one;
+- in `theWebsMirrorsAreTheApps`, the menu's order, Word Cloud's place in it, the question every delete asks and the name its title gives; and the web's row in the menu's order, the alert's field holding the name as saved, and the question named by the row.
+
+`CollectionFileParityTests`' line for Create Static Snapshot, which the pin move updated for #1831, stands.
+
+**Tests**
+- **The server:** `CollectionTests.aRenameIsTheListsAlert`, over two collections stamped alike, which the list orders as the store took them. An empty name, one of spaces and the same name padded each keep the second's name and write nothing, so its stamp and its place stand. A new name is trimmed and stamped, which lists it first, and leaves the collection out of the project the user works in, where the editor's Name, sent next, files it there. No name, a null one, another field and an unknown collection are refused. The refusal and isolation tests take the route too: U+0000 in its name, a name past a note's limit, and another user's collection.
+- **The browser app's unit tests:** the row's buttons in the menu's order; the alert's field, focused and holding the saved name; a rename sent as typed and its row first under its new name, focus back on its Rename; Cancel, and Save on the name as it opened, which send nothing; an empty name, which Save sends and the server keeps; Delete…'s question in the app's words, Cancel then Delete; and a rename or a delete answered after its dialog's Cancel, which leaves the dialog opened since, and its focus, alone. Those two fail with the dialogs as they were. The web app's unit tests go from 455 to 459.
+- **Playwright,** in `collections.spec.ts`'s keyboard test, from the list: Rename's alert, focused on its field holding the name, with no axe violations; Escape, then an empty name, each leaving the name and returning focus to the row's Rename; then a new name, the row first under it; and Delete…'s question for it, by its new name and in the app's words, with no axe violations. Its pointer test renames the duplicate before deleting it. The browser suite keeps its 69 tests in each pass.
+
+**Narrow widths.** In the in-app browser at a phone's 375 px, a smart collection's four buttons overflowed its row, and a plain row's three squeezed its name to a word a line. Below 900 px a row's buttons now wrap under its name and caption, as the editor's panes stack below 900 px (`app.css`).
+
+**A cold review,** one subagent given the code and none of this log, found four defects, fixed before the first push:
+- **A late answer after Cancel:** Cancel or Escape while a rename or a delete was being answered closed the dialog, but the answer, when it came, closed any dialog opened since and sent focus back to the closed dialog's row. Rename's alert and Delete…'s question now leave the screen as the reader left it once they are closed. New Collection's sheet has the same pattern, older than this change and left for a pull request of its own.
+- **The body limit:** the route took a change's 64 KiB, where `PATCH` takes a note's 4 MiB, so a long name the editor's Name keeps could not be sent back. It now takes `PATCH`'s.
+- **A vacuous assertion:** the server test's list order held without the rename's stamp, since the collection renamed was already first. It now renames the second.
+- **A stale field:** a list read before a rename in another window seeded the field with the old name, which Save wrote back. Save on the name as it opened now sends nothing.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** CI's swift job replayed with its PostgreSQL (`scripts/swift --postgres`) at `fe9325b2`, over `main` at `ec4b881`, under the app's lock, at the final tree: 2,692 tests, against `main`'s 2,691, all passing with only the named skip, in Swift Testing's results file. FRUSLightServerTests runs 242, from 241; FRUSParityTests' 224 hold the new lines in their tests; every other target as on `main`.
+- **The browser app:** `scripts/npm` typecheck, lint and build pass, and its unit tests, 459 in 48 files.
+- **The image and the smoke test:** `scripts/compose-smoke --e2e`, with an image of the final tree under a tag and a port of this session's own, passed every step, its labels naming build 1787 and index version 74: the browser suite on Chromium passed its 69 tests at the root and 69 under the path, and the sign-in spec behind the proxy. It had passed the same way twice before the review's fixes, and `collections.spec.ts` alone five times over at the root.
+- **By eye,** this branch's image in the in-app browser at 800 px and at 375 px, before the review's fixes: the rows, the alert, the question, an empty name keeping the old one, and a rename bringing its row first, with focus on its Rename.
+
+**Records:** `SPEC.md`'s Collections tab line and its API line. `README.md`'s Known gaps still names #1831 among what the web does not show, as the pin move wrote it; under `PLAN.md`'s arrangement the README is the pin moves' and each group's last row's, so the next of them writes it.
+
+**Next:** the pin move's other follow-ups, each a pull request of its own: the editors' annotations; Project Home's focus subjects, their editor, a lead's line and a visit's head; and Add Documents' Citations and Tags. Then S20a.
+
 ## Pin move to `fe9325b2`: the app past phase 2, at index version 74
 
 7 November 2026 · branch `claude/upstream-catchup-phase-2-ec6310` · [#94](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/94) · upstream `fe9325b2`
