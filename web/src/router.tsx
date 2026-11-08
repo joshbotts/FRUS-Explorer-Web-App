@@ -8,6 +8,14 @@
 import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/react-router';
 import { basePath } from './api/base';
 import { formDecode, formEncode, type FormValue } from './api/form';
+import {
+  type AnnotationSearch,
+  AnnotationDrillScreen,
+  AnnotationEraScreen,
+  AnnotationLayerScreen,
+  AnnotationsAxisScreen,
+  validateAnnotationSearch,
+} from './browse/AnnotationsScreen';
 import { CatalogueScreen, type CatalogueSearch, validateCatalogueSearch } from './browse/CatalogueScreen';
 import { CorporaScreen, CorpusScreen } from './browse/CorporaScreen';
 import { CollectionEditorScreen } from './collections/CollectionEditorScreen';
@@ -95,6 +103,33 @@ const scopeEditorRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/browse/scopes/$scopeId/edit',
   component: ScopeEditorScreen,
+});
+
+// Browse's Editors’ Annotations (FRUS-Explorer#1861): the axis, a layer's page, its lists, and a cell's.
+const annotationsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/browse/annotations',
+  component: AnnotationsAxisScreen,
+});
+
+const annotationLayerRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/browse/annotations/$layer',
+  validateSearch: (raw: Record<string, unknown>): AnnotationSearch => validateAnnotationSearch(raw),
+  component: AnnotationLayerScreen,
+});
+
+const annotationDrillRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/browse/annotations/$layer/$drill',
+  validateSearch: (raw: Record<string, unknown>): AnnotationSearch => validateAnnotationSearch(raw),
+  component: AnnotationDrillScreen,
+});
+
+const annotationEraRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/browse/annotations/$layer/era/$era',
+  component: AnnotationEraScreen,
 });
 
 const volumeRoute = createRoute({
@@ -242,6 +277,10 @@ export const routeTree = rootRoute.addChildren([
   scopesRoute,
   scopeRoute,
   scopeEditorRoute,
+  annotationsRoute,
+  annotationLayerRoute,
+  annotationDrillRoute,
+  annotationEraRoute,
   volumeRoute,
   sectionRoute,
   searchRoute,
