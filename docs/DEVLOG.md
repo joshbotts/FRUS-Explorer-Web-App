@@ -161,7 +161,72 @@ Phase 3's row S22a, wave 1, one of its two upstream rows, beside S21a's: Source 
 
 ## Session 21a: the library's rules, upstream
 
-Not started: `PLAN.md`'s row S21a. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+8 November 2026 · branch `claude/s21a-library-rules-671ce7` · [#103](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/103) · upstream `fe9325b2`, unchanged; [FRUS-Explorer#1870](https://github.com/joshbotts/FRUS-Explorer/pull/1870), open, awaiting Mac check 15
+
+Phase 3's row S21a, in wave 1. The library's rules move into FRUSCoreKit, Foundation-only, unchanged but for access, so that S21c to S21g can download, side-load, index, correct and review a library on the server as the app does. The pull request is `claude/library-rules-into-kit`, labelled `Mac`, with "Mac verification requested" in its body. It is not merged. It was cut from `v2` at `fe9325b2` and rebased, before it was pushed, onto `184f9c3c` once the app's #1868 had merged, since both append to the app's Amendment-Log. Under rule 4 the pull request changes shared files, and this repository changes only its records.
+
+**FRUS-Explorer#1870, in five commits and a records commit:**
+- **The corrections check:**
+  - `VolumeUpdateChecker`, `hasUpdate(local:live:)`, `LocalVolumeInfo` and `UpdatableVolume` are moved to `FRUSCoreKit/Downloads/`, with `gitBlobSHA1(for:)`. That uses CryptoKit on Apple platforms and swift-crypto here, and `DownloadManager`'s own forwards to it.
+  - `updatableVolumes` reads `DownloadedVolumeFiles`, a protocol of the three `DownloadManager` methods it called, which the server's library will conform to.
+  - The live listing's entry is now public, `GitHubLiveEntry`, with `volumes(inListing:)`, the fetch's decode and filter (`.xml`, 20,000 bytes or more).
+  - `ManifestDiffResult`, `LiveVolumeInfo`, `NewlyAvailableVolume` and the diff, `ManifestDiffResult.diff(bundled:live:)`, are in `FRUSCoreKit/Models/Manifest/ManifestLiveDiff.swift`. `ManifestStore` keeps its fetch.
+- **Side-loading:**
+  - `SideloadValidator`, `SideloadError` and the root sniffer move out of `SettingsView.swift` into `FRUSCoreKit/Settings/`.
+  - `LocalVolumeCatalog` moves into `FRUSCoreKit/Models/Manifest/`.
+  - FRUSCoreKit depends on TEIHeaderKit for the catalogue's header read, behind `canImport`.
+- **The update review's rules:**
+  - `VolumeUpdateReview`'s tallies and `ExcerptReview`'s lines are moved and public.
+  - `HighlightReview`'s status is a rule over a highlight's two stored values, `status(renderingVersion:selectedText:currentVersion:)`, in `FRUSCoreKit/DocumentView/HighlightReviewStatus.swift`. The app's `status(of:currentVersion:)` reads its model into it.
+- **The indexer:**
+  - `consolidatePersonRollup(overrides:forceReload:)` is public.
+  - `setStopsBetweenBatchesWhenCancelled(_:)` is new. With it on, a cancelled `indexVolume` throws `CancellationError` after a batch of a volume's documents, as a pass cut short stops (#1566), and `finishIndexing(of:)` stops before its next volume.
+  - The row asked for a plain `Task.checkCancellation`. The app cancels one pass, though: the background indexing task iOS expires. A plain check would change how that pass ends, so the stop is a host's choice, off by default and never turned on by the app.
+  - On the server a batch is a whole volume, so the check comes once, after a volume's documents and before its other tables.
+  - The pull request asks the owner whether the app should turn it on.
+- **Two suites moved:**
+  - `DocumentRevisionsTests` (28 of its 29 tests in the package; one needs the app's `GeneratedSummary`) and `CorrectedVolumeReindexTests` (2) moved into `FRUSExplorerTests/FRUSCoreKit/`, so Linux runs them.
+  - `UnfinishedStoreTests` gains the stop's three tests.
+
+**How it was checked:**
+- Each heavy job ran under the app's lock, from a clone at a real path. `v2` at `184f9c3c` was built and run the same way, Xcode 27.2, clean and unsigned, on an iPhone Air simulator (iOS 27.2).
+- **The full iOS unit run:** 7,901 tests in 946 suites, against `v2`'s 7,898. Both runs have the same 8 issues: 6 known, and two tests that fail on `v2` too. Both skip the same 17 tests and 2 suites. Both app builds had `v2`'s warning lines.
+- **`swift test`:** 3,335 tests in 400 suites, against 3,302 in 398, all passed and none skipped. `FRUSCoreKitTests` ran 1,381 tests in 184 suites, against 1,348 in 182. `v2`'s package run was at `fe9325b2`; #1868 changed no file the package builds.
+- **The Mac app's symbols:** 256,690 normalized names on `v2` and 256,727 on the branch, 168 removed and 205 added.
+  - Each name removed belongs to a moved or renamed declaration, back under its new name: the private live entry as the public one, the store's diff as `ManifestDiffResult`'s, `storeIndexData` with its new parameter, and `updatableVolumes` made generic.
+  - The one exception is the generator of `consolidatePersonRollup`'s first default argument. Swift emits a public function's generators only where a caller uses one.
+- **The records commit:** the two audits that read the repository's text passed again at it.
+- **Moved unchanged:** each moved declaration was normalized on both sides and diffed. 8 of 17 are identical, and the other 9 differ only by the changes above.
+- **Two cold reviews**, given the diff and no conclusions, both found a moved assertion of an app view outside the package's guard, which would have kept the package's tests from compiling. One found that `finishIndexing(of:)` went on past the stop. The fixes are folded in, and every run is at their head.
+- **Linux**, in a scratch worktree of this repository's `main` at `7a35517` (the pin `fe9325b2`), with `v2` and then the branch copied over the submodule, each built clean:
+  - **At `v2`:** 2,718 tests. All passed but `FRUSParityTests`' 30 issues: 21 the golden files' staleness, and 9 in `AnnotationsParityTests`, which compares this repository's words with the app's, some of which #1868 changed.
+  - **At the branch:** 2,751 tests. `FRUSCoreKitTests` passed 1,381 in 184 suites, against 1,348 in 182. The same 30 issues came back, and 2 more in `HighlightViewParityTests.theOrdersAndTheStaleLinesAreTheApps`, which reads the status rule's two lines in the app's `HighlightReview.swift`, where they no longer are.
+  - **Skipped at both:** 8, the PostgreSQL store's 7, since the run had no PostgreSQL, and FTS5StoreTests' `backupExclusion()`.
+  - **The patch:** at the branch, `Package.swift` gained TEIHeaderKit in FRUSCoreKit's dependencies, never committed.
+- **Public access:** a scratch suite, never committed, imports FRUSCoreKit without `@testable` and calls what the pull request makes public as the server will, in 8 tests, all passed on Linux:
+  - `gitBlobSHA1` against git's own hashes;
+  - a listing decoded and diffed, and checked over a host's own `DownloadedVolumeFiles`;
+  - the validator's three refusals in the app's words;
+  - a side-loaded volume's sidecar;
+  - each highlight status, and the excerpt's lines;
+  - a corrected volume's tallies;
+  - the rollup rebuilt;
+  - a pass with the stop on, cancelled after its first batch, stopped and finished by `finishIndexing(of:)`.
+
+**What the pin move past it, S21b, brings:**
+- **`Package.swift`:** TEIHeaderKit in FRUSCoreKit's dependencies. Without it, `LocalVolumeCatalog`'s header read does not resolve on Linux.
+- **`HighlightViewParityTests`** pointed at the kit's `HighlightReviewStatus.swift`, where the rule's two lines now are.
+- **#1868's words** in this repository, which `AnnotationsParityTests` will name.
+- **Golden files** remade by `scripts/make-golden`, since their source digest covers the kit's folders and the app's.
+- **On §5's indexing path,** `IndexingPipeline.swift` changes only behind the flag the app never sets, and in the rollup's access, so an index the app builds is the same. The owner may choose to reuse the last three-volume export.
+- **`FRUSCoreKitTests`** grows by 33. No kit test gains a skip, so the CI's allow-list stays as it is.
+
+**Records:** this entry, and S21a's paragraph in PLAN's Where the rows stand. No other file changes, so this pull request is the first to try S20a's `paths` job on records alone: it should write `code=false`, and skip `swift`, `web` and `compose`, which GitHub reports as passed. The pull request's body says what its run showed.
+
+**Next:**
+- Mac check 15, the owner's, for FRUS-Explorer#1870, from a clone at a real path, with the commands and counts its body lists; then its merge.
+- Then S22a's session merges `v2` into its branch and re-runs what the merge touches, before Mac check 16.
+- S21b's pin move follows the batch.
 
 ## Session 25a: PDF through Gotenberg
 
