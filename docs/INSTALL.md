@@ -254,7 +254,7 @@ curl -s http://localhost:8080/api/v1/pdf
 
 answers `{"available":true}`, and `POST /api/v1/me/collections/{id}/export` with `{"format": "pdf"}` gives the file, as it gives the other formats with theirs.
 
-**What the service sees:** each collection you export as PDF, which the server sends it, and nothing else. It is on a network of its own with the server alone, which reaches neither the internet nor the rest of this machine; its Chromium runs no script and fetches no address a collection names; and its root filesystem is read-only, with no Linux capabilities. A long collection takes longer to print, up to five minutes. A PDF that cannot be made is refused in the sheet, which says why, and the other formats are made by the server itself, without the service.
+**What the service sees:** each collection you export as PDF, which the server sends it, and nothing else. It is on a network of its own with the server alone, which reaches neither the internet nor the rest of this machine; its Chromium runs no script and fetches no address a collection names; and its root filesystem is read-only, with no Linux capabilities. A long collection takes longer to print, up to five minutes; behind a reverse proxy, one that waits less, as nginx's recipes below wait 60 seconds by default, ends the export first, so give a long collection's PDF a longer `proxy_read_timeout`. A PDF that cannot be made is refused in the sheet, which says why, and the other formats are made by the server itself, without the service.
 
 To turn PDF off, remove `COMPOSE_PROFILES=pdf` from `.env`, then stop and remove the service:
 

@@ -139,7 +139,7 @@ public actor PDFService {
             struct Module: Decodable { let status: String }
             let details: [String: Module]?
         }
-        if let chromium = (try? JSONDecoder().decode(Body.self, from: Data(answer.body)))?.details?["chromium"] {
+        if let chromium = (try? JSONDecoder().decode(Body.self, from: answer.body))?.details?["chromium"] {
             return Health(available: chromium.status == "up", reason: "its Chromium is \(chromium.status)")
         }
         return Health(available: answer.status == 200, reason: "its health check answered \(answer.status)")
@@ -168,7 +168,7 @@ public actor PDFService {
         guard answer.body.starts(with: Array("%PDF-".utf8)) else {
             throw PDFServiceError.badAnswer("its answer was no PDF but \(answer.headers["content-type"] ?? "no type") of \(answer.body.count) bytes")
         }
-        return Data(answer.body)
+        return answer.body
     }
 
     /// A boundary the page does not hold, as `multipart/form-data` needs.
@@ -201,7 +201,7 @@ public actor PDFService {
     }
 
     /// The start of an error's words, as Gotenberg writes them, plain text.
-    static func words(_ body: [UInt8]) -> String {
+    static func words(_ body: Data) -> String {
         let text = String(decoding: body.prefix(2_048), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         let line = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
         return line.count > 300 ? String(line.prefix(300)) + "…" : line
@@ -226,7 +226,7 @@ public actor PDFService {
     /// cancelled, as when the browser that asked has gone, closes the connection.
     nonisolated func exchange(_ request: [UInt8], limit: Int, timeout: Duration) async throws -> HTTPAnswer {
         try await withThrowingTaskGroup(of: HTTPAnswer.self) { group in
-            group.addTask { try await self.send(request, limit: limit) }
+            group.addTask { try await self.send(request, limit: limit, connectWithin: timeout) }
             group.addTask {
                 try await Task.sleep(for: timeout)
                 throw PDFServiceError.unavailable("no answer within \(timeout.components.seconds) seconds")
@@ -237,7 +237,9 @@ public actor PDFService {
         }
     }
 
-    private nonisolated func send(_ request: [UInt8], limit: Int) async throws -> HTTPAnswer {
+    /// The connection is bounded by `connectWithin` as well, at most five seconds: NIO's connect does not
+    /// stop when its task is cancelled, so the exchange's own timeout could not end it sooner.
+    private nonisolated func send(_ request: [UInt8], limit: Int, connectWithin timeout: Duration) async throws -> HTTPAnswer {
         let endpoint = endpoint
         let context: NIOSSLContext?
         switch tls {
@@ -248,7 +250,7 @@ public actor PDFService {
         let channel: NIOAsyncChannel<ByteBuffer, ByteBuffer>
         do {
             channel = try await ClientBootstrap(group: MultiThreadedEventLoopGroup.singleton)
-                .connectTimeout(.seconds(5))
+                .connectTimeout(.milliseconds(min(5_000, Int64(timeout.components.seconds) * 1_000)))
                 .connect(host: endpoint.host, port: endpoint.port) { channel in
                     channel.eventLoop.makeCompletedFuture {
                         if let context {
@@ -331,11 +333,12 @@ public actor PDFService {
     }
 }
 
-/// One HTTP/1.1 answer, read whole: its status, its headers by lowercase name, and its body.
+/// One HTTP/1.1 answer, read whole: its status, its headers by lowercase name, and its body, copied once
+/// from the bytes read, as a PDF may be large.
 struct HTTPAnswer: Sendable, Equatable {
     var status: Int
     var headers: [String: String]
-    var body: [UInt8]
+    var body: Data
 
     /// Reads an answer as its bytes arrive: whole once its `Content-Length` has come, or, for a chunked
     /// answer or one with no length, once the connection has closed, as `Connection: close` asks.
@@ -366,14 +369,16 @@ struct HTTPAnswer: Sendable, Equatable {
             let body = bytes[head.bodyStart...]
             guard body.count <= limit else { throw PDFServiceError.tooLarge(limit) }
             if head.headers["transfer-encoding"]?.lowercased().contains("chunked") == true {
-                return ended ? HTTPAnswer(status: head.status, headers: head.headers, body: try Self.dechunked(body)) : nil
+                return ended ? HTTPAnswer(status: head.status, headers: head.headers, body: Data(try Self.dechunked(body))) : nil
             }
             if let length = head.headers["content-length"].flatMap({ Int($0) }) {
-                if body.count >= length { return HTTPAnswer(status: head.status, headers: head.headers, body: Array(body.prefix(length))) }
+                guard length >= 0 else { throw PDFServiceError.badAnswer("its answer's length was \(length)") }
+                guard length <= limit else { throw PDFServiceError.tooLarge(limit) }
+                if body.count >= length { return HTTPAnswer(status: head.status, headers: head.headers, body: Data(body.prefix(length))) }
                 if ended { throw PDFServiceError.badAnswer("its answer ended after \(body.count) of \(length) bytes") }
                 return nil
             }
-            return ended ? HTTPAnswer(status: head.status, headers: head.headers, body: Array(body)) : nil
+            return ended ? HTTPAnswer(status: head.status, headers: head.headers, body: Data(body)) : nil
         }
 
         /// The status line and the headers.
@@ -407,6 +412,8 @@ struct HTTPAnswer: Sendable, Equatable {
                 guard let size = Int(sizeText, radix: 16), size >= 0 else {
                     throw PDFServiceError.badAnswer("its chunked answer was malformed")
                 }
+                // Before `size + 2` below, which a size near `Int.max` would overflow.
+                guard size <= body.count else { throw PDFServiceError.badAnswer("its chunked answer ended early") }
                 index = lineEnd.upperBound
                 if size == 0 { return data }
                 guard body.distance(from: index, to: body.endIndex) >= size + 2 else {

@@ -260,8 +260,9 @@ class Document:
         return found
 
     def trailer(self):
+        # The trailer follows the last object; the word elsewhere may be a stream's bytes.
         at = self.data.rfind(b'trailer')
-        if at >= 0:
+        if at >= 0 and at > self.data.rfind(b'endobj'):
             lexer = Lexer(self.data, at + 7)
             return lexer.value()
         for number in sorted(self.offsets):

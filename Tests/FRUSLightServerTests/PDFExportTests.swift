@@ -198,7 +198,8 @@ struct FormPart: Equatable {
             await service.answerHealth(.serviceUnavailable,
                                        #"{"status":"down","details":{"chromium":{"status":"up"},"libreoffice":{"status":"down"}}}"#)
             try await Self.app(fixture, pdfURL: address).test(.router) { client in
-                #expect(try await Self.available(client), "LibreOffice's state is not Chromium's")
+                let available = try await Self.available(client)
+                #expect(available, "LibreOffice's state is not Chromium's")
             }
             await service.answerHealth(.serviceUnavailable, #"{"status":"down","details":{"chromium":{"status":"down"}}}"#)
             for url in [address, "http://localhost:1"] {

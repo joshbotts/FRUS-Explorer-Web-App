@@ -25,7 +25,7 @@ export function CollectionExportSheet({ detail, onClose }: { detail: CollectionD
   const id = useId();
   const check = useQuery(excerptCheckQuery(detail.id));
   const smart = !detail.takesHandAddedEntries;
-  // The grid waits for the server to say whether it makes PDFs, so that it never changes under the reader.
+  // The grid waits for the server to say whether it makes PDFs, so that it opens as it will stay.
   const pdf = useQuery(pdfServiceQuery);
   const known = !pdf.isPending;
   const formats = gridFormats(smart, offersPdf(pdf.data));
@@ -33,6 +33,9 @@ export function CollectionExportSheet({ detail, onClose }: { detail: CollectionD
   // The app's sheet opens on PDF, the grid's first; without it, on HTML, the first then. A format the grid
   // no longer offers, as the native file once the collection is linked, is the first again.
   const format = chosen !== null && formats.includes(chosen) ? chosen : formats[0]!;
+  // Once shown, the choice holds: an answer that comes later, the sheet's own ask after the editor's has
+  // gone stale, changes the cards but not the format chosen, unless it takes that card away.
+  if (known && chosen === null) setFormat(format);
   const [includeNotes, setIncludeNotes] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);

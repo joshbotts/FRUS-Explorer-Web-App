@@ -71,7 +71,7 @@ import Testing
         #expect(try reader.answer(ended: false) == nil)
         try reader.append(Array("-1.4 and more".utf8))
         let answer = try #require(try reader.answer(ended: false))
-        #expect(answer.status == 200 && answer.body == Array("%PDF-1.4".utf8))
+        #expect(answer.status == 200 && answer.body == Data("%PDF-1.4".utf8))
         #expect(answer.headers["content-type"] == "application/pdf" && answer.headers["x-a"] == "1, 2")
     }
 
@@ -80,11 +80,11 @@ import Testing
         try chunked.append(Array("HTTP/1.1 503 Service Unavailable\r\nTransfer-Encoding: chunked\r\n\r\n4;ext=1\r\nTime\r\n4\r\nout.\r\n0\r\nX: y\r\n\r\n".utf8))
         #expect(try chunked.answer(ended: false) == nil)
         let answer = try #require(try chunked.answer(ended: true))
-        #expect(answer.status == 503 && answer.body == Array("Timeout.".utf8))
+        #expect(answer.status == 503 && answer.body == Data("Timeout.".utf8))
         var open = HTTPAnswer.Reader(limit: 1_024)
         try open.append(Array("HTTP/1.0 200 OK\r\n\r\n{\"status\":\"up\"}".utf8))
         #expect(try open.answer(ended: false) == nil)
-        #expect(try open.answer(ended: true)?.body == Array("{\"status\":\"up\"}".utf8))
+        #expect(try open.answer(ended: true)?.body == Data("{\"status\":\"up\"}".utf8))
     }
 
     @Test func anAnswerCutShortTooLargeOrNoHTTPIsRefused() throws {
@@ -103,6 +103,10 @@ import Testing
         #expect(refusal("HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\n%PDF") == .badAnswer("its answer ended after 4 of 5 bytes"))
         #expect(refusal("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n10\r\nshort") == .badAnswer("its chunked answer ended early"))
         #expect(refusal("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nzz\r\n") == .badAnswer("its chunked answer was malformed"))
+        // Lengths that would trap: a negative one, and a chunk's size at `Int.max`.
+        #expect(refusal("HTTP/1.1 200 OK\r\nContent-Length: -1\r\n\r\n%PDF") == .badAnswer("its answer's length was -1"))
+        #expect(refusal("HTTP/1.1 200 OK\r\nContent-Length: 4096\r\n\r\n%PDF") == .tooLarge(1_024))
+        #expect(refusal("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n7FFFFFFFFFFFFFFF\r\nx") == .badAnswer("its chunked answer ended early"))
         #expect(refusal("SSH-2.0-OpenSSH_9.6\r\n\r\n") == .badAnswer("its answer was no HTTP: SSH-2.0-OpenSSH_9.6"))
         #expect(refusal("HTTP/1.1 200 OK\r\n\r\n" + String(repeating: "x", count: 2_000), limit: 1_024) == .tooLarge(1_024))
         var reader = HTTPAnswer.Reader(limit: 1_024)
@@ -112,7 +116,7 @@ import Testing
     /// Chromium's own status decides, whatever another module's; an answer that names none, its status.
     @Test func theHealthCheckIsChromiums() {
         func health(_ status: Int, _ body: String) -> (Bool, String) {
-            let checked = PDFService.health(of: HTTPAnswer(status: status, headers: [:], body: Array(body.utf8)))
+            let checked = PDFService.health(of: HTTPAnswer(status: status, headers: [:], body: Data(body.utf8)))
             return (checked.available, checked.reason)
         }
         #expect(health(200, #"{"status":"up","details":{"chromium":{"status":"up"},"libreoffice":{"status":"up"}}}"#) == (true, "its Chromium is up"))
@@ -124,9 +128,9 @@ import Testing
     }
 
     @Test func anErrorsWordsAreItsFirstLine() {
-        #expect(PDFService.words(Array("  Invalid form data: 'paperWidth'\nmore\n".utf8)) == "Invalid form data: 'paperWidth'")
-        #expect(PDFService.words([]) == "")
-        #expect(PDFService.words(Array(String(repeating: "é", count: 400).utf8)) == String(repeating: "é", count: 300) + "…")
+        #expect(PDFService.words(Data("  Invalid form data: 'paperWidth'\nmore\n".utf8)) == "Invalid form data: 'paperWidth'")
+        #expect(PDFService.words(Data()) == "")
+        #expect(PDFService.words(Data(String(repeating: "é", count: 400).utf8)) == String(repeating: "é", count: 300) + "…")
         #expect(PDFServiceError.refused(status: 400, detail: "Bad Request").description == "it answered 400: Bad Request")
         #expect(PDFServiceError.refused(status: 500, detail: "").description == "it answered 500")
         #expect(PDFServiceError.tooLarge(512 * 1_048_576).description == "its answer was larger than 512 MiB")

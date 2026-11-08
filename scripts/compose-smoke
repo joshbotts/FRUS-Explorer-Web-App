@@ -322,7 +322,7 @@ echo "   /api/v1/pdf offers none, and a collection's PDF is refused as PDF_SERVI
 
 echo "== collections: a collection's PDF through the pdf profile's Gotenberg, holding its documents' titles"
 python3 scripts/pdf-text selftest >/dev/null || fail "scripts/pdf-text cannot read the PDF its selftest writes"
-COMPOSE_PROFILES=pdf docker compose up -d pdf >/dev/null 2>&1 || fail "the pdf profile did not start"
+COMPOSE_PROFILES=pdf docker compose up -d pdf > "$work/pdf-up.log" 2>&1 || fail "the pdf profile did not start: $(tail -5 "$work/pdf-up.log")"
 # Kept for the rest of the run, so that the steps after this, the browser suite's PDF and the clean-up
 # keep the pdf service in the project.
 export COMPOSE_PROFILES=pdf

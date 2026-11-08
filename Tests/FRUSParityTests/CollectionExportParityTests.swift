@@ -169,8 +169,9 @@ import Testing
             #expect(active == project.id)
             let kit = try await KitReference(files: files, session: session, activeProject: active)
             for collection in [rich.id, plain.id, many.id, away.id] {
-                // The native file is CollectionFileParityTests'.
-                for format in CollectionExportFormat.allCases where format != .fruscollection {
+                // The native file is CollectionFileParityTests'; the PDF is Chromium's print of the HTML page
+                // held here, which this server, with no PDF service, does not export (PDFExportTests).
+                for format in CollectionExportFormat.allCases where format != .fruscollection && format != .pdf {
                     try await Self.sameDay { day in
                         let served = Data(buffer: try await session.send(.post, "\(base)/\(collection)/export",
                                                                          try Self.json(["format": format.rawValue, "timeZone": "UTC"])).body)

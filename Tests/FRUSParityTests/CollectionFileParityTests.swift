@@ -137,7 +137,7 @@ import Testing
             let results = try ServedFixture.decode(CollectionExportRoutes.Results.self, try await session.get("\(base)/\(smart.id)/results"))
             #expect(results.total > 20 && results.total < 40, "past the preview's cap: \(results.total)")
             #expect(results.items.contains { $0.volumeId == "frus1894Nicaragua" && $0.documentId == "d1" }, "a result the user's note finds")
-            for format in CollectionExportFormat.allCases where format != .fruscollection {
+            for format in CollectionExportFormat.allCases where format != .fruscollection && format != .pdf {
                 try await CollectionExportParityTests.sameDay { day in
                     let served = Data(buffer: try await session.send(.post, "\(base)/\(smart.id)/export",
                                                                      try Self.json(["format": format.rawValue, "timeZone": "UTC"])).body)
