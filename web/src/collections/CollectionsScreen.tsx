@@ -279,6 +279,7 @@ export function NewCollection({
   const headingId = useId();
   const fieldId = useId();
   const field = useRef<HTMLInputElement>(null);
+  const stillOpen = useStillOpen();
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -290,8 +291,9 @@ export function NewCollection({
     setFailure(null);
     try {
       const made = await onCreate(name);
-      closeAtOnce(() => onClose(made));
+      if (stillOpen.current) closeAtOnce(() => onClose(made));
     } catch (error) {
+      if (!stillOpen.current) return;
       setFailure(errorMessage(error));
       setBusy(false);
     }
@@ -338,7 +340,7 @@ export function NewCollection({
 
 /**
  * Whether a dialog is still drawn: an answer that comes after its Cancel or Escape leaves the screen as
- * the reader left it, rather than closing a dialog opened since or moving focus.
+ * the reader left it, rather than closing a dialog opened since, moving focus, or opening what it made.
  */
 function useStillOpen() {
   const open = useRef(false);

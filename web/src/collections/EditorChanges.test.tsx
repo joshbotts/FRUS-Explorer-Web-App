@@ -1,7 +1,8 @@
 // How the collection editor carries a change through (S18d's review): focus back to what opened a
 // sheet, and kept on a row Move Down moves; a second Move Down worked out from where the first left
 // the row; a switch shown as it was turned, before the server answers, and a second press read from
-// it; a refused title kept and sent again; the picker's add made once however fast it is pressed; a
+// it; a refused title kept and sent again; the picker's add made once however fast it is pressed, and
+// its New Collection answered after Cancel leaving a sheet opened since alone; a
 // collection opened by its id in lower case; and a note block the formatting editor cannot show
 // edited plain.
 import { cleanup, screen, waitFor, within } from '@testing-library/react';
@@ -221,5 +222,33 @@ describe('the Add to Collection picker', () => {
     adds.waiting[0]?.({ added: true, collection: { id: berlinId, name: 'Berlin', listName: 'Berlin', documentCount: 1, isSmart: false, projectIds: [] } });
     expect(await screen.findByText('Added')).toBeTruthy();
     expect(fetch.mock.calls.filter(([url]) => String(url).endsWith('/document'))).toHaveLength(1);
+  });
+
+  it('leaves its New Collection sheet opened since alone when a create is answered after its Cancel', async () => {
+    const creates = held();
+    const fetch = server({ '/api/v1/me/collections': { total: 0, items: [] }, 'POST /api/v1/me/collections': creates.answer });
+    renderWithClient(<CollectionPicker document={{ volumeId: 'frus1961-63v06', documentId: 'd1' }} onClose={() => {}} />);
+    const picker = await screen.findByRole('dialog', { name: 'Add to Collection' });
+    // The picker's own, taken before the sheet, which is drawn within the picker and has a Cancel of its own.
+    const opener = within(picker).getByRole('button', { name: 'New Collection' });
+    const cancel = within(picker).getByRole('button', { name: 'Cancel' });
+    await userEvent.click(opener);
+    const first = screen.getByRole('dialog', { name: 'New Collection' });
+    await userEvent.type(within(first).getByRole('textbox', { name: 'Name' }), 'Grain{Enter}');
+    await userEvent.click(within(first).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(document.activeElement).toBe(cancel));
+    await userEvent.click(opener);
+    const field = within(screen.getByRole('dialog', { name: 'New Collection' })).getByRole('textbox', { name: 'Name' });
+    await waitFor(() => expect(document.activeElement).toBe(field));
+    const lists = () =>
+      fetch.mock.calls.filter(([url, init]) => String(url).endsWith('/api/v1/me/collections') && (init?.method ?? 'GET') === 'GET').length;
+    const read = lists();
+    creates.waiting[0]?.(detail({ name: 'Grain', listName: 'Grain' }));
+    // Once the answer has been taken, the picker reads its list again; the sheet opened since stays, its
+    // field focused.
+    await waitFor(() => expect(lists()).toBeGreaterThan(read));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(field.isConnected).toBe(true);
+    expect(document.activeElement).toBe(field);
   });
 });

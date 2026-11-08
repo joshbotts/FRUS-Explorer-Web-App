@@ -309,6 +309,29 @@ describe('the Collections tab', () => {
     expect(cuba.isConnected).toBe(true);
     expect(document.activeElement).toBe(within(cuba).getByRole('button', { name: 'Cancel' }));
   });
+
+  it('leaves a New Collection sheet opened since alone, and opens nothing, when a create is answered after its Cancel', async () => {
+    const later = answeredLater('POST /api/v1/me/collections');
+    const { router } = renderAt('/collections');
+    const opener = await screen.findByRole('button', { name: 'New Collection' });
+    await userEvent.click(opener);
+    const first = screen.getByRole('dialog', { name: 'New Collection' });
+    await userEvent.type(within(first).getByRole('textbox', { name: 'Name' }), 'Grain{Enter}');
+    await userEvent.click(within(first).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    await userEvent.click(opener);
+    const field = within(screen.getByRole('dialog', { name: 'New Collection' })).getByRole('textbox', { name: 'Name' });
+    await waitFor(() => expect(document.activeElement).toBe(field));
+    const read = later.lists();
+    later.answer(detail({ name: 'Grain', listName: 'Grain' }));
+    // Once the answer has been taken, the list is read again; the sheet opened since stays, its field
+    // focused, and the made collection's editor is not opened.
+    await waitFor(() => expect(later.lists()).toBeGreaterThan(read));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(field.isConnected).toBe(true);
+    expect(document.activeElement).toBe(field);
+    expect(router.state.location.pathname).toBe('/collections');
+  });
 });
 
 describe('a collection’s editor', () => {
