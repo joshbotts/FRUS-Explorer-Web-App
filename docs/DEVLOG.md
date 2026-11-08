@@ -94,6 +94,10 @@ Not started: `PLAN.md`'s row S21c. The session that does it replaces this line, 
 
 Not started: `PLAN.md`'s row S21b. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
 
+## Session 25d: Add Documents' Citations and Tags
+
+Not started: `PLAN.md`'s row S25d. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
 ## Session 20d: administration and jobs
 
 Not started: `PLAN.md`'s row S20d. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
@@ -105,6 +109,10 @@ Not started: `PLAN.md`'s row S22b. The session that does it replaces this line, 
 ## Session 23a: Related Documents' engine, upstream
 
 Not started: `PLAN.md`'s row S23a. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 25c: Project Home's focus subjects and a lead's line
+
+Not started: `PLAN.md`'s row S25c. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
 
 ## Session 20c: the secrets table and Settings ▸ Keys
 
@@ -129,6 +137,25 @@ Not started: `PLAN.md`'s row S20b. The session that does it replaces this line, 
 ## Session 20a: CI and the files for parallel sessions
 
 Not started: `PLAN.md`'s row S20a. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Phase 3's plan: phase 2's two follow-ups as S25c and S25d
+
+8 November 2026 · branch `claude/phase-3-plan-phase-2-follow-ups` · [#98](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/98) · upstream `fe9325b2`, unchanged
+
+The owner asked for phase 2's two follow-ups to join phase 3's plan before its first row starts. Phase 2's sign-off left them past its exit, each a pull request of its own over what [FRUS-Explorer#1813](https://github.com/joshbotts/FRUS-Explorer/pull/1813) and [#1814](https://github.com/joshbotts/FRUS-Explorer/pull/1814) made public at `fb542514`: Project Home's focus subjects, their editor, a lead's line and a visit's head; and Add Documents' Citations and Tags. Neither needs a pin move, an upstream pull request or a migration, so both are Features rows of S25, beside S25a, which needs none either, and the sign-off, S25b, stays the group's last row.
+
+**Where they run.** Wave 2's features track was empty: S25a ends with wave 1, and S23d waits for S21b. S25c, then S25d, fill it, which keeps the steady state's four sessions and adds no wave. Both register in the files S20a groups, so neither starts before S20a has merged, and each follows S25a on its track. S25c changes Project Home before S23d, which computes the leads it shows, so the two meet in one screen in order.
+
+**What changed:**
+- `PLAN.md`: the two rows, between S25a and S25b; the diagram; the phase's opening and its groups' sentence; wave 2's features cell; their stubs in Where the rows stand; and phase 2's sign-off's list, which names them.
+- `docs/prep/README.md`: a section for the two rows, read at `fe9325b2`: the app's views and the kit's calls by file and line, what the server and the browser app have, and the tests that hold each to the app's source.
+- This log: the two rows' stubs, S25c above S20c's and S25d above S20d's, where the plan expects them to end; and this entry, above the last follow-up's.
+- `SPEC.md`: Project Home's and Add Documents' sentences name the rows where they said a pull request of their own.
+- `README.md`: Known gaps and Next, which listed the two as pull requests of their own and still listed the app's additions after phase 2 as not shown, which #95 to #97 brought: phase 3's 34 rows hold the two, and the additions' lines are gone.
+
+**What each reads:** its row, its section of the prep notes, the log entries Session 17f, follow-up, and Session 18d, follow-up, and their hand-over notes in the shared notes, `s17f-followup-project-home-kit.md` and `s18d-followup-kit-access.md`, written before the pin moved past them, at `d7130e9b` and `76b82e70`; the prep section gives the lines at `fe9325b2`.
+
+**Next:** S20a, alone, as the waves have it; S25c follows S25a on the features track in wave 2.
 
 ## The Add to Collection picker's add, answered after its Cancel
 
