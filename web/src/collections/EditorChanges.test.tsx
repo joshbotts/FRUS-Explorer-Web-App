@@ -2,17 +2,18 @@
 // sheet, and kept on a row Move Down moves; a second Move Down worked out from where the first left
 // the row; a switch shown as it was turned, before the server answers, and a second press read from
 // it; a refused title kept and sent again; the picker's add made once however fast it is pressed, and
-// its New Collection answered after Cancel leaving a sheet opened since alone; a
+// an add or a New Collection answered after its Cancel leaving a picker or sheet opened since alone; a
 // collection opened by its id in lower case; and a note block the formatting editor cannot show
 // edited plain.
 import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useRef, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CollectionDetail, CollectionEntry } from '../api/collections';
 import type { NoteRun } from '../api/types';
 import { renderWithClient, sent } from '../test/notes';
 import { ProblemAnswer, ready, renderAt, stubServer } from '../test/renderRoute';
-import { CollectionPicker } from './CollectionPicker';
+import { CollectionPicker, heldPause } from './CollectionPicker';
 
 // The formatting editor stands in here, as in the note editor's tests: it shows its text, and reports
 // the text unreadable when asked to.
@@ -250,5 +251,50 @@ describe('the Add to Collection picker', () => {
     await new Promise((resolve) => requestAnimationFrame(resolve));
     expect(field.isConnected).toBe(true);
     expect(document.activeElement).toBe(field);
+  });
+
+  it('leaves a picker opened since alone when an add is answered after its Cancel', async () => {
+    const adds = held();
+    server({
+      '/api/v1/me/collections': { total: 1, items: [{ id: berlinId, name: 'Berlin', listName: 'Berlin', documentCount: 0, isSmart: false, projectIds: [] }] },
+      [`POST ${path}/document`]: adds.answer,
+    });
+    // The research rail's Add to Collection, which opens the picker and takes focus back when it closes.
+    function Rail() {
+      const [picking, setPicking] = useState(false);
+      const add = useRef<HTMLButtonElement>(null);
+      return (
+        <>
+          <button ref={add} type="button" onClick={() => setPicking(true)}>
+            Add to Collection…
+          </button>
+          {picking && (
+            <CollectionPicker
+              document={{ volumeId: 'frus1961-63v06', documentId: 'd1' }}
+              onClose={() => {
+                setPicking(false);
+                requestAnimationFrame(() => add.current?.focus());
+              }}
+            />
+          )}
+        </>
+      );
+    }
+    renderWithClient(<Rail />);
+    const add = screen.getByRole('button', { name: 'Add to Collection…' });
+    await userEvent.click(add);
+    await userEvent.click(await screen.findByRole('button', { name: /^Berlin/ }));
+    await waitFor(() => expect(adds.waiting).toHaveLength(1));
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Add to Collection' })).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(document.activeElement).toBe(add));
+    await userEvent.click(add);
+    const picker = screen.getByRole('dialog', { name: 'Add to Collection' });
+    const cancel = within(picker).getByRole('button', { name: 'Cancel' });
+    await waitFor(() => expect(document.activeElement).toBe(cancel));
+    adds.waiting[0]!({ added: true, collection: { id: berlinId, name: 'Berlin', listName: 'Berlin', documentCount: 1, isSmart: false, projectIds: [] } });
+    // Longer than a picker shows Added before it closes: the picker opened since stays, its Cancel focused.
+    await new Promise((resolve) => setTimeout(resolve, heldPause + 100));
+    expect(picker.isConnected).toBe(true);
+    expect(document.activeElement).toBe(cancel);
   });
 });

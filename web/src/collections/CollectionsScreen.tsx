@@ -342,7 +342,7 @@ export function NewCollection({
  * Whether a dialog is still drawn: an answer that comes after its Cancel or Escape leaves the screen as
  * the reader left it, rather than closing a dialog opened since, moving focus, or opening what it made.
  */
-function useStillOpen() {
+export function useStillOpen() {
   const open = useRef(false);
   useEffect(() => {
     open.current = true;

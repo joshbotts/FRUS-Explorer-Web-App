@@ -18,7 +18,7 @@ import {
 import { copy } from '../copy';
 import { closeAtOnce, Modal } from '../shell/Modal';
 import { heldOrder, listNameMatches, pickerTakesEntries } from './collectionRules';
-import { NewCollection } from './CollectionsScreen';
+import { NewCollection, useStillOpen } from './CollectionsScreen';
 
 /** How long the picker shows Added before it closes, as the app's waits (0.6 s, 0.8 s for one it held). */
 export const addedPause = 600;
@@ -56,6 +56,7 @@ export function CollectionPicker({
   const shown = search === '' ? listed : listed.filter((item) => listNameMatches(item.listName, search));
   const closing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(closing.current), []);
+  const stillOpen = useStillOpen();
   // Set at the press, as the app sets its added collection at once, so a second press adds nothing.
   const choosing = useRef(false);
 
@@ -68,9 +69,13 @@ export function CollectionPicker({
       let pause = addedPause;
       if (excerpt) await addExcerpts(client, id, excerpt);
       else if (!(await addDocumentToCollection(client, id, document)).added) pause = heldPause;
+      // An add answered after Cancel or Escape stands, and leaves the screen alone: a close set once the
+      // picker had gone would never be cleared, and would close a picker opened since.
+      if (!stillOpen.current) return;
       setAdded(id);
       closing.current = setTimeout(() => closeAtOnce(onClose), pause);
     } catch (error) {
+      if (!stillOpen.current) return;
       choosing.current = false;
       setFailure(errorMessage(error));
     }
