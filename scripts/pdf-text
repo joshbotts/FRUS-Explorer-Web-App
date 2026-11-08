@@ -1,0 +1,460 @@
+#!/usr/bin/env python3
+# The text of a PDF's pages, in their order, for the Compose smoke test's PDF step (PLAN's S25a), which
+# finds a collection's documents' titles in the PDF the server's PDF service printed: neither CI's runner
+# nor the Gotenberg image has a PDF reader, and Python's standard library has none.
+#
+# It reads the PDFs Chromium writes through Skia: a PDF 1.4 file of indirect objects listed in its xref
+# table, or found by scanning when it has none, their streams deflated; each page's text in fonts whose
+# ToUnicode maps give the characters, one or two bytes a code, shown with Tj, TJ, ' and " between BT and
+# ET; and form XObjects drawn with Do, with resources of their own or the page's. It does not read
+# object streams, encryption, or text in fonts with no ToUnicode map beyond Latin-1. A line of output is
+# a text object's text.
+#   scripts/pdf-text <file.pdf>                    prints the text
+#   scripts/pdf-text <file.pdf> --contains <text>  exits 0 if the text holds <text>, and 1 if not, white
+#                                                  space aside on both sides, since a line may break
+#                                                  anywhere a title does and Chromium starts a text
+#                                                  object for each run of a font; one --contains a text
+#   scripts/pdf-text selftest                      reads the PDF it writes, with each feature above
+import re
+import sys
+import zlib
+
+WHITESPACE = b' \t\r\n\f\x00'
+DELIMITERS = b'()<>[]{}/%'
+
+
+class Ref:
+    def __init__(self, number):
+        self.number = number
+
+
+class Name(str):
+    pass
+
+
+class Keyword(str):
+    pass
+
+
+class Stream:
+    def __init__(self, dictionary, data):
+        self.dictionary = dictionary
+        self.raw = data
+
+
+END = object()
+
+
+class Lexer:
+    """PDF's objects, read from `data` at `pos`: numbers, strings, names, arrays, dictionaries, references
+    and keywords."""
+
+    def __init__(self, data, pos=0):
+        self.data = data
+        self.pos = pos
+
+    def skip(self):
+        data = self.data
+        while self.pos < len(data):
+            c = data[self.pos]
+            if c in WHITESPACE:
+                self.pos += 1
+            elif c == 0x25:  # % a comment, to the line's end
+                while self.pos < len(data) and data[self.pos] not in b'\r\n':
+                    self.pos += 1
+            else:
+                break
+
+    def token(self):
+        """The next object or keyword, END at the end; a reference only where `value` reads one."""
+        self.skip()
+        data = self.data
+        if self.pos >= len(data):
+            return END
+        c = data[self.pos:self.pos + 1]
+        if c == b'/':
+            match = re.compile(rb'/([^\s()<>\[\]{}/%]*)').match(data, self.pos)
+            self.pos = match.end()
+            raw = re.sub(rb'#([0-9A-Fa-f]{2})', lambda m: bytes([int(m.group(1), 16)]), match.group(1))
+            return Name(raw.decode('latin-1'))
+        if c == b'(':
+            return self.literal()
+        if data.startswith(b'<<', self.pos):
+            self.pos += 2
+            dictionary = {}
+            while True:
+                self.skip()
+                if data.startswith(b'>>', self.pos):
+                    self.pos += 2
+                    return dictionary
+                key = self.token()
+                if key is END:
+                    raise ValueError('a dictionary ends early')
+                dictionary[key] = self.value()
+        if c == b'<':
+            end = data.index(b'>', self.pos)
+            digits = re.sub(rb'\s', b'', data[self.pos + 1:end])
+            self.pos = end + 1
+            if len(digits) % 2:
+                digits += b'0'
+            return bytes.fromhex(digits.decode('ascii'))
+        if c == b'[':
+            self.pos += 1
+            array = []
+            while True:
+                self.skip()
+                if data.startswith(b']', self.pos):
+                    self.pos += 1
+                    return array
+                item = self.value()
+                if item is END:
+                    raise ValueError('an array ends early')
+                array.append(item)
+        if c in (b']', b'>', b'{', b'}', b')'):
+            self.pos += 1
+            return Keyword(c.decode('latin-1'))
+        match = re.compile(rb'[^\s()<>\[\]{}/%]+').match(data, self.pos)
+        self.pos = match.end()
+        word = match.group()
+        if re.fullmatch(rb'[+-]?\d+', word):
+            return int(word)
+        if re.fullmatch(rb'[+-]?(\d+\.\d*|\.\d+|\d+\.)', word):
+            return float(word)
+        return {b'true': True, b'false': False, b'null': None}.get(word, Keyword(word.decode('latin-1')))
+
+    def value(self):
+        """The next object, `n g R` read as a reference."""
+        first = self.token()
+        if isinstance(first, int) and not isinstance(first, bool):
+            saved = self.pos
+            second = self.token()
+            if isinstance(second, int) and not isinstance(second, bool):
+                third = self.token()
+                if third == 'R' and isinstance(third, Keyword):
+                    return Ref(first)
+            self.pos = saved
+        return first
+
+    def literal(self):
+        data = self.data
+        self.pos += 1
+        out = bytearray()
+        depth = 1
+        escapes = {ord('n'): b'\n', ord('r'): b'\r', ord('t'): b'\t', ord('b'): b'\b', ord('f'): b'\f'}
+        while self.pos < len(data):
+            c = data[self.pos]
+            self.pos += 1
+            if c == 0x5C:  # backslash
+                e = data[self.pos]
+                self.pos += 1
+                if e in escapes:
+                    out += escapes[e]
+                elif 0x30 <= e <= 0x37:
+                    digits = bytes([e])
+                    while len(digits) < 3 and 0x30 <= data[self.pos] <= 0x37:
+                        digits += data[self.pos:self.pos + 1]
+                        self.pos += 1
+                    out.append(int(digits, 8) & 0xFF)
+                elif e == 0x0D:
+                    if data[self.pos:self.pos + 1] == b'\n':
+                        self.pos += 1
+                elif e != 0x0A:
+                    out.append(e)
+            elif c == 0x28:
+                depth += 1
+                out.append(c)
+            elif c == 0x29:
+                depth -= 1
+                if depth == 0:
+                    return bytes(out)
+                out.append(c)
+            else:
+                out.append(c)
+        raise ValueError('a string ends early')
+
+
+class Document:
+    def __init__(self, data):
+        self.data = data
+        self.offsets = self.xref() or self.scan()
+        self.cache = {}
+
+    def xref(self):
+        """The offsets the xref table gives, or none for a file without one."""
+        found = re.search(rb'startxref\s+(\d+)\s+%%EOF\s*$', self.data[-1024:])
+        if not found:
+            return None
+        lexer = Lexer(self.data, int(found.group(1)))
+        if lexer.token() != 'xref':
+            return None
+        offsets = {}
+        while True:
+            start = lexer.token()
+            if not isinstance(start, int):
+                break
+            count = lexer.token()
+            for number in range(start, start + count):
+                offset, _generation, kind = lexer.token(), lexer.token(), lexer.token()
+                if kind == 'n':
+                    offsets[number] = offset
+        return offsets
+
+    def scan(self):
+        return {int(m.group(1)): m.start() for m in re.finditer(rb'(?<![0-9])(\d+)\s+\d+\s+obj\b', self.data)}
+
+    def get(self, number):
+        if number not in self.cache:
+            self.cache[number] = None  # a reference to itself reads as nothing
+            self.cache[number] = self.read(self.offsets[number]) if number in self.offsets else None
+        return self.cache[number]
+
+    def read(self, offset):
+        lexer = Lexer(self.data, offset)
+        lexer.token(), lexer.token()
+        if lexer.token() != 'obj':
+            raise ValueError('no object at %d' % offset)
+        value = lexer.value()
+        lexer.skip()
+        if isinstance(value, dict) and self.data.startswith(b'stream', lexer.pos):
+            start = lexer.pos + 6
+            if self.data[start:start + 2] == b'\r\n':
+                start += 2
+            elif self.data[start:start + 1] in (b'\n', b'\r'):
+                start += 1
+            length = self.resolve(value.get('Length'))
+            if not isinstance(length, int) or self.data[start + length:start + length + 12].strip()[:9] != b'endstream':
+                length = self.data.index(b'endstream', start) - start
+            return Stream(value, self.data[start:start + length])
+        return value
+
+    def resolve(self, value):
+        while isinstance(value, Ref):
+            value = self.get(value.number)
+        return value
+
+    def decoded(self, stream):
+        filters = self.resolve(stream.dictionary.get('Filter'))
+        filters = filters if isinstance(filters, list) else [filters] if filters else []
+        data = stream.raw
+        for name in filters:
+            if self.resolve(name) in ('FlateDecode', 'Fl'):
+                data = zlib.decompressobj().decompress(data)
+            else:
+                raise ValueError('a stream filter this reader does not read: %s' % name)
+        return data
+
+    def pages(self):
+        root = self.resolve(self.trailer().get('Root'))
+        found = []
+
+        def walk(node, inherited):
+            node = self.resolve(node)
+            resources = self.resolve(node.get('Resources', inherited))
+            if node.get('Type') == 'Pages' or 'Kids' in node:
+                for kid in self.resolve(node.get('Kids', [])):
+                    walk(kid, resources)
+            else:
+                found.append((node, resources))
+
+        walk(root.get('Pages'), None)
+        return found
+
+    def trailer(self):
+        # The trailer follows the last object; the word elsewhere may be a stream's bytes.
+        at = self.data.rfind(b'trailer')
+        if at >= 0 and at > self.data.rfind(b'endobj'):
+            lexer = Lexer(self.data, at + 7)
+            return lexer.value()
+        for number in sorted(self.offsets):
+            value = self.get(number)
+            if isinstance(value, dict) and value.get('Type') == 'Catalog':
+                return {'Root': Ref(number)}
+        raise ValueError('no trailer, and no catalogue')
+
+
+class Font:
+    def __init__(self, document, dictionary):
+        self.map = {}
+        self.width = 2 if dictionary.get('Subtype') == 'Type0' else 1
+        cmap = document.resolve(dictionary.get('ToUnicode'))
+        if isinstance(cmap, Stream):
+            self.read(document.decoded(cmap))
+
+    def read(self, data):
+        lexer = Lexer(data)
+        operands = []
+        mode = None
+        while True:
+            token = lexer.token()
+            if token is END:
+                return
+            if isinstance(token, Keyword):
+                if token in ('begincodespacerange', 'beginbfchar', 'beginbfrange'):
+                    mode = token
+                elif token == 'endcodespacerange':
+                    if operands and isinstance(operands[0], bytes):
+                        self.width = len(operands[0])
+                    mode = None
+                elif token == 'endbfchar':
+                    for source, target in zip(operands[0::2], operands[1::2]):
+                        self.map[int.from_bytes(source, 'big')] = target.decode('utf-16-be', 'replace')
+                    mode = None
+                elif token == 'endbfrange':
+                    for low, high, target in zip(operands[0::3], operands[1::3], operands[2::3]):
+                        low, high = int.from_bytes(low, 'big'), int.from_bytes(high, 'big')
+                        for code in range(low, high + 1):
+                            if isinstance(target, list):
+                                if code - low < len(target):
+                                    self.map[code] = target[code - low].decode('utf-16-be', 'replace')
+                            else:
+                                value = int.from_bytes(target, 'big') + code - low
+                                self.map[code] = value.to_bytes(len(target), 'big').decode('utf-16-be', 'replace')
+                    mode = None
+                operands = []
+            elif mode:
+                operands.append(token)
+
+    def text(self, data):
+        if not self.map:
+            return data.decode('latin-1')
+        codes = [int.from_bytes(data[i:i + self.width], 'big') for i in range(0, len(data) - self.width + 1, self.width)]
+        return ''.join(self.map.get(code, '') for code in codes)
+
+
+def page_text(document, contents, resources, fonts, depth=0):
+    """The text of a content stream, with the fonts and forms its resources name: a line a text object."""
+    resources = document.resolve(resources) or {}
+    font_names = document.resolve(resources.get('Font')) or {}
+    xobjects = document.resolve(resources.get('XObject')) or {}
+    lines = []
+    line = []
+    font = None
+    lexer = Lexer(contents)
+    operands = []
+    while True:
+        token = lexer.value()
+        if token is END:
+            break
+        if not isinstance(token, Keyword):
+            operands.append(token)
+            continue
+        if token == 'BI':  # an inline image, whose data runs to EI
+            end = re.compile(rb'\sEI(?=[\s/]|$)').search(contents, lexer.pos)
+            lexer.pos = end.end() if end else len(contents)
+        elif token == 'Tf' and operands and isinstance(operands[0], Name):
+            reference = font_names.get(operands[0])
+            key = reference.number if isinstance(reference, Ref) else id(reference)
+            if key not in fonts:
+                fonts[key] = Font(document, document.resolve(reference) or {})
+            font = fonts[key]
+        elif token in ('Tj', "'", '"') and operands and isinstance(operands[-1], bytes):
+            if token != 'Tj' and line:
+                lines.append(''.join(line))
+                line = []
+            line.append(font.text(operands[-1]) if font else operands[-1].decode('latin-1'))
+        elif token == 'TJ' and operands and isinstance(operands[-1], list):
+            for item in operands[-1]:
+                if isinstance(item, bytes):
+                    line.append(font.text(item) if font else item.decode('latin-1'))
+        elif token == 'ET':
+            lines.append(''.join(line))
+            line = []
+        elif token == 'Do' and operands and isinstance(operands[0], Name) and depth < 8:
+            form = document.resolve(xobjects.get(operands[0]))
+            if isinstance(form, Stream) and form.dictionary.get('Subtype') == 'Form':
+                lines += page_text(document, document.decoded(form), form.dictionary.get('Resources', resources), fonts, depth + 1)
+        operands = []
+    if line:
+        lines.append(''.join(line))
+    return [each for each in lines if each.strip()]
+
+
+def text(data):
+    document = Document(data)
+    fonts = {}
+    lines = []
+    for page, resources in document.pages():
+        contents = document.resolve(page.get('Contents'))
+        streams = contents if isinstance(contents, list) else [contents] if contents is not None else []
+        stream = b'\n'.join(document.decoded(document.resolve(each)) for each in streams)
+        lines += page_text(document, stream, resources, fonts)
+    return '\n'.join(lines)
+
+
+def compact(value):
+    return ''.join(value.split())
+
+
+def sample():
+    """A PDF with the features the reader reads: two pages under a tree, the second inheriting its
+    resources, a Type0 font with a ToUnicode map of single codes, a range and an array, a simple font with
+    none, Tj, TJ, ', a form XObject, an inline image, deflated streams and a xref table."""
+    cmap = b'''/CIDInit /ProcSet findresource begin 12 dict begin begincmap
+1 begincodespacerange <0000> <FFFF> endcodespacerange
+2 beginbfchar <0003> <0020> <0010> <00E9> endbfchar
+2 beginbfrange <0024> <0026> <0041> <0030> <0031> [<0074> <D83DDE00>] endbfrange
+endcmap CMapName currentdict /CMap defineresource pop end end'''
+    page1 = b'BT /F1 12 Tf <0024002500260003> Tj [<0030> -120 <0031>] TJ ET q BI /W 1 /H 1 /CS /G /BPC 8 ID \x00 EI Q BT /F2 9 Tf (Plain \\(Latin\\)) Tj (second line) \' ET'
+    page2 = b'/X1 Do'
+    form = b'BT /F1 10 Tf <00240010> Tj ET'
+    objects = {
+        1: b'<< /Type /Catalog /Pages 2 0 R >>',
+        2: b'<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 /Resources << /Font << /F1 5 0 R /F2 6 0 R >> /XObject << /X1 9 0 R >> >> >>',
+        3: b'<< /Type /Page /Parent 2 0 R /Contents 7 0 R >>',
+        4: b'<< /Type /Page /Parent 2 0 R /Contents [8 0 R] >>',
+        5: b'<< /Type /Font /Subtype /Type0 /BaseFont /AAAAAA+Serif /Encoding /Identity-H /ToUnicode 10 0 R >>',
+        6: b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    }
+    streams = {7: page1, 8: page2, 9: form, 10: cmap}
+    out = bytearray(b'%PDF-1.4\n%\xe2\xe3\xcf\xd3\n')
+    offsets = {}
+    for number in range(1, 11):
+        offsets[number] = len(out)
+        if number in streams:
+            body = zlib.compress(streams[number])
+            extra = b' /Type /XObject /Subtype /Form /BBox [0 0 10 10]' if number == 9 else b''
+            out += b'%d 0 obj\n<< /Filter /FlateDecode /Length %d%s >>\nstream\n' % (number, len(body), extra) + body + b'\nendstream\nendobj\n'
+        else:
+            out += b'%d 0 obj\n' % number + objects[number] + b'\nendobj\n'
+    xref = len(out)
+    out += b'xref\n0 11\n0000000000 65535 f \n' + b''.join(b'%010d 00000 n \n' % offsets[n] for n in range(1, 11))
+    out += b'trailer\n<< /Size 11 /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n' % xref
+    return bytes(out)
+
+
+def selftest():
+    data = sample()
+    expected = 'ABC t\U0001F600\nPlain (Latin)\nsecond line\nAé'
+    for label, pdf in [('with its xref table', data), ('without it', data.replace(b'startxref', b'startxrfe'))]:
+        got = text(pdf)
+        if got != expected:
+            sys.stderr.write('pdf-text selftest, %s: %r, not %r\n' % (label, got, expected))
+            return 1
+    print('pdf-text selftest: ok, two ways')
+    return 0
+
+
+def main(argv):
+    if argv == ['selftest']:
+        return selftest()
+    if not argv or len(argv) % 2 == 0 or any(flag != '--contains' for flag in argv[1::2]):
+        sys.stderr.write('usage: scripts/pdf-text <file.pdf> [--contains <text>]...\n       scripts/pdf-text selftest\n')
+        return 2
+    with open(argv[0], 'rb') as file:
+        data = file.read()
+    if not data.startswith(b'%PDF-'):
+        sys.stderr.write('pdf-text: %s is no PDF\n' % argv[0])
+        return 2
+    found = text(data)
+    wanted = argv[2::2]
+    if not wanted:
+        print(found)
+        return 0
+    missing = [each for each in wanted if compact(each) not in compact(found)]
+    for each in missing:
+        sys.stderr.write('pdf-text: %s does not hold "%s"\n' % (argv[0], each))
+    return 1 if missing else 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))

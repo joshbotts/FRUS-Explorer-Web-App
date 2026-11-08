@@ -8,6 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { errorMessage } from '../api/client';
+import { pdfServiceQuery } from '../api/pdf';
 import {
   addBlock,
   collectionGone,
@@ -62,6 +63,8 @@ function subscribeToWidth(onChange: () => void): () => void {
 export function CollectionEditorScreen() {
   const { collectionId } = route.useParams();
   const query = useQuery(collectionQuery(collectionId));
+  // Asked as the editor opens, so that its export sheet knows at once whether to offer PDF (S25a).
+  useQuery(pdfServiceQuery);
   const gone = collectionGone(query.error);
   const detail = query.data;
   const title = gone ? copy.collectionEditor.unavailableTitle : (detail?.listName ?? copy.collections.title);

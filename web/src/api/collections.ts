@@ -287,8 +287,11 @@ export function documentCollectionsQuery(volumeId: string, documentId: string) {
 /** Whether the server has no such collection: deleted elsewhere. */
 export const collectionGone = (error: unknown) => error instanceof ApiError && error.code === 'COLLECTION_NOT_FOUND';
 
-/** The formats a collection exports to here, the app's `ExportFormat` raw values, in its grid's order. */
-export const exportFormats = ['html', 'docx', 'bibtex', 'zoteroJSON', 'fruscollection'] as const;
+/**
+ * The formats a collection exports to here, the app's `ExportFormat` raw values, in its grid's order:
+ * PDF while the server's PDF service answers (S25a).
+ */
+export const exportFormats = ['pdf', 'html', 'docx', 'bibtex', 'zoteroJSON', 'fruscollection'] as const;
 export type ExportFormat = (typeof exportFormats)[number];
 
 /** A smart collection's results, which the preview's bar counts. */

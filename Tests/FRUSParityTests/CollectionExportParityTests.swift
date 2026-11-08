@@ -169,8 +169,9 @@ import Testing
             #expect(active == project.id)
             let kit = try await KitReference(files: files, session: session, activeProject: active)
             for collection in [rich.id, plain.id, many.id, away.id] {
-                // The native file is CollectionFileParityTests'.
-                for format in CollectionExportFormat.allCases where format != .fruscollection {
+                // The native file is CollectionFileParityTests'; the PDF is Chromium's print of the HTML page
+                // held here, which this server, with no PDF service, does not export (PDFExportTests).
+                for format in CollectionExportFormat.allCases where format != .fruscollection && format != .pdf {
                     try await Self.sameDay { day in
                         let served = Data(buffer: try await session.send(.post, "\(base)/\(collection)/export",
                                                                          try Self.json(["format": format.rawValue, "timeZone": "UTC"])).body)
@@ -231,6 +232,8 @@ import Testing
             (sheet, "CollectionExportSheet", "export.close", "Close", "collectionExport", "close: 'Close'"),
             (sheet, "CollectionExportSheet", "export.progress.label", "Exporting…", "collectionExport", "exporting: 'Exporting…'"),
             (sheet, "CollectionExportSheet", "export.mac.success.title", "Export Complete", "collectionExport", "complete: 'Export Complete'"),
+            (formats, "CollectionExporter+App", "export.grid.pdf.caption", "Formatted reader", "collectionExport",
+             "pdf: { label: 'PDF', caption: 'Formatted reader' }"),
             (formats, "CollectionExporter+App", "export.grid.html.caption.v2", "Web page", "collectionExport", "html: { label: 'HTML', caption: 'Web page' }"),
             (formats, "CollectionExporter+App", "export.grid.docx.title", "Word", "collectionExport", "docx: { label: 'Word', caption: 'Editable .docx' }"),
             (formats, "CollectionExporter+App", "export.grid.docx.caption", "Editable .docx", "collectionExport",
@@ -274,15 +277,29 @@ import Testing
             #expect(format.source.contains(NoteViewParityTests.flattened(format.line)), "the app holds \(format.line)")
             #expect(blocks[format.block]?.contains(format.web) == true, "copy.ts's \(format.block) block holds \(format.web)")
         }
-        // The grid's labels the app writes as they are, and its order, which the web's omits PDF from (the native file since S18f).
+        // The grid's labels the app writes as they are, and its order, PDF first, which the web's grid offers
+        // while the server's PDF service answers (S25a); the format the app's sheet opens on, PDF, the grid's
+        // first, as the web's opens on its grid's first; and the PDF's name, the collection's with `.pdf`.
         NoteViewParityTests.expect(formats, holds: [
-            #"case .html: return "HTML""#, #"case .bibtex: return "BibTeX""#,
+            #"case .pdf: return "PDF""#, #"case .html: return "HTML""#, #"case .bibtex: return "BibTeX""#,
             "let ordered: [ExportFormat] = [.pdf, .html, .docx, .bibtex, .zoteroJSON, .fruscollection]",
         ], file: "CollectionExporter+App.swift")
+        NoteViewParityTests.expect(sheet, holds: ["@State private var selectedFormat: ExportFormat = .pdf"], file: "CollectionExportSheet.swift")
+        NoteViewParityTests.expect(try CollectionParityTests.app("Collections/PDFCollectionExporter.swift"), holds: [
+            #"let url = CollectionExportNaming.temporaryFileURL(savedName: metadata.name, suffix: ".pdf")"#,
+            "private static let pageWidth: CGFloat = 612 private static let pageHeight: CGFloat = 792 private static let margin: CGFloat = 72",
+        ], file: "PDFCollectionExporter.swift")
         NoteViewParityTests.expect(try CollectionParityTests.web("api/collections.ts"), holds: [
-            "export const exportFormats = ['html', 'docx', 'bibtex', 'zoteroJSON', 'fruscollection'] as const;",
+            "export const exportFormats = ['pdf', 'html', 'docx', 'bibtex', 'zoteroJSON', 'fruscollection'] as const;",
             "export const previewDocumentCap = 20;",
         ], file: "api/collections.ts")
+        NoteViewParityTests.expect(try CollectionParityTests.web("collections/CollectionExportSheet.tsx"), holds: [
+            "const format = chosen !== null && formats.includes(chosen) ? chosen : formats[0]!;",
+        ], file: "collections/CollectionExportSheet.tsx")
+        #expect(CollectionExportFormat.pdf.suffix == ".pdf" && CollectionExportFormat.pdf.mediaType == "application/pdf")
+        #expect(PDFService.printFields.map { "\($0.name)=\($0.value)" }
+            == ["paperWidth=8.5", "paperHeight=11", "marginTop=1", "marginBottom=1", "marginLeft=1", "marginRight=1", "printBackground=true"],
+            "612 by 792 points are 8.5 by 11 inches, and 72 points an inch")
     }
 
     /// The server's mirrors of the app's preview and sheet, of its resolver and of what they read, each

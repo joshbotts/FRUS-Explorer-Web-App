@@ -4,13 +4,17 @@
 // server's folder lacks as its citation card. By keyboard: Export…, the sheet's quotation check, which
 // warns without blocking, Word chosen by the arrow keys and saved; then HTML, BibTeX and RIS by pointer,
 // each the file its exporter names; and each export in History's Collections Exported. Narrow, the
-// iPhone's Outline | Preview. Each test deletes the collections it made and the exports it recorded.
+// iPhone's Outline | Preview. S25a's done-when: while the server's PDF service answers, the sheet opens on
+// PDF, the app's choice, and exports it by keyboard, named as the app names it, with no axe violations;
+// the sheet's specs hold without it too, HTML first. Each test deletes the collections it made and the
+// exports it recorded.
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
 import { tabTo } from './keyboard';
 import { getJSON, send } from './notes';
+import { firstFormat, offersPdf } from './pdf';
 
 interface Detail {
   id: string;
@@ -90,6 +94,7 @@ test('previews a collection beside its contents, the first 20 documents until Re
 });
 
 test('exports each format by keyboard and pointer, after the quotation check, and keeps each in the history', async ({ page }) => {
+  const pdf = await offersPdf(page);
   const id = await made(page, 'Café letters', letters(2));
   // An excerpt frozen from d1's page, whose text the synthetic index stores in other words: not found.
   const page1 = await page.request.get(`api/v1/volumes/${volume}/documents/d1/html`);
@@ -108,11 +113,12 @@ test('exports each format by keyboard and pointer, after the quotation check, an
   const sheet = page.getByRole('dialog', { name: 'Export collection' });
   await expect(sheet.getByText('Exports the full text of each document, with your notes and footnotes.')).toBeVisible();
   await expect(sheet.getByText('One quotation was not found in the document it cites.')).toBeVisible();
-  await expect(sheet.getByRole('radio', { name: 'HTML, Web page' })).toBeChecked();
+  await expect(sheet.getByRole('radio', { name: firstFormat(pdf) })).toBeChecked();
   await axeCheck(page);
 
-  await tabTo(page, sheet.getByRole('radio', { name: 'HTML, Web page' }));
-  await page.keyboard.press('ArrowRight');
+  // Word is the card after HTML, which follows PDF.
+  await tabTo(page, sheet.getByRole('radio', { name: firstFormat(pdf) }));
+  for (let step = 0; step < (pdf ? 2 : 1); step += 1) await page.keyboard.press('ArrowRight');
   await expect(sheet.getByRole('radio', { name: 'Word, Editable .docx' })).toBeChecked();
   await tabTo(page, sheet.getByRole('button', { name: 'Export Word' }));
   const word = page.waitForEvent('download');
@@ -151,6 +157,38 @@ test('exports each format by keyboard and pointer, after the quotation check, an
     'html',
     'docx',
   ]);
+});
+
+test('exports a PDF by keyboard through the server’s PDF service, named as the app names it, and keeps it in the history', async ({ page }) => {
+  test.skip(!(await offersPdf(page)), 'the server under test offers no PDF: its PDF service is not running');
+  const id = await made(page, 'Café letters', letters(2));
+  await page.goto(`collections/${id}`);
+  const open = page.getByRole('button', { name: 'Export…' });
+  await tabTo(page, open);
+  await page.keyboard.press('Enter');
+  const sheet = page.getByRole('dialog', { name: 'Export collection' });
+  // The app's grid, PDF first, and the app's choice as the sheet opens.
+  await expect(sheet.getByRole('radio')).toHaveCount(6);
+  await expect(sheet.getByRole('radio', { name: 'PDF, Formatted reader' })).toBeChecked();
+  await axeCheck(page);
+
+  await tabTo(page, sheet.getByRole('button', { name: 'Export PDF' }));
+  const saving = page.waitForEvent('download');
+  await page.keyboard.press('Enter');
+  const file = await saving;
+  expect(file.suggestedFilename()).toBe('Café letters.pdf');
+  expect((await readFile(await file.path())).subarray(0, 5).toString('latin1')).toBe('%PDF-');
+  await expect(sheet.getByText('Export Complete: Café letters.pdf')).toBeVisible();
+  await expect(sheet.getByRole('button', { name: 'Export PDF' })).toBeFocused();
+  await axeCheck(page);
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await expect(open).toBeFocused();
+
+  await page.goto('research/history');
+  const exported = page.getByRole('region', { name: 'Collections Exported' });
+  await expect(exported.getByText('PDF · 2 documents', { exact: false }).first()).toBeVisible();
+  expect((await recorded(page)).filter((row) => !exportsBefore.has(row.id)).map((row) => [row.format, row.formatName])).toEqual([['pdf', 'PDF']]);
 });
 
 test('shows Outline or Preview, one at a time, in a narrow window', async ({ page }) => {
