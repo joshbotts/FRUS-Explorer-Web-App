@@ -246,7 +246,7 @@ echo "COMPOSE_PROFILES=pdf" >> .env
 docker compose up -d
 ```
 
-Once it answers, **Export…** offers **PDF** first and opens on it, as the app's sheet does; the file is named after the collection, with `.pdf`, and **Research ▸ History** lists it. The server asks the service whether it answers, at most every ten seconds, and offers PDF only while it does, so without the profile there is no PDF to choose. Its log, `docker compose logs frus`, says which from the first time it asks, as an editor opens, and again whenever the answer changes. While the server offers PDF,
+Gotenberg starts Chromium with it, in a few seconds, and answers only once Chromium runs; Chromium then holds about 150 MB of memory. Once it answers, **Export…** offers **PDF** first and opens on it, as the app's sheet does; the file is named after the collection, with `.pdf`, and **Research ▸ History** lists it. The server asks the service whether it answers, at most every ten seconds, and offers PDF only while it does, so without the profile there is no PDF to choose. Its log, `docker compose logs frus`, says which from the first time it asks, as an editor opens, and again whenever the answer changes. While the server offers PDF,
 
 ```bash
 curl -s http://localhost:8080/api/v1/pdf
@@ -254,7 +254,7 @@ curl -s http://localhost:8080/api/v1/pdf
 
 answers `{"available":true}`, and `POST /api/v1/me/collections/{id}/export` with `{"format": "pdf"}` gives the file, as it gives the other formats with theirs.
 
-**What the service sees:** each collection you export as PDF, which the server sends it, and nothing else. It is on a network of its own with the server alone, which reaches neither the internet nor the rest of this machine; its Chromium runs no script and fetches no address a collection names; and its root filesystem is read-only, with no Linux capabilities. A long collection takes longer to print, up to five minutes; behind a reverse proxy, one that waits less, as nginx's recipes below wait 60 seconds by default, ends the export first, so give a long collection's PDF a longer `proxy_read_timeout`. A PDF that cannot be made is refused in the sheet, which says why, and the other formats are made by the server itself, without the service.
+**What the service sees:** each collection you export as PDF, which the server sends it, and nothing else. It is on a network of its own with the server alone, which reaches neither the internet nor the rest of this machine; its Chromium runs no script and fetches no address a collection names; and its root filesystem is read-only, with no Linux capabilities, its Chromium writing only to `/tmp` and its home, both held in memory and emptied when the service stops. A long collection takes longer to print, up to five minutes; behind a reverse proxy, one that waits less, as nginx's recipes below wait 60 seconds by default, ends the export first, so give a long collection's PDF a longer `proxy_read_timeout`. A PDF that cannot be made is refused in the sheet, which says why, and the other formats are made by the server itself, without the service.
 
 To turn PDF off, remove `COMPOSE_PROFILES=pdf` from `.env`, then stop and remove the service:
 

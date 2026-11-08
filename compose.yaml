@@ -68,6 +68,7 @@ services:
     profiles: [pdf]
     command:
       - gotenberg
+      - --chromium-auto-start                    # Chromium starts with it, so that it answers only once Chromium runs
       - --api-timeout=300s                       # a long collection's print; the server waits as long
       - --api-disable-download-from              # it prints what it is sent, and downloads nothing
       - --chromium-disable-javascript
@@ -77,9 +78,10 @@ services:
       - --webhook-disable
       - --prometheus-disable-collect
     networks: [pdf]
-    read_only: true          # Chromium writes only to /tmp
+    read_only: true          # Chromium writes only to /tmp and its home
     tmpfs:
       - /tmp
+      - /home/gotenberg      # its crash handler's folder and fontconfig's cache
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true

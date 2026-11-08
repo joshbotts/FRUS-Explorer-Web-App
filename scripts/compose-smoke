@@ -81,6 +81,11 @@ cleanup() {
   if [ -z "$passed" ]; then
     echo "== the smoke test failed; the server's log:"
     docker compose logs --no-color frus 2>&1 | tail -50 || true
+    # Gotenberg's, once a step has started it: a print it refuses names its cause there alone.
+    if [ -n "$(COMPOSE_PROFILES=pdf docker compose ps -aq pdf 2>/dev/null)" ]; then
+      echo "== the pdf service's log:"
+      COMPOSE_PROFILES=pdf docker compose logs --no-color pdf 2>&1 | tail -40 || true
+    fi
   fi
   docker rm -f "$proxy" "$COMPOSE_PROJECT_NAME-tmp-volume" "$COMPOSE_PROJECT_NAME-tmp-tmp" >/dev/null 2>&1 || true
   docker volume rm "$COMPOSE_PROJECT_NAME-tmp-volume" "$COMPOSE_PROJECT_NAME-tmp-tmp" >/dev/null 2>&1 || true

@@ -742,7 +742,7 @@ The image's labels name the app's version, `io.github.joshbotts.frus-explorer.ve
 
 The workflow's default is a dry run, which prints the release and writes nothing, as does a run on any branch but `main`. A selftest runs the release against stubs of `docker` and `gh` first. On a pull request that changes the release, the workflow dry-runs against the branch's own build, pushed to a registry inside the job, so nothing is published.
 
-Two sidecars are optional. `gotenberg/gotenberg:8-chromium`, Gotenberg with Chromium alone, enables PDF export, behind Compose's `pdf` profile (PLAN's S25a): the server offers PDF while its Chromium answers, and the service runs on a network of its own with the server, which Compose makes internal, its Chromium with no script and no address fetched, private or public, its root filesystem read-only and with no Linux capabilities. A reverse proxy such as Caddy or Traefik provides TLS beyond localhost.
+Two sidecars are optional. `gotenberg/gotenberg:8-chromium`, Gotenberg with Chromium alone, enables PDF export, behind Compose's `pdf` profile (PLAN's S25a): the server offers PDF while its Chromium answers, and Gotenberg starts Chromium with the service, so that it answers only once Chromium runs. The service runs on a network of its own with the server, which Compose makes internal, its Chromium with no script and no address fetched, private or public, and its root filesystem read-only but for `/tmp` and Chromium's home, each a tmpfs, with no Linux capabilities. A reverse proxy such as Caddy or Traefik provides TLS beyond localhost.
 
 ### Compose file
 
