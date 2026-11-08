@@ -101,6 +101,46 @@ import Testing
         #expect(try rows.userSearch() == [Self.row(summary: "An older AI summary.")])
     }
 
+    /// A structured summary is searched by its fields as plain text, the app's `indexedText` since
+    /// FRUS-Explorer#1824, and not by its JSON; one whose text is no JSON object of strings by its text.
+    /// A row written before, which holds the JSON, takes the fields at the store's sync, as at the app's
+    /// launch, and one left with no text in either column goes; a row already current is left alone, so
+    /// a second sync changes nothing.
+    @Test(arguments: UserStoreKind.available) func aStructuredSummaryIsSearchedByItsFields(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await UserTagTests.open(kind)
+        defer { withExtendedLifetime(directory) {} }
+        let schema = #"{"structured":{"schema":{"fields":[{"description":"Who","name":"KeyParticipants"},{"description":"What","name":"Background"}]}}}"#
+        let json = #"{"Background": "Berlin, 1961.", "KeyParticipants": " Rusk and Dobrynin ", "Outcome": ""}"#
+        try rows.addSummary("40000000-0000-4000-8000-000000000004", responseText: json, responseFormat: schema)
+        try rows.addSummary("50000000-0000-4000-8000-000000000005", documentId: "d2", responseText: "[1, 2]", responseFormat: schema)
+        // Any write to the documents' research rewrites their rows by the rule.
+        let notes = [try UserNoteTests.make(store, "A note.", at: Self.time(0)),
+                     try UserNoteTests.make(store, "Another.", in: Self.d2, at: Self.time(0))]
+        let fields = "Key Participants: Rusk and Dobrynin\n\nBackground: Berlin, 1961.\n\nOutcome:"
+        #expect(try rows.userSearch() == [Self.row(summary: fields, notes: "A note."), Self.row(Self.d2, summary: "[1, 2]", notes: "Another.")],
+                "the schema's fields in its order, then any other by name, each trimmed; text that is no object as stored")
+        #expect(try rows.userSearchMatches("\"Key Participants\"") == ["d1"])
+        #expect(try store.syncSummarySearchText() == 0, "a store already current is left alone")
+
+        // As an older build left the rows: the JSON, and two rows of documents whose only summary is a
+        // draft, one with a note, which keeps its row, and one without, whose row goes.
+        try rows.addSummary("60000000-0000-4000-8000-000000000006", documentId: "d3", responseText: "A draft.", isHeadnoteDraft: true)
+        try rows.addSummary("70000000-0000-4000-8000-000000000007", documentId: "d4", responseText: "Another.", isHeadnoteDraft: true)
+        _ = try rows.searched("UPDATE user_search SET summary_text = ? WHERE document_id = 'd1'", [.text(json)])
+        for (document, note) in [("d3", SQLiteValue.text("Kept.")), ("d4", .null)] {
+            _ = try rows.searched(
+                "INSERT INTO user_search (user_id, document_id, volume_id, summary_text, note_text) VALUES ('owner', ?, 'frus1961-63v06', 'A draft.', ?)",
+                [.text(document), note])
+        }
+        #expect(try rows.userSearchMatches("KeyParticipants") == ["d1"])
+        #expect(try store.syncSummarySearchText() == 3)
+        #expect(try rows.userSearch() == [Self.row(summary: fields, notes: "A note."), Self.row(Self.d2, summary: "[1, 2]", notes: "Another."),
+                                          Self.row(DocumentKey(volumeId: "frus1961-63v06", documentId: "d3"), notes: "Kept.")])
+        #expect(try rows.userSearchMatches("KeyParticipants").isEmpty)
+        #expect(try store.syncSummarySearchText() == 0)
+        for note in notes { try store.deleteNote(note.id, for: "owner") }
+    }
+
     /// Porter stems the user's words as the corpus's: a search for "negotiate" finds "negotiating".
     /// A tag change touches no row, as user_search holds no tags; each user's rows are theirs.
     @Test(arguments: UserStoreKind.available) func theRowsAreSearchableAndEachUsersAlone(_ kind: UserStoreKind) async throws {

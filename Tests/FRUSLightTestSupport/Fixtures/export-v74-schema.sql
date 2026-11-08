@@ -1,10 +1,12 @@
--- Schema of a FRUS Explorer research export: index version 69, FTS schema 4, app build 50.
--- Taken from the owner's three-volume export of 13 October 2026 (sqlite_master, in creation order).
+-- Schema of a FRUS Explorer research export: index version 74, FTS schema 4, app 1.0 build 1787, from
+-- a build of FRUS-Explorer fe9325b2. Taken from the owner's three-volume export of 7 November 2026
+-- (sqlite_master, in creation order), and the same in the owner's two full exports of that day.
 -- Its library was emptied with Erase Everything…, which keeps the database file, so the partial index
 -- idx_document_cache_user_tag_ids comes last among the indexes; a new database makes it earlier.
 -- Schema only: no rows. SQLite internals and FTS5 shadow tables are left out; FTS5 creates those.
--- Index version 71 (app 1.0, build 1776) has the same statements in the same order: checked on
--- 22 October 2026 against both of the owner's exports from that build, which add only FTS5's tables.
+-- Index versions 69 (build 50) and 71 (1.0, build 1776) had the same statements in the same order but
+-- one: research_suppressed_volumes, which since FRUS-Explorer#1845 suppresses the first edition of a
+-- pair whose second the export holds, where it suppressed the second.
 
 CREATE TABLE cross_references (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -323,7 +325,7 @@ CREATE TRIGGER document_cache_user_content_au AFTER UPDATE OF summary_text, note
 END;
 
 CREATE VIEW research_suppressed_volumes AS
-SELECT DISTINCT later.volume_id AS volume_id
+SELECT DISTINCT substr(later.volume_id, 1, length(later.volume_id) - 3) AS volume_id
 FROM document_cache AS later
 WHERE later.volume_id GLOB '*Ed[0-9]'
   AND EXISTS (SELECT 1 FROM document_cache AS first_edition

@@ -71,13 +71,16 @@ export function note(fields: Partial<Note> & Pick<Note, 'id'>): Note {
 export function summary(fields: Partial<Summary> & Pick<Summary, 'id'>): Summary {
   // One the reader may not change they may not delete either, unless the test says so.
   const editable = fields.editable ?? true;
+  // A plain summary reads as its text, unless the test gives a structured one's reading.
+  const responseText = fields.responseText ?? 'A summary.';
   return {
     volumeId: 'frus1961-63v06',
     documentId: 'd1',
     promptId: '0EB00000-0000-4000-8000-000000000001',
     promptName: null,
-    responseText: 'A summary.',
+    responseText,
     responseFormat: 'general',
+    reading: { fields: null, text: responseText, line: responseText },
     wasChunked: false,
     authorship: 'userWritten',
     isHeadnoteDraft: false,

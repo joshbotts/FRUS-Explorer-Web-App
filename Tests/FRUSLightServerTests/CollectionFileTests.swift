@@ -379,13 +379,16 @@ import Testing
                 try fixture.rows.column("SELECT response_text || ' ' || authorship FROM summaries WHERE is_headnote_draft = 1 ORDER BY response_text")
             }
             #expect(try await card(made.entryIds[0]) == .init(summaryId: "5A000000-0000-4000-8000-000000000001", text: "The model's takeaway.",
-                                                               authorship: "aiGenerated", isDraft: false))
+                                                               reading: Self.plain("The model's takeaway."), authorship: "aiGenerated",
+                                                               isDraft: false))
             #expect(try await card(made.entryIds[1]) == nil)
             #expect(try await card(made.entryIds[2])?.authorship == "userWritten", "an imported headnote, with its authorship")
 
             let edited = try await save(made.entryIds[0], "  The model's takeaway, edited.  ")
             let draftId = try #require(edited.entries[0].headnoteSummaryId)
-            #expect(try await card(made.entryIds[0]) == .init(summaryId: draftId, text: "The model's takeaway, edited.", authorship: "aiEdited", isDraft: true))
+            #expect(try await card(made.entryIds[0]) == .init(summaryId: draftId, text: "The model's takeaway, edited.",
+                                                               reading: Self.plain("The model's takeaway, edited."), authorship: "aiEdited",
+                                                               isDraft: true))
             let again = try await save(made.entryIds[0], "Edited again.")
             #expect(try drafts() == ["An imported headnote. userWritten", "Edited again. aiEdited"], "the draft it named is gone")
             let named = again.entries[0].headnoteSummaryId
@@ -406,6 +409,43 @@ import Testing
             let heading = try await CollectionTests.edit(owner, "\(path)/blocks", #"{"kind": "heading"}"#)
             let refused = try await owner.send(.put, "\(path)/entries/\(heading.entryIds[0])/headnote", #"{"text": "No."}"#)
             #expect(refused.status == .conflict && problemCode(refused) == "NOT_A_DOCUMENT")
+        }
+    }
+
+    /// A plain summary's reading: its text as stored, on one line as in paragraphs.
+    static func plain(_ text: String) -> SummaryReading { SummaryReading(fields: nil, text: text, line: text) }
+
+    /// A structured summary in the card, and in the AI summary row, shows its fields, and Edit opens on them as
+    /// *Label: text* paragraphs (`headnoteSeedText(_:)`, FRUS-Explorer#1824): Save with them as they were saves
+    /// nothing, as the seed's own text does; edited, a draft of the plain text, AI · edited, which shows as written.
+    @Test func aStructuredHeadnoteIsEditedAsItsFields() async throws {
+        let fixture = try await UserDataFixture(volumes: [Self.volume])
+        defer { withExtendedLifetime(fixture) {} }
+        let structured = #"{"structured":{"schema":{"fields":[{"description":"Who","name":"KeyParticipants"},{"description":"What","name":"Summary"}]}}}"#
+        try fixture.rows.addSummary("5B000000-0000-4000-8000-000000000001", responseText: #"{"Summary": "A meeting.", "KeyParticipants": "Rusk"}"#,
+                                    responseFormat: structured)
+        try await fixture.app.test(.router) { client in
+            let owner = Browser(client: client)
+            let berlin = try await CollectionTests.made(owner, "Berlin")
+            let path = "\(Self.base)/\(berlin.id)"
+            let entry = try await CollectionTests.edit(owner, "\(path)/documents", try CollectionTests.documents(["d1"])).entryIds[0]
+            _ = try await owner.send(.patch, "\(path)/entries/\(entry)", #"{"includeHeadnote": true}"#)
+            func inspected() async throws -> EntryInspector {
+                try decode(EntryInspector.self, try await owner.get("\(path)/entries/\(entry)/inspector"))
+            }
+            func save(_ text: String) async throws -> CollectionDetail {
+                try await CollectionTests.detail(owner, .put, "\(path)/entries/\(entry)/headnote", try CollectionTests.json(["text": text]))
+            }
+            let seed = "Key Participants: Rusk\n\nSummary: A meeting."
+            let shown = SummaryReading(fields: [.init(label: "Key Participants", text: "Rusk"), .init(label: "Summary", text: "A meeting.")],
+                                       text: seed, line: "Key Participants: Rusk Summary: A meeting.")
+            #expect(try await inspected().headnote?.reading == shown)
+            #expect(try await inspected().summary?.reading == shown, "the AI summary row too")
+            #expect(try await save("  \(seed)\n").entries[0].headnoteSummaryId == nil, "the seed as Edit showed it saves nothing")
+            let draftId = try #require(try await save(seed + " Edited.").entries[0].headnoteSummaryId)
+            #expect(try await inspected().headnote == .init(summaryId: draftId, text: seed + " Edited.", reading: Self.plain(seed + " Edited."),
+                                                            authorship: "aiEdited", isDraft: true))
+            #expect(try fixture.rows.column("SELECT response_format FROM summaries WHERE is_headnote_draft = 1") == [#"{"general":{}}"#])
         }
     }
 }

@@ -241,7 +241,9 @@ public protocol ResearchDatabaseWritingStore: Sendable {
     ///   has been changed here since; it replaces an earlier block only when it is newer;
     /// - each document's summary under the mark's id and prompt, with `summaryFormat`, the kit's
     ///   `ResponseFormat.general` as its encoder writes it, and no time it was made, unless a summary
-    ///   of the user's on the document has its text; it replaces an earlier one only when newer.
+    ///   of the user's on the document has its text, as stored or as the app's index holds it since
+    ///   FRUS-Explorer#1824, a structured summary's fields as plain text (`SummaryDisplay.plainText`);
+    ///   it replaces an earlier one only when newer.
     /// What is left out is counted as kept. Then the user's rows of `user_search` are made again.
     func keep(_ writing: ResearchDatabaseWriting, summaryFormat: String, for user: String) throws -> MovedWriting
 }
@@ -261,10 +263,18 @@ extension RelationalUserStore: ResearchDatabaseWritingStore {
                     bodyText: row[3].text ?? "", richText: nil, projectIds: [], userTagIds: [], selectedSummaryIds: [],
                     createdAt: row[4].text.flatMap(UserStoreDate.date), lastModified: row[5].text.flatMap(UserStoreDate.date)))
             }
+            // A summary's text as stored, and as the app's index holds it since #1824, its `indexedText`,
+            // a structured summary's fields as plain text, which an export from such a build carries.
             var summaryTexts: [DocumentKey: Set<String>] = [:]
             for row in try db.query(
-                "SELECT volume_id, document_id, response_text FROM summaries WHERE user_id = ? AND is_headnote_draft = 0", [.text(user)]) {
-                summaryTexts[DocumentKey(volumeId: row[0].text ?? "", documentId: row[1].text ?? ""), default: []].insert(row[2].text ?? "")
+                "SELECT volume_id, document_id, response_text, response_format FROM summaries WHERE user_id = ? AND is_headnote_draft = 0",
+                [.text(user)]) {
+                let document = DocumentKey(volumeId: row[0].text ?? "", documentId: row[1].text ?? "")
+                let stored = SummaryRecord(id: "", volumeId: document.volumeId, documentId: document.documentId, promptId: "",
+                                           responseText: row[2].text ?? "", responseFormat: row[3].text ?? "", wasChunked: false,
+                                           authorship: nil, isHeadnoteDraft: false, sourceContentHash: nil, projectId: nil,
+                                           createdAt: nil, lastModified: nil)
+                summaryTexts[document, default: []].formUnion([stored.responseText, SummaryDisplay.plainText(stored)])
             }
             var assigned: Set<String> = []
             for row in try db.query("SELECT volume_id, document_id, tag_id FROM tag_assignments WHERE user_id = ?", [.text(user)]) {

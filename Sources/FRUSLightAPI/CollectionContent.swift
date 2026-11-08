@@ -182,17 +182,18 @@ struct CollectionContentSource: CollectionContentDataSource {
     /// does (`ExportError.renderingFailed`); and each document must have one stored under it, since this
     /// server writes none, the documents with none refused together (`SummariesNotStored`) with the
     /// app's reason, where the app would generate them with Apple Intelligence. Without it the app
-    /// refuses every Summary only export, stored summaries and all.
+    /// refuses every Summary only export, stored summaries and all. Each answer is the summary's record,
+    /// whose format the document prints, a structured summary as its fields, as the kit asks since #1824.
     func generateSummaries(for documents: [CollectionExportDocument], promptId: UUID,
-                           bodyTexts: [String: String]) async throws -> [String: String] {
+                           bodyTexts: [String: String]) async throws -> [String: GeneratedSummaryExport] {
         guard research.promptIds.contains(promptId) else { throw ExportError.renderingFailed }
-        var result: [String: String] = [:]
+        var result: [String: GeneratedSummaryExport] = [:]
         var missing: [CollectionExportDocument] = []
         for document in documents {
             let key = "\(document.volumeId)/\(document.documentId)"
             if let stored = summary(volumeId: document.volumeId, documentId: document.documentId, promptId: promptId),
                !stored.responseText.isEmpty {
-                result[key] = stored.responseText
+                result[key] = stored
             } else if !missing.contains(where: { $0.volumeId == document.volumeId && $0.documentId == document.documentId }) {
                 missing.append(document)
             }

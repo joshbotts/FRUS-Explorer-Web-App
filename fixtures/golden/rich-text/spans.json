@@ -69665,8 +69665,8 @@
   "configuration" : "Written cases drive the note editor's own path on macOS: an NSTextView set up as RichTextPlatformEditor.makeNSView sets it (rich text, undo, the 13-point system font, its inset, no background), loaded as initialAttributed() loads a note (the stored RTF, else the plain body), with RichTextEditorController given the view as the representable gives it. Text is typed with insertText(_:replacementRange:); bold, italic, underline and links go through the controller's toggleBold(), toggleItalic(), toggleUnderline() and applyLink(_:) after refreshSelectionState(), as the formatting bar's buttons call them; a colour is applied as colorPanelDidPick(_:) applies the panel's colour, which mac-golden cannot open; text pasted with other attributes is inserted as an attributed string. The RTF is what report(_:) stores on macOS: RichTextRestingText.withBreaksRestored, then ProseRichText.rtfData(from:). Read and web cases are files under fixtures/rich-text. Every case is read under the aqua appearance, since the app's reading of a dynamic colour follows the appearance current when it runs: text is NSAttributedString.string of ProseRichText.decodedRTF; runs are its enumerateAttributes runs, unmerged, each read by CollectionProse's span rules (bold and italic from the font's symbolic traits, underline from a nonzero underline style, the colour through usingColorSpace(.sRGB) with near-black as none, the link's absoluteString or string); paragraphs are CollectionProse.paragraphs(fromRTF:). Catalog colours are each key of the System colour list, as an RTF \\cname entry, read the same way. Each written and read case is also rewritten: the web's codec (FRUSRichText) reads it, writes its runs in canonical form with RTFWriter, as the server stores a web edit, and the app reads that RTF the same way. Code pages are ParityFormat's RichTextCodePages documents, every text byte and double-byte pair in a group of its own, read by ProseRichText.decodedRTF; the web's codec must read each the same before its digest is recorded. A release build of the app module, with testing enabled, compiled from the submodule unmodified.",
   "format" : 2,
   "provenance" : {
-    "appBuild" : 1776,
-    "indexVersion" : 71,
+    "appBuild" : 1787,
+    "indexVersion" : 74,
     "inputs" : {
       "fixtures/rich-text/read/baseline-up-down.rtf" : "fa7bcd3dadbf9c0abda959ccca1065bad85f4219b42825d14d9bdecde8198cd2",
       "fixtures/rich-text/read/binary.rtf" : "d1fd763db2ce44562bc673982eebc3a115a34ae6577fa3f84c9fdce61924280c",
@@ -69752,8 +69752,8 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "1c104b472611dcb60626a1c3e223d6fbd0765b8f0403fbcddec37cdfefb680c4",
+    "sourceDigest" : "068076a35381b08d8cd13aa60d07a1309c8da36e4cfc784ebd3f60e68b961f0e",
     "tool" : "tools/mac-golden rich-text",
-    "upstreamCommit" : "fb5425146b3bbd9513d0319d8d8a7ec84d6aab8d"
+    "upstreamCommit" : "fe9325b27062f102fe9ce699b405e012b01f6157"
   }
 }

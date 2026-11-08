@@ -39,7 +39,8 @@ Phases 0 to 2 are done. Phase 1, a Docker Compose install that serves a FRUS Exp
 
 **Known gaps**
 
-- **Behind FRUS Explorer 1.0's last step.** The pin is 1.0 build 1776, the TestFlight build, at index version 71, with the 26 commits after it, among them this project's [FRUS-Explorer#1784](https://github.com/joshbotts/FRUS-Explorer/pull/1784) to [#1790](https://github.com/joshbotts/FRUS-Explorer/pull/1790), [#1805](https://github.com/joshbotts/FRUS-Explorer/pull/1805) to [#1807](https://github.com/joshbotts/FRUS-Explorer/pull/1807), [#1809](https://github.com/joshbotts/FRUS-Explorer/pull/1809) to [#1811](https://github.com/joshbotts/FRUS-Explorer/pull/1811), [#1813](https://github.com/joshbotts/FRUS-Explorer/pull/1813) and [#1814](https://github.com/joshbotts/FRUS-Explorer/pull/1814): the server serves that build's exports. The App Store build, 1861, waits for S12d.
+- **Ahead of FRUS Explorer's next release.** The pin is the app's `fe9325b2`, at index version 74, 28 commits past 1.0's second TestFlight build (1787), which indexes at 71, and 75 past its first (1776), among them this project's [FRUS-Explorer#1784](https://github.com/joshbotts/FRUS-Explorer/pull/1784) to [#1790](https://github.com/joshbotts/FRUS-Explorer/pull/1790), [#1805](https://github.com/joshbotts/FRUS-Explorer/pull/1805) to [#1807](https://github.com/joshbotts/FRUS-Explorer/pull/1807), [#1809](https://github.com/joshbotts/FRUS-Explorer/pull/1809) to [#1811](https://github.com/joshbotts/FRUS-Explorer/pull/1811), [#1813](https://github.com/joshbotts/FRUS-Explorer/pull/1813) and [#1814](https://github.com/joshbotts/FRUS-Explorer/pull/1814): the server serves exports at version 74, which the app's next release makes and, until then, a build of its source. The App Store build, 1861, waits for S12d.
+- **What the app added after phase 2, not shown here yet:** the editors' annotations on a volume's page and in Browse (FRUS-Explorer#1859 to #1862), the collections list's Rename, and its question before a delete in the app's words (#1831). The kit holds the annotations' code and the image their data.
 - **Two parts of phase 2's screens wait for a pull request each:** Project Home's focus subjects, their editor, a lead's line and a visit's head; and Add Documents' Citations and Tags. The kit has made the code they call public since #1813 and #1814.
 - **No release yet.** The first comes with phase 5. `:1.0-1776` still names a build from 23 October, before the research layer, so follow `edge`.
 - **Later phases:**
@@ -51,8 +52,9 @@ Phases 0 to 2 are done. Phase 1, a Docker Compose install that serves a FRUS Exp
 **Next**
 
 1. **The two follow-ups,** each a pull request of its own: Project Home's focus subjects, their editor, a lead's line and a visit's head, through `VolumeSubjectProfiles`, `ProjectFocusSuggestions`, `documentSnippets(forKeys:maxLength:)` and `extractHeader(from:)`; and Add Documents' Citations and Tags, through `CollectionCitationLineResolver` and `CollectionGeneratedBlocks.tagDocumentRefs`.
-2. **S12d**, once the app tags `version-1.0`: the pin moves to 1.0 build 1861, the App Store build, and `edge` serves its exports.
-3. **Phase 3,** planned on 29 October in [`docs/PLAN.md`](docs/PLAN.md)'s Phase 3: 32 rows in six groups, from local accounts and the server's own library to Source Explorer, Related Documents, the graph and the analytics, with an arrangement for the sessions that run beside each other. Its first row, S20a, is CI's part of that arrangement.
+2. **What the app added after phase 2,** a pull request each: the editors' annotations on a volume's page and in Browse, through the kit's `VolumeAnnotations`; and the collections list's Rename and its question before a delete.
+3. **S12d**, once the app tags `version-1.0`: the pin moves to 1.0 build 1861, the App Store build, and `edge` serves its exports.
+4. **Phase 3,** planned on 29 October in [`docs/PLAN.md`](docs/PLAN.md)'s Phase 3: 32 rows in six groups, from local accounts and the server's own library to Source Explorer, Related Documents, the graph and the analytics, with an arrangement for the sessions that run beside each other. Its first row, S20a, is CI's part of that arrangement.
 
 ## Development plan
 

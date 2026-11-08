@@ -292,6 +292,30 @@ final class FreeSpace: FileStore, @unchecked Sendable {
         #expect(try fixture.rows.column("SELECT count(*) FROM tag_assignments WHERE document_id = 'd1' AND volume_id = 'frus1961-63v06'").first == "2")
     }
 
+    /// Since FRUS-Explorer#1824 the app's index holds a structured summary's fields as plain text, its
+    /// `indexedText`, where it held the JSON, so an export from such a build carries that: a summary the
+    /// user holds from a JSON import is known by it as by its JSON, and is not added again.
+    @Test(arguments: UserStoreKind.available) func aStructuredSummaryIsKnownByTheTextTheAppsIndexHolds(_ kind: UserStoreKind) async throws {
+        let fixture = try await WritingImportFixture(kind: kind)
+        defer { withExtendedLifetime(fixture) {} }
+        let nicaragua = DocumentKey(volumeId: "frus1894Nicaragua", documentId: "d1")
+        let overview = "Minister Baker weighs the canal concession against British claims on the Mosquito Coast."
+        try fixture.rows.addSummary("20000000-0000-4000-8000-000000000001", volumeId: nicaragua.volumeId, documentId: nicaragua.documentId,
+                                    responseText: #"{"overview":"\#(overview)"}"#,
+                                    responseFormat: #"{"structured":{"schema":{"fields":[{"description":"What","name":"overview"}]}}}"#)
+        let source = fixture.directory.url.appendingPathComponent("fields.sqlite")
+        try WritingImportFixture.withWriting.write(to: source)
+        let edit = try SQLiteConnection(source.path, readOnly: false)
+        _ = try edit.query("UPDATE document_cache SET summary_text = ? WHERE volume_id = ? AND document_id = ?",
+                           [.text("overview: \(overview)"), .text(nicaragua.volumeId), .text(nicaragua.documentId)])
+        edit.close()
+
+        let imported = try await fixture.importer.importExport(at: try fixture.copyIn(source, as: "fields.sqlite"), observer: WritingStepRecorder())
+        #expect(imported.writing?.summaries == ImportCount(added: 1, kept: 1))
+        #expect(try fixture.store.summary(ResearchDatabaseMark.summaryId(for: nicaragua), of: "owner") == nil)
+        #expect(try fixture.rows.column("SELECT count(*) FROM summaries WHERE volume_id = 'frus1894Nicaragua'").first == "1")
+    }
+
     /// A file refused after its writing was read, damaged where only `VACUUM` reads, changes nothing:
     /// no index, and nothing kept in the store.
     @Test func aRefusalAfterTheWritingIsReadChangesNothing() async throws {

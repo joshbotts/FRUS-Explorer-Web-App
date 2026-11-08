@@ -345,7 +345,8 @@ import Testing
         Self.expect(try sources.app("DocumentView/ResearchRailView.swift"), holds: [
             #"@AppStorage("frus.document.researchPanel.summary") private var summaryExpanded = true"#,
             #"@AppStorage("frus.document.researchPanel.notes") private var notesExpanded = true"#,
-            "String($0.responseText.trimmingCharacters(in: .whitespacesAndNewlines).prefix(80))",
+            // A structured summary's fields on one line since #1824, which the server gives as its reading's line.
+            #"String($0.plainReaderText(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines).prefix(80))"#,
             #"Text(preview + "…")"#,
             #"Text(note.bodyText.isEmpty ? String(localized: "panel.notes.emptyNote", defaultValue: "Empty note") : note.bodyText)"#,
             "Text(note.lastModified ?? .now, style: .relative)",
@@ -378,6 +379,7 @@ import Testing
             "return bodyText === '' ? copy.notes.emptyNote : bodyText;",
             "const then = lastModified ? new Date(lastModified).getTime() : now;",
         ], file: "notesRules.ts")
+        #expect(try sources.web("research/ResearchRail.tsx").contains("summaryPreview(shownSummary.reading.line)"))
         Self.expect(try sources.web("research/SummarySection.tsx"), holds: [
             "export const shownSummaries = 20;",
             "{summaries.length > 1 && (",
@@ -397,6 +399,42 @@ import Testing
         ], file: "ReaderScreen.tsx")
     }
 
+    /// Since #1822 and #1824 the app's readers draw a summary's `readerText`, the kit's fields of a
+    /// structured summary one to a line, each label bold with its colon, then a space and the text, and
+    /// any other's text as stored: the reader's summary block, the note editor's Generated Summaries and
+    /// the collection inspector's headnote card and AI summary row. The browser app draws the server's
+    /// reading of each with `SummaryReadingText`, as the app's `StructuredSummaryDisplay.text` builds it.
+    @Test func aSummaryShowsAsTheAppsReadersDrawIt() throws {
+        let sources = Sources()
+        Self.expect(try sources.app("Summarization/StructuredSummaryText.swift"), holds: [
+            "guard let fields = fields(responseText: responseText, format: format) else { return AttributedString(responseText) }",
+            #"if index > 0 { text += AttributedString("\n") }"#,
+            #"var label = AttributedString(field.label + ":") label.inlinePresentationIntent = .stronglyEmphasized text += label"#,
+            #"text += AttributedString(" " + field.text)"#,
+            "var readerText: AttributedString { StructuredSummaryDisplay.text(responseText: responseText, format: responseFormat) }",
+        ], file: "StructuredSummaryText.swift")
+        Self.expect(try sources.web("research/SummaryReadingText.tsx"), holds: [
+            "if (!reading.fields) return <>{reading.text}</>;",
+            "{index > 0 && <br />}",
+            "<strong>{field.label}:</strong>",
+            "{` ${field.text}`}",
+        ], file: "SummaryReadingText.tsx")
+        #expect(try sources.app("App/SupportingViews.swift").contains("Text(summary.readerText)"), "the Mac's summary block")
+        #expect(try sources.app("DocumentView/DocumentView.swift").contains("Text(summary.readerText)"), "the iPhone's summary strip")
+        #expect(try sources.web("research/SummarySection.tsx").contains("<SummaryReadingText reading={shown.reading} />"))
+        #expect(try sources.app("ResearchNoteEditor/ResearchNoteEditorView.swift").contains("Text(summary.readerText) .font(.caption)"))
+        #expect(try sources.web("research/NoteEditor.tsx").contains("<SummaryReadingText reading={summary.reading} />"))
+        Self.expect(try sources.app("Collections/CollectionEntryInspector.swift"), holds: [
+            "summaryPreview = shown?.readerText",
+            "if let summary, !summary.responseText.isEmpty { Text(summary.readerText).font(.callout).italic() }",
+        ], file: "CollectionEntryInspector.swift")
+        Self.expect(try sources.web("collections/EntryInspector.tsx"), holds: [
+            "<SummaryReadingText reading={data.summary.reading} />",
+            #"<p className="headnote-text"> <SummaryReadingText reading={headnote.reading} /> </p>"#,
+            "setDraft(headnote?.reading.text ?? '');",
+        ], file: "EntryInspector.tsx")
+    }
+
     /// The editor's rules, as the app's view model and formatting bar have them: the Formatting
     /// switch on until it is turned off, under the app's key; a summary inserted once, after a blank
     /// line unless the note is empty, and Remove from note unticking it alone; a tag made from its
@@ -410,13 +448,15 @@ import Testing
         #expect(try sources.web("settings/preferences.ts").contains("usePreference<'true' | 'false'>('frus.notes.editor.richText', ['true', 'false'], 'true')"))
         Self.expect(try sources.app("ResearchNoteEditor/ResearchNoteEditorViewModel.swift"), holds: [
             "guard !selectedSummaryIds.contains(summary.id) else { return }",
-            #"replaceBody(with: bodyText.isEmpty ? summary.responseText : bodyText + "\n\n" + summary.responseText)"#,
+            // The summary's plain text, a structured one's fields as Label: text paragraphs since #1824.
+            #"let text = summary.plainReaderText() replaceBody(with: bodyText.isEmpty ? text : bodyText + "\n\n" + text)"#,
             "selectedSummaryIds.removeAll { $0 == summaryId }",
             "let trimmed = newTagName.trimmingCharacters(in: .whitespacesAndNewlines) guard !trimmed.isEmpty else { return } let tag = UserTag(name: trimmed) context.insert(tag)",
         ], file: "ResearchNoteEditorViewModel.swift")
         Self.expect(try sources.web("research/NoteEditor.tsx"), holds: [
             "if (!draft || draft.selectedSummaryIds.some((id) => upper(id) === upper(summary.id))) return;",
-            #"setBody({ text: text === '' ? summary.responseText : `${text}\n\n${summary.responseText}`, runs: null, edited: true });"#,
+            "const inserted = summary.reading.text;",
+            #"setBody({ text: text === '' ? inserted : `${text}\n\n${inserted}`, runs: null, edited: true });"#,
             "selectedSummaryIds: draft.selectedSummaryIds.filter((id) => upper(id) !== upper(summary.id))",
             "const name = newTag.trim(); if (!name || making) return;",
             "const tag = await createTag(client, name);",

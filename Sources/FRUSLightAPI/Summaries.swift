@@ -9,6 +9,51 @@ import FRUSLightCore
 import Foundation
 import Hummingbird
 
+/// A summary as the app's readers show it since FRUS-Explorer#1824 (`StructuredSummaryDisplay`): a
+/// structured summary's fields, each labelled, which the browser app draws one to a line with the label
+/// in bold, as the app's `StructuredSummaryDisplay.text(responseText:format:)` does; and its plain text
+/// (`GeneratedSummary.plainReaderText(separator:)`), the fields as *Label: text* paragraphs, which Insert
+/// into note and a headnote's Edit take, and on one line, which the rail's closed Summary previews. Any
+/// other summary has no fields, and its text, as stored, in both.
+public struct SummaryReading: Codable, Equatable, Sendable {
+    public struct Field: Codable, Equatable, Sendable {
+        public var label: String
+        public var text: String
+
+        public init(label: String, text: String) {
+            self.label = label
+            self.text = text
+        }
+    }
+
+    /// The fields, in the schema's order; nil for a plain summary, which shows its text.
+    public var fields: [Field]?
+    /// `plainReaderText()`: the fields as paragraphs, a blank line between them, or the text as stored.
+    public var text: String
+    /// `plainReaderText(separator: " ")`: the same on one line.
+    public var line: String
+
+    public init(_ summary: SummaryRecord) {
+        fields = SummaryDisplay.fields(summary)?.map { Field(label: $0.label, text: $0.text) }
+        text = SummaryDisplay.plainText(summary)
+        line = SummaryDisplay.plainText(summary, separator: " ")
+    }
+
+    public init(fields: [Field]?, text: String, line: String) {
+        self.fields = fields
+        self.text = text
+        self.line = line
+    }
+
+    /// The fields null for a plain summary.
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(fields, forKey: .fields)
+        try container.encode(text, forKey: .text)
+        try container.encode(line, forKey: .line)
+    }
+}
+
 /// One of a document's summaries, with the fields of the Mac's export (`GeneratedSummaryExport`).
 public struct Summary: Codable, Equatable, Sendable, ResponseEncodable {
     public var id: String
@@ -19,10 +64,12 @@ public struct Summary: Codable, Equatable, Sendable, ResponseEncodable {
     /// `SummarizationPrompt.resolve` names it (`.requested`); null otherwise, a standard prompt's
     /// summary among them, since an export carries no standard prompt.
     public var promptName: String?
-    /// The text, which for a structured summary is the model's JSON, shown as the app shows it.
+    /// The text as stored, which for a structured summary is the model's JSON.
     public var responseText: String
     /// The kit's `ResponseFormat`: general or structured, or unknown for a value it cannot read.
     public var responseFormat: String
+    /// The summary as the app's readers show it: a structured one's fields.
+    public var reading: SummaryReading
     public var wasChunked: Bool
     /// `SummaryAuthorship`'s raw value; a summary with none is `aiGenerated`, as every reader in the
     /// app takes it.
@@ -50,6 +97,7 @@ public struct Summary: Codable, Equatable, Sendable, ResponseEncodable {
         promptName = promptNames[UserSearchText.uuidString(record.promptId)]
         responseText = record.responseText
         responseFormat = Self.format(record.responseFormat)
+        reading = SummaryReading(record)
         wasChunked = record.wasChunked
         authorship = (record.authorship.flatMap(SummaryAuthorship.init(rawValue:)) ?? .aiGenerated).rawValue
         isHeadnoteDraft = record.isHeadnoteDraft
@@ -87,6 +135,7 @@ public struct Summary: Codable, Equatable, Sendable, ResponseEncodable {
         try container.encode(promptName, forKey: .promptName)
         try container.encode(responseText, forKey: .responseText)
         try container.encode(responseFormat, forKey: .responseFormat)
+        try container.encode(reading, forKey: .reading)
         try container.encode(wasChunked, forKey: .wasChunked)
         try container.encode(authorship, forKey: .authorship)
         try container.encode(isHeadnoteDraft, forKey: .isHeadnoteDraft)

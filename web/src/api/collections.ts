@@ -9,7 +9,7 @@
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
 import { servedPath } from './base';
 import { ApiError, getJSON, sendFile, sendForFile } from './client';
-import type { NoteRun } from './types';
+import type { NoteRun, SummaryReading } from './types';
 import { change, meQuery, searchesChanged } from './userData';
 
 const segment = encodeURIComponent;
@@ -162,7 +162,8 @@ export interface EntryInspector {
   notes: { id: string; preview: string; included: boolean }[];
   highlights: { id: string; colorTag: string; text?: string; included: boolean }[];
   tags: string[];
-  summary?: { text: string; promptName?: string };
+  /** The AI summary row's: its text as stored, its prompt's name, and as the row shows it, `readerText`. */
+  summary?: { text: string; promptName?: string; reading: SummaryReading };
   resolved?: {
     bodyDepth: string;
     highlights: boolean;
@@ -178,7 +179,7 @@ export interface EntryInspector {
   /** For a document: whether it has a summary stored, without which Summary only is not offered. */
   summaryOnlyOffered?: boolean;
   /** For a document: the summary its headnote card shows, with who wrote it. */
-  headnote?: { summaryId: string; text: string; authorship: string; isDraft: boolean };
+  headnote?: { summaryId: string; text: string; reading: SummaryReading; authorship: string; isDraft: boolean };
 }
 
 /** The collections that hold a document among their documents. */

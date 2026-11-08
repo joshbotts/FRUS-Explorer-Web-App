@@ -14,6 +14,7 @@ import type { Summary } from '../api/types';
 import { createSummary, deleteSummary, updateSummary } from '../api/userData';
 import { copy } from '../copy';
 import { closeAtOnce, Modal } from '../shell/Modal';
+import { SummaryReadingText } from './SummaryReadingText';
 
 /** The app's rail shows the 20 newest (`DocumentViewModel.loadSummaries`' fetch limit). */
 export const shownSummaries = 20;
@@ -103,7 +104,7 @@ export function SummarySection({
             )}
           </div>
           <p id={textId} className="summary-text">
-            {shown.responseText}
+            <SummaryReadingText reading={shown.reading} />
           </p>
           {shown.deletable && (
             <div className="summary-actions">
