@@ -4,10 +4,16 @@
 // S19a, Browse's Working Corpora and My Scopes from S17e, and from S17f Project Home, the History
 // screen and Settings' Projects, Research Sessions and Reading, and from S18d the Collections tab and a
 // collection's editor, under the path the server serves the app at. Query strings have the API's form semantics, so
-// a search's URL reads as its request does.
+// a search's URL reads as its request does. Its imports, its routes and its tree are grouped by area, under
+// a line each, as copy.ts's blocks are (PLAN's S20a): a new page's lines go beside their area's kin, never at
+// the end.
 import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/react-router';
 import { basePath } from './api/base';
 import { formDecode, formEncode, type FormValue } from './api/form';
+// ─── The shell ──────────────────────────────────────────────────────────────
+import { AppShell } from './shell/AppShell';
+import { NotFound } from './shell/NotFound';
+// ─── Browse and search ──────────────────────────────────────────────────────
 import {
   type AnnotationSearch,
   AnnotationDrillScreen,
@@ -18,26 +24,30 @@ import {
 } from './browse/AnnotationsScreen';
 import { CatalogueScreen, type CatalogueSearch, validateCatalogueSearch } from './browse/CatalogueScreen';
 import { CorporaScreen, CorpusScreen } from './browse/CorporaScreen';
-import { CollectionEditorScreen } from './collections/CollectionEditorScreen';
-import { CollectionsScreen } from './collections/CollectionsScreen';
 import { ScopeEditorScreen, ScopeScreen, ScopesScreen } from './browse/ScopesScreen';
-import { LookupScreen } from './lookup/LookupScreen';
 import { SectionScreen } from './browse/SectionScreen';
 import { VolumeScreen } from './browse/VolumeScreen';
+import { validateSearch } from './search/searchState';
+import { SearchScreen } from './search/SearchScreen';
+// ─── The reader ─────────────────────────────────────────────────────────────
 import { ReaderScreen } from './reader/ReaderScreen';
+// ─── Research ───────────────────────────────────────────────────────────────
 import { AllNotesScreen, type NotesSearch, validateNotesSearch } from './research/AllNotesScreen';
 import { HistoryScreen } from './research/HistoryScreen';
 import { ProjectHomeScreen } from './research/ProjectHomeScreen';
 import { ResearchScreen, type ResearchSearch, validateResearchSearch } from './research/ResearchScreen';
-import { validateSearch } from './search/searchState';
-import { SearchScreen } from './search/SearchScreen';
+// ─── Collections ────────────────────────────────────────────────────────────
+import { CollectionEditorScreen } from './collections/CollectionEditorScreen';
+import { CollectionsScreen } from './collections/CollectionsScreen';
+// ─── Tools ──────────────────────────────────────────────────────────────────
+import { LookupScreen } from './lookup/LookupScreen';
+// ─── Settings ───────────────────────────────────────────────────────────────
 import { DataSettingsScreen } from './settings/DataSettings';
 import { ProjectsSettingsScreen } from './settings/ProjectsSettings';
 import { ReadingSettingsScreen } from './settings/ReadingSettings';
 import { SessionLogScreen, SessionsSettingsScreen } from './settings/SessionsSettings';
 import { TagsSettingsScreen } from './settings/TagsSettings';
-import { AppShell } from './shell/AppShell';
-import { NotFound } from './shell/NotFound';
+// ─── Admin ──────────────────────────────────────────────────────────────────
 
 /** A query string's fields: a name given once is a string, a repeated one a list. */
 export function parseSearch(query: string): Record<string, unknown> {
@@ -56,6 +66,7 @@ export function stringifySearch(search: Record<string, unknown>): string {
   return query ? `?${query}` : '';
 }
 
+// ─── The shell ──────────────────────────────────────────────────────────────
 const rootRoute = createRootRoute({ component: AppShell, notFoundComponent: NotFound });
 
 const indexRoute = createRoute({
@@ -67,6 +78,7 @@ const indexRoute = createRoute({
   },
 });
 
+// ─── Browse and search ──────────────────────────────────────────────────────
 const browseRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/browse',
@@ -151,6 +163,7 @@ const searchRoute = createRoute({
   component: SearchScreen,
 });
 
+// ─── The reader ─────────────────────────────────────────────────────────────
 export interface ReaderSearch {
   /** The rail beside the text: `cite` opens Cite, and `research` the Research rail. */
   rail?: 'cite' | 'research';
@@ -172,14 +185,7 @@ const documentRoute = createRoute({
   component: ReaderScreen,
 });
 
-// Citation Lookup, which the app opens in a window of its own from Search's Find by Citation. Its form
-// is kept for the tab's session rather than in the address, since a block of footnotes outgrows one.
-const lookupRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/lookup',
-  component: LookupScreen,
-});
-
+// ─── Research ───────────────────────────────────────────────────────────────
 // The Research page (S19b), the app's Research tab, with the category it shows in the address.
 const researchRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -209,6 +215,7 @@ const projectHomeRoute = createRoute({
   component: ProjectHomeScreen,
 });
 
+// ─── Collections ────────────────────────────────────────────────────────────
 // The Collections tab (S18d), between Research and Settings, as the app's tabs order them, and a
 // collection's editor, which the tab pushes.
 const collectionsRoute = createRoute({
@@ -223,6 +230,16 @@ const collectionRoute = createRoute({
   component: CollectionEditorScreen,
 });
 
+// ─── Tools ──────────────────────────────────────────────────────────────────
+// Citation Lookup, which the app opens in a window of its own from Search's Find by Citation. Its form
+// is kept for the tab's session rather than in the address, since a block of footnotes outgrows one.
+const lookupRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/lookup',
+  component: LookupScreen,
+});
+
+// ─── Settings ───────────────────────────────────────────────────────────────
 // Settings opens at its first pane, Tags.
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -269,8 +286,12 @@ const settingsReadingRoute = createRoute({
   component: ReadingSettingsScreen,
 });
 
+// ─── Admin ──────────────────────────────────────────────────────────────────
+
 export const routeTree = rootRoute.addChildren([
+  // ─── The shell ────────────────────────────────────────────────────────────
   indexRoute,
+  // ─── Browse and search ────────────────────────────────────────────────────
   browseRoute,
   corporaRoute,
   corpusRoute,
@@ -284,14 +305,19 @@ export const routeTree = rootRoute.addChildren([
   volumeRoute,
   sectionRoute,
   searchRoute,
+  // ─── The reader ───────────────────────────────────────────────────────────
   documentRoute,
-  lookupRoute,
+  // ─── Research ─────────────────────────────────────────────────────────────
   researchRoute,
   researchNotesRoute,
   researchHistoryRoute,
   projectHomeRoute,
+  // ─── Collections ──────────────────────────────────────────────────────────
   collectionsRoute,
   collectionRoute,
+  // ─── Tools ────────────────────────────────────────────────────────────────
+  lookupRoute,
+  // ─── Settings ─────────────────────────────────────────────────────────────
   settingsRoute,
   settingsTagsRoute,
   settingsDataRoute,
@@ -299,6 +325,7 @@ export const routeTree = rootRoute.addChildren([
   settingsSessionsRoute,
   settingsSessionLogRoute,
   settingsReadingRoute,
+  // ─── Admin ────────────────────────────────────────────────────────────────
 ]);
 
 export function makeRouter(basepath: string = basePath) {
