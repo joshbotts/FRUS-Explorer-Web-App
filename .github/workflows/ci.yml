@@ -2,7 +2,7 @@
 # - paths: scripts/ci-paths, its selftest first, then the pull request's changed paths (PLAN's S20a).
 #   A pull request whose merge commit changes nothing but the records, docs/ but the install guide
 #   and the Markdown files at the root, skips the three jobs below, and GitHub reports a job skipped
-#   by its own condition as passed, so main's required checks, swift and compose, let it merge.
+#   by its own condition as passed, so main's required checks, swift, web and compose, let it merge.
 #   Anything else runs them: a change to any other file, a push to main, which tests what merged
 #   together, and a paths job that fails, times out or writes no verdict. A run cancelled before
 #   they start leaves them cancelled, as GitHub reported upstream-watch.yml's watch-report, which
