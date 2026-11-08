@@ -25,6 +25,11 @@
 #                                               through nginx, and its sign-in spec through the
 #                                               proxy that signs people in (scripts/npm ci first)
 # It uses its own Compose project and host port, and removes its containers and volume afterwards.
+# Each step's line names its area, as web/src/router.tsx and copy.ts group theirs: the install (the
+# image, Compose, the proxy's recipes and the health check), browse and search, the reader, research,
+# settings and admin, and all areas for the browser suite. A row adds its step beside its area's kin,
+# in the phase whose state the step needs, never at the end (PLAN, How sessions run beside each
+# other, rule 4).
 set -euo pipefail
 
 e2e=""
@@ -47,7 +52,7 @@ export FRUS_HOST_PORT="${FRUS_HOST_PORT:-18080}"
 export FRUS_PUBLIC_URL=http://localhost:8080
 if [ -z "${FRUS_IMAGE:-}" ]; then
   export FRUS_IMAGE=frus-light:smoke
-  echo "== building $FRUS_IMAGE"
+  echo "== install: building $FRUS_IMAGE"
   build_args=()
   while IFS= read -r arg; do build_args+=(--build-arg "$arg"); done < <(scripts/release build-args)
   docker build -f docker/Dockerfile "${build_args[@]}" -t "$FRUS_IMAGE" .
@@ -123,14 +128,14 @@ through_proxy() {
     | sed -nE 's/^ *HTTP\/1\.[01] ([0-9]+).*/\1/p' | tail -1
 }
 
-echo "== synthetic export"
+echo "== admin: a synthetic export"
 scripts/synthetic-export --own-text "$work/export.sqlite"
 
-echo "== docker compose up (image $FRUS_IMAGE)"
+echo "== install: docker compose up (image $FRUS_IMAGE)"
 docker compose up -d frus   # the optional pdf service needs no test
 wait_for_200 "$base/healthz" 30 || fail "/healthz did not answer 200"
 
-echo "== user, filesystem and network"
+echo "== install: user, filesystem and network"
 container=$(docker compose ps -q frus)
 uid=$(docker compose exec -T frus id -u)
 [ "$uid" = 10001 ] || fail "the server runs as UID $uid, not 10001"
@@ -145,7 +150,7 @@ published=$(docker compose port frus 8080)
 [ "${published%:*}" = 127.0.0.1 ] || fail "the port is published on $published, not 127.0.0.1"
 echo "   UID 10001; root read-only; /data, /backups and /tmp writable; TEI read-only; port on 127.0.0.1"
 
-echo "== the daily backup's first look"
+echo "== admin: the daily backup's first look"
 # At its start the server looks at its backups, and finds a new store that holds no research yet,
 # which it does not back up: its first backup comes at the look after the first write (S14b).
 looked=""
@@ -164,7 +169,7 @@ case "$server_log" in *"backed up daily at 03:00 America/New_York"*) ;;
 esac
 echo "   none of a new store; daily at 03:00 America/New_York"
 
-echo "== the browser app"
+echo "== install: the browser app"
 # The app's page and every client route answer with the same index.html and the app's policy; a
 # missing file and an unknown API path do not.
 app=$(curl -s --max-time 5 -D "$work/app.headers" -o "$work/app.html" -w '%{http_code} %{content_type}' "$base/" || true)
@@ -187,7 +192,7 @@ unknown=$(curl -s --max-time 5 -o /dev/null -w '%{http_code} %{content_type}' "$
 [ "$unknown" = "404 application/problem+json" ] || fail "an unknown API path answered $unknown"
 echo "   / and two client routes give index.html with the app's policy; $script immutable; 404s for a missing asset and an unknown API path"
 
-echo "== before an import"
+echo "== browse and search, the reader: before an import"
 code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "$base/readyz" || true)
 [ "$code" = 503 ] || fail "/readyz answered $code before any import"
 echo "   503 waiting_for_export"
@@ -202,14 +207,14 @@ missing=$(curl -s --max-time 5 -w ' %{http_code}' "$base/api/v1/volumes/frus1961
 case "$missing" in *'"code":"VOLUME_NOT_FOUND"'*' 404') ;; *) fail "an unknown volume answered $missing" ;; esac
 echo "   catalogue of 553 volumes; frus1894Nicaragua d1 rendered, $(wc -c < "$work/d1.html" | tr -d ' ') bytes; problem details for an unknown volume"
 
-echo "== docker compose cp the export, then /readyz"
+echo "== admin: docker compose cp the export, then /readyz"
 docker compose cp "$work/export.sqlite" frus:/data/import/export.sqlite
 wait_for_200 "$base/readyz" 120 || fail "/readyz did not reach 200"
 status=$(curl -s --max-time 5 "$base/api/v1/status") || fail "/api/v1/status did not answer"
 printf '%s' "$status" | grep -q '"documents":7' || fail "status does not report 7 documents: $status"
 echo "   status: $(printf '%s' "$status" | sed -nE 's/.*"sqliteVersion":"([^"]+)".*/SQLite \1/p'), 7 documents"
 
-echo "== the image's labels"
+echo "== install: the image's labels"
 # The app build whose exports the image serves, and the index version, which a release names
 # (PLAN's S14g): the index version is the one the server serves.
 label() { docker image inspect --format "{{ index .Config.Labels \"$1\" }}" "$FRUS_IMAGE"; }
@@ -223,7 +228,7 @@ served=$(printf '%s' "$status" | sed -nE 's/.*"supportedIndexVersion":([0-9]+).*
 [ "$labelled" = "$served" ] || fail "the image's index-version label is \"$labelled\", where the server serves ${served:-none}"
 echo "   FRUS Explorer $app_version (build $app_build), index version $labelled, the one the server serves"
 
-echo "== search and the reader's page over the imported index"
+echo "== browse and search, the reader: search and the reader's page over the imported index"
 # The kit's read-only stack over the live index: two documents mention treaties.
 search=$(curl -s --max-time 30 "$base/api/v1/search?keywords=treaties") || fail "/api/v1/search did not answer"
 # The keys come in no fixed order, so the count may end the object.
@@ -243,7 +248,7 @@ version=$(grep -i '^x-frus-rendering-version:' "$work/page.headers" | tr -d '\r'
 [ "${#version}" = 16 ] || fail "the page sends no rendering version: '$version'"
 echo "   2 documents found; frus1961-63v06 d1's page, $(wc -c < "$work/page.html" | tr -d ' ') bytes, with the reader's four scripts and its policy"
 
-echo "== the user's tags, through the write guard"
+echo "== research: the user's tags, through the write guard"
 # Sent to the public address's host and from its origin, as the browser app sends them; curl
 # reaches the server on the host's port, so it names the host the browser would.
 as_app=(-H "Host: localhost:8080" -H "Origin: http://localhost:8080")
@@ -269,7 +274,7 @@ code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' -X DELETE "${as_app[@
 [ "$code" = 204 ] || fail "deleting the tag answered $code"
 echo "   refused without the token, from another origin and to another host; made Smoke, trimmed, and deleted it"
 
-echo "== a highlight, through the write guard"
+echo "== research: a highlight, through the write guard"
 # Over d1's first nine characters, in the version of the page read above; the server takes its text
 # from the page's model. Then the document lists it, and it is removed.
 highlights="$base/api/v1/me/volumes/frus1961-63v06/documents/d1/highlights"
@@ -287,7 +292,7 @@ code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' -X DELETE "${as_app[@
 [ "$code" = 204 ] || fail "deleting the highlight answered $code"
 echo "   made over d1's first nine characters at version $version, listed and not stale, and removed"
 
-echo "== behind nginx at the root, with docs/INSTALL.md's recipe"
+echo "== install: behind nginx at the root, with docs/INSTALL.md's recipe"
 start_proxy "at the root" /healthz
 for path in / "/doc/frus1961-63v06/d1" /api/v1/status "/api/v1/volumes/frus1961-63v06/documents/d1/html" /reader/host.js \
     /reader/frus-highlights.js /readyz; do
@@ -297,7 +302,7 @@ done
 echo "   the app, a client route, the API, the reader's page and its scripts, and /readyz"
 
 if [ -n "$e2e" ]; then
-  echo "== the browser suite at the root: Playwright on Chromium"
+  echo "== all areas: the browser suite at the root, Playwright on Chromium"
   # In the server's network namespace, so the app is http://localhost:8080, a secure context.
   FRUS_E2E_NETWORK="container:$container" FRUS_E2E_BASE_URL=http://localhost:8080/ scripts/npm --playwright \
     || fail "the browser suite failed; web/playwright-report has its report"
@@ -314,15 +319,15 @@ wait_healthy() {
   fail "the container's health is $health"
 }
 
-echo "== health check"
+echo "== install: health check"
 wait_healthy
 echo "   healthy"
 
-echo "== restart: the index stays in the volume"
+echo "== install: a restart, the index staying in the volume"
 docker compose restart frus >/dev/null
 wait_for_200 "$base/readyz" 60 || fail "/readyz did not reach 200 after a restart"
 
-echo "== under a path: FRUS_PUBLIC_URL ends in /frus-explorer/"
+echo "== install: under a path, FRUS_PUBLIC_URL ending in /frus-explorer/"
 # The container is made again with the path, and the index stays in the volume. /healthz and
 # /readyz answer at the root as well, so Docker's health check is unchanged.
 FRUS_PUBLIC_URL=http://localhost:8080/frus-explorer/ docker compose up -d frus 2>/dev/null
@@ -356,7 +361,7 @@ for path in /search /api/v1/status "/${script#./}"; do
 done
 echo "   the page with its base, a client route, $script, the API, the reader's page and its scripts under the path; health at both; 404 outside it"
 
-echo "== behind nginx under the path, with docs/INSTALL.md's recipe"
+echo "== install: behind nginx under the path, with docs/INSTALL.md's recipe"
 start_proxy "under a path" /frus-explorer/healthz
 for path in /frus-explorer /frus-explorer/ "/frus-explorer/search?keywords=treaties" /frus-explorer/api/v1/status /frus-explorer/reader/host.js \
     /frus-explorer/reader/frus-offset-engine.js /frus-explorer/readyz; do
@@ -366,13 +371,13 @@ done
 echo "   the app, its own path without the slash, a client route, the API, the host script and /readyz"
 
 if [ -n "$e2e" ]; then
-  echo "== the browser suite under the path, through nginx: Playwright on Chromium"
+  echo "== all areas: the browser suite under the path, through nginx, Playwright on Chromium"
   # In the proxy's network namespace, so the app is http://localhost:8080/frus-explorer/.
   FRUS_E2E_NETWORK="container:$proxy" FRUS_E2E_BASE_URL=http://localhost:8080/frus-explorer/ scripts/npm --playwright \
     || fail "the browser suite failed under the path; web/playwright-report has its report"
 fi
 
-echo "== an import of more than 4 MiB through nginx under the path, with the recipe's limit"
+echo "== settings: an import of more than 4 MiB through nginx under the path, with the recipe's limit"
 # The browser suite's export, padded with spaces past 4 MiB, sent through the guard from inside the
 # proxy's container as the browser app sends it, and followed to its report. After the browser
 # suite, which expects a store without the export's notes.
@@ -396,7 +401,7 @@ done
 [ "$state" = succeeded ] || fail "the import through nginx ended $state"
 echo "   $(wc -c < "$work/import.json" | tr -d ' ') bytes, accepted and imported"
 
-echo "== an export made with the owner's writing (PLAN's S16e)"
+echo "== admin: an export made with the owner's writing (PLAN's S16e)"
 # The server keeps the writing in the user's store, strips its copy with the kit's statements, with
 # SQLite's temporary files in the volume rather than the tmpfs, and installs it; check 5's script then
 # searches the installed index for the writing. After the browser suite, which expects none of it.
@@ -426,7 +431,7 @@ summaries=$(curl -s --max-time 5 "${as_app[@]}" "$under/api/v1/me/volumes/frus19
 case "$summaries" in *'Llewellyn Thompson reports from Moscow'*) ;; *) fail "the store does not hold the export's summary: $summaries" ;; esac
 echo "   installed, its writing in the store and marked, none of it in the index"
 
-echo "== VACUUM's copy in the volume, past a /tmp of 64 KB"
+echo "== admin: VACUUM's copy in the volume, past a /tmp of 64 KB"
 # An export with writing whose copy outgrows SQLite's page cache, so VACUUM writes it to disk: the image
 # installs it in a container whose /tmp holds 64 KB, and fails to with SQLITE_TMPDIR=/tmp forced.
 scripts/synthetic-export --writing "$work/large.sqlite" >/dev/null
@@ -466,7 +471,7 @@ for folder in volume tmp; do
 done
 echo "   $(wc -c < "$work/large.sqlite" | tr -d ' ') bytes: installed with them in /data/tmp, and not with them in /tmp"
 
-echo "== a backup, through the API, and its restore"
+echo "== admin: a backup, through the API, and its restore"
 # What the import and the browser suite wrote, as the export gives every record of the user's,
 # without the time it was made: the research to read back after the restore.
 research() {
@@ -510,11 +515,11 @@ cmp -s "$work/before.json" "$work/after.json" \
   || fail "the restored store's research differs: $(diff "$work/before.json" "$work/after.json" | head -20)"
 echo "   $backup, also in the host folder and through the API with its SHA-256; refused beside the server; the store removed, restored and its research read back whole"
 
-echo "== health check under the path"
+echo "== install: health check under the path"
 wait_healthy
 echo "   healthy"
 
-echo "== signing in through the proxy: FRUS_AUTH=header behind docs/INSTALL.md's recipe"
+echo "== install: signing in through the proxy, FRUS_AUTH=header behind docs/INSTALL.md's recipe"
 # nginx runs the recipe with a stand-in for oauth2-proxy on 127.0.0.1:4180 in its own container:
 # /oauth2/auth answers 202 naming the user its session cookie holds, or 401; the sign-in page takes
 # a name, and /oauth2/start keeps it as the session and returns to the page first asked for. The
@@ -602,13 +607,13 @@ code=$(through_proxy /frus-explorer/api/v1/volumes/frus1961-63v06/figures/none.p
 echo "   through nginx: no session asks for a sign-in; alice's session is alice, an admin, whatever header the browser sends; bob's is bob; her tag is not his; the frame's scripts and figures need no session"
 
 if [ -n "$e2e" ]; then
-  echo "== signing in through the proxy: Playwright on Chromium"
+  echo "== install: signing in through the proxy, the sign-in spec in Playwright on Chromium"
   # The sign-in spec alone, in nginx's network namespace, under the path.
   FRUS_E2E_SIGN_IN=1 FRUS_E2E_NETWORK="container:$proxy" FRUS_E2E_BASE_URL=http://localhost:8080/frus-explorer/ scripts/npm --playwright \
     || fail "the sign-in spec failed; web/playwright-report has its report"
 fi
 
-echo "== health check behind sign-in"
+echo "== install: health check behind sign-in"
 wait_healthy
 echo "   healthy"
 

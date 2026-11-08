@@ -1,0 +1,538 @@
+#!/usr/bin/env bash
+# FRUS Explorer Light: whether a change needs CI's three jobs (PLAN's S20a). ci.yml's paths job runs
+# both commands, and its compose job runs the selftest again, so that a change that breaks the rules
+# fails a check main requires.
+#   scripts/ci-paths changed     prints code=false, for $GITHUB_OUTPUT, when a pull request's merge
+#                                commit changes nothing but the records, so that swift, web and
+#                                compose are skipped, and code=true for any other change and any
+#                                other event, a push to main among them. It prints nothing and fails
+#                                when it cannot tell, and ci.yml then runs the three jobs.
+#   scripts/ci-paths selftest    holds the rules to their cases, the verdict to merge commits made as
+#                                GitHub makes them, and ci.yml's conditions on the three jobs to every
+#                                outcome of the paths job. It needs git and python3, so it runs on
+#                                the host, never through scripts/swift --exec: swift:6.4-noble has no
+#                                python3.
+# In Actions, changed reads GITHUB_EVENT_NAME and GITHUB_SHA, which Actions sets, and PR_HEAD, the
+# pull request's head, which the paths job passes in. Works with macOS's bash 3.2.
+set -euo pipefail
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+work=""
+trap '[ -z "$work" ] || rm -rf "$work"' EXIT
+
+die() { echo "scripts/ci-paths: $*" >&2; exit 1; }
+say() { echo "scripts/ci-paths: $*" >&2; }
+
+# A record is a file under docs/ but the install guide, or a Markdown file at the repository's root:
+# the plan, the log, the specification, the coordination, the prep notes, the README and CLAUDE.md.
+# No job reads one, and the image copies none (docker/Dockerfile). The install guide is no record,
+# since scripts/compose-smoke runs its nginx recipes. A change that has a job read another file
+# under docs/ takes that file out of the records here, as the install guide is; a Markdown file in
+# any other folder is no record, since the jobs build and read those folders.
+is_record() {
+  case "$1" in
+    docs/INSTALL.md) return 1 ;;
+    docs/?*) return 0 ;;
+    */*) return 1 ;;
+    ?*.md) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+cmd_changed() {
+  local event=${GITHUB_EVENT_NAME:-} head parents base n=0 outside=0 first="" path=""
+  # main's run tests what merged together, and only a pull request has a merge commit to read.
+  if [ "$event" != pull_request ]; then
+    say "a ${event:-run outside Actions} runs every job"
+    echo code=true
+    return 0
+  fi
+  [ -n "${GITHUB_SHA:-}" ] || die "GITHUB_SHA is not set"
+  [ -n "${PR_HEAD:-}" ] || die "PR_HEAD, the pull request's head, is not set"
+  head=$(git -C "$root" rev-parse --verify -q 'HEAD^{commit}') || die "no commit is checked out"
+  [ "$head" = "$GITHUB_SHA" ] || die "HEAD is $head, not the run's commit $GITHUB_SHA"
+  # GitHub's merge commit for a pull request has two parents: the base branch's head, which main's
+  # own run tests, then the pull request's head. What it changes from the first is what the pull
+  # request brings, and only those paths decide.
+  parents=$(git -C "$root" rev-list --parents -n 1 HEAD) || die "git rev-list failed"
+  # shellcheck disable=SC2086 # the commit and its parents, split on spaces
+  set -- $parents
+  [ $# -eq 3 ] || die "HEAD has $(($# - 1)) parents, where a pull request's merge commit has 2: does the checkout fetch two commits deep?"
+  [ "$3" = "$PR_HEAD" ] || die "HEAD's second parent is $3, not the pull request's head $PR_HEAD"
+  base=$2
+  # Plumbing, which no configuration changes: every path that differs, a submodule's pin among
+  # them, and a move as its two paths, the one it left and the one it reached. -z keeps each path
+  # whole, whatever characters it holds.
+  work=$(mktemp -d)
+  git -C "$root" diff-tree -r --no-commit-id --no-renames --ignore-submodules=none --name-only -z "$base" HEAD > "$work/paths" \
+    || die "git diff-tree failed"
+  while IFS= read -r -d '' path || [ -n "$path" ]; do
+    n=$((n + 1))
+    if is_record "$path"; then
+      say "  record  $path"
+    else
+      say "  code    $path"
+      outside=$((outside + 1))
+      [ -n "$first" ] || first=$path
+    fi
+  done < "$work/paths"
+  if [ "$n" -eq 0 ]; then
+    say "the merge commit changes no path: every job runs"
+    echo code=true
+  elif [ "$outside" -gt 0 ]; then
+    say "$n paths changed, $outside of them outside the records, $first first: every job runs"
+    echo code=true
+  else
+    say "$n paths changed, all of them records: swift, web and compose are skipped"
+    if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+      echo "This pull request changes only the records, $n paths, so swift, web and compose are skipped." >> "$GITHUB_STEP_SUMMARY"
+    fi
+    echo code=false
+  fi
+}
+
+# --- selftest --------------------------------------------------------------------------------
+
+fails=0
+check() {  # $1: what was found; $2: what was expected; $3: the case
+  if [ "$1" = "$2" ]; then
+    echo "ok    $3"
+  else
+    echo "FAIL  $3: $1, where $2 was expected" >&2
+    fails=$((fails + 1))
+  fi
+}
+
+# The selftest's repository, where it runs its own copy of this script, read by no configuration.
+repo=""
+branch() {  # $1: the branch, cut from main; $2: the function that changes it, run in the repository
+  git -C "$repo" checkout -q -b "$1" main
+  (cd "$repo" && "$2")
+  # Not the submodule's folder, whose pin a branch changes in the index alone.
+  git -C "$repo" add -A -- . ':(exclude)upstream'
+  git -C "$repo" commit -q -m "$1"
+}
+merged() {  # $1: the branch: checks out GitHub's merge commit for it, main's head first, then its own
+  git -C "$repo" checkout -q --detach main
+  git -C "$repo" merge -q --no-ff --no-edit "$1"
+}
+verdict() {  # changed at HEAD, as the paths job runs it; $1, if given, is PR_HEAD, and $2 GITHUB_SHA
+  local at
+  at=$(git -C "$repo" rev-parse HEAD)
+  (cd "$repo" && GITHUB_EVENT_NAME=pull_request GITHUB_SHA=${2:-$at} \
+    PR_HEAD=${1:-$(git rev-parse -q --verify 'HEAD^2' || echo none)} scripts/ci-paths changed 2>/dev/null) || echo failed
+}
+change_records() { echo more >> docs/PLAN.md; echo more >> README.md; echo new > docs/prep/new.md; echo log > CLAUDE.md; }
+change_code() { echo more >> Sources/a.swift; }
+change_guide() { echo more >> docs/INSTALL.md; }
+change_mixed() { echo more >> docs/PLAN.md; echo more >> Sources/a.swift; }
+change_moved() { git mv Sources/a.swift docs/a.md; }
+change_removed() { git rm -q Sources/a.swift; }
+change_pin() { git update-index --cacheinfo 160000,2222222222222222222222222222222222222222,upstream/FRUS-Explorer; echo more >> docs/PLAN.md; }
+change_names() {
+  echo one > "docs/a name with spaces.md"
+  echo two > "docs/caf"$'\xc3\xa9'".md"
+  echo three > "docs/two"$'\n'"lines.md"
+}
+
+cmd_selftest() {
+  command -v python3 >/dev/null 2>&1 \
+    || die "the selftest needs python3, which swift:6.4-noble lacks: run it on the host, as ci.yml's runners do"
+  work=$(mktemp -d)
+  local p depth head found
+  # Its cases' verdicts are not the run's: in Actions, the step's summary is the run's page.
+  unset GITHUB_STEP_SUMMARY
+
+  # The rules: paths that are records, and paths that are not.
+  for p in docs/PLAN.md docs/DEVLOG.md docs/SPEC.md docs/COORDINATION.md docs/prep/README.md \
+      docs/prep/s3-linux-edits.tsv docs/prep/shims/KeychainShim.swift README.md CLAUDE.md CONTRIBUTING.md \
+      "docs/a name with spaces.md" "docs/caf"$'\xc3\xa9'".md"; do
+    if is_record "$p"; then check record record "$p is a record"; else check code record "$p is a record"; fi
+  done
+  for p in docs/INSTALL.md docs .md docsx/PLAN.md README.md.orig LICENSE Package.swift Package.resolved \
+      compose.yaml .dockerignore .gitmodules docker/Dockerfile Sources/FRUSLightAPI/Routes.swift \
+      Tests/FRUSParityTests/NoteViewParityTests.swift web/src/copy.ts web/README.md fixtures/sample/README.md \
+      fixtures/golden/index-summary.json tools/rtf-code-pages/README.md upstream/FRUS-Explorer \
+      .github/workflows/ci.yml scripts/ci-paths scripts/compose-smoke ""; do
+    if is_record "$p"; then check record code "'$p' is no record"; else check code code "'$p' is no record"; fi
+  done
+
+  # The verdict, over merge commits made as GitHub makes them.
+  export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+    GIT_AUTHOR_NAME=ci-paths GIT_AUTHOR_EMAIL=ci-paths@example.invalid \
+    GIT_COMMITTER_NAME=ci-paths GIT_COMMITTER_EMAIL=ci-paths@example.invalid
+  repo="$work/repo"
+  git init -q -b main "$repo"
+  mkdir -p "$repo/docs/prep" "$repo/Sources" "$repo/scripts" "$repo/upstream/FRUS-Explorer"
+  echo plan > "$repo/docs/PLAN.md"
+  echo guide > "$repo/docs/INSTALL.md"
+  echo readme > "$repo/README.md"
+  echo code > "$repo/Sources/a.swift"
+  cp "$root/scripts/ci-paths" "$repo/scripts/ci-paths"
+  chmod +x "$repo/scripts/ci-paths"
+  git -C "$repo" add -A -- . ':(exclude)upstream'
+  # The submodule's pin, a gitlink, as a clone holds it: an empty folder.
+  git -C "$repo" update-index --add --cacheinfo 160000,1111111111111111111111111111111111111111,upstream/FRUS-Explorer
+  git -C "$repo" commit -q -m base
+
+  branch records change_records
+  merged records
+  git -C "$repo" branch -q pr-records HEAD
+  check "$(verdict)" code=false "a pull request that changes only the records skips the jobs"
+  check "$( (cd "$repo" && GITHUB_EVENT_NAME=push scripts/ci-paths changed 2>/dev/null) || echo failed)" code=true \
+    "a push, even of that merge commit, runs them"
+  check "$( (cd "$repo" && env -u GITHUB_EVENT_NAME scripts/ci-paths changed 2>/dev/null) || echo failed)" code=true \
+    "a run outside Actions runs them"
+  check "$(verdict "$(git -C "$repo" rev-parse main)")" failed "a second parent that is not the pull request's head fails"
+  check "$(verdict "" "$(git -C "$repo" rev-parse main)")" failed "a HEAD that is not the run's commit fails"
+  check "$( (cd "$repo" && GITHUB_EVENT_NAME=pull_request GITHUB_SHA=$(git rev-parse HEAD) env -u PR_HEAD \
+    scripts/ci-paths changed 2>/dev/null) || echo failed)" failed "a pull request without PR_HEAD fails"
+
+  branch code change_code
+  merged code
+  check "$(verdict)" code=true "a change to the code runs them"
+  git -C "$repo" checkout -q code
+  check "$(verdict "$(git -C "$repo" rev-parse HEAD)")" failed "a HEAD that is no merge commit fails"
+
+  branch guide change_guide
+  merged guide
+  check "$(verdict)" code=true "a change to the install guide, whose recipes the smoke test runs, runs them"
+
+  branch mixed change_mixed
+  merged mixed
+  check "$(verdict)" code=true "the records with the code run them"
+
+  branch moved change_moved
+  merged moved
+  check "$(verdict)" code=true "code moved into docs/ runs them, by the path it left"
+
+  branch removed change_removed
+  merged removed
+  check "$(verdict)" code=true "code removed runs them"
+
+  branch pin change_pin
+  merged pin
+  check "$(verdict)" code=true "a pin move, with the records, runs them"
+
+  branch names change_names
+  merged names
+  check "$(verdict)" code=false "records whose names hold spaces, a UTF-8 letter or a line break skip them"
+
+  # main moves on with code after the pull request was cut: main's own run tests that code, and the
+  # pull request brings the records alone.
+  git -C "$repo" checkout -q -b late-records main
+  echo later >> "$repo/docs/PLAN.md"
+  git -C "$repo" add docs/PLAN.md
+  git -C "$repo" commit -q -m late-records
+  git -C "$repo" checkout -q main
+  echo main >> "$repo/Sources/a.swift"
+  git -C "$repo" add Sources/a.swift
+  git -C "$repo" commit -q -m "main moves on"
+  merged late-records
+  check "$(verdict)" code=false "the records alone, merged into a main that moved on with code, skip them"
+
+  # A merge commit that changes nothing from main's head, as one whose changes main already holds.
+  git -C "$repo" checkout -q \
+    "$(git -C "$repo" commit-tree -p main -p late-records -m same "$(git -C "$repo" rev-parse 'main^{tree}')")"
+  check "$(verdict)" code=true "a merge commit that changes no path runs them"
+
+  # The checkout: two commits deep holds the merge commit's parents, and one does not.
+  for depth in 1 2; do
+    git clone -q --depth "$depth" --branch pr-records "file://$repo" "$work/depth-$depth" 2>/dev/null
+    head=$(git -C "$work/depth-$depth" rev-parse HEAD)
+    found=$( (cd "$work/depth-$depth" && GITHUB_EVENT_NAME=pull_request GITHUB_SHA=$head \
+      PR_HEAD=$(git -C "$repo" rev-parse records) scripts/ci-paths changed 2>/dev/null) || echo failed)
+    if [ "$depth" = 1 ]; then
+      check "$found" failed "a checkout one commit deep, which holds no parent, fails"
+    else
+      check "$found" code=false "a checkout two commits deep, as the paths job fetches, reads the parents"
+    fi
+  done
+
+  # ci.yml: the paths job first, and the three jobs' condition, the same in each, held to every
+  # outcome of the paths job.
+  cat > "$work/conditions.py" <<'PY'
+import re
+import sys
+
+lines = open(sys.argv[1], encoding="utf-8").read().split("\n")
+problems = []
+
+# The jobs, each id two spaces in under the top-level jobs:, with its lines.
+jobs, order, current, inside = {}, [], None, False
+for line in lines:
+    if line == "jobs:":
+        inside = True
+        continue
+    if not inside:
+        continue
+    if line and not line.startswith((" ", "#")):
+        break
+    match = re.match(r"^  ([A-Za-z_][A-Za-z0-9_-]*):\s*$", line)
+    if match:
+        current = match.group(1)
+        jobs[current] = []
+        order.append(current)
+    elif current:
+        jobs[current].append(line)
+
+
+def key(job, name):
+    """One of the job's own keys, four spaces in."""
+    for line in jobs.get(job, []):
+        match = re.match(r"^    " + re.escape(name) + r":\s*(.*?)\s*$", line)
+        if match:
+            return match.group(1)
+    return None
+
+
+def holds(job, text):
+    return any(line.strip() == text for line in jobs.get(job, []))
+
+
+if not order or order[0] != "paths":
+    problems.append("the paths job is not the first: %s" % order)
+for text in ["code: ${{ steps.paths.outputs.code }}", "fetch-depth: 2", "id: paths",
+             "PR_HEAD: ${{ github.event.pull_request.head.sha }}", "run: scripts/ci-paths selftest",
+             'run: scripts/ci-paths changed >> "$GITHUB_OUTPUT"']:
+    if not holds("paths", text):
+        problems.append("the paths job lacks the line %s" % text)
+if not holds("compose", "run: scripts/ci-paths selftest"):
+    problems.append("the compose job does not run scripts/ci-paths selftest")
+conditions = {}
+for job in ["swift", "web", "compose"]:
+    if job not in jobs:
+        problems.append("there is no %s job" % job)
+        continue
+    if key(job, "name") != job:
+        problems.append("the %s job is named %s, where main's protection requires %s" % (job, key(job, "name"), job))
+    if key(job, "needs") != "paths":
+        problems.append("the %s job needs %s, not paths" % (job, key(job, "needs")))
+    condition = re.fullmatch(r"\$\{\{(.*)\}\}", key(job, "if") or "")
+    if condition:
+        conditions[job] = condition.group(1).strip()
+    else:
+        problems.append("the %s job's if is not one expression: %s" % (job, key(job, "if")))
+if len(set(conditions.values())) > 1:
+    problems.append("the three jobs' conditions differ: %s" % conditions)
+
+# A job's condition in GitHub's expression syntax: literals, contexts, the status functions,
+# ! < <= > >= == != && || and parentheses, in that order of precedence, as GitHub evaluates them:
+# strings compare without regard to case, values of two types compare as numbers, && and || give
+# one of their operands, and a condition with no status function is read as success() && (it).
+TOKENS = re.compile(r"\s*(?:(\|\||&&|==|!=|<=|>=|[!()<>])|'((?:[^']|'')*)'|(-?\d+(?:\.\d+)?)"
+                    r"|([A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z_][A-Za-z0-9_-]*)*))")
+STATUS = ("success", "failure", "cancelled", "always")
+
+
+def tokenize(text):
+    tokens, at, end = [], 0, len(text.rstrip())
+    while at < end:
+        match = TOKENS.match(text, at)
+        if not match:
+            raise ValueError("cannot read %r: the selftest's evaluator knows literals, contexts, the four status "
+                             "functions, ! < <= > >= == != && || and parentheses; extend it in scripts/ci-paths "
+                             "for more" % text[at:])
+        operator, string, number, name = match.groups()
+        if operator:
+            tokens.append(("op", operator))
+        elif string is not None:
+            tokens.append(("value", string.replace("''", "'")))
+        elif number:
+            tokens.append(("value", float(number)))
+        elif name in ("true", "false", "null"):
+            tokens.append(("value", {"true": True, "false": False, "null": None}[name]))
+        else:
+            tokens.append(("name", name))
+        at = match.end()
+    return tokens
+
+
+def truthy(value):
+    return not (value is None or value is False or value == "" or (isinstance(value, float) and (value == 0 or value != value)))
+
+
+def number(value):
+    if value is None:
+        return 0.0
+    if isinstance(value, bool):
+        return 1.0 if value else 0.0
+    if isinstance(value, float):
+        return value
+    try:
+        return float(value) if value.strip() else 0.0
+    except ValueError:
+        return float("nan")
+
+
+def equal(left, right):
+    if isinstance(left, str) and isinstance(right, str):
+        return left.casefold() == right.casefold()
+    if type(left) is type(right):
+        return left == right
+    return number(left) == number(right)
+
+
+def evaluate(text, context, cancelled):
+    tokens = tokenize(text)
+    if not any(token == ("name", status) for token in tokens for status in STATUS):
+        tokens = [("name", "success"), ("op", "("), ("op", ")"), ("op", "&&"), ("op", "(")] + tokens + [("op", ")")]
+    at = [0]
+
+    def peek():
+        return tokens[at[0]] if at[0] < len(tokens) else (None, None)
+
+    def take(expected=None):
+        token = peek()
+        if token[0] is None or (expected is not None and token != ("op", expected)):
+            raise ValueError("expected %s at token %d of %r" % (expected or "more", at[0], text))
+        at[0] += 1
+        return token
+
+    def disjunction():
+        value = conjunction()
+        while peek() == ("op", "||"):
+            take()
+            right = conjunction()
+            value = value if truthy(value) else right
+        return value
+
+    def conjunction():
+        value = equality()
+        while peek() == ("op", "&&"):
+            take()
+            right = equality()
+            value = right if truthy(value) else value
+        return value
+
+    def equality():
+        value = comparison()
+        while peek() in (("op", "=="), ("op", "!=")):
+            operator = take()[1]
+            value = equal(value, comparison()) == (operator == "==")
+        return value
+
+    def comparison():
+        value = unary()
+        while peek() in (("op", "<"), ("op", "<="), ("op", ">"), ("op", ">=")):
+            operator = take()[1]
+            left, right = number(value), number(unary())
+            value = {"<": left < right, "<=": left <= right, ">": left > right, ">=": left >= right}[operator]
+        return value
+
+    def unary():
+        if peek() == ("op", "!"):
+            take()
+            return not truthy(unary())
+        return primary()
+
+    def primary():
+        kind, value = take()
+        if (kind, value) == ("op", "("):
+            inner = disjunction()
+            take(")")
+            return inner
+        if kind == "value":
+            return value
+        if kind == "name" and peek() == ("op", "("):
+            take("(")
+            take(")")
+            results = [need["result"] for need in context["needs"].values()]
+            functions = {"always": True, "cancelled": cancelled,
+                         "success": not cancelled and all(result == "success" for result in results),
+                         "failure": any(result == "failure" for result in results)}
+            if value not in functions:
+                raise ValueError("the selftest does not know %s(): extend its evaluator in scripts/ci-paths with it, "
+                                 "in the change that writes it" % value)
+            return functions[value]
+        if kind == "name":
+            found = context
+            for part in value.split("."):
+                found = found.get(part) if isinstance(found, dict) else None
+            return found
+        raise ValueError("unexpected %r in %r" % (value, text))
+
+    value = disjunction()
+    if at[0] != len(tokens):
+        raise ValueError("left over at token %d of %r" % (at[0], text))
+    return truthy(value)
+
+
+def outcomes(condition):
+    """Each outcome of the paths job, with what it leaves the three jobs: runs, skipped or cancelled.
+    A job skipped by its own condition is reported as passed. A job whose run is cancelled before
+    it starts is reported cancelled: so GitHub reported upstream-watch.yml's watch-report, which
+    waits on two jobs under !cancelled(), in that workflow's cancelled runs of 23 October."""
+    found = []
+    for cancelled in (False, True):
+        for result in ("success", "failure", "cancelled", "skipped"):
+            for code in ("false", "true", "", None, "skip"):
+                context = {"needs": {"paths": {"result": result, "outputs": {} if code is None else {"code": code}}},
+                           "github": {"event_name": "pull_request"}}
+                if evaluate(condition, context, cancelled):
+                    outcome = "runs"
+                else:
+                    outcome = "cancelled" if cancelled else "skipped"
+                found.append((cancelled, result, code, outcome))
+    return found
+
+
+def wrong(condition):
+    """What the condition gets wrong: the three jobs are skipped only when the paths job succeeded
+    and wrote code=false. They run whenever it did not succeed, whatever cancelled() reads, since
+    GitHub could read it as true after the job's own timeout, which leaves the job cancelled as a
+    cancelled run does; and a run cancelled after it succeeded starts none of them."""
+    found = []
+    for cancelled, result, code, outcome in outcomes(condition):
+        if result != "success":
+            expected = "runs"
+        elif cancelled:
+            expected = "cancelled"
+        elif code == "false":
+            expected = "skipped"
+        else:
+            expected = "runs"
+        if outcome != expected:
+            found.append("%s with the paths job %s and code %r: %s, where it %s" % (
+                "a cancelled run" if cancelled else "a run", result, code, outcome, expected))
+    return found
+
+
+# The evaluator sees what is wrong with two conditions that skip the jobs when the paths job
+# writes no verdict, and with one that reads cancelled() when the paths job did not succeed.
+for unsafe in ["needs.paths.outputs.code == 'true'",
+               "!cancelled() && (needs.paths.result != 'success' || needs.paths.outputs.code == 'true')",
+               "!cancelled() && !(needs.paths.result == 'success' && needs.paths.outputs.code == 'false')"]:
+    if not wrong(unsafe):
+        problems.append("the selftest finds nothing wrong with %r" % unsafe)
+
+for job, condition in sorted(conditions.items()):
+    try:
+        problems.extend("the %s job: %s" % (job, line) for line in wrong(condition))
+    except ValueError as error:
+        problems.append("the %s job's condition: %s" % (job, error))
+
+for problem in problems:
+    print("FAIL  ci.yml: " + problem)
+if not problems:
+    print("ok    ci.yml: the paths job first, and swift, web and compose skipped only when it succeeded and "
+          "wrote code=false, in %d outcomes; run whenever it did not, whatever cancelled() reads; and started by "
+          "no run cancelled after it succeeded" % len(outcomes(next(iter(conditions.values())))))
+sys.exit(1 if problems else 0)
+PY
+  if python3 -I "$work/conditions.py" "$root/.github/workflows/ci.yml" > "$work/conditions.out" 2>&1; then
+    cat "$work/conditions.out"
+  else
+    cat "$work/conditions.out" >&2
+    fails=$((fails + 1))
+  fi
+
+  [ "$fails" -eq 0 ] || die "selftest: $fails failed"
+  echo "selftest passed"
+}
+
+case "${1:-}" in
+  changed) shift; cmd_changed "$@" ;;
+  selftest) shift; cmd_selftest "$@" ;;
+  *) sed -n '2,16p' "$0" | sed -e 's/^# \{0,1\}//' >&2; exit 2 ;;
+esac

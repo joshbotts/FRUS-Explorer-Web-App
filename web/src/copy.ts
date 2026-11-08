@@ -48,7 +48,10 @@
 // chiefly what only a server has (what it indexes, which TEI it holds), are the web's own until
 // check 10 settles them.
 
+// One block a screen, grouped by area under a line each (PLAN's S20a): a new screen's block goes beside its
+// area's kin, never at the end.
 export const copy = {
+  // ─── The shell ────────────────────────────────────────────────────────────
   app: {
     name: 'FRUS Explorer Light',
     skipToContent: 'Skip to content',
@@ -86,6 +89,21 @@ export const copy = {
     body: 'Nothing is at this address.',
     toBrowse: 'Go to Browse',
   },
+  /**
+   * The project picker and the "Working on:" line (PLAN's S17f), in the app's words. The picker's
+   * visible label, Project, is the History scope picker's; the app's menu has none.
+   */
+  projectPicker: {
+    label: 'Project',
+    global: 'Global Context',
+    globalShort: 'Global',
+    manage: 'Manage Projects',
+    a11y: 'Switch project context',
+    workingOn: 'Working on:',
+    home: 'Project Home',
+  },
+
+  // ─── Browse and search ────────────────────────────────────────────────────
   search: {
     title: 'Search',
     label: 'Search the documents',
@@ -697,6 +715,8 @@ export const copy = {
     unavailableTitle: 'Editors’ Annotations Unavailable',
     unavailableDetail: 'The bundled annotation data could not be loaded.',
   },
+
+  // ─── The reader ───────────────────────────────────────────────────────────
   reader: {
     previous: 'Previous',
     next: 'Next',
@@ -755,6 +775,8 @@ export const copy = {
     toCopy: 'Text to copy',
     close: 'Close',
   },
+
+  // ─── Research ─────────────────────────────────────────────────────────────
   /** The reader's Research rail and its Tags section, in the app's words. */
   research: {
     title: 'Research',
@@ -915,48 +937,6 @@ export const copy = {
     cancel: 'Cancel',
     done: 'Done',
   },
-  /** Settings ▸ Tags, its editor and its merge sheet, in the app's words. */
-  settings: {
-    title: 'Settings',
-    panes: 'Settings',
-    tags: 'Tags',
-    tagsEmpty:
-      'No tags yet. Tags are the labels you apply to research notes and documents as you read — create one here, or from any note.',
-    tagsFooter: 'Tags are global labels you apply to research notes and documents. They are not scoped to a project.',
-    // S17f: the reader's own order, which the Move commands set.
-    tagsOrderFooter: 'This order is also the order of your tags in the note editor, the document tag picker and Search.',
-    newTag: 'New Tag…',
-    newTagDefault: 'New Tag',
-    edit: (name: string) => `Edit ${name}`,
-    loading: 'Loading the tags…',
-    userDataOff: 'This server keeps no tags or other research data of yours: it is read-only.',
-  },
-  tagEditor: {
-    title: 'Edit Tag',
-    nameHeader: 'Name',
-    namePlaceholder: 'Tag name',
-    nameField: 'Tag name',
-    manage: 'Manage',
-    merge: 'Merge into Another Tag…',
-    delete: 'Delete Tag',
-    manageFooterOnly:
-      'Merging needs a second tag to merge into. Deleting removes this tag from every note and document that carries it; nothing else is deleted.',
-    manageFooter:
-      'Merging re-tags everything here with the tag you choose, then removes this one. Deleting removes this tag from every note and document that carries it; nothing else is deleted.',
-    cancel: 'Cancel',
-    save: 'Save',
-    deleteTitle: 'Delete Tag?',
-    deleteMessage: 'Deleting removes this tag from every note and document that carries it; nothing else is deleted.',
-    deleteConfirm: 'Delete',
-    deleteCancel: 'Cancel',
-  },
-  mergeTag: {
-    title: 'Merge Tag',
-    into: (name: string) => `Merge ‘${name}’ into:`,
-    explanation: (name: string) => `All notes tagged ‘${name}’ will be re-tagged with the selected tag. ‘${name}’ will be deleted.`,
-    cancel: 'Cancel',
-    confirm: 'Merge',
-  },
   /**
    * All Notes, as the app's Research destination words it, with the count its sheet gives. Each row's
    * Delete… is the web's own, since the app's is in a context menu.
@@ -982,175 +962,6 @@ export const copy = {
     deleteConfirm: 'Delete',
     deleteCancel: 'Cancel',
     loading: 'Loading the notes…',
-  },
-  /** Settings ▸ Data, the web's own pane, with the app's Markdown export in its words. */
-  dataSettings: {
-    title: 'Data',
-    // The export (PLAN's S16d), in the words of the app's export sheet.
-    contents: 'Contents',
-    tagsAndAssignments: 'Tags & Assignments',
-    includeSummaries: 'Include AI-Generated Summaries',
-    includeSummariesFooter: (count: number) =>
-      `Adds all ${count.toLocaleString('en-US')} generated summaries to the JSON export. Off by default since AI output can be large.`,
-    exportJSON: 'Export as JSON',
-    jsonError: (detail: string) => `Couldn’t prepare the export: ${detail}`,
-    jsonFooter:
-      'One JSON file with your notes, tags, highlights, collections, custom prompts, projects, archive visit plans, saved searches, working corpora, volume scopes, corrections, reviewed changes, Suggested Next leads, and synced settings. It also holds your research trail: every document you opened, every search you ran and how many results it returned, and every collection you exported.',
-    exportMarkdown: (count: number) => `Export Notes as Markdown (${count.toLocaleString('en-US')})`,
-    preparing: 'Preparing export…',
-    empty: 'No research notes to export.',
-    footer:
-      'One Markdown file per research note, with a citation and link back to the source document. Compatible with Obsidian and similar note-taking tools.',
-    // The import (PLAN's S16c), the web's own words, since the app imports no JSON export, but for
-    // the records' names, which are its export sheet's Contents, and the missing search's sentence.
-    importTitle: 'Import a JSON Export',
-    importLead:
-      'Import the file FRUS Explorer writes on the Mac with Settings ▸ Data & Recovery ▸ Export as JSON; turn on Include AI-Generated Summaries there to bring your summaries. Each record keeps its id from the Mac, and a record you already have here is replaced only by a newer copy. Nothing here is deleted.',
-    importFile: 'Export file',
-    importAction: 'Import',
-    importQueued: (name: string) => `${name} waits for the server’s other work…`,
-    importRunning: (name: string) => `Importing ${name}…`,
-    importDone: (name: string) => `Imported ${name}`,
-    importFailed: (name: string) => `${name} could not be imported. Nothing of it was kept.`,
-    importLost: (name: string) =>
-      `The import of ${name} can no longer be followed, as after the server restarts, so whether it finished is not known here. Importing the file again changes nothing it brought.`,
-    importWritten: (version: number, date: string) => `A version-${version} export, written on ${date}.`,
-    reportCaption: 'What the export held, and what became of it',
-    reportType: 'Records',
-    reportInFile: 'In the file',
-    reportAdded: 'Came in',
-    reportReplaced: 'Replaced',
-    reportKept: 'Kept',
-    reportKeptNote: 'Replaced: you had an older copy here. Kept: you had a copy as new or newer.',
-    notCarried: (version: number, names: string) => `A version-${version} export carries no ${names}.`,
-    repeated: (count: number, name: string) =>
-      `${count.toLocaleString('en-US')} of the ${name.toLowerCase()} came twice in the file: each is kept once, the newer copy.`,
-    setAsideSettings: (count: number) =>
-      count === 1
-        ? 'The file held a second set of synced settings, from a device iCloud had not yet merged: the earliest set is kept, as the app keeps it.'
-        : `The file held ${count.toLocaleString('en-US')} more sets of synced settings, from devices iCloud had not yet merged: the earliest set is kept, as the app keeps it.`,
-    setAsideCorrections: (count: number) =>
-      `${count.toLocaleString('en-US')} ${count === 1 ? 'correction was' : 'corrections were'} left out: a correction changes the index everyone here reads, and only a curator imports one.`,
-    formattingKept: (count: number) =>
-      count === 1
-        ? 'One note keeps formatting this server cannot show: it opens as plain text until you edit it here.'
-        : `${count.toLocaleString('en-US')} notes keep formatting this server cannot show: they open as plain text until you edit them here.`,
-    headnoteDrafts: (count: number) =>
-      count === 1
-        ? 'One summary is a collection’s headnote draft, which no list of a document’s summaries shows.'
-        : `${count.toLocaleString('en-US')} summaries are collections’ headnote drafts, which no list of a document’s summaries shows.`,
-    withoutAuthorship: (count: number) =>
-      `${count.toLocaleString('en-US')} ${count === 1 ? 'summary says' : 'summaries say'} nothing of who wrote ${count === 1 ? 'it' : 'them'}, as exports before version 5 do, and ${count === 1 ? 'is' : 'are'} shown as AI summaries.`,
-    inertEntries: (count: number) =>
-      count === 1
-        ? 'One collection entry has no document. A version-6 export does not say what it was, a section heading, a note block or an apparatus block, so it is kept as an entry this server does not show.'
-        : `${count.toLocaleString('en-US')} collection entries have no document. A version-6 export does not say what they were, section headings, note blocks or apparatus blocks, so they are kept as entries this server does not show.`,
-    unlinkedLead: 'These smart collections keep their link to a saved search this export does not carry:',
-    missingSearch: 'The linked saved search could not be found. It may have been deleted.',
-    // The method appendix (PLAN's S17f), in the words of the app's export sheet; the two files' own
-    // links are the web's, since a browser saves one file at a time.
-    appendixAction: 'Export Query Log as a Method Appendix',
-    appendixEmpty: 'No searches recorded yet.',
-    appendixFooter:
-      'Every search you ran, in a Markdown table and a CSV. Each row gives the scope the search ran under and how many volumes were indexed at the time. Counts that hit the app’s row ceiling appear as “at least N”, so a partial result is never printed as a total.',
-    appendixMarkdown: 'Markdown table (frus-query-log.md)',
-    appendixCSV: 'CSV (frus-query-log.csv)',
-    /** What the app's lists call a collection with no name (`CollectionEditorNaming.listName`). */
-    untitledCollection: 'Untitled Collection',
-    types: {
-      ResearchNote: 'Research Notes',
-      UserTag: 'Tags',
-      DocumentTagAssignment: 'Tag Assignments',
-      DocumentHighlight: 'Highlights',
-      Collection: 'Collections',
-      CollectionEntry: 'Collection Entries',
-      SummarizationPrompt: 'Custom Prompts',
-      Project: 'Projects',
-      ArchiveVisitPlan: 'Archives Visits',
-      ArchiveVisitDocument: 'Archives Visit Documents',
-      ArchiveVisitTarget: 'Archives Visit Targets',
-      SavedSearch: 'Saved Searches',
-      WorkingCorpus: 'Working Corpora',
-      CustomVolumeScope: 'Volume Scopes',
-      DocumentClassificationOverride: 'Classification Corrections',
-      PersonClusterOverride: 'Person Corrections',
-      AnnotationReview: 'Reviewed Changes',
-      ProjectLeadEntry: 'Suggested Next Leads',
-      SyncedPreferences: 'Synced Settings',
-      ReadingHistoryEntry: 'Documents Visited',
-      SearchHistoryEntry: 'Searches Executed',
-      ExportHistoryEntry: 'Collections Exported',
-      GeneratedSummary: 'Generated Summaries',
-    },
-  },
-  /**
-   * The project picker and the "Working on:" line (PLAN's S17f), in the app's words. The picker's
-   * visible label, Project, is the History scope picker's; the app's menu has none.
-   */
-  projectPicker: {
-    label: 'Project',
-    global: 'Global Context',
-    globalShort: 'Global',
-    manage: 'Manage Projects',
-    a11y: 'Switch project context',
-    workingOn: 'Working on:',
-    home: 'Project Home',
-  },
-  /** Settings ▸ Projects, the project editor and Merge Project, in the app's words. */
-  projects: {
-    title: 'Projects',
-    activeLabel: 'Active Project',
-    global: 'Global Context',
-    home: 'Project Home',
-    activeFooter: 'The active project scopes the notes, collections, history, and searches you see. Global Context shows everything.',
-    empty: 'No projects yet. A project keeps one line of research — its notes, collections, history and searches — separate from the rest.',
-    listHeader: 'All Projects',
-    new: 'New Project…',
-    listFooter: "This order is also the order of the Active Project picker, the project switcher and the note editor's project list.",
-    active: 'active',
-    edit: 'Edit',
-    mergeShort: 'Merge into…',
-    relatedHeader: 'Related',
-    tags: 'Tags',
-    scopes: 'Volume Scopes',
-    relatedFooter: 'Open Tags to rename, merge or delete a tag. Open Volume Scopes to edit or delete a scope — scopes cannot be merged.',
-    noneYet: 'None yet',
-    tagCount: (count: number) => (count === 1 ? '1 tag' : `${count.toLocaleString('en-US')} tags`),
-    scopeCount: (count: number) => (count === 1 ? '1 scope' : `${count.toLocaleString('en-US')} scopes`),
-    editorNew: 'New Project',
-    editorEdit: 'Edit Project',
-    cancel: 'Cancel',
-    save: 'Save',
-    nameHeader: 'Name',
-    namePlaceholder: 'Project name',
-    nameField: 'Project name',
-    questionHeader: 'Research Question',
-    questionField: 'Research question',
-    manage: 'Manage',
-    merge: 'Merge into Another Project…',
-    delete: 'Delete Project',
-    manageFooterOnly:
-      'Merging needs a second project to merge into. Deleting keeps your notes, collections, and history — it only unlinks them from this project.',
-    manageFooter:
-      'Merging moves everything filed here into the project you choose. Deleting keeps your notes, collections, and history — it only unlinks them from this project.',
-    deleteTitle: 'Delete Project?',
-    deleteMessage: 'Activity records are kept but unlinked from this project.',
-    deleteConfirm: 'Delete',
-    deleteCancel: 'Cancel',
-    mergeTitle: 'Merge Project',
-    mergeInto: (name: string) => `Merge “${name}” into:`,
-    mergeExplanation: (name: string) =>
-      `All notes, collections, summaries, and reading history assigned to “${name}” will be re-assigned to the selected project. “${name}” will be deleted.`,
-    mergeCancel: 'Cancel',
-    mergeConfirm: 'Merge',
-    loading: 'Loading the projects…',
-  },
-  /** The Move commands of the Settings lists, in the app's words. */
-  listOrder: {
-    moveToTop: 'Move to Top',
-    moveUp: 'Move Up',
-    moveDown: 'Move Down',
-    moveLabel: (command: string, name: string) => `${command}: ${name}`,
   },
   /**
    * Project Home, in the words of the app's view. What Suggested Next says of the Mac's leads, which the
@@ -1273,118 +1084,8 @@ export const copy = {
     collectionLabel: 'Collection: ',
     loading: 'Loading your research…',
   },
-  /** Settings ▸ Research Sessions and the Session Log, in the app's words. */
-  sessions: {
-    title: 'Research Sessions',
-    recording: 'Recording',
-    logging: 'Log Research Sessions',
-    loggingFooter:
-      'Despite the name, this switch covers everything the app can track about your work. That means the documents you open, the text of the searches you run, and the collections you export. The app keeps one record of each. The History screen, a project’s Recently Read and Recent Searches cards, its Documents Visited and Searches Run counts, and the Session Log all read those same records. The Session Log groups them into sessions, and a session ends after 30 minutes of inactivity. The records stay on this device, and in your private iCloud database if iCloud sync is on. Turn the switch off and all of that recording stops. Those surfaces will thin out and eventually empty. That is the switch working, not a fault. Anything recorded before you turned it off stays until you delete it.',
-    activity: 'Recorded Activity',
-    log: 'Session Log',
-    activityEmpty: 'Nothing has been recorded yet. Open a document or run a search and it will appear here.',
-    activityFooter:
-      'The app infers sessions from the times you opened documents, ran searches, and exported collections. A gap of 30 minutes starts a new session. The same records fill the History screen and a project’s Recents.',
-    manage: 'Manage',
-    deleteAll: 'Delete Recorded Sessions…',
-    manageFooter:
-      'This deletes the whole record of your work: every document you opened, every search you ran, and every collection you exported. It goes from this device, and from your iCloud database if iCloud sync is on. Your notes, highlights, tags, and collections are not touched. To delete single entries instead, use the History screen.',
-    deleteTitle: 'Delete Recorded Sessions?',
-    deleteMessage: (events: string) =>
-      `${events} will be permanently deleted from this device. If iCloud sync is on, the same records go from iCloud too. A session is made of every document you opened, every search you ran, and every collection you exported. Your notes, highlights, tags, and collections are not affected.`,
-    deleteConfirm: 'Delete',
-    deleteCancel: 'Cancel',
-    nothingRecorded: 'Nothing recorded yet',
-    sessionCount: (count: number, exact: boolean) =>
-      exact
-        ? count === 1
-          ? '1 session'
-          : `${count} sessions`
-        : count === 1
-          ? 'at least 1 session'
-          : `at least ${count} sessions`,
-    eventCount: (count: number) => (count === 1 ? '1 event' : `${count} events`),
-    lastToday: (time: string) => `last today ${time}`,
-    lastOlder: (date: string) => `last ${date}`,
-    emptyTitle: 'No Sessions Yet',
-    emptyDetail: 'Your research activity will appear here as you open documents, run searches, and export collections.',
-    showMore: 'Show More',
-    showingRecent: (shown: number, total: number) => `Showing the most recent ${shown} of ${total} recorded activities.`,
-    oldestPartial: 'The oldest session listed may reach further back than the activity loaded.',
-    ongoing: 'Ongoing',
-    results: (count: number) => (count === 1 ? '1 result' : `${count} results`),
-    searchLine: (query: string, results: string) => `“${query}” — ${results}`,
-    documents: (count: number) => (count === 1 ? '1 document' : `${count} documents`),
-    exportLine: (format: string, documents: string) => `Exported ${format} — ${documents}`,
-    loading: 'Loading the sessions…',
-  },
-  /**
-   * Settings ▸ Reading, the web's own pane for the app's Display ▸ Reading and Citations sections, in
-   * their words.
-   */
-  reading: {
-    title: 'Reading',
-    openIn: 'Open Documents In',
-    openInA11y: 'Default document mode',
-    modes: { read: 'Read', research: 'Research', rememberLast: 'Remember Last' },
-    footer:
-      '“Remember Last” reopens documents in the mode you used last, Read or Research. Research mode shows the Research rail in a side panel beside the document. Read mode hides the rail so you can just read. The rail toggle inside a document always wins for that document.',
-    citations: 'Citations',
-    citationStyle: 'Citation Style',
-    citationFooter: 'Used when copying or sharing a citation.',
-    /** The kit's names for the styles in Settings (`CitationStyle.displayName`). */
-    styles: { historyAtState: 'History at State (Recommended)', chicago: 'Chicago', turabian: 'Turabian' },
-  },
-  /**
-   * Citation Lookup, in the words of the app's window and of Search's Find by Citation, with the kit's
-   * names for the modes. Each result's label, a Batch row's own label and the table's summary are the
-   * kit's, from the server. View Volume, which stands where the app offers Download Volume, and its
-   * tooltip are the web's own.
-   */
-  lookup: {
-    title: 'Citation Lookup',
-    findByCitation: 'Find by Citation',
-    findByCitationHelp: 'Resolve a pasted or manually entered FRUS citation to a specific document',
-    mode: 'Input mode',
-    modes: { paste: 'Paste Citation', structured: 'Structured Entry', batch: 'Batch' },
-    pasteHeader: 'Citation Text',
-    pastePlaceholder: 'Paste a FRUS citation…',
-    batchHeader: 'Footnotes',
-    batchFooter:
-      'Paste a chapter’s footnotes. Numbered notes are split on their numbers, and a note wrapped across lines is rejoined; an unnumbered list is one citation per line.',
-    fieldsHeader: 'Parsed Fields',
-    fieldsFooter: 'Provide at least a document number, page number, or volume to search.',
-    subseries: 'Subseries',
-    subseriesPlaceholder: 'e.g. 1969-76',
-    volume: 'Volume',
-    volumePlaceholder: 'e.g. I or 1',
-    part: 'Part',
-    partPlaceholder: 'e.g. 1 or I',
-    document: 'Document no.',
-    documentPlaceholder: 'e.g. 15',
-    page: 'Page',
-    pagePlaceholder: 'e.g. 47',
-    lookUp: 'Look Up',
-    lookUpHelp: 'Resolve the citation to matching FRUS documents',
-    searching: 'Looking up…',
-    errorTitle: 'Lookup Error',
-    noMatchTitle: 'No Matches Found',
-    noMatchDetail: 'No FRUS documents matched the provided citation. Check the subseries and volume, then try again.',
-    results: (count: number) => `Results (${count} found)`,
-    /** What a lookup that found matches announces, as the app's announcement words it. */
-    matchesFound: (count: number) => `${count} matches found`,
-    viewDocument: 'View Document',
-    viewDocumentHelp: 'Open this document',
-    viewVolume: 'View Volume',
-    viewVolumeHelp: 'Open this volume’s page in Browse, which says what this server holds of it',
-    batchEmptyTitle: 'Nothing to Triage',
-    batchEmptyDetail: 'No citations were found in that text.',
-    needsWorkFirst: 'Needs work first',
-    resolved: (identity: string) => `Resolved — ${identity}`,
-    possibleDocuments: (count: number) => `${count} possible documents`,
-    noMatch: 'No match',
-  },
 
+  // ─── Collections ──────────────────────────────────────────────────────────
   /**
    * Collections (PLAN's S18d), in the app's words: the Collections tab's list, its project scope and its
    * rows, with their Rename Collection alert and the question before a delete (`CollectionDeletion`,
@@ -1822,4 +1523,319 @@ export const copy = {
     loading: 'Loading…',
     notIndexed: 'This server has not indexed this volume, so its documents cannot be listed here.',
   },
+
+  // ─── Tools ────────────────────────────────────────────────────────────────
+  /**
+   * Citation Lookup, in the words of the app's window and of Search's Find by Citation, with the kit's
+   * names for the modes. Each result's label, a Batch row's own label and the table's summary are the
+   * kit's, from the server. View Volume, which stands where the app offers Download Volume, and its
+   * tooltip are the web's own.
+   */
+  lookup: {
+    title: 'Citation Lookup',
+    findByCitation: 'Find by Citation',
+    findByCitationHelp: 'Resolve a pasted or manually entered FRUS citation to a specific document',
+    mode: 'Input mode',
+    modes: { paste: 'Paste Citation', structured: 'Structured Entry', batch: 'Batch' },
+    pasteHeader: 'Citation Text',
+    pastePlaceholder: 'Paste a FRUS citation…',
+    batchHeader: 'Footnotes',
+    batchFooter:
+      'Paste a chapter’s footnotes. Numbered notes are split on their numbers, and a note wrapped across lines is rejoined; an unnumbered list is one citation per line.',
+    fieldsHeader: 'Parsed Fields',
+    fieldsFooter: 'Provide at least a document number, page number, or volume to search.',
+    subseries: 'Subseries',
+    subseriesPlaceholder: 'e.g. 1969-76',
+    volume: 'Volume',
+    volumePlaceholder: 'e.g. I or 1',
+    part: 'Part',
+    partPlaceholder: 'e.g. 1 or I',
+    document: 'Document no.',
+    documentPlaceholder: 'e.g. 15',
+    page: 'Page',
+    pagePlaceholder: 'e.g. 47',
+    lookUp: 'Look Up',
+    lookUpHelp: 'Resolve the citation to matching FRUS documents',
+    searching: 'Looking up…',
+    errorTitle: 'Lookup Error',
+    noMatchTitle: 'No Matches Found',
+    noMatchDetail: 'No FRUS documents matched the provided citation. Check the subseries and volume, then try again.',
+    results: (count: number) => `Results (${count} found)`,
+    /** What a lookup that found matches announces, as the app's announcement words it. */
+    matchesFound: (count: number) => `${count} matches found`,
+    viewDocument: 'View Document',
+    viewDocumentHelp: 'Open this document',
+    viewVolume: 'View Volume',
+    viewVolumeHelp: 'Open this volume’s page in Browse, which says what this server holds of it',
+    batchEmptyTitle: 'Nothing to Triage',
+    batchEmptyDetail: 'No citations were found in that text.',
+    needsWorkFirst: 'Needs work first',
+    resolved: (identity: string) => `Resolved — ${identity}`,
+    possibleDocuments: (count: number) => `${count} possible documents`,
+    noMatch: 'No match',
+  },
+
+  // ─── Settings ─────────────────────────────────────────────────────────────
+  /** Settings ▸ Tags, its editor and its merge sheet, in the app's words. */
+  settings: {
+    title: 'Settings',
+    panes: 'Settings',
+    tags: 'Tags',
+    tagsEmpty:
+      'No tags yet. Tags are the labels you apply to research notes and documents as you read — create one here, or from any note.',
+    tagsFooter: 'Tags are global labels you apply to research notes and documents. They are not scoped to a project.',
+    // S17f: the reader's own order, which the Move commands set.
+    tagsOrderFooter: 'This order is also the order of your tags in the note editor, the document tag picker and Search.',
+    newTag: 'New Tag…',
+    newTagDefault: 'New Tag',
+    edit: (name: string) => `Edit ${name}`,
+    loading: 'Loading the tags…',
+    userDataOff: 'This server keeps no tags or other research data of yours: it is read-only.',
+  },
+  tagEditor: {
+    title: 'Edit Tag',
+    nameHeader: 'Name',
+    namePlaceholder: 'Tag name',
+    nameField: 'Tag name',
+    manage: 'Manage',
+    merge: 'Merge into Another Tag…',
+    delete: 'Delete Tag',
+    manageFooterOnly:
+      'Merging needs a second tag to merge into. Deleting removes this tag from every note and document that carries it; nothing else is deleted.',
+    manageFooter:
+      'Merging re-tags everything here with the tag you choose, then removes this one. Deleting removes this tag from every note and document that carries it; nothing else is deleted.',
+    cancel: 'Cancel',
+    save: 'Save',
+    deleteTitle: 'Delete Tag?',
+    deleteMessage: 'Deleting removes this tag from every note and document that carries it; nothing else is deleted.',
+    deleteConfirm: 'Delete',
+    deleteCancel: 'Cancel',
+  },
+  mergeTag: {
+    title: 'Merge Tag',
+    into: (name: string) => `Merge ‘${name}’ into:`,
+    explanation: (name: string) => `All notes tagged ‘${name}’ will be re-tagged with the selected tag. ‘${name}’ will be deleted.`,
+    cancel: 'Cancel',
+    confirm: 'Merge',
+  },
+  /** Settings ▸ Data, the web's own pane, with the app's Markdown export in its words. */
+  dataSettings: {
+    title: 'Data',
+    // The export (PLAN's S16d), in the words of the app's export sheet.
+    contents: 'Contents',
+    tagsAndAssignments: 'Tags & Assignments',
+    includeSummaries: 'Include AI-Generated Summaries',
+    includeSummariesFooter: (count: number) =>
+      `Adds all ${count.toLocaleString('en-US')} generated summaries to the JSON export. Off by default since AI output can be large.`,
+    exportJSON: 'Export as JSON',
+    jsonError: (detail: string) => `Couldn’t prepare the export: ${detail}`,
+    jsonFooter:
+      'One JSON file with your notes, tags, highlights, collections, custom prompts, projects, archive visit plans, saved searches, working corpora, volume scopes, corrections, reviewed changes, Suggested Next leads, and synced settings. It also holds your research trail: every document you opened, every search you ran and how many results it returned, and every collection you exported.',
+    exportMarkdown: (count: number) => `Export Notes as Markdown (${count.toLocaleString('en-US')})`,
+    preparing: 'Preparing export…',
+    empty: 'No research notes to export.',
+    footer:
+      'One Markdown file per research note, with a citation and link back to the source document. Compatible with Obsidian and similar note-taking tools.',
+    // The import (PLAN's S16c), the web's own words, since the app imports no JSON export, but for
+    // the records' names, which are its export sheet's Contents, and the missing search's sentence.
+    importTitle: 'Import a JSON Export',
+    importLead:
+      'Import the file FRUS Explorer writes on the Mac with Settings ▸ Data & Recovery ▸ Export as JSON; turn on Include AI-Generated Summaries there to bring your summaries. Each record keeps its id from the Mac, and a record you already have here is replaced only by a newer copy. Nothing here is deleted.',
+    importFile: 'Export file',
+    importAction: 'Import',
+    importQueued: (name: string) => `${name} waits for the server’s other work…`,
+    importRunning: (name: string) => `Importing ${name}…`,
+    importDone: (name: string) => `Imported ${name}`,
+    importFailed: (name: string) => `${name} could not be imported. Nothing of it was kept.`,
+    importLost: (name: string) =>
+      `The import of ${name} can no longer be followed, as after the server restarts, so whether it finished is not known here. Importing the file again changes nothing it brought.`,
+    importWritten: (version: number, date: string) => `A version-${version} export, written on ${date}.`,
+    reportCaption: 'What the export held, and what became of it',
+    reportType: 'Records',
+    reportInFile: 'In the file',
+    reportAdded: 'Came in',
+    reportReplaced: 'Replaced',
+    reportKept: 'Kept',
+    reportKeptNote: 'Replaced: you had an older copy here. Kept: you had a copy as new or newer.',
+    notCarried: (version: number, names: string) => `A version-${version} export carries no ${names}.`,
+    repeated: (count: number, name: string) =>
+      `${count.toLocaleString('en-US')} of the ${name.toLowerCase()} came twice in the file: each is kept once, the newer copy.`,
+    setAsideSettings: (count: number) =>
+      count === 1
+        ? 'The file held a second set of synced settings, from a device iCloud had not yet merged: the earliest set is kept, as the app keeps it.'
+        : `The file held ${count.toLocaleString('en-US')} more sets of synced settings, from devices iCloud had not yet merged: the earliest set is kept, as the app keeps it.`,
+    setAsideCorrections: (count: number) =>
+      `${count.toLocaleString('en-US')} ${count === 1 ? 'correction was' : 'corrections were'} left out: a correction changes the index everyone here reads, and only a curator imports one.`,
+    formattingKept: (count: number) =>
+      count === 1
+        ? 'One note keeps formatting this server cannot show: it opens as plain text until you edit it here.'
+        : `${count.toLocaleString('en-US')} notes keep formatting this server cannot show: they open as plain text until you edit them here.`,
+    headnoteDrafts: (count: number) =>
+      count === 1
+        ? 'One summary is a collection’s headnote draft, which no list of a document’s summaries shows.'
+        : `${count.toLocaleString('en-US')} summaries are collections’ headnote drafts, which no list of a document’s summaries shows.`,
+    withoutAuthorship: (count: number) =>
+      `${count.toLocaleString('en-US')} ${count === 1 ? 'summary says' : 'summaries say'} nothing of who wrote ${count === 1 ? 'it' : 'them'}, as exports before version 5 do, and ${count === 1 ? 'is' : 'are'} shown as AI summaries.`,
+    inertEntries: (count: number) =>
+      count === 1
+        ? 'One collection entry has no document. A version-6 export does not say what it was, a section heading, a note block or an apparatus block, so it is kept as an entry this server does not show.'
+        : `${count.toLocaleString('en-US')} collection entries have no document. A version-6 export does not say what they were, section headings, note blocks or apparatus blocks, so they are kept as entries this server does not show.`,
+    unlinkedLead: 'These smart collections keep their link to a saved search this export does not carry:',
+    missingSearch: 'The linked saved search could not be found. It may have been deleted.',
+    // The method appendix (PLAN's S17f), in the words of the app's export sheet; the two files' own
+    // links are the web's, since a browser saves one file at a time.
+    appendixAction: 'Export Query Log as a Method Appendix',
+    appendixEmpty: 'No searches recorded yet.',
+    appendixFooter:
+      'Every search you ran, in a Markdown table and a CSV. Each row gives the scope the search ran under and how many volumes were indexed at the time. Counts that hit the app’s row ceiling appear as “at least N”, so a partial result is never printed as a total.',
+    appendixMarkdown: 'Markdown table (frus-query-log.md)',
+    appendixCSV: 'CSV (frus-query-log.csv)',
+    /** What the app's lists call a collection with no name (`CollectionEditorNaming.listName`). */
+    untitledCollection: 'Untitled Collection',
+    types: {
+      ResearchNote: 'Research Notes',
+      UserTag: 'Tags',
+      DocumentTagAssignment: 'Tag Assignments',
+      DocumentHighlight: 'Highlights',
+      Collection: 'Collections',
+      CollectionEntry: 'Collection Entries',
+      SummarizationPrompt: 'Custom Prompts',
+      Project: 'Projects',
+      ArchiveVisitPlan: 'Archives Visits',
+      ArchiveVisitDocument: 'Archives Visit Documents',
+      ArchiveVisitTarget: 'Archives Visit Targets',
+      SavedSearch: 'Saved Searches',
+      WorkingCorpus: 'Working Corpora',
+      CustomVolumeScope: 'Volume Scopes',
+      DocumentClassificationOverride: 'Classification Corrections',
+      PersonClusterOverride: 'Person Corrections',
+      AnnotationReview: 'Reviewed Changes',
+      ProjectLeadEntry: 'Suggested Next Leads',
+      SyncedPreferences: 'Synced Settings',
+      ReadingHistoryEntry: 'Documents Visited',
+      SearchHistoryEntry: 'Searches Executed',
+      ExportHistoryEntry: 'Collections Exported',
+      GeneratedSummary: 'Generated Summaries',
+    },
+  },
+  /** Settings ▸ Projects, the project editor and Merge Project, in the app's words. */
+  projects: {
+    title: 'Projects',
+    activeLabel: 'Active Project',
+    global: 'Global Context',
+    home: 'Project Home',
+    activeFooter: 'The active project scopes the notes, collections, history, and searches you see. Global Context shows everything.',
+    empty: 'No projects yet. A project keeps one line of research — its notes, collections, history and searches — separate from the rest.',
+    listHeader: 'All Projects',
+    new: 'New Project…',
+    listFooter: "This order is also the order of the Active Project picker, the project switcher and the note editor's project list.",
+    active: 'active',
+    edit: 'Edit',
+    mergeShort: 'Merge into…',
+    relatedHeader: 'Related',
+    tags: 'Tags',
+    scopes: 'Volume Scopes',
+    relatedFooter: 'Open Tags to rename, merge or delete a tag. Open Volume Scopes to edit or delete a scope — scopes cannot be merged.',
+    noneYet: 'None yet',
+    tagCount: (count: number) => (count === 1 ? '1 tag' : `${count.toLocaleString('en-US')} tags`),
+    scopeCount: (count: number) => (count === 1 ? '1 scope' : `${count.toLocaleString('en-US')} scopes`),
+    editorNew: 'New Project',
+    editorEdit: 'Edit Project',
+    cancel: 'Cancel',
+    save: 'Save',
+    nameHeader: 'Name',
+    namePlaceholder: 'Project name',
+    nameField: 'Project name',
+    questionHeader: 'Research Question',
+    questionField: 'Research question',
+    manage: 'Manage',
+    merge: 'Merge into Another Project…',
+    delete: 'Delete Project',
+    manageFooterOnly:
+      'Merging needs a second project to merge into. Deleting keeps your notes, collections, and history — it only unlinks them from this project.',
+    manageFooter:
+      'Merging moves everything filed here into the project you choose. Deleting keeps your notes, collections, and history — it only unlinks them from this project.',
+    deleteTitle: 'Delete Project?',
+    deleteMessage: 'Activity records are kept but unlinked from this project.',
+    deleteConfirm: 'Delete',
+    deleteCancel: 'Cancel',
+    mergeTitle: 'Merge Project',
+    mergeInto: (name: string) => `Merge “${name}” into:`,
+    mergeExplanation: (name: string) =>
+      `All notes, collections, summaries, and reading history assigned to “${name}” will be re-assigned to the selected project. “${name}” will be deleted.`,
+    mergeCancel: 'Cancel',
+    mergeConfirm: 'Merge',
+    loading: 'Loading the projects…',
+  },
+  /** The Move commands of the Settings lists, in the app's words. */
+  listOrder: {
+    moveToTop: 'Move to Top',
+    moveUp: 'Move Up',
+    moveDown: 'Move Down',
+    moveLabel: (command: string, name: string) => `${command}: ${name}`,
+  },
+  /** Settings ▸ Research Sessions and the Session Log, in the app's words. */
+  sessions: {
+    title: 'Research Sessions',
+    recording: 'Recording',
+    logging: 'Log Research Sessions',
+    loggingFooter:
+      'Despite the name, this switch covers everything the app can track about your work. That means the documents you open, the text of the searches you run, and the collections you export. The app keeps one record of each. The History screen, a project’s Recently Read and Recent Searches cards, its Documents Visited and Searches Run counts, and the Session Log all read those same records. The Session Log groups them into sessions, and a session ends after 30 minutes of inactivity. The records stay on this device, and in your private iCloud database if iCloud sync is on. Turn the switch off and all of that recording stops. Those surfaces will thin out and eventually empty. That is the switch working, not a fault. Anything recorded before you turned it off stays until you delete it.',
+    activity: 'Recorded Activity',
+    log: 'Session Log',
+    activityEmpty: 'Nothing has been recorded yet. Open a document or run a search and it will appear here.',
+    activityFooter:
+      'The app infers sessions from the times you opened documents, ran searches, and exported collections. A gap of 30 minutes starts a new session. The same records fill the History screen and a project’s Recents.',
+    manage: 'Manage',
+    deleteAll: 'Delete Recorded Sessions…',
+    manageFooter:
+      'This deletes the whole record of your work: every document you opened, every search you ran, and every collection you exported. It goes from this device, and from your iCloud database if iCloud sync is on. Your notes, highlights, tags, and collections are not touched. To delete single entries instead, use the History screen.',
+    deleteTitle: 'Delete Recorded Sessions?',
+    deleteMessage: (events: string) =>
+      `${events} will be permanently deleted from this device. If iCloud sync is on, the same records go from iCloud too. A session is made of every document you opened, every search you ran, and every collection you exported. Your notes, highlights, tags, and collections are not affected.`,
+    deleteConfirm: 'Delete',
+    deleteCancel: 'Cancel',
+    nothingRecorded: 'Nothing recorded yet',
+    sessionCount: (count: number, exact: boolean) =>
+      exact
+        ? count === 1
+          ? '1 session'
+          : `${count} sessions`
+        : count === 1
+          ? 'at least 1 session'
+          : `at least ${count} sessions`,
+    eventCount: (count: number) => (count === 1 ? '1 event' : `${count} events`),
+    lastToday: (time: string) => `last today ${time}`,
+    lastOlder: (date: string) => `last ${date}`,
+    emptyTitle: 'No Sessions Yet',
+    emptyDetail: 'Your research activity will appear here as you open documents, run searches, and export collections.',
+    showMore: 'Show More',
+    showingRecent: (shown: number, total: number) => `Showing the most recent ${shown} of ${total} recorded activities.`,
+    oldestPartial: 'The oldest session listed may reach further back than the activity loaded.',
+    ongoing: 'Ongoing',
+    results: (count: number) => (count === 1 ? '1 result' : `${count} results`),
+    searchLine: (query: string, results: string) => `“${query}” — ${results}`,
+    documents: (count: number) => (count === 1 ? '1 document' : `${count} documents`),
+    exportLine: (format: string, documents: string) => `Exported ${format} — ${documents}`,
+    loading: 'Loading the sessions…',
+  },
+  /**
+   * Settings ▸ Reading, the web's own pane for the app's Display ▸ Reading and Citations sections, in
+   * their words.
+   */
+  reading: {
+    title: 'Reading',
+    openIn: 'Open Documents In',
+    openInA11y: 'Default document mode',
+    modes: { read: 'Read', research: 'Research', rememberLast: 'Remember Last' },
+    footer:
+      '“Remember Last” reopens documents in the mode you used last, Read or Research. Research mode shows the Research rail in a side panel beside the document. Read mode hides the rail so you can just read. The rail toggle inside a document always wins for that document.',
+    citations: 'Citations',
+    citationStyle: 'Citation Style',
+    citationFooter: 'Used when copying or sharing a citation.',
+    /** The kit's names for the styles in Settings (`CitationStyle.displayName`). */
+    styles: { historyAtState: 'History at State (Recommended)', chicago: 'Chicago', turabian: 'Turabian' },
+  },
+
+  // ─── Admin ────────────────────────────────────────────────────────────────
 } as const;

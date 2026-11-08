@@ -2,7 +2,8 @@
 // S17f) and appearance, the "Working on:" line over Browse and Search, the readiness banner, the
 // screen, and the footer. Behind a proxy that signs people in (PLAN's S14e),
 // the header names the user and the footer says that the instance's operator can read what it
-// keeps for them, as SPEC's Privacy asks.
+// keeps for them, as SPEC's Privacy asks. The header's links are grouped by area, under a line each,
+// in the order of the app's tabs (PLAN's S20a): a new link goes beside its area's kin, never at the end.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, useRouter } from '@tanstack/react-router';
 import { createContext, type MouseEvent, useContext, useEffect, useRef } from 'react';
@@ -51,25 +52,31 @@ export function AppShell() {
           {copy.app.name}
         </Link>
         <nav aria-label={copy.app.navigation}>
+          {/* ─── Browse and search ─────────────────────────────────────── */}
           <Link to="/browse" activeProps={{ 'aria-current': 'page' }}>
             {copy.app.browse}
           </Link>
           <Link to="/search" activeProps={{ 'aria-current': 'page' }}>
             {copy.app.search}
           </Link>
+          {/* ─── Research ──────────────────────────────────────────────── */}
           {/* Between Search and Settings, as the app's tabs order them. */}
           <Link to="/research" activeProps={{ 'aria-current': 'page' }}>
             {copy.app.research}
           </Link>
+          {/* ─── Collections ───────────────────────────────────────────── */}
           {/* From S18d, the app's Collections tab, on a server that keeps user data. */}
           {keepsUserData && (
             <Link to="/collections" activeProps={{ 'aria-current': 'page' }}>
               {copy.app.collections}
             </Link>
           )}
+          {/* ─── Tools ─────────────────────────────────────────────────── */}
+          {/* ─── Settings ──────────────────────────────────────────────── */}
           <Link to="/settings" activeProps={{ 'aria-current': 'page' }}>
             {copy.app.settings}
           </Link>
+          {/* ─── Admin ─────────────────────────────────────────────────── */}
         </nav>
         <ProjectPicker />
         <label className="appearance">

@@ -1,4 +1,13 @@
 # FRUS Explorer Light CI, on every pull request and on main.
+# - paths: scripts/ci-paths, its selftest first, then the pull request's changed paths (PLAN's S20a).
+#   A pull request whose merge commit changes nothing but the records, docs/ but the install guide
+#   and the Markdown files at the root, skips the three jobs below, and GitHub reports a job skipped
+#   by its own condition as passed, so main's required checks, swift, web and compose, let it merge.
+#   Anything else runs them: a change to any other file, a push to main, which tests what merged
+#   together, and a paths job that fails, times out, is cancelled or writes no verdict, whatever
+#   cancelled() then reads. A run cancelled after the paths job succeeded leaves them cancelled, as
+#   GitHub reported upstream-watch.yml's watch-report, waiting under !cancelled(), in that
+#   workflow's cancelled runs; one cancelled while the paths job ran lets them run to the end.
 # - swift: build and test in swift:6.4-noble with libsqlite3-dev, the way scripts/swift runs them, with
 #   a PostgreSQL service, so the user store's conformance suite runs on both of its stores (S14d).
 # - web: the browser app in web/, typechecked, linted, unit-tested and built with Node at
@@ -27,8 +36,45 @@ defaults:
     shell: bash
 
 jobs:
+  # First, so the three jobs below wait for its verdict. Each takes the same condition, which
+  # scripts/ci-paths selftest holds to every outcome of this job: they are skipped only when it
+  # succeeded and wrote code=false; they run whenever it did not succeed, since GitHub could read
+  # cancelled() as true after a job's own timeout; and a run cancelled after it succeeded starts
+  # none of them. The selftest evaluates the condition in the syntax it knows, literals, contexts,
+  # the four status functions, ! < <= > >= == != && || and parentheses: a condition that needs
+  # more extends its evaluator in the same change, as scripts/ci-paths selftest, run before the
+  # push, will say.
+  paths:
+    name: paths
+    runs-on: ubuntu-24.04
+    # A step that hangs fails at its own limit, and the job's limit, which would end it cancelled,
+    # is beyond the steps' sum; the three jobs run after either.
+    timeout-minutes: 15
+    outputs:
+      code: ${{ steps.paths.outputs.code }}
+    steps:
+      # On a pull request, the merge commit GitHub made and its two parents: the base branch's head
+      # and the pull request's.
+      - uses: actions/checkout@v5
+        timeout-minutes: 5
+        with:
+          fetch-depth: 2
+
+      - name: The rules, against their cases
+        timeout-minutes: 3
+        run: scripts/ci-paths selftest
+
+      - name: The changed paths
+        id: paths
+        timeout-minutes: 2
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: scripts/ci-paths changed >> "$GITHUB_OUTPUT"
+
   swift:
     name: swift
+    needs: paths
+    if: ${{ !(needs.paths.result == 'success' && needs.paths.outputs.code == 'false') && (needs.paths.result != 'success' || !cancelled()) }}
     runs-on: ubuntu-24.04
     container: swift:6.4-noble
     # Under amd64 emulation with 4 CPUs, a build with no cache took 12 minutes and FTS5StoreTests
@@ -151,6 +197,8 @@ jobs:
 
   web:
     name: web
+    needs: paths
+    if: ${{ !(needs.paths.result == 'success' && needs.paths.outputs.code == 'false') && (needs.paths.result != 'success' || !cancelled()) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -190,12 +238,19 @@ jobs:
 
   compose:
     name: compose
+    needs: paths
+    if: ${{ !(needs.paths.result == 'success' && needs.paths.outputs.code == 'false') && (needs.paths.result != 'success' || !cancelled()) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
         with:
           submodules: true
+
+      # Again here, where a check main requires fails with it, so a change that breaks the paths
+      # job's rules, or this file's conditions, cannot merge.
+      - name: The paths job's rules, against their cases
+        run: scripts/ci-paths selftest
 
       - uses: docker/setup-buildx-action@v4
 
