@@ -474,7 +474,7 @@ S21f has not started.
 
 S21g has not started.
 
-S22a has not started.
+S22a was done on 8 November at `fe9325b2`, with [FRUS-Explorer#1869](https://github.com/joshbotts/FRUS-Explorer/pull/1869) open and awaiting Mac check 16: Source Explorer's readers and resolvers move into FRUSCoreKit unchanged, the eleven indexes public and each loaded from a URL the host gives (`init(contentsOf:)`), their stores and the overloads over them left in the app, and `ArchivalResolver`, `ArchivalResolution` and `LotFileEntry` public. Seventeen suites move with them, so `FRUSCoreKitTests` runs 1,641 tests on Linux where it ran 1,348. `SourceExplorerLoadIdentity`, which the row lists, moves with S22b, since its `hydrate` reads the classifier S22b moves; the subject-numeric label table went to `FRUSCoreKit/Analytics/`, beside its twin, rather than `SourceExplorer/`. The pull request was rebased before it opened onto `v2`'s `184f9c3c` (FRUS-Explorer#1868, which touches none of its files but the EditableContent amendment log). Next: S22b once FRUS-Explorer#1869 merges, after S21a's in the batch's order, then S24c.
 
 S22b has not started.
 
