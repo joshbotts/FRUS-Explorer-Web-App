@@ -62,8 +62,8 @@ jobs:
     outputs:
       head: ${{ steps.move.outputs.head }}
     steps:
-      - name: Install SQLite headers
-        run: apt-get update -qq && apt-get install -y -qq --no-install-recommends libsqlite3-dev
+      - name: Install SQLite and Argon2 headers
+        run: apt-get update -qq && apt-get install -y -qq --no-install-recommends libsqlite3-dev libargon2-dev
 
       - uses: actions/checkout@v5
         with:

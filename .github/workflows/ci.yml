@@ -8,7 +8,7 @@
 #   cancelled() then reads. A run cancelled after the paths job succeeded leaves them cancelled, as
 #   GitHub reported upstream-watch.yml's watch-report, waiting under !cancelled(), in that
 #   workflow's cancelled runs; one cancelled while the paths job ran lets them run to the end.
-# - swift: build and test in swift:6.4-noble with libsqlite3-dev, the way scripts/swift runs them, with
+# - swift: build and test in swift:6.4-noble with libsqlite3-dev and libargon2-dev, the way scripts/swift runs them, with
 #   a PostgreSQL service, so the user store's conformance suite runs on both of its stores (S14d).
 # - web: the browser app in web/, typechecked, linted, unit-tested and built with Node at
 #   web/.node-version, as scripts/npm runs it.
@@ -97,8 +97,8 @@ jobs:
           --health-timeout 5s
           --health-retries 30
     steps:
-      - name: Install SQLite headers
-        run: apt-get update -qq && apt-get install -y -qq --no-install-recommends libsqlite3-dev
+      - name: Install SQLite and Argon2 headers
+        run: apt-get update -qq && apt-get install -y -qq --no-install-recommends libsqlite3-dev libargon2-dev
 
       # The submodule is public, and checked out whole: a SourceNoteKit test reads an app resource,
       # and FRUSCoreKitTests reads the app's data files and manifest in FRUSExplorer/Resources.

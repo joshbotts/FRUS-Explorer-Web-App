@@ -107,6 +107,15 @@ public enum UserStoreRestore {
     /// 3. the store's side files are removed, so no `-wal` of another store is ever read with it,
     ///    and the backup takes its place.
     /// Up to the last step nothing of the store has changed, and a refusal or a failure leaves it so.
+    /// Ends every session the store at `url` keeps, if it keeps any: one from before migration 4 has none.
+    static func endSessions(in url: URL) throws {
+        let db = try SQLiteConnection(url.path, readOnly: false)
+        defer { db.close() }
+        if try db.scalar("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sessions'") != nil {
+            try db.execute("DELETE FROM sessions")
+        }
+    }
+
     public static func restore(_ source: URL, files: DataDirectory, copyDirectory: URL?, now: Date = Date(),
                                build: Int = UserStoreMigrations.all.count) async throws -> Report {
         let manager = FileManager.default
@@ -138,6 +147,9 @@ public enum UserStoreRestore {
             // Named by what was asked for, not by the copy beside the store.
             throw refusal.naming(source)
         }
+        // A session the backup holds may have ended since it was taken, by a sign-out, a new password or
+        // a disabled account (PLAN's S20b): a restore ends them all, and everyone signs in again.
+        try endSessions(in: staged)
 
         var kept: URL?
         var keptAsFiles = false

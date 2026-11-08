@@ -12,7 +12,9 @@
 # container of its own (S16e). Then it backs up the user store with frus-light backup, fetches the
 # backup through GET /api/v1/admin/backup, removes the store, restores it with frus-light restore and
 # reads the same research back (S14b). docs/INSTALL.md's nginx recipes, for the root and for a path,
-# run in nginx on the Compose network in each phase. Last, the server signs people in through the
+# run in nginx on the Compose network in each phase. Then the server signs people in with accounts of
+# its own (S20b), FRUS_AUTH=local, two made with frus-light user, whose sessions, refusals and slowing
+# it checks. Last, the server signs people in through the
 # proxy (S14e), with FRUS_AUTH=header and nginx's address alone in FRUS_TRUSTED_PROXIES: the install
 # guide's recipe for it runs with a stand-in for its session check, a header from outside the list
 # is refused, and two users' tags stay apart. Its TEI folder holds fixtures/tei's volumes and the
@@ -22,7 +24,8 @@
 #   FRUS_IMAGE=<image> scripts/compose-smoke    tests an image already built
 #   scripts/compose-smoke --e2e                 also runs web/e2e, Playwright on Chromium, against the
 #                                               imported server at the root, then under the path
-#                                               through nginx, and its sign-in spec through the
+#                                               through nginx, its accounts spec with local
+#                                               accounts, and its sign-in spec through the
 #                                               proxy that signs people in (scripts/npm ci first)
 # It uses its own Compose project and host port, and removes its containers and volume afterwards.
 # Each step's line names its area, as web/src/router.tsx and copy.ts group theirs: the install (the
@@ -518,6 +521,93 @@ echo "   $backup, also in the host folder and through the API with its SHA-256; 
 echo "== install: health check under the path"
 wait_healthy
 echo "   healthy"
+
+echo "== install: signing in with accounts of the server's own, FRUS_AUTH=local"
+# The server is made again with local accounts (S20b), under the path, and makes two with frus-light
+# user, each password a line of standard input, random for this run: erin, an admin, and frank, a
+# reader; the proxy's sign-in, after this, names alice, bob, carol and dave, none of them. curl reaches
+# the server through the published port, from the Compose network's gateway, and carries the session's
+# cookie itself: curl keeps no Secure cookie from an address that is not https.
+password=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
+FRUS_PUBLIC_URL=http://localhost:8080/frus-explorer/ FRUS_AUTH=local docker compose up -d frus 2>/dev/null
+wait_for_200 "$base/readyz" 60 || fail "/readyz did not reach 200 with local accounts"
+made=$(printf '%s\n' "$password" | docker compose exec -T frus frus-light user add erin --role admin) \
+  || fail "frus-light user add erin failed: $made"
+[ "$made" = "Made erin, an admin. They sign in at http://localhost:8080/frus-explorer/." ] || fail "user add said: $made"
+printf '%s\n' "$password" | docker compose exec -T frus frus-light user add frank >/dev/null || fail "frus-light user add frank failed"
+if printf 'short\n' | docker compose exec -T frus frus-light user add grace 2>/dev/null; then fail "a short password was taken"; fi
+auth() {  # $1: sign-in or sign-out; $2: the body, or nothing; the rest: curl's arguments
+  local what=$1 body=$2
+  shift 2
+  curl -s --max-time 30 -D "$work/auth.headers" -H "Host: localhost:8080" -H 'Origin: http://localhost:8080' \
+    -H 'Content-Type: application/json' ${body:+--data "$body"} -X POST -w ' %{http_code}' "$@" "$under/api/v1/auth/$what" || true
+}
+cookie_of() { sed -nE 's/^[Ss]et-[Cc]ookie: (frus_session=[0-9a-f]{64});.*/\1/p' "$work/auth.headers" | tr -d '\r'; }
+as_session() {  # $1: the cookie; the rest: curl's arguments
+  local cookie=$1
+  shift
+  curl -s --max-time 30 -H "Host: localhost:8080" -H "Cookie: $cookie" "$@" || true
+}
+session=$(curl -s --max-time 5 -H "Host: localhost:8080" "$under/api/v1/auth/session" || true)
+[ "$session" = '{"auth":"local","signedIn":false}' ] || fail "the session with no cookie answered $session"
+refused=$(curl -s --max-time 5 -H "Host: localhost:8080" -w ' %{http_code}' "$under/api/v1/me" || true)
+case "$refused" in *'"code":"NOT_SIGNED_IN"'*' 403') ;; *) fail "/api/v1/me with no session answered $refused" ;; esac
+wrong=$(auth sign-in '{"name":"erin","password":"not her password at all"}')
+case "$wrong" in *'"code":"SIGN_IN_FAILED"'*' 403') ;; *) fail "a wrong password answered $wrong" ;; esac
+nobody=$(auth sign-in "{\"name\":\"nobody\",\"password\":\"$password\"}")
+[ "$nobody" = "$wrong" ] || fail "a name with no account answered otherwise than a wrong password: $nobody"
+signed=$(auth sign-in "{\"name\":\"erin\",\"password\":\"$password\"}")
+case "$signed" in *' 200') ;; *) fail "erin's sign-in answered $signed" ;; esac
+case "$signed" in *'"userId":"erin"'*) ;; *) fail "erin's sign-in named another: $signed" ;; esac
+case "$signed" in *'"auth":"local"'*) ;; *) fail "the server does not sign in with its own accounts: $signed" ;; esac
+grep -qiE '^set-cookie: frus_session=[0-9a-f]{64}; Path=/frus-explorer/; Max-Age=2592000; HttpOnly; Secure; SameSite=Lax' "$work/auth.headers" \
+  || fail "the session's cookie is not as it should be: $(grep -i '^set-cookie' "$work/auth.headers")"
+erin=$(cookie_of)
+me=$(as_session "$erin" "$under/api/v1/me")
+case "$me" in *'"userId":"erin"'*) ;; *) fail "erin's cookie names $me" ;; esac
+case "$me" in *'"admin"'*) ;; *) fail "erin, made an admin, is none: $me" ;; esac
+token=$(printf '%s' "$me" | sed -nE 's/.*"csrfToken":"([0-9a-f]+)".*/\1/p')
+made=$(as_session "$erin" -H 'Content-Type: application/json' -H "X-CSRF-Token: $token" -H 'Origin: http://localhost:8080' \
+  --data '{"name":"Local"}' "$under/api/v1/me/tags")
+case "$made" in *'"name":"Local"'*) ;; *) fail "erin's tag was not made: $made" ;; esac
+auth sign-in "{\"name\":\"frank\",\"password\":\"$password\"}" >/dev/null
+frank=$(cookie_of)
+[ -n "$frank" ] && [ "$frank" != "$erin" ] || fail "frank's sign-in gave no session of his own"
+tags=$(as_session "$frank" "$under/api/v1/me/tags")
+case "$tags" in *'"total":0'[,}]*) ;; *) fail "frank's tags hold erin's: $tags" ;; esac
+tags=$(as_session "$erin" "$under/api/v1/me/tags")
+case "$tags" in *'"total":1'[,}]*) ;; *) fail "erin's tags are not the one she made: $tags" ;; esac
+# What the reader's sandboxed frame asks for carries no cookie, and needs none.
+code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' -H "Host: localhost:8080" "$under/reader/frus-selection.js" || true)
+[ "$code" = 200 ] || fail "the reader's selection script with no session answered $code"
+absent=$(curl -s --max-time 5 -H "Host: localhost:8080" "$under/api/v1/volumes/frus1961-63v06/figures/none.png" || true)
+case "$absent" in *'"code":"FIGURE_NOT_FOUND"'*) ;; *) fail "a figure with no session answered $absent" ;; esac
+docker compose exec -T frus frus-light user disable frank >/dev/null || fail "frus-light user disable failed"
+disabled=$(auth sign-in "{\"name\":\"frank\",\"password\":\"$password\"}")
+[ "$disabled" = "$wrong" ] || fail "a disabled account's sign-in answered otherwise than a wrong password: $disabled"
+docker compose exec -T frus frus-light user enable frank >/dev/null || fail "frus-light user enable failed"
+out=$(auth sign-out '' -H "Cookie: $erin")
+[ "$out" = " 204" ] || fail "erin's sign-out answered $out"
+grep -qi '^set-cookie: frus_session=; Path=/frus-explorer/; Max-Age=0' "$work/auth.headers" || fail "the sign-out did not clear the cookie"
+gone=$(as_session "$erin" -w ' %{http_code}' "$under/api/v1/me")
+case "$gone" in *'"code":"NOT_SIGNED_IN"'*' 403') ;; *) fail "erin's ended session answered $gone" ;; esac
+listed=$(docker compose exec -T frus frus-light user list) || fail "frus-light user list failed"
+case "$listed" in *"erin "*"admin "*"can sign in, last signed in "*) ;; *) fail "frus-light user list said: $listed" ;; esac
+# Last, as it slows this address for everyone behind it: five more failures for a name it has not
+# tried, and the sixth attempt waits.
+for attempt in 1 2 3 4 5; do auth sign-in "{\"name\":\"slowed\",\"password\":\"guess $attempt\"}" >/dev/null; done
+slowed=$(auth sign-in "{\"name\":\"slowed\",\"password\":\"guess 6\"}")
+case "$slowed" in *'"code":"SIGN_IN_SLOWED"'*' 429') ;; *) fail "the sixth attempt answered $slowed" ;; esac
+grep -qiE '^retry-after: [0-9]+' "$work/auth.headers" || fail "the slowed attempt gave no Retry-After"
+echo "   erin and frank made with frus-light user, from standard input; no session is no user; a wrong password and an unknown name refused alike; erin's cookie HttpOnly, Secure and SameSite=Lax under the path; her tag not frank's; the frame's scripts and figures need no session; a disabled account refused; a sign-out ends the session; the sixth attempt slowed"
+
+if [ -n "$e2e" ]; then
+  echo "== install: signing in with accounts, the accounts spec in Playwright on Chromium"
+  # In the server's network namespace, under the path, as erin and frank, by keyboard.
+  FRUS_E2E_ACCOUNTS=1 FRUS_E2E_PASSWORD="$password" FRUS_E2E_NETWORK="container:$(docker compose ps -q frus)" \
+    FRUS_E2E_BASE_URL=http://localhost:8080/frus-explorer/ scripts/npm --playwright \
+    || fail "the accounts spec failed; web/playwright-report has its report"
+fi
 
 echo "== install: signing in through the proxy, FRUS_AUTH=header behind docs/INSTALL.md's recipe"
 # nginx runs the recipe with a stand-in for oauth2-proxy on 127.0.0.1:4180 in its own container:

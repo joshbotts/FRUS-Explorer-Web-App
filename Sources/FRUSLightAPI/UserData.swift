@@ -4,7 +4,8 @@
 // of a capped size; and a read of a user's data must be sent to that address. Since S15d a note's
 // writes may be larger than the rest, as a note carries its text twice and a Mac note can be long,
 // and since S16c an import's larger still, as it carries a whole Mac JSON export. Since S14e the user
-// may be the one a proxy that signs people in names in a header, on a request from that proxy alone.
+// may be the one a proxy that signs people in names in a header, on a request from that proxy alone,
+// and since S20b the one a local account's session names (SignIn.swift).
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -207,6 +208,7 @@ final class CSRFTokens: Sendable {
 /// What the user store keeps for the routes under /api/v1/me.
 typealias UserDataStore = UserStore & TagStore & HighlightStore & NoteStore & SummaryStore & ProjectStore & ResearchImportStore
     & ResearchExportStore & UserSearchStore & SearchSetStore & ResearchRowStore & TrailStore & PreferenceStore & CollectionStore
+    & AccountStore & SessionStore
 
 /// What the routes under /api/v1/me need.
 struct UserDataServices: Sendable {
@@ -214,6 +216,8 @@ struct UserDataServices: Sendable {
     let resolver: any UserResolver
     /// Under `FRUS_AUTH=header`, the proxies every request but /healthz and /readyz must come from.
     let proxies: TrustedProxies?
+    /// Under `FRUS_AUTH=local` (PLAN's S20b), the accounts' sign-in and their sessions.
+    let accounts: LocalAccounts?
     let tokens: CSRFTokens
     /// `FRUS_PUBLIC_URL`'s address.
     let address: PublicAddress
@@ -232,18 +236,29 @@ struct UserDataServices: Sendable {
     let backupsDirectory: URL?
     let backupCopyDirectory: URL?
 
+    /// `passwords` hashes and verifies local accounts' passwords: Argon2id at the standard costs, or a
+    /// test's cheapest.
     init(store: any UserDataStore, configuration: ServerConfiguration, tokens: CSRFTokens = CSRFTokens(),
          jobs: any JobQueue = InProcessJobQueue(), importLimit: Int = UserDataServices.importBodyLimit,
-         resolver: (any UserResolver)? = nil, now: @escaping @Sendable () -> Date = Date.init) {
+         resolver: (any UserResolver)? = nil, passwords: PasswordHasher = PasswordHasher(),
+         now: @escaping @Sendable () -> Date = Date.init) {
         self.store = store
-        if configuration.auth == .header {
+        switch configuration.auth {
+        case .header:
             let proxies = TrustedProxies(configuration.trustedProxies)
             self.proxies = proxies
+            accounts = nil
             self.resolver = resolver ?? ProxyHeaderResolver(
                 store: store, header: HTTPFields.Element.Name(configuration.authHeader) ?? HTTPFields.Element.Name("X-Forwarded-User")!,
                 proxies: proxies, admins: configuration.adminUsers, now: now)
-        } else {
+        case .local:
             proxies = nil
+            let accounts = LocalAccounts(store: store, configuration: configuration, hasher: passwords, now: now)
+            self.accounts = accounts
+            self.resolver = resolver ?? LocalSessionResolver(accounts: accounts)
+        case .none:
+            proxies = nil
+            accounts = nil
             self.resolver = resolver ?? SingleUserResolver(store: store)
         }
         backupsDirectory = configuration.userStore == .sqlite
@@ -298,11 +313,7 @@ struct UserDataGuard: RouterMiddleware {
     var bodyLimit = UserDataServices.bodyLimit
 
     func handle(_ request: Request, context: Context, next: (Request, Context) async throws -> Response) async throws -> Response {
-        let address = services.address
-        guard let host = request.head.authority, address.allows(host: host) else {
-            throw APIProblem(.forbidden, code: "HOST_NOT_ALLOWED",
-                             detail: "This server answers for \(address), the address FRUS_PUBLIC_URL names, and this request was sent to \(request.head.authority ?? "no host").")
-        }
+        try Self.checkHost(request, services.address)
         var context = context
         let user = try await services.resolver.user(for: request, context: context)
         context.user = user
@@ -311,24 +322,42 @@ struct UserDataGuard: RouterMiddleware {
                              detail: "This server keeps no tags, notes or other user data: FRUS_USER_DATA is off.")
         }
         if ![.get, .head, .options].contains(request.method) {
-            guard let origin = request.headers[.origin], address.allows(origin: origin) else {
-                throw APIProblem(.forbidden, code: "ORIGIN_NOT_ALLOWED",
-                                 detail: "A change must come from a page of \(address), the address FRUS_PUBLIC_URL names, and this one came from \(request.headers[.origin] ?? "no origin").")
-            }
+            try Self.checkOrigin(request, services.address)
             guard services.tokens.accepts(request.headers[CSRFTokens.header], for: user.id) else {
                 throw APIProblem(.forbidden, code: "CSRF_TOKEN_INVALID",
                                  detail: "A change must carry the token GET /api/v1/me gives, in X-CSRF-Token; this request's is missing or no longer current.")
             }
-            let length = request.headers[.contentLength].flatMap { Int($0) }
-            if (length ?? 0) > 0 || request.headers[.transferEncoding] != nil {
-                guard JSONBody.isJSON(request.headers[.contentType]) else {
-                    throw APIProblem(.unsupportedMediaType, code: "UNSUPPORTED_MEDIA_TYPE",
-                                     detail: "A change's body must be JSON, sent as application/json.")
-                }
-                if let length, length > bodyLimit { throw JSONBody.tooLarge(bodyLimit) }
-            }
+            try Self.checkBody(request, limit: bodyLimit)
         }
         return try await next(request, context)
+    }
+
+    /// Step 1: the request's `Host` names `address`. Sign-in's guard (S20b) takes it too.
+    static func checkHost(_ request: Request, _ address: PublicAddress) throws {
+        guard let host = request.head.authority, address.allows(host: host) else {
+            throw APIProblem(.forbidden, code: "HOST_NOT_ALLOWED",
+                             detail: "This server answers for \(address), the address FRUS_PUBLIC_URL names, and this request was sent to \(request.head.authority ?? "no host").")
+        }
+    }
+
+    /// Step 4's origin: a change comes from a page of `address`.
+    static func checkOrigin(_ request: Request, _ address: PublicAddress) throws {
+        guard let origin = request.headers[.origin], address.allows(origin: origin) else {
+            throw APIProblem(.forbidden, code: "ORIGIN_NOT_ALLOWED",
+                             detail: "A change must come from a page of \(address), the address FRUS_PUBLIC_URL names, and this one came from \(request.headers[.origin] ?? "no origin").")
+        }
+    }
+
+    /// Step 4's body: one it has is declared JSON, of `limit` bytes at most by its length.
+    static func checkBody(_ request: Request, limit: Int) throws {
+        let length = request.headers[.contentLength].flatMap { Int($0) }
+        if (length ?? 0) > 0 || request.headers[.transferEncoding] != nil {
+            guard JSONBody.isJSON(request.headers[.contentType]) else {
+                throw APIProblem(.unsupportedMediaType, code: "UNSUPPORTED_MEDIA_TYPE",
+                                 detail: "A change's body must be JSON, sent as application/json.")
+            }
+            if let length, length > limit { throw JSONBody.tooLarge(limit) }
+        }
     }
 }
 
@@ -389,7 +418,8 @@ enum JSONBody {
 public struct Me: Codable, Equatable, Sendable, ResponseEncodable {
     public var userId: String
     public var displayName: String
-    /// `FRUS_AUTH`: `none` for a server with no sign-in, `header` behind a proxy that signs people in.
+    /// `FRUS_AUTH`: `none` for a server with no sign-in, `header` behind a proxy that signs people in,
+    /// `local` for one with accounts of its own (PLAN's S20b).
     public var auth: String
     public var roles: [RequestUser.Role]
     /// `FRUS_USER_DATA`: false when the server keeps none, and every resource under /me is refused.

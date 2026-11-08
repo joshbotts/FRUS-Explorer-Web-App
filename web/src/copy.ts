@@ -71,9 +71,12 @@ export const copy = {
       'FRUS Explorer Light is a self-hosted edition of FRUS Explorer, with documents published by the Office of the Historian. This instance is not an Office of the Historian service.',
     /** Behind a proxy that signs people in (PLAN's S14e): who the proxy named. */
     signedInAs: (name: string) => `Signed in as ${name}`,
-    /** And what SPEC's Privacy asks the app to say once someone has signed in. */
+    /** And what SPEC's Privacy asks the app to say once someone has signed in, or is asked to (S20b). */
     operatorReads:
       'Whoever runs this instance can read everything it keeps for you, your tags, highlights, notes and summaries included.',
+    /** With an account of the server's own (PLAN's S20b): ends the session, and shows the sign-in page. */
+    signOut: 'Sign Out',
+    signOutFailed: 'You are still signed in: the server could not be reached. Try Sign Out again.',
   },
   appearance: {
     label: 'Appearance',
@@ -88,6 +91,19 @@ export const copy = {
     title: 'Not found',
     body: 'Nothing is at this address.',
     toBrowse: 'Go to Browse',
+  },
+  /**
+   * The sign-in page of a server with accounts of its own (PLAN's S20b), shown in place of any page until
+   * someone signs in: the web's own, since the app signs in to iCloud and to no server.
+   */
+  signIn: {
+    title: 'Sign In',
+    intro: 'This instance keeps each person’s research under an account of their own. Sign in with the name and password its admin gave you.',
+    name: 'Name',
+    password: 'Password',
+    submit: 'Sign In',
+    signingIn: 'Signing In…',
+    help: 'An admin makes each account, and sets a new password for one whose password is forgotten.',
   },
   /**
    * The project picker and the "Working on:" line (PLAN's S17f), in the app's words. The picker's

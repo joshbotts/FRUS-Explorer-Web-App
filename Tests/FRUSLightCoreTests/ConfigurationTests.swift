@@ -207,17 +207,50 @@ import Testing
         #expect(everyV4.isEveryAddress && everyV6.isEveryAddress && !half.isEveryAddress && !network.isEveryAddress)
     }
 
+    /// Local accounts (S20b): a password and a Secure cookie need an https address, or this machine,
+    /// whose http a browser treats as secure; behind a proxy, FRUS_TRUSTED_PROXIES names it, for the
+    /// address a sign-in came from, and the proxy's other two settings are refused, since the server
+    /// signs people in itself and its admins are accounts with the role.
+    @Test func localAccountsNeedAnAddressABrowserKeepsTheirCookieFrom() throws {
+        let plain = try ServerConfiguration.fromEnvironment(["FRUS_AUTH": "local"])
+        #expect(plain.auth == .local && plain.trustedProxies.isEmpty && plain.publicAddress.isSecureContext)
+        for url in ["https://frus.example.org", "https://example.org/frus-explorer/", "http://localhost:8080/frus-explorer/",
+                    "http://127.0.0.1:18080", "http://[::1]:8080"] {
+            #expect(try ServerConfiguration.fromEnvironment(["FRUS_AUTH": "local", "FRUS_PUBLIC_URL": url]).auth == .local, "\(url)")
+        }
+        let proxied = try ServerConfiguration.fromEnvironment([
+            "FRUS_AUTH": "local", "FRUS_PUBLIC_URL": "https://frus.example.org", "FRUS_TRUSTED_PROXIES": "172.18.0.5, fd00::/8",
+        ])
+        #expect(proxied.trustedProxies.map(\.description) == ["172.18.0.5", "fd00::/8"])
+        for environment in [
+            ["FRUS_AUTH": "local", "FRUS_PUBLIC_URL": "http://frus.example.org"],
+            ["FRUS_AUTH": "local", "FRUS_PUBLIC_URL": "http://192.168.1.20:8080/"],
+            ["FRUS_AUTH": "local", "FRUS_ADMIN_USERS": "alice"],
+            ["FRUS_AUTH": "local", "FRUS_AUTH_HEADER": "X-Forwarded-User"],
+            ["FRUS_AUTH": "local", "FRUS_TRUSTED_PROXIES": "0.0.0.0/0"],
+        ] {
+            #expect(throws: ConfigurationError.self, "\(environment)") { try ServerConfiguration.fromEnvironment(environment) }
+        }
+        #expect {
+            _ = try ServerConfiguration.fromEnvironment(["FRUS_AUTH": "local", "FRUS_PUBLIC_URL": "http://frus.example.org"])
+        } throws: { error in
+            (error as? ConfigurationError)?.problems == [
+                "FRUS_AUTH=local sends passwords and a session cookie, which browsers keep only for an https address or this machine: set FRUS_PUBLIC_URL to the https:// address people open, behind a proxy with TLS, or keep the server on this machine, as http://localhost:8080",
+            ]
+        }
+    }
+
     @Test func reportsEveryProblemAtOnce() {
         #expect {
             _ = try ServerConfiguration.fromEnvironment([
-                "FRUS_MODE": "standalone", "FRUS_AUTH": "local", "FRUS_PORT": "80000",
+                "FRUS_MODE": "standalone", "FRUS_AUTH": "local", "FRUS_ADMIN_USERS": "alice", "FRUS_PORT": "80000",
                 "FRUS_OFFLINE": "maybe", "FRUS_PUBLIC_URL": "localhost:8080",
             ])
         } throws: { error in
             guard let error = error as? ConfigurationError else { return false }
             return error.problems.count == 5
                 && error.problems.contains { $0.contains("standalone arrives in phase 3") }
-                && error.problems.contains { $0.contains("FRUS_AUTH=local") }
+                && error.problems.contains { $0.contains("FRUS_ADMIN_USERS") && $0.contains("FRUS_AUTH is local") }
         }
     }
 }

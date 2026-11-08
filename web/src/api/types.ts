@@ -535,12 +535,24 @@ export interface CitationBatch {
 export interface Me {
   userId: string;
   displayName: string;
-  /** `FRUS_AUTH`: `none` for a server with no sign-in, `header` behind a proxy that signs people in. */
+  /**
+   * `FRUS_AUTH`: `none` for a server with no sign-in, `header` behind a proxy that signs people in,
+   * `local` for one with accounts of its own (PLAN's S20b).
+   */
   auth: string;
   roles: ('reader' | 'curator' | 'admin')[];
   /** False when the server keeps no user data (`FRUS_USER_DATA=off`), and refuses all of it. */
   userData: boolean;
   csrfToken: string;
+}
+
+/**
+ * Whether this browser is signed in (PLAN's S20b), which the shell asks before anything else, so that a
+ * server with accounts of its own shows its sign-in page in place of any other.
+ */
+export interface AuthSession {
+  auth: string;
+  signedIn: boolean;
 }
 
 /** One of the user's tags. */
