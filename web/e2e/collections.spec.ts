@@ -2,13 +2,15 @@
 // with no axe violations. By keyboard: the Collections tab and New Collection; three section headings,
 // three deep by Indent, the third offering no more; Add Documents' search, its documents in the order
 // chosen; Sort by Date within each section; a note block with bold; an apparatus block, which goes
-// where the kit puts it; and Delete…'s question. The presets, Briefing packet offered once a document
-// of the collection has a summary. By pointer: Excerpt from the selection bar into a collection the
-// picker makes; the Research rail's Collections section and its Add to Collection; Add Documents'
-// Browse; Move Up; Sort by Date across the whole collection; the document inspector's overrides, each
-// with what Default resolves to, and a section's defaults, which its documents resolve to; and
-// Duplicate. Against the image, whose user store holds none of these collections, and which each test
-// leaves as it found it, keeping the collections an import brought in the run before.
+// where the kit puts it; and from the list Rename, the app's alert, where a name left empty keeps the
+// old one, and Delete…, which asks the app's question (FRUS-Explorer#1831). The presets, Briefing packet
+// offered once a document of the collection has a summary. By pointer: Excerpt from the selection bar
+// into a collection the picker makes; the Research rail's Collections section and its Add to
+// Collection; Add Documents' Browse; Move Up; Sort by Date across the whole collection; the document
+// inspector's overrides, each with what Default resolves to, and a section's defaults, which its
+// documents resolve to; and Duplicate, then Rename. Against the image, whose user store holds none of
+// these collections, and which each test leaves as it found it, keeping the collections an import
+// brought in the run before.
 import type { Locator, Page } from '@playwright/test';
 import { axeCheck } from './axe';
 import { d1Text, d2Header, v06Title } from './expected';
@@ -255,14 +257,51 @@ test('makes a collection three sections deep, with documents, a note block and a
   await expect(rows).toHaveClass([/indent-0/, /indent-0/, /indent-1/, /indent-2/, /indent-3/, /indent-3/, /indent-3/]);
   await axeCheck(page);
 
-  // Delete…, from the list, asks first.
+  // Rename, from the list, is the app's Rename Collection alert: its field holds the name, Escape is its
+  // Cancel, a name left empty keeps the old one, and focus comes back to the row's Rename each time.
   await backTabTo(page, tab, 80);
   await page.keyboard.press('Enter');
   await expect(heading).toHaveText('Collections');
-  const remove = page.getByRole('button', { name: 'Delete… Kennedy–Khrushchev letters', exact: true });
+  const rename = page.getByRole('button', { name: 'Rename Kennedy–Khrushchev letters', exact: true });
+  await tabTo(page, rename);
+  await page.keyboard.press('Enter');
+  const alert = page.getByRole('dialog', { name: 'Rename Collection' });
+  const field = alert.getByRole('textbox', { name: 'Collection Name' });
+  await expect(field).toBeFocused();
+  await expect(field).toHaveValue('Kennedy–Khrushchev letters');
+  await axeCheck(page);
+  await page.keyboard.press('Escape');
+  await expect(alert).toHaveCount(0);
+  await expect(rename).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(field).toBeFocused();
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.press('Backspace');
+  await expect(field).toHaveValue('');
+  await page.keyboard.press('Enter');
+  await expect(alert).toHaveCount(0);
+  await expect(rename).toBeFocused();
+  expect((await collection(page, id)).name).toBe('Kennedy–Khrushchev letters');
+  // A new name: the row, the most recently changed, comes first under it, its Rename still focused.
+  await page.keyboard.press('Enter');
+  await expect(field).toHaveValue('Kennedy–Khrushchev letters');
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type('Kennedy–Khrushchev letters, 1961');
+  await page.keyboard.press('Enter');
+  await expect(alert).toHaveCount(0);
+  const collections = page.getByRole('list', { name: 'Collections', exact: true });
+  await expect(collections.getByRole('link').first()).toHaveText('Kennedy–Khrushchev letters, 1961');
+  await expect(page.getByRole('button', { name: 'Rename Kennedy–Khrushchev letters, 1961', exact: true })).toBeFocused();
+  expect((await collection(page, id)).name).toBe('Kennedy–Khrushchev letters, 1961');
+
+  // Delete…, from the list, asks the app's question first.
+  const remove = page.getByRole('button', { name: 'Delete… Kennedy–Khrushchev letters, 1961', exact: true });
   await tabTo(page, remove);
   await page.keyboard.press('Enter');
-  const confirm = page.getByRole('alertdialog', { name: 'Delete Collection?' });
+  const confirm = page.getByRole('alertdialog', { name: 'Delete “Kennedy–Khrushchev letters, 1961”?' });
+  await expect(confirm).toContainText(
+    'Its section headings, note blocks and headnotes go with it, on your other devices too once they sync. The documents in it, and your notes and highlights on them, stay.',
+  );
   await expect(confirm.getByRole('button', { name: 'Cancel' })).toBeFocused();
   await axeCheck(page);
   await page.keyboard.press('Tab');
@@ -460,7 +499,7 @@ test('freezes an excerpt from the selection bar, adds the document from the rail
   await inspector.getByRole('button', { name: 'Done' }).click();
 });
 
-test('duplicates a collection and deletes the copy from the list, by pointer', async ({ page }) => {
+test('duplicates a collection, renames the copy and deletes it from the list, by pointer', async ({ page }) => {
   await page.goto('collections');
   const id = await made(page, 'Moscow telegrams');
   await page.reload();
@@ -478,15 +517,24 @@ test('duplicates a collection and deletes the copy from the list, by pointer', a
   expect(copied.entries.map((entry) => [entry.kind, entry.documentId])).toEqual(original.entries.map((entry) => [entry.kind, entry.documentId]));
   expect(copied.entries.filter((entry) => original.entries.some((held) => held.id === entry.id))).toEqual([]);
 
-  // Delete…: the question names the collection, and focus goes on to the next row's Delete….
-  await list.getByRole('button', { name: 'Delete… Moscow telegrams copy', exact: true }).click();
-  const confirm = page.getByRole('alertdialog', { name: 'Delete Collection?' });
+  // Rename: the app's alert, its Save writing the name the row then prints.
+  await list.getByRole('button', { name: 'Rename Moscow telegrams copy', exact: true }).click();
+  const alert = page.getByRole('dialog', { name: 'Rename Collection' });
+  await alert.getByRole('textbox', { name: 'Collection Name' }).fill('Moscow telegrams, second reading');
+  await alert.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(alert).toHaveCount(0);
+  await expect(list.getByRole('link').first()).toHaveText('Moscow telegrams, second reading');
+  expect((await collection(page, copyId)).name).toBe('Moscow telegrams, second reading');
+
+  // Delete…: the app's question names the collection, and focus goes on to the next row's Delete….
+  await list.getByRole('button', { name: 'Delete… Moscow telegrams, second reading', exact: true }).click();
+  const confirm = page.getByRole('alertdialog', { name: 'Delete “Moscow telegrams, second reading”?' });
   await expect(confirm.getByRole('button', { name: 'Cancel' })).toBeFocused();
-  await expect(confirm).toContainText('Moscow telegrams copy — This collection and everything in it will be permanently deleted.');
+  await expect(confirm).toContainText('Its section headings, note blocks and headnotes go with it, on your other devices too once they sync.');
   await axeCheck(page);
   await confirm.getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(confirm).toHaveCount(0);
-  await expect(row('Moscow telegrams copy')).toHaveCount(0);
+  await expect(row('Moscow telegrams, second reading')).toHaveCount(0);
   await expect(list.getByRole('button', { name: 'Delete… Moscow telegrams', exact: true })).toBeFocused();
   expect((await listed(page)).map((item) => item.id)).not.toContain(copyId);
 });

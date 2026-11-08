@@ -5,8 +5,9 @@
 // the app keeps over its SwiftData models is mirrored here, each rule from the file and type the
 // comment names, and `CollectionParityTests` holds each to the app's source at the pin:
 // `CollectionOutline+App.swift`'s normalize, indent and outdent; `CollectionEntryData.swift`'s
-// `CollectionEntryOrdering` and `sortedByDate`; the editor's appends, deletes, moves and presets
-// (`CollectionEditorView.swift`); the document and excerpt appends (`CollectionDocumentDiscovery`,
+// `CollectionEntryOrdering` and `sortedByDate`; the editor's appends, deletes, moves and presets, and
+// the name as its Name commits it and as the Rename alert does (`CollectionEditorCommit`, in
+// `CollectionEditorView.swift`); the document and excerpt appends (`CollectionDocumentDiscovery`,
 // `CollectionExcerpts`); `Collection.duplicate(in:)`, the footnote flags, `documentCount` and
 // `SmartCollectionRule` (`Models/Collection.swift`); `CollectionPreset.applyFields(to:)` and
 // `matches(_:)` (`CollectionExporter+App.swift`); and the inspector's selections, resolved defaults
@@ -443,6 +444,23 @@ enum CollectionEditing {
         for block in preset.apparatusBlocks(notAlreadyIn: present) {
             addGeneratedEntry(block, to: &collection, at: time)
         }
+    }
+
+    // MARK: - The name (`CollectionEditorCommit`)
+
+    /// `CollectionEditorCommit.name(_:to:)`, the editor's Name: the field's text, trimmed, written where it
+    /// says something the saved name does not, an empty one included. Returns whether it wrote.
+    static func name(_ fieldText: String, to collection: inout CollectionExport) -> Bool {
+        guard !CollectionEditorNaming.fieldAgrees(fieldText, withSavedName: collection.name) else { return false }
+        collection.name = fieldText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return true
+    }
+
+    /// `CollectionEditorCommit.rename(_:to:)`, the Rename Collection alert's Save (FRUS-Explorer#1831): as
+    /// `name(_:to:)`, except that a name left empty keeps the one it had. Returns whether it wrote.
+    static func rename(_ fieldText: String, to collection: inout CollectionExport) -> Bool {
+        guard !fieldText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        return name(fieldText, to: &collection)
     }
 
     // MARK: - Duplicate (`Collection.duplicate(in:)`)

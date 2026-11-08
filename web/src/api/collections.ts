@@ -545,6 +545,14 @@ export function updateCollection(client: QueryClient, id: string, changes: Colle
   return showing(client, id, patch, 'PATCH', `${base}/${segment(id)}`, changes);
 }
 
+/**
+ * The list's Rename, the app's Rename Collection alert (FRUS-Explorer#1831), sent in its turn: the server
+ * commits the name as the alert's Save does, and a name left empty keeps the old one.
+ */
+export function renameCollection(client: QueryClient, id: string, name: string): Promise<CollectionDetail> {
+  return changed(client, id, 'POST', `${base}/${segment(id)}/rename`, { name });
+}
+
 /** Deletes a collection, its entries and their headnote drafts; one deleted elsewhere is deleted. */
 export async function deleteCollection(client: QueryClient, id: string): Promise<void> {
   try {

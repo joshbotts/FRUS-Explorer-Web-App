@@ -5,9 +5,10 @@
 // lists them, the most recently changed first; made as the Mac's New Collection sheet makes one, named
 // and in the project the user works in; read with its entries in their order, each with what the
 // editor's row shows and the outline the kit derives (`CollectionOutline`); changed field by field as
-// the editor commits each (`CollectionEditorCommit`); deleted with its entries and their headnote
-// drafts; duplicated as `Collection.duplicate(in:)`; given a preset; and listed in the Research
-// rail's Collections section for a document it holds. The entries' routes are CollectionEntries.swift.
+// the editor commits each (`CollectionEditorCommit`); renamed as the list's Rename alert renames one;
+// deleted with its entries and their headnote drafts; duplicated as `Collection.duplicate(in:)`; given
+// a preset; and listed in the Research rail's Collections section for a document it holds. The
+// entries' routes are CollectionEntries.swift.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -188,6 +189,9 @@ public struct DocumentCollections: Codable, Equatable, Sendable, ResponseEncodab
 enum CollectionRoutes {
     struct NewCollection: Decodable { let name: String }
 
+    /// The Rename Collection alert's field.
+    struct Rename: Decodable { let name: String }
+
     struct Duplicate: Decodable {}
 
     struct PresetChoice: Decodable { let preset: String }
@@ -344,10 +348,7 @@ enum CollectionRoutes {
             let time = UserStoreDate.rounded(now())
             let rows = try await changed(id, for: user.id, in: store, at: time) { collection in
                 var committed = false
-                if let name = body.name, !CollectionEditorNaming.fieldAgrees(name, withSavedName: collection.name) {
-                    collection.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-                    committed = true
-                }
+                if let name = body.name, CollectionEditing.name(name, to: &collection) { committed = true }
                 for (text, keyPath) in [(body.note, \CollectionExport.note), (body.subtitle, \.subtitle),
                                         (body.authorLine, \.authorLine)] {
                     guard let text, !CollectionEditorNaming.fieldAgrees(text, withSavedName: collection[keyPath: keyPath] ?? "") else {
@@ -408,6 +409,22 @@ enum CollectionRoutes {
                 if let prompt = body.summaryPromptId {
                     collection.summaryPromptId = try promptId(prompt, among: promptIds, field: "summaryPromptId")
                 }
+            }
+            return try await detail(values(rows), for: user.id, in: store, resources: resources, provider: provider)
+        }
+        // The list's Rename, the app's Rename Collection alert (FRUS-Explorer#1831): its Save commits the name
+        // through `CollectionEditorCommit.rename`, trimmed and written where it differs, a name left empty
+        // keeping the old one; and saves, without the editor's `recordEdit()`, so the collection stays in the
+        // projects it was in.
+        me.post("collections/:collectionId/rename") { request, context -> CollectionDetail in
+            try FormQuery(request.uri.query).refuseUnknown([])
+            let user = try context.requireUser()
+            let id = try context.parameters.require("collectionId")
+            // PATCH's limit, so that any name the editor's Name keeps can be sent back as the alert holds it.
+            let body = try await JSONBody.decode(Rename.self, from: request, fields: ["name"], limit: UserDataServices.noteBodyLimit)
+            let name = try checked(body.name, "name")
+            let rows = try await changed(id, for: user.id, in: store, at: UserStoreDate.rounded(now())) { collection in
+                _ = CollectionEditing.rename(name, to: &collection)
             }
             return try await detail(values(rows), for: user.id, in: store, resources: resources, provider: provider)
         }

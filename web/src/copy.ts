@@ -1387,9 +1387,10 @@ export const copy = {
 
   /**
    * Collections (PLAN's S18d), in the app's words: the Collections tab's list, its project scope and its
-   * rows; the Mac's New Collection sheet; the Add to Collection picker; and the Research rail's
-   * Collections section. Delete… and its question are the web's own, where the app deletes a collection
-   * by a swipe.
+   * rows, with their Rename Collection alert and the question before a delete (`CollectionDeletion`,
+   * FRUS-Explorer#1831); the Mac's New Collection sheet; the Add to Collection picker; and the Research
+   * rail's Collections section. A row's Delete…, which asks the app's question, is the web's own button for
+   * its menu's Delete, as All Notes' rows have one.
    */
   collections: {
     title: 'Collections',
@@ -1401,6 +1402,12 @@ export const copy = {
     /** A row's count: its documents, not its entries. */
     documentCount: (count: number) => `${count} document${count === 1 ? '' : 's'}`,
     smartLabel: 'Smart collection',
+    rename: 'Rename',
+    /** The Rename Collection alert, whose Save keeps the old name for a name left empty. */
+    renameTitle: 'Rename Collection',
+    renamePlaceholder: 'Collection Name',
+    renameCancel: 'Cancel',
+    renameSave: 'Save',
     duplicate: 'Duplicate',
     showingAll: (project: string) => `Showing collections from every project, including ones outside “${project}”.`,
     scopeToProject: (project: string) => `Scope to “${project}”`,
@@ -1410,8 +1417,10 @@ export const copy = {
     showAll: 'Show All',
     untitledProject: 'Untitled Project',
     delete: 'Delete…',
-    deleteTitle: 'Delete Collection?',
-    deleteMessage: 'This collection and everything in it will be permanently deleted.',
+    /** `CollectionDeletion`'s question for one collection, which it names as its row does. */
+    deleteTitle: (name: string) => `Delete “${name}”?`,
+    deleteMessage:
+      'Its section headings, note blocks and headnotes go with it, on your other devices too once they sync. The documents in it, and your notes and highlights on them, stay.',
     deleteConfirm: 'Delete',
     deleteCancel: 'Cancel',
     loading: 'Loading the collections…',

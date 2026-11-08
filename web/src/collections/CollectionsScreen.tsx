@@ -3,13 +3,15 @@
 // Smart collection for one linked to a saved search, and the day it last changed; every project's at
 // first, with the banner that scopes the list to the project the user works in, and back; New
 // Collection, the Mac's sheet, which names it and opens its editor; Import Collection…, which makes a
-// collection of a `.fruscollection` file and opens it (S18f); and on each row Duplicate, the app's,
-// Create Static Snapshot for a smart collection, which opens the snapshot, as the app's context menu
-// does (S18f), and Delete…, which asks first, the web's own where the app deletes by a swipe. A failed
-// import or snapshot says why under the app's alert's title, the web's own place for it.
+// collection of a `.fruscollection` file and opens it (S18f); and on each row the app's context menu, in
+// its order (FRUS-Explorer#1831): Rename, its Rename Collection alert, where a name left empty keeps the
+// old one; Duplicate; Create Static Snapshot for a smart collection, which opens the snapshot (S18f); and
+// Delete…, the web's own button for the menu's Delete, which asks the app's question first. The menu's
+// Word Cloud waits for the web's word cloud (PLAN's S24i). A failed import or snapshot says why under
+// the app's alert's title, the web's own place for it.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
 import {
   collectionsQuery,
@@ -17,6 +19,7 @@ import {
   deleteCollection,
   duplicateCollection,
   importCollectionFile,
+  renameCollection,
   snapshotCollection,
   type CollectionListItem,
 } from '../api/collections';
@@ -46,6 +49,7 @@ export function CollectionsScreen() {
   useHeadingReady(!collections.isPending);
   const [showAll, setShowAll] = useState(managerDefaultShowAllCollections);
   const [creating, setCreating] = useState(false);
+  const [renaming, setRenaming] = useState<CollectionListItem | null>(null);
   const [deleting, setDeleting] = useState<{ collection: CollectionListItem; index: number } | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   // 'import' while a file is imported, or the id of the smart collection being snapshotted.
@@ -178,6 +182,14 @@ export function CollectionsScreen() {
               </Link>
               <p className="meta">{collectionCaption(collection)}</p>
               <div className="row-actions">
+                <button
+                  type="button"
+                  data-rename={collection.id}
+                  aria-label={`${copy.collections.rename} ${collection.listName}`}
+                  onClick={() => setRenaming(collection)}
+                >
+                  {copy.collections.rename}
+                </button>
                 <button type="button" aria-label={`${copy.collections.duplicate} ${collection.listName}`} onClick={() => void duplicate(collection)}>
                   {copy.collections.duplicate}
                 </button>
@@ -213,6 +225,21 @@ export function CollectionsScreen() {
             else requestAnimationFrame(() => newButton.current?.focus());
           }}
           onCreate={async (name) => (await createCollection(client, name)).id}
+        />
+      )}
+      {renaming && (
+        <RenameCollection
+          collection={renaming}
+          onClose={() => {
+            const { id } = renaming;
+            setRenaming(null);
+            // Back to the row's Rename, wherever the row now sits, else to New Collection.
+            requestAnimationFrame(() => {
+              const buttons = [...(list.current?.querySelectorAll<HTMLButtonElement>('button[data-rename]') ?? [])];
+              (buttons.find((button) => button.dataset.rename === id) ?? newButton.current)?.focus();
+            });
+          }}
+          onRename={(name) => renameCollection(client, renaming.id, name)}
         />
       )}
       {deleting && (
@@ -309,7 +336,102 @@ export function NewCollection({
   );
 }
 
-/** Delete…'s question, the web's own. */
+/**
+ * Whether a dialog is still drawn: an answer that comes after its Cancel or Escape leaves the screen as
+ * the reader left it, rather than closing a dialog opened since or moving focus.
+ */
+function useStillOpen() {
+  const open = useRef(false);
+  useEffect(() => {
+    open.current = true;
+    return () => {
+      open.current = false;
+    };
+  }, []);
+  return open;
+}
+
+/**
+ * The app's Rename Collection alert (`collectionRenameAlert`): the collection's name in a field, Cancel,
+ * and Save, which commits it as the alert's does, a name left empty keeping the old one (the server's
+ * `CollectionEditorCommit.rename`).
+ */
+function RenameCollection({
+  collection,
+  onClose,
+  onRename,
+}: {
+  collection: CollectionListItem;
+  onClose: () => void;
+  onRename: (name: string) => Promise<unknown>;
+}) {
+  const headingId = useId();
+  const field = useRef<HTMLInputElement>(null);
+  const stillOpen = useStillOpen();
+  // The name as saved, as the app seeds its field, so an unnamed collection's is empty.
+  const [name, setName] = useState(collection.name);
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  async function save() {
+    if (busy) return;
+    // The field as it opened writes nothing, as the alert's does: sent, a name the list showed before a
+    // rename elsewhere would undo it.
+    if (name === collection.name) {
+      onClose();
+      return;
+    }
+    setBusy(true);
+    setFailure(null);
+    try {
+      await onRename(name);
+      if (stillOpen.current) closeAtOnce(onClose);
+    } catch (error) {
+      if (!stillOpen.current) return;
+      setFailure(errorMessage(error));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal className="rename-collection" labelledBy={headingId} initial={field} onCancel={onClose} onClose={() => {}}>
+      <h2 id={headingId} tabIndex={-1}>
+        {copy.collections.renameTitle}
+      </h2>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save();
+        }}
+      >
+        <input
+          ref={field}
+          type="text"
+          value={name}
+          aria-label={copy.collections.renamePlaceholder}
+          placeholder={copy.collections.renamePlaceholder}
+          onChange={(event) => setName(event.target.value)}
+        />
+        {failure && (
+          <p className="error" role="alert">
+            {failure}
+          </p>
+        )}
+        <div className="dialog-actions">
+          <button type="button" onClick={onClose}>
+            {copy.collections.renameCancel}
+          </button>
+          {/* aria-disabled, not disabled, so Save pressed by keyboard keeps its focus while the name is saved. */}
+          <button type="submit" className="primary" aria-disabled={busy}>
+            {copy.collections.renameSave}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Delete…'s question, the app's (`CollectionDeletion`), for the one collection a row deletes. */
 function DeleteCollection({
   collection,
   onClose,
@@ -322,6 +444,7 @@ function DeleteCollection({
   const headingId = useId();
   const messageId = useId();
   const cancel = useRef<HTMLButtonElement>(null);
+  const stillOpen = useStillOpen();
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
 
@@ -331,8 +454,9 @@ function DeleteCollection({
     setFailure(null);
     try {
       await onDelete();
-      closeAtOnce(() => onClose(true));
+      if (stillOpen.current) closeAtOnce(() => onClose(true));
     } catch (error) {
+      if (!stillOpen.current) return;
       setFailure(errorMessage(error));
       setBusy(false);
     }
@@ -349,11 +473,9 @@ function DeleteCollection({
       onClose={() => {}}
     >
       <h2 id={headingId} tabIndex={-1}>
-        {copy.collections.deleteTitle}
+        {copy.collections.deleteTitle(collection.listName)}
       </h2>
-      <p id={messageId}>
-        <strong>{collection.listName}</strong> — {copy.collections.deleteMessage}
-      </p>
+      <p id={messageId}>{copy.collections.deleteMessage}</p>
       {failure && (
         <p className="error" role="alert">
           {failure}
