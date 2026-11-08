@@ -1,10 +1,10 @@
 // What the index summary hashes in an index-69 database, table by table, and how it classifies
 // every other object, so that nothing in the file goes unhashed or unexplained.
 //
-// Verified against Tests/FRUSLightTestSupport/Fixtures/export-v69-schema.sql, the schema of the
-// owner's three-volume export (index version 69, build 50), which index version 71's exports from
-// build 1776 hold unchanged. A pin move that changes a table fails the column check in
-// `IndexSummarizer`, rather than leaving a new column out of every hash.
+// Verified against Tests/FRUSLightTestSupport/Fixtures/export-v74-schema.sql, the schema of the
+// owner's three-volume export from a build of FRUS-Explorer fe9325b2 (index version 74, build 1787),
+// whose tables index versions 69 and 71 held unchanged. A pin move that changes a table fails the
+// column check in `IndexSummarizer`, rather than leaving a new column out of every hash.
 
 /// One table of the corpus index and how its rows are hashed.
 struct CorpusTable: Sendable {

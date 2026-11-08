@@ -2,8 +2,8 @@
   "configuration" : "The Mac reader's own path, without an index. For each row, DocumentViewModel(entry:volumeEntry:parser:) with an entry naming only the volume and the document (its other fields do not reach the HTML; mac-golden checks that on every 25th row), no volume entry, a new FRUSDocumentParser, no person-mention store, no AST cache and no classification override. load(volumeURL:) on the main actor then parses the document alone and takes persons and glossary terms from the volume's TEI. broken-refs-index.json lists no reference in the fixture volumes, so no cross-reference is degraded. Then HTMLTemplate.build(model:colorScheme: .light), keeping the body: the fragment FRUSRenderNodeHTMLSerializer.reader writes (annotateSourceClassification: true, figureImages: .reader, listsNamedReferences: true). Rows are every document a full parse of each volume yields, in parse order, volumes sorted. A release build of the app module, with testing enabled, compiled from the submodule unmodified.",
   "format" : 1,
   "provenance" : {
-    "appBuild" : 1776,
-    "indexVersion" : 71,
+    "appBuild" : 1787,
+    "indexVersion" : 74,
     "inputs" : {
       "fixtures/tei/SHA256SUMS" : "41609437167f6e54228471ac8f6638d3fe3db6d55045dbcd242b006c7301ae87",
       "fixtures/tei/frus1894Nicaragua.xml" : "c36aa079477928672a8f9cb98b37757a428452824ce15500db62e0636dd2c4cc",
@@ -17,9 +17,9 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "1c104b472611dcb60626a1c3e223d6fbd0765b8f0403fbcddec37cdfefb680c4",
+    "sourceDigest" : "068076a35381b08d8cd13aa60d07a1309c8da36e4cfc784ebd3f60e68b961f0e",
     "tool" : "tools/mac-golden render",
-    "upstreamCommit" : "fb5425146b3bbd9513d0319d8d8a7ec84d6aab8d"
+    "upstreamCommit" : "fe9325b27062f102fe9ce699b405e012b01f6157"
   },
   "rows" : [
     {
@@ -1619,9 +1619,9 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 3914,
+      "bytes" : 4238,
       "document" : "d2",
-      "sha256" : "403ac13e1d9d61a4b194480911aa27ca41dc77f1c4e2ada563d4ce1f389972a8",
+      "sha256" : "eb26445524c2aa4cfd05ae0f45325c0315ef3bfaacb57087360f15da71e71d18",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -1631,9 +1631,9 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 8736,
+      "bytes" : 9020,
       "document" : "d4",
-      "sha256" : "78743ec43b5226419819cd0ef5954f3663a77523b40608a2337dca1181c2f5e2",
+      "sha256" : "a559e32daa59aadf0c1d7f5195b900ee939728ada161727bfee5cd138c1ac3af",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -1643,9 +1643,9 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 4286,
+      "bytes" : 4526,
       "document" : "d6",
-      "sha256" : "31624c548750e4335f4477b392315e39d233495e8bddda76f8144b1c04ba749d",
+      "sha256" : "c02ef948823272d2b0be45e31fea211c5537b7f4c22dfc0f84e12ab3717ea16e",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -1655,27 +1655,27 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 4559,
+      "bytes" : 4771,
       "document" : "d8",
-      "sha256" : "8ffa70faf12546875afe041da878c2695c4fa1e78c62342916b665a4a3f2568d",
+      "sha256" : "73bf7c434e2f9c28a7117bb0b0ea7a78661dab79bd84504bca3dc95f300b1c4d",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 8707,
+      "bytes" : 8979,
       "document" : "d9",
-      "sha256" : "283b906e423d431d6475d056d9f2882d2c28af5fe8161f9717e3920b9f7edd2d",
+      "sha256" : "d49068d7cadfe763c5648844d178544c8fbc9cfd2760c1f23eb00ef70d83af73",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 5340,
+      "bytes" : 5620,
       "document" : "d10",
-      "sha256" : "e7f900b3d1f45e7ad622a8c33070a6caf8ad7d1b4257db9bcaac1c5ebe2a4c96",
+      "sha256" : "a905bda6003dd6b3170d66bdbcee48571514f3a5d41a38ddefc4171d3180f470",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 8440,
+      "bytes" : 8724,
       "document" : "d11",
-      "sha256" : "222000b9e7d99a6e97310bd6fcc0b35f2ac1344b5128725e4d994d309828b452",
+      "sha256" : "d6250d23840b9ae62ac5f144a4550bd89833dd3e22936fb6ba18db6020c7b061",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -1697,15 +1697,15 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 8986,
+      "bytes" : 9298,
       "document" : "d15",
-      "sha256" : "ab308374c2d0584dcd1969b6192f2294fbe722448e04cb54ed42d40df31799b4",
+      "sha256" : "c7408f2fe4abcc450333b06f6f432ec557208dda401f43252690d61f6104bf65",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 1701,
+      "bytes" : 1913,
       "document" : "d16",
-      "sha256" : "213996a25df3939445c800a93de65dd0ff4af41e4c7c63d7ceee929878b31314",
+      "sha256" : "597142505f04f8259d5b1d7ce30abdc958fe0197ccdc510cdee03981f61f3a66",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -1727,9 +1727,9 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 6581,
+      "bytes" : 6817,
       "document" : "d20",
-      "sha256" : "8bcfe2ebba3fe4e1fbc31251f80ea2dabd5e42eae41f07e2c1a522a55a8cbde5",
+      "sha256" : "fda5cfcadab5a5591753604934bd9ac63c4fb6e45dacaeaa281249c7fede8b42",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -1763,15 +1763,15 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 5901,
+      "bytes" : 6169,
       "document" : "d26",
-      "sha256" : "157691b6f4cc6c72f43cfa33c20a421402065ba5d9fdb8a7dec67e1c6ca8b2fd",
+      "sha256" : "f45c90b590aff2eaf011666ed64a84e2356f198d5bdd369975bd45e070ca3b77",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 5965,
+      "bytes" : 6229,
       "document" : "d27",
-      "sha256" : "6c0a3397a5603ee8e733970e3270bb120ffa101e8af168b328206ffc689d64b1",
+      "sha256" : "720711673a87f31e22fa44b4fbd876e3288fd335f023ca3178da3c02c42b22d0",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -1811,9 +1811,9 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 7953,
+      "bytes" : 8233,
       "document" : "d34",
-      "sha256" : "28bb51e4eaef36a26a1eb0e5fb697a153c4c466611d966ac31429f0d0b2a961c",
+      "sha256" : "d1d2aa8f24dc217f8308b6b6e09187afa0dee7bf8f8898913ee53326528d447c",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -1829,21 +1829,21 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 5306,
+      "bytes" : 5614,
       "document" : "d37",
-      "sha256" : "ee4d1e7269a690c08048d7b49e2e7cf295fafe37980ae3a728b623f86209232f",
+      "sha256" : "9dcbe26751fe8a7784ef7cf7556d04d380c2827a4d61f9b29b7e5a4bcf3038a6",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 5200,
+      "bytes" : 5480,
       "document" : "d38",
-      "sha256" : "34904b54332d7cc2701414c8edeb6d0ca627268f19373edcd85b703e3f8449ff",
+      "sha256" : "af118bbc35013f68552f27c2a1e7439a55c1ae9adc8c513eddc6015e000f5370",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 3681,
+      "bytes" : 4041,
       "document" : "d39",
-      "sha256" : "9d602c1c88fb7abbdcda5a5dd5f0d280deff76a446bfe573b970bd8d88a96d60",
+      "sha256" : "941cd53842e0ce8c265865ccfac4ef5d3233411b0e332241f604d0ec85a344a5",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -1883,9 +1883,9 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 5535,
+      "bytes" : 5839,
       "document" : "d46",
-      "sha256" : "c013ac77fc122bfcbd3f398f671d130b2e070edfbcef885ff3e0f43933006088",
+      "sha256" : "e84f644482624b53572ae8813ac0c08a39984e2e3ec5ba2fc7a09491133676e6",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -1901,9 +1901,9 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 7915,
+      "bytes" : 8191,
       "document" : "d49",
-      "sha256" : "0e73e229a7786838398dbc7dbba38b40d0a36cfc8d49eeec5f21a83073cf7bf0",
+      "sha256" : "f2d649831814c51b8691fe085111b9675bb705e355df4c13004f89b38d5beb25",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -1961,33 +1961,33 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 7885,
+      "bytes" : 8097,
       "document" : "d59",
-      "sha256" : "69135152d9b389a50c8207ab942fab089095f270b64bae1a01cf7c4336f17130",
+      "sha256" : "6941b03fc6abf86a12c2c6cd3ade95a813dbc031309de7f86684bfba5caf843b",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 14440,
+      "bytes" : 14652,
       "document" : "d60",
-      "sha256" : "ae33570e713767af88da83c042ecff19305a1dda4c5bc9cd3fba49070a5be65d",
+      "sha256" : "4f30b61a1c7beb7720fbd76354fcbed8356e390ea2efba30bb4a7a96fc1e374a",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 1640,
+      "bytes" : 1852,
       "document" : "d61",
-      "sha256" : "fec928fa9d64c3ecf98b1d4f1b69d3962affabe208f8b3524154b55b270ea18e",
+      "sha256" : "293ec7c024054a62192c2499046e1e6d51800ca7c2aa635e90482b1d5d68a25c",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 12542,
+      "bytes" : 12754,
       "document" : "d62",
-      "sha256" : "8e0923d303efb057a3c91015c0e9ff301931314817b8f6bf29bfc107b35ee335",
+      "sha256" : "a6340aba444071e948f3962bb8d9cf5244ab5f2176c89aaaa40c965b0e07f730",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 11971,
+      "bytes" : 12183,
       "document" : "d63",
-      "sha256" : "611a63e5f49d09795fd66c2d4b3eceadb1fb2106f3c034dab7610302cf5de677",
+      "sha256" : "032e84e2deed6897e94aacb7c035aa24ee4b28df4cc85a3bf0ae4f6faffcf4e6",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -2009,21 +2009,21 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 12614,
+      "bytes" : 12898,
       "document" : "d67",
-      "sha256" : "ba8fa073ed78d131fbbc06a26621c8a5172d7b7b766324c680d4f5775824d420",
+      "sha256" : "815b967913faebecc36ffc1db110b2efd9fb67ef88bb65976dc22aa940ab55dc",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 1638,
+      "bytes" : 1850,
       "document" : "d68",
-      "sha256" : "e8c54dc267e38cbacbd1f61b51dbcb1de1dba42a530bb46828584cebf677d500",
+      "sha256" : "9a2ce7e2f0a2487d0df5429bd56b4b2b6b7968bc87f035c871596251c6c453a5",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 10055,
+      "bytes" : 10267,
       "document" : "d69",
-      "sha256" : "1c60d01cd77a6f0c881d176c6576ab4a95ae1f87ad255596026dcff99ce344c3",
+      "sha256" : "0745b4c6ffab0e3c8c425ab735f13122361778ae723bc3cf1d25581a1ed88776",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -2033,15 +2033,15 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 3829,
+      "bytes" : 4065,
       "document" : "d71",
-      "sha256" : "73abddbeb21763563b0dfaade063765bf704a859c742c9bb2a1d4be82c8e0d43",
+      "sha256" : "6f4d491c176a84b187c3cd96c9c6347a09cc5878fbc15031372f39e69669332d",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 8175,
+      "bytes" : 8439,
       "document" : "d72",
-      "sha256" : "f960075d864494fef7e31961194e445844f141ce113d80c878a19a2d299cd2f3",
+      "sha256" : "6d48afbcdbe956553d3c71a76b800b038a6bc259aea4f873ce149671692f510a",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -2057,9 +2057,9 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 5565,
+      "bytes" : 5801,
       "document" : "d75",
-      "sha256" : "f7de868a33e3df7d2b63a5fcd05a71b875bbc1b0cad29d4a6c010661e25c7ac9",
+      "sha256" : "9c3204fa6391a01f61951ba6ae8639cd630801008ea9b175387bd5251b7bcac9",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -2075,9 +2075,9 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 31491,
+      "bytes" : 31731,
       "document" : "d78",
-      "sha256" : "0bc6eb4400dbb52f3dd86deada67f3f909b398c9ee28d30bf23f41672b6cdcdc",
+      "sha256" : "1514cbfd2d8bfa4a904700d00cf8ebb893b403d24f7481c6de36bda9d84f038c",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -2135,9 +2135,9 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 8229,
+      "bytes" : 8513,
       "document" : "d88",
-      "sha256" : "378287cba67a1bc575a19f9b5a1bf1be5fbb0aef6ee2cdfa2e8332b9ea9c7335",
+      "sha256" : "b8c5f09e9ece1db9b80db3344b7ffb637a3bf21e5b5172258cebcb73c62557e9",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -2147,15 +2147,15 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 11348,
+      "bytes" : 11588,
       "document" : "d90",
-      "sha256" : "0ee129048331c21282bd171589297a41ce361507d1a62079488d7372b96baa46",
+      "sha256" : "abe31a3b142cbdbea09e787e83f0cc6b4b493e23e54be34dfe2af687dbbe1ef5",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 7265,
+      "bytes" : 7573,
       "document" : "d91",
-      "sha256" : "b1d40caf8bf2ea03003d05ee1911d8ada8262ebf5a9c680b63d9e88b860218aa",
+      "sha256" : "be4685ae1a835d83ab5ddae03f3de1d29bf515bb5c2b72f3ca12b36a577674c2",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -2171,9 +2171,9 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 6963,
+      "bytes" : 7315,
       "document" : "d94",
-      "sha256" : "48a3bb9e0678d9e7631b460238674ece87796de346730cd670109643badb7848",
+      "sha256" : "8c31a6c25651159215fff43d7a897e185b752e499993fdf6abedf52bef1e856e",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -2183,27 +2183,27 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 10749,
+      "bytes" : 10989,
       "document" : "d96",
-      "sha256" : "80f8192185f597c31b006efaa66359012aade9a3ef9f09be33c68cb07da68a37",
+      "sha256" : "6c2960991ebe86371baa7b2207f98e422475c9ae9416f2db5e1a643e8d7acc70",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 6511,
+      "bytes" : 6795,
       "document" : "d97",
-      "sha256" : "c1777a55ae0b4955d6d8f62f6ad7d356facedae5a8e980ae78781dda19dd2fbe",
+      "sha256" : "816d761862be433dafc88231d9c0fec350d4edf83f85a2ff03000845665a7302",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 7434,
+      "bytes" : 7718,
       "document" : "d98",
-      "sha256" : "cdcefd2523e0d4cd2f0d34a9911d8ffa5e6726c537fa15b26f5fdcbfcf73e8c2",
+      "sha256" : "0a2147a5fdfc636966fce2128d1f26664e2e1e0ec8ed43dabc6c0aef65cd5f8f",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 8901,
+      "bytes" : 9185,
       "document" : "d99",
-      "sha256" : "07293c1d2bad5a1080583b97ae7a21e9441174360bbf3be7e50db2f8ac8f4e68",
+      "sha256" : "953f8901f20e2b7f2eb8345222a38ba37d90b20aed2fdde4ea514fbf8f9c6a18",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -2213,21 +2213,21 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 5559,
+      "bytes" : 5843,
       "document" : "d101",
-      "sha256" : "e9cb9ff8493270821998ac1479a0a944f101aa1bc5997e3aa23e26d381f5e50e",
+      "sha256" : "80e55956bd46cbc40249d833699746d9c52bc15127d7e9629cccda2932769d43",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 11451,
+      "bytes" : 11735,
       "document" : "d102",
-      "sha256" : "1ca6cbe895aa4507ed3aa16cbea1836dbfd8c01a70ab4451894165cc3e726923",
+      "sha256" : "009daa16938fdf5580a565c6dc018d26da8fb26d9bcc8b4124f6594c34eae1ba",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 6830,
+      "bytes" : 7138,
       "document" : "d103",
-      "sha256" : "382fcdb40dc77301a907d2d22d0b5a731bbb58e99ec7f227395ab56337887860",
+      "sha256" : "26e8fbabb03639a6ee1d0f05339feb0dc0f6fc7211fca3cbd6ac293bb241b99e",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -2249,15 +2249,15 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 10485,
+      "bytes" : 10793,
       "document" : "d107",
-      "sha256" : "5d928754b128f89e39bfb33d2e6d7089d2eda3c8b5b8c1c4ab2d67c7ed3e5669",
+      "sha256" : "e2318878f2bd1b9cdf01de411b9df440e7437338962427725d2f9bc0575fd2ce",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 6729,
+      "bytes" : 7013,
       "document" : "d108",
-      "sha256" : "c6410944fde473c53cb3ab312077510f0860adbc0af346850ddd57d2679d47ee",
+      "sha256" : "780e6f838698acec4c26bd45711020d02fc6c42572f813e2b98d46cf97eef0e9",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -2267,15 +2267,15 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 20502,
+      "bytes" : 20742,
       "document" : "d110",
-      "sha256" : "4d1571ae8789bc32d951e359e11ba509c8b95ad6812e51363452e6d7a893df41",
+      "sha256" : "7dbff3e845f6f1fae3a63c60c28e519bd82bcc5da4eb2dbfd2162fe43de63390",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 16184,
+      "bytes" : 16424,
       "document" : "d111",
-      "sha256" : "0953fdd6f26e7c33efbc56334a81f1abca70fb4b9b9a0f29b1b27bb2ca04a6bc",
+      "sha256" : "513692870647dd5abdb3b9397ef0b7e0b2155166a6e5f49333faa88c6b7e7f0c",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -2285,9 +2285,9 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 3856,
+      "bytes" : 4124,
       "document" : "d113",
-      "sha256" : "643499b9b68833930d49a509be4f5d63aab618e6e8bcd7623a4053d441a4297a",
+      "sha256" : "e73d3123262f5bc6287ffc1deb34a543d3d61a7d15c87b5b153929e919c62a04",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -2309,9 +2309,9 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 7635,
+      "bytes" : 7871,
       "document" : "d117",
-      "sha256" : "b737fb3f5a534ac69309a5be3ef6500c0905cd37c6d0c71b08a702a0ad5c45fd",
+      "sha256" : "c4ae88fb581100bb2e97bff99c7f7c7341810b01a273fb7f44a986f70e01b2a8",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -2339,15 +2339,15 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 9416,
+      "bytes" : 9656,
       "document" : "d122",
-      "sha256" : "ed43b5d4a0aeadc43d85ce1bfc4f2c21a70e4b97ec44529e4a6c9afd15f947e9",
+      "sha256" : "16679b318a4b072ba45590f74229cb3eafae4771f3631e52be0715ac21eb6444",
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 13384,
+      "bytes" : 13624,
       "document" : "d123",
-      "sha256" : "2f31a49a6a3aa05027e32b90c6b1c314320a1569503029c07648d5d72839fcb2",
+      "sha256" : "e8268b97a8c55637fc2d6b8823a284a6ddb26c98f10d2be4bc61b7d4f73f8ffe",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -2369,9 +2369,9 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 8662,
+      "bytes" : 8902,
       "document" : "d127",
-      "sha256" : "03e77c07e26435477392167e1f790c2715efbd6df6cd4306d186824091ba529d",
+      "sha256" : "9b8119c1ca5758d515b037f4a571339782d1016b3a48656a04c8870f7cc5e967",
       "volume" : "frus1969-76ve09p1"
     },
     {
