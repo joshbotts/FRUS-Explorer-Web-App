@@ -37,6 +37,7 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
         return await state.status()
     }
     CatalogRoutes.add(to: router, state: state, provider: provider, resources: resources, reader: reader)
+    AnnotationRoutes.add(to: router, resources: resources)
     SearchRoutes.add(to: router, provider: provider, resources: resources, users: users)
     FacetRoutes.add(to: router, provider: provider, resources: resources, users: users)
     ReadingRoutes.add(to: router, provider: provider, resources: resources, users: users)

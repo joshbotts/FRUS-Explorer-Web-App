@@ -321,10 +321,11 @@ export const copy = {
     // S17f: the strip's line while the history records nothing, which is what hides an opened result.
     loggingOff: 'Opening a result does not hide it while Log Research Sessions is off in Settings. Mark Reviewed still hides a result.',
   },
-  /** Browse's axes, as the Mac's sidebar names the three the web has; the group's name is the web's own. */
+  /** Browse's axes, as the Mac's sidebar names the four the web has; the group's name is the web's own. */
   axes: {
     label: 'Browse by',
     volumes: 'All Volumes',
+    annotations: 'Editors’ Annotations',
     corpora: 'Working Corpora',
     scopes: 'My Scopes',
   },
@@ -513,6 +514,188 @@ export const copy = {
     notIndexedBadge: 'Not indexed on this server',
     editorialNote: 'Editorial Note',
     loading: 'Loading…',
+  },
+  /**
+   * The editors' annotations (FRUS-Explorer#1859 to #1862), in the app's words: a volume page's Editors’
+   * Annotations (`VolumeAnnotationsPresentation`, `VolumeAnnotationsSection`), and Browse's axis of that
+   * name with a layer's page and its lists (`AnnotationLayer`, `AnnotationsAxis`, `AnnotationsAxisViews`).
+   * A count's two forms are the app's one and many, which browse/annotationRules.ts chooses as the app's
+   * `CountCopy` does; a `%1$@`/`%2$@` form takes its arguments in the app's order. The web's own: four
+   * of the "In the app" sentences (`appUse`), where the app's name a screen this server does not have
+   * yet, and the line for a server that cannot read the bundled file, where the app's says to reinstall it.
+   */
+  annotations: {
+    title: 'Editors’ Annotations',
+    families: { named: 'Who is named', provenance: 'Where it came from', connects: 'How it connects' },
+    layers: {
+      people: 'People tagged',
+      abbreviations: 'Abbreviations explained',
+      correspondents: 'Senders and recipients',
+      subjects: 'Subject lines',
+      participants: 'Meeting participants',
+      sourceNotes: 'Source notes',
+      classification: 'Classification markings',
+      excisions: 'Excisions marked',
+      despatch: 'Despatch numbers',
+      numbered: 'Numbered documents',
+      crossReferences: 'Cross-references',
+      editorialNotes: 'Editorial notes',
+      footnotes: 'Footnotes',
+      marginalNotes: 'Marginal notes',
+      printedAids: 'Printed aids',
+    },
+    /** The two standard layers narrower than a layer, which a volume's page lists as absent. */
+    referencesToDocuments: 'References to documents',
+    noteOnSources: 'Note on Sources',
+    /** The printed aids by the kind that names each, "intro" for both kinds the app calls Introduction. */
+    aids: {
+      preface: 'Preface',
+      foreword: 'Foreword',
+      intro: 'Introduction',
+      sources: 'Sources',
+      terms: 'Abbreviations',
+      persons: 'Persons',
+      'list-of-papers': 'List of Papers',
+      'note-on-covert-actions': 'Note on U.S. Covert Actions',
+      'press-release': 'Press Release',
+      'volume-summary': 'Volume Summary',
+      index: 'Index',
+      errata: 'Errata',
+    } as Record<string, string>,
+    // A row's line, its parts joined by the app's separator.
+    separator: ' · ',
+    ofDocumentsOne: (total: string, count: string) => `${count} of ${total} document`,
+    ofDocumentsMany: (total: string, count: string) => `${count} of ${total} documents`,
+    personsListedOne: (count: string) => `${count} person listed`,
+    personsListedMany: (count: string) => `${count} people listed`,
+    termsListedOne: (count: string) => `${count} term listed`,
+    termsListedMany: (count: string) => `${count} terms listed`,
+    /** The kit's `CountCopy.documents`. */
+    documentsOne: (count: string) => `${count} document`,
+    documentsMany: (count: string) => `${count} documents`,
+    sourceForms: {
+      citations: 'archival citations (“Source: …”)',
+      fileNumbers: 'file numbers above the heading',
+      both: 'archival citations and file numbers',
+    },
+    excisionsOne: (count: string) => `${count} document with text not declassified`,
+    excisionsMany: (count: string) => `${count} documents with text not declassified`,
+    editorialNotesOne: (count: string) => `${count} editorial note`,
+    editorialNotesMany: (count: string) => `${count} editorial notes`,
+    xrefDocumentsOne: (count: string) => `${count} document cites another in this volume`,
+    xrefDocumentsMany: (count: string) => `${count} documents cite others in this volume`,
+    xrefVolumesOne: (count: string) => `${count} document cites other volumes`,
+    xrefVolumesMany: (count: string) => `${count} documents cite other volumes`,
+    xrefPagesOne: (count: string) => `${count} document cites printed pages`,
+    xrefPagesMany: (count: string) => `${count} documents cite printed pages`,
+    rowSpoken: (label: string, detail: string) => `${label}: ${detail}.`,
+    rowHint: 'Opens what the editors did, and the volumes that carry it.',
+    absentTitle: (count: string) => `Not in this volume (${count})`,
+    absentSpoken: (label: string) => `Not in this volume: ${label}.`,
+    standardFrom: (year: string) => `Standard in the volumes covering ${year} on.`,
+    peopleHint: 'Search the names instead.',
+    // The axis.
+    ofVolumesOne: (total: string, count: string) => `${count} of ${total} volume`,
+    ofVolumesMany: (total: string, count: string) => `${count} of ${total} volumes`,
+    /** The kit's `CountCopy.volumes`. */
+    volumesOne: (count: string) => `${count} volume`,
+    volumesMany: (count: string) => `${count} volumes`,
+    eraRetrospective: 'the late retrospectives',
+    eraSpan: (first: string, last: string) => `${first}–${last}`,
+    eraFrom: (first: string) => `${first} on`,
+    eraRetrospectiveShort: 'Retro.',
+    eraRetrospectiveTitle: 'Late retrospectives',
+    standardNoneRetrospective: 'No era made it standard. It is most common in the late retrospective volumes.',
+    standardNone: (era: string) => `No era made it standard. It is most common in the volumes covering ${era}.`,
+    layerSpoken: (label: string, volumes: string) => `${label}: ${volumes}.`,
+    bandSpoken: (era: string, volumes: string) => `${era}: ${volumes}`,
+    cellSpoken: (label: string, band: string) => `${label}, ${band}`,
+    indexCaption: (volumes: string) =>
+      `What the editors of ${volumes} annotated, layer by layer. A layer that runs through a volume, such as people tagged, counts when it reaches at least half the volume's documents; one found here and there, such as an editorial note, when one document carries it. Each strip shades the eras, earliest first and the late retrospectives last, by the share of their volumes that carry the layer.`,
+    rowHelp: 'What the editors did, when it became standard, and the volumes that carry it',
+    // A layer's page.
+    practiceHeader: 'What the editors did',
+    erasHeader: 'Era by era',
+    appHeader: 'In the app',
+    volumesHeader: 'Volumes',
+    rules: {
+      people: 'A volume counts when at least half its documents link a name to its List of Persons.',
+      abbreviations: 'A volume counts when at least half its documents link a term to its List of Abbreviations.',
+      correspondents: 'A volume counts when at least half its documents mark a sender or a recipient in the heading.',
+      subjects: 'A volume counts when one of its documents prints a Subject line.',
+      participants: 'A volume counts when one of its documents lists who attended a meeting.',
+      sourceNotes: 'A volume counts when at least half its documents carry a source note, of either form.',
+      classification: 'A volume counts when at least half its documents carry a classification marking, as the app reads them.',
+      excisions: 'A volume counts when one of its documents marks text as not declassified.',
+      despatch: 'A volume counts when at least a tenth of its documents carry a despatch number.',
+      numbered: 'A volume counts when at least half its documents print a document number.',
+      crossReferences: 'A volume counts when one of its documents cites another of its documents, another volume or a printed page.',
+      editorialNotes: 'A volume counts when it prints an editorial note.',
+      footnotes: 'A volume counts when at least half its documents carry a footnote.',
+      marginalNotes: 'A volume counts when one of its documents prints a marginal note.',
+      printedAids: 'A volume counts when it prints one of the aids listed below.',
+      sourceForm: 'A volume counts when at least half its documents carry a source note of this form.',
+      aid: 'A volume counts when it prints this aid.',
+    },
+    practices: {
+      people: "The editors linked each person a document names to the volume's List of Persons, where the person is identified.",
+      abbreviations: "The editors linked each abbreviation in a document to the volume's List of Abbreviations, where it is spelled out.",
+      correspondents: 'The editors marked who sent each document, and to whom, in its heading.',
+      subjects: 'Where a memorandum carried a Subject line, the editors printed it with the memorandum.',
+      participants: 'Where a memorandum of conversation lists who took part, the editors marked the list.',
+      sourceNotes:
+        "A source note says where the editors found a document. It was printed first as a file number above the heading, and later as a note that begins “Source:” with the full archival citation. The earliest volumes print none: a despatch there carries the post's own number instead.",
+      classification:
+        "The editors printed each document's security classification, first above the dateline and later in the source note.",
+      excisions: 'Where text was still classified when the volume was published, the editors marked the gap: “[… not declassified]”.',
+      despatch:
+        'Older volumes print the number a diplomatic post gave each despatch it sent, “No. 74.”, by which the despatch is found in the archives.',
+      numbered: 'The editors numbered the documents in print, so that each heading opens with its number: “12. Telegram From …”.',
+      crossReferences:
+        "The editors' notes point to other documents in the volume, to other volumes and to printed pages: “See Document 12”, “see p. 123”.",
+      editorialNotes: 'Where no single document tells the story, the editors wrote a note of their own, set between the documents.',
+      footnotes: "The editors' footnotes explain a document: who it names, what it answered, what became of it.",
+      marginalNotes: "A few volumes print the notes written in a document's margin, set off from its text.",
+      printedAids: 'Besides its documents, a volume prints aids to reading it: a preface, lists of sources, abbreviations and persons, an index.',
+    },
+    /**
+     * What the app does with each layer, as the app's `appUse` says it where every screen it names is
+     * this server's too; for people, source notes, classification and cross-references the sentence is
+     * the web's own, naming only what the web edition has, and despatch numbers take the app's line for
+     * a layer nothing else reads.
+     */
+    appUse: {
+      people: 'The reader opens a linked person’s entry. Where a volume does not link its names, search for them instead.',
+      abbreviations: "The reader opens a linked abbreviation's meaning.",
+      sourceNotes: 'The reader shows each document’s source note.',
+      classification: 'The reader shows a document’s marking as the volume prints it.',
+      numbered: 'Document titles and citations give the number the volume prints.',
+      crossReferences: 'The reader follows each one.',
+      editorialNotes: 'Search can limit its results to editorial notes.',
+      footnotes: 'The reader shows each footnote with its document.',
+      printedAids: "A volume's page lists them under Front Matter and Back Matter, and the reader opens each one.",
+      none: 'The reader shows these as printed. Nothing else in the app reads them yet.',
+    },
+    // A layer's lists.
+    drillWith: 'Volumes with it',
+    drillWithout: 'Volumes without it',
+    drillWithTitle: (label: string) => `With: ${label}`,
+    drillWithoutTitle: (label: string) => `Without: ${label}`,
+    drillCitation: 'Archival citations (“Source: …”)',
+    drillFileNumber: 'File numbers above the heading',
+    eraDrillTitle: (label: string, era: string) => `${label}, ${era}`,
+    drillCaption: (count: string, rule: string) => `${count}. ${rule}`,
+    drillSpoken: (title: string, volumes: string) => `${title}: ${volumes}`,
+    notesOne: (count: string) => `${count} note`,
+    notesMany: (count: string) => `${count} notes`,
+    /** The kit's `CountCopy.docs`. */
+    docsOne: (count: string) => `${count} doc`,
+    docsMany: (count: string) => `${count} docs`,
+    noteFrom: 'You came here from this volume.',
+    notePersonsUnlinked: 'Prints a List of Persons, but none of its documents links a name to it.',
+    noteTermsUnlinked: 'Prints a List of Abbreviations, but none of its documents links a term to it.',
+    unavailableTitle: 'Editors’ Annotations Unavailable',
+    unavailableDetail: 'The bundled annotation data could not be loaded.',
   },
   reader: {
     previous: 'Previous',

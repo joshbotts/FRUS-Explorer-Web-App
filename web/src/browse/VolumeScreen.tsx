@@ -10,6 +10,7 @@ import { useHeadingReady } from '../shell/headingFocus';
 import { plainTitle, useDocumentTitle } from '../shell/useDocumentTitle';
 import { Breadcrumb } from './Breadcrumb';
 import { SectionTree } from './SectionTree';
+import { VolumeAnnotations } from './VolumeAnnotations';
 
 const route = getRouteApi('/browse/$volumeId');
 
@@ -54,6 +55,8 @@ export function VolumeScreen() {
             <p className="count">{copy.browse.documentCoverage(data.indexedDocumentCount ?? 0, data.documentCount)}</p>
           )}
           {!data.teiAvailable && <p className="note">{copy.browse.noTEI}</p>}
+          {/* After the metadata, as the app's volume page puts Editors’ Annotations, before its contents. */}
+          <VolumeAnnotations volumeId={volumeId} />
           {data.structure ? (
             <>
               <h2>{copy.browse.sections}</h2>

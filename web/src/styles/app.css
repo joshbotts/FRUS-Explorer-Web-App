@@ -2352,6 +2352,165 @@ dialog.save-corpus .captured dd {
   text-decoration: none;
 }
 
+/* Editors’ Annotations (FRUS-Explorer#1860 to #1862): a volume's section, the axis's matrix, a layer's
+   page and its lists. A row is its layer's name, which opens its page, over a line of counts. */
+
+.volume-annotations h3 {
+  margin: 0.75rem 0 0.25rem;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.annotation-rows,
+.annotation-drills {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.annotation-rows li,
+.annotation-drills li {
+  margin: 0.375rem 0;
+}
+
+.annotation-rows a,
+.annotations-matrix th a {
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+}
+
+.annotation-rows a:hover .annotation-label,
+.annotations-matrix th a:hover .annotation-label,
+.annotation-drills a:hover .annotation-label {
+  text-decoration: underline;
+}
+
+.annotation-detail {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.annotations-absent {
+  margin-top: 0.75rem;
+}
+
+.annotations-absent summary {
+  cursor: pointer;
+}
+
+.annotation-reach .reach {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.annotation-drills a {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: 30rem;
+  text-decoration: none;
+}
+
+.annotation-drills .count {
+  color: var(--text-secondary);
+}
+
+/* An amber line, as the app marks a volume in a list. */
+.annotation-note {
+  margin: 0.125rem 0 0;
+  color: var(--warning);
+  font-size: 0.875rem;
+}
+
+/* An era's cell: the accent, as strong as the share of the era's volumes that carry the layer, and an
+   outline alone where none does. The late retrospectives are set apart, as a band of their own. */
+.era-cell {
+  display: block;
+  min-width: 1.5rem;
+  height: 1.75rem;
+  border: 1px solid var(--control-border);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) var(--fill, 0%), transparent);
+}
+
+.annotations-matrix-scroll {
+  overflow-x: auto;
+}
+
+.annotations-matrix {
+  border-collapse: separate;
+  border-spacing: 2px 0.25rem;
+  width: 100%;
+}
+
+.annotations-matrix th[scope='col'] {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: normal;
+  text-align: center;
+}
+
+.annotations-matrix th[scope='row'] {
+  width: 15rem;
+  padding-right: 0.75rem;
+  font-weight: normal;
+  text-align: left;
+}
+
+.annotations-matrix .retrospective {
+  padding-left: 0.375rem;
+}
+
+.annotations-matrix a.era-cell[aria-disabled='true'] {
+  cursor: default;
+}
+
+.era-strip {
+  display: flex;
+  gap: 2px;
+  max-width: 40rem;
+  margin: 0.5rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A picture, not a row of targets: at a phone's width its eleven cells and their years shrink to fit,
+   as the app scales its labels down, so the page never scrolls sideways. */
+.era-strip li {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+}
+
+.era-strip .era-cell {
+  min-width: 0;
+}
+
+.era-strip li.retrospective {
+  margin-left: 0.375rem;
+}
+
+.era-strip .era-name {
+  display: block;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: min(0.75rem, 2.4vw);
+  white-space: nowrap;
+}
+
+@media (forced-colors: active) {
+  .era-cell {
+    forced-color-adjust: none;
+    background: color-mix(in srgb, CanvasText var(--fill, 0%), Canvas);
+    border-color: CanvasText;
+  }
+}
+
 .corpus-volume h2 {
   font-size: 1.0625rem;
   margin: 1rem 0 0.25rem;

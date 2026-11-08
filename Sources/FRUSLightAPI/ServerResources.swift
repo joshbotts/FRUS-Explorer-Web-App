@@ -28,6 +28,8 @@ public final class ServerResources: Sendable {
     /// The three indexes a collection's Sources & Archives block links a lot through (PLAN's S18e),
     /// decoded on first use.
     private let archival = ArchivalIndexFiles()
+    /// The editors' annotations, `volume-annotations-index.json`, decoded on first use (Annotations.swift).
+    private let annotations = VolumeAnnotationsFile()
 
     /// The files the server cannot start without: those it reads here, and the five
     /// `IndexingResources` requires.
@@ -84,6 +86,10 @@ public final class ServerResources: Sendable {
     /// `lot-claimants-index.json`, each decoded once, as its store in the app decodes it, and none for a
     /// file missing or malformed, which the block reads as the app's does, linking what the others can.
     public var archivalIndexes: ArchivalIndexes { archival.indexes(in: directory) }
+
+    /// `VolumeAnnotationsStore.shared`, app code: the editors' annotations, decoded once by the kit's
+    /// `VolumeAnnotationsIndex`, with each layer's reach; nil for a file missing or malformed.
+    var volumeAnnotations: VolumeAnnotationsData? { annotations.data(in: directory) }
 }
 
 /// The archival indexes, decoded the first time a collection asks for them: 4.5 MB of JSON that a
