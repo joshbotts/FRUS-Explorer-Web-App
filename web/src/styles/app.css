@@ -197,6 +197,39 @@ textarea {
   overflow-wrap: anywhere;
 }
 
+/* The sign-in page of a server with accounts of its own (PLAN's S20b). */
+
+.sign-in-form {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 22rem;
+  margin: 1.5rem 0;
+}
+
+.sign-in-form label {
+  font-weight: 600;
+}
+
+.sign-in-form input {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.sign-in-form .error {
+  margin: 0;
+}
+
+.sign-in-form button {
+  justify-self: start;
+  margin-top: 0.5rem;
+}
+
+.sign-in-help {
+  color: var(--text-secondary);
+}
+
 .banner {
   margin: 0;
   padding: 0.5rem 1rem;

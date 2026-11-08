@@ -62,6 +62,8 @@ if [ -n "$docker_up" ] && docker image inspect swift:6.4-noble >/dev/null 2>&1; 
   else fix "scripts/swift could not run swift; run it directly to see why"; fi
   if scripts/swift --exec test -f /usr/include/sqlite3.h >/dev/null 2>&1; then ok "SQLite headers in the build image"
   else fix "the build image has no sqlite3.h"; fi
+  if scripts/swift --exec test -f /usr/include/argon2.h >/dev/null 2>&1; then ok "Argon2 headers in the build image"
+  else fix "the build image has no argon2.h"; fi
   # Run from /tmp: in a git worktree, /src/.git points outside the mount and git refuses to start.
   if scripts/swift --exec git -C /tmp ls-remote https://github.com/joshbotts/FRUS-Explorer.git HEAD >/dev/null 2>&1; then
     ok "the container reaches github.com"

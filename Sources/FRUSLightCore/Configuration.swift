@@ -7,8 +7,8 @@ import Glibc
 import Darwin
 #endif
 
-/// The settings a server process runs with: Import mode, with no sign-in or, from PLAN's S14e,
-/// sign-in through a trusted proxy.
+/// The settings a server process runs with: Import mode, with no sign-in, from PLAN's S14e sign-in
+/// through a trusted proxy, or from S20b local accounts.
 public struct ServerConfiguration: Sendable, Equatable {
     public enum Mode: String, Sendable, Codable { case `import`, standalone }
     public enum Auth: String, Sendable, Codable { case none, local, header }
@@ -60,7 +60,8 @@ public struct ServerConfiguration: Sendable, Equatable {
     /// In `header` mode, the header the proxy names the user in (`FRUS_AUTH_HEADER`).
     public var authHeader: String
     /// In `header` mode, the proxies a request may come from (`FRUS_TRUSTED_PROXIES`); a request
-    /// from any other peer is refused.
+    /// from any other peer is refused. With local accounts (S20b), the proxies in front of the server,
+    /// whose `X-Forwarded-For` gives the address of the browser a sign-in came from.
     public var trustedProxies: [AddressRange]
     /// In `header` mode, the users who hold the admin role (`FRUS_ADMIN_USERS`), as the header
     /// names them.
@@ -136,9 +137,6 @@ public struct ServerConfiguration: Sendable, Equatable {
                 problems.append("FRUS_AUTH must be none, local or header, not \(raw)")
             }
         }
-        if config.auth == .local {
-            problems.append("FRUS_AUTH=local arrives in phase 3; this build supports none and header")
-        }
         if let raw = value("FRUS_AUTH_HEADER") {
             if Self.isFieldName(raw) { config.authHeader = raw } else {
                 problems.append("FRUS_AUTH_HEADER must be a header's name, such as X-Forwarded-User, not \(raw)")
@@ -163,7 +161,19 @@ public struct ServerConfiguration: Sendable, Equatable {
         if config.auth == .header, config.trustedProxies.isEmpty, value("FRUS_TRUSTED_PROXIES") == nil {
             problems.append("FRUS_AUTH=header needs FRUS_TRUSTED_PROXIES: the addresses of the proxy that signs people in and sets \(config.authHeader)")
         }
-        if config.auth != .header {
+        switch config.auth {
+        case .header:
+            break
+        case .local:
+            // Local accounts (PLAN's S20b) sign people in themselves, and an admin is an account with the
+            // role; FRUS_TRUSTED_PROXIES names the proxies whose X-Forwarded-For gives a browser's address.
+            if value("FRUS_AUTH_HEADER") != nil {
+                problems.append("FRUS_AUTH_HEADER is for sign-in through a proxy, and FRUS_AUTH is local, which signs people in itself: leave FRUS_AUTH_HEADER out")
+            }
+            if value("FRUS_ADMIN_USERS") != nil {
+                problems.append("FRUS_ADMIN_USERS is for sign-in through a proxy, and FRUS_AUTH is local, whose admins are the accounts with the admin role: leave it out, and give the role with frus-light user set-role <name> admin")
+            }
+        case .none:
             // Sign-in's settings without sign-in: every visitor would share one user's research.
             for name in ["FRUS_AUTH_HEADER", "FRUS_TRUSTED_PROXIES", "FRUS_ADMIN_USERS"] where value(name) != nil {
                 problems.append("\(name) is for sign-in through a proxy, and FRUS_AUTH is \(config.auth.rawValue): set FRUS_AUTH=header, or leave \(name) out")
@@ -183,6 +193,11 @@ public struct ServerConfiguration: Sendable, Equatable {
             } else {
                 config.publicURL = raw
             }
+        }
+        // A session's cookie is Secure, which a browser keeps only from an https address or this
+        // machine, and a password crosses the network: local accounts need one or the other.
+        if config.auth == .local, !config.publicAddress.isSecureContext {
+            problems.append("FRUS_AUTH=local sends passwords and a session cookie, which browsers keep only for an https address or this machine: set FRUS_PUBLIC_URL to the https:// address people open, behind a proxy with TLS, or keep the server on this machine, as http://localhost:8080")
         }
         if let raw = value("FRUS_PDF_URL") {
             if Self.isHTTPOrigin(raw) { config.pdfURL = raw } else {
@@ -402,6 +417,10 @@ public struct PublicAddress: Sendable, Equatable, CustomStringConvertible {
     private func names(_ other: String) -> Bool {
         other == host || (Self.loopback.contains(host) && Self.loopback.contains(other))
     }
+
+    /// Whether a browser treats a page of this address as a secure context, and so keeps a `Secure`
+    /// cookie from it: an https address, or one on this machine (PLAN's S20b).
+    public var isSecureContext: Bool { scheme == "https" || Self.loopback.contains(host) }
 
     private static let loopback: Set<String> = ["localhost", "127.0.0.1", "::1"]
 

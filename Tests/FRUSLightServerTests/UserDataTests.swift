@@ -26,13 +26,16 @@ struct UserDataFixture {
     /// `volumes` from fixtures/tei are in the server's TEI folder, for the routes that read a page;
     /// `indexed`, the server serves the synthetic export, for the routes that read the index;
     /// `importLimit`, an import's largest file; `resolver`, who a request acts for, the store's single
-    /// user by default, or with `auth`, `trustedProxies` and `adminUsers`, the one a proxy names (S14e);
-    /// `userStore`, the store the configuration names, whichever the fixture holds.
+    /// user by default, or with `auth`, `trustedProxies` and `adminUsers`, the one a proxy names (S14e)
+    /// or a local account's session (S20b), whose passwords `passwords` hashes, the cheapest by
+    /// default, by the clock `now`; `userStore`, the store the configuration names, whichever the
+    /// fixture holds.
     init(publicURL: String = "http://localhost:8080", userData: Bool = true, volumes: [String] = [],
          indexed: Bool = false, importLimit: Int = UserDataServices.importBodyLimit,
          resolver: (any UserResolver)? = nil, auth: ServerConfiguration.Auth = .none,
          trustedProxies: [AddressRange] = [], adminUsers: Set<String> = [],
-         userStore: ServerConfiguration.UserStoreChoice = .sqlite) async throws {
+         userStore: ServerConfiguration.UserStoreChoice = .sqlite, passwords: PasswordHasher = PasswordHasher(.leastCost),
+         now: @escaping @Sendable () -> Date = { UserDataFixture.now }) async throws {
         server = try await indexed ? servingSyntheticExport(volumes: volumes) : ServerFixture(volumes: volumes)
         let url = server.files.userStore
         store = try await SQLiteUserStore(url: url, backupsDirectory: server.files.backupsDirectory)
@@ -41,7 +44,7 @@ struct UserDataFixture {
                                             userStore: userStore, trustedProxies: trustedProxies, adminUsers: adminUsers)
         jobs = InProcessJobQueue()
         services = UserDataServices(store: store, configuration: configuration, jobs: jobs, importLimit: importLimit,
-                                    resolver: resolver, now: { Self.now })
+                                    resolver: resolver, passwords: passwords, now: now)
     }
 
     var app: some ApplicationProtocol {

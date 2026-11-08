@@ -7,13 +7,16 @@ import { defineConfig, devices } from '@playwright/test';
 const baseURL = (process.env.FRUS_E2E_BASE_URL ?? 'http://localhost:8080/').replace(/\/?$/, '/');
 
 // Behind a proxy that signs people in (PLAN's S14e), the sign-in spec runs alone, signing in as it
-// goes; everywhere else, the rest run without it.
+// goes; on a server with accounts of its own (S20b), the accounts spec runs alone; everywhere else,
+// the rest run without either.
 const signIn = /sign-in\.spec\.ts$/;
 const signingIn = !!process.env.FRUS_E2E_SIGN_IN;
+const accounts = /accounts\.spec\.ts$/;
+const withAccounts = !!process.env.FRUS_E2E_ACCOUNTS;
 
 export default defineConfig({
   testDir: './e2e',
-  ...(signingIn ? { testMatch: signIn } : { testIgnore: signIn }),
+  ...(signingIn ? { testMatch: signIn } : withAccounts ? { testMatch: accounts } : { testIgnore: [signIn, accounts] }),
   timeout: 30_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,

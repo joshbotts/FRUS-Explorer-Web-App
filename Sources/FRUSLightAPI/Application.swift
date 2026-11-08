@@ -20,7 +20,6 @@ struct ServerComponents: Sendable {
     /// its database service's.
     let serverLock: FileLock?
     let backups: UserStoreBackups?
-    let sessions: InMemorySessionStore
     let jobs: InProcessJobQueue
     let indexWriter: LocalIndexWriter
     let imports: ImportCoordinator
@@ -50,7 +49,6 @@ struct ServerComponents: Sendable {
             userStore: userStore,
             serverLock: serverLock,
             backups: backups,
-            sessions: InMemorySessionStore(),
             jobs: jobs,
             indexWriter: writer,
             // An export made with the owner's writing has it kept in the user store (S16e); a server
@@ -157,6 +155,9 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
         let admins = configuration.adminUsers.isEmpty ? "no admins" : "admins \(configuration.adminUsers.sorted().joined(separator: ", "))"
         logger.info("Sign-in through a proxy (FRUS_AUTH=header): the user is \(configuration.authHeader) on requests from \(proxies), and every other request but /healthz and /readyz is refused; \(admins)")
     }
+    if configuration.auth == .local {
+        try await logAccounts(components.userStore, configuration: configuration, logger: logger)
+    }
     if let folder = getenv("SQLITE_TMPDIR") {
         logger.info("SQLite's temporary files go to \(String(cString: folder))")
     }
@@ -175,6 +176,20 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
         app.addServices(BackupService(backups: backups, serverLock: serverLock, logger: logger))
     }
     return app
+}
+
+/// Says how local accounts sign in (PLAN's S20b), and how to make the first when no account can.
+private func logAccounts(_ store: RelationalUserStore, configuration: ServerConfiguration, logger: Logger) async throws {
+    let accounts = try await Blocking.run { try store.accounts() }.filter(\.canSignIn)
+    let proxies = configuration.trustedProxies.isEmpty
+        ? "" : ", each browser's address read from X-Forwarded-For behind \(configuration.trustedProxies.map(\.description).joined(separator: ", "))"
+    logger.info("Local accounts (FRUS_AUTH=local): people sign in at \(configuration.publicAddress) with a name and a password\(proxies); \(accounts.count) can sign in, \(accounts.filter { $0.role == .admin }.count) of them admins")
+    if accounts.isEmpty {
+        logger.warning("No account can sign in yet: make the first admin with docker compose exec frus frus-light user add <name> --role admin")
+    }
+    if configuration.publicAddress.scheme == "https", configuration.trustedProxies.isEmpty {
+        logger.warning("FRUS_PUBLIC_URL is https, so a proxy forwards to this server, and FRUS_TRUSTED_PROXIES names none: failed sign-ins are counted by the proxy's address, which everyone behind it shares, so a few failures slow everyone's. Name the proxy there")
+    }
 }
 
 /// The application around `router`, under `base`, on the server's HTTP/1.1 channel, which watches

@@ -479,6 +479,51 @@ location ~ ^/frus-explorer/(reader/|api/v1/volumes/[^/]+/figures/) {
 
 The reader shows a document in a sandboxed frame, and what the frame asks for, the reader's scripts and the document's figures, carries none of the cookies a browser keeps for the site alone, as a session's are (`SameSite=Lax` or `Strict`). So the last location forwards those without the check, and with no user: they are the same for everyone, and nothing under `/api/v1/me` answers without a user. Both of the app's locations set `X-Forwarded-User`, the last to nothing, which nginx then leaves out, so a header the browser sends never reaches the server. With another proxy, do the same: check the session everywhere under the path but those two, set the header from the session, and remove any the browser sent. `scripts/compose-smoke` runs this recipe with a stand-in for oauth2-proxy, and the browser suite signs in through it.
 
+## Accounts
+
+The server can sign people in itself, each with an account of their own, a name and a password, in place of a proxy that signs them in. Each person's tags, highlights, notes, summaries, collections, imports and exports are theirs alone, and the app names them at the top of every page, with Sign Out. An admin makes the accounts; no one makes their own.
+
+A password and the session's cookie need an address a browser trusts: an https address, behind a reverse proxy with TLS as [Behind a reverse proxy](#behind-a-reverse-proxy) sets out, with `FRUS_PUBLIC_URL` set to it, or this machine's own, `http://localhost:8080` by default. The server does not start with accounts at any other address. Behind a proxy, also name the proxy in `.env`, so that the server counts each person's failed sign-ins by their browser's address, which the recipes above pass in `X-Forwarded-For`, rather than the proxy's, which everyone shares. A proxy on this machine reaches the server from the gateway of the Compose network, whose address [Signing in through the proxy](#signing-in-through-the-proxy) shows how to find; write it in place of `172.18.0.1`:
+
+```bash
+echo "FRUS_TRUSTED_PROXIES=172.18.0.1" >> .env
+```
+
+Turn accounts on, start the server again, and make the first admin, whose password the command asks for twice, unseen:
+
+```bash
+echo "FRUS_AUTH=local" >> .env
+```
+
+```bash
+docker compose up -d
+```
+
+```bash
+docker compose exec frus frus-light user add alice --role admin
+```
+
+The log says at each start how many accounts can sign in, and gives this command while none can. With the server stopped, `docker compose run --rm frus user add alice --role admin` does the same. A password must be at least 15 characters, as NIST asks of a password that is the only thing a sign-in checks; a phrase of a few words is one. To give it from a script instead, send it as a line of standard input, never as a word of the command, which the machine's process list shows:
+
+```bash
+printf '%s\n' "$PASSWORD" | docker compose exec -T frus frus-light user add bob
+```
+
+| Command | What it does |
+| --- | --- |
+| `frus-light user add <name> [--role reader\|curator\|admin] [--display-name <name>]` | Makes an account, a reader's unless `--role` says otherwise, named in the app by its display name, or by its name |
+| `frus-light user set-password <name>` | Gives it a new password, and signs it out everywhere |
+| `frus-light user set-role <name> reader\|curator\|admin` | Changes its role |
+| `frus-light user disable <name>` | Stops it signing in, and signs it out everywhere |
+| `frus-light user enable <name>` | Lets it sign in again |
+| `frus-light user list` | Lists every account with its role, whether it can sign in, and its last sign-in |
+
+Each runs as `docker compose exec frus frus-light user …` while the server runs. A change reaches someone already signed in within half a minute. The roles: a **reader** keeps their own research; a **curator** can also import corrections of the index that everyone shares; an **admin** can also take the research data's backup, and later manage the library, jobs and users.
+
+Every page of the app asks for a sign-in first, and opens once someone has signed in. A session lasts fourteen days from its last use, and thirty from its sign-in. After five failed sign-ins for one name, or from one address, the next has to wait a second, and each further failure doubles the wait, up to fifteen minutes; a sign-in for that name clears its count. The documents need no account: the catalogue, search and the reader answer anyone who reaches the server, as they do behind a proxy that signs people in. The server keeps each session by a hash of its cookie, so a backup holds nothing that signs anyone in, and a restore signs everyone out.
+
+The store's own user, `owner`, whose research an export made with your writing brings ([5. Import it](#5-import-it)), is an admin with no password, and so cannot sign in until you give it one, which gives you that research back: `docker compose exec frus frus-light user set-password owner`. A user a proxy signed in before has no password either. As the footer of every page says, whoever runs the instance can read everything it keeps for each person.
+
 ## A PostgreSQL user store
 
 The Compose install keeps your research data in `/data/app/app.db`, in the volume, and needs nothing else. A deployment that keeps it in a PostgreSQL database instead, as a managed database service runs one, sets `FRUS_USER_STORE` to the database's URL. At its first start the server makes the store's tables there, by the same numbered migrations as `app.db`'s, and from then on migrates them forward at each start, each migration in a transaction of its own. Search still reads FTS5: the server keeps a copy of what it reads, your notes' and summaries' text and your tags, in `/data/app/user-search.db`, made again from the database at each start and written beside each change. The image holds no PostgreSQL client tools; the server speaks PostgreSQL's protocol itself.
@@ -529,7 +574,7 @@ These go in `.env` beside `compose.yaml`. A PostgreSQL user store's go in `compo
 
 ## Notes
 
-- **Only this machine can reach the server,** unless a reverse proxy on it forwards to it, as Behind a reverse proxy sets out. The server has no sign-in of its own until phase 3's local accounts; a proxy can sign people in for it, as Signing in through the proxy sets out.
+- **Only this machine can reach the server,** unless a reverse proxy on it forwards to it, as Behind a reverse proxy sets out. The server can sign people in with accounts of its own, as Accounts sets out, or a proxy can sign people in for it, as Signing in through the proxy sets out.
 - **Keep `/data` in the Docker volume.** On a Mac, a folder shared from macOS is not a local filesystem to SQLite. On Linux, replacing the volume with a host folder in `compose.yaml` works if that folder is writable by UID 10001, the server's user.
 - **On Linux,** the TEI files must be readable by UID 10001; a clone made with the usual umask is. The backups folder must be writable by it, as step 3 makes it. On a host with SELinux enforcing, add `,z` after `ro` in the TEI volume line of `compose.yaml`, and `:z` after `/backups` in the backups line. To run `docker` without `sudo`, your user must be in the `docker` group.
 - **Backups** of your research data are daily, as Backups and restore sets out; the index is not among them, since it can always be imported again. An upgrade that changes the layout of the server's own store, `/data/app/app.db`, first copies it into `/data/backups`, and into your backups folder. If the change fails, the server leaves the store as it was and does not start, and its log names the copy; Compose starts it again, and it tries again without taking another copy.

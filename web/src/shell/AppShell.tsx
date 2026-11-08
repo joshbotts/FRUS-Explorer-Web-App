@@ -1,18 +1,22 @@
 // The frame around every screen: a skip link, the header with navigation, the project picker (PLAN's
 // S17f) and appearance, the "Working on:" line over Browse and Search, the readiness banner, the
-// screen, and the footer. Behind a proxy that signs people in (PLAN's S14e),
-// the header names the user and the footer says that the instance's operator can read what it
-// keeps for them, as SPEC's Privacy asks. The header's links are grouped by area, under a line each,
-// in the order of the app's tabs (PLAN's S20a): a new link goes beside its area's kin, never at the end.
+// screen, and the footer. Behind a proxy that signs people in (PLAN's S14e), or signed in with an
+// account of the server's own (S20b), the header names the user and the footer says that the
+// instance's operator can read what it keeps for them, as SPEC's Privacy asks; with an account, the
+// header has Sign Out, and until someone signs in the screen is the sign-in page, whatever the address.
+// The header's links are grouped by area, under a line each, in the order of the app's tabs (PLAN's
+// S20a): a new link goes beside its area's kin, never at the end.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, useRouter } from '@tanstack/react-router';
-import { createContext, type MouseEvent, useContext, useEffect, useRef } from 'react';
+import { createContext, type MouseEvent, useContext, useEffect, useRef, useState } from 'react';
+import { isSignedOut, sessionQuery, signedOut, signOut } from '../api/auth';
 import { readinessQuery } from '../api/endpoints';
 import { meQuery } from '../api/userData';
 import { copy } from '../copy';
 import { type Appearance, useAppearance, useResolvedScheme } from '../settings/preferences';
 import { requestHeadingFocus } from './headingFocus';
 import { ProjectPicker, WorkingOn } from './ProjectPicker';
+import { SignInScreen } from './SignInScreen';
 
 const SchemeContext = createContext<'light' | 'dark'>('light');
 
@@ -23,10 +27,51 @@ export function AppShell() {
   const [appearance, setAppearance] = useAppearance();
   const scheme = useResolvedScheme(appearance);
   const router = useRouter();
-  // Signed in, through the proxy: a server with no sign-in has one user, its operator.
-  const me = useQuery(meQuery);
-  const signedIn = me.data && me.data.auth !== 'none' ? me.data : undefined;
+  const queryClient = useQueryClient();
+  // Whether this browser is signed in (S20b): a server with accounts of its own shows its sign-in page
+  // in place of any other until someone signs in, and asks nothing of a user before. One that cannot
+  // say, as a server from before accounts, needs no sign-in of the app's.
+  const session = useQuery(sessionQuery);
+  const signingIn = session.data?.auth === 'local' && !session.data.signedIn;
+  const entered = (session.isSuccess && !signingIn) || session.isError;
+  // Signed in, through the proxy or with an account: a server with no sign-in has one user, its operator.
+  const me = useQuery({ ...meQuery, enabled: entered });
+  const signedIn = entered && me.data && me.data.auth !== 'none' ? me.data : undefined;
   const keepsUserData = me.data?.userData === true;
+  const [signOutFailed, setSignOutFailed] = useState(false);
+  // Signing in or out shows another screen, so focus moves to its heading once it has rendered, as the
+  // router's arrivals move it; the field or button that had it is gone by then. A page just loaded
+  // starts at its top, the sign-in page too.
+  const shown = signingIn ? 'signIn' : entered ? 'app' : 'waiting';
+  const lastShown = useRef(shown);
+  useEffect(() => {
+    if (lastShown.current !== 'waiting' && shown !== 'waiting' && lastShown.current !== shown) requestHeadingFocus();
+    lastShown.current = shown;
+  }, [shown]);
+
+  // A session that ends while a page is open, expired or ended by an admin, is refused at the next
+  // request, and the shell asks again whether it is signed in, which shows the sign-in page.
+  useEffect(
+    () =>
+      queryClient.getQueryCache().subscribe((event) => {
+        if (event.type === 'updated' && event.action.type === 'error' && isSignedOut(event.action.error)) {
+          void queryClient.invalidateQueries({ queryKey: sessionQuery.queryKey });
+        }
+      }),
+    [queryClient],
+  );
+
+  /** Ends the session; the page stays as it is if the server could not be told, since its cookie would. */
+  async function leave() {
+    setSignOutFailed(false);
+    try {
+      await signOut();
+    } catch {
+      setSignOutFailed(true);
+      return;
+    }
+    signedOut(queryClient);
+  }
 
   // A new screen takes focus at its heading, so a screen reader announces where it arrived. The
   // router says when the new screen has rendered; a new search on the same screen keeps its focus,
@@ -51,7 +96,8 @@ export function AppShell() {
         <Link to="/search" className="brand">
           {copy.app.name}
         </Link>
-        <nav aria-label={copy.app.navigation}>
+        {/* Hidden on the sign-in page, where every link would lead back to it. */}
+        <nav aria-label={copy.app.navigation} hidden={!entered}>
           {/* ─── Browse and search ─────────────────────────────────────── */}
           <Link to="/browse" activeProps={{ 'aria-current': 'page' }}>
             {copy.app.browse}
@@ -78,7 +124,7 @@ export function AppShell() {
           </Link>
           {/* ─── Admin ─────────────────────────────────────────────────── */}
         </nav>
-        <ProjectPicker />
+        {entered && <ProjectPicker />}
         <label className="appearance">
           {copy.appearance.label}{' '}
           <select value={appearance} onChange={(event) => setAppearance(event.target.value as Appearance)}>
@@ -88,15 +134,25 @@ export function AppShell() {
           </select>
         </label>
         {signedIn && <p className="signed-in">{copy.app.signedInAs(signedIn.displayName)}</p>}
+        {signedIn?.auth === 'local' && (
+          <button type="button" className="sign-out" onClick={() => void leave()}>
+            {copy.app.signOut}
+          </button>
+        )}
+        {signOutFailed && (
+          <p className="error" role="alert">
+            {copy.app.signOutFailed}
+          </p>
+        )}
       </header>
-      <WorkingOn />
+      {entered && <WorkingOn />}
       <ReadinessBanner />
       <main id="main" tabIndex={-1}>
-        <Outlet />
+        {signingIn ? <SignInScreen /> : entered ? <Outlet /> : null}
       </main>
       <footer className="app-footer" aria-label={copy.app.footerLabel}>
         <p>{copy.app.footer}</p>
-        {signedIn && <p>{copy.app.operatorReads}</p>}
+        {(signedIn || signingIn) && <p>{copy.app.operatorReads}</p>}
       </footer>
     </SchemeContext.Provider>
   );

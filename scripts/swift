@@ -5,8 +5,9 @@
 #   scripts/swift --postgres test ...                 either, with a PostgreSQL for the user store's tests
 # Works in a cloud session and on a Mac (macOS ships bash 3.2, so no newer bash features).
 #
-# - The image has no SQLite headers, so a small derived image adds libsqlite3-dev. It is built
-#   the first time, and again whenever swift:6.4-noble or the package list changes.
+# - The image has no SQLite or Argon2 headers, so a small derived image adds libsqlite3-dev and,
+#   since S20b's local accounts, libargon2-dev. It is built the first time, and again whenever
+#   swift:6.4-noble changes; its tag names the package list.
 # - SwiftPM output goes to .build/linux, apart from a Mac's own .build.
 # - The container shares the host's network. Proxy variables and a CA bundle are passed in
 #   when they are set, as a cloud session needs.
@@ -27,8 +28,10 @@ fi
 
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 base=swift:6.4-noble
-image=frus-light-swift:6.4-noble
-packages="libsqlite3-dev"
+packages="libsqlite3-dev libargon2-dev"
+# The tag names the package list, so that checkouts with another list, as sessions on one machine may
+# have side by side, each keep an image of their own rather than building one tag over the other.
+image="frus-light-swift:6.4-noble-$(printf '%s' "$packages" | cksum | cut -d' ' -f1)"
 
 # Docker Desktop installs its CLI here; a non-interactive shell may not have it on PATH.
 if ! command -v docker >/dev/null 2>&1 && [ -x "$HOME/.docker/bin/docker" ]; then

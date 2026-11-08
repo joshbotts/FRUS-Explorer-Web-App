@@ -15,8 +15,9 @@ ARG RUNTIME_IMAGE=ubuntu:24.04
 # CoreFoundation and ICU symbols unresolved at link time. Revisit when a Swift release fixes that.
 FROM ${SWIFT_IMAGE} AS build
 ARG TARGETARCH
+# SQLite's headers, and since S20b Argon2's, whose library hashes local accounts' passwords.
 RUN apt-get update -qq \
- && apt-get install -y -qq --no-install-recommends libsqlite3-dev \
+ && apt-get install -y -qq --no-install-recommends libsqlite3-dev libargon2-dev \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 # What SwiftPM reads, which checks every target's path, tests included; so an edit to the browser
@@ -48,10 +49,10 @@ RUN npm run build && chmod -R a+rX dist
 
 # Runtime stage: Ubuntu 24.04's SQLite 3.45.1 (with FTS5), libxml2 for FoundationXML, whose parser
 # FRUSCoreKit reads TEI with and which the static Swift runtime links dynamically, the C++ runtime
-# the Swift runtime needs, CA certificates and tini.
+# the Swift runtime needs, libargon2 for local accounts' passwords (S20b), CA certificates and tini.
 FROM ${RUNTIME_IMAGE}
 RUN apt-get update -qq \
- && apt-get install -y -qq --no-install-recommends libsqlite3-0 libxml2 libstdc++6 ca-certificates tini \
+ && apt-get install -y -qq --no-install-recommends libsqlite3-0 libxml2 libstdc++6 libargon2-1 ca-certificates tini \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --gid 10001 frus \
  && useradd --uid 10001 --gid 10001 --home-dir /data --no-create-home --shell /usr/sbin/nologin frus \

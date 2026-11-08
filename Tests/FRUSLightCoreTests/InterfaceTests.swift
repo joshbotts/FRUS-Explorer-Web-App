@@ -52,18 +52,27 @@ import Testing
 
     // 4. Sessions, jobs and generated files behind small interfaces.
 
-    @Test func sessionsExpire() async {
+    /// Since PLAN's S20b, sessions are the user store's: a session is found until it expires or ends,
+    /// by the id its token hashes to. UserAccountTests holds the rest on both stores.
+    @Test func sessionsExpire() async throws {
+        let directory = try TemporaryDirectory()
+        let store = try await SQLiteUserStore(url: directory.url.appendingPathComponent("app.db"),
+                                              backupsDirectory: directory.url.appendingPathComponent("backups"))
         let clock = Clock()
-        let store = InMemorySessionStore(now: { clock.now })
-        let session = await store.create(for: "owner", lifetime: .seconds(60))
-        #expect(session.id.count == 64)
-        #expect(await store.session(id: session.id) == session)
+        let token = SessionToken.make()
+        #expect(token.count == 64 && SessionToken.isWellFormed(token[...]))
+        let session = Session(id: SessionToken.id(of: token), userID: "owner", createdAt: clock.now, lastUsedAt: clock.now,
+                              expiresAt: clock.now.addingTimeInterval(60))
+        try store.startSession(session)
+        #expect(try store.session(session.id, at: clock.now)?.session == session)
         clock.advance(by: 61)
-        #expect(await store.session(id: session.id) == nil)
+        #expect(try store.session(session.id, at: clock.now) == nil)
 
-        let other = await store.create(for: "owner", lifetime: .seconds(60))
-        await store.remove(id: other.id)
-        #expect(await store.session(id: other.id) == nil)
+        let other = Session(id: SessionToken.id(of: SessionToken.make()), userID: "owner", createdAt: clock.now,
+                            lastUsedAt: clock.now, expiresAt: clock.now.addingTimeInterval(60))
+        try store.startSession(other)
+        try store.endSession(other.id)
+        #expect(try store.session(other.id, at: clock.now) == nil)
     }
 
     @Test func jobsRunOneAtATimeInOrder() async {

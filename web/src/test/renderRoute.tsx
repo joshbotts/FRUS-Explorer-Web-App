@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router';
 import { render } from '@testing-library/react';
 import { vi } from 'vitest';
+import { sessionQuery } from '../api/auth';
 import type { Choice, Coverage, Readiness } from '../api/types';
 import { parseSearch, routeTree, stringifySearch } from '../router';
 
@@ -25,6 +26,9 @@ export const sortChoices: Choice[] = [
  */
 export type Answer = unknown;
 
+/** Whether the browser is signed in, as a server with no sign-in answers it (S20b). */
+export const signedInWithoutAccounts = { auth: 'none', signedIn: true };
+
 /** A problem the server sends, as RFC 9457 problem details. */
 export class ProblemAnswer {
   constructor(
@@ -38,8 +42,9 @@ export class ProblemAnswer {
  * Answers each request with what `answers` holds for it: under `METHOD /path` for any method, or
  * under its path alone for a GET. An answer is JSON, a `ProblemAnswer`, `null` for 204 No Content,
  * a `Response` as it is, or a function of the request's URL and its init that gives one, at once or
- * by a promise. Any other request is a 404 problem. Returns the stub, whose calls name the URLs
- * asked for and how.
+ * by a promise. Whether the browser is signed in, which the shell asks first (S20b), is answered as a
+ * server with no sign-in answers it unless `answers` holds it. Any other request is a 404 problem.
+ * Returns the stub, whose calls name the URLs asked for and how.
  */
 export function stubServer(answers: Record<string, Answer>) {
   const fetch = vi.fn(async (input: string, init?: RequestInit) => {
@@ -51,7 +56,9 @@ export function stubServer(answers: Record<string, Answer>) {
         ? answers[key]
         : method === 'GET' && url.pathname in answers
           ? answers[url.pathname]
-          : new ProblemAnswer(404, 'NOT_FOUND', `No answer for ${key}.`);
+          : method === 'GET' && url.pathname === '/api/v1/auth/session'
+            ? signedInWithoutAccounts
+            : new ProblemAnswer(404, 'NOT_FOUND', `No answer for ${key}.`);
     const given: unknown = await (typeof answer === 'function' ? (answer as (url: URL, init?: RequestInit) => Answer)(url, init) : answer);
     // A file, with its headers, as a collection's export answers (S18e).
     if (given instanceof Response) return given;
@@ -66,10 +73,15 @@ export function stubServer(answers: Record<string, Answer>) {
   return fetch;
 }
 
-/** Renders the app at `href`, with nothing cached; the router says where the app has gone since. */
-export function renderAt(href: string) {
+/**
+ * Renders the app at `href`, with nothing cached but the session as a server with no sign-in gives it,
+ * so that a screen opens as soon as it did before the shell asked (S20b), unless `askSession` has the
+ * shell ask the stubbed server; the router says where the app has gone since.
+ */
+export function renderAt(href: string, { askSession = false }: { askSession?: boolean } = {}) {
   const router = createRouter({ routeTree, parseSearch, stringifySearch, history: createMemoryHistory({ initialEntries: [href] }) });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  if (!askSession) client.setQueryData(sessionQuery.queryKey, signedInWithoutAccounts);
   const rendered = render(
     <QueryClientProvider client={client}>
       <RouterProvider router={router} />

@@ -45,6 +45,11 @@ let package = Package(
         // SQLite with FTS5: the system library. On Linux its header comes from libsqlite3-dev,
         // which scripts/swift and ci.yml install; on macOS, from the SDK. Neither needs pkg-config.
         .systemLibrary(name: "CSQLite", path: "Sources/CSQLite"),
+        // Argon2id, for local accounts' passwords (PLAN's S20b): the reference implementation Ubuntu
+        // packages, its header and library from libargon2-dev, which scripts/swift, ci.yml and the
+        // image's build stage install, and its library from libargon2-1 in the image. No Swift package
+        // in the tree has Argon2, and the server alone links it, never a Mac build.
+        .systemLibrary(name: "CArgon2", path: "Sources/CArgon2"),
 
         // Shared kits, from the submodule's own directories.
         .target(
@@ -184,11 +189,11 @@ let package = Package(
         // backups (S14b); since S14d PostgresNIO, for the user store's PostgreSQL implementation, with
         // NIO's event loops and TLS beneath it; and since the pin move to `fe9325b2` the kit, whose
         // `StructuredSummaryDisplay` gives the text a summary is searched by, as the app's index holds
-        // it (FRUS-Explorer#1824).
+        // it (FRUS-Explorer#1824); and since S20b Argon2, which hashes local accounts' passwords.
         .target(
             name: "FRUSLightCore",
             dependencies: [
-                "CSQLite", "FRUSCoreKit",
+                "CSQLite", "CArgon2", "FRUSCoreKit",
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "PostgresNIO", package: "postgres-nio"),
                 .product(name: "NIOCore", package: "swift-nio"),

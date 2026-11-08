@@ -4,7 +4,7 @@
 /// starting at 1. Never edit one that has shipped: add another, and with it any change to
 /// `UserStoreSchema`.
 public enum UserStoreMigrations {
-    public static let all: [String] = [one, two, three]
+    public static let all: [String] = [one, two, three, four]
 
     /// S2: the single user, and corrections as override rows.
     static let one = """
@@ -418,5 +418,27 @@ public enum UserStoreMigrations {
     /// `project_id` is stamped from as the Mac stamps it. NULL is the Mac's Global Context.
     static let three = """
         ALTER TABLE users ADD COLUMN active_project_id TEXT;
+        """
+
+    /// S20b's: local accounts, `FRUS_AUTH=local`. A user gains the Argon2id hash of their password, as
+    /// its PHC string, none for one who cannot sign in; a role, each of reader, curator and admin the
+    /// one before it and more, a reader's unless the user is `owner`, who holds the three under
+    /// `FRUS_AUTH=none` and so is an admin; when the account was disabled; and its last sign-in. A
+    /// session is keyed by the SHA-256 of the token its cookie carries, so that neither the store nor a
+    /// backup of it holds a token that signs anyone in, and goes with its user.
+    static let four = """
+        ALTER TABLE users ADD COLUMN password_hash TEXT;
+        ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'reader' CHECK (role IN ('reader', 'curator', 'admin'));
+        ALTER TABLE users ADD COLUMN disabled_at TEXT;
+        ALTER TABLE users ADD COLUMN last_sign_in_at TEXT;
+        UPDATE users SET role = 'admin' WHERE user_id = 'owner';
+        CREATE TABLE sessions (
+            session_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users (user_id) ON DELETE CASCADE,
+            created_at TEXT NOT NULL,
+            last_used_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL
+        );
+        CREATE INDEX sessions_by_user ON sessions (user_id);
         """
 }

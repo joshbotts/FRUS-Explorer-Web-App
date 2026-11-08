@@ -13,7 +13,7 @@
 /// reads as the order the store took its rows in. `user_search` is not here: search reads FTS5, in
 /// the store's local SQLite copy (`PostgreSQLUserStore`).
 enum PostgreSQLMigrations {
-    static let all: [[String]] = [one, two, three]
+    static let all: [[String]] = [one, two, three, four]
 
     /// S2's: the single user, and corrections as override rows.
     static let one = [
@@ -482,5 +482,24 @@ enum PostgreSQLMigrations {
     /// S17f's: the project each user works in, as app.db's migration 3 keeps it.
     static let three = [
         #"ALTER TABLE users ADD COLUMN active_project_id TEXT COLLATE "C""#,
+    ]
+
+    /// S20b's: local accounts, as app.db's migration 4 keeps them.
+    static let four = [
+        #"ALTER TABLE users ADD COLUMN password_hash TEXT COLLATE "C""#,
+        #"ALTER TABLE users ADD COLUMN role TEXT COLLATE "C" NOT NULL DEFAULT 'reader' CHECK (role IN ('reader', 'curator', 'admin'))"#,
+        #"ALTER TABLE users ADD COLUMN disabled_at TEXT COLLATE "C""#,
+        #"ALTER TABLE users ADD COLUMN last_sign_in_at TEXT COLLATE "C""#,
+        "UPDATE users SET role = 'admin' WHERE user_id = 'owner'",
+        """
+        CREATE TABLE sessions (
+            session_id TEXT COLLATE "C" PRIMARY KEY,
+            user_id TEXT COLLATE "C" NOT NULL REFERENCES users (user_id) ON DELETE CASCADE,
+            created_at TEXT COLLATE "C" NOT NULL,
+            last_used_at TEXT COLLATE "C" NOT NULL,
+            expires_at TEXT COLLATE "C" NOT NULL
+        )
+        """,
+        "CREATE INDEX sessions_by_user ON sessions (user_id)",
     ]
 }
