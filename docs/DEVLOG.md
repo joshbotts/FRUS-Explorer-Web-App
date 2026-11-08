@@ -130,6 +130,30 @@ Not started: `PLAN.md`'s row S20b. The session that does it replaces this line, 
 
 Not started: `PLAN.md`'s row S20a. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
 
+## The Add to Collection picker's add, answered after its Cancel
+
+8 November 2026 · branch `claude/agitated-mahavira-8861aa` · [#97](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/97) · upstream `fe9325b2`, unchanged
+
+The session given New Collection's late answer, which #95's review left for a pull request of its own, and the collection specs' cleanup found a third race of the same kind while reading the picker: the picker's own add. The owner chose to carry the first two in [#96](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/96), where they landed with its merge (`406d16e`): New Collection's `useStillOpen` guard, on the Collections list and in the picker, and the specs' cleanup from the Collections list. This pull request carries the picker's add alone, at the owner's word, branched from `main` at #96's merge. It is outside `PLAN.md`'s table, so its entry sits directly above #96's, the one it follows. There is no app behaviour to mirror, since the app's add commits at once: the web's rule is that a dialog cancelled leaves the screen alone. No copy, server file or parity line changes.
+
+**What a late answer did.** A collection pressed in the picker sets the picker's close, after Added's 0.6 s (0.8 s for a document it held), once the server answers. Answered after the picker's Cancel or Escape, that close was set after the picker had gone, past the cleanup that clears it, so nothing cleared it: it closed whatever picker the research rail or the reader had opened since, and sent focus to the rail's Add to Collection or to the reader's frame, and with no picker open it still moved focus there.
+
+**What the web does now.** The picker checks `useStillOpen()`, exported from `CollectionsScreen.tsx` for it, once the add is answered and before it shows a failure, as New Collection's sheet and Rename's and Delete…'s dialogs do. An add answered after Cancel or Escape stays in its collection, and the screen stays as the reader left it. Cancel or Escape during Added's pause was safe already, since the picker's cleanup clears a close set before it.
+
+**Test.** `EditorChanges.test.tsx`, after the picker's add and #96's New Collection test: an add answered after the picker's Cancel, from a rail that opens the picker again, leaves the picker opened since, and its focused Cancel, alone past Added's pause. It fails without the guard, the picker opened since closed. The browser app's unit tests go from 475 to 476.
+
+**Results**
+
+- **The browser app:** `scripts/npm` typecheck, lint and build pass, and its unit tests, 476 in 50 files.
+- **The image and the smoke test:** `scripts/compose-smoke --e2e`, with an image of the final tree under a tag and a port of this session's own, passed every step: 71 browser specs at the root and 71 under the path, and the sign-in spec behind the proxy.
+- **Linux** was not run again at the final tree: no Swift file changes, and the parity tests' lines in `CollectionPicker.tsx` and `CollectionsScreen.tsx` stand; CI's swift job runs it. Over `6472df1`, before #96 merged, the branch's first form, with New Collection's guard and its tests besides this fix, passed `scripts/swift --postgres`'s 2,692 tests with only the named skip, the web's suites, the smoke test with 69 specs in each pass, and `collections.spec.ts` alone five times over at the root.
+
+**A cold review,** one subagent given the code and none of this log, over the branch's first form, found no defect: its mutation runs, each guard taken out of a copy, failed exactly the tests written for it. It noted one behaviour older than this change and outside its rule, since no Cancel is pressed: the picker's close after an add also takes a New Collection sheet opened inside the picker meanwhile. The app's picker closes itself after the same pause, its New Collection offered throughout (`CollectionPickerSheet.swift`), so it is left as it is.
+
+**Records:** none but this entry. `README.md` is untouched: its Known gaps never named this race.
+
+**Next:** the two follow-ups the move to `fb542514` unblocked (Project Home's focus subjects, their editor, a lead's line and a visit's head; Add Documents' Citations and Tags), each a pull request of its own; S20a.
+
 ## Pin move to `fe9325b2`, follow-up: the editors' annotations on a volume's page and in Browse
 
 7 November 2026 · branch `claude/admiring-solomon-97acee` · [#96](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/96) · upstream `fe9325b2`, unchanged
