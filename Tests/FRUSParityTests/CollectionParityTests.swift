@@ -61,6 +61,19 @@ import Testing
             (list, "CollectionListView", "collections.filterBanner.untitledProject", "Untitled Project", "collections",
              "untitledProject: 'Untitled Project'"),
             (list, "CollectionListView", "collection.duplicate.action", "Duplicate", "collections", "duplicate: 'Duplicate'"),
+            // A row's Rename and its Rename Collection alert, and the question before a delete (FRUS-Explorer#1831).
+            (list, "CollectionListView", "common.rename", "Rename", "collections", "rename: 'Rename'"),
+            (list, "CollectionListView", "collection.rename.title", "Rename Collection", "collections", "renameTitle: 'Rename Collection'"),
+            (list, "CollectionListView", "collection.editor.name.placeholder", "Collection Name", "collections",
+             "renamePlaceholder: 'Collection Name'"),
+            (list, "CollectionListView", "common.cancel", "Cancel", "collections", "renameCancel: 'Cancel'"),
+            (list, "CollectionListView", "common.save", "Save", "collections", "renameSave: 'Save'"),
+            (model, "Collection", "collection.delete.confirm.message.one",
+             "Its section headings, note blocks and headnotes go with it, on your other devices too once they sync. The documents in it, and your notes and highlights on them, stay.",
+             "collections",
+             "deleteMessage: 'Its section headings, note blocks and headnotes go with it, on your other devices too once they sync. The documents in it, and your notes and highlights on them, stay.'"),
+            (model, "Collection", "common.delete", "Delete", "collections", "deleteConfirm: 'Delete'"),
+            (list, "CollectionListView", "common.cancel", "Cancel", "collections", "deleteCancel: 'Cancel'"),
             (model, "Collection", "collection.smart.listLabel", "Smart collection", "collections", "smartLabel: 'Smart collection'"),
             (model, "Collection", "collection.picker.smart", "Smart collection. Its documents come from its saved search.", "collections",
              "smartSentence: 'Smart collection. Its documents come from its saved search.'"),
@@ -401,6 +414,9 @@ import Testing
              "collections", "`Showing collections for “${project}” — ${hidden} other collection${hidden === 1 ? '' : 's'} hidden.`"),
             (list, "CollectionListView", #"defaultValue: "Showing collections for “\(activeProjectDisplayName)”.")"#,
              "collections", "filteredNoHidden: (project: string) => `Showing collections for “${project}”.`"),
+            // `CollectionDeletion.title(for:)` for the one collection a row deletes.
+            (model, "Collection", #"String(localized: "collection.delete.confirm.title.named", defaultValue: "Delete “\(name)”?")"#,
+             "collections", "deleteTitle: (name: string) => `Delete “${name}”?`"),
             (picker, "CollectionPickerSheet", #"defaultValue: "No collections match “\(searchText)”.")"#,
              "collections", "pickerNoResults: (text: string) => `No collections match “${text}”.`"),
             (mac, "MacCollectionManagerView", #"Text("New Collection").font(.headline)"#, "collections", "newTitle: 'New Collection'"),
@@ -506,13 +522,29 @@ import Testing
             "for block in preset.apparatusBlocks(notAlreadyIn: present) { addGeneratedEntry(type: block) }",
             // Sort by Date's tail
             "withinSections: withinSections) reindexEntries()",
-            // the commits and recordEdit
+            // the commits and recordEdit: the name, and the Rename alert's, where a name left empty keeps the old (#1831)
             "collection.name = fieldText.trimmingCharacters(in: .whitespacesAndNewlines)",
+            "static func name(_ fieldText: String, to collection: Collection) -> Bool { guard !CollectionEditorNaming.fieldAgrees(fieldText, withSavedName: collection.name) else { return false } collection.name = fieldText.trimmingCharacters(in: .whitespacesAndNewlines) return true }",
+            "static func rename(_ fieldText: String, to collection: Collection) -> Bool { guard !fieldText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false } return name(fieldText, to: collection) }",
             "let trimmed = fieldText.trimmingCharacters(in: .whitespacesAndNewlines) collection[keyPath: keyPath] = trimmed.isEmpty ? nil : trimmed",
             "guard collection[keyPath: keyPath] != isOn else { return false }",
             "if let projectId = appState.activeProjectId, !collection.projectIds.contains(projectId) { collection.projectIds.append(projectId) }",
             "let trimmed = plain.trimmingCharacters(in: .whitespacesAndNewlines) if trimmed.isEmpty { collection.introductionText = nil collection.introductionRichText = nil",
         ], file: "CollectionEditorView.swift")
+        // The list's Rename Collection alert saves what `rename` commits, and no more: no `recordEdit()`, so
+        // the collection stays in the projects it was in (#1831). The server's mirrors, beside the app's.
+        NoteViewParityTests.expect(try Self.app("Collections/CollectionListView.swift"), holds: [
+            #"Button(String(localized: "common.save", defaultValue: "Save")) { if CollectionEditorCommit.rename(name, to: collection) { try? modelContext.save() } }"#,
+        ], file: "CollectionListView.swift")
+        NoteViewParityTests.expect(try Self.server("Sources/FRUSLightAPI/CollectionEditing.swift"), holds: [
+            "guard !CollectionEditorNaming.fieldAgrees(fieldText, withSavedName: collection.name) else { return false } collection.name = fieldText.trimmingCharacters(in: .whitespacesAndNewlines) return true",
+            "guard !fieldText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false } return name(fieldText, to: &collection)",
+        ], file: "CollectionEditing.swift")
+        var named = CollectionRoutes.newCollection(name: "Berlin", projectIds: [], at: Date(timeIntervalSince1970: 0))
+        #expect(!CollectionEditing.rename(" \n", to: &named) && named.name == "Berlin", "a name left empty keeps the old one")
+        #expect(!CollectionEditing.rename(" Berlin ", to: &named), "nor is a name written that says what the saved one does")
+        #expect(CollectionEditing.rename("\tBonn ", to: &named) && named.name == "Bonn")
+        #expect(CollectionEditing.name("  ", to: &named) && named.name == "", "the editor's Name writes an empty one")
         let discovery = try Self.app("Collections/CollectionAddDocumentsSheet.swift")
         NoteViewParityTests.expect(discovery, holds: [
             "var next = CollectionEntryOrdering.nextSortOrder(in: collection, outline: sortedEntries) for ref in refs {",
@@ -606,7 +638,33 @@ import Testing
         NoteViewParityTests.expect(try Self.app("Collections/CollectionListView.swift"), holds: [
             "return allCollections.filter { !$0.projectIds.contains(projectId) }.count",
             "@Query(sort: \\Collection.lastModified, order: .reverse) private var allCollections: [Collection]",
+            // A row's menu (#1831): Rename, its field holding the name as saved, then Duplicate; Word Cloud, which
+            // the web leaves out until it has a word cloud (S24i); Create Static Snapshot, a smart collection's;
+            // and Delete last, which asks.
+            #"Button { renameText = collection.name renaming = collection } label: { Label(String(localized: "common.rename", defaultValue: "Rename"), systemImage: "pencil") } Button { _ = collection.duplicate(in: modelContext) try? modelContext.save() } label: {"#,
+            "Divider() Button { appState.openWordCloud(.collection(id: collection.id), from: sceneID) } label: {",
+            #"systemImage: "camera") } } Divider() Button(role: .destructive) { pendingDeletionId = collection.id } label: { Label(CollectionDeletion.action, systemImage: "trash") } }"#,
+            // The question every delete asks: `CollectionDeletion`'s title, its Delete and Cancel, and its message.
+            #"confirmationDialog(CollectionDeletion.title(for: collections), isPresented: isPresented, titleVisibility: .visible, presenting: collections) { doomed in Button(CollectionDeletion.action, role: .destructive) { onDelete(doomed) } Button(String(localized: "common.cancel", defaultValue: "Cancel"), role: .cancel) {} } message: { doomed in Text(CollectionDeletion.message(count: doomed.count)) }"#,
         ], file: "CollectionListView.swift")
+        NoteViewParityTests.expect(model, holds: [
+            // The title names one collection as its row does, and the message is for one.
+            "if collections.count == 1, let only = collections.first { let name = CollectionEditorNaming.listName(savedName: only.name)",
+            "static func message(count: Int) -> String { count == 1",
+        ], file: "Collection.swift")
+        // The web's row: the menu's buttons in its order, Word Cloud aside; the alert's field holding the name as
+        // saved; and the question for the one collection a row deletes, named by its row.
+        let screen = try Self.web("collections/CollectionsScreen.tsx")
+        let order = ["{copy.collections.rename}", "{copy.collections.duplicate}", "{copy.collections.snapshot}", "{copy.collections.delete}"]
+            .map { screen.range(of: $0)?.lowerBound }
+        #expect(order.allSatisfy { $0 != nil } && zip(order, order.dropFirst()).allSatisfy { $0! < $1! },
+                "CollectionsScreen.tsx's row orders its buttons as the app's menu")
+        NoteViewParityTests.expect(screen, holds: [
+            "const [name, setName] = useState(collection.name);",
+            "onRename={(name) => renameCollection(client, renaming.id, name)}",
+            "{copy.collections.deleteTitle(collection.listName)}",
+            "<p id={messageId}>{copy.collections.deleteMessage}</p>",
+        ], file: "CollectionsScreen.tsx")
         NoteViewParityTests.expect(try Self.app("Collections/CollectionOutline+App.swift"), holds: [
             "guard savedSearchId != nil else { return visibleRows(in: items, collapsedHeadingIds: collapsedHeadingIds) }",
             "return SmartCollectionRule.leavesOut(entry.entryKind, savedSearchId: savedSearchId) ? nil : VisibleRow(index: index, depth: 0, id: entry.id)",
