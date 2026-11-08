@@ -101,6 +101,9 @@ function inspector(fields: Partial<EntryInspector> = {}): EntryInspector {
 
 const saved = { id: searchId, name: 'Berlin wall', queryText: 'wall', search: {}, notRecalled: [] };
 
+/** A plain summary's reading: its text as stored. */
+const plain = (text: string) => ({ fields: null, text, line: text });
+
 const server = (answers: Record<string, unknown> = {}) =>
   stubServer({
     '/readyz': ready,
@@ -295,8 +298,8 @@ describe('the inspector’s headnote card and New Note…', () => {
       [`${base}/${berlinId}/entries/E1/inspector`]: () =>
         inspector({
           headnote: saved
-            ? { summaryId: 'D2', text: 'Khrushchev answers at once.', authorship: 'aiEdited', isDraft: true }
-            : { summaryId: 'S1', text: 'Khrushchev answers.', authorship: 'aiGenerated', isDraft: false },
+            ? { summaryId: 'D2', text: 'Khrushchev answers at once.', reading: plain('Khrushchev answers at once.'), authorship: 'aiEdited', isDraft: true }
+            : { summaryId: 'S1', text: 'Khrushchev answers.', reading: plain('Khrushchev answers.'), authorship: 'aiGenerated', isDraft: false },
         }),
       [`PUT ${base}/${berlinId}/entries/E1/headnote`]: () => {
         saved = true;
@@ -320,6 +323,33 @@ describe('the inspector’s headnote card and New Note…', () => {
     expect(within(sheet).getByText('Khrushchev answers at once.')).toBeTruthy();
     await waitFor(() => expect(document.activeElement).toBe(within(sheet).getByRole('button', { name: 'Edit' })));
     expect(sent(fetch.mock.calls.find(([, init]) => init?.method === 'PUT')?.[1]).body).toEqual({ text: 'Khrushchev answers at once.' });
+  });
+
+  it('shows a structured headnote as its fields, and opens Edit on them as Label: text paragraphs (#1824)', async () => {
+    const reading = {
+      fields: [
+        { label: 'Key Participants', text: 'Khrushchev' },
+        { label: 'Summary', text: 'He answers.' },
+      ],
+      text: 'Key Participants: Khrushchev\n\nSummary: He answers.',
+      line: 'Key Participants: Khrushchev Summary: He answers.',
+    };
+    server({
+      [`${base}/${berlinId}`]: detail({ entries: [{ ...telegram, includeHeadnote: true }] }),
+      [`${base}/${berlinId}/entries/E1/inspector`]: inspector({
+        summary: { text: '{"Summary": "He answers.", "KeyParticipants": "Khrushchev"}', reading },
+        headnote: { summaryId: 'S1', text: '{"Summary": "He answers.", "KeyParticipants": "Khrushchev"}', reading, authorship: 'aiGenerated', isDraft: false },
+      }),
+    });
+    renderAt(`/collections/${berlinId}`);
+    await userEvent.click(await screen.findByRole('button', { name: 'Configure: 1. Telegram From the Embassy in the Soviet Union' }));
+    const sheet = screen.getByRole('dialog', { name: 'Berlin' });
+    const card = (await within(sheet).findByText('Key takeaway · headnote')).closest('.headnote-card')!;
+    expect([...card.querySelectorAll('.headnote-text strong')].map((label) => label.textContent)).toEqual(['Key Participants:', 'Summary:']);
+    expect([...sheet.querySelectorAll('.summary-preview strong')].map((label) => label.textContent)).toEqual(['Key Participants:', 'Summary:']);
+    expect(sheet.textContent).not.toContain('{"Summary"');
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Edit' }));
+    expect((within(sheet).getByRole('textbox', { name: 'Headnote text' }) as HTMLTextAreaElement).value).toBe(reading.text);
   });
 
   it('says there is no headnote yet, and hides the card while the headnote is off', async () => {

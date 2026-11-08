@@ -85,7 +85,8 @@ export function ResearchRail({
   const summaryItems = summaries.data?.items.slice(0, shownSummaries);
   const summaryIndex = summaryAt.documentKey === documentKey ? Math.min(summaryAt.index, Math.max((summaryItems?.length ?? 1) - 1, 0)) : 0;
   const shownSummary = summaryItems?.[summaryIndex];
-  const summaryPreviewed = summaryOpen !== 'open' && shownSummary ? summaryPreview(shownSummary.responseText) : null;
+  // A structured summary's fields on one line, not its JSON (FRUS-Explorer#1824).
+  const summaryPreviewed = summaryOpen !== 'open' && shownSummary ? summaryPreview(shownSummary.reading.line) : null;
   const [focusOnOpen] = useState(autoFocus);
   useEffect(() => {
     if (focusOnOpen) heading.current?.focus({ preventScroll: true });

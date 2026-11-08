@@ -45,7 +45,9 @@ import Testing
             #expect(stored["was_chunked"] == "0" && stored["project_id"] == .some(nil) && stored["source_content_hash"] == .some(nil))
             // Every field written, a prompt's name, a project and a time with none as null.
             let raw = try #require(try JSONSerialization.jsonObject(with: Data(buffer: made.body)) as? [String: Any])
-            #expect(raw["promptName"] is NSNull && raw["projectId"] is NSNull && raw.count == 16)
+            #expect(raw["promptName"] is NSNull && raw["projectId"] is NSNull && raw.count == 17)
+            #expect(summary.reading == SummaryReading(fields: nil, text: summary.responseText, line: summary.responseText),
+                    "a plain summary reads as its text")
             #expect(raw["isHeadnoteDraft"] as? Bool == false, "the draft flag is written, false too")
             #expect(raw["fromResearchDatabase"] as? Bool == false, "the research database's mark is written, false too (S16e)")
             #expect(raw["deletable"] as? Bool == true, "the reader's own may be deleted")
@@ -57,6 +59,7 @@ import Testing
             #expect(editing.status == .ok)
             var edited = summary
             edited.responseText = "Edited."
+            edited.reading = SummaryReading(fields: nil, text: "Edited.", line: "Edited.")
             #expect(try decode(Summary.self, editing) == edited, "the fixture's clock stands still")
             let deleted = try await browser.send(.delete, Self.summary(summary.id))
             #expect(deleted.status == .noContent && deleted.body.readableBytes == 0)
@@ -107,6 +110,16 @@ import Testing
             #expect(listed.items.map(\.responseFormat) == ["general", "general", "structured", "unknown"])
             #expect(listed.items.map(\.wasChunked) == [false, false, true, false])
             #expect(listed.items[2].responseText == #"{"People":"Kennedy"}"# && listed.items[2].projectId == "CC000000-0000-4000-8000-000000000003")
+            // As the app's readers show each since FRUS-Explorer#1824: a structured summary's fields, labelled;
+            // any other's text, as it is stored, a format the kit cannot read among them.
+            #expect(listed.items[2].reading == SummaryReading(fields: [.init(label: "People", text: "Kennedy")], text: "People: Kennedy",
+                                                              line: "People: Kennedy"))
+            #expect(listed.items.map(\.reading) == listed.items.map {
+                $0.responseFormat == "structured" ? listed.items[2].reading : SummaryReading(fields: nil, text: $0.responseText, line: $0.responseText)
+            })
+            let rawReading = try #require(try JSONSerialization.jsonObject(with: Data(buffer: try await browser.get(Self.d1).body)) as? [String: Any])
+            let firstReading = try #require(((rawReading["items"] as? [[String: Any]])?.first)?["reading"] as? [String: Any])
+            #expect(firstReading["fields"] is NSNull, "a plain summary's fields are null")
             #expect(listed.items[3].createdAt == nil)
             #expect(listed.items.allSatisfy { !$0.editable }, "only the reader's own")
             #expect(listed.items.allSatisfy { !$0.isHeadnoteDraft }, "the imported headnote too, though it shares the draft's prompt")

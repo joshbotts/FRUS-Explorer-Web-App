@@ -76,6 +76,15 @@ struct ServerComponents: Sendable {
                 try await serverLock.lock(.shared)
             }
             let userStore = try await SQLiteUserStore(url: files.userStore, backupsDirectory: files.backupsDirectory)
+            // As the app's launch sync: a row written before a summary was searched by its fields (the pin
+            // move to `fe9325b2`) takes them. The PostgreSQL store's copy is made again at each start. As
+            // the app's, it is no reason not to start: a search over the user's writing is all it serves.
+            do {
+                let synced = try userStore.syncSummarySearchText()
+                if synced > 0 { logger.info("app.db's search text of \(synced) documents' summaries was rewritten as their fields") }
+            } catch {
+                logger.warning("app.db's search text of the users' summaries could not be brought up to date: \(error)")
+            }
             let copies = configuration.backupCopyDirectory
             let problem = copies.flatMap(UserStoreBackups.problem(writing:))
             if let migration = userStore.migration {

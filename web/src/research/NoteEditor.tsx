@@ -32,6 +32,7 @@ import { useNoteEditorRichText } from '../settings/preferences';
 import { useListOrder } from '../settings/syncedPreferences';
 import { applyOrder } from './listOrder';
 import { closeAtOnce, Modal } from '../shell/Modal';
+import { SummaryReadingText } from './SummaryReadingText';
 
 const RichTextEditor = lazy(() => import('../editor/RichTextEditor'));
 
@@ -183,20 +184,24 @@ export function NoteEditor({
     }
   }
 
-  /** Insert into note, as the app's: the summary's text after a blank line, or alone in an empty note. */
+  /**
+   * Insert into note, as the app's: the summary's plain text, a structured one's fields as *Label: text*
+   * paragraphs since FRUS-Explorer#1824, after a blank line, or alone in an empty note.
+   */
   function insert(summary: Summary) {
     if (!draft || draft.selectedSummaryIds.some((id) => upper(id) === upper(summary.id))) return;
     setDraft({ ...draft, selectedSummaryIds: [...draft.selectedSummaryIds, summary.id] });
     const { text } = draft.body;
+    const inserted = summary.reading.text;
     if (formatted && editorHandle.current) {
       // The web's own: added to the formatted text, whose formatting stays, where the app's drops it.
-      editorHandle.current.insertSummary(summary.responseText);
+      editorHandle.current.insertSummary(inserted);
     } else if (formatted) {
       // The same while the formatting editor is still loading: added to the runs it will open with.
-      const runs = withSummary(draft.body.runs, text, summary.responseText);
+      const runs = withSummary(draft.body.runs, text, inserted);
       setBody({ text: runsText(runs), runs, edited: true });
     } else {
-      setBody({ text: text === '' ? summary.responseText : `${text}\n\n${summary.responseText}`, runs: null, edited: true });
+      setBody({ text: text === '' ? inserted : `${text}\n\n${inserted}`, runs: null, edited: true });
     }
   }
 
@@ -443,15 +448,16 @@ export function NoteEditor({
 }
 
 /**
- * A summary in the editor's Generated Summaries, its text to three lines, with Insert into note, or
- * Remove from note once it is in, which only unticks it, as the app's leaves the text.
+ * A summary in the editor's Generated Summaries, as the reader shows it (a structured summary's fields),
+ * to three lines, with Insert into note, or Remove from note once it is in, which only unticks it, as the
+ * app's leaves the text.
  */
 function SummaryRow({ summary, inserted, onInsert, onRemove }: { summary: Summary; inserted: boolean; onInsert: () => void; onRemove: () => void }) {
   const textId = useId();
   return (
     <li className="note-summary">
       <p id={textId} className="note-summary-text">
-        {summary.responseText}
+        <SummaryReadingText reading={summary.reading} />
       </p>
       {inserted ? (
         <button type="button" className="destructive" aria-describedby={textId} onClick={onRemove}>

@@ -304,6 +304,38 @@ describe('the note editor', () => {
     });
   });
 
+  it('shows a structured summary as its fields, and inserts them as Label: text paragraphs, as the app has since #1824', async () => {
+    plainMode();
+    const structured = summary({
+      id: 'S3000000-0000-4000-8000-000000000000',
+      responseText: '{"Summary": "A meeting.", "KeyParticipants": "Rusk"}',
+      responseFormat: 'structured',
+      authorship: 'aiGenerated',
+      editable: false,
+      reading: {
+        fields: [
+          { label: 'Key Participants', text: 'Rusk' },
+          { label: 'Summary', text: 'A meeting.' },
+        ],
+        text: 'Key Participants: Rusk\n\nSummary: A meeting.',
+        line: 'Key Participants: Rusk Summary: A meeting.',
+      },
+    });
+    server({
+      [notePath]: note({ id: noteId, bodyText: '' }),
+      [documentPaths.summaries]: { volumeId: 'frus1961-63v06', documentId: 'd1', items: [structured] },
+    });
+    editNote();
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Note' });
+    const section = await within(dialog).findByRole('region', { name: 'Generated Summaries' });
+    const row = within(section).getByRole('listitem');
+    expect([...row.querySelectorAll('strong')].map((label) => label.textContent)).toEqual(['Key Participants:', 'Summary:']);
+    await userEvent.click(within(row).getByRole('button', { name: 'Insert into note' }));
+    expect((within(dialog).getByRole('textbox', { name: 'Research note body' }) as HTMLTextAreaElement).value).toBe(
+      'Key Participants: Rusk\n\nSummary: A meeting.',
+    );
+  });
+
   it('inserts a summary into the formatted text, keeping its formatting, the web’s own', async () => {
     const only = summary({ id: 'S1000000-0000-4000-8000-000000000000', responseText: 'A summary.' });
     const fetch = server({

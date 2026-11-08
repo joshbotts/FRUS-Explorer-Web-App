@@ -59,7 +59,21 @@ describe('the rail’s Summary', () => {
       [documentPaths.summaries]: documentSummaries([
         summary({ id: 'A', responseText: 'The newest, edited.', authorship: 'aiEdited', promptName: 'Meeting Record', editable: false }),
         summary({ id: 'B', responseText: 'Mine.', authorship: 'userWritten' }),
-        summary({ id: 'C', responseText: '{"summary": "The model’s."}', authorship: 'aiGenerated', responseFormat: 'structured', editable: false }),
+        summary({
+          id: 'C',
+          responseText: '{"Summary": "The model’s.", "KeyParticipants": ""}',
+          authorship: 'aiGenerated',
+          responseFormat: 'structured',
+          editable: false,
+          reading: {
+            fields: [
+              { label: 'Summary', text: 'The model’s.' },
+              { label: 'Key Participants', text: '' },
+            ],
+            text: 'Summary: The model’s.\n\nKey Participants:',
+            line: 'Summary: The model’s. Key Participants:',
+          },
+        }),
       ]),
     });
     renderAt('/doc/frus1961-63v06/d1?rail=research');
@@ -83,8 +97,12 @@ describe('the rail’s Summary', () => {
     expect(header().querySelector('.summary-prompt')).toBeNull();
     expect(within(region()).getByRole('button', { name: 'Edit…' })).toBeTruthy();
     await userEvent.click(older);
-    // A structured summary's text is shown raw, as the app shows it.
-    expect(within(region()).getByText('{"summary": "The model’s."}')).toBeTruthy();
+    // A structured summary shows its fields one to a line, each label in bold, as the app's reader has since
+    // FRUS-Explorer#1824, and never its JSON.
+    const text = region().querySelector('.summary-text')!;
+    expect([...text.querySelectorAll('strong')].map((label) => label.textContent)).toEqual(['Summary:', 'Key Participants:']);
+    expect(text.querySelectorAll('br')).toHaveLength(1);
+    expect(text.textContent).toBe('Summary: The model’s.Key Participants: ');
     expect(header().querySelector('.summary-label')?.textContent).toBe('AI summary');
     expect(older.getAttribute('aria-disabled')).toBe('true');
     await userEvent.click(older);
@@ -114,6 +132,20 @@ describe('the rail’s Summary', () => {
     expect([...header.querySelectorAll('.summary-prompt')].map((part) => part.textContent)).toEqual(['· From a research database']);
     expect(within(region()).queryByRole('button', { name: 'Edit…' })).toBeNull();
     expect(within(region()).getByRole('button', { name: 'Delete…' })).toBeTruthy();
+  });
+
+  it('previews a structured summary’s fields on one line, never its JSON', async () => {
+    const reading = { fields: [{ label: 'Summary', text: 'A meeting.' }], text: 'Summary: A meeting.', line: 'Summary: A meeting.' };
+    reader({
+      [documentPaths.summaries]: documentSummaries([
+        summary({ id: 'S', responseText: '{"Summary": "A meeting."}', responseFormat: 'structured', editable: false, reading }),
+      ]),
+    });
+    renderAt('/doc/frus1961-63v06/d1?rail=research');
+    const { rail, region } = await section();
+    await within(region()).findByText('Summary:');
+    await userEvent.click(within(rail).getByRole('button', { name: 'Summary' }));
+    expect(within(rail).getByRole('button', { name: 'Summary, Summary: A meeting.…' })).toBeTruthy();
   });
 
   it('previews the summary shown in its header when it is closed, and shows no control for one summary', async () => {

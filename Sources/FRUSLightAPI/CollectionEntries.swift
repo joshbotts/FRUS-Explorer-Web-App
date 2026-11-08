@@ -61,7 +61,11 @@ public struct EntryInspector: Codable, Equatable, Sendable, ResponseEncodable {
 
     public struct Headnote: Codable, Equatable, Sendable {
         public var summaryId: String
+        /// Its text as stored.
         public var text: String
+        /// As the card shows it, a structured summary's fields (the summary's `readerText`), and the text
+        /// Edit opens on, `headnoteSeedText(_:)`, which is the reading's plain text.
+        public var reading: SummaryReading
         /// Who wrote it, the kit's `SummaryAuthorship`, a missing one `aiGenerated`, which the card's chip
         /// reads as AI draft, AI · edited or Yours.
         public var authorship: String
@@ -85,9 +89,13 @@ public struct EntryInspector: Codable, Equatable, Sendable, ResponseEncodable {
     }
 
     public struct ShownSummary: Codable, Equatable, Sendable {
+        /// Its text as stored.
         public var text: String
         /// Its prompt's name, while the user has the prompt.
         public var promptName: String?
+        /// As the inspector's AI summary row shows it (`summaryPreview`, the summary's `readerText`):
+        /// a structured summary's fields.
+        public var reading: SummaryReading
     }
 
     public struct Resolved: Codable, Equatable, Sendable {
@@ -671,7 +679,9 @@ enum CollectionEntryRoutes {
                              included: CollectionEditing.highlightIncluded(id, in: entry))
             },
             tags: tagNames.sorted(),
-            summary: summary.map { .init(text: $0.responseText, promptName: prompts[UserSearchText.uuidString($0.promptId)]) },
+            summary: summary.map {
+                .init(text: $0.responseText, promptName: prompts[UserSearchText.uuidString($0.promptId)], reading: SummaryReading($0))
+            },
             resolved: resolved.map {
                 .init(bodyDepth: $0.bodyDepth.rawValue, highlights: $0.highlights, notes: $0.notes, sourceNote: $0.sourceNote,
                       footnotes: $0.footnotes, related: $0.related, summaryPromptId: $0.summaryPromptId?.uuidString, headnote: $0.headnote)
@@ -682,7 +692,7 @@ enum CollectionEntryRoutes {
             sourceNote: facts?.sourceNote,
             summaryOnlyOffered: !shown.isEmpty,
             headnote: headnote.map {
-                .init(summaryId: $0.id, text: $0.responseText,
+                .init(summaryId: $0.id, text: $0.responseText, reading: SummaryReading($0),
                       authorship: ($0.authorship.flatMap(SummaryAuthorship.init(rawValue:)) ?? .aiGenerated).rawValue,
                       isDraft: $0.isHeadnoteDraft)
             })

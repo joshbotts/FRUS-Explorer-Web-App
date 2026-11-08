@@ -609,22 +609,31 @@ enum CollectionEditing {
         return promptId.flatMap { pid in candidates.first { UUID(uuidString: $0.promptId) == pid } } ?? candidates.first
     }
 
+    /// `headnoteSeedText(_:)`: the text Edit opens a headnote on, the seed's fields as *Label: text*
+    /// paragraphs for a structured summary and its text as stored for any other, empty with no seed.
+    static func headnoteSeedText(_ seed: SummaryRecord?) -> String {
+        seed.map { SummaryDisplay.plainText($0) } ?? ""
+    }
+
     /// What `commitHeadnote(seed:)` saves, nil for nothing: the text trimmed, nothing when that is empty or
-    /// the seed's own text trimmed; AI · edited when the seed is the model's, generated or edited, and holds
-    /// text, else Yours. A seed with no authorship is the model's, as every reader takes one.
+    /// the seed's text as Edit showed it (`headnoteSeedText(_:)`), trimmed; AI · edited when the seed is the
+    /// model's, generated or edited, and holds text, else Yours. A seed with no authorship is the model's,
+    /// as every reader takes one.
     static func headnoteCommit(_ text: String, seed: SummaryRecord?) -> (text: String, authorship: SummaryAuthorship)? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, seed?.responseText.trimmingCharacters(in: .whitespacesAndNewlines) != trimmed else { return nil }
+        guard !trimmed.isEmpty, headnoteSeedText(seed).trimmingCharacters(in: .whitespacesAndNewlines) != trimmed else { return nil }
         let seedAuthorship = seed.map { $0.authorship.flatMap(SummaryAuthorship.init(rawValue:)) ?? .aiGenerated }
         let seedIsAIDerived = seedAuthorship == .aiGenerated || seedAuthorship == .aiEdited
         let authorship: SummaryAuthorship = (seedIsAIDerived && !(seed?.responseText.isEmpty ?? true)) ? .aiEdited : .userWritten
         return (trimmed, authorship)
     }
 
-    /// `swapHeadnoteDraft(text:authorship:)`'s new draft on the entry's document:
-    /// `GeneratedSummary(documentId:volumeId:promptId:responseText:authorship:isHeadnoteDraft:)` under the
-    /// drafts' prompt, made now, every other field at its initial value. The draft the entry named before
-    /// is deleted with the write that makes this one, if it is a draft.
+    /// `swapHeadnoteDraft(text:authorship:format:)`'s new draft on the entry's document, as Edit's commit
+    /// makes it, in `.general`, the format of the plain text it saves:
+    /// `GeneratedSummary(documentId:volumeId:promptId:responseText:responseFormat:authorship:isHeadnoteDraft:)`
+    /// under the drafts' prompt, made now, every other field at its initial value. The draft the entry named
+    /// before is deleted with the write that makes this one, if it is a draft. Regenerate, which writes the
+    /// prompt's format, is the summarizer's, which this server has not.
     static func headnoteDraft(_ text: String, authorship: SummaryAuthorship, of entry: CollectionEntryExport,
                               at time: Date) -> GeneratedSummaryExport {
         GeneratedSummaryExport(id: UUID(), documentId: entry.documentId, volumeId: entry.volumeId, promptId: headnoteDraftPromptId,

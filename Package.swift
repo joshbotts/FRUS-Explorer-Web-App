@@ -179,14 +179,16 @@ let package = Package(
         ),
 
         // Web-only logic: configuration, Import mode, readiness, and the five v1 interfaces. It
-        // links no shared kit: SQLite; swift-crypto, for SHA-1 in the name-based ids of what an import
-        // takes from a research database (S16e), whose strip the kit gives it, and SHA-256 for the
-        // user store's backups (S14b); and since S14d PostgresNIO, for the user store's PostgreSQL
-        // implementation, with NIO's event loops and TLS beneath it.
+        // links SQLite; swift-crypto, for SHA-1 in the name-based ids of what an import takes from a
+        // research database (S16e), whose strip the kit gives it, and SHA-256 for the user store's
+        // backups (S14b); since S14d PostgresNIO, for the user store's PostgreSQL implementation, with
+        // NIO's event loops and TLS beneath it; and since the pin move to `fe9325b2` the kit, whose
+        // `StructuredSummaryDisplay` gives the text a summary is searched by, as the app's index holds
+        // it (FRUS-Explorer#1824).
         .target(
             name: "FRUSLightCore",
             dependencies: [
-                "CSQLite",
+                "CSQLite", "FRUSCoreKit",
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "PostgresNIO", package: "postgres-nio"),
                 .product(name: "NIOCore", package: "swift-nio"),

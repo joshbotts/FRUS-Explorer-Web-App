@@ -2,10 +2,12 @@
 // the Mac's `user_content` holds a document's note and summary text, rewritten in the transaction of
 // every note and summary change, so that S17d's search finds what was written a moment ago. The text
 // is the app's: its notes joined as `ResearchNote.indexedTextPerDocument` joins them, and its newest
-// summary but a headnote draft, as `GeneratedSummary.newestNonDraftPerDocument` picks it, each app
-// code mirrored here with a parity test that reads the app's source. The rows are written to the
-// database the kit's search attaches (S14d): app.db itself, or the PostgreSQL store's local copy,
-// which holds the tag assignments too, copied from the store beside each change to them.
+// summary but a headnote draft, as `GeneratedSummary.newestNonDraftPerDocument` picks it, in the
+// summary's `indexedText`, a structured summary's fields as plain text (`SummaryDisplay`) since the pin
+// move to `fe9325b2`, each app code mirrored here with a parity test that reads the app's source. The
+// rows are written to the database the kit's search attaches (S14d): app.db itself, or the PostgreSQL
+// store's local copy, which holds the tag assignments too, copied from the store beside each change to
+// them.
 
 import Foundation
 
@@ -31,12 +33,13 @@ public enum UserSearchText {
         return text.isEmpty ? nil : text
     }
 
-    /// `GeneratedSummary.newestNonDraftPerDocument` for one document's summaries: the text of the
-    /// newest by `SummaryOrder.ranksAbove` that is not a headnote draft, or nil when every one is,
-    /// which clears the column, as the app's `draftOnlyDocuments` does.
+    /// `GeneratedSummary.newestNonDraftPerDocument` for one document's summaries: the newest by
+    /// `SummaryOrder.ranksAbove` that is not a headnote draft, in its `indexedText`, a structured
+    /// summary's fields as plain text and any other's text as stored (`SummaryDisplay.plainText`), or nil
+    /// when every one is a draft, which clears the column, as the app's `draftOnlyDocuments` does.
     public static func summaryText(_ summaries: [SummaryRecord]) -> String? {
         summaries.filter { !$0.isHeadnoteDraft && !$0.volumeId.isEmpty && !$0.documentId.isEmpty }
-            .min(by: SummaryOrder.ranksAbove)?.responseText
+            .min(by: SummaryOrder.ranksAbove).map { SummaryDisplay.plainText($0) }
     }
 
     /// An id as the app's `uuidString` spells it, in uppercase; one that is no UUID, in uppercase too.
@@ -77,13 +80,13 @@ extension RelationalUserStore {
         var summaries: [DocumentKey: [SummaryRecord]] = [:]
         for row in try db.query(
             """
-            SELECT id, volume_id, document_id, response_text, is_headnote_draft, created_at, last_modified FROM summaries
-                WHERE user_id = ?
+            SELECT id, volume_id, document_id, response_text, is_headnote_draft, created_at, last_modified, response_format
+                FROM summaries WHERE user_id = ?
             """, [.text(user)]) {
             let document = DocumentKey(volumeId: row[1].text ?? "", documentId: row[2].text ?? "")
             summaries[document, default: []].append(SummaryRecord(
                 id: row[0].text ?? "", volumeId: document.volumeId, documentId: document.documentId, promptId: "",
-                responseText: row[3].text ?? "", responseFormat: "", wasChunked: false, authorship: nil,
+                responseText: row[3].text ?? "", responseFormat: row[7].text ?? "", wasChunked: false, authorship: nil,
                 isHeadnoteDraft: row[4].integer == 1, sourceContentHash: nil, projectId: nil,
                 createdAt: row[5].text.flatMap(UserStoreDate.date), lastModified: row[6].text.flatMap(UserStoreDate.date)))
         }
@@ -96,6 +99,50 @@ extension RelationalUserStore {
         }
         try copyTagAssignments(for: user, in: db)
         return written
+    }
+
+    /// The app's launch sync of a document's summary text, which pushes each document's newest summary
+    /// but a draft (`GeneratedSummary.newestNonDraftPerDocument`) in its `indexedText` and skips a row
+    /// already current, so that the first launch after 31 October rewrote, once, each row that held a
+    /// structured summary's JSON: here, each row of `user_search` whose summary text is not
+    /// `UserSearchText.summaryText` of its user's summaries of its document, written again in one
+    /// transaction, and one left with no text in either column deleted, as `writeSearchRow` keeps none.
+    /// No row is added, since a change to a document's notes or summaries writes its row whole. The
+    /// summaries and the rows are each read once and compared here, by rowid: a `WHERE` on the table's
+    /// `UNINDEXED` columns would read all of it for every document. Returns how many rows it changed:
+    /// none for a store already current, which so writes nothing a backup would count.
+    public func syncSummarySearchText() throws -> Int {
+        try writing { db in
+            var summaries: [String: [DocumentKey: [SummaryRecord]]] = [:]
+            for row in try db.query(
+                """
+                SELECT user_id, id, volume_id, document_id, response_text, response_format, is_headnote_draft, created_at,
+                    last_modified FROM summaries
+                """, []) {
+                let document = DocumentKey(volumeId: row[2].text ?? "", documentId: row[3].text ?? "")
+                summaries[row[0].text ?? "", default: [:]][document, default: []].append(SummaryRecord(
+                    id: row[1].text ?? "", volumeId: document.volumeId, documentId: document.documentId, promptId: "",
+                    responseText: row[4].text ?? "", responseFormat: row[5].text ?? "", wasChunked: false, authorship: nil,
+                    isHeadnoteDraft: row[6].integer == 1, sourceContentHash: nil, projectId: nil,
+                    createdAt: row[7].text.flatMap(UserStoreDate.date), lastModified: row[8].text.flatMap(UserStoreDate.date)))
+            }
+            // The searchable database is SQLite's on both stores: app.db, or the PostgreSQL store's copy.
+            var changed = 0
+            for row in try db.search.query("SELECT rowid, user_id, volume_id, document_id, summary_text, note_text FROM user_search", []) {
+                guard let rowid = row[0].integer else { continue }
+                let document = DocumentKey(volumeId: row[2].text ?? "", documentId: row[3].text ?? "")
+                let rule = (summaries[row[1].text ?? ""]?[document]).flatMap(UserSearchText.summaryText).flatMap { $0.isEmpty ? nil : $0 }
+                guard row[4].text != rule else { continue }
+                if rule == nil, (row[5].text ?? "").isEmpty {
+                    _ = try db.search.query("DELETE FROM user_search WHERE rowid = ?", [.integer(rowid)])
+                } else {
+                    _ = try db.search.query("UPDATE user_search SET summary_text = ? WHERE rowid = ?",
+                                            [rule.map(SQLiteValue.text) ?? .null, .integer(rowid)])
+                }
+                changed += 1
+            }
+            return changed
+        }
     }
 
     /// Where the searchable database is a copy, makes its rows of the user's assignments on each of

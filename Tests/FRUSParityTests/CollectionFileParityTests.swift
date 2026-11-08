@@ -228,8 +228,8 @@ import Testing
             "let snapshot = SmartCollectionSnapshot.create(from: collection, results: refs, into: modelContext)",
             "if let pid = appState.activeProjectId, !snapshot.projectIds.contains(pid) { snapshot.projectIds.append(pid) }",
             "collectionToEdit = snapshot",
-            // Create Static Snapshot is on a smart collection's row alone
-            "if collection.savedSearchId != nil { Divider() Button { Task { await snapshotSmartCollection(collection) } }",
+            // Create Static Snapshot is on a smart collection's row alone, after Word Cloud since #1831
+            "if collection.savedSearchId != nil { Button { Task { await snapshotSmartCollection(collection) } }",
             ".fileImporter(isPresented: $isImporting, allowedContentTypes: [.fruscollection], allowsMultipleSelection: false)",
         ], file: "CollectionListView.swift")
         NoteViewParityTests.expect(try CollectionParityTests.app("Collections/SmartCollectionSnapshot+App.swift"), holds: [
@@ -268,14 +268,19 @@ import Testing
             "if let sid = entry.headnoteSummaryId, let chosen = try? modelContext.fetch( FetchDescriptor<GeneratedSummary>(predicate: #Predicate { $0.id == sid })).first, !chosen.responseText.isEmpty { return chosen }",
             "predicate: #Predicate { $0.volumeId == vid && $0.documentId == did && !$0.isHeadnoteDraft }))) ?? []) .filter { !$0.responseText.isEmpty }",
             "let promptId = entry.summaryPromptIdOverride ?? resolvedEntryDefaults?.summaryPromptId return promptId.flatMap { pid in stored.first { $0.promptId == pid } } ?? stored.first",
-            // commitHeadnote(seed:)
+            // commitHeadnote(seed:), against the seed as Edit showed it (#1824)
             "let trimmed = headnoteDraft.trimmingCharacters(in: .whitespacesAndNewlines)",
-            "guard !trimmed.isEmpty, seed?.responseText.trimmingCharacters(in: .whitespacesAndNewlines) != trimmed else { return }",
+            "guard !trimmed.isEmpty, Self.headnoteSeedText(seed).trimmingCharacters(in: .whitespacesAndNewlines) != trimmed else { return }",
+            // headnoteSeedText(_:), which Edit opens on
+            #"nonisolated static func headnoteSeedText(_ summary: GeneratedSummary?) -> String { summary?.plainReaderText() ?? "" }"#,
+            "headnoteDraft = Self.headnoteSeedText(summary)",
             "let seedAuthorship = seed.map { $0.authorship ?? .aiGenerated } let seedIsAIDerived = seedAuthorship == .aiGenerated || seedAuthorship == .aiEdited",
             "(seedIsAIDerived && !(seed?.responseText.isEmpty ?? true)) ? .aiEdited : .userWritten",
-            // swapHeadnoteDraft(text:authorship:)
+            // swapHeadnoteDraft(text:authorship:format:), whose format Edit's commit leaves at .general
+            "private func swapHeadnoteDraft(text: String, authorship: SummaryAuthorship, format: ResponseFormat = .general) {",
+            "swapHeadnoteDraft(text: trimmed, authorship: authorship)",
             "existing.isHeadnoteDraft { modelContext.delete(existing) }",
-            "let draft = GeneratedSummary(documentId: entry.documentId, volumeId: entry.volumeId, promptId: Self.headnoteDraftPromptId, responseText: text, authorship: authorship, isHeadnoteDraft: true)",
+            "let draft = GeneratedSummary(documentId: entry.documentId, volumeId: entry.volumeId, promptId: Self.headnoteDraftPromptId, responseText: text, responseFormat: format, authorship: authorship, isHeadnoteDraft: true)",
             "entry.headnoteSummaryId = draft.id",
             // the card shows where the headnote is on, and its Save is dimmed for no text
             "if entry.includeHeadnote ?? rd?.headnote ?? false { headnoteCard }",
@@ -328,7 +333,9 @@ import Testing
             #"static let headnoteDraftPromptId = UUID(uuidString: "0EAD0000-0000-4000-8000-000000000001")!"#,
             "if let chosen, !chosen.responseText.isEmpty { return chosen }",
             "let candidates = stored.filter { !$0.isHeadnoteDraft && !$0.responseText.isEmpty } return promptId.flatMap { pid in candidates.first { UUID(uuidString: $0.promptId) == pid } } ?? candidates.first",
-            "guard !trimmed.isEmpty, seed?.responseText.trimmingCharacters(in: .whitespacesAndNewlines) != trimmed else { return nil }",
+            #"seed.map { SummaryDisplay.plainText($0) } ?? """#,
+            "guard !trimmed.isEmpty, headnoteSeedText(seed).trimmingCharacters(in: .whitespacesAndNewlines) != trimmed else { return nil }",
+            "responseText: text, responseFormat: .general, wasChunked: false, projectId: nil, createdAt: time,",
             "let seedIsAIDerived = seedAuthorship == .aiGenerated || seedAuthorship == .aiEdited",
             "(seedIsAIDerived && !(seed?.responseText.isEmpty ?? true)) ? .aiEdited : .userWritten",
         ], file: "CollectionEditing.swift")

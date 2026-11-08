@@ -113,6 +113,40 @@ import Testing
         #expect(UserSearchText.summaryText([Self.summary("10000000-0000-4000-8000-000000000001", created: 1, modified: nil, draft: true)]) == nil)
     }
 
+    /// Since #1824 every writer of the app's summary text writes the summary's `indexedText`, its
+    /// `plainReaderText()`: the kit's `StructuredSummaryDisplay.plainText` over its format, a structured
+    /// summary's fields as *Label: text* paragraphs and any other's text as stored; and the launch's sync
+    /// rewrites a row that still held a structured summary's JSON. `UserSearchText.summaryText` writes
+    /// `SummaryDisplay.plainText`, the same call, and the server's start runs `syncSummarySearchText()`.
+    @Test func aSummaryIsSearchedByItsIndexedTextAsTheAppWritesIt() throws {
+        let display = Self.flattened(try Self.read("Summarization/StructuredSummaryText.swift"))
+        for line in [
+            #"func plainReaderText(separator: String = "\n\n") -> String { StructuredSummaryDisplay.plainText(responseText: responseText, format: responseFormat, separator: separator) }"#,
+            "var indexedText: String { plainReaderText() }",
+        ] {
+            #expect(display.contains(line), "\(line)")
+        }
+        #expect(Self.flattened(try Self.read("Search/IndexingPipeline+App.swift")).contains("responseText: summary.indexedText"))
+        let launch = Self.flattened(try Self.read("App/FRUSExplorerApp.swift"))
+        #expect(launch.components(separatedBy: "let text = summary.indexedText try? await pipeline.updateSummaryText(volumeId: vid, documentId: did, responseText: text)").count == 3,
+                "the launch's sync and the summaries' re-push both write the summary's indexedText")
+        #expect(Self.flattened(try Self.read("Summarization/SummarizationService.swift")).contains("let text = summary.indexedText"))
+        let schema = String(decoding: try JSONEncoder().encode(ResponseFormat.structured(schema: StructuredSummarySchema(
+            fields: [.init(name: "KeyParticipants", description: "Who"), .init(name: "Background", description: "What")]))), as: UTF8.self)
+        var structured = Self.summary("10000000-0000-4000-8000-000000000001", created: 100, modified: nil,
+                                      text: #"{"Background": "Berlin.", "KeyParticipants": "Rusk"}"#)
+        structured.responseFormat = schema
+        #expect(UserSearchText.summaryText([structured]) == "Key Participants: Rusk\n\nBackground: Berlin.")
+        #expect(SummaryDisplay.plainText(structured, separator: " ") == "Key Participants: Rusk Background: Berlin.")
+        structured.responseFormat = #"{"general":{}}"#
+        #expect(UserSearchText.summaryText([structured]) == #"{"Background": "Berlin.", "KeyParticipants": "Rusk"}"#, "a general summary as stored")
+        let server = Self.flattened(try String(contentsOf: RepositoryFiles.root.appendingPathComponent("Sources/FRUSLightCore/UserSearchIndex.swift"),
+                                               encoding: .utf8))
+        #expect(server.contains(".min(by: SummaryOrder.ranksAbove).map { SummaryDisplay.plainText($0) }"))
+        #expect(try String(contentsOf: RepositoryFiles.root.appendingPathComponent("Sources/FRUSLightAPI/Application.swift"), encoding: .utf8)
+            .contains("let synced = try userStore.syncSummarySearchText()"))
+    }
+
     /// `UserSearchText.noteText` is `indexedTextPerDocument` for one document: oldest first by
     /// `createdAt`, none first of all, then by `uuidString`; blank bodies left out; joined by the
     /// app's separator; none when nothing is left (`noteTextWrite`'s `.clear`). Since #1792 the app
@@ -153,7 +187,8 @@ import Testing
         let reserved = try #require(inspector.firstMatch(of: /static let headnoteDraftPromptId = UUID\(uuidString: "([0-9A-F-]+)"\)!/)?.1)
         #expect(reserved == "0EAD0000-0000-4000-8000-000000000001")
         #expect(OwnSummary.promptId != String(reserved) && UUID(uuidString: OwnSummary.promptId)?.uuidString == OwnSummary.promptId)
-        #expect(Self.flattened(inspector).contains("promptId: Self.headnoteDraftPromptId, responseText: text, authorship: authorship, isHeadnoteDraft: true)"))
+        #expect(Self.flattened(inspector).contains(
+            "promptId: Self.headnoteDraftPromptId, responseText: text, responseFormat: format, authorship: authorship, isHeadnoteDraft: true)"))
         #expect(OwnSummary.authorship == SummaryAuthorship.userWritten.rawValue)
         #expect(SummaryAuthorship.allCases.map(\.rawValue) == ["aiGenerated", "aiEdited", "userWritten"])
         // The app's own JSON for a general summary's format, which the store keeps as the kit encodes it.

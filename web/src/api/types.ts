@@ -671,6 +671,21 @@ export interface DocumentNotes {
 /** A summary's authorship, as the kit's `SummaryAuthorship` names it; the store's null reads as AI. */
 export type SummaryAuthorship = 'aiGenerated' | 'aiEdited' | 'userWritten';
 
+/**
+ * A summary as the app's readers show it since FRUS-Explorer#1824, the kit's `StructuredSummaryDisplay`
+ * on the server: a structured summary's fields, each labelled, drawn one to a line with the label in
+ * bold; and its plain text, the fields as *Label: text* paragraphs, which Insert into note and a
+ * headnote's Edit take, and on one line, which the rail's closed Summary previews. Any other summary
+ * has no fields, and its text as stored in both.
+ */
+export interface SummaryReading {
+  fields: { label: string; text: string }[] | null;
+  /** `plainReaderText()`: the fields as paragraphs, a blank line between them, or the text as stored. */
+  text: string;
+  /** `plainReaderText(separator: " ")`: the same on one line. */
+  line: string;
+}
+
 /** A summary of a document: one the researcher wrote here, or one imported from the Mac. */
 export interface Summary {
   id: string;
@@ -679,9 +694,11 @@ export interface Summary {
   promptId: string;
   /** The name of the prompt that made it, only while the user's prompts hold that prompt. */
   promptName: string | null;
-  /** The text, raw: a structured summary's JSON as the app shows it. */
+  /** The text as stored: a structured summary's JSON. */
   responseText: string;
   responseFormat: 'general' | 'structured' | 'unknown';
+  /** As the app's readers show it: a structured summary's fields. */
+  reading: SummaryReading;
   wasChunked: boolean;
   authorship: SummaryAuthorship;
   /**

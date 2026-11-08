@@ -22,6 +22,7 @@ import {
 } from '../api/collections';
 import { createNote, projectsQuery } from '../api/userData';
 import { copy } from '../copy';
+import { SummaryReadingText } from '../research/SummaryReadingText';
 import { closeAtOnce, Modal } from '../shell/Modal';
 import { useActiveProjectId } from '../shell/ProjectPicker';
 import { ChosenCheckbox, ChosenSelect } from './chosen';
@@ -294,7 +295,9 @@ export function EntryInspector({ detail, entryId, onClose }: { detail: Collectio
             {data.summary && (
               <div className="inspector-summary">
                 <p className="note">{data.summary.promptName ? words.summaryFromPrompt(data.summary.promptName) : words.summary}</p>
-                <p className="summary-preview">{data.summary.text}</p>
+                <p className="summary-preview">
+                  <SummaryReadingText reading={data.summary.reading} />
+                </p>
               </div>
             )}
           </section>
@@ -394,8 +397,10 @@ export function EntryInspector({ detail, entryId, onClose }: { detail: Collectio
 
 /**
  * The headnote card (`headnoteCard`): Key takeaway · headnote, the chip of who wrote the summary it shows,
- * its text, or the app's line for none, and Edit, which opens the text to change, Cancel and Save, Save
- * dimmed while the text is empty. What it saves is the server's, `commitHeadnote(seed:)`'s rule.
+ * its text as the reader shows it, a structured summary's fields, or the app's line for none, and Edit,
+ * which opens on the text to change, a structured summary's fields as *Label: text* paragraphs
+ * (`headnoteSeedText(_:)`), Cancel and Save, Save dimmed while the text is empty. What it saves is the
+ * server's, `commitHeadnote(seed:)`'s rule.
  */
 function HeadnoteCard({ collectionId, entryId, headnote }: { collectionId: string; entryId: string; headnote: Inspected['headnote'] }) {
   const client = useQueryClient();
@@ -460,12 +465,18 @@ function HeadnoteCard({ collectionId, entryId, headnote }: { collectionId: strin
         </>
       ) : (
         <>
-          {headnote ? <p className="headnote-text">{headnote.text}</p> : <p className="note">{words.headnoteEmpty}</p>}
+          {headnote ? (
+            <p className="headnote-text">
+              <SummaryReadingText reading={headnote.reading} />
+            </p>
+          ) : (
+            <p className="note">{words.headnoteEmpty}</p>
+          )}
           <button
             ref={editButton}
             type="button"
             onClick={() => {
-              setDraft(headnote?.text ?? '');
+              setDraft(headnote?.reading.text ?? '');
               setEditing(true);
               requestAnimationFrame(() => field.current?.focus());
             }}
