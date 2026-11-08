@@ -64,7 +64,9 @@ test.beforeEach(async ({ page }) => {
   before = new Set((await listed(page)).map((item) => item.id));
 });
 test.afterEach(async ({ page }) => {
-  if (page.url() === 'about:blank') await page.goto('collections');
+  // From the Collections list, not an editor: an editor's preview, built again a second after a change,
+  // would ask for a collection deleted under it, and the fixture counts the server's 404 as an error.
+  await page.goto('collections');
   for (const item of await listed(page)) if (!before.has(item.id)) await send(page, 'DELETE', `api/v1/me/collections/${item.id}`);
   await removeNotesAndSummaries(page);
 });
