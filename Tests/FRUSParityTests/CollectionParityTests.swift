@@ -536,6 +536,13 @@ import Testing
         NoteViewParityTests.expect(try Self.app("Collections/CollectionListView.swift"), holds: [
             #"Button(String(localized: "common.save", defaultValue: "Save")) { if CollectionEditorCommit.rename(name, to: collection) { try? modelContext.save() } }"#,
         ], file: "CollectionListView.swift")
+        let listSource = try NoteViewParityTests.read(NoteViewParityTests.app, "Collections/CollectionListView.swift")
+        let alertStart = try #require(listSource.range(of: "private struct CollectionRenameAlert: ViewModifier {"))
+        let alertEnd = listSource.range(of: "\n}\n", range: alertStart.upperBound..<listSource.endIndex)?.upperBound ?? listSource.endIndex
+        let renameAlert = listSource[alertStart.lowerBound..<alertEnd]
+        #expect(renameAlert.contains("CollectionEditorCommit.rename(name, to: collection)"))
+        #expect(!renameAlert.contains("recordEdit") && !renameAlert.contains("projectIds"),
+                "the Rename alert never reaches the editor's recordEdit(), nor any project of the collection's")
         NoteViewParityTests.expect(try Self.server("Sources/FRUSLightAPI/CollectionEditing.swift"), holds: [
             "guard !CollectionEditorNaming.fieldAgrees(fieldText, withSavedName: collection.name) else { return false } collection.name = fieldText.trimmingCharacters(in: .whitespacesAndNewlines) return true",
             "guard !fieldText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false } return name(fieldText, to: &collection)",

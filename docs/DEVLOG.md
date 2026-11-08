@@ -149,7 +149,7 @@ The pin move left the app's [#1831](https://github.com/joshbotts/FRUS-Explorer/p
 
 **Held to the app's source.** `CollectionParityTests` gains, beside its lines for the list:
 - in `theAppsWordsAreTheWebs`, Rename, the alert's title, placeholder, Cancel and Save, and the question's title, message, Delete and Cancel, each under its key and in copy.ts's `collections` block;
-- in `theServersMirrorsAreTheApps`, the app's `name` and `rename`, and the alert's Save, which saves what `rename` commits and no more; the server's `CollectionEditing` lines beside them; and the mirror's answers for an empty name, the same name and a new one;
+- in `theServersMirrorsAreTheApps`, the app's `name` and `rename`, and the alert's Save, which saves what `rename` commits and no more; that the alert never reaches the editor's `recordEdit()`, nor any project of the collection's; the server's `CollectionEditing` lines beside them; and the mirror's answers for an empty name, the same name and a new one;
 - in `theWebsMirrorsAreTheApps`, the menu's order, Word Cloud's place in it, the question every delete asks and the name its title gives; and the web's row in the menu's order, the alert's field holding the name as saved, and the question named by the row.
 
 `CollectionFileParityTests`' line for Create Static Snapshot, which the pin move updated for #1831, stands.
