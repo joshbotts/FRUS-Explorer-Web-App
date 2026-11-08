@@ -9,7 +9,9 @@
 #                                when it cannot tell, and ci.yml then runs the three jobs.
 #   scripts/ci-paths selftest    holds the rules to their cases, the verdict to merge commits made as
 #                                GitHub makes them, and ci.yml's conditions on the three jobs to every
-#                                outcome of the paths job. It needs git and python3.
+#                                outcome of the paths job. It needs git and python3, so it runs on
+#                                the host, never through scripts/swift --exec: swift:6.4-noble has no
+#                                python3.
 # In Actions, changed reads GITHUB_EVENT_NAME and GITHUB_SHA, which Actions sets, and PR_HEAD, the
 # pull request's head, which the paths job passes in. Works with macOS's bash 3.2.
 set -euo pipefail
@@ -134,6 +136,8 @@ change_names() {
 }
 
 cmd_selftest() {
+  command -v python3 >/dev/null 2>&1 \
+    || die "the selftest needs python3, which swift:6.4-noble lacks: run it on the host, as ci.yml's runners do"
   work=$(mktemp -d)
   local p depth head found
   # Its cases' verdicts are not the run's: in Actions, the step's summary is the run's page.
@@ -326,7 +330,9 @@ def tokenize(text):
     while at < end:
         match = TOKENS.match(text, at)
         if not match:
-            raise ValueError("cannot read %r" % text[at:])
+            raise ValueError("cannot read %r: the selftest's evaluator knows literals, contexts, the four status "
+                             "functions, ! < <= > >= == != && || and parentheses; extend it in scripts/ci-paths "
+                             "for more" % text[at:])
         operator, string, number, name = match.groups()
         if operator:
             tokens.append(("op", operator))
@@ -436,7 +442,8 @@ def evaluate(text, context, cancelled):
                          "success": not cancelled and all(result == "success" for result in results),
                          "failure": any(result == "failure" for result in results)}
             if value not in functions:
-                raise ValueError("the selftest does not know %s()" % value)
+                raise ValueError("the selftest does not know %s(): extend its evaluator in scripts/ci-paths with it, "
+                                 "in the change that writes it" % value)
             return functions[value]
         if kind == "name":
             found = context
@@ -472,12 +479,16 @@ def outcomes(condition):
 
 def wrong(condition):
     """What the condition gets wrong: the three jobs are skipped only when the paths job succeeded
-    and wrote code=false, and a cancelled run starts none of them."""
+    and wrote code=false. They run whenever it did not succeed, whatever cancelled() reads, since
+    GitHub could read it as true after the job's own timeout, which leaves the job cancelled as a
+    cancelled run does; and a run cancelled after it succeeded starts none of them."""
     found = []
     for cancelled, result, code, outcome in outcomes(condition):
-        if cancelled:
+        if result != "success":
+            expected = "runs"
+        elif cancelled:
             expected = "cancelled"
-        elif (result, code) == ("success", "false"):
+        elif code == "false":
             expected = "skipped"
         else:
             expected = "runs"
@@ -488,9 +499,10 @@ def wrong(condition):
 
 
 # The evaluator sees what is wrong with two conditions that skip the jobs when the paths job
-# writes no verdict.
+# writes no verdict, and with one that reads cancelled() when the paths job did not succeed.
 for unsafe in ["needs.paths.outputs.code == 'true'",
-               "!cancelled() && (needs.paths.result != 'success' || needs.paths.outputs.code == 'true')"]:
+               "!cancelled() && (needs.paths.result != 'success' || needs.paths.outputs.code == 'true')",
+               "!cancelled() && !(needs.paths.result == 'success' && needs.paths.outputs.code == 'false')"]:
     if not wrong(unsafe):
         problems.append("the selftest finds nothing wrong with %r" % unsafe)
 
@@ -504,7 +516,8 @@ for problem in problems:
     print("FAIL  ci.yml: " + problem)
 if not problems:
     print("ok    ci.yml: the paths job first, and swift, web and compose skipped only when it succeeded and "
-          "wrote code=false, in %d outcomes, and started by no cancelled run" % len(outcomes(next(iter(conditions.values())))))
+          "wrote code=false, in %d outcomes; run whenever it did not, whatever cancelled() reads; and started by "
+          "no run cancelled after it succeeded" % len(outcomes(next(iter(conditions.values())))))
 sys.exit(1 if problems else 0)
 PY
   if python3 -I "$work/conditions.py" "$root/.github/workflows/ci.yml" > "$work/conditions.out" 2>&1; then
@@ -521,5 +534,5 @@ PY
 case "${1:-}" in
   changed) shift; cmd_changed "$@" ;;
   selftest) shift; cmd_selftest "$@" ;;
-  *) sed -n '2,14p' "$0" | sed -e 's/^# \{0,1\}//' >&2; exit 2 ;;
+  *) sed -n '2,16p' "$0" | sed -e 's/^# \{0,1\}//' >&2; exit 2 ;;
 esac
