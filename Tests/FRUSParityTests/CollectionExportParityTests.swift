@@ -755,14 +755,14 @@ struct KitSource: CollectionContentDataSource {
     func fetchAbsentFigureImages(_ images: [FigureImageName]) async {}
 
     func generateSummaries(for documents: [CollectionExportDocument], promptId: UUID,
-                           bodyTexts: [String: String]) async throws -> [String: String] {
+                           bodyTexts: [String: String]) async throws -> [String: GeneratedSummaryExport] {
         guard reference.envelope.prompts.contains(where: { $0.id == promptId }) else { throw ExportError.renderingFailed }
-        var result: [String: String] = [:]
+        var result: [String: GeneratedSummaryExport] = [:]
         for document in documents {
             guard let stored = summary(volumeId: document.volumeId, documentId: document.documentId, promptId: promptId) else {
                 throw ExportError.renderingFailed
             }
-            result["\(document.volumeId)/\(document.documentId)"] = stored.responseText
+            result["\(document.volumeId)/\(document.documentId)"] = stored
         }
         return result
     }
