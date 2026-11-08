@@ -130,6 +130,24 @@ Not started: `PLAN.md`'s row S21a. The session that does it replaces this line, 
 
 Not started: `PLAN.md`'s row S25a. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
 
+## Session 20b, follow-up: the smoke test's session check, in either order of its keys
+
+8 November 2026 · branch `claude/s20b-smoke-key-order-944ee3` · [#104](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/104) · upstream `fe9325b2`, unchanged
+
+`main` went red when #101 merged: its run at `2cbd443` failed in `compose`, at the first check of the smoke test's step for local accounts, which compared `GET /api/v1/auth/session`'s body with the literal `{"auth":"local","signedIn":false}` and was answered `{"signedIn":false,"auth":"local"}`. #101's own run, on the same tree, had passed. PLAN's rule 3 puts the fix on S20b, in a pull request of its own, and holds every other merge, S25a's #100 and S22a's #102 among them, until it is in.
+
+**The cause.** The session's answer goes out, as every answer of the API's but a problem does, through Hummingbird's default encoder, a `JSONEncoder` that sets only its dates; `APIProblem` sorts its keys. swift-foundation's encoder keeps an object's keys in a `Dictionary`, whose order is fixed neither from one process to another nor from one answer to the next: in the build image, three processes that each encoded the session's answer 1,000 times gave 500 of each order in one and `signedIn` first every time in the other two. A check of two keys' order is a coin toss.
+
+**The fix.** The check reads the two fields, as the step's checks of the sign-in's and `/api/v1/me`'s answers already did, and a comment there says why, and when two bodies may be compared whole: when both are problems. The API is left as it is. JSON gives an object's keys no order, SPEC promises none, and nothing reads an answer's bytes, no ETag among them. Sorting the session's keys alone would make one route the exception, and sorting every answer's would cost each large answer a sort for a check's sake.
+
+**The rest of #101, read for the same assumption,** holds none. The smoke test's other checks read fields, and its two comparisons of whole bodies, an unknown name's refusal and a disabled account's each against a wrong password's, compare problems. The Swift tests decode what they check (`AccountBrowser.session()`, `problemCode`). The accounts spec compares parsed values with `toEqual`. The web app's tests parse the bodies they post. No other check in `scripts/compose-smoke` or `web/e2e` compares a body with a literal.
+
+**How it was checked:**
+- **`scripts/compose-smoke --e2e`** with `FRUS_IMAGE=frus-light:s20b`, S20b's image, built from the tree `main` has at `2cbd443`, on port 18120: passed, the browser suite's 71 specs at the root and 71 under the path, the accounts spec and the proxy's sign-in spec.
+- **The two checks alone,** over four answers: they take the session's answer in both orders, `main`'s failing one among them, and refuse one that is signed in and one that names no local accounts.
+
+**Next:** with `main` green, #100 and #102 merge as rule 3 lets them; S20c, as S20b's entry says.
+
 ## Session 20b: local accounts, migration 4
 
 8 November 2026 · branch `claude/s20b-local-accounts-944ee3` · [#101](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/101) · upstream `fe9325b2`, unchanged

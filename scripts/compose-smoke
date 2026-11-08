@@ -549,7 +549,10 @@ as_session() {  # $1: the cookie; the rest: curl's arguments
   curl -s --max-time 30 -H "Host: localhost:8080" -H "Cookie: $cookie" "$@" || true
 }
 session=$(curl -s --max-time 5 -H "Host: localhost:8080" "$under/api/v1/auth/session" || true)
-[ "$session" = '{"auth":"local","signedIn":false}' ] || fail "the session with no cookie answered $session"
+# The order of a body's keys can change from one answer to the next, but for a problem's, which are
+# sorted: a check reads a body's fields, and compares two bodies whole only when both are problems.
+case "$session" in *'"auth":"local"'*) ;; *) fail "the session with no cookie does not name local accounts: $session" ;; esac
+case "$session" in *'"signedIn":false'*) ;; *) fail "the session with no cookie is signed in: $session" ;; esac
 refused=$(curl -s --max-time 5 -H "Host: localhost:8080" -w ' %{http_code}' "$under/api/v1/me" || true)
 case "$refused" in *'"code":"NOT_SIGNED_IN"'*' 403') ;; *) fail "/api/v1/me with no session answered $refused" ;; esac
 wrong=$(auth sign-in '{"name":"erin","password":"not her password at all"}')
