@@ -484,7 +484,7 @@ S22d has not started.
 
 S22e has not started.
 
-S23a has not started.
+S23a was done on 8 November at `fe9325b2`, with [FRUS-Explorer#1872](https://github.com/joshbotts/FRUS-Explorer/pull/1872) open and awaiting Mac check 17: Related Documents' engine moves into FRUSCoreKit, its generators and scorers reading a `RelatedDocumentsDependencies` in place of `AppState`, each member an autoclosure read where it is used, so the app reads its stores when it read them before; the semantic generator's three passes stay the app's behind the struct's `semantic`, which this server leaves out until phase 4, so the axis contributes nothing here; and the model, the ranker, the engine's `rank`, the rows and chips, `ProjectLeadsAggregator`, `DocumentKey`, `CandidateRecord` and `DocumentSubjectIndex` are public. Its suites move with it and a host test ranks over an index the kit builds, so `FRUSCoreKitTests` runs 1,776 tests on Linux: 102 more than at `v2` alone (1,674, with S22a's and S21a's moves) and 428 more than at this repository's `main` (1,348). The pull request was rebased before it opened onto `v2`'s `b905f788`, past S22a's and S21a's (and #1871's planning documents), so the batch needs no merge of `v2` into it. The pin move must replace `FRUSLightCore`'s own `DocumentKey` with the kit's, now public, and give `Package.swift`'s `FRUSCoreKit` TEIHeaderKit for S21a's `LocalVolumeCatalog`; and S23d has no cross-reference query until S23b's `CrossReferenceStore` arrives with S23c (the log's entry, Session 23a). Next: S21b once Mac checks 15 to 17 are done, then S23d.
 
 S23b has not started.
 
