@@ -1,16 +1,18 @@
-// The editors' annotations (FRUS-Explorer#1859 to #1862): what each volume's editors annotated, read
-// from the bundled volume-annotations-index.json by the kit's `VolumeAnnotationsIndex`. GET
-// /api/v1/volumes/{v}/annotations is a volume page's Editors’ Annotations, and /api/v1/annotations the
-// Browse axis of that name: its layers, a layer's page (/annotations/{layer}), and the volumes a page's
-// drill (/annotations/{layer}/drills/{drill}) or a cell of its matrix (/annotations/{layer}/eras/{era})
-// lists. When a volume carries a category, the era it belongs to and the era from which the series made
-// a practice standard are the kit's (`VolumeAnnotations.carries(_:)`, `carriesSourceNotes`,
-// `AnnotationEra`, `VolumeAnnotationsIndex.onset(where:)`). The table of fifteen layers and the rows,
-// reaches and drills built over it are the app's view code, Foundation-only and small
-// (`AnnotationLayer` and `AnnotationsAxis` in FRUSExplorer/Browser/AnnotationsAxis.swift,
-// `VolumeAnnotationsPresentation` beside it), mirrored here and held to the app's lines by
-// AnnotationsParityTests. Every word is the browser app's, in copy.ts: the server answers with the
-// counts and the parts the app's words are made of.
+// The editors' annotations (FRUS-Explorer#1859 to #1862, and their follow-ups #1868, #1873 and
+// #1874): what each volume's editors annotated, read from the bundled volume-annotations-index.json
+// by the kit's `VolumeAnnotationsIndex`. GET /api/v1/volumes/{v}/annotations is a volume page's
+// Editors’ Annotations, and /api/v1/annotations the Browse axis of that name: its layers, a layer's
+// page (/annotations/{layer}), and the volumes a page's drill (/annotations/{layer}/drills/{drill})
+// or a cell of its matrix (/annotations/{layer}/eras/{era}) lists. When a volume carries a category,
+// the era it belongs to, the era from which the series made a practice standard and the year from
+// which a volume's bracketed omissions count are the kit's (`VolumeAnnotations.carries(_:)`,
+// `carriesSourceNotes`, `AnnotationEra`, `VolumeAnnotationsIndex.onset(where:)`,
+// `VolumeAnnotations.editorialOmissionsFromYear`). The table of sixteen layers and the rows, reaches
+// and drills built over it are the app's view code, Foundation-only and small (`AnnotationLayer` and
+// `AnnotationsAxis` in FRUSExplorer/Browser/AnnotationsAxis.swift, `VolumeAnnotationsPresentation`
+// beside it), mirrored here and held to the app's lines by AnnotationsParityTests. Every word is the
+// browser app's, in copy.ts: the server answers with the counts and the parts the app's words are
+// made of.
 
 import FRUSCoreKit
 import Foundation
@@ -19,10 +21,10 @@ import Hummingbird
 // MARK: - AnnotationLayer
 
 /// One layer of a volume's editorial annotation, as the app shows it: a row of a volume page's
-/// Editors’ Annotations and a category of the Browse axis of that name, fifteen in the page's order.
+/// Editors’ Annotations and a category of the Browse axis of that name, sixteen in the page's order.
 /// The app's `AnnotationLayer`: one of the kit's `AnnotationCategory` counts, or several taken
-/// together, the two source-note forms, the three kinds of reference, and the printed aids, which are
-/// sections, not counts.
+/// together, the two source-note forms, the three kinds of reference, and the front and back matter,
+/// which is sections, not counts (`printedAids`, the name the app's code keeps for it).
 enum AnnotationLayer: String, CaseIterable, Sendable {
     /// Names linked to the volume's List of Persons.
     case people
@@ -40,6 +42,8 @@ enum AnnotationLayer: String, CaseIterable, Sendable {
     case classification
     /// Text marked as not declassified.
     case excisions
+    /// What the editors left out, said in brackets: "[Here follows …]".
+    case editorialOmissions
     /// The posts' despatch numbers.
     case despatch
     /// Documents numbered in print.
@@ -52,7 +56,7 @@ enum AnnotationLayer: String, CaseIterable, Sendable {
     case footnotes
     /// Marginal notes.
     case marginalNotes
-    /// The printed aids: a preface, the lists, an index.
+    /// The front and back matter: a preface, the lists, an index.
     case printedAids
 
     /// The group the layer is shown in.
@@ -60,7 +64,7 @@ enum AnnotationLayer: String, CaseIterable, Sendable {
         switch self {
         case .people, .abbreviations, .correspondents, .subjects, .participants:
             return .named
-        case .sourceNotes, .classification, .excisions, .despatch:
+        case .sourceNotes, .classification, .excisions, .editorialOmissions, .despatch:
             return .provenance
         case .numbered, .crossReferences, .editorialNotes, .footnotes, .marginalNotes, .printedAids:
             return .connects
@@ -78,6 +82,7 @@ enum AnnotationLayer: String, CaseIterable, Sendable {
         case .participants: return .participants
         case .classification: return .classification
         case .excisions: return .excisions
+        case .editorialOmissions: return .editorialOmissions
         case .despatch: return .despatch
         case .numbered: return .numbered
         case .editorialNotes: return .editorialNotes
@@ -319,11 +324,20 @@ enum AnnotationsAxis {
             return .init(kind: "ratio", count: count, of: annotations.documents)
         case .editorialNotes:
             return .init(kind: "notes", count: count)
-        case .subjects, .participants, .excisions, .marginalNotes:
+        case .subjects, .participants, .excisions, .editorialOmissions, .marginalNotes:
             return .init(kind: "docs", count: count)
         case .crossReferences, .printedAids:
             return nil
         }
+    }
+
+    /// The mark for a volume the 1925 gate keeps out of Marked editorial omissions: published before
+    /// Secretary Kellogg's order, so its bracketed omissions, if it has any, are counted in the file
+    /// and not carried (`VolumeAnnotations.editorialOmissionsFromYear`), which the line under it says:
+    /// `before1925`, or `nil`.
+    static func gateNote(for layer: AnnotationLayer, _ annotations: VolumeAnnotations) -> String? {
+        guard layer == .editorialOmissions, annotations.publishedBeforeEditorialOmissionsOrder else { return nil }
+        return "before1925"
     }
 
     /// The list a volume prints that a layer links to and that none of its documents links to
@@ -373,9 +387,9 @@ public struct VolumeAnnotationsSection: Codable, Equatable, Sendable {
     }
 
     /// A part of a row's line, which the browser app words: `ofDocuments` ("279 of 280 documents"),
-    /// `personsListed`, `termsListed`, `documents`, `excisions`, `editorialNotes`, `xrefDocuments`,
-    /// `xrefVolumes` and `xrefPages`, each with its count; `sourceForm`, with its `form`; and `aid`,
-    /// with the aid's id.
+    /// `personsListed`, `termsListed`, `documents`, `excisions`, `editorialOmissions`, `editorialNotes`,
+    /// `xrefDocuments`, `xrefVolumes` and `xrefPages`, each with its count; `sourceForm`, with its
+    /// `form`; and `aid`, with the aid's id.
     public struct Part: Codable, Equatable, Sendable {
         public var kind: String
         public var count: Int?
@@ -475,6 +489,7 @@ public struct VolumeAnnotationsSection: Codable, Equatable, Sendable {
             case .sourceNotes: return sourceNotes
             case .classification: return coverage(.classification)
             case .excisions: return excisions
+            case .editorialOmissions: return editorialOmissions
             case .despatch: return documents(.despatch)
             case .numbered: return coverage(.numbered)
             case .crossReferences: return crossReferences ?? []
@@ -514,9 +529,14 @@ public struct VolumeAnnotationsSection: Codable, Equatable, Sendable {
             return of(annotations.sourceNotes) + [Part(kind: "sourceForm", form: form)]
         }
 
-        /// "31 documents with text not declassified".
+        /// "31 documents with redactions marked".
         var excisions: [Part] {
             [Part(kind: "excisions", count: annotations.count(.excisions))]
+        }
+
+        /// "12 documents with editorial omissions marked".
+        var editorialOmissions: [Part] {
+            [Part(kind: "editorialOmissions", count: annotations.count(.editorialOmissions))]
         }
 
         /// "12 editorial notes".
@@ -639,6 +659,9 @@ public struct AnnotationDrill: Codable, Equatable, Sendable {
         /// `persons` or `terms`: the volume prints the list the layer links to, and none of its documents
         /// links to it.
         public var unlinked: String?
+        /// `before1925`: the volume was published before the 1925 order, so Marked editorial omissions'
+        /// gate keeps it out of the layer, whatever it counts.
+        public var gated: String?
         /// `true` for the volume whose page opened the layer's.
         public var from: Bool?
     }
@@ -679,6 +702,7 @@ public struct AnnotationDrill: Codable, Equatable, Sendable {
                               AnnotationsAxis.accessory(for: layer, $0, category: accessoryCategory)
                           },
                           unlinked: annotations.flatMap { AnnotationsAxis.unlinkedList(for: layer, $0) },
+                          gated: annotations.flatMap { AnnotationsAxis.gateNote(for: layer, $0) },
                           from: volumeId == fromVolumeId ? true : nil)
         }
     }

@@ -10,6 +10,7 @@
 // them.
 
 import Foundation
+import FRUSCoreKit
 
 /// The two texts a document's row holds, composed in one place.
 public enum UserSearchText {

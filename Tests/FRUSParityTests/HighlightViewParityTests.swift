@@ -15,6 +15,8 @@ import Testing
 
 @Suite struct HighlightViewParityTests {
     static let app = RepositoryFiles.root.appendingPathComponent("upstream/FRUS-Explorer/FRUSExplorer")
+    /// The kit's folder, for the app's code that moved into it.
+    static let kit = RepositoryFiles.root.appendingPathComponent("upstream/FRUS-Explorer/FRUSCoreKit")
     static let web = RepositoryFiles.root.appendingPathComponent("web/src")
 
     static func read(_ base: URL, _ path: String) throws -> String {
@@ -84,7 +86,10 @@ import Testing
 
     /// The reader draws a document's highlights in its query's order, by time, which the store gives
     /// (`UserHighlightTests`); the review sheet lists them by where they start, as the rail's
-    /// Highlights section does; and its stale lines are `HighlightReview.status`'s.
+    /// Highlights section does; and its stale lines are `HighlightReview.status`'s, a rule over a
+    /// highlight's two stored values that FRUS-Explorer#1870 moved into the kit
+    /// (`DocumentView/HighlightReviewStatus.swift`), where the app's `status(of:currentVersion:)`
+    /// reads its model into it.
     @Test func theOrdersAndTheStaleLinesAreTheApps() throws {
         for file in ["App/MacDocumentView.swift", "DocumentView/DocumentView.swift"] {
             #expect(try Self.read(Self.app, file).contains("sort: \\DocumentHighlight.createdAt"), "\(file)")
@@ -93,10 +98,17 @@ import Testing
         #expect(sheet.contains("sort: [SortDescriptor(\\DocumentHighlight.startOffset)])"))
         let rules = try Self.read(Self.web, "reader/highlightRules.ts")
         #expect(rules.contains("a.startOffset - b.startOffset ||"))
-        let review = try Self.read(Self.app, "DocumentView/HighlightReview.swift")
-        #expect(review.contains("if highlight.renderingVersion == currentVersion { return .aligned }"))
-        #expect(review.contains("return .stale(hasPassage: !highlight.selectedText.isEmpty)"))
+        let rule = try Self.read(Self.kit, "DocumentView/HighlightReviewStatus.swift")
+        #expect(rule.contains("if renderingVersion == currentVersion { return .aligned }"))
+        #expect(rule.contains("return .stale(hasPassage: !selectedText.isEmpty)"))
+        let review = Self.flattened(try Self.read(Self.app, "DocumentView/HighlightReview.swift"))
+        #expect(review.contains("status(renderingVersion: highlight.renderingVersion, selectedText: highlight.selectedText, currentVersion: currentVersion)"))
         #expect(rules.contains("return highlight.selectedText !== '' ? 'stale' : 'staleNoPassage';"))
+        // The kit's rule answers as the browser app's line reads it: the passage's presence alone
+        // tells the two stale lines apart.
+        #expect(HighlightReview.status(renderingVersion: "a", selectedText: "words", currentVersion: "b") == .stale(hasPassage: true))
+        #expect(HighlightReview.status(renderingVersion: "a", selectedText: "", currentVersion: "b") == .stale(hasPassage: false))
+        #expect(HighlightReview.status(renderingVersion: "a", selectedText: "", currentVersion: "a") == .aligned)
     }
 
     /// The app's shortcut for Highlight Selection ▸ Yellow is ⇧⌘H, which the host script and the

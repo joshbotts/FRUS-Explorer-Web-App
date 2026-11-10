@@ -483,7 +483,12 @@ func servingSyntheticExport(volumes: [String] = [], edits: String? = nil, includ
             #expect(script.contains("kind === 'reveal'") && script.contains("scrollIntoView"))
             // A note is landed on by the app's own script, byte for byte, its key the function's parameter.
             #expect(script.contains("function landOnFootnote(key) {\n    return \(FootnoteLanding.script(keyExpression: "key"));"))
-            #expect(script.contains("var prefix = '\(ReaderLinkRoutes.footnoteEntryPrefix)';"))
+            // An index's entry is landed on by the app's own script too (FRUS-Explorer#1875), its id the
+            // function's parameter; each landing is chosen by the prefix of the id the app asks for.
+            #expect(script.contains("function landOnIndexEntry(key) {\n    return \(IndexEntryLanding.script(keyExpression: "key"));"))
+            #expect(script.contains("['\(ReaderLinkRoutes.footnoteEntryPrefix)', landOnFootnote]"))
+            #expect(script.contains("['\(ReaderLinkRoutes.indexEntryPrefix)', landOnIndexEntry]"))
+            #expect(script.contains("fn-arrived") && script.contains("ix-arrived"))
             // Highlights: drawn by the kit's renderer, each first built by the kit's buildRanges; the
             // selection collapsed once a colour is chosen; the app's shortcut; and no tap from the
             // keyboard or from a link.

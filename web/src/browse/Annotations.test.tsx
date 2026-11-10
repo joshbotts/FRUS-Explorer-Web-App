@@ -146,7 +146,9 @@ describe('a volume page’s Editors’ Annotations', () => {
     const despatch = within(section).getByRole('link', { name: 'Despatch numbers: 347 documents.' });
     expect(despatch.getAttribute('href')).toBe('/browse/annotations/despatch?from=frus1890');
     expect(despatch.getAttribute('title')).toBe('Opens what the editors did, and the volumes that carry it.');
-    expect(within(section).getByRole('link', { name: 'Printed aids: List of Papers; Index.' }).textContent).toBe('Printed aidsList of Papers · Index');
+    expect(within(section).getByRole('link', { name: 'Front and back matter: List of Papers; Index.' }).textContent).toBe(
+      'Front and back matterList of Papers · Index',
+    );
 
     // Collapsed at first, as the app's disclosure is.
     const disclosure = within(section).getByText('Not in this volume (2)').closest('details')!;

@@ -155,11 +155,13 @@ let package = Package(
         // open of an index, a host's figure addresses and the reader's page. Upstream's Package.swift
         // gives it SourceNoteKit and FTS5Store,
         // and links sqlite3, here for macOS only as for FTS5Store; its CryptoKit and SQLite3 guards
-        // need swift-crypto's Crypto and CSQLite, declared here for Linux only.
+        // need swift-crypto's Crypto and CSQLite, declared here for Linux only. Since S21b's pin move
+        // (upstream #1870) it has TEIHeaderKit too, as upstream's has: `LocalVolumeCatalog` reads a
+        // side-loaded volume's header with it, behind `canImport`.
         .target(
             name: "FRUSCoreKit",
             dependencies: [
-                "SourceNoteKit", "FTS5Store",
+                "SourceNoteKit", "FTS5Store", "TEIHeaderKit",
                 .product(name: "Crypto", package: "swift-crypto", condition: .when(platforms: [.linux])),
                 .target(name: "CSQLite", condition: .when(platforms: [.linux])),
             ],

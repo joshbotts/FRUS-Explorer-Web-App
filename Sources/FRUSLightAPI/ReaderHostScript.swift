@@ -6,9 +6,9 @@ import FRUSCoreKit
 /// kit. It stands in for what FRUS Explorer's WebKit host gives the same page: the three message
 /// handlers those scripts post to (`selectionChanged`, `selectionScrolled`, `highlightTapped`), the
 /// call that draws the document's highlights (`FRUSHighlights.render`), the handling of the reader's
-/// `frusexplorer://` links (`person/`, `gloss/`, `doc/`, `brokenref/`), and the footnote landing.
-/// Each link becomes a message to the parent page, which acts on it; the page itself navigates
-/// nowhere.
+/// `frusexplorer://` links (`person/`, `gloss/`, `doc/`, `brokenref/`), and the two landings, a
+/// footnote's and an index entry's. Each link becomes a message to the parent page, which acts on
+/// it; the page itself navigates nowhere.
 ///
 /// Highlights (PLAN's S15c): the parent sends the document's highlights (`{source: 'frus-app',
 /// kind: 'highlights', highlights}`, each the kit's `ReaderHighlight`), and the host draws them
@@ -33,18 +33,23 @@ import FRUSCoreKit
 ///
 /// The footnote landing is the kit's `FootnoteLanding` script, which the app's reader runs once a
 /// page has loaded, here as the body of `landOnFootnote(key)`: it scrolls a note's entry in the list
-/// of footnotes into view and washes it, as the app's reader does.
+/// of footnotes into view and washes it, as the app's reader does. The index entry's landing is the
+/// kit's `IndexEntryLanding` script (FRUS-Explorer#1875), which the app's readers run when an index's
+/// "See" reference is tapped, here as the body of `landOnIndexEntry(key)`: it scrolls the entry's
+/// item into view and washes it the same way.
 ///
 /// What a browser adds to a WebKit view's host: a middle click on a reader link is ignored, since
 /// the sandbox would refuse the window it opens; Space activates an unresolved reference, which the
 /// kit marks as a button; and, since the parent cannot reach into the frame, it asks: the link last
 /// activated takes focus again when a card for it closes (`{source: 'frus-app', kind:
-/// 'restoreFocus'}`), and a note is landed on when a link names it (`{source: 'frus-app', kind:
-/// 'reveal', id}`, the id of the note's entry), after which the entry takes focus, so the next Tab
-/// continues from it.
+/// 'restoreFocus'}`), and a note or an index's entry is landed on when a link names it (`{source:
+/// 'frus-app', kind: 'reveal', id}`, the id of the note's entry or of the index entry's item), after
+/// which it takes focus, so the next Tab continues from it.
 enum ReaderHostScript {
     /// The kit's footnote landing, its key the parameter `key` of the function around it.
     static let footnoteLanding = FootnoteLanding.script(keyExpression: "key")
+    /// The kit's index entry landing, the entry's `xml:id` the parameter `key` of the function around it.
+    static let indexEntryLanding = IndexEntryLanding.script(keyExpression: "key")
 
     static let source = """
         // FRUS Explorer Light: the reader page's host script.
@@ -99,6 +104,16 @@ enum ReaderHostScript {
           function landOnFootnote(key) {
             return \(footnoteLanding);
           }
+          // FRUS Explorer's index entry landing (FRUSCoreKit's IndexEntryLanding), for the entry of a
+          // back-of-volume index whose xml:id is `key`: true when the page holds the entry's item.
+          function landOnIndexEntry(key) {
+            return \(indexEntryLanding);
+          }
+          // What the app may ask the page to land on, each by the prefix of its element's id.
+          var landings = [
+            ['\(ReaderLinkRoutes.footnoteEntryPrefix)', landOnFootnote],
+            ['\(ReaderLinkRoutes.indexEntryPrefix)', landOnIndexEntry]
+          ];
           var lastLink = null;
           function readerLink(event) {
             var target = event.target;
@@ -156,12 +171,17 @@ enum ReaderHostScript {
               var selection = window.getSelection();
               if (selection && selection.rangeCount && !selection.isCollapsed) { selection.collapseToEnd(); }
             }
-            var prefix = '\(ReaderLinkRoutes.footnoteEntryPrefix)';
-            var target = data.kind === 'reveal' && typeof data.id === 'string' && data.id.indexOf(prefix) === 0
-              ? document.getElementById(data.id) : null;
-            if (target && landOnFootnote(data.id.slice(prefix.length))) {
-              if (!target.hasAttribute('tabindex')) { target.setAttribute('tabindex', '-1'); }
-              target.focus({ preventScroll: true });
+            if (data.kind === 'reveal' && typeof data.id === 'string') {
+              landings.some(function (landing) {
+                var prefix = landing[0];
+                if (data.id.indexOf(prefix) !== 0) { return false; }
+                var target = document.getElementById(data.id);
+                if (target && landing[1](data.id.slice(prefix.length))) {
+                  if (!target.hasAttribute('tabindex')) { target.setAttribute('tabindex', '-1'); }
+                  target.focus({ preventScroll: true });
+                }
+                return true;
+              });
             }
           });
         })();

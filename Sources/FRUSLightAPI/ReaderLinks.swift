@@ -7,8 +7,12 @@
 // bundled broken-refs index an unresolved reference, `FRUSURLScheme.resolveCrossRefTarget` a
 // cross-reference, `PageLink` where a link to a printed page goes and `WholeVolumeLink` where a
 // link that opens a volume goes (joshbotts/FRUS-Explorer#1784), and, over the served index,
-// `PageRangeStore` a page's document and `PersonMentionStore` a person's mentions. Only the choice
-// between a person's two counts is the app's, and `mentionCount` mirrors it.
+// `PageRangeStore` a page's document and `PersonMentionStore` a person's mentions. An index's "See"
+// reference names an entry of the index it is in (joshbotts/FRUS-Explorer#1875), which both of the
+// app's readers scroll to on the page on screen, and the answer says where that entry's item is. No
+// page this reader serves holds one yet: every such reference is in a back-of-volume index, which a
+// full parse, the reader's source, leaves out of its documents. Only the choice between a person's
+// two counts is the app's, and `mentionCount` mirrors it.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -56,6 +60,17 @@ public struct ReaderLinkTarget: Codable, Equatable, Sendable {
         public var resolvedAnchor: String?
     }
 
+    /// An entry of a back-of-volume index, which a "See" reference names (the kit's
+    /// `CrossRefDestination.indexEntry`, joshbotts/FRUS-Explorer#1875).
+    public struct IndexEntry: Codable, Equatable, Sendable {
+        /// The index's volume: the one the reference names, or the one the link is in.
+        public var volumeId: String
+        /// The entry's `xml:id`, as the reference names it, such as `in2`.
+        public var anchor: String
+        /// The id of the entry's item on the index's page, which the frame lands on.
+        public var elementId: String
+    }
+
     /// The destination's volume, as this server holds it; absent for a volume outside the catalogue.
     public struct DestinationVolume: Codable, Equatable, Sendable {
         public var title: String
@@ -63,7 +78,8 @@ public struct ReaderLinkTarget: Codable, Equatable, Sendable {
         public var indexed: Bool
     }
 
-    /// `person`, `gloss`, `document`, `page`, `volume`, `external`, `unresolved` or `brokenReference`.
+    /// `person`, `gloss`, `document`, `page`, `volume`, `indexEntry`, `external`, `unresolved` or
+    /// `brokenReference`.
     public var kind: String
     /// The link, as the page wrote it.
     public var href: String
@@ -75,12 +91,17 @@ public struct ReaderLinkTarget: Codable, Equatable, Sendable {
     /// index is served.
     public var mentionCount: Int?
     public var term: Term?
-    /// The reference's target, as the TEI gives it; for `document`, `page`, `volume`, `unresolved`
-    /// and `brokenReference`.
+    /// The reference's target, as the TEI gives it; for `document`, `page`, `volume`, `indexEntry`,
+    /// `unresolved` and `brokenReference`.
     public var target: String?
     public var destination: Destination?
-    /// Whether the destination is a note in the document the link is in, which the reader shows in
-    /// place, as the app does.
+    /// The index's entry a "See" reference names; for `indexEntry`.
+    public var indexEntry: IndexEntry?
+    /// Whether the destination is on the page the link is in, which the reader shows in place, as
+    /// the app does: a note of the document the link is in, or an entry of an index of the volume
+    /// the link is in, which every such reference in the corpus names. An anchor of an index entry's
+    /// shape is answered so whether or not the index holds it, as the app reads it: the page then
+    /// finds no such item, and nothing moves.
     public var inPlace: Bool?
     public var volume: DestinationVolume?
     /// The page a page reference names, and its volume; for `page`. Its `destination` is the
@@ -116,6 +137,9 @@ enum ReaderLinkRoutes {
     /// (`FRUSRenderNodeHTMLSerializer`), before the note's key; the kit's `FootnoteLanding` script
     /// adds it to the key it is given.
     static let footnoteEntryPrefix = "fnote-"
+    /// The prefix the kit's serializer gives the item of an index's entry, before the entry's
+    /// `xml:id`; the kit's `IndexEntryLanding` script adds it to the id it is given.
+    static let indexEntryPrefix = "ix-"
 
     static func add(to router: Router<APIRequestContext>, state: ServerState, provider: ServedIndexProvider,
                     reader: ReaderService, resources: ServerResources) {
@@ -199,6 +223,16 @@ enum ReaderLinkRoutes {
                     // A whole volume (joshbotts/FRUS-Explorer#1603).
                     target.kind = "volume"
                     await openVolume(otherVolume, into: &target, state: state, reader: reader, resources: resources)
+                case .indexEntry(let otherVolume, let anchor):
+                    // An entry of a back-of-volume index, which a "See" reference names
+                    // (joshbotts/FRUS-Explorer#1875). Every such reference in the catalogue's volumes
+                    // sits in the index that holds its entry, so the app's readers scroll the page on
+                    // screen to it and open nothing, and leave alone one that names another volume's
+                    // index, which the corpus does not have: `inPlace` is that test.
+                    let entryVolume = otherVolume ?? volumeId
+                    target.kind = "indexEntry"
+                    target.indexEntry = .init(volumeId: entryVolume, anchor: anchor, elementId: indexEntryPrefix + anchor)
+                    target.inPlace = entryVolume == volumeId
                 case .external(let url):
                     target.kind = "external"
                     target.url = url.absoluteString

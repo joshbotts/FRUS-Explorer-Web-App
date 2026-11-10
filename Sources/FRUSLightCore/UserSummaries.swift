@@ -5,6 +5,7 @@
 // Every change rewrites the document's row of `user_search` in its transaction.
 
 import Foundation
+import FRUSCoreKit
 
 /// One of a user's summaries, as the store keeps the Mac's `GeneratedSummary`.
 public struct SummaryRecord: Sendable, Equatable {

@@ -14,6 +14,9 @@
 # From an export, with frus-parity and tools/mac-golden:
 #   index-summary.json         each table's row count and content hash (check 2)
 #   queries.results.json       each query's count and first 50 results (check 3)
+# frus-parity runs in swift:6.4-noble through scripts/swift, as CI builds it: since S20b it links
+# FRUSLightCore, which links Argon2, whose header the build image has and a Mac does not. The rest
+# runs on the Mac, in the app's own code.
 #
 # The export must come from a library holding exactly the three fixture volumes, since BM25 ranks
 # with whole-index statistics and person rollups span volumes. To make it:
@@ -31,10 +34,11 @@
 #   3. Leave it running until indexing finishes and the person rollup has run.
 #   4. Export Research Database…, with Include My Notes, Summaries, and Tags turned off, and save it
 #      outside ~/Documents, such as /Users/Shared/frus-golden.sqlite.
-# The script copies the export to a new temporary folder and works on the copy only.
+# The script copies the export to a new temporary folder under .build, which the container sees,
+# and works on the copy only.
 #
-# Needs macOS 26 or later, Xcode 27 and the submodule. The first run builds the app module in
-# release, which takes about four minutes.
+# Needs macOS 26 or later, Xcode 27, the submodule and Docker, for scripts/swift. The first run
+# builds the app module in release, which takes about four minutes.
 
 fixes=0
 ok()    { printf '  ok     %s\n' "$*"; }
@@ -57,8 +61,14 @@ esac
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$root" || exit 1
 golden=fixtures/golden
-work=$(mktemp -d) || exit 1
+# Under .build, which .gitignore lists, so that frus-parity in the container reads the export's copy.
+mkdir -p .build || exit 1
+work=$(mktemp -d "$root/.build/make-golden.XXXXXX") || exit 1
 trap 'rm -rf "$work"' EXIT
+
+# Runs frus-parity in swift:6.4-noble, which mounts the repository at /src and runs there, so a path
+# it is given is the repository's, from its root.
+frus_parity() { scripts/swift run frus-parity "$@"; }
 
 # Runs a step, keeping its output in $work. On failure, prints the output's last lines.
 step() {
@@ -146,7 +156,7 @@ if [ -n "$tool" ]; then
     fix "fixtures/parity/queries.jsonl or rules.tsv is missing, so the expressions cannot be made"
   fi
   # The web cases' RTF, which the codec writes the same on macOS as on Linux: CI checks the bytes.
-  if step rich-text-fixtures swift run -c release frus-parity rich-text-fixtures --repo "$root"; then
+  if step rich-text-fixtures frus_parity rich-text-fixtures --repo /src; then
     ok "fixtures/rich-text/web"
     golden_tool rich-text rich-text
   else
@@ -159,8 +169,8 @@ if [ -z "$export_file" ]; then
   later "index-summary.json and queries.results.json: run again with --export <file>, made as the top of this script says"
 else
   # --repo names the root, whose fixtures and submodule the summary records.
-  if step frus-parity-summarize swift run -c release frus-parity summarize "$work/export.sqlite" \
-       --golden "$golden/index-summary.json" --upstream-commit "$head" --repo "$root"; then
+  if step frus-parity-summarize frus_parity summarize "${work#"$root"/}/export.sqlite" \
+       --golden "$golden/index-summary.json" --upstream-commit "$head" --repo /src; then
     ok "$golden/index-summary.json"
   else
     fix "frus-parity summarize failed (above)"
@@ -187,7 +197,7 @@ if [ -f "$golden/PENDING" ]; then
   elif cp "$work/PENDING" "$golden/PENDING"; then ok "$golden/PENDING no longer lists$made"
   else fix "could not update $golden/PENDING"; fi
 fi
-if step check-golden swift run -c release frus-parity check-golden --repo "$root"; then
+if step check-golden frus_parity check-golden --repo /src; then
   ok "frus-parity check-golden passes"
 else
   fix "frus-parity check-golden failed (above)"

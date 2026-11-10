@@ -151,7 +151,7 @@ export interface Neighbour {
 
 /** What a link in the reader's page leads to (GET …/documents/{d}/link). */
 export interface ReaderLinkTarget {
-  kind: 'person' | 'gloss' | 'document' | 'page' | 'volume' | 'external' | 'unresolved' | 'brokenReference';
+  kind: 'person' | 'gloss' | 'document' | 'page' | 'volume' | 'indexEntry' | 'external' | 'unresolved' | 'brokenReference';
   href: string;
   ref?: string;
   person?: { ref: string; name: string; description?: string; role?: string; eraText?: string };
@@ -166,6 +166,9 @@ export interface ReaderLinkTarget {
     footnoteElementId?: string;
     canonicalURL: string;
   };
+  /** For an index's "See" reference: the entry it names, its volume and the id of its item on the index's page. */
+  indexEntry?: { volumeId: string; anchor: string; elementId: string };
+  /** Whether the destination is on the page the link is in: a note of this document, or an entry of this volume's index. */
   inPlace?: boolean;
   volume?: { title: string; teiAvailable: boolean; indexed: boolean };
   /** For a page reference: the page and its volume; `destination` is the document the kit's PageLink lands on, if any. */

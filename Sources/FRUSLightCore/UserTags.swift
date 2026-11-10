@@ -3,6 +3,7 @@
 // the Research rail's writes of one document's tags.
 
 import Foundation
+import FRUSCoreKit
 
 /// One of a user's tags, as the store keeps the Mac's `UserTag`.
 public struct UserTagRecord: Sendable, Equatable {
@@ -17,17 +18,6 @@ public struct UserTagRecord: Sendable, Equatable {
         self.name = name
         self.createdAt = createdAt
         self.lastModified = lastModified
-    }
-}
-
-/// A document, as the index and the user store name it.
-public struct DocumentKey: Sendable, Hashable {
-    public let volumeId: String
-    public let documentId: String
-
-    public init(volumeId: String, documentId: String) {
-        self.volumeId = volumeId
-        self.documentId = documentId
     }
 }
 

@@ -114,6 +114,50 @@ describe('ReaderScreen', () => {
     await router.navigate({ to: '/browse/$volumeId', params: { volumeId: 'frus1961-63v15' }, state: { followedPage: 539 } });
     expect(await screen.findByText('You followed a link to page 539 of this volume, which this server hasn’t indexed.')).toBeTruthy();
   });
+
+  it('scrolls an index to the entry a “See” reference names, in place, and opens nothing (FRUS-Explorer#1875)', async () => {
+    const index: DocumentDetail = {
+      document: { documentId: 'index', volumeId: 'frus1961-63v06', header: 'Index', displayTitle: 'Index', isEditorialNote: false, inIndex: false },
+      canonicalURL: 'https://history.state.gov/historicaldocuments/frus1961-63v06/index',
+      teiAvailable: true,
+    };
+    const here = 'frusexplorer://doc/%23in1';
+    const elsewhere = 'frusexplorer://doc/frus1961-63v05%23in4/frus1961-63v05';
+    const see = (href: string, volumeId: string, anchor: string, inPlace: boolean): ReaderLinkTarget => ({
+      kind: 'indexEntry',
+      href,
+      target: inPlace ? `#${anchor}` : `${volumeId}#${anchor}`,
+      indexEntry: { volumeId, anchor, elementId: `ix-${anchor}` },
+      inPlace,
+    });
+    stubServer({
+      '/readyz': ready,
+      '/api/v1/volumes': { total: 0, limit: 1000, offset: 0, items: [], coverage },
+      '/api/v1/volumes/frus1961-63v06/documents/index': index,
+      '/api/v1/volumes/frus1961-63v06/documents/index/html': {},
+      '/api/v1/volumes/frus1961-63v06/documents/index/link': (url: URL) =>
+        url.searchParams.get('href') === here ? see(here, 'frus1961-63v06', 'in1', true) : see(elsewhere, 'frus1961-63v05', 'in4', false),
+    });
+    const { router } = renderAt('/doc/frus1961-63v06/index');
+    const frame = (await screen.findByTitle('Document text: Index')) as HTMLIFrameElement;
+    const post = vi.spyOn(frame.contentWindow!, 'postMessage');
+    const follow = (href: string) =>
+      window.dispatchEvent(new MessageEvent('message', { data: { source: 'frus-reader', kind: 'link', detail: { href } }, origin: 'null', source: frame.contentWindow }));
+
+    // The entry is on the page on screen: the page is asked to land on it, where focus goes.
+    follow(here);
+    await waitFor(() => expect(post).toHaveBeenCalledWith({ source: 'frus-app', kind: 'reveal', id: 'ix-in1' }, '*'));
+    expect(document.activeElement).toBe(frame);
+    expect(router.state.location.pathname).toBe('/doc/frus1961-63v06/index');
+    expect(screen.queryByText('This reference has no destination that can be opened.')).toBeNull();
+
+    // An entry of another volume's index, which the corpus does not have: nothing to land on here.
+    post.mockClear();
+    follow(elsewhere);
+    expect(await screen.findByText('This reference has no destination that can be opened.')).toBeTruthy();
+    expect(post).not.toHaveBeenCalled();
+    expect(router.state.location.pathname).toBe('/doc/frus1961-63v06/index');
+  });
 });
 
 const me: Me = { userId: 'owner', displayName: 'Owner', auth: 'none', roles: ['reader', 'curator', 'admin'], userData: true, csrfToken: 'token-1' };

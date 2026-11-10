@@ -1,5 +1,5 @@
-// The editors' annotations (FRUS-Explorer#1859 to #1862): a volume page's Editors’ Annotations and
-// Browse's axis of that name, as the server answers them from the bundled volume-annotations-index.json
+// The editors' annotations (FRUS-Explorer#1859 to #1862, and their follow-ups #1868, #1873 and #1874): a
+// volume page's Editors’ Annotations and Browse's axis of that name, as the server answers them from the bundled volume-annotations-index.json
 // (Sources/FRUSLightAPI/Annotations.swift). The server gives the counts and the parts; the words are
 // copy.ts's, put together by browse/annotationRules.ts. The file is the server's build's, so an answer
 // never goes stale.
@@ -8,7 +8,7 @@ import { getJSON } from './client';
 import { retryServerFaults } from './endpoints';
 import { formEncode } from './form';
 
-/** The fifteen layers, in the order a volume's page and the axis show them (`AnnotationLayer`). */
+/** The sixteen layers, in the order a volume's page and the axis show them (`AnnotationLayer`). */
 export const annotationLayers = [
   'people',
   'abbreviations',
@@ -18,6 +18,7 @@ export const annotationLayers = [
   'sourceNotes',
   'classification',
   'excisions',
+  'editorialOmissions',
   'despatch',
   'numbered',
   'crossReferences',
@@ -51,7 +52,16 @@ export interface AnnotationEraName {
 export type AnnotationPart =
   | { kind: 'ofDocuments'; count: number; of: number }
   | {
-      kind: 'personsListed' | 'termsListed' | 'documents' | 'excisions' | 'editorialNotes' | 'xrefDocuments' | 'xrefVolumes' | 'xrefPages';
+      kind:
+        | 'personsListed'
+        | 'termsListed'
+        | 'documents'
+        | 'excisions'
+        | 'editorialOmissions'
+        | 'editorialNotes'
+        | 'xrefDocuments'
+        | 'xrefVolumes'
+        | 'xrefPages';
       count: number;
     }
   | { kind: 'sourceForm'; form: 'citations' | 'fileNumbers' | 'both' }
@@ -134,6 +144,8 @@ export interface AnnotationDrillVolume {
   accessory?: AnnotationAccessory;
   /** The list the volume prints that none of its documents links to. */
   unlinked?: 'persons' | 'terms';
+  /** Published before the 1925 order, so Marked editorial omissions' gate keeps it out of the layer. */
+  gated?: 'before1925';
   /** The volume whose page opened the layer's. */
   from?: boolean;
 }
