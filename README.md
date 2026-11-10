@@ -4,7 +4,7 @@ FRUS Explorer Light is a self-hosted web edition of [FRUS Explorer](https://gith
 
 ## Status
 
-Phases 0 to 2 are done. Phase 1, a Docker Compose install that serves a FRUS Explorer research export at `http://localhost:8080`, was signed off on 13 October 2026, and phase 2, each researcher's notes, highlights, collections and the rest of the research layer, on 29 October. [`docs/INSTALL.md`](docs/INSTALL.md) is the install guide, [`docs/PLAN.md`](docs/PLAN.md) the plan and [`docs/DEVLOG.md`](docs/DEVLOG.md) the record of each session.
+Phases 0 to 2 are done, and phase 3, the library and the archives, is under way. Phase 1, a Docker Compose install that serves a FRUS Explorer research export at `http://localhost:8080`, was signed off on 13 October 2026, and phase 2, each researcher's notes, highlights, collections and the rest of the research layer, on 29 October. Since 10 November the server compiles the app's code at FRUS Explorer's third TestFlight build, 1.0 (1812), and serves its exports. [`docs/INSTALL.md`](docs/INSTALL.md) is the install guide, [`docs/PLAN.md`](docs/PLAN.md) the plan and [`docs/DEVLOG.md`](docs/DEVLOG.md) the record of each session.
 
 **What works today**, from the published image `ghcr.io/joshbotts/frus-explorer-light:edge`, for amd64 and arm64.
 
@@ -12,7 +12,7 @@ Phases 0 to 2 are done. Phase 1, a Docker Compose install that serves a FRUS Exp
 
 - Import of a Mac export copied into the `/data` volume, checked and served read-only. The server refuses an export from another index version. One that holds the owner's writing has it kept in the user's research data, marked as from a research database, and removed from the served copy; a read-only server refuses it.
 - Search with the app's query language, with the facets, the Query Inspector, the order by relevance or date, and the timeline and concordance readings, each saying which results it read. Each result carries its date, drawn as the app draws it, and a search you replace stops on the server.
-- Browse, which lists a section's own text first, as the app does: a meeting's list of those present, say, above its minutes. The reader, with its text size and Reading Width, its links, which follow a printed page into a volume the server does not hold as 1.0 does, and the cards for people and terms. All of it is usable by keyboard and free of axe violations.
+- Browse, which lists a section's own text first, as the app does: a meeting's list of those present, say, above its minutes, and the editors' annotations of every volume, its page's sixteen layers and an axis of them across the series. The reader, with its text size and Reading Width, its links, which follow a printed page into a volume the server does not hold as 1.0 does, and the cards for people and terms. All of it is usable by keyboard and free of axe violations.
 - Cite, with BibTeX and RIS, and Citation Lookup, opened by Search's Find by Citation: a citation pasted, its fields typed, or a chapter's footnotes at once, each looked up by the app's own matcher, its results labelled as the app labels them.
 
 *The research layer,* each researcher's own, kept on the server:
@@ -30,6 +30,8 @@ Phases 0 to 2 are done. Phase 1, a Docker Compose install that serves a FRUS Exp
 *Running it:*
 
 - Serving at the root of a host or under a path behind a reverse proxy, such as `https://example.org/frus-explorer/`, as `FRUS_PUBLIC_URL` says, with an nginx recipe for each in the install guide.
+- Local accounts, `FRUS_AUTH=local`: an admin makes each with `frus-light user add`, each signs in on the server's own page, and passwords are hashed with Argon2id ([`docs/INSTALL.md`](docs/INSTALL.md#accounts)).
+- A collection's PDF, through the optional Gotenberg container of Compose's `pdf` profile, which the export sheet offers only while it answers ([`docs/INSTALL.md`](docs/INSTALL.md#pdf-export)).
 - Sign-in through that proxy, `FRUS_AUTH=header`: the proxy signs people in and names each in a header the server takes from the proxy's address alone, and each keeps research of their own, named at the top of every page, with a footer saying that whoever runs the instance can read it. The install guide's recipe checks a session with nginx and oauth2-proxy.
 - The research store in `app.db`, the Compose install's, or in PostgreSQL, for a shared deployment that chooses one with `FRUS_USER_STORE`, every store method held alike on both by one conformance suite in CI.
 - A daily backup of the research store, at 03:00 in the container's time zone or soon after a Mac that slept through it wakes, none when nothing changed, seven kept in the volume and seven more in `./backups` on the host; `frus-light restore` puts one back, and `GET /api/v1/admin/backup` gives the newest with a manifest of versions. The owner's restore drill found their research again.
@@ -39,19 +41,20 @@ Phases 0 to 2 are done. Phase 1, a Docker Compose install that serves a FRUS Exp
 
 **Known gaps**
 
-- **Ahead of FRUS Explorer's next release.** The pin is the app's `fe9325b2`, at index version 74, 28 commits past 1.0's second TestFlight build (1787), which indexes at 71, and 75 past its first (1776), among them this project's [FRUS-Explorer#1784](https://github.com/joshbotts/FRUS-Explorer/pull/1784) to [#1790](https://github.com/joshbotts/FRUS-Explorer/pull/1790), [#1805](https://github.com/joshbotts/FRUS-Explorer/pull/1805) to [#1807](https://github.com/joshbotts/FRUS-Explorer/pull/1807), [#1809](https://github.com/joshbotts/FRUS-Explorer/pull/1809) to [#1811](https://github.com/joshbotts/FRUS-Explorer/pull/1811), [#1813](https://github.com/joshbotts/FRUS-Explorer/pull/1813) and [#1814](https://github.com/joshbotts/FRUS-Explorer/pull/1814): the server serves exports at version 74, which the app's next release makes and, until then, a build of its source. The App Store build, 1861, waits for S12d.
+- **Between TestFlight builds.** The pin is the app's `68bffcf6`, four commits past 1.0's third TestFlight build (1812), `build-53`, in the app's planning, documentation, website and marketing files alone, at index version 74, which 1812 is the first shipped build to index at: the server serves 1812's exports. It holds this project's phase 3 batch, [FRUS-Explorer#1869](https://github.com/joshbotts/FRUS-Explorer/pull/1869), [#1870](https://github.com/joshbotts/FRUS-Explorer/pull/1870) and [#1872](https://github.com/joshbotts/FRUS-Explorer/pull/1872), whose code the server's coming rows call. The App Store build, 1861, waits for S12d.
+- **The reader opens no back-of-volume index,** which the app's Read Index opens from the section's page: the reader's pages are a full parse's documents, which leave an index out. So an index's "See" links, which since FRUS-Explorer#1875 scroll to their entry in the app, and which the server answers, have no page here yet: a follow-up of the pin move to `68bffcf6`.
 - **Two parts of phase 2's screens wait for phase 3's S25c and S25d:** Project Home's focus subjects, their editor, a lead's line and a visit's head; and Add Documents' Citations and Tags. The kit has made the code they call public since #1813 and #1814.
 - **No release yet.** The first comes with phase 5. `:1.0-1776` still names a build from 23 October, before the research layer, so follow `edge`.
 - **Later phases:**
-  - no local accounts, indexing from TEI on the server, Source Explorer, NARA and Zotero, analytics, a collection's PDF, or the review of a document an update changed (phase 3);
+  - no indexing from TEI on the server, Source Explorer, NARA and Zotero, Related Documents, the cross-reference graph, analytics, an analytics figure's PDF, or the review of a document an update changed (phase 3);
   - no search by meaning, live word clouds or Archives Visits packets (phase 4);
   - no upgrade drill, accessibility audit or load test yet (phase 5);
   - no AWS deployment (phase 6).
 
 **Next**
 
-1. **Phase 3,** planned on 29 October in [`docs/PLAN.md`](docs/PLAN.md)'s Phase 3: 34 rows in six groups, from local accounts and the server's own library to Source Explorer, Related Documents, the graph and the analytics, with an arrangement for the sessions that run beside each other; phase 2's two follow-ups joined it on 8 November as S25c and S25d. Its first row, S20a, is CI's part of that arrangement.
-2. **S12d**, once the app tags `version-1.0`: the pin moves to 1.0 build 1861, the App Store build, and `edge` serves its exports.
+1. **Phase 3,** planned on 29 October in [`docs/PLAN.md`](docs/PLAN.md)'s Phase 3: 34 rows in six groups, from local accounts and the server's own library to Source Explorer, Related Documents, the graph and the analytics, with an arrangement for the sessions that run beside each other; phase 2's two follow-ups joined it on 8 November as S25c and S25d. Its first wave and its first upstream batch are merged, and S21b's pin move brings the batch into the server's build; beside it run S20c's secrets, S25c's focus subjects, and S22b's and S23b's upstream pull requests. Then S21c's downloads, after S20d, and S23d's Related Documents, after S25d.
+2. **S12d**, once the app tags `1.0-release`: the pin moves to 1.0 build 1861, the App Store build, and `edge` serves its exports.
 
 ## Development plan
 
@@ -62,7 +65,7 @@ The edition is built in phases 0 to 6, the last optional, each a visible slice w
 | 0. Linux spike | The app's shared Swift kits on Linux; the indexer, search, the TEI renderer and citations moved into `FRUSCoreKit`, which the app and the server both compile; the parity harness and its golden files; the server's skeleton and image | Checks 1–4 on three fixture volumes: the kits' own tests, and index, search and renderer parity | Done 5 October 2026 (S0–S6) |
 | 1. Reader over an export | Import mode in Docker Compose; Browse; search with the query language, the inspector, facets, timeline and concordance; the reader; Cite with BibTeX and RIS; one user on localhost | Checks 3–5 on a real export: search and renderer parity, and import acceptance | Signed off 13 October (S7–S10); its remaining features and FRUS Explorer 1.0 by 23 October (S11–S13) |
 | 2. Research layer | Notes, highlights, tags, summaries, projects, saved searches, corpora, scopes, the history and its method appendix; collections with their preview and exports; Citation Lookup; the Mac's JSON export both ways; a daily backup and its restore. For a shared deployment: sign-in through a trusted proxy, serving under a path, releases cut by hand, and a PostgreSQL store | Check 6, highlights the same text on the web as on the Mac; a Mac JSON export imports every type it carries without loss | Signed off 29 October (S14–S19) |
-| 3. Library and archives | Standalone mode: downloading, indexing and removing volumes on the server, corrections and the review of changed text; Source Explorer, NARA and Zotero, the cross-reference graph, analytics and About the Series; PDF through Gotenberg; local accounts | Checks 2, 7 and 8 on the full corpus: index, citation and Source Explorer parity | Planned 29 October (S20–S25); next |
+| 3. Library and archives | Standalone mode: downloading, indexing and removing volumes on the server, corrections and the review of changed text; Source Explorer, NARA and Zotero, the cross-reference graph, analytics and About the Series; PDF through Gotenberg; local accounts | Checks 2, 7 and 8 on the full corpus: index, citation and Source Explorer parity | Planned 29 October (S20–S25); under way since 8 November |
 | 4. Semantic and language | Search by meaning with EmbeddingGemma, the semantic Related signal and the map; a Linux lemmatizer, live word clouds and collocates; Archives Visits packets | Check 9: semantic parity | Later |
 | 5. Hardening | The first release, the upgrade path, the backup and restore drill, an accessibility audit and a 20-user load test | Checks 11 and 12: the browser suite and performance on the full corpus | Later |
 | 6. Managed variant, optional | One ECS task on Fargate behind a load balancer that signs people in, the index copied from an S3 snapshot, user data replicated to S3 | The managed variant's acceptance checks in SPEC | Later |

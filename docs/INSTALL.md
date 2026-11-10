@@ -14,7 +14,7 @@ FRUS Explorer Light runs as one container on a Mac or a Linux host, serving a re
   - a later import keeps the previous index for rollback, so a re-import needs about four times the index while it runs;
   - an export made with your notes, summaries and tags needs about twice the index more while the server removes them from its copy, about 20 GB in all for the full corpus.
 - **Memory.** Importing and serving the full corpus used about 130 MB, and the reader levelled off at about 170 MB over the largest volumes, so Docker Desktop's default allocation is plenty. A search ordered by date, or read in its timeline, holds up to 7,500 results, as the app's search window does, and the server keeps the last two such searches: by estimate, up to about 40 MB more. It also keeps the pages and counts of the last four searches, a few megabytes at most.
-- **A FRUS Explorer research export** from a Mac running a build that matches the server's index version: 74 today. FRUS Explorer's TestFlight build, 1.0 (1787), indexes at 71, and the app's next release indexes at 74; until it comes, an export at 74 comes from a build of the app's source at `fe9325b2`, the commit this server compiles, or a later one that has not moved the index version again. The server refuses any other version and says which it needs.
+- **A FRUS Explorer research export** from a Mac running a build that matches the server's index version: 74 today, which FRUS Explorer's TestFlight build 1.0 (1812) indexes at, and so does a build of the app's source at a later commit that has not moved the index version again. The earlier TestFlight builds, 1.0 (1776) and 1.0 (1787), index at 71. The server refuses any other version and says which it needs.
 - **The TEI volumes**, which the reader renders documents from. Without them the server still imports and serves the index.
 
 ## 1. Get the Compose file
@@ -291,7 +291,7 @@ When the Compose file changes too, as it did when the daily backup's folder on t
 cd ~/frus-light && curl -fsSLO https://raw.githubusercontent.com/joshbotts/FRUS-Explorer-Web-App/main/compose.yaml
 ```
 
-`edge` is the newest build of the project's main branch that passed its smoke test on both architectures. The index stays in the volume. If the new server serves a different index version, `/readyz` answers `index_version_mismatch`, naming both versions: export again from a matching FRUS Explorer build and copy it in. The first such change came with FRUS Explorer build 50, which moved the index from version 65 to 69, the second with 1.0 (build 1776), which moved it to 71, and the third on 7 November 2026, when the server moved to the app's source ahead of its next release, at version 74.
+`edge` is the newest build of the project's main branch that passed its smoke test on both architectures. The index stays in the volume. If the new server serves a different index version, `/readyz` answers `index_version_mismatch`, naming both versions: export again from a matching FRUS Explorer build and copy it in. The first such change came with FRUS Explorer build 50, which moved the index from version 65 to 69, the second with 1.0 (build 1776), which moved it to 71, and the third on 7 November 2026, when the server moved to the app's source ahead of its next release, at version 74, which TestFlight's 1.0 (1812) has indexed at since 10 November.
 
 ### Releases
 
@@ -600,7 +600,7 @@ These go in `.env` beside `compose.yaml`. A PostgreSQL user store's go in `compo
 | `FRUS_TRUSTED_PROXIES` | none | With `FRUS_AUTH=header`, which it needs, the proxy's addresses or CIDR ranges, separated by commas. Every request from elsewhere is refused, but `/healthz` and `/readyz` |
 | `FRUS_ADMIN_USERS` | none | With `FRUS_AUTH=header`, the admins, by the names the proxy gives them, separated by commas |
 | `FRUS_IMAGE` | `ghcr.io/joshbotts/frus-explorer-light:edge` | The image to run: a release, or `edge` (see [Releases](#releases)) |
-| `COMPOSE_PROFILES` | none | `pdf` starts Gotenberg, a 700 MB download, for PDF export when it arrives in phase 3 |
+| `COMPOSE_PROFILES` | none | `pdf` starts Gotenberg, for a collection's PDF: see [PDF export](#pdf-export) |
 
 ## Notes
 
