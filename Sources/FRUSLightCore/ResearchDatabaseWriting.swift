@@ -11,6 +11,7 @@
 
 import Crypto
 import Foundation
+import FRUSCoreKit
 
 /// The owner's writing as an export made with Include My Notes, Summaries, and Tags holds it, which is
 /// what the Mac's index keeps: by document, its newest summary but a headnote draft

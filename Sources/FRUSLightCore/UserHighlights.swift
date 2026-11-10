@@ -4,6 +4,7 @@
 // the store keeps what it is given.
 
 import Foundation
+import FRUSCoreKit
 
 /// One of a user's highlights, as the store keeps the Mac's `DocumentHighlight`.
 public struct HighlightRecord: Sendable, Equatable {

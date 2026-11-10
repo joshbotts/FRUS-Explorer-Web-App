@@ -1,5 +1,6 @@
-// The editors' annotations (FRUS-Explorer#1859 to #1862): a volume page's Editors’ Annotations and the
-// Browse axis of that name, as the server builds them over the kit's `VolumeAnnotationsIndex`. The
+// The editors' annotations (FRUS-Explorer#1859 to #1862, and their follow-ups #1868, #1873 and #1874):
+// a volume page's Editors’ Annotations and the Browse axis of that name, as the server builds them
+// over the kit's `VolumeAnnotationsIndex`. The
 // app's own tests of the code the server mirrors, `VolumeAnnotationsPresentationTests` and
 // `AnnotationsAxisTests`, are run here on the same fixtures with the same expectations, less their
 // words, which are the browser app's and are held by AnnotationsParityTests; then the shipped file,
@@ -18,9 +19,11 @@ import Testing
 @Suite struct AnnotationTests {
     /// A volume of `documents` documents carrying `counts`, as the app's tests make one.
     static func volume(_ era: AnnotationEra, documents: Int, persons: Int = 0, terms: Int = 0,
-                       _ counts: [AnnotationCategory: Int] = [:], sections: [String] = []) -> VolumeAnnotations {
+                       _ counts: [AnnotationCategory: Int] = [:], sections: [String] = [],
+                       publicationYear: Int? = nil) -> VolumeAnnotations {
         VolumeAnnotations(documents: documents, historicalDocuments: documents - (counts[.editorialNotes] ?? 0),
-                          personsListed: persons, termsListed: terms, era: era, counts: counts, sections: sections)
+                          personsListed: persons, termsListed: terms, era: era, counts: counts, sections: sections,
+                          publicationYear: publicationYear)
     }
 
     static func index(_ volumes: [String: VolumeAnnotations]) -> VolumeAnnotationsIndex {
@@ -38,14 +41,16 @@ import Testing
     }
 
     /// The China volume's own counts (`frus1969-76v17`), with a despatch number and a marginal note
-    /// added so every row shows, as `VolumeAnnotationsPresentationTests` has them.
+    /// added so every row shows, and its 32 bracketed omissions, as `VolumeAnnotationsPresentationTests`
+    /// has them.
     static let full = volume(.from1969, documents: 280, persons: 325, terms: 470, [
         .people: 279, .abbreviations: 278, .correspondents: 161, .subjects: 137, .participants: 67,
-        .sourceCitation: 263, .sourceFileNumber: 5, .classification: 260, .excisions: 37, .despatch: 30,
+        .sourceCitation: 263, .sourceFileNumber: 5, .classification: 260, .excisions: 37,
+        .editorialOmissions: 32, .despatch: 30,
         .numbered: 280, .xrefDocuments: 131, .xrefFootnotes: 65, .xrefVolumes: 89,
         .editorialNotes: 12, .footnotes: 243, .marginalNotes: 1,
     ], sections: ["back", "errata", "front", "index", "note-on-covert-actions", "persons", "preface",
-                  "sources", "table-of-contents", "terms"])
+                  "sources", "table-of-contents", "terms"], publicationYear: 2006)
 
     // MARK: A volume's page
 
@@ -63,6 +68,7 @@ import Testing
         #expect(parts["sourceNotes"] == [Self.part("ofDocuments", 268, of: 280), Part(kind: "sourceForm", form: "both")])
         #expect(parts["classification"] == [Self.part("ofDocuments", 260, of: 280)])
         #expect(parts["excisions"] == [Self.part("excisions", 37)])
+        #expect(parts["editorialOmissions"] == [Self.part("editorialOmissions", 32)])
         #expect(parts["despatch"] == [Self.part("documents", 30)])
         #expect(parts["numbered"] == [Self.part("ofDocuments", 280, of: 280)])
         // Footnotes are not cross-references the line counts.
@@ -119,6 +125,26 @@ import Testing
             "referencesToDocuments": "crossReferences", "editorialNotes": "editorialNotes",
             "noteOnSources": "printedAids",
         ])
+    }
+
+    /// The app's `editorialOmissionsFollowTheGate`: bracketed omissions show from 1925, and a volume
+    /// published before the order lists none and is not told it lacks them.
+    @Test func bracketedOmissionsShowFrom1925AndAVolumePublishedBeforeTheOrderListsNone() throws {
+        let before = Self.volume(.from1914, documents: 1_200, [.correspondents: 1_200, .editorialOmissions: 16],
+                                 publicationYear: 1922)
+        let gated = VolumeAnnotationsSection(volumeId: "v", annotations: before, index: Self.index(["v": before]))
+        #expect(Self.parts(gated)["editorialOmissions"] == nil)
+        // An era-bound layer is never listed as missing.
+        #expect(!gated.absent.contains { $0.id == "editorialOmissions" || $0.layer == "editorialOmissions" })
+        let from = Self.volume(.from1920, documents: 800, [.correspondents: 800, .editorialOmissions: 1], publicationYear: 1940)
+        let carried = VolumeAnnotationsSection(volumeId: "v", annotations: from, index: Self.index(["v": from]))
+        #expect(Self.parts(carried)["editorialOmissions"] == [Self.part("editorialOmissions", 1)])
+        let group = try #require(carried.groups.first { $0.rows.contains { $0.layer == "editorialOmissions" } })
+        #expect(group.family == "provenance" && AnnotationLayer.editorialOmissions.family == .provenance)
+        // A file of schema version 1 gives no year, and a volume with none is not gated.
+        let unknown = Self.volume(.from1914, documents: 10, [.editorialOmissions: 2])
+        #expect(Self.parts(VolumeAnnotationsSection(volumeId: "v", annotations: unknown, index: Self.index(["v": unknown])))["editorialOmissions"]
+                == [Self.part("editorialOmissions", 2)])
     }
 
     // MARK: The axis
@@ -222,12 +248,48 @@ import Testing
     }
 
     @Test func aLayerFoundHereAndThereCountsDocumentsEditorialNotesCountNotesReferencesNone() {
-        let annotated = Self.volume(.from1969, documents: 280, [.editorialNotes: 12, .excisions: 37, .xrefDocuments: 9])
+        let annotated = Self.volume(.from1969, documents: 280, [.editorialNotes: 12, .excisions: 37, .editorialOmissions: 32,
+                                                                .xrefDocuments: 9])
         #expect(AnnotationsAxis.accessory(for: .editorialNotes, annotated) == Accessory(kind: "notes", count: 12))
         #expect(AnnotationsAxis.accessory(for: .excisions, annotated) == Accessory(kind: "docs", count: 37))
+        #expect(AnnotationsAxis.accessory(for: .editorialOmissions, annotated) == Accessory(kind: "docs", count: 32))
         #expect(AnnotationsAxis.accessory(for: .crossReferences, annotated) == nil)
         let one = Self.volume(.from1969, documents: 2, [.editorialNotes: 1])
         #expect(AnnotationsAxis.accessory(for: .editorialNotes, one) == Accessory(kind: "notes", count: 1))
+    }
+
+    /// The app's `editorialOmissionsDrillsCarryTheGateNote`: a volume published before 1925 is listed
+    /// without the layer, with the mark its line is said from.
+    @Test func markedEditorialOmissionsListAVolumePublishedBefore1925WithoutItAndMarkIt() throws {
+        let volumes = Self.index([
+            "frus1914": Self.volume(.from1914, documents: 1_200, [.editorialOmissions: 16], publicationYear: 1922),
+            "frus1925v01": Self.volume(.from1920, documents: 800, [.editorialOmissions: 9], publicationYear: 1940),
+            "frus1861": Self.volume(.from1861, documents: 400, publicationYear: 1861),
+            "frus1950v01": Self.volume(.from1945, documents: 900, publicationYear: 1977),
+        ])
+        let drills = AnnotationsAxis.drills(for: .editorialOmissions, in: volumes)
+        #expect(drills.map(\.id) == ["with", "without"])
+        func list(_ drill: AnnotationsAxis.Drill, from: String? = nil) -> AnnotationDrill {
+            AnnotationDrill(layer: .editorialOmissions, drill: drill.id, rule: drill.rule, volumeIds: drill.volumeIds, total: 4,
+                            index: volumes, from: from, accessoryCategory: drill.accessoryCategory)
+        }
+        let with = list(try #require(drills.first))
+        let without = list(try #require(drills.last))
+        #expect(with.volumes == [AnnotationDrill.Volume(volumeId: "frus1925v01", accessory: Accessory(kind: "docs", count: 9))])
+        #expect(with.count == 1 && with.total == 4 && with.rule == "layer")
+        #expect(without.volumes.map(\.volumeId) == ["frus1861", "frus1914", "frus1950v01"])
+        // The gated volume keeps its count and is marked; one published since, with none, says nothing.
+        #expect(without.volumes.map(\.accessory) == [nil, Accessory(kind: "docs", count: 16), nil])
+        #expect(without.volumes.map(\.gated) == ["before1925", "before1925", nil])
+        // Opened from the gated volume's page, it comes first, marked both ways.
+        let marked = list(try #require(drills.last), from: "frus1914")
+        #expect(marked.volumes.first == AnnotationDrill.Volume(volumeId: "frus1914", accessory: Accessory(kind: "docs", count: 16),
+                                                              gated: "before1925", from: true))
+        // The mark is this layer's alone.
+        #expect(AnnotationsAxis.gateNote(for: .excisions, try #require(volumes["frus1914"])) == nil)
+        let reach = AnnotationsAxis.reach(of: .editorialOmissions, in: volumes)
+        #expect(reach.carrying == ["frus1925v01"])
+        #expect(reach.bands.first { $0.era == .from1914 }?.carrying == 0)
     }
 
     @Test func sourceNotesAddOneDrillPerFormThePrintedAidsHaveOnePerAid() throws {
@@ -309,6 +371,28 @@ import Testing
                                     total: 553, index: index, from: nil)
         #expect(terms.volumes.filter { $0.unlinked != nil }.map { "\($0.volumeId) \($0.unlinked ?? "")" } == ["frus1977-80v27 terms"])
 
+        // Marked editorial omissions (FRUS-Explorer#1874), as the app's test reads the file: 482 volumes
+        // hold a bracketed omission, 26 of them published before the 1925 order, which the gate keeps
+        // out, so 456 carry the layer; by the eras the volumes cover it is standard from 1920.
+        let omissions = data.reach(of: .editorialOmissions)
+        #expect(omissions.carrying.count == 456 && omissions.onset == .from1920)
+        #expect(index.volumes.values.filter { $0.count(.editorialOmissions) > 0 }.count == 482)
+        #expect(index["frus1969-76v17"]?.count(.editorialOmissions) == 32)
+        let papers1914 = try #require(index["frus1914"])
+        #expect(papers1914.publicationYear == 1922 && papers1914.count(.editorialOmissions) == 16)
+        #expect(!omissions.carrying.contains("frus1914"))
+        let withoutOmissions = try #require(AnnotationsAxis.drills(for: .editorialOmissions, in: index).first { $0.id == "without" })
+        #expect(withoutOmissions.volumeIds.count == 97)
+        let gated = AnnotationDrill(layer: .editorialOmissions, drill: "without", rule: .layer, volumeIds: withoutOmissions.volumeIds,
+                                    total: 553, index: index, from: nil)
+        #expect(gated.volumes.first { $0.volumeId == "frus1914" }
+                == AnnotationDrill.Volume(volumeId: "frus1914", accessory: Accessory(kind: "docs", count: 16), gated: "before1925"))
+        // Every volume published before the order is marked, whether or not it holds a bracket.
+        #expect(gated.volumes.first { $0.volumeId == "frus1890" }?.gated == "before1925")
+        #expect(gated.volumes.filter { $0.gated != nil }.count == 74)
+        // Every volume the file holds says when it was published, which the gate reads.
+        #expect(index.volumes.values.allSatisfy { $0.publicationYear != nil })
+
         // Every layer has volumes to show.
         for layer in AnnotationLayer.allCases {
             #expect(!data.reach(of: layer).carrying.isEmpty, "\(layer) has no volume")
@@ -323,6 +407,7 @@ import Testing
         let china = try section("frus1969-76v17")
         #expect(Self.parts(china)["people"] == [Self.part("ofDocuments", 279, of: 280), Self.part("personsListed", 325)])
         #expect(Self.parts(china)["classification"] == [Self.part("ofDocuments", 260, of: 280)])
+        #expect(Self.parts(china)["editorialOmissions"] == [Self.part("editorialOmissions", 32)])
         #expect(china.absent.isEmpty)
 
         let papers1890 = try section("frus1890")
@@ -330,6 +415,11 @@ import Testing
         #expect(papers1890.absent.first?.id == "people" && papers1890.absent.first?.onset?.firstYear == 1955)
         #expect(Self.parts(papers1890)["despatch"] == [Self.part("documents", 347)])
         #expect(Self.parts(papers1890)["printedAids"] == ["list-of-papers", "index"].map { Part(kind: "aid", aid: $0) })
+        // 1914, published in 1922, holds 16 bracketed omissions and is kept out by the 1925 gate: no
+        // row, and no absent row either, since the layer is era-bound.
+        let papers1914 = try section("frus1914")
+        #expect(Self.parts(papers1914)["editorialOmissions"] == nil)
+        #expect(!papers1914.absent.contains { $0.layer == "editorialOmissions" })
 
         // One of the three fixture volumes, which the browser suite opens: every standard layer.
         let kennedy = try section("frus1961-63v06")
@@ -416,6 +506,20 @@ import Testing
             #expect(with.volumes.first == AnnotationDrill.Volume(volumeId: "frus1961-63v06", accessory: Accessory(kind: "ratio", count: 120, of: 120),
                                                                 unlinked: nil, from: true))
             #expect(with.volumes.dropFirst().allSatisfy { $0.from == nil })
+
+            // Marked editorial omissions, opened from 1914's page: the volume first, with its count and
+            // both marks, the 1925 gate's written only where it holds.
+            let gated = try await client.execute(uri: "/api/v1/annotations/editorialOmissions/drills/without?from=frus1914", method: .get)
+            let omissions = try decode(AnnotationDrill.self, gated)
+            #expect(omissions.count == 97 && omissions.total == 553 && omissions.rule == "layer")
+            #expect(omissions.volumes.first == AnnotationDrill.Volume(volumeId: "frus1914", accessory: Accessory(kind: "docs", count: 16),
+                                                                     gated: "before1925", from: true))
+            #expect(String(buffer: gated.body).components(separatedBy: #""gated":"before1925""#).count - 1 == 74)
+            #expect(!String(buffer: gated.body).contains("null"))
+            let carried = try decode(AnnotationLayerPage.self,
+                                     try await client.execute(uri: "/api/v1/annotations/editorialOmissions", method: .get))
+            #expect(carried.reach.carrying == 456 && carried.reach.onset?.firstYear == 1920)
+            #expect(carried.drills == [AnnotationLayerPage.Drill(id: "with", count: 456), AnnotationLayerPage.Drill(id: "without", count: 97)])
 
             let cell = try decode(AnnotationDrill.self, try await client.execute(uri: "/api/v1/annotations/people/eras/1955-1968", method: .get))
             #expect(cell.drill == "era" && cell.era == AnnotationEraName(.from1955) && cell.count == 114 && cell.total == 114)

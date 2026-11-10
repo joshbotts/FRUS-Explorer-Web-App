@@ -1,7 +1,7 @@
 {
   "format" : 1,
   "provenance" : {
-    "appBuild" : 1787,
+    "appBuild" : 1812,
     "indexVersion" : 74,
     "inputs" : {
       "fixtures/parity/queries.jsonl#records" : "f75bc7b9e75cf052af539d4c10a9fabef152f0d7f3ff750a4816d18ae0e04189",
@@ -9,12 +9,12 @@
       "fixtures/tei/frus1894Nicaragua.xml" : "c36aa079477928672a8f9cb98b37757a428452824ce15500db62e0636dd2c4cc",
       "fixtures/tei/frus1961-63v06.xml" : "48d571c05cad26e51d645c7a5fe7d5ea8b1d42e3f9a2c78ae97bf59a0e5c6f3f",
       "fixtures/tei/frus1969-76ve09p1.xml" : "6f88c7c3078d374797db1cbf2ec2999e92c489170d4ce5df0cdcc5c22a612df8",
-      "research_provenance.app_build" : "1787",
+      "research_provenance.app_build" : "1812",
       "research_provenance.app_version" : "1.0",
       "research_provenance.current_fts_schema_version" : "4",
       "research_provenance.current_index_version" : "74",
       "research_provenance.documentation" : "https://github.com/joshbotts/FRUS-Explorer/blob/v2/Docs/Agentic-Analysis-Guide.md",
-      "research_provenance.exported_at" : "2026-11-08T02:20:50Z",
+      "research_provenance.exported_at" : "2026-11-10T16:12:56Z",
       "research_provenance.installed_fts_schema_version" : "4",
       "research_provenance.installed_index_version" : "74",
       "research_provenance.my_writing_included" : "0",
@@ -27,9 +27,9 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "068076a35381b08d8cd13aa60d07a1309c8da36e4cfc784ebd3f60e68b961f0e",
+    "sourceDigest" : "fa1b745620fc74e0368b43dcdd9120f32e8eaedf3fe3d010eef7641d9d2b6524",
     "tool" : "tools/mac-golden results",
-    "upstreamCommit" : "fe9325b27062f102fe9ce699b405e012b01f6157"
+    "upstreamCommit" : "68bffcf6e9464b406cf577af89864510402a9ea0"
   },
   "queries" : [
     {

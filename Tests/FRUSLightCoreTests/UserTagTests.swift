@@ -7,6 +7,7 @@
 @testable import FRUSLightCore
 import FRUSLightTestSupport
 import Foundation
+import FRUSCoreKit
 import Testing
 
 @Suite struct UserTagTests {

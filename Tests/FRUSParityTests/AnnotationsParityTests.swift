@@ -1,6 +1,7 @@
 // The app's words and the lines of its code that the web takes for the editors' annotations
-// (FRUS-Explorer#1859 to #1862, and PLAN's rule for view code: "mirrored with a parity test that reads
-// the app's source at the pin"), read from the app's source, the kit's, the server's and the browser
+// (FRUS-Explorer#1859 to #1862, their follow-ups #1868, #1873 and #1874, which S21b's pin move
+// followed, and PLAN's rule for view code: "mirrored with a parity test that reads the app's source
+// at the pin"), read from the app's source, the kit's, the server's and the browser
 // app's at once: a volume page's Editors’ Annotations (`VolumeAnnotationsPresentation`,
 // `VolumeAnnotationsSection`) and Browse's axis of that name (`AnnotationLayer`, `AnnotationsAxis`,
 // `AnnotationsAxisViews`). The table of layers, the rows, the reaches and the drills are the server's
@@ -84,7 +85,8 @@ import Testing
             (Self.presentation, "browser.volume.annotations.participants", "Meeting participants", "participants"),
             (Self.presentation, "browser.volume.annotations.sourceNotes", "Source notes", "sourceNotes"),
             (Self.presentation, "browser.volume.annotations.classification", "Classification markings", "classification"),
-            (Self.presentation, "browser.volume.annotations.excisions", "Excisions marked", "excisions"),
+            (Self.presentation, "browser.volume.annotations.excisions", "Redactions marked as not declassified", "excisions"),
+            (Self.presentation, "browser.volume.annotations.editorialOmissions", "Marked editorial omissions", "editorialOmissions"),
             (Self.presentation, "browser.volume.annotations.despatch", "Despatch numbers", "despatch"),
             (Self.presentation, "browser.volume.annotations.numbered", "Numbered documents", "numbered"),
             (Self.presentation, "browser.volume.annotations.crossReferences", "Cross-references", "crossReferences"),
@@ -92,7 +94,7 @@ import Testing
             (Self.presentation, "browser.volume.annotations.editorialNotes", "Editorial notes", "editorialNotes"),
             (Self.presentation, "browser.volume.annotations.footnotes", "Footnotes", "footnotes"),
             (Self.presentation, "browser.volume.annotations.marginalNotes", "Marginal notes", "marginalNotes"),
-            (Self.presentation, "browser.volume.annotations.printedAids", "Printed aids", "printedAids"),
+            (Self.presentation, "browser.volume.annotations.printedAids", "Front and back matter", "printedAids"),
             (Self.presentation, "browser.volume.annotations.noteOnSources", "Note on Sources", "noteOnSources"),
             (Self.presentation, "browser.volume.annotations.sourceNotes.citations", "archival citations (“Source: …”)", "citations"),
             (Self.presentation, "browser.volume.annotations.sourceNotes.fileNumbers", "file numbers above the heading", "fileNumbers"),
@@ -113,7 +115,11 @@ import Testing
             (Self.axis, "browser.annotations.rule.classification",
              "A volume counts when at least half its documents carry a classification marking, as the app reads them.", "classification"),
             (Self.axis, "browser.annotations.rule.excisions",
-             "A volume counts when one of its documents marks text as not declassified.", "excisions"),
+             "A volume counts when one of its documents marks a redaction as not declassified: text in it, or the whole document.",
+             "excisions"),
+            (Self.axis, "browser.annotations.rule.editorialOmissions",
+             "A volume published from 1925 counts when one of its documents says, in brackets, what the editors left out: “[Here follows …]” or “[Omitted here is …]”.",
+             "editorialOmissions"),
             (Self.axis, "browser.annotations.rule.despatch",
              "A volume counts when at least a tenth of its documents carry a despatch number.", "despatch"),
             (Self.axis, "browser.annotations.rule.numbered",
@@ -127,10 +133,10 @@ import Testing
             (Self.axis, "browser.annotations.rule.marginalNotes",
              "A volume counts when one of its documents prints a marginal note.", "marginalNotes"),
             (Self.axis, "browser.annotations.rule.printedAids",
-             "A volume counts when it prints one of the aids listed below.", "printedAids"),
+             "A volume counts when it prints one of the sections listed below.", "printedAids"),
             (Self.axis, "browser.annotations.rule.sourceForm",
              "A volume counts when at least half its documents carry a source note of this form.", "sourceForm"),
-            (Self.axis, "browser.annotations.rule.aid", "A volume counts when it prints this aid.", "aid"),
+            (Self.axis, "browser.annotations.rule.aid", "A volume counts when it prints this section.", "aid"),
             (Self.axis, "browser.annotations.practice.people",
              "The editors linked each person a document names to the volume's List of Persons, where the person is identified.", "people"),
             (Self.axis, "browser.annotations.practice.abbreviations",
@@ -149,8 +155,11 @@ import Testing
              "The editors printed each document's security classification, first above the dateline and later in the source note.",
              "classification"),
             (Self.axis, "browser.annotations.practice.excisions",
-             "Where text was still classified when the volume was published, the editors marked the gap: “[… not declassified]”.",
+             "The editors mark what declassification review redacted: a gap in the printed text, “[… not declassified]”, or a whole document withheld, listed in its place with its heading, its source note and the number of pages not declassified. From Secretary Kellogg’s 1925 order until the 1991 statute, volumes marked an omission with an ellipsis, whether the editors left the text out or it was not cleared for publication, so their redactions cannot be told from the editors’ omissions and are not counted here. Volumes published before the 1925 order marked an omission with a row of asterisks, under no written rule and without saying whose cut it was; those are not counted here either.",
              "excisions"),
+            (Self.axis, "browser.annotations.practice.editorialOmissions",
+             "Since Secretary Kellogg’s 1925 order, where the editors left out part of a document as not relevant to the volume, they could say so in brackets and describe what was omitted. Until the 1991 statute an ellipsis could also mark an omission, the editors’ or a redaction, and those are not counted here. Volumes published before the order marked an omission with a row of asterisks, not a bracketed note, and are not counted here.",
+             "editorialOmissions"),
             (Self.axis, "browser.annotations.practice.despatch",
              "Older volumes print the number a diplomatic post gave each despatch it sent, “No. 74.”, by which the despatch is found in the archives.",
              "despatch"),
@@ -166,21 +175,22 @@ import Testing
             (Self.axis, "browser.annotations.practice.marginalNotes",
              "A few volumes print the notes written in a document's margin, set off from its text.", "marginalNotes"),
             (Self.axis, "browser.annotations.practice.printedAids",
-             "Besides its documents, a volume prints aids to reading it: a preface, lists of sources, abbreviations and persons, an index.",
+             "Besides its documents, a volume prints front and back matter to help readers use it: a preface, lists of sources, abbreviations and persons, an index.",
              "printedAids"),
             // The sentences of "In the app" whose screens this server has too; the others are the web's own, below.
             (Self.axis, "browser.annotations.app.abbreviations", "The reader opens a linked abbreviation's meaning.", "abbreviations"),
             (Self.axis, "browser.annotations.app.numbered", "Document titles and citations give the number the volume prints.", "numbered"),
             (Self.axis, "browser.annotations.app.editorialNotes", "Search can limit its results to editorial notes.", "editorialNotes"),
             (Self.axis, "browser.annotations.app.footnotes", "The reader shows each footnote with its document.", "footnotes"),
-            (Self.axis, "browser.annotations.app.printedAids",
-             "A volume's page lists them under Front Matter and Back Matter, and the reader opens each one.", "printedAids"),
             (Self.axis, "browser.annotations.app.none", "The reader shows these as printed. Nothing else in the app reads them yet.", "none"),
             (Self.axis, "browser.annotations.era.retrospective", "the late retrospectives", "eraRetrospective"),
             (Self.axis, "browser.annotations.era.retrospective.short", "Retro.", "eraRetrospectiveShort"),
             (Self.axis, "browser.annotations.era.retrospective.title", "Late retrospectives", "eraRetrospectiveTitle"),
             (Self.axis, "browser.annotations.standard.none.retrospective",
              "No era made it standard. It is most common in the late retrospective volumes.", "standardNoneRetrospective"),
+            (Self.axis, "browser.annotations.standard.redactions",
+             "Volumes produced after the passage of the 1991 statute include explicit editorial annotation of redactions made during the declassification process.",
+             "standardRedactions"),
             (Self.axis, "browser.annotations.drill.with", "Volumes with it", "drillWith"),
             (Self.axis, "browser.annotations.drill.without", "Volumes without it", "drillWithout"),
             (Self.axis, "browser.annotations.drill.sourceCitation", "Archival citations (“Source: …”)", "drillCitation"),
@@ -190,6 +200,9 @@ import Testing
              "Prints a List of Persons, but none of its documents links a name to it.", "notePersonsUnlinked"),
             (Self.axis, "browser.annotations.note.abbreviations.unlinked",
              "Prints a List of Abbreviations, but none of its documents links a term to it.", "noteTermsUnlinked"),
+            (Self.axis, "browser.annotations.note.editorialOmissions.before1925",
+             "Published before the 1925 order, when the editors marked an omission with a row of asterisks, not a bracketed note.",
+             "noteBefore1925"),
             (Self.views, "browser.annotations.unavailable.title", "Editors’ Annotations Unavailable", "unavailableTitle"),
             (Self.views, "browser.annotations.row.help",
              "What the editors did, when it became standard, and the volumes that carry it", "rowHelp"),
@@ -227,6 +240,11 @@ import Testing
             // and the kit's chip beside a "Source:" note's, which a volume that prints it in the opener has none of.
             ("browser.annotations.app.classification", "Search's results and Source Explorer show a document's marking.",
              "classification", "The reader shows a document’s marking as the volume prints it."),
+            // The reader's pages are a full parse's documents, which leave out a volume's index and its lists
+            // of sources and persons, where the app's Read Index opens each (S21b's follow-up).
+            ("browser.annotations.app.printedAids",
+             "A volume's page lists them under Front Matter and Back Matter, and the reader opens each one.",
+             "printedAids", "A volume’s page lists them under Front Matter and Back Matter, and the reader opens most of them; its index and its lists of sources and persons do not open here yet."),
             // The graph and Cross-Volume Connections are S23e's.
             ("browser.annotations.app.crossReferences",
              "The reader follows each one, and the Cross-Reference graph and Cross-Volume Connections draw them.",
@@ -274,10 +292,14 @@ import Testing
              "termsListedOne: (count: string) => `${count} term listed`,"),
             (Self.presentation, "browser.volume.annotations.terms.listed.many", "%@ terms listed",
              "termsListedMany: (count: string) => `${count} terms listed`,"),
-            (Self.presentation, "browser.volume.annotations.excisions.one", "%@ document with text not declassified",
-             "excisionsOne: (count: string) => `${count} document with text not declassified`,"),
-            (Self.presentation, "browser.volume.annotations.excisions.many", "%@ documents with text not declassified",
-             "excisionsMany: (count: string) => `${count} documents with text not declassified`,"),
+            (Self.presentation, "browser.volume.annotations.excisions.one", "%@ document with a redaction marked",
+             "excisionsOne: (count: string) => `${count} document with a redaction marked`,"),
+            (Self.presentation, "browser.volume.annotations.excisions.many", "%@ documents with redactions marked",
+             "excisionsMany: (count: string) => `${count} documents with redactions marked`,"),
+            (Self.presentation, "browser.volume.annotations.editorialOmissions.one", "%@ document with an editorial omission marked",
+             "editorialOmissionsOne: (count: string) => `${count} document with an editorial omission marked`,"),
+            (Self.presentation, "browser.volume.annotations.editorialOmissions.many", "%@ documents with editorial omissions marked",
+             "editorialOmissionsMany: (count: string) => `${count} documents with editorial omissions marked`,"),
             (Self.presentation, "browser.volume.annotations.editorialNotes.one", "%@ editorial note",
              "editorialNotesOne: (count: string) => `${count} editorial note`,"),
             (Self.presentation, "browser.volume.annotations.editorialNotes.many", "%@ editorial notes",
@@ -381,7 +403,7 @@ import Testing
         ], file: "Annotations.swift")
     }
 
-    /// The table of layers: the app's fifteen, in its order, as the server's `AnnotationLayer` and the
+    /// The table of layers: the app's sixteen, in its order, as the server's `AnnotationLayer` and the
     /// browser app's `annotationLayers` list them.
     @Test func theLayersAreTheAppsInItsOrder() throws {
         let source = try NoteViewParityTests.read(NoteViewParityTests.app, Self.axis)
@@ -390,7 +412,7 @@ import Testing
         let cases = String(source[start.upperBound..<end.lowerBound]).matches(of: try Regex(#"(?m)^\s*case (\w+)$"#)).compactMap {
             $0.output[1].substring.map(String.init)
         }
-        #expect(cases.count == 15)
+        #expect(cases.count == 16)
         #expect(AnnotationLayer.allCases.map(\.rawValue) == cases)
         let web = try NoteViewParityTests.read(NoteViewParityTests.web, "api/annotations.ts")
         let listStart = try #require(web.range(of: "export const annotationLayers = ["))
@@ -411,12 +433,12 @@ import Testing
         let same = [
             // `AnnotationLayer.family`
             "case .people, .abbreviations, .correspondents, .subjects, .participants: return .named",
-            "case .sourceNotes, .classification, .excisions, .despatch: return .provenance",
+            "case .sourceNotes, .classification, .excisions, .editorialOmissions, .despatch: return .provenance",
             "case .numbered, .crossReferences, .editorialNotes, .footnotes, .marginalNotes, .printedAids: return .connects",
             // `category`
             "case .people: return .people case .abbreviations: return .abbreviations case .correspondents: return .correspondents",
             "case .subjects: return .subjects case .participants: return .participants case .classification: return .classification",
-            "case .excisions: return .excisions case .despatch: return .despatch case .numbered: return .numbered",
+            "case .excisions: return .excisions case .editorialOmissions: return .editorialOmissions case .despatch: return .despatch case .numbered: return .numbered",
             "case .editorialNotes: return .editorialNotes case .footnotes: return .footnotes case .marginalNotes: return .marginalNotes",
             "case .sourceNotes, .crossReferences, .printedAids: return nil",
             // `isCarried(by:)` and `count(in:)`
@@ -446,7 +468,9 @@ import Testing
             // `accessory(for:_:category:locale:)`
             "let count = category.map(annotations.count) ?? layer.count(in: annotations) guard let count, count > 0 else { return nil }",
             "case .people, .abbreviations, .correspondents, .sourceNotes, .classification, .despatch, .numbered, .footnotes:",
-            "case .subjects, .participants, .excisions, .marginalNotes:",
+            "case .subjects, .participants, .excisions, .editorialOmissions, .marginalNotes:",
+            // `gateNote(for:_:)`: the 1925 gate's mark, by the kit's `publishedBeforeEditorialOmissionsOrder`
+            "guard layer == .editorialOmissions, annotations.publishedBeforeEditorialOmissionsOrder else { return nil }",
             // `unlinkedList(for:_:)`
             "case .people where annotations.count(.people) == 0 && annotations.personsListed > 0:",
             "case .abbreviations where annotations.count(.abbreviations) == 0 && annotations.termsListed > 0:",
@@ -464,7 +488,7 @@ import Testing
             "case .people: return coverage(.people, listed: personsListed) case .abbreviations: return coverage(.abbreviations, listed: termsListed)",
             "case .correspondents: return documents(.correspondents) case .subjects: return documents(.subjects) case .participants: return documents(.participants)",
             "case .sourceNotes: return sourceNotes case .classification: return coverage(.classification) case .excisions: return excisions",
-            "case .despatch: return documents(.despatch) case .numbered: return coverage(.numbered)",
+            "case .editorialOmissions: return editorialOmissions case .despatch: return documents(.despatch) case .numbered: return coverage(.numbered)",
             "case .editorialNotes: return editorialNotes case .footnotes: return coverage(.footnotes) case .marginalNotes: return documents(.marginalNotes)",
             "guard annotations.personsListed > 0 else { return nil }", "guard annotations.termsListed > 0 else { return nil }",
             "let citations = annotations.count(.sourceCitation) > 0 let fileNumbers = annotations.count(.sourceFileNumber) > 0",
@@ -509,7 +533,7 @@ import Testing
             "case .printedAids: return !VolumeAnnotationsPresentation.printedAids(in: annotations.sections).isEmpty",
             "if layer == .printedAids { return aidDrills(in: index, from: fromVolumeId, locale: locale) }",
             "accessoryCategory: form.category)))",
-            "if let unlinked = unlinkedList(for: layer, annotations) { lines.append(unlinked) } if volumeId == fromVolumeId {",
+            "if let unlinked = unlinkedList(for: layer, annotations) { lines.append(unlinked) } if let gated = gateNote(for: layer, annotations) { lines.append(gated) } if volumeId == fromVolumeId {",
             "if reach.onset != nil { return VolumeAnnotationsPresentation.standardFrom(reach.onset) }",
             "volumeIds: ids, rule: layer.rule, layer: layer, index: index, from: nil,",
         ], file: "AnnotationsAxis.swift")
@@ -517,7 +541,7 @@ import Testing
             "case .printedAids: return !PrintedAid.printed(in: annotations.sections).isEmpty",
             "if layer == .printedAids { return aidDrills(in: index) }",
             "rule: .sourceForm, accessoryCategory: form.category))",
-            "unlinked: annotations.flatMap { AnnotationsAxis.unlinkedList(for: layer, $0) }, from: volumeId == fromVolumeId ? true : nil)",
+            "unlinked: annotations.flatMap { AnnotationsAxis.unlinkedList(for: layer, $0) }, gated: annotations.flatMap { AnnotationsAxis.gateNote(for: layer, $0) }, from: volumeId == fromVolumeId ? true : nil)",
             "guard reach.onset == nil else { return nil }",
             #"return AnnotationDrill(layer: layer, drill: "era", era: era, rule: .layer, volumeIds: cell.volumeIds, total: cell.band.total, index: data.index, from: nil)"#,
         ], file: "Annotations.swift")
@@ -542,7 +566,8 @@ import Testing
             "guard let first = era.firstYear else {", "if parts.count == 2, let last = Int(parts[1]) {",
             #"String(localized: "browser.annotations.era.span", defaultValue: "%1$@–%2$@"), String(first), String(last))"#,
             "return String(first)",
-            // When a layer became standard, and the row and band read aloud.
+            // When a layer became standard, Redactions' sentence before any era's, and the row and band read aloud.
+            "if reach.layer == .excisions { return redactionsStandardLine }",
             "if peak.era == .retrospective {",
             #"return standard.isEmpty ? lead : lead + " " + standard"#,
             "let name = band.era == .retrospective",
@@ -570,11 +595,12 @@ import Testing
             "if (era.lastYear !== undefined) return words.eraSpan(String(era.firstYear), String(era.lastYear));",
             "return words.eraFrom(String(era.firstYear));",
             "return era.firstYear === undefined ? words.eraRetrospectiveShort : String(era.firstYear);",
+            "if (reach.layer === 'excisions') return words.standardRedactions; if (reach.onset) return standardFrom(reach.onset);",
             "if (reach.peak.firstYear === undefined) return words.standardNoneRetrospective;",
             "return standard === '' ? lead : `${lead} ${standard}`;",
             "const name = era.firstYear === undefined ? words.eraRetrospectiveTitle : eraName(era);",
             "const count = drill.era ? spokenBand(drill.era, { carrying: drill.count, total: drill.total }) : volumesLine(drill.count, drill.total);",
-            "return lines.join(' ');",
+            "if (volume.gated === 'before1925') lines.push(words.noteBefore1925); if (volume.from) lines.push(words.noteFrom); return lines.join(' ');",
             "if (accessory.kind === 'ratio') return `${accessory.count.toLocaleString('en-US')}/${accessory.of.toLocaleString('en-US')}`;",
             "return `${Math.round((0.15 + 0.85 * share) * 100)}%`;",
             "return words.drillSpoken(drillRowTitle(drill), counted(count, words.volumesOne, words.volumesMany));",

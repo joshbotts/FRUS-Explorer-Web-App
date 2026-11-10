@@ -1,4 +1,6 @@
-// The editors' annotations (FRUS-Explorer#1859 to #1862), the follow-up to the pin move to fe9325b2:
+// The editors' annotations (FRUS-Explorer#1859 to #1862), the follow-up to the pin move to fe9325b2, and
+// their own follow-ups (#1868, #1873 and #1874: Redactions' words and the sixteenth layer, Marked editorial
+// omissions), which S21b's pin move followed:
 // Playwright reaches a volume page's Editors’ Annotations and Browse's axis of that name by keyboard on
 // Chromium, with no axe violations. The counts are the bundled volume-annotations-index.json's, which the
 // image carries with the app's other data files, as the app's own UI suites read the shipped file
@@ -23,7 +25,9 @@ test('opens a layer from a volume’s Editors’ Annotations, lists its volumes 
   await expect(section.getByRole('link', { name: /^Cross-references: / })).toHaveAccessibleName(
     'Cross-references: 70 documents cite others in this volume; 13 documents cite other volumes; 12 documents cite printed pages.',
   );
-  await expect(section.getByRole('link', { name: /^Printed aids: / })).toContainText('Preface · Sources · Abbreviations · Persons · Index');
+  await expect(section.getByRole('link', { name: /^Front and back matter: / })).toContainText('Preface · Sources · Abbreviations · Persons · Index');
+  // Published in 1996, it carries the sixteenth layer, which counts from 1925.
+  await expect(section.getByRole('link', { name: 'Marked editorial omissions: 2 documents with editorial omissions marked.' })).toBeVisible();
   // It carries every standard layer, so nothing is listed as absent.
   await expect(section.locator('details')).toHaveCount(0);
   await axeCheck(page);
@@ -115,5 +119,70 @@ test('opens what a volume lacks by keyboard, and its absent row lists the volume
   await expect(list.getByRole('listitem').first()).toContainText('You came here from this volume.');
   // frus1977-80v27 prints a List of Persons that none of its documents links to.
   await expect(list.getByText('Prints a List of Persons, but none of its documents links a name to it.')).toHaveCount(1);
+  await axeCheck(page);
+});
+
+test('reads when Redactions began from the statute, not an era, and lists a volume published before 1925 without Marked editorial omissions, with the reason, by keyboard alone', async ({
+  page,
+}) => {
+  await page.goto('browse/frus1969-76ve09p1');
+  const heading = page.getByRole('heading', { level: 1 });
+  const section = page.getByRole('region', { name: 'Editors’ Annotations' });
+  const redactions = section.getByRole('link', { name: 'Redactions marked as not declassified: 20 documents with redactions marked.' });
+  await expect(redactions).toBeVisible();
+  await expect(section.getByRole('link', { name: 'Marked editorial omissions: 8 documents with editorial omissions marked.' })).toBeVisible();
+
+  // Redactions' page: the practice follows the year a volume was published, so it names the statute.
+  await tabTo(page, redactions, 80);
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/browse\/annotations\/excisions\?from=frus1969-76ve09p1$/);
+  await expect(heading).toHaveText('Redactions marked as not declassified');
+  await expect(heading).toBeFocused();
+  await expect(page.getByText('210 of 553 volumes', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(
+      'Volumes produced after the passage of the 1991 statute include explicit editorial annotation of redactions made during the declassification process.',
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(page.getByText(/^Standard in the volumes covering/)).toHaveCount(0);
+  await axeCheck(page);
+
+  // The axis: the sixteenth layer, in Where it came from, between Redactions and Despatch numbers.
+  await backTabTo(page, page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Editors’ Annotations' }));
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/browse\/annotations$/);
+  const provenance = page.getByRole('table', { name: 'Where it came from' });
+  await expect(provenance.getByRole('rowheader')).toHaveText([
+    /^Source notes/,
+    /^Classification markings/,
+    /^Redactions marked as not declassified/,
+    /^Marked editorial omissions/,
+    /^Despatch numbers/,
+  ]);
+  const omissions = provenance.getByRole('link', {
+    name: 'Marked editorial omissions: 456 of 553 volumes. Standard in the volumes covering 1920 on.',
+  });
+  // Past Who is named's rows and their cells, and three rows of this table.
+  await tabTo(page, omissions, 200);
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/browse\/annotations\/editorialOmissions$/);
+  await expect(heading).toHaveText('Marked editorial omissions');
+  await expect(heading).toBeFocused();
+  await expect(page.getByText('456 of 553 volumes', { exact: true })).toBeVisible();
+  await axeCheck(page);
+
+  // Volumes without it: the 97 the gate or their own text keeps out, 74 of them published before the
+  // 1925 order, each saying so, the 1894 Nicaragua volume among them.
+  await tabTo(page, page.getByRole('link', { name: 'Volumes without it: 97 volumes' }));
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/browse\/annotations\/editorialOmissions\/without$/);
+  await expect(heading).toHaveText('Without: Marked editorial omissions');
+  await expect(heading).toBeFocused();
+  const list = page.getByRole('list', { name: 'Without: Marked editorial omissions' });
+  await expect(list.getByRole('listitem')).toHaveCount(97);
+  const before1925 = 'Published before the 1925 order, when the editors marked an omission with a row of asterisks, not a bracketed note.';
+  await expect(list.getByText(before1925, { exact: true })).toHaveCount(74);
+  await expect(list.getByRole('listitem').filter({ hasText: 'frus1894Nicaragua' })).toContainText(before1925);
   await axeCheck(page);
 });

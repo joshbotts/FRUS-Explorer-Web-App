@@ -39,7 +39,8 @@ describe('a volume page’s rows', () => {
     expect(rowDetail([{ kind: 'documents', count: 161 }])).toBe('161 documents');
     expect(rowDetail([of(268, 280), { kind: 'sourceForm', form: 'both' }])).toBe('268 of 280 documents · archival citations and file numbers');
     expect(rowDetail([of(6, 10), { kind: 'sourceForm', form: 'citations' }])).toBe('6 of 10 documents · archival citations (“Source: …”)');
-    expect(rowDetail([{ kind: 'excisions', count: 37 }])).toBe('37 documents with text not declassified');
+    expect(rowDetail([{ kind: 'excisions', count: 37 }])).toBe('37 documents with redactions marked');
+    expect(rowDetail([{ kind: 'editorialOmissions', count: 32 }])).toBe('32 documents with editorial omissions marked');
     expect(rowDetail([of(280, 280)])).toBe('280 of 280 documents');
     expect(rowDetail([{ kind: 'xrefDocuments', count: 131 }, { kind: 'xrefVolumes', count: 89 }])).toBe(
       '131 documents cite others in this volume · 89 documents cite other volumes',
@@ -55,6 +56,8 @@ describe('a volume page’s rows', () => {
   it('take the one form at exactly one, and group a count but never a year', () => {
     expect(rowDetail([{ kind: 'editorialNotes', count: 1 }])).toBe('1 editorial note');
     expect(rowDetail([{ kind: 'xrefPages', count: 1 }])).toBe('1 document cites printed pages');
+    expect(rowDetail([{ kind: 'excisions', count: 1 }])).toBe('1 document with a redaction marked');
+    expect(rowDetail([{ kind: 'editorialOmissions', count: 1 }])).toBe('1 document with an editorial omission marked');
     expect(rowDetail([of(1, 1)])).toBe('1 of 1 document');
     expect(rowDetail([of(1_234, 2_000)])).toBe('1,234 of 2,000 documents');
     expect(standardFrom(era1955)).toBe('Standard in the volumes covering 1955 on.');
@@ -63,6 +66,9 @@ describe('a volume page’s rows', () => {
   it('are read as one sentence, the parts joined by semicolons', () => {
     expect(rowSpoken('people', [of(279, 280), { kind: 'personsListed', count: 325 }])).toBe(
       'People tagged: 279 of 280 documents; 325 people listed.',
+    );
+    expect(rowSpoken('editorialOmissions', [{ kind: 'editorialOmissions', count: 1 }])).toBe(
+      'Marked editorial omissions: 1 document with an editorial omission marked.',
     );
   });
 
@@ -101,6 +107,17 @@ describe('the axis', () => {
     expect(standardLine(reach({ layer: 'marginalNotes', peak: retrospective }))).toBe(
       'No era made it standard. It is most common in the late retrospective volumes.',
     );
+    // Redactions follow the year of publication, so they name the statute, not an era: with an onset,
+    // with a peak, and even where no volume carries them.
+    const statute =
+      'Volumes produced after the passage of the 1991 statute include explicit editorial annotation of redactions made during the declassification process.';
+    expect(standardLine(reach({ layer: 'excisions', onset: era1981 }))).toBe(statute);
+    expect(standardLine(reach({ layer: 'excisions', peak: era1861 }))).toBe(statute);
+    expect(standardLine(reach({ layer: 'excisions', carrying: 0 }))).toBe(statute);
+    expect(spokenRow(reach({ layer: 'excisions', onset: era1981 }))).toBe(`Redactions marked as not declassified: 2 of 5 volumes. ${statute}`);
+    expect(standardLine(reach({ layer: 'editorialOmissions', onset: { id: '1920-1931', firstYear: 1920, lastYear: 1931 } }))).toBe(
+      'Standard in the volumes covering 1920 on.',
+    );
     // A layer no volume carries says nothing of when.
     expect(standardLine(reach({ layer: 'subjects', carrying: 0 }))).toBe('');
     expect(spokenRow(reach({ layer: 'subjects', carrying: 0 }))).toBe('Subject lines: 0 of 5 volumes.');
@@ -127,7 +144,11 @@ describe('a layer’s lists', () => {
     expect(drillTitle(drill({ layer: 'sourceNotes', drill: 'citation', rule: 'sourceForm' }))).toBe('Archival citations (“Source: …”)');
     expect(drillTitle(drill({ layer: 'printedAids', drill: 'intro', rule: 'aid' }))).toBe('Introduction');
     expect(drillCaption(drill({ layer: 'printedAids', drill: 'intro', rule: 'aid', count: 2 }))).toBe(
-      '2 of 3 volumes. A volume counts when it prints this aid.',
+      '2 of 3 volumes. A volume counts when it prints this section.',
+    );
+    expect(drillTitle(drill({ layer: 'editorialOmissions', drill: 'without' }))).toBe('Without: Marked editorial omissions');
+    expect(drillCaption(drill({ layer: 'editorialOmissions', count: 1, total: 4 }))).toBe(
+      '1 of 4 volumes. A volume published from 1925 counts when one of its documents says, in brackets, what the editors left out: “[Here follows …]” or “[Omitted here is …]”.',
     );
     const cell = drill({ drill: 'era', era: era1955, count: 2, total: 3 });
     expect(drillTitle(cell)).toBe('People tagged, 1955–1968');
@@ -154,6 +175,10 @@ describe('a layer’s lists', () => {
     expect(volumeNote({ volumeId: 'frus1977-80v27', unlinked: 'terms' })).toBe(
       'Prints a List of Abbreviations, but none of its documents links a term to it.',
     );
+    // The 1925 gate's line, then that the reader came from the volume, as the app's lines are joined.
+    const before1925 = 'Published before the 1925 order, when the editors marked an omission with a row of asterisks, not a bracketed note.';
+    expect(volumeNote({ volumeId: 'frus1914', gated: 'before1925' })).toBe(before1925);
+    expect(volumeNote({ volumeId: 'frus1914', gated: 'before1925', from: true })).toBe(`${before1925} You came here from this volume.`);
     expect(volumeNote({ volumeId: 'frus1969-76v17' })).toBe('');
   });
 });

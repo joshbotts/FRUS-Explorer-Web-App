@@ -550,11 +550,12 @@ export const copy = {
     loading: 'Loading…',
   },
   /**
-   * The editors' annotations (FRUS-Explorer#1859 to #1862), in the app's words: a volume page's Editors’
-   * Annotations (`VolumeAnnotationsPresentation`, `VolumeAnnotationsSection`), and Browse's axis of that
-   * name with a layer's page and its lists (`AnnotationLayer`, `AnnotationsAxis`, `AnnotationsAxisViews`).
+   * The editors' annotations (FRUS-Explorer#1859 to #1862, and their follow-ups #1868, #1873 and #1874), in
+   * the app's words: a volume page's Editors’ Annotations (`VolumeAnnotationsPresentation`,
+   * `VolumeAnnotationsSection`), and Browse's axis of that name with a layer's page and its lists
+   * (`AnnotationLayer`, `AnnotationsAxis`, `AnnotationsAxisViews`).
    * A count's two forms are the app's one and many, which browse/annotationRules.ts chooses as the app's
-   * `CountCopy` does; a `%1$@`/`%2$@` form takes its arguments in the app's order. The web's own: four
+   * `CountCopy` does; a `%1$@`/`%2$@` form takes its arguments in the app's order. The web's own: five
    * of the "In the app" sentences (`appUse`), where the app's name a screen this server does not have
    * yet, and the line for a server that cannot read the bundled file, where the app's says to reinstall it.
    */
@@ -569,19 +570,20 @@ export const copy = {
       participants: 'Meeting participants',
       sourceNotes: 'Source notes',
       classification: 'Classification markings',
-      excisions: 'Excisions marked',
+      excisions: 'Redactions marked as not declassified',
+      editorialOmissions: 'Marked editorial omissions',
       despatch: 'Despatch numbers',
       numbered: 'Numbered documents',
       crossReferences: 'Cross-references',
       editorialNotes: 'Editorial notes',
       footnotes: 'Footnotes',
       marginalNotes: 'Marginal notes',
-      printedAids: 'Printed aids',
+      printedAids: 'Front and back matter',
     },
     /** The two standard layers narrower than a layer, which a volume's page lists as absent. */
     referencesToDocuments: 'References to documents',
     noteOnSources: 'Note on Sources',
-    /** The printed aids by the kind that names each, "intro" for both kinds the app calls Introduction. */
+    /** The front and back matter's sections by the kind that names each, "intro" for both kinds the app calls Introduction. */
     aids: {
       preface: 'Preface',
       foreword: 'Foreword',
@@ -612,8 +614,10 @@ export const copy = {
       fileNumbers: 'file numbers above the heading',
       both: 'archival citations and file numbers',
     },
-    excisionsOne: (count: string) => `${count} document with text not declassified`,
-    excisionsMany: (count: string) => `${count} documents with text not declassified`,
+    excisionsOne: (count: string) => `${count} document with a redaction marked`,
+    excisionsMany: (count: string) => `${count} documents with redactions marked`,
+    editorialOmissionsOne: (count: string) => `${count} document with an editorial omission marked`,
+    editorialOmissionsMany: (count: string) => `${count} documents with editorial omissions marked`,
     editorialNotesOne: (count: string) => `${count} editorial note`,
     editorialNotesMany: (count: string) => `${count} editorial notes`,
     xrefDocumentsOne: (count: string) => `${count} document cites another in this volume`,
@@ -641,6 +645,9 @@ export const copy = {
     eraRetrospectiveTitle: 'Late retrospectives',
     standardNoneRetrospective: 'No era made it standard. It is most common in the late retrospective volumes.',
     standardNone: (era: string) => `No era made it standard. It is most common in the volumes covering ${era}.`,
+    /** Redactions' sentence in place of an era's: the practice follows the year a volume was published, not the years it covers. */
+    standardRedactions:
+      'Volumes produced after the passage of the 1991 statute include explicit editorial annotation of redactions made during the declassification process.',
     layerSpoken: (label: string, volumes: string) => `${label}: ${volumes}.`,
     bandSpoken: (era: string, volumes: string) => `${era}: ${volumes}`,
     cellSpoken: (label: string, band: string) => `${label}, ${band}`,
@@ -660,16 +667,18 @@ export const copy = {
       participants: 'A volume counts when one of its documents lists who attended a meeting.',
       sourceNotes: 'A volume counts when at least half its documents carry a source note, of either form.',
       classification: 'A volume counts when at least half its documents carry a classification marking, as the app reads them.',
-      excisions: 'A volume counts when one of its documents marks text as not declassified.',
+      excisions: 'A volume counts when one of its documents marks a redaction as not declassified: text in it, or the whole document.',
+      editorialOmissions:
+        'A volume published from 1925 counts when one of its documents says, in brackets, what the editors left out: “[Here follows …]” or “[Omitted here is …]”.',
       despatch: 'A volume counts when at least a tenth of its documents carry a despatch number.',
       numbered: 'A volume counts when at least half its documents print a document number.',
       crossReferences: 'A volume counts when one of its documents cites another of its documents, another volume or a printed page.',
       editorialNotes: 'A volume counts when it prints an editorial note.',
       footnotes: 'A volume counts when at least half its documents carry a footnote.',
       marginalNotes: 'A volume counts when one of its documents prints a marginal note.',
-      printedAids: 'A volume counts when it prints one of the aids listed below.',
+      printedAids: 'A volume counts when it prints one of the sections listed below.',
       sourceForm: 'A volume counts when at least half its documents carry a source note of this form.',
-      aid: 'A volume counts when it prints this aid.',
+      aid: 'A volume counts when it prints this section.',
     },
     practices: {
       people: "The editors linked each person a document names to the volume's List of Persons, where the person is identified.",
@@ -681,7 +690,10 @@ export const copy = {
         "A source note says where the editors found a document. It was printed first as a file number above the heading, and later as a note that begins “Source:” with the full archival citation. The earliest volumes print none: a despatch there carries the post's own number instead.",
       classification:
         "The editors printed each document's security classification, first above the dateline and later in the source note.",
-      excisions: 'Where text was still classified when the volume was published, the editors marked the gap: “[… not declassified]”.',
+      excisions:
+        'The editors mark what declassification review redacted: a gap in the printed text, “[… not declassified]”, or a whole document withheld, listed in its place with its heading, its source note and the number of pages not declassified. From Secretary Kellogg’s 1925 order until the 1991 statute, volumes marked an omission with an ellipsis, whether the editors left the text out or it was not cleared for publication, so their redactions cannot be told from the editors’ omissions and are not counted here. Volumes published before the 1925 order marked an omission with a row of asterisks, under no written rule and without saying whose cut it was; those are not counted here either.',
+      editorialOmissions:
+        'Since Secretary Kellogg’s 1925 order, where the editors left out part of a document as not relevant to the volume, they could say so in brackets and describe what was omitted. Until the 1991 statute an ellipsis could also mark an omission, the editors’ or a redaction, and those are not counted here. Volumes published before the order marked an omission with a row of asterisks, not a bracketed note, and are not counted here.',
       despatch:
         'Older volumes print the number a diplomatic post gave each despatch it sent, “No. 74.”, by which the despatch is found in the archives.',
       numbered: 'The editors numbered the documents in print, so that each heading opens with its number: “12. Telegram From …”.',
@@ -690,13 +702,14 @@ export const copy = {
       editorialNotes: 'Where no single document tells the story, the editors wrote a note of their own, set between the documents.',
       footnotes: "The editors' footnotes explain a document: who it names, what it answered, what became of it.",
       marginalNotes: "A few volumes print the notes written in a document's margin, set off from its text.",
-      printedAids: 'Besides its documents, a volume prints aids to reading it: a preface, lists of sources, abbreviations and persons, an index.',
+      printedAids:
+        'Besides its documents, a volume prints front and back matter to help readers use it: a preface, lists of sources, abbreviations and persons, an index.',
     },
     /**
      * What the app does with each layer, as the app's `appUse` says it where every screen it names is
-     * this server's too; for people, source notes, classification and cross-references the sentence is
-     * the web's own, naming only what the web edition has, and despatch numbers take the app's line for
-     * a layer nothing else reads.
+     * this server's too; for people, source notes, classification, cross-references and the front and
+     * back matter the sentence is the web's own, naming only what the web edition has, and despatch
+     * numbers take the app's line for a layer nothing else reads.
      */
     appUse: {
       people: 'The reader opens a linked person’s entry. Where a volume does not link its names, search for them instead.',
@@ -707,7 +720,7 @@ export const copy = {
       crossReferences: 'The reader follows each one.',
       editorialNotes: 'Search can limit its results to editorial notes.',
       footnotes: 'The reader shows each footnote with its document.',
-      printedAids: "A volume's page lists them under Front Matter and Back Matter, and the reader opens each one.",
+      printedAids: 'A volume’s page lists them under Front Matter and Back Matter, and the reader opens most of them; its index and its lists of sources and persons do not open here yet.',
       none: 'The reader shows these as printed. Nothing else in the app reads them yet.',
     },
     // A layer's lists.
@@ -728,6 +741,7 @@ export const copy = {
     noteFrom: 'You came here from this volume.',
     notePersonsUnlinked: 'Prints a List of Persons, but none of its documents links a name to it.',
     noteTermsUnlinked: 'Prints a List of Abbreviations, but none of its documents links a term to it.',
+    noteBefore1925: 'Published before the 1925 order, when the editors marked an omission with a row of asterisks, not a bracketed note.',
     unavailableTitle: 'Editors’ Annotations Unavailable',
     unavailableDetail: 'The bundled annotation data could not be loaded.',
   },

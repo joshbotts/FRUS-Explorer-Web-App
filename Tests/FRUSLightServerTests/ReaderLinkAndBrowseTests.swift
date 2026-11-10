@@ -168,7 +168,61 @@ private func formEncoded(_ fields: [String: String]) -> String {
             // No fixture volume has a broken reference.
             let broken = try await resolve("frusexplorer://brokenref/%23pg_700", in: "d1")
             #expect(broken.kind == "brokenReference" && broken.target == "#pg_700" && broken.brokenReference == nil)
+            // An index's "See" reference names an entry of the index it is in (joshbotts/FRUS-Explorer#1875):
+            // the kit reads the anchor's shape, and the reader scrolls the page on screen to the entry's
+            // item, which the kit's serializer writes as `ix-` and the entry's id. Nothing is opened.
+            let see = try await resolve("frusexplorer://doc/%23in1", in: "index")
+            #expect(see.kind == "indexEntry" && see.target == "#in1" && see.inPlace == true)
+            #expect(see.indexEntry == .init(volumeId: v06, anchor: "in1", elementId: "ix-in1"))
+            #expect(see.destination == nil && see.volume == nil && see.volumeId == nil && see.url == nil)
+            // The anchor's shape alone decides, as in the app: from any page of the volume, and for an
+            // entry the index does not hold, which the page then does not find.
+            #expect(try await resolve("frusexplorer://doc/%23in999", in: "d1").indexEntry
+                    == .init(volumeId: v06, anchor: "in999", elementId: "ix-in999"))
+            // One that names another volume's index, which the corpus does not have, is not in place:
+            // the app's readers leave it alone.
+            let other = try await resolve("frusexplorer://doc/frus1961-63v05%23in4/frus1961-63v05", in: "index")
+            #expect(other.kind == "indexEntry" && other.inPlace == false)
+            #expect(other.indexEntry == .init(volumeId: "frus1961-63v05", anchor: "in4", elementId: "ix-in4"))
+            // Only `in` and digits, the whole anchor: a longer one is a document's, as before.
+            #expect(try await resolve("frusexplorer://doc/%23in2a", in: "index").kind == "document")
         }
+    }
+
+    /// An index's "See" references (joshbotts/FRUS-Explorer#1875) are answered with the id of the item
+    /// the kit's serializer writes for the entry they name. The fixture's references, read from its
+    /// TEI, each name an entry of its index; the page the reader's own rendering makes of the index, as
+    /// the app's Read Index parses it (`parseDocument(documentId:volumeURL:)`), holds an item for each,
+    /// and each of the page's "See" links is answered in place with that item's id. The server's reader
+    /// serves no volume's index yet: a full parse, the source of its pages, gives no document for a
+    /// back-of-volume index, so the route says so.
+    @Test func anIndexsSeeReferencesAreAnsweredWithTheItemsItsPageHolds() async throws {
+        let url = RepositoryFiles.tei.appendingPathComponent("\(v06).xml")
+        let tei = try String(contentsOf: url, encoding: .utf8)
+        let anchors = Set(tei.matches(of: /target="#(in\d+)"/).map { String($0.1) })
+        #expect(anchors.count == 8)
+        #expect(anchors == Set(tei.matches(of: /<item xml:id="(in\d+)"/).map { String($0.1) }))
+        let fixture = try await servingSyntheticExport(volumes: [v06])
+        let ast = try #require(try await FRUSDocumentParser().parseDocument(documentId: "index", volumeURL: url))
+        let lookups = try await fixture.reader.document(volume: v06, document: "d1").lookups
+        let page = ReaderService.render(.init(ast: ast, lookups: lookups), volume: v06, classification: nil, part: .body,
+                                        base: .root, brokenRefs: fixture.resources.brokenRefs).html
+        #expect(Set(page.matches(of: /<li id="ix-(in\d+)">/).map { String($0.1) }) == anchors)
+        let hrefs = Set(page.matches(of: /href="(frusexplorer:\/\/doc\/%23in\d+)"/).map { String($0.1) })
+        #expect(hrefs.count == anchors.count)
+        try await fixture.app.test(.router) { client in
+            for href in hrefs {
+                let target = try decode(ReaderLinkTarget.self, try await client.execute(uri: linkURI(href, in: "index"), method: .get))
+                let entry = try #require(target.indexEntry, "\(href)")
+                #expect(target.kind == "indexEntry" && target.inPlace == true && entry.volumeId == v06, "\(href)")
+                #expect(entry.elementId == ReaderLinkRoutes.indexEntryPrefix + entry.anchor)
+                #expect(page.contains("<li id=\"\(entry.elementId)\">"), "\(href): the page holds \(entry.elementId)")
+            }
+            let index = try await client.execute(uri: "/api/v1/volumes/\(v06)/documents/index/html", method: .get)
+            #expect(try problem(index, .notFound).code == "DOCUMENT_NOT_FOUND")
+        }
+        // The kit's landing script looks for the same id.
+        #expect(IndexEntryLanding.script(keyExpression: "key").contains(#"document.getElementById("ix-" + key)"#))
     }
 
     /// Every link the reader's pages hold for the walk the browser suite takes is answered.

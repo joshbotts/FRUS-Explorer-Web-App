@@ -143,7 +143,7 @@ import Testing
         try test.rows.addUser(other)
         let time = Date(timeIntervalSince1970: 1_792_800_000)
         for text in texts {
-            let document = FRUSLightCore.DocumentKey(volumeId: volume, documentId: text.document)
+            let document = FRUSCoreKit.DocumentKey(volumeId: volume, documentId: text.document)
             if let note = text.note {
                 _ = try store.createNote(in: document, bodyText: note, richText: nil, projectIds: [], userTagIds: [],
                                          selectedSummaryIds: [], linkedHighlightId: nil, for: text.user, at: time)
@@ -402,7 +402,7 @@ import Testing
         let note = Self.search("zanzibar", documents: false)
         #expect(try await reader.searchCount(parameters: note) == 3)
         // The host writes a note and a tag through its own connection, and the next search has them.
-        _ = try fixture.test.store.createNote(in: FRUSLightCore.DocumentKey(volumeId: Self.volume, documentId: "d7"), bodyText: "A last zanzibar",
+        _ = try fixture.test.store.createNote(in: FRUSCoreKit.DocumentKey(volumeId: Self.volume, documentId: "d7"), bodyText: "A last zanzibar",
                                               richText: nil, projectIds: [], userTagIds: [], selectedSummaryIds: [],
                                               linkedHighlightId: nil, for: Self.reader, at: Date())
         _ = try fixture.test.store.importResearch(ResearchImportBatch(rows: ["tag_assignments": [ImportRow(values: [

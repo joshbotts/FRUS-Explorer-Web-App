@@ -6,6 +6,7 @@
 // the document's row of `user_search` in its transaction.
 
 import Foundation
+import FRUSCoreKit
 
 /// One of a user's notes, as the store keeps the Mac's `ResearchNote`.
 public struct NoteRecord: Sendable, Equatable {

@@ -250,6 +250,18 @@ export function ReaderScreen() {
       case 'volume':
         openVolume(target);
         return;
+      case 'indexEntry':
+        // An index's "See" reference (FRUS-Explorer#1875): its entry is on the page on screen, so the
+        // page scrolls to it and nothing opens, as the app's readers do. One that names another
+        // volume's index, which the corpus does not have and the app leaves alone, has no
+        // destination this reader can open.
+        if (target.inPlace && target.indexEntry) {
+          setNotice(null);
+          reveal(target.indexEntry.elementId);
+        } else {
+          say(copy.reader.linkUnresolved);
+        }
+        return;
       case 'external':
         say(
           <>
@@ -280,7 +292,7 @@ export function ReaderScreen() {
     return () => window.removeEventListener('message', onMessage);
   }, []);
 
-  /** Asks the page to scroll to an element and take focus there, where the next Tab continues. */
+  /** Asks the page to scroll to a note's entry or an index's, and take focus there, where the next Tab continues. */
   function reveal(id: string) {
     frame.current?.focus();
     frame.current?.contentWindow?.postMessage({ source: 'frus-app', kind: 'reveal', id }, '*');

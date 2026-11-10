@@ -10,6 +10,7 @@ import CSQLite
 @testable import FRUSLightCore
 import FRUSLightTestSupport
 import Foundation
+import FRUSCoreKit
 import Testing
 
 /// The rows each statement gave, by its SQL, for `UserNoteTests.rowsReturned`.

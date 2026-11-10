@@ -1,4 +1,4 @@
-// The editors' annotations' words (FRUS-Explorer#1859 to #1862), put together as the app's view code
+// The editors' annotations' words (FRUS-Explorer#1859 to #1862, #1868, #1873 and #1874), put together as the app's view code
 // puts them: a volume page's row from the parts the server gives (`VolumeAnnotationsPresentation`),
 // what a screen reader reads for it, an absent layer's note; an era's names, when a layer became
 // standard, the axis's rows and cells (`AnnotationsAxis`); and a list's title, caption, counts and marks.
@@ -59,6 +59,8 @@ export function partText(part: AnnotationPart): string {
       return words.sourceForms[part.form];
     case 'excisions':
       return counted(part.count, words.excisionsOne, words.excisionsMany);
+    case 'editorialOmissions':
+      return counted(part.count, words.editorialOmissionsOne, words.editorialOmissionsMany);
     case 'editorialNotes':
       return counted(part.count, words.editorialNotesOne, words.editorialNotesMany);
     case 'xrefDocuments':
@@ -133,8 +135,13 @@ export function shortEraName(era: AnnotationEraName): string {
   return era.firstYear === undefined ? words.eraRetrospectiveShort : String(era.firstYear);
 }
 
-/** When the layer became standard, or, for a practice no era made standard, where it is most common. */
+/**
+ * When the layer became standard, or, for a practice no era made standard, where it is most common.
+ * Redactions say instead when the series began to mark them, which follows the year a volume was
+ * published and not the years it covers, whatever the eras' shares are.
+ */
 export function standardLine(reach: AnnotationReach): string {
+  if (reach.layer === 'excisions') return words.standardRedactions;
   if (reach.onset) return standardFrom(reach.onset);
   if (!reach.peak) return '';
   if (reach.peak.firstYear === undefined) return words.standardNoneRetrospective;
@@ -215,11 +222,15 @@ export function accessoryText(accessory: AnnotationAccessory): string {
   return counted(accessory.count, words.docsOne, words.docsMany);
 }
 
-/** A volume's amber line: the list it prints that nothing links to, then that the reader came from it. */
+/**
+ * A volume's amber line: the list it prints that nothing links to, that the 1925 gate keeps it out of
+ * Marked editorial omissions, then that the reader came from it.
+ */
 export function volumeNote(volume: AnnotationDrillVolume): string {
   const lines: string[] = [];
   if (volume.unlinked === 'persons') lines.push(words.notePersonsUnlinked);
   if (volume.unlinked === 'terms') lines.push(words.noteTermsUnlinked);
+  if (volume.gated === 'before1925') lines.push(words.noteBefore1925);
   if (volume.from) lines.push(words.noteFrom);
   return lines.join(' ');
 }

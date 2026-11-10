@@ -603,31 +603,31 @@
       },
       "volume_structures.json" : {
         "rows" : 3,
-        "sha256" : "f93b14662bfc6eb25bdc956ed979e475eb6532967f53dccb2f559d2a7cf3a39f",
+        "sha256" : "4b8b89b0755fcb4d59c59a8acb883d4294e17e4ae0cb6d1e6803aa3d6108cb41",
         "sql" : "SELECT volume_id, structure_json FROM volume_structures ORDER BY volume_id",
         "volumes" : {
           "frus1894Nicaragua" : {
             "rows" : 1,
-            "sha256" : "362651df00d985c512519f0f4777e1ad15169d0238c49d6ab985f5757e6394cc"
+            "sha256" : "fb84123793aed0f3fccbbdcc63e5b48723dbc56fd950c9ca0c8f1fa6231c2dbd"
           },
           "frus1961-63v06" : {
             "rows" : 1,
-            "sha256" : "54985777d7ae214ec89bd0e5fba5040a5a6aa588d536a2ac32c55fb4efeeacca"
+            "sha256" : "98e85532c880626f96d77a1d8aaa965acdf12fabc407b3f3bb60c22b387e89e4"
           },
           "frus1969-76ve09p1" : {
             "rows" : 1,
-            "sha256" : "ba93a421ca0dc93f5682ae066171beb3e62f50bcdd9cb0d63b4fc33afff4b169"
+            "sha256" : "4d93085ce618e4d22545c3acc1757f95a04a80be232d9d74156efed5556fc9e6"
           }
         }
       }
     },
     "exportStamp" : {
-      "app_build" : "1787",
+      "app_build" : "1812",
       "app_version" : "1.0",
       "current_fts_schema_version" : "4",
       "current_index_version" : "74",
       "documentation" : "https://github.com/joshbotts/FRUS-Explorer/blob/v2/Docs/Agentic-Analysis-Guide.md",
-      "exported_at" : "2026-11-08T02:20:50Z",
+      "exported_at" : "2026-11-10T16:12:56Z",
       "installed_fts_schema_version" : "4",
       "installed_index_version" : "74",
       "my_writing_included" : "0",
@@ -650,40 +650,40 @@
       "CREATE VIRTUAL TABLE temp.parity_user_content_instance USING fts5vocab(main, user_content, instance)"
     ],
     "sqliteSequence" : {
-      "cross_references" : 1139356,
-      "page_ranges" : 4604455,
-      "person_mentions" : 3696119
+      "cross_references" : 1139577,
+      "page_ranges" : 4605590,
+      "person_mentions" : 3697137
     },
-    "sqliteVersion" : "3.54.0",
+    "sqliteVersion" : "3.45.1",
     "timings" : {
-      "cross_references" : 0.001,
-      "cross_references.sequence" : 0,
-      "document_cache" : 0.005,
-      "document_cache.sequence" : 0,
+      "cross_references" : 0.002,
+      "cross_references.sequence" : 0.001,
+      "document_cache" : 0.004,
+      "document_cache.sequence" : 0.001,
       "document_dates" : 0.001,
-      "document_dates.sequence" : 0,
-      "document_revisions" : 0,
-      "document_revisions.sequence" : 0,
+      "document_dates.sequence" : 0.001,
+      "document_revisions" : 0.001,
+      "document_revisions.sequence" : 0.001,
       "document_sources" : 0.001,
       "document_sources.sequence" : 0,
-      "document_subject_refs" : 0.001,
+      "document_subject_refs" : 0.003,
       "document_subject_volumes" : 0,
-      "document_subjects" : 0,
+      "document_subjects" : 0.002,
       "external_citations" : 0,
       "external_citations.sequence" : 0,
       "frus_documents.averages" : 0,
       "frus_documents.config" : 0,
-      "frus_documents.docsize" : 0,
-      "frus_documents.vocab_col" : 0.008,
-      "frus_documents.vocab_instance" : 0.4,
-      "frus_documents.vocab_row" : 0.011,
-      "integrity" : 0.03,
-      "page_ranges" : 0.001,
-      "page_ranges.sequence" : 0.001,
+      "frus_documents.docsize" : 0.001,
+      "frus_documents.vocab_col" : 0.022,
+      "frus_documents.vocab_instance" : 1.147,
+      "frus_documents.vocab_row" : 0.03,
+      "integrity" : 0.028,
+      "page_ranges" : 0.003,
+      "page_ranges.sequence" : 0.003,
       "person_cluster_candidate" : 0,
       "person_list_sources" : 0,
-      "person_mentions" : 0.001,
-      "person_rollup" : 0,
+      "person_mentions" : 0.002,
+      "person_rollup" : 0.001,
       "person_rollup.ids" : 0,
       "person_rollup_member" : 0,
       "persons" : 0,
@@ -692,17 +692,17 @@
       "schema.export_only" : 0,
       "terms" : 0,
       "terms.sequence" : 0,
-      "total" : 0.482,
+      "total" : 1.281,
       "user_content.averages" : 0,
       "user_content.config" : 0,
-      "user_content.docsize" : 0,
+      "user_content.docsize" : 0.001,
       "user_content.vocab_col" : 0,
       "user_content.vocab_instance" : 0,
       "user_content.vocab_row" : 0,
       "user_tags" : 0,
       "volume_sources" : 0,
       "volume_sources.sequence" : 0,
-      "volume_structures" : 0,
+      "volume_structures" : 0.001,
       "volume_structures.json" : 0
     },
     "volumeOrder" : [
@@ -712,19 +712,19 @@
     ]
   },
   "provenance" : {
-    "appBuild" : 1787,
+    "appBuild" : 1812,
     "indexVersion" : 74,
     "inputs" : {
       "fixtures/tei/SHA256SUMS" : "41609437167f6e54228471ac8f6638d3fe3db6d55045dbcd242b006c7301ae87",
       "fixtures/tei/frus1894Nicaragua.xml" : "c36aa079477928672a8f9cb98b37757a428452824ce15500db62e0636dd2c4cc",
       "fixtures/tei/frus1961-63v06.xml" : "48d571c05cad26e51d645c7a5fe7d5ea8b1d42e3f9a2c78ae97bf59a0e5c6f3f",
       "fixtures/tei/frus1969-76ve09p1.xml" : "6f88c7c3078d374797db1cbf2ec2999e92c489170d4ce5df0cdcc5c22a612df8",
-      "research_provenance.app_build" : "1787",
+      "research_provenance.app_build" : "1812",
       "research_provenance.app_version" : "1.0",
       "research_provenance.current_fts_schema_version" : "4",
       "research_provenance.current_index_version" : "74",
       "research_provenance.documentation" : "https://github.com/joshbotts/FRUS-Explorer/blob/v2/Docs/Agentic-Analysis-Guide.md",
-      "research_provenance.exported_at" : "2026-11-08T02:20:50Z",
+      "research_provenance.exported_at" : "2026-11-10T16:12:56Z",
       "research_provenance.installed_fts_schema_version" : "4",
       "research_provenance.installed_index_version" : "74",
       "research_provenance.my_writing_included" : "0",
@@ -732,13 +732,13 @@
     },
     "platform" : {
       "arch" : "arm64",
-      "locale" : "en_US",
-      "os" : "macOS 27.2.0",
-      "sqlite" : "3.54.0",
-      "timeZone" : "America/New_York"
+      "locale" : "en_001",
+      "os" : "Linux 7.0.14",
+      "sqlite" : "3.45.1",
+      "timeZone" : "Etc/UTC"
     },
-    "sourceDigest" : "068076a35381b08d8cd13aa60d07a1309c8da36e4cfc784ebd3f60e68b961f0e",
+    "sourceDigest" : "fa1b745620fc74e0368b43dcdd9120f32e8eaedf3fe3d010eef7641d9d2b6524",
     "tool" : "frus-parity summarize",
-    "upstreamCommit" : "fe9325b27062f102fe9ce699b405e012b01f6157"
+    "upstreamCommit" : "68bffcf6e9464b406cf577af89864510402a9ea0"
   }
 }

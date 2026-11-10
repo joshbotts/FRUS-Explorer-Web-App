@@ -199,7 +199,7 @@ import Testing
             let fixture = try await UserDataFixture(publicURL: publicURL, userData: userData, indexed: true)
             defer { withExtendedLifetime(fixture) {} }
             let time = UserDataFixture.now
-            let document = FRUSLightCore.DocumentKey(volumeId: Self.volume, documentId: "d1")
+            let document = FRUSCoreKit.DocumentKey(volumeId: Self.volume, documentId: "d1")
             let tag = try fixture.store.createTag(named: "Berlin", for: "owner", at: time)
             try fixture.store.setTags([tag.id], of: document, for: "owner", at: time)
             _ = try fixture.store.createNote(in: document, bodyText: "A zanzibar cable", richText: nil, projectIds: [], userTagIds: [],

@@ -13,6 +13,7 @@
 // rewrites their documents' rows of `user_search` in the same write, as a note's own write does.
 
 import Foundation
+import FRUSCoreKit
 
 /// A collection's rows: its own, and its entries' in the order the store took them.
 public struct CollectionRows: Sendable, Equatable {
