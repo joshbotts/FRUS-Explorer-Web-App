@@ -66,6 +66,10 @@ public struct ServerConfiguration: Sendable, Equatable {
     /// In `header` mode, the users who hold the admin role (`FRUS_ADMIN_USERS`), as the header
     /// names them.
     public var adminUsers: Set<String>
+    /// The key file the stored API keys are sealed under (`FRUS_SECRET_KEY_FILE`, PLAN's S20c), as a
+    /// mounted secret is named; nil for the server's own, `secret.key` beside app.db, which it makes at
+    /// its first start.
+    public var secretKeyFile: URL?
 
     /// The path the server answers under, `FRUS_PUBLIC_URL`'s: the root unless it ends in a path.
     public var basePath: BasePath {
@@ -90,7 +94,7 @@ public struct ServerConfiguration: Sendable, Equatable {
         webDirectory: URL = ServerConfiguration.imageWebDirectory, requiresWebDirectory: Bool = false,
         userData: Bool = true, userStore: UserStoreChoice = .sqlite, backupHour: Int = 3,
         backupCopyDirectory: URL? = nil, authHeader: String = "X-Forwarded-User",
-        trustedProxies: [AddressRange] = [], adminUsers: Set<String> = []
+        trustedProxies: [AddressRange] = [], adminUsers: Set<String> = [], secretKeyFile: URL? = nil
     ) {
         self.mode = mode
         self.auth = auth
@@ -111,6 +115,7 @@ public struct ServerConfiguration: Sendable, Equatable {
         self.authHeader = authHeader
         self.trustedProxies = trustedProxies
         self.adminUsers = adminUsers
+        self.secretKeyFile = secretKeyFile
     }
 
     /// Reads the configuration, reporting every problem at once.
@@ -263,6 +268,12 @@ public struct ServerConfiguration: Sendable, Equatable {
         }
         if let raw = value("FRUS_BACKUP_COPY_DIR") {
             config.backupCopyDirectory = URL(fileURLWithPath: raw, isDirectory: true)
+        }
+        // Read when the server starts, not here: a command that needs no stored key runs without it.
+        if let raw = value("FRUS_SECRET_KEY_FILE") {
+            if raw.hasPrefix("/") { config.secretKeyFile = URL(fileURLWithPath: raw) } else {
+                problems.append("FRUS_SECRET_KEY_FILE must be the key file's whole path, such as /run/secrets/frus_secret_key, not \(raw)")
+            }
         }
 
         if let raw = value("FRUS_RESOURCES_DIR") {

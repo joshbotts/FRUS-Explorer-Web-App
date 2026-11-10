@@ -133,6 +133,7 @@ button[aria-disabled='true'] {
 input[type='search'],
 input[type='date'],
 input[type='text'],
+input[type='password'],
 select,
 textarea {
   padding: 0.25rem 0.5rem;

@@ -1772,6 +1772,47 @@ export const copy = {
       GeneratedSummary: 'Generated Summaries',
     },
   },
+  /**
+   * Settings ▸ Keys (PLAN's S20c), the web's own pane for the app's Connections: the services' names, the
+   * status, About and field lines, the links to a key, Add Key…, Replace Key…, Remove Key, Save,
+   * Cancel, Saved, Removed and the question before a removal, in the app's words; the rest are the
+   * web's own, since a key is kept on this server and not in a keychain.
+   */
+  keys: {
+    title: 'Keys',
+    nara: 'NARA Catalog',
+    zotero: 'Zotero',
+    stored: 'Key stored',
+    notStored: 'No key stored',
+    naraAbout:
+      'A free key from the National Archives Catalog. Source Explorer needs it to search lot files and Presidential Library records; everything else in the app works without it.',
+    naraGetKey: 'Get a free key from NARA',
+    naraField: 'Paste your key',
+    naraFieldA11y: 'NARA Catalog key',
+    zoteroAbout:
+      'Send to Zotero Library sends FRUS documents to your Zotero library with your tags and research notes attached, and Zotero syncs them to all your devices.',
+    zoteroGetKey: 'Create a Zotero API key',
+    zoteroField: 'Paste your Zotero API key…',
+    zoteroFieldA11y: 'Zotero API key',
+    add: 'Add Key…',
+    replace: 'Replace Key…',
+    remove: 'Remove Key',
+    save: 'Save',
+    cancel: 'Cancel',
+    saved: 'Saved',
+    removed: 'Removed',
+    removeTitle: 'Remove the stored key?',
+    removeConfirm: 'Remove',
+    removeMessage: 'The server forgets it, for every browser you sign in from. Nothing you’ve already saved is affected.',
+    // The web's own: the server keeps the key, and nothing here uses it yet.
+    pending:
+      'Nothing on this server uses these keys yet: Source Explorer’s archival search and Send to Zotero Library, which will, are still to come.',
+    instanceNara: 'This server has a NARA Catalog key of its own, which serves you while you have none.',
+    footer:
+      'Each key is kept on this server, encrypted, and is never shown again once it is saved: the server alone uses it, to reach the service for you. Whoever runs this server holds the key file that opens them.',
+    loading: 'Loading the keys…',
+    userDataOff: 'This server keeps no keys or other data of yours: it is read-only.',
+  },
   /** Settings ▸ Projects, the project editor and Merge Project, in the app's words. */
   projects: {
     title: 'Projects',

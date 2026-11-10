@@ -47,6 +47,9 @@ public struct DataDirectory: FileStore {
     public var serverLock: URL { root.appendingPathComponent("app/server.lock") }
     /// Held by a backup while it runs, so two never run at once (S14b).
     public var backupLock: URL { root.appendingPathComponent("app/backup.lock") }
+    /// The key file the stored API keys are sealed under (PLAN's S20c), which the server makes at its
+    /// first start unless `FRUS_SECRET_KEY_FILE` names another. It is beside the store and in no backup.
+    public var secretKey: URL { root.appendingPathComponent("app/secret.key") }
     /// SQLite's temporary files, on the index's volume: the copy `VACUUM` writes when an import strips
     /// the owner's writing from an export (S16e) is as large as the index, where `/tmp` is a tmpfs in
     /// `compose.yaml`, held in memory. `FRUSLightServer` names it in `SQLITE_TMPDIR`.

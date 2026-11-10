@@ -4,7 +4,7 @@
 /// starting at 1. Never edit one that has shipped: add another, and with it any change to
 /// `UserStoreSchema`.
 public enum UserStoreMigrations {
-    public static let all: [String] = [one, two, three, four]
+    public static let all: [String] = [one, two, three, four, five]
 
     /// S2: the single user, and corrections as override rows.
     static let one = """
@@ -440,5 +440,22 @@ public enum UserStoreMigrations {
             expires_at TEXT NOT NULL
         );
         CREATE INDEX sessions_by_user ON sessions (user_id);
+        """
+
+    /// S20c's: the keys the server keeps for the outside services it calls, a user's own, by their id, or
+    /// the instance's, with no user, each by its name, of which a user or the instance has one. A row
+    /// holds no key as it was given: `sealed` is the key under AES-GCM, with what it takes to open it
+    /// but the key file (`SecretKey`), and `key_id` names the key file it was sealed under, so that a
+    /// server can tell a store whose keys its key file does not open. A user's keys go with the user.
+    static let five = """
+        CREATE TABLE secrets (
+            user_id TEXT REFERENCES users (user_id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            key_id TEXT NOT NULL,
+            sealed BLOB NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE UNIQUE INDEX secrets_of_user ON secrets (user_id, name) WHERE user_id IS NOT NULL;
+        CREATE UNIQUE INDEX secrets_of_instance ON secrets (name) WHERE user_id IS NULL;
         """
 }

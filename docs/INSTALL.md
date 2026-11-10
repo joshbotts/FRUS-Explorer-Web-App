@@ -371,6 +371,8 @@ Name a backup in `/data/backups` or in your backups folder, or give a path, such
 
 The restore checks the backup first: a whole SQLite file that passes SQLite's integrity check, holding this server's store, at a version of it this server knows, and for an archive, the file its manifest describes. Then it keeps the store it replaces, as `app-<time>-before-restore.db` in `/data/backups` and your backups folder, and puts the backup in its place. When it refuses, nothing has changed. A backup from an older server is brought up to date when the server starts, after a copy of it, as an upgrade's store is. While the server runs, a restore refuses and says to stop it.
 
+A backup holds the keys people stored in Settings ▸ Keys, sealed, and never the key file that opens them, [The key file](#the-key-file) below. The restore says whether the key file in place opens the keys it restored. If it does not, put the copy of the key file you kept back before you start the server, as that section shows, or the server does not start.
+
 **After the volume is lost,** for example when Docker Desktop was reset, `docker compose up -d` makes a new, empty store, which takes no backup until it holds research, so your backups folder keeps the last seven. Restore the newest of them by its path in the container, then import the research database again, as in [5. Import it](#5-import-it):
 
 ```bash
@@ -381,9 +383,63 @@ docker compose stop frus
 docker compose run --rm frus restore /backups/app-20261027T070000Z.db
 ```
 
+If the restore says that the key file does not open the stored keys the backup carries, which it does on a new volume, put your copy of the key file back first:
+
+```bash
+docker compose run --rm -T --no-deps --entrypoint sh frus -c 'umask 077 && cat > /data/app/secret.key' < frus_secret_key
+```
+
 ```bash
 docker compose start frus
 ```
+
+### The key file
+
+The keys people store in Settings ▸ Keys, their own NARA Catalog and Zotero keys, and an admin's NARA key for the whole server, are kept in the store encrypted, each with AES-GCM under a key of its own, derived from one key file. The server makes that file at its first start, `/data/app/secret.key` in the volume: 32 random bytes that only the server's user can read. The app never shows a stored key again: Settings ▸ Keys says only whether each is stored, and the server alone uses one, to reach the service for the person who stored it.
+
+No backup holds the key file, so that a backup alone never opens the keys. The archive from the API lists the stored keys in its `manifest.json`, under `secrets`: the table, how many keys it holds, and the id of the key file they were sealed under, with `keyFileIncluded` false. **Keep a copy of the key file**, once, somewhere safe and apart from your backups folder, which your Mac's backup copies with the rest of your files:
+
+```bash
+docker compose cp frus:/data/app/secret.key ./frus_secret_key
+```
+
+```bash
+chmod 600 frus_secret_key
+```
+
+The server does not start while the store holds stored keys that its key file does not open, since a new key file would leave them unreadable and say nothing. Its log then gives one of these, with the number of keys and the ids it found:
+
+```text
+frus-light: the user store holds 2 stored keys, and the key file that opens them, /data/app/secret.key, is missing. Put the key file back there, from the copy you kept, and start again. If no copy is left, run docker compose run --rm frus secrets forget --all, which removes them so that the server makes a new key file, and the people who had stored a key enter it again in Settings ▸ Keys.
+```
+
+```text
+frus-light: the user store holds 2 stored keys that the key file /data/app/secret.key does not open: they were sealed under another key file, id 9f3a6c0d51e27b48, and this one's id is 141c99669e6cf0cc. Put the key file they were sealed under there and start again. If it is lost, run docker compose run --rm frus secrets forget, which removes them, and the people who had stored a key enter it again in Settings ▸ Keys.
+```
+
+Put the copy back with the server stopped, as the server's own user, then start it:
+
+```bash
+docker compose stop frus
+```
+
+```bash
+docker compose run --rm -T --no-deps --entrypoint sh frus -c 'umask 077 && cat > /data/app/secret.key' < frus_secret_key
+```
+
+```bash
+docker compose start frus
+```
+
+If no copy is left, `docker compose run --rm frus secrets forget`, with the server stopped, removes the stored keys the key file in place does not open, and keeps the rest. With no key file in place it removes nothing, since a key file that is only not there yet is no key file lost, unless you add `--all`, which removes every stored key, after which the next start makes a new key file. Each person then enters their key again. Whoever runs the server holds the key file, and so can open every stored key, as they can read everything else it keeps.
+
+A server outside this Compose file can be given a key file of its own, mounted as a secret is, by naming it in `FRUS_SECRET_KEY_FILE`, its whole path, such as `/run/secrets/frus_secret_key`; the server reads that file and never makes it, and does not start while it is missing:
+
+```text
+frus-light: FRUS_SECRET_KEY_FILE names /run/secrets/frus_secret_key, and there is no file there. Mount the key file at that path, 32 random bytes, or leave the variable out, and the server makes one in its data directory.
+```
+
+Servers that share a PostgreSQL store need the same key file, named so: [A PostgreSQL user store](#a-postgresql-user-store) sets it out.
 
 ## Stopping and removing
 
@@ -561,6 +617,11 @@ The Compose install keeps your research data in `/data/app/app.db`, in the volum
 - **The database:** one of its own, on PostgreSQL 14 or later, in which the server's role can make tables, as in a database it owns: `CREATE ROLE frus LOGIN PASSWORD '…';` then `CREATE DATABASE frus OWNER frus;`. The tables go in the role's own search path, `public` for most roles.
 - **The URL,** in the form PostgreSQL's own tools take: `postgres://frus@db.example.org:5432/frus`. Its connection uses TLS and checks the server's certificate and name against the system's trusted roots, `sslmode=verify-full`, unless the URL says otherwise: `sslrootcert=` names a PEM file of a provider's own roots, mounted into the container, for a service whose certificates the system does not trust; `sslmode=verify-ca` checks the certificate but not its name, `require` neither; `disable` is for a database on the same host or a private network only. The server refuses any other parameter.
 - **The password** is best kept in a file named by `FRUS_POSTGRES_PASSWORD_FILE`, as a Compose secret mounts one, rather than in the URL, which `docker inspect` shows. The log names the URL without it.
+- **The key file** for the keys people store in Settings ▸ Keys ([The key file](#the-key-file)) is one you make and name in `FRUS_SECRET_KEY_FILE`, the same for every server that opens the database, since each would otherwise make its own and none could open another's keys. Make it once, 32 random bytes, `head -c 32 /dev/urandom > frus-secret-key`, and keep a copy apart from the database's backups. Without it the server does not start:
+
+  ```text
+  frus-light: the user store is a PostgreSQL database, which every server that shares it opens, so each needs the same key file for the stored keys, and FRUS_SECRET_KEY_FILE names none. Make one, 32 random bytes, give it to each server as a secret is mounted, readable by the server's user alone, and name it there by its whole path.
+  ```
 - **One server for each database,** for now: each server's copy for search follows its own writes alone, so a second server sharing the database would search what it had seen. A later phase adds the feed that keeps several in step.
 - **Backups are the database service's,** with `pg_dump` and `pg_restore` or its own snapshots. The server takes none of a PostgreSQL store, `frus-light backup` and `restore` refuse one, and `/api/v1/admin/backup` has none to give: the backups in `/data/backups` and your backups folder are of `app.db`.
 - **To move your research** from `app.db` to PostgreSQL, export it with Settings ▸ Data ▸ Export as JSON, with Include AI-Generated Summaries on, start the server with the PostgreSQL store, and import the file in the same pane.
@@ -573,14 +634,17 @@ services:
     environment:
       FRUS_USER_STORE: postgres://frus@db.example.org:5432/frus
       FRUS_POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-    secrets: [postgres_password]
+      FRUS_SECRET_KEY_FILE: /run/secrets/frus_secret_key
+    secrets: [postgres_password, frus_secret_key]
 
 secrets:
   postgres_password:
     file: ./postgres-password    # the password alone
+  frus_secret_key:
+    file: ./frus-secret-key      # 32 random bytes
 ```
 
-Compose mounts the file as it is on the host, so on Linux it must be readable by UID 10001, the server's user, as the TEI files must be, and best by no one else: `sudo chown 10001 postgres-password && sudo chmod 400 postgres-password`. Then run `docker compose up -d`. The log names the store as the server starts, and `FRUS_USER_STORE=sqlite`, or no setting, goes back to `app.db`, which the server leaves as it was.
+Compose mounts each file as it is on the host, so on Linux each must be readable by UID 10001, the server's user, as the TEI files must be, and best by no one else: `sudo chown 10001 postgres-password frus-secret-key && sudo chmod 400 postgres-password frus-secret-key`. Then run `docker compose up -d`. The log names the store as the server starts, and `FRUS_USER_STORE=sqlite`, or no setting, goes back to `app.db`, which the server leaves as it was.
 
 ## Settings
 

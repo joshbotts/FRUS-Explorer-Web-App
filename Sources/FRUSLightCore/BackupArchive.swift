@@ -5,14 +5,17 @@
 import Crypto
 import Foundation
 
-/// `manifest.json`: the backup the archive holds, the versions of the server that wrote it, and
-/// every backup and copy that server keeps.
+/// `manifest.json`: the backup the archive holds, the versions of the server that wrote it, the stored
+/// keys the backup carries, and every backup and copy that server keeps.
 public struct BackupManifest: Codable, Equatable, Sendable {
     /// This manifest's own format.
     public var manifestVersion: Int
     /// The backup the archive holds, with its SHA-256.
     public var backup: Version
     public var server: Server
+    /// The stored API keys the backup carries (PLAN's S20c): absent for a backup from before migration
+    /// 5, which has no table for them, and from a manifest written before it.
+    public var secrets: Secrets?
     /// Every backup and copy the server keeps, newest first, the archive's among them.
     public var versions: [Version]
 
@@ -48,6 +51,33 @@ public struct BackupManifest: Codable, Equatable, Sendable {
         }
     }
 
+    /// The stored API keys a backup carries: the `secrets` table, whose rows are each sealed, and the
+    /// ids of the key files that open them. A backup carries the table and never a key file, which is
+    /// kept beside the store and apart from every backup: what is restored from this archive reads its
+    /// stored keys only once the key file with one of these ids is back in place.
+    public struct Secrets: Codable, Equatable, Sendable {
+        /// The table that holds them: `secrets`.
+        public var table: String
+        /// How many it holds, every user's and the instance's together.
+        public var rows: Int
+        /// The ids of the key files they were sealed under, in order: one, unless servers with different
+        /// key files wrote the store.
+        public var keyIds: [String]
+        /// Whether the archive holds a key file: never.
+        public var keyFileIncluded: Bool
+
+        /// What the store in `file` holds of them, read without locks; nil for a store with no `secrets`
+        /// table, as one from before migration 5 is, and for a file that is not a store.
+        public static func held(in file: URL) -> Secrets? {
+            guard let db = try? SQLiteConnection.immutable(file) else { return nil }
+            defer { db.close() }
+            guard (try? db.hasObject(named: "secrets")) == true,
+                  let rows = try? db.query("SELECT key_id, count(*) FROM secrets GROUP BY key_id ORDER BY key_id") else { return nil }
+            return Secrets(table: "secrets", rows: rows.reduce(0) { $0 + Int($1[1].integer ?? 0) },
+                           keyIds: rows.compactMap { $0[0].text }, keyFileIncluded: false)
+        }
+    }
+
     /// The manifest of `backup`, `bytes` long with the SHA-256 `sha256`, among every backup and copy
     /// in its folder.
     static func describing(_ backup: UserStoreBackupFile, bytes: Int64, sha256: String, copyDirectory: URL?) -> BackupManifest {
@@ -63,7 +93,8 @@ public struct BackupManifest: Codable, Equatable, Sendable {
         held.sha256 = sha256
         let versions = UserStoreBackup.files(in: backup.url.deletingLastPathComponent())
             .map { $0.name == backup.name ? held : version($0) }
-        return BackupManifest(manifestVersion: currentVersion, backup: held, server: .current, versions: versions)
+        return BackupManifest(manifestVersion: currentVersion, backup: held, server: .current,
+                              secrets: Secrets.held(in: backup.url), versions: versions)
     }
 
     private static func size(of file: URL) -> Int64 {

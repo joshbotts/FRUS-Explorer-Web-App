@@ -13,7 +13,7 @@
 /// reads as the order the store took its rows in. `user_search` is not here: search reads FTS5, in
 /// the store's local SQLite copy (`PostgreSQLUserStore`).
 enum PostgreSQLMigrations {
-    static let all: [[String]] = [one, two, three, four]
+    static let all: [[String]] = [one, two, three, four, five]
 
     /// S2's: the single user, and corrections as override rows.
     static let one = [
@@ -501,5 +501,20 @@ enum PostgreSQLMigrations {
         )
         """,
         "CREATE INDEX sessions_by_user ON sessions (user_id)",
+    ]
+
+    /// S20c's: the keys the server keeps, sealed, as app.db's migration 5 keeps them.
+    static let five = [
+        """
+        CREATE TABLE secrets (
+            user_id TEXT COLLATE "C" REFERENCES users (user_id) ON DELETE CASCADE,
+            name TEXT COLLATE "C" NOT NULL,
+            key_id TEXT COLLATE "C" NOT NULL,
+            sealed BYTEA NOT NULL,
+            updated_at TEXT COLLATE "C" NOT NULL
+        )
+        """,
+        "CREATE UNIQUE INDEX secrets_of_user ON secrets (user_id, name) WHERE user_id IS NOT NULL",
+        "CREATE UNIQUE INDEX secrets_of_instance ON secrets (name) WHERE user_id IS NULL",
     ]
 }

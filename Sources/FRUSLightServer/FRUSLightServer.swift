@@ -1,6 +1,7 @@
 // FRUS Explorer Light server. Configuration comes from FRUS_* environment variables (docs/SPEC.md).
 // `frus-light backup` and `frus-light restore` back up and restore the user store (StoreCommands), and
-// `frus-light user` makes and changes local accounts (UserCommands, PLAN's S20b).
+// `frus-light user` makes and changes local accounts (UserCommands, PLAN's S20b), and `frus-light secrets
+// forget` removes the stored keys a lost key file leaves unreadable (SecretCommands, S20c).
 
 import FRUSLightAPI
 import FRUSLightCore
@@ -43,6 +44,8 @@ struct FRUSLightServer {
             fail("usage: frus-light backup, or frus-light restore <backup>", status: 2)
         case "user":
             exit(await UserCommands.run(Array(arguments.dropFirst()), configuration))
+        case "secrets":
+            exit(await SecretCommands.run(Array(arguments.dropFirst()), configuration))
         default:
             break
         }

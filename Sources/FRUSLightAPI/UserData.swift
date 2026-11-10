@@ -218,6 +218,9 @@ struct UserDataServices: Sendable {
     let proxies: TrustedProxies?
     /// Under `FRUS_AUTH=local` (PLAN's S20b), the accounts' sign-in and their sessions.
     let accounts: LocalAccounts?
+    /// The stored API keys (PLAN's S20c), a user's and the instance's: what a route sets, clears and
+    /// reads one through.
+    let secrets: SecretVault
     let tokens: CSRFTokens
     /// `FRUS_PUBLIC_URL`'s address.
     let address: PublicAddress
@@ -238,11 +241,12 @@ struct UserDataServices: Sendable {
 
     /// `passwords` hashes and verifies local accounts' passwords: Argon2id at the standard costs, or a
     /// test's cheapest.
-    init(store: any UserDataStore, configuration: ServerConfiguration, tokens: CSRFTokens = CSRFTokens(),
+    init(store: any UserDataStore, configuration: ServerConfiguration, secrets: SecretVault, tokens: CSRFTokens = CSRFTokens(),
          jobs: any JobQueue = InProcessJobQueue(), importLimit: Int = UserDataServices.importBodyLimit,
          resolver: (any UserResolver)? = nil, passwords: PasswordHasher = PasswordHasher(),
          now: @escaping @Sendable () -> Date = Date.init) {
         self.store = store
+        self.secrets = secrets
         switch configuration.auth {
         case .header:
             let proxies = TrustedProxies(configuration.trustedProxies)
@@ -446,6 +450,7 @@ enum UserDataRoutes {
         HistoryRoutes.add(to: me, services: services, provider: provider, resources: resources, reader: reader)
         ResearchRoutes.add(to: me, services: services, resources: resources, provider: provider)
         PreferenceRoutes.add(to: me, services: services)
+        SecretRoutes.add(to: me, services: services)
         ExportRoutes.add(to: me, services: services)
         SearchTagRoutes.add(to: me, services: services, provider: provider, resources: resources)
         SavedSearchRoutes.add(to: me, services: services, provider: provider)

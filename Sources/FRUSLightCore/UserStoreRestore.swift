@@ -21,6 +21,9 @@ public enum UserStoreRestore {
         public let keptAsFiles: Bool
         /// Whether the kept store reached the folder backups are copied to.
         public let copy: UserStoreBackups.Copy
+        /// The stored API keys the backup carries (PLAN's S20c), which only the key file they were
+        /// sealed under opens; nil for a backup from before migration 5.
+        public let secrets: BackupManifest.Secrets?
     }
 
     /// Why a restore changed nothing.
@@ -150,6 +153,8 @@ public enum UserStoreRestore {
         // A session the backup holds may have ended since it was taken, by a sign-out, a new password or
         // a disabled account (PLAN's S20b): a restore ends them all, and everyone signs in again.
         try endSessions(in: staged)
+        // What the backup carries of stored keys, for the command to say which key file opens them.
+        let secrets = BackupManifest.Secrets.held(in: staged)
 
         var kept: URL?
         var keptAsFiles = false
@@ -186,7 +191,7 @@ public enum UserStoreRestore {
             throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: store.path,
                                                            NSLocalizedDescriptionKey: String(cString: strerror(errno))])
         }
-        return Report(backup: source, migration: migration, kept: kept, keptAsFiles: keptAsFiles, copy: copy)
+        return Report(backup: source, migration: migration, kept: kept, keptAsFiles: keptAsFiles, copy: copy, secrets: secrets)
     }
 
     /// What every backup and copy in the two folders is, for `frus-light restore` with nothing named.
