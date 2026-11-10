@@ -2,14 +2,16 @@
 // appendix and the synced preferences (PLAN's S17f, and PLAN's rule for view code: "mirrored with a
 // parity test that reads the app's source at the pin"), read from the app's source, the kit's and the
 // web's at once: the project picker and "Working on:", Settings ▸ Projects with the editor and Merge
-// Project, the Move commands, Project Home, the History screen, Research Sessions and the Session Log,
-// Data's method appendix, Settings ▸ Reading and the checklist's line; and the rules mirrored, the
-// reader's own order (web/src/research/listOrder.ts), the History screen's filter and count
-// (historyRules.ts), Project Home's summary, leads and lines (ProjectHome.swift, projectRules.ts), a
-// visit's title (`ReadingHistoryTitle`), an export's format's name, the search trail's re-run, the
-// trail's loaders and the appendix's coverage, the project editor's save and the admin's merge, and the
-// synced preferences' initial values and list order. A pin move that changes one fails here until the
-// web follows it.
+// Project, the Move commands, Project Home with its focus subjects and their editor (S25c), the History
+// screen, Research Sessions and the Session Log, Data's method appendix, Settings ▸ Reading and the
+// checklist's line; and the rules mirrored, the reader's own order (web/src/research/listOrder.ts), the
+// History screen's filter and count (historyRules.ts), Project Home's summary, leads and lines
+// (ProjectHome.swift, projectRules.ts), its focus subjects' filter, their editor's sections, search and
+// rows (focusSubjectRules.ts) and the engaged volumes their suggestions start from (ProjectFocus.swift),
+// a lead's line, a visit's title (`ReadingHistoryTitle`, and the parsed head since S25c), an export's
+// format's name, the search trail's re-run, the trail's loaders and the appendix's coverage, the
+// project editor's save and the admin's merge, and the synced preferences' initial values and list
+// order. A pin move that changes one fails here until the web follows it.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -39,6 +41,7 @@ import Testing
         let merge = try Self.app("ProjectContext/ProjectContextView.swift")
         let components = try Self.app("Settings/SettingsComponents.swift")
         let home = try Self.app("ProjectContext/ProjectHomeView.swift")
+        let focus = try Self.app("ProjectContext/ProjectFocusSubjectsEditor.swift")
         let history = try Self.app("History/HistoryView.swift")
         let snapshot = try Self.app("Models/HistoryPaneSnapshot.swift")
         let sessions = try Self.app("Settings/ResearchSessionsView.swift")
@@ -120,6 +123,28 @@ import Testing
             (home, "ProjectHomeView", "project.home.stat.notes", "Notes", "projectHome", "statNotes: 'Notes'"),
             (home, "ProjectHomeView", "project.home.stat.visited", "Documents Visited", "projectHome", "statVisited: 'Documents Visited'"),
             (home, "ProjectHomeView", "project.home.stat.searches", "Searches Run", "projectHome", "statSearches: 'Searches Run'"),
+            (home, "ProjectHomeView", "project.home.focus.title", "Focus subjects", "projectHome", "focusSubjects: 'Focus subjects'"),
+            (home, "ProjectHomeView", "project.home.focus.add", "Add", "projectHome", "focusSubjectsAdd: 'Add'"),
+            (home, "ProjectHomeView", "project.home.focus.edit", "Edit", "projectHome", "focusSubjectsEdit: 'Edit'"),
+            (home, "ProjectHomeView", "project.home.focus.empty", "Choose subjects to focus discovery on the volumes they define.",
+             "projectHome", "focusSubjectsEmpty: 'Choose subjects to focus discovery on the volumes they define.'"),
+            (focus, "ProjectFocusSubjectsEditor", "project.focus.title", "Focus Subjects", "projectHome", "focusSubjectsTitle: 'Focus Subjects'"),
+            (focus, "ProjectFocusSubjectsEditor", "project.focus.done", "Done", "projectHome", "focusSubjectsDone: 'Done'"),
+            (focus, "ProjectFocusSubjectsEditor", "project.focus.unavailable.title", "Subjects Unavailable", "projectHome",
+             "focusSubjectsUnavailableTitle: 'Subjects Unavailable'"),
+            (focus, "ProjectFocusSubjectsEditor", "project.focus.unavailable.detail", "The subject index could not be loaded.", "projectHome",
+             "focusSubjectsUnavailable: 'The subject index could not be loaded.'"),
+            (focus, "ProjectFocusSubjectsEditor", "project.focus.search", "Search subjects", "projectHome", "focusSubjectsSearch: 'Search subjects'"),
+            (focus, "ProjectFocusSubjectsEditor", "project.focus.selected", "Focus subjects", "projectHome", "focusSubjectsSelected: 'Focus subjects'"),
+            (focus, "ProjectFocusSubjectsEditor", "project.focus.suggested", "Suggested from your volumes", "projectHome",
+             "focusSubjectsSuggested: 'Suggested from your volumes'"),
+            (focus, "ProjectFocusSubjectsEditor", "project.focus.suggested.detail",
+             "Subjects that recur across the volumes you’ve already collected, annotated, or opened in this project.", "projectHome",
+             "focusSubjectsSuggestedDetail: 'Subjects that recur across the volumes you’ve already collected, annotated, or opened in this project.'"),
+            (focus, "ProjectFocusSubjectsEditor", "project.focus.all", "All subjects", "projectHome", "focusSubjectsAll: 'All subjects'"),
+            (focus, "ProjectFocusSubjectsEditor", "project.focus.noMatches", "No subjects match.", "projectHome",
+             "focusSubjectsNoMatches: 'No subjects match.'"),
+            (focus, "ProjectFocusSubjectsEditor", "project.focus.volumeCount.one", "1 volume", "projectHome", "volumeCountOne: '1 volume'"),
             (home, "ProjectHomeView", "project.home.focusTags.title", "Focus tags", "projectHome", "focusTags: 'Focus tags'"),
             (home, "ProjectHomeView", "project.home.focusTags.add", "Add", "projectHome", "focusAdd: 'Add'"),
             (home, "ProjectHomeView", "project.home.focusTags.edit", "Edit", "projectHome", "focusEdit: 'Edit'"),
@@ -237,6 +262,8 @@ import Testing
              "relatedMany: (count: number) => `Related to ${count.toLocaleString('en-US')} of your documents`"),
             (home, "ProjectHomeView", #"defaultValue: "\(search.resultCount) results")"#, "projectHome",
              "results: (count: number) => `${count.toLocaleString('en-US')} results`"),
+            (focus, "ProjectFocusSubjectsEditor", #"String(localized: "project.focus.volumeCount.other", defaultValue: "\(subject.volumeCount) volumes")"#,
+             "projectHome", "volumeCountOther: (count: number) => `${count.toLocaleString('en-US')} volumes`"),
             (merge, "ProjectContextView", #"defaultValue: "Merge “\(sourceProject.name)” into:")"#, "projects",
              "mergeInto: (name: string) => `Merge “${name}” into:`"),
             (merge, "ProjectContextView", #"defaultValue: "All notes, collections, summaries, and reading history assigned to “\(sourceProject.name)” will be re-assigned to the selected project. “\(sourceProject.name)” will be deleted.")"#,
@@ -355,6 +382,119 @@ import Testing
         #expect(parser.contains(#"private static let typographicDoubleQuotationMarks: Set<Character> = [ "\u{201C}", "\u{201D}", "\u{201E}", "\u{201F}", "\u{FF02}", "\u{00AB}", "\u{00BB}", ]"#))
         #expect(try Self.web("research/historyRules.ts").contains(
             #"export const typographicDoubleQuotationMarks = ['\u201C', '\u201D', '\u201E', '\u201F', '\uFF02', '\u00AB', '\u00BB'];"#))
+    }
+
+    /// Project Home's focus subjects (S25c), as the app's source writes them and the web's mirrors say
+    /// them: the section's filter of the vocabulary and its Add or Edit; the editor's three sections,
+    /// when each shows, its search, its rows and its toggle; the volumes its suggestions start from, the
+    /// app's `ProjectEngagedDocuments` and not the coverage tiles' gatherer; the kit's suggestions, with
+    /// the dictionary by ref that a repeated ref would trap on, which the server refuses to load; a
+    /// lead's line; and the head a visit to a document the index does not hold is titled by.
+    @Test func theFocusSubjectsRulesAreTheApps() throws {
+        NoteViewParityTests.expect(try Self.app("ProjectContext/ProjectHomeView.swift"), holds: [
+            "if let profiles = VolumeSubjectProfilesStore.shared {", "let chosen = project.defaultSubjectTagIds",
+            "let subjects = profiles.allSubjects.filter { chosen.contains($0.ref) }",
+            #"Label(subjects.isEmpty ? String(localized: "project.home.focus.add", defaultValue: "Add") : String(localized: "project.home.focus.edit", defaultValue: "Edit"),"#,
+            "if subjects.isEmpty {", "ForEach(subjects) { subject in Text(subject.name)",
+            "focusSubjectsSection(project) focusTagsSection(project) leadsSection",
+            "guard !keys.isEmpty, let pipeline = appState.indexingPipeline else { leadSnippets = [:] return }",
+            "leadSnippets = (try? await pipeline.documentSnippets(forKeys: keys)) ?? [:]",
+            "if let snippet = leadSnippets[lead.documentKey], !snippet.isEmpty { Text(snippet) .font(.caption) .foregroundStyle(.tertiary) .lineLimit(3)",
+        ], file: "ProjectHomeView.swift")
+        NoteViewParityTests.expect(try Self.server("Sources/FRUSLightAPI/ProjectFocus.swift"), holds: [
+            "profiles.allSubjects.filter { chosen.contains($0.ref) }.map(FocusSubject.init)",
+            "ProjectFocusSuggestions.suggestions(engagedVolumeIds: engagedVolumeIds, profiles: profiles, excluding: Set(chosen))",
+        ], file: "ProjectFocus.swift")
+        NoteViewParityTests.expect(try Self.server("Sources/FRUSLightAPI/ProjectHome.swift"), holds: [
+            "if let profiles = resources.subjectProfiles.profiles {",
+            "let lines = (try? await served.pipeline.documentSnippets(forKeys: keys)) ?? [:]",
+            "if let line = lines[ProjectFocusRoutes.key(lead.volumeId, lead.documentId)], !line.isEmpty { lead.snippet = line }",
+        ], file: "ProjectHome.swift")
+        NoteViewParityTests.expect(try Self.web("research/ProjectHomeScreen.tsx"), holds: [
+            "{home.focusSubjects && <FocusSubjects home={home} />} {home.hasTags && <FocusTags home={home} />}",
+            "{lead.snippet && <span className=\"lead-snippet\">{lead.snippet}</span>}",
+        ], file: "ProjectHomeScreen.tsx")
+        NoteViewParityTests.expect(try Self.web("research/FocusSubjects.tsx"), holds: [
+            "{subjects.length === 0 ? copy.projectHome.focusSubjectsAdd : copy.projectHome.focusSubjectsEdit}",
+            "{refs.length > 0 && (", "subjects={chosenSubjects(all, refs)}", "{showsSuggestions(search, suggested) && (",
+            "subjects={filteredSubjects(all, search)}", "empty={copy.projectHome.focusSubjectsNoMatches}",
+            "const next = toggledSubjects(wanted.current ?? stored, ref);", "await updateProject(client, projectId, { defaultSubjectTagIds: sent });",
+        ], file: "FocusSubjects.tsx")
+        // The editor's sections, search, rows and toggle.
+        NoteViewParityTests.expect(try Self.app("ProjectContext/ProjectFocusSubjectsEditor.swift"), holds: [
+            "let chosen = Set(project.defaultSubjectTagIds)",
+            "let suggestions = ProjectFocusSuggestions.suggestions(engagedVolumeIds: engagedVolumeIds, profiles: profiles, excluding: chosen)",
+            "if !chosen.isEmpty {", "ForEach(profiles.allSubjects.filter { chosen.contains($0.ref) }) { subject in subjectRow(subject, isSelected: true, project: project)",
+            "if searchText.isEmpty && !suggestions.isEmpty {", "ForEach(suggestions) { subject in subjectRow(subject, isSelected: false, project: project)",
+            "let matches = filteredSubjects(profiles) if matches.isEmpty {",
+            "subjectRow(subject, isSelected: chosen.contains(subject.ref), project: project)",
+            "let query = searchText.trimmingCharacters(in: .whitespaces).lowercased()",
+            "guard !query.isEmpty else { return Array(profiles.allSubjects.prefix(50)) }",
+            "$0.name.lowercased().contains(query) || $0.category.lowercased().contains(query) || $0.subcategory.lowercased().contains(query)",
+            #"Text("\(subject.category) · \(subject.subcategory)")"#, "Text(subject.volumeCount == 1",
+            "var ids = project.defaultSubjectTagIds if let index = ids.firstIndex(of: ref) { ids.remove(at: index) } else { ids.append(ref) } project.defaultSubjectTagIds = ids",
+            "engagedVolumeIds = await ProjectEngagedDocuments.engagedVolumeIds( forProject: projectId, container: modelContext.container)",
+        ], file: "ProjectFocusSubjectsEditor.swift")
+        NoteViewParityTests.expect(try Self.web("research/focusSubjectRules.ts"), holds: [
+            "export const unsearchedSubjectLimit = 50;", #"const whitespaces = /^[\t\p{Zs}]+|[\t\p{Zs}]+$/gu;"#,
+            "return subjects.filter((subject) => chosen.includes(subject.ref));", "return search === '' && suggestions.length > 0;",
+            "const query = search.replace(whitespaces, '').toLowerCase();", "if (query === '') return subjects.slice(0, unsearchedSubjectLimit);",
+            "subject.name.toLowerCase().includes(query) || subject.category.toLowerCase().includes(query) || subject.subcategory.toLowerCase().includes(query),",
+            "return `${subject.category} · ${subject.subcategory}`;",
+            "return subject.volumeCount === 1 ? copy.projectHome.volumeCountOne : copy.projectHome.volumeCountOther(subject.volumeCount);",
+            "return index >= 0 ? [...refs.slice(0, index), ...refs.slice(index + 1)] : [...refs, ref];",
+        ], file: "focusSubjectRules.ts")
+        // The same trim as the History screen's filter, `.whitespaces`.
+        #expect(try Self.web("research/historyRules.ts").contains(#"const whitespaces = /^[\t\p{Zs}]+|[\t\p{Zs}]+$/gu;"#))
+        // The volumes the suggestions start from.
+        NoteViewParityTests.expect(try Self.app("ProjectContext/ProjectEngagedDocuments.swift"), holds: [
+            #""\(volumeId)/\(documentId)""#,
+            "for note in notes where !note.volumeId.isEmpty && !note.documentId.isEmpty { result.insert(key(note.volumeId, note.documentId)) }",
+            "for visit in visits where !visit.volumeId.isEmpty && !visit.documentId.isEmpty { result.insert(key(visit.volumeId, visit.documentId)) }",
+            "for entry in collection.documentEntries ?? [] where entry.kind == CollectionEntryKind.document.rawValue && !entry.volumeId.isEmpty && !entry.documentId.isEmpty {",
+            ".filter { $0.projectIds.contains(pid) } let collections = ((try? context.fetch(FetchDescriptor<Collection>())) ?? []) .filter { $0.projectIds.contains(pid) }",
+            "predicate: #Predicate { $0.projectId == pid }",
+            #"return Set(keys.compactMap { $0.split(separator: "/", maxSplits: 1).first.map(String.init) })"#,
+        ], file: "ProjectEngagedDocuments.swift")
+        NoteViewParityTests.expect(try Self.server("Sources/FRUSLightAPI/ProjectFocus.swift"), holds: [
+            #""\(volumeId)/\(documentId)""#,
+            "for note in notes where !note.volumeId.isEmpty && !note.documentId.isEmpty { result.insert(key(note.volumeId, note.documentId)) }",
+            "for visit in visits where !visit.volumeId.isEmpty && !visit.documentId.isEmpty { result.insert(key(visit.volumeId, visit.documentId)) }",
+            "where (entry.kind ?? CollectionEntryKind.document.rawValue) == CollectionEntryKind.document.rawValue && !entry.volumeId.isEmpty && !entry.documentId.isEmpty {",
+            #"Set(keys.compactMap { $0.split(separator: "/", maxSplits: 1).first.map(String.init) })"#,
+        ], file: "ProjectFocus.swift")
+        // Over the project's own records, as the app's fetches filter them: Project Home's summary's.
+        NoteViewParityTests.expect(try Self.server("Sources/FRUSLightAPI/ProjectHome.swift"), holds: [
+            "notes: newestFirst(notes.filter { $0.projectIds.contains(id) }) { $0.lastModified },",
+            "collections: newestFirst(collections.filter { $0.projectIds.contains(id) }) { $0.lastModified },",
+            "visits: newestFirst(visits.filter { $0.projectId == id }) { $0.accessedAt },",
+            "let engaged = ProjectFocusRoutes.engagedKeys(collections: summary.collections, notes: summary.notes, visits: summary.visits)",
+        ], file: "ProjectHome.swift")
+        // The kit's suggestions: eight at most, and the dictionary by ref that traps on a repeated one.
+        NoteViewParityTests.expect(try Self.kit("FRUSCoreKit/ProjectContext/ProjectFocusSuggestions.swift"), holds: [
+            "excluding chosen: Set<String>, limit: Int = 8) -> [VolumeSubjectProfiles.SubjectOption] {",
+            "let byRef = Dictionary(uniqueKeysWithValues: profiles.allSubjects.map { ($0.ref, $0) })",
+        ], file: "ProjectFocusSuggestions.swift")
+        // The app's loader: none for a file missing or malformed.
+        NoteViewParityTests.expect(try Self.app("Browser/VolumeSubjectProfilesStore.swift"), holds: [
+            #"guard let url = Bundle.main.url(forResource: "volume-subject-profiles-index", withExtension: "json") else {"#,
+            "return try JSONDecoder().decode(VolumeSubjectProfiles.self, from: data)",
+        ], file: "VolumeSubjectProfilesStore.swift")
+        // A visit's head, from the parsed TEI, as the app's reader titles a document it loaded.
+        NoteViewParityTests.expect(try Self.app("DocumentView/DocumentViewModel.swift"), holds: [
+            "let extracted = IndexingPipeline.extractHeader(from: ast.nodes)",
+            "let isEditorialNote: Bool = { if case .editorialNote? = ast.nodes.first { return true } return false }()",
+            "if !extracted.isEmpty || isEditorialNote { documentTitle = DocumentDisplayTitle.text( .init(header: extracted.isEmpty ? nil : extracted, documentNumber: resolvedDocumentNumber, isEditorialNote: isEditorialNote), documentId: entry.documentId)",
+            "resolvedDocumentNumber = ast.printedNumber ?? IndexingPipeline.extractDocumentNumber(from: ast.nodes)",
+        ], file: "DocumentViewModel.swift")
+        NoteViewParityTests.expect(try Self.server("Sources/FRUSLightAPI/History.swift"), holds: [
+            "let extracted = IndexingPipeline.extractHeader(from: ast.nodes) let isEditorialNote = ast.isShapedAsEditorialNote",
+            "guard !extracted.isEmpty || isEditorialNote else { return nil }",
+            "return displayTitle(header: extracted, documentNumber: ast.printedNumber, isEditorialNote: isEditorialNote, documentId: ast.documentId)",
+        ], file: "History.swift")
+        NoteViewParityTests.expect(try Self.kit("FRUSCoreKit/TEI/FRUSASTNode.swift"), holds: [
+            "public var isShapedAsEditorialNote: Bool { guard let first = nodes.first, case .editorialNote = first else { return false } return true }",
+        ], file: "FRUSASTNode.swift")
     }
 
     /// What the server mirrors of the app's views and services: Project Home's summary, leads and

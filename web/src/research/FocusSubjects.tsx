@@ -41,6 +41,8 @@ function useFocusSubjectRefs(projectId: string, stored: readonly string[]) {
           // A later toggle waits, and its list holds this one's change too.
           if (wanted.current !== sent) continue;
           setFailure(errorMessage(error));
+          // What the server holds, read again, in case it is not what this page read.
+          void client.invalidateQueries({ queryKey: ['projectHome', projectId] });
         }
         if (wanted.current === sent) {
           wanted.current = null;
