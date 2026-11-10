@@ -92,7 +92,7 @@ const group = (dialog: ReturnType<typeof within>, name: string) => within(dialog
 
 /** The subjects a section's switches name, in its order. */
 const names = (section: ReturnType<typeof within>) =>
-  section.getAllByRole('checkbox').map((box) => document.getElementById(box.getAttribute('aria-labelledby') ?? '')?.textContent);
+  section.getAllByRole('checkbox').map((box: HTMLElement) => document.getElementById(box.getAttribute('aria-labelledby') ?? '')?.textContent);
 
 describe('the editor’s rules', () => {
   it('keeps the vocabulary’s order for the subjects chosen, and leaves out a ref it does not name', () => {
@@ -161,9 +161,9 @@ describe('Project Home’s focus subjects', () => {
       } });
     renderAt(`/projects/${grain}`);
     const leads = within(await screen.findByRole('region', { name: 'Suggested Next' }));
-    const rows = leads.getAllByRole('listitem');
-    expect(within(rows[0]).getByText('The ambassador was negotiating treaties with the minister.')).toBeTruthy();
-    expect(rows[1].querySelector('.lead-snippet')).toBeNull();
+    const [first, second] = leads.getAllByRole('listitem');
+    expect(within(first!).getByText('The ambassador was negotiating treaties with the minister.')).toBeTruthy();
+    expect(second!.querySelector('.lead-snippet')).toBeNull();
   });
 });
 
