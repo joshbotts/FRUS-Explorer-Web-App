@@ -418,7 +418,9 @@ import Testing
             "{subjects.length === 0 ? copy.projectHome.focusSubjectsAdd : copy.projectHome.focusSubjectsEdit}",
             "{refs.length > 0 && (", "subjects={chosenSubjects(all, refs)}", "{showsSuggestions(search, suggested) && (",
             "subjects={filteredSubjects(all, search)}", "empty={copy.projectHome.focusSubjectsNoMatches}",
-            "const next = toggledSubjects(wanted.current ?? stored, ref);", "await updateProject(client, projectId, { defaultSubjectTagIds: sent });",
+            "const next = toggledSubjects(latest.current ?? cachedRefs(client, projectId) ?? stored, ref);",
+            "await updateProject(client, projectId, { defaultSubjectTagIds: [...sent] });",
+            "const subjects = vocabulary.data ? chosenSubjects(vocabulary.data.items, chosen.refs) : (home.focusSubjects ?? []);",
         ], file: "FocusSubjects.tsx")
         // The editor's sections, search, rows and toggle.
         NoteViewParityTests.expect(try Self.app("ProjectContext/ProjectFocusSubjectsEditor.swift"), holds: [
@@ -486,10 +488,14 @@ import Testing
             "let isEditorialNote: Bool = { if case .editorialNote? = ast.nodes.first { return true } return false }()",
             "if !extracted.isEmpty || isEditorialNote { documentTitle = DocumentDisplayTitle.text( .init(header: extracted.isEmpty ? nil : extracted, documentNumber: resolvedDocumentNumber, isEditorialNote: isEditorialNote), documentId: entry.documentId)",
             "resolvedDocumentNumber = ast.printedNumber ?? IndexingPipeline.extractDocumentNumber(from: ast.nodes)",
+            // A document the parse gives no title keeps the one it was opened with, through the display rule.
+            "if let documentTitle, !documentTitle.isEmpty { return documentTitle } return ReadingHistoryTitle.documentTitle(stored: entry.header,",
         ], file: "DocumentViewModel.swift")
         NoteViewParityTests.expect(try Self.server("Sources/FRUSLightAPI/History.swift"), holds: [
             "let extracted = IndexingPipeline.extractHeader(from: ast.nodes) let isEditorialNote = ast.isShapedAsEditorialNote",
             "guard !extracted.isEmpty || isEditorialNote else { return nil }",
+            "if let title = parsedTitle(of: ast) { return title }",
+            "return ReadingHistoryTitle.documentTitle(stored: label == documentId ? nil : label,",
             "return displayTitle(header: extracted, documentNumber: ast.printedNumber, isEditorialNote: isEditorialNote, documentId: ast.documentId)",
         ], file: "History.swift")
         NoteViewParityTests.expect(try Self.kit("FRUSCoreKit/TEI/FRUSASTNode.swift"), holds: [

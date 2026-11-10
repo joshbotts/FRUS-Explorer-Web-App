@@ -47,6 +47,11 @@ export function subjectReach(subject: Pick<FocusSubject, 'volumeCount'>): string
   return subject.volumeCount === 1 ? copy.projectHome.volumeCountOne : copy.projectHome.volumeCountOther(subject.volumeCount);
 }
 
+/** Whether two lists of refs are the same, in the same order. */
+export function sameSubjects(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((ref, index) => ref === b[index]);
+}
+
 /** The project's refs after a row's toggle: without `ref` where they held it, else with it at their end. */
 export function toggledSubjects(refs: readonly string[], ref: string): string[] {
   const index = refs.indexOf(ref);

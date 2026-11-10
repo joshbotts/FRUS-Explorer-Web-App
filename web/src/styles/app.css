@@ -2698,6 +2698,8 @@ dialog.save-corpus .captured dd {
 dialog.focus-subjects-editor {
   width: min(32rem, calc(100vw - 2rem));
   padding-top: 0;
+  /* A row the focus reaches stays clear of the header that sticks over the rows (WCAG 2.4.11). */
+  scroll-padding-top: 4.5rem;
 }
 
 .focus-subjects-editor .editor-header {

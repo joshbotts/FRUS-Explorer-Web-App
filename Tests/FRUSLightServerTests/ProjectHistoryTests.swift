@@ -166,6 +166,37 @@ import Testing
         }
     }
 
+    /// The parsed head's two edges: an editorial note whose head only says what it is takes its printed
+    /// number, as the app's reader titles it ("Editorial Note 2"); and a document whose TEI has no head
+    /// and no note's shape takes the reader's label, as the app's takes the title it was opened with.
+    @Test func aVisitWithNoHeadToNameItTakesTheNoteNumberOrTheReadersLabel() async throws {
+        let fixture = try await UserDataFixture()
+        defer { withExtendedLifetime(fixture) {} }
+        let tei = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <TEI xmlns="http://www.tei-c.org/ns/1.0">
+              <teiHeader><fileDesc><titleStmt><title>Test</title></titleStmt></fileDesc></teiHeader>
+              <text><body>
+                <div type="document" xml:id="d1" n="1"><p>A document printed with no head.</p></div>
+                <div type="document" subtype="editorial-note" xml:id="d2" n="2"><head>Editorial Note<note n="1" xml:id="d2fn1">Its footnote.</note></head><p>A note.</p></div>
+              </body></text>
+            </TEI>
+            """
+        let directory = fixture.server.files.volumesDirectory
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data(tei.utf8).write(to: directory.appendingPathComponent("frus1894Nicaragua.xml"))
+        let volume = try await fixture.server.reader.volume("frus1894Nicaragua")
+        #expect(HistoryRoutes.parsedTitle(of: try #require(volume.documents["d1"])) == nil, "no head, no note")
+        #expect(HistoryRoutes.parsedTitle(of: try #require(volume.documents["d2"])) == "Editorial Note 2", "the head names nothing, its footnote left out")
+        try await fixture.app.test(.router) { client in
+            let owner = Browser(client: client)
+            let printed = try await Self.visit(owner, "d1", volume: "frus1894Nicaragua")
+            let note = try await Self.visit(owner, "d2", volume: "frus1894Nicaragua")
+            #expect(printed.visit?.title == "Document 1", "the reader's label")
+            #expect(note.visit?.title == "Editorial Note 2")
+        }
+    }
+
     /// A visit is recorded under the reader's title of its document, a search with what the server's
     /// run of it gives and the scope's signature the kit writes, each stamped with the project the user
     /// works in; a re-run of the anchored query, in either spelling of its quotation marks, refreshes

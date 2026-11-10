@@ -55,8 +55,11 @@ function homeFor(refs: string[]): ProjectHome {
   };
 }
 
-/** A server that keeps the project's subjects as each PATCH sets them, with `patch` to answer one otherwise. */
-function serving(initial: string[], patch?: (refs: string[], count: number) => unknown) {
+/**
+ * A server that keeps the project's subjects as each PATCH sets them, with `patch` to answer one
+ * otherwise, and `home` to hold Project Home's answer back.
+ */
+function serving(initial: string[], patch?: (refs: string[], count: number) => unknown, home?: () => Promise<void> | void) {
   let refs = initial;
   const bodies: string[][] = [];
   const fetch = stubServer({
@@ -65,7 +68,11 @@ function serving(initial: string[], patch?: (refs: string[], count: number) => u
     '/api/v1/me/projects': { total: 1, items: [base.project] },
     '/api/v1/me/preferences': preferences,
     '/api/v1/me/focus-subjects': list,
-    [`/api/v1/me/projects/${grain}/home`]: () => homeFor(refs),
+    [`/api/v1/me/projects/${grain}/home`]: async () => {
+      const answer = homeFor(refs);
+      await home?.();
+      return answer;
+    },
     [`PATCH /api/v1/me/projects/${grain}`]: async (_: URL, init?: RequestInit) => {
       const given = sent(init).body.defaultSubjectTagIds as string[];
       bodies.push(given);
@@ -218,6 +225,32 @@ describe('the focus subjects’ editor', () => {
     expect(document.activeElement).toBe(dialog.getByRole('searchbox', { name: 'Search subjects' }));
   });
 
+  it('hands the focus from the last row of a section to the row now last', async () => {
+    serving(['s07', 's41', 's52']);
+    const { user, dialog } = await openEditor();
+    expect(names(group(dialog, 'Focus subjects'))).toEqual(['Cuban missile crisis', 'Subject 41', 'Outer space']);
+    await user.click(group(dialog, 'Focus subjects').getByRole('checkbox', { name: 'Outer space' }));
+    await waitFor(() => expect(names(group(dialog, 'Focus subjects'))).toEqual(['Cuban missile crisis', 'Subject 41']));
+    expect(document.activeElement).toBe(group(dialog, 'Focus subjects').getByRole('checkbox', { name: 'Subject 41' }));
+  });
+
+  it('builds a toggle on the server’s last answer, before Project Home is read again', async () => {
+    let held = false;
+    let release: () => void = () => {};
+    const { bodies } = serving([], undefined, () => (held ? new Promise<void>((resolve) => (release = resolve)) : undefined));
+    const { user, dialog } = await openEditor();
+    held = true;
+    await user.click(group(dialog, 'All subjects').getByRole('checkbox', { name: 'Subject 1' }));
+    await waitFor(() => expect(bodies).toEqual([['s01']]));
+    // The save is answered, and Project Home, read again, has not answered yet.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await user.click(group(dialog, 'All subjects').getByRole('checkbox', { name: 'Subject 2' }));
+    await waitFor(() => expect(bodies).toEqual([['s01'], ['s01', 's02']]));
+    held = false;
+    release();
+    await waitFor(() => expect(names(group(dialog, 'Focus subjects'))).toEqual(['Subject 1', 'Subject 2']));
+  });
+
   it('searches the name, category and subcategory, hiding the suggestions, and says when nothing matches', async () => {
     serving([]);
     const { user, dialog } = await openEditor();
@@ -265,6 +298,35 @@ describe('the focus subjects’ editor', () => {
     expect(dialog.getByText('The subject vocabulary has no subject with the ref s05.')).toBeTruthy();
     await waitFor(() => expect((group(dialog, 'All subjects').getByRole('checkbox', { name: 'Subject 5' }) as HTMLInputElement).checked).toBe(false));
     expect(group(dialog, 'Focus subjects').getAllByRole('checkbox')).toHaveLength(1);
+    // Opened again, the editor starts with no refusal.
+    await user.click(dialog.getByRole('button', { name: 'Done' }));
+    const section = within(screen.getByRole('region', { name: 'Focus subjects' }));
+    await user.click(section.getByRole('button', { name: 'Edit' }));
+    const again = within(await screen.findByRole('dialog', { name: 'Focus Subjects' }));
+    expect(again.queryByRole('alert')).toBeNull();
+  });
+
+  it('says a refusal that comes once the editor has closed in the section, and keeps the focus in the editor when a row goes back', async () => {
+    let release: () => void = () => {};
+    serving(['s07'], async () => {
+      await new Promise<void>((resolve) => (release = resolve));
+      return new ProblemAnswer(409, 'STORE_DAMAGED', 'The project could not be read.');
+    });
+    const { user, dialog } = await openEditor();
+    // Subject 41 joins Focus subjects, and the focus moves onto it there, while the save waits.
+    await user.click(group(dialog, 'All subjects').getByRole('checkbox', { name: 'Subject 41' }));
+    group(dialog, 'Focus subjects').getByRole('checkbox', { name: 'Subject 41' }).focus();
+    release();
+    // Put back, the row goes, and the focus goes to the search field, not to the page behind.
+    await waitFor(() => expect(group(dialog, 'Focus subjects').queryByRole('checkbox', { name: 'Subject 41' })).toBeNull());
+    expect(document.activeElement).toBe(dialog.getByRole('searchbox', { name: 'Search subjects' }));
+    // And a refusal after Done is said in the section.
+    await user.click(group(dialog, 'All subjects').getByRole('checkbox', { name: 'Subject 42' }));
+    await user.click(dialog.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    release();
+    const section = within(screen.getByRole('region', { name: 'Focus subjects' }));
+    expect((await section.findByRole('alert')).textContent).toBe('The project could not be read.');
   });
 
   it('says the subjects are unavailable when the server cannot give them', async () => {
