@@ -214,7 +214,77 @@ Phase 3's row S23a, the third pull request of the first upstream batch, beside S
 
 ## Session 25c: Project Home's focus subjects and a lead's line
 
-Not started: `PLAN.md`'s row S25c. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+10 November 2026 · branch `claude/s25c-project-home-focus-subjects-e1e80d` · [#108](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/108) · upstream `fe9325b2`, unchanged
+
+Phase 3's features-track row of wave 2, phase 2's follow-up to S17f, beside S20c, S21b, S22b and S23b, with no upstream pull request, no pin move and no migration: Project Home's focus subjects with their editor, a lead's line under Suggested Next, and a visit's head, each over the kit code FRUS-Explorer#1813 made public at `fb542514`. The row ran across the owner's resumption of 10 November and a stop at the usage limit; the Mac restarted meanwhile, and the session went on, on Opus, from its state note.
+
+**The kit's calls,** compiled from the submodule, none copied:
+- `VolumeSubjectProfiles`, decoded from the image's `volume-subject-profiles-index.json`, 380 subjects and 552 volumes' profiles, each ref once, and its `allSubjects`.
+- `ProjectFocusSuggestions.suggestions(engagedVolumeIds:profiles:excluding:limit:)`, eight at most, its default, which the app's editor takes.
+- `IndexingPipeline.documentSnippets(forKeys:maxLength:)` over the served index, for the leads shown.
+- `IndexingPipeline.extractHeader(from:)` and `DocumentDisplayTitle` over a parsed document, with `FRUSDocumentAST.isShapedAsEditorialNote`.
+
+**The server** (`Sources/FRUSLightAPI/ProjectFocus.swift`, new; `ProjectHome.swift`, `Projects.swift`, `History.swift`, `ServerResources.swift`; one line in `UserData.swift`):
+- **The vocabulary** is read the first time a project's page asks, as the app's `VolumeSubjectProfilesStore` reads it: none for a file missing or one that does not decode, and none, the web's own, for one whose vocabulary names a ref twice. The kit's suggestions build `Dictionary(uniqueKeysWithValues:)` by ref, which would trap and stop the server for every user; the generator writes each ref once and the kit's suite fails on a bundled file that repeats one, so this guards a file someone replaced. The reason is kept for the routes' problems.
+- **Project Home's answer** gains `focusSubjects`, the vocabulary's subjects the project chose, in the vocabulary's order (`ProjectHomeView.focusSubjectsSection`'s filter), and `focusSuggestions`, the kit's suggestions over the volumes of the documents the project engages, the chosen left out. Both are absent on a server with no vocabulary, where the browser leaves the section out as the app does.
+- **The engaged documents** are `ProjectEngagedDocuments.keys(collections:notes:visits:)`, mirrored: the project's notes on a document, the documents read while it was active and its collections' document entries, over the records Project Home's summary already filters to the project, and a key's volume what comes before its first `/`. Not `DocumentEngagementService.gather`, which the coverage tiles take and which counts the highlights of the project's notes as well; the app's editor leaves them out.
+- **`GET /api/v1/me/focus-subjects`** is the vocabulary whole, for the editor's All subjects and its search; `SUBJECTS_UNAVAILABLE` (503), with the reason, on a server with none.
+- **`PATCH /api/v1/me/projects/{id}`** takes `defaultSubjectTagIds`, the editor's whole list, in the order given and once each. Each ref is the vocabulary's or one the project holds already, as the app's toggle keeps what the project holds, a ref a Mac's export brought that the vocabulary no longer names among them: `SUBJECT_NOT_FOUND` (404) for another, and on a server with no vocabulary `SUBJECTS_UNAVAILABLE` for a ref the project does not hold. A list that changes nothing writes nothing; one in another order, or an import's with a ref twice, is a change and stamps `lastModified`.
+- **A lead's line** is the kit's snippet of the served index for the leads shown, read at once by their keys after the rest of Project Home (`ProjectHomeRoutes.withLines`): none while no index is served, none when the read fails, and none for a document the index lacks, as the app's `loadLeadSnippets()` gives none.
+- **A visit's head.** A visit to a document the served index does not hold, or any while none is served, is titled as the app's reader titles a document it parsed (`DocumentViewModel.load`): the kit's display title of the head `extractHeader(from:)` reads from the TEI, with the number the document prints, "Editorial Note 2" for a note whose head names nothing. A document with no head and no note's shape takes the reader's label, "Document 1" or a section's title, through `ReadingHistoryTitle`'s rule, as the app records the title the document was opened with; never its bare id. The app's number falls back to the first head that begins with one (`extractDocumentNumber(from:)`, still internal), which a title shows only for a note with no `@n` whose first head names nothing; every shipped document carries `@n`.
+
+**The browser app** (`web/src/research/FocusSubjects.tsx` and `focusSubjectRules.ts`, new; `ProjectHomeScreen.tsx`, `api/research.ts`, `copy.ts`'s `projectHome` block, `styles/app.css`):
+- **The section,** between the tiles and the focus tags, as the app orders them: the chosen subjects' chips, Add or Edit, and the app's sentence for none.
+- **The editor,** `ProjectFocusSubjectsEditor`'s, a dialog titled Focus Subjects with Done:
+  - Focus subjects while the project holds any;
+  - Suggested from your volumes while the search field holds nothing at all, with the app's line under it;
+  - All subjects under Search subjects: the first fifty while the field, trimmed, is empty, or else each subject whose name, category or subcategory holds the words, whatever their case, or No subjects match.
+  - Each row is a checkbox named by the subject, described by "category · subcategory" and "N volumes", saving the whole list.
+  - The app's Subjects Unavailable when the server cannot give the vocabulary.
+- **A lead's line,** under its context line, to three lines.
+
+**Decided here, each the web's own:**
+- **Saves one at a time.** A toggle saves the newest list whole once the save before it is answered, so the server ends with what the rows show. It builds on the newest list made, or else on the server's last answer, which `updateProject` writes into Project Home's cache at once, before the screen draws it.
+- **What the rows show.** They show what was made until the server's copy holds it, and the section's chips follow them once the editor has read the vocabulary.
+- **A refused save** puts the rows back as the server holds them and reads Project Home again. Why is said in the editor, or under the section once the editor has closed. The editor opens again with no refusal.
+- **The focus.** A row that leaves its section hands the focus to the row now in its place, or the last, or the search field from a section gone with its last row. A row that goes any other way while it has the focus hands it to the search field too: one put back after a refusal, or a suggestion the next answer ranks out.
+- **For a screen reader,** a status line says each subject added or removed. The editor's title and Done stick above its rows, and the focus reaches a row clear of them (`scroll-padding-top`, WCAG 2.4.11).
+- **The summarised lead's difference,** which SPEC now says. A lead the user has summarised shows its opening text, where the Mac shows the summary, since the served copy never holds the index's `summary_text`. An upstream `documentSnippets(forKeys:maxLength:userSource:)` would close it.
+- **The web reader's own heading is left.** For a document the index does not hold it is still "Document 3" or a section's title (`DocumentDetail(teiOnly:)`, S12c's), so History and the reader name such a document differently. Moving the reader to the parsed head is a follow-up of its own.
+
+**At both pins.** S21b takes the pin from `fe9325b2` to `v2`, now `68bffcf6`. None of the files this row mirrors or reads changed between the two: `ProjectHomeView.swift`, `ProjectFocusSubjectsEditor.swift`, `ProjectEngagedDocuments.swift`, `VolumeSubjectProfilesStore.swift`, `DocumentViewModel.swift`, the kit's `VolumeSubjectProfiles.swift`, `ProjectFocusSuggestions.swift` and `DocumentDisplayTitle.swift`, and `volume-subject-profiles-index.json` (`git diff --stat fe9325b2 origin/v2`). `FRUSASTNode.swift` changed in its list item, which #1875 gave an id, and not in the line the parity test holds. No file of this row names `DocumentKey`.
+
+**Tests**
+
+- **FRUSLightServerTests,** 284 to 290: `ProjectFocusTests`, 5. They cover the vocabulary and its order, the write and its refusals, a held ref, and a no-op; the editor's suggestions, the kit's over the three volumes the project engages, with each volume the rule leaves out shown to change them; the engaged documents' rule over records with no document; a lead's line over the served index and none without one; and a vocabulary missing, malformed or naming a subject twice leaving the section out while Project Home, a held ref and `/healthz` answer on. `ProjectHistoryTests` has a visit's parsed head over the fixture's preface, d1, d3 and the editorial note d20, served and not, and, new, a note whose head names nothing and a document with no head, with the other user's refusal of a subjects' write.
+- **FRUSParityTests,** 231 to 232: `ProjectHistoryParityTests` gains `theFocusSubjectsRulesAreTheApps`, which holds these to the app's source: the section's filter and Add or Edit; the editor's sections, search, rows and toggle; the engaged documents' rule; the kit's limit and its dictionary by ref; the app's loader; and the visit's head with its fallback. The web's and the server's mirrors are held to their own source. It also gains the section's and the editor's sixteen words.
+- **The web unit suite,** from 486 tests in 51 files to 504 in 52: `FocusSubjects.test.tsx`, 18. Each of the review's fixes has a test that fails without it, and so do the focus handoff and the saves one at a time.
+- **The browser suite:** `focus-subjects.spec.ts`. It makes a project that has read frus1961-63v06's d1, and opens the editor by keyboard. It chooses the first of the eight suggestions with Space, the focus going to the next, and a subject the search finds. It closes with Done, the focus back on Edit, and finds the chips in the vocabulary's order, again after a reload. It takes both out, the focus ending in the search field, and closes with Escape. axe runs on the page and on the open editor.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** `scripts/swift test` under the heavy lock, over a build folder cloned from another worktree at the pin, this package's own targets rebuilt: 2,772 tests, all passing, seven of them new. The nine skips are the Linux backup attribute's and the PostgreSQL store's eight, which need `--postgres`; no store method changed, and CI's swift job runs them. The build gives no warning.
+- **The browser app:** typecheck, lint and build pass; the unit suite, 504 tests in 52 files.
+- **The image and the smoke test:** `scripts/compose-smoke --e2e`, with this branch's image as `frus-light:s25c` on port 18160, under the heavy lock, passed every step. The browser suite ran 73 specs at the root and 73 under the path, where `main` has 72, `focus-subjects.spec.ts` among them, and the accounts and sign-in specs.
+
+**Two cold reviews,** subagents given the diff, the row and the app's source, and none of this session's reasoning, one for the server and one for the browser app.
+- The server's found nothing serious. One finding is fixed: a visit to a document with no head went untitled, where the app keeps the title it was opened with; it takes the reader's label now, with a test. It also left these:
+  - the number fallback, as above;
+  - a reordered list counted as a change;
+  - the vocabulary's absence cached until a restart, as the annotations' file is;
+  - a test of a generic note head with a number on the parsed path, now added.
+- The browser app's found six, all fixed, each with a test that fails without its fix where a unit test can reach it:
+  - **A toggle in the moment after a save answered built on the list the screen last drew,** and could drop that save: it builds on the cache's answer now. The rows no longer show the server's old list for that moment.
+  - **The sticky header could cover a row the focus reached:** the dialog's scroll padding keeps it clear.
+  - **A refusal outlived the editor,** said again when it opened. One after Done was said nowhere. Both are mended.
+  - **The focus was lost to a row that went other than by its own toggle:** it goes to the search field.
+  - **A refused save read Project Home again under the project's id, not the route's:** it reads every Project Home again.
+  - **Add and Edit lagged the rows after Done:** fixed, with the chips, which follow the rows.
+  - Its test gaps, the cache write and the "or the last" branch, have tests now. Escape in a search field that holds text clears it, as Chromium does, before it closes the editor.
+
+**Records:** this entry and PLAN's S25c paragraph; in SPEC, Project Home's paragraph with the editor's and the summarised lead's, the API's projects and Project Home lines, `/me/focus-subjects`, and History's visit title; and the install guide's Projects lines. README and COORDINATION are left to the group's last row and the pin moves (rule 5). The hand-over note is `s25c-handover.md` in the shared notes folder, for S25d and S23d.
+
+**Next:** S25d, Add Documents' Citations and Tags, on the features track; then S23d, after S21b, which computes Suggested Next here and keeps the leads' lines (`ProjectHomeRoutes.withLines`).
 
 ## Session 20c: the secrets table and Settings ▸ Keys
 

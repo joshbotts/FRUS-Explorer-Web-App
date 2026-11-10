@@ -2681,6 +2681,82 @@ dialog.save-corpus .captured dd {
   padding: 0;
 }
 
+/* Project Home's focus subjects (S25c): the chosen subjects' chips, as the focus tags', and their
+   editor, whose title and Done stay in reach above its rows, as the app's sheet keeps its toolbar. */
+.focus-subjects .chips {
+  padding: 0;
+}
+
+.focus-subjects .chips li {
+  padding: 0.125rem 0.625rem;
+  border-radius: 999px;
+  background: var(--tag);
+  font-size: 0.875rem;
+  list-style: none;
+}
+
+dialog.focus-subjects-editor {
+  width: min(32rem, calc(100vw - 2rem));
+  padding-top: 0;
+  /* A row the focus reaches stays clear of the header that sticks over the rows (WCAG 2.4.11). */
+  scroll-padding-top: 4.5rem;
+}
+
+.focus-subjects-editor .editor-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 0 0.5rem;
+  background: var(--bg);
+}
+
+.focus-subjects-editor .editor-header h2 {
+  margin: 0;
+}
+
+.focus-subjects-editor input[type='search'] {
+  width: 100%;
+}
+
+.subject-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.subject-rows li + li {
+  border-top: 1px solid var(--border);
+}
+
+.subject-rows label {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.375rem 0;
+}
+
+.subject-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.subject-kind,
+.subject-reach {
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+
+.subject-reach {
+  white-space: nowrap;
+}
+
 .lead-list,
 .history-rows,
 .session-log,
@@ -2717,6 +2793,17 @@ dialog.save-corpus .captured dd {
 .lead-context,
 .history-rows .caption,
 .session-log .caption {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+/* A lead's line, its document's opening text, to three lines, as the app's row shows it (S25c). */
+.lead-snippet {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
   color: var(--text-secondary);
   font-size: 0.875rem;
 }

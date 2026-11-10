@@ -140,29 +140,68 @@ import Testing
         }
     }
 
+    /// A visit to a document the index does not hold, as front matter is, or to any while no index is
+    /// served, is titled as the app's reader titles the document it parsed (S25c): the kit's display
+    /// title of the head `IndexingPipeline.extractHeader(from:)` reads from its TEI, its footnotes left
+    /// out, which is the header the index would store. One the index holds takes the index's head.
+    @Test func aVisitTheIndexCannotTitleTakesTheHeadOfItsParsedTEI() async throws {
+        let parsed = ["preface": "Preface", "d1": "1. Message From Chairman Khrushchev to President-elect Kennedy",
+                      "d3": "3. Message From Chairmen Khrushchev and Brezhnev to President Kennedy", "d20": "20. Editorial Note"]
+        for indexed in [true, false] {
+            let fixture = try await UserDataFixture(volumes: [Self.volume], indexed: indexed)
+            defer { withExtendedLifetime(fixture) {} }
+            let volume = try await fixture.server.reader.volume(Self.volume)
+            for (documentId, title) in parsed {
+                #expect(HistoryRoutes.parsedTitle(of: try #require(volume.documents[documentId])) == title, "\(documentId)'s parsed head")
+            }
+            try await fixture.app.test(.router) { client in
+                let owner = Browser(client: client)
+                for documentId in ["preface", "d3", "d20", "d1"] {
+                    let visit = try #require(try await Self.visit(owner, documentId).visit)
+                    // The synthetic export holds d1 under a head of its own, which the index's title takes.
+                    let expected = indexed && documentId == "d1" ? SyntheticExport.documents[0].header : parsed[documentId]
+                    #expect(visit.title == expected && visit.displayTitle == expected, "\(documentId), indexed \(indexed)")
+                }
+            }
+        }
+    }
+
+    /// The parsed head's two edges: an editorial note whose head only says what it is takes its printed
+    /// number, as the app's reader titles it ("Editorial Note 2"); and a document whose TEI has no head
+    /// and no note's shape takes the reader's label, as the app's takes the title it was opened with.
+    @Test func aVisitWithNoHeadToNameItTakesTheNoteNumberOrTheReadersLabel() async throws {
+        let fixture = try await UserDataFixture()
+        defer { withExtendedLifetime(fixture) {} }
+        let tei = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <TEI xmlns="http://www.tei-c.org/ns/1.0">
+              <teiHeader><fileDesc><titleStmt><title>Test</title></titleStmt></fileDesc></teiHeader>
+              <text><body>
+                <div type="document" xml:id="d1" n="1"><p>A document printed with no head.</p></div>
+                <div type="document" subtype="editorial-note" xml:id="d2" n="2"><head>Editorial Note<note n="1" xml:id="d2fn1">Its footnote.</note></head><p>A note.</p></div>
+              </body></text>
+            </TEI>
+            """
+        let directory = fixture.server.files.volumesDirectory
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data(tei.utf8).write(to: directory.appendingPathComponent("frus1894Nicaragua.xml"))
+        let volume = try await fixture.server.reader.volume("frus1894Nicaragua")
+        #expect(HistoryRoutes.parsedTitle(of: try #require(volume.documents["d1"])) == nil, "no head, no note")
+        #expect(HistoryRoutes.parsedTitle(of: try #require(volume.documents["d2"])) == "Editorial Note 2", "the head names nothing, its footnote left out")
+        try await fixture.app.test(.router) { client in
+            let owner = Browser(client: client)
+            let printed = try await Self.visit(owner, "d1", volume: "frus1894Nicaragua")
+            let note = try await Self.visit(owner, "d2", volume: "frus1894Nicaragua")
+            #expect(printed.visit?.title == "Document 1", "the reader's label")
+            #expect(note.visit?.title == "Editorial Note 2")
+        }
+    }
+
     /// A visit is recorded under the reader's title of its document, a search with what the server's
     /// run of it gives and the scope's signature the kit writes, each stamped with the project the user
     /// works in; a re-run of the anchored query, in either spelling of its quotation marks, refreshes
     /// its row, and another query adds one; a search with no words is skipped, and with Log Research
     /// Sessions off nothing is recorded.
-    /// A visit to a document the index does not hold, as front matter is, or to any while no index is
-    /// served, takes the title the reader gives it from its TEI, as the app's records the head it parsed.
-    @Test func aVisitTheIndexCannotTitleTakesTheReadersTitleFromItsTEI() async throws {
-        for indexed in [true, false] {
-            let fixture = try await UserDataFixture(volumes: [Self.volume], indexed: indexed)
-            defer { withExtendedLifetime(fixture) {} }
-            try await fixture.app.test(.router) { client in
-                let owner = Browser(client: client)
-                for documentId in ["preface", "d3", "d1"] {
-                    let detail = try decode(DocumentDetail.self,
-                                            try await owner.get("/api/v1/volumes/\(Self.volume)/documents/\(documentId)"))
-                    let visit = try #require(try await Self.visit(owner, documentId).visit)
-                    #expect(visit.title == detail.document.displayTitle && visit.displayTitle == detail.document.displayTitle,
-                            "\(documentId), indexed \(indexed): the reader's title")
-                }
-            }
-        }
-    }
 
     @Test func aVisitAndASearchAreRecordedAsTheAppRecordsThem() async throws {
         let fixture = try await UserDataFixture(indexed: true)
@@ -489,6 +528,7 @@ import Testing
             let byId: [(TestResponse, String)] = [
                 (try await bob.get("/api/v1/me/projects/\(grain.id)"), "PROJECT_NOT_FOUND"),
                 (try await bob.send(.patch, "/api/v1/me/projects/\(grain.id)", #"{"name": "Bob's"}"#), "PROJECT_NOT_FOUND"),
+                (try await bob.send(.patch, "/api/v1/me/projects/\(grain.id)", #"{"defaultSubjectTagIds": []}"#), "PROJECT_NOT_FOUND"),
                 (try await bob.send(.delete, "/api/v1/me/projects/\(grain.id)"), "PROJECT_NOT_FOUND"),
                 (try await bob.send(.post, "/api/v1/me/projects/\(grain.id)/merge", #"{"into": "\#(grain.id)"}"#), "PROJECT_NOT_FOUND"),
                 (try await bob.get("/api/v1/me/projects/\(grain.id)/home"), "PROJECT_NOT_FOUND"),
