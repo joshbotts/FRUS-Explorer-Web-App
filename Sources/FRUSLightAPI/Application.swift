@@ -20,6 +20,8 @@ struct ServerComponents: Sendable {
     /// its database service's.
     let serverLock: FileLock?
     let backups: UserStoreBackups?
+    /// The stored API keys, over the key file this start read or made (PLAN's S20c).
+    let secrets: SecretVault
     let jobs: InProcessJobQueue
     let indexWriter: LocalIndexWriter
     let imports: ImportCoordinator
@@ -40,6 +42,7 @@ struct ServerComponents: Sendable {
         let jobs = InProcessJobQueue()
         let writer = LocalIndexWriter(files: files)
         let (userStore, serverLock, backups) = try await openUserStore(configuration, files: files, logger: logger)
+        let secrets = try await openSecrets(configuration, files: files, store: userStore, logger: logger)
         return ServerComponents(
             files: files,
             state: state,
@@ -49,6 +52,7 @@ struct ServerComponents: Sendable {
             userStore: userStore,
             serverLock: serverLock,
             backups: backups,
+            secrets: secrets,
             jobs: jobs,
             indexWriter: writer,
             // An export made with the owner's writing has it kept in the user store (S16e); a server
@@ -119,6 +123,32 @@ struct ServerComponents: Sendable {
             return (store, nil, nil)
         }
     }
+
+    /// The stored API keys' vault (PLAN's S20c), over the key file `FRUS_SECRET_KEY_FILE` names or the
+    /// server's own beside app.db, which this start makes when there is none and the store holds no
+    /// stored key. A store whose stored keys the key file does not open, or whose key file is gone,
+    /// keeps the server from starting, with `SecretKeyProblem`'s sentence, which the install guide
+    /// gives: a new key file would leave every stored key unreadable, and say nothing. So does a
+    /// PostgreSQL store with no key file named, since every server that shares it would make its own.
+    /// The log names the file and its id, never the key.
+    private static func openSecrets(_ configuration: ServerConfiguration, files: DataDirectory, store: RelationalUserStore,
+                                    logger: Logger) async throws -> SecretVault {
+        let keyFile = configuration.secretKeyFile ?? files.secretKey
+        let named = configuration.secretKeyFile != nil
+        let shared = configuration.userStore != .sqlite
+        let (vault, origin, held) = try await Blocking.run {
+            let (vault, origin) = try SecretVault.open(store: store, keyFile: keyFile, named: named, shared: shared)
+            return (vault, origin, try store.secretCounts().values.reduce(0, +))
+        }
+        switch origin {
+        case .made:
+            logger.info("Made the key file \(keyFile.path) (id \(vault.key.id)), which stored API keys are sealed under. No backup holds it: keep a copy of it somewhere safe, apart from the backups, since no stored key can be read without it")
+        case .found:
+            let keys = held == 0 ? "the store holds none yet" : held == 1 ? "it opens the 1 the store holds" : "it opens the \(held) the store holds"
+            logger.info("Stored API keys are sealed under the key file \(keyFile.path) (id \(vault.key.id)): \(keys)")
+        }
+        return vault
+    }
 }
 
 /// The PostgreSQL user store could not be reached, or refused a statement, at start: named by its
@@ -165,7 +195,7 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
         router: buildRouter(state: components.state, resources: components.resources, reader: components.reader,
                             webClient: components.webClient,
                             userData: UserDataServices(store: components.userStore, configuration: configuration,
-                                                       jobs: components.jobs),
+                                                       secrets: components.secrets, jobs: components.jobs),
                             base: configuration.basePath, logger: logger),
         base: configuration.basePath,
         configuration: .init(address: .hostname(configuration.host, port: configuration.port), serverName: "frus-light"),

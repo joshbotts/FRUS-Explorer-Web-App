@@ -244,6 +244,9 @@ func decode<T: Decodable>(_ type: T.Type, _ response: TestResponse) throws -> T 
         defer { try? TestPostgreSQL.drop(schema) }
         var config = ServerConfiguration.testing(directory.url.appendingPathComponent("data"))
         config.userStore = .postgreSQL(try TestPostgreSQL.configuration(schema: schema))
+        // Every server that shares the store names one key file for the stored keys (S20c).
+        config.secretKeyFile = directory.url.appendingPathComponent("frus_secret_key")
+        try Data(repeating: 7, count: 32).write(to: try #require(config.secretKeyFile))
         let app = try await buildApplication(configuration: config)
         try await app.test(.router) { client in
             let browser = Browser(client: client)

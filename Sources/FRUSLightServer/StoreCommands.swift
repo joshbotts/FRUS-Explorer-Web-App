@@ -74,11 +74,40 @@ enum StoreCommands {
                 ? " The next start migrates it from \(report.migration) to \(UserStoreMigrations.all.count), after a copy of it."
                 : ""
             print("Restored \(source.path), at migration \(report.migration), as \(files.userStore.path).\(next) Start the server again: docker compose start frus")
+            if let (line, isProblem) = keyFileLine(for: report.secrets, configuration, files: files) {
+                if isProblem { printError(line) } else { print(line) }
+            }
             return 0
         } catch let refusal as UserStoreRestore.Refusal {
             return fail("nothing was restored: \(refusal)")
         } catch {
             return fail("nothing was restored: \(error)")
+        }
+    }
+
+    /// What a restore says of the stored API keys the backup carries (PLAN's S20c), since no backup holds
+    /// a key file: that the key file in place opens them, or, as a problem, that it is another or is not
+    /// there, so that the server will not start until the one they were sealed under is. Nil when the
+    /// backup carries none.
+    static func keyFileLine(for secrets: BackupManifest.Secrets?, _ configuration: ServerConfiguration,
+                            files: DataDirectory) -> (line: String, isProblem: Bool)? {
+        guard let secrets, secrets.rows > 0 else { return nil }
+        let keyFile = configuration.secretKeyFile ?? files.secretKey
+        let held = secrets.rows == 1 ? "1 stored key" : "\(secrets.rows) stored keys"
+        func ids(_ list: [String]) -> String { (list.count == 1 ? "the key file with id " : "the key files with ids ") + list.joined(separator: ", ") }
+        let putItBack = "No backup holds a key file: put the one they were sealed under there before you start the server, which does not start without it"
+        switch Result(catching: { try SecretKeyFile.key(at: keyFile) }) {
+        case .success(let key?):
+            let others = secrets.keyIds.filter { $0 != key.id }
+            if others.isEmpty { return ("It carries \(held), which the key file \(keyFile.path) opens.", false) }
+            let which = secrets.keyIds.contains(key.id)
+                ? "It carries \(held): the key file \(keyFile.path), id \(key.id), opens those sealed under it, and not those sealed under \(ids(others))."
+                : "It carries \(held), sealed under \(ids(others)), and \(keyFile.path) is another, id \(key.id)."
+            return ("\(which) \(putItBack), or forget those it does not open with \(SecretKeyProblem.forget).", true)
+        case .success(nil):
+            return ("It carries \(held), sealed under \(ids(secrets.keyIds)), and there is no key file at \(keyFile.path). \(putItBack), or forget them all with \(SecretKeyProblem.forgetAll).", true)
+        case .failure(let error):
+            return ("It carries \(held), sealed under \(ids(secrets.keyIds)), and \(error)", true)
         }
     }
 

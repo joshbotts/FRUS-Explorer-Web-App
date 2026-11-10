@@ -43,6 +43,7 @@ describe('Settings ▸ Data', () => {
       ['Research Sessions', null],
       ['Reading', null],
       ['Data', 'page'],
+      ['Keys', null],
     ]);
     const download = await screen.findByRole('link', { name: 'Export Notes as Markdown (1,204)' });
     expect(download.getAttribute('href')).toBe('/api/v1/me/notes/export');

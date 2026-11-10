@@ -43,6 +43,7 @@ import { CollectionsScreen } from './collections/CollectionsScreen';
 import { LookupScreen } from './lookup/LookupScreen';
 // ─── Settings ───────────────────────────────────────────────────────────────
 import { DataSettingsScreen } from './settings/DataSettings';
+import { KeysSettingsScreen } from './settings/KeysSettings';
 import { ProjectsSettingsScreen } from './settings/ProjectsSettings';
 import { ReadingSettingsScreen } from './settings/ReadingSettings';
 import { SessionLogScreen, SessionsSettingsScreen } from './settings/SessionsSettings';
@@ -261,6 +262,13 @@ const settingsDataRoute = createRoute({
   component: DataSettingsScreen,
 });
 
+// From S20c: Keys, the user's stored NARA Catalog and Zotero keys.
+const settingsKeysRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings/keys',
+  component: KeysSettingsScreen,
+});
+
 // From S17f: Projects, Research Sessions with its Session Log, and Reading.
 const settingsProjectsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -321,6 +329,7 @@ export const routeTree = rootRoute.addChildren([
   settingsRoute,
   settingsTagsRoute,
   settingsDataRoute,
+  settingsKeysRoute,
   settingsProjectsRoute,
   settingsSessionsRoute,
   settingsSessionLogRoute,

@@ -85,8 +85,8 @@ struct PostgreSQLUserStoreTests {
 
             let store = try await Self.open(configuration, in: directory)
             defer { store.close() }
-            #expect(store.migration == UserStoreMigration(from: 1, to: 4, backup: nil), "its backups are the database service's")
-            #expect(try store.schemaVersion() == 4 && store.user("owner")?.displayName == "Owner")
+            #expect(store.migration == UserStoreMigration(from: 1, to: 5, backup: nil), "its backups are the database service's")
+            #expect(try store.schemaVersion() == 5 && store.user("owner")?.displayName == "Owner")
             let corrections = try store.classificationOverrides()
             #expect(corrections.count == 1)
             #expect(corrections.first?.isEditorialNote == true && corrections.first?.parsedIsEditorialNote == false)
@@ -106,11 +106,11 @@ struct PostgreSQLUserStoreTests {
                 _ = try await Self.open(configuration, in: directory, migrations: PostgreSQLMigrations.all + [failing])
             } throws: { error in
                 guard case .postgreSQLMigrationFailed(let leftAt, let to, _) = error as? UserStoreOpenError else { return false }
-                return leftAt == 4 && to == 5 && "\(error)".contains("left at 4")
+                return leftAt == 5 && to == 6 && "\(error)".contains("left at 5")
             }
             let store = try await Self.open(configuration, in: directory)
             defer { store.close() }
-            #expect(try store.schemaVersion() == 4 && store.migration == nil)
+            #expect(try store.schemaVersion() == 5 && store.migration == nil)
             let db = try PostgreSQLConnection.connect(configuration)
             defer { db.close() }
             #expect(try db.scalar("SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'later'", [])
@@ -126,7 +126,7 @@ struct PostgreSQLUserStoreTests {
                 _ = try await Self.open(configuration, in: directory)
             } throws: { error in
                 guard case .postgreSQLNewerThanThisBuild(let store, let build) = error as? UserStoreOpenError else { return false }
-                return store == 5 && build == 4
+                return store == 6 && build == 5
             }
         }
     }

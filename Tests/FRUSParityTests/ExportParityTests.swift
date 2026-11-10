@@ -197,6 +197,7 @@ import Testing
         "users": "the accounts the server acts for, S2's and S14e's",
         "schema_migrations": "the store's own record of its migrations",
         "sessions": "the browsers signed in with local accounts (S20b), by their tokens' hashes",
+        "secrets": "the stored API keys (S20c), each sealed under the server's key file, which no export carries",
         "user_search": "made again from the notes and summaries by every write and import (S15d, S16c), with FTS5's own tables",
     ]
 

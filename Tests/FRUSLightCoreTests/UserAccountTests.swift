@@ -85,7 +85,7 @@ import Testing
         _ = try old.signedInUser("reader@example.org", at: Self.created)
         let tag = try old.createTag(named: "Kept", for: "reader@example.org", at: Self.created)
 
-        let store = try await UserStoreTests.open(directory)
+        let store = try await UserStoreTests.open(directory, migrations: Array(UserStoreMigrations.all.prefix(4)))
         #expect(try store.schemaVersion() == 4)
         let backup = try #require(store.migration?.backup)
         #expect(store.migration == UserStoreMigration(from: 3, to: 4, backup: backup))
@@ -288,7 +288,8 @@ struct PostgreSQLAccountMigrationTests {
             let tag = try old.createTag(named: "Kept", for: "reader@example.org", at: UserAccountTests.created)
             old.close()
 
-            let store = try await PostgreSQLUserStoreTests.open(configuration, in: directory)
+            let store = try await PostgreSQLUserStoreTests.open(configuration, in: directory,
+                                                                 migrations: Array(PostgreSQLMigrations.all.prefix(4)))
             defer { store.close() }
             #expect(store.migration == UserStoreMigration(from: 3, to: 4, backup: nil))
             #expect(try store.schemaVersion() == 4)

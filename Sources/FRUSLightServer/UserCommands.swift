@@ -44,8 +44,8 @@ enum UserCommands {
         }
     }
 
-    /// A command's failure, said in a sentence.
-    private struct Failure: Error {
+    /// A command's failure, said in a sentence. `SecretCommands` (S20c) reads it too.
+    struct Failure: Error {
         let message: String
         var status: Int32 = 1
     }
@@ -186,15 +186,23 @@ enum UserCommands {
     /// Opens the store `FRUS_USER_STORE` names, migrated to this build's schema, for `body`: app.db under
     /// the server's lock, held shared as a server holds it, so that no restore replaces the store while
     /// a command writes; or the PostgreSQL store, with a search copy of the command's own, which it
-    /// removes, so that a running server's is left as it is.
-    private static func withStore(_ configuration: ServerConfiguration,
-                                  _ body: @escaping @Sendable (RelationalUserStore) throws -> Void) async throws {
+    /// removes, so that a running server's is left as it is. `SecretCommands` (S20c) opens it here too,
+    /// `exclusive`: app.db's lock held as a restore holds it, so that the command runs only with the
+    /// server stopped.
+    static func withStore(_ configuration: ServerConfiguration, exclusive: Bool = false,
+                          _ body: @escaping @Sendable (RelationalUserStore) throws -> Void) async throws {
         let files = DataDirectory(root: configuration.dataDirectory)
         try files.prepare()
         switch configuration.userStore {
         case .sqlite:
             let lock = try FileLock(files.serverLock)
-            guard try lock.lock(.shared, wait: false) else { throw Failure(message: "a restore of app.db is under way") }
+            if exclusive {
+                guard try lock.lock(.exclusive, wait: false) else {
+                    throw Failure(message: "the server is running, and holds app.db: stop it first, with docker compose stop frus")
+                }
+            } else {
+                guard try lock.lock(.shared, wait: false) else { throw Failure(message: "a restore of app.db is under way") }
+            }
             defer { lock.unlock() }
             let store = try await SQLiteUserStore(url: files.userStore, backupsDirectory: files.backupsDirectory)
             try await Blocking.run { try body(store) }

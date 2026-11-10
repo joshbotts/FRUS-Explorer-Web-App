@@ -90,7 +90,7 @@ cleanup() {
       COMPOSE_PROFILES=pdf docker compose logs --no-color pdf 2>&1 | tail -40 || true
     fi
   fi
-  docker rm -f "$proxy" "$COMPOSE_PROJECT_NAME-tmp-volume" "$COMPOSE_PROJECT_NAME-tmp-tmp" >/dev/null 2>&1 || true
+  docker rm -f "$proxy" "$COMPOSE_PROJECT_NAME-tmp-volume" "$COMPOSE_PROJECT_NAME-tmp-tmp" "$COMPOSE_PROJECT_NAME-keyless" >/dev/null 2>&1 || true
   docker volume rm "$COMPOSE_PROJECT_NAME-tmp-volume" "$COMPOSE_PROJECT_NAME-tmp-tmp" >/dev/null 2>&1 || true
   # With the pdf profile, whether or not a step started it, so that its container and network go too.
   COMPOSE_PROFILES=pdf docker compose down --volumes --remove-orphans >/dev/null 2>&1 || true
@@ -480,6 +480,96 @@ for _ in $(seq 1 120); do
 done
 [ "$state" = succeeded ] || fail "the import through nginx ended $state"
 echo "   $(wc -c < "$work/import.json" | tr -d ' ') bytes, accepted and imported"
+
+echo "== settings: stored keys, sealed under the key file the server made, and a start without it refused"
+# PLAN's S20c: the user's NARA key and the instance's, set through the write guard and named as set,
+# never given back; the key file the first start made, the server's user's alone; no key as it was
+# given in the volume, the log or the backup's archive, whose manifest lists the table and holds no key
+# file; a start whose key file is gone refused with the install guide's sentence, none made in its
+# place, and a start with it back. The instance's key stays, for the backup and restore after this.
+keys="$under/api/v1/me/secrets"
+me=$(curl -s --max-time 5 "${as_app[@]}" "$under/api/v1/me") || fail "/api/v1/me did not answer under the path"
+token=$(printf '%s' "$me" | sed -nE 's/.*"csrfToken":"([0-9a-f]+)".*/\1/p')
+[ -n "$token" ] || fail "/api/v1/me gave no token: $me"
+secret="smoke-key-$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')"
+key_states() {  # $1: GET /api/v1/me/secrets's answer. Prints each key's name and whether it is set, then the instance's.
+  python3 -c 'import json, sys
+d = json.loads(sys.argv[1])
+print(" ".join("%s=%s" % (s["name"], "set" if s["set"] else "unset") for s in d["secrets"]), "instance=" + ",".join(d.get("instance") or []))' "$1"
+}
+put_key() {  # $1: the route; $2: the key; the rest: curl's arguments. Prints the answer and its status.
+  local route=$1 value=$2
+  shift 2
+  curl -s --max-time 5 -X PUT -H 'Content-Type: application/json' --data "{\"value\":\"$value\"}" "$@" -w ' %{http_code}' "$route" || true
+}
+listed=$(curl -s --max-time 5 "${as_app[@]}" "$keys") || fail "/api/v1/me/secrets did not answer"
+[ "$(key_states "$listed")" = "nara=unset zotero=unset instance=" ] || fail "a new store lists keys: $listed"
+case "$(put_key "$keys/nara" "$secret" "${as_app[@]}")" in *'"code":"CSRF_TOKEN_INVALID"'*' 403') ;; *) fail "a key was taken without the token" ;; esac
+case "$(put_key "$keys/nara" "$secret" -H "Host: localhost:8080" -H "Origin: https://attacker.example" -H "X-CSRF-Token: $token")" in
+  *'"code":"ORIGIN_NOT_ALLOWED"'*' 403') ;; *) fail "a key was taken from another origin" ;; esac
+user_put=$(put_key "$keys/nara" "$secret" "${as_app[@]}" -H "X-CSRF-Token: $token")
+case "$user_put" in *'"set":true'*' 200') ;; *) fail "setting the key answered $user_put" ;; esac
+instance_put=$(put_key "$under/api/v1/admin/secrets/nara" "$secret-instance" "${as_app[@]}" -H "X-CSRF-Token: $token")
+case "$instance_put" in *'"set":true'*' 200') ;; *) fail "setting the instance's key answered $instance_put" ;; esac
+listed=$(curl -s --max-time 5 "${as_app[@]}" "$keys") || fail "/api/v1/me/secrets did not answer"
+[ "$(key_states "$listed")" = "nara=set zotero=unset instance=nara" ] || fail "the keys set are listed as $listed"
+shared=$(curl -s --max-time 5 "${as_app[@]}" "$under/api/v1/admin/secrets") || fail "/api/v1/admin/secrets did not answer"
+[ "$(key_states "$shared")" = "nara=set instance=" ] || fail "the instance's keys are listed as $shared"
+case "$user_put $instance_put $listed $shared" in *"$secret"*) fail "an answer gave a key back" ;; esac
+facts=$(docker exec "$container" stat -c '%a %u %s' /data/app/secret.key) || fail "the server made no key file"
+[ "$facts" = "600 10001 32" ] || fail "the key file is mode, owner and size $facts, not 600 10001 32"
+# grep's 1 is no match; 0 a match, and anything else a search that could not be made.
+found=0
+docker exec "$container" grep -rqF "$secret" /data/app /data/backups || found=$?
+[ "$found" = 1 ] || fail "the store or its backups hold a key as it was given, or could not be searched (grep's status $found)"
+case "$(docker compose logs --no-color frus 2>&1)" in *"$secret"*) fail "the server's log holds a key" ;; esac
+docker compose exec -T frus frus-light backup >/dev/null || fail "frus-light backup failed"
+answer=$(curl -s --max-time 30 -H "Host: localhost:8080" -o "$work/keys.tar" -w '%{http_code}' "$under/api/v1/admin/backup" || true)
+[ "$answer" = 200 ] || fail "GET /api/v1/admin/backup answered $answer"
+docker exec "$container" cat /data/app/secret.key > "$work/secret.key" || fail "the key file could not be read"
+python3 - "$work/keys.tar" "$work/secret.key" "$secret" <<'PY' || fail "the backup's archive does not carry the keys as it should"
+import json, sys, tarfile
+archive, key, secret = open(sys.argv[1], 'rb').read(), open(sys.argv[2], 'rb').read(), sys.argv[3].encode()
+with tarfile.open(sys.argv[1]) as tar:
+    names = tar.getnames()
+    manifest = json.load(tar.extractfile('manifest.json'))
+assert names[0] == 'manifest.json' and len(names) == 2 and names[1].startswith('app-'), names
+carried = manifest['secrets']
+assert carried['table'] == 'secrets' and carried['rows'] == 2 and len(carried['keyIds']) == 1, carried
+assert carried['keyFileIncluded'] is False, carried
+assert key not in archive, 'the archive holds the key file'
+assert secret not in archive, 'the archive holds a key as it was given'
+PY
+docker exec "$container" mv /data/app/secret.key /data/app/secret.key.kept || fail "the key file could not be moved"
+# A second server over the same volume, in a container of its own, which must stop at once: it is given a
+# minute, since one that started would never stop, and is removed either way.
+keyless="$COMPOSE_PROJECT_NAME-keyless"
+docker compose run -d --no-deps --name "$keyless" frus >/dev/null 2>&1 || fail "a server without its key file could not be run"
+state=""
+for _ in $(seq 1 120); do
+  state=$(docker inspect --format '{{.State.Status}} {{.State.ExitCode}}' "$keyless" 2>/dev/null || true)
+  case "$state" in exited*) break ;; esac
+  sleep 0.5
+done
+docker logs "$keyless" > "$work/keyless.txt" 2>&1 || true
+docker rm -f "$keyless" >/dev/null 2>&1 || true
+case "$state" in exited\ 0|exited) fail "a server without its key file exited with $state" ;; exited*) ;;
+  *) fail "a server without its key file did not stop: $state; $(tail -3 "$work/keyless.txt")" ;; esac
+grep -qF "frus-light: the user store holds 2 stored keys, and the key file that opens them, /data/app/secret.key, is missing." "$work/keyless.txt" \
+  || fail "a start without its key file said: $(tail -3 "$work/keyless.txt")"
+if docker exec "$container" test -e /data/app/secret.key; then fail "a start without its key file made one"; fi
+docker exec "$container" mv /data/app/secret.key.kept /data/app/secret.key || fail "the key file could not be put back"
+docker compose restart frus >/dev/null 2>&1 || fail "the server could not be restarted"
+wait_for_200 "$base/readyz" 60 || fail "/readyz did not reach 200 with the key file back"
+# A new process, with a new token.
+me=$(curl -s --max-time 5 "${as_app[@]}" "$under/api/v1/me" || true)
+token=$(printf '%s' "$me" | sed -nE 's/.*"csrfToken":"([0-9a-f]+)".*/\1/p')
+[ -n "$token" ] || fail "/api/v1/me gave no token after the restart: $me"
+code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' -X DELETE "${as_app[@]}" -H "X-CSRF-Token: $token" "$keys/nara" || true)
+[ "$code" = 204 ] || fail "clearing the key answered $code"
+listed=$(curl -s --max-time 5 "${as_app[@]}" "$keys") || fail "/api/v1/me/secrets did not answer"
+[ "$(key_states "$listed")" = "nara=unset zotero=unset instance=nara" ] || fail "the key cleared is listed as $listed"
+echo "   set and named as set, never given back; the key file 0600, the server's alone; the archive's manifest lists the table, with no key file; a start without it refused, and one with it back"
 
 echo "== admin: an export made with the owner's writing (PLAN's S16e)"
 # The server keeps the writing in the user's store, strips its copy with the kit's statements, with

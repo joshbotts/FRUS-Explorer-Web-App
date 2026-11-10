@@ -14,6 +14,8 @@ enum AdminRoutes {
     static func add(to router: Router<APIRequestContext>, services: UserDataServices) {
         let admin = router.group("/api/v1/admin").add(middleware: UserDataGuard(services: services))
         let (directory, copyDirectory) = (services.backupsDirectory, services.backupCopyDirectory)
+        // The instance's stored keys (PLAN's S20c), an admin's too.
+        SecretRoutes.addInstance(to: admin, services: services)
 
         admin.get("backup") { request, context -> Response in
             try FormQuery(request.uri.query).refuseUnknown([])
