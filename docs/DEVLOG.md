@@ -149,7 +149,7 @@ Phase 3's row S23a, the third pull request of the first upstream batch, beside S
 
 ## Session 25c: Project Home's focus subjects and a lead's line
 
-10 November 2026 · branch `claude/s25c-project-home-focus-subjects-e1e80d` · [#PRNUMBER](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/PRNUMBER) · upstream `fe9325b2`, unchanged
+10 November 2026 · branch `claude/s25c-project-home-focus-subjects-e1e80d` · [#108](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/108) · upstream `fe9325b2`, unchanged
 
 Phase 3's features-track row of wave 2, phase 2's follow-up to S17f, beside S20c, S21b, S22b and S23b, with no upstream pull request, no pin move and no migration: Project Home's focus subjects with their editor, a lead's line under Suggested Next, and a visit's head, each over the kit code FRUS-Explorer#1813 made public at `fb542514`. The row ran across the owner's resumption of 10 November and a stop at the usage limit; the Mac restarted meanwhile, and the session went on, on Opus, from its state note.
 
@@ -200,7 +200,7 @@ Phase 3's features-track row of wave 2, phase 2's follow-up to S17f, beside S20c
 
 - **Linux, `swift:6.4-noble`, arm64,** `scripts/swift test` under the heavy lock, over a build folder cloned from another worktree at the pin, this package's own targets rebuilt: 2,772 tests, all passing, seven of them new. The nine skips are the Linux backup attribute's and the PostgreSQL store's eight, which need `--postgres`; no store method changed, and CI's swift job runs them. The build gives no warning.
 - **The browser app:** typecheck, lint and build pass; the unit suite, 504 tests in 52 files.
-- **The image and the smoke test:** SMOKERESULT
+- **The image and the smoke test:** `scripts/compose-smoke --e2e`, with this branch's image as `frus-light:s25c` on port 18160, under the heavy lock, passed every step. The browser suite ran 73 specs at the root and 73 under the path, where `main` has 72, `focus-subjects.spec.ts` among them, and the accounts and sign-in specs.
 
 **Two cold reviews,** subagents given the diff, the row and the app's source, and none of this session's reasoning, one for the server and one for the browser app.
 - The server's found nothing serious. One finding is fixed: a visit to a document with no head went untitled, where the app keeps the title it was opened with; it takes the reader's label now, with a test. It also left these:
