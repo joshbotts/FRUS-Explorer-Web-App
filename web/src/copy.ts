@@ -980,8 +980,10 @@ export const copy = {
     loading: 'Loading the notes…',
   },
   /**
-   * Project Home, in the words of the app's view. What Suggested Next says of the Mac's leads, which the
-   * web keeps but cannot compute until Related Documents, is the web's own.
+   * Project Home, in the words of the app's view, and of its focus subjects' editor (S25c). What
+   * Suggested Next says of the Mac's leads, which the web keeps but cannot compute until Related
+   * Documents, is the web's own, and so are the editor's line while its subjects load and what it
+   * says, for a screen reader, of a subject added or removed.
    */
   projectHome: {
     title: 'Project Home',
@@ -994,6 +996,26 @@ export const copy = {
     statNotes: 'Notes',
     statVisited: 'Documents Visited',
     statSearches: 'Searches Run',
+    focusSubjects: 'Focus subjects',
+    focusSubjectsAdd: 'Add',
+    focusSubjectsEdit: 'Edit',
+    focusSubjectsEmpty: 'Choose subjects to focus discovery on the volumes they define.',
+    focusSubjectsTitle: 'Focus Subjects',
+    focusSubjectsDone: 'Done',
+    focusSubjectsUnavailableTitle: 'Subjects Unavailable',
+    focusSubjectsUnavailable: 'The subject index could not be loaded.',
+    focusSubjectsLoading: 'Loading subjects…',
+    focusSubjectsSearch: 'Search subjects',
+    focusSubjectsSelected: 'Focus subjects',
+    focusSubjectsSuggested: 'Suggested from your volumes',
+    focusSubjectsSuggestedDetail:
+      'Subjects that recur across the volumes you’ve already collected, annotated, or opened in this project.',
+    focusSubjectsAll: 'All subjects',
+    focusSubjectsNoMatches: 'No subjects match.',
+    volumeCountOne: '1 volume',
+    volumeCountOther: (count: number) => `${count.toLocaleString('en-US')} volumes`,
+    focusSubjectAdded: (name: string) => `${name} added to Focus subjects`,
+    focusSubjectRemoved: (name: string) => `${name} removed from Focus subjects`,
     focusTags: 'Focus tags',
     focusAdd: 'Add',
     focusEdit: 'Edit',

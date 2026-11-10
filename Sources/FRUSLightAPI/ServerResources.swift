@@ -30,6 +30,8 @@ public final class ServerResources: Sendable {
     private let archival = ArchivalIndexFiles()
     /// The editors' annotations, `volume-annotations-index.json`, decoded on first use (Annotations.swift).
     private let annotations = VolumeAnnotationsFile()
+    /// The subject vocabulary, `volume-subject-profiles-index.json`, decoded on first use (ProjectFocus.swift).
+    private let subjects = SubjectProfilesFile()
 
     /// The files the server cannot start without: those it reads here, and the five
     /// `IndexingResources` requires.
@@ -90,6 +92,11 @@ public final class ServerResources: Sendable {
     /// `VolumeAnnotationsStore.shared`, app code: the editors' annotations, decoded once by the kit's
     /// `VolumeAnnotationsIndex`, with each layer's reach; nil for a file missing or malformed.
     var volumeAnnotations: VolumeAnnotationsData? { annotations.data(in: directory) }
+
+    /// `VolumeSubjectProfilesStore.shared`, app code: the subjects a project's focus is chosen from,
+    /// decoded once by the kit's `VolumeSubjectProfiles`; or why the server has none, for a file
+    /// missing or malformed, as the app has none, and for one that names a subject twice.
+    var subjectProfiles: SubjectProfilesFile.Read { subjects.read(in: directory) }
 }
 
 /// The archival indexes, decoded the first time a collection asks for them: 4.5 MB of JSON that a

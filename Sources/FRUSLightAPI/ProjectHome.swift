@@ -2,10 +2,11 @@
 // the project it shows. Its activity summary and recent feeds are the app's `ProjectHomeSummary` over
 // the project's notes, collections, visits and searches, mirrored; its coverage tiles are the kit's
 // engagement rules (`DocumentEngagementService.gather(among:forProject:)` and `partition`) over the
-// corpora the project searched inside, in the kit's words; its focus tags are the user's tags it
-// chose; and Suggested Next is the leads the Mac computed, which Dismiss keeps from surfacing again,
-// until phase 3's Related Documents computes them here. Focus subjects wait for the kit's subject
-// profiles, which are internal to it, and the leads' snippets for its `documentSnippets(forKeys:)`.
+// corpora the project searched inside, in the kit's words; its focus subjects are the subjects of the
+// kit's vocabulary it chose, with those their editor suggests (ProjectFocus.swift, PLAN's S25c); its
+// focus tags are the user's tags it chose; and Suggested Next is the leads the Mac computed, which
+// Dismiss keeps from surfacing again, until phase 3's Related Documents computes them here, each with
+// the line the kit reads for it from the served index (`documentSnippets(forKeys:maxLength:)`, S25c).
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -22,6 +23,12 @@ public struct ProjectHome: Codable, Equatable, Sendable, ResponseEncodable {
     public var counts: Counts
     /// A coverage tile for each corpus a search run under it ran inside, by the corpus's name.
     public var coverage: [Coverage]
+    /// Its focus subjects (S25c): the vocabulary's subjects it chose, in the vocabulary's order. Absent
+    /// on a server with no vocabulary, where the section is left out, as the Mac's is.
+    public var focusSubjects: [FocusSubject]?
+    /// "Suggested from your volumes", for the focus subjects' editor: the kit's suggestions over the
+    /// volumes the project engages, the subjects it chose left out. Absent with `focusSubjects`.
+    public var focusSuggestions: [FocusSubject]?
     /// Whether the user has any tag, which the focus tags section waits for, as the Mac's does.
     public var hasTags: Bool
     /// Its focus tags, the user's tags it chose, by name.
@@ -80,6 +87,10 @@ public struct ProjectHome: Codable, Equatable, Sendable, ResponseEncodable {
         public var relatedCount: Int
         /// Whether its document is an editorial note, the user's corrections applied.
         public var isEditorialNote: Bool
+        /// The line under it (S25c): its document's text in the served index, from its head on, cut at
+        /// a word within 240 characters, as the kit reads it. Absent while no index is served, and for
+        /// a document the index does not hold or holds no text of.
+        public var snippet: String?
     }
 
     public struct RecentVisit: Codable, Equatable, Sendable {
@@ -107,7 +118,8 @@ enum ProjectHomeRoutes {
     static let tables: Set<String> = ["projects", "notes", "highlights", "collections", "collection_entries", "trail_reading",
                                       "trail_search", "project_leads", "working_corpora", "classification_overrides"]
 
-    static func add(to me: RouterGroup<APIRequestContext>, services: UserDataServices, resources: ServerResources) {
+    static func add(to me: RouterGroup<APIRequestContext>, services: UserDataServices, resources: ServerResources,
+                    provider: ServedIndexProvider) {
         let store = services.store
         let now = services.now
 
@@ -124,13 +136,16 @@ enum ProjectHomeRoutes {
                 throw ProjectRoutes.notFound(id)
             }
             let logging = try preferences.map { try PreferenceRoutes.read($0).researchLoggingEnabled } ?? true
+            var answer: ProjectHome
             do {
-                return try home(project, rows: rows, tags: tags, logging: logging, now: now(),
-                                resources: resources,
-                                isActive: active.map(UserSearchText.uuidString) == project.id.uuidString)
+                answer = try home(project, rows: rows, tags: tags, logging: logging, now: now(),
+                                  resources: resources,
+                                  isActive: active.map(UserSearchText.uuidString) == project.id.uuidString)
             } catch let error as ResearchExportError {
                 throw APIProblem(.internalServerError, code: "STORE_DAMAGED", detail: "Project Home could not be read: \(error.description)")
             }
+            answer.leads = await withLines(answer.leads, provider: provider)
+            return answer
         }
         // Suggested Next's ×: the lead stays dismissed, so it does not surface again.
         me.post("projects/:projectId/leads/:leadId/dismiss") { request, context -> Response in
@@ -154,6 +169,23 @@ enum ProjectHomeRoutes {
     static var leadsTable: UserStoreSchema.Table {
         guard let table = UserStoreSchema.table(for: "ProjectLeadEntry") else { preconditionFailure("UserStoreSchema has no project_leads") }
         return table
+    }
+
+    /// `leads` with the line under each (`ProjectHomeView.loadLeadSnippets()`): the kit's snippets of
+    /// the served index for the leads shown, read at once by their keys. None while no index is
+    /// served; and none when the read fails, as the app's rows then draw as they did without a line.
+    /// The kit prefers the summary the index's own `summary_text` holds, which the served copy never
+    /// holds, so each line is its document's text.
+    static func withLines(_ leads: [ProjectHome.Lead], provider: ServedIndexProvider) async -> [ProjectHome.Lead] {
+        guard !leads.isEmpty, let served = try? await provider.servedIfReady() else { return leads }
+        let keys = leads.map { (volumeId: $0.volumeId, documentId: $0.documentId) }
+        let lines = (try? await served.pipeline.documentSnippets(forKeys: keys)) ?? [:]
+        return leads.map { lead in
+            var lead = lead
+            // The row draws a line only when it has one (`if let snippet = leadSnippets[lead.documentKey], !snippet.isEmpty`).
+            if let line = lines[ProjectFocusRoutes.key(lead.volumeId, lead.documentId)], !line.isEmpty { lead.snippet = line }
+            return lead
+        }
     }
 
     /// Project Home for `project` over the user's `rows`, as the app's view computes it.
@@ -213,6 +245,17 @@ enum ProjectHomeRoutes {
             }
         }
 
+        // The focus subjects, where the server has their vocabulary: those the project chose, and those
+        // their editor suggests, from the volumes of what is filed under the project and read in it.
+        var focusSubjects: [FocusSubject]?
+        var focusSuggestions: [FocusSubject]?
+        if let profiles = resources.subjectProfiles.profiles {
+            let engaged = ProjectFocusRoutes.engagedKeys(collections: summary.collections, notes: summary.notes, visits: summary.visits)
+            focusSubjects = ProjectFocusRoutes.chosenSubjects(project.defaultSubjectTagIds, in: profiles)
+            focusSuggestions = ProjectFocusRoutes.suggestedSubjects(engagedVolumeIds: ProjectFocusRoutes.engagedVolumeIds(engaged),
+                                                                    excluding: project.defaultSubjectTagIds, in: profiles)
+        }
+
         // The focus tags, in the tag list's order, which is by name.
         let chosen = Set((project.defaultUserTagIds ?? []).map(\.uuidString))
         let focusTags = tags.filter { chosen.contains(UserSearchText.uuidString($0.id)) }
@@ -238,7 +281,8 @@ enum ProjectHomeRoutes {
             project: Project(project), isActive: isActive,
             counts: .init(collections: summary.collections.count, notes: summary.notes.count,
                           documentsVisited: summary.documentsVisitedCount, searches: summary.searches.count),
-            coverage: coverage, hasTags: !tags.isEmpty, focusTags: focusTags, leads: shownLeads,
+            coverage: coverage, focusSubjects: focusSubjects, focusSuggestions: focusSuggestions,
+            hasTags: !tags.isEmpty, focusTags: focusTags, leads: shownLeads,
             recentVisits: summary.recentVisits.map { visit in
                 ProjectHome.RecentVisit(volumeId: visit.volumeId, documentId: visit.documentId,
                                         title: ReadingHistoryTitle.label(stored: visit.displayTitle,

@@ -3,8 +3,9 @@
 // it; New Project, the editor's Save and Delete Project, as `ProjectEditorView` and
 // `ProjectAdminService` make and change them; Merge into…; the project each user works in, the web's
 // own, which the Mac keeps on each device (`AppState.activeProjectId`); and Project Home
-// (`ProjectHome.swift`), with Suggested Next's Dismiss. A project is written as the import writes a
-// Mac's record (`MacImport.project`) and read as the export reads one (`ResearchExport.project`).
+// (`ProjectHome.swift`), with Suggested Next's Dismiss, and, since S25c, its focus subjects
+// (`ProjectFocus.swift`). A project is written as the import writes a Mac's record
+// (`MacImport.project`) and read as the export reads one (`ResearchExport.project`).
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -23,7 +24,7 @@ public struct Project: Codable, Equatable, Sendable, ResponseEncodable {
     public var defaultDateRangeStart: String?
     public var defaultDateRangeEnd: String?
     /// Its focus subjects, the refs of the bundled subject profiles' vocabulary, as an import brings
-    /// them (`defaultSubjectTagIds`, which #377 reuses for them).
+    /// them and Project Home's editor sets them (`defaultSubjectTagIds`, which #377 reuses for them).
     public var defaultSubjectTagIds: [String]
     /// Its focus tags, the ids of the user's tags whose documents anchor its Suggested Next.
     public var defaultUserTagIds: [String]
@@ -73,11 +74,12 @@ enum ProjectRoutes {
     }
 
     /// The editor's fields and Project Home's, each changed only when given: the name and the research
-    /// question as the editor's Save writes them, and the focus tags as `ProjectFocusTagsEditor` sets
-    /// them.
+    /// question as the editor's Save writes them, the focus subjects as `ProjectFocusSubjectsEditor`
+    /// sets them, the whole list at once, and the focus tags as `ProjectFocusTagsEditor` sets them.
     struct Change: Decodable {
         let name: String?
         let researchQuestion: String?
+        let defaultSubjectTagIds: [String]?
         let defaultUserTagIds: [String]?
     }
 
@@ -85,7 +87,8 @@ enum ProjectRoutes {
 
     struct Active: Decodable { let projectId: String? }
 
-    static func add(to me: RouterGroup<APIRequestContext>, services: UserDataServices, resources: ServerResources) {
+    static func add(to me: RouterGroup<APIRequestContext>, services: UserDataServices, resources: ServerResources,
+                    provider: ServedIndexProvider) {
         let store = services.store
         let now = services.now
 
@@ -145,7 +148,8 @@ enum ProjectRoutes {
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
             let id = try context.parameters.require("projectId")
-            let body = try await JSONBody.decode(Change.self, from: request, fields: ["name", "researchQuestion", "defaultUserTagIds"])
+            let body = try await JSONBody.decode(Change.self, from: request,
+                                                 fields: ["name", "researchQuestion", "defaultSubjectTagIds", "defaultUserTagIds"])
             var project = try await project(id, of: user.id, in: store)
             var columns: Set<String> = []
             if let name = body.name {
@@ -155,6 +159,11 @@ enum ProjectRoutes {
             if let text = body.researchQuestion {
                 project.researchQuestion = question(text)
                 columns.insert("research_question")
+            }
+            if let refs = body.defaultSubjectTagIds {
+                project.defaultSubjectTagIds = try ProjectFocusRoutes.focusSubjects(refs, held: project.defaultSubjectTagIds,
+                                                                                    resources: resources)
+                columns.insert("default_subject_tag_ids")
             }
             if let ids = body.defaultUserTagIds {
                 project.defaultUserTagIds = try await focusTags(ids, of: user.id, in: store)
@@ -166,6 +175,7 @@ enum ProjectRoutes {
                 switch column {
                 case "name": held.name != project.name
                 case "research_question": held.researchQuestion != project.researchQuestion
+                case "default_subject_tag_ids": held.defaultSubjectTagIds != project.defaultSubjectTagIds
                 default: held.defaultUserTagIds ?? [] != project.defaultUserTagIds ?? []
                 }
             }
@@ -222,7 +232,8 @@ enum ProjectRoutes {
             }
             return ActiveProject(projectId: try await Blocking.run { try store.activeProjectId(of: user.id) }.map(NoteRoutes.wire))
         }
-        ProjectHomeRoutes.add(to: me, services: services, resources: resources)
+        ProjectHomeRoutes.add(to: me, services: services, resources: resources, provider: provider)
+        ProjectFocusRoutes.add(to: me, resources: resources)
     }
 
     static var table: UserStoreSchema.Table {

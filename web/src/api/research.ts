@@ -1,7 +1,8 @@
 // Projects, the history and the synced preferences (PLAN's S17f), under /api/v1/me: the project the
-// user works in, Project Home and its leads, the research trail with its Session Log and method
-// appendix, and the Mac's synced settings. A change asks again what it can change, and an import,
-// which can bring any of it, asks again for all of it (`researchImported`).
+// user works in, Project Home and its leads, with its focus subjects and their vocabulary (S25c), the
+// research trail with its Session Log and method appendix, and the Mac's synced settings. A change
+// asks again what it can change, and an import, which can bring any of it, asks again for all of it
+// (`researchImported`).
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
 import { getJSON } from './client';
 import type { Project, ProjectList } from './types';
@@ -12,6 +13,23 @@ const segment = encodeURIComponent;
 /** The project the user works in; absent for Global Context. */
 export interface ActiveProject {
   projectId?: string;
+}
+
+/** One subject of the vocabulary a project's focus is chosen from (S25c), the kit's `SubjectOption`. */
+export interface FocusSubject {
+  /** What a project's `defaultSubjectTagIds` holds of it. */
+  ref: string;
+  name: string;
+  category: string;
+  subcategory: string;
+  /** How many volumes' profiles carry it. */
+  volumeCount: number;
+}
+
+/** The vocabulary, in its own order: the focus subjects editor's All subjects. */
+export interface FocusSubjectList {
+  total: number;
+  items: FocusSubject[];
 }
 
 /** Project Home's account of a project, as the app's view shows it. */
@@ -29,6 +47,10 @@ export interface ProjectHome {
     truncationLine?: string;
     truncationWarns: boolean;
   }[];
+  /** The subjects it chose, in the vocabulary's order; absent on a server with no vocabulary, which shows no section. */
+  focusSubjects?: FocusSubject[];
+  /** The subjects their editor suggests from the project's volumes, those chosen left out; absent with `focusSubjects`. */
+  focusSuggestions?: FocusSubject[];
   hasTags: boolean;
   focusTags: { id: string; name: string }[];
   leads: ProjectLead[];
@@ -47,6 +69,8 @@ export interface ProjectLead {
   isNew: boolean;
   relatedCount: number;
   isEditorialNote: boolean;
+  /** The line under it, its document's text in the served index; absent while none is served or it holds none. */
+  snippet?: string;
 }
 
 /** One recorded visit. */
@@ -195,6 +219,14 @@ export function projectHomeQuery(projectId: string) {
   });
 }
 
+/** The subjects a project's focus is chosen from: the app's bundled vocabulary, the same until the server starts again. */
+export const focusSubjectsQuery = queryOptions({
+  queryKey: ['focusSubjects'],
+  queryFn: ({ signal }) => getJSON<FocusSubjectList>('/api/v1/me/focus-subjects', undefined, signal),
+  staleTime: 60 * 60_000,
+  retry: false,
+});
+
 export function historyQuery(scope: HistoryScope, limit: number) {
   return queryOptions({
     queryKey: ['history', scope, limit],
@@ -242,13 +274,17 @@ export async function createProject(client: QueryClient, name: string, researchQ
   return project;
 }
 
-/** The editor's Save, Project Home's question, or the focus tags. */
+/** The editor's Save, Project Home's question, the focus subjects or the focus tags. */
 export async function updateProject(
   client: QueryClient,
   id: string,
-  fields: { name?: string; researchQuestion?: string; defaultUserTagIds?: string[] },
+  fields: { name?: string; researchQuestion?: string; defaultSubjectTagIds?: string[]; defaultUserTagIds?: string[] },
 ): Promise<Project> {
   const project = (await change<Project>(client, 'PATCH', `/api/v1/me/projects/${segment(id)}`, fields))!;
+  // Project Home's project is the server's answer at once; what follows from it comes when it is read again.
+  client.setQueriesData<ProjectHome>({ queryKey: ['projectHome'] }, (home) =>
+    home && home.project.id.toUpperCase() === project.id.toUpperCase() ? { ...home, project } : home,
+  );
   projectsChanged(client);
   return project;
 }

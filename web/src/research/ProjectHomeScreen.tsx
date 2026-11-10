@@ -1,10 +1,11 @@
 // Project Home (PLAN's S17f), as the app's `ProjectHomeView` lays it out: the project's name, its
 // research question, saved as it is typed, and its date focus; the summary's tiles, with a tile for
-// each corpus its searches ran inside; its focus tags, once the reader has tags, with their editor;
-// Suggested Next, the leads the Mac found, until Related Documents finds them here, each with Dismiss;
-// Recent Activity; and the quick ways to Research and Search. The app's Focus subjects wait for the
-// kit's subject profiles, its Collections section and Plan a Visit for the rows that bring them, and
-// its weighting and Refresh for Related Documents.
+// each corpus its searches ran inside; its focus subjects, where the server has their vocabulary, with
+// their editor (FocusSubjects.tsx, PLAN's S25c); its focus tags, once the reader has tags, with their
+// editor; Suggested Next, the leads the Mac found, until Related Documents finds them here, each with
+// the opening of its document's text, where the served index holds it, and Dismiss; Recent Activity;
+// and the quick ways to Research and Search. The app's Collections section and Plan a Visit wait for
+// the rows that bring them, and its weighting and Refresh for Related Documents.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
@@ -15,6 +16,7 @@ import { copy } from '../copy';
 import { useHeadingReady } from '../shell/headingFocus';
 import { Modal } from '../shell/Modal';
 import { useDocumentTitle } from '../shell/useDocumentTitle';
+import { FocusSubjects } from './FocusSubjects';
 import { dateFocusText, leadContext, trimmedQuestion } from './projectRules';
 
 const route = getRouteApi('/projects/$projectId');
@@ -92,6 +94,7 @@ function Workspace({ home, onFailure }: { home: ProjectHome; onFailure: () => vo
           </li>
         ))}
       </ul>
+      {home.focusSubjects && <FocusSubjects home={home} />}
       {home.hasTags && <FocusTags home={home} />}
       <Leads home={home} onFailure={onFailure} />
       <Recent home={home} />
@@ -170,7 +173,7 @@ function FocusTags({ home }: { home: ProjectHome }) {
     <section className="focus-tags" aria-labelledby={headingId}>
       <div className="section-header">
         <h2 id={headingId}>{copy.projectHome.focusTags}</h2>
-        <button ref={opener} type="button" aria-haspopup="dialog" onClick={() => setEditing(true)}>
+        <button ref={opener} type="button" aria-haspopup="dialog" aria-describedby={headingId} onClick={() => setEditing(true)}>
           {home.focusTags.length === 0 ? copy.projectHome.focusAdd : copy.projectHome.focusEdit}
         </button>
       </div>
@@ -297,6 +300,7 @@ function Leads({ home, onFailure }: { home: ProjectHome; onFailure: () => void }
                 </Link>
                 {lead.isNew && <span className="badge">{copy.projectHome.leadNew}</span>}
                 <span className="lead-context">{leadContext(lead)}</span>
+                {lead.snippet && <span className="lead-snippet">{lead.snippet}</span>}
               </div>
               <button
                 type="button"
