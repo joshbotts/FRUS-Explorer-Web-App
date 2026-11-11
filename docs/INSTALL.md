@@ -623,7 +623,7 @@ An admin finds **Admin** in the app's header, which opens Administration at its 
 Two recovery actions ask first:
 
 - **Erase Research…**, on a user's row, erases everything they keep here: their tags, highlights, notes, summaries, collections, projects, saved searches, history and settings, and the keys they stored. Its question names how many of each they hold, and nothing is erased if that changed meanwhile, or while an import of theirs waits or runs. Their account, its role, its password and their sessions stay as they are, so they can go on, with nothing. The daily backups still hold what they had until each is replaced, a week or more, and a restore brings it back.
-- **Reset the Index…**, in Status, stops serving the index and removes it, with the index the last import replaced, so that the server waits for an export in `/data/import`, as at its first start. Search stops until you import one; the reader keeps working from the TEI files, and nobody's research changes. It runs as a job, after any import before it.
+- **Reset the Index…**, in Status, stops serving the index and removes it, with the index the last import replaced, so that the server waits for an export in `/data/import`, as at its first start. Search stops until you import one; the reader keeps working from the TEI files, and nobody's research changes. It runs as a job, and is refused while an index import waits or runs; an export copied in after it is imported after it.
 
 ## A PostgreSQL user store
 
