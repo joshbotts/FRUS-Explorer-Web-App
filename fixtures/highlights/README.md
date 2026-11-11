@@ -4,9 +4,8 @@
 the 410 golden rows, in `fixtures/golden/render/manifest.json`'s order, it holds the flat text the
 kit's `buildFlatText` makes from the row along the server's path, one full parse of its volume, or,
 for a section the reader parses alone, such as the index, a table of contents, a list of names or a
-chapter that prints only its heading, the section's own parse, as its
-length in UTF-16 units and the SHA-256 of its UTF-8 bytes, with the kit's rendering version, and
-highlights placed by offset over it:
+chapter that prints only its heading, the section's own parse, as its length in UTF-16 units and the
+SHA-256 of its UTF-8 bytes, with the kit's rendering version, and highlights placed by offset over it:
 
 - the whole row, whose length and digest stand for its text;
 - its first and last words;

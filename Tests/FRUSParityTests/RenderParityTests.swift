@@ -96,8 +96,9 @@ import Testing
         // The sections read alone: each volume's table of contents, frus1894Nicaragua's a table, and
         // frus1961-63v06's index, which holds the fixtures' eight "See" references, which the app's Read
         // opens; the lists of names and of sources, and frus1961-63v06's list of the subseries' volumes,
-        // which its Previous and Next turn to; and the compilations and chapters, which a table of
-        // contents' links open, frus1969-76ve09p1's as its toc lists them.
+        // which its Previous and Next turn to; and the compilations and chapters, which a link opens, as
+        // frus1969-76ve09p1's table of contents links its own, each read alone for its id of its own,
+        // though no link in the other two fixture volumes names theirs.
         let (alone, readOpens) = try await Self.sectionsReadAlone(in: volumes)
         #expect(alone == Self.expectedSectionsReadAlone, "the sections the server parses alone")
         #expect(readOpens == Self.expectedSectionsReadOpens, "the sections Browse links to the reader")

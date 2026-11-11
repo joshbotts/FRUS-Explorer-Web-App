@@ -5,23 +5,27 @@
 // keyboard alone, with no axe violations, the reader's frame scanned with the app. Browse still links to
 // the reader only what the app's Read opens. Against the image, with the synthetic export imported and
 // fixtures/tei mounted: the export's index does not hold frus1969-76ve09p1, so its contents come from
-// its TEI, and its pages have no Previous or Next, as the app's reader has none in a volume it has not
-// indexed; FRUSParityTests turn the pages of a volume the index holds through the API.
+// its TEI and its pages turn no pages, as the app's reader turns none in a volume it has not indexed;
+// FRUSParityTests turn the pages of a volume the index holds through the API.
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
 import { tabTo } from './keyboard';
 
 const volume = 'frus1969-76ve09p1';
 
-/** The contents' links this spec follows: the section's id, the link's name, and a line of its page. */
+/**
+ * The contents' links this spec follows: the section's id, the link's name, the reader's heading, and
+ * text of its page, which for a chapter is the whole of it, its heading.
+ */
 const destinations = [
-  { id: 'sources', name: 'Sources', heading: 'Sources', text: 'Sources for the Foreign Relations Series' },
-  { id: 'persons', name: 'Persons', heading: 'Persons', text: 'Atherton, Alfred L., Jr.' },
-  { id: 'ch1', name: 'Algeria, 1973–1976', heading: 'Algeria, 1973–1976', text: 'Algeria, 1973–1976' },
+  { id: 'sources', name: 'Sources', heading: 'Sources', text: 'Sources for the Foreign Relations Series', whole: false },
+  { id: 'persons', name: 'Persons', heading: 'Persons', text: 'Atherton, Alfred L., Jr.', whole: false },
+  { id: 'ch1', name: 'Algeria, 1973–1976', heading: 'Algeria, 1973–1976', text: 'Algeria, 1973–1976', whole: true },
 ];
 
 test('a table of contents’ links open its lists and a chapter in the reader, as the app’s reader opens them, by keyboard alone', async ({ page }) => {
-  // Four axe passes over pages of up to sixty links, and a walk through the contents' links each time.
+  // Four axe passes, the contents' and three more, over pages of up to sixty links, and a walk through
+  // the contents' links each time.
   test.setTimeout(120_000);
   await page.goto(`browse/${volume}`);
   const heading = page.getByRole('heading', { level: 1 });
@@ -40,6 +44,7 @@ test('a table of contents’ links open its lists and a chapter in the reader, a
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(new RegExp(`/doc/${volume}/toc$`));
   await expect(heading).toHaveText('Contents');
+  await axeCheck(page);
 
   // Each link the contents print opens its section in the reader, headed by its parsed head, its page
   // the kit's parse of the section alone; Back returns to the contents.
@@ -52,7 +57,9 @@ test('a table of contents’ links open its lists and a chapter in the reader, a
     await expect(page).toHaveURL(new RegExp(`/doc/${volume}/${destination.id}$`));
     await expect(heading).toHaveText(destination.heading);
     await expect(heading).toBeFocused();
-    await expect(frame.locator('.frus-document')).toContainText(destination.text);
+    const text = frame.locator('.frus-document');
+    if (destination.whole) await expect(text).toHaveText(destination.text);
+    else await expect(text).toContainText(destination.text);
     await expect(page.locator('.reader-main .notice')).toHaveText('');
     await axeCheck(page);
     await page.goBack();

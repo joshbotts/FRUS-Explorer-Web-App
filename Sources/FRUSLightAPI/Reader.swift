@@ -23,6 +23,7 @@ import FRUSCoreKit
 import FRUSLightCore
 import Foundation
 import Hummingbird
+import Synchronization
 
 /// Parses each volume's TEI once and keeps the most recent few, so a reader paging through a
 /// volume parses it once. A volume whose file changes, by size or modification time, is parsed
@@ -108,6 +109,8 @@ public actor ReaderService {
     private var sectionParses: [String: [String: (signature: FileSignature, ast: FRUSDocumentAST?)]] = [:]
     /// Sections being parsed alone.
     private var parsingSections: [SectionParse: Task<FRUSDocumentAST?, any Error>] = [:]
+    /// The places for those parses, two at once across volumes (`SectionParseSlots`).
+    nonisolated let sectionSlots = SectionParseSlots()
     /// How many parses have started.
     private(set) var parseCount = 0
     /// How many parses of a section alone have started.
@@ -160,8 +163,9 @@ public actor ReaderService {
     /// section it opens by its id (`DocumentViewModel.load`): the kit's parse of the one division,
     /// which reads the file until the division closes and captures a list the index keeps out of its
     /// rows, such as an index, whole, and reads a division the index leaves out a second time, to give
-    /// it whole but for its documents (`parseTarget`), a chapter's heading. Kept while the volume's
-    /// parse is; nil when the parse finds no such division, which is kept too.
+    /// it whole but for its documents (`parseTarget`), a chapter's heading. Two such parses run at once,
+    /// and more wait their turn (`sectionSlots`). Kept while the volume's parse is; nil when the parse
+    /// finds no such division, which is kept too.
     private func section(_ sectionId: String, in volume: ParsedVolume, of volumeId: String) async throws -> FRUSDocumentAST? {
         if let kept = sectionParses[volumeId]?[sectionId], kept.signature == volume.signature { return kept.ast }
         let key = SectionParse(volumeId: volumeId, sectionId: sectionId, signature: volume.signature)
@@ -170,7 +174,10 @@ public actor ReaderService {
             throw APIProblem(.notFound, code: "TEI_NOT_AVAILABLE", detail: "\(volumeId).xml is no longer in the TEI folder, \(volumesDirectory.path).")
         }
         sectionParseCount += 1
+        let slots = sectionSlots
         let task = Task<FRUSDocumentAST?, any Error> {
+            await slots.acquire()
+            defer { slots.release() }
             do {
                 return try await FRUSDocumentParser().parseDocument(documentId: sectionId, volumeURL: url)
             } catch {
@@ -199,8 +206,9 @@ public actor ReaderService {
     ///   Citations, a title page;
     /// - by a link, such as a table of contents' entry, a chapter, a compilation or an appendix the index
     ///   leaves out for printing nothing of its own but its heading, which the kit gives whole but for
-    ///   its documents, so its page is its heading. The reading order holds no such container, so its
-    ///   page has no Previous or Next, in the app as here.
+    ///   its documents: a chapter's page is its heading, and a compilation's its heading and its
+    ///   chapters', with any text they hold that is not a document. The reading order holds no such
+    ///   container, so its page has no Previous or Next, in the app as here.
     ///
     /// A section with a generated id, such as the `<front>` and `<back>` wrappers, has no id to be opened
     /// by, and the reading order skips it too.
@@ -341,6 +349,60 @@ public actor ReaderService {
         return FileSignature(size: (attributes?[.size] as? NSNumber)?.intValue ?? -1,
                              modified: attributes?[.modificationDate] as? Date)
     }
+}
+
+/// At most two sections parsed alone at once, across volumes, and the rest waiting their turn, first come
+/// first served. Each parse reads its volume's file to the section's close, and a section the index
+/// leaves out to its close twice (`parseTarget`), so a compilation that holds the rest of its volume costs
+/// two parses of the volume, and while the XML parser runs it holds a thread the server answers with: a
+/// burst of requests for a volume's many chapters at once waits here rather than taking every thread.
+/// What each parse gives is kept, so a section is parsed once while its volume's parse is kept.
+final class SectionParseSlots: Sendable {
+    static let running = 2
+
+    private struct State {
+        var free = SectionParseSlots.running
+        var queue: [CheckedContinuation<Void, Never>] = []
+    }
+
+    private let state = Mutex(State())
+
+    /// Returns once a place is free, which the caller holds until `release()`.
+    func acquire() async {
+        let taken = state.withLock { state -> Bool in
+            guard state.free > 0 else { return false }
+            state.free -= 1
+            return true
+        }
+        guard !taken else { return }
+        await withCheckedContinuation { continuation in
+            let resumeNow = state.withLock { state -> Bool in
+                // A place freed between the two locks is taken here.
+                if state.free > 0 {
+                    state.free -= 1
+                    return true
+                }
+                state.queue.append(continuation)
+                return false
+            }
+            if resumeNow { continuation.resume() }
+        }
+    }
+
+    /// Frees a place, for the parse that has waited longest if one waits: the place passes to it.
+    func release() {
+        let next = state.withLock { state -> CheckedContinuation<Void, Never>? in
+            if state.queue.isEmpty {
+                state.free += 1
+                return nil
+            }
+            return state.queue.removeFirst()
+        }
+        next?.resume()
+    }
+
+    /// How many parses wait for a place, for the tests.
+    var waiting: Int { state.withLock { $0.queue.count } }
 }
 
 /// The reader's Reading Width, which the app's Settings ▸ Display offers beside Document Text Size
