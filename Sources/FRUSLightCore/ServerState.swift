@@ -4,7 +4,8 @@ import Foundation
 
 /// How an import ended.
 public struct ImportReport: Sendable, Equatable, Codable {
-    public enum Outcome: String, Sendable, Codable { case installed, refused, failed }
+    /// `cancelled` when an admin stopped it between two of its steps (PLAN's S20d).
+    public enum Outcome: String, Sendable, Codable { case installed, refused, failed, cancelled }
 
     public var file: String
     public var outcome: Outcome
@@ -41,7 +42,7 @@ public struct ServerStatus: Sendable, Equatable, Codable {
 }
 
 public actor ServerState: ImportObserver {
-    public let configuration: ServerConfiguration
+    public nonisolated let configuration: ServerConfiguration
     /// The PDF service `FRUS_PDF_URL` names (PLAN's S25a), none when it is unset, which hides PDF.
     public nonisolated let pdf: PDFService?
     private let startedAt = Date()
@@ -111,6 +112,7 @@ public actor ServerState: ImportObserver {
             switch lastImport.outcome {
             case .refused: detail += ". The last file, \(lastImport.file), was refused: \(lastImport.message)"
             case .failed: detail += ". The last file, \(lastImport.file), could not be imported and will be tried again: \(lastImport.message)"
+            case .cancelled: detail += ". The import of the last file, \(lastImport.file), was stopped by an admin"
             case .installed: break
             }
         }
@@ -148,8 +150,9 @@ public actor ServerState: ImportObserver {
     }
 
     /// `writing` is what the user's store made of the owner's writing an export held, and `note`
-    /// reports a loose end, such as a drop file that could not be removed.
-    func importFinished(file: String, index newIndex: CorpusIndex, writing: MovedWriting? = nil, note: String? = nil) {
+    /// reports a loose end, such as a drop file that could not be removed. Gives the report's message.
+    @discardableResult
+    func importFinished(file: String, index newIndex: CorpusIndex, writing: MovedWriting? = nil, note: String? = nil) -> String {
         index = newIndex
         importing = nil
         startupProblem = nil
@@ -159,6 +162,16 @@ public actor ServerState: ImportObserver {
         if let note { message += "\(writing == nil ? "." : "") \(note)" }
         lastImport = ImportReport(file: file, outcome: .installed, step: nil, message: message,
                                   finishedAt: Self.timestamp(Date()), writing: writing)
+        log(message)
+        return message
+    }
+
+    /// An admin stopped the import between two of its steps (PLAN's S20d): nothing changed.
+    func importCancelled(file: String) {
+        let message = "An admin stopped the import of \(file) before it changed anything. It is tried again once the file in /data/import changes, or the server restarts"
+        lastImport = ImportReport(file: file, outcome: .cancelled, step: importing?.step, message: message,
+                                  finishedAt: Self.timestamp(Date()))
+        importing = nil
         log(message)
     }
 
@@ -178,6 +191,30 @@ public actor ServerState: ImportObserver {
                                   finishedAt: Self.timestamp(Date()))
         importing = nil
         log("Import of \(file) \(outcome.rawValue): \(message)")
+    }
+
+    /// The recovery action that resets the index in Import mode (PLAN's S20d): the server stops serving
+    /// its index and removes it, with the index an import kept before it and any copy one left, and then
+    /// waits for an export in /data/import, as at its first start. A request that holds the index
+    /// finishes on it, as on an index an import replaced. Gives what the index held, or nil when none
+    /// was served.
+    public func resetIndex(files: any FileStore) async throws -> IndexSummary? {
+        let removed = index?.summary
+        index = nil
+        importing = nil
+        lastImport = nil
+        startupProblem = nil
+        let paths = [files.liveIndex, files.previousIndex, files.candidateIndex].flatMap { url in
+            ["", "-wal", "-shm", "-journal"].map { url.path + $0 }
+        }
+        try await Blocking.run {
+            for path in paths where FileManager.default.fileExists(atPath: path) {
+                try FileManager.default.removeItem(atPath: path)
+            }
+        }
+        log(removed.map { "Removed the served index of \($0.documents) documents from \($0.volumes) volumes: waiting for an export" }
+            ?? "No index was served; any left on disk was removed: waiting for an export")
+        return removed
     }
 
     /// An export already live was found in the drop zone again, for example after a restart

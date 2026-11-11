@@ -124,6 +124,23 @@ final class LocalAccounts: Sendable {
         _ = known.withLock { $0.removeValue(forKey: id) }
     }
 
+    /// Forgets every session of `userID`'s the server holds, so that its next request reads the store
+    /// again: an admin's change to the account (PLAN's S20d), a password reset or the account disabled,
+    /// which end its sessions in the store, or a new role, reaches each at once, not within half a minute.
+    func forgetSessions(of userID: String) {
+        known.withLock { known in known = known.filter { $0.value.user.id != userID } }
+    }
+
+    /// `password`'s hash, for an admin's new account or new password (PLAN's S20d), in one of the slots
+    /// sign-ins are verified in, so that hashes asked for at once hold no more memory than sign-ins do;
+    /// nil when too many wait.
+    func hash(_ password: String) async throws -> String? {
+        guard await slots.acquire() else { return nil }
+        defer { slots.release() }
+        let hasher = hasher
+        return try await Blocking.run { try hasher.hash(password) }
+    }
+
     // MARK: Signing in and out
 
     /// Why a sign-in was refused.

@@ -1,6 +1,7 @@
 // v1 interface 4, sessions and the job queue: small interfaces rather than files under /data. Since
 // PLAN's S20b, a session is a row of the user store's `sessions` table, in app.db or the PostgreSQL
-// store, written by `RelationalUserStore` (UserAccounts.swift); the job queue is still the process's.
+// store, written by `RelationalUserStore` (UserAccounts.swift); and since S20d each job is a row of its
+// `jobs` table (UserJobs.swift), which the queue, still the process's, keeps as the job goes.
 
 import Crypto
 import Foundation
@@ -72,59 +73,3 @@ public protocol SessionStore: Sendable {
     func endSession(_ id: String) throws
 }
 
-/// A job's progress.
-public struct JobRecord: Sendable, Equatable, Codable {
-    public enum State: String, Sendable, Codable { case queued, running, succeeded, failed }
-
-    public let id: Int
-    public let name: String
-    public var state: State
-    public var message: String?
-}
-
-/// Long-running work, such as an import, runs as a job.
-public protocol JobQueue: Sendable {
-    /// Queues work and returns its job id.
-    func submit(_ name: String, _ work: @escaping @Sendable () async throws -> Void) async -> Int
-    func record(id: Int) async -> JobRecord?
-    func records() async -> [JobRecord]
-}
-
-/// Runs jobs in this process, one at a time, in the order they were submitted.
-public actor InProcessJobQueue: JobQueue {
-    private var jobs: [Int: JobRecord] = [:]
-    private var nextID = 1
-    private var tail: Task<Void, Never>?
-
-    public init() {}
-
-    public func submit(_ name: String, _ work: @escaping @Sendable () async throws -> Void) -> Int {
-        let id = nextID
-        nextID += 1
-        jobs[id] = JobRecord(id: id, name: name, state: .queued, message: nil)
-        let previous = tail
-        tail = Task {
-            await previous?.value
-            self.update(id, .running, nil)
-            do {
-                try await work()
-                self.update(id, .succeeded, nil)
-            } catch {
-                self.update(id, .failed, String(describing: error))
-            }
-        }
-        return id
-    }
-
-    public func record(id: Int) -> JobRecord? { jobs[id] }
-
-    public func records() -> [JobRecord] { jobs.values.sorted { $0.id < $1.id } }
-
-    /// Waits until every job submitted so far has finished.
-    public func waitUntilIdle() async { await tail?.value }
-
-    private func update(_ id: Int, _ state: JobRecord.State, _ message: String?) {
-        jobs[id]?.state = state
-        jobs[id]?.message = message
-    }
-}

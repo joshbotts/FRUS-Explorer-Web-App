@@ -22,6 +22,8 @@ struct ServerComponents: Sendable {
     let backups: UserStoreBackups?
     /// The stored API keys, over the key file this start read or made (PLAN's S20c).
     let secrets: SecretVault
+    /// The server's jobs, each a row of the user store (PLAN's S20d), opened once the store is: the jobs
+    /// a server stopped before they finished are marked failed before any other is queued.
     let jobs: InProcessJobQueue
     let indexWriter: LocalIndexWriter
     let imports: ImportCoordinator
@@ -39,10 +41,10 @@ struct ServerComponents: Sendable {
         let state = ServerState(configuration: configuration) { logger.info("\($0)") }
         // The watcher opens it once the server is listening, so /healthz answers at once.
         await state.prepareToOpenExistingIndex(files: files)
-        let jobs = InProcessJobQueue()
         let writer = LocalIndexWriter(files: files)
         let (userStore, serverLock, backups) = try await openUserStore(configuration, files: files, logger: logger)
         let secrets = try await openSecrets(configuration, files: files, store: userStore, logger: logger)
+        let jobs = try await InProcessJobQueue.open(store: userStore, log: { logger.info("\($0)") })
         return ServerComponents(
             files: files,
             state: state,

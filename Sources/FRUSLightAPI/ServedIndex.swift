@@ -125,6 +125,9 @@ public actor ServedIndexProvider {
     /// readiness step while none is, as before the first import.
     public func served() async throws -> ServedIndex {
         guard let corpus = await state.index else {
+            // An index reset (PLAN's S20d) leaves none: the stack over the file it removed is let go, so
+            // that its space comes back once the requests that hold it finish.
+            current = nil
             let readiness = await state.readiness()
             throw APIProblem(.serviceUnavailable, code: "INDEX_NOT_READY",
                              detail: "No index is being served yet (\(readiness.step.rawValue)): \(readiness.detail)")

@@ -13,7 +13,7 @@
 /// reads as the order the store took its rows in. `user_search` is not here: search reads FTS5, in
 /// the store's local SQLite copy (`PostgreSQLUserStore`).
 enum PostgreSQLMigrations {
-    static let all: [[String]] = [one, two, three, four, five]
+    static let all: [[String]] = [one, two, three, four, five, six]
 
     /// S2's: the single user, and corrections as override rows.
     static let one = [
@@ -516,5 +516,27 @@ enum PostgreSQLMigrations {
         """,
         "CREATE UNIQUE INDEX secrets_of_user ON secrets (user_id, name) WHERE user_id IS NOT NULL",
         "CREATE UNIQUE INDEX secrets_of_instance ON secrets (name) WHERE user_id IS NULL",
+    ]
+
+    /// S20d's: the server's jobs, as app.db's migration 6 keeps them.
+    static let six = [
+        """
+        CREATE TABLE jobs (
+            job_id TEXT COLLATE "C" PRIMARY KEY,
+            kind TEXT COLLATE "C" NOT NULL,
+            subject TEXT COLLATE "C",
+            state TEXT COLLATE "C" NOT NULL CHECK (state IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')),
+            progress TEXT COLLATE "C",
+            fraction DOUBLE PRECISION,
+            requested_by TEXT COLLATE "C",
+            queued_at TEXT COLLATE "C" NOT NULL,
+            started_at TEXT COLLATE "C",
+            finished_at TEXT COLLATE "C",
+            error TEXT COLLATE "C",
+            cancel_requested_by TEXT COLLATE "C",
+            cancel_requested_at TEXT COLLATE "C"
+        )
+        """,
+        "CREATE INDEX jobs_by_state ON jobs (state, finished_at)",
     ]
 }

@@ -208,7 +208,7 @@ final class CSRFTokens: Sendable {
 /// What the user store keeps for the routes under /api/v1/me.
 typealias UserDataStore = UserStore & TagStore & HighlightStore & NoteStore & SummaryStore & ProjectStore & ResearchImportStore
     & ResearchExportStore & UserSearchStore & SearchSetStore & ResearchRowStore & TrailStore & PreferenceStore & CollectionStore
-    & AccountStore & SessionStore
+    & AccountStore & SessionStore & ResearchErasureStore & SecretStore
 
 /// What the routes under /api/v1/me need.
 struct UserDataServices: Sendable {
@@ -227,6 +227,8 @@ struct UserDataServices: Sendable {
     /// `FRUS_USER_DATA`: off, every resource under /api/v1/me is refused, and only /me answers.
     let enabled: Bool
     let auth: ServerConfiguration.Auth
+    /// Under `FRUS_AUTH=header`, `FRUS_ADMIN_USERS`: the users the admin's Users list names admins (S20d).
+    let adminUsers: Set<String>
     let now: @Sendable () -> Date
     /// Where an import runs (S16c): the server's queue, beside an index's import.
     let jobs: any JobQueue
@@ -272,6 +274,7 @@ struct UserDataServices: Sendable {
         address = configuration.publicAddress
         enabled = configuration.userData
         auth = configuration.auth
+        adminUsers = configuration.adminUsers
         self.now = now
         self.jobs = jobs
         imports = ResearchImports()
