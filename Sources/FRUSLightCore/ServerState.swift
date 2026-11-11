@@ -79,20 +79,27 @@ public actor ServerState: ImportObserver {
         guard FileManager.default.fileExists(atPath: live.path) else { return }
         openingAtStart = true
         let generation = indexGeneration
+        let outcome: Result<CorpusIndex, any Error>
         do {
-            let opened = try await Blocking.run { try CorpusIndex.open(live) }
-            // A reset that removed the file while it opened wins: the server waits for an export.
-            guard indexGeneration == generation else {
-                log("Not serving \(live.path): the index was reset while it was opened")
-                return
-            }
+            outcome = .success(try await Blocking.run { try CorpusIndex.open(live) })
+        } catch {
+            outcome = .failure(error)
+        }
+        // A reset that removed the file while it opened wins, whether the open finished or failed for
+        // it: the server waits for an export (S20d).
+        guard indexGeneration == generation else {
+            log("Not serving \(live.path): the index was reset while it was opened")
+            return
+        }
+        switch outcome {
+        case .success(let opened):
             if index == nil { index = opened }
             startupProblem = nil
             log("Serving \(opened.summary.documents) documents from \(opened.summary.volumes) volumes, index version \(opened.summary.indexVersion)")
-        } catch let refusal as ImportRefusal {
+        case .failure(let refusal as ImportRefusal):
             startupProblem = refusal
             log("Not serving \(live.path): \(refusal.reason)")
-        } catch {
+        case .failure(let error):
             startupProblem = ImportRefusal(.openingIndex, "The index could not be opened: \(error)")
             log("Not serving \(live.path): \(error)")
         }

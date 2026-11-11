@@ -1,10 +1,13 @@
 // Administration ▸ Users (PLAN's S20d): the users the server holds, each with their role, their last
-// sign-in and whether the account can sign in. Under local accounts an admin adds an account, sets a role,
-// disables or enables one after a question, and sets a new password, which signs the person out; the
-// server refuses any change that would leave no admin who can sign in, and the pane says so. Behind a
-// proxy, or with no sign-in, the list alone. In every mode, Erase Research…, the recovery action SPEC
-// names, after a question that names what the user holds, in the export sheet's words: the server erases
-// it only while that is still what they hold, and says when it changed.
+// sign-in and whether the account can sign in. Under local accounts an admin adds an account, chooses a
+// role and sets it, disables or enables one after a question, and sets a new password, which signs the
+// person out; the server refuses any change that would leave no admin who can sign in, and the pane
+// says so. Behind a proxy, or with no sign-in, the list alone. In every mode, Erase Research…, the
+// recovery action SPEC names, after a question that names what the user holds, in the export sheet's
+// words: the server erases it only while that is still what they hold, and the question counts again
+// when it changed. What each change did is said in a status line, and a refusal in an alert, both always
+// on the page, so that a screen reader hears each as it comes. Focus goes back after a request only
+// while the admin has left it in the place the request came from, or nowhere.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useId, useRef, useState } from 'react';
 import {
@@ -19,6 +22,7 @@ import {
   usersQuery,
 } from '../api/admin';
 import { ApiError, errorMessage } from '../api/client';
+import { meQuery, researchImported } from '../api/userData';
 import { copy } from '../copy';
 import { closeAtOnce, Modal } from '../shell/Modal';
 import { AdminFrame, useAdmin } from './AdminPanes';
@@ -26,7 +30,13 @@ import { AdminFrame, useAdmin } from './AdminPanes';
 const words = copy.admin.users;
 const roles: Role[] = ['reader', 'curator', 'admin'];
 
-type Feedback = { kind: 'done'; message: string } | { kind: 'failed'; message: string } | null;
+type Feedback = { kind: 'done' | 'failed'; message: string } | null;
+
+/** Moves focus to `target` after a request, only while focus is within `area` or nowhere. */
+function focusAfterRequest(area: HTMLElement | null, target: HTMLElement | null | undefined) {
+  const active = document.activeElement;
+  if (!active || active === document.body || area?.contains(active)) target?.focus();
+}
 
 export function UsersScreen() {
   const { allowed } = useAdmin();
@@ -46,14 +56,17 @@ export function UsersScreen() {
     body = (
       <>
         <p className="note">{words.leads[users.data.auth] ?? words.leads.none}</p>
+        {users.isError && (
+          <p className="error" role="alert">
+            {errorMessage(users.error)}
+          </p>
+        )}
+        {/* Always on the page, so that each new line is announced as it comes. */}
         <div className="admin-feedback">
-          {feedback?.kind === 'failed' ? (
-            <p className="error" role="alert">
-              {feedback.message}
-            </p>
-          ) : (
-            <p role="status">{feedback?.message ?? ''}</p>
-          )}
+          <p role="status">{feedback?.kind === 'done' ? feedback.message : ''}</p>
+          <p className="error" role="alert">
+            {feedback?.kind === 'failed' ? feedback.message : ''}
+          </p>
         </div>
         <UserTable users={users.data.users} local={local} onFeedback={setFeedback} />
         {local && <AddAccount onFeedback={setFeedback} />}
@@ -68,25 +81,28 @@ type Dialog = { kind: 'disable' | 'password' | 'erase'; user: AdminUser } | null
 function UserTable({ users, local, onFeedback }: { users: AdminUser[]; local: boolean; onFeedback: (feedback: Feedback) => void }) {
   const client = useQueryClient();
   const [dialog, setDialog] = useState<Dialog>(null);
+  const [enabling, setEnabling] = useState<string | null>(null);
   const area = useRef<HTMLDivElement>(null);
 
-  async function apply(user: AdminUser, fields: { role?: Role; disabled?: boolean }) {
+  async function enable(user: AdminUser) {
+    if (enabling) return;
+    setEnabling(user.id);
     onFeedback(null);
     try {
-      await changeAccount(client, user.id, fields);
+      await changeAccount(client, user.id, { disabled: false });
       onFeedback({ kind: 'done', message: words.changed(user.id) });
     } catch (error) {
       onFeedback({ kind: 'failed', message: errorMessage(error) });
-      // What the server holds is shown again, the refused choice with it.
-      void client.invalidateQueries({ queryKey: ['admin', 'users'] });
+    } finally {
+      setEnabling(null);
     }
   }
 
-  /** Closes the dialog, and sends focus back to the button that opened it. */
+  /** Closes the dialog, and sends focus back to the button `kind` names on the user's row, or else the table's first. */
   function close(kind: string, user: AdminUser) {
     closeAtOnce(() => setDialog(null));
     const opener = area.current?.querySelector<HTMLButtonElement>(`button[data-action="${kind}"][data-user="${CSS.escape(user.id)}"]`);
-    (opener ?? area.current?.querySelector<HTMLButtonElement>('button'))?.focus();
+    (opener ?? area.current?.querySelector<HTMLButtonElement>('button') ?? area.current)?.focus();
   }
 
   return (
@@ -109,35 +125,32 @@ function UserTable({ users, local, onFeedback }: { users: AdminUser[]; local: bo
             <tr key={user.id} data-user={user.id}>
               <th scope="row">{user.id}</th>
               <td>{user.displayName}</td>
-              <td>
-                {local ? (
-                  <select aria-label={words.roleA11y(user.id)} value={user.role} onChange={(event) => void apply(user, { role: event.target.value as Role })}>
-                    {roles.map((role) => (
-                      <option key={role} value={role}>
-                        {words.roles[role]}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  words.roles[user.role]
-                )}
-              </td>
+              <td>{local ? <RoleChoice user={user} onFeedback={onFeedback} /> : words.roles[user.role]}</td>
               <td>{user.lastSignInAt ? copy.admin.time(user.lastSignInAt) : copy.admin.never}</td>
               <td>{user.disabledAt ? words.disabled : user.hasPassword || !local ? words.active : words.noPassword}</td>
               <td>
                 <div className="actions">
-                  {local &&
-                    (user.disabledAt ? (
-                      <button type="button" data-action="enable" data-user={user.id} aria-label={words.enableA11y(user.id)} onClick={() => void apply(user, { disabled: false })}>
-                        {words.enable}
-                      </button>
-                    ) : (
-                      <button type="button" data-action="disable" data-user={user.id} aria-label={words.disableA11y(user.id)} onClick={() => setDialog({ kind: 'disable', user })}>
-                        {words.disable}
-                      </button>
-                    ))}
+                  {/* One button, Disable… or Enable, so that focus stays on it as the account changes. */}
                   {local && (
-                    <button type="button" data-action="password" data-user={user.id} aria-label={words.passwordA11y(user.id)} onClick={() => setDialog({ kind: 'password', user })}>
+                    <button
+                      type="button"
+                      data-action="access"
+                      data-user={user.id}
+                      aria-label={user.disabledAt ? words.enableA11y(user.id) : words.disableA11y(user.id)}
+                      aria-disabled={enabling === user.id}
+                      onClick={() => (user.disabledAt ? void enable(user) : setDialog({ kind: 'disable', user }))}
+                    >
+                      {user.disabledAt ? words.enable : words.disable}
+                    </button>
+                  )}
+                  {local && (
+                    <button
+                      type="button"
+                      data-action="password"
+                      data-user={user.id}
+                      aria-label={words.passwordA11y(user.id)}
+                      onClick={() => setDialog({ kind: 'password', user })}
+                    >
                       {words.password}
                     </button>
                   )}
@@ -159,16 +172,18 @@ function UserTable({ users, local, onFeedback }: { users: AdminUser[]; local: bo
       </table>
       {dialog?.kind === 'disable' && (
         <DisableConfirmation
+          key={`disable:${dialog.user.id}`}
           user={dialog.user}
           onDone={(message) => {
             onFeedback({ kind: 'done', message });
-            close('disable', dialog.user);
+            close('access', dialog.user);
           }}
-          onCancel={() => close('disable', dialog.user)}
+          onCancel={() => close('access', dialog.user)}
         />
       )}
       {dialog?.kind === 'password' && (
         <PasswordDialog
+          key={`password:${dialog.user.id}`}
           user={dialog.user}
           onDone={(message) => {
             onFeedback({ kind: 'done', message });
@@ -179,6 +194,7 @@ function UserTable({ users, local, onFeedback }: { users: AdminUser[]; local: bo
       )}
       {dialog?.kind === 'erase' && (
         <EraseDialog
+          key={`erase:${dialog.user.id}`}
           user={dialog.user}
           onDone={(message) => {
             onFeedback({ kind: 'done', message });
@@ -188,6 +204,60 @@ function UserTable({ users, local, onFeedback }: { users: AdminUser[]; local: bo
         />
       )}
     </div>
+  );
+}
+
+/**
+ * A role chosen in its list and set with Set Role, so that no step through the list sends a change of its
+ * own: one request at a time, the list showing the choice while it is sent, and the server's role again
+ * once it has answered, whether it took the change or refused it.
+ */
+function RoleChoice({ user, onFeedback }: { user: AdminUser; onFeedback: (feedback: Feedback) => void }) {
+  const client = useQueryClient();
+  const [chosen, setChosen] = useState<Role | null>(null);
+  const [busy, setBusy] = useState(false);
+  const area = useRef<HTMLSpanElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const shown = chosen ?? user.role;
+
+  async function apply() {
+    if (busy || chosen === null || chosen === user.role) return;
+    setBusy(true);
+    onFeedback(null);
+    try {
+      await changeAccount(client, user.id, { role: chosen });
+      await client.refetchQueries({ queryKey: ['admin', 'users'] });
+      onFeedback({ kind: 'done', message: words.changed(user.id) });
+    } catch (error) {
+      onFeedback({ kind: 'failed', message: errorMessage(error) });
+    } finally {
+      closeAtOnce(() => {
+        setChosen(null);
+        setBusy(false);
+      });
+      focusAfterRequest(area.current, button.current);
+    }
+  }
+
+  return (
+    <span ref={area} className="role-choice">
+      <select aria-label={words.roleA11y(user.id)} value={shown} onChange={(event) => setChosen(event.target.value as Role)}>
+        {roles.map((role) => (
+          <option key={role} value={role}>
+            {words.roles[role]}
+          </option>
+        ))}
+      </select>{' '}
+      <button
+        ref={button}
+        type="button"
+        aria-label={words.setRoleA11y(user.id)}
+        aria-disabled={busy || chosen === null || chosen === user.role}
+        onClick={() => void apply()}
+      >
+        {words.setRole}
+      </button>
+    </span>
   );
 }
 
@@ -215,7 +285,7 @@ function DisableConfirmation({ user, onDone, onCancel }: { user: AdminUser; onDo
   }
 
   return (
-    <Modal className="confirm" role="alertdialog" labelledBy={headingId} describedBy={messageId} initial={cancel} onCancel={() => !busy && onCancel()} onClose={() => {}}>
+    <Modal className="confirm" role="alertdialog" labelledBy={headingId} describedBy={messageId} initial={cancel} onCancel={() => !busy && onCancel()} onClose={onCancel}>
       <h2 id={headingId} tabIndex={-1}>
         {words.disableTitle(user.id)}
       </h2>
@@ -237,15 +307,26 @@ function DisableConfirmation({ user, onDone, onCancel }: { user: AdminUser; onDo
   );
 }
 
-/** A new password's two fields, which no browser fills or keeps, read only to send them. */
-function PasswordFields({ idPrefix, first, second, onChange }: {
+/**
+ * A new password's two fields, which no browser fills or keeps, read only to send them: a hidden field
+ * names whose password it is, so that a browser that offers to save it names that user, never the admin.
+ */
+function PasswordFields({
+  idPrefix,
+  owner,
+  first,
+  second,
+  onChange,
+}: {
   idPrefix: string;
+  owner: string;
   first: { current: HTMLInputElement | null };
   second: { current: HTMLInputElement | null };
   onChange: () => void;
 }) {
   return (
     <>
+      <input type="text" name="username" autoComplete="username" value={owner} readOnly hidden />
       <label htmlFor={`${idPrefix}-password`}>{words.newPassword}</label>
       <input
         id={`${idPrefix}-password`}
@@ -253,7 +334,6 @@ function PasswordFields({ idPrefix, first, second, onChange }: {
         type="password"
         autoComplete="new-password"
         aria-describedby={`${idPrefix}-rule`}
-        minLength={15}
         required
         data-1p-ignore="true"
         data-lpignore="true"
@@ -279,13 +359,16 @@ function PasswordFields({ idPrefix, first, second, onChange }: {
   );
 }
 
-/** The two fields' password, or why there is none to send, the second field emptied to be typed again. */
-function chosenPassword(first: HTMLInputElement | null, second: HTMLInputElement | null): { password: string } | { problem: string } {
+/**
+ * The two fields' password, both fields emptied as it is read, so that nothing of it stays on the page
+ * while it is sent; or why there is none to send, the second field emptied to be typed again.
+ */
+function takePassword(first: HTMLInputElement | null, second: HTMLInputElement | null): { password: string } | { problem: string } {
   const password = first?.value ?? '';
-  if (password !== (second?.value ?? '')) {
-    if (second) second.value = '';
-    return { problem: words.mismatch };
-  }
+  const again = second?.value ?? '';
+  if (second) second.value = '';
+  if (password !== again) return { problem: words.mismatch };
+  if (first) first.value = '';
   return { password };
 }
 
@@ -302,36 +385,33 @@ function PasswordDialog({ user, onDone, onCancel }: { user: AdminUser; onDone: (
   async function save(event: FormEvent) {
     event.preventDefault();
     if (busy) return;
-    const chosen = chosenPassword(first.current, second.current);
-    if ('problem' in chosen) {
-      setFailure(chosen.problem);
+    const taken = takePassword(first.current, second.current);
+    if ('problem' in taken) {
+      setFailure(taken.problem);
       second.current?.focus();
       return;
     }
     setBusy(true);
     setFailure(null);
     try {
-      await setPassword(client, user.id, chosen.password);
+      await setPassword(client, user.id, taken.password);
       onDone(words.passwordSet(user.id));
     } catch (error) {
       setFailure(errorMessage(error));
       setBusy(false);
       first.current?.focus();
-    } finally {
-      if (first.current) first.current.value = '';
-      if (second.current) second.current.value = '';
     }
   }
 
   return (
-    <Modal className="confirm admin-dialog" labelledBy={headingId} describedBy={messageId} initial={first} onCancel={() => !busy && onCancel()} onClose={() => {}}>
+    <Modal className="confirm admin-dialog" labelledBy={headingId} describedBy={messageId} initial={first} onCancel={() => !busy && onCancel()} onClose={onCancel}>
       <form onSubmit={(event) => void save(event)}>
         <h2 id={headingId} tabIndex={-1}>
           {words.passwordTitle(user.id)}
         </h2>
         <p id={messageId}>{words.passwordMessage}</p>
         <div className="admin-fields">
-          <PasswordFields idPrefix={fieldsId} first={first} second={second} onChange={() => setFailure(null)} />
+          <PasswordFields idPrefix={fieldsId} owner={user.id} first={first} second={second} onChange={() => setFailure(null)} />
         </div>
         {failure && (
           <p className="error" role="alert">
@@ -359,47 +439,59 @@ function holdingLines(holdings: ResearchHoldings): string[] {
 
 /**
  * "Erase the research of bob?": what they hold, counted as the dialog opens, then Erase and Cancel, which
- * wait for the erasure sent; when what they hold changed meanwhile, the server erases nothing and the
- * dialog counts again, and asks once more.
+ * wait for the erasure sent; when what they hold changed meanwhile, the server erases nothing, and the
+ * dialog counts again, says so, and asks once more, its Erase focused. The admin's own research erased
+ * leaves nothing of it in what the app holds of theirs.
  */
 function EraseDialog({ user, onDone, onCancel }: { user: AdminUser; onDone: (message: string) => void; onCancel: () => void }) {
   const client = useQueryClient();
+  const me = useQuery(meQuery);
   const counted = useQuery({
     queryKey: ['admin', 'holdings', user.id],
     queryFn: ({ signal }) => researchHoldings(user.id, signal),
     staleTime: 0,
     gcTime: 0,
     retry: false,
+    refetchOnWindowFocus: false,
   });
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [changed, setChanged] = useState(false);
   const cancel = useRef<HTMLButtonElement>(null);
+  const eraser = useRef<HTMLButtonElement>(null);
   const headingId = useId();
   const messageId = useId();
 
   async function erase() {
-    if (busy || !counted.data) return;
+    if (busy || !counted.data || counted.isFetching) return;
     setBusy(true);
     setFailure(null);
     setChanged(false);
     try {
       const erased = await eraseResearch(client, counted.data);
+      if (user.id === me.data?.userId) {
+        researchImported(client);
+        void client.invalidateQueries({ queryKey: ['secrets'] });
+      }
       onDone(words.erased(user.id, erased?.total ?? counted.data.total));
     } catch (error) {
       if (error instanceof ApiError && error.code === 'RESEARCH_CHANGED') {
-        setChanged(true);
         await counted.refetch();
+        closeAtOnce(() => {
+          setChanged(true);
+          setBusy(false);
+        });
+        eraser.current?.focus();
       } else {
         setFailure(errorMessage(error));
+        setBusy(false);
       }
-      setBusy(false);
     }
   }
 
   const holds = counted.data;
   return (
-    <Modal className="confirm admin-dialog" role="alertdialog" labelledBy={headingId} describedBy={messageId} initial={cancel} onCancel={() => !busy && onCancel()} onClose={() => {}}>
+    <Modal className="confirm admin-dialog" role="alertdialog" labelledBy={headingId} describedBy={messageId} initial={cancel} onCancel={() => !busy && onCancel()} onClose={onCancel}>
       <h2 id={headingId} tabIndex={-1}>
         {words.eraseTitle(user.id)}
       </h2>
@@ -408,17 +500,15 @@ function EraseDialog({ user, onDone, onCancel }: { user: AdminUser; onDone: (mes
           <p className="error" role="alert">
             {errorMessage(counted.error)}
           </p>
-        ) : !holds || counted.isFetching ? (
+        ) : !holds ? (
           <p role="status">{words.eraseLoading}</p>
         ) : holds.total === 0 ? (
           <p>{words.eraseNothing(user.id)}</p>
         ) : (
           <>
-            {changed && (
-              <p className="error" role="alert">
-                {words.eraseChanged}
-              </p>
-            )}
+            <p className="error" role="alert">
+              {changed ? words.eraseChanged : ''}
+            </p>
             <p>{words.eraseHolds(user.id)}</p>
             <ul className="erase-holdings">
               {holdingLines(holds).map((line) => (
@@ -438,8 +528,8 @@ function EraseDialog({ user, onDone, onCancel }: { user: AdminUser; onDone: (mes
         <button ref={cancel} type="button" aria-disabled={busy} onClick={() => !busy && onCancel()}>
           {copy.admin.cancel}
         </button>
-        {holds && holds.total > 0 && !counted.isFetching && (
-          <button type="button" className="destructive" aria-disabled={busy} onClick={() => void erase()}>
+        {holds && holds.total > 0 && (
+          <button ref={eraser} type="button" className="destructive" aria-disabled={busy || counted.isFetching} onClick={() => void erase()}>
             {words.eraseConfirm}
           </button>
         )}
@@ -456,6 +546,7 @@ function AddAccount({ onFeedback }: { onFeedback: (feedback: Feedback) => void }
   const [role, setRole] = useState<Role>('reader');
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const area = useRef<HTMLElement>(null);
   const first = useRef<HTMLInputElement>(null);
   const second = useRef<HTMLInputElement>(null);
   const nameField = useRef<HTMLInputElement>(null);
@@ -465,9 +556,9 @@ function AddAccount({ onFeedback }: { onFeedback: (feedback: Feedback) => void }
   async function add(event: FormEvent) {
     event.preventDefault();
     if (busy) return;
-    const chosen = chosenPassword(first.current, second.current);
-    if ('problem' in chosen) {
-      setFailure(chosen.problem);
+    const taken = takePassword(first.current, second.current);
+    if ('problem' in taken) {
+      setFailure(taken.problem);
       second.current?.focus();
       return;
     }
@@ -478,26 +569,23 @@ function AddAccount({ onFeedback }: { onFeedback: (feedback: Feedback) => void }
       const made = await addAccount(client, {
         name: name.trim(),
         role,
-        password: chosen.password,
+        password: taken.password,
         ...(displayName.trim() ? { displayName: displayName.trim() } : {}),
       });
       setName('');
       setDisplayName('');
       setRole('reader');
       onFeedback({ kind: 'done', message: words.added(made?.id ?? name.trim()) });
-      nameField.current?.focus();
     } catch (error) {
       setFailure(errorMessage(error));
-      nameField.current?.focus();
     } finally {
-      if (first.current) first.current.value = '';
-      if (second.current) second.current.value = '';
       setBusy(false);
+      focusAfterRequest(area.current, nameField.current);
     }
   }
 
   return (
-    <section className="admin-add" aria-labelledby={headingId}>
+    <section ref={area} className="admin-add" aria-labelledby={headingId}>
       <h2 id={headingId}>{words.add}</h2>
       <form onSubmit={(event) => void add(event)}>
         <div className="admin-fields">
@@ -522,7 +610,7 @@ function AddAccount({ onFeedback }: { onFeedback: (feedback: Feedback) => void }
               </option>
             ))}
           </select>
-          <PasswordFields idPrefix={fieldsId} first={first} second={second} onChange={() => setFailure(null)} />
+          <PasswordFields idPrefix={fieldsId} owner={name.trim()} first={first} second={second} onChange={() => setFailure(null)} />
         </div>
         {failure && (
           <p className="error" role="alert">

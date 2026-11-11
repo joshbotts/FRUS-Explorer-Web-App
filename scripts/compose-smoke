@@ -231,10 +231,17 @@ echo "== admin: the import's job (PLAN's S20d)"
 # The export the drop zone took ran as a job of the server's queue, which the admin's list names,
 # finished, asked for by the server itself; the admin step on local accounts finds it again, after the
 # restarts between, since the queue keeps its jobs in the user store.
-jobs=$(curl -s --max-time 5 -H "Host: localhost:8080" "$base/api/v1/admin/jobs") || fail "/api/v1/admin/jobs did not answer"
-import_job=$(python3 -c 'import json, sys
+# /readyz turns 200 as the job installs the index, a moment before the job itself has finished.
+import_job=""
+for _ in $(seq 1 20); do
+  jobs=$(curl -s --max-time 5 -H "Host: localhost:8080" "$base/api/v1/admin/jobs") || fail "/api/v1/admin/jobs did not answer"
+  import_job=$(python3 -c 'import json, sys
 jobs = [j for j in json.loads(sys.argv[1])["jobs"] if j["kind"] == "indexImport" and j.get("subject") == "export.sqlite"]
-print(jobs[0]["id"] if len(jobs) == 1 and jobs[0]["state"] == "succeeded" and "requestedBy" not in jobs[0] else "")' "$jobs")
+print(jobs[0]["id"] if len(jobs) == 1 and jobs[0]["state"] == "succeeded" and "requestedBy" not in jobs[0] else "")' "$jobs") \
+    || fail "the jobs list is not one: $jobs"
+  [ -n "$import_job" ] && break
+  sleep 0.25
+done
 [ -n "$import_job" ] || fail "the jobs list does not name the import's job, finished: $jobs"
 echo "   job $import_job, the index import of export.sqlite, finished"
 
@@ -841,7 +848,8 @@ sys.exit(0 if d["auth"] == "local" and roles.get("erin") == "admin" and roles.ge
 changed=$(as_change "$erin" "$erin_token" -X PATCH --data '{"role":"curator"}' -w ' %{http_code}' "$under/api/v1/admin/users/frank")
 case "$changed" in *'"role":"curator"'*' 200') ;; *) fail "erin could not make frank a curator: $changed" ;; esac
 case "$(as_session "$frank" "$under/api/v1/me")" in *'"curator"'*) ;; *) fail "frank's session does not have his new role" ;; esac
-as_change "$erin" "$erin_token" -X PATCH --data '{"role":"reader"}' "$under/api/v1/admin/users/frank" >/dev/null
+changed=$(as_change "$erin" "$erin_token" -X PATCH --data '{"role":"reader"}' -w ' %{http_code}' "$under/api/v1/admin/users/frank")
+case "$changed" in *'"role":"reader"'*' 200') ;; *) fail "erin could not make frank a reader again: $changed" ;; esac
 last=$(as_change "$erin" "$erin_token" -X PATCH --data '{"role":"reader"}' -w ' %{http_code}' "$under/api/v1/admin/users/erin")
 case "$last" in *'"code":"LAST_ADMIN"'*' 409') ;; *) fail "erin, the last admin who can sign in, could demote herself: $last" ;; esac
 jobs=$(as_session "$erin" "$under/api/v1/admin/jobs")
@@ -850,6 +858,11 @@ sys.exit(0 if any(j["id"] == sys.argv[2] and j["state"] == "succeeded" for j in 
   || fail "the import's job, $import_job, is not listed finished after the restarts: $jobs"
 made=$(as_change "$frank" "$frank_token" --data '{"name":"Frank"}' "$under/api/v1/me/tags")
 case "$made" in *'"name":"Frank"'*) ;; *) fail "frank's tag was not made: $made" ;; esac
+# What erin holds of her own, which her export's count cannot say: as an admin, a curator, her export
+# also counts the instance's corrections, which are everyone's.
+total_of() { as_session "$erin" "$under/api/v1/admin/users/$1/research" | python3 -c 'import json, sys; print(json.load(sys.stdin)["total"])'; }
+erin_held=$(total_of erin) || fail "erin's research was not counted"
+[ "$erin_held" -ge 1 ] || fail "erin holds no research of her own before frank's erasure: $erin_held"
 counted=$(as_session "$erin" "$under/api/v1/admin/users/frank/research")
 expected=$(python3 -c 'import json, sys
 d = json.loads(sys.argv[1])
@@ -859,7 +872,9 @@ erased=$(as_change "$erin" "$erin_token" --data "$expected" -w ' %{http_code}' "
 case "$erased" in *'"userId":"frank"'*' 200') ;; *) fail "erin could not erase frank's research: $erased" ;; esac
 held() { as_session "$1" "$under/api/v1/me/export/contents" | python3 -c 'import json, sys; print(sum(t["count"] for t in json.load(sys.stdin)["types"]))'; }
 [ "$(held "$frank")" = 0 ] || fail "frank's export is not empty after the erasure"
-[ "$(held "$erin")" -ge 1 ] || fail "erin's export lost her research to frank's erasure"
+[ "$(held "$erin")" -ge 1 ] || fail "erin's export is empty after frank's erasure"
+[ "$(total_of erin)" = "$erin_held" ] || fail "erin's own research changed with frank's erasure: $erin_held before, $(total_of erin) after"
+[ "$(total_of frank)" = 0 ] || fail "frank still holds research after the erasure"
 echo "   frank refused every admin route; erin lists the accounts, gives frank a role at once, and cannot demote herself; the import's job listed still, after the restarts; frank's research erased, his export empty and erin's not"
 
 echo "== install: signing in through the proxy, FRUS_AUTH=header behind docs/INSTALL.md's recipe"

@@ -5,9 +5,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { backupsQuery, statusQuery } from '../api/admin';
 import { servedPath } from '../api/base';
-import { errorMessage } from '../api/client';
 import { copy } from '../copy';
-import { AdminFrame, useAdmin } from './AdminPanes';
+import { AdminFrame, ReadFailure, useAdmin } from './AdminPanes';
 
 const words = copy.admin.backups;
 
@@ -18,11 +17,7 @@ export function BackupsScreen() {
   const schedule = status.data?.backups;
   let body;
   if (backups.isError && !backups.data) {
-    body = (
-      <p className="error" role="alert">
-        {errorMessage(backups.error)}
-      </p>
-    );
+    body = <ReadFailure error={backups.error} stale={false} />;
   } else if (!backups.data) {
     body = <p role="status">{copy.admin.loading}</p>;
   } else if (!backups.data.backedUp) {
@@ -32,6 +27,7 @@ export function BackupsScreen() {
     body = (
       <>
         <p className="note">{schedule ? words.lead(schedule.hour, schedule.timeZone) : words.leadPlain}</p>
+        {backups.isError && <ReadFailure error={backups.error} stale />}
         {list.some((backup) => backup.kind === 'daily') && (
           <p>
             {/* A link, so that the browser saves the archive as it comes, however large. */}

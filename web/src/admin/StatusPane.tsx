@@ -9,7 +9,7 @@ import { type AdminStatus, resetIndex, statusQuery } from '../api/admin';
 import { errorMessage } from '../api/client';
 import { copy } from '../copy';
 import { closeAtOnce, Modal } from '../shell/Modal';
-import { AdminFrame, useAdmin } from './AdminPanes';
+import { AdminFrame, ReadFailure, useAdmin } from './AdminPanes';
 
 const words = copy.admin.status;
 
@@ -18,15 +18,16 @@ export function StatusScreen() {
   const status = useQuery({ ...statusQuery, enabled: allowed });
   let body;
   if (status.isError && !status.data) {
-    body = (
-      <p className="error" role="alert">
-        {errorMessage(status.error)}
-      </p>
-    );
+    body = <ReadFailure error={status.error} stale={false} />;
   } else if (!status.data) {
     body = <p role="status">{copy.admin.loading}</p>;
   } else {
-    body = <StatusBody status={status.data} />;
+    body = (
+      <>
+        {status.isError && <ReadFailure error={status.error} stale />}
+        <StatusBody status={status.data} />
+      </>
+    );
   }
   return <AdminFrame title={words.title}>{body}</AdminFrame>;
 }
@@ -177,18 +178,21 @@ function Recovery({ status }: { status: AdminStatus }) {
             >
               {words.reset}
             </button>
-            {queued && (
-              <p role="status">
-                {words.resetQueued} <Link to="/admin/jobs">{copy.admin.jobs.title}</Link>
-              </p>
-            )}
+            {/* Always on the page, so that the line is announced when it comes. */}
+            <p role="status">
+              {queued && (
+                <>
+                  {words.resetQueued} <Link to="/admin/jobs">{copy.admin.jobs.title}</Link>
+                </>
+              )}
+            </p>
           </div>
         </>
       ) : (
         <p className="note">{words.resetStandalone}</p>
       )}
       {asking && (
-        <Modal className="confirm" role="alertdialog" labelledBy={headingId} describedBy={messageId} initial={cancel} onCancel={close} onClose={() => {}}>
+        <Modal className="confirm" role="alertdialog" labelledBy={headingId} describedBy={messageId} initial={cancel} onCancel={close} onClose={() => closeAtOnce(() => setAsking(false))}>
           <h2 id={headingId} tabIndex={-1}>
             {words.resetTitle}
           </h2>

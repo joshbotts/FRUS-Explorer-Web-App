@@ -118,13 +118,24 @@ export interface ResearchHoldings {
 /** A user's name as a path's segment. */
 export const userSegment = (name: string) => encodeURIComponent(name);
 
+/**
+ * How often a pane reads again: every two seconds while `busy` says work goes on, else every thirty,
+ * and not at all once a reading has failed, until the pane is opened again, as when the server is gone or
+ * the user is no longer an admin.
+ */
+function every(busy: boolean, failed: boolean): number | false {
+  if (failed) return false;
+  return busy ? 2_000 : 30_000;
+}
+
 /** The jobs, read again every two seconds while one waits or runs. */
 export const jobsQuery = queryOptions({
   queryKey: ['admin', 'jobs'],
   queryFn: ({ signal }) => getJSON<AdminJobList>('/api/v1/admin/jobs', undefined, signal),
   staleTime: 0,
   retry: false,
-  refetchInterval: (query) => (query.state.data?.jobs.some((job) => job.state === 'queued' || job.state === 'running') ? 2_000 : 30_000),
+  refetchInterval: (query) =>
+    every(query.state.data?.jobs.some((job) => job.state === 'queued' || job.state === 'running') ?? false, query.state.status === 'error'),
 });
 
 export const statusQuery = queryOptions({
@@ -132,7 +143,8 @@ export const statusQuery = queryOptions({
   queryFn: ({ signal }) => getJSON<AdminStatus>('/api/v1/admin/status', undefined, signal),
   staleTime: 0,
   retry: false,
-  refetchInterval: (query) => (query.state.data && (query.state.data.jobs.running || query.state.data.jobs.queued > 0) ? 2_000 : 30_000),
+  refetchInterval: (query) =>
+    every(!!query.state.data && (!!query.state.data.jobs.running || query.state.data.jobs.queued > 0), query.state.status === 'error'),
 });
 
 export const usersQuery = queryOptions({
@@ -161,13 +173,15 @@ export function researchHoldings(name: string, signal?: AbortSignal): Promise<Re
   return getJSON<ResearchHoldings>(`/api/v1/admin/users/${userSegment(name)}/research`, undefined, signal);
 }
 
-/** Every admin list is read again after a change, and the user's own, which an admin's own change may touch. */
+/** Every admin list is read again after a change. */
 function changed(client: QueryClient) {
   void client.invalidateQueries({ queryKey: ['admin'] });
 }
 
+/** Cancels the job, and returns once the list of jobs has been read again, so that it shows what the cancel did. */
 export async function cancelJob(client: QueryClient, id: string): Promise<AdminJob | null> {
   const job = await change<AdminJob>(client, 'POST', `/api/v1/admin/jobs/${encodeURIComponent(id)}/cancel`);
+  await client.refetchQueries({ queryKey: ['admin', 'jobs'] });
   changed(client);
   return job;
 }

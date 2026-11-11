@@ -1,15 +1,15 @@
 // Administration ▸ Jobs (PLAN's S20d): every job the server holds, newest first, each its kind and what it
 // works on, its state, its line of progress with how far through it is, who asked and when it was queued,
 // started and finished, and why it failed; and Cancel… for one the server still takes a cancel for,
-// after a question. Read again every two seconds while a job waits or runs, and announced politely: a
-// job's state is a status, not an alert.
+// after a question, whose answer a status line says. Read again every two seconds while a job waits or
+// runs.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
 import { type AdminJob, cancelJob, jobsQuery } from '../api/admin';
 import { errorMessage } from '../api/client';
 import { copy } from '../copy';
 import { closeAtOnce, Modal } from '../shell/Modal';
-import { AdminFrame, useAdmin } from './AdminPanes';
+import { AdminFrame, ReadFailure, useAdmin } from './AdminPanes';
 
 const words = copy.admin.jobs;
 
@@ -24,11 +24,7 @@ export function JobsScreen() {
   const jobs = useQuery({ ...jobsQuery, enabled: allowed });
   let body;
   if (jobs.isError && !jobs.data) {
-    body = (
-      <p className="error" role="alert">
-        {errorMessage(jobs.error)}
-      </p>
-    );
+    body = <ReadFailure error={jobs.error} stale={false} />;
   } else if (!jobs.data) {
     body = <p role="status">{copy.admin.loading}</p>;
   } else if (jobs.data.jobs.length === 0) {
@@ -42,6 +38,7 @@ export function JobsScreen() {
     body = (
       <>
         <p className="note">{words.lead}</p>
+        {jobs.isError && <ReadFailure error={jobs.error} stale />}
         <JobTable jobs={jobs.data.jobs} />
       </>
     );
@@ -51,10 +48,13 @@ export function JobsScreen() {
 
 function JobTable({ jobs }: { jobs: AdminJob[] }) {
   const [cancelling, setCancelling] = useState<AdminJob | null>(null);
+  const [said, setSaid] = useState('');
   const area = useRef<HTMLDivElement>(null);
   return (
     // A region a keyboard can scroll, where the table is wider than the pane.
     <div ref={area} className="admin-table" role="region" aria-label={words.caption} tabIndex={0}>
+      {/* Always on the page, so that what a cancel did is announced when it comes. */}
+      <p role="status">{said}</p>
       <table>
         <caption>{words.caption}</caption>
         <thead>
@@ -72,7 +72,10 @@ function JobTable({ jobs }: { jobs: AdminJob[] }) {
         <tbody>
           {jobs.map((job) => (
             <tr key={job.id} data-id={job.id}>
-              <th scope="row">{jobName(job)}</th>
+              {/* Focusable from a script alone: where focus goes once a cancel has taken the row's button. */}
+              <th scope="row" tabIndex={-1} data-job={job.id}>
+                {jobName(job)}
+              </th>
               <td>
                 <span className={`job-state ${job.state}`}>{words.states[job.state]}</span>
                 {job.state === 'running' && job.cancelRequestedAt ? <span className="note"> · {words.stopping}</span> : null}
@@ -106,13 +109,17 @@ function JobTable({ jobs }: { jobs: AdminJob[] }) {
       </table>
       {cancelling && (
         <CancelConfirmation
+          key={cancelling.id}
           job={cancelling}
-          onClose={() => {
+          onCancelled={(job) => setSaid(job.state === 'cancelled' ? words.cancelled(jobName(job)) : words.stopAsked(jobName(job)))}
+          onClose={(cancelled) => {
             const id = cancelling.id;
             closeAtOnce(() => setCancelling(null));
-            // Back to the row's button if it is still there, else to the pane's heading.
-            const button = area.current?.querySelector<HTMLButtonElement>(`button[data-cancel="${CSS.escape(id)}"]`);
-            (button ?? document.querySelector<HTMLElement>('main h1'))?.focus();
+            // After a cancel the row's button goes, so focus goes to the row; else back to its button.
+            const target = cancelled
+              ? area.current?.querySelector<HTMLElement>(`th[data-job="${CSS.escape(id)}"]`)
+              : area.current?.querySelector<HTMLButtonElement>(`button[data-cancel="${CSS.escape(id)}"]`);
+            (target ?? document.querySelector<HTMLElement>('main h1'))?.focus();
           }}
         />
       )}
@@ -120,8 +127,16 @@ function JobTable({ jobs }: { jobs: AdminJob[] }) {
   );
 }
 
-/** "Cancel this job?", with Cancel Job and Keep It, which waits for the cancel sent. */
-function CancelConfirmation({ job, onClose }: { job: AdminJob; onClose: () => void }) {
+/** "Cancel this job?", with Cancel Job and Keep It, which waits for the cancel sent and the list read again. */
+function CancelConfirmation({
+  job,
+  onCancelled,
+  onClose,
+}: {
+  job: AdminJob;
+  onCancelled: (job: AdminJob) => void;
+  onClose: (cancelled: boolean) => void;
+}) {
   const client = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -134,9 +149,10 @@ function CancelConfirmation({ job, onClose }: { job: AdminJob; onClose: () => vo
     setBusy(true);
     setFailure(null);
     try {
-      await cancelJob(client, job.id);
+      const answered = await cancelJob(client, job.id);
       setBusy(false);
-      onClose();
+      onCancelled(answered ?? job);
+      onClose(true);
     } catch (error) {
       setFailure(errorMessage(error));
       setBusy(false);
@@ -151,9 +167,9 @@ function CancelConfirmation({ job, onClose }: { job: AdminJob; onClose: () => vo
       describedBy={messageId}
       initial={keep}
       onCancel={() => {
-        if (!busy) onClose();
+        if (!busy) onClose(false);
       }}
-      onClose={() => {}}
+      onClose={() => onClose(false)}
     >
       <h2 id={headingId} tabIndex={-1}>
         {words.cancelTitle}
@@ -172,7 +188,7 @@ function CancelConfirmation({ job, onClose }: { job: AdminJob; onClose: () => vo
           type="button"
           aria-disabled={busy}
           onClick={() => {
-            if (!busy) onClose();
+            if (!busy) onClose(false);
           }}
         >
           {words.keepRunning}

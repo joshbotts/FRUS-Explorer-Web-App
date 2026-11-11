@@ -78,8 +78,9 @@ final class CancelAtStep: ImportObserver, @unchecked Sendable {
         await #expect(throws: IndexResetRefusal.self) { _ = try await fixture.state.resetIndex(files: fixture.files, askedAt: asked) }
         #expect(await fixture.state.readiness().ready, "the new index is still served")
         #expect(FileManager.default.fileExists(atPath: fixture.files.liveIndex.path))
+        let served = try #require(await fixture.state.status().index)
         let removed = try await fixture.state.resetIndex(files: fixture.files, askedAt: fixture.state.indexGeneration)
-        #expect(removed?.documents == 7)
+        #expect(removed == served)
         #expect(await fixture.state.readiness().step == .waitingForExport)
         #expect(!FileManager.default.fileExists(atPath: fixture.files.liveIndex.path))
         #expect(!FileManager.default.fileExists(atPath: fixture.files.previousIndex.path))
@@ -93,7 +94,8 @@ final class CancelAtStep: ImportObserver, @unchecked Sendable {
         _ = try await started.state.resetIndex(files: started.files, askedAt: generation)
         await opening
         #expect(await started.state.status().index == nil, "the reset wins")
-        #expect(await started.state.readiness().step == .waitingForExport)
+        let readiness = await started.state.readiness()
+        #expect(readiness.step == .waitingForExport, "\(readiness)")
     }
 
     /// An import's job cancelled between its steps (S20d) stops before the next, changing nothing: no

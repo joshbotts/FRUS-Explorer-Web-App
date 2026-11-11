@@ -3,10 +3,10 @@
 // in, which says why there is nothing to show to anyone else, or on a server that keeps no user data.
 // The panes are grouped by area under a line each, as Settings' are (PLAN's S20a): a later row's pane,
 // the library's (S21c), goes beside its area's kin, never at the end.
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import type { ReactNode } from 'react';
-import { errorMessage } from '../api/client';
+import { type ReactNode, useEffect } from 'react';
+import { ApiError, errorMessage } from '../api/client';
 import { meQuery } from '../api/userData';
 import { copy } from '../copy';
 import { useHeadingReady } from '../shell/headingFocus';
@@ -55,6 +55,25 @@ export function useAdmin() {
   const me = useQuery(meQuery);
   const allowed = me.data?.userData === true && me.data.roles.includes('admin');
   return { me, allowed };
+}
+
+/**
+ * A pane's reading that failed: why, and with `stale`, that what the pane still shows may be out of date.
+ * When the user is no longer an admin, or no longer signed in, the app asks again who they are, so that
+ * the pane says so, and its reading stops.
+ */
+export function ReadFailure({ error, stale }: { error: unknown; stale: boolean }) {
+  const client = useQueryClient();
+  useEffect(() => {
+    if (error instanceof ApiError && (error.code === 'ROLE_REQUIRED' || error.code === 'NOT_SIGNED_IN')) {
+      void client.invalidateQueries({ queryKey: ['me'] });
+    }
+  }, [error, client]);
+  return (
+    <p className="error" role="alert">
+      {stale ? copy.admin.stale(errorMessage(error)) : errorMessage(error)}
+    </p>
+  );
 }
 
 /**

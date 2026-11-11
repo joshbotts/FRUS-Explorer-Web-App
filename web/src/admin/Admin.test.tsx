@@ -113,7 +113,12 @@ describe('Administration', () => {
     await userEvent.click(within(rows[0]!).getByRole('button', { name: 'Cancel Index import: export.sqlite' }));
     const dialog = await screen.findByRole('alertdialog', { name: 'Cancel this job?' });
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel Job' }));
+    // The row's Cancel… goes with the cancel, so focus goes to the row.
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     await waitFor(() => expect(screen.getByText('Stopping at its next step', { exact: false })).toBeTruthy());
+    expect(screen.getAllByRole('status').some((line) => line.textContent === 'Index import: export.sqlite stops before its next step.')).toBe(true);
+    expect(document.activeElement).toBe(within(table).getByRole('rowheader', { name: 'Index import: export.sqlite' }));
+    expect(within(table).queryByRole('button', { name: 'Cancel Index import: export.sqlite' })).toBeNull();
     expect(sent(fetch, 'POST', '/api/v1/admin/jobs/J2/cancel')).toHaveLength(1);
   });
 
@@ -139,8 +144,19 @@ describe('Administration', () => {
     renderAt('/admin/users');
     const table = await screen.findByRole('table', { name: 'The users this server holds, by name' });
     expect(within(table).getAllByRole('rowheader').map((cell) => cell.textContent)).toEqual(['alice', 'bob']);
-    await userEvent.selectOptions(within(table).getByRole('combobox', { name: 'Role of alice' }), 'reader');
-    expect((await screen.findByRole('alert')).textContent).toBe('alice is the last admin who can sign in: make another account an admin first.');
+    const role = within(table).getByRole('combobox', { name: 'Role of alice' }) as HTMLSelectElement;
+    await userEvent.selectOptions(role, 'reader');
+    expect(sent(fetch, 'PATCH', '/api/v1/admin/users/alice')).toHaveLength(0);
+    const setRole = within(table).getByRole('button', { name: 'Set Role of alice' });
+    await userEvent.click(setRole);
+    await waitFor(() =>
+      expect(screen.getAllByRole('alert').some((line) => line.textContent === 'alice is the last admin who can sign in: make another account an admin first.')).toBe(
+        true,
+      ),
+    );
+    expect(sent(fetch, 'PATCH', '/api/v1/admin/users/alice')).toHaveLength(1);
+    await waitFor(() => expect(role.value).toBe('admin'));
+    expect(document.activeElement).toBe(setRole);
 
     await userEvent.click(within(table).getByRole('button', { name: 'Disable bob' }));
     const dialog = await screen.findByRole('alertdialog', { name: 'Disable bob?' });
@@ -197,7 +213,7 @@ describe('Administration', () => {
       },
     });
     renderAt('/admin/users');
-    await userEvent.click(await screen.findByRole('button', { name: 'Erase the research of bob' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Erase Research of bob' }));
     const dialog = await screen.findByRole('alertdialog', { name: 'Erase the research of bob?' });
     expect(await within(dialog).findByText('3 Research Notes')).toBeTruthy();
     expect(within(dialog).getByText('2 Tags')).toBeTruthy();
@@ -205,11 +221,12 @@ describe('Administration', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Erase' }));
     expect(await within(dialog).findByText('What they hold changed since it was counted, so nothing was erased. Here is what they hold now.')).toBeTruthy();
     expect(await within(dialog).findByText('4 Research Notes')).toBeTruthy();
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Erase' }));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Erase' }));
     expect(await screen.findByText('Erased 7 records of bob’s research.')).toBeTruthy();
     const bodies = sent(fetch, 'POST', '/api/v1/admin/users/bob/research/erase').map(([, init]) => JSON.parse(String(init?.body)) as unknown);
     expect(bodies).toEqual([{ expected: { notes: 3, tags: 2, secrets: 1 } }, { expected: { notes: 4, tags: 2, secrets: 1 } }]);
-    expect(screen.getByRole('button', { name: 'Erase the research of bob' })).toBe(document.activeElement);
+    expect(screen.getByRole('button', { name: 'Erase Research of bob' })).toBe(document.activeElement);
   });
 
   it('lists the backups with a link to the newest', async () => {

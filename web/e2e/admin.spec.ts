@@ -1,13 +1,14 @@
 // S20d's done-when (docs/PLAN.md): Playwright by keyboard on Chromium with no axe violations, through
 // Administration as the image's single user, an admin: the header's Admin link to Status, whose Reset the
-// Index… asks first and is cancelled; Jobs, which names the import that made the index, finished, after
-// the restarts the smoke test made; Users, whose Erase Research… names what the user holds and is
-// cancelled; Backups; and Keys, where the instance's NARA key is set and cleared, as the test found it.
-// It changes nothing a later spec reads: no reset, no erasure, and no key left. It runs at the root and
-// again under the path.
+// Index… asks first and is cancelled; Jobs, which names the import that made the index, finished; Users,
+// whose Erase Research… names what the user holds and is cancelled; Backups; and Keys, where the
+// instance's NARA key is set and cleared, leaving none. A link that opens a pane keeps focus, as the
+// header's do, and Tab goes on into the pane. It changes nothing a later spec reads: no reset, no
+// erasure, and no key left. It runs at the root and again under the path.
+import type { Locator } from '@playwright/test';
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
-import { tabTo } from './keyboard';
+import { backTabTo, tabTo } from './keyboard';
 import { getJSON, send } from './notes';
 
 interface SecretList {
@@ -23,15 +24,21 @@ test('walks Administration by keyboard alone, asking before each recovery action
   await tabTo(page, admin);
   await page.keyboard.press('Enter');
 
-  // Status, the first pane, with its heading focused.
-  const status = page.getByRole('heading', { level: 1, name: 'Status' });
-  await expect(status).toBeFocused();
-  await expect(page).toHaveURL(/admin\/status$/);
+  /** The pane a link opened: its address, its heading, and the link, which keeps focus and is the current page's. */
+  async function opened(link: Locator, path: RegExp, title: string) {
+    await expect(page).toHaveURL(path);
+    await expect(page.getByRole('heading', { level: 1, name: title, exact: true })).toBeVisible();
+    await expect(link).toBeFocused();
+    await expect(link).toHaveAttribute('aria-current', 'page');
+  }
+
+  // Status, the first pane.
+  await opened(admin, /admin\/status$/, 'Status');
   await expect(page.getByText('app.db, SQLite')).toBeVisible();
   await expect(page.getByText('Import: an index exported from the Mac')).toBeVisible();
   await axeCheck(page);
   const reset = page.getByRole('button', { name: 'Reset the Index…' });
-  await tabTo(page, reset);
+  await tabTo(page, reset, 60);
   await page.keyboard.press('Enter');
   const question = page.getByRole('alertdialog', { name: 'Reset the index?' });
   await expect(question.getByRole('button', { name: 'Cancel' })).toBeFocused();
@@ -42,9 +49,10 @@ test('walks Administration by keyboard alone, asking before each recovery action
 
   // Jobs: the import that made the index, finished.
   const panes = page.getByRole('navigation', { name: 'Administration' });
-  await tabTo(page, panes.getByRole('link', { name: 'Jobs' }), 60, 'Shift+Tab');
+  const jobsLink = panes.getByRole('link', { name: 'Jobs', exact: true });
+  await backTabTo(page, jobsLink, 60);
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('heading', { level: 1, name: 'Jobs' })).toBeFocused();
+  await opened(jobsLink, /admin\/jobs$/, 'Jobs');
   const jobs = page.getByRole('table', { name: 'The jobs the server holds, newest first' });
   const imported = jobs.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Index import: export.sqlite', exact: true }) });
   await expect(imported.first()).toBeVisible();
@@ -52,14 +60,15 @@ test('walks Administration by keyboard alone, asking before each recovery action
   await axeCheck(page);
 
   // Users: the single user, an admin, whose Erase Research… names what they hold, and is cancelled.
-  await tabTo(page, panes.getByRole('link', { name: 'Users' }), 60, 'Shift+Tab');
+  const usersLink = panes.getByRole('link', { name: 'Users', exact: true });
+  await tabTo(page, usersLink);
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('heading', { level: 1, name: 'Users' })).toBeFocused();
+  await opened(usersLink, /admin\/users$/, 'Users');
   const users = page.getByRole('table', { name: 'The users this server holds, by name' });
   await expect(users.getByRole('rowheader', { name: 'owner', exact: true })).toBeVisible();
   await expect(page.getByText('This server has no sign-in: it has one user, owner, who holds every role.')).toBeVisible();
   await axeCheck(page);
-  const erase = users.getByRole('button', { name: 'Erase the research of owner' });
+  const erase = users.getByRole('button', { name: 'Erase Research of owner', exact: true });
   await tabTo(page, erase);
   await page.keyboard.press('Enter');
   const asking = page.getByRole('alertdialog', { name: 'Erase the research of owner?' });
@@ -71,18 +80,20 @@ test('walks Administration by keyboard alone, asking before each recovery action
   await expect(erase).toBeFocused();
 
   // Backups.
-  await tabTo(page, panes.getByRole('link', { name: 'Backups' }), 60, 'Shift+Tab');
+  const backupsLink = panes.getByRole('link', { name: 'Backups', exact: true });
+  await backTabTo(page, backupsLink, 60);
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('heading', { level: 1, name: 'Backups' })).toBeFocused();
+  await opened(backupsLink, /admin\/backups$/, 'Backups');
   await expect(page.getByText(/The server backs up its user store every day/)).toBeVisible();
   await axeCheck(page);
 
-  // Keys: the instance's NARA key, set and cleared by keyboard, as the test found it.
+  // Keys: the instance's NARA key, set and cleared by keyboard, leaving none.
   await send(page, 'DELETE', 'api/v1/admin/secrets/nara');
   try {
-    await tabTo(page, panes.getByRole('link', { name: 'Keys' }), 60, 'Shift+Tab');
+    const keysLink = panes.getByRole('link', { name: 'Keys', exact: true });
+    await tabTo(page, keysLink);
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('heading', { level: 1, name: 'Keys' })).toBeFocused();
+    await opened(keysLink, /admin\/keys$/, 'Keys');
     const nara = page.getByRole('region', { name: 'NARA Catalog' });
     await expect(nara.getByText('No key stored', { exact: true })).toBeVisible();
     await axeCheck(page);

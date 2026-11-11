@@ -2,21 +2,16 @@
 // key of their own, with Settings ▸ Keys' section over the admin's routes (S20c's `/api/v1/admin/secrets`).
 import { useQuery } from '@tanstack/react-query';
 import { instanceSecretsQuery } from '../api/admin';
-import { errorMessage } from '../api/client';
 import { copy } from '../copy';
 import { KeySection } from '../settings/KeysSettings';
-import { AdminFrame, useAdmin } from './AdminPanes';
+import { AdminFrame, ReadFailure, useAdmin } from './AdminPanes';
 
 export function AdminKeysScreen() {
   const { allowed } = useAdmin();
   const secrets = useQuery({ ...instanceSecretsQuery, enabled: allowed });
   let body;
   if (secrets.isError && !secrets.data) {
-    body = (
-      <p className="error" role="alert">
-        {errorMessage(secrets.error)}
-      </p>
-    );
+    body = <ReadFailure error={secrets.error} stale={false} />;
   } else if (!secrets.data) {
     body = <p role="status">{copy.admin.loading}</p>;
   } else {
