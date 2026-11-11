@@ -1,7 +1,7 @@
 // A section of a volume (SPEC, Browse): the row of the text it prints outside the documents and
 // sections it holds, first, as the app's Browse lists it; its subsections; and its documents in the
-// volume's order, each named by the kit's rule for lists from the index's entry, as the reader's
-// heading is, or, for one the index lacks, by its number from the TEI.
+// volume's order, each named as the reader heads it: by the kit's rule for lists from the index's
+// entry, or, for one the index lacks, by the head the server parses from its TEI.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { useId } from 'react';

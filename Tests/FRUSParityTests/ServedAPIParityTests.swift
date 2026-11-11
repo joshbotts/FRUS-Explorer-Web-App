@@ -205,7 +205,8 @@ struct ServedFile: Equatable {
         return try await found() == 1
     }
 
-    /// Check 4 through the page. Every golden row, read as the page the browser loads, holds the
+    /// Check 4 through the page. Every golden row, read as the page the browser loads, the index and
+    /// the tables of contents the reader parses alone among them, holds the
     /// golden fragment between its one `<body>\n` and `\n</body>`, once the 8 figure images, which
     /// the server names by its own address, are named by the app's again; the body alone is the
     /// same; and every page's head is the kit's `ReaderPage.build` head with the host script, at the
@@ -338,7 +339,13 @@ struct ServedFile: Equatable {
         #expect(ParityFixtures.volumes.map { documents[$0]?.total } == [140, 128, 134], "front matter, documents and back matter")
         #expect(Set(list.items.filter(\.indexed).map(\.volumeId)) == Set(ParityFixtures.volumes))
         for volume in ParityFixtures.volumes {
-            let rows = Set(golden.rows.filter { $0.volume == volume }.map(\.document))
+            // The golden rows less the sections the reader parses alone, which the index leaves out and
+            // its reading order holds, as the app's reader turns its pages to them.
+            let alone = Set(RenderParityTests.expectedSectionsReadAlone.filter { $0.hasPrefix("\(volume)/") }
+                .map { String($0.dropFirst(volume.count + 1)) })
+            let rows = Set(golden.rows.filter { $0.volume == volume }.map(\.document)).subtracting(alone)
+            #expect(alone.isSubset(of: Set((documents[volume]?.items ?? []).filter { !$0.inIndex }.map(\.documentId))),
+                    "\(volume)'s sections read alone are in its reading order, and not in the index")
             #expect(volumes[volume]?.indexedDocuments == built.index.documents[volume] && volumes[volume]?.teiAvailable == true)
             #expect(volumes[volume]?.structure?.isEmpty == false, "\(volume) has a structure")
             #expect(volumes[volume]?.structureSource == "index", "\(volume)'s structure is the index's")

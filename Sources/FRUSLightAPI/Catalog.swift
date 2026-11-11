@@ -233,40 +233,42 @@ enum CatalogRoutes {
                 do { parse = .success(try await reader.volume(volumeId)) } catch { parse = .failure(error) }
             }
             let parsed = try? parse?.get()
-            /// A document the index cannot answer for, named from its TEI; else `problem`, or the
-            /// TEI's own when it will not parse.
-            func fromTEI(otherwise problem: any Error) throws -> DocumentDetail {
+            /// A document the index cannot answer for, or a section the reader parses alone, named from
+            /// its TEI, with its neighbours in `browse`'s reading order when that holds it; else
+            /// `problem`, or the TEI's own when it will not parse.
+            func fromTEI(otherwise problem: any Error, browse: VolumeBrowse? = nil) async throws -> DocumentDetail {
                 if let parse, case .failure(let error) = parse { throw error }
-                guard let parsed, let ast = parsed.documents[documentId] else { throw problem }
-                return DocumentDetail(teiOnly: ast, structure: parsed.structure, volumeId: volumeId)
+                guard let parsed, parsed.opens(documentId) else { throw problem }
+                let ast = try await reader.document(volume: volumeId, document: documentId).ast
+                var detail = DocumentDetail(teiOnly: ast, structure: parsed.structure, volumeId: volumeId)
+                if let browse { (detail.previous, detail.next) = browse.neighbours(of: documentId, readable: parsed) }
+                return detail
             }
             let served: ServedIndex
             do {
                 served = try await provider.served()
             } catch {
                 // The reader works without an index.
-                return try fromTEI(otherwise: error)
+                return try await fromTEI(otherwise: error)
             }
             guard let entry = try await served.pipeline.document(forDocumentId: documentId, inVolume: volumeId) else {
-                return try fromTEI(otherwise: APIProblem(.notFound, code: "DOCUMENT_NOT_FOUND",
-                                                         detail: "The index holds no document \(documentId) in \(volumeId)."))
+                // A section the index leaves out, such as a back-of-volume index, is in its reading order
+                // all the same, and the app's reader turns its pages from it as from a document
+                // (`DocumentViewModel.loadAdjacentEntries`). An order that cannot be read leaves none.
+                let browse = try? await VolumeBrowse(volumeId, served: served)
+                return try await fromTEI(otherwise: APIProblem(.notFound, code: "DOCUMENT_NOT_FOUND",
+                                                               detail: "The index holds no document \(documentId) in \(volumeId)."),
+                                         browse: browse)
             }
             let browse = try await VolumeBrowse(volumeId, served: served)
-            let position = browse.sequence.firstIndex { $0.documentId == entry.documentId }
-            func neighbour(_ offset: Int) -> DocumentDetail.Neighbour? {
-                guard let position, browse.sequence.indices.contains(position + offset) else { return nil }
-                let other = browse.sequence[position + offset]
-                return DocumentDetail.Neighbour(documentId: other.documentId, header: other.header,
-                                                inIndex: browse.indexed.contains(other.documentId),
-                                                readable: parsed.map { $0.documents[other.documentId] != nil })
-            }
+            let (previous, next) = browse.neighbours(of: entry.documentId, readable: parsed)
             let date = try await served.pipeline.datesByDocumentKey([(volumeId: volumeId, documentId: entry.documentId)])
             let classification = try await served.pipeline.effectiveIsEditorialNote(volumeId: volumeId, documentId: entry.documentId)
             var document = DocumentEntry(entry, inIndex: true, dateISO: date["\(volumeId)/\(entry.documentId)"])
             document.classify(asEditorialNote: classification ?? entry.isEditorialNote)
             return DocumentDetail(document: document,
                                   canonicalURL: FRUSCanonicalURL.string(volumeId: volumeId, documentId: entry.documentId),
-                                  previous: neighbour(-1), next: neighbour(1), teiAvailable: teiAvailable)
+                                  previous: previous, next: next, teiAvailable: teiAvailable)
         }
     }
 }
@@ -283,7 +285,8 @@ struct VolumeContents {
     let entries: [String: DocumentBrowserEntry]
     var indexed: Set<String> { Set(entries.keys) }
     let parsed: ReaderService.ParsedVolume?
-    var readerDocuments: Set<String>? { parsed.map { Set($0.documents.keys) } }
+    /// What the reader opens: the full parse's documents and the sections it parses alone.
+    var readerDocuments: Set<String>? { parsed.map(\.readerIds) }
 
     /// Nil when neither the index nor the TEI gives the volume a structure. An index that cannot be
     /// read, or TEI that will not parse when the index gives no structure, throws its problem; TEI
@@ -348,7 +351,8 @@ public struct VolumeSectionPage: Codable, Equatable, Sendable {
 }
 
 /// A document in a section's list: the index's entry when it holds the document, else what the
-/// TEI's parse gives, named as the kit names a document by its number ("Document 3").
+/// TEI's parse gives, its header the kit's label for a document by its number ("Document 3") and its
+/// name the head the reader heads it by (`parsedTitle(of:)`), so the row reads as the heading it opens.
 public struct SectionDocument: Codable, Equatable, Sendable {
     public var documentId: String
     public var header: String
@@ -378,8 +382,9 @@ public struct SectionDocument: Codable, Equatable, Sendable {
         header = teiHeader(documentId: documentId, printed: ast?.printedNumber, structure: structure)
         documentNumber = CitableDocumentNumber.resolve(printed: ast?.printedNumber, documentId: documentId)
         isEditorialNote = ast?.isShapedAsEditorialNote ?? false
-        displayTitle = FRUSLightAPI.displayTitle(header: header, documentNumber: documentNumber,
-                                                 isEditorialNote: isEditorialNote, documentId: documentId)
+        displayTitle = ast.flatMap(parsedTitle(of:))
+            ?? FRUSLightAPI.displayTitle(header: header, documentNumber: documentNumber,
+                                         isEditorialNote: isEditorialNote, documentId: documentId)
         inIndex = false
         self.readable = readable
     }
@@ -411,6 +416,21 @@ struct VolumeBrowse {
         sequence = try await served.pipeline.readingSequence(forVolume: volumeId)
         indexed = Set(try await served.pipeline.documents(forVolume: volumeId).map(\.documentId))
     }
+
+    /// The entries before and after `documentId` in the reading order, none where it is not in it, each
+    /// marked with whether the reader of `parsed`'s volume opens it, unknown without the TEI.
+    func neighbours(of documentId: String, readable parsed: ReaderService.ParsedVolume?)
+        -> (previous: DocumentDetail.Neighbour?, next: DocumentDetail.Neighbour?) {
+        guard let position = sequence.firstIndex(where: { $0.documentId == documentId }) else { return (nil, nil) }
+        func neighbour(_ offset: Int) -> DocumentDetail.Neighbour? {
+            guard sequence.indices.contains(position + offset) else { return nil }
+            let other = sequence[position + offset]
+            return DocumentDetail.Neighbour(documentId: other.documentId, header: other.header,
+                                            inIndex: indexed.contains(other.documentId),
+                                            readable: parsed.map { $0.opens(other.documentId) })
+        }
+        return (neighbour(-1), neighbour(1))
+    }
 }
 
 /// A document in a volume's list: the draft's `DocumentBrowserEntry`, and whether the index holds
@@ -422,7 +442,8 @@ public struct DocumentEntry: Codable, Equatable, Sendable {
     public var documentNumber: String?
     public var header: String
     /// What a list calls it, and the reader's heading
-    /// (`displayTitle(header:documentNumber:isEditorialNote:documentId:)`).
+    /// (`displayTitle(header:documentNumber:isEditorialNote:documentId:)`); for a document the index
+    /// does not hold, the reader's heading is its parsed head (`DocumentDetail(teiOnly:)`).
     public var displayTitle: String
     public var dateline: String?
     public var sourceNote: String?
@@ -480,9 +501,10 @@ public struct DocumentDetail: Codable, Equatable, Sendable {
         public var documentId: String
         public var header: String
         public var inIndex: Bool
-        /// Whether the reader can open it; absent when the TEI is not mounted. A front-matter list
-        /// such as the list of names is in the reading order, but the reader's parse does not make it
-        /// a document.
+        /// Whether the reader can open it; absent when the TEI is not mounted. The list of names and
+        /// the list of sources are in the reading order, where the app's reader turns to them as
+        /// printed pages, but this reader does not open them: the app's Browse opens each as a list of
+        /// its own, which this server does not have yet.
         public var readable: Bool?
     }
 
@@ -507,14 +529,35 @@ func teiHeader(documentId: String, printed: String?, structure: [VolumeSection])
     return CitableDocumentNumber.rowLabel(printed: printed, documentId: documentId)
 }
 
+/// The title the app's reader gives a document it parsed (`DocumentViewModel.load`): the kit's display
+/// title of the head `IndexingPipeline.extractHeader(from:)` reads from the TEI, which is the header the
+/// index would store, with the number the document prints; none for a document with no head that is not
+/// shaped as an editorial note, which the reader leaves to the title it was opened with. The reader's
+/// heading for a document the index does not hold and History's title of a visit to one both take it
+/// (S25c), so the two name it alike. The app's number falls back to the first head that begins with one
+/// (`extractDocumentNumber(from:)`, internal to the kit), which a title shows only for a note with no
+/// `@n` whose first head names nothing; every shipped document carries `@n`, as that rule's own doc says,
+/// so the server takes `printedNumber` alone.
+func parsedTitle(of ast: FRUSDocumentAST) -> String? {
+    let extracted = IndexingPipeline.extractHeader(from: ast.nodes)
+    let isEditorialNote = ast.isShapedAsEditorialNote
+    guard !extracted.isEmpty || isEditorialNote else { return nil }
+    return displayTitle(header: extracted, documentNumber: ast.printedNumber, isEditorialNote: isEditorialNote,
+                        documentId: ast.documentId)
+}
+
 extension DocumentDetail {
-    /// A document the index does not hold, or none is served, named from its TEI (`teiHeader`), with
-    /// no neighbours, since the reading order is the index's.
+    /// A document the index does not hold, or any while none is served, as the app's reader names a
+    /// document it parsed: by its parsed head (`parsedTitle(of:)`), "Index" for a back-of-volume index,
+    /// and by its label from the TEI (`teiHeader`), a section's title or "Document 3", where it has no
+    /// head and no note's shape, as the app's reader keeps the title Browse opened it with. Its header
+    /// is that label. No neighbours: the route adds them where the index's reading order holds it.
     init(teiOnly ast: FRUSDocumentAST, structure: [VolumeSection], volumeId: String) {
         let number = CitableDocumentNumber.resolve(printed: ast.printedNumber, documentId: ast.documentId)
         document = DocumentEntry(documentId: ast.documentId, volumeId: volumeId, documentNumber: number,
                                  header: teiHeader(documentId: ast.documentId, printed: ast.printedNumber, structure: structure),
                                  isEditorialNote: ast.isShapedAsEditorialNote, inIndex: false)
+        if let title = parsedTitle(of: ast) { document.displayTitle = title }
         canonicalURL = FRUSCanonicalURL.string(volumeId: volumeId, documentId: ast.documentId)
         teiAvailable = true
     }

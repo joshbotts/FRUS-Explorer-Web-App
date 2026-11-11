@@ -240,11 +240,12 @@ import Testing
             // and the kit's chip beside a "Source:" note's, which a volume that prints it in the opener has none of.
             ("browser.annotations.app.classification", "Search's results and Source Explorer show a document's marking.",
              "classification", "The reader shows a document’s marking as the volume prints it."),
-            // The reader's pages are a full parse's documents, which leave out a volume's index and its lists
-            // of sources and persons, where the app's Read Index opens each (S21b's follow-up).
+            // The reader opens a volume's index, which it parses alone as the app's Read Index does (S21b's
+            // follow-up), but not its lists of sources and persons, which the app's Browse opens as lists
+            // of their own.
             ("browser.annotations.app.printedAids",
              "A volume's page lists them under Front Matter and Back Matter, and the reader opens each one.",
-             "printedAids", "A volume’s page lists them under Front Matter and Back Matter, and the reader opens most of them; its index and its lists of sources and persons do not open here yet."),
+             "printedAids", "A volume’s page lists them under Front Matter and Back Matter, and the reader opens most of them, its index among them; its lists of sources and persons do not open here yet."),
             // The graph and Cross-Volume Connections are S23e's.
             ("browser.annotations.app.crossReferences",
              "The reader follows each one, and the Cross-Reference graph and Cross-Volume Connections draw them.",

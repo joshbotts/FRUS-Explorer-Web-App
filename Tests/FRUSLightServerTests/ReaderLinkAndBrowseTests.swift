@@ -191,11 +191,10 @@ private func formEncoded(_ fields: [String: String]) -> String {
 
     /// An index's "See" references (joshbotts/FRUS-Explorer#1875) are answered with the id of the item
     /// the kit's serializer writes for the entry they name. The fixture's references, read from its
-    /// TEI, each name an entry of its index; the page the reader's own rendering makes of the index, as
-    /// the app's Read Index parses it (`parseDocument(documentId:volumeURL:)`), holds an item for each,
-    /// and each of the page's "See" links is answered in place with that item's id. The server's reader
-    /// serves no volume's index yet: a full parse, the source of its pages, gives no document for a
-    /// back-of-volume index, so the route says so.
+    /// TEI, each name an entry of its index; the page the reader serves of the index, which it parses
+    /// alone, as the app's Read Index does (`parseDocument(documentId:volumeURL:)`), is the kit's
+    /// rendering of that parse, holds an item for each, and each of the page's "See" links is answered
+    /// in place with that item's id.
     @Test func anIndexsSeeReferencesAreAnsweredWithTheItemsItsPageHolds() async throws {
         let url = RepositoryFiles.tei.appendingPathComponent("\(v06).xml")
         let tei = try String(contentsOf: url, encoding: .utf8)
@@ -211,6 +210,10 @@ private func formEncoded(_ fields: [String: String]) -> String {
         let hrefs = Set(page.matches(of: /href="(frusexplorer:\/\/doc\/%23in\d+)"/).map { String($0.1) })
         #expect(hrefs.count == anchors.count)
         try await fixture.app.test(.router) { client in
+            // The reader serves the index's page, the body the kit renders of the one section's parse.
+            let served = try await client.execute(uri: "/api/v1/volumes/\(v06)/documents/index/html?part=body", method: .get)
+            #expect(served.status == .ok)
+            #expect(String(buffer: served.body) == page, "the served index is the kit's rendering of the section parsed alone")
             for href in hrefs {
                 let target = try decode(ReaderLinkTarget.self, try await client.execute(uri: linkURI(href, in: "index"), method: .get))
                 let entry = try #require(target.indexEntry, "\(href)")
@@ -218,8 +221,6 @@ private func formEncoded(_ fields: [String: String]) -> String {
                 #expect(entry.elementId == ReaderLinkRoutes.indexEntryPrefix + entry.anchor)
                 #expect(page.contains("<li id=\"\(entry.elementId)\">"), "\(href): the page holds \(entry.elementId)")
             }
-            let index = try await client.execute(uri: "/api/v1/volumes/\(v06)/documents/index/html", method: .get)
-            #expect(try problem(index, .notFound).code == "DOCUMENT_NOT_FOUND")
         }
         // The kit's landing script looks for the same id.
         #expect(IndexEntryLanding.script(keyExpression: "key").contains(#"document.getElementById("ix-" + key)"#))
@@ -362,8 +363,11 @@ private func formEncoded(_ fields: [String: String]) -> String {
             let section = try decode(VolumeSectionPage.self, try await client.execute(uri: "/api/v1/volumes/\(v06)/sections/comp1", method: .get))
             #expect(section.documents[0].displayTitle == "1. Telegram From the Embassy in the Soviet Union")
             #expect(section.documents[1].header == "Editorial Note" && section.documents[1].displayTitle == "Editorial Note 2")
-            // A document the index lacks keeps the name its TEI gives it.
-            #expect(section.documents[2].displayTitle == "Document 3" && section.documents[2].displayTitle == section.documents[2].header)
+            // A document the index lacks is named by the head the reader heads it by, its label from the TEI its header.
+            #expect(section.documents[2].displayTitle == "3. Message From Chairmen Khrushchev and Brezhnev to President Kennedy")
+            #expect(section.documents[2].header == "Document 3")
+            let d3 = try decode(DocumentDetail.self, try await client.execute(uri: "/api/v1/volumes/\(v06)/documents/d3", method: .get))
+            #expect(d3.document.displayTitle == section.documents[2].displayTitle, "the row reads as the heading it opens")
             let order = try decode(DocumentList.self, try await client.execute(uri: "/api/v1/volumes/\(v06)/documents?limit=1000", method: .get))
             #expect(order.items.first { $0.documentId == "d2" }?.displayTitle == "Editorial Note 2")
             let d2 = try decode(DocumentDetail.self, try await client.execute(uri: "/api/v1/volumes/\(v06)/documents/d2", method: .get))
@@ -381,17 +385,24 @@ private func formEncoded(_ fields: [String: String]) -> String {
     }
 
     /// The reader works without the index, so a document the index lacks, or every document before
-    /// an import, is named from its TEI.
+    /// an import, is named from its TEI: headed as the app's reader heads a document it parsed, by the
+    /// kit's display title of its parsed head (`parsedTitle(of:)`, S25c), which History titles a visit
+    /// by too, with its label from the TEI as its header.
     @Test func aDocumentTheIndexLacksIsNamedFromItsTEI() async throws {
         let fixture = try await servingSyntheticExport(volumes: [v06])
         try await fixture.app.test(.router) { client in
             let d3 = try decode(DocumentDetail.self, try await client.execute(uri: "/api/v1/volumes/\(v06)/documents/d3", method: .get))
             #expect(d3.document.header == "Document 3" && d3.document.documentNumber == "3" && !d3.document.inIndex)
+            #expect(d3.document.displayTitle == "3. Message From Chairmen Khrushchev and Brezhnev to President Kennedy")
             #expect(d3.previous == nil && d3.next == nil && d3.teiAvailable)
             #expect(d3.canonicalURL == "https://history.state.gov/historicaldocuments/frus1961-63v06/d3")
+            // An editorial note whose head says only what it is takes its printed number, as the app's reader titles it.
+            let d20 = try decode(DocumentDetail.self, try await client.execute(uri: "/api/v1/volumes/\(v06)/documents/d20", method: .get))
+            #expect(d20.document.displayTitle == "20. Editorial Note" && d20.document.isEditorialNote)
             // A prose section the parse makes a document is named by its title, as the kit's reading order names it.
             let intro = try decode(DocumentDetail.self, try await client.execute(uri: "/api/v1/volumes/\(v06)/documents/intro1", method: .get))
             #expect(intro.document.header == "Introduction" && intro.document.documentNumber == nil && !intro.document.inIndex)
+            #expect(intro.document.displayTitle == "Introduction")
             // An indexed document's neighbours say whether the reader can open them.
             let d1 = try decode(DocumentDetail.self, try await client.execute(uri: "/api/v1/volumes/\(v06)/documents/d1", method: .get))
             #expect(d1.next?.documentId == "d2" && d1.next?.readable == true)
@@ -400,10 +411,57 @@ private func formEncoded(_ fields: [String: String]) -> String {
         try await before.app.test(.router) { client in
             let d1 = try decode(DocumentDetail.self, try await client.execute(uri: "/api/v1/volumes/\(v06)/documents/d1", method: .get))
             #expect(d1.document.header == "Document 1" && !d1.document.inIndex)
+            #expect(d1.document.displayTitle == "1. Message From Chairman Khrushchev to President-elect Kennedy")
             // A document neither the index nor the TEI holds still waits for the index.
             let missing = try await client.execute(uri: "/api/v1/volumes/\(v06)/documents/d999", method: .get)
             #expect(try problem(missing, .serviceUnavailable).code == "INDEX_NOT_READY")
         }
+    }
+
+    /// The sections the app's Browse opens in its reader that a full parse leaves out, a back-of-volume
+    /// index and a table of contents, are parsed alone, as the app's Read Index parses one
+    /// (`ReaderService.sectionsReadAlone`): the volume's contents mark them readable, so Browse links
+    /// them to the reader, which serves each, named by its parsed head, and parses each once. The lists
+    /// of persons and of sources, which the app's Browse opens as lists of their own, and a subseries'
+    /// list of volumes, which it does not open, are not.
+    @Test func theSectionsTheAppsReadOpensAreParsedAlone() async throws {
+        let fixture = try await servingSyntheticExport(volumes: [v06])
+        let url = RepositoryFiles.tei.appendingPathComponent("\(v06).xml")
+        try await fixture.app.test(.router) { client in
+            let volume = try decode(Volume.self, try await client.execute(uri: "/api/v1/volumes/\(v06)", method: .get))
+            let all = OwnTextRouteTests.flatten(try #require(volume.structure))
+            for id in ["index", "toc"] {
+                #expect(all[id]?.readable == true && all[id]?.canReadDirectly == true, "\(id) opens in the reader")
+            }
+            #expect(all["index"]?.divType == "index" && all["toc"]?.divType == "table-of-contents")
+            for id in ["persons", "sources", "subseriesvols"] {
+                #expect(all[id]?.readable == false && all[id]?.canReadDirectly == false, "\(id) does not")
+            }
+            for (id, title) in [("index", "Index"), ("toc", "Contents")] {
+                let page = try await client.execute(uri: "/api/v1/volumes/\(v06)/documents/\(id)/html?part=body", method: .get)
+                #expect(page.status == .ok, "\(id)")
+                let ast = try #require(try await FRUSDocumentParser().parseDocument(documentId: id, volumeURL: url))
+                let parsed = try await fixture.reader.document(volume: v06, document: id)
+                #expect(parsed.ast.nodes.count == ast.nodes.count, "\(id) is the kit's parse of the section alone")
+                #expect(String(buffer: page.body) == ReaderService.render(parsed, volume: v06, classification: nil, part: .body, base: .root,
+                                                                           brokenRefs: fixture.resources.brokenRefs).html)
+                // Named by its parsed head, the section's own; no number, and not in the index.
+                let detail = try decode(DocumentDetail.self, try await client.execute(uri: "/api/v1/volumes/\(v06)/documents/\(id)", method: .get))
+                #expect(detail.document.displayTitle == title && detail.document.header == title, "\(id)")
+                #expect(detail.document.documentNumber == nil && !detail.document.inIndex && detail.teiAvailable, "\(id)")
+                #expect(detail.canonicalURL == "https://history.state.gov/historicaldocuments/\(v06)/\(id)")
+                // A highlight there is judged against the page's version.
+                let version = try await fixture.reader.renderingVersion(volume: v06, document: id)
+                let whole = try await client.execute(uri: "/api/v1/volumes/\(v06)/documents/\(id)/html", method: .get)
+                #expect(whole.headers[ReaderRoutes.renderingVersionHeader] == version, "\(id)")
+            }
+            for id in ["persons", "sources", "subseriesvols", "nowhere"] {
+                let page = try await client.execute(uri: "/api/v1/volumes/\(v06)/documents/\(id)/html", method: .get)
+                #expect(try problem(page, .notFound).code == "DOCUMENT_NOT_FOUND", "\(id)")
+            }
+        }
+        // Each was parsed once, though asked for four times, and nothing else was.
+        #expect(await fixture.reader.sectionParseCount == 2)
     }
 
     /// TEI that will not parse is reported, not taken for a volume without contents.

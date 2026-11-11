@@ -9,10 +9,10 @@
 // link that opens a volume goes (joshbotts/FRUS-Explorer#1784), and, over the served index,
 // `PageRangeStore` a page's document and `PersonMentionStore` a person's mentions. An index's "See"
 // reference names an entry of the index it is in (joshbotts/FRUS-Explorer#1875), which both of the
-// app's readers scroll to on the page on screen, and the answer says where that entry's item is. No
-// page this reader serves holds one yet: every such reference is in a back-of-volume index, which a
-// full parse, the reader's source, leaves out of its documents. Only the choice between a person's
-// two counts is the app's, and `mentionCount` mirrors it.
+// app's readers scroll to on the page on screen, and the answer says where that entry's item is on
+// the index's page, which the reader parses alone, as the app's Read Index does
+// (`ReaderService.sectionsReadAlone`). Only the choice between a person's two counts is the app's,
+// and `mentionCount` mirrors it.
 
 import FRUSCoreKit
 import FRUSLightCore

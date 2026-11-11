@@ -210,3 +210,81 @@ describe('a section’s own text, as the app’s Browse lists it', () => {
     expect(screen.getByRole('link', { name: 'Convention One' }).getAttribute('href')).toBe(`/doc/${v01}/t3`);
   });
 });
+
+describe('a volume’s back matter, as the app’s Read Index opens it', () => {
+  const v06 = 'frus1961-63v06';
+  const listed = (sectionId: string, divType: string, title: string, opens: boolean): Section => ({
+    sectionId,
+    divType,
+    title,
+    documentIds: [],
+    subsections: [],
+    documentCount: 0,
+    indexedDocumentCount: 0,
+    isFrontMatter: divType !== 'index',
+    canReadDirectly: opens,
+    readable: opens,
+    hasOwnText: false,
+  });
+  const wrapper = (sectionId: string, divType: string, title: string, subsections: Section[]): Section => ({
+    ...listed(sectionId, divType, title, false),
+    subsections,
+  });
+
+  it('links the index and the table of contents to the reader, which parses each alone, and names the lists of persons and sources', async () => {
+    const volume: Volume = {
+      volumeId: v06,
+      filename: `${v06}.xml`,
+      subseries: '1961-63',
+      title: page.volumeTitle,
+      dateRange: {},
+      status: 'published',
+      editors: [],
+      sizeBytes: 1,
+      tags: [],
+      indexed: true,
+      indexedDocuments: 120,
+      teiAvailable: true,
+      structure: [
+        wrapper('front-1', 'front', 'Front Matter', [
+          listed('toc', 'table-of-contents', 'Contents', true),
+          listed('sources', 'sources', 'Sources', false),
+          listed('persons', 'persons', 'Persons', false),
+        ]),
+        wrapper('back-2', 'back', 'Back Matter', [listed('index', 'index', 'Index', true)]),
+      ],
+      structureSource: 'index',
+      documentCount: 0,
+      indexedDocumentCount: 0,
+    };
+    stubServer({ '/readyz': ready, [`/api/v1/volumes/${v06}`]: volume });
+    renderAt(`/browse/${v06}`);
+    expect((await screen.findByRole('link', { name: 'Index' })).getAttribute('href')).toBe(`/doc/${v06}/index`);
+    expect(screen.getByRole('link', { name: 'Contents' }).getAttribute('href')).toBe(`/doc/${v06}/toc`);
+    // The app's Browse opens these as lists of their own, which this server does not have yet.
+    for (const name of ['Sources', 'Persons']) {
+      expect(screen.queryByRole('link', { name })).toBeNull();
+      expect(screen.getByText(name)).toBeTruthy();
+    }
+  });
+
+  it('heads a document the index does not hold with the title the server gives it, its parsed head', async () => {
+    const detail: DocumentDetail = {
+      document: { documentId: 'index', volumeId: v06, header: 'Index', displayTitle: 'Index', isEditorialNote: false, inIndex: false },
+      canonicalURL: `https://history.state.gov/historicaldocuments/${v06}/index`,
+      previous: { documentId: 'd120', header: '120. Letter', inIndex: true, readable: true },
+      teiAvailable: true,
+    };
+    stubServer({
+      '/readyz': ready,
+      '/api/v1/volumes': { total: 0, limit: 1000, offset: 0, items: [], coverage },
+      [`/api/v1/volumes/${v06}/documents/index`]: detail,
+      [`/api/v1/volumes/${v06}/documents/index/html`]: '',
+    });
+    renderAt(`/doc/${v06}/index`);
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Index'));
+    await waitFor(() => expect(document.title).toBe('Index – FRUS Explorer Light'));
+    // The index's reading order holds it, as the app's reader turns its pages to it.
+    expect((await screen.findByRole('link', { name: /Previous/ })).getAttribute('href')).toBe(`/doc/${v06}/d120`);
+  });
+});

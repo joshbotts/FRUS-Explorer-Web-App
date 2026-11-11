@@ -356,7 +356,9 @@ enum HistoryRoutes {
     /// (`DocumentViewModel.readingHistoryTitle`): the kit's display title of its head, or none for a
     /// document with no head that is no editorial note. The head is the index's where the index holds
     /// the document; for one it does not hold, as front matter is, or any while no index is served, it
-    /// is the head of the parsed TEI, and for one whose TEI has no head either, the reader's label.
+    /// is the head of the parsed TEI (`parsedTitle(of:)`), as the reader heads it, a section the reader
+    /// parses alone, such as a volume's index, among them; and for one whose TEI has no head either,
+    /// the reader's label.
     static func visitTitle(volumeId: String, documentId: String, provider: ServedIndexProvider, reader: ReaderService,
                            resources: ServerResources) async -> String? {
         if let served = try? await provider.servedIfReady(),
@@ -365,7 +367,8 @@ enum HistoryRoutes {
             return displayTitle(header: entry.header, documentNumber: entry.documentNumber, isEditorialNote: entry.isEditorialNote,
                                 documentId: entry.documentId)
         }
-        guard let parsed = try? await reader.volume(volumeId), let ast = parsed.documents[documentId] else { return nil }
+        guard let parsed = try? await reader.volume(volumeId),
+              let ast = try? await reader.document(volume: volumeId, document: documentId).ast else { return nil }
         if let title = parsedTitle(of: ast) { return title }
         // No head to title it by, and no note's shape: the app records the header the document was opened
         // with, a list's label for it, through `ReadingHistoryTitle.documentTitle(stored:…)`. A visit here
@@ -375,22 +378,6 @@ enum HistoryRoutes {
         return ReadingHistoryTitle.documentTitle(stored: label == documentId ? nil : label,
                                                  volumeTitle: resources.volume(volumeId)?.title,
                                                  volumeId: volumeId, documentId: documentId)
-    }
-
-    /// The title the app's reader gives a document it parsed (`DocumentViewModel.load`, S25c): the
-    /// kit's display title of the head `IndexingPipeline.extractHeader(from:)` reads from the TEI, which
-    /// is the header the index would store, with the number the document prints; none for a document
-    /// with no head that is not shaped as an editorial note, which the reader leaves to the title it was
-    /// opened with. The app's number falls back to the first head that begins with one
-    /// (`extractDocumentNumber(from:)`, internal to the kit), which a title shows only for a note with
-    /// no `@n` whose first head names nothing; every shipped document carries `@n`, as that rule's own
-    /// doc says.
-    static func parsedTitle(of ast: FRUSDocumentAST) -> String? {
-        let extracted = IndexingPipeline.extractHeader(from: ast.nodes)
-        let isEditorialNote = ast.isShapedAsEditorialNote
-        guard !extracted.isEmpty || isEditorialNote else { return nil }
-        return displayTitle(header: extracted, documentNumber: ast.printedNumber, isEditorialNote: isEditorialNote,
-                            documentId: ast.documentId)
     }
 
     /// What the server's run of a search gives the row that records it.
