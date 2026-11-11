@@ -39,6 +39,7 @@ import Testing
         (.delete, "/api/v1/admin/secrets/nara", nil),
         (.get, "/api/v1/admin/library", nil),
         (.post, "/api/v1/admin/library/downloads", #"{"all":true}"#),
+        (.post, "/api/v1/admin/library/index", #"{"all":true}"#),
         (.delete, "/api/v1/admin/library/volumes/frus1894Nicaragua", nil),
     ]
 

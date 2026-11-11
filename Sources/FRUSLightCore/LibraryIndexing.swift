@@ -109,6 +109,13 @@ public actor LibraryIndexer {
     private var runningJob: String?
     private var runningLeft: Set<String> = []
     private var runningVolume: String?
+    /// Test hook: told the writer's pipeline once a job has opened it, before its first volume.
+    private var writerOpenedTestHook: (@Sendable (IndexingPipeline) async -> Void)?
+
+    /// Test hook: installs `writerOpenedTestHook`.
+    func setWriterOpenedTestHook(_ hook: (@Sendable (IndexingPipeline) async -> Void)?) {
+        writerOpenedTestHook = hook
+    }
 
     /// The space a volume's pass leaves free on the data volume beyond twice its file's length, which the
     /// index grows by at most and its write-ahead log takes meanwhile: the user store and its backups
@@ -285,6 +292,7 @@ public actor LibraryIndexer {
             await observer?.didFinishWritingIndex(at: liveIndex)
             throw JobFailed("The index in /data/index could not be opened to write into it, so nothing was indexed. The server's log says why.")
         }
+        if let hook = writerOpenedTestHook { await hook(writer!.pipeline) }
         let relay = IndexingProgressRelay(job: job)
         let consumer = Task { [stream = writer!.pipeline.progressStream] in
             for await update in stream { await relay.take(update) }
