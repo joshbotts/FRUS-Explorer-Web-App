@@ -112,6 +112,9 @@ test('chooses focus subjects in the editor by keyboard, and finds them on Projec
     await expect(section.getByRole('button', { name: 'Add' })).toBeFocused();
     await expect(section.getByRole('listitem')).toHaveCount(0);
   } finally {
+    // Off Project Home first, whose last save asks for it again, which a project deleted under it would
+    // answer 404, a console error (S23d's smoke run found the race).
+    await page.goto('research');
     await reset(page);
   }
 });

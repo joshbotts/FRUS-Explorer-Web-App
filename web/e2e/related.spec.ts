@@ -115,6 +115,8 @@ test('opens Related from the reader by keyboard, changes its scope and a weight,
     for (const lead of home.leads) expect(`${lead.volumeId}/${lead.documentId}`).not.toBe('frus1961-63v06/d1');
     await axeCheck(page);
   } finally {
+    // Off Project Home first, so that no read of it meets the project deleted under it.
+    await page.goto('research');
     await reset(page);
   }
 });
