@@ -6,13 +6,13 @@
 // volume in Browse or, outside the catalogue, on history.state.gov, or a card for a person, a term
 // or an unresolved reference. From S17f each document opened is recorded in the trail, and opens in
 // the mode Settings ▸ Reading names when the link that opened it names no rail.
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from 'react';
 import { ApiError } from '../api/client';
 import { documentQuery, linkQuery, type ReadingWidth, readerPageURL, type TextSize, volumesQuery } from '../api/endpoints';
 import type { ReaderLinkTarget } from '../api/types';
-import { recordVisit } from '../api/research';
+import { pendingPreferenceChanges, preferencesQuery, recordVisit } from '../api/research';
 import { meQuery } from '../api/userData';
 import { CitePanel } from '../cite/CitePanel';
 import { CollectionPicker, type ExcerptCapture } from '../collections/CollectionPicker';
@@ -49,6 +49,26 @@ async function checkPage(url: string, signal: AbortSignal): Promise<{ renderingV
   const response = await fetch(url, { signal });
   if (!response.ok) throw await ApiError.from(response);
   return { renderingVersion: response.headers.get('X-FRUS-Rendering-Version') };
+}
+
+/**
+ * An arrival at a document, once its account has loaded, as the app's reader records a visit after
+ * its load (S17f): the visit is sent at once, since the server records it only while Log Research
+ * Sessions is on; while that is on, a document opened during Checklist Mode leaves its list (S17e), as
+ * the Mac's reading history hides it, once the user's preferences say so; with no user data kept, it
+ * leaves the list, as before the switch. It runs to its end after the reader is left, so a document
+ * left before the user and their preferences are read is visited all the same.
+ */
+async function recordArrival(client: QueryClient, volumeId: string, documentId: string, documentLoaded: boolean): Promise<void> {
+  const key = reviewedKey(volumeId, documentId);
+  if (!(await client.ensureQueryData(meQuery)).userData) {
+    checklistStore.opened(key);
+    return;
+  }
+  const visit = documentLoaded ? recordVisit(client, volumeId, documentId).catch(() => {}) : undefined;
+  const preferences = { ...(await client.ensureQueryData(preferencesQuery)), ...pendingPreferenceChanges() };
+  if (preferences.researchLoggingEnabled) checklistStore.opened(key);
+  await visit;
 }
 
 export function ReaderScreen() {
@@ -108,19 +128,15 @@ export function ReaderScreen() {
     setComposing(false);
     setExcerpting(null);
   }
-  // Each arrival at a document, once its account has loaded, as the app's reader records a visit after
-  // its load (S17f): the trail records it while Log Research Sessions is on, and while that is on a
-  // document opened during Checklist Mode leaves its list (S17e), as the Mac's reading history hides it.
-  // With no user data kept, it leaves the list, as before the switch.
+  // Each arrival at a document, once its account has loaded (`recordArrival`), taken once: a reader
+  // left before the user's preferences are read still records it.
   const visited = useRef<string | null>(null);
   const loaded = detail.isSuccess || detail.isError;
   useEffect(() => {
-    if (!me.data || !loaded || visited.current === documentKey) return;
-    if (keepsUserData && !preferences) return;
+    if (!loaded || visited.current === documentKey) return;
     visited.current = documentKey;
-    if (!keepsUserData || preferences?.researchLoggingEnabled) checklistStore.opened(reviewedKey(volumeId, documentId));
-    if (keepsUserData && detail.isSuccess) void recordVisit(queryClient, volumeId, documentId).catch(() => {});
-  }, [me.data, loaded, documentKey, keepsUserData, preferences, detail.isSuccess, volumeId, documentId, queryClient]);
+    void recordArrival(queryClient, volumeId, documentId, detail.isSuccess).catch(() => {});
+  }, [loaded, documentKey, detail.isSuccess, volumeId, documentId, queryClient]);
   // Open Documents In (S17f): a document a link opens with no rail named opens with the Research rail
   // in Research mode, as last left in Remember Last, and without it in Read; a rail the link names, as
   // the rail's own toggle does, wins. The rail as the reader leaves it is what Remember Last reopens.

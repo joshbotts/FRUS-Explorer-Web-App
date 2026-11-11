@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DocumentDetail, NoteSummary } from '../api/types';
 import { resetPreferences } from '../settings/preferences';
-import { berlin, documentPaths, me, note, noteSummary, renderWithClient, sent } from '../test/notes';
+import { berlin, documentPaths, isVisitRecord, me, note, noteSummary, renderWithClient, sent } from '../test/notes';
 import { coverage, ready, renderAt, stubServer } from '../test/renderRoute';
 import { NotesSection } from './NotesSection';
 
@@ -160,7 +160,7 @@ describe('the rail’s Notes', () => {
     await userEvent.type(within(editor).getByRole('textbox', { name: 'Research note body' }), 'A thought');
     await userEvent.click(within(editor).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(fetch.mock.calls.filter(([, init]) => init?.method === 'POST').map(([url, init]) => [String(url), sent(init).body])).toEqual([
+    expect(fetch.mock.calls.filter(([url, init]) => init?.method === 'POST' && !isVisitRecord(url)).map(([url, init]) => [String(url), sent(init).body])).toEqual([
       [documentPaths.notes, { bodyText: 'A thought', runs: null, userTagIds: [], projectIds: [], selectedSummaryIds: [] }],
     ]);
     // The lists are read again.
@@ -221,7 +221,7 @@ describe('the rail’s Notes', () => {
     await go('d1');
     await screen.findByRole('heading', { level: 1, name: '1. Telegram From the Embassy in the Soviet Union' });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+    expect(fetch.mock.calls.some(([url, init]) => init?.method === 'POST' && !isVisitRecord(url))).toBe(false);
   });
 
   it('is not offered, nor any note read, on a server that keeps no user data', async () => {

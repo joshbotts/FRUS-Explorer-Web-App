@@ -74,6 +74,38 @@ describe('the reader and the trail', () => {
     expect(checklistStore.get().readSinceEnabled.size).toBe(0);
   });
 
+  it('records a document left before the user’s preferences are read, and takes it off Checklist Mode’s list once they are', async () => {
+    // The browser suite's Project Home step, on main on 11 November: the preferences came after the
+    // reader was left, and the visit was never sent.
+    const visits: string[] = [];
+    let answer: (given: typeof preferences) => void = () => {};
+    const held = new Promise<typeof preferences>((resolve) => {
+      answer = resolve;
+    });
+    stubServer({
+      '/readyz': ready,
+      '/api/v1/me': me,
+      '/api/v1/me/preferences': () => held,
+      '/api/v1/volumes': { total: 0, limit: 1000, offset: 0, items: [], coverage },
+      '/api/v1/volumes/frus1961-63v06/documents/d1': detail('d1'),
+      '/api/v1/volumes/frus1961-63v06/documents/d1/html': {},
+      'POST /api/v1/me/history/documents': (_: URL, init?: RequestInit) => {
+        visits.push(JSON.parse(String(init?.body)).documentId);
+        return { outcome: 'inserted' };
+      },
+    });
+    checklistStore.setOn(true, { keywords: 'treaties' });
+    const { router } = renderAt('/doc/frus1961-63v06/d1');
+    await screen.findByRole('heading', { level: 1, name: 'Document d1' });
+    // Left at once, while the header's project picker still waits for the preferences.
+    await router.navigate({ to: '/browse' });
+    expect(screen.queryByRole('heading', { level: 1, name: 'Document d1' })).toBeNull();
+    await waitFor(() => expect(visits).toEqual(['d1']));
+    expect(checklistStore.get().readSinceEnabled.size).toBe(0);
+    answer(preferences);
+    await waitFor(() => expect(checklistStore.get().readSinceEnabled.has(reviewedKey('frus1961-63v06', 'd1'))).toBe(true));
+  });
+
   it('opens a document a link names no rail for with the Research rail in Research mode, as last left in Remember Last', async () => {
     server({ defaultDocumentMode: 'research' }, []);
     const { router } = renderAt('/doc/frus1961-63v06/d1');

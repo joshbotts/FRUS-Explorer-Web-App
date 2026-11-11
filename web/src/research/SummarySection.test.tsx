@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DocumentDetail, Summary } from '../api/types';
 import { resetPreferences } from '../settings/preferences';
 import { framesAtOnce } from '../test/frames';
-import { documentPaths, me, sent, summary } from '../test/notes';
+import { documentPaths, isVisitRecord, me, sent, summary } from '../test/notes';
 import { coverage, ready, renderAt, stubServer } from '../test/renderRoute';
 
 const d1: DocumentDetail = {
@@ -187,7 +187,7 @@ describe('the rail’s Summary', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(await within(region()).findByText('My reading of it.')).toBeTruthy();
     expect(region().querySelector('.summary-label')?.textContent).toBe('Yours');
-    expect(fetch.mock.calls.filter(([, init]) => init?.method === 'POST').map(([url, init]) => [String(url), sent(init).body])).toEqual([
+    expect(fetch.mock.calls.filter(([url, init]) => init?.method === 'POST' && !isVisitRecord(url)).map(([url, init]) => [String(url), sent(init).body])).toEqual([
       [documentPaths.summaries, { responseText: 'My reading of it.' }],
     ]);
     await waitFor(() => expect(document.activeElement).toBe(within(region()).getByRole('button', { name: 'Write a Summary' })));
