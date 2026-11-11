@@ -1,0 +1,27 @@
+# FRUS Explorer Light in Standalone mode (PLAN's S21c): the server keeps its own library of volumes, which
+# an admin downloads in Administration ▸ Library, in the named volume beside everything else it keeps,
+# rather than reading a TEI folder of the Mac's. Used with compose.yaml, which it changes:
+#
+#   docker compose -f compose.yaml -f compose.standalone.yaml up -d
+#
+# or with COMPOSE_FILE=compose.yaml:compose.standalone.yaml in a .env file beside them. docs/INSTALL.md's
+# Standalone section is the guide. The server downloads from GitHub and history.state.gov; an export copied
+# into /data/import at its index version seeds its index, as in Import mode.
+# Optional settings, from the environment or a .env file, beside compose.yaml's:
+#   FRUS_GITHUB_TOKEN    a GitHub token, sent with the library's listing to GitHub's API alone, which
+#                        raises its limit of 60 requests an hour for an address without one
+#   FRUS_LIBRARY_MIRROR  a mirror of GitHub's and history.state.gov's files to download from instead, one
+#                        folder served as they serve them, each host's files under its name
+#   FRUS_OFFLINE         true to download nothing and make no request outside, serving what is kept
+
+services:
+  frus:
+    environment:
+      FRUS_MODE: standalone
+      FRUS_GITHUB_TOKEN: ${FRUS_GITHUB_TOKEN:-}
+      FRUS_LIBRARY_MIRROR: ${FRUS_LIBRARY_MIRROR:-}
+      FRUS_OFFLINE: ${FRUS_OFFLINE:-false}
+    # compose.yaml's list without its read-only TEI folder: the server writes /data/volumes itself.
+    volumes: !override
+      - frus-data:/data
+      - "${FRUS_BACKUP_DIR:-./backups}:/backups"

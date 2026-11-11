@@ -56,7 +56,8 @@ public struct DataDirectory: FileStore {
     public var temporaryDirectory: URL { root.appendingPathComponent("tmp", isDirectory: true) }
 
     public func prepare() throws {
-        // volumes/ is not created: it is a read-only mount, or arrives with Standalone mode.
+        // volumes/ is not created here: it is Import mode's read-only mount, or in Standalone mode the
+        // library's own folder, which the library makes and checks (`VolumeLibrary.prepare()`, S21c).
         for directory in [importDirectory, indexDirectory, userStore.deletingLastPathComponent(),
                           exportsDirectory, backupsDirectory, temporaryDirectory] {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

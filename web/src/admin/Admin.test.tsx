@@ -49,7 +49,7 @@ const sent = (fetch: ReturnType<typeof stubServer>, method: string, path: string
   fetch.mock.calls.filter(([url, init]) => init?.method === method && String(url).endsWith(path));
 
 describe('Administration', () => {
-  it('is an admin’s, linked from the header, with its five panes', async () => {
+  it('is an admin’s, linked from the header, with its six panes', async () => {
     stubServer({ '/readyz': ready, '/api/v1/me': alice, '/api/v1/admin/status': status });
     const { router } = renderAt('/admin');
     expect(await screen.findByRole('heading', { level: 1, name: 'Status' })).toBeTruthy();
@@ -58,7 +58,7 @@ describe('Administration', () => {
     const header = screen.getByRole('navigation', { name: 'Main' });
     expect(within(header).getByRole('link', { name: 'Admin' }).getAttribute('aria-current')).toBe('page');
     const panes = screen.getByRole('navigation', { name: 'Administration' });
-    expect(within(panes).getAllByRole('link').map((link) => link.textContent)).toEqual(['Status', 'Jobs', 'Users', 'Backups', 'Keys']);
+    expect(within(panes).getAllByRole('link').map((link) => link.textContent)).toEqual(['Status', 'Jobs', 'Library', 'Users', 'Backups', 'Keys']);
     expect(screen.getByText('6, this build’s')).toBeTruthy();
     expect(screen.getByText('9f3a6c0d51e27b48')).toBeTruthy();
     expect(screen.getByText('No job is running.')).toBeTruthy();

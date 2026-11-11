@@ -189,8 +189,8 @@ import Testing
         }
         let tables = Set(try db.query("SELECT name FROM sqlite_master WHERE type = 'table'").compactMap { $0[0].text })
         let shadows = ["data", "idx", "content", "docsize", "config"].map { "user_search_\($0)" }
-        #expect(tables == Set(UserStoreSchema.tables.map(\.name) + ["users", "sessions", "secrets", "jobs", "schema_migrations", "user_search"] + shadows),
-                "the store holds the users, their sessions (S20b), the stored keys (S20c), its migrations, the 23 tables and user_search, and nothing else")
+        #expect(tables == Set(UserStoreSchema.tables.map(\.name) + ["users", "sessions", "secrets", "jobs", "library_volumes", "schema_migrations", "user_search"] + shadows),
+                "the store holds the users, their sessions (S20b), the stored keys (S20c), the jobs (S20d), the library's volumes (S21c), its migrations, the 23 tables and user_search, and nothing else")
     }
 
     @Test func userSearchHoldsTheIndexedColumnsOfTheMacsUserContent() async throws {

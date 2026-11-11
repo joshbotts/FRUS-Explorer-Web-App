@@ -49,14 +49,16 @@ RUN npm run build && chmod -R a+rX dist
 
 # Runtime stage: Ubuntu 24.04's SQLite 3.45.1 (with FTS5), libxml2 for FoundationXML, whose parser
 # FRUSCoreKit reads TEI with and which the static Swift runtime links dynamically, the C++ runtime
-# the Swift runtime needs, libargon2 for local accounts' passwords (S20b), CA certificates and tini.
+# the Swift runtime needs, libargon2 for local accounts' passwords (S20b), libcurl for
+# FoundationNetworking's URLSession, which the static Swift runtime links dynamically and through which
+# a Standalone server downloads its library (S21c), CA certificates and tini.
 FROM ${RUNTIME_IMAGE}
 RUN apt-get update -qq \
- && apt-get install -y -qq --no-install-recommends libsqlite3-0 libxml2 libstdc++6 libargon2-1 ca-certificates tini \
+ && apt-get install -y -qq --no-install-recommends libsqlite3-0 libxml2 libstdc++6 libargon2-1 libcurl4t64 ca-certificates tini \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --gid 10001 frus \
  && useradd --uid 10001 --gid 10001 --home-dir /data --no-create-home --shell /usr/sbin/nologin frus \
- && install -d -o 10001 -g 10001 /data
+ && install -d -o 10001 -g 10001 /data /data/volumes
 COPY --from=build /out/frus-light /usr/local/bin/frus-light
 COPY LICENSE /usr/share/doc/frus-light/LICENSE
 # The manifest, the broken-refs index, the indexing resources and the rest, at the server's
@@ -84,7 +86,9 @@ LABEL org.opencontainers.image.title="FRUS Explorer Light" \
       io.github.joshbotts.frus-explorer.index-version="${INDEX_VERSION}"
 
 # Everything the server keeps is under /data, owned by the server's user, so a new named
-# volume mounted there starts with that ownership. The root filesystem can be read-only.
+# volume mounted there starts with that ownership; /data/volumes too, so that Import mode's TEI
+# mount finds a folder there and Docker makes none of root's in the volume, which a Standalone
+# server, keeping its library there (S21c), could not write. The root filesystem can be read-only.
 # Two malloc arenas: the reader parses each volume on whichever thread is free, and glibc's
 # default of eight arenas a CPU keeps the freed parses. Reading across the 16 largest volumes eight
 # times levelled off at about 170 MB with two, where the default passed 300 MB in three.
