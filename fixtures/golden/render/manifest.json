@@ -1,5 +1,5 @@
 {
-  "configuration" : "The Mac reader's own path, without an index. For each row, DocumentViewModel(entry:volumeEntry:parser:) with an entry naming only the volume and the document (its other fields do not reach the HTML; mac-golden checks that on every 25th row), no volume entry, a new FRUSDocumentParser, no person-mention store, no AST cache and no classification override. load(volumeURL:) on the main actor then parses the document alone and takes persons and glossary terms from the volume's TEI. broken-refs-index.json lists no reference in the fixture volumes, so no cross-reference is degraded. Then HTMLTemplate.build(model:colorScheme: .light), keeping the body: the fragment FRUSRenderNodeHTMLSerializer.reader writes (annotateSourceClassification: true, figureImages: .reader, listsNamedReferences: true). Rows are every document a full parse of each volume yields, in parse order, volumes sorted. A release build of the app module, with testing enabled, compiled from the submodule unmodified.",
+  "configuration" : "The Mac reader's own path, without an index. For each row, DocumentViewModel(entry:volumeEntry:parser:) with an entry naming only the volume and the document (its other fields do not reach the HTML; mac-golden checks that on every 25th row), no volume entry, a new FRUSDocumentParser, no person-mention store, no AST cache and no classification override. load(volumeURL:) on the main actor then parses the document alone and takes persons and glossary terms from the volume's TEI. broken-refs-index.json lists no reference in the fixture volumes, so no cross-reference is degraded. Then HTMLTemplate.build(model:colorScheme: .light), keeping the body: the fragment FRUSRenderNodeHTMLSerializer.reader writes (annotateSourceClassification: true, figureImages: .reader, listsNamedReferences: true). Rows are every document a full parse of each volume yields, in parse order, then each section the app's Browse opens in the reader by its id, as its Read button does (VolumeSection.canReadDirectly), that the full parse yields no document for, in the structure's order: a back-of-volume index and a table of contents; volumes sorted. A release build of the app module, with testing enabled, compiled from the submodule unmodified.",
   "format" : 1,
   "provenance" : {
     "appBuild" : 1812,
@@ -857,6 +857,12 @@
       "volume" : "frus1894Nicaragua"
     },
     {
+      "bytes" : 45381,
+      "document" : "toc",
+      "sha256" : "779d38982d162febce508d56942f99159452ee99f5cf66fc268233bc0bfb4bd7",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
       "bytes" : 17304,
       "document" : "preface",
       "sha256" : "cc344c533d89e02f3ab65ee119f8ac872c3e47321a0c9940ff10ba0adb2f9dfc",
@@ -1592,6 +1598,18 @@
       "bytes" : 7700,
       "document" : "d120",
       "sha256" : "b6dafdb8b58ebd9c1969040e22e16eedc54b372aff81786f662e7388e528746c",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 1028,
+      "document" : "toc",
+      "sha256" : "47d32363f69774c30062b0367f15063735f7c76bfa873698fc9da5c26620c8f5",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "bytes" : 96448,
+      "document" : "index",
+      "sha256" : "adfb23e88e395f6f683b4c1a493f653f4ad7020c702174ac80f7438692ef3a93",
       "volume" : "frus1961-63v06"
     },
     {
@@ -2378,6 +2396,12 @@
       "bytes" : 8631,
       "document" : "d128",
       "sha256" : "5875d80624f3197f929a8d2e29151693f594af1ec290181562c64d8381ff44af",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "bytes" : 2225,
+      "document" : "toc",
+      "sha256" : "71552b153f11979a648f2761fe612f81b765f3d49b2a2bf92a032fb1fb37854a",
       "volume" : "frus1969-76ve09p1"
     }
   ]
