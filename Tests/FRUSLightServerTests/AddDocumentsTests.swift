@@ -20,20 +20,22 @@ import Testing
 struct AddDocumentsFixture {
     let server: ServerFixture
     let test: TestUserStore
+    let configuration: ServerConfiguration
     let services: UserDataServices
 
     init(kind: UserStoreKind = .sqlite, indexed: Bool = true) async throws {
         server = try await indexed ? servingSyntheticExport(edits: CitationLookupTests.numbered) : ServerFixture()
         test = try await TestUserStore.open(kind)
-        let configuration = ServerConfiguration(dataDirectory: server.files.root, publicURL: "http://localhost:8080", userData: true)
+        configuration = ServerConfiguration(dataDirectory: server.files.root, publicURL: "http://localhost:8080", userData: true)
         let secrets = try SecretVault.open(store: test.store, keyFile: server.files.secretKey, named: false).vault
         services = UserDataServices(store: test.store, configuration: configuration, secrets: secrets, jobs: InProcessJobQueue(),
                                     passwords: PasswordHasher(.leastCost), now: { UserDataFixture.now })
     }
 
     var app: some ApplicationProtocol {
-        Application(router: ServedRouter(base: "", router: buildRouter(
-            state: server.state, resources: server.resources, reader: server.reader, userData: services, base: "")))
+        let base = configuration.basePath
+        return Application(router: ServedRouter(base: base, router: buildRouter(
+            state: server.state, resources: server.resources, reader: server.reader, userData: services, base: base)))
     }
 
     func served() async throws -> ServedIndex {
