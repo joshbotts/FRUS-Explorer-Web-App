@@ -22,6 +22,7 @@ export type ReadinessStep =
   | 'moving_writing'
   | 'installing_index'
   | 'opening_index'
+  | 'indexing_library'
   | 'index_version_mismatch'
   | 'ready';
 

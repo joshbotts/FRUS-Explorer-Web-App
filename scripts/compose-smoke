@@ -514,13 +514,28 @@ echo "   $broken, which does not parse, is listed failed while its XML was read,
 
 scripts/synthetic-export "$work/seed.sqlite"
 library_compose cp "$work/seed.sqlite" frus:/data/import/seed.sqlite
+# The server serves an index of its own by now (S21d), so /readyz answers throughout: the import's job says
+# when the export has taken that index's place.
+seeded=""
+for _ in $(seq 1 480); do
+  if library_jobs 2>/dev/null; then
+    seeded=$(python3 -c 'import json, sys
+jobs = [j for j in json.load(open(sys.argv[1], encoding="utf-8"))["jobs"] if j["kind"] == "indexImport" and j.get("subject") == "seed.sqlite"]
+print(jobs[0]["state"] if jobs else "")' "$work/library-jobs.json")
+  fi
+  case "$seeded" in succeeded|failed|cancelled) break ;; esac
+  sleep 0.25
+done
+[ "$seeded" = succeeded ] || fail "the export that seeds the index was not installed: ${seeded:-no job}"
 wait_for_200 "$library_base/readyz" 120 || fail "a Standalone server did not serve the export that seeds it"
 library_list || fail "the Library did not answer after the seed"
 python3 -c 'import json, sys
 volumes = {v["volumeId"]: v for v in json.load(open(sys.argv[1], encoding="utf-8"))["volumes"]}
-assert volumes["frus1961-63v06"]["status"] == "indexed" and volumes["frus1961-63v06"]["downloaded"], volumes["frus1961-63v06"]' "$work/library.json" \
-  || fail "the seeded index's volume is not listed as indexed"
-echo "   an export at the server's index version seeds its index, and the Library lists its volume as indexed"
+assert volumes["frus1961-63v06"]["status"] == "indexed" and volumes["frus1961-63v06"]["downloaded"], volumes["frus1961-63v06"]
+ve09 = volumes["frus1969-76ve09p1"]
+assert ve09["status"] == "downloaded" and not ve09["indexed"] and "index" not in ve09, ve09' "$work/library.json" \
+  || fail "the seeded index's volume is not listed as indexed, or a volume it lacks as downloaded alone"
+echo "   an export at the server's index version takes the place of the index the server made, with its stamps; the Library lists the export's volume as indexed, and one it lacks as downloaded"
 
 if [ -n "$e2e" ]; then
   echo "== admin: the library, the library spec in Playwright on Chromium, on the Standalone server"

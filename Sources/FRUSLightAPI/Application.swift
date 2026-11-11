@@ -65,7 +65,7 @@ struct ServerComponents: Sendable {
         try library.prepare()
         let indexer = LibraryIndexer(liveIndex: files.liveIndex, volumesDirectory: files.volumesDirectory, mode: configuration.mode,
                                      resources: resources.indexing, jobs: jobs, state: state,
-                                     observer: ServedIndexWriting(state: state, log: { logger.info("\($0)") }),
+                                     observer: ServedIndexWriting(state: state, provider: provider, log: { logger.info("\($0)") }),
                                      capacity: { try files.availableCapacity() }, log: { logger.info("\($0)") })
         library.whenDownloadsEnd { fetched in
             do {

@@ -24,6 +24,8 @@ import Testing
         let users: UserDataFixture
         let library: VolumeLibrary
         let indexer: LibraryIndexer
+        /// The stacks every route reads the index through, which the indexing lets go of before it writes.
+        let provider: ServedIndexProvider
 
         init(mode: ServerConfiguration.Mode = .standalone, volumes: [String] = LibraryIndexingRouteTests.fixtures) async throws {
             users = try await UserDataFixture()
@@ -33,14 +35,16 @@ import Testing
                                     catalogue: users.server.resources.manifest, sources: FakeGitHub().sources, transport: nil, mode: mode)
             try library.prepare()
             let state = users.server.state
+            provider = ServedIndexProvider(state: state, resources: users.server.resources, volumesDirectory: files.volumesDirectory,
+                                           userStore: users.store.searchDatabase)
             indexer = LibraryIndexer(liveIndex: files.liveIndex, volumesDirectory: files.volumesDirectory, mode: mode,
                                      resources: users.server.resources.indexing, jobs: users.jobs, state: state,
-                                     observer: ServedIndexWriting(state: state, log: { _ in }), capacity: { .max })
+                                     observer: ServedIndexWriting(state: state, provider: provider, log: { _ in }), capacity: { .max })
         }
 
         var app: some ApplicationProtocol {
             Application(router: ServedRouter(base: .root, router: buildRouter(
-                state: users.server.state, resources: users.server.resources, reader: users.server.reader,
+                state: users.server.state, resources: users.server.resources, reader: users.server.reader, provider: provider,
                 userData: users.services, library: library, indexer: indexer)))
         }
 
@@ -186,6 +190,64 @@ import Testing
             defer { again.close() }
             #expect(try again.query("SELECT count(*) FROM volume_structures WHERE volume_id = 'frus1894Nicaragua'").first?.first?.integer == 1)
         }
+    }
+
+    /// While a job writes the index, by the owner's choice of 11 November: search answers 503, naming the
+    /// indexing, `/readyz` says so, and the reader renders from the volumes' files; once it has ended, search
+    /// answers over what it wrote.
+    @Test func searchWaitsWhileAJobWritesTheIndexAndTheReaderWorks() async throws {
+        let fixture = try await Fixture(volumes: ["frus1894Nicaragua", "frus1961-63v06"])
+        defer { withExtendedLifetime(fixture) {} }
+        let gate = JobGate()
+        try await fixture.app.test(.router) { client in
+            let owner = Browser(client: client)
+            #expect(try await owner.send(.post, Self.index, #"{"volumeIds":["frus1894Nicaragua"]}"#).status == .accepted)
+            await fixture.users.jobs.waitUntilIdle()
+            let before = try decode(SearchResultList.self, try await owner.get("/api/v1/search?keywords=khrushchev"))
+            #expect(before.total == 0)
+
+            // The next job, held once its writer is open: past the point where the index is read no more.
+            await fixture.indexer.setWriterOpenedTestHook { _ in await gate.wait() }
+            #expect(try await owner.send(.post, Self.index, #"{"volumeIds":["frus1961-63v06"]}"#).status == .accepted)
+            await gate.untilReached()
+            let refused = try await owner.get("/api/v1/search?keywords=nicaragua")
+            #expect(refused.status == .serviceUnavailable && problemCode(refused) == "INDEX_BEING_WRITTEN")
+            let readyz = try await owner.get("/readyz")
+            let readiness = try decode(Readiness.self, readyz)
+            #expect(readyz.status == .serviceUnavailable && readiness.step == .indexingLibrary && !readiness.ready)
+            #expect(try await owner.get("/api/v1/volumes/frus1894Nicaragua/documents/d1/html?part=body").status == .ok)
+            gate.open()
+            await fixture.users.jobs.waitUntilIdle()
+
+            let after = try decode(SearchResultList.self, try await owner.get("/api/v1/search?keywords=khrushchev"))
+            #expect(after.total > 0)
+            #expect(try decode(Readiness.self, try await owner.get("/readyz")).ready)
+        }
+    }
+
+    /// Before a job writes, the provider lets go of its stack and waits until no request holds one, for at
+    /// most its patience: an immutable connection cannot read a file being written.
+    @Test func theProviderWaitsUntilNoRequestHoldsAStack() async throws {
+        let fixture = try await Fixture(volumes: ["frus1894Nicaragua"])
+        defer { withExtendedLifetime(fixture) {} }
+        try await fixture.app.test(.router) { client in
+            let owner = Browser(client: client)
+            let posted = try await owner.send(.post, Self.index, #"{"all":true}"#)
+            #expect(posted.status == .accepted)
+            await fixture.users.jobs.waitUntilIdle()
+        }
+        let state = fixture.users.server.state
+        do {
+            let held = try await fixture.provider.served()
+            await state.beginIndexWrite()
+            #expect(await !fixture.provider.letGoOfStacks(patience: .milliseconds(300)), "a request holds a stack")
+            await #expect(throws: APIProblem.self) { try await fixture.provider.served() }
+            #expect(try await fixture.provider.servedIfReady() == nil)
+            withExtendedLifetime(held) {}
+        }
+        #expect(await fixture.provider.letGoOfStacks(patience: .seconds(5)), "the request's stack was released")
+        await state.endIndexWrite()
+        #expect(try await fixture.provider.servedIfReady() != nil)
     }
 
     /// An Import server indexes nothing.

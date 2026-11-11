@@ -59,6 +59,9 @@ public actor ServerState: ImportObserver {
     /// for at one removes nothing an import installed after it, and an index the start was opening when
     /// a reset removed it is not served.
     public private(set) var indexGeneration = 0
+    /// Whether the library's indexing writes the index now (PLAN's S21d): from before its first write until
+    /// its job has closed the file, nothing reads the index, search answers 503 and `/readyz` says so.
+    public private(set) var indexBeingWritten = false
     private let log: @Sendable (String) -> Void
 
     public init(configuration: ServerConfiguration, log: @escaping @Sendable (String) -> Void = { _ in }) {
@@ -112,6 +115,10 @@ public actor ServerState: ImportObserver {
     func setStillCopying(_ files: [String]) { stillCopying = files }
 
     public func readiness() -> Readiness {
+        if indexBeingWritten {
+            return Readiness(step: .indexingLibrary,
+                             detail: "The library's indexing is writing the index: search answers again once its job ends, and the reader opens documents meanwhile")
+        }
         if let index {
             let s = index.summary
             return Readiness(step: .ready, detail: "Serving \(s.documents) documents from \(s.volumes) volumes, index version \(s.indexVersion)")
@@ -191,12 +198,24 @@ public actor ServerState: ImportObserver {
         return message
     }
 
+    /// The library's indexing is about to write the index (PLAN's S21d): it is read no more until the job
+    /// has closed it.
+    public func beginIndexWrite() {
+        indexBeingWritten = true
+    }
+
+    /// The library's indexing has closed the index without one to serve, as when it could not open it.
+    public func endIndexWrite() {
+        indexBeingWritten = false
+    }
+
     /// The library's indexing has written the index (PLAN's S21d): `newIndex`, opened again over the file
     /// it closed, is served.
     public func indexWritten(_ newIndex: CorpusIndex) {
         index = newIndex
         indexGeneration += 1
         startupProblem = nil
+        indexBeingWritten = false
         let s = newIndex.summary
         log("Serving \(s.documents) documents from \(s.volumes) volumes, index version \(s.indexVersion), as the library's indexing left them")
     }
