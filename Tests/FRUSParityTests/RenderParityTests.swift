@@ -23,20 +23,43 @@ import Testing
     }
 
     /// The sections the server parses alone in the fixture volumes, as `volume/section`, in the golden
-    /// rows' order.
-    static let expectedSectionsReadAlone = ["frus1894Nicaragua/toc", "frus1961-63v06/toc", "frus1961-63v06/index", "frus1969-76ve09p1/toc"]
+    /// rows' order: every section with an id of its own that a full parse gives no document, the leaves
+    /// of the reading order and the compilations and chapters that print only their headings
+    /// (`expectedContainersReadAlone`).
+    static let expectedSectionsReadAlone = [
+        "frus1894Nicaragua/toc", "frus1894Nicaragua/comp1",
+        "frus1961-63v06/subseriesvols", "frus1961-63v06/toc", "frus1961-63v06/sources", "frus1961-63v06/persons",
+        "frus1961-63v06/comp1", "frus1961-63v06/index",
+        "frus1969-76ve09p1/toc", "frus1969-76ve09p1/sources", "frus1969-76ve09p1/persons", "frus1969-76ve09p1/comp1",
+        "frus1969-76ve09p1/ch1", "frus1969-76ve09p1/ch2", "frus1969-76ve09p1/ch3", "frus1969-76ve09p1/ch4", "frus1969-76ve09p1/ch5",
+    ]
 
-    /// The sections the server's rule (`ReaderService.sectionsReadAlone`) picks in `volumes`, from one
-    /// full parse of each, as `volume/section`.
-    static func sectionsReadAlone(in volumes: [String]) async throws -> [String] {
-        var found: [String] = []
+    /// Of those, the sections that hold documents or other sections, which a link opens, as a table of
+    /// contents' entry does, and the kit's reading order does not hold: each fixture volume's
+    /// compilation, and frus1969-76ve09p1's five chapters.
+    static let expectedContainersReadAlone = [
+        "frus1894Nicaragua/comp1", "frus1961-63v06/comp1", "frus1969-76ve09p1/comp1",
+        "frus1969-76ve09p1/ch1", "frus1969-76ve09p1/ch2", "frus1969-76ve09p1/ch3", "frus1969-76ve09p1/ch4", "frus1969-76ve09p1/ch5",
+    ]
+
+    /// Of those, the sections the app's Browse opens in the reader, as its Read button does
+    /// (`ReaderService.sectionsReadOpens`): each volume's table of contents and frus1961-63v06's index.
+    static let expectedSectionsReadOpens = ["frus1894Nicaragua/toc", "frus1961-63v06/toc", "frus1961-63v06/index", "frus1969-76ve09p1/toc"]
+
+    /// The sections the server's rules pick in `volumes`, from one full parse of each, as
+    /// `volume/section`: those the reader parses alone (`ReaderService.sectionsReadAlone`) and, of
+    /// them, those the app's Read opens (`ReaderService.sectionsReadOpens`).
+    static func sectionsReadAlone(in volumes: [String]) async throws -> (alone: [String], readOpens: [String]) {
+        var alone: [String] = []
+        var readOpens: [String] = []
         for volume in volumes {
             let url = Repository.layout.tei.appendingPathComponent("\(volume).xml")
             let parse = try await FRUSDocumentParser().parseVolumeFull(volumeURL: url)
-            found += ReaderService.sectionsReadAlone(in: parse.structureSections, documents: Set(parse.documents.map(\.documentId)))
-                .map { "\(volume)/\($0)" }
+            let documents = Set(parse.documents.map(\.documentId))
+            alone += ReaderService.sectionsReadAlone(in: parse.structureSections, documents: documents).map { "\(volume)/\($0)" }
+            readOpens += ReaderService.sectionsReadOpens(in: parse.structureSections, documents: documents).map { "\(volume)/\($0)" }
         }
-        return found
+        return (alone, readOpens)
     }
 
     /// Check 4 along the reader's own path: each row of the golden manifest, parsed alone by a new
@@ -56,12 +79,13 @@ import Testing
     }
 
     /// The rows are exactly the documents one full parse of each volume yields, in its order, then the
-    /// sections the server parses alone, as the app's Read Index does, in the structure's order,
-    /// volumes sorted: the Mac's choice of the sections its Read button opens, which the server's rule
-    /// (`ReaderService.sectionsReadAlone`) makes too. Rendering each from that parse, with its own
-    /// persons and terms, is the path the server serves, without a parse per document, and it gives
-    /// the same bytes. Since the bytes would be the same with any lists, the parse's persons and terms
-    /// are compared with those the reader parses, field for field.
+    /// sections the server parses alone, as the app's reader parses any division it opens by its id, in
+    /// the structure's order, volumes sorted: the Mac's choice of every section with an id of its own
+    /// that the full parse gives no document, which the server's rule (`ReaderService.sectionsReadAlone`)
+    /// makes too. Rendering each from that parse, with its own persons and terms, is the path the server
+    /// serves, without a parse per document, and it gives the same bytes. Since the bytes would be the
+    /// same with any lists, the parse's persons and terms are compared with those the reader parses,
+    /// field for field.
     @Test func aFullParseYieldsTheRowsAndRendersThemTheSame() async throws {
         let (golden, directory) = try Self.currentGolden()
         let renderer = try ReaderRenderer(layout: Repository.layout)
@@ -70,11 +94,15 @@ import Testing
         let goldenRows = golden.rows.map { "\($0.volume)/\($0.document)" }
         #expect(rendered.map { "\($0.volume)/\($0.document)" } == goldenRows)
         // The sections read alone: each volume's table of contents, frus1894Nicaragua's a table, and
-        // frus1961-63v06's index, which holds the fixtures' eight "See" references. The persons and
-        // sources lists are not among them, since the app's Browse opens each as a list of its own.
-        let alone = try await Self.sectionsReadAlone(in: volumes)
+        // frus1961-63v06's index, which holds the fixtures' eight "See" references, which the app's Read
+        // opens; the lists of names and of sources, and frus1961-63v06's list of the subseries' volumes,
+        // which its Previous and Next turn to; and the compilations and chapters, which a table of
+        // contents' links open, frus1969-76ve09p1's as its toc lists them.
+        let (alone, readOpens) = try await Self.sectionsReadAlone(in: volumes)
         #expect(alone == Self.expectedSectionsReadAlone, "the sections the server parses alone")
+        #expect(readOpens == Self.expectedSectionsReadOpens, "the sections Browse links to the reader")
         #expect(Set(alone).isSubset(of: Set(goldenRows)))
+        #expect(rendered.allSatisfy { $0.html != nil }, "a full parse or the section's parse gives every row a page")
         let mismatches = RenderParity.mismatches(rendered, golden: golden, directory: directory)
         #expect(mismatches.isEmpty, "\(mismatches.count) of \(rendered.count) rows differ:\n\(mismatches.map(\.description).joined(separator: "\n"))")
 

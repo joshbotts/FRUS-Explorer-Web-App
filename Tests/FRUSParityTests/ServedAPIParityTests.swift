@@ -308,8 +308,10 @@ struct ServedFile: Equatable {
     /// A section the reader parses alone, which the index leaves out and its reading order holds, is
     /// headed by its parsed head and takes its neighbours from that order, as the app's reader turns its
     /// pages from any entry (`DocumentViewModel.loadAdjacentEntries`): frus1961-63v06's index follows
-    /// its last document, which turns to it, and its table of contents sits between two lists the
-    /// reader does not open, a subseries' list of volumes and the list of sources.
+    /// its last document, which turns to it, and its table of contents sits between two lists the reader
+    /// opens as the app's reader turns to them, a subseries' list of volumes and the list of sources, each
+    /// headed by its parsed head between its own neighbours, so Previous and Next walk the front matter
+    /// through them, as in the app, where they stopped at them before.
     @Test func aSectionReadAloneTakesItsNeighboursFromTheIndexsReadingOrder() async throws {
         let built = try await FixtureIndex.value()
         let volume = "frus1961-63v06"
@@ -317,11 +319,18 @@ struct ServedFile: Equatable {
         let indexAt = try #require(order.firstIndex(of: "index"))
         let tocAt = try #require(order.firstIndex(of: "toc"))
         let last = order[indexAt - 1]
-        let (index, toc, before) = try await ServedFixture.run { client, _ in
+        let lists = ["subseriesvols", "sources", "persons"]
+        let (index, toc, before, listed) = try await ServedFixture.run { client, _ in
             func detail(_ id: String) async throws -> DocumentDetail {
                 try ServedFixture.decode(DocumentDetail.self, try await client.execute(uri: "/api/v1/volumes/\(volume)/documents/\(id)", method: .get))
             }
-            return (try await detail("index"), try await detail("toc"), try await detail(last))
+            var listed: [String: DocumentDetail] = [:]
+            for id in lists {
+                let page = try await client.execute(uri: "/api/v1/volumes/\(volume)/documents/\(id)/html", method: .get)
+                guard page.status == .ok else { throw APIParityError("\(id)'s page: \(page.status.code)") }
+                listed[id] = try await detail(id)
+            }
+            return (try await detail("index"), try await detail("toc"), try await detail(last), listed)
         }
         #expect(index.document.displayTitle == "Index" && !index.document.inIndex && index.teiAvailable)
         #expect(index.previous?.documentId == last && index.previous?.inIndex == true && index.previous?.readable == true)
@@ -329,9 +338,54 @@ struct ServedFile: Equatable {
         #expect(before.next?.documentId == "index" && before.next?.inIndex == false && before.next?.readable == true)
         #expect(toc.document.displayTitle == "Contents" && !toc.document.inIndex)
         #expect(toc.previous?.documentId == order[tocAt - 1] && toc.next?.documentId == order[tocAt + 1])
-        #expect(toc.previous?.documentId == "subseriesvols" && toc.previous?.readable == false)
-        #expect(toc.next?.documentId == "sources" && toc.next?.readable == false)
-        print("a section read alone through the API: \(volume)'s index after \(last), its table of contents between \(order[tocAt - 1]) and \(order[tocAt + 1])")
+        #expect(toc.previous?.documentId == "subseriesvols" && toc.previous?.readable == true && toc.previous?.inIndex == false)
+        #expect(toc.next?.documentId == "sources" && toc.next?.readable == true && toc.next?.inIndex == false)
+        for (id, title) in zip(lists, ["List of Kennedy Administration Volumes", "List of Sources", "List of Names"]) {
+            let detail = try #require(listed[id], "\(id)")
+            let at = try #require(order.firstIndex(of: id), "\(id) is in the reading order")
+            #expect(detail.document.displayTitle == title && !detail.document.inIndex && detail.teiAvailable, "\(id)")
+            #expect(detail.previous?.documentId == order[at - 1] && detail.next?.documentId == order[at + 1], "\(id)'s neighbours")
+            #expect(detail.previous?.readable == true && detail.next?.readable == true, "\(id)'s neighbours open")
+        }
+        print("a section read alone through the API: \(volume)'s index after \(last), its table of contents between \(order[tocAt - 1]) and \(order[tocAt + 1]), "
+              + "and its lists, " + lists.map { id in "\(id) between \(listed[id]?.previous?.documentId ?? "none") and \(listed[id]?.next?.documentId ?? "none")" }.joined(separator: ", "))
+    }
+
+    /// A table of contents' link to a chapter, which the app's reader opens on the chapter's id as
+    /// everything the chapter holds but its documents, its heading: frus1969-76ve09p1's contents link
+    /// each of its five chapters and its compilation, which print nothing of their own, so the index
+    /// holds no row of them. The link route says where the link lands, and the reader opens it there,
+    /// headed by the chapter's head and with no Previous or Next, since the reading order holds no such
+    /// chapter, in the app as here; the page is the kit's parse of the chapter alone.
+    @Test func aTableOfContentsLinkOpensAChapterAsItsHeading() async throws {
+        let built = try await FixtureIndex.value()
+        let volume = "frus1969-76ve09p1"
+        let order = try await built.index.pipeline.readingSequence(forVolume: volume).map(\.documentId)
+        #expect(!order.contains("ch1") && !order.contains("comp1"), "the reading order holds no chapter that prints only its heading")
+        let url = Repository.layout.tei.appendingPathComponent("\(volume).xml")
+        let ast = try #require(try await FRUSDocumentParser().parseDocument(documentId: "ch1", volumeURL: url))
+        let (link, chapter, page) = try await ServedFixture.run { client, _ in
+            // The link as the contents' page writes it, its target `#ch1`.
+            let link = try ServedFixture.decode(ReaderLinkTarget.self, try await client.execute(
+                uri: ReaderLinkParityTests.uri("frusexplorer://doc/%23ch1", volume: volume, document: "toc"), method: .get))
+            let chapter = try ServedFixture.decode(DocumentDetail.self, try await client.execute(uri: "/api/v1/volumes/\(volume)/documents/ch1", method: .get))
+            let page = try await client.execute(uri: "/api/v1/volumes/\(volume)/documents/ch1/html?part=body", method: .get)
+            return (link, chapter, page)
+        }
+        #expect(link.kind == "document" && link.destination?.documentId == "ch1" && link.destination?.volumeId == volume)
+        #expect(link.inPlace == false && link.volume?.teiAvailable == true)
+        #expect(chapter.document.displayTitle == "Algeria, 1973–1976" && !chapter.document.inIndex && chapter.teiAvailable)
+        #expect(chapter.previous == nil && chapter.next == nil, "no neighbours, as the app's reader has none for it")
+        #expect(page.status == .ok)
+        // The volume's persons and terms, from a full parse made here, as the server's lookups are.
+        let full = try await FRUSDocumentParser().parseVolumeFull(volumeURL: url)
+        let lookups = ReaderLookups(persons: full.persons, terms: full.terms)
+        let brokenRefs = try ServerResources.load(from: ServedFixture.resources).brokenRefs
+        #expect(String(buffer: page.body) == ReaderService.render(.init(ast: ast, lookups: lookups), volume: volume, classification: nil,
+                                                                   part: .body, base: .root, brokenRefs: brokenRefs).html,
+                "the chapter's page is the kit's parse of it alone")
+        #expect(!full.documents.contains { $0.documentId == "ch1" }, "a full parse gives the chapter no document")
+        print("a table of contents' link through the API: \(volume)'s toc opens ch1, \"\(chapter.document.displayTitle)\", with no neighbours")
     }
 
     /// Browsing through the API: the catalogue's coverage, each fixture volume's documents, reading
@@ -368,13 +422,19 @@ struct ServedFile: Equatable {
         #expect(ParityFixtures.volumes.map { documents[$0]?.total } == [140, 128, 134], "front matter, documents and back matter")
         #expect(Set(list.items.filter(\.indexed).map(\.volumeId)) == Set(ParityFixtures.volumes))
         for volume in ParityFixtures.volumes {
-            // The golden rows less the sections the reader parses alone, which the index leaves out and
-            // its reading order holds, as the app's reader turns its pages to them.
-            let alone = Set(RenderParityTests.expectedSectionsReadAlone.filter { $0.hasPrefix("\(volume)/") }
-                .map { String($0.dropFirst(volume.count + 1)) })
+            // The golden rows less the sections the reader parses alone, which the index leaves out. Its
+            // reading order holds the leaves among them, as the app's reader turns its pages to them, and
+            // none of the compilations and chapters, which only a link opens.
+            func ids(_ rows: [String]) -> Set<String> {
+                Set(rows.filter { $0.hasPrefix("\(volume)/") }.map { String($0.dropFirst(volume.count + 1)) })
+            }
+            let alone = ids(RenderParityTests.expectedSectionsReadAlone)
+            let containers = ids(RenderParityTests.expectedContainersReadAlone)
             let rows = Set(golden.rows.filter { $0.volume == volume }.map(\.document)).subtracting(alone)
-            #expect(alone.isSubset(of: Set((documents[volume]?.items ?? []).filter { !$0.inIndex }.map(\.documentId))),
-                    "\(volume)'s sections read alone are in its reading order, and not in the index")
+            let order = documents[volume]?.items ?? []
+            #expect(alone.subtracting(containers) == Set(order.filter { !$0.inIndex }.map(\.documentId)),
+                    "\(volume)'s leaves read alone are its reading order's entries the index does not hold")
+            #expect(containers.isDisjoint(with: order.map(\.documentId)), "\(volume)'s reading order holds no container read alone")
             #expect(volumes[volume]?.indexedDocuments == built.index.documents[volume] && volumes[volume]?.teiAvailable == true)
             #expect(volumes[volume]?.structure?.isEmpty == false, "\(volume) has a structure")
             #expect(volumes[volume]?.structureSource == "index", "\(volume)'s structure is the index's")

@@ -707,9 +707,9 @@ export const copy = {
     },
     /**
      * What the app does with each layer, as the app's `appUse` says it where every screen it names is
-     * this server's too; for people, source notes, classification, cross-references and the front and
-     * back matter the sentence is the web's own, naming only what the web edition has, and despatch
-     * numbers take the app's line for a layer nothing else reads.
+     * this server's too; for people, source notes, classification and cross-references the sentence is
+     * the web's own, naming only what the web edition has, and despatch numbers take the app's line for
+     * a layer nothing else reads.
      */
     appUse: {
       people: 'The reader opens a linked person’s entry. Where a volume does not link its names, search for them instead.',
@@ -720,7 +720,7 @@ export const copy = {
       crossReferences: 'The reader follows each one.',
       editorialNotes: 'Search can limit its results to editorial notes.',
       footnotes: 'The reader shows each footnote with its document.',
-      printedAids: 'A volume’s page lists them under Front Matter and Back Matter, and the reader opens most of them, its index among them; its lists of sources and persons do not open here yet.',
+      printedAids: "A volume's page lists them under Front Matter and Back Matter, and the reader opens each one.",
       none: 'The reader shows these as printed. Nothing else in the app reads them yet.',
     },
     // A layer's lists.

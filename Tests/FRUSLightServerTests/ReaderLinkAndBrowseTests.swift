@@ -315,7 +315,8 @@ private func formEncoded(_ fields: [String: String]) -> String {
             #expect(compilation.title.split(whereSeparator: \.isWhitespace).joined(separator: " ") == "Kennedy-Khrushchev Exchanges")
             #expect(compilation.documentCount == 120 && compilation.indexedDocumentCount == 2 && compilation.readable == false)
             #expect(compilation.documentIds.prefix(2) == ["d1", "d2"])
-            // The reader opens a preface, which the parse makes a document, but not the list of names.
+            // Browse opens a preface in the reader, which the parse makes a document, but not the list of
+            // names, which the app's Browse opens as a list of its own, though the reader opens it.
             #expect(all["preface"]?.readable == true && all["preface"]?.canReadDirectly == true && all["preface"]?.isFrontMatter == true)
             #expect(all["persons"]?.readable == false && all["persons"]?.isFrontMatter == true)
             #expect(volume.documentCount == 120 && volume.indexedDocumentCount == 2)
@@ -418,27 +419,31 @@ private func formEncoded(_ fields: [String: String]) -> String {
         }
     }
 
-    /// The sections the app's Browse opens in its reader that a full parse leaves out, a back-of-volume
-    /// index and a table of contents, are parsed alone, as the app's Read Index parses one
-    /// (`ReaderService.sectionsReadAlone`): the volume's contents mark them readable, so Browse links
-    /// them to the reader, which serves each, named by its parsed head, and parses each once. The lists
-    /// of persons and of sources, which the app's Browse opens as lists of their own, and a subseries'
-    /// list of volumes, which it does not open, are not.
-    @Test func theSectionsTheAppsReadOpensAreParsedAlone() async throws {
+    /// Every section with an id of its own that a full parse leaves out is parsed alone, as the app's
+    /// reader parses any division it is opened on (`ReaderService.sectionsReadAlone`): a back-of-volume
+    /// index and a table of contents, which the app's Browse opens by Read; the lists of persons and of
+    /// sources, which it opens as lists of their own, and a subseries' list of volumes, which it opens
+    /// nowhere, all of which its reader turns to by Previous and Next; and the compilation, which a link
+    /// opens as its heading. The reader serves each, named by its parsed head, and parses each once.
+    /// The volume's contents mark readable only the two Read opens, so Browse links those alone to the
+    /// reader, as the app's Browse does.
+    @Test func theSectionsTheAppsReaderOpensAreParsedAlone() async throws {
         let fixture = try await servingSyntheticExport(volumes: [v06])
         let url = RepositoryFiles.tei.appendingPathComponent("\(v06).xml")
+        let sections = [("index", "Index"), ("toc", "Contents"), ("persons", "List of Names"), ("sources", "List of Sources"),
+                        ("subseriesvols", "List of Kennedy Administration Volumes"), ("comp1", "Kennedy-Khrushchev Exchanges")]
         try await fixture.app.test(.router) { client in
             let volume = try decode(Volume.self, try await client.execute(uri: "/api/v1/volumes/\(v06)", method: .get))
             let all = OwnTextRouteTests.flatten(try #require(volume.structure))
             for id in ["index", "toc"] {
-                #expect(all[id]?.readable == true && all[id]?.canReadDirectly == true, "\(id) opens in the reader")
+                #expect(all[id]?.readable == true && all[id]?.canReadDirectly == true, "\(id) opens in the reader from Browse")
             }
             #expect(all["index"]?.divType == "index" && all["toc"]?.divType == "table-of-contents")
-            for id in ["persons", "sources", "subseriesvols"] {
-                #expect(all[id]?.readable == false && all[id]?.canReadDirectly == false, "\(id) does not")
+            for id in ["persons", "sources", "subseriesvols", "comp1"] {
+                #expect(all[id]?.readable == false && all[id]?.canReadDirectly == false, "\(id) does not open from Browse")
             }
             let lookups = try await fixture.reader.document(volume: v06, document: "d1").lookups
-            for (id, title) in [("index", "Index"), ("toc", "Contents")] {
+            for (id, title) in sections {
                 let page = try await client.execute(uri: "/api/v1/volumes/\(v06)/documents/\(id)/html?part=body", method: .get)
                 #expect(page.status == .ok, "\(id)")
                 // The page is the kit's rendering of a parse of the section alone, made here apart from the server's.
@@ -457,13 +462,14 @@ private func formEncoded(_ fields: [String: String]) -> String {
                 let whole = try await client.execute(uri: "/api/v1/volumes/\(v06)/documents/\(id)/html", method: .get)
                 #expect(whole.headers[ReaderRoutes.renderingVersionHeader] == version, "\(id)")
             }
-            for id in ["persons", "sources", "subseriesvols", "nowhere"] {
+            // The wrappers have no id to be opened by, and an id no division has is none.
+            for id in ["front-1", "back-10", "nowhere"] {
                 let page = try await client.execute(uri: "/api/v1/volumes/\(v06)/documents/\(id)/html", method: .get)
                 #expect(try problem(page, .notFound).code == "DOCUMENT_NOT_FOUND", "\(id)")
             }
         }
         // Each was parsed once, though asked for four times, and nothing else was.
-        #expect(await fixture.reader.sectionParseCount == 2)
+        #expect(await fixture.reader.sectionParseCount == sections.count)
     }
 
     /// A section read alone is parsed once for requests that come together, kept while its volume's
