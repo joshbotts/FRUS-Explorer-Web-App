@@ -2,15 +2,16 @@
 // research question, saved as it is typed, and its date focus; the summary's tiles, with a tile for
 // each corpus its searches ran inside; its focus subjects, where the server has their vocabulary, with
 // their editor (FocusSubjects.tsx, PLAN's S25c); its focus tags, once the reader has tags, with their
-// editor; Suggested Next, the leads the Mac found, until Related Documents finds them here, each with
-// the opening of its document's text, where the served index holds it, and Dismiss; Recent Activity;
-// and the quick ways to Research and Search. The app's Collections section and Plan a Visit wait for
-// the rows that bring them, and its weighting and Refresh for Related Documents.
+// editor; Suggested Next, the leads the server finds (S23d) or an import brought, each with the opening
+// of its document's text, where the served index holds it, and Dismiss, with Refresh, which has the
+// server find them again, and "Finding leads…" while it does; Recent Activity; and the quick ways to
+// Research and Search. The app's Collections section and Plan a Visit wait for the rows that bring them,
+// its weighting for a row of its own, and Beyond your library for phase 4.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
-import { dismissLead, projectHomeQuery, type ProjectHome, updateProject } from '../api/research';
+import { dismissLead, findingLeads, projectHomeQuery, type ProjectHome, refreshLeads, updateProject } from '../api/research';
 import { meQuery, tagsQuery } from '../api/userData';
 import { copy } from '../copy';
 import { useHeadingReady } from '../shell/headingFocus';
@@ -29,7 +30,12 @@ export function ProjectHomeScreen() {
   const client = useQueryClient();
   const me = useQuery(meQuery);
   const keepsUserData = me.data?.userData === true;
-  const home = useQuery({ ...projectHomeQuery(projectId), enabled: keepsUserData });
+  // While its leads are found, Project Home is read again every two seconds, as the admin's Jobs pane reads its list.
+  const home = useQuery({
+    ...projectHomeQuery(projectId),
+    enabled: keepsUserData,
+    refetchInterval: (query) => (findingLeads(query.state.data) ? 2000 : false),
+  });
   const project = home.data?.project;
   useDocumentTitle(project?.name ?? copy.projectHome.title);
   useHeadingReady(!home.isPending || me.data?.userData === false);
@@ -37,7 +43,9 @@ export function ProjectHomeScreen() {
   let body;
   if (me.data && !keepsUserData) {
     body = <p>{copy.settings.userDataOff}</p>;
-  } else if (home.isError) {
+  } else if (home.isError && !home.data) {
+    // A read that failed while the workspace is on show, as one of the reads while the leads are found,
+    // keeps it on show, and its focus, until the next.
     body = (
       <>
         <h2>{copy.projectHome.missingTitle}</h2>
@@ -267,6 +275,21 @@ function Leads({ home, onFailure }: { home: ProjectHome; onFailure: () => void }
   const headingId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
+  const finding = asking || findingLeads(home);
+
+  async function refresh() {
+    if (finding) return;
+    setFailure(null);
+    setAsking(true);
+    try {
+      await refreshLeads(client, home.project.id);
+    } catch (error) {
+      setFailure(errorMessage(error));
+    } finally {
+      setAsking(false);
+    }
+  }
 
   async function dismiss(leadId: string, index: number, list: HTMLElement | null) {
     setFailure(null);
@@ -316,7 +339,19 @@ function Leads({ home, onFailure }: { home: ProjectHome; onFailure: () => void }
           ))}
         </ul>
       )}
-      <p className="note">{copy.projectHome.leadsFromMac}</p>
+      {/* Refresh stays where it is while the leads are found, so the focus does, the web's own. */}
+      <div className="leads-footer">
+        <button type="button" aria-disabled={finding} onClick={() => void refresh()}>
+          {copy.projectHome.leadsRefresh}
+        </button>
+        <p className="note" role="status">
+          {finding ? copy.projectHome.leadsComputing : ''}
+        </p>
+      </div>
+      {/* Said where it is seen, not announced at each visit: a computation an import asked for fails as well. */}
+      {home.leadsRefresh?.state === 'failed' && !finding && (
+        <p className="note warning">{copy.projectHome.leadsRefreshFailed(home.leadsRefresh.error ?? copy.projectHome.leadsRefreshUnexplained)}</p>
+      )}
       {failure && (
         <p className="error" role="alert">
           {failure}

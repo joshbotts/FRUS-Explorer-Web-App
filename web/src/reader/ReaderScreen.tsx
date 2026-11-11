@@ -405,6 +405,10 @@ export function ReaderScreen() {
             >
               {copy.reader.cite}
             </button>
+            {/* The rail's Related tile (S23d): the documents related to this one, a page of their own. */}
+            <Link to="/related/$volumeId/$documentId" params={{ volumeId, documentId }} title={copy.related.tileHelp}>
+              {copy.related.tile}
+            </Link>
             {keepsUserData && (
               <button
                 ref={researchToggle}

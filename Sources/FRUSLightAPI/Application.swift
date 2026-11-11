@@ -27,6 +27,10 @@ struct ServerComponents: Sendable {
     let jobs: InProcessJobQueue
     let indexWriter: LocalIndexWriter
     let imports: ImportCoordinator
+    /// The stacks over the served index, which every route reads it through.
+    let provider: ServedIndexProvider
+    /// Suggested Next's computations (PLAN's S23d), which an export made the served index queues for every project.
+    let leads: ProjectLeadsQueue
     /// The library (PLAN's S21c): a Standalone server's own folder of volumes and its downloads, jobs of
     /// the queue, those a stopped server left resumed once the queue is open; in Import mode the TEI
     /// folder it reads.
@@ -49,6 +53,10 @@ struct ServerComponents: Sendable {
         let (userStore, serverLock, backups) = try await openUserStore(configuration, files: files, logger: logger)
         let secrets = try await openSecrets(configuration, files: files, store: userStore, logger: logger)
         let jobs = try await InProcessJobQueue.open(store: userStore, log: { logger.info("\($0)") })
+        // With user data on, each stack attaches the user store's search database, for each user's half of a search (S17d).
+        let provider = ServedIndexProvider(state: state, resources: resources, volumesDirectory: files.volumesDirectory,
+                                           userStore: configuration.userData ? userStore.searchDatabase : nil)
+        let leads = ProjectLeadsQueue(store: userStore, jobs: jobs, provider: provider, resources: resources)
         let library = VolumeLibrary.make(configuration: configuration, files: files, store: userStore, jobs: jobs,
                                          catalogue: resources.manifest, log: { logger.info("\($0)") })
         try library.prepare()
@@ -71,7 +79,9 @@ struct ServerComponents: Sendable {
                 files: files,
                 importer: IndexImporter(files: files, writer: writer,
                                         writing: configuration.userData ? ResearchDatabaseImport.move(into: userStore) : nil),
-                state: state, jobs: jobs),
+                state: state, jobs: jobs, alsoNotify: configuration.userData ? LeadsAfterIndexImport(leads: leads) : nil),
+            provider: provider,
+            leads: leads,
             library: library)
     }
 
@@ -214,9 +224,10 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
     }
     var app = apiApplication(
         router: buildRouter(state: components.state, resources: components.resources, reader: components.reader,
-                            webClient: components.webClient,
+                            provider: components.provider, webClient: components.webClient,
                             userData: UserDataServices(store: components.userStore, configuration: configuration,
                                                        secrets: components.secrets, jobs: components.jobs),
+                            leads: components.leads,
                             library: components.library, base: configuration.basePath, logger: logger),
         base: configuration.basePath,
         configuration: .init(address: .hostname(configuration.host, port: configuration.port), serverName: "frus-light"),

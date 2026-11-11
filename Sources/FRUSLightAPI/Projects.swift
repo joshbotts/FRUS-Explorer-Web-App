@@ -88,7 +88,7 @@ enum ProjectRoutes {
     struct Active: Decodable { let projectId: String? }
 
     static func add(to me: RouterGroup<APIRequestContext>, services: UserDataServices, resources: ServerResources,
-                    provider: ServedIndexProvider) {
+                    provider: ServedIndexProvider, leads: ProjectLeadsQueue) {
         let store = services.store
         let now = services.now
 
@@ -232,8 +232,9 @@ enum ProjectRoutes {
             }
             return ActiveProject(projectId: try await Blocking.run { try store.activeProjectId(of: user.id) }.map(NoteRoutes.wire))
         }
-        ProjectHomeRoutes.add(to: me, services: services, resources: resources, provider: provider)
+        ProjectHomeRoutes.add(to: me, services: services, resources: resources, provider: provider, leads: leads)
         ProjectFocusRoutes.add(to: me, resources: resources)
+        ProjectLeadsRoutes.add(to: me, services: services, leads: leads)
     }
 
     static var table: UserStoreSchema.Table {

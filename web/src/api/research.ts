@@ -5,6 +5,7 @@
 // (`researchImported`).
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
 import { getJSON } from './client';
+import { storedWeights } from './related';
 import type { Project, ProjectList } from './types';
 import { change, projectsQuery } from './userData';
 
@@ -54,13 +55,28 @@ export interface ProjectHome {
   hasTags: boolean;
   focusTags: { id: string; name: string }[];
   leads: ProjectLead[];
+  /** Where the newest computation of its leads stands (S23d); absent when none was asked for since the server started. */
+  leadsRefresh?: LeadsRefresh;
   recentVisits: { volumeId: string; documentId: string; title: string }[];
   recentNotes: { id: string; volumeId: string; documentId: string }[];
   recentSearches: { id: string; queryText: string; resultCount: number }[];
   isEmpty: boolean;
 }
 
-/** One of Suggested Next's leads, the Mac's. */
+/** Where a computation of a project's leads stands: a job of the server's queue (S23d). */
+export interface LeadsRefresh {
+  state: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+  finishedAt?: string;
+  /** Why it failed, in the server's words. */
+  error?: string;
+}
+
+/** Whether a project's leads are being found: its computation waits or runs. */
+export function findingLeads(home: Pick<ProjectHome, 'leadsRefresh'> | undefined): boolean {
+  return home?.leadsRefresh?.state === 'queued' || home?.leadsRefresh?.state === 'running';
+}
+
+/** One of Suggested Next's leads, computed on the server (S23d) or brought by an import from the Mac. */
 export interface ProjectLead {
   id: string;
   volumeId: string;
@@ -345,6 +361,18 @@ export async function setActiveProject(client: QueryClient, projectId: string | 
     }
     throw error;
   }
+}
+
+/**
+ * Suggested Next's Refresh (S23d): the project's leads computed again on the server, with the tuning
+ * this browser keeps for a project with none of its own, as the app's recompute reads its device's.
+ */
+export async function refreshLeads(client: QueryClient, projectId: string): Promise<LeadsRefresh> {
+  const weights = storedWeights();
+  const job = (await change<LeadsRefresh>(client, 'POST', `/api/v1/me/projects/${segment(projectId)}/leads/refresh`,
+    weights === undefined ? {} : { weights }))!;
+  await client.invalidateQueries({ queryKey: ['projectHome', projectId] });
+  return job;
 }
 
 /** Suggested Next's ×. */
