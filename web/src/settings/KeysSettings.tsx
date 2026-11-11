@@ -5,9 +5,11 @@
 // state, the field is emptied as it is sent, whatever the answer, and the server says from then on only
 // that it is stored. Removing asks first, as the app does, and while the removal is sent its question
 // waits for it, as Delete Note's does. While the instance has a NARA key of its own, an admin's, the
-// pane says that it serves the user who has none.
+// pane says that it serves the user who has none. From S20d the admin's Keys pane shows that key with the
+// same section, over the instance's routes.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
+import { removeInstanceSecret, setInstanceSecret } from '../api/admin';
 import { errorMessage } from '../api/client';
 import { removeSecret, type SecretName, secretsQuery, setSecret } from '../api/secrets';
 import { meQuery } from '../api/userData';
@@ -91,10 +93,25 @@ export function KeysSettingsScreen() {
 
 type Feedback = { kind: 'saved' | 'removed' } | { kind: 'failed'; message: string };
 
-/** One service's key: its status, what it is for, and its actions, or the field a new key is typed in. */
-function KeySection({ name, stored: listed, instanceHasOne }: { name: SecretName; stored: boolean; instanceHasOne: boolean }) {
+/**
+ * One service's key: its status, what it is for, and its actions, or the field a new key is typed in. The
+ * user's own, or with `owner` the instance's, an admin's (S20d), whose removal says what it leaves.
+ */
+export function KeySection({
+  name,
+  stored: listed,
+  instanceHasOne,
+  owner = 'user',
+}: {
+  name: SecretName;
+  stored: boolean;
+  instanceHasOne: boolean;
+  owner?: 'user' | 'instance';
+}) {
   const client = useQueryClient();
   const service = services[name];
+  const keep = owner === 'instance' ? setInstanceSecret : setSecret;
+  const forget = owner === 'instance' ? removeInstanceSecret : removeSecret;
   const [editing, setEditing] = useState(false);
   // Whether the field holds anything: the key itself stays in the field.
   const [hasText, setHasText] = useState(false);
@@ -149,7 +166,7 @@ function KeySection({ name, stored: listed, instanceHasOne }: { name: SecretName
     setBusy(true);
     setFeedback(null);
     try {
-      await setSecret(client, name, key);
+      await keep(client, name, key);
       closeAtOnce(() => {
         setBusy(false);
         setKnown({ stored: true, over: listed });
@@ -172,7 +189,7 @@ function KeySection({ name, stored: listed, instanceHasOne }: { name: SecretName
     setRemoveFailure(null);
     setFeedback(null);
     try {
-      await removeSecret(client, name);
+      await forget(client, name);
       closeAtOnce(() => {
         setBusy(false);
         setConfirming(false);
@@ -275,6 +292,7 @@ function KeySection({ name, stored: listed, instanceHasOne }: { name: SecretName
       )}
       {confirming && (
         <RemoveConfirmation
+          message={owner === 'instance' ? copy.admin.keys.removeMessage : copy.keys.removeMessage}
           busy={busy}
           failure={removeFailure}
           onRemove={() => void remove()}
@@ -291,11 +309,13 @@ function KeySection({ name, stored: listed, instanceHasOne }: { name: SecretName
 
 /** "Remove the stored key?", as the app's confirmation asks it, with Remove and Cancel, which wait for a removal sent. */
 function RemoveConfirmation({
+  message,
   busy,
   failure,
   onRemove,
   onCancel,
 }: {
+  message: string;
   busy: boolean;
   failure: string | null;
   onRemove: () => void;
@@ -309,7 +329,7 @@ function RemoveConfirmation({
       <h2 id={headingId} tabIndex={-1}>
         {copy.keys.removeTitle}
       </h2>
-      <p id={messageId}>{copy.keys.removeMessage}</p>
+      <p id={messageId}>{message}</p>
       {failure && (
         <p className="error" role="alert">
           {failure}

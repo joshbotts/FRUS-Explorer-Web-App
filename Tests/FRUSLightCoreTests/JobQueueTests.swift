@@ -42,7 +42,8 @@ final class JobClock: Sendable {
         }
         #expect(first.state == .queued && first.cancellable && second.requestedBy == "alice")
         await gate.untilReached()
-        #expect(await queue.job(first.id)?.state == .running && queue.job(first.id)?.progress == "Copying export.sqlite")
+        let started = await queue.job(first.id)
+        #expect(started?.state == .running && started?.progress == "Copying export.sqlite")
         #expect(await queue.job(second.id)?.state == .queued, "one at a time")
         #expect(try Self.stored(rows, first.id) == [.text("indexImport"), .text("export.sqlite"), .text("running"),
                                                      .text("Copying export.sqlite"), .null, .null, .null])
@@ -112,7 +113,8 @@ final class JobClock: Sendable {
         await #expect(throws: JobCancelRefusal.self) { _ = try await queue.cancel(committed.id, by: "bob") }
         last.open()
         await queue.waitUntilIdle()
-        #expect(await queue.job(committed.id)?.state == .succeeded && queue.job(committed.id)?.progress == "Written",
+        let ended = await queue.job(committed.id)
+        #expect(ended?.state == .succeeded && ended?.progress == "Written",
                 "past the point where it can stop, it runs to its end")
         await #expect(throws: JobCancelRefusal.finished(.succeeded)) { _ = try await queue.cancel(committed.id, by: "bob") }
         await #expect(throws: JobCancelRefusal.finished(.cancelled)) { _ = try await queue.cancel(waiting.id, by: "bob") }

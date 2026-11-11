@@ -49,6 +49,11 @@ import { ReadingSettingsScreen } from './settings/ReadingSettings';
 import { SessionLogScreen, SessionsSettingsScreen } from './settings/SessionsSettings';
 import { TagsSettingsScreen } from './settings/TagsSettings';
 // ─── Admin ──────────────────────────────────────────────────────────────────
+import { AdminKeysScreen } from './admin/KeysPane';
+import { BackupsScreen } from './admin/BackupsPane';
+import { JobsScreen } from './admin/JobsPane';
+import { StatusScreen } from './admin/StatusPane';
+import { UsersScreen } from './admin/UsersPane';
 
 /** A query string's fields: a name given once is a string, a repeated one a list. */
 export function parseSearch(query: string): Record<string, unknown> {
@@ -295,6 +300,44 @@ const settingsReadingRoute = createRoute({
 });
 
 // ─── Admin ──────────────────────────────────────────────────────────────────
+// From S20d: administration, for an admin, opening at Status, its first pane.
+const adminRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin',
+  beforeLoad: () => {
+    throw redirect({ to: '/admin/status' });
+  },
+});
+
+const adminStatusRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/status',
+  component: StatusScreen,
+});
+
+const adminJobsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/jobs',
+  component: JobsScreen,
+});
+
+const adminUsersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/users',
+  component: UsersScreen,
+});
+
+const adminBackupsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/backups',
+  component: BackupsScreen,
+});
+
+const adminKeysRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/keys',
+  component: AdminKeysScreen,
+});
 
 export const routeTree = rootRoute.addChildren([
   // ─── The shell ────────────────────────────────────────────────────────────
@@ -335,6 +378,12 @@ export const routeTree = rootRoute.addChildren([
   settingsSessionLogRoute,
   settingsReadingRoute,
   // ─── Admin ────────────────────────────────────────────────────────────────
+  adminRoute,
+  adminStatusRoute,
+  adminJobsRoute,
+  adminUsersRoute,
+  adminBackupsRoute,
+  adminKeysRoute,
 ]);
 
 export function makeRouter(basepath: string = basePath) {

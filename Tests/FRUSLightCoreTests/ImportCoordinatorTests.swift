@@ -80,7 +80,8 @@ final class CancelAtStep: ImportObserver, @unchecked Sendable {
         #expect(stopped.state == .cancelled && stopped.cancelRequestedBy == "alice" && stopped.progress == "Checking the file's format")
         #expect(observer.reached == [.copyingExport, .checkingFormat], "it stopped before checking the versions")
         #expect(await fixture.state.status().lastImport?.outcome == .cancelled)
-        #expect(await !fixture.state.readiness().ready && fixture.state.status().index == nil)
+        #expect(await !fixture.state.readiness().ready)
+        #expect(await fixture.state.status().index == nil)
         #expect(!FileManager.default.fileExists(atPath: fixture.files.candidateIndex.path), "its copy removed")
         #expect(!FileManager.default.fileExists(atPath: fixture.files.liveIndex.path))
         #expect(FileManager.default.fileExists(atPath: source.path), "the file is kept")
@@ -120,7 +121,8 @@ final class CancelAtStep: ImportObserver, @unchecked Sendable {
         #expect(await fixture.state.status().lastImport?.outcome == .installed)
         #expect(!FileManager.default.fileExists(atPath: source.path), "an installed export is removed from the drop zone")
         #expect(await fixture.jobs.job(job!)?.state == .succeeded)
-        #expect(await fixture.jobs.job(job!)?.kind == .indexImport && fixture.jobs.job(job!)?.subject == "export.sqlite")
+        let listed = await fixture.jobs.job(job!)
+        #expect(listed?.kind == .indexImport && listed?.subject == "export.sqlite")
     }
 
     @Test func waitsForAFileStillBeingCopied() async throws {

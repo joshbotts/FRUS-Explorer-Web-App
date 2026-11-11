@@ -53,8 +53,7 @@ import Testing
         let tested = Set(Self.routes.map { method, path, _ in
             "\(method.rawValue) " + String(path.dropFirst("/api/v1/admin/".count))
                 .replacingOccurrences(of: Self.anyJob, with: ":jobId")
-                .replacingOccurrences(of: #/users/(bob|alice)/#, with: "users/:userName")
-                .replacingOccurrences(of: #/users/(bob|alice)$/#, with: "users/:userName")
+                .replacing(#/users/(bob|alice)/#, with: "users/:userName")
         })
         #expect(registered.isSubset(of: tested), "untested: \(registered.subtracting(tested).sorted())")
         #expect(registered.count >= 12)
@@ -133,7 +132,8 @@ import Testing
             await gate.untilReached()
             let second = try decode(ImportStatus.self, try await owner.send(.post, ImportRouteTests.path, try ImportRouteTests.export(noteText: "Two.")))
             let dequeued = try await owner.send(.post, "/api/v1/admin/jobs/\(second.id)/cancel")
-            #expect(dequeued.status == .ok && (try decode(AdminJob.self, dequeued)).state == "cancelled")
+            let cancelled = try decode(AdminJob.self, dequeued)
+            #expect(dequeued.status == .ok && cancelled.state == "cancelled")
             let status = try decode(ImportStatus.self, try await owner.get("/api/v1/me/import/\(second.id)"))
             #expect(status.state == .failed && status.problem?.code == "IMPORT_CANCELLED" && status.problem?.detail == ImportRoutes.cancelledDetail)
             let asked = try await owner.send(.post, "/api/v1/admin/jobs/\(held.id)/cancel")
@@ -239,7 +239,8 @@ import Testing
             #expect(stale.status == .conflict && problemCode(stale) == "RESEARCH_CHANGED")
             let recounted = try decode(ResearchHoldings.self, try await alice.get("/api/v1/admin/users/bob/research"))
             let erased = try await alice.send(.post, "/api/v1/admin/users/bob/research/erase", confirmation(recounted))
-            #expect(erased.status == .ok && (try decode(ResearchHoldings.self, erased)) == recounted)
+            let removed = try decode(ResearchHoldings.self, erased)
+            #expect(erased.status == .ok && removed == recounted)
 
             func exported(_ browser: AccountBrowser) async throws -> Int {
                 try decode(ExportContents.self, try await browser.get("/api/v1/me/export/contents")).types.reduce(0) { $0 + $1.count }
