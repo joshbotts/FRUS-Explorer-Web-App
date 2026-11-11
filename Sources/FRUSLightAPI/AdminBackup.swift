@@ -27,7 +27,7 @@ struct AdminRoleGuard: RouterMiddleware {
 
 enum AdminRoutes {
     static func add(to router: Router<APIRequestContext>, services: UserDataServices, state: ServerState, resources: ServerResources,
-                    library: VolumeLibrary? = nil) {
+                    library: VolumeLibrary? = nil, indexer: LibraryIndexer? = nil) {
         let admin = router.group("/api/v1/admin").add(middleware: UserDataGuard(services: services)).add(middleware: AdminRoleGuard())
         let (directory, copyDirectory) = (services.backupsDirectory, services.backupCopyDirectory)
         // The instance's stored keys (PLAN's S20c), an admin's too.
@@ -35,8 +35,8 @@ enum AdminRoutes {
         // Status, the backups' list and the index's reset; the jobs; the users and an erasure (S20d).
         AdminStatusRoutes.add(to: admin, services: services, state: state, resources: resources)
         AdminJobRoutes.add(to: admin, services: services)
-        // The library's volumes and their downloads (S21c).
-        AdminLibraryRoutes.add(to: admin, state: state, resources: resources, library: library)
+        // The library's volumes, their downloads (S21c) and their indexing (S21d).
+        AdminLibraryRoutes.add(to: admin, state: state, resources: resources, library: library, indexer: indexer)
         AdminUserRoutes.add(to: admin, services: services)
 
         admin.get("backup") { request, context -> Response in

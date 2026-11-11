@@ -35,6 +35,9 @@ struct ServerComponents: Sendable {
     /// the queue, those a stopped server left resumed once the queue is open; in Import mode the TEI
     /// folder it reads.
     let library: VolumeLibrary
+    /// The library's indexing (PLAN's S21d): a Standalone server's one writer of its index, jobs of the
+    /// queue, one after each download that fetched volumes, and one for what waits at a start.
+    let indexer: LibraryIndexer
 
     static func make(configuration: ServerConfiguration, logger: Logger) async throws -> ServerComponents {
         // Before anything is written: a server without its data files cannot serve the reader.
@@ -60,6 +63,18 @@ struct ServerComponents: Sendable {
         let library = VolumeLibrary.make(configuration: configuration, files: files, store: userStore, jobs: jobs,
                                          catalogue: resources.manifest, log: { logger.info("\($0)") })
         try library.prepare()
+        let indexer = LibraryIndexer(liveIndex: files.liveIndex, volumesDirectory: files.volumesDirectory, mode: configuration.mode,
+                                     resources: resources.indexing, jobs: jobs, state: state,
+                                     observer: ServedIndexWriting(state: state, log: { logger.info("\($0)") }),
+                                     capacity: { try files.availableCapacity() }, log: { logger.info("\($0)") })
+        library.whenDownloadsEnd { fetched in
+            do {
+                try await indexer.index(.afterDownload(fetched), requestedBy: nil)
+            } catch LibraryIndexingRefusal.importMode {
+            } catch {
+                logger.warning("The indexing of \(fetched.count) downloaded volumes could not be queued: \(error)")
+            }
+        }
         await library.resumeUnfinished()
         return ServerComponents(
             files: files,
@@ -79,10 +94,13 @@ struct ServerComponents: Sendable {
                 files: files,
                 importer: IndexImporter(files: files, writer: writer,
                                         writing: configuration.userData ? ResearchDatabaseImport.move(into: userStore) : nil),
-                state: state, jobs: jobs, alsoNotify: configuration.userData ? LeadsAfterIndexImport(leads: leads) : nil),
+                state: state, jobs: jobs,
+                alsoNotify: ImportObservers(observers: (configuration.userData ? [LeadsAfterIndexImport(leads: leads)] : [])
+                    + (configuration.mode == .standalone ? [IndexerAfterIndexImport(indexer: indexer)] : []))),
             provider: provider,
             leads: leads,
-            library: library)
+            library: library,
+            indexer: indexer)
     }
 
     /// The user store `FRUS_USER_STORE` names, migrated to this build's schema: app.db in the data
@@ -228,12 +246,13 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
                             userData: UserDataServices(store: components.userStore, configuration: configuration,
                                                        secrets: components.secrets, jobs: components.jobs),
                             leads: components.leads,
-                            library: components.library, base: configuration.basePath, logger: logger),
+                            library: components.library, indexer: components.indexer, base: configuration.basePath, logger: logger),
         base: configuration.basePath,
         configuration: .init(address: .hostname(configuration.host, port: configuration.port), serverName: "frus-light"),
         logger: logger)
     app.addServices(ImportWatcher(files: components.files, state: components.state,
-                                  coordinator: components.imports, interval: configuration.importPollInterval))
+                                  coordinator: components.imports, interval: configuration.importPollInterval,
+                                  afterOpening: { [indexer = components.indexer] in await indexer.resumeAtStart() }))
     if let backups = components.backups, let serverLock = components.serverLock {
         app.addServices(BackupService(backups: backups, serverLock: serverLock, logger: logger))
     }
@@ -329,9 +348,12 @@ struct ImportWatcher: Service {
     let state: ServerState
     let coordinator: ImportCoordinator
     let interval: Duration
+    /// Once the index found at start is open: a Standalone server's library indexes what waits (S21d).
+    var afterOpening: (@Sendable () async -> Void)? = nil
 
     func run() async throws {
         await state.openExistingIndex(files: files)
+        await afterOpening?()
         // Shutdown cancels the loop; that is the normal way out, not an error.
         try? await cancelWhenGracefulShutdown {
             while !Task.isCancelled {

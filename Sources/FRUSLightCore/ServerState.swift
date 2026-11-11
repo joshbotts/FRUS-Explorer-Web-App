@@ -125,7 +125,7 @@ public actor ServerState: ImportObserver {
         // A Standalone server may be seeded from an export at its version (PLAN's S21c), and its reader reads
         // the volumes its library downloads meanwhile.
         var detail = configuration.mode == .standalone
-            ? "Copy a FRUS Explorer research export into /data/import to seed this Standalone server's index, for example with: docker compose cp <export file> frus:/data/import/. The reader reads the volumes the library downloads meanwhile"
+            ? "Download volumes in Administration ▸ Library, which this Standalone server indexes as they arrive, or copy a FRUS Explorer research export into /data/import to seed its index, for example with: docker compose cp <export file> frus:/data/import/. The reader reads the volumes the library downloads meanwhile"
             : "Copy a FRUS Explorer research export into /data/import, for example with: docker compose cp <export file> frus:/data/import/"
         if !stillCopying.isEmpty {
             detail = "Waiting for \(stillCopying.joined(separator: ", ")) to finish copying into /data/import"
@@ -186,6 +186,16 @@ public actor ServerState: ImportObserver {
                                   finishedAt: Self.timestamp(Date()), writing: writing)
         log(message)
         return message
+    }
+
+    /// The library's indexing has written the index (PLAN's S21d): `newIndex`, opened again over the file
+    /// it closed, is served.
+    public func indexWritten(_ newIndex: CorpusIndex) {
+        index = newIndex
+        indexGeneration += 1
+        startupProblem = nil
+        let s = newIndex.summary
+        log("Serving \(s.documents) documents from \(s.volumes) volumes, index version \(s.indexVersion), as the library's indexing left them")
     }
 
     /// An admin stopped the import between two of its steps (PLAN's S20d): nothing changed.

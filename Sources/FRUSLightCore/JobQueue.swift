@@ -27,6 +27,8 @@ public struct JobKind: RawRepresentable, Hashable, Sendable, Codable {
     public static let indexReset = JobKind(rawValue: "indexReset")
     /// Catalogue volumes a Standalone server downloads, with their figure images (PLAN's S21c).
     public static let libraryDownload = JobKind(rawValue: "libraryDownload")
+    /// The volumes a Standalone server's library holds, indexed into its own index (PLAN's S21d).
+    public static let libraryIndex = JobKind(rawValue: "libraryIndex")
 }
 
 /// One job, as the queue holds it and the store keeps it.

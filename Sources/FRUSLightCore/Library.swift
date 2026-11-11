@@ -458,6 +458,9 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
     let now: @Sendable () -> Date
     let log: @Sendable (String) -> Void
     private let lastListing = Mutex<CachedListing?>(nil)
+    /// Told the volumes a download job fetched once the job ends, however it ends, with any: the
+    /// library's indexing queues their pass there (PLAN's S21d). Set once, at the server's start.
+    private let downloadsEnd = Mutex<(@Sendable ([String]) async -> Void)?>(nil)
 
     /// The longest listing the library reads: GitHub's of 553 volumes is about 400 KB.
     static let listingLimit = 16 * 1_048_576
@@ -696,7 +699,15 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
             return try await jobs.submit(.libraryDownload, subject: subject, requestedBy: requestedBy, id: nil, onCancel: {
                 await self.withdraw(ids)
             }) { job in
-                try await self.run(ids, job: job, skipUnlisted: skipUnlisted)
+                let fetched = FetchedVolumes()
+                do {
+                    let line = try await self.run(ids, job: job, skipUnlisted: skipUnlisted, fetched: fetched)
+                    await self.downloadsEnded(await fetched.ids)
+                    return line
+                } catch {
+                    await self.downloadsEnded(await fetched.ids)
+                    throw error
+                }
             }
         } catch {
             await withdraw(ids)
@@ -734,7 +745,17 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
 
     /// The job's work: GitHub's listing once, then each volume, a step each, so that a cancel stops it
     /// between two volumes and takes back those it had not begun.
-    private func run(_ ids: [String], job: JobContext, skipUnlisted: Bool) async throws -> String? {
+    /// Has `hook` told the volumes each download job fetched, once the job ends (PLAN's S21d).
+    public func whenDownloadsEnd(_ hook: @escaping @Sendable ([String]) async -> Void) {
+        downloadsEnd.withLock { $0 = hook }
+    }
+
+    private func downloadsEnded(_ fetched: [String]) async {
+        guard !fetched.isEmpty, let hook = downloadsEnd.withLock({ $0 }) else { return }
+        await hook(fetched)
+    }
+
+    private func run(_ ids: [String], job: JobContext, skipUnlisted: Bool, fetched: FetchedVolumes) async throws -> String? {
         var next = 0
         do {
             try await job.step("Reading GitHub's listing of the corpus's volumes", fraction: 0)
@@ -768,6 +789,7 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
                 do {
                     try await fetchVolume(id, live: info, job: job, figures: &figures)
                     downloaded += 1
+                    await fetched.add(id)
                     unanswered = 0
                 } catch let problem as Problem {
                     await fail(id, problem.sentence)
@@ -1108,4 +1130,10 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
 /// `VolumeLibrary.rename(_:over:)`.
 private func posixRename(_ from: String, _ to: String) -> Int32 {
     rename(from, to)
+}
+
+/// The volumes a download job fetched, as it goes, for the library's indexing (PLAN's S21d).
+actor FetchedVolumes {
+    private(set) var ids: [String] = []
+    func add(_ id: String) { ids.append(id) }
 }
