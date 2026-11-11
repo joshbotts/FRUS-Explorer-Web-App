@@ -2207,6 +2207,20 @@ Phase 2's row S14e, the last of the three asks of the shared deployment behind a
 
 **Next: S17d,** search in notes, summaries and tags, now that S17c's pin move has merged, holding the search's user half to this row's two-user test. S16e and S14b run in sessions of their own, and S14d, the PostgreSQL store, is the server track's last row, whose conformance suite takes `signedInUser`.
 
+## Session 14b, third follow-up: a request within the grace, tested with its grace held
+
+11 November 2026 · branch `claude/phase-3-index-databases-63fcf3`, the phase-3 orchestrating session's · upstream `68bffcf6`, unchanged
+
+`main`'s `ci` run on #111's merge, `c2e8a1c`, which changed only records, failed one test in `swift`: `RecentComputationsTests`' `aRequestThatComesWithinTheGraceJoinsTheComputation()`, at `ClientConnectionTests.swift:321` and `:323`. That job passed when it was run again, so `main` was green again before this pull request opened.
+
+**What was wrong.** The test abandoned a computation, then sent a second request within a real grace of two seconds. On a loaded runner, where the test took 13.5 seconds, the grace ran out before the second request joined. So the computation was stopped, and the second request computed its value again.
+
+**The fix.** The test now holds its grace until it ends it, through `waitOutGraces(with:)`, the hook its sibling `theGraceRunsFromTheLastRequestToLeave()` has used since the second follow-up. The second request then comes within the grace however slowly the machine runs. Once the value is kept, the test ends the grace and finds that it stopped nothing.
+
+The server is unchanged. A grace that runs out on its own clock is still the subject of `aComputationNoRequestWaitsForIsStoppedAndNotKept()`, with fifty milliseconds.
+
+**Tests.** On Linux, `RecentComputationsTests` passed 25 runs in a row, in 0.07 seconds a run.
+
 ## Session 14b, second follow-up: the grace runs from the last request to leave
 
 27 October 2026 · branch `claude/mystifying-goldberg-7dfcf1` · [#74](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/74) · upstream `1c18b51e`, unchanged

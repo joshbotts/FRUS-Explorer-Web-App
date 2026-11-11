@@ -307,20 +307,30 @@ func eventually(_ condition: () -> Bool) async throws -> Bool {
 
     /// A request for the same search that comes while a computation no one waits for is in its grace,
     /// as a browser sends one just after it abandons the first, joins it: nothing is computed again.
+    /// The test holds the grace until it ends it, as the next one does, so the second request comes
+    /// within it however slowly the machine runs: a grace of two seconds once ran out first on a
+    /// loaded runner.
     @Test func aRequestThatComesWithinTheGraceJoinsTheComputation() async throws {
-        let kept = RecentComputations<Int>(capacity: 2, stopsAbandoned: true, grace: .seconds(2))
+        let kept = RecentComputations<Int>(capacity: 2, stopsAbandoned: true)
+        let graces = Graces()
+        await kept.waitOutGraces(with: graces.wait)
         let gate = Gate()
         let first = Task { try await kept.value(for: "a") { try await gate.compute(1) } }
         #expect(try await eventuallyAsync { await kept.waitingCount(for: "a") == 1 })
         first.cancel()
         await #expect(throws: CancellationError.self) { try await first.value }
         #expect(await kept.waitingCount(for: "a") == 0)
+        #expect(try await eventually { graces.count == 1 })
         let second = Task { try await kept.value(for: "a") { try await gate.compute(2) } }
         #expect(try await eventuallyAsync { await kept.waitingCount(for: "a") == 1 })
         await gate.release()
         #expect(try await second.value == 1)
         let (started, cancelled) = (await gate.started, await gate.cancelled)
         #expect(started == 1 && cancelled == 0)
+        // The grace, ended once the value is kept, stops nothing.
+        graces.end(0)
+        #expect(try await eventuallyAsync { await kept.gracesPassed == 1 })
+        #expect(await gate.cancelled == 0)
     }
 
     /// The grace runs from the last request to leave, as when the reader turns the date order round
