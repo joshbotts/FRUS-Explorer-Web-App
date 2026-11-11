@@ -319,11 +319,13 @@ library_api() {  # $1: method, $2: path, $3: body; prints the body and the statu
   curl -s --max-time 10 -X "$1" -H "Host: localhost:8080" -H "Origin: http://localhost:8080" -H "X-CSRF-Token: $token" \
     -H 'Content-Type: application/json' ${3:+--data "$3"} -w ' %{http_code}' "$library_base$2"
 }
-library_list() { curl -s --max-time 10 -H "Host: localhost:8080" "$library_base/api/v1/admin/library"; }
-library_counts() {  # what the Library counts of each state, as status=count lines, and frus1969-76ve09p1's figures
-  python3 -c 'import json, sys
-library = json.loads(sys.argv[1])
-print(" ".join(f"{k}={v}" for k, v in sorted(library["counts"].items())))' "$1"
+# The Library's answer, about 170 KB for the catalogue's 553 volumes, goes to python3 in a file: Linux takes
+# no single argument longer than 128 KiB (MAX_ARG_STRLEN).
+library_list() { curl -s --max-time 10 -H "Host: localhost:8080" -o "$work/library.json" "$library_base/api/v1/admin/library"; }
+library_counts() {  # the Library read again, and how many volumes it counts in each state, as status=count pairs
+  library_list && python3 -c 'import json, sys
+library = json.load(open(sys.argv[1], encoding="utf-8"))
+print(" ".join(f"{k}={v}" for k, v in sorted(library["counts"].items())))' "$work/library.json"
 }
 # Import mode first, compose.yaml alone, the TEI folder mounted on the folder the image made the server's.
 FRUS_AUTH=none FRUS_AUTH_HEADER='' FRUS_TRUSTED_PROXIES='' FRUS_ADMIN_USERS='' FRUS_USER_DATA=on FRUS_PUBLIC_URL=http://localhost:8080 \
@@ -355,11 +357,11 @@ docker run -d --name "$library_github" --network "${library_project}_default" --
 wait_for_200 "$library_base/healthz" 30 || fail "the Standalone server's /healthz did not answer 200 after the remedy"
 library_compose exec -T frus sh -c 'test -d /data/volumes && touch /data/volumes/.probe && rm /data/volumes/.probe' \
   || fail "a Standalone server cannot write /data/volumes"
-offline=$(library_list)
+library_list || fail "the offline Library did not answer"
 python3 -c 'import json, sys
-library = json.loads(sys.argv[1])
-assert library["mode"] == "standalone" and library["offline"] and not library["downloads"] and "FRUS_OFFLINE" in library["unavailable"]' "$offline" \
-  || fail "the offline Library is not one: ${offline:0:300}"
+library = json.load(open(sys.argv[1], encoding="utf-8"))
+assert library["mode"] == "standalone" and library["offline"] and not library["downloads"] and "FRUS_OFFLINE" in library["unavailable"]' "$work/library.json" \
+  || fail "the offline Library is not one: $(head -c 300 "$work/library.json")"
 
 refused=$(library_api POST /api/v1/admin/library/downloads '{"all":true}')
 case "$refused" in *'"code":"OFFLINE"'*' 409') ;; *) fail "a download under FRUS_OFFLINE answered $refused" ;; esac
@@ -374,7 +376,7 @@ first_job=$(printf '%s' "$posted" | sed -nE 's/.*"id":"([^"]+)".*/\1/p')
 # The restart, once the first volume is downloaded and another is downloading.
 restarted=""
 for _ in $(seq 1 120); do
-  counts=$(library_counts "$(library_list)" 2>/dev/null || true)
+  counts=$(library_counts 2>/dev/null || true)
   case "$counts" in *downloaded=1*downloading=1*|*downloading=1*downloaded=1*) library_compose restart frus >/dev/null; restarted=1; break ;; esac
   case "$counts" in *downloaded=3*) break ;; esac
   sleep 0.25
@@ -382,7 +384,7 @@ done
 [ -n "$restarted" ] || fail "no moment with one volume downloaded and one downloading came to restart in: $counts"
 wait_for_200 "$library_base/healthz" 30 || fail "the Standalone server's /healthz did not answer 200 after its restart"
 for _ in $(seq 1 240); do
-  counts=$(library_counts "$(library_list)" 2>/dev/null || true)
+  counts=$(library_counts 2>/dev/null || true)
   [ "$counts" = "downloaded=3 notDownloaded=550" ] && break
   sleep 0.25
 done
@@ -406,12 +408,12 @@ library_compose exec -T frus sh -c 'cd /data/volumes/frus1969-76ve09p1.figures &
   | awk '{print $1, $NF}' | LC_ALL=C sort -k2 > "$work/downloaded-figures.sha256"
 diff "$work/expected-figures.sha256" "$work/downloaded-figures.sha256" >/dev/null \
   || fail "the figure images differ from the mirror's: $(cat "$work/downloaded-figures.sha256")"
-listed=$(library_list)
+library_list || fail "the Library did not answer after the downloads"
 python3 -c 'import json, sys
-volumes = {v["volumeId"]: v for v in json.loads(sys.argv[1])["volumes"]}
+volumes = {v["volumeId"]: v for v in json.load(open(sys.argv[1], encoding="utf-8"))["volumes"]}
 ve09 = volumes["frus1969-76ve09p1"]
 assert ve09["status"] == "downloaded" and ve09["figures"] == 7 and ve09["figuresRefused"] == 1 and ve09["bytes"] == 1890303, ve09
-assert all(volumes[i]["blobSha"] and not volumes[i].get("error") for i in ["frus1894Nicaragua", "frus1961-63v06", "frus1969-76ve09p1"])' "$listed" \
+assert all(volumes[i]["blobSha"] and not volumes[i].get("error") for i in ["frus1894Nicaragua", "frus1961-63v06", "frus1969-76ve09p1"])' "$work/library.json" \
   || fail "the Library does not list the three as downloaded, with frus1969-76ve09p1's 7 figures and 1 refused"
 page=$(curl -s --max-time 30 -w ' %{http_code}' "$library_base/api/v1/volumes/frus1969-76ve09p1/documents/d1/html?part=body")
 case "$page" in *' 200') ;; *) fail "the reader did not render a downloaded volume: ${page: -200}" ;; esac
@@ -423,10 +425,10 @@ echo "   downloaded the three fixture volumes and 7 figure images, restarted mid
 scripts/synthetic-export "$work/seed.sqlite"
 library_compose cp "$work/seed.sqlite" frus:/data/import/seed.sqlite
 wait_for_200 "$library_base/readyz" 120 || fail "a Standalone server did not serve the export that seeds it"
-seeded=$(library_list)
+library_list || fail "the Library did not answer after the seed"
 python3 -c 'import json, sys
-volumes = {v["volumeId"]: v for v in json.loads(sys.argv[1])["volumes"]}
-assert volumes["frus1961-63v06"]["status"] == "indexed" and volumes["frus1961-63v06"]["downloaded"], volumes["frus1961-63v06"]' "$seeded" \
+volumes = {v["volumeId"]: v for v in json.load(open(sys.argv[1], encoding="utf-8"))["volumes"]}
+assert volumes["frus1961-63v06"]["status"] == "indexed" and volumes["frus1961-63v06"]["downloaded"], volumes["frus1961-63v06"]' "$work/library.json" \
   || fail "the seeded index's volume is not listed as indexed"
 echo "   an export at the server's index version seeds its index, and the Library lists its volume as indexed"
 
