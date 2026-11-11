@@ -432,8 +432,9 @@ import Testing
         #expect(try f.row("frus1969-76ve09p1") == nil)
         await #expect(throws: LibraryRefusal.notDownloaded("frus1969-76ve09p1")) { try await f.library.remove("frus1969-76ve09p1") }
         await #expect(throws: LibraryRefusal.unknownVolume("../volumes")) { try await f.library.remove("../volumes") }
+        // Held at its volume's own request: the listing of the first download is used as it is, and not asked for.
         let gate = JobGate()
-        github.hold(github.sources.listing, at: gate)
+        github.hold(github.volumeURL("frus1894Nicaragua.xml"), at: gate)
         let job = try await f.library.download(.volumes(["frus1894Nicaragua"]), requestedBy: nil)
         await gate.untilReached()
         await #expect(throws: LibraryRefusal.inProgress("frus1894Nicaragua")) { try await f.library.remove("frus1894Nicaragua") }
