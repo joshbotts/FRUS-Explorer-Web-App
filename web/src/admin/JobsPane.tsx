@@ -53,7 +53,8 @@ function JobTable({ jobs }: { jobs: AdminJob[] }) {
   const [cancelling, setCancelling] = useState<AdminJob | null>(null);
   const area = useRef<HTMLDivElement>(null);
   return (
-    <div ref={area} className="admin-table">
+    // A region a keyboard can scroll, where the table is wider than the pane.
+    <div ref={area} className="admin-table" role="region" aria-label={words.caption} tabIndex={0}>
       <table>
         <caption>{words.caption}</caption>
         <thead>

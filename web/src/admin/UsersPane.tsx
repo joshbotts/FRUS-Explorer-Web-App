@@ -90,7 +90,8 @@ function UserTable({ users, local, onFeedback }: { users: AdminUser[]; local: bo
   }
 
   return (
-    <div ref={area} className="admin-table">
+    // A region a keyboard can scroll, where the table is wider than the pane.
+    <div ref={area} className="admin-table" role="region" aria-label={words.caption} tabIndex={0}>
       <table>
         <caption>{words.caption}</caption>
         <thead>

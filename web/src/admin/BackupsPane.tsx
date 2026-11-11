@@ -45,7 +45,8 @@ export function BackupsScreen() {
         {list.length === 0 ? (
           <p>{words.empty}</p>
         ) : (
-          <div className="admin-table">
+          // A region a keyboard can scroll, where the table is wider than the pane.
+          <div className="admin-table" role="region" aria-label={words.caption} tabIndex={0}>
             <table>
               <caption>{words.caption}</caption>
               <thead>
