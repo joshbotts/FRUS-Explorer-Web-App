@@ -1,7 +1,7 @@
 // Check 6 on the fixtures (PLAN's S15c): highlights placed by offset over each golden row's flat text,
 // the kit's buildFlatText, and the text the reader's page holds between those offsets, read by the
 // kit's offset engine in Chromium, equals each one's text. fixtures/highlights/samples.json is the
-// Swift half, which FRUSParityTests holds to the kit at the pin. For each of the 393 rows the page is
+// Swift half, which FRUSParityTests holds to the kit at the pin. For each of the 397 rows the page is
 // loaded as the server serves it, and checked: its rendering version is the kit's; the engine's flat
 // text has the row's length and digest; each sample's text, read through the engine's map of the
 // live page, is the sample's; the kit's selection bridge reads the kit's own range for each sample
@@ -49,9 +49,9 @@ const volumes = [...new Set(file.rows.map((row) => row.volume))];
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
 
 if (!process.env.FRUS_CHECK6_SAMPLES) {
-  test('the samples cover the 393 golden rows', () => {
+  test('the samples cover the 397 golden rows', () => {
     expect(file.formatVersion).toBe(1);
-    expect(file.rows).toHaveLength(393);
+    expect(file.rows).toHaveLength(397);
   });
 }
 

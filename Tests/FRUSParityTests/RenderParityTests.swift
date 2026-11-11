@@ -24,7 +24,7 @@ import Testing
 
     /// The sections the server parses alone in the fixture volumes, as `volume/section`, in the golden
     /// rows' order.
-    static let expectedSectionsReadAlone = ["frus1961-63v06/toc", "frus1961-63v06/index", "frus1969-76ve09p1/toc"]
+    static let expectedSectionsReadAlone = ["frus1894Nicaragua/toc", "frus1961-63v06/toc", "frus1961-63v06/index", "frus1969-76ve09p1/toc"]
 
     /// The sections the server's rule (`ReaderService.sectionsReadAlone`) picks in `volumes`, from one
     /// full parse of each, as `volume/section`.
@@ -69,8 +69,8 @@ import Testing
         let (rendered, lists) = try await renderer.fullParsePass(volumes)
         let goldenRows = golden.rows.map { "\($0.volume)/\($0.document)" }
         #expect(rendered.map { "\($0.volume)/\($0.document)" } == goldenRows)
-        // The sections read alone: frus1961-63v06's table of contents and its index, which holds the
-        // fixtures' eight "See" references, and frus1969-76ve09p1's table of contents. The persons and
+        // The sections read alone: each volume's table of contents, frus1894Nicaragua's a table, and
+        // frus1961-63v06's index, which holds the fixtures' eight "See" references. The persons and
         // sources lists are not among them, since the app's Browse opens each as a list of its own.
         let alone = try await Self.sectionsReadAlone(in: volumes)
         #expect(alone == Self.expectedSectionsReadAlone, "the sections the server parses alone")

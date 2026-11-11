@@ -1,9 +1,10 @@
 # Check 6 on the fixtures: highlights placed by offset
 
 `samples.json` is the Swift half of SPEC's check 6 on the fixture volumes (PLAN's S15c). For each of
-the 393 golden rows, in `fixtures/golden/render/manifest.json`'s order, it holds the flat text the
-kit's `buildFlatText` makes from the row along the server's path, one full parse of its volume, as
-its length in UTF-16 units and the SHA-256 of its UTF-8 bytes, with the kit's rendering version, and
+the 397 golden rows, in `fixtures/golden/render/manifest.json`'s order, it holds the flat text the
+kit's `buildFlatText` makes from the row along the server's path, one full parse of its volume, or,
+for the index and the tables of contents the reader parses alone, the section's own parse, as its
+length in UTF-16 units and the SHA-256 of its UTF-8 bytes, with the kit's rendering version, and
 highlights placed by offset over it:
 
 - the whole row, whose length and digest stand for its text;

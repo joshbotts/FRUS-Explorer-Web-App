@@ -12,7 +12,7 @@ import Testing
 @Suite struct ReaderPageParityTests {
     static let volumes = ParityFixtures.volumes.sorted()
 
-    /// `reader(figureURL:)` given the app's own addresses writes `.reader`'s bytes: all 393 rows are
+    /// `reader(figureURL:)` given the app's own addresses writes `.reader`'s bytes: all 397 rows are
     /// the golden files'.
     @Test func theAppsFigureAddressesRenderEveryRowAsBefore() async throws {
         let (golden, directory) = try RenderParityTests.currentGolden()

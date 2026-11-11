@@ -89,7 +89,7 @@ public actor ReaderService {
     private var versions: [String: (signature: FileSignature, byDocument: [String: String])] = [:]
     /// The sections of the volumes in `parsed` that were parsed alone, by volume and id, each with
     /// the signature of the file it was read from; dropped with their volume.
-    private var sections: [String: [String: (signature: FileSignature, ast: FRUSDocumentAST?)]] = [:]
+    private var sectionParses: [String: [String: (signature: FileSignature, ast: FRUSDocumentAST?)]] = [:]
     /// Sections being parsed alone, by `volume/section`.
     private var parsingSections: [String: Task<FRUSDocumentAST?, any Error>] = [:]
     /// How many parses have started.
@@ -142,11 +142,11 @@ public actor ReaderService {
 
     /// One section, parsed alone from the file `volume` was parsed from, as the app's reader parses a
     /// section it opens by its id (`DocumentViewModel.load`): the kit's parse of the one division,
-    /// which reads the file until the division closes, and a second time for a list the index leaves
-    /// out, such as an index. Kept while the volume's parse is; nil when the parse finds no such
-    /// division, which is kept too.
+    /// which reads the file until the division closes and captures a list the index keeps out of its
+    /// rows, such as an index, whole. Kept while the volume's parse is; nil when the parse finds no
+    /// such division, which is kept too.
     private func section(_ sectionId: String, in volume: ParsedVolume, of volumeId: String) async throws -> FRUSDocumentAST? {
-        if let kept = sections[volumeId]?[sectionId], kept.signature == volume.signature { return kept.ast }
+        if let kept = sectionParses[volumeId]?[sectionId], kept.signature == volume.signature { return kept.ast }
         let key = "\(volumeId)/\(sectionId)"
         if let running = parsingSections[key] { return try await running.value }
         guard let url = Self.teiFile(for: volumeId, in: volumesDirectory) else {
@@ -165,17 +165,17 @@ public actor ReaderService {
         let ast = try await task.value
         // Only beside the volume's parse it was read with, and while that parse is kept.
         if parsed[volumeId]?.signature == volume.signature, Self.signature(of: url) == volume.signature {
-            sections[volumeId, default: [:]][sectionId] = (volume.signature, ast)
+            sectionParses[volumeId, default: [:]][sectionId] = (volume.signature, ast)
         }
         return ast
     }
 
     /// The sections the app's Browse opens in its reader by their ids, as its Read button does
     /// (`CompilationView`, and the Mac's corpus browser, over the kit's `VolumeSection.canReadDirectly`),
-    /// that a full parse gives no document: a back-of-volume index, a table of contents, and a
-    /// section of no kind the parser names, which the index leaves out (`promotableQuasiDocumentKinds`).
-    /// In the structure's order. The persons and sources lists are not among them: the app's Browse
-    /// opens each through a view of its own.
+    /// that a full parse gives no document: a back-of-volume index and a table of contents, the kinds
+    /// Read opens that the index does not promote (`promotableQuasiDocumentKinds`). In the structure's
+    /// order. The persons and sources lists are not among them: the app's Browse opens each through a
+    /// view of its own.
     public static func sectionsReadAlone(in structure: [VolumeSection], documents: Set<String>) -> [String] {
         var found: [String] = []
         var seen = Set<String>()
@@ -272,13 +272,13 @@ public actor ReaderService {
         let volume = try await task.value
         parsed[volumeId] = volume
         // Sections parsed alone from an earlier file are not this parse's.
-        sections[volumeId] = sections[volumeId]?.filter { $0.value.signature == volume.signature }
+        sectionParses[volumeId] = sectionParses[volumeId]?.filter { $0.value.signature == volume.signature }
         touch(volumeId)
         while recency.count > capacity {
             let evicted = recency.removeFirst()
             parsed[evicted] = nil
             versions[evicted] = nil
-            sections[evicted] = nil
+            sectionParses[evicted] = nil
         }
         return volume
     }

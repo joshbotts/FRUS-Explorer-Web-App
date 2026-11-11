@@ -55,7 +55,8 @@ public enum HighlightSamples {
     public static let longestText = 160
 
     /// The samples for every row of the golden render manifest, in its order, each document's model
-    /// from one full parse of its volume, as the server reads it.
+    /// from one full parse of its volume, and each section the server parses alone from that parse of
+    /// it, as the server reads them (`ReaderRenderer.fullParseModels`).
     public static func make(layout: RepositoryLayout, rows: [(volume: String, document: String)]) async throws -> HighlightSampleFile {
         let volumes = Array(Set(rows.map(\.volume))).sorted()
         let models = try await ReaderRenderer(layout: layout).fullParseModels(volumes) { model in
@@ -67,7 +68,7 @@ public enum HighlightSamples {
         for row in models where byKey["\(row.volume)/\(row.document)"] == nil { byKey["\(row.volume)/\(row.document)"] = row }
         return HighlightSampleFile(formatVersion: formatVersion, rows: try rows.map { wanted in
             guard let row = byKey["\(wanted.volume)/\(wanted.document)"] else {
-                throw GoldenError.malformed(path, "\(wanted.volume) has no document \(wanted.document) in a full parse")
+                throw GoldenError.malformed(path, "\(wanted.volume) has no document \(wanted.document) in a full parse or a section parsed alone")
             }
             return sampled(volume: row.volume, document: row.document, flat: row.value.flat, blocks: row.value.blocks,
                            renderingVersion: row.value.version)
