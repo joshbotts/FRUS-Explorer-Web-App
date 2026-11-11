@@ -24,8 +24,8 @@ let renderConfiguration = """
 
 /// The sections the app's Browse opens in the reader by their ids, as `CompilationView`'s Read button
 /// and the Mac corpus browser's `proseSectionView` do (`VolumeSection.canReadDirectly`), that a full
-/// parse yields no document for, in the structure's order: the reader parses each alone, as the app's
-/// Read Index does.
+/// parse yields no document for, chiefly a back-of-volume index and a table of contents, in the
+/// structure's order: the reader parses each alone, as the app's Read Index does.
 func sectionsReadAlone(in structure: [VolumeSection], documents: Set<String>) -> [String] {
     var found: [String] = []
     var seen = Set<String>()

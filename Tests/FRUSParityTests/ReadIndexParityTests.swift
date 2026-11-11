@@ -57,18 +57,22 @@ import Testing
         ], file: "FRUSDocumentParser.swift")
     }
 
-    /// The kit's sets, compiled: the Read door opens an index and a table of contents, which the index
-    /// leaves out, so a full parse gives no document for them; not the persons and sources lists.
+    /// The kit's sets, compiled: the Read door opens an index, a table of contents and a division of
+    /// the kind `section` (frus1958-60v05mSupp's seventeen take it from their subtype), the kinds Read
+    /// opens that the index leaves out, so a full parse gives no document for them; not the persons and
+    /// sources lists, and not a list of another name, such as frus1902app2's Table of Citations.
     @Test func theDoorOpensAnIndexAndATableOfContentsThatAFullParseLeavesOut() throws {
-        for kind in ["index", "table-of-contents"] {
+        for kind in ["index", "table-of-contents", "section"] {
             #expect(VolumeSection.proseReadableKinds.contains(kind), "\(kind) opens by Read")
-            #expect(VolumeSection(sectionId: kind, divType: kind, title: "", documentIds: [], subsections: []).canReadDirectly)
+            #expect(VolumeSection(sectionId: "s1", divType: kind, title: "", documentIds: [], subsections: []).canReadDirectly)
         }
-        for kind in ["persons", "sources"] {
-            #expect(!VolumeSection.proseReadableKinds.contains(kind), "\(kind) opens a view of its own")
+        for kind in ["persons", "sources", "citations", "additional-volumes"] {
+            #expect(!VolumeSection.proseReadableKinds.contains(kind), "\(kind) does not open by Read")
         }
         NoteViewParityTests.expect(try SearchSetParityTests.kit("FRUSCoreKit/TEI/FRUSDocumentParser.swift"), holds: [
+            "/// `\"persons\"`/`\"sources\"` (structured data with dedicated views and tables),",
             "/// `\"table-of-contents\"`/`\"index\"` (navigation aids — page numbers and chapter",
+            "/// titles would pollute search results), and `\"section\"` (unidentifiable).",
         ], file: "FRUSDocumentParser.swift")
     }
 

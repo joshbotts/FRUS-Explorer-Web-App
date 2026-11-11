@@ -53,9 +53,17 @@ public actor ReaderService {
         var readerIds: Set<String> { Set(documents.keys).union(sectionsReadAlone) }
     }
 
-    struct FileSignature: Equatable, Sendable {
+    struct FileSignature: Hashable, Sendable {
         let size: Int
         let modified: Date?
+    }
+
+    /// A section being parsed alone: its volume, its id, and the file it is read from, so a request
+    /// beside a later parse of the volume never waits for a parse of the earlier file.
+    struct SectionParse: Hashable, Sendable {
+        let volumeId: String
+        let sectionId: String
+        let signature: FileSignature
     }
 
     /// A document parsed from its volume, and the volume's lookups.
@@ -90,8 +98,8 @@ public actor ReaderService {
     /// The sections of the volumes in `parsed` that were parsed alone, by volume and id, each with
     /// the signature of the file it was read from; dropped with their volume.
     private var sectionParses: [String: [String: (signature: FileSignature, ast: FRUSDocumentAST?)]] = [:]
-    /// Sections being parsed alone, by `volume/section`.
-    private var parsingSections: [String: Task<FRUSDocumentAST?, any Error>] = [:]
+    /// Sections being parsed alone.
+    private var parsingSections: [SectionParse: Task<FRUSDocumentAST?, any Error>] = [:]
     /// How many parses have started.
     private(set) var parseCount = 0
     /// How many parses of a section alone have started.
@@ -147,7 +155,7 @@ public actor ReaderService {
     /// such division, which is kept too.
     private func section(_ sectionId: String, in volume: ParsedVolume, of volumeId: String) async throws -> FRUSDocumentAST? {
         if let kept = sectionParses[volumeId]?[sectionId], kept.signature == volume.signature { return kept.ast }
-        let key = "\(volumeId)/\(sectionId)"
+        let key = SectionParse(volumeId: volumeId, sectionId: sectionId, signature: volume.signature)
         if let running = parsingSections[key] { return try await running.value }
         guard let url = Self.teiFile(for: volumeId, in: volumesDirectory) else {
             throw APIProblem(.notFound, code: "TEI_NOT_AVAILABLE", detail: "\(volumeId).xml is no longer in the TEI folder, \(volumesDirectory.path).")
@@ -172,10 +180,10 @@ public actor ReaderService {
 
     /// The sections the app's Browse opens in its reader by their ids, as its Read button does
     /// (`CompilationView`, and the Mac's corpus browser, over the kit's `VolumeSection.canReadDirectly`),
-    /// that a full parse gives no document: a back-of-volume index and a table of contents, the kinds
-    /// Read opens that the index does not promote (`promotableQuasiDocumentKinds`). In the structure's
-    /// order. The persons and sources lists are not among them: the app's Browse opens each through a
-    /// view of its own.
+    /// that a full parse gives no document: chiefly a back-of-volume index and a table of contents, the
+    /// kinds Read opens that the index does not promote (`promotableQuasiDocumentKinds`), and any
+    /// section of prose the parse leaves out for holding nothing. In the structure's order. The persons
+    /// and sources lists are not among them: the app's Browse opens each through a view of its own.
     public static func sectionsReadAlone(in structure: [VolumeSection], documents: Set<String>) -> [String] {
         var found: [String] = []
         var seen = Set<String>()
@@ -203,6 +211,8 @@ public actor ReaderService {
         let model = Self.model(Parsed(ast: ast, lookups: volume.lookups), volume: volumeId, classification: nil,
                                brokenRefs: resources.brokenRefs)
         let version = ASTToRenderNodeConverter.renderingVersion(for: model)
+        // Kept only while the parse it was made from is: a section's parse may have let the volume go.
+        guard parsed[volumeId]?.signature == volume.signature else { return version }
         var kept = versions[volumeId].flatMap { $0.signature == volume.signature ? $0 : nil } ?? (signature: volume.signature, byDocument: [:])
         kept.byDocument[documentId] = version
         versions[volumeId] = kept

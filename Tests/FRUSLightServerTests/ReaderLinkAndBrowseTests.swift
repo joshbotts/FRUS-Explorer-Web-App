@@ -437,15 +437,17 @@ private func formEncoded(_ fields: [String: String]) -> String {
             for id in ["persons", "sources", "subseriesvols"] {
                 #expect(all[id]?.readable == false && all[id]?.canReadDirectly == false, "\(id) does not")
             }
+            let lookups = try await fixture.reader.document(volume: v06, document: "d1").lookups
             for (id, title) in [("index", "Index"), ("toc", "Contents")] {
                 let page = try await client.execute(uri: "/api/v1/volumes/\(v06)/documents/\(id)/html?part=body", method: .get)
                 #expect(page.status == .ok, "\(id)")
+                // The page is the kit's rendering of a parse of the section alone, made here apart from the server's.
                 let ast = try #require(try await FRUSDocumentParser().parseDocument(documentId: id, volumeURL: url))
-                let parsed = try await fixture.reader.document(volume: v06, document: id)
-                #expect(parsed.ast.nodes.count == ast.nodes.count, "\(id) is the kit's parse of the section alone")
-                #expect(String(buffer: page.body) == ReaderService.render(parsed, volume: v06, classification: nil, part: .body, base: .root,
-                                                                           brokenRefs: fixture.resources.brokenRefs).html)
-                // Named by its parsed head, the section's own; no number, and not in the index.
+                #expect(String(buffer: page.body) == ReaderService.render(.init(ast: ast, lookups: lookups), volume: v06, classification: nil,
+                                                                           part: .body, base: .root, brokenRefs: fixture.resources.brokenRefs).html,
+                        "\(id) is the kit's parse of the section alone")
+                // Named by its parsed head, which is the section's title here, so the documents above
+                // hold the parsed head to the rule; no number, and not in the index.
                 let detail = try decode(DocumentDetail.self, try await client.execute(uri: "/api/v1/volumes/\(v06)/documents/\(id)", method: .get))
                 #expect(detail.document.displayTitle == title && detail.document.header == title, "\(id)")
                 #expect(detail.document.documentNumber == nil && !detail.document.inIndex && detail.teiAvailable, "\(id)")
@@ -462,6 +464,36 @@ private func formEncoded(_ fields: [String: String]) -> String {
         }
         // Each was parsed once, though asked for four times, and nothing else was.
         #expect(await fixture.reader.sectionParseCount == 2)
+    }
+
+    /// A section read alone is parsed once for requests that come together, kept while its volume's
+    /// parse is, dropped with it, and parsed again from a file that changes, as the volume is.
+    @Test func aSectionReadAloneIsKeptWithItsVolumesParse() async throws {
+        let fixture = try await ServerFixture(volumes: ["frus1894Nicaragua", v06])
+        let reader = ReaderService(volumesDirectory: fixture.files.volumesDirectory, resources: fixture.resources, capacity: 1)
+        let bodies = try await withThrowingTaskGroup(of: String.self) { group in
+            for _ in 0..<8 { group.addTask { try await reader.body(volume: v06, document: "index").html } }
+            return try await group.reduce(into: [String]()) { $0.append($1) }
+        }
+        #expect(Set(bodies).count == 1)
+        #expect(await reader.parseCount == 1)
+        #expect(await reader.sectionParseCount == 1, "eight requests, one parse of the index")
+        _ = try await reader.renderingVersion(volume: v06, document: "index")
+        #expect(await reader.sectionParseCount == 1, "kept beside the volume's parse")
+        // A cache of one volume drops v06 for Nicaragua, and the index with it.
+        _ = try await reader.body(volume: "frus1894Nicaragua", document: "d1")
+        _ = try await reader.body(volume: v06, document: "index")
+        #expect(await reader.parseCount == 3)
+        #expect(await reader.sectionParseCount == 2, "the index went with its volume")
+        // A changed file is parsed again, and the index read from it.
+        let file = fixture.files.volumesDirectory.appendingPathComponent("\(v06).xml")
+        let text = try String(contentsOf: file, encoding: .utf8)
+        let changed = text.replacingOccurrences(of: "<head>Index</head>", with: "<head>Index of Names</head>")
+        #expect(changed != text)
+        try Data(changed.utf8).write(to: file, options: .atomic)
+        #expect(try await reader.body(volume: v06, document: "index").html.contains("Index of Names"))
+        #expect(await reader.parseCount == 4)
+        #expect(await reader.sectionParseCount == 3)
     }
 
     /// TEI that will not parse is reported, not taken for a volume without contents.

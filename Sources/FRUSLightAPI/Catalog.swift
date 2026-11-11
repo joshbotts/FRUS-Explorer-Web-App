@@ -254,8 +254,9 @@ enum CatalogRoutes {
             guard let entry = try await served.pipeline.document(forDocumentId: documentId, inVolume: volumeId) else {
                 // A section the index leaves out, such as a back-of-volume index, is in its reading order
                 // all the same, and the app's reader turns its pages from it as from a document
-                // (`DocumentViewModel.loadAdjacentEntries`). An order that cannot be read leaves none.
-                let browse = try? await VolumeBrowse(volumeId, served: served)
+                // (`DocumentViewModel.loadAdjacentEntries`): read for a page the reader opens alone. An
+                // order that cannot be read leaves none.
+                let browse = parsed?.opens(documentId) == true ? try? await VolumeBrowse(volumeId, served: served) : nil
                 return try await fromTEI(otherwise: APIProblem(.notFound, code: "DOCUMENT_NOT_FOUND",
                                                                detail: "The index holds no document \(documentId) in \(volumeId)."),
                                          browse: browse)
@@ -501,10 +502,11 @@ public struct DocumentDetail: Codable, Equatable, Sendable {
         public var documentId: String
         public var header: String
         public var inIndex: Bool
-        /// Whether the reader can open it; absent when the TEI is not mounted. The list of names and
-        /// the list of sources are in the reading order, where the app's reader turns to them as
-        /// printed pages, but this reader does not open them: the app's Browse opens each as a list of
-        /// its own, which this server does not have yet.
+        /// Whether the reader can open it; absent when the TEI is not mounted. The lists of names and of
+        /// sources, and a subseries' list of volumes, are in the reading order, where the app's reader
+        /// turns to them as printed pages, but this reader does not open them: the app's Browse opens
+        /// the first two as lists of their own, which this server does not have yet, and the third not
+        /// at all.
         public var readable: Bool?
     }
 
