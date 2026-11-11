@@ -37,6 +37,16 @@ RUN --mount=type=cache,id=frus-light-swiftpm-${TARGETARCH},target=/src/.build,sh
 RUN cp -R upstream/FRUS-Explorer/FRUSExplorer/Resources /out/resources \
  && chmod -R a+rX /out/resources
 
+# Parity stage, built only when asked for (--target parity): frus-parity, which the Compose smoke test
+# runs over a Standalone server's own index for check 2 (PLAN's S21d). It builds in the server's cache
+# mount, so that once the server is built only the parity harness compiles; no image a release ships
+# holds it, since the runtime stage below copies nothing from here.
+FROM build AS parity
+ARG TARGETARCH
+RUN --mount=type=cache,id=frus-light-swiftpm-${TARGETARCH},target=/src/.build,sharing=locked \
+    swift build -c release --static-swift-stdlib --build-system native --product frus-parity \
+ && install -D -m 0755 "$(swift build -c release --static-swift-stdlib --build-system native --show-bin-path)/frus-parity" /usr/local/bin/frus-parity
+
 # Client stage: Node runs the Vite production build of the browser app (SPEC, Deployment > Image).
 # Its output is the same on every architecture, so it runs on the builder's own, even when the
 # image is built for another.

@@ -15,6 +15,8 @@ public enum ReadinessStep: String, Sendable, Codable, CaseIterable {
     case installingIndex = "installing_index"
     case openingIndex = "opening_index"
     case indexVersionMismatch = "index_version_mismatch"
+    /// A Standalone server's library indexing writes the index (PLAN's S21d): search waits for its job.
+    case indexingLibrary = "indexing_library"
     case ready
 
     /// The steps of an import, in order.

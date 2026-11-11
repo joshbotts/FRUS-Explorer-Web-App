@@ -111,8 +111,25 @@ public actor ServedIndexProvider {
     let userStore: URL?
     private var current: (corpus: ObjectIdentifier, served: ServedIndex)?
     private var opening: (corpus: ObjectIdentifier, task: Task<ServedIndex, any Error>)?
+    /// Every stack opened, held weakly: one is released once its last request has finished with it, and the
+    /// library's indexing writes the file only once none is held (PLAN's S21d).
+    private var stacks: [WeakStack] = []
     /// How many stacks have been opened, for the tests.
     private(set) var opened = 0
+
+    /// A stack, and its pipeline, which a computation kept beside a search holds past the stack's last
+    /// request, held without keeping them.
+    private struct WeakStack {
+        weak var stack: ServedIndex?
+        weak var pipeline: IndexingPipeline?
+        var held: Bool { stack != nil || pipeline != nil }
+    }
+
+    /// Why no stack is given while the library's indexing writes the index (PLAN's S21d): a plain refusal,
+    /// as the server's other unavailable answers are.
+    static let beingWritten = APIProblem(
+        .serviceUnavailable, code: "INDEX_BEING_WRITTEN",
+        detail: "The library's indexing is writing the index: search answers again once its job ends, and the reader opens documents meanwhile.")
 
     public init(state: ServerState, resources: ServerResources, volumesDirectory: URL, userStore: URL? = nil) {
         self.state = state
@@ -124,6 +141,11 @@ public actor ServedIndexProvider {
     /// The stack for the index being served. Throws a 503 `INDEX_NOT_READY` problem naming the
     /// readiness step while none is, as before the first import.
     public func served() async throws -> ServedIndex {
+        // Its stacks' connections are immutable, which a file being written cannot be read through (S21d).
+        if await state.indexBeingWritten {
+            current = nil
+            throw Self.beingWritten
+        }
         guard let corpus = await state.index else {
             // An index reset (PLAN's S20d) leaves none: the stack over the file it removed is let go, so
             // that its space comes back once the requests that hold it finish.
@@ -145,14 +167,32 @@ public actor ServedIndexProvider {
         opened += 1
         defer { if opening?.corpus == key { opening = nil } }
         let served = try await task.value
+        stacks.append(WeakStack(stack: served, pipeline: served.pipeline))
+        if await state.indexBeingWritten { throw Self.beingWritten }
         if current?.corpus != key, await state.index.map(ObjectIdentifier.init) == key { current = (key, served) }
         return served
+    }
+
+    /// Lets go of the stack over the index served, and waits until no request holds one, nor one being
+    /// opened, for at most `patience`: the library's indexing writes the file once nothing reads it through
+    /// an immutable connection, which cannot see a write (PLAN's S21d). Gives whether none is held.
+    public func letGoOfStacks(patience: Duration = .seconds(300)) async -> Bool {
+        current = nil
+        let deadline = ContinuousClock.now.advanced(by: patience)
+        while true {
+            if let opening { _ = try? await opening.task.value }
+            current = nil
+            stacks.removeAll { !$0.held }
+            if stacks.isEmpty, opening == nil { return true }
+            guard ContinuousClock.now < deadline else { return false }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
     }
 
     /// The stack, or nil while no index is served, for routes that work without one; with none, the
     /// stack a reset left is let go, as `served()` lets it go (S20d).
     public func servedIfReady() async throws -> ServedIndex? {
-        guard await state.index != nil else {
+        guard await state.index != nil, await !state.indexBeingWritten else {
             current = nil
             return nil
         }

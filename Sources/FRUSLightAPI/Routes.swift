@@ -12,7 +12,7 @@ import Logging
 func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderService,
                  provider: ServedIndexProvider? = nil, webClient: WebClient? = nil, userData: UserDataServices? = nil,
                  leads: ProjectLeadsQueue? = nil,
-                 library: VolumeLibrary? = nil, base: BasePath = .root,
+                 library: VolumeLibrary? = nil, indexer: LibraryIndexer? = nil, base: BasePath = .root,
                  logger: Logger = Logger(label: "frus-light")) -> Router<APIRequestContext> {
     // With user data on, each stack attaches the user store's search database, for each user's half of
     // a search (S17d).
@@ -52,7 +52,7 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     if let userData {
         AuthRoutes.add(to: router, services: userData)
         UserDataRoutes.add(to: router, services: userData, resources: resources, reader: reader, provider: provider, leads: leads)
-        AdminRoutes.add(to: router, services: userData, state: state, resources: resources, library: library)
+        AdminRoutes.add(to: router, services: userData, state: state, resources: resources, library: library, indexer: indexer)
     }
     // Last, so it wraps only the requests no route answers.
     if let webClient { router.add(middleware: WebClientMiddleware(webClient, logger: logger)) }

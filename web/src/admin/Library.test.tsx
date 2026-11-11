@@ -1,6 +1,6 @@
 // Administration ▸ Library (PLAN's S21c): the catalogue's volumes with their states, a download of one or
 // of all, a removal after a question, and an Import server's or an offline server's Library, which
-// downloads nothing and says why.
+// downloads nothing and says why; and the library's indexing (S21d), Index for one and for all waiting.
 import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -31,7 +31,7 @@ const volume = (fields: Partial<LibraryVolume> & Pick<LibraryVolume, 'volumeId' 
 function library(volumes: LibraryVolume[], fields: Partial<AdminLibrary> = {}): AdminLibrary {
   const counts: AdminLibrary['counts'] = {};
   for (const { status } of volumes) counts[status] = (counts[status] ?? 0) + 1;
-  return { mode: 'standalone', offline: false, downloads: true, source: 'github', counts, volumes, ...fields };
+  return { mode: 'standalone', offline: false, downloads: true, source: 'github', counts, indexing: { active: false }, volumes, ...fields };
 }
 
 const job: AdminJob = { id: 'J1', kind: 'libraryDownload', subject: 'frus1894Nicaragua', state: 'queued', queuedAt: '2026-11-11T12:00:00.000Z', cancellable: true };
@@ -150,6 +150,69 @@ describe('Administration ▸ Library', () => {
     expect(await screen.findByText('The 3 volumes not downloaded wait for their download.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Download All' }).getAttribute('aria-disabled')).toBe('true');
   });
+
+  it('indexes a volume whose last pass did not index it, and every volume waiting, keeping focus on its row as the job takes it', async () => {
+    let volumes = [
+      volume({
+        volumeId: 'frus1961-63v06',
+        status: 'failed',
+        downloaded: true,
+        bytes: 1_646_822,
+        error: 'Its XML could not be parsed while its XML was read: the parser’s error 5 at line 3.',
+        index: { state: 'failed', stage: 'reading', at: '2026-11-11T12:00:00.000Z' },
+      }),
+      volume({ volumeId: 'frus1969-76ve09p1', status: 'downloaded', downloaded: true, bytes: 1_890_303 }),
+      volume({ volumeId: 'frus1894Nicaragua', status: 'indexed', indexed: true, downloaded: true, bytes: 1_273_810 }),
+    ];
+    let indexing: AdminLibrary['indexing'] = { active: false };
+    const fetch = stubServer({
+      '/readyz': ready,
+      '/api/v1/me': alice,
+      '/api/v1/admin/library': () => library(volumes, { indexing }),
+      // As the server answers: the job is queued, and the volume's row is as it was until the job takes it.
+      'POST /api/v1/admin/library/index': () => {
+        indexing = { active: true };
+        return { ...job, kind: 'libraryIndex', subject: 'frus1961-63v06' };
+      },
+    });
+    renderAt('/admin/library');
+    const table = await screen.findByRole('table', { name: 'The catalogue’s volumes, with what this server holds of each' });
+    const row = (id: string) => within(table).getByRole('row', { name: new RegExp(`^${id}`) });
+    expect(within(row('frus1961-63v06')).getByText('Its XML could not be parsed', { exact: false })).toBeTruthy();
+    expect(within(row('frus1894Nicaragua')).queryByRole('button', { name: /^Index/ })).toBeNull();
+    expect(screen.getByText('2 volumes are downloaded and not indexed, or their last pass did not index them.')).toBeTruthy();
+    expect(within(row('frus1969-76ve09p1')).getByRole('button', { name: 'Remove frus1969-76ve09p1' })).toBeTruthy();
+
+    const index = within(row('frus1961-63v06')).getByRole('button', { name: 'Index frus1961-63v06' });
+    await userEvent.click(index);
+    await waitFor(() =>
+      expect(screen.getAllByRole('status').some((line) => line.textContent === 'The indexing of frus1961-63v06 is queued as a job: Jobs follows it.')).toBe(true),
+    );
+    expect(JSON.parse(String(sent(fetch, 'POST', '/api/v1/admin/library/index')[0]![1]?.body))).toEqual({ volumeIds: ['frus1961-63v06'] });
+    expect(screen.getByText('An indexing job waits: Jobs follows it.')).toBeTruthy();
+    // While a job waits, a volume it may take offers no Remove….
+    expect(within(row('frus1969-76ve09p1')).queryByRole('button', { name: 'Remove frus1969-76ve09p1' })).toBeNull();
+    expect(document.activeElement).toBe(index);
+
+    // The job takes the volume: the Library, read again within two seconds, shows it under way, its Index gone,
+    // and focus goes to its row rather than to the page.
+    indexing = { active: true, volume: 'frus1961-63v06' };
+    volumes = [{ ...volumes[0]!, status: 'indexing', index: undefined, error: undefined }, ...volumes.slice(1)];
+    await waitFor(() => expect(within(row('frus1961-63v06')).getByText('Indexing', { exact: true })).toBeTruthy(), { timeout: 5_000 });
+    expect(screen.getByText('Indexing frus1961-63v06: Jobs follows it.')).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(within(table).getByRole('rowheader', { name: /^frus1961-63v06/ })));
+
+    expect(screen.getByText('One volume is downloaded and not indexed, or its last pass did not index it.')).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Index All Waiting' }));
+    await waitFor(() => expect(sent(fetch, 'POST', '/api/v1/admin/library/index')).toHaveLength(2));
+    expect(JSON.parse(String(sent(fetch, 'POST', '/api/v1/admin/library/index')[1]![1]?.body))).toEqual({ all: true });
+
+    // Once nothing waits, Index All Waiting stays where it was, unavailable, so that focus on it is kept.
+    indexing = { active: false };
+    volumes = volumes.map((each) => ({ ...each, status: 'indexed', indexed: true, index: undefined, error: undefined }));
+    await waitFor(() => expect(screen.getByText('No volume waits to be indexed.')).toBeTruthy(), { timeout: 5_000 });
+    expect(screen.getByRole('button', { name: 'Index All Waiting' }).getAttribute('aria-disabled')).toBe('true');
+  }, 20_000);
 
   it('says why an Import server and an offline one download nothing, offering neither Download nor Remove', async () => {
     const volumes = [volume({ volumeId: 'frus1894Nicaragua', status: 'downloaded', downloaded: true, bytes: 1_273_810 })];

@@ -274,6 +274,23 @@ jobs:
           cache-from: type=gha,scope=image-amd64
           cache-to: type=gha,scope=image-amd64,mode=max,ignore-error=true
 
+      # frus-parity, for the smoke test's check 2 over a Standalone server's own index (PLAN's S21d): the
+      # Dockerfile's parity stage, in the builder that built the image, whose cache mount then holds the
+      # server's objects, so that only the parity harness compiles. No release ships it.
+      - name: Build frus-parity's image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile
+          build-args: ${{ steps.args.outputs.list }}
+          target: parity
+          tags: frus-light:ci-parity
+          load: true
+          cache-from: |
+            type=gha,scope=image-amd64
+            type=gha,scope=parity-amd64
+          cache-to: type=gha,scope=parity-amd64,mode=max,ignore-error=true
+
       - name: Install sqlite3 for the synthetic export
         run: command -v sqlite3 || (sudo apt-get update -qq && sudo apt-get install -y -qq sqlite3)
 
@@ -297,7 +314,7 @@ jobs:
         run: docker pull swift:6.4-noble
 
       - name: Compose smoke test and the browser suite
-        run: FRUS_IMAGE=frus-light:ci scripts/compose-smoke --e2e
+        run: FRUS_IMAGE=frus-light:ci FRUS_PARITY_IMAGE=frus-light:ci-parity scripts/compose-smoke --e2e
 
       - name: Upload the browser suite's report
         if: failure()

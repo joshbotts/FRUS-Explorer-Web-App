@@ -59,6 +59,11 @@ public actor ServerState: ImportObserver {
     /// for at one removes nothing an import installed after it, and an index the start was opening when
     /// a reset removed it is not served.
     public private(set) var indexGeneration = 0
+    /// Whether the library's indexing writes the index now (PLAN's S21d): from before its first write until
+    /// its job has closed the file, nothing reads the index, search answers 503 and `/readyz` says so.
+    public private(set) var indexBeingWritten = false
+    /// Why the index the library's indexing wrote is not served, when its write-ahead log could not be folded.
+    private var indexWriteProblem: String?
     private let log: @Sendable (String) -> Void
 
     public init(configuration: ServerConfiguration, log: @escaping @Sendable (String) -> Void = { _ in }) {
@@ -71,6 +76,9 @@ public actor ServerState: ImportObserver {
     public func prepareToOpenExistingIndex(files: any FileStore) {
         openingAtStart = FileManager.default.fileExists(atPath: files.liveIndex.path)
     }
+
+    /// Whether the index found at start is being opened still: the library's indexing waits for it (S21d).
+    public var isOpeningIndexAtStart: Bool { openingAtStart }
 
     /// Opens the live index if there is one, off the cooperative pool. A restart copies nothing.
     public func openExistingIndex(files: any FileStore) async {
@@ -109,6 +117,11 @@ public actor ServerState: ImportObserver {
     func setStillCopying(_ files: [String]) { stillCopying = files }
 
     public func readiness() -> Readiness {
+        if indexBeingWritten {
+            return Readiness(step: .indexingLibrary,
+                             detail: indexWriteProblem.map { "Search waits: \($0)" }
+                                 ?? "The library's indexing is writing the index: search answers again once its job ends, and the reader opens documents meanwhile")
+        }
         if let index {
             let s = index.summary
             return Readiness(step: .ready, detail: "Serving \(s.documents) documents from \(s.volumes) volumes, index version \(s.indexVersion)")
@@ -125,7 +138,7 @@ public actor ServerState: ImportObserver {
         // A Standalone server may be seeded from an export at its version (PLAN's S21c), and its reader reads
         // the volumes its library downloads meanwhile.
         var detail = configuration.mode == .standalone
-            ? "Copy a FRUS Explorer research export into /data/import to seed this Standalone server's index, for example with: docker compose cp <export file> frus:/data/import/. The reader reads the volumes the library downloads meanwhile"
+            ? "Download volumes in Administration ▸ Library, which this Standalone server indexes as they arrive, or copy a FRUS Explorer research export into /data/import to seed its index, for example with: docker compose cp <export file> frus:/data/import/. The reader reads the volumes the library downloads meanwhile"
             : "Copy a FRUS Explorer research export into /data/import, for example with: docker compose cp <export file> frus:/data/import/"
         if !stillCopying.isEmpty {
             detail = "Waiting for \(stillCopying.joined(separator: ", ")) to finish copying into /data/import"
@@ -186,6 +199,38 @@ public actor ServerState: ImportObserver {
                                   finishedAt: Self.timestamp(Date()), writing: writing)
         log(message)
         return message
+    }
+
+    /// The library's indexing is about to write the index (PLAN's S21d): it is read no more until the job
+    /// has closed it.
+    public func beginIndexWrite() {
+        indexBeingWritten = true
+    }
+
+    /// The library's indexing has closed the index without one to serve, as when it could not open it.
+    public func endIndexWrite() {
+        indexBeingWritten = false
+        indexWriteProblem = nil
+    }
+
+    /// The library's indexing closed the index, and its write-ahead log could not be folded into it: read
+    /// immutable, it would be served without the log's commits, so nothing reads it until a start folds it.
+    public func indexWriteUnfinished(_ reason: String) {
+        indexBeingWritten = true
+        indexWriteProblem = reason
+        log("Not serving the index: \(reason)")
+    }
+
+    /// The library's indexing has written the index (PLAN's S21d): `newIndex`, opened again over the file
+    /// it closed, is served.
+    public func indexWritten(_ newIndex: CorpusIndex) {
+        index = newIndex
+        indexGeneration += 1
+        startupProblem = nil
+        indexBeingWritten = false
+        indexWriteProblem = nil
+        let s = newIndex.summary
+        log("Serving \(s.documents) documents from \(s.volumes) volumes, index version \(s.indexVersion), as the library's indexing left them")
     }
 
     /// An admin stopped the import between two of its steps (PLAN's S20d): nothing changed.
