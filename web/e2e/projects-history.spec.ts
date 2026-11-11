@@ -112,6 +112,39 @@ test('makes a project, works in it, and sees its Project Home and history fill, 
   }
 });
 
+test('records a document opened and left before the user’s preferences come', async ({ page }) => {
+  // The test above failed once on main, on #115's merge: the search page's preferences came after it
+  // had opened a document and left it for Project Home, and the reader, waiting for them, never sent the
+  // visit. Here they are held until the reader has been left.
+  await page.goto('settings/sessions');
+  await reset(page);
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  try {
+    await page.route(/\/api\/v1\/me\/preferences$/, async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      const response = await route.fetch();
+      await held;
+      await route.fulfill({ response }).catch(() => {});
+    });
+    await page.goto('search?keywords=treaties');
+    await page.getByRole('list', { name: 'Results' }).getByRole('link', { name: treatiesResults[0] }).click();
+    await expect(page.getByRole('heading', { level: 1, name: treatiesResults[0] })).toBeVisible();
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Browse', exact: true }).click();
+    await expect(page.getByRole('heading', { level: 1, name: treatiesResults[0] })).toHaveCount(0);
+    release();
+    await expect
+      .poll(async () => (await getJSON<{ documents: { volumeId: string; documentId: string }[] }>(page, 'api/v1/me/history')).documents)
+      .toMatchObject([{ volumeId: 'frus1961-63v06', documentId: 'd1' }]);
+  } finally {
+    release();
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    await reset(page);
+  }
+});
+
 test('stops the trail with Log Research Sessions, reads the Session Log, and deletes the trail', async ({ page }) => {
   await page.goto('settings/sessions');
   await reset(page);

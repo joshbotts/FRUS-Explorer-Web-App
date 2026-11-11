@@ -100,6 +100,14 @@ export function sent(init?: RequestInit) {
   return { body: init?.body ? JSON.parse(String(init.body)) : undefined, token: headers['X-CSRF-Token'] };
 }
 
+/**
+ * Whether a request is the reader's record of a document it arrived at, which it sends beside whatever a
+ * test writes, its preferences read or not (S17f; `ReaderTrail.test.tsx` holds it).
+ */
+export function isVisitRecord(url: unknown): boolean {
+  return String(url).endsWith('/api/v1/me/history/documents');
+}
+
 /** `ui` rendered with a query client of its own, which a test may read. */
 export function renderWithClient(ui: ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
