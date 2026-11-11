@@ -243,7 +243,10 @@ public final class PostgreSQLUserStore: RelationalUserStore, @unchecked Sendable
     override func writing<T>(outsideSearch: Bool = false, _ body: (UserStoreTransaction) throws -> T) throws -> T {
         try access.withLock {
             let db = try ready()
-            try db.execute("BEGIN")
+            // Read committed whatever the database's default, so that each statement after the lock
+            // reads what the writes before it committed, as a check made in the write, as an admin's
+            // change that may leave no admin (S20d), must.
+            try db.execute("BEGIN ISOLATION LEVEL READ COMMITTED")
             let value: T
             var committing = false
             do {

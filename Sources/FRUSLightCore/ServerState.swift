@@ -55,6 +55,10 @@ public actor ServerState: ImportObserver {
     private var openingAtStart = false
     /// Files in the drop zone still being copied.
     private var stillCopying: [String] = []
+    /// Moved each time an import makes a new index live, and by each reset (PLAN's S20d): a reset asked
+    /// for at one removes nothing an import installed after it, and an index the start was opening when
+    /// a reset removed it is not served.
+    public private(set) var indexGeneration = 0
     private let log: @Sendable (String) -> Void
 
     public init(configuration: ServerConfiguration, log: @escaping @Sendable (String) -> Void = { _ in }) {
@@ -74,8 +78,14 @@ public actor ServerState: ImportObserver {
         let live = files.liveIndex
         guard FileManager.default.fileExists(atPath: live.path) else { return }
         openingAtStart = true
+        let generation = indexGeneration
         do {
             let opened = try await Blocking.run { try CorpusIndex.open(live) }
+            // A reset that removed the file while it opened wins: the server waits for an export.
+            guard indexGeneration == generation else {
+                log("Not serving \(live.path): the index was reset while it was opened")
+                return
+            }
             if index == nil { index = opened }
             startupProblem = nil
             log("Serving \(opened.summary.documents) documents from \(opened.summary.volumes) volumes, index version \(opened.summary.indexVersion)")
@@ -154,6 +164,7 @@ public actor ServerState: ImportObserver {
     @discardableResult
     func importFinished(file: String, index newIndex: CorpusIndex, writing: MovedWriting? = nil, note: String? = nil) -> String {
         index = newIndex
+        indexGeneration += 1
         importing = nil
         startupProblem = nil
         let s = newIndex.summary
@@ -184,6 +195,7 @@ public actor ServerState: ImportObserver {
             (outcome, step, message) = (.refused, refusal.step, refusal.reason)
         case let problem as ImportProblem:
             (outcome, step, message) = (.failed, problem.step, problem.reason)
+            if let logged = problem.logged { log("Import of \(file): \(logged)") }
         default:
             (outcome, step, message) = (.failed, importing?.step, error.localizedDescription)
         }
@@ -196,12 +208,17 @@ public actor ServerState: ImportObserver {
     /// The recovery action that resets the index in Import mode (PLAN's S20d): the server stops serving
     /// its index and removes it, with the index an import kept before it and any copy one left, and then
     /// waits for an export in /data/import, as at its first start. A request that holds the index
-    /// finishes on it, as on an index an import replaced. Gives what the index held, or nil when none
-    /// was served.
-    public func resetIndex(files: any FileStore) async throws -> IndexSummary? {
+    /// finishes on it, as on an index an import replaced. `generation` is `indexGeneration` when the
+    /// reset was asked for: an import that made a new index live since is not undone, and the reset is
+    /// refused. An import queued meanwhile keeps its line in `/readyz`. Gives what the index held, or nil
+    /// when none was served.
+    public func resetIndex(files: any FileStore, askedAt generation: Int) async throws -> IndexSummary? {
+        guard indexGeneration == generation else {
+            throw IndexResetRefusal()
+        }
+        indexGeneration += 1
         let removed = index?.summary
         index = nil
-        importing = nil
         lastImport = nil
         startupProblem = nil
         let paths = [files.liveIndex, files.previousIndex, files.candidateIndex].flatMap { url in
@@ -226,5 +243,13 @@ public actor ServerState: ImportObserver {
 
     static func timestamp(_ date: Date) -> String {
         date.formatted(.iso8601)
+    }
+}
+
+/// A reset refused because an import made a new index live after it was asked for (PLAN's S20d).
+public struct IndexResetRefusal: JobFailure, Equatable {
+    public init() {}
+    public var jobMessage: String {
+        "An import made a new index live after the reset was asked for, so nothing was removed: ask for the reset again to remove that index."
     }
 }

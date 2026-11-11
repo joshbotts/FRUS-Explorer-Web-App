@@ -204,13 +204,14 @@ final class JobClock: Sendable {
         defer { withExtendedLifetime(test) {} }
         let clock = JobClock()
         let queue = try await InProcessJobQueue.open(store: store, now: { clock.now })
-        let gate = JobGate()
+        let (gate, after) = (JobGate(), JobGate())
         let fractions = { try rows.stored("SELECT progress, fraction FROM jobs") }
         let job = try await queue.submit(.indexImport) { job in
             try await job.step("Copying", fraction: 0.1)
             await job.progress("Copying", fraction: 0.2)
             await gate.wait()
             await job.progress("Copying", fraction: 0.3)
+            await after.wait()
             try await job.step("Checking")
             return nil
         }
@@ -219,8 +220,11 @@ final class JobClock: Sendable {
         #expect(try fractions() == [[.text("Copying"), .real(0.1)]], "the row waits for a second")
         clock.advance(by: 1)
         gate.open()
+        await after.untilReached()
+        #expect(try fractions() == [[.text("Copying"), .real(0.3)]], "a second on, it is written")
+        after.open()
         await queue.waitUntilIdle()
-        #expect(try fractions() == [[.text("Checking"), .null]])
+        #expect(try fractions() == [[.text("Checking"), .null]], "a new line at once")
     }
 
     /// The queue keeps the newest finished jobs, and so does the store.

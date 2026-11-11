@@ -127,15 +127,18 @@ public actor ImportCoordinator {
                     await self.finished(file: file, signature: signature, retry: false)
                     throw JobCancelled()
                 } catch {
+                    // A step that failed after an admin asked the job to stop: the file waits, as a cancel's.
+                    let stopped = await job.cancelRequested
                     await state.importFailed(file: name, error: error)
-                    await self.finished(file: file, signature: signature, retry: !(error is ImportRefusal))
+                    await self.finished(file: file, signature: signature, retry: !stopped && !(error is ImportRefusal))
                     throw error
                 }
             }
             return job.id
         } catch {
             // The store could not keep the job's row: a problem on the server's side, tried again later.
-            let problem = ImportProblem(.copyingExport, "The import of \(name) could not be queued, since the user store could not keep its job: \(error). It is tried again within a minute")
+            let problem = ImportProblem(.copyingExport, "The import of \(name) could not be queued, since the user store could not keep its job. It is tried again within a minute",
+                                        logged: "\(error)")
             await state.importFailed(file: name, error: problem)
             finished(file: file, signature: signature, retry: true)
             return nil

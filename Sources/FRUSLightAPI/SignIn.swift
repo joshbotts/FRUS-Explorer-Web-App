@@ -38,12 +38,19 @@ final class LocalAccounts: Sendable {
     var verifications: Int { verified.withLock { $0 } }
     /// Each session read lately, so that a request asks the store for it at most once in
     /// `readAgainAfter`, and need not wait while an import writes, as a proxy's users are held (S14e).
-    private let known = Mutex<[String: Known]>([:])
+    private let known = Mutex(KnownSessions())
 
     private struct Known {
         let user: RequestUser
         let expiresAt: Date
         let read: Date
+    }
+
+    private struct KnownSessions {
+        var sessions: [String: Known] = [:]
+        /// Moved by each admin's change to an account (S20d): a session read from the store before the
+        /// change is not kept, since the change may have come between the read and the keeping.
+        var epoch = 0
     }
 
     /// A session ends this long after it was last used, and this long after its sign-in, whichever
@@ -88,9 +95,10 @@ final class LocalAccounts: Sendable {
     }
 
     private func user(ofSession id: String, at time: Date) async throws -> RequestUser? {
-        if let known = known.withLock({ $0[id] }), time.timeIntervalSince(known.read) < Self.readAgainAfter, time >= known.read {
+        if let known = known.withLock({ $0.sessions[id] }), time.timeIntervalSince(known.read) < Self.readAgainAfter, time >= known.read {
             if known.expiresAt > time { return known.user }
         }
+        let epoch = known.withLock { $0.epoch }
         let store = store
         guard let found = try await Blocking.run({ try store.session(id, at: time) }), found.account.canSignIn else {
             forget(id)
@@ -103,7 +111,7 @@ final class LocalAccounts: Sendable {
             try await Blocking.run { try store.touchSession(id, at: time, expiresAt: moved) }
         }
         let user = Self.user(found.account)
-        remember(id, user, expiresAt: expiresAt, at: time)
+        remember(id, user, expiresAt: expiresAt, at: time, ifUnchangedSince: epoch)
         return user
     }
 
@@ -112,23 +120,30 @@ final class LocalAccounts: Sendable {
                     roles: account.role.held.compactMap { RequestUser.Role(rawValue: $0.rawValue) })
     }
 
-    private func remember(_ id: String, _ user: RequestUser, expiresAt: Date, at time: Date) {
+    /// Keeps what a read of the store found, unless an admin's change to an account came since `epoch`,
+    /// when the read was made: the next request reads the store again.
+    private func remember(_ id: String, _ user: RequestUser, expiresAt: Date, at time: Date, ifUnchangedSince epoch: Int) {
         known.withLock { known in
+            guard known.epoch == epoch else { return }
             // A bound on what the server holds; the store keeps every session.
-            if known.count >= 10_000 { known.removeAll() }
-            known[id] = Known(user: user, expiresAt: expiresAt, read: time)
+            if known.sessions.count >= 10_000 { known.sessions.removeAll() }
+            known.sessions[id] = Known(user: user, expiresAt: expiresAt, read: time)
         }
     }
 
     private func forget(_ id: String) {
-        _ = known.withLock { $0.removeValue(forKey: id) }
+        _ = known.withLock { $0.sessions.removeValue(forKey: id) }
     }
 
-    /// Forgets every session of `userID`'s the server holds, so that its next request reads the store
-    /// again: an admin's change to the account (PLAN's S20d), a password reset or the account disabled,
-    /// which end its sessions in the store, or a new role, reaches each at once, not within half a minute.
+    /// Forgets every session of `userID`'s the server holds, and any read of the store under way, so
+    /// that its next request reads the store again: an admin's change to the account (PLAN's S20d), a
+    /// password reset or the account disabled, which end its sessions in the store, or a new role,
+    /// reaches each at once, not within half a minute. Called once the change is in the store.
     func forgetSessions(of userID: String) {
-        known.withLock { known in known = known.filter { $0.value.user.id != userID } }
+        known.withLock { known in
+            known.epoch += 1
+            known.sessions = known.sessions.filter { $0.value.user.id != userID }
+        }
     }
 
     /// `password`'s hash, for an admin's new account or new password (PLAN's S20d), in one of the slots
@@ -203,22 +218,31 @@ final class LocalAccounts: Sendable {
         return hash
     }
 
-    /// A new session for `account`, kept in the store: its cookie's token. The store keeps it only if the
-    /// account still has the password just verified and is not disabled, so a sign-in verifying while
-    /// the command line set a password or disabled the account gives no session: `Refusal.failed`.
-    func startSession(for account: Account) async throws -> String {
+    /// A new session for `account`, kept in the store: its cookie's token, and the user it signs in, as
+    /// the store holds them once it is kept, so that a role an admin changed while the password was
+    /// verified is the new one (S20d). The store keeps it only if the account still has the password
+    /// just verified and is not disabled, so a sign-in verifying while the command line set a password
+    /// or disabled the account gives no session: `Refusal.failed`.
+    func startSession(for account: Account) async throws -> (token: String, user: RequestUser) {
         let time = now()
         let token = SessionToken.make()
         let session = Session(id: SessionToken.id(of: token), userID: account.id, createdAt: time, lastUsedAt: time,
                               expiresAt: Self.expiry(createdAt: time, lastUsed: time))
         let (store, hash) = (store, account.passwordHash)
+        let epoch = known.withLock { $0.epoch }
+        let kept: Account?
         do {
-            try await Blocking.run { try store.startSession(session, passwordHash: hash) }
+            kept = try await Blocking.run {
+                try store.startSession(session, passwordHash: hash)
+                return try store.account(account.id)
+            }
         } catch is AccountStoreError {
             throw Refusal.failed
         }
-        remember(session.id, Self.user(account), expiresAt: session.expiresAt, at: time)
-        return token
+        guard let kept, kept.canSignIn else { throw Refusal.failed }
+        let user = Self.user(kept)
+        remember(session.id, user, expiresAt: session.expiresAt, at: time, ifUnchangedSince: epoch)
+        return (token, user)
     }
 
     /// Ends every session `request`'s cookie names.
@@ -526,11 +550,10 @@ enum AuthRoutes {
             } catch let refusal as LocalAccounts.Refusal {
                 return try refused(refusal).response(from: request, context: context)
             }
-            let token = try await accounts.startSession(for: account)
+            let (token, user) = try await accounts.startSession(for: account)
             // A session the browser held already, its own or another's, ends once the new one is kept:
             // a browser has one at a time. The new one's token is in no cookie yet.
             try await accounts.signOut(request)
-            let user = LocalAccounts.user(account)
             let me = Me(userId: user.id, displayName: user.displayName, auth: services.auth.rawValue, roles: user.roles,
                         userData: services.enabled, csrfToken: services.tokens.token(for: user.id))
             return try EditedResponse(headers: [.cacheControl: "no-store", .setCookie: accounts.cookie.setting(token)], response: me)

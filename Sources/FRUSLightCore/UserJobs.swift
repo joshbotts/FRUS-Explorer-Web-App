@@ -14,7 +14,7 @@ public protocol JobStore: Sendable {
     func failUnfinishedJobs(at time: Date) throws -> Int
     /// The newest `limit` jobs, by when they were queued, newest first.
     func jobs(limit: Int) throws -> [Job]
-    /// Removes every finished job but the newest `kept`, by when they finished.
+    /// Removes every finished job but the newest `kept`, by when they were queued, as the queue keeps them.
     func pruneJobs(keeping kept: Int) throws
 }
 
@@ -74,7 +74,7 @@ extension RelationalUserStore: JobStore {
                 """
                 DELETE FROM jobs WHERE state IN ('succeeded', 'failed', 'cancelled') AND job_id NOT IN (
                     SELECT job_id FROM jobs WHERE state IN ('succeeded', 'failed', 'cancelled')
-                        ORDER BY finished_at DESC, job_id DESC LIMIT ?)
+                        ORDER BY queued_at DESC, job_id DESC LIMIT ?)
                 """, [.integer(Int64(kept))])
         }
     }

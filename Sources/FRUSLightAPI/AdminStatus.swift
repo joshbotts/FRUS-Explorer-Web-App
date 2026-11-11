@@ -134,12 +134,19 @@ enum AdminStatusRoutes {
                 throw APIProblem(.conflict, code: "RESET_NOT_AVAILABLE",
                                  detail: "A Standalone server's index is reset by indexing its volumes again, which comes with the library's own indexing.")
             }
+            // An index import before it would make an index live that the reset then removed, with its
+            // file gone from the drop zone: the reset waits for none, and one queued after it runs after it.
+            if await services.jobs.jobs().contains(where: { $0.kind == .indexImport && !$0.state.isFinished }) {
+                throw APIProblem(.conflict, code: "IMPORT_IN_PROGRESS",
+                                 detail: "An index import is queued or running: reset the index once it has ended, or cancel it first.")
+            }
+            let generation = await state.indexGeneration
             let job: Job
             do {
                 job = try await services.jobs.submit(.indexReset, subject: nil, requestedBy: user.id, id: nil) { job in
                     try await job.step("Removing the served index")
                     try await job.commit()
-                    let removed = try await state.resetIndex(files: files)
+                    let removed = try await state.resetIndex(files: files, askedAt: generation)
                     return removed.map {
                         "Removed the index of \($0.documents) documents from \($0.volumes) volumes: the server waits for an export in /data/import"
                     } ?? "No index was served: the server waits for an export in /data/import"

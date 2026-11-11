@@ -149,8 +149,13 @@ public actor ServedIndexProvider {
         return served
     }
 
-    /// The stack, or nil while no index is served, for routes that work without one.
+    /// The stack, or nil while no index is served, for routes that work without one; with none, the
+    /// stack a reset left is let go, as `served()` lets it go (S20d).
     public func servedIfReady() async throws -> ServedIndex? {
-        await state.index == nil ? nil : try await served()
+        guard await state.index != nil else {
+            current = nil
+            return nil
+        }
+        return try await served()
     }
 }

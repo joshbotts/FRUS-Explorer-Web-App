@@ -67,6 +67,35 @@ final class CancelAtStep: ImportObserver, @unchecked Sendable {
 }
 
 @Suite struct ImportCoordinatorTests {
+    /// The index's reset (S20d) removes nothing an import made live after it was asked for; and a reset
+    /// while the start opens the index found there wins, so the server waits for an export.
+    @Test func aResetRemovesNoIndexMadeLiveAfterItWasAskedFor() async throws {
+        let fixture = try WatchFixture()
+        let asked = await fixture.state.indexGeneration
+        _ = try fixture.drop(SyntheticExport())
+        #expect(await fixture.scanUntilImported() != nil)
+        #expect(await fixture.state.readiness().ready)
+        await #expect(throws: IndexResetRefusal.self) { _ = try await fixture.state.resetIndex(files: fixture.files, askedAt: asked) }
+        #expect(await fixture.state.readiness().ready, "the new index is still served")
+        #expect(FileManager.default.fileExists(atPath: fixture.files.liveIndex.path))
+        let removed = try await fixture.state.resetIndex(files: fixture.files, askedAt: fixture.state.indexGeneration)
+        #expect(removed?.documents == 7)
+        #expect(await fixture.state.readiness().step == .waitingForExport)
+        #expect(!FileManager.default.fileExists(atPath: fixture.files.liveIndex.path))
+        #expect(!FileManager.default.fileExists(atPath: fixture.files.previousIndex.path))
+
+        // An index found at start, reset while the start opens it, is not served.
+        let started = try WatchFixture()
+        try SyntheticExport().write(to: started.files.liveIndex)
+        await started.state.prepareToOpenExistingIndex(files: started.files)
+        let generation = await started.state.indexGeneration
+        async let opening: Void = started.state.openExistingIndex(files: started.files)
+        _ = try await started.state.resetIndex(files: started.files, askedAt: generation)
+        await opening
+        #expect(await started.state.status().index == nil, "the reset wins")
+        #expect(await started.state.readiness().step == .waitingForExport)
+    }
+
     /// An import's job cancelled between its steps (S20d) stops before the next, changing nothing: no
     /// index served, no copy left, the file kept in the drop zone and not tried again while unchanged;
     /// and one cancelled while it waits never begins.

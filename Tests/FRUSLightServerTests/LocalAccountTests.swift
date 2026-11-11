@@ -288,6 +288,18 @@ struct AccountBrowser {
         #expect(try fixture.rows.stored("SELECT count(*) FROM sessions", []) == [[.integer(0)]])
     }
 
+    /// A role an admin changed while a sign-in verified the password is the new session's (S20d): the
+    /// session carries the role the store holds once it is kept, not the one read before the hash.
+    @Test func aSignInTakesTheRoleTheStoreHoldsOnceItsSessionIsKept() async throws {
+        let fixture = try await Self.fixture()
+        defer { withExtendedLifetime(fixture) {} }
+        let accounts = try Self.accounts(fixture)
+        let alice = try #require(try fixture.store.account("alice"))
+        try fixture.store.setRole(.reader, of: "alice")
+        let (_, user) = try await accounts.startSession(for: alice)
+        #expect(user.roles == [.reader])
+    }
+
     /// Cookies that name two people's sessions, as another site under the same host could set beside the
     /// browser's own, name no one.
     @Test func cookiesNamingTwoPeoplesSessionsNameNoOne() async throws {

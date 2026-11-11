@@ -172,8 +172,12 @@ enum AdminUserRoutes {
             let id = try userName(context)
             let body = try await JSONBody.decode(Erasure.self, from: request, fields: ["expected"])
             // An import of theirs under way would write after the erasure: the erasure waits for none, and
-            // is refused while one is queued or running; and none begins while it erases.
-            guard await services.imports.beginErasure(of: id) else {
+            // is refused while one is queued or running, the JSON import's or, for the store's single
+            // user, an index import's, which may bring the owner's writing; and no JSON import begins
+            // while it erases.
+            let single = try await Blocking.run { try store.singleUserID() }
+            let indexImporting = await services.jobs.jobs().contains { $0.kind == .indexImport && !$0.state.isFinished }
+            guard !(id == single && indexImporting), await services.imports.beginErasure(of: id) else {
                 throw APIProblem(.conflict, code: "IMPORT_IN_PROGRESS",
                                  detail: "An import of \(id)'s is queued or running: erase their research once it has ended, or cancel its job first.")
             }

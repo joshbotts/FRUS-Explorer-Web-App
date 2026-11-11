@@ -140,6 +140,12 @@ public struct JobContext: Sendable {
     public func commit() async throws {
         try await queue.commit(id)
     }
+
+    /// Whether an admin has asked the job to stop: for a job whose step failed meanwhile, which then
+    /// leaves what it worked on as a cancel would, rather than trying it again.
+    public var cancelRequested: Bool {
+        get async { await queue.isCancelRequested(id) }
+    }
 }
 
 /// Where long work runs: the server's queue.
@@ -199,6 +205,8 @@ public actor InProcessJobQueue: JobQueue {
     /// The jobs waiting, in the order they were queued.
     private var waiting: [String] = []
     private var running: String?
+    /// The ids of jobs whose rows are being kept, not yet in the line: no second job takes one.
+    private var reserved: Set<String> = []
     private var idle: [CheckedContinuation<Void, Never>] = []
 
     /// How many finished jobs are kept, the oldest forgotten first, here and in the store.
@@ -242,7 +250,10 @@ public actor InProcessJobQueue: JobQueue {
                        onCancel: (@Sendable () async -> Void)?, _ work: @escaping Work) async throws -> Job {
         let job = Job(id: id ?? UUID().uuidString, kind: kind, subject: subject, requestedBy: requestedBy, state: .queued,
                       queuedAt: now())
-        guard entries[job.id] == nil else { throw JobFailed("A job with the id \(job.id) is queued already.") }
+        guard entries[job.id] == nil, reserved.insert(job.id).inserted else {
+            throw JobFailed("A job with the id \(job.id) is queued already.")
+        }
+        defer { reserved.remove(job.id) }
         if let store { try await Blocking.run { try store.saveJob(job) } }
         entries[job.id] = Entry(job: job, work: work, onCancel: onCancel, written: (nil, now()))
         order.append(job.id)
@@ -302,6 +313,8 @@ public actor InProcessJobQueue: JobQueue {
         try checkpoint(id)
         await report(id, line: line, fraction: fraction)
     }
+
+    func isCancelRequested(_ id: String) -> Bool { entries[id]?.job.cancelRequestedAt != nil }
 
     func checkpoint(_ id: String) throws {
         guard let entry = entries[id] else { return }

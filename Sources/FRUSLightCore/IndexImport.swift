@@ -244,7 +244,8 @@ public struct IndexImporter: Sendable {
                 do {
                     moved = try await Blocking.run { try move.keep(writing) }
                 } catch {
-                    throw ImportProblem(.movingWriting, "Your notes, summaries and tags could not be kept in your research data, so \(name) was not installed: \(error)")
+                    throw ImportProblem(.movingWriting, "Your notes, summaries and tags could not be kept in your research data, so \(name) was not installed. The server's log says why",
+                                        logged: "\(error)")
                 }
             }
         } catch {
@@ -257,7 +258,8 @@ public struct IndexImporter: Sendable {
             try await Blocking.run { [writer] in try writer.install(candidate: candidate) }
         } catch {
             removeCandidate()
-            throw ImportProblem(.installingIndex, "The new index could not be made live: \(error.localizedDescription)")
+            throw ImportProblem(.installingIndex, "The new index could not be made live, so the index before it is still the one served. The server's log says why",
+                                logged: error.localizedDescription)
         }
 
         await observer.importDidReach(.openingIndex, detail: "Opening the index read-only", progress: nil)
