@@ -166,11 +166,12 @@ actor ProjectLeadsQueue {
             guard let accounts = try? await Blocking.run({ [store] in try store.accounts() }) else { return }
             users = accounts.filter { $0.disabledAt == nil }.map(\.id)
         }
-        var keys: [Key] = []
+        var concerned: [Key] = []
         for user in users {
             guard let projects = try? await Blocking.run({ [store] in try store.projects(for: user) }) else { continue }
-            keys += projects.map { Key(user: user, project: $0.id) }
+            concerned += projects.map { Key(user: user, project: $0.id) }
         }
+        let keys = concerned
         guard !keys.isEmpty else { return }
         let subject = user.map { "Every project of \($0)'s" } ?? "Every project"
         let provider = provider
