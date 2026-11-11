@@ -5,7 +5,7 @@
 // kit's words, with nothing to choose; Add puts the two at the end of the collection, in the order chosen. Its Tags:
 // a tag a note and an assignment carry is listed with its count, opens on its documents, the note's first, all
 // chosen, with the focus on Tags, and Add puts them at the end. Against the image, which the test leaves as it found it.
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
 import { tabTo } from './keyboard';
@@ -36,13 +36,16 @@ test.afterEach(async ({ page }) => {
 /** The editor's Add Documents… under Contents, over the footer that names the sheet's four tabs. */
 const opener = (page: Page) => page.getByRole('button', { name: 'Add Documents…', exact: true });
 
+/** One of the sheet's tabs, a button of the group Find documents, apart from any other button of its name. */
+const tab = (sheet: Locator, name: string) => sheet.getByRole('group', { name: 'Find documents' }).getByRole('button', { name, exact: true });
+
 /** Opens Add Documents by keyboard, from its button where the focus is or a Tab reaches it: its Search tab takes the focus. */
 async function openAddDocuments(page: Page) {
   const open = opener(page);
   if (!(await open.evaluate((element) => element === element.ownerDocument.activeElement))) await tabTo(page, open);
   await page.keyboard.press('Enter');
   const sheet = page.getByRole('dialog', { name: 'Add Documents' });
-  await expect(sheet.getByRole('button', { name: 'Search', exact: true })).toBeFocused();
+  await expect(tab(sheet, 'Search')).toBeFocused();
   return sheet;
 }
 
@@ -69,7 +72,7 @@ test("resolves a paste and adds what resolved, then a tag's documents, by keyboa
 
   // Citations: a citation by page, one of a part the volume does not have, and one of a volume the index does not hold.
   let sheet = await openAddDocuments(page);
-  const citationsTab = sheet.getByRole('button', { name: 'Citations', exact: true });
+  const citationsTab = tab(sheet, 'Citations');
   await tabTo(page, citationsTab);
   await page.keyboard.press('Enter');
   await expect(citationsTab).toHaveAttribute('aria-pressed', 'true');
@@ -106,7 +109,7 @@ test("resolves a paste and adds what resolved, then a tag's documents, by keyboa
 
   // Tags: the tag's documents, the note's then the assignment's, chosen as the tag opens.
   sheet = await openAddDocuments(page);
-  const tagsTab = sheet.getByRole('button', { name: 'Tags', exact: true });
+  const tagsTab = tab(sheet, 'Tags');
   await tabTo(page, tagsTab);
   await page.keyboard.press('Enter');
   await expect(tagsTab).toHaveAttribute('aria-pressed', 'true');

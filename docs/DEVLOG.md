@@ -195,7 +195,74 @@ Phase 3's row S21b: the pin moves from `fe9325b2` to `68bffcf6`, `v2`'s head, pa
 
 ## Session 25d: Add Documents' Citations and Tags
 
-Not started: `PLAN.md`'s row S25d. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+10–11 November 2026 · branch `claude/practical-williamson-1d7684` · [#112](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/112) · upstream `68bffcf6`, unchanged
+
+Phase 3's features-track row of wave 2, phase 2's follow-up to S18d, beside S20d, S22b and S23b, with no upstream pull request, no pin move and no migration: Add Documents' Citations and Tags tabs, over the kit code FRUS-Explorer#1814 made public at `fb542514`. None of the files the row reads changed between `fe9325b2` and the pin, `68bffcf6`: `CollectionAddDocumentsSheet.swift`, which holds `CollectionDocumentDiscovery`, and the kit's `CollectionCitationLineResolver.swift`, `CollectionGeneratedBlocks.swift` and `FRUSCoreKit/Citation/`.
+
+**The kit's calls,** compiled from the submodule, none copied:
+- `CollectionCitationLineResolver(parse:match:)` over the kit's `CitationParser` and the matcher Citation Lookup's routes ask, with `lines(from:)` and `resolve(line:)`.
+- `CollectionGeneratedBlocks.tagDocumentRefs(tagId:noteTags:assignments:)`, the union of a tag's documents the Thematic Index reads too, over the user's notes and tag assignments.
+
+**The store** (`Sources/FRUSLightCore/UserTags.swift`): `TagStore.tagAssignments(of:)`, beside `tags(of:for:)`, written once on `RelationalUserStore` in SQL both stores read: every assignment of the user's as it was written, a `TagAssignmentRecord`, `ORDER BY rowid`. That is the order an export reads them in (`researchRows`), which the Thematic Index's assembly already hands the same union, and it stands for the app's fetch with no sort (`@Query`): an import writes a Mac's assignments in the order the Mac fetched them, and each made here after them. `created_at`, which the store's other reads of a document's assignments sort by, would put an assignment synced from another device where its time says, not where the Mac's sheet lists it.
+
+**The server** (`Sources/FRUSLightAPI/AddDocuments.swift`, new; `CitationLookup.swift`; one line in `UserData.swift`, beside the collections' routes):
+- **`POST /api/v1/me/add-documents/citations`** with `{"text"}` resolves each line the kit splits from the paste with the kit's resolver, one after another, and answers every line: its `outcome`, `resolved`, `ambiguous` or `unresolved`, and for the first two the document, the served index's head and the catalogue's volume title, with the resolver's note; for the last its reason, in the kit's words.
+  - **The matcher is Citation Lookup's:** `CitationLookupRoutes.matcher(provider:resources:)`, drawn out of `add` so that both routes ask the same, the served index's or, with none served, the catalogue's alone.
+  - **Bounded as Batch is:** 500 lines (`TOO_MANY_CITATIONS`) and a body of 256 KiB (`CONTENT_TOO_LARGE`), Batch's own constants. The resolver turns a lookup its task stopped into an unresolved line and goes on, so the route asks between lines, and reads the heads inside the same watched work: a paste whose client has gone stops at its next line.
+  - **The heads** are the Research page's read of a document's title facts (`ResearchRoutes.titleFacts`, the app's `documentTitleFacts(for:)`), the documents' own rows a volume at a time, where the app's sheet reads `documentHeaders(for:)`, the same column.
+- **`GET /api/v1/me/add-documents/tags`** lists the user's tags in `GET /me/tags`' order, each with the union's count over all their notes and assignments, whatever project they are filed under, as the app's sheet counts its rows. **`GET …/tags/{id}`** gives a tag's documents, the union's in its order, with heads and titles, and whether the catalogue lists each volume (`catalogued`); `TAG_NOT_FOUND` for a tag the user has none of.
+  - **The union is the kit's,** over the store's notes (`notes(for:)`, newest first, as the app's editor queries them) and the new read of the assignments. For the list's counts each tag is handed its own notes and assignments, gathered in one pass: the kit passes over an entry that does not carry the tag it is asked for, so the answer is the one the whole lists give, which a test holds, and the counts cost one pass rather than one a tag. The work runs off the cooperative pool (`Blocking.run`).
+
+**The browser app** (`web/src/collections/AddDocuments.tsx`; `addDocumentsRules.ts` and `api/addDocuments.ts`, new; `copy.ts`'s `addDocuments` block and the editor's footer; `styles/app.css`):
+- **The tabs,** Search, Browse, Citations and Tags, in the app's order, one selection across them.
+- **Citations:** the paste, in the app's monospaced field, with Resolve, which waits for text and for the last Resolve's answer. A status line says the app's count, "2 of 4 resolved · 1 to review", or "Nothing to resolve — paste at least one line.", or Resolving… while the server works. Every line has a row: one naming a document has its box, the app's words for the document, the line pasted, and the resolver's note, a warning on a line to review, which describe its box; one naming none says "No match — …" and has no box.
+- **Tags:** the tags, each with its count, then a tag's documents, the focus handed to Tags and back to the tag, as Browse hands it.
+- **Chosen at once:** what resolved, in line order, and a tag's documents as it opens, each pass passing over a document the reader unchose in the sheet, as the app's `preselect(_:)` does. A line to review waits for the reader.
+- **The editor's footer** under Add Documents… is now the app's, naming the four tabs.
+
+**Decided here, each the web's own:**
+- **A tag's document of a volume the catalogue does not list,** which only a Mac's export can bring, one side-loaded there, has no box and is never chosen: S18d's add takes no such volume (`VOLUME_NOT_FOUND`), and one chosen would refuse the whole add. The app's sheet adds it. Its row says why.
+- **A note with no document,** a project's, gives the union none, where the app's sheet would list an empty row and add an entry with no ids.
+- **Each opening of a tag gathers its documents again,** as the app's `openTag(_:)` does, and keeps no answer for the next opening, nor asks again while it is open, so what is chosen at once is what that opening gathered and showed.
+- **A refused Resolve keeps the last lines,** with what was chosen from them, which the reader can still see and unchoose; the app's resolver is never refused.
+- **The paste and its lines stay while the sheet is open,** as the app's do; a tag opened goes back to the list when another tab is chosen, as Browse's volume does, where the app's stays open.
+- **The hint names the server's index** where the app's names the device's, and the line while it resolves is the web's own, where the app shows a spinner.
+- **Add takes 1,000 documents at a time,** S18d's bound, so a tag that gathers more is added in parts; SPEC says so.
+- **Kept as the app's:** the drill-in's Tags, which shares its word with the tab's; the tab is a pressed toggle in the group Find documents, so a screen reader tells them apart. And the union reads each note whole (`notes(for:)`), as the Thematic Index's assembly does.
+
+**Tests**
+
+- **FRUSLightCoreTests,** 217 to 218: `UserTagTests` gains `aUsersAssignmentsAreReadInTheOrderTheStoreTookThem`, on each store: an import's later time first, none, a lower-case tag id and a dangling tag in the order the store took them, each user's alone, and a merge re-pointing an assignment where it stands.
+- **FRUSLightServerTests,** 302 to 308: `AddDocumentsTests`, 6, two of them on each store:
+  - each bucket over the synthetic export, a line pasted twice two rows, and the kit's resolver, built as the app's sheet builds it, answering line for line;
+  - the catalogue alone with no index, a link to a chapter finding only its volume;
+  - the bounds and the body's refusals;
+  - a stopped resolve throwing before its next line;
+  - the Tags routes through the router on each store: counts, order, heads, titles, `catalogued`, a project's note, a deleted tag's assignment, another user's tag;
+  - the union over each store's rows equal to the kit's over the whole lists, and the project's note the routes leave out.
+- **FRUSParityTests,** 232 to 233: `CollectionParityTests` gains `theAddDocumentsCitationsAndTagsAreTheApps`, which holds the app's tabs and their order, its choosing at once and passing over, Resolve's gate, the counts, a row's words, the resolver's construction, the union's inputs and the editor's queries to the app's source, beside the server's calls and the browser app's mirrors; and the word list gains the tabs' nine words, the three lines that count or name, and the editor's footer.
+- **The web unit suite,** from 513 tests in 53 files to 528 in 55: `AddDocuments.test.tsx`, 10, and `addDocumentsRules.test.ts`, 5. Each review fix has a test that fails without it, checked by undoing each: the stale answer, the lines kept, the uncatalogued document, one Resolve at a time, and the remembered unchoosing.
+- **The browser suite:** `add-documents.spec.ts`, by keyboard alone: a paste of three lines, one resolved and chosen, a best guess for review chosen by Space, one that names a volume only; Add, the focus back on Add Documents…; then a tag on a note and an assignment, its documents chosen as it opens, the focus on Tags, and Add; axe at each step.
+
+**Results**
+
+- **Linux, `swift:6.4-noble`, arm64,** CI's swift job replayed with its PostgreSQL (`scripts/swift --postgres test`), under the heavy lock, over a build folder cloned from S21b's worktree at the pin: 3,250 tests, all passing, where `main` runs 3,242, the row's parameterized tests on app.db and PostgreSQL both; the one skip is the named one, `FTS5StoreTests`' `backupExclusion()`, which Linux's Foundation cannot keep. The build gives no warning.
+- **The browser app:** typecheck, lint and build pass; the unit suite, 528 tests in 55 files.
+- **The image and the smoke test:** `scripts/compose-smoke --e2e`, with this branch's image as `frus-light:s25d` on port 18190, under the heavy lock, passed every step. The browser suite ran 76 specs at the root and 76 under the path, where `main` has 75, `add-documents.spec.ts` among them, and the accounts and sign-in specs. Its first run failed in the new spec alone, whose name for the Search tab also named the Search tab's own Search button; the spec finds each tab in its group now, and the second run, over the same image, passed.
+
+**A cold review,** two subagents given the diff, the row and the app's source, and none of this session's reasoning, one for the server and one for the browser app. What held up is fixed, each with a test where a unit test reaches it:
+- **The browser spec would not have run:** a local `opener` shadowed the helper of the same name, which `tsc -b` refuses and which would have stopped the spec after its first Add.
+- **A tag opened a second time chose from the answer the sheet before was given,** before the fresh one came: the two queries keep nothing once closed and ask nothing again while open.
+- **A tag could choose a document of a volume the catalogue does not list,** which the add refuses: such a row is never chosen and says why.
+- **A refused Resolve hid the last lines but kept their documents chosen:** the lines stay.
+- **The heads were read after the watched work,** with every document of each volume and their dates: they are the documents' own rows now, inside it. The list's counts took a pass a tag, on the cooperative pool: one pass, off it.
+- **SPEC said every link resolves by id,** where only a numbered document's does, and that such a document cannot be opened, where the reader opens it from the server's folder of volumes.
+- **Test gaps:** the comparison with the kit, both stores through the routes, a stopped resolve, a project's note, Resolving…, a tag's error, and the second gathering, all added.
+- **Left, with the reason above:** the two Tags, and whole notes read.
+
+**Records:** this entry and PLAN's S25d paragraph; in SPEC, the web edition's collections paragraph, Add Documents' four tabs, and the collections API's routes. The install guide shows no Add Documents route and stays true unchanged; README and COORDINATION are the group's last row's and the pin moves' (rule 5). The hand-over note is `s25d-handover.md` in the shared notes folder, for S23d and S25b.
+
+**Next:** S23d, Related Documents and Suggested Next, on the features track.
 
 ## Session 20d: administration and jobs
 
