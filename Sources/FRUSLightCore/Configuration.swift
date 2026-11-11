@@ -228,11 +228,12 @@ public struct ServerConfiguration: Sendable, Equatable {
         if let raw = value("FRUS_LIBRARY_MIRROR") {
             if config.mode != .standalone {
                 problems.append("FRUS_LIBRARY_MIRROR is where a Standalone server downloads its volumes from, and FRUS_MODE is \(config.mode.rawValue): set FRUS_MODE=standalone, or leave FRUS_LIBRARY_MIRROR out")
-            } else if Self.isHTTPOrigin(raw), let url = URL(string: raw), Self.components(of: raw)?.query == nil,
-                      Self.components(of: raw)?.fragment == nil {
+            } else if Self.isHTTPOrigin(raw), let url = URL(string: raw), let parts = Self.components(of: raw), parts.query == nil,
+                      parts.fragment == nil, parts.user == nil, parts.password == nil {
                 config.libraryMirror = url
             } else {
-                problems.append("FRUS_LIBRARY_MIRROR must be an http or https URL with no query or fragment, not \(raw)")
+                // Not echoed: a URL given with a password in it would leave it in the log.
+                problems.append("FRUS_LIBRARY_MIRROR must be an http or https URL with no user, password, query or fragment")
             }
         }
         if let raw = value("FRUS_GITHUB_TOKEN") {

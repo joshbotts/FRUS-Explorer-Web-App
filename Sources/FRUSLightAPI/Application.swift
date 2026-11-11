@@ -205,6 +205,9 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
         logger.info(configuration.offline
             ? "Standalone mode with FRUS_OFFLINE=true: the library in \(library.volumesDirectory.path) is read, and nothing is downloaded"
             : "Standalone mode: the library downloads volumes into \(library.volumesDirectory.path) from \(source)\(configuration.githubToken != nil && library.sources.isGitHub ? ", its listing with a GitHub token" : "")")
+        if !configuration.userData {
+            logger.warning("FRUS_USER_DATA is off, so Administration and its Library are too: the server serves the volumes it keeps, and downloads none")
+        }
     }
     if let folder = getenv("SQLITE_TMPDIR") {
         logger.info("SQLite's temporary files go to \(String(cString: folder))")

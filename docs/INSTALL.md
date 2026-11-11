@@ -640,14 +640,20 @@ A Standalone server keeps a library of volumes of its own, which it downloads, i
    echo "COMPOSE_FILE=compose.yaml:compose.standalone.yaml" >> .env
    ```
 
-   It sets `FRUS_MODE=standalone` and leaves out the read-only TEI folder, `FRUS_TEI_DIR`, so that the server can write `/data/volumes`; a Standalone server that cannot write it does not start, and its log says why.
-2. Start it, or start it again, with `docker compose up -d`. On Linux, make the backups folder first, as step 3 does.
+   It sets `FRUS_MODE=standalone` and leaves out the read-only TEI folder, `FRUS_TEI_DIR`, so that the server can write `/data/volumes`; a Standalone server that cannot write it does not start, and its log says why. It needs Docker Compose 2.24.4 or later, for its `!override`. Compose reads `compose.override.yaml` only when `COMPOSE_FILE` is unset, so if you keep one, as A PostgreSQL user store and The key file have you do, name it last: `COMPOSE_FILE=compose.yaml:compose.standalone.yaml:compose.override.yaml`.
+2. Start it, or start it again, with `docker compose up -d`. On Linux, make the backups folder first, as step 3 does. **A volume an Import server used before this release** holds a `/data/volumes` folder Docker made for the TEI mount, which belongs to root, so the server does not start, and its log gives this command, which gives the folder to the server's user once:
+
+   ```bash
+   docker compose run --rm --no-deps --user 0 --cap-add CHOWN --entrypoint chown frus 10001:10001 /data/volumes
+   ```
+
+   Then run `docker compose up -d` again.
 3. In the browser app, **Admin ▸ Library** lists the catalogue's 553 volumes. **Download** fetches one, and **Download All** every volume not downloaded, about 3.3 GB of TEI and 141 MB of figure images for all of them. Each is a job, which **Jobs** follows, fetching the volumes one after another: Cancel… stops it between two volumes, keeping those it finished. A download a restart stops goes on when the server starts again, from the volume it was fetching.
 4. To seed the index, copy an export into `/data/import`, as step 5 does: the server imports one at its index version, 74 today, and the Library lists its volumes as indexed. Download brings the files of the volumes it holds, for the reader.
 
-What a download checks: GitHub's listing names each volume's size and its git blob SHA-1, the hash Git keeps a file by, and a file takes the place of the copy there only once it has that size and that hash; one that does not is left out, and the copy there stays. Just after the Office of the Historian corrects a volume, GitHub can serve the old file for a few minutes: the Library then says so, and Download asks again. **Remove…** deletes a downloaded volume's file and figure images, after a question, but not a volume the index holds.
+What a download checks: GitHub's listing names each volume's size and its git blob SHA-1, the hash Git keeps a file by, and a file takes the place of the copy there only once it has that size and that hash; one that does not is left out, and the copy there stays. Just after the Office of the Historian corrects a volume, GitHub can serve the old file for a few minutes: the Library then says so, and Download asks again. A download leaves 64 MB free on the Docker volume, which your research shares, and stops when it cannot. **Remove…** deletes a downloaded volume's file and figure images, after a question. A volume the index holds is neither removed nor downloaded again, since the index was made from its file: that waits for a later release.
 
-- **GitHub's limit.** GitHub lets an address with no token read its listing 60 times an hour. The server reads it once a download, and a listing that has not changed does not count. For more, give it a GitHub token, which it sends to GitHub's own API alone: a fine-grained token with no permissions reads a public repository.
+- **GitHub's limit.** GitHub lets an address with no token read its listing 60 times an hour. The server reads it once a download, and a download within five minutes of the last reading uses that reading. With a token, the limit is 5,000 an hour, and a reading of a listing that has not changed does not count; the server sends the token to GitHub's own API alone. A fine-grained token with no permissions reads a public repository.
 
   ```bash
   echo "FRUS_GITHUB_TOKEN=<token>" >> .env

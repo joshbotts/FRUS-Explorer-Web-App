@@ -490,7 +490,8 @@ public enum UserStoreMigrations {
     /// does, then `downloaded` or `failed`, with why in the server's own sentence; a row left `queued`
     /// or `downloading` by a server that stopped is fetched again at the next start, volume by volume.
     /// `blob_sha` and `size_bytes` describe the file in the volumes folder, the git blob SHA-1 GitHub's
-    /// listing gives and its length, checked before it took its place, with when it was downloaded and
+    /// listing gives and its length, checked before it took its place, with its modification time then, which
+    /// with its length says that the file is still the one hashed, when it was downloaded and
     /// whether it was side-loaded (S21e), and the figure images fetched beside it and refused by the
     /// host. A volume never asked for has no row. No row holds research or a key: a volume's id, the
     /// server's sentences, and who asked.
@@ -500,6 +501,7 @@ public enum UserStoreMigrations {
             state TEXT NOT NULL CHECK (state IN ('queued', 'downloading', 'downloaded', 'failed')),
             blob_sha TEXT,
             size_bytes INTEGER,
+            modified_at TEXT,
             downloaded_at TEXT,
             sideloaded INTEGER NOT NULL DEFAULT 0,
             figures_stored INTEGER,

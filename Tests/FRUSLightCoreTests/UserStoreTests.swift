@@ -35,7 +35,7 @@ import Testing
         let store = try await Self.open(directory)
         #expect(try store.schemaVersion() == UserStoreMigrations.all.count)
         #expect(UserStoreMigrations.all.count == 7)
-        #expect(store.migration == UserStoreMigration(from: 0, to: 6, backup: nil))
+        #expect(store.migration == UserStoreMigration(from: 0, to: 7, backup: nil))
         #expect(try Self.backups(in: directory).isEmpty, "a new store has nothing to copy")
         #expect(try store.singleUserID() == "owner")
         #expect(try store.enforcesForeignKeys(), "on again once the migrations are done")
@@ -59,10 +59,10 @@ import Testing
         let before = try StoreDump(directory.url.appendingPathComponent("app.db"))
 
         let store = try await Self.open(directory)
-        #expect(try store.schemaVersion() == 6)
+        #expect(try store.schemaVersion() == 7)
         #expect(try store.enforcesForeignKeys())
         let backup = try #require(store.migration?.backup)
-        #expect(store.migration == UserStoreMigration(from: 1, to: 6, backup: backup))
+        #expect(store.migration == UserStoreMigration(from: 1, to: 7, backup: backup))
         #expect(backup.lastPathComponent == "app-20261024T000000Z-before-migration-2.db")
         #expect(try Self.backups(in: directory) == [backup.lastPathComponent], "one whole copy, and no partial one")
         #expect(try StoreDump(backup) == before, "the copy is the store at migration 1")
@@ -90,7 +90,7 @@ import Testing
         let url = directory.url.appendingPathComponent("app.db")
         let before = try StoreDump(url)
 
-        // Migration 6 creates a table, changes a row and then fails: all of it is undone.
+        // Migration 8 creates a table, changes a row and then fails: all of it is undone.
         let failing = """
             CREATE TABLE added_by_three (a TEXT);
             UPDATE classification_overrides SET is_editorial_note = 1;
@@ -107,15 +107,15 @@ import Testing
             Issue.record("expected a failed migration, got \(error)")
             return
         }
-        #expect(from == 6 && to == 7)
+        #expect(from == 7 && to == 8)
         let copy = try #require(backup)
-        #expect(String(describing: error).contains("left at 6"))
+        #expect(String(describing: error).contains("left at 7"))
         #expect(String(describing: error).contains(copy.path))
 
         #expect(try StoreDump(url) == before, "the store is as it was")
         #expect(try StoreDump(copy) == before, "and so is its copy")
         let reopened = try await Self.open(directory)
-        #expect(try reopened.schemaVersion() == 6)
+        #expect(try reopened.schemaVersion() == 7)
         #expect(try reopened.classificationOverrides().map(\.isEditorialNote) == [false])
     }
 
@@ -189,7 +189,7 @@ import Testing
         _ = try await Self.open(directory)
         _ = try await Self.open(directory, migrations: UserStoreMigrations.all + ["CREATE TABLE later (a TEXT);"])
         await #expect(throws: UserStoreOpenError.self) { _ = try await Self.open(directory) }
-        #expect(try Self.backups(in: directory).count == 1, "the copy before migration 6, and none for the refusal")
+        #expect(try Self.backups(in: directory).count == 1, "the copy before migration 8, and none for the refusal")
     }
 
     @Test func aBackupNameAlreadyTakenGetsANumber() async throws {

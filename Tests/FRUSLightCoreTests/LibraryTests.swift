@@ -28,7 +28,7 @@ import Testing
         <figure><graphic url="back\\slash"/></figure><figure><graphic url="Document A.1"/></figure><figure><graphic url="what?#%"/></figure>
         <figure><graphic url="Document A.1"/></figure><figure><graphic url="  "/></figure>
         </div></body></text><facsimile><surface><graphic url="https://static.history.state.gov/frus/frus1999v99/tiff/0001.tif"/></surface></facsimile></TEI>
-        """
+        """ + "\n<!-- " + String(repeating: "Padded past the 20,000 bytes the kit's listing takes a volume from. ", count: 300) + "-->\n"
 
     /// The bundled catalogue, and the tests' own volume.
     static func catalogue() throws -> [VolumeManifestEntry] {
@@ -72,12 +72,12 @@ import Testing
     }
 
     static func open(github: FakeGitHub = FakeGitHub(), mode: ServerConfiguration.Mode = .standalone, offline: Bool = false,
-                     token: String? = nil) async throws -> Fixture {
+                     token: String? = nil, clock: JobClock = JobClock()) async throws -> Fixture {
         let (store, rows, directory) = try await UserTagTests.open()
         let queue = try await InProcessJobQueue.open(store: store)
         let library = VolumeLibrary(volumesDirectory: directory.url.appendingPathComponent("volumes", isDirectory: true), store: store,
                                     jobs: queue, catalogue: try catalogue(), sources: github.sources,
-                                    transport: offline ? nil : github, mode: mode, githubToken: token)
+                                    transport: github, mode: mode, offline: offline, githubToken: token, now: { clock.now })
         try library.prepare()
         return Fixture(directory: directory, store: store, rows: rows, queue: queue, github: github, library: library)
     }
@@ -142,10 +142,15 @@ import Testing
         live["frus1961-63v06"] = LiveVolumeInfo(sha: String(repeating: "a", count: 40), sizeBytes: 1)
         #expect(await VolumeUpdateChecker.updatableVolumes(known: catalogue, liveInfoByVolumeId: live, downloadManager: f.library)
             .map(\.id) == ["frus1961-63v06"])
-        // A file whose length changed is hashed again.
+        // A file whose length changed is hashed again, and so is one of the same length whose modification
+        // time is not the one its download recorded.
         try Data("changed".utf8).write(to: f.file("frus1894Nicaragua"))
         #expect(await f.library.localVolumeInfo(for: "frus1894Nicaragua") == LocalVolumeInfo(
             sha: VolumeUpdateChecker.gitBlobSHA1(for: Data("changed".utf8)), sizeBytes: 7))
+        let blanks = Data(repeating: 0x20, count: try Self.fixture("frus1961-63v06").count)
+        try blanks.write(to: f.file("frus1961-63v06"))
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1_000_000)], ofItemAtPath: f.file("frus1961-63v06").path)
+        #expect(await f.library.localVolumeInfo(for: "frus1961-63v06")?.sha == VolumeUpdateChecker.gitBlobSHA1(for: blanks))
     }
 
     /// A file is kept only once its length and blob SHA-1 are the listing's: one whose hash differs, one
@@ -155,7 +160,7 @@ import Testing
         let github = FakeGitHub()
         let nicaragua = try Self.fixture("frus1894Nicaragua")
         github.serve("frus1894Nicaragua.xml", data: nicaragua, listedSHA: String(repeating: "0", count: 40))
-        github.serve("frus1961-63v06.xml", data: try Self.fixture("frus1961-63v06"), listedSize: 1_000)
+        github.serve("frus1961-63v06.xml", data: try Self.fixture("frus1961-63v06"), listedSize: 25_000)
         github.serve("frus1969-76ve09p1.xml", data: try Self.fixture("frus1969-76ve09p1"))
         github.answer(github.volumeURL("frus1969-76ve09p1.xml"), with: LibraryAnswer(status: 404))
         let f = try await Self.open(github: github)
@@ -163,7 +168,7 @@ import Testing
         let done = try await Self.finished(f.queue, try await f.library.download(.volumes(Self.fixtures), requestedBy: "alice"))
         #expect(done.state == .failed && done.error == "Downloaded 0 of 3 volumes; 3 could not be downloaded, which the Library says why.")
         #expect(try f.row("frus1894Nicaragua")?.error?.hasPrefix("The file served for frus1894Nicaragua.xml is not the one GitHub's listing names, so it was not kept") == true)
-        #expect(try f.row("frus1961-63v06")?.error == "The file served for frus1961-63v06.xml was longer than the 1000 bytes GitHub's listing gives it, so it was not kept.")
+        #expect(try f.row("frus1961-63v06")?.error == "The file served for frus1961-63v06.xml was longer than the 25000 bytes GitHub's listing gives it, so it was not kept.")
         #expect(try f.row("frus1969-76ve09p1")?.error == "library.test answered 404 for frus1969-76ve09p1.xml.")
         for id in Self.fixtures {
             #expect(try f.row(id)?.state == .failed && f.row(id)?.blobSHA == nil && !f.library.isVolumeDownloaded(id))
@@ -174,7 +179,8 @@ import Testing
         github.serve("frus1894Nicaragua.xml", data: nicaragua)
         #expect(try await Self.finished(f.queue, try await f.library.download(.volumes(["frus1894Nicaragua"]), requestedBy: nil)).state == .succeeded)
         let kept = try #require(try f.row("frus1894Nicaragua"))
-        github.serve("frus1894Nicaragua.xml", data: Data("<TEI/>".utf8), listedSHA: String(repeating: "1", count: 40), listedSize: 6)
+        let changed = nicaragua + Data(" ".utf8)
+        github.serve("frus1894Nicaragua.xml", data: changed, listedSHA: String(repeating: "1", count: 40), listedSize: changed.count)
         #expect(try await Self.finished(f.queue, try await f.library.download(.volumes(["frus1894Nicaragua"]), requestedBy: nil)).state == .failed)
         #expect(try Data(contentsOf: f.file("frus1894Nicaragua")) == nicaragua)
         let after = try #require(try f.row("frus1894Nicaragua"))
@@ -295,7 +301,7 @@ import Testing
         #expect(try offline.row("frus1894Nicaragua")?.state == .failed
             && offline.row("frus1894Nicaragua")?.error == "The server started with FRUS_OFFLINE=true, so this download, which a restart stopped, was not resumed.")
         let offlineJobs = await offline.queue.jobs()
-        #expect(offline.github.requests.isEmpty && offlineJobs.isEmpty)
+        #expect(offline.github.requests.isEmpty && offlineJobs.isEmpty, "the fake was given, and asked nothing")
 
         let imports = try await Self.open(github: try Self.servingFixtures(), mode: .import)
         defer { withExtendedLifetime(imports.directory) {} }
@@ -305,25 +311,32 @@ import Testing
         await #expect(throws: LibraryRefusal.importMode) { try await imports.library.remove("frus1894Nicaragua") }
         let importJobs = await imports.queue.jobs()
         #expect(imports.github.requests.isEmpty && importJobs.isEmpty)
+        // An Import server leaves aside the rows a Standalone run kept, which describe files that are not the mount's.
+        try imports.store.recordLibraryDownload("frus1894Nicaragua", LibraryDownloadRecord(blobSHA: "abc", sizeBytes: 1, figuresStored: 0, figuresRefused: 0), at: Self.start)
+        #expect(try imports.library.libraryVolumes().isEmpty && imports.store.libraryVolumes().count == 1)
     }
 
     /// GitHub's listing is read once a job, with the last answer's ETag, which a 304 answers; a token goes
     /// to GitHub's own API alone, never to its raw files or the image host, nor to a mirror; and GitHub's
     /// rate limit fails the job, saying when it lifts, and every volume with it, none asked for.
     @Test func theListingItsETagItsTokenAndGitHubsLimit() async throws {
-        let f = try await Self.open(github: try Self.servingFixtures(), token: "ghp_secret")
+        let clock = JobClock()
+        let f = try await Self.open(github: try Self.servingFixtures(), token: "ghp_secret", clock: clock)
         defer { withExtendedLifetime(f.directory) {} }
         let listing = f.github.sources.listing
         _ = try await Self.finished(f.queue, try await f.library.download(.volumes(["frus1894Nicaragua"]), requestedBy: nil))
         _ = try await Self.finished(f.queue, try await f.library.download(.volumes(["frus1961-63v06"]), requestedBy: nil))
+        #expect(f.github.count(listing) == 1, "a reading within five minutes is used as it is")
+        clock.advance(by: 301)
+        _ = try await Self.finished(f.queue, try await f.library.download(.volumes(["frus1969-76ve09p1"]), requestedBy: nil))
         let asked = f.github.requests.filter { $0.url == listing.absoluteString }
         #expect(asked.count == 2 && asked[0].headers["If-None-Match"] == nil && asked[1].headers["If-None-Match"]?.hasPrefix("\"") == true)
-        #expect(try f.row("frus1961-63v06")?.state == .downloaded, "a 304 answers with the listing kept")
+        #expect(try f.row("frus1969-76ve09p1")?.state == .downloaded, "a 304 answers with the listing kept")
         #expect(f.github.requests.allSatisfy { $0.headers["Authorization"] == nil }, "a mirror is given no token")
 
         let github = FakeGitHub(sources: .github)
         try github.serveFixture("frus1894Nicaragua")
-        let gh = try await Self.open(github: github, token: "ghp_secret")
+        let gh = try await Self.open(github: github, token: "ghp_secret", clock: clock)
         defer { withExtendedLifetime(gh.directory) {} }
         #expect(github.sources.listing.absoluteString == "https://api.github.com/repos/HistoryAtState/frus/contents/volumes")
         #expect(try await Self.finished(gh.queue, try await gh.library.download(.volumes(["frus1894Nicaragua"]), requestedBy: nil)).state == .succeeded)
@@ -331,6 +344,7 @@ import Testing
                                                "https://raw.githubusercontent.com/HistoryAtState/frus/master/volumes/frus1894Nicaragua.xml"])
         #expect(github.requests.map { $0.headers["Authorization"] } == ["Bearer ghp_secret", nil])
 
+        clock.advance(by: 301)
         github.answer(github.sources.listing, with: LibraryAnswer(status: 403, headers: [
             "x-ratelimit-limit": "60", "x-ratelimit-remaining": "0", "x-ratelimit-reset": "1792803900"]))
         let limited = try await Self.finished(gh.queue, try await gh.library.download(.volumes(["frus1961-63v06", "frus1969-76ve09p1"]), requestedBy: nil))
@@ -340,6 +354,7 @@ import Testing
         #expect(VolumeLibrary.rateLimited(["x-ratelimit-limit": "60"], token: false)
             == "GitHub's limit of 60 requests an hour for this server is reached, so its listing of the corpus's volumes could not be read: try again then, or give the server a token (FRUS_GITHUB_TOKEN), which raises the limit.")
         github.answer(github.sources.listing, with: LibraryAnswer(status: 403))
+        clock.advance(by: 301)
         let refused = try await Self.finished(gh.queue, try await gh.library.download(.volumes(["frus1961-63v06"]), requestedBy: nil))
         #expect(refused.error == "GitHub's listing of the corpus's volumes could not be read: api.github.com answered 403.")
         #expect(!(limited.error ?? "").contains("ghp_secret") && !(refused.error ?? "").contains("ghp_secret"))
@@ -371,10 +386,37 @@ import Testing
         let f = try await Self.open(github: github)
         defer { withExtendedLifetime(f.directory) {} }
         let done = try await Self.finished(f.queue, try await f.library.download(.volumes(Self.fixtures + [Self.syntheticId]), requestedBy: nil))
-        #expect(done.state == .failed && done.error == "Downloaded 0 of 4 volumes, then stopped: 3 volumes in a row had no answer from their host. The Library says which were not downloaded.")
+        #expect(done.state == .failed && done.error == "Downloaded 0 of 4 volumes, then stopped, since 3 volumes in a row had no answer from their host. The Library says which were not downloaded.")
         #expect(try f.row("frus1894Nicaragua")?.error == "library.test gave no answer the server takes for frus1894Nicaragua.xml.")
-        #expect(try f.row(Self.syntheticId)?.error == "Not tried: the download stopped after 3 volumes in a row whose host gave no answer.")
+        #expect(try f.row(Self.syntheticId)?.error == "Not tried: the download stopped, since 3 volumes in a row had no answer from their host.")
         #expect(github.count(github.volumeURL("frus1999v99.xml")) == 0)
+    }
+
+    /// A host that says it limits this server stops the download at once, and so the rest are not tried; the
+    /// image host that gives no answer for three images in a row is asked nothing more in that job, its
+    /// volume kept, saying which images it lacks.
+    @Test func aHostsLimitStopsTheDownloadAndAnImageHostThatDoesNotAnswerIsLeft() async throws {
+        let github = try Self.servingFixtures()
+        github.answer(github.volumeURL("frus1894Nicaragua.xml"), with: LibraryAnswer(status: 429, headers: ["retry-after": "60"]))
+        let f = try await Self.open(github: github)
+        defer { withExtendedLifetime(f.directory) {} }
+        let done = try await Self.finished(f.queue, try await f.library.download(.volumes(Self.fixtures), requestedBy: nil))
+        #expect(done.error == "Downloaded 0 of 3 volumes, then stopped, since library.test limits how often this server may ask it, and asks it to wait 60 seconds. The Library says which were not downloaded.")
+        #expect(try f.row("frus1961-63v06")?.error == "Not tried: the download stopped, since library.test limits how often this server may ask it, and asks it to wait 60 seconds.")
+        #expect(github.count(github.volumeURL("frus1961-63v06.xml")) == 0)
+
+        let images = FakeGitHub()
+        try images.serveFixture("frus1969-76ve09p1")
+        for name in Self.figures {
+            images.leaveUnanswered(try #require(images.sources.figure(volumeId: "frus1969-76ve09p1", fileName: "\(name).png")))
+        }
+        let g = try await Self.open(github: images)
+        defer { withExtendedLifetime(g.directory) {} }
+        #expect(try await Self.finished(g.queue, try await g.library.download(.volumes(["frus1969-76ve09p1"]), requestedBy: nil)).state == .succeeded)
+        #expect(images.requests.filter { $0.url.contains("/frus/frus1969-76ve09p1/") }.count == 3, "three images with no answer, then none asked")
+        let row = try #require(try g.row("frus1969-76ve09p1"))
+        #expect(row.state == .downloaded && row.figuresStored == 0)
+        #expect(row.error == "8 of its figure images were not fetched, since library.test gave no answer for 3 images in a row: Download asks for them again.")
     }
 
     /// Remove takes a downloaded volume's file and figure images away and forgets it; it is refused while a
@@ -452,8 +494,9 @@ import Testing
         #expect(try store.unfinishedLibraryDownloads().map(\.volumeId) == ["a", "b", "c"])
         #expect(try store.libraryVolume("a")?.state == .downloading)
         #expect(try store.requeueUnfinishedLibraryDownloads(at: t3).map { "\($0.volumeId) \($0.state)" } == ["a queued", "b queued", "c queued"])
-        let record = LibraryDownloadRecord(blobSHA: "abc", sizeBytes: 12, figuresStored: 3, figuresRefused: 1)
+        let record = LibraryDownloadRecord(blobSHA: "abc", sizeBytes: 12, modifiedAt: t1, figuresStored: 3, figuresRefused: 1)
         try store.recordLibraryDownload("a", record, at: t1)
+        #expect(try store.libraryVolume("a")?.modifiedAt == t1)
         try store.recordLibraryDownload("a", LibraryDownloadRecord(blobSHA: "abc", sizeBytes: 12, figuresStored: 4, figuresRefused: 0), at: t2)
         var downloaded = try #require(try store.libraryVolume("a"))
         #expect(downloaded.state == .downloaded && downloaded.blobSHA == "abc" && downloaded.sizeBytes == 12 && downloaded.figuresStored == 4)
@@ -471,7 +514,8 @@ import Testing
         try store.withdrawLibraryDownloads(["a", "b", "d"], at: t3)
         #expect(try store.libraryVolume("a")?.state == .downloaded && store.libraryVolume("a")?.error == nil && store.libraryVolume("a")?.blobSHA == "def")
         #expect(try store.libraryVolume("b") == nil && store.libraryVolume("d")?.state == .failed)
-        try store.forgetLibraryVolume("a")
+        #expect(try store.forgetLibraryVolume("a") == .forgotten && store.forgetLibraryVolume("a") == .nothing)
+        #expect(try store.forgetLibraryVolume("c") == .heldByADownload && store.libraryVolume("c")?.state == .queued, "a download holds it")
         #expect(try store.libraryVolumes().map(\.volumeId) == ["c", "d"] && store.unfinishedLibraryDownloads().map(\.volumeId) == ["c"])
     }
 }

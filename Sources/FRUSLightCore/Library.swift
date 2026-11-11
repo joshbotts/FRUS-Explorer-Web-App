@@ -116,9 +116,11 @@ public struct LibraryAnswer: Sendable, Equatable {
 public enum LibraryTransportError: Error, Sendable, Equatable {
     /// Its body was longer than the request allows: the part written is removed.
     case tooLarge(limit: Int)
-    /// No answer: no connection, a reset, a timeout, or a file that could not be written. Its words, for
-    /// the log alone.
+    /// No answer: no connection, a reset, a timeout. Its words, for the log alone.
     case unreachable(String)
+    /// The file it was to be written to could not be made, written or flushed, as on a full disk. Its
+    /// words, for the log alone.
+    case unwritable(String)
     /// A redirect to another host, or from https, which the library does not follow.
     case redirected(String)
 }
@@ -133,15 +135,15 @@ public protocol LibraryTransport: Sendable {
 }
 
 /// FoundationNetworking's URLSession, over libcurl on Linux: nothing cached or kept but the file asked
-/// for; a request that receives nothing for a minute gives up, and one file takes an hour at most;
-/// redirects followed within the host asked alone.
+/// for; a request that receives nothing for a minute gives up; redirects followed within the host asked
+/// alone.
 public final class URLSessionLibraryTransport: NSObject, LibraryTransport, URLSessionDataDelegate, @unchecked Sendable {
     /// One request under way, read and written on the session's delegate queue, whose one thread is the
-    /// only one that touches it once it is begun.
+    /// only one that touches it once it is begun, but for its outcome and its continuation, which the
+    /// transport's lock guards.
     private final class Transfer: @unchecked Sendable {
         let limit: Int
         let file: URL?
-        let continuation: CheckedContinuation<LibraryAnswer, any Error>
         var handle: FileHandle?
         var status = 0
         var headers: [String: String] = [:]
@@ -151,25 +153,31 @@ public final class URLSessionLibraryTransport: NSObject, LibraryTransport, URLSe
         /// Set once an error's first 64 KiB have come, after which the rest is not read.
         var errorBodyRead = false
 
-        init(limit: Int, file: URL?, continuation: CheckedContinuation<LibraryAnswer, any Error>) {
+        init(limit: Int, file: URL?) {
             self.limit = limit
             self.file = file
-            self.continuation = continuation
         }
 
         var succeeded: Bool { (200..<300).contains(status) }
     }
 
+    /// A transfer's waiter and its outcome: whichever comes second resumes the first, so that an outcome
+    /// that comes before its waiter, as one cancelled before it began may, is never lost.
+    private struct Waiting: Sendable {
+        var continuation: CheckedContinuation<LibraryAnswer, any Error>?
+        var outcome: Result<LibraryAnswer, LibraryTransportError>?
+    }
+
     static let errorBodyLimit = 65_536
 
     private let transfers = Mutex<[Int: Transfer]>([:])
+    private let waiting = Mutex<[Int: Waiting]>([:])
     private var session: URLSession!
 
     public override init() {
         super.init()
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 60
-        configuration.timeoutIntervalForResource = 3_600
         configuration.urlCache = nil
         configuration.httpCookieStorage = nil
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
@@ -185,11 +193,26 @@ public final class URLSessionLibraryTransport: NSObject, LibraryTransport, URLSe
         request.httpMethod = "GET"
         for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
         let task = session.dataTask(with: request)
+        let id = task.taskIdentifier
+        // Kept before the task can begin or be cancelled, so that every callback finds it.
+        transfers.withLock { $0[id] = Transfer(limit: limit, file: file) }
+        waiting.withLock { $0[id] = Waiting() }
         do {
             return try await withTaskCancellationHandler {
                 try await withCheckedThrowingContinuation { continuation in
-                    transfers.withLock { $0[task.taskIdentifier] = Transfer(limit: limit, file: file, continuation: continuation) }
-                    task.resume()
+                    let outcome = waiting.withLock { state -> Result<LibraryAnswer, LibraryTransportError>? in
+                        if let outcome = state[id]?.outcome {
+                            state[id] = nil
+                            return outcome
+                        }
+                        state[id]?.continuation = continuation
+                        return nil
+                    }
+                    if let outcome {
+                        continuation.resume(with: outcome)
+                    } else {
+                        task.resume()
+                    }
                 }
             } onCancel: {
                 task.cancel()
@@ -204,17 +227,35 @@ public final class URLSessionLibraryTransport: NSObject, LibraryTransport, URLSe
         transfers.withLock { $0[task.taskIdentifier] }
     }
 
+    /// Hands `outcome` to the transfer's waiter, now or once it waits.
+    private func finish(_ id: Int, _ outcome: Result<LibraryAnswer, LibraryTransportError>) {
+        let continuation = waiting.withLock { state -> CheckedContinuation<LibraryAnswer, any Error>? in
+            guard let continuation = state[id]?.continuation else {
+                state[id]?.outcome = outcome
+                return nil
+            }
+            state[id] = nil
+            return continuation
+        }
+        continuation?.resume(with: outcome)
+    }
+
     public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
                            completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
-        guard let transfer = transfer(dataTask) else { return completionHandler(.cancel) }
+        guard let transfer = transfer(dataTask) else {
+            dataTask.cancel()
+            return completionHandler(.cancel)
+        }
         let http = response as? HTTPURLResponse
         transfer.status = http?.statusCode ?? 0
         for (name, value) in http?.allHeaderFields ?? [:] {
             if let name = name as? String, let value = value as? String { transfer.headers[name.lowercased()] = value }
         }
         if transfer.succeeded {
+            // FoundationNetworking on Linux may not stop a task for `.cancel`, so each refusal cancels it too.
             if response.expectedContentLength > Int64(transfer.limit) {
                 transfer.failure = .tooLarge(limit: transfer.limit)
+                dataTask.cancel()
                 return completionHandler(.cancel)
             }
             if let file = transfer.file {
@@ -222,7 +263,8 @@ public final class URLSessionLibraryTransport: NSObject, LibraryTransport, URLSe
                 try? FileManager.default.removeItem(at: file)
                 guard FileManager.default.createFile(atPath: file.path, contents: nil),
                       let handle = try? FileHandle(forWritingTo: file) else {
-                    transfer.failure = .unreachable("\(file.lastPathComponent) could not be written")
+                    transfer.failure = .unwritable("\(file.lastPathComponent) could not be made")
+                    dataTask.cancel()
                     return completionHandler(.cancel)
                 }
                 transfer.handle = handle
@@ -250,7 +292,7 @@ public final class URLSessionLibraryTransport: NSObject, LibraryTransport, URLSe
             do {
                 try handle.write(contentsOf: data)
             } catch {
-                transfer.failure = .unreachable("\(transfer.file?.lastPathComponent ?? "the file") could not be written: \(error)")
+                transfer.failure = .unwritable("\(transfer.file?.lastPathComponent ?? "the file") could not be written: \(error)")
                 dataTask.cancel()
             }
         } else {
@@ -270,14 +312,15 @@ public final class URLSessionLibraryTransport: NSObject, LibraryTransport, URLSe
     }
 
     public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
-        guard let transfer = transfers.withLock({ $0.removeValue(forKey: task.taskIdentifier) }) else { return }
+        let id = task.taskIdentifier
+        guard let transfer = transfers.withLock({ $0.removeValue(forKey: id) }) else { return }
         var failure = transfer.failure
         if let handle = transfer.handle {
             if failure == nil, error == nil {
                 do {
                     try handle.synchronize()
                 } catch {
-                    failure = .unreachable("\(transfer.file?.lastPathComponent ?? "the file") could not be flushed: \(error)")
+                    failure = .unwritable("\(transfer.file?.lastPathComponent ?? "the file") could not be flushed: \(error)")
                 }
             }
             try? handle.close()
@@ -287,9 +330,9 @@ public final class URLSessionLibraryTransport: NSObject, LibraryTransport, URLSe
         }
         if let failure {
             if let file = transfer.file { try? FileManager.default.removeItem(at: file) }
-            return transfer.continuation.resume(throwing: failure)
+            return finish(id, .failure(failure))
         }
-        transfer.continuation.resume(returning: LibraryAnswer(status: transfer.status, headers: transfer.headers, body: transfer.body))
+        finish(id, .success(LibraryAnswer(status: transfer.status, headers: transfer.headers, body: transfer.body)))
     }
 }
 
@@ -358,33 +401,44 @@ public enum LibraryRefusal: Error, Equatable, Sendable {
     case unknownVolume(String)
     /// A job waits for the volume or fetches it.
     case inProgress(String)
-    /// Every volume asked for waits for a download already, or, for all, every one is downloaded.
-    case nothingToDownload
+    /// Every volume asked for waits for a download already; for all, every volume not downloaded does.
+    case nothingToDownload(all: Bool)
     /// The volume's file is not in the volumes folder.
     case notDownloaded(String)
 }
 
 /// The volumes folder of a Standalone server cannot be written: the read-only TEI mount of Import mode is
-/// in its place. The server does not start.
+/// in its place, or the folder belongs to another user, as the one Docker made for that mount in a volume
+/// an Import server used does. The server does not start.
 public struct LibraryFolderError: Error, CustomStringConvertible {
     public let path: String
     public let underlying: String
 
     public var description: String {
-        "In Standalone mode the server keeps the volumes it downloads in \(path), which it cannot write (\(underlying)). Leave out the read-only TEI folder Import mode mounts there: compose.standalone.yaml does, and the install guide's Standalone section says how"
+        "In Standalone mode the server keeps the volumes it downloads in \(path), which it cannot write (\(underlying)). Either the read-only TEI folder of Import mode is mounted there, which compose.standalone.yaml leaves out, or the folder belongs to another user, as the one Docker made for that mount does in a volume an Import server used: give it to the server's user once with docker compose run --rm --no-deps --user 0 --cap-add CHOWN --entrypoint chown frus 10001:10001 \(path). The install guide's Standalone section says more"
     }
 }
 
 /// A Standalone server's library of volumes (PLAN's S21c): the files in its volumes folder, their states
 /// in the user store's `library_volumes`, and the downloads that write them, as jobs of the server's
 /// queue. The kit's corrections check reads it as it reads the app's `DownloadManager`
-/// (`DownloadedVolumeFiles`). In Import mode it reads the mounted TEI folder and downloads nothing.
+/// (`DownloadedVolumeFiles`). In Import mode it reads the mounted TEI folder, downloads nothing, and leaves
+/// the rows a Standalone run kept aside, since they describe files that are not the mount's.
 public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
-    /// What the library remembers of GitHub's last listing: its ETag and its body, so that the next asks
-    /// with `If-None-Match` and GitHub answers 304 for one unchanged, which its rate limit does not count.
+    /// What the library remembers of GitHub's last listing: its ETag, its body and when it came, so that a
+    /// job soon after uses it as it is, and a later one asks with `If-None-Match`, which GitHub answers 304
+    /// for a listing that has not changed.
     private struct CachedListing: Sendable {
-        let etag: String
+        let etag: String?
         let body: Data
+        let at: Date
+    }
+
+    /// Within one job, how the image host has answered: after `figurePatience` images in a row with no
+    /// answer, or one answer that it limits this server, the job asks it nothing more.
+    struct FigureHost {
+        var unanswered = 0
+        var givenUp: String?
     }
 
     public let volumesDirectory: URL
@@ -394,9 +448,11 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
     let catalogue: [VolumeManifestEntry]
     let entries: [String: VolumeManifestEntry]
     public let sources: LibrarySources
-    /// How the library asks; none under `FRUS_OFFLINE`, so that nothing can.
+    /// How the library asks; none under `FRUS_OFFLINE` or in Import mode, so that nothing can.
     let transport: (any LibraryTransport)?
     public let mode: ServerConfiguration.Mode
+    /// `FRUS_OFFLINE`: the server makes no request outside, and the library holds no transport.
+    public let offline: Bool
     /// `FRUS_GITHUB_TOKEN`, sent to GitHub's own API alone.
     let githubToken: String?
     let now: @Sendable () -> Date
@@ -405,16 +461,26 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
 
     /// The longest listing the library reads: GitHub's of 553 volumes is about 400 KB.
     static let listingLimit = 16 * 1_048_576
+    /// How long a listing is used as it is, without asking again: a download soon after another, as a
+    /// volume asked for after a volume, costs GitHub's limit nothing. A file corrected meanwhile fails its
+    /// check against it, and is asked for again.
+    static let listingReuse: TimeInterval = 300
     /// The largest figure image it takes: the corpus's largest is 3.6 MB.
     static let figureLimit = 64 * 1_048_576
     /// How many volumes in a row whose host gave no answer stop a job: the host is not answering.
     static let patience = 3
+    /// How many figure images in a row with no answer end a job's asking the image host, as the app's pass
+    /// over its library stops after three volumes whose transfers all failed.
+    static let figurePatience = 3
+    /// The space a volume leaves free on the data volume, beyond its own length, which the user store and
+    /// its backups share.
+    static let spareBytes: Int64 = 64 * 1_048_576
     /// The suffix of a file being written, hidden by its leading dot until it takes its name.
     static let partialSuffix = ".download"
 
     public init(volumesDirectory: URL, store: any LibraryStore, jobs: any JobQueue, catalogue: [VolumeManifestEntry],
                 sources: LibrarySources, transport: (any LibraryTransport)?, mode: ServerConfiguration.Mode,
-                githubToken: String? = nil, now: @escaping @Sendable () -> Date = Date.init,
+                offline: Bool = false, githubToken: String? = nil, now: @escaping @Sendable () -> Date = Date.init,
                 log: @escaping @Sendable (String) -> Void = { _ in }) {
         self.volumesDirectory = volumesDirectory.standardizedFileURL
         self.store = store
@@ -422,27 +488,30 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
         self.catalogue = catalogue
         entries = Dictionary(catalogue.map { ($0.volumeId, $0) }, uniquingKeysWith: { first, _ in first })
         self.sources = sources
-        self.transport = transport
+        self.offline = offline
+        self.transport = offline ? nil : transport
         self.mode = mode
         self.githubToken = githubToken
         self.now = now
         self.log = log
     }
 
-    /// The library `configuration` asks for: URLSession's transport, unless `FRUS_OFFLINE` gives none.
+    /// The library `configuration` asks for: URLSession's transport in Standalone mode, and none under
+    /// `FRUS_OFFLINE` or in Import mode, which download nothing.
     public static func make(configuration: ServerConfiguration, files: DataDirectory, store: any LibraryStore,
                             jobs: any JobQueue, catalogue: [VolumeManifestEntry],
                             log: @escaping @Sendable (String) -> Void) -> VolumeLibrary {
-        VolumeLibrary(volumesDirectory: files.volumesDirectory, store: store, jobs: jobs, catalogue: catalogue,
-                      sources: configuration.libraryMirror.map(LibrarySources.mirror) ?? .github,
-                      transport: configuration.offline ? nil : URLSessionLibraryTransport(), mode: configuration.mode,
-                      githubToken: configuration.githubToken, log: log)
+        let downloads = configuration.mode == .standalone && !configuration.offline
+        return VolumeLibrary(volumesDirectory: files.volumesDirectory, store: store, jobs: jobs, catalogue: catalogue,
+                             sources: configuration.libraryMirror.map(LibrarySources.mirror) ?? .github,
+                             transport: downloads ? URLSessionLibraryTransport() : nil, mode: configuration.mode,
+                             offline: configuration.offline, githubToken: configuration.githubToken, log: log)
     }
 
     /// Why this server downloads nothing, or nil when it downloads.
     public var downloadsRefusal: LibraryRefusal? {
         if mode != .standalone { return .importMode }
-        if transport == nil { return .offline }
+        if offline || transport == nil { return .offline }
         return nil
     }
 
@@ -468,38 +537,54 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
         (try? FileManager.default.attributesOfItem(atPath: url.path))?[.type] as? FileAttributeType
     }
 
-    /// The length of the regular file at `url`, or nil when none is there.
-    static func regularFileSize(_ url: URL) -> Int? {
-        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
-              attributes[.type] as? FileAttributeType == .typeRegular else { return nil }
-        return (attributes[.size] as? NSNumber)?.intValue
+    /// The length and modification time of the regular file at `url`, a link followed, as the reader follows
+    /// one in an Import server's TEI folder; nil when none is there. Nothing is written through a link: a
+    /// file takes its name by a rename, which replaces a link in its place.
+    static func regularFile(_ url: URL) -> (size: Int, modified: Date?)? {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.resolvingSymlinksInPath().path),
+              attributes[.type] as? FileAttributeType == .typeRegular,
+              let size = (attributes[.size] as? NSNumber)?.intValue else { return nil }
+        return (size, (attributes[.modificationDate] as? Date).map(UserStoreDate.rounded))
     }
 
-    /// Every volume the library has been asked for, as the store keeps it: for the admin's Library.
+    /// The length of the regular file at `url`, or nil when none is there.
+    static func regularFileSize(_ url: URL) -> Int? {
+        regularFile(url)?.size
+    }
+
+    /// The length of a volume's file in the volumes folder, or nil when it is not there.
+    public func fileSize(_ volumeId: String) -> Int? {
+        fileURL(volumeId).flatMap(Self.regularFileSize)
+    }
+
+    /// Every volume the library has been asked for, as the store keeps it: for the admin's Library. None in
+    /// Import mode, whose files are the mount's, not those a Standalone run downloaded.
     public func libraryVolumes() throws -> [LibraryVolume] {
-        try store.libraryVolumes()
+        mode == .standalone ? try store.libraryVolumes() : []
     }
 
     // MARK: DownloadedVolumeFiles
 
     public func isVolumeDownloaded(_ volumeId: String) -> Bool {
-        fileURL(volumeId).flatMap(Self.regularFileSize) != nil
+        fileSize(volumeId) != nil
     }
 
-    /// The file's git blob SHA-1, the one its download was checked by while the file is still that length,
+    /// The file's git blob SHA-1: the one its download was checked by while the file keeps the length and
+    /// the modification time it had then, as the app's `DownloadManager` keeps a hash with its file's stamp,
     /// and otherwise taken now, with the kit's `gitBlobSHA1(for:)`; nil when the volume is not downloaded.
     public func localVolumeInfo(for volumeId: String) async -> LocalVolumeInfo? {
-        guard let url = fileURL(volumeId), let size = Self.regularFileSize(url) else { return nil }
-        let row = try? await Blocking.run { [store] in try store.libraryVolume(volumeId) }
-        if let row, let sha = row.blobSHA, row.sizeBytes == size {
-            return LocalVolumeInfo(sha: sha, sizeBytes: size)
+        guard let url = fileURL(volumeId), let file = Self.regularFile(url) else { return nil }
+        if mode == .standalone, let row = try? await Blocking.run({ [store] in try store.libraryVolume(volumeId) }),
+           let sha = row.blobSHA, row.sizeBytes == file.size, let modified = row.modifiedAt, modified == file.modified {
+            return LocalVolumeInfo(sha: sha, sizeBytes: file.size)
         }
         let sha = try? await Blocking.run { VolumeUpdateChecker.gitBlobSHA1(for: try Data(contentsOf: url, options: .alwaysMapped)) }
-        return LocalVolumeInfo(sha: sha, sizeBytes: size)
+        return LocalVolumeInfo(sha: sha, sizeBytes: file.size)
     }
 
     public func isSideloaded(_ volumeId: String) async -> Bool {
-        (try? await Blocking.run { [store] in try store.libraryVolume(volumeId)?.sideloaded ?? false }) ?? false
+        guard mode == .standalone else { return false }
+        return (try? await Blocking.run { [store] in try store.libraryVolume(volumeId)?.sideloaded ?? false }) ?? false
     }
 
     // MARK: At a start
@@ -535,8 +620,9 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
     }
 
     /// At a start, once the queue is open: every volume a stopped server left queued or downloading is
-    /// downloaded again, in a job of the server's own, volume by volume, the volumes it finished kept; or,
-    /// where this server downloads nothing, each is marked failed with why. Gives the job, if one was queued.
+    /// downloaded again, in a job of the server's own, volume by volume, the volumes it finished kept and
+    /// one the listing no longer names left out; or, where this server downloads nothing, each is marked
+    /// failed with why. Gives the job, if one was queued.
     @discardableResult
     public func resumeUnfinished() async -> Job? {
         let time = now()
@@ -558,7 +644,7 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
             return nil
         }
         do {
-            let job = try await submit(ids, requestedBy: nil, subject: Self.subject(ids, resumed: true), skipUnlisted: false)
+            let job = try await submit(ids, requestedBy: nil, subject: Self.subject(ids, resumed: true), skipUnlisted: true)
             log("Resuming the download of \(ids.count) \(ids.count == 1 ? "volume" : "volumes") a restart stopped, as job \(job.id)")
             return job
         } catch {
@@ -592,8 +678,8 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
         let time = now()
         let queued = try await Blocking.run { [store] in try store.queueLibraryDownloads(ids, requestedBy: requestedBy, at: time) }
         guard !queued.isEmpty else {
-            if case .volumes(let given) = request, given.count == 1 { throw LibraryRefusal.inProgress(given[0]) }
-            throw LibraryRefusal.nothingToDownload
+            if case .volumes(let given) = request, Set(given).count == 1 { throw LibraryRefusal.inProgress(given[0]) }
+            throw LibraryRefusal.nothingToDownload(all: request == .all)
         }
         return try await submit(queued, requestedBy: requestedBy, subject: Self.subject(queued, resumed: false),
                                 skipUnlisted: request == .all)
@@ -637,10 +723,13 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
         }
     }
 
-    /// A volume's download failed, in the server's sentence; `unreachable` when the host gave no answer.
+    /// A volume's download failed, in the server's sentence: `unreachable` when its host gave no answer, and
+    /// `stops`, the reason the rest are not tried, when no volume after it can be downloaded either, as on a
+    /// full disk or under a host's rate limit.
     struct Problem: Error {
         let sentence: String
         var unreachable = false
+        var stops: String?
     }
 
     /// The job's work: GitHub's listing once, then each volume, a step each, so that a cancel stops it
@@ -661,6 +750,7 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
             var failed: [String] = []
             var left = 0
             var unanswered = 0
+            var figures = FigureHost()
             while next < ids.count {
                 let id = ids[next]
                 try await job.step("Downloading \(id) (\(next + 1) of \(ids.count))", fraction: Double(next) / Double(ids.count))
@@ -676,20 +766,23 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
                     continue
                 }
                 do {
-                    try await fetchVolume(id, live: info, job: job)
+                    try await fetchVolume(id, live: info, job: job, figures: &figures)
                     downloaded += 1
                     unanswered = 0
                 } catch let problem as Problem {
                     await fail(id, problem.sentence)
                     failed.append(id)
                     unanswered = problem.unreachable ? unanswered + 1 : 0
-                    if unanswered >= Self.patience, next < ids.count {
+                    var stop = problem.stops
+                    if stop == nil, unanswered >= Self.patience {
+                        stop = "\(Self.patience) volumes in a row had no answer from their host"
+                    }
+                    if let stop, next < ids.count {
                         let rest = Array(ids[next...])
-                        let sentence = "Not tried: the download stopped after \(Self.patience) volumes in a row whose host gave no answer."
-                        for id in rest { await fail(id, sentence) }
+                        for id in rest { await fail(id, "Not tried: the download stopped, since \(stop).") }
                         failed += rest
                         next = ids.count
-                        throw JobFailed("Downloaded \(downloaded) of \(ids.count) volumes, then stopped: \(Self.patience) volumes in a row had no answer from their host. The Library says which were not downloaded.")
+                        throw JobFailed("Downloaded \(downloaded) of \(ids.count) volumes, then stopped, since \(stop). The Library says which were not downloaded.")
                     }
                 }
             }
@@ -705,42 +798,50 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
     }
 
     /// GitHub's listing of the corpus's volumes, read with the kit's decode and diff: each catalogue
-    /// volume's git blob SHA-1 and size, by id. Asked with the last answer's ETag, so that GitHub answers
-    /// 304 for a listing that has not changed, which its rate limit does not count; and with
-    /// `FRUS_GITHUB_TOKEN` to GitHub's own API alone. Throws `JobFailed` in the server's words.
+    /// volume's git blob SHA-1 and size, by id. One read in the last `listingReuse` seconds is used as it
+    /// is; a later read is asked with the last answer's ETag, so that GitHub answers 304 for a listing that
+    /// has not changed, which with a token its rate limit does not count; and with `FRUS_GITHUB_TOKEN` to
+    /// GitHub's own API alone. Throws `JobFailed` in the server's words.
     func liveListing() async throws -> [String: LiveVolumeInfo] {
         guard let transport else { throw JobFailed("The server makes no request outside (FRUS_OFFLINE=true).") }
-        var headers = ["User-Agent": Self.userAgent, "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"]
+        let time = now()
         let cached = lastListing.withLock { $0 }
-        if let cached { headers["If-None-Match"] = cached.etag }
-        if sources.isGitHub, let githubToken { headers["Authorization"] = "Bearer \(githubToken)" }
-        let host = sources.listing.host ?? LibrarySources.apiHost
-        let answer: LibraryAnswer
-        do {
-            answer = try await transport.get(sources.listing, headers: headers, limit: Self.listingLimit, into: nil)
-        } catch let error as LibraryTransportError {
-            log("GitHub's listing of the volumes could not be read: \(error)")
-            throw JobFailed("GitHub's listing of the corpus's volumes could not be read: \(host) gave no answer the server takes.")
-        }
         let body: Data
-        switch answer.status {
-        case 200:
-            body = answer.body
-            if let etag = answer.headers["etag"], !etag.isEmpty { lastListing.withLock { $0 = CachedListing(etag: etag, body: body) } }
-        case 304 where cached != nil:
-            body = cached!.body
-        case 429:
-            throw JobFailed(Self.rateLimited(answer.headers, token: sources.isGitHub && githubToken != nil))
-        case 403 where answer.headers["x-ratelimit-remaining"] == "0":
-            throw JobFailed(Self.rateLimited(answer.headers, token: sources.isGitHub && githubToken != nil))
-        default:
-            throw JobFailed("GitHub's listing of the corpus's volumes could not be read: \(host) answered \(answer.status).")
+        if let cached, time.timeIntervalSince(cached.at) < Self.listingReuse, time >= cached.at {
+            body = cached.body
+        } else {
+            var headers = ["User-Agent": Self.userAgent, "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"]
+            if let etag = cached?.etag { headers["If-None-Match"] = etag }
+            if sources.isGitHub, let githubToken { headers["Authorization"] = "Bearer \(githubToken)" }
+            let host = sources.listing.host ?? LibrarySources.apiHost
+            let answer: LibraryAnswer
+            do {
+                answer = try await transport.get(sources.listing, headers: headers, limit: Self.listingLimit, into: nil)
+            } catch let error as LibraryTransportError {
+                log("GitHub's listing of the volumes could not be read: \(error)")
+                throw JobFailed("GitHub's listing of the corpus's volumes could not be read: \(host) gave no answer the server takes.")
+            }
+            switch answer.status {
+            case 200:
+                body = answer.body
+            case 304 where cached != nil:
+                body = cached!.body
+            case 429:
+                throw JobFailed(Self.rateLimited(answer.headers, token: sources.isGitHub && githubToken != nil))
+            case 403 where answer.headers["x-ratelimit-remaining"] == "0":
+                throw JobFailed(Self.rateLimited(answer.headers, token: sources.isGitHub && githubToken != nil))
+            default:
+                throw JobFailed("GitHub's listing of the corpus's volumes could not be read: \(host) answered \(answer.status).")
+            }
+            let etag = answer.status == 200 ? answer.headers["etag"].flatMap { $0.isEmpty ? nil : $0 } : cached?.etag
+            lastListing.withLock { $0 = CachedListing(etag: etag, body: body, at: time) }
         }
         let listed: [GitHubLiveEntry]
         do {
             listed = try GitHubLiveEntry.volumes(inListing: body)
         } catch {
-            throw JobFailed("GitHub's listing of the corpus's volumes could not be read: \(host)'s answer was no listing.")
+            lastListing.withLock { $0 = nil }
+            throw JobFailed("GitHub's listing of the corpus's volumes could not be read: \(sources.listing.host ?? LibrarySources.apiHost)'s answer was no listing.")
         }
         // The kit's diff keys the listing by name, which a listing naming one file twice would trap on: the
         // first of each is kept.
@@ -749,7 +850,7 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
         return ManifestDiffResult.diff(bundled: catalogue, live: live).liveInfoByVolumeId
     }
 
-    /// The sentence for GitHub's rate limit: how many listings an hour it allows this server, and when its
+    /// The sentence for GitHub's rate limit: how many requests an hour it allows this server, and when its
     /// count starts again, from its `X-RateLimit-…` headers.
     static func rateLimited(_ headers: [String: String], token: Bool) -> String {
         let limit = headers["x-ratelimit-limit"].flatMap(Int.init)
@@ -761,14 +862,26 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
         return sentence + (token ? "." : ": try again then, or give the server a token (FRUS_GITHUB_TOKEN), which raises the limit.")
     }
 
+    /// Whether an answer says its host limits this server: a 429, or a 403 with GitHub's rate-limit
+    /// headers, which a host's own 403 for a file it lacks has not.
+    static func isLimited(_ answer: LibraryAnswer) -> Bool {
+        answer.status == 429 || (answer.status == 403 && answer.headers["x-ratelimit-remaining"] == "0")
+    }
+
+    /// The bytes free on the volume that holds `url`, or nil when the system does not say.
+    static func freeBytes(at url: URL) -> Int64? {
+        ((try? FileManager.default.attributesOfFileSystem(forPath: url.path))?[.systemFreeSize] as? NSNumber)?.int64Value
+    }
+
     /// One volume: its file from the kit's `downloadUrl`, kept once its length and git blob SHA-1 are the
     /// listing's, renamed into place over any copy; or, when the file in place is that one already, kept as
     /// it is. Then its figure images. Throws `Problem`.
-    private func fetchVolume(_ id: String, live: LiveVolumeInfo, job: JobContext) async throws {
+    private func fetchVolume(_ id: String, live: LiveVolumeInfo, job: JobContext, figures: inout FigureHost) async throws {
         guard let entry = entries[id], entry.filename == "\(id).xml", let final = fileURL(id),
               let url = sources.volume(entry), let transport else {
             throw Problem(sentence: "The catalogue gives \(id) no address to download it from.")
         }
+        let host = url.host ?? "Its host"
         let time = now()
         do {
             try await Blocking.run { [store] in try store.markLibraryDownloading(id, at: time) }
@@ -777,6 +890,11 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
         }
         let local = await localVolumeInfo(for: id)
         if local?.sha != live.sha || local?.sizeBytes != live.sizeBytes {
+            // The user store and its backups share the volume: a download leaves room for them.
+            if let free = Self.freeBytes(at: volumesDirectory), free < Int64(live.sizeBytes) + Self.spareBytes {
+                let room = "the data volume has \(Self.megabytes(Int(free))) free, and \(entry.filename) needs \(Self.megabytes(live.sizeBytes)) with \(Self.megabytes(Int(Self.spareBytes))) to spare"
+                throw Problem(sentence: "Not downloaded: \(room).", stops: room)
+            }
             await job.progress("Downloading \(id): \(Self.megabytes(live.sizeBytes))")
             let partial = volumesDirectory.appendingPathComponent(".\(id).xml\(Self.partialSuffix)")
             let answer: LibraryAnswer
@@ -784,13 +902,21 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
                 answer = try await transport.get(url, headers: ["User-Agent": Self.userAgent], limit: live.sizeBytes, into: partial)
             } catch LibraryTransportError.tooLarge {
                 throw Problem(sentence: "The file served for \(entry.filename) was longer than the \(live.sizeBytes) bytes GitHub's listing gives it, so it was not kept.")
+            } catch LibraryTransportError.unwritable(let why) {
+                log("\(id) could not be written to \(volumesDirectory.path): \(why)")
+                throw Problem(sentence: "\(entry.filename) could not be written to the volumes folder: the server's log says why.",
+                              stops: "the volumes folder could not be written")
             } catch let error as LibraryTransportError {
-                log("\(id) could not be downloaded from \(url.host ?? "its host"): \(error)")
-                throw Problem(sentence: "\(url.host ?? "Its host") gave no answer the server takes for \(entry.filename).", unreachable: true)
+                log("\(id) could not be downloaded from \(host): \(error)")
+                throw Problem(sentence: "\(host) gave no answer the server takes for \(entry.filename).", unreachable: true)
             }
             guard answer.status == 200 else {
                 try? FileManager.default.removeItem(at: partial)
-                throw Problem(sentence: "\(url.host ?? "Its host") answered \(answer.status) for \(entry.filename).")
+                if Self.isLimited(answer) {
+                    let limit = "\(host) limits how often this server may ask it\(answer.headers["retry-after"].map { ", and asks it to wait \($0) seconds" } ?? "")"
+                    throw Problem(sentence: "Not downloaded: \(limit).", stops: limit)
+                }
+                throw Problem(sentence: "\(host) answered \(answer.status) for \(entry.filename).")
             }
             // The check, before the file takes its place: its length and its git blob SHA-1, the listing's.
             let check = try? await Blocking.run { () -> (Int, String) in
@@ -806,19 +932,21 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
             } catch {
                 try? FileManager.default.removeItem(at: partial)
                 log("\(id)'s file could not take its place: \(error)")
-                throw Problem(sentence: "\(entry.filename) was downloaded and checked, but could not take its place in the volumes folder.")
+                throw Problem(sentence: "\(entry.filename) was downloaded and checked, but could not take its place in the volumes folder.",
+                              stops: "the volumes folder could not be written")
             }
         }
         await job.progress("Fetching \(id)'s figure images")
-        let figures = await fetchFigures(id, volumeAt: final)
+        let found = await fetchFigures(id, volumeAt: final, host: &figures)
         var problem: String?
-        if figures == nil {
+        if found == nil {
             problem = "Its text could not be read for the figure images it names."
-        } else if let failed = figures?.failed, failed > 0 {
-            problem = "\(failed) of its figure images could not be fetched: Download asks for them again."
+        } else if let failed = found?.failed, failed > 0 {
+            problem = figures.givenUp.map { "\(failed) of its figure images were not fetched, since \($0): Download asks for them again." }
+                ?? "\(failed) of its figure images could not be fetched: Download asks for them again."
         }
-        let record = LibraryDownloadRecord(blobSHA: live.sha, sizeBytes: live.sizeBytes, figuresStored: figures?.stored ?? 0,
-                                           figuresRefused: figures?.refused ?? 0, problem: problem)
+        let record = LibraryDownloadRecord(blobSHA: live.sha, sizeBytes: live.sizeBytes, modifiedAt: Self.regularFile(final)?.modified,
+                                           figuresStored: found?.stored ?? 0, figuresRefused: found?.refused ?? 0, problem: problem)
         let done = now()
         do {
             try await Blocking.run { [store] in try store.recordLibraryDownload(id, record, at: done) }
@@ -839,15 +967,34 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
         }
     }
 
+    /// Writes `data` to `url`, made afresh and flushed to disk.
+    static func writeFlushed(_ data: Data, to url: URL) throws {
+        try? FileManager.default.removeItem(at: url)
+        guard FileManager.default.createFile(atPath: url.path, contents: nil) else { throw CocoaError(.fileWriteNoPermission) }
+        let handle = try FileHandle(forWritingTo: url)
+        defer { try? handle.close() }
+        try handle.write(contentsOf: data)
+        try handle.synchronize()
+    }
+
+    /// Whether the regular file at `url` opens with the PNG signature, the kit's check.
+    static func holdsPNG(_ url: URL) -> Bool {
+        guard regularFileSize(url) != nil, let handle = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? handle.close() }
+        return FigureImagePNG.isPNG((try? handle.read(upToCount: 8)) ?? Data())
+    }
+
     static func megabytes(_ bytes: Int) -> String {
         String(format: "%.1f MB", Double(bytes) / 1_000_000)
     }
 
     /// The figure images `volumeId`'s text at `url` names, as the app's figure library fetches them (#1516):
-    /// each from history.state.gov as `<url>.png`, into `<volumeId>.figures/`, one already there not asked
-    /// for again, one the host refuses (403 or 404) left out, one whose answer is no PNG not kept; and any
-    /// image there the text no longer names removed. Nil when the text cannot be read.
-    private func fetchFigures(_ volumeId: String, volumeAt url: URL) async -> (stored: Int, refused: Int, failed: Int)? {
+    /// each from history.state.gov as `<url>.png`, into `<volumeId>.figures/`, one already there and a PNG
+    /// not asked for again, one the host refuses (403 or 404) left out, one whose answer is no PNG not kept;
+    /// and any image there the text no longer names removed. The job stops asking the image host after
+    /// `figurePatience` images in a row with no answer, or once it says it limits this server (`host`). Nil
+    /// when the text cannot be read.
+    private func fetchFigures(_ volumeId: String, volumeAt url: URL, host: inout FigureHost) async -> (stored: Int, refused: Int, failed: Int)? {
         guard let names = try? await Blocking.run({ LibraryFigureNames.graphicNames(inVolumeAt: url) }),
               let folder = figuresDirectory(volumeId), let transport else { return nil }
         // Each name a file name of one path component, the kit's rule, so that no name reaches outside the folder.
@@ -874,11 +1021,11 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
         var (stored, refused, failed) = (0, 0, 0)
         for fileName in fileNames {
             let destination = folder.appendingPathComponent(fileName, isDirectory: false)
-            if Self.regularFileSize(destination) != nil {
+            if Self.holdsPNG(destination) {
                 stored += 1
                 continue
             }
-            guard let remote = sources.figure(volumeId: volumeId, fileName: fileName) else {
+            guard host.givenUp == nil, let remote = sources.figure(volumeId: volumeId, fileName: fileName) else {
                 failed += 1
                 continue
             }
@@ -887,6 +1034,16 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
                 answer = try await transport.get(remote, headers: ["User-Agent": Self.userAgent], limit: Self.figureLimit, into: nil)
             } catch {
                 log("\(volumeId)'s figure image \(fileName) could not be fetched: \(error)")
+                failed += 1
+                host.unanswered += 1
+                if host.unanswered >= Self.figurePatience {
+                    host.givenUp = "\(remote.host ?? "the image host") gave no answer for \(Self.figurePatience) images in a row"
+                }
+                continue
+            }
+            host.unanswered = 0
+            if Self.isLimited(answer) {
+                host.givenUp = "\(remote.host ?? "the image host") limits how often this server may ask it"
                 failed += 1
                 continue
             }
@@ -911,9 +1068,7 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
             }
             let partial = folder.appendingPathComponent(".\(fileName)\(Self.partialSuffix)")
             do {
-                // Made afresh, never through a link left where it goes.
-                try? manager.removeItem(at: partial)
-                try answer.body.write(to: partial, options: .withoutOverwriting)
+                try Self.writeFlushed(answer.body, to: partial)
                 try Self.rename(partial, over: destination)
                 stored += 1
             } catch {
@@ -928,18 +1083,22 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
     // MARK: Remove
 
     /// Removes a downloaded volume's file and figure images, and forgets it: refused while a job waits for
-    /// it or fetches it, and in Import mode, whose folder is the operator's.
+    /// it or fetches it, which the store's forgetting checks in one step, and in Import mode, whose folder
+    /// is the operator's.
     public func remove(_ volumeId: String) async throws {
         guard mode == .standalone else { throw LibraryRefusal.importMode }
         guard entries[volumeId] != nil, let file = fileURL(volumeId), let folder = figuresDirectory(volumeId) else {
             throw LibraryRefusal.unknownVolume(volumeId)
         }
-        let row = try await Blocking.run { [store] in try store.libraryVolume(volumeId) }
-        if row?.isUnfinished == true { throw LibraryRefusal.inProgress(volumeId) }
-        guard isVolumeDownloaded(volumeId) || row != nil else { throw LibraryRefusal.notDownloaded(volumeId) }
-        try await Blocking.run { [store] in
+        let present = isVolumeDownloaded(volumeId) || Self.kind(at: folder) != nil
+        let forgotten = try await Blocking.run { [store] in try store.forgetLibraryVolume(volumeId) }
+        switch forgotten {
+        case .heldByADownload: throw LibraryRefusal.inProgress(volumeId)
+        case .nothing where !present: throw LibraryRefusal.notDownloaded(volumeId)
+        case .nothing, .forgotten: break
+        }
+        try await Blocking.run {
             for url in [file, folder] where Self.kind(at: url) != nil { try FileManager.default.removeItem(at: url) }
-            try store.forgetLibraryVolume(volumeId)
         }
         log("Removed \(volumeId)'s file and figure images from the library")
     }

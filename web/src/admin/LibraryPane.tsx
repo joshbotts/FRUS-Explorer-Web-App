@@ -69,6 +69,7 @@ function Library({ library }: { library: AdminLibrary }) {
     if (busy) return;
     setBusy(key);
     setFailure(null);
+    setSaid('');
     try {
       const job = await downloadVolumes(client, request);
       setSaid(job?.subject ? words.queued(job.subject) : words.queuedPlain);
@@ -76,6 +77,17 @@ function Library({ library }: { library: AdminLibrary }) {
       setFailure(errorMessage(error));
     } finally {
       setBusy(null);
+      // A volume waiting for its download has no Download: focus goes to its row, while it was on the button
+      // or nowhere, and the button has gone.
+      if ('volumeIds' in request) {
+        window.requestAnimationFrame(() => {
+          const active = document.activeElement;
+          const button = area.current?.querySelector<HTMLButtonElement>(`button[data-download="${CSS.escape(key)}"]`);
+          if (!button && (!active || active === document.body || !active.isConnected || area.current?.contains(active))) {
+            (area.current?.querySelector<HTMLElement>(`th[data-volume="${CSS.escape(key)}"]`) ?? document.querySelector<HTMLElement>('main h1'))?.focus();
+          }
+        });
+      }
     }
   }
 
@@ -87,7 +99,10 @@ function Library({ library }: { library: AdminLibrary }) {
         library.mode === 'import' && (status === 'downloaded' || status === 'notDownloaded') ? words.importStatuses[status] : words.statuses[status],
       ),
     );
-  const notDownloaded = library.counts.notDownloaded ?? 0;
+  // What Download All asks for: every volume whose file is not here and that no download waits for, as the
+  // server takes it, a failed one and an indexed one with no file among them.
+  const missing = library.volumes.filter((volume) => !volume.downloaded && !isDownloading(volume)).length;
+  const waiting = library.volumes.filter(isDownloading).length;
 
   return (
     <>
@@ -102,14 +117,16 @@ function Library({ library }: { library: AdminLibrary }) {
         <p>
           <button
             type="button"
-            aria-disabled={busy !== null || notDownloaded === 0}
+            aria-disabled={busy !== null || missing === 0}
             onClick={() => {
-              if (notDownloaded > 0) void download({ all: true }, 'all');
+              if (missing > 0) void download({ all: true }, 'all');
             }}
           >
             {words.downloadAll}
           </button>{' '}
-          <span className="note">{notDownloaded === 0 ? words.allDownloaded : words.downloadAllNote(notDownloaded)}</span>
+          <span className="note">
+            {missing > 0 ? words.downloadAllNote(missing) : waiting > 0 ? words.allWaiting(waiting) : words.allDownloaded}
+          </span>
         </p>
       )}
       {/* Always on the page, so that what a download or a removal did is announced when it comes. */}
@@ -161,7 +178,9 @@ function Library({ library }: { library: AdminLibrary }) {
                 <td>
                   <span className={`library-state ${volume.status}`}>{statusWord(volume, library.mode)}</span>
                   {volume.indexed && volume.status !== 'indexed' && <span className="note"> · {words.statuses.indexed}</span>}
-                  {volume.status === 'indexed' && !volume.downloaded && <p className="note">{words.indexedWithoutFile}</p>}
+                  {volume.indexed && !volume.downloaded && (
+                    <p className="note">{library.downloads ? words.indexedWithoutFile : words.indexedWithoutFileHere}</p>
+                  )}
                   {volume.requestedBy && <p className="note">{words.askedBy(volume.requestedBy)}</p>}
                   {volume.error && <p className={volume.status === 'failed' ? 'error' : 'note'}>{volume.error}</p>}
                 </td>
@@ -177,7 +196,8 @@ function Library({ library }: { library: AdminLibrary }) {
                   )}
                 </td>
                 <td>
-                  {library.downloads && !isDownloading(volume) && (
+                  {/* An indexed volume's file is not replaced until the corrections check comes. */}
+                  {library.downloads && !isDownloading(volume) && !(volume.indexed && volume.downloaded) && (
                     <button
                       type="button"
                       data-download={volume.volumeId}

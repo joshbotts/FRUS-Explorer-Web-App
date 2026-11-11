@@ -85,6 +85,8 @@ describe('Administration ▸ Library', () => {
     expect(within(row('frus1894Nicaragua')).getByText('Asked for by alice')).toBeTruthy();
     expect(within(row('frus1894Nicaragua')).queryByRole('button')).toBeNull();
     expect(screen.getAllByRole('status').some((line) => line.textContent === 'The download of frus1894Nicaragua is queued as a job: Jobs follows it.')).toBe(true);
+    // Its Download has gone with the download queued, so focus goes to its row.
+    await waitFor(() => expect(document.activeElement).toBe(within(table).getByRole('rowheader', { name: /^frus1894Nicaragua/ })));
     const posted = sent(fetch, 'POST', '/api/v1/admin/library/downloads');
     expect(posted).toHaveLength(1);
     expect(JSON.parse(String(posted[0]![1]?.body))).toEqual({ volumeIds: ['frus1894Nicaragua'] });
@@ -111,7 +113,7 @@ describe('Administration ▸ Library', () => {
       'POST /api/v1/admin/library/downloads': () => ({ ...job, subject: '2 volumes' }),
     });
     renderAt('/admin/library');
-    expect(await screen.findByText('Every volume not downloaded: 2 of the catalogue’s, each GitHub’s listing still names.')).toBeTruthy();
+    expect(await screen.findByText('Every volume not downloaded: 2 of the catalogue’s, less any GitHub’s listing no longer names.')).toBeTruthy();
     await userEvent.click(screen.getByRole('button', { name: 'Download All' }));
     await waitFor(() =>
       expect(screen.getAllByRole('status').some((line) => line.textContent === 'The download of 2 volumes is queued as a job: Jobs follows it.')).toBe(true),
@@ -121,6 +123,32 @@ describe('Administration ▸ Library', () => {
     const table = screen.getByRole('table', { name: 'The catalogue’s volumes, with what this server holds of each' });
     expect(within(table).getAllByRole('rowheader').map((header) => header.textContent)).toEqual(['frus1961-63v06Kennedy-Khrushchev Exchanges']);
     expect(screen.getByText('1 of 2 volumes')).toBeTruthy();
+  });
+
+  it('counts for Download All every volume whose file is missing and no download holds, and offers no Download Again for an indexed file', async () => {
+    let volumes = [
+      volume({ volumeId: 'frus1894Nicaragua', status: 'failed', error: 'api.github.com answered 500.' }),
+      volume({ volumeId: 'frus1969-76v01', status: 'indexed', indexed: true }),
+      volume({ volumeId: 'frus1961-63v06', status: 'indexed', indexed: true, downloaded: true, bytes: 1_646_822 }),
+      volume({ volumeId: 'frus1969-76ve09p1', status: 'queued', requestedBy: 'alice' }),
+    ];
+    stubServer({
+      '/readyz': ready,
+      '/api/v1/me': alice,
+      '/api/v1/admin/library': () => library(volumes),
+      'POST /api/v1/admin/library/downloads': () => {
+        volumes = volumes.map((each) => (each.downloaded ? each : { ...each, status: 'queued' }));
+        return { ...job, subject: '2 volumes' };
+      },
+    });
+    renderAt('/admin/library');
+    expect(await screen.findByText('Every volume not downloaded: 2 of the catalogue’s, less any GitHub’s listing no longer names.')).toBeTruthy();
+    const table = screen.getByRole('table', { name: 'The catalogue’s volumes, with what this server holds of each' });
+    expect(within(table).queryByRole('button', { name: 'Download Again frus1961-63v06' })).toBeNull();
+    expect(within(table).getByRole('button', { name: 'Download frus1969-76v01' })).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Download All' }));
+    expect(await screen.findByText('The 3 volumes not downloaded wait for their download.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Download All' }).getAttribute('aria-disabled')).toBe('true');
   });
 
   it('says why an Import server and an offline one download nothing, offering neither Download nor Remove', async () => {

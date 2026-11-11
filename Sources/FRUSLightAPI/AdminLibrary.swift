@@ -65,15 +65,16 @@ enum AdminLibraryRoutes {
             let library = try available(library)
             let indexed = await state.index?.documentsByVolume ?? [:]
             // Off the cooperative pool: the store's rows, and a look at each volume's file.
-            let (rows, present) = try await Blocking.run {
+            let (rows, sizes) = try await Blocking.run {
                 (Dictionary(try library.libraryVolumes().map { ($0.volumeId, $0) }, uniquingKeysWith: { first, _ in first }),
-                 Set(resources.manifest.map(\.volumeId).filter(library.isVolumeDownloaded)))
+                 Dictionary(resources.manifest.compactMap { entry in library.fileSize(entry.volumeId).map { (entry.volumeId, $0) } },
+                            uniquingKeysWith: { first, _ in first }))
             }
             var counts: [String: Int] = [:]
             let volumes = resources.manifest.map { entry -> AdminLibrary.Volume in
                 let row = rows[entry.volumeId]
                 let isIndexed = (indexed[entry.volumeId] ?? 0) > 0
-                let isDownloaded = present.contains(entry.volumeId)
+                let isDownloaded = sizes[entry.volumeId] != nil
                 let status: String = switch row?.state {
                 case .queued?: "queued"
                 case .downloading?: "downloading"
@@ -86,13 +87,13 @@ enum AdminLibraryRoutes {
                 return AdminLibrary.Volume(
                     volumeId: entry.volumeId, title: entry.title, subseries: entry.subseries, catalogueBytes: entry.sizeBytes,
                     status: status, downloaded: isDownloaded, indexed: isIndexed, sideloaded: file?.sideloaded ?? false,
-                    bytes: file?.sizeBytes, blobSha: file?.blobSHA, downloadedAt: file?.downloadedAt.map(UserStoreDate.text),
+                    bytes: sizes[entry.volumeId], blobSha: file?.blobSHA, downloadedAt: file?.downloadedAt.map(UserStoreDate.text),
                     figures: file?.figuresStored, figuresRefused: file?.figuresRefused, error: row?.error,
                     requestedBy: row?.isUnfinished == true ? row?.requestedBy : nil)
             }
             let refusal = library.downloadsRefusal
             let body = AdminLibrary(
-                mode: library.mode.rawValue, offline: refusal == .offline, downloads: refusal == nil,
+                mode: library.mode.rawValue, offline: library.offline, downloads: refusal == nil,
                 unavailable: refusal.map(sentence), source: library.sources.isGitHub ? "github" : "mirror",
                 counts: counts, volumes: volumes)
             return EditedResponse(headers: [.cacheControl: "no-store"], response: body)
@@ -114,6 +115,15 @@ enum AdminLibraryRoutes {
                 throw APIProblem(.badRequest, code: "INVALID_FIELD",
                                  detail: "volumeIds: one catalogue volume's id or more, at most \(resources.manifest.count); or all: true, alone.")
             }
+            // A file the served index was made from is not replaced until the corrections check and the
+            // review of what a correction touched come (PLAN's S21f).
+            if case .volumes(let ids) = wanted, library.downloadsRefusal == nil {
+                let indexed = await state.index?.documentsByVolume ?? [:]
+                if let held = ids.first(where: { (indexed[$0] ?? 0) > 0 && library.isVolumeDownloaded($0) }) {
+                    throw APIProblem(.conflict, code: "VOLUME_INDEXED",
+                                     detail: "\(held) is in the served index, which was made from the file in place: a corrected file replaces it with the corrections check, which comes later.")
+                }
+            }
             let job: Job
             do {
                 job = try await library.download(wanted, requestedBy: user.id)
@@ -134,6 +144,7 @@ enum AdminLibraryRoutes {
             let library = try available(library)
             let volumeId = try context.parameters.require("volumeId")
             guard resources.volume(volumeId) != nil else { throw APIProblem.volumeNotFound(volumeId) }
+            guard library.mode == .standalone else { throw problem(.importMode) }
             if (await state.index?.documentsByVolume[volumeId] ?? 0) > 0 {
                 throw APIProblem(.conflict, code: "VOLUME_INDEXED",
                                  detail: "\(volumeId) is in the served index, and the reader renders its documents from this file: a volume leaves the index with the library's indexing, which comes later.")
@@ -173,8 +184,9 @@ enum AdminLibraryRoutes {
             "The catalogue has no volume \(id)."
         case .inProgress(let id):
             "A download of \(id) is queued or under way."
-        case .nothingToDownload:
-            "Every volume asked for is downloaded already, or waits for a download."
+        case .nothingToDownload(let all):
+            all ? "Every catalogue volume is downloaded already, or waits for a download."
+                : "Each volume asked for waits for a download already."
         case .notDownloaded(let id):
             "\(id) is not in the library."
         }

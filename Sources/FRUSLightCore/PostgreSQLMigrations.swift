@@ -548,6 +548,7 @@ enum PostgreSQLMigrations {
             state TEXT COLLATE "C" NOT NULL CHECK (state IN ('queued', 'downloading', 'downloaded', 'failed')),
             blob_sha TEXT COLLATE "C",
             size_bytes BIGINT,
+            modified_at TEXT COLLATE "C",
             downloaded_at TEXT COLLATE "C",
             sideloaded BIGINT NOT NULL DEFAULT 0,
             figures_stored BIGINT,

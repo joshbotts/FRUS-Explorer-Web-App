@@ -28,6 +28,9 @@ public struct LibraryVolume: Sendable, Equatable {
     public var blobSHA: String?
     /// The file's length in bytes.
     public var sizeBytes: Int?
+    /// The file's modification time when its download recorded it: with its length, what says that the
+    /// file is still the one `blobSHA` was taken of, as the app keeps a hash with its file's stamp.
+    public var modifiedAt: Date?
     public var downloadedAt: Date?
     /// Whether the file is one an admin side-loaded under the catalogue volume's name (PLAN's S21e).
     public var sideloaded: Bool
@@ -41,13 +44,14 @@ public struct LibraryVolume: Sendable, Equatable {
     public var queuedAt: Date?
     public var updatedAt: Date
 
-    public init(volumeId: String, state: State, blobSHA: String? = nil, sizeBytes: Int? = nil, downloadedAt: Date? = nil,
+    public init(volumeId: String, state: State, blobSHA: String? = nil, sizeBytes: Int? = nil, modifiedAt: Date? = nil, downloadedAt: Date? = nil,
                 sideloaded: Bool = false, figuresStored: Int? = nil, figuresRefused: Int? = nil, error: String? = nil,
                 requestedBy: String? = nil, queuedAt: Date? = nil, updatedAt: Date) {
         self.volumeId = volumeId
         self.state = state
         self.blobSHA = blobSHA
         self.sizeBytes = sizeBytes
+        self.modifiedAt = modifiedAt.map(UserStoreDate.rounded)
         self.downloadedAt = downloadedAt.map(UserStoreDate.rounded)
         self.sideloaded = sideloaded
         self.figuresStored = figuresStored
@@ -66,18 +70,28 @@ public struct LibraryVolume: Sendable, Equatable {
 public struct LibraryDownloadRecord: Sendable, Equatable {
     public var blobSHA: String
     public var sizeBytes: Int
+    /// The file's modification time once it took its place.
+    public var modifiedAt: Date?
     public var figuresStored: Int
     public var figuresRefused: Int
     /// What was left undone, such as a figure image whose transfer failed, or nil.
     public var problem: String?
 
-    public init(blobSHA: String, sizeBytes: Int, figuresStored: Int, figuresRefused: Int, problem: String? = nil) {
+    public init(blobSHA: String, sizeBytes: Int, modifiedAt: Date? = nil, figuresStored: Int, figuresRefused: Int, problem: String? = nil) {
         self.blobSHA = blobSHA
         self.sizeBytes = sizeBytes
+        self.modifiedAt = modifiedAt.map(UserStoreDate.rounded)
         self.figuresStored = figuresStored
         self.figuresRefused = figuresRefused
         self.problem = problem
     }
+}
+
+/// What forgetting a volume found: its row forgotten, a download holding it, or no row.
+public enum LibraryForgetting: Sendable, Equatable {
+    case forgotten
+    case heldByADownload
+    case nothing
 }
 
 /// Where the library keeps its volumes' states: the user store's `library_volumes` (PLAN's S21c).
@@ -100,8 +114,9 @@ public protocol LibraryStore: Sendable {
     /// Takes back the volumes a job was stopped before fetching: each still queued or downloading goes
     /// back to `downloaded` when a file had taken its place before, and otherwise loses its row.
     func withdrawLibraryDownloads(_ volumeIds: [String], at time: Date) throws
-    /// Forgets the volume: its files were removed.
-    func forgetLibraryVolume(_ volumeId: String) throws
+    /// Forgets the volume, whose files are to be removed, unless a download waits for it or fetches it,
+    /// checked in the same transaction.
+    func forgetLibraryVolume(_ volumeId: String) throws -> LibraryForgetting
     /// Every volume a job waits for or fetches, the earliest asked for first.
     func unfinishedLibraryDownloads() throws -> [LibraryVolume]
     /// What a server that stopped left: every volume a job waited for or fetched, queued again in one
@@ -112,7 +127,7 @@ public protocol LibraryStore: Sendable {
 extension RelationalUserStore: LibraryStore {
     private static let libraryColumns = """
         volume_id, state, blob_sha, size_bytes, downloaded_at, sideloaded, figures_stored, figures_refused, error,
-        requested_by, queued_at, updated_at
+        requested_by, queued_at, updated_at, modified_at
         """
 
     private static func text(_ value: String?) -> SQLiteValue { value.map(SQLiteValue.text) ?? .null }
@@ -163,9 +178,9 @@ extension RelationalUserStore: LibraryStore {
             _ = try db.query(
                 """
                 INSERT INTO library_volumes (volume_id, state, blob_sha, size_bytes, downloaded_at, sideloaded, figures_stored,
-                    figures_refused, error, updated_at) VALUES (?, 'downloaded', ?, ?, ?, 0, ?, ?, ?, ?)
+                    figures_refused, error, updated_at, modified_at) VALUES (?, 'downloaded', ?, ?, ?, 0, ?, ?, ?, ?, ?)
                 ON CONFLICT (volume_id) DO UPDATE SET state = 'downloaded', blob_sha = excluded.blob_sha,
-                    size_bytes = excluded.size_bytes,
+                    size_bytes = excluded.size_bytes, modified_at = excluded.modified_at,
                     downloaded_at = CASE WHEN library_volumes.blob_sha = excluded.blob_sha AND library_volumes.downloaded_at IS NOT NULL
                         THEN library_volumes.downloaded_at ELSE excluded.downloaded_at END,
                     sideloaded = 0,
@@ -173,7 +188,8 @@ extension RelationalUserStore: LibraryStore {
                     updated_at = excluded.updated_at
                 """,
                 [.text(volumeId), .text(record.blobSHA), Self.integer(record.sizeBytes), Self.stamp(time),
-                 Self.integer(record.figuresStored), Self.integer(record.figuresRefused), Self.text(record.problem), Self.stamp(time)])
+                 Self.integer(record.figuresStored), Self.integer(record.figuresRefused), Self.text(record.problem), Self.stamp(time),
+                 record.modifiedAt.map(Self.stamp) ?? .null])
         }
     }
 
@@ -202,9 +218,17 @@ extension RelationalUserStore: LibraryStore {
         }
     }
 
-    public func forgetLibraryVolume(_ volumeId: String) throws {
+    public func forgetLibraryVolume(_ volumeId: String) throws -> LibraryForgetting {
         try writing(outsideSearch: true) { db in
-            _ = try db.query("DELETE FROM library_volumes WHERE volume_id = ?", [.text(volumeId)])
+            switch try db.scalar("SELECT state FROM library_volumes WHERE volume_id = ?", [.text(volumeId)])?.text {
+            case nil:
+                return .nothing
+            case LibraryVolume.State.queued.rawValue?, LibraryVolume.State.downloading.rawValue?:
+                return .heldByADownload
+            default:
+                _ = try db.query("DELETE FROM library_volumes WHERE volume_id = ?", [.text(volumeId)])
+                return .forgotten
+            }
         }
     }
 
@@ -233,7 +257,8 @@ extension RelationalUserStore: LibraryStore {
     private static func libraryVolume(_ row: [SQLiteValue]) -> LibraryVolume {
         LibraryVolume(
             volumeId: row[0].text ?? "", state: row[1].text.flatMap(LibraryVolume.State.init(rawValue:)) ?? .failed,
-            blobSHA: row[2].text, sizeBytes: row[3].integer.map(Int.init), downloadedAt: row[4].text.flatMap(UserStoreDate.date),
+            blobSHA: row[2].text, sizeBytes: row[3].integer.map(Int.init), modifiedAt: row[12].text.flatMap(UserStoreDate.date),
+            downloadedAt: row[4].text.flatMap(UserStoreDate.date),
             sideloaded: row[5].integer == 1, figuresStored: row[6].integer.map(Int.init), figuresRefused: row[7].integer.map(Int.init),
             error: row[8].text, requestedBy: row[9].text, queuedAt: row[10].text.flatMap(UserStoreDate.date),
             updatedAt: row[11].text.flatMap(UserStoreDate.date) ?? Date(timeIntervalSince1970: 0))

@@ -2082,8 +2082,10 @@ export const copy = {
       },
       downloadAll: 'Download All',
       downloadAllNote: (count: number) =>
-        `Every volume not downloaded: ${count.toLocaleString('en-US')} of the catalogue’s, each GitHub’s listing still names.`,
+        `Every volume not downloaded: ${count.toLocaleString('en-US')} of the catalogue’s, less any GitHub’s listing no longer names.`,
       allDownloaded: 'Every volume of the catalogue is downloaded.',
+      allWaiting: (count: number) =>
+        count === 1 ? 'The one volume not downloaded waits for its download.' : `The ${count.toLocaleString('en-US')} volumes not downloaded wait for their download.`,
       queued: (subject: string) => `The download of ${subject} is queued as a job: Jobs follows it.`,
       queuedPlain: 'The download is queued as a job: Jobs follows it.',
       filter: 'Find a volume',
@@ -2097,6 +2099,7 @@ export const copy = {
       file: 'File',
       actions: 'Actions',
       indexedWithoutFile: 'Its file is not downloaded, so the reader cannot open its documents: Download brings it.',
+      indexedWithoutFileHere: 'Its file is not in this server’s folder, so the reader cannot open its documents.',
       askedBy: (user: string) => `Asked for by ${user}`,
       figures: (count: number) => (count === 1 ? '1 figure image' : `${count.toLocaleString('en-US')} figure images`),
       catalogueSize: (size: string) => `${size} in the catalogue`,
@@ -2108,7 +2111,7 @@ export const copy = {
       removeA11y: (volume: string) => `Remove ${volume}`,
       removeTitle: (volume: string) => `Remove ${volume}?`,
       removeMessage:
-        'Its file and figure images are deleted from /data/volumes, and the reader can no longer open its documents. Download brings them back.',
+        'Its file and figure images are deleted from /data/volumes, and the reader can no longer open its documents until it is downloaded again.',
       removeConfirm: 'Remove',
       keep: 'Keep It',
       removed: (volume: string) => `Removed ${volume}.`,

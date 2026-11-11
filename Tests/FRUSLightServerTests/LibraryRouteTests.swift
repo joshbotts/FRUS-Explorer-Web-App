@@ -134,16 +134,21 @@ import Testing
     /// An Import server lists its TEI folder and the index, and downloads and removes nothing; a server
     /// under FRUS_OFFLINE downloads nothing; an indexed volume is not removed.
     @Test func importModeOfflineAndAnIndexedVolumeAreRefused() async throws {
-        let imports = try await Fixture(mode: .import, volumes: ["frus1894Nicaragua"], indexed: true)
+        let imports = try await Fixture(mode: .import, volumes: ["frus1969-76ve09p1"], indexed: true)
         defer { withExtendedLifetime(imports) {} }
         try await imports.app.test(.router) { client in
             let owner = Browser(client: client)
             let library = try decode(AdminLibrary.self, try await owner.get(Self.path))
             #expect(library.mode == "import" && !library.downloads && library.unavailable?.hasPrefix("An Import server reads the TEI folder") == true)
-            #expect(try Self.volume(library, "frus1894Nicaragua").status == "downloaded" && Self.volume(library, "frus1961-63v06").status == "indexed")
+            // The synthetic export indexes frus1961-63v06 and frus1894Nicaragua; the TEI folder holds frus1969-76ve09p1.
+            #expect(try Self.volume(library, "frus1969-76ve09p1").status == "downloaded" && Self.volume(library, "frus1961-63v06").status == "indexed")
+            #expect(try Self.volume(library, "frus1894Nicaragua").status == "indexed" && !Self.volume(library, "frus1894Nicaragua").downloaded)
             #expect(problemCode(try await owner.send(.post, Self.downloads, #"{"all":true}"#)) == "LIBRARY_NOT_AVAILABLE")
-            #expect(problemCode(try await owner.send(.delete, "\(Self.path)/volumes/frus1894Nicaragua")) == "LIBRARY_NOT_AVAILABLE")
-            #expect(FileManager.default.fileExists(atPath: imports.users.server.files.volumesDirectory.appendingPathComponent("frus1894Nicaragua.xml").path))
+            #expect(problemCode(try await owner.send(.delete, "\(Self.path)/volumes/frus1969-76ve09p1")) == "LIBRARY_NOT_AVAILABLE")
+            #expect(problemCode(try await owner.send(.delete, "\(Self.path)/volumes/frus1961-63v06")) == "LIBRARY_NOT_AVAILABLE", "the mode first")
+            let size = try Data(contentsOf: RepositoryFiles.tei.appendingPathComponent("frus1969-76ve09p1.xml")).count
+            #expect(try Self.volume(library, "frus1969-76ve09p1").bytes == size && Self.volume(library, "frus1969-76ve09p1").blobSha == nil)
+            #expect(FileManager.default.fileExists(atPath: imports.users.server.files.volumesDirectory.appendingPathComponent("frus1969-76ve09p1.xml").path))
         }
         let offline = try await Fixture(offline: true, indexed: true)
         defer { withExtendedLifetime(offline) {} }
@@ -156,6 +161,22 @@ import Testing
             let jobs = await offline.users.jobs.jobs()
             #expect(try offline.users.store.libraryVolumes().isEmpty && jobs.isEmpty)
             #expect(problemCode(try await owner.send(.delete, "\(Self.path)/volumes/frus1961-63v06")) == "VOLUME_INDEXED")
+        }
+    }
+
+    /// A volume the served index holds is downloaded while its file is missing, which the reader needs, and
+    /// then not again, since the index was made from that file.
+    @Test func anIndexedVolumesFileIsDownloadedOnceAndNotReplaced() async throws {
+        let fixture = try await Fixture(indexed: true)
+        defer { withExtendedLifetime(fixture) {} }
+        try await fixture.app.test(.router) { client in
+            let owner = Browser(client: client)
+            #expect(try await owner.send(.post, Self.downloads, #"{"volumeIds":["frus1894Nicaragua"]}"#).status == .accepted)
+            await fixture.users.jobs.waitUntilIdle()
+            let listed = try Self.volume(try decode(AdminLibrary.self, try await owner.get(Self.path)), "frus1894Nicaragua")
+            #expect(listed.status == "indexed" && listed.downloaded)
+            #expect(problemCode(try await owner.send(.post, Self.downloads, #"{"volumeIds":["frus1894Nicaragua"]}"#)) == "VOLUME_INDEXED")
+            #expect(problemCode(try await owner.send(.delete, "\(Self.path)/volumes/frus1894Nicaragua")) == "VOLUME_INDEXED")
         }
     }
 

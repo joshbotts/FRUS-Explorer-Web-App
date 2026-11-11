@@ -260,7 +260,9 @@ echo "== admin: the library, a Standalone project downloading from a folder serv
 # volumes in /data/volumes and downloads them from an nginx serving a mirror: GitHub's listing of the three
 # fixture volumes with their blob SHA-1s, the volumes' files, and frus1969-76ve09p1's figure images but its
 # last, which the host does not have; the volumes' files served slowly enough that a restart lands while
-# one downloads. Under FRUS_OFFLINE the server refuses and asks nothing; then it downloads the three, is
+# one downloads. Its volume is first an Import server's, with the TEI folder mounted; then, as a volume an
+# older image left, its /data/volumes is root's, which a Standalone start refuses with the install guide's
+# remedy, run here. Under FRUS_OFFLINE the server refuses and asks nothing; then it downloads the three, is
 # restarted while it does, and finishes at its next start without asking again for what it had; every byte
 # is the fixture's; the reader and its figures read them; and an export copied into /data/import seeds its
 # index.
@@ -323,15 +325,42 @@ library_counts() {  # what the Library counts of each state, as status=count lin
 library = json.loads(sys.argv[1])
 print(" ".join(f"{k}={v}" for k, v in sorted(library["counts"].items())))' "$1"
 }
+# Import mode first, compose.yaml alone, the TEI folder mounted on the folder the image made the server's.
+FRUS_AUTH=none FRUS_AUTH_HEADER='' FRUS_TRUSTED_PROXIES='' FRUS_ADMIN_USERS='' FRUS_USER_DATA=on FRUS_PUBLIC_URL=http://localhost:8080 \
+  FRUS_HOST_PORT="$library_port" FRUS_BACKUP_DIR="$work/library-backups" COMPOSE_PROFILES='' \
+  docker compose -p "$library_project" -f compose.yaml up -d frus
+wait_for_200 "$library_base/healthz" 30 || fail "the library project's Import server did not answer"
+library_compose stop frus >/dev/null
+# As a volume an Import server of an older image used: Docker made /data/volumes there, root's.
+library_compose run --rm --no-deps --user 0 --cap-add CHOWN --entrypoint chown frus 0:0 /data/volumes \
+  || fail "the volumes folder could not be given to root"
+FRUS_OFFLINE=true library_compose up -d frus
+refusal=""
+for _ in $(seq 1 80); do
+  refusal=$(library_compose logs --no-color frus 2>&1 | grep -c 'In Standalone mode the server keeps the volumes it downloads in /data/volumes, which it cannot write' || true)
+  [ "$refusal" -gt 0 ] && break
+  sleep 0.25
+done
+[ "$refusal" -gt 0 ] || fail "a Standalone server whose /data/volumes is root's did not refuse to start with its sentence: $(library_compose logs --no-color frus 2>&1 | tail -5)"
+library_compose logs --no-color frus 2>&1 | grep -q -- '--cap-add CHOWN --entrypoint chown frus 10001:10001 /data/volumes' \
+  || fail "the refusal does not give the remedy"
+# The install guide's remedy, then the start again.
+library_compose stop frus >/dev/null
+library_compose run --rm --no-deps --user 0 --cap-add CHOWN --entrypoint chown frus 10001:10001 /data/volumes \
+  || fail "the install guide's remedy did not run"
 FRUS_OFFLINE=true library_compose up -d frus
 docker run -d --name "$library_github" --network "${library_project}_default" --network-alias github --pull missing -q \
   -v "$mirror:/srv/mirror:ro" -v "$work/mirror.conf:/etc/nginx/conf.d/default.conf:ro" "$proxy_image" >/dev/null \
   || fail "the mirror's nginx did not start"
-wait_for_200 "$library_base/healthz" 30 || fail "the Standalone server's /healthz did not answer 200"
+wait_for_200 "$library_base/healthz" 30 || fail "the Standalone server's /healthz did not answer 200 after the remedy"
 library_compose exec -T frus sh -c 'test -d /data/volumes && touch /data/volumes/.probe && rm /data/volumes/.probe' \
   || fail "a Standalone server cannot write /data/volumes"
 offline=$(library_list)
-case "$offline" in *'"mode":"standalone"'*'"offline":true'*) ;; *) fail "the offline Library is not one: ${offline:0:300}" ;; esac
+python3 -c 'import json, sys
+library = json.loads(sys.argv[1])
+assert library["mode"] == "standalone" and library["offline"] and not library["downloads"] and "FRUS_OFFLINE" in library["unavailable"]' "$offline" \
+  || fail "the offline Library is not one: ${offline:0:300}"
+
 refused=$(library_api POST /api/v1/admin/library/downloads '{"all":true}')
 case "$refused" in *'"code":"OFFLINE"'*' 409') ;; *) fail "a download under FRUS_OFFLINE answered $refused" ;; esac
 [ -z "$(docker logs "$library_github" 2>&1 | grep 'GET /')" ] || fail "a server under FRUS_OFFLINE asked the mirror: $(docker logs "$library_github" 2>&1 | tail -3)"
@@ -345,7 +374,7 @@ first_job=$(printf '%s' "$posted" | sed -nE 's/.*"id":"([^"]+)".*/\1/p')
 # The restart, once the first volume is downloaded and another is downloading.
 restarted=""
 for _ in $(seq 1 120); do
-  counts=$(library_counts "$(library_list)")
+  counts=$(library_counts "$(library_list)" 2>/dev/null || true)
   case "$counts" in *downloaded=1*downloading=1*|*downloading=1*downloaded=1*) library_compose restart frus >/dev/null; restarted=1; break ;; esac
   case "$counts" in *downloaded=3*) break ;; esac
   sleep 0.25
@@ -353,7 +382,7 @@ done
 [ -n "$restarted" ] || fail "no moment with one volume downloaded and one downloading came to restart in: $counts"
 wait_for_200 "$library_base/healthz" 30 || fail "the Standalone server's /healthz did not answer 200 after its restart"
 for _ in $(seq 1 240); do
-  counts=$(library_counts "$(library_list)")
+  counts=$(library_counts "$(library_list)" 2>/dev/null || true)
   [ "$counts" = "downloaded=3 notDownloaded=550" ] && break
   sleep 0.25
 done
@@ -368,13 +397,13 @@ assert first["state"] == "failed" and first["error"] == "The server stopped whil
 resumed = [j for j in jobs.values() if j["kind"] == "libraryDownload" and j.get("subject", "").endswith("resumed after a restart")]
 assert len(resumed) == 1 and resumed[0]["state"] == "succeeded" and "requestedBy" not in resumed[0], resumed' "$jobs" "$first_job" \
   || fail "the jobs do not show the download stopped by the restart and resumed by the server: $jobs"
-(cd fixtures/tei && sha256sum frus1894Nicaragua.xml frus1961-63v06.xml frus1969-76ve09p1.xml) | awk '{print $1, $NF}' > "$work/expected.sha256"
+(cd fixtures/tei && shasum -a 256 frus1894Nicaragua.xml frus1961-63v06.xml frus1969-76ve09p1.xml) | awk '{print $1, $NF}' | LC_ALL=C sort -k2 > "$work/expected.sha256"
 library_compose exec -T frus sh -c 'cd /data/volumes && sha256sum frus1894Nicaragua.xml frus1961-63v06.xml frus1969-76ve09p1.xml' \
-  | awk '{print $1, $NF}' > "$work/downloaded.sha256"
+  | awk '{print $1, $NF}' | LC_ALL=C sort -k2 > "$work/downloaded.sha256"
 diff "$work/expected.sha256" "$work/downloaded.sha256" >/dev/null || fail "a downloaded volume differs from its fixture: $(cat "$work/downloaded.sha256")"
-(cd "$figures" && sha256sum ./*.png) | awk '{print $1, $NF}' > "$work/expected-figures.sha256"
+(cd "$figures" && shasum -a 256 ./*.png) | awk '{print $1, $NF}' | LC_ALL=C sort -k2 > "$work/expected-figures.sha256"
 library_compose exec -T frus sh -c 'cd /data/volumes/frus1969-76ve09p1.figures && sha256sum ./*.png' \
-  | awk '{print $1, $NF}' > "$work/downloaded-figures.sha256"
+  | awk '{print $1, $NF}' | LC_ALL=C sort -k2 > "$work/downloaded-figures.sha256"
 diff "$work/expected-figures.sha256" "$work/downloaded-figures.sha256" >/dev/null \
   || fail "the figure images differ from the mirror's: $(cat "$work/downloaded-figures.sha256")"
 listed=$(library_list)
@@ -406,8 +435,8 @@ if [ -n "$e2e" ]; then
   FRUS_E2E_LIBRARY=1 FRUS_E2E_NETWORK="container:$(library_compose ps -q frus)" FRUS_E2E_BASE_URL=http://localhost:8080/ scripts/npm --playwright \
     || fail "the library spec failed; web/playwright-report has its report"
 fi
-library_compose down --volumes --remove-orphans >/dev/null 2>&1 || true
 docker rm -f "$library_github" >/dev/null 2>&1 || true
+library_compose down --volumes --remove-orphans >/dev/null 2>&1 || true
 
 echo "== install: the image's labels"
 # The app build whose exports the image serves, and the index version, which a release names

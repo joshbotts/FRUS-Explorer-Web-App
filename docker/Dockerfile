@@ -58,7 +58,7 @@ RUN apt-get update -qq \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --gid 10001 frus \
  && useradd --uid 10001 --gid 10001 --home-dir /data --no-create-home --shell /usr/sbin/nologin frus \
- && install -d -o 10001 -g 10001 /data
+ && install -d -o 10001 -g 10001 /data /data/volumes
 COPY --from=build /out/frus-light /usr/local/bin/frus-light
 COPY LICENSE /usr/share/doc/frus-light/LICENSE
 # The manifest, the broken-refs index, the indexing resources and the rest, at the server's
@@ -86,7 +86,9 @@ LABEL org.opencontainers.image.title="FRUS Explorer Light" \
       io.github.joshbotts.frus-explorer.index-version="${INDEX_VERSION}"
 
 # Everything the server keeps is under /data, owned by the server's user, so a new named
-# volume mounted there starts with that ownership. The root filesystem can be read-only.
+# volume mounted there starts with that ownership; /data/volumes too, so that Import mode's TEI
+# mount finds a folder there and Docker makes none of root's in the volume, which a Standalone
+# server, keeping its library there (S21c), could not write. The root filesystem can be read-only.
 # Two malloc arenas: the reader parses each volume on whichever thread is free, and glibc's
 # default of eight arenas a CPU keeps the freed parses. Reading across the 16 largest volumes eight
 # times levelled off at about 170 MB with two, where the default passed 300 MB in three.

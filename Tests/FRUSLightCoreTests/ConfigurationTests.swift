@@ -263,7 +263,12 @@ import Testing
         #expect {
             _ = try ServerConfiguration.fromEnvironment(["FRUS_MODE": "standalone", "FRUS_LIBRARY_MIRROR": "ftp://library/x?y=1"])
         } throws: { error in
-            (error as? ConfigurationError)?.problems == ["FRUS_LIBRARY_MIRROR must be an http or https URL with no query or fragment, not ftp://library/x?y=1"]
+            (error as? ConfigurationError)?.problems == ["FRUS_LIBRARY_MIRROR must be an http or https URL with no user, password, query or fragment"]
+        }
+        #expect {
+            _ = try ServerConfiguration.fromEnvironment(["FRUS_MODE": "standalone", "FRUS_LIBRARY_MIRROR": "https://me:secret@library/"])
+        } throws: { error in
+            (error as? ConfigurationError).map { $0.problems.count == 1 && !$0.description.contains("secret") } == true
         }
     }
 
