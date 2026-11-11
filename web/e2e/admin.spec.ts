@@ -2,9 +2,10 @@
 // Administration as the image's single user, an admin: the header's Admin link to Status, whose Reset the
 // Index… asks first and is cancelled; Jobs, which names the import that made the index, finished; Users,
 // whose Erase Research… names what the user holds and is cancelled; Backups; and Keys, where the
-// instance's NARA key is set and cleared, leaving none. A link that opens a pane keeps focus, as the
-// header's do, and Tab goes on into the pane. It changes nothing a later spec reads: no reset, no
-// erasure, and no key left. It runs at the root and again under the path.
+// instance's NARA key is set and cleared, leaving none. The header's Admin link keeps focus, as the
+// header's links do, since the header stays; a pane's link takes it to the new pane's heading, since
+// each pane draws the panes' list afresh. It changes nothing a later spec reads: no reset, no erasure,
+// and no key left. It runs at the root and again under the path.
 import type { Locator } from '@playwright/test';
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
@@ -24,16 +25,20 @@ test('walks Administration by keyboard alone, asking before each recovery action
   await tabTo(page, admin);
   await page.keyboard.press('Enter');
 
-  /** The pane a link opened: its address, its heading, and the link, which keeps focus and is the current page's. */
-  async function opened(link: Locator, path: RegExp, title: string) {
+  /**
+   * The pane a link opened: its address and its heading, the link the current page's, and focus on the
+   * heading, or with `keeps`, on the link.
+   */
+  async function opened(link: Locator, path: RegExp, title: string, keeps = false) {
     await expect(page).toHaveURL(path);
-    await expect(page.getByRole('heading', { level: 1, name: title, exact: true })).toBeVisible();
-    await expect(link).toBeFocused();
+    const heading = page.getByRole('heading', { level: 1, name: title, exact: true });
+    await expect(heading).toBeVisible();
     await expect(link).toHaveAttribute('aria-current', 'page');
+    await expect(keeps ? link : heading).toBeFocused();
   }
 
   // Status, the first pane.
-  await opened(admin, /admin\/status$/, 'Status');
+  await opened(admin, /admin\/status$/, 'Status', true);
   await expect(page.getByText('app.db, SQLite')).toBeVisible();
   await expect(page.getByText('Import: an index exported from the Mac')).toBeVisible();
   await axeCheck(page);
@@ -60,8 +65,9 @@ test('walks Administration by keyboard alone, asking before each recovery action
   await axeCheck(page);
 
   // Users: the single user, an admin, whose Erase Research… names what they hold, and is cancelled.
+  // From the heading, back into the panes' list, which comes before it.
   const usersLink = panes.getByRole('link', { name: 'Users', exact: true });
-  await tabTo(page, usersLink);
+  await backTabTo(page, usersLink);
   await page.keyboard.press('Enter');
   await opened(usersLink, /admin\/users$/, 'Users');
   const users = page.getByRole('table', { name: 'The users this server holds, by name' });
@@ -91,7 +97,7 @@ test('walks Administration by keyboard alone, asking before each recovery action
   await send(page, 'DELETE', 'api/v1/admin/secrets/nara');
   try {
     const keysLink = panes.getByRole('link', { name: 'Keys', exact: true });
-    await tabTo(page, keysLink);
+    await backTabTo(page, keysLink);
     await page.keyboard.press('Enter');
     await opened(keysLink, /admin\/keys$/, 'Keys');
     const nara = page.getByRole('region', { name: 'NARA Catalog' });
