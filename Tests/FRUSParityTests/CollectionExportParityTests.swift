@@ -371,10 +371,6 @@ import Testing
             "if let existing = storedSummary(volumeId: doc.volumeId, documentId: doc.documentId, promptId: promptId) { result[key] = existing continue }",
             "guard AppleIntelligenceProvider.shared.isAvailable else { throw ExportError.renderingFailed }",
         ], file: "CollectionContentResolver.swift")
-        NoteViewParityTests.expect(try CollectionParityTests.app("CrossReference/CrossReferenceStore.swift"), holds: [
-            #"static let namesADocumentPredicate = "target_document_id != ''""#,
-            "SELECT source_volume_id, source_document_id, COALESCE(target_volume_id, source_volume_id) AS resolved_target_volume, target_document_id, reference_type, context FROM cross_references WHERE source_document_id = ? AND source_volume_id = ? AND is_broken = 0 AND \\(Self.namesADocumentPredicate)",
-        ], file: "CrossReferenceStore.swift")
         NoteViewParityTests.expect(try CollectionParityTests.app("SourceExplorer/ArchivalResolver+App.swift"), holds: [
             "ArchivalIndexes(centralFiles: CentralFilesIndexStore.shared, volumeSources: VolumeSourcesIndexStore.shared, claimants: LotClaimantsIndexStore.shared)",
         ], file: "ArchivalResolver+App.swift")
@@ -420,7 +416,9 @@ import Testing
         ], file: "CollectionExports.swift")
         NoteViewParityTests.expect(try CollectionParityTests.server("Sources/FRUSLightAPI/CollectionContent.swift"), holds: [
             "guard research.promptIds.contains(promptId) else { throw ExportError.renderingFailed }",
-            "COALESCE(target_volume_id, source_volume_id) AS resolved_target_volume, target_document_id FROM cross_references WHERE source_document_id = ? AND source_volume_id = ? AND is_broken = 0 AND target_document_id != ''",
+            // A document's "See also" line: the kit's store, asked as the app's resolver asks its own (above),
+            // since S23c's pin move, where the server ran a copy of the store's query.
+            "let edges = (try? await served.crossReferences.outboundEdges(forDocumentId: documentId, volumeId: volumeId)) ?? [] return edges.map { (volumeId: $0.targetVolumeId, documentId: $0.targetDocumentId) }",
             "ast = try? await FRUSDocumentParser().parseDocument(documentId: id, volumeURL: url)",
             "if let name = names[assignment.tagId] { tagNames.insert(name) }",
             "return tagNames.sorted()",
@@ -480,7 +478,9 @@ struct KitReference: Sendable {
     let resources: ServerResources
     let pipeline: IndexingPipeline
     let persons: PersonMentionStore
-    let references: SQLiteConnection
+    /// The kit's cross-reference store (FRUS-Explorer#1891), which the app's resolver asks for a
+    /// document's "See also" line, opened as a host opens it.
+    let crossReferences: CrossReferenceStore
     /// The kit's search over the index with the user's store attached, the user's notes and summaries its
     /// half, as the server runs the user's saved search (S18f).
     let search: SearchService
@@ -503,7 +503,8 @@ struct KitReference: Sendable {
                                              volumesDirectory: files.volumesDirectory, userStore: files.userStore)
         search = SearchService(fts5Store: fts5, pipeline: searching, userSource: .attachedStore(userId: user))
         persons = try PersonMentionStore(readingDatabaseAt: files.liveIndex)
-        references = try SQLiteConnection.immutable(files.liveIndex)
+        crossReferences = try CrossReferenceStore(readingDatabaseAt: files.liveIndex, volumes: resources.manifest,
+                                                  resolvedEdgeIndex: nil, citedPageMap: resources.citedPages)
     }
 
     func collection(_ id: String) throws -> CollectionExport {
@@ -695,21 +696,8 @@ struct KitSource: CollectionContentDataSource {
     }
 
     func crossReferenceTargets(volumeId: String, documentId: String) async -> [(volumeId: String, documentId: String)]? {
-        let query = """
-            SELECT source_volume_id, source_document_id,
-                   COALESCE(target_volume_id, source_volume_id) AS resolved_target_volume,
-                   target_document_id,
-                   reference_type, context
-            FROM cross_references
-            WHERE source_document_id = ?
-              AND source_volume_id = ?
-              AND is_broken = 0
-              AND target_document_id != ''
-            """
-        return ((try? reference.references.query(query, [.text(documentId), .text(volumeId)])) ?? []).compactMap { row in
-            guard let volume = row[2].text, let document = row[3].text else { return nil }
-            return (volumeId: volume, documentId: document)
-        }
+        let edges = (try? await reference.crossReferences.outboundEdges(forDocumentId: documentId, volumeId: volumeId)) ?? []
+        return edges.map { (volumeId: $0.targetVolumeId, documentId: $0.targetDocumentId) }
     }
 
     var personMentionStore: PersonMentionStore? { reference.persons }

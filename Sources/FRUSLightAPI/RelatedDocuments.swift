@@ -8,11 +8,11 @@
 // each stands for (`RelatedDocumentsContent.availableScopes`, `NeighborScope.resolveVolumeIds(appState:)`),
 // and the topics named on the rows shown (`RelatedDocumentsContent.attachSubjectEvidence()`).
 //
-// Three of the app's eight axes contribute nothing here, which the answer's `axes` says: the
-// cross-reference axis until S23c's pin move brings the kit's `CrossReferenceStore` (FRUS-Explorer#1891),
-// which S23c passes as `crossReferenceStore`; the lexical axis, which ships at weight 0 and then skips its
-// generation, until S24d compiles WordCloudKit, whose stopwords its query terms are chosen past; and the
-// semantic axis, which reads the bundled vectors, until phase 4.
+// The cross-reference axis ranks by the kit's `CrossReferenceStore` (FRUS-Explorer#1891) over the served
+// index, since S23c's pin move, as the app's ranks by its `appState.crossReferenceStore`. Two of the app's
+// eight axes contribute nothing here, which the answer's `axes` says: the lexical axis, which ships at
+// weight 0 and then skips its generation, until S24d compiles WordCloudKit, whose stopwords its query terms
+// are chosen past; and the semantic axis, which reads the bundled vectors, until phase 4.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -49,9 +49,9 @@ public struct RelatedDocuments: Codable, Equatable, Sendable, ResponseEncodable 
         /// Its weight in this tuning.
         public var weight: Double
         public var defaultWeight: Double
-        /// Whether it can contribute on this server: never the cross-reference axis until S23c's pin move,
-        /// the lexical axis until S24d, or the semantic axis until phase 4; nor shared topics on a server
-        /// whose data files hold no document subject index, as the app's slider says on a device without one.
+        /// Whether it can contribute on this server: never the lexical axis until S24d, or the semantic
+        /// axis until phase 4; nor shared topics on a server whose data files hold no document subject
+        /// index, as the app's slider says on a device without one.
         public var available: Bool
     }
 
@@ -177,16 +177,15 @@ enum RelatedDocumentsRoutes {
     }
 
     /// The engine's dependencies over the served index and the data files: the index's pipeline, its
-    /// person store, the document subject index, and the catalogue's manifest; no cross-reference query
-    /// until S23c's pin move, no search service or stopwords for the lexical axis until S24d, and no
-    /// semantic axis until phase 4.
+    /// cross-reference and person stores, the document subject index, and the catalogue's manifest; no
+    /// search service or stopwords for the lexical axis until S24d, and no semantic axis until phase 4.
     @MainActor
     static func dependencies(served: ServedIndex, resources: ServerResources,
                              subjects: DocumentSubjectIndex?) -> RelatedDocumentsDependencies {
         RelatedDocumentsDependencies(
             indexingPipeline: served.pipeline,
-            // S23c: the kit's `CrossReferenceStore`, opened read-only and immutable over the served index.
-            crossReferenceStore: nil,
+            // The kit's store, opened read-only and immutable with the served stack (S23c's pin move).
+            crossReferenceStore: served.crossReferences,
             personMentionStore: served.persons,
             documentSubjectIndex: subjects,
             manifestStore: ServedManifest(resources: resources),
@@ -234,9 +233,9 @@ enum RelatedDocumentsRoutes {
     /// Whether an axis can contribute on this server.
     static func isAvailable(_ axis: SimilarityAxis, subjects: DocumentSubjectIndex?) -> Bool {
         switch axis {
-        case .crossReference, .lexicalSimilarity, .semanticSimilarity: false
+        case .lexicalSimilarity, .semanticSimilarity: false
         case .sharedSubjects: subjects != nil
-        case .archivalProvenance, .dateProximity, .subseries, .sharedPersons: true
+        case .archivalProvenance, .crossReference, .dateProximity, .subseries, .sharedPersons: true
         }
     }
 

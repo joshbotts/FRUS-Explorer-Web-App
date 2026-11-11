@@ -34,6 +34,8 @@ public final class ServerResources: Sendable {
     private let subjects = SubjectProfilesFile()
     /// The document subject index, `document-subject-index.json`, decoded on first use (RelatedDocuments.swift).
     private let documentSubjects = DocumentSubjectIndexFile()
+    /// The corpus-wide citation index, `resolved-edge-index.json`, decoded on first use (ServedIndex.swift).
+    private let resolvedEdges = ResolvedEdgeIndexFile()
 
     /// The files the server cannot start without: those it reads here, and the five
     /// `IndexingResources` requires.
@@ -104,6 +106,27 @@ public final class ServerResources: Sendable {
     /// Documents' shared-topics axis scores and names, decoded once by the kit's `DocumentSubjectIndex`;
     /// nil for a file missing or malformed, and the axis then contributes nothing, as the app's does.
     var documentSubjectIndex: DocumentSubjectIndex? { documentSubjects.index(in: directory) }
+
+    /// `ResolvedEdgeIndexStore.shared`, app code: the bundled corpus-wide citation index, which the
+    /// cross-reference store reads where a graph is built, decoded once by the kit's
+    /// `ResolvedEdgeIndex(contentsOf:)`; nil for a file missing or malformed, and a graph's inbound half
+    /// is then the index's own table alone, as the app's is when its store fails to load.
+    var resolvedEdgeIndex: ResolvedEdgeIndex? { resolvedEdges.index(in: directory) }
+}
+
+/// The corpus-wide citation index, decoded the first time a served index's stack opens: 1.1 MB of JSON.
+private final class ResolvedEdgeIndexFile: @unchecked Sendable {
+    private let lock = NSLock()
+    private var held: ResolvedEdgeIndex??
+
+    func index(in directory: URL) -> ResolvedEdgeIndex? {
+        lock.lock()
+        defer { lock.unlock() }
+        if let held { return held }
+        let index = try? ResolvedEdgeIndex(contentsOf: directory.appendingPathComponent("resolved-edge-index.json"))
+        held = .some(index)
+        return index
+    }
 }
 
 /// The archival indexes, decoded the first time a collection asks for them: 4.5 MB of JSON that a

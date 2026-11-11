@@ -20,7 +20,7 @@ const anchor = '/api/v1/volumes/frus1961-63v06/documents/d1';
 
 const axes: RelatedDocuments['axes'] = [
   { id: 'archivalProvenance', name: 'Archival provenance', weight: 1, defaultWeight: 1, available: true },
-  { id: 'crossReference', name: 'Cross-references', weight: 1, defaultWeight: 1, available: false },
+  { id: 'crossReference', name: 'Cross-references', weight: 1, defaultWeight: 1, available: true },
   { id: 'dateProximity', name: 'Close in date', weight: 0.5, defaultWeight: 0.5, available: true },
   { id: 'subseries', name: 'Corpus proximity', weight: 0.3, defaultWeight: 0.3, available: true },
   { id: 'sharedPersons', name: 'Shared people', weight: 0.7, defaultWeight: 0.7, available: true },
@@ -112,11 +112,15 @@ describe('Related Documents', () => {
     renderAt('/related/frus1961-63v06/d1');
     await screen.findByRole('link', { name: 'Memorandum From the President' });
     expect((screen.getByRole('button', { name: 'Reset to app defaults' }) as HTMLButtonElement).disabled).toBe(true);
-    // The axes this server does not rank by are set aside, and say so.
+    // The axes this server does not rank by are set aside, and say so; the cross-references it ranks by
+    // since S23c's pin move are not.
+    const meaning = screen.getByRole('slider', { name: 'Semantically similar (experimental)' }) as HTMLInputElement;
+    expect(meaning.disabled).toBe(true);
+    expect(meaning.getAttribute('aria-describedby')).toBeTruthy();
+    expect(screen.getByText('This server does not rank by meaning yet.')).toBeTruthy();
     const crossReferences = screen.getByRole('slider', { name: 'Cross-references' }) as HTMLInputElement;
-    expect(crossReferences.disabled).toBe(true);
-    expect(crossReferences.getAttribute('aria-describedby')).toBeTruthy();
-    expect(screen.getByText('This server does not rank by cross-references yet.')).toBeTruthy();
+    expect(crossReferences.disabled).toBe(false);
+    expect(crossReferences.getAttribute('aria-describedby')).toBeNull();
 
     const slider = screen.getByRole('slider', { name: 'Corpus proximity' });
     fireEvent.change(slider, { target: { value: '0.8' } });

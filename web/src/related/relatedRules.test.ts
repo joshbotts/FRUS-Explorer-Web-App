@@ -6,7 +6,7 @@ import { decodedWeights, emptyDetail, encodedWeights, overflowLine, rowTitle, we
 
 const axes: RelatedAxis[] = [
   { id: 'archivalProvenance', name: 'Archival provenance', weight: 1, defaultWeight: 1, available: true },
-  { id: 'crossReference', name: 'Cross-references', weight: 1, defaultWeight: 1, available: false },
+  { id: 'crossReference', name: 'Cross-references', weight: 1, defaultWeight: 1, available: true },
   { id: 'dateProximity', name: 'Close in date', weight: 0.5, defaultWeight: 0.5, available: true },
   { id: 'subseries', name: 'Corpus proximity', weight: 0.3, defaultWeight: 0.3, available: true },
   { id: 'sharedPersons', name: 'Shared people', weight: 0.7, defaultWeight: 0.7, available: true },

@@ -249,6 +249,63 @@ let package = Package(
             swiftSettings: swift6
         ),
 
+        // Check 8's comparator (S23c's pin move, for FRUS-Explorer#1894): the Source Explorer export
+        // generator's core, whose `SourceExplorerExportRunner.exportRecord` builds the record the
+        // export gives a source note by the generator's own reading, apart from the kit's
+        // `SourceExplorerResolution`, and the five cores it reads, each with upstream's dependencies
+        // and settings, with the generator's own tests. The parity harness alone links them, and no
+        // image a release ships holds it: the server needs none of them. A file that imports both
+        // FRUSCoreKit and these cores sees two each of CentralFilesIndex, CollectionAuthorityIndex,
+        // CountryRoll, LotFileEntry, NumericalFileIndex, NumericalFileRoll and VolumeSourcesIndex, and
+        // names them by module; and CountrySeriesIndex and GeoKeyNormalizer, internal to the kit, are the
+        // cores' alone there, but twice over where the file imports the kit `@testable`.
+        .target(
+            name: "LotClaimantsIndexGeneratorCore",
+            dependencies: ["GeneratorKit", "SourceNoteKit"],
+            path: "\(upstream)/LotClaimantsIndexGeneratorCore",
+            swiftSettings: swift6
+        ),
+        // Its NARA Catalog harvest client imports FoundationNetworking, behind `canImport`.
+        .target(
+            name: "CentralFilesIndexGeneratorCore",
+            dependencies: ["GeneratorKit", "SourceNoteKit", "LotClaimantsIndexGeneratorCore"],
+            path: "\(upstream)/CentralFilesIndexGeneratorCore",
+            swiftSettings: swift6
+        ),
+        .target(
+            name: "VolumeSourcesIndexGeneratorCore",
+            dependencies: ["CentralFilesIndexGeneratorCore", "SourceNoteKit", "GeneratorKit"],
+            path: "\(upstream)/VolumeSourcesIndexGeneratorCore",
+            swiftSettings: swift6
+        ),
+        .target(
+            name: "CollectionAuthorityGeneratorCore",
+            dependencies: ["SourceNoteKit", "VolumeSourcesIndexGeneratorCore"],
+            path: "\(upstream)/CollectionAuthorityGeneratorCore",
+            swiftSettings: swift6
+        ),
+        .target(
+            name: "SourceProvenanceIndexGeneratorCore",
+            dependencies: ["SourceNoteKit", "GeneratorKit"],
+            path: "\(upstream)/SourceProvenanceIndexGeneratorCore",
+            swiftSettings: swift6
+        ),
+        .target(
+            name: "SourceExplorerExportGeneratorCore",
+            dependencies: [
+                "SourceNoteKit", "GeneratorKit", "SourceProvenanceIndexGeneratorCore", "CollectionAuthorityGeneratorCore",
+                "VolumeSourcesIndexGeneratorCore", "CentralFilesIndexGeneratorCore",
+            ],
+            path: "\(upstream)/SourceExplorerExportGeneratorCore",
+            swiftSettings: swift6
+        ),
+        .testTarget(
+            name: "SourceExplorerExportGeneratorTests",
+            dependencies: ["SourceExplorerExportGeneratorCore"],
+            path: "\(upstream)/SourceExplorerExportGeneratorTests",
+            swiftSettings: swift6
+        ),
+
         // The parity harness (checks 2-4): golden-file formats, shared with tools/mac-golden. Since
         // S17c's pin move it splits prose into paragraphs with the kit's `CollectionProse.append`.
         // Its SHA-256 is CryptoKit's on Apple platforms and swift-crypto's on Linux, as the kit's is:
@@ -266,11 +323,13 @@ let package = Package(
         // The harness itself: the index summary (check 2), the parse and results comparisons
         // (check 3), the render comparison (check 4), the golden files' validation, and the
         // indexing metrics; since S16c, the import of a Mac JSON export it is given, through the
-        // server's own mapping, read back from the store.
+        // server's own mapping, read back from the store; and since S23c's pin move check 8's
+        // comparator, the export generator's core, for S22d's check.
         .target(
             name: "FRUSParity",
             dependencies: [
                 "ParityFormat", "FTS5Store", "FRUSCoreKit", "CSQLite", "FRUSLightCore", "FRUSRichText", "FRUSLightAPI",
+                "SourceExplorerExportGeneratorCore", "CentralFilesIndexGeneratorCore", "VolumeSourcesIndexGeneratorCore",
                 .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "Tests/FRUSParity",
@@ -320,6 +379,7 @@ let package = Package(
             dependencies: [
                 "FRUSParity", "ParityFormat", "FTS5Store", "FRUSCoreKit", "FRUSLightTestSupport", "FRUSLightCore", "CSQLite",
                 "FRUSLightAPI", "FRUSRichText", .product(name: "HummingbirdTesting", package: "hummingbird"),
+                "SourceNoteKit", "SourceExplorerExportGeneratorCore", "CentralFilesIndexGeneratorCore", "VolumeSourcesIndexGeneratorCore",
             ],
             path: "Tests/FRUSParityTests",
             swiftSettings: swift6
