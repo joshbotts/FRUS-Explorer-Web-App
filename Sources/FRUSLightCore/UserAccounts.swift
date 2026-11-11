@@ -39,12 +39,15 @@ public enum AccountStoreError: Error, Equatable, CustomStringConvertible {
     case notFound(String)
     /// The user's password changed, or they were disabled, while they signed in.
     case changed(String)
+    /// The change would leave no admin who can sign in (PLAN's S20d): the user is the last.
+    case lastAdmin(String)
 
     public var description: String {
         switch self {
         case .exists(let id): "There is already a user named \(id)."
         case .notFound(let id): "There is no user named \(id)."
         case .changed(let id): "\(id)'s password or account changed while they signed in."
+        case .lastAdmin(let id): "\(id) is the last admin who can sign in: make another account an admin first."
         }
     }
 }
@@ -65,6 +68,11 @@ public protocol AccountStore: Sendable {
     /// Disables a user, at `time` unless they were already, ending each of their sessions; or enables
     /// them again.
     func setDisabled(_ disabled: Bool, of id: String, at time: Date) throws
+    /// An admin's change (PLAN's S20d): sets the user's role, or disables or enables them, as
+    /// `setRole` and `setDisabled` do, in one transaction that is refused, as
+    /// `AccountStoreError.lastAdmin`, when it would leave no admin who can sign in. Gives the account.
+    @discardableResult
+    func changeAccount(_ id: String, role: AccountRole?, disabled: Bool?, at time: Date) throws -> Account
 }
 
 /// What a name or a display name may be: the rule a proxy's header is held to (S14e), at most 256
@@ -160,13 +168,32 @@ extension RelationalUserStore: AccountStore, SessionStore {
     public func setDisabled(_ disabled: Bool, of id: String, at time: Date) throws {
         try writing(outsideSearch: true) { db in
             try Self.requireUser(id, in: db)
-            if disabled {
-                _ = try db.query("UPDATE users SET disabled_at = coalesce(disabled_at, ?) WHERE user_id = ?",
-                                 [Self.date(time), .text(id)])
-                _ = try db.query("DELETE FROM sessions WHERE user_id = ?", [.text(id)])
-            } else {
-                _ = try db.query("UPDATE users SET disabled_at = NULL WHERE user_id = ?", [.text(id)])
-            }
+            try Self.setDisabled(disabled, of: id, at: time, in: db)
+        }
+    }
+
+    private static func setDisabled(_ disabled: Bool, of id: String, at time: Date, in db: UserStoreTransaction) throws {
+        if disabled {
+            _ = try db.query("UPDATE users SET disabled_at = coalesce(disabled_at, ?) WHERE user_id = ?", [date(time), .text(id)])
+            _ = try db.query("DELETE FROM sessions WHERE user_id = ?", [.text(id)])
+        } else {
+            _ = try db.query("UPDATE users SET disabled_at = NULL WHERE user_id = ?", [.text(id)])
+        }
+    }
+
+    @discardableResult
+    public func changeAccount(_ id: String, role: AccountRole?, disabled: Bool?, at time: Date) throws -> Account {
+        try writing(outsideSearch: true) { db in
+            try Self.requireUser(id, in: db)
+            let admins = "SELECT count(*) FROM users WHERE role = 'admin' AND password_hash IS NOT NULL AND disabled_at IS NULL"
+            let before = try db.scalar(admins, [])?.integer ?? 0
+            if let role { _ = try db.query("UPDATE users SET role = ? WHERE user_id = ?", [.text(role.rawValue), .text(id)]) }
+            if let disabled { try Self.setDisabled(disabled, of: id, at: time, in: db) }
+            // Checked after the change, in its transaction, so two admins who change each other at once
+            // cannot both pass: the second waits for the first, and counts what it left.
+            if before > 0, try db.scalar(admins, [])?.integer ?? 0 == 0 { throw AccountStoreError.lastAdmin(id) }
+            guard let account = try Self.account(id, in: db) else { throw AccountStoreError.notFound(id) }
+            return account
         }
     }
 

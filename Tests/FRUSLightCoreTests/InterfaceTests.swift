@@ -75,21 +75,26 @@ import Testing
         #expect(try store.session(other.id, at: clock.now) == nil)
     }
 
-    @Test func jobsRunOneAtATimeInOrder() async {
+    @Test func jobsRunOneAtATimeInOrder() async throws {
         let queue = InProcessJobQueue()
         let log = Log()
-        let first = await queue.submit("first") {
+        let first = try await queue.submit(.indexImport) { _ in
             try await Task.sleep(for: .milliseconds(50))
             await log.append("first")
+            return nil
         }
-        let second = await queue.submit("second") { await log.append("second") }
-        let failing = await queue.submit("failing") { throw CocoaError(.fileNoSuchFile) }
+        let second = try await queue.submit(.indexImport) { _ in
+            await log.append("second")
+            return nil
+        }
+        let failing = try await queue.submit(.indexImport) { _ in throw CocoaError(.fileNoSuchFile) }
         await queue.waitUntilIdle()
         #expect(await log.entries == ["first", "second"])
-        #expect(await queue.record(id: first)?.state == .succeeded)
-        #expect(await queue.record(id: second)?.state == .succeeded)
-        #expect(await queue.record(id: failing)?.state == .failed)
-        #expect(await queue.records().map(\.id) == [first, second, failing])
+        #expect(await queue.job(first.id)?.state == .succeeded)
+        #expect(await queue.job(second.id)?.state == .succeeded)
+        #expect(await queue.job(failing.id)?.state == .failed)
+        #expect(await queue.job(failing.id)?.error == Job.unexplained, "an error the server did not word is not repeated")
+        #expect(await queue.jobs().map(\.id) == [failing, second, first].map(\.id), "newest first")
     }
 
     @Test func dataDirectoryFollowsTheSpecLayout() throws {

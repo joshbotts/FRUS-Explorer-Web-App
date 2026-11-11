@@ -227,6 +227,24 @@ status=$(curl -s --max-time 5 "$base/api/v1/status") || fail "/api/v1/status did
 printf '%s' "$status" | grep -q '"documents":7' || fail "status does not report 7 documents: $status"
 echo "   status: $(printf '%s' "$status" | sed -nE 's/.*"sqliteVersion":"([^"]+)".*/SQLite \1/p'), 7 documents"
 
+echo "== admin: the import's job (PLAN's S20d)"
+# The export the drop zone took ran as a job of the server's queue, which the admin's list names,
+# finished, asked for by the server itself; the admin step on local accounts finds it again, after the
+# restarts between, since the queue keeps its jobs in the user store.
+# /readyz turns 200 as the job installs the index, a moment before the job itself has finished.
+import_job=""
+for _ in $(seq 1 20); do
+  jobs=$(curl -s --max-time 5 -H "Host: localhost:8080" "$base/api/v1/admin/jobs") || fail "/api/v1/admin/jobs did not answer"
+  import_job=$(python3 -c 'import json, sys
+jobs = [j for j in json.loads(sys.argv[1])["jobs"] if j["kind"] == "indexImport" and j.get("subject") == "export.sqlite"]
+print(jobs[0]["id"] if len(jobs) == 1 and jobs[0]["state"] == "succeeded" and "requestedBy" not in jobs[0] else "")' "$jobs") \
+    || fail "the jobs list is not one: $jobs"
+  [ -n "$import_job" ] && break
+  sleep 0.25
+done
+[ -n "$import_job" ] || fail "the jobs list does not name the import's job, finished: $jobs"
+echo "   job $import_job, the index import of export.sqlite, finished"
+
 echo "== install: the image's labels"
 # The app build whose exports the image serves, and the index version, which a release names
 # (PLAN's S14g): the index version is the one the server serves.
@@ -778,6 +796,86 @@ if [ -n "$e2e" ]; then
     FRUS_E2E_BASE_URL=http://localhost:8080/frus-explorer/ scripts/npm --playwright \
     || fail "the accounts spec failed; web/playwright-report has its report"
 fi
+
+echo "== admin: the users, a reader refused, the jobs, and a user's research erased, with local accounts (PLAN's S20d)"
+# erin, the admin, and frank, a reader, sign in again, waiting out the slowing the step before left on
+# this address. frank is refused every route under /api/v1/admin, reads and changes alike; erin lists
+# the accounts, gives frank a role his session has at once, and cannot demote herself, the last admin
+# who can sign in; the import's job is listed still, finished, after the restarts since; and erin
+# erases frank's research once she has counted it, after which his export is empty and hers is not.
+sign_in_again() {  # $1: the name. Signs in with the run's password, waiting out a slowing; prints the cookie.
+  local answer wait
+  for _ in 1 2 3 4 5 6; do
+    answer=$(auth sign-in "{\"name\":\"$1\",\"password\":\"$password\"}")
+    case "$answer" in
+      *' 200') cookie_of; return 0 ;;
+      *'"code":"SIGN_IN_SLOWED"'*' 429')
+        wait=$(sed -nE 's/^[Rr]etry-[Aa]fter: ([0-9]+).*/\1/p' "$work/auth.headers" | tr -d '\r')
+        sleep "$((${wait:-1} + 1))" ;;
+      *) fail "$1's sign-in answered $answer" ;;
+    esac
+  done
+  fail "$1's sign-in was slowed six times"
+}
+token_of() { as_session "$1" "$under/api/v1/me" | sed -nE 's/.*"csrfToken":"([0-9a-f]+)".*/\1/p'; }
+as_change() {  # $1: the cookie; $2: its token; the rest: curl's arguments
+  local cookie=$1 csrf=$2
+  shift 2
+  as_session "$cookie" -H 'Origin: http://localhost:8080' -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" "$@"
+}
+erin=$(sign_in_again erin)
+frank=$(sign_in_again frank)
+erin_token=$(token_of "$erin")
+frank_token=$(token_of "$frank")
+[ -n "$erin_token" ] && [ -n "$frank_token" ] || fail "erin and frank are not both signed in again"
+for route in status jobs "jobs/$import_job" users users/erin/research backups backup secrets; do
+  answer=$(as_session "$frank" -w ' %{http_code}' "$under/api/v1/admin/$route")
+  case "$answer" in *'"code":"ROLE_REQUIRED"'*' 403') ;; *) fail "frank, a reader, was answered for /api/v1/admin/$route: $answer" ;; esac
+done
+for change in "POST jobs/$import_job/cancel" "POST index/reset" "POST users" "PATCH users/frank" "PUT users/frank/password" \
+    "POST users/erin/research/erase" "PUT secrets/nara" "DELETE secrets/nara"; do
+  answer=$(as_change "$frank" "$frank_token" -X "${change%% *}" --data '{"role":"admin","expected":{}}' -w ' %{http_code}' \
+    "$under/api/v1/admin/${change#* }")
+  case "$answer" in *'"code":"ROLE_REQUIRED"'*' 403') ;; *) fail "frank, a reader, was answered for $change: $answer" ;; esac
+done
+users=$(as_session "$erin" "$under/api/v1/admin/users")
+python3 -c 'import json, sys
+d = json.loads(sys.argv[1])
+roles = {u["id"]: u["role"] for u in d["users"]}
+signed = {u["id"] for u in d["users"] if u.get("lastSignInAt")}
+sys.exit(0 if d["auth"] == "local" and roles.get("erin") == "admin" and roles.get("frank") == "reader" and {"erin", "frank"} <= signed else 1)' "$users" \
+  || fail "the users list is not erin, an admin, and frank, a reader, each signed in: $users"
+changed=$(as_change "$erin" "$erin_token" -X PATCH --data '{"role":"curator"}' -w ' %{http_code}' "$under/api/v1/admin/users/frank")
+case "$changed" in *'"role":"curator"'*' 200') ;; *) fail "erin could not make frank a curator: $changed" ;; esac
+case "$(as_session "$frank" "$under/api/v1/me")" in *'"curator"'*) ;; *) fail "frank's session does not have his new role" ;; esac
+changed=$(as_change "$erin" "$erin_token" -X PATCH --data '{"role":"reader"}' -w ' %{http_code}' "$under/api/v1/admin/users/frank")
+case "$changed" in *'"role":"reader"'*' 200') ;; *) fail "erin could not make frank a reader again: $changed" ;; esac
+last=$(as_change "$erin" "$erin_token" -X PATCH --data '{"role":"reader"}' -w ' %{http_code}' "$under/api/v1/admin/users/erin")
+case "$last" in *'"code":"LAST_ADMIN"'*' 409') ;; *) fail "erin, the last admin who can sign in, could demote herself: $last" ;; esac
+jobs=$(as_session "$erin" "$under/api/v1/admin/jobs")
+python3 -c 'import json, sys
+sys.exit(0 if any(j["id"] == sys.argv[2] and j["state"] == "succeeded" for j in json.loads(sys.argv[1])["jobs"]) else 1)' "$jobs" "$import_job" \
+  || fail "the import's job, $import_job, is not listed finished after the restarts: $jobs"
+made=$(as_change "$frank" "$frank_token" --data '{"name":"Frank"}' "$under/api/v1/me/tags")
+case "$made" in *'"name":"Frank"'*) ;; *) fail "frank's tag was not made: $made" ;; esac
+# What erin holds of her own, which her export's count cannot say: as an admin, a curator, her export
+# also counts the instance's corrections, which are everyone's.
+total_of() { as_session "$erin" "$under/api/v1/admin/users/$1/research" | python3 -c 'import json, sys; print(json.load(sys.stdin)["total"])'; }
+erin_held=$(total_of erin) || fail "erin's research was not counted"
+[ "$erin_held" -ge 1 ] || fail "erin holds no research of her own before frank's erasure: $erin_held"
+counted=$(as_session "$erin" "$under/api/v1/admin/users/frank/research")
+expected=$(python3 -c 'import json, sys
+d = json.loads(sys.argv[1])
+assert d["userId"] == "frank" and d["total"] >= 1
+print(json.dumps({"expected": {h["table"]: h["count"] for h in d["holdings"]}}))' "$counted") || fail "frank's research was not counted: $counted"
+erased=$(as_change "$erin" "$erin_token" --data "$expected" -w ' %{http_code}' "$under/api/v1/admin/users/frank/research/erase")
+case "$erased" in *'"userId":"frank"'*' 200') ;; *) fail "erin could not erase frank's research: $erased" ;; esac
+held() { as_session "$1" "$under/api/v1/me/export/contents" | python3 -c 'import json, sys; print(sum(t["count"] for t in json.load(sys.stdin)["types"]))'; }
+[ "$(held "$frank")" = 0 ] || fail "frank's export is not empty after the erasure"
+[ "$(held "$erin")" -ge 1 ] || fail "erin's export is empty after frank's erasure"
+[ "$(total_of erin)" = "$erin_held" ] || fail "erin's own research changed with frank's erasure: $erin_held before, $(total_of erin) after"
+[ "$(total_of frank)" = 0 ] || fail "frank still holds research after the erasure"
+echo "   frank refused every admin route; erin lists the accounts, gives frank a role at once, and cannot demote herself; the import's job listed still, after the restarts; frank's research erased, his export empty and erin's not"
 
 echo "== install: signing in through the proxy, FRUS_AUTH=header behind docs/INSTALL.md's recipe"
 # nginx runs the recipe with a stand-in for oauth2-proxy on 127.0.0.1:4180 in its own container:

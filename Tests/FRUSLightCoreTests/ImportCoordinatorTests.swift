@@ -15,7 +15,7 @@ struct WatchFixture {
 
     init(store: ((DataDirectory) -> any FileStore)? = nil, retryDelay: Duration = .seconds(60),
          removeFile: (@Sendable (URL) throws -> Void)? = nil,
-         isReadable: (@Sendable (String) -> Bool)? = nil,
+         isReadable: (@Sendable (String) -> Bool)? = nil, alsoNotify: (any ImportObserver)? = nil,
          log: @escaping @Sendable (String) -> Void = { _ in }) throws {
         directory = try TemporaryDirectory()
         files = DataDirectory(root: directory.url.appendingPathComponent("data"))
@@ -25,7 +25,7 @@ struct WatchFixture {
         jobs = InProcessJobQueue()
         coordinator = ImportCoordinator(
             files: used, importer: IndexImporter(files: used, writer: LocalIndexWriter(files: used)),
-            state: state, jobs: jobs, retryDelay: retryDelay,
+            state: state, jobs: jobs, alsoNotify: alsoNotify, retryDelay: retryDelay,
             removeFile: removeFile ?? { try FileManager.default.removeItem(at: $0) },
             isReadable: isReadable ?? { FileManager.default.isReadableFile(atPath: $0) })
     }
@@ -40,7 +40,7 @@ struct WatchFixture {
 
     /// Scans until an import starts or `limit` scans pass, then waits for the import to finish.
     @discardableResult
-    func scanUntilImported(limit: Int = 3) async -> Int? {
+    func scanUntilImported(limit: Int = 3) async -> String? {
         for _ in 0..<limit {
             if let job = await coordinator.scan() {
                 await jobs.waitUntilIdle()
@@ -51,7 +51,93 @@ struct WatchFixture {
     }
 }
 
+/// Cancels the import's job as it reaches a step (S20d).
+final class CancelAtStep: ImportObserver, @unchecked Sendable {
+    let step: ReadinessStep
+    var jobs: InProcessJobQueue?
+    var reached: [ReadinessStep] = []
+
+    init(_ step: ReadinessStep) { self.step = step }
+
+    func importDidReach(_ step: ReadinessStep, detail: String, progress: Double?) async {
+        if reached.last != step { reached.append(step) }
+        guard step == self.step, let jobs, let job = await jobs.jobs().first(where: { $0.state == .running }) else { return }
+        _ = try? await jobs.cancel(job.id, by: "alice")
+    }
+}
+
 @Suite struct ImportCoordinatorTests {
+    /// The index's reset (S20d) removes nothing an import made live after it was asked for; and a reset
+    /// while the start opens the index found there wins, so the server waits for an export.
+    @Test func aResetRemovesNoIndexMadeLiveAfterItWasAskedFor() async throws {
+        let fixture = try WatchFixture()
+        let asked = await fixture.state.indexGeneration
+        _ = try fixture.drop(SyntheticExport())
+        #expect(await fixture.scanUntilImported() != nil)
+        #expect(await fixture.state.readiness().ready)
+        await #expect(throws: IndexResetRefusal.self) { _ = try await fixture.state.resetIndex(files: fixture.files, askedAt: asked) }
+        #expect(await fixture.state.readiness().ready, "the new index is still served")
+        #expect(FileManager.default.fileExists(atPath: fixture.files.liveIndex.path))
+        let served = try #require(await fixture.state.status().index)
+        let removed = try await fixture.state.resetIndex(files: fixture.files, askedAt: fixture.state.indexGeneration)
+        #expect(removed == served)
+        #expect(await fixture.state.readiness().step == .waitingForExport)
+        #expect(!FileManager.default.fileExists(atPath: fixture.files.liveIndex.path))
+        #expect(!FileManager.default.fileExists(atPath: fixture.files.previousIndex.path))
+
+        // An index found at start, reset while the start opens it, is not served.
+        let started = try WatchFixture()
+        try SyntheticExport().write(to: started.files.liveIndex)
+        await started.state.prepareToOpenExistingIndex(files: started.files)
+        let generation = await started.state.indexGeneration
+        async let opening: Void = started.state.openExistingIndex(files: started.files)
+        _ = try await started.state.resetIndex(files: started.files, askedAt: generation)
+        await opening
+        #expect(await started.state.status().index == nil, "the reset wins")
+        let readiness = await started.state.readiness()
+        #expect(readiness.step == .waitingForExport, "\(readiness)")
+    }
+
+    /// An import's job cancelled between its steps (S20d) stops before the next, changing nothing: no
+    /// index served, no copy left, the file kept in the drop zone and not tried again while unchanged;
+    /// and one cancelled while it waits never begins.
+    @Test func anImportCancelledBetweenItsStepsChangesNothing() async throws {
+        let observer = CancelAtStep(.checkingFormat)
+        let fixture = try WatchFixture(alsoNotify: observer)
+        observer.jobs = fixture.jobs
+        let source = try fixture.drop(SyntheticExport())
+        let job = try #require(await fixture.scanUntilImported())
+        let stopped = try #require(await fixture.jobs.job(job))
+        #expect(stopped.state == .cancelled && stopped.cancelRequestedBy == "alice" && stopped.progress == "Checking the file's format")
+        #expect(observer.reached == [.copyingExport, .checkingFormat], "it stopped before checking the versions")
+        #expect(await fixture.state.status().lastImport?.outcome == .cancelled)
+        #expect(await !fixture.state.readiness().ready)
+        #expect(await fixture.state.status().index == nil)
+        #expect(!FileManager.default.fileExists(atPath: fixture.files.candidateIndex.path), "its copy removed")
+        #expect(!FileManager.default.fileExists(atPath: fixture.files.liveIndex.path))
+        #expect(FileManager.default.fileExists(atPath: source.path), "the file is kept")
+        #expect(await fixture.coordinator.scan() == nil, "and not tried again while it is unchanged")
+
+        // One queued behind another job, cancelled while it waits, never begins, and frees the watcher.
+        let other = try WatchFixture()
+        let gate = JobGate()
+        _ = try await other.jobs.submit(.researchImport) { _ in
+            await gate.wait()
+            return nil
+        }
+        _ = try other.drop(SyntheticExport())
+        #expect(await other.coordinator.scan() == nil)
+        let waiting = try #require(await other.coordinator.scan())
+        _ = try await other.jobs.cancel(waiting, by: "alice")
+        #expect(await other.state.status().lastImport?.outcome == .cancelled)
+        gate.open()
+        await other.jobs.waitUntilIdle()
+        #expect(await other.jobs.job(waiting)?.startedAt == nil, "it never began")
+        let renamed = try other.drop(SyntheticExport(), as: "export-2.sqlite")
+        #expect(await other.scanUntilImported() != nil, "the watcher takes the next file")
+        #expect(!FileManager.default.fileExists(atPath: renamed.path))
+    }
+
     @Test func importsAFileOnceItStopsChanging() async throws {
         let fixture = try WatchFixture()
         let source = fixture.files.importDirectory.appendingPathComponent("export.sqlite")
@@ -65,7 +151,9 @@ struct WatchFixture {
         #expect(await fixture.state.readiness().ready)
         #expect(await fixture.state.status().lastImport?.outcome == .installed)
         #expect(!FileManager.default.fileExists(atPath: source.path), "an installed export is removed from the drop zone")
-        #expect(await fixture.jobs.record(id: job!)?.state == .succeeded)
+        #expect(await fixture.jobs.job(job!)?.state == .succeeded)
+        let listed = await fixture.jobs.job(job!)
+        #expect(listed?.kind == .indexImport && listed?.subject == "export.sqlite")
     }
 
     @Test func waitsForAFileStillBeingCopied() async throws {

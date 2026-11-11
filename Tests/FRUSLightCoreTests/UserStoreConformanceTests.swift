@@ -55,7 +55,7 @@ import Testing
 
     /// Each store's migrations make the 23 tables, each column as `UserStoreSchema` describes it and of
     /// the type its kind is kept as, with `user_id` first in a user table's key, and nothing else but
-    /// the users, their sessions (S20b), the stored keys (S20c) and the migrations: app.db with `user_search` beside them, the PostgreSQL store with
+    /// the users, their sessions (S20b), the stored keys (S20c), the jobs (S20d) and the migrations: app.db with `user_search` beside them, the PostgreSQL store with
     /// each table's `rowid`, the number SQLite gives every row, and every text in the "C" collation.
     @Test(arguments: UserStoreKind.available)
     func eachStoresMigrationsMakeTheTablesTheSchemaDescribes(_ kind: UserStoreKind) async throws {
@@ -108,7 +108,7 @@ import Testing
             tables = Set(try rows.stored("SELECT table_name::text FROM information_schema.tables WHERE table_schema = current_schema()", [])
                 .compactMap { $0[0].text })
         }
-        #expect(tables == Set(UserStoreSchema.tables.map(\.name) + ["users", "sessions", "secrets", "schema_migrations"]))
+        #expect(tables == Set(UserStoreSchema.tables.map(\.name) + ["users", "sessions", "secrets", "jobs", "schema_migrations"]))
         #expect(PostgreSQLMigrations.all.count == UserStoreMigrations.all.count, "the same numbered migrations")
     }
 

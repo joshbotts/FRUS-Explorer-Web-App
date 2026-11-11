@@ -80,9 +80,9 @@ private func holds(_ bytes: [UInt8], _ part: [UInt8]) -> Bool {
         let tag = try old.createTag(named: "Kept", for: "reader@example.org", at: Self.created)
 
         let store = try await UserStoreTests.open(directory)
-        #expect(try store.schemaVersion() == 5)
+        #expect(try store.schemaVersion() == UserStoreMigrations.all.count)
         let backup = try #require(store.migration?.backup)
-        #expect(store.migration == UserStoreMigration(from: 4, to: 5, backup: backup))
+        #expect(store.migration == UserStoreMigration(from: 4, to: UserStoreMigrations.all.count, backup: backup))
         #expect(backup.lastPathComponent == "app-20261024T000000Z-before-migration-5.db")
         #expect(BackupManifest.Secrets.held(in: backup) == nil, "the copy from before has no table for them")
         #expect(try store.tags(of: "reader@example.org") == [tag])
@@ -185,8 +185,8 @@ struct PostgreSQLSecretMigrationTests {
 
             let store = try await PostgreSQLUserStoreTests.open(configuration, in: directory)
             defer { store.close() }
-            #expect(store.migration == UserStoreMigration(from: 4, to: 5, backup: nil))
-            #expect(try store.schemaVersion() == 5)
+            #expect(store.migration == UserStoreMigration(from: 4, to: PostgreSQLMigrations.all.count, backup: nil))
+            #expect(try store.schemaVersion() == PostgreSQLMigrations.all.count)
             #expect(try store.tags(of: "reader@example.org") == [tag])
             #expect(try store.secretCounts().isEmpty)
             try store.setSecret([1], keyID: "k", named: "zotero", of: .user("reader@example.org"), at: UserSecretTests.created)

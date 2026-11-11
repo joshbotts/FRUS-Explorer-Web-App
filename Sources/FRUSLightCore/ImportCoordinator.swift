@@ -1,4 +1,5 @@
-// Watches /data/import for a finished export and imports it as a job.
+// Watches /data/import for a finished export and imports it as a job of the server's queue (PLAN's
+// S20d), which an admin may cancel between its steps.
 
 import Foundation
 
@@ -8,9 +9,9 @@ import Foundation
 /// written, so a file is imported only once it has stopped changing between two looks, and,
 /// for a SQLite file whose header records its size, once it has reached that size.
 ///
-/// A file is not tried again while it is unchanged once it has been installed, or refused for
-/// something about the file itself. A problem on the server's side, such as a full disk, is
-/// tried again after `retryDelay`.
+/// A file is not tried again while it is unchanged once it has been installed, refused for
+/// something about the file itself, or cancelled by an admin. A problem on the server's side, such
+/// as a full disk, is tried again after `retryDelay`.
 public actor ImportCoordinator {
     struct Signature: Equatable {
         let size: Int64
@@ -51,9 +52,9 @@ public actor ImportCoordinator {
         self.isReadable = isReadable
     }
 
-    /// Looks once, and starts an import if a file is ready. Returns the job id it started.
+    /// Looks once, and queues an import if a file is ready. Returns the job id it queued.
     @discardableResult
-    public func scan() async -> Int? {
+    public func scan() async -> String? {
         guard !busy else { return nil }
         let present = candidates()
         lastLook = lastLook.filter { present[$0.key] != nil }
@@ -101,22 +102,46 @@ public actor ImportCoordinator {
         }
 
         busy = true
-        await state.importStarted(file: file.lastPathComponent)
-        let observer = StateThenOthers(state: state, others: alsoNotify)
-        return await jobs.submit("import \(file.lastPathComponent)") { [importer, state, removeFile] in
-            do {
-                let imported = try await importer.importExport(at: file, observer: observer)
-                var note: String?
-                do { try removeFile(file) } catch {
-                    note = "The file could not be removed from /data/import: \(error.localizedDescription)"
-                }
-                await state.importFinished(file: file.lastPathComponent, index: imported.index, writing: imported.writing, note: note)
+        let name = file.lastPathComponent
+        // /readyz names the import from here, as it did before imports were jobs (S20d).
+        await state.importStarted(file: name)
+        do {
+            let job = try await jobs.submit(.indexImport, subject: name, requestedBy: nil, id: nil, onCancel: { [state] in
+                // Cancelled before it began: the file waits as one cancelled between steps does.
+                await state.importCancelled(file: name)
                 await self.finished(file: file, signature: signature, retry: false)
-            } catch {
-                await state.importFailed(file: file.lastPathComponent, error: error)
-                await self.finished(file: file, signature: signature, retry: !(error is ImportRefusal))
-                throw error
+            }) { [importer, state, removeFile, alsoNotify] job in
+                let observer = StateThenOthers(state: state, others: alsoNotify, job: job)
+                do {
+                    let imported = try await importer.importExport(at: file, observer: observer, job: job)
+                    var note: String?
+                    do { try removeFile(file) } catch {
+                        note = "The file could not be removed from /data/import: \(error.localizedDescription)"
+                    }
+                    let message = await state.importFinished(file: name, index: imported.index, writing: imported.writing, note: note)
+                    await self.finished(file: file, signature: signature, retry: false)
+                    return message
+                } catch is JobCancelled {
+                    // Nothing changed; the file waits in the drop zone, not tried again until it changes.
+                    await state.importCancelled(file: name)
+                    await self.finished(file: file, signature: signature, retry: false)
+                    throw JobCancelled()
+                } catch {
+                    // A step that failed after an admin asked the job to stop: the file waits, as a cancel's.
+                    let stopped = await job.cancelRequested
+                    await state.importFailed(file: name, error: error)
+                    await self.finished(file: file, signature: signature, retry: !stopped && !(error is ImportRefusal))
+                    throw error
+                }
             }
+            return job.id
+        } catch {
+            // The store could not keep the job's row: a problem on the server's side, tried again later.
+            let problem = ImportProblem(.copyingExport, "The import of \(name) could not be queued, since the user store could not keep its job. It is tried again within a minute",
+                                        logged: "\(error)")
+            await state.importFailed(file: name, error: problem)
+            finished(file: file, signature: signature, retry: true)
+            return nil
         }
     }
 
@@ -193,13 +218,26 @@ public actor ImportCoordinator {
     }
 }
 
-/// Updates the server state first, then any other observer.
+/// Updates the server state first, then any other observer, then the import's job, whose line in the
+/// admin's Jobs list is the step's.
 private struct StateThenOthers: ImportObserver {
     let state: ServerState
     let others: (any ImportObserver)?
+    let job: JobContext
 
     func importDidReach(_ step: ReadinessStep, detail: String, progress: Double?) async {
         await state.importDidReach(step, detail: detail, progress: progress)
         await others?.importDidReach(step, detail: detail, progress: progress)
+        await job.progress(detail, fraction: progress)
     }
+}
+
+/// An import's refusals and the server's problems are the server's own sentences, which `/api/v1/status`
+/// gives already: a job's row keeps them as they are.
+extension ImportRefusal: JobFailure {
+    public var jobMessage: String { reason }
+}
+
+extension ImportProblem: JobFailure {
+    public var jobMessage: String { reason }
 }

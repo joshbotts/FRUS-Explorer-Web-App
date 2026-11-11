@@ -49,7 +49,7 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     if let userData {
         AuthRoutes.add(to: router, services: userData)
         UserDataRoutes.add(to: router, services: userData, resources: resources, reader: reader, provider: provider)
-        AdminRoutes.add(to: router, services: userData)
+        AdminRoutes.add(to: router, services: userData, state: state, resources: resources)
     }
     // Last, so it wraps only the requests no route answers.
     if let webClient { router.add(middleware: WebClientMiddleware(webClient, logger: logger)) }

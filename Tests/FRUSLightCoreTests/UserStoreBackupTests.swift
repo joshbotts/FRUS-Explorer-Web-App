@@ -133,6 +133,10 @@ import Testing
         #expect(try await backups.check(at: Self.hour) == .empty)
         #expect(try await fixture.backups(marked: false).backUp(at: Self.hour) == .empty)
         #expect(fixture.daily().isEmpty)
+        // A job's row, as an index's import leaves before any research comes (S20d), is none.
+        try fixture.rows.run("INSERT INTO jobs (job_id, kind, state, queued_at) VALUES ('J1', 'indexImport', 'succeeded', '2026-10-27T03:00:00.000Z')")
+        #expect(try UserStoreBackup.holdsNoResearch(fixture.files.userStore), "the server's jobs are no research")
+        #expect(try await backups.check(at: Self.hour) == .empty)
         try fixture.rows.addNote("N1")
         try fixture.rows.run("INSERT INTO user_search (user_id, document_id, volume_id, note_text) VALUES ('owner', 'd1', 'frus1961-63v06', 'A note.')")
         #expect(try !UserStoreBackup.holdsNoResearch(fixture.files.userStore))

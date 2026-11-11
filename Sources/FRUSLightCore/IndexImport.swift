@@ -136,9 +136,14 @@ public struct IndexImporter: Sendable {
     /// server's) nothing changes, with one exception: when installing the copy fails, the owner's
     /// writing an export held stays kept in the user's store, and a retry keeps it as it is. The
     /// source file is never modified or removed; the caller decides what happens to it.
-    public func importExport(at source: URL, observer: some ImportObserver) async throws -> ImportedExport {
+    ///
+    /// Run as a job (PLAN's S20d), a cancel asked for meanwhile stops it before its next step, as
+    /// `JobCancelled`, with nothing changed and the copy removed, until it moves the owner's writing or
+    /// installs the copy, from where it runs to its end (`JobContext.commit`).
+    public func importExport(at source: URL, observer: some ImportObserver, job: JobContext? = nil) async throws -> ImportedExport {
         let name = source.lastPathComponent
         let candidate = files.candidateIndex
+        try await job?.checkpoint()
         removeCandidate()  // left behind by an interrupted import
 
         /// Runs blocking SQLite work for a step, off the cooperative pool, classifying its errors.
@@ -201,6 +206,7 @@ public struct IndexImporter: Sendable {
             }
             export.close()
 
+            try await job?.checkpoint()
             await observer.importDidReach(.checkingFormat, detail: "Checking the file's format", progress: nil)
             let provenance = try await run(.checkingFormat) {
                 // The live index is served immutable, so it needs no write-ahead log.
@@ -209,10 +215,12 @@ public struct IndexImporter: Sendable {
                 return try ExportChecks.provenance(copy)
             }
 
+            try await job?.checkpoint()
             await observer.importDidReach(.checkingVersions, detail: "Checking the index and FTS schema versions", progress: nil)
             _ = try await run(.checkingVersions) { try ExportChecks.checkVersions(copy, provenance: provenance) }
 
             let canKeep = writingMove != nil
+            try await job?.checkpoint()
             await observer.importDidReach(.checkingWriting, detail: canKeep && provenance?["my_writing_included"] == "1"
                 ? "Reading your notes, summaries and tags from the export" : "Checking that it holds no notes, summaries or tags",
                 progress: nil)
@@ -220,19 +228,24 @@ public struct IndexImporter: Sendable {
                 try ExportChecks.checkWriting(copy, provenance: provenance, canKeep: canKeep)
             }
             if writing != nil, let move = writingMove {
+                try await job?.checkpoint()
                 try await strip(copy, of: name, with: move.strip, observer: observer)
             }
 
+            try await job?.checkpoint()
             await observer.importDidReach(.checkingIntegrity, detail: "Checking the database and both full-text indexes", progress: nil)
             try await run(.checkingIntegrity) { try ExportChecks.checkIntegrity(copy) }
 
+            // From here the import changes what the server keeps, so it runs to its end.
+            try await job?.commit()
             if let writing, let move = writingMove {
                 await observer.importDidReach(.movingWriting, detail: "Moving your notes, summaries and tags into your research data",
                                               progress: nil)
                 do {
                     moved = try await Blocking.run { try move.keep(writing) }
                 } catch {
-                    throw ImportProblem(.movingWriting, "Your notes, summaries and tags could not be kept in your research data, so \(name) was not installed: \(error)")
+                    throw ImportProblem(.movingWriting, "Your notes, summaries and tags could not be kept in your research data, so \(name) was not installed. The server's log says why",
+                                        logged: "\(error)")
                 }
             }
         } catch {
@@ -245,7 +258,8 @@ public struct IndexImporter: Sendable {
             try await Blocking.run { [writer] in try writer.install(candidate: candidate) }
         } catch {
             removeCandidate()
-            throw ImportProblem(.installingIndex, "The new index could not be made live: \(error.localizedDescription)")
+            throw ImportProblem(.installingIndex, "The new index could not be made live, so the index before it is still the one served. The server's log says why",
+                                logged: error.localizedDescription)
         }
 
         await observer.importDidReach(.openingIndex, detail: "Opening the index read-only", progress: nil)

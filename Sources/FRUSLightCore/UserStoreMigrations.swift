@@ -4,7 +4,7 @@
 /// starting at 1. Never edit one that has shipped: add another, and with it any change to
 /// `UserStoreSchema`.
 public enum UserStoreMigrations {
-    public static let all: [String] = [one, two, three, four, five]
+    public static let all: [String] = [one, two, three, four, five, six]
 
     /// S2: the single user, and corrections as override rows.
     static let one = """
@@ -457,5 +457,31 @@ public enum UserStoreMigrations {
         );
         CREATE UNIQUE INDEX secrets_of_user ON secrets (user_id, name) WHERE user_id IS NOT NULL;
         CREATE UNIQUE INDEX secrets_of_instance ON secrets (name) WHERE user_id IS NULL;
+        """
+
+    /// S20d's: the server's jobs, which its queue runs one at a time, each a row kept as it goes, so
+    /// that the admin's Jobs list outlives a restart: what it does (`kind`, such as `indexImport`), what
+    /// it works on, its state, a line of its progress and how far through it is where it can tell, who
+    /// asked (NULL for the server itself, as an export found in /data/import), when it was queued,
+    /// started and finished, why it failed, and who asked it to stop, and when. A job a server stopped
+    /// mid-way is marked failed at the next start. The rows hold no research and no key: a user's id,
+    /// an export's file name and the server's own sentences.
+    static let six = """
+        CREATE TABLE jobs (
+            job_id TEXT PRIMARY KEY,
+            kind TEXT NOT NULL,
+            subject TEXT,
+            state TEXT NOT NULL CHECK (state IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')),
+            progress TEXT,
+            fraction REAL,
+            requested_by TEXT,
+            queued_at TEXT NOT NULL,
+            started_at TEXT,
+            finished_at TEXT,
+            error TEXT,
+            cancel_requested_by TEXT,
+            cancel_requested_at TEXT
+        );
+        CREATE INDEX jobs_by_state ON jobs (state, finished_at);
         """
 }

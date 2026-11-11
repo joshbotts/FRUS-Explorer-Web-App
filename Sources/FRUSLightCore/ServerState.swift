@@ -4,7 +4,8 @@ import Foundation
 
 /// How an import ended.
 public struct ImportReport: Sendable, Equatable, Codable {
-    public enum Outcome: String, Sendable, Codable { case installed, refused, failed }
+    /// `cancelled` when an admin stopped it between two of its steps (PLAN's S20d).
+    public enum Outcome: String, Sendable, Codable { case installed, refused, failed, cancelled }
 
     public var file: String
     public var outcome: Outcome
@@ -41,7 +42,7 @@ public struct ServerStatus: Sendable, Equatable, Codable {
 }
 
 public actor ServerState: ImportObserver {
-    public let configuration: ServerConfiguration
+    public nonisolated let configuration: ServerConfiguration
     /// The PDF service `FRUS_PDF_URL` names (PLAN's S25a), none when it is unset, which hides PDF.
     public nonisolated let pdf: PDFService?
     private let startedAt = Date()
@@ -54,6 +55,10 @@ public actor ServerState: ImportObserver {
     private var openingAtStart = false
     /// Files in the drop zone still being copied.
     private var stillCopying: [String] = []
+    /// Moved each time an import makes a new index live, and by each reset (PLAN's S20d): a reset asked
+    /// for at one removes nothing an import installed after it, and an index the start was opening when
+    /// a reset removed it is not served.
+    public private(set) var indexGeneration = 0
     private let log: @Sendable (String) -> Void
 
     public init(configuration: ServerConfiguration, log: @escaping @Sendable (String) -> Void = { _ in }) {
@@ -73,15 +78,28 @@ public actor ServerState: ImportObserver {
         let live = files.liveIndex
         guard FileManager.default.fileExists(atPath: live.path) else { return }
         openingAtStart = true
+        let generation = indexGeneration
+        let outcome: Result<CorpusIndex, any Error>
         do {
-            let opened = try await Blocking.run { try CorpusIndex.open(live) }
+            outcome = .success(try await Blocking.run { try CorpusIndex.open(live) })
+        } catch {
+            outcome = .failure(error)
+        }
+        // A reset that removed the file while it opened wins, whether the open finished or failed for
+        // it: the server waits for an export (S20d).
+        guard indexGeneration == generation else {
+            log("Not serving \(live.path): the index was reset while it was opened")
+            return
+        }
+        switch outcome {
+        case .success(let opened):
             if index == nil { index = opened }
             startupProblem = nil
             log("Serving \(opened.summary.documents) documents from \(opened.summary.volumes) volumes, index version \(opened.summary.indexVersion)")
-        } catch let refusal as ImportRefusal {
+        case .failure(let refusal as ImportRefusal):
             startupProblem = refusal
             log("Not serving \(live.path): \(refusal.reason)")
-        } catch {
+        case .failure(let error):
             startupProblem = ImportRefusal(.openingIndex, "The index could not be opened: \(error)")
             log("Not serving \(live.path): \(error)")
         }
@@ -111,6 +129,7 @@ public actor ServerState: ImportObserver {
             switch lastImport.outcome {
             case .refused: detail += ". The last file, \(lastImport.file), was refused: \(lastImport.message)"
             case .failed: detail += ". The last file, \(lastImport.file), could not be imported and will be tried again: \(lastImport.message)"
+            case .cancelled: detail += ". The import of the last file, \(lastImport.file), was stopped by an admin"
             case .installed: break
             }
         }
@@ -148,9 +167,11 @@ public actor ServerState: ImportObserver {
     }
 
     /// `writing` is what the user's store made of the owner's writing an export held, and `note`
-    /// reports a loose end, such as a drop file that could not be removed.
-    func importFinished(file: String, index newIndex: CorpusIndex, writing: MovedWriting? = nil, note: String? = nil) {
+    /// reports a loose end, such as a drop file that could not be removed. Gives the report's message.
+    @discardableResult
+    func importFinished(file: String, index newIndex: CorpusIndex, writing: MovedWriting? = nil, note: String? = nil) -> String {
         index = newIndex
+        indexGeneration += 1
         importing = nil
         startupProblem = nil
         let s = newIndex.summary
@@ -159,6 +180,16 @@ public actor ServerState: ImportObserver {
         if let note { message += "\(writing == nil ? "." : "") \(note)" }
         lastImport = ImportReport(file: file, outcome: .installed, step: nil, message: message,
                                   finishedAt: Self.timestamp(Date()), writing: writing)
+        log(message)
+        return message
+    }
+
+    /// An admin stopped the import between two of its steps (PLAN's S20d): nothing changed.
+    func importCancelled(file: String) {
+        let message = "An admin stopped the import of \(file) before it changed anything. It is tried again once the file in /data/import changes, or the server restarts"
+        lastImport = ImportReport(file: file, outcome: .cancelled, step: importing?.step, message: message,
+                                  finishedAt: Self.timestamp(Date()))
+        importing = nil
         log(message)
     }
 
@@ -171,6 +202,7 @@ public actor ServerState: ImportObserver {
             (outcome, step, message) = (.refused, refusal.step, refusal.reason)
         case let problem as ImportProblem:
             (outcome, step, message) = (.failed, problem.step, problem.reason)
+            if let logged = problem.logged { log("Import of \(file): \(logged)") }
         default:
             (outcome, step, message) = (.failed, importing?.step, error.localizedDescription)
         }
@@ -178,6 +210,35 @@ public actor ServerState: ImportObserver {
                                   finishedAt: Self.timestamp(Date()))
         importing = nil
         log("Import of \(file) \(outcome.rawValue): \(message)")
+    }
+
+    /// The recovery action that resets the index in Import mode (PLAN's S20d): the server stops serving
+    /// its index and removes it, with the index an import kept before it and any copy one left, and then
+    /// waits for an export in /data/import, as at its first start. A request that holds the index
+    /// finishes on it, as on an index an import replaced. `generation` is `indexGeneration` when the
+    /// reset was asked for: an import that made a new index live since is not undone, and the reset is
+    /// refused. An import queued meanwhile keeps its line in `/readyz`. Gives what the index held, or nil
+    /// when none was served.
+    public func resetIndex(files: any FileStore, askedAt generation: Int) async throws -> IndexSummary? {
+        guard indexGeneration == generation else {
+            throw IndexResetRefusal()
+        }
+        indexGeneration += 1
+        let removed = index?.summary
+        index = nil
+        lastImport = nil
+        startupProblem = nil
+        let paths = [files.liveIndex, files.previousIndex, files.candidateIndex].flatMap { url in
+            ["", "-wal", "-shm", "-journal"].map { url.path + $0 }
+        }
+        try await Blocking.run {
+            for path in paths where FileManager.default.fileExists(atPath: path) {
+                try FileManager.default.removeItem(atPath: path)
+            }
+        }
+        log(removed.map { "Removed the served index of \($0.documents) documents from \($0.volumes) volumes: waiting for an export" }
+            ?? "No index was served; any left on disk was removed: waiting for an export")
+        return removed
     }
 
     /// An export already live was found in the drop zone again, for example after a restart
@@ -189,5 +250,13 @@ public actor ServerState: ImportObserver {
 
     static func timestamp(_ date: Date) -> String {
         date.formatted(.iso8601)
+    }
+}
+
+/// A reset refused because an import made a new index live after it was asked for (PLAN's S20d).
+public struct IndexResetRefusal: JobFailure, Equatable {
+    public init() {}
+    public var jobMessage: String {
+        "An import made a new index live after the reset was asked for, so nothing was removed: ask for the reset again to remove that index."
     }
 }

@@ -82,19 +82,34 @@ public struct BackupManifest: Codable, Equatable, Sendable {
     /// in its folder.
     static func describing(_ backup: UserStoreBackupFile, bytes: Int64, sha256: String, copyDirectory: URL?) -> BackupManifest {
         let copies = copyDirectory.map { UserStoreBackup.files(in: $0) }
-        func version(_ file: UserStoreBackupFile) -> Version {
-            let bytes = size(of: file.url)
-            let copied = copies.map { $0.contains { $0.name == file.name && size(of: $0.url) == bytes } }
-            return Version(name: file.name, kind: file.kind, takenAt: file.takenAt.formatted(.iso8601), bytes: bytes,
-                           migration: migration(of: file.url), sha256: nil, copied: copied)
-        }
-        var held = version(backup)
+        var held = version(backup, copies: copies)
         held.bytes = bytes
         held.sha256 = sha256
         let versions = UserStoreBackup.files(in: backup.url.deletingLastPathComponent())
-            .map { $0.name == backup.name ? held : version($0) }
+            .map { $0.name == backup.name ? held : version($0, copies: copies) }
         return BackupManifest(manifestVersion: currentVersion, backup: held, server: .current,
                               secrets: Secrets.held(in: backup.url), versions: versions)
+    }
+
+    /// Every backup and copy `directory` keeps, as the manifest lists them, each with whether
+    /// `copyDirectory` holds it too: the admin's Backups list (PLAN's S20d).
+    public static func versions(in directory: URL, copyDirectory: URL?) -> [Version] {
+        let copies = copyDirectory.map { UserStoreBackup.files(in: $0) }
+        return UserStoreBackup.files(in: directory).map { version($0, copies: copies) }
+    }
+
+    /// The newest daily backup `directory` keeps, as the manifest lists it, or nil before the first:
+    /// the admin's Status, which reads that one alone.
+    public static func newestDaily(in directory: URL, copyDirectory: URL?) -> Version? {
+        guard let newest = UserStoreBackup.files(in: directory).first(where: { $0.kind == .daily }) else { return nil }
+        return version(newest, copies: copyDirectory.map { UserStoreBackup.files(in: $0) })
+    }
+
+    private static func version(_ file: UserStoreBackupFile, copies: [UserStoreBackupFile]?) -> Version {
+        let bytes = size(of: file.url)
+        let copied = copies.map { $0.contains { $0.name == file.name && size(of: $0.url) == bytes } }
+        return Version(name: file.name, kind: file.kind, takenAt: file.takenAt.formatted(.iso8601), bytes: bytes,
+                       migration: migration(of: file.url), sha256: nil, copied: copied)
     }
 
     private static func size(of file: URL) -> Int64 {

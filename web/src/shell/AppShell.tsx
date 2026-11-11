@@ -38,6 +38,8 @@ export function AppShell() {
   const me = useQuery({ ...meQuery, enabled: entered });
   const signedIn = entered && me.data && me.data.auth !== 'none' ? me.data : undefined;
   const keepsUserData = me.data?.userData === true;
+  // From S20d: an admin's link to administration, on a server that keeps user data.
+  const isAdmin = keepsUserData && me.data?.roles.includes('admin') === true;
   const [signOutFailed, setSignOutFailed] = useState(false);
   // Signing in or out shows another screen, so focus moves to its heading once it has rendered, as the
   // router's arrivals move it; the field or button that had it is gone by then. A page just loaded
@@ -123,6 +125,11 @@ export function AppShell() {
             {copy.app.settings}
           </Link>
           {/* ─── Admin ─────────────────────────────────────────────────── */}
+          {isAdmin && (
+            <Link to="/admin" activeProps={{ 'aria-current': 'page' }} activeOptions={{ exact: false }}>
+              {copy.admin.link}
+            </Link>
+          )}
         </nav>
         {entered && <ProjectPicker />}
         <label className="appearance">

@@ -61,14 +61,18 @@ public struct ImportRefusal: Error, Sendable, Equatable, CustomStringConvertible
 }
 
 /// A problem on the server's side, such as too little disk space or a write error, rather than
-/// with the export. Nothing changes, and the file is tried again later.
+/// with the export. Nothing changes, and the file is tried again later. `reason` is what `/readyz`,
+/// the status and the import's job say (S20d); `logged`, what only the server's log is told, such as a
+/// store's own words, which may quote the research it refused, or a path.
 public struct ImportProblem: Error, Sendable, Equatable, CustomStringConvertible {
     public let step: ReadinessStep
     public let reason: String
+    public let logged: String?
 
-    public init(_ step: ReadinessStep, _ reason: String) {
+    public init(_ step: ReadinessStep, _ reason: String, logged: String? = nil) {
         self.step = step
         self.reason = reason
+        self.logged = logged
     }
 
     public var description: String { reason }

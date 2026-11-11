@@ -1511,6 +1511,111 @@ button.highlight-color[aria-pressed='true'] {
   }
 }
 
+/* ─── Administration (PLAN's S20d) ───────────────────────────────────────── */
+
+/* Wider than a settings pane: its lists are tables. */
+.settings.admin {
+  grid-template-columns: 12rem minmax(0, 1fr);
+}
+
+@media (max-width: 899.98px) {
+  .settings.admin {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.admin-pane h2 {
+  font-size: 1.25rem;
+}
+
+.admin-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.25rem 1rem;
+  margin: 0;
+}
+
+.admin-facts dt {
+  color: var(--text-secondary);
+}
+
+.admin-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A table scrolls within its pane, never the page. */
+.admin-table {
+  overflow-x: auto;
+}
+
+.admin-table table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-table caption {
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 0.25rem 0.75rem 0.25rem 0;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.admin-table th[scope='row'] {
+  overflow-wrap: anywhere;
+}
+
+.admin-table .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+}
+
+.admin-table .error {
+  margin: 0.25rem 0 0;
+}
+
+.job-state.failed {
+  color: var(--error);
+}
+
+.admin-fields {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 20rem);
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+}
+
+.admin-fields .note {
+  grid-column: 2;
+  margin: 0;
+}
+
+@media (max-width: 599.98px) {
+  .admin-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-fields .note {
+    grid-column: 1;
+  }
+}
+
+.admin-add {
+  margin-top: 2rem;
+}
+
+.erase-holdings {
+  margin: 0.25rem 0 0.75rem;
+}
+
 /* ─── Notes and summaries (PLAN's S15d) ──────────────────────────────────── */
 
 /* Tiptap's own rules (@tiptap/core's style.ts), here because the page's policy refuses the <style>
