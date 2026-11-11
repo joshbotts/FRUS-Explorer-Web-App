@@ -103,13 +103,14 @@ public actor ImportCoordinator {
 
         busy = true
         let name = file.lastPathComponent
+        // /readyz names the import from here, as it did before imports were jobs (S20d).
+        await state.importStarted(file: name)
         do {
             let job = try await jobs.submit(.indexImport, subject: name, requestedBy: nil, id: nil, onCancel: { [state] in
                 // Cancelled before it began: the file waits as one cancelled between steps does.
                 await state.importCancelled(file: name)
                 await self.finished(file: file, signature: signature, retry: false)
             }) { [importer, state, removeFile, alsoNotify] job in
-                await state.importStarted(file: name)
                 let observer = StateThenOthers(state: state, others: alsoNotify, job: job)
                 do {
                     let imported = try await importer.importExport(at: file, observer: observer, job: job)
