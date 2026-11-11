@@ -155,9 +155,9 @@ import Testing
 
         let newer = try copy("newer.db")
         let newerDB = try SQLiteConnection(newer.path, readOnly: false)
-        try newerDB.execute("CREATE TABLE later (a TEXT); INSERT INTO schema_migrations VALUES (7, '2026-11-01T00:00:00Z');")
+        try newerDB.execute("CREATE TABLE later (a TEXT); INSERT INTO schema_migrations VALUES (8, '2026-11-01T00:00:00Z');")
         newerDB.close()
-        #expect(await refusal(newer) == .newerThanThisBuild(newer, store: 7, build: 6))
+        #expect(await refusal(newer) == .newerThanThisBuild(newer, store: 8, build: 7))
 
         let damaged = try copy("damaged.db")
         let handle = try FileHandle(forWritingTo: damaged)

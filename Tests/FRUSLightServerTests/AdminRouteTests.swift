@@ -37,6 +37,9 @@ import Testing
         (.get, "/api/v1/admin/secrets", nil),
         (.put, "/api/v1/admin/secrets/nara", #"{"value":"abc"}"#),
         (.delete, "/api/v1/admin/secrets/nara", nil),
+        (.get, "/api/v1/admin/library", nil),
+        (.post, "/api/v1/admin/library/downloads", #"{"all":true}"#),
+        (.delete, "/api/v1/admin/library/volumes/frus1894Nicaragua", nil),
     ]
 
     /// The routes the admin files register, as their source writes them: so a route added there and
@@ -54,6 +57,7 @@ import Testing
             "\(method.rawValue) " + String(path.dropFirst("/api/v1/admin/".count))
                 .replacingOccurrences(of: Self.anyJob, with: ":jobId")
                 .replacing(#/users/(bob|alice)/#, with: "users/:userName")
+                .replacingOccurrences(of: "library/volumes/frus1894Nicaragua", with: "library/volumes/:volumeId")
         })
         #expect(registered.isSubset(of: tested), "untested: \(registered.subtracting(tested).sorted())")
         #expect(registered.count >= 12)

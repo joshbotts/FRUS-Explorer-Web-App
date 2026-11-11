@@ -85,12 +85,22 @@ cleanup() {
     echo "== the smoke test failed; the server's log:"
     docker compose logs --no-color frus 2>&1 | tail -50 || true
     # Gotenberg's, once a step has started it: a print it refuses names its cause there alone.
+    # The library's Standalone project's, once its step has started it (PLAN's S21c), and its mirror's.
+    if [ -n "$(docker compose -p "$COMPOSE_PROJECT_NAME-library" -f compose.yaml -f compose.standalone.yaml ps -aq frus 2>/dev/null)" ]; then
+      echo "== the Standalone project's server log:"
+      docker compose -p "$COMPOSE_PROJECT_NAME-library" -f compose.yaml -f compose.standalone.yaml logs --no-color frus 2>&1 | tail -40 || true
+      echo "== its mirror's log:"
+      docker logs "$COMPOSE_PROJECT_NAME-library-github" 2>&1 | tail -20 || true
+    fi
     if [ -n "$(COMPOSE_PROFILES=pdf docker compose ps -aq pdf 2>/dev/null)" ]; then
       echo "== the pdf service's log:"
       COMPOSE_PROFILES=pdf docker compose logs --no-color pdf 2>&1 | tail -40 || true
     fi
   fi
-  docker rm -f "$proxy" "$COMPOSE_PROJECT_NAME-tmp-volume" "$COMPOSE_PROJECT_NAME-tmp-tmp" "$COMPOSE_PROJECT_NAME-keyless" >/dev/null 2>&1 || true
+  docker rm -f "$proxy" "$COMPOSE_PROJECT_NAME-tmp-volume" "$COMPOSE_PROJECT_NAME-tmp-tmp" "$COMPOSE_PROJECT_NAME-keyless" \
+    "$COMPOSE_PROJECT_NAME-library-github" >/dev/null 2>&1 || true
+  # The library's Standalone project (PLAN's S21c), with its volume.
+  docker compose -p "$COMPOSE_PROJECT_NAME-library" -f compose.yaml -f compose.standalone.yaml down --volumes --remove-orphans >/dev/null 2>&1 || true
   docker volume rm "$COMPOSE_PROJECT_NAME-tmp-volume" "$COMPOSE_PROJECT_NAME-tmp-tmp" >/dev/null 2>&1 || true
   # With the pdf profile, whether or not a step started it, so that its container and network go too.
   COMPOSE_PROFILES=pdf docker compose down --volumes --remove-orphans >/dev/null 2>&1 || true
@@ -244,6 +254,191 @@ print(jobs[0]["id"] if len(jobs) == 1 and jobs[0]["state"] == "succeeded" and "r
 done
 [ -n "$import_job" ] || fail "the jobs list does not name the import's job, finished: $jobs"
 echo "   job $import_job, the index import of export.sqlite, finished"
+
+echo "== admin: the library, a Standalone project downloading from a folder served as GitHub serves it (PLAN's S21c)"
+# A Compose project of its own, compose.yaml with compose.standalone.yaml, whose server keeps its own
+# volumes in /data/volumes and downloads them from an nginx serving a mirror: GitHub's listing of the three
+# fixture volumes with their blob SHA-1s, the volumes' files, and frus1969-76ve09p1's figure images but its
+# last, which the host does not have; the volumes' files served slowly enough that a restart lands while
+# one downloads. Its volume is first an Import server's, with the TEI folder mounted; then, as a volume an
+# older image left, its /data/volumes is root's, which a Standalone start refuses with the install guide's
+# remedy, run here. Under FRUS_OFFLINE the server refuses and asks nothing; then it downloads the three, is
+# restarted while it does, and finishes at its next start without asking again for what it had; every byte
+# is the fixture's; the reader and its figures read them; and an export copied into /data/import seeds its
+# index.
+library_project="$COMPOSE_PROJECT_NAME-library"
+library_port=$((FRUS_HOST_PORT + 1))
+library_base="http://127.0.0.1:$library_port"
+library_github="$library_project-github"
+mirror="$work/mirror"
+raw="$mirror/raw.githubusercontent.com/HistoryAtState/frus/master/volumes"
+figures="$mirror/static.history.state.gov/frus/frus1969-76ve09p1"
+mkdir -p "$mirror/api.github.com/repos/HistoryAtState/frus/contents" "$raw" "$figures" "$work/library-backups"
+chmod 0777 "$work/library-backups"
+for id in frus1894Nicaragua frus1961-63v06 frus1969-76ve09p1; do cp "fixtures/tei/$id.xml" "$raw/"; done
+python3 - "$mirror" "$raw" "$figures" <<'PY' || fail "the mirror could not be written"
+import json, os, struct, subprocess, sys, zlib
+mirror, raw, figures = sys.argv[1:4]
+listing = []
+for name in sorted(os.listdir(raw)):
+    path = os.path.join(raw, name)
+    sha = subprocess.check_output(["git", "hash-object", "--no-filters", path], text=True).strip()
+    listing.append({"name": name, "path": f"volumes/{name}", "sha": sha, "size": os.path.getsize(path), "type": "file",
+                    "download_url": f"https://raw.githubusercontent.com/HistoryAtState/frus/master/volumes/{name}"})
+listing.append({"name": "README.md", "path": "volumes/README.md", "sha": "0" * 40, "size": 120, "type": "file",
+                "download_url": "https://raw.githubusercontent.com/HistoryAtState/frus/master/volumes/README.md"})
+with open(os.path.join(mirror, "api.github.com/repos/HistoryAtState/frus/contents/volumes"), "w") as out:
+    json.dump(listing, out)
+def chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+for name in ["genassemblybldg", "OpenPitMine.jpg", "autoconveyorbelt.jpg", "SaharanFamily.jpg", "SpanishSaharaMap.jpg",
+             "SpanishSaharaMap2.jpg", "1973SummitMeeting.jpg"]:
+    png = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 0, 0, 0, 0))
+           + chunk(b"tEXt", b"Comment\x00" + name.encode()) + chunk(b"IDAT", zlib.compress(b"\x00\x80")) + chunk(b"IEND", b""))
+    with open(os.path.join(figures, name + ".png"), "wb") as out:
+        out.write(png)
+PY
+chmod -R a+rX "$mirror"
+cat > "$work/mirror.conf" <<'NGINX'
+server {
+    listen 8000;
+    root /srv/mirror;
+    default_type application/octet-stream;
+    access_log /dev/stdout;
+    location /raw.githubusercontent.com/ { limit_rate 300k; }
+}
+NGINX
+library_compose() {
+  FRUS_AUTH=none FRUS_AUTH_HEADER='' FRUS_TRUSTED_PROXIES='' FRUS_ADMIN_USERS='' FRUS_USER_DATA=on FRUS_PUBLIC_URL=http://localhost:8080 \
+    FRUS_HOST_PORT="$library_port" FRUS_BACKUP_DIR="$work/library-backups" FRUS_LIBRARY_MIRROR=http://github:8000/ COMPOSE_PROFILES='' \
+    docker compose -p "$library_project" -f compose.yaml -f compose.standalone.yaml "$@"
+}
+library_api() {  # $1: method, $2: path, $3: body; prints the body and the status
+  local token
+  token=$(curl -s --max-time 5 -H "Host: localhost:8080" "$library_base/api/v1/me" | sed -nE 's/.*"csrfToken":"([0-9a-f]+)".*/\1/p')
+  curl -s --max-time 10 -X "$1" -H "Host: localhost:8080" -H "Origin: http://localhost:8080" -H "X-CSRF-Token: $token" \
+    -H 'Content-Type: application/json' ${3:+--data "$3"} -w ' %{http_code}' "$library_base$2"
+}
+# The Library's answer, about 170 KB for the catalogue's 553 volumes, goes to python3 in a file: Linux takes
+# no single argument longer than 128 KiB (MAX_ARG_STRLEN).
+library_list() { curl -s --max-time 10 -H "Host: localhost:8080" -o "$work/library.json" "$library_base/api/v1/admin/library"; }
+library_counts() {  # the Library read again, and how many volumes it counts in each state, as status=count pairs
+  library_list && python3 -c 'import json, sys
+library = json.load(open(sys.argv[1], encoding="utf-8"))
+print(" ".join(f"{k}={v}" for k, v in sorted(library["counts"].items())))' "$work/library.json"
+}
+# Import mode first, compose.yaml alone, the TEI folder mounted on the folder the image made the server's.
+FRUS_AUTH=none FRUS_AUTH_HEADER='' FRUS_TRUSTED_PROXIES='' FRUS_ADMIN_USERS='' FRUS_USER_DATA=on FRUS_PUBLIC_URL=http://localhost:8080 \
+  FRUS_HOST_PORT="$library_port" FRUS_BACKUP_DIR="$work/library-backups" COMPOSE_PROFILES='' \
+  docker compose -p "$library_project" -f compose.yaml up -d frus
+wait_for_200 "$library_base/healthz" 30 || fail "the library project's Import server did not answer"
+library_compose stop frus >/dev/null
+# As a volume an Import server of an older image used: Docker made /data/volumes there, root's.
+library_compose run --rm --no-deps --user 0 --cap-add CHOWN --entrypoint chown frus 0:0 /data/volumes \
+  || fail "the volumes folder could not be given to root"
+FRUS_OFFLINE=true library_compose up -d frus
+refusal=""
+for _ in $(seq 1 80); do
+  refusal=$(library_compose logs --no-color frus 2>&1 | grep -c 'In Standalone mode the server keeps the volumes it downloads in /data/volumes, which it cannot write' || true)
+  [ "$refusal" -gt 0 ] && break
+  sleep 0.25
+done
+[ "$refusal" -gt 0 ] || fail "a Standalone server whose /data/volumes is root's did not refuse to start with its sentence: $(library_compose logs --no-color frus 2>&1 | tail -5)"
+library_compose logs --no-color frus 2>&1 | grep -q -- '--cap-add CHOWN --entrypoint chown frus 10001:10001 /data/volumes' \
+  || fail "the refusal does not give the remedy"
+# The install guide's remedy, then the start again.
+library_compose stop frus >/dev/null
+library_compose run --rm --no-deps --user 0 --cap-add CHOWN --entrypoint chown frus 10001:10001 /data/volumes \
+  || fail "the install guide's remedy did not run"
+FRUS_OFFLINE=true library_compose up -d frus
+docker run -d --name "$library_github" --network "${library_project}_default" --network-alias github --pull missing -q \
+  -v "$mirror:/srv/mirror:ro" -v "$work/mirror.conf:/etc/nginx/conf.d/default.conf:ro" "$proxy_image" >/dev/null \
+  || fail "the mirror's nginx did not start"
+wait_for_200 "$library_base/healthz" 30 || fail "the Standalone server's /healthz did not answer 200 after the remedy"
+library_compose exec -T frus sh -c 'test -d /data/volumes && touch /data/volumes/.probe && rm /data/volumes/.probe' \
+  || fail "a Standalone server cannot write /data/volumes"
+library_list || fail "the offline Library did not answer"
+python3 -c 'import json, sys
+library = json.load(open(sys.argv[1], encoding="utf-8"))
+assert library["mode"] == "standalone" and library["offline"] and not library["downloads"] and "FRUS_OFFLINE" in library["unavailable"]' "$work/library.json" \
+  || fail "the offline Library is not one: $(head -c 300 "$work/library.json")"
+
+refused=$(library_api POST /api/v1/admin/library/downloads '{"all":true}')
+case "$refused" in *'"code":"OFFLINE"'*' 409') ;; *) fail "a download under FRUS_OFFLINE answered $refused" ;; esac
+[ -z "$(docker logs "$library_github" 2>&1 | grep 'GET /')" ] || fail "a server under FRUS_OFFLINE asked the mirror: $(docker logs "$library_github" 2>&1 | tail -3)"
+echo "   under FRUS_OFFLINE: the Library says so, a download is refused, and the mirror was asked nothing"
+
+FRUS_OFFLINE=false library_compose up -d frus
+wait_for_200 "$library_base/healthz" 30 || fail "the Standalone server's /healthz did not answer 200 online"
+posted=$(library_api POST /api/v1/admin/library/downloads '{"volumeIds":["frus1894Nicaragua","frus1961-63v06","frus1969-76ve09p1"]}')
+case "$posted" in *'"kind":"libraryDownload"'*' 202') ;; *) fail "the download was not queued: $posted" ;; esac
+first_job=$(printf '%s' "$posted" | sed -nE 's/.*"id":"([^"]+)".*/\1/p')
+# The restart, once the first volume is downloaded and another is downloading.
+restarted=""
+for _ in $(seq 1 120); do
+  counts=$(library_counts 2>/dev/null || true)
+  case "$counts" in *downloaded=1*downloading=1*|*downloading=1*downloaded=1*) library_compose restart frus >/dev/null; restarted=1; break ;; esac
+  case "$counts" in *downloaded=3*) break ;; esac
+  sleep 0.25
+done
+[ -n "$restarted" ] || fail "no moment with one volume downloaded and one downloading came to restart in: $counts"
+wait_for_200 "$library_base/healthz" 30 || fail "the Standalone server's /healthz did not answer 200 after its restart"
+for _ in $(seq 1 240); do
+  counts=$(library_counts 2>/dev/null || true)
+  [ "$counts" = "downloaded=3 notDownloaded=550" ] && break
+  sleep 0.25
+done
+[ "$counts" = "downloaded=3 notDownloaded=550" ] || fail "the download did not finish after the restart: $counts"
+fetched=$(docker logs "$library_github" 2>&1 | grep -c 'GET /raw.githubusercontent.com/HistoryAtState/frus/master/volumes/frus1894Nicaragua.xml' || true)
+[ "$fetched" = 1 ] || fail "frus1894Nicaragua, downloaded before the restart, was asked for $fetched times"
+jobs=$(curl -s --max-time 5 -H "Host: localhost:8080" "$library_base/api/v1/admin/jobs")
+python3 -c 'import json, sys
+jobs = {j["id"]: j for j in json.loads(sys.argv[1])["jobs"]}
+first = jobs[sys.argv[2]]
+assert first["state"] == "failed" and first["error"] == "The server stopped while this job ran, so it did not finish.", first
+resumed = [j for j in jobs.values() if j["kind"] == "libraryDownload" and j.get("subject", "").endswith("resumed after a restart")]
+assert len(resumed) == 1 and resumed[0]["state"] == "succeeded" and "requestedBy" not in resumed[0], resumed' "$jobs" "$first_job" \
+  || fail "the jobs do not show the download stopped by the restart and resumed by the server: $jobs"
+(cd fixtures/tei && shasum -a 256 frus1894Nicaragua.xml frus1961-63v06.xml frus1969-76ve09p1.xml) | awk '{print $1, $NF}' | LC_ALL=C sort -k2 > "$work/expected.sha256"
+library_compose exec -T frus sh -c 'cd /data/volumes && sha256sum frus1894Nicaragua.xml frus1961-63v06.xml frus1969-76ve09p1.xml' \
+  | awk '{print $1, $NF}' | LC_ALL=C sort -k2 > "$work/downloaded.sha256"
+diff "$work/expected.sha256" "$work/downloaded.sha256" >/dev/null || fail "a downloaded volume differs from its fixture: $(cat "$work/downloaded.sha256")"
+(cd "$figures" && shasum -a 256 ./*.png) | awk '{print $1, $NF}' | LC_ALL=C sort -k2 > "$work/expected-figures.sha256"
+library_compose exec -T frus sh -c 'cd /data/volumes/frus1969-76ve09p1.figures && sha256sum ./*.png' \
+  | awk '{print $1, $NF}' | LC_ALL=C sort -k2 > "$work/downloaded-figures.sha256"
+diff "$work/expected-figures.sha256" "$work/downloaded-figures.sha256" >/dev/null \
+  || fail "the figure images differ from the mirror's: $(cat "$work/downloaded-figures.sha256")"
+library_list || fail "the Library did not answer after the downloads"
+python3 -c 'import json, sys
+volumes = {v["volumeId"]: v for v in json.load(open(sys.argv[1], encoding="utf-8"))["volumes"]}
+ve09 = volumes["frus1969-76ve09p1"]
+assert ve09["status"] == "downloaded" and ve09["figures"] == 7 and ve09["figuresRefused"] == 1 and ve09["bytes"] == 1890303, ve09
+assert all(volumes[i]["blobSha"] and not volumes[i].get("error") for i in ["frus1894Nicaragua", "frus1961-63v06", "frus1969-76ve09p1"])' "$work/library.json" \
+  || fail "the Library does not list the three as downloaded, with frus1969-76ve09p1's 7 figures and 1 refused"
+page=$(curl -s --max-time 30 -w ' %{http_code}' "$library_base/api/v1/volumes/frus1969-76ve09p1/documents/d1/html?part=body")
+case "$page" in *' 200') ;; *) fail "the reader did not render a downloaded volume: ${page: -200}" ;; esac
+curl -s --max-time 10 -o "$work/figure.png" -w '%{http_code}' "$library_base/api/v1/volumes/frus1969-76ve09p1/figures/OpenPitMine.jpg.png" | grep -q '^200$' \
+  || fail "the reader's figure route did not serve a downloaded figure"
+cmp -s "$work/figure.png" "$figures/OpenPitMine.jpg.png" || fail "the served figure is not the mirror's"
+echo "   downloaded the three fixture volumes and 7 figure images, restarted mid-download, resumed by the server without asking again for the volume it had; every byte the fixture's; the reader renders them and serves their figures"
+
+scripts/synthetic-export "$work/seed.sqlite"
+library_compose cp "$work/seed.sqlite" frus:/data/import/seed.sqlite
+wait_for_200 "$library_base/readyz" 120 || fail "a Standalone server did not serve the export that seeds it"
+library_list || fail "the Library did not answer after the seed"
+python3 -c 'import json, sys
+volumes = {v["volumeId"]: v for v in json.load(open(sys.argv[1], encoding="utf-8"))["volumes"]}
+assert volumes["frus1961-63v06"]["status"] == "indexed" and volumes["frus1961-63v06"]["downloaded"], volumes["frus1961-63v06"]' "$work/library.json" \
+  || fail "the seeded index's volume is not listed as indexed"
+echo "   an export at the server's index version seeds its index, and the Library lists its volume as indexed"
+
+if [ -n "$e2e" ]; then
+  echo "== admin: the library, the library spec in Playwright on Chromium, on the Standalone server"
+  FRUS_E2E_LIBRARY=1 FRUS_E2E_NETWORK="container:$(library_compose ps -q frus)" FRUS_E2E_BASE_URL=http://localhost:8080/ scripts/npm --playwright \
+    || fail "the library spec failed; web/playwright-report has its report"
+fi
+docker rm -f "$library_github" >/dev/null 2>&1 || true
+library_compose down --volumes --remove-orphans >/dev/null 2>&1 || true
 
 echo "== install: the image's labels"
 # The app build whose exports the image serves, and the index version, which a release names

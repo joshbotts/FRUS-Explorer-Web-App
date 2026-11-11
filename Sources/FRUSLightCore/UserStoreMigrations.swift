@@ -4,7 +4,7 @@
 /// starting at 1. Never edit one that has shipped: add another, and with it any change to
 /// `UserStoreSchema`.
 public enum UserStoreMigrations {
-    public static let all: [String] = [one, two, three, four, five, six]
+    public static let all: [String] = [one, two, three, four, five, six, seven]
 
     /// S2: the single user, and corrections as override rows.
     static let one = """
@@ -483,5 +483,34 @@ public enum UserStoreMigrations {
             cancel_requested_at TEXT
         );
         CREATE INDEX jobs_by_state ON jobs (state, finished_at);
+        """
+
+    /// S21c's: the library a Standalone server downloads, one row a catalogue volume it has been asked
+    /// for. `state` is its download's: `queued` while a job waits to fetch it, `downloading` while one
+    /// does, then `downloaded` or `failed`, with why in the server's own sentence; a row left `queued`
+    /// or `downloading` by a server that stopped is fetched again at the next start, volume by volume.
+    /// `blob_sha` and `size_bytes` describe the file in the volumes folder, the git blob SHA-1 GitHub's
+    /// listing gives and its length, checked before it took its place, with its modification time then, which
+    /// with its length says that the file is still the one hashed, when it was downloaded and
+    /// whether it was side-loaded (S21e), and the figure images fetched beside it and refused by the
+    /// host. A volume never asked for has no row. No row holds research or a key: a volume's id, the
+    /// server's sentences, and who asked.
+    static let seven = """
+        CREATE TABLE library_volumes (
+            volume_id TEXT PRIMARY KEY,
+            state TEXT NOT NULL CHECK (state IN ('queued', 'downloading', 'downloaded', 'failed')),
+            blob_sha TEXT,
+            size_bytes INTEGER,
+            modified_at TEXT,
+            downloaded_at TEXT,
+            sideloaded INTEGER NOT NULL DEFAULT 0,
+            figures_stored INTEGER,
+            figures_refused INTEGER,
+            error TEXT,
+            requested_by TEXT,
+            queued_at TEXT,
+            updated_at TEXT NOT NULL
+        );
+        CREATE INDEX library_volumes_by_state ON library_volumes (state, queued_at);
         """
 }

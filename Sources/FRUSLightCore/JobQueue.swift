@@ -25,6 +25,8 @@ public struct JobKind: RawRepresentable, Hashable, Sendable, Codable {
     public static let projectLeads = JobKind(rawValue: "projectLeads")
     /// The served index removed in Import mode, so that the server waits for an export (S20d).
     public static let indexReset = JobKind(rawValue: "indexReset")
+    /// Catalogue volumes a Standalone server downloads, with their figure images (PLAN's S21c).
+    public static let libraryDownload = JobKind(rawValue: "libraryDownload")
 }
 
 /// One job, as the queue holds it and the store keeps it.

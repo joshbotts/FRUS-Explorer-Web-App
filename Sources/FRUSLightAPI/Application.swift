@@ -31,6 +31,10 @@ struct ServerComponents: Sendable {
     let provider: ServedIndexProvider
     /// Suggested Next's computations (PLAN's S23d), which an export made the served index queues for every project.
     let leads: ProjectLeadsQueue
+    /// The library (PLAN's S21c): a Standalone server's own folder of volumes and its downloads, jobs of
+    /// the queue, those a stopped server left resumed once the queue is open; in Import mode the TEI
+    /// folder it reads.
+    let library: VolumeLibrary
 
     static func make(configuration: ServerConfiguration, logger: Logger) async throws -> ServerComponents {
         // Before anything is written: a server without its data files cannot serve the reader.
@@ -53,6 +57,10 @@ struct ServerComponents: Sendable {
         let provider = ServedIndexProvider(state: state, resources: resources, volumesDirectory: files.volumesDirectory,
                                            userStore: configuration.userData ? userStore.searchDatabase : nil)
         let leads = ProjectLeadsQueue(store: userStore, jobs: jobs, provider: provider, resources: resources)
+        let library = VolumeLibrary.make(configuration: configuration, files: files, store: userStore, jobs: jobs,
+                                         catalogue: resources.manifest, log: { logger.info("\($0)") })
+        try library.prepare()
+        await library.resumeUnfinished()
         return ServerComponents(
             files: files,
             state: state,
@@ -73,7 +81,8 @@ struct ServerComponents: Sendable {
                                         writing: configuration.userData ? ResearchDatabaseImport.move(into: userStore) : nil),
                 state: state, jobs: jobs, alsoNotify: configuration.userData ? LeadsAfterIndexImport(leads: leads) : nil),
             provider: provider,
-            leads: leads)
+            leads: leads,
+            library: library)
     }
 
     /// The user store `FRUS_USER_STORE` names, migrated to this build's schema: app.db in the data
@@ -200,6 +209,16 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
     if configuration.auth == .local {
         try await logAccounts(components.userStore, configuration: configuration, logger: logger)
     }
+    if configuration.mode == .standalone {
+        let library = components.library
+        let source = library.sources.isGitHub ? "GitHub and history.state.gov" : "the mirror at \(configuration.libraryMirror?.absoluteString ?? "")"
+        logger.info(configuration.offline
+            ? "Standalone mode with FRUS_OFFLINE=true: the library in \(library.volumesDirectory.path) is read, and nothing is downloaded"
+            : "Standalone mode: the library downloads volumes into \(library.volumesDirectory.path) from \(source)\(configuration.githubToken != nil && library.sources.isGitHub ? ", its listing with a GitHub token" : "")")
+        if !configuration.userData {
+            logger.warning("FRUS_USER_DATA is off, so Administration and its Library are too: the server serves the volumes it keeps, and downloads none")
+        }
+    }
     if let folder = getenv("SQLITE_TMPDIR") {
         logger.info("SQLite's temporary files go to \(String(cString: folder))")
     }
@@ -209,7 +228,7 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
                             userData: UserDataServices(store: components.userStore, configuration: configuration,
                                                        secrets: components.secrets, jobs: components.jobs),
                             leads: components.leads,
-                            base: configuration.basePath, logger: logger),
+                            library: components.library, base: configuration.basePath, logger: logger),
         base: configuration.basePath,
         configuration: .init(address: .hostname(configuration.host, port: configuration.port), serverName: "frus-light"),
         logger: logger)

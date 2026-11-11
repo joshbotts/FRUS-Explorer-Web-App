@@ -108,7 +108,7 @@ import Testing
             tables = Set(try rows.stored("SELECT table_name::text FROM information_schema.tables WHERE table_schema = current_schema()", [])
                 .compactMap { $0[0].text })
         }
-        #expect(tables == Set(UserStoreSchema.tables.map(\.name) + ["users", "sessions", "secrets", "jobs", "schema_migrations"]))
+        #expect(tables == Set(UserStoreSchema.tables.map(\.name) + ["users", "sessions", "secrets", "jobs", "library_volumes", "schema_migrations"]))
         #expect(PostgreSQLMigrations.all.count == UserStoreMigrations.all.count, "the same numbered migrations")
     }
 

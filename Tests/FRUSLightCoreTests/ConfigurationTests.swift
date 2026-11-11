@@ -240,16 +240,48 @@ import Testing
         }
     }
 
+    /// Standalone mode (PLAN's S21c), with the library's mirror, which only a Standalone server reads, and
+    /// GitHub's token, which no problem repeats.
+    @Test func standaloneModeWithItsLibrarysSettings() throws {
+        let config = try ServerConfiguration.fromEnvironment([
+            "FRUS_MODE": "standalone", "FRUS_LIBRARY_MIRROR": "http://library:8000/mirror", "FRUS_GITHUB_TOKEN": "ghp_abc123",
+        ])
+        #expect(config.mode == .standalone && config.libraryMirror?.absoluteString == "http://library:8000/mirror")
+        #expect(config.githubToken == "ghp_abc123" && !config.offline)
+        #expect(try ServerConfiguration.fromEnvironment(["FRUS_MODE": "standalone", "FRUS_OFFLINE": "true"]).offline,
+                "a Standalone server may run offline, serving what it has and downloading nothing")
+        #expect {
+            _ = try ServerConfiguration.fromEnvironment([
+                "FRUS_LIBRARY_MIRROR": "http://library:8000/", "FRUS_GITHUB_TOKEN": "ghp_secret value",
+            ])
+        } throws: { error in
+            (error as? ConfigurationError)?.problems == [
+                "FRUS_LIBRARY_MIRROR is where a Standalone server downloads its volumes from, and FRUS_MODE is import: set FRUS_MODE=standalone, or leave FRUS_LIBRARY_MIRROR out",
+                "FRUS_GITHUB_TOKEN must be a GitHub token, without spaces or line breaks",
+            ]
+        }
+        #expect {
+            _ = try ServerConfiguration.fromEnvironment(["FRUS_MODE": "standalone", "FRUS_LIBRARY_MIRROR": "ftp://library/x?y=1"])
+        } throws: { error in
+            (error as? ConfigurationError)?.problems == ["FRUS_LIBRARY_MIRROR must be an http or https URL with no user, password, query or fragment"]
+        }
+        #expect {
+            _ = try ServerConfiguration.fromEnvironment(["FRUS_MODE": "standalone", "FRUS_LIBRARY_MIRROR": "https://me:secret@library/"])
+        } throws: { error in
+            (error as? ConfigurationError).map { $0.problems.count == 1 && !$0.description.contains("secret") } == true
+        }
+    }
+
     @Test func reportsEveryProblemAtOnce() {
         #expect {
             _ = try ServerConfiguration.fromEnvironment([
-                "FRUS_MODE": "standalone", "FRUS_AUTH": "local", "FRUS_ADMIN_USERS": "alice", "FRUS_PORT": "80000",
+                "FRUS_MODE": "snapshot", "FRUS_AUTH": "local", "FRUS_ADMIN_USERS": "alice", "FRUS_PORT": "80000",
                 "FRUS_OFFLINE": "maybe", "FRUS_PUBLIC_URL": "localhost:8080",
             ])
         } throws: { error in
             guard let error = error as? ConfigurationError else { return false }
             return error.problems.count == 5
-                && error.problems.contains { $0.contains("standalone arrives in phase 3") }
+                && error.problems.contains { $0 == "FRUS_MODE must be import or standalone, not snapshot" }
                 && error.problems.contains { $0.contains("FRUS_ADMIN_USERS") && $0.contains("FRUS_AUTH is local") }
         }
     }

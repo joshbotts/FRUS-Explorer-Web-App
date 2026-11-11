@@ -13,7 +13,7 @@
 /// reads as the order the store took its rows in. `user_search` is not here: search reads FTS5, in
 /// the store's local SQLite copy (`PostgreSQLUserStore`).
 enum PostgreSQLMigrations {
-    static let all: [[String]] = [one, two, three, four, five, six]
+    static let all: [[String]] = [one, two, three, four, five, six, seven]
 
     /// S2's: the single user, and corrections as override rows.
     static let one = [
@@ -538,5 +538,27 @@ enum PostgreSQLMigrations {
         )
         """,
         "CREATE INDEX jobs_by_state ON jobs (state, finished_at)",
+    ]
+
+    /// S21c's: the library a Standalone server downloads, as app.db's migration 7 keeps it.
+    static let seven = [
+        """
+        CREATE TABLE library_volumes (
+            volume_id TEXT COLLATE "C" PRIMARY KEY,
+            state TEXT COLLATE "C" NOT NULL CHECK (state IN ('queued', 'downloading', 'downloaded', 'failed')),
+            blob_sha TEXT COLLATE "C",
+            size_bytes BIGINT,
+            modified_at TEXT COLLATE "C",
+            downloaded_at TEXT COLLATE "C",
+            sideloaded BIGINT NOT NULL DEFAULT 0,
+            figures_stored BIGINT,
+            figures_refused BIGINT,
+            error TEXT COLLATE "C",
+            requested_by TEXT COLLATE "C",
+            queued_at TEXT COLLATE "C",
+            updated_at TEXT COLLATE "C" NOT NULL
+        )
+        """,
+        "CREATE INDEX library_volumes_by_state ON library_volumes (state, queued_at)",
     ]
 }
