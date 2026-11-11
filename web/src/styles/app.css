@@ -3619,6 +3619,10 @@ button.preset-card.active {
   margin: 0;
 }
 
+.pick-heading {
+  margin: 0 0 0 1.5rem;
+}
+
 .pick-source,
 .pick-note {
   margin: 0.125rem 0 0 1.5rem;

@@ -48,6 +48,8 @@ export interface TaggedDocument {
   documentId: string;
   header?: string;
   volumeTitle?: string;
+  /** Whether the catalogue lists its volume, without which a collection here takes no document. */
+  catalogued: boolean;
 }
 
 export interface TagDocuments {
@@ -63,20 +65,31 @@ export async function resolveCitations(client: QueryClient, text: string): Promi
   return answer ?? { total: 0, items: [] };
 }
 
-/** The user's tags, each with its count, read each time the tab opens, as the app's sheet counts its rows. */
+/**
+ * The user's tags, each with its count, read each time the tab opens, as the app's sheet counts its rows: nothing
+ * is kept once the tab closes, and nothing read again while it is open.
+ */
 export const discoveryTagsQuery = queryOptions({
   queryKey: ['addDocumentsTags'],
   queryFn: ({ signal }) => getJSON<DiscoveryTags>('/api/v1/me/add-documents/tags', undefined, signal),
   staleTime: 0,
+  gcTime: 0,
+  refetchOnWindowFocus: false,
   retry: false,
 });
 
-/** A tag's documents, gathered once each time it is opened. */
+/**
+ * A tag's documents, gathered once each time it is opened, as the app's `openTag(_:)` gathers them, so what is
+ * chosen at once is what this opening gathered: no answer is kept for the next, which would choose from it before
+ * the fresh one came, and none is read again while it is open, which would choose a document no row showed.
+ */
 export function tagDocumentsQuery(tagId: string) {
   return queryOptions({
     queryKey: ['addDocumentsTag', tagId],
     queryFn: ({ signal }) => getJSON<TagDocuments>(`/api/v1/me/add-documents/tags/${encodeURIComponent(tagId)}`, undefined, signal),
     staleTime: 0,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
     retry: false,
   });
 }

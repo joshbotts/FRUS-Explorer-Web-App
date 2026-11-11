@@ -1,10 +1,13 @@
 // Add Documents' Citations and Tags (S25d), against a stubbed server: the app's four tabs in its order; a paste
 // resolved, with its count of lines resolved and to review, the lines that resolved chosen at once and a line to
 // review left to the reader, with its note as its row's description, a line that named no document said, a line
-// the reader unchose left unchosen by the next Resolve, the paste kept across tabs, and a refusal said; and a tag's
-// documents chosen as it opens, focus handed into and back out of it, and the app's words for no tags, a tag with
-// no documents and nothing to resolve.
-import { cleanup, screen, waitFor, within } from '@testing-library/react';
+// the reader unchose left unchosen by the next Resolve, the paste kept across tabs, Resolving… said and one Resolve
+// sent at a time, and a refusal said with the last lines and their choices kept; and a tag's documents chosen as it
+// opens, but one of a volume the catalogue does not list, from what that opening gathered and never a sheet before's
+// answer, focus handed into and back out of it, and the app's words for no tags, a tag with no documents and nothing
+// to resolve.
+import { QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CitationLines, DiscoveryTags, TagDocuments } from '../api/addDocuments';
@@ -105,18 +108,26 @@ const resolvedLines: CitationLines = {
 const tags: DiscoveryTags = {
   total: 2,
   items: [
-    { id: cubaId, name: 'Cuba', count: 3 },
+    { id: cubaId, name: 'Cuba', count: 4 },
     { id: idleId, name: 'Idle', count: 0 },
   ],
 };
 const cuba: TagDocuments = {
   id: cubaId,
   name: 'Cuba',
-  total: 3,
+  total: 4,
   items: [
-    { volumeId: 'frus1894Nicaragua', documentId: 'd1', header: 'No. 1. Mr. Baker to Mr. Gresham', volumeTitle: 'Nicaragua' },
-    { volumeId: 'frus1961-63v06', documentId: 'd1', header: '1. Telegram From the Embassy in the Soviet Union', volumeTitle: 'Kennedy-Khrushchev Exchanges' },
-    { volumeId: 'frus1964-68v30', documentId: 'd12', volumeTitle: 'China' },
+    { volumeId: 'frus1894Nicaragua', documentId: 'd1', header: 'No. 1. Mr. Baker to Mr. Gresham', volumeTitle: 'Nicaragua', catalogued: true },
+    {
+      volumeId: 'frus1961-63v06',
+      documentId: 'd1',
+      header: '1. Telegram From the Embassy in the Soviet Union',
+      volumeTitle: 'Kennedy-Khrushchev Exchanges',
+      catalogued: true,
+    },
+    { volumeId: 'frus1964-68v30', documentId: 'd12', volumeTitle: 'China', catalogued: true },
+    // A Mac's side-loaded volume, which no collection here takes.
+    { volumeId: 'frus1900sideloaded', documentId: 'd3', catalogued: false },
   ],
 };
 
@@ -262,18 +273,55 @@ describe('the Citations tab', () => {
     expect((await within(sheet()).findByRole('alert')).textContent).toContain('Add Documents resolves at most 500 lines at a time');
     expect(within(sheet()).queryByRole('list', { name: 'Citations' })).toBeNull();
   });
+
+  it('says Resolving… while the server works, and sends one Resolve at a time', async () => {
+    let answer: (lines: CitationLines) => void = () => {};
+    const fetch = server({ [`POST ${citationsPath}`]: () => new Promise((resolve) => (answer = resolve)) });
+    renderWithClient(<AddDocuments detail={detail()} onClose={() => {}} />);
+    const field = await openCitations();
+    await userEvent.click(field);
+    await userEvent.paste('FRUS, 1961–1963, vol. VI, doc. 1');
+    const resolve = within(sheet()).getByRole('button', { name: 'Resolve' });
+    await userEvent.click(resolve);
+    const posts = () => fetch.mock.calls.filter(([url]) => String(url).endsWith(citationsPath)).length;
+    await waitFor(() => expect(posts()).toBe(1));
+    expect(within(sheet()).getByRole('status').textContent).toBe('Resolving…');
+    expect(resolve.getAttribute('aria-disabled')).toBe('true');
+    await userEvent.click(resolve);
+    expect(posts()).toBe(1);
+    answer(resolvedLines);
+    await waitFor(() => expect(within(sheet()).getByRole('status').textContent).toBe('2 of 4 resolved · 1 to review'));
+    expect(resolve.getAttribute('aria-disabled')).toBe('false');
+    expect(document.activeElement).toBe(resolve);
+  });
+
+  it('keeps the last lines, and what was chosen from them, when the server refuses a Resolve', async () => {
+    server({
+      [`POST ${citationsPath}`]: (_url: URL, init?: RequestInit) =>
+        sent(init).body.text === 'refused' ? new ProblemAnswer(503, 'INDEX_NOT_READY', 'A new index is being installed; ask again in a moment.') : resolvedLines,
+    });
+    renderWithClient(<AddDocuments detail={detail()} onClose={() => {}} />);
+    await resolvePaste('FRUS, 1961–1963, vol. VI, doc. 1');
+    const field = within(sheet()).getByRole('textbox', { name: 'Paste citations or history.state.gov links, one per line…' });
+    await userEvent.clear(field);
+    await userEvent.paste('refused');
+    await userEvent.click(within(sheet()).getByRole('button', { name: 'Resolve' }));
+    expect((await within(sheet()).findByRole('alert')).textContent).toBe('A new index is being installed; ask again in a moment.');
+    expect(within(within(sheet()).getByRole('list', { name: 'Citations' })).getAllByRole('listitem')).toHaveLength(4);
+    expect(checkbox('1. Telegram From the Embassy in the Soviet Union').checked).toBe(true);
+    expect(within(sheet()).getByRole('button', { name: 'Add 2 Document(s)' })).toBeTruthy();
+  });
 });
 
 describe('the Tags tab', () => {
-  it("lists each tag with its count, and chooses a tag's documents as it opens", async () => {
+  it("lists each tag with its count, and chooses a tag's documents as it opens, but one no collection here takes", async () => {
     const fetch = server();
     renderWithClient(<AddDocuments detail={detail()} onClose={() => {}} />);
     await userEvent.click(within(sheet()).getByRole('button', { name: 'Tags' }));
     const list = await within(sheet()).findByRole('list', { name: 'Tags' });
-    expect(within(list).getAllByRole('button').map((button) => button.textContent)).toEqual(['Cuba 3', 'Idle 0']);
+    expect(within(list).getAllByRole('button').map((button) => button.textContent)).toEqual(['Cuba 4', 'Idle 0']);
 
-    const opener = within(list).getByRole('button', { name: 'Cuba 3' });
-    await userEvent.click(opener);
+    await userEvent.click(within(list).getByRole('button', { name: 'Cuba 4' }));
     const gathered = await within(sheet()).findByRole('list', { name: 'Cuba' });
     // The tab's button and the drill-in's Tags share the app's word: the drill-in's, the later, takes the focus.
     const back = () => within(sheet()).getAllByRole('button', { name: 'Tags' }).at(-1)!;
@@ -283,40 +331,71 @@ describe('the Tags tab', () => {
       [null, true],
       [null, true],
     ]);
-    expect(
-      within(gathered)
-        .getAllByRole('listitem')
-        .map((row) => [row.querySelector('.pick-title')?.textContent, row.querySelector('.meta')?.textContent]),
-    ).toEqual([
+    const rows = within(gathered).getAllByRole('listitem');
+    expect(rows.map((row) => [row.querySelector('.pick-title, .pick-heading')?.textContent, row.querySelector('.meta')?.textContent])).toEqual([
       ['No. 1. Mr. Baker to Mr. Gresham', 'd1 · Nicaragua'],
       ['1. Telegram From the Embassy in the Soviet Union', 'd1 · Kennedy-Khrushchev Exchanges'],
       ['d12', 'China'],
+      ['d3', 'frus1900sideloaded'],
     ]);
+    // The side-loaded volume's document: no box, and why.
+    expect(within(rows[3]!).queryByRole('checkbox')).toBeNull();
+    expect(rows[3]!.querySelector('.pick-note')?.textContent).toBe(
+      'The published catalogue does not list this volume, so this server cannot add the document to a collection.',
+    );
     expect(within(sheet()).getByRole('button', { name: 'Add 3 Document(s)' })).toBeTruthy();
 
-    // Unchosen, a document stays so when the tag is opened again.
+    // Unchosen, a document stays so when the tag is opened again, which gathers its documents again.
     await userEvent.click(checkbox('d12'));
     await userEvent.click(back());
-    await waitFor(() => expect(document.activeElement?.textContent).toBe('Cuba 3'));
-    await userEvent.click(within(sheet()).getByRole('button', { name: 'Cuba 3' }));
+    await waitFor(() => expect(document.activeElement?.textContent).toBe('Cuba 4'));
+    await userEvent.click(within(sheet()).getByRole('button', { name: 'Cuba 4' }));
     await within(sheet()).findByRole('list', { name: 'Cuba' });
+    await waitFor(() => expect(fetch.mock.calls.filter(([url]) => String(url).endsWith(`${tagsPath}/${cubaId}`))).toHaveLength(2));
     expect(within(sheet()).getByRole('button', { name: 'Add 2 Document(s)' })).toBeTruthy();
     expect(checkbox('d12').checked).toBe(false);
-    expect(fetch.mock.calls.some(([url]) => String(url).endsWith(`${tagsPath}/${cubaId}`))).toBe(true);
   });
 
-  it("says the app's words for no tags, and for a tag with no documents", async () => {
+  it('chooses from what this opening gathered, never from an answer a sheet before was given', async () => {
+    let answer: TagDocuments = cuba;
+    server({ [`${tagsPath}/${cubaId}`]: () => answer });
+    const first = renderWithClient(<AddDocuments detail={detail()} onClose={() => {}} />);
+    await userEvent.click(within(sheet()).getByRole('button', { name: 'Tags' }));
+    await userEvent.click(await within(sheet()).findByRole('button', { name: 'Cuba 4' }));
+    await within(sheet()).findByRole('list', { name: 'Cuba' });
+    expect(within(sheet()).getByRole('button', { name: 'Add 3 Document(s)' })).toBeTruthy();
+    first.unmount();
+    // Cuba is taken off frus1964-68v30's d12 elsewhere; the sheet's answer is not kept for the next.
+    answer = { ...cuba, total: 3, items: cuba.items.filter((item) => item.documentId !== 'd12') };
+    await waitFor(() => expect(first.client.getQueryCache().find({ queryKey: ['addDocumentsTag', cubaId] })).toBeUndefined());
+
+    render(
+      <QueryClientProvider client={first.client}>
+        <AddDocuments detail={detail()} onClose={() => {}} />
+      </QueryClientProvider>,
+    );
+    await userEvent.click(within(sheet()).getByRole('button', { name: 'Tags' }));
+    await userEvent.click(await within(sheet()).findByRole('button', { name: 'Cuba 4' }));
+    const gathered = await within(sheet()).findByRole('list', { name: 'Cuba' });
+    expect(within(gathered).getAllByRole('checkbox')).toHaveLength(2);
+    expect(within(sheet()).getByRole('button', { name: 'Add 2 Document(s)' })).toBeTruthy();
+  });
+
+  it("says the app's words for no tags and for a tag with no documents, and why a tag's could not be read", async () => {
     server({ [tagsPath]: { total: 0, items: [] } });
     const first = renderWithClient(<AddDocuments detail={detail()} onClose={() => {}} />);
     await userEvent.click(within(sheet()).getByRole('button', { name: 'Tags' }));
     expect(await within(sheet()).findByText('No user tags yet. Tag documents or research notes to gather them here.')).toBeTruthy();
     first.unmount();
 
-    server();
+    server({ [`${tagsPath}/${cubaId}`]: new ProblemAnswer(404, 'TAG_NOT_FOUND', `You have no tag with the id ${cubaId}.`) });
     renderWithClient(<AddDocuments detail={detail()} onClose={() => {}} />);
     await userEvent.click(within(sheet()).getByRole('button', { name: 'Tags' }));
     await userEvent.click(await within(sheet()).findByRole('button', { name: 'Idle 0' }));
     expect(await within(sheet()).findByText('No documents carry this tag.')).toBeTruthy();
     expect(within(sheet()).getByRole('heading', { name: 'Idle' })).toBeTruthy();
+    await userEvent.click(within(sheet()).getAllByRole('button', { name: 'Tags' }).at(-1)!);
+    await userEvent.click(await within(sheet()).findByRole('button', { name: 'Cuba 4' }));
+    expect((await within(sheet()).findByRole('alert')).textContent).toBe(`You have no tag with the id ${cubaId}.`);
   });
 });

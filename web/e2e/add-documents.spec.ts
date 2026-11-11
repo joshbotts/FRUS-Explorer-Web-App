@@ -1,9 +1,10 @@
 // S25d's done-when (docs/PLAN.md): Playwright resolves a paste and adds what resolved, then a tag's documents, by
-// keyboard on Chromium with no axe violations. Add Documents' Citations: a link and a citation by page resolve and
-// are chosen at once, and a citation of a volume the server's index does not hold finds only the volume, in the
-// kit's words, with nothing to choose; Add puts the two at the end of the collection. Its Tags: a tag a note and an
-// assignment carry is listed with its count, opens on its documents, the note's first, all chosen, with the focus
-// on Tags, and Add puts them at the end. Against the image, which the test leaves as it found it.
+// keyboard on Chromium with no axe violations. Add Documents' Citations: a citation by page resolves and is chosen
+// at once; a citation of a part the volume does not have is the kit's best guess, to review, left to the reader, who
+// chooses it by keyboard; and a citation of a volume the server's index does not hold finds only the volume, in the
+// kit's words, with nothing to choose; Add puts the two at the end of the collection, in the order chosen. Its Tags:
+// a tag a note and an assignment carry is listed with its count, opens on its documents, the note's first, all
+// chosen, with the focus on Tags, and Add puts them at the end. Against the image, which the test leaves as it found it.
 import type { Page } from '@playwright/test';
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
@@ -66,7 +67,7 @@ test("resolves a paste and adds what resolved, then a tag's documents, by keyboa
     page.getByText('Search the index, browse volumes, paste citations or history.state.gov links, or gather a tag. New documents are added to the end of the list.'),
   ).toBeVisible();
 
-  // Citations: a link, a citation by page, and one of a volume the index does not hold.
+  // Citations: a citation by page, one of a part the volume does not have, and one of a volume the index does not hold.
   let sheet = await openAddDocuments(page);
   const citationsTab = sheet.getByRole('button', { name: 'Citations', exact: true });
   await tabTo(page, citationsTab);
@@ -76,29 +77,32 @@ test("resolves a paste and adds what resolved, then a tag's documents, by keyboa
   await axeCheck(page);
   const paste = sheet.getByRole('textbox', { name: 'Paste citations or history.state.gov links, one per line…' });
   await tabTo(page, paste);
-  await page.keyboard.type(
-    ['https://history.state.gov/historicaldocuments/frus1961-63v06/d1', 'FRUS, 1961–1963, vol. VI, p. 2', 'FRUS, 1961–1963, vol. V, doc. 84'].join('\n'),
-  );
+  await page.keyboard.type(['FRUS, 1961–1963, vol. VI, p. 2', 'FRUS, 1961–1963, vol. VI, pt. 2, p. 1', 'FRUS, 1961–1963, vol. V, doc. 84'].join('\n'));
   const resolve = sheet.getByRole('button', { name: 'Resolve', exact: true });
   await tabTo(page, resolve);
   await page.keyboard.press('Enter');
-  await expect(sheet.getByRole('status')).toHaveText('2 of 3 resolved');
+  await expect(sheet.getByRole('status')).toHaveText('1 of 3 resolved · 1 to review');
   await expect(resolve).toBeFocused();
   const lines = sheet.getByRole('list', { name: 'Citations' }).locator('xpath=./li');
   await expect(lines).toHaveCount(3);
-  const telegram = sheet.getByRole('checkbox', { name: '1. Telegram From the Embassy in the Soviet Union', exact: true });
   const memorandum = sheet.getByRole('checkbox', { name: '2. Memorandum of Conversation', exact: true });
-  await expect(telegram).toBeChecked();
+  const telegram = sheet.getByRole('checkbox', { name: '1. Telegram From the Embassy in the Soviet Union', exact: true });
   await expect(memorandum).toBeChecked();
-  await expect(lines.nth(1)).toContainText('FRUS, 1961–1963, vol. VI, p. 2');
+  await expect(telegram).not.toBeChecked();
+  await expect(lines.nth(0)).toContainText('FRUS, 1961–1963, vol. VI, p. 2');
+  await expect(lines.nth(1).locator('.pick-note.warning')).toHaveText('Best guess — this volume does not match the cited part 2');
   await expect(lines.nth(2)).toHaveText(/FRUS, 1961–1963, vol. V, doc. 84\s*No match — Volume identified — download to find the specific document/);
   await expect(lines.nth(2).getByRole('checkbox')).toHaveCount(0);
   await axeCheck(page);
+  // The line to review, chosen by the reader.
+  await tabTo(page, telegram);
+  await page.keyboard.press('Space');
+  await expect(telegram).toBeChecked();
   await tabTo(page, sheet.getByRole('button', { name: 'Add 2 Document(s)' }));
   await page.keyboard.press('Enter');
   await expect(sheet).toHaveCount(0);
   await expect(opener(page)).toBeFocused();
-  await expect.poll(() => documents(page, detail.id)).toEqual(['frus1961-63v06/d1', 'frus1961-63v06/d2']);
+  await expect.poll(() => documents(page, detail.id)).toEqual(['frus1961-63v06/d2', 'frus1961-63v06/d1']);
 
   // Tags: the tag's documents, the note's then the assignment's, chosen as the tag opens.
   sheet = await openAddDocuments(page);
@@ -106,8 +110,8 @@ test("resolves a paste and adds what resolved, then a tag's documents, by keyboa
   await tabTo(page, tagsTab);
   await page.keyboard.press('Enter');
   await expect(tagsTab).toHaveAttribute('aria-pressed', 'true');
-  const opener = sheet.getByRole('list', { name: 'Tags' }).getByRole('button', { name: `${tagName} 2`, exact: true });
-  await tabTo(page, opener);
+  const tagButton = sheet.getByRole('list', { name: 'Tags' }).getByRole('button', { name: `${tagName} 2`, exact: true });
+  await tabTo(page, tagButton);
   await axeCheck(page);
   await page.keyboard.press('Enter');
   const gathered = sheet.getByRole('list', { name: tagName });
@@ -122,5 +126,5 @@ test("resolves a paste and adds what resolved, then a tag's documents, by keyboa
   await expect(opener(page)).toBeFocused();
   await expect
     .poll(() => documents(page, detail.id))
-    .toEqual(['frus1961-63v06/d1', 'frus1961-63v06/d2', 'frus1969-76v01/d2', 'frus1894Nicaragua/d1']);
+    .toEqual(['frus1961-63v06/d2', 'frus1961-63v06/d1', 'frus1969-76v01/d2', 'frus1894Nicaragua/d1']);
 });

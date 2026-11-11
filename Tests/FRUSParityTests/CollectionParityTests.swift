@@ -811,7 +811,7 @@ import Testing
             "try Task.checkCancellation() results.append(CollectionCitationLineResolver.LineResult(line: line, outcome: await resolver.resolve(line: line)))",
             "noteTags = notes.filter { !$0.volumeId.isEmpty && !$0.documentId.isEmpty }.map { (volumeId: $0.volumeId, documentId: $0.documentId, tagIds: $0.userTagIds.compactMap(UUID.init(uuidString:))) }",
             "TagUnion(notes: try store.notes(for: user), assignments: try store.tagAssignments(of: user))",
-            "CollectionGeneratedBlocks.tagDocumentRefs(tagId: tag, noteTags: noteTags, assignments: assignments)",
+            "CollectionGeneratedBlocks.tagDocumentRefs(tagId: tag, noteTags: own.notes, assignments: own.assignments)",
         ], file: "AddDocuments.swift")
         NoteViewParityTests.expect(try Self.server("Sources/FRUSLightCore/UserTags.swift"), holds: [
             "SELECT id, volume_id, document_id, tag_id, created_at FROM tag_assignments WHERE user_id = ? ORDER BY rowid",
@@ -835,7 +835,7 @@ import Testing
             "const blank = state.text.trim() === '';", "aria-disabled={state.resolving || blank}",
             "summary = words.resolvedCount(counts.resolved, state.lines.length) + (counts.toReview > 0 ? ` ${words.toReview(counts.toReview)}` : '');",
             "warning: line.outcome === 'ambiguous'",
-            "if (gathered && gathered.id === tagId) preselect(gathered.items.map(choice));",
+            "if (gathered && gathered.id === tagId) preselect(gathered.items.filter((item) => item.catalogued).map(choice));",
         ], file: "AddDocuments.tsx")
     }
 }

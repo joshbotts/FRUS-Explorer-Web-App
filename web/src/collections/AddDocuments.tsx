@@ -3,10 +3,13 @@
 // of the collection; a document the collection holds shows In collection and can be chosen again, as the app's
 // can. Resolve chooses at once the lines that resolved, and a tag opened its documents, each passing over what
 // the reader unchose in this sheet, as the app's `preselect(_:)` does; an ambiguous line waits for the reader.
-// The paste and its lines stay while the sheet is open, as the app's sheet keeps them across its tabs.
+// The paste and its lines stay while the sheet is open, as the app's sheet keeps them across its tabs; a tag
+// opened goes back to the list when another tab is chosen, as Browse's volume does, where the app's stays open.
+// A document of a volume the catalogue does not list, which a tag can gather from a Mac's export, is the web's
+// own: a collection here takes none, so its row has no box and is never chosen.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
-import { type CitationLine, discoveryTagsQuery, resolveCitations, tagDocumentsQuery, type TaggedDocument } from '../api/addDocuments';
+import { type CitationLine, discoveryTagsQuery, resolveCitations, tagDocumentsQuery } from '../api/addDocuments';
 import { addDocuments, type CollectionDetail, type DocumentRef } from '../api/collections';
 import { errorMessage } from '../api/client';
 import { readingOrderQuery, searchQuery, volumesQuery } from '../api/endpoints';
@@ -14,7 +17,7 @@ import { matchesFilter } from '../browse/CatalogueScreen';
 import { copy } from '../copy';
 import { validateSearch } from '../search/searchState';
 import { closeAtOnce, Modal } from '../shell/Modal';
-import { citationCounts, pickLabel, preselected, resolvedDocuments } from './addDocumentsRules';
+import { citationCounts, type DocumentChoice, pickLabel, preselected, resolvedDocuments } from './addDocumentsRules';
 import { documentKey } from './collectionRules';
 
 /** One document chosen, with what its row shows. */
@@ -46,7 +49,7 @@ interface Citations {
 }
 
 /** A document the Citations or the Tags tab offers, as a choice with its row's words. */
-function choice(document: TaggedDocument): Chosen {
+function choice(document: DocumentChoice & { header?: string; volumeTitle?: string }): Chosen {
   return { volumeId: document.volumeId, documentId: document.documentId, ...pickLabel(document) };
 }
 
@@ -89,7 +92,8 @@ export function AddDocuments({ detail, onClose }: { detail: CollectionDetail; on
       setCitations((state) => ({ ...state, lines: answer.items, resolving: false }));
       preselect(resolvedDocuments(answer.items).map((line) => choice({ ...line, volumeId: line.volumeId ?? '', documentId: line.documentId ?? '' })));
     } catch (error) {
-      setCitations((state) => ({ ...state, lines: null, resolving: false, failure: errorMessage(error) }));
+      // The last Resolve's lines stay, with the documents chosen from them, which the reader can still see and unchoose.
+      setCitations((state) => ({ ...state, resolving: false, failure: errorMessage(error) }));
     }
   }
 
@@ -386,11 +390,11 @@ function TagsTab({ row, preselect }: { row: Row; preselect: (list: Chosen[]) => 
     if (tagId) back.current?.focus();
     else if (cameFrom.current) tagList.current?.querySelector<HTMLElement>(`button[data-tag="${CSS.escape(cameFrom.current)}"]`)?.focus();
   }, [tagId]);
-  // `openTag(_:)`: a tag's documents, chosen at once, all but what the reader unchose; again on a second visit,
-  // which adds nothing the first did not, or the reader unchose.
+  // `openTag(_:)`: a tag's documents, chosen at once, all but what the reader unchose and what no collection here
+  // takes; again on a second visit, which adds nothing the first did not, or the reader unchose.
   const gathered = documents.data;
   useEffect(() => {
-    if (gathered && gathered.id === tagId) preselect(gathered.items.map(choice));
+    if (gathered && gathered.id === tagId) preselect(gathered.items.filter((item) => item.catalogued).map(choice));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- chosen once for each answer, not each time the sheet draws
   }, [gathered]);
   const words = copy.addDocuments;
@@ -419,7 +423,17 @@ function TagsTab({ row, preselect }: { row: Row; preselect: (list: Chosen[]) => 
           <p className="note">{words.tagsEmpty}</p>
         ) : (
           <ul className="pick-list" aria-label={gathered.name}>
-            {gathered.items.map((item) => row(choice(item)))}
+            {gathered.items.map((item) => {
+              if (item.catalogued) return row(choice(item));
+              const label = pickLabel(item);
+              return (
+                <li key={documentKey(item.volumeId, item.documentId)} className="pick-row">
+                  <p className="pick-heading">{label.title}</p>
+                  <p className="meta">{label.line}</p>
+                  <p className="pick-note">{words.notCatalogued}</p>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

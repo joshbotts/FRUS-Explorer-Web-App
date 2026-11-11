@@ -23,9 +23,10 @@ public struct AddDocumentsCitations: Codable, Equatable, Sendable, ResponseEncod
         public var line: String
         /// `resolved`, `ambiguous` or `unresolved` (`CollectionCitationLineResolver.Outcome`).
         public var outcome: String
-        /// The document a resolved or an ambiguous line names: for a link into a catalogued volume the
-        /// served index does not hold, the document the link names, by its id, as the app adds one from a
-        /// volume it has not downloaded.
+        /// The document a resolved or an ambiguous line names, always in a volume the published catalogue
+        /// lists: for a link to a numbered document (`d12`) in a catalogued volume the served index does not
+        /// hold, the document the link names, by its id, as the app adds one from a volume it has not
+        /// downloaded.
         public var volumeId: String?
         public var documentId: String?
         /// A resolved line's correction note, absent for none, or an ambiguous line's rank note, which it
@@ -66,10 +67,14 @@ public struct AddDocumentsTag: Codable, Equatable, Sendable, ResponseEncodable {
     public struct Document: Codable, Equatable, Sendable {
         public var volumeId: String
         public var documentId: String
-        /// As a citation's row's: the served index's head, absent for none.
+        /// As a citation's line's: the served index's head, absent for none.
         public var header: String?
         /// The volume's title in the published catalogue, absent for a volume it does not list.
         public var volumeTitle: String?
+        /// Whether the published catalogue lists the volume, without which a collection here takes no
+        /// document (`POST …/documents` answers `VOLUME_NOT_FOUND`): false for a volume only a Mac's export
+        /// can name, one side-loaded there, which the app's sheet adds and the web's offers to no one.
+        public var catalogued: Bool
     }
 }
 
@@ -80,8 +85,15 @@ public struct AddDocumentsTag: Codable, Equatable, Sendable, ResponseEncodable {
 /// with no document, a project's, gives no document to add, so it is passed over, as
 /// `ProjectEngagedDocuments` passes it over.
 struct TagUnion: Sendable {
-    let noteTags: [(volumeId: String, documentId: String, tagIds: [UUID])]
-    let assignments: [(volumeId: String, documentId: String, tagId: UUID)]
+    typealias NoteTags = (volumeId: String, documentId: String, tagIds: [UUID])
+    typealias Assignment = (volumeId: String, documentId: String, tagId: UUID)
+
+    let noteTags: [NoteTags]
+    let assignments: [Assignment]
+    /// Each tag's own notes and assignments, in their order: the kit passes over an entry that does not
+    /// carry the tag it is asked for, so handing it a tag's own gives the answer the whole lists give, and
+    /// the list's counts take one pass over the store's rows rather than one for each tag.
+    private let byTag: [UUID: (notes: [NoteTags], assignments: [Assignment])]
 
     init(notes: [NoteRecord], assignments: [TagAssignmentRecord]) {
         noteTags = notes.filter { !$0.volumeId.isEmpty && !$0.documentId.isEmpty }.map {
@@ -92,6 +104,12 @@ struct TagUnion: Sendable {
                 (volumeId: assignment.volumeId, documentId: assignment.documentId, tagId: $0)
             }
         }
+        var byTag: [UUID: (notes: [NoteTags], assignments: [Assignment])] = [:]
+        for note in noteTags {
+            for tag in Set(note.tagIds) { byTag[tag, default: ([], [])].notes.append(note) }
+        }
+        for assignment in self.assignments { byTag[assignment.tagId, default: ([], [])].assignments.append(assignment) }
+        self.byTag = byTag
     }
 
     /// The user's, read from the store at one go each.
@@ -101,8 +119,8 @@ struct TagUnion: Sendable {
 
     /// The documents carrying the tag `id` names, the kit's union, which answers `(documentId, volumeId)`.
     func documents(of id: String) -> [(documentId: String, volumeId: String)] {
-        guard let tag = UUID(uuidString: id) else { return [] }
-        return CollectionGeneratedBlocks.tagDocumentRefs(tagId: tag, noteTags: noteTags, assignments: assignments)
+        guard let tag = UUID(uuidString: id), let own = byTag[tag] else { return [] }
+        return CollectionGeneratedBlocks.tagDocumentRefs(tagId: tag, noteTags: own.notes, assignments: own.assignments)
     }
 }
 
@@ -110,12 +128,19 @@ enum AddDocumentsRoutes {
     /// A paste, as the Citations tab sends its text.
     struct Paste: Decodable { let text: String }
 
+    /// A paste's lines, as the kit buckets them, with what the served index holds of their documents.
+    struct Resolution: Sendable {
+        let lines: [CollectionCitationLineResolver.LineResult]
+        let facts: [String: DocumentDisplayTitle.Facts]
+    }
+
     static func add(to me: RouterGroup<APIRequestContext>, services: UserDataServices, resources: ServerResources,
                     provider: ServedIndexProvider) {
         let store = services.store
         let matcher = CitationLookupRoutes.matcher(provider: provider, resources: resources)
 
-        // Resolve: each line of the paste, bounded as Batch is, by its count of lines and its size.
+        // Resolve: each line of the paste, bounded as Batch is, by its count of lines and its size, and the
+        // heads of the documents they name, all stopped when the client goes.
         me.post("add-documents/citations") { request, context -> AddDocumentsCitations in
             try FormQuery(request.uri.query).refuseUnknown([])
             _ = try context.requireUser()
@@ -126,9 +151,12 @@ enum AddDocumentsRoutes {
                                  detail: "Add Documents resolves at most \(CitationLookupRoutes.batchLimit) lines at a time, and this text holds \(lines.count). Paste it in parts.")
             }
             let engine = try await matcher()
-            let results = try await context.whileClientConnected { try await resolve(lines, engine: engine) }
-            let facts = await CollectionRoutes.documentFacts(results.compactMap { document(of: $0.outcome) }, provider: provider)
-            return AddDocumentsCitations(total: results.count, items: results.map { result in
+            let resolution = try await context.whileClientConnected {
+                let results = try await resolve(lines, engine: engine)
+                try Task.checkCancellation()
+                return Resolution(lines: results, facts: await heads(of: results.compactMap { document(of: $0.outcome) }, provider: provider))
+            }
+            return AddDocumentsCitations(total: resolution.lines.count, items: resolution.lines.map { result in
                 var line = AddDocumentsCitations.Line(line: result.line, outcome: "unresolved")
                 switch result.outcome {
                 case .resolved(let volumeId, let documentId, let note):
@@ -143,7 +171,7 @@ enum AddDocumentsRoutes {
                     line.reason = reason
                 }
                 if let volumeId = line.volumeId, let documentId = line.documentId {
-                    line.header = facts["\(volumeId)/\(documentId)"]?.header
+                    line.header = resolution.facts["\(volumeId)/\(documentId)"]?.header
                     line.volumeTitle = resources.volume(volumeId)?.title
                 }
                 return line
@@ -154,25 +182,29 @@ enum AddDocumentsRoutes {
         me.get("add-documents/tags") { request, context -> AddDocumentsTags in
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
-            let (tags, union) = try await Blocking.run { (try store.tags(of: user.id), try TagUnion.read(for: user.id, in: store)) }
-            return AddDocumentsTags(total: tags.count, items: tags.map {
-                AddDocumentsTags.Tag(id: $0.id, name: $0.name, count: union.documents(of: $0.id).count)
-            })
+            return try await Blocking.run {
+                let (tags, union) = (try store.tags(of: user.id), try TagUnion.read(for: user.id, in: store))
+                return AddDocumentsTags(total: tags.count, items: tags.map {
+                    AddDocumentsTags.Tag(id: $0.id, name: $0.name, count: union.documents(of: $0.id).count)
+                })
+            }
         }
         // A tag's documents, the union in its order.
         me.get("add-documents/tags/:tagId") { request, context -> AddDocumentsTag in
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
             let id = try context.parameters.require("tagId")
-            let (tag, union) = try await Blocking.run { (try store.tag(id, of: user.id), try TagUnion.read(for: user.id, in: store)) }
+            let (tag, refs) = try await Blocking.run {
+                let tag = try store.tag(id, of: user.id)
+                return (tag, try tag.map { try TagUnion.read(for: user.id, in: store).documents(of: $0.id) } ?? [])
+            }
             guard let tag else { throw TagRoutes.problem(TagStoreError.tagNotFound(id)) }
-            let refs = union.documents(of: tag.id)
-            let facts = await CollectionRoutes.documentFacts(refs.map { DocumentKey(volumeId: $0.volumeId, documentId: $0.documentId) },
-                                                             provider: provider)
+            let facts = await heads(of: refs.map { DocumentKey(volumeId: $0.volumeId, documentId: $0.documentId) }, provider: provider)
             return AddDocumentsTag(id: tag.id, name: tag.name, total: refs.count, items: refs.map { ref in
-                AddDocumentsTag.Document(volumeId: ref.volumeId, documentId: ref.documentId,
-                                         header: facts["\(ref.volumeId)/\(ref.documentId)"]?.header,
-                                         volumeTitle: resources.volume(ref.volumeId)?.title)
+                let volume = resources.volume(ref.volumeId)
+                return AddDocumentsTag.Document(volumeId: ref.volumeId, documentId: ref.documentId,
+                                                header: facts["\(ref.volumeId)/\(ref.documentId)"]?.header,
+                                                volumeTitle: volume?.title, catalogued: volume != nil)
             })
         }
     }
@@ -200,5 +232,12 @@ enum AddDocumentsRoutes {
         case .unresolved:
             nil
         }
+    }
+
+    /// What the served index holds of each document, for its head, as the app's sheet reads its heads
+    /// (`CrossReferenceStore.documentHeaders(for:)`): the Research page's read of a row's title facts, the
+    /// documents' rows alone, a volume's ids at a time; nothing while no index is served.
+    static func heads(of documents: [DocumentKey], provider: ServedIndexProvider) async -> [String: DocumentDisplayTitle.Facts] {
+        await ResearchRoutes.titleFacts(documents.map { (volumeId: $0.volumeId, documentId: $0.documentId) }, provider: provider)
     }
 }

@@ -1557,7 +1557,8 @@ export const copy = {
   /**
    * Add Documents, in the app's words for its four tabs, Citations and Tags since PLAN's S25d. The Citations
    * tab's hint names the server's index where the app's names the device's, and its line while it resolves is
-   * the web's own, where the app shows a spinner.
+   * the web's own, where the app shows a spinner; so is the line on a tag's document whose volume the catalogue
+   * does not list, which the app's sheet adds.
    */
   addDocuments: {
     title: 'Add Documents',
@@ -1591,6 +1592,7 @@ export const copy = {
     tagsNone: 'No user tags yet. Tag documents or research notes to gather them here.',
     tagsBack: 'Tags',
     tagsEmpty: 'No documents carry this tag.',
+    notCatalogued: 'The published catalogue does not list this volume, so this server cannot add the document to a collection.',
   },
 
   // ─── Tools ────────────────────────────────────────────────────────────────
