@@ -94,7 +94,8 @@ import Testing
             }
 
             let all = try await owner.send(.post, Self.downloads, #"{"all":true}"#)
-            #expect(all.status == .accepted && (try decode(AdminJob.self, all)).subject == "551 volumes")
+            let allJob = try decode(AdminJob.self, all)
+            #expect(all.status == .accepted && allJob.subject == "551 volumes")
             await fixture.users.jobs.waitUntilIdle()
             #expect(try decode(AdminLibrary.self, try await owner.get(Self.path)).counts == ["downloaded": 3, "notDownloaded": 550])
 
@@ -196,7 +197,8 @@ import Testing
             let base = "http://localhost:\(port)/"
             let file = directory.url.appendingPathComponent(".file.download")
             let answer = try await transport.get(URL(string: base + "file")!, headers: ["User-Agent": "test"], limit: 1_000, into: file)
-            #expect(answer.status == 200 && answer.body.isEmpty && (try Data(contentsOf: file)) == Data(String(repeating: "x", count: 1_000).utf8))
+            let written = try Data(contentsOf: file)
+            #expect(answer.status == 200 && answer.body.isEmpty && written == Data(String(repeating: "x", count: 1_000).utf8))
             await #expect(throws: LibraryTransportError.tooLarge(limit: 999)) {
                 try await transport.get(URL(string: base + "file")!, headers: [:], limit: 999, into: file)
             }

@@ -615,7 +615,8 @@ The store's own user, `owner`, whose research an export made with your writing b
 An admin finds **Admin** in the app's header, which opens Administration at its first pane. Under `FRUS_AUTH=none` the one user is an admin; behind a proxy that signs people in, those `FRUS_ADMIN_USERS` names; with accounts, those with the admin role. Everyone else is refused it, and so is every route under `/api/v1/admin`. A server with `FRUS_USER_DATA=off` keeps none of what it shows, and refuses it to everyone: use `frus-light` on the server there.
 
 - **Status** names the server's version, its mode and its sign-in; the index it serves, how many of the catalogue's volumes and their documents, its version and the export it came from; the research data's store and its migration; the daily backups and the newest; the key file the stored keys are sealed under, by its id, which says nothing of the key, and how many keys it holds; and the job running.
-- **Jobs** lists the server's work, newest first, one job at a time: an index imported from `/data/import`, a JSON export imported into someone's research, and an index reset. Each says what it does as it goes, who asked for it, and when it was queued, started and finished, and why it failed. **Cancel…** stops one: a job waiting never begins, and one running stops before its next step, keeping nothing it had not finished, until it is past the point where it can stop, as an import making its new index live, which then runs to its end. An index import cancelled leaves its file in `/data/import`, not tried again until the file changes or the server restarts. The list outlives a restart; a job the server was running when it stopped is marked failed when it starts again, and an import runs again from its file.
+- **Jobs** lists the server's work, newest first, one job at a time: an index imported from `/data/import`, a JSON export imported into someone's research, an index reset, and the library's downloads. Each says what it does as it goes, who asked for it, and when it was queued, started and finished, and why it failed. **Cancel…** stops one: a job waiting never begins, and one running stops before its next step, keeping nothing it had not finished, until it is past the point where it can stop, as an import making its new index live, which then runs to its end. An index import cancelled leaves its file in `/data/import`, not tried again until the file changes or the server restarts. The list outlives a restart; a job the server was running when it stopped is marked failed when it starts again, and an import runs again from its file.
+- **Library** lists the catalogue's volumes, each with what the server holds of it: in Import mode the TEI folder's files and the index's volumes; in Standalone mode the volumes it downloads, as [Standalone mode](#standalone-mode) sets out.
 - **Users** lists the users, each with their role and last sign-in. With accounts, an admin adds one, with its first password, which you give the person, sets a role, disables or enables an account, and sets a new password, each as `frus-light user` does: a disabled account and one given a new password are signed out at once. No change can leave the server without an admin who can sign in. Behind a proxy, the list alone: the proxy keeps the accounts.
 - **Backups** lists the backups the server keeps and downloads the newest, as [Backups and restore](#backups-and-restore) sets out.
 - **Keys** keeps the server's own NARA Catalog key, which serves everyone who has none of their own, as Settings ▸ Keys keeps a person's ([The key file](#the-key-file)).
@@ -624,6 +625,38 @@ Two recovery actions ask first:
 
 - **Erase Research…**, on a user's row, erases everything they keep here: their tags, highlights, notes, summaries, collections, projects, saved searches, history and settings, and the keys they stored. Its question names how many of each they hold, and nothing is erased if that changed meanwhile, or while an import of theirs waits or runs. Their account, its role, its password and their sessions stay as they are, so they can go on, with nothing. The daily backups still hold what they had until each is replaced, a week or more, and a restore brings it back.
 - **Reset the Index…**, in Status, stops serving the index and removes it, with the index the last import replaced, so that the server waits for an export in `/data/import`, as at its first start. Search stops until you import one; the reader keeps working from the TEI files, and nobody's research changes. It runs as a job, and is refused while an index import waits or runs; an export copied in after it is imported after it.
+
+## Standalone mode
+
+A Standalone server keeps a library of volumes of its own, which it downloads, in place of a TEI folder of the Mac's: each volume from GitHub's copy of the Office of the Historian's TEI, `HistoryAtState/frus`, and its figure images from history.state.gov, as FRUS Explorer downloads them. They live in the Docker volume with everything else the server keeps, at `/data/volumes`. Search reads an index, which this release does not yet build from the volumes it downloads: seed one with an export from the Mac, as in Import mode, and the reader renders the volumes the library holds.
+
+1. Beside `compose.yaml`, fetch the file that turns it to Standalone mode, and have Compose read both:
+
+   ```bash
+   curl -fsSLO https://raw.githubusercontent.com/joshbotts/FRUS-Explorer-Web-App/main/compose.standalone.yaml
+   ```
+
+   ```bash
+   echo "COMPOSE_FILE=compose.yaml:compose.standalone.yaml" >> .env
+   ```
+
+   It sets `FRUS_MODE=standalone` and leaves out the read-only TEI folder, `FRUS_TEI_DIR`, so that the server can write `/data/volumes`; a Standalone server that cannot write it does not start, and its log says why.
+2. Start it, or start it again, with `docker compose up -d`. On Linux, make the backups folder first, as step 3 does.
+3. In the browser app, **Admin ▸ Library** lists the catalogue's 553 volumes. **Download** fetches one, and **Download All** every volume not downloaded, about 3.3 GB of TEI and 141 MB of figure images for all of them. Each is a job, which **Jobs** follows, fetching the volumes one after another: Cancel… stops it between two volumes, keeping those it finished. A download a restart stops goes on when the server starts again, from the volume it was fetching.
+4. To seed the index, copy an export into `/data/import`, as step 5 does: the server imports one at its index version, 74 today, and the Library lists its volumes as indexed. Download brings the files of the volumes it holds, for the reader.
+
+What a download checks: GitHub's listing names each volume's size and its git blob SHA-1, the hash Git keeps a file by, and a file takes the place of the copy there only once it has that size and that hash; one that does not is left out, and the copy there stays. Just after the Office of the Historian corrects a volume, GitHub can serve the old file for a few minutes: the Library then says so, and Download asks again. **Remove…** deletes a downloaded volume's file and figure images, after a question, but not a volume the index holds.
+
+- **GitHub's limit.** GitHub lets an address with no token read its listing 60 times an hour. The server reads it once a download, and a listing that has not changed does not count. For more, give it a GitHub token, which it sends to GitHub's own API alone: a fine-grained token with no permissions reads a public repository.
+
+  ```bash
+  echo "FRUS_GITHUB_TOKEN=<token>" >> .env
+  ```
+
+- **No outbound traffic.** `FRUS_OFFLINE=true` in `.env` keeps the server from making any request outside: it serves what it holds, and the Library says that it downloads nothing.
+- **A mirror.** `FRUS_LIBRARY_MIRROR=<url>` downloads from a server of your own in place of GitHub and history.state.gov: one folder served over http or https, holding each host's files under its name, `api.github.com/repos/HistoryAtState/frus/contents/volumes` (the listing, as GitHub's API gives it), `raw.githubusercontent.com/HistoryAtState/frus/master/volumes/<file>.xml` and `static.history.state.gov/frus/<volume>/<image>.png`. The Compose smoke test serves the fixtures so.
+- **Behind a proxy for outbound traffic,** give the server `https_proxy`, and `no_proxy` for the hosts it reaches directly, in `compose.override.yaml`'s `environment` for `frus`: the server downloads through libcurl, which reads them.
+- **Back to Import mode,** remove the `COMPOSE_FILE` line: the downloaded volumes stay in the Docker volume, under the TEI folder's mount, until you remove the volume.
 
 ## A PostgreSQL user store
 
