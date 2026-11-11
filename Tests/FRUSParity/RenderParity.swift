@@ -8,7 +8,9 @@
 // tools/mac-golden ran that path to make the golden files. This file makes the same calls through
 // the kit's public API alone, with a plain import, as the server does. It chooses only what
 // the app chooses: persons and terms from the TEI, no classification override, and the app's
-// bundled broken-refs index.
+// bundled broken-refs index. Which sections the server parses alone, beside a full parse's
+// documents, is the server's own rule (`ReaderService.sectionsReadAlone`), which the golden rows'
+// list, the Mac's, holds.
 //
 // The golden HTML cannot show where the persons and terms came from. The serializer writes a
 // person's or a term's link from its ref alone, and the one link a lookup decides, an <abbr> whose
@@ -16,6 +18,7 @@
 // lists they rendered with, for the tests to compare, and a synthetic volume tests the <abbr> link.
 
 import FRUSCoreKit
+import FRUSLightAPI
 import Foundation
 import ParityFormat
 
@@ -155,23 +158,40 @@ public struct ReaderRenderer: Sendable {
     }
 
     /// The path the server serves (FRUSLightAPI's `ReaderService`): one `parseVolumeFull` of each volume, whose
-    /// persons and terms make the lookups, then every document it yields, in parse order, with the
-    /// reader's converter, written by `write`: the reader's serializer unless a test passes another,
-    /// such as one with a host's figure addresses or the whole page. Volumes render concurrently, in
-    /// the order given. Each volume's persons and terms are returned too, to be compared with
-    /// `readerLists`.
+    /// persons and terms make the lookups, then every document it yields, in parse order, then each
+    /// section the server parses alone, as the app's Read Index does (`ReaderService.sectionsReadAlone`:
+    /// a back-of-volume index, a table of contents), in the structure's order, with the reader's
+    /// converter, written by `write`: the reader's serializer unless a test passes another, such as one
+    /// with a host's figure addresses or the whole page. Volumes render concurrently, in the order given.
+    /// Each volume's persons and terms are returned too, to be compared with `readerLists`.
     public func fullParsePass(_ volumes: [String], write: @escaping Writer = ReaderRenderer.readerFragment) async throws -> (documents: [RenderedDocument], lists: [String: LookupLists]) {
         let passes = try await Self.map(volumes.count) { index in
             let volume = volumes[index]
-            let parse = try await FRUSDocumentParser().parseVolumeFull(volumeURL: self.volumeURL(volume))
-            let lists = LookupLists(persons: parse.persons, terms: parse.terms)
-            let documents = parse.documents.map { ast in
+            let served = try await self.servedParse(volume)
+            let lists = LookupLists(persons: served.parse.persons, terms: served.parse.terms)
+            let documents = served.parse.documents.map { ast in
                 RenderedDocument(volume: volume, document: ast.documentId,
                                  html: self.html(ast, volume: volume, lookups: lists.lookups, write: write))
             }
-            return (documents, lists)
+            let sections = served.sections.map { section in
+                RenderedDocument(volume: volume, document: section.id,
+                                 html: section.ast.map { self.html($0, volume: volume, lookups: lists.lookups, write: write) })
+            }
+            return (documents + sections, lists)
         }
         return (passes.flatMap(\.0), Dictionary(zip(volumes, passes.map(\.1)), uniquingKeysWith: { first, _ in first }))
+    }
+
+    /// A volume as the server reads it: one full parse, and each section it parses alone, in the
+    /// structure's order, by a new parser's `parseDocument`; nil where that finds no such division.
+    func servedParse(_ volume: String) async throws -> (parse: VolumeFullParseResult, sections: [(id: String, ast: FRUSDocumentAST?)]) {
+        let url = volumeURL(volume)
+        let parse = try await FRUSDocumentParser().parseVolumeFull(volumeURL: url)
+        var sections: [(id: String, ast: FRUSDocumentAST?)] = []
+        for id in ReaderService.sectionsReadAlone(in: parse.structureSections, documents: Set(parse.documents.map(\.documentId))) {
+            sections.append((id, try await FRUSDocumentParser().parseDocument(documentId: id, volumeURL: url)))
+        }
+        return (parse, sections)
     }
 
     /// One document's render model along `fullParsePass`'s path, read by `read`.
@@ -182,14 +202,16 @@ public struct ReaderRenderer: Sendable {
     }
 
     /// `fullParsePass`'s path, each document's render model read by `read` rather than written as
-    /// HTML: for a check of what the model holds, such as check 6's flat text.
+    /// HTML: for a check of what the model holds, such as check 6's flat text. The sections the server
+    /// parses alone come after each volume's documents, as there; one the parse cannot find has no row.
     public func fullParseModels<Value: Sendable>(_ volumes: [String],
                                                  read: @escaping @Sendable (FRUSDocumentRenderModel) -> Value) async throws -> [ModelRow<Value>] {
         try await Self.map(volumes.count) { index in
             let volume = volumes[index]
-            let parse = try await FRUSDocumentParser().parseVolumeFull(volumeURL: self.volumeURL(volume))
-            let lookups = LookupLists(persons: parse.persons, terms: parse.terms).lookups
-            return parse.documents.map { ast in
+            let served = try await self.servedParse(volume)
+            let lookups = LookupLists(persons: served.parse.persons, terms: served.parse.terms).lookups
+            let asts = served.parse.documents + served.sections.compactMap(\.ast)
+            return asts.map { ast in
                 ModelRow(volume: volume, document: ast.documentId, value: read(self.model(ast, volume: volume, lookups: lookups)))
             }
         }.flatMap { $0 }

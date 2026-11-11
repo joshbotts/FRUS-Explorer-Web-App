@@ -330,7 +330,9 @@ export function ReaderScreen() {
   }
 
   const entry = detail.data?.document;
-  // Named as the row that opened it, by the kit's rule for lists, as the app's reader is.
+  // Named as the app's reader names it: by the kit's rule for lists over the index's head, as the row
+  // that opened it is, or, for a document the index does not hold, by the head the server parses from
+  // its TEI, as History names a visit to it.
   const header = entry?.displayTitle ?? documentId;
   const volumeTitle = volumes.data?.items.find((volume) => volume.volumeId === volumeId)?.title ?? volumeId;
   useDocumentTitle(header);

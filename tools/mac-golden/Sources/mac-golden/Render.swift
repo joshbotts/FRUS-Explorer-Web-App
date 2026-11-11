@@ -1,4 +1,5 @@
-// render: check 4's golden HTML, as the Mac reader renders each fixture document.
+// render: check 4's golden HTML, as the Mac reader renders each fixture document, and each section
+// the app's Browse opens in the reader that a full parse leaves out.
 
 import Foundation
 import ParityFormat
@@ -14,9 +15,31 @@ let renderConfiguration = """
     HTMLTemplate.build(model:colorScheme: .light), keeping the body: the fragment \
     FRUSRenderNodeHTMLSerializer.reader writes (annotateSourceClassification: true, \
     figureImages: .reader, listsNamedReferences: true). \
-    Rows are every document a full parse of each volume yields, in parse order, volumes sorted. \
+    Rows are every document a full parse of each volume yields, in parse order, then each section the \
+    app's Browse opens in the reader by its id, as its Read button does (VolumeSection.canReadDirectly), \
+    that the full parse yields no document for, in the structure's order: a back-of-volume index and a \
+    table of contents; volumes sorted. \
     A release build of the app module, with testing enabled, compiled from the submodule unmodified.
     """
+
+/// The sections the app's Browse opens in the reader by their ids, as `CompilationView`'s Read button
+/// and the Mac corpus browser's `proseSectionView` do (`VolumeSection.canReadDirectly`), that a full
+/// parse yields no document for, chiefly a back-of-volume index and a table of contents, in the
+/// structure's order: the reader parses each alone, as the app's Read Index does.
+func sectionsReadAlone(in structure: [VolumeSection], documents: Set<String>) -> [String] {
+    var found: [String] = []
+    var seen = Set<String>()
+    func walk(_ sections: [VolumeSection]) {
+        for section in sections {
+            if section.canReadDirectly, !documents.contains(section.sectionId), seen.insert(section.sectionId).inserted {
+                found.append(section.sectionId)
+            }
+            walk(section.subsections)
+        }
+    }
+    walk(structure)
+    return found
+}
 
 @MainActor
 func renderGolden(repo: Repository, out: URL) async throws {
@@ -36,9 +59,11 @@ func renderGolden(repo: Repository, out: URL) async throws {
     var pages: [(path: String, html: String)] = []
     for volume in ParityFixtures.volumes.sorted() {
         let volumeURL = tei.appendingPathComponent("\(volume).xml")
-        let documents = try await FRUSDocumentParser().parseVolumeFull(volumeURL: volumeURL).documents
+        let parse = try await FRUSDocumentParser().parseVolumeFull(volumeURL: volumeURL)
+        let documents = parse.documents.map(\.documentId)
+        let sections = sectionsReadAlone(in: parse.structureSections, documents: Set(documents))
         var seen = Set<String>()
-        for (index, document) in documents.map(\.documentId).enumerated() {
+        for (index, document) in (documents + sections).enumerated() {
             guard document.wholeMatch(of: /[A-Za-z0-9_-][A-Za-z0-9._-]*/) != nil else {
                 throw ToolError("\(volume)/\(document) is not a safe file name")
             }
@@ -60,7 +85,8 @@ func renderGolden(repo: Repository, out: URL) async throws {
             rows.append(RenderRow(volume: volume, document: document, html: html))
             pages.append((RenderGolden.htmlPath(volume: volume, document: document), html))
         }
-        note("render: \(volume), \(documents.count) rows")
+        note("render: \(volume), \(documents.count + sections.count) rows"
+             + (sections.isEmpty ? "" : ", the last \(sections.count) sections read alone (\(sections.joined(separator: ", ")))"))
     }
 
     // Everything rendered, so replace the old files: any html file not written now is stale. A

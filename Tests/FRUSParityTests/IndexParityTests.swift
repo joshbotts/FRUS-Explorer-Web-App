@@ -11,7 +11,8 @@ import Testing
     /// server's indexer will, has the golden summary's 36 digests and 7 checks. While the golden
     /// summary waits for the owner's export, the test still checks what needs none: every check at
     /// its right value, the rollup rebuilt, and each volume's documents, which the render golden,
-    /// made from the app's source, also counts.
+    /// made from the app's source, also counts, less the sections the reader parses alone, which the
+    /// index leaves out.
     @Test func theKitsIndexOfTheFixturesSummarizesAsTheMacs() async throws {
         let built = try await FixtureIndex.value()
         let summary = try IndexSummarizer(layout: Repository.layout).summarize(built.copy)
@@ -20,7 +21,9 @@ import Testing
         #expect(built.index.rollupRebuilt)
         let (render, renderStale) = try RenderParity.golden(Repository.layout)
         #expect(renderStale.isEmpty, "\(renderStale.joined(separator: "\n"))")
-        let rendered = Dictionary(grouping: render.rows, by: \.volume).mapValues(\.count)
+        let alone = Set(RenderParityTests.expectedSectionsReadAlone)
+        let rendered = Dictionary(grouping: render.rows.filter { !alone.contains("\($0.volume)/\($0.document)") }, by: \.volume)
+            .mapValues(\.count)
         #expect(built.index.documents == rendered)
         print(built.index.metrics.report())
         #if DEBUG

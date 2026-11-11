@@ -210,3 +210,82 @@ describe('a section’s own text, as the app’s Browse lists it', () => {
     expect(screen.getByRole('link', { name: 'Convention One' }).getAttribute('href')).toBe(`/doc/${v01}/t3`);
   });
 });
+
+describe('a volume’s back matter, as the app’s Read Index opens it', () => {
+  const v06 = 'frus1961-63v06';
+  const listed = (sectionId: string, divType: string, title: string, opens: boolean, isFrontMatter = true): Section => ({
+    sectionId,
+    divType,
+    title,
+    documentIds: [],
+    subsections: [],
+    documentCount: 0,
+    indexedDocumentCount: 0,
+    isFrontMatter,
+    canReadDirectly: opens,
+    readable: opens,
+    hasOwnText: false,
+  });
+  const wrapper = (sectionId: string, divType: string, title: string, subsections: Section[]): Section => ({
+    ...listed(sectionId, divType, title, false, divType === 'front'),
+    subsections,
+  });
+
+  it('links to the reader the index and the table of contents the server reads, and names the lists it does not', async () => {
+    const volume: Volume = {
+      volumeId: v06,
+      filename: `${v06}.xml`,
+      subseries: '1961-63',
+      title: page.volumeTitle,
+      dateRange: {},
+      status: 'published',
+      editors: [],
+      sizeBytes: 1,
+      tags: [],
+      indexed: true,
+      indexedDocuments: 120,
+      teiAvailable: true,
+      structure: [
+        wrapper('front-1', 'front', 'Front Matter', [
+          listed('toc', 'table-of-contents', 'Contents', true),
+          listed('sources', 'sources', 'List of Sources', false),
+          listed('persons', 'persons', 'List of Names', false),
+        ]),
+        wrapper('back-2', 'back', 'Back Matter', [listed('index', 'index', 'Index', true, false)]),
+      ],
+      structureSource: 'index',
+      documentCount: 0,
+      indexedDocumentCount: 0,
+    };
+    stubServer({ '/readyz': ready, [`/api/v1/volumes/${v06}`]: volume });
+    renderAt(`/browse/${v06}`);
+    expect((await screen.findByRole('link', { name: 'Index' })).getAttribute('href')).toBe(`/doc/${v06}/index`);
+    expect(screen.getByRole('link', { name: 'Contents' }).getAttribute('href')).toBe(`/doc/${v06}/toc`);
+    // The app's Browse opens these as lists of their own, which this server does not have yet.
+    for (const name of ['List of Sources', 'List of Names']) {
+      expect(screen.queryByRole('link', { name })).toBeNull();
+      expect(screen.getByText(name)).toBeTruthy();
+    }
+  });
+
+  it('heads a document the index does not hold by the title the server gives it, its parsed head, not its header', async () => {
+    const parsedHead = '3. Message From Chairmen Khrushchev and Brezhnev to President Kennedy';
+    const detail: DocumentDetail = {
+      document: { documentId: 'd3', volumeId: v06, documentNumber: '3', header: 'Document 3', displayTitle: parsedHead, isEditorialNote: false, inIndex: false },
+      canonicalURL: `https://history.state.gov/historicaldocuments/${v06}/d3`,
+      previous: { documentId: 'd2', header: '2. Memorandum of Conversation', inIndex: true, readable: true },
+      teiAvailable: true,
+    };
+    stubServer({
+      '/readyz': ready,
+      '/api/v1/volumes': { total: 0, limit: 1000, offset: 0, items: [], coverage },
+      [`/api/v1/volumes/${v06}/documents/d3`]: detail,
+      [`/api/v1/volumes/${v06}/documents/d3/html`]: '',
+    });
+    renderAt(`/doc/${v06}/d3`);
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(parsedHead));
+    await waitFor(() => expect(document.title).toBe(`${parsedHead} – FRUS Explorer Light`));
+    // The index's reading order holds it, as the app's reader turns its pages to it.
+    expect((await screen.findByRole('link', { name: /Previous/ })).getAttribute('href')).toBe(`/doc/${v06}/d2`);
+  });
+});

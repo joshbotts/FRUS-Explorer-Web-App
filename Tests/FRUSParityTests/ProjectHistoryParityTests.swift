@@ -491,12 +491,17 @@ import Testing
             // A document the parse gives no title keeps the one it was opened with, through the display rule.
             "if let documentTitle, !documentTitle.isEmpty { return documentTitle } return ReadingHistoryTitle.documentTitle(stored: entry.header,",
         ], file: "DocumentViewModel.swift")
-        NoteViewParityTests.expect(try Self.server("Sources/FRUSLightAPI/History.swift"), holds: [
+        // The parsed head is one rule, the server's `parsedTitle(of:)`, which a visit's title and the
+        // reader's heading for a document the index does not hold both take, so the two agree.
+        NoteViewParityTests.expect(try Self.server("Sources/FRUSLightAPI/Catalog.swift"), holds: [
             "let extracted = IndexingPipeline.extractHeader(from: ast.nodes) let isEditorialNote = ast.isShapedAsEditorialNote",
             "guard !extracted.isEmpty || isEditorialNote else { return nil }",
+            "return displayTitle(header: extracted, documentNumber: ast.printedNumber, isEditorialNote: isEditorialNote, documentId: ast.documentId)",
+            "if let title = parsedTitle(of: ast) { document.displayTitle = title }",
+        ], file: "Catalog.swift")
+        NoteViewParityTests.expect(try Self.server("Sources/FRUSLightAPI/History.swift"), holds: [
             "if let title = parsedTitle(of: ast) { return title }",
             "return ReadingHistoryTitle.documentTitle(stored: label == documentId ? nil : label,",
-            "return displayTitle(header: extracted, documentNumber: ast.printedNumber, isEditorialNote: isEditorialNote, documentId: ast.documentId)",
         ], file: "History.swift")
         NoteViewParityTests.expect(try Self.kit("FRUSCoreKit/TEI/FRUSASTNode.swift"), holds: [
             "public var isShapedAsEditorialNote: Bool { guard let first = nodes.first, case .editorialNote = first else { return false } return true }",

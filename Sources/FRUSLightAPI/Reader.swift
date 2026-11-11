@@ -6,7 +6,10 @@
 // The path is check 4's (Tests/FRUSParity/RenderParity.swift, `fullParsePass`): one
 // `parseVolumeFull` of the volume, whose persons and glossary terms make the reader's lookups,
 // then the reader's converter with the app's broken-refs index, and the reader's serializer, here
-// with the server's own figure addresses (upstream #1575's `reader(figureURL:)`). The page is the
+// with the server's own figure addresses (upstream #1575's `reader(figureURL:)`). A section the
+// app's Browse opens in its reader that a full parse gives no document, a back-of-volume index or a
+// table of contents, is parsed alone, as the app's Read Index parses it
+// (`parseDocument(documentId:volumeURL:)`), with the same lookups. The page is the
 // kit's `ReaderPage.build`, which the app's `HTMLTemplate.build` forwards to, in the appearance,
 // text size and Reading Width the request names (#1665, `ReaderMeasure`). When an index is
 // served, its effective classification of the document reshapes the parse first, as the app's
@@ -31,11 +34,36 @@ public actor ReaderService {
         let lookups: ReaderLookups
         /// Its front matter, chapters and back matter, as the parse found them in the TEI.
         let structure: [VolumeSection]
+        /// The sections the reader parses alone (`ReaderService.sectionsReadAlone`).
+        let sectionsReadAlone: Set<String>
+
+        init(signature: FileSignature, documents: [String: FRUSDocumentAST], lookups: ReaderLookups,
+             structure: [VolumeSection]) {
+            self.signature = signature
+            self.documents = documents
+            self.lookups = lookups
+            self.structure = structure
+            sectionsReadAlone = Set(ReaderService.sectionsReadAlone(in: structure, documents: Set(documents.keys)))
+        }
+
+        /// Whether the reader opens the id: a document of the full parse, or a section it parses alone.
+        func opens(_ id: String) -> Bool { documents[id] != nil || sectionsReadAlone.contains(id) }
+
+        /// Every id the reader opens.
+        var readerIds: Set<String> { Set(documents.keys).union(sectionsReadAlone) }
     }
 
-    struct FileSignature: Equatable, Sendable {
+    struct FileSignature: Hashable, Sendable {
         let size: Int
         let modified: Date?
+    }
+
+    /// A section being parsed alone: its volume, its id, and the file it is read from, so a request
+    /// beside a later parse of the volume never waits for a parse of the earlier file.
+    struct SectionParse: Hashable, Sendable {
+        let volumeId: String
+        let sectionId: String
+        let signature: FileSignature
     }
 
     /// A document parsed from its volume, and the volume's lookups.
@@ -67,8 +95,15 @@ public actor ReaderService {
     private var parsing: [String: Task<ParsedVolume, any Error>] = [:]
     /// The rendering versions of documents of the volumes in `parsed`, each from the parse it names.
     private var versions: [String: (signature: FileSignature, byDocument: [String: String])] = [:]
+    /// The sections of the volumes in `parsed` that were parsed alone, by volume and id, each with
+    /// the signature of the file it was read from; dropped with their volume.
+    private var sectionParses: [String: [String: (signature: FileSignature, ast: FRUSDocumentAST?)]] = [:]
+    /// Sections being parsed alone.
+    private var parsingSections: [SectionParse: Task<FRUSDocumentAST?, any Error>] = [:]
     /// How many parses have started.
     private(set) var parseCount = 0
+    /// How many parses of a section alone have started.
+    private(set) var sectionParseCount = 0
 
     public init(volumesDirectory: URL, resources: ServerResources, capacity: Int = 4) {
         self.volumesDirectory = volumesDirectory
@@ -96,14 +131,72 @@ public actor ReaderService {
         return try await parsedVolume(volumeId, at: url)
     }
 
-    /// One document, parsed. Throws an `APIProblem` for an unknown volume or document, a volume
-    /// whose TEI is not mounted, or TEI that will not parse.
+    /// One document, parsed: a document of the volume's full parse, or a section the reader parses
+    /// alone (`sectionsReadAlone`), with the volume's lookups. Throws an `APIProblem` for an unknown
+    /// volume or document, a volume whose TEI is not mounted, or TEI that will not parse.
     public func document(volume volumeId: String, document documentId: String) async throws -> Parsed {
         let volume = try await volume(volumeId)
-        guard let ast = volume.documents[documentId] else {
-            throw APIProblem(.notFound, code: "DOCUMENT_NOT_FOUND", detail: "\(volumeId) has no document \(documentId).")
+        return Parsed(ast: try await ast(documentId, in: volume, of: volumeId), lookups: volume.lookups)
+    }
+
+    /// A document of `volume`'s full parse, or one of its sections parsed alone.
+    private func ast(_ documentId: String, in volume: ParsedVolume, of volumeId: String) async throws -> FRUSDocumentAST {
+        if let ast = volume.documents[documentId] { return ast }
+        if volume.sectionsReadAlone.contains(documentId), let ast = try await section(documentId, in: volume, of: volumeId) {
+            return ast
         }
-        return Parsed(ast: ast, lookups: volume.lookups)
+        throw APIProblem(.notFound, code: "DOCUMENT_NOT_FOUND", detail: "\(volumeId) has no document \(documentId).")
+    }
+
+    /// One section, parsed alone from the file `volume` was parsed from, as the app's reader parses a
+    /// section it opens by its id (`DocumentViewModel.load`): the kit's parse of the one division,
+    /// which reads the file until the division closes and captures a list the index keeps out of its
+    /// rows, such as an index, whole. Kept while the volume's parse is; nil when the parse finds no
+    /// such division, which is kept too.
+    private func section(_ sectionId: String, in volume: ParsedVolume, of volumeId: String) async throws -> FRUSDocumentAST? {
+        if let kept = sectionParses[volumeId]?[sectionId], kept.signature == volume.signature { return kept.ast }
+        let key = SectionParse(volumeId: volumeId, sectionId: sectionId, signature: volume.signature)
+        if let running = parsingSections[key] { return try await running.value }
+        guard let url = Self.teiFile(for: volumeId, in: volumesDirectory) else {
+            throw APIProblem(.notFound, code: "TEI_NOT_AVAILABLE", detail: "\(volumeId).xml is no longer in the TEI folder, \(volumesDirectory.path).")
+        }
+        sectionParseCount += 1
+        let task = Task<FRUSDocumentAST?, any Error> {
+            do {
+                return try await FRUSDocumentParser().parseDocument(documentId: sectionId, volumeURL: url)
+            } catch {
+                throw APIProblem(.internalServerError, code: "TEI_UNREADABLE", detail: "\(volumeId).xml could not be parsed: \(error)")
+            }
+        }
+        parsingSections[key] = task
+        defer { parsingSections[key] = nil }
+        let ast = try await task.value
+        // Only beside the volume's parse it was read with, and while that parse is kept.
+        if parsed[volumeId]?.signature == volume.signature, Self.signature(of: url) == volume.signature {
+            sectionParses[volumeId, default: [:]][sectionId] = (volume.signature, ast)
+        }
+        return ast
+    }
+
+    /// The sections the app's Browse opens in its reader by their ids, as its Read button does
+    /// (`CompilationView`, and the Mac's corpus browser, over the kit's `VolumeSection.canReadDirectly`),
+    /// that a full parse gives no document: chiefly a back-of-volume index and a table of contents, the
+    /// kinds Read opens that the index does not promote (`promotableQuasiDocumentKinds`), and any
+    /// section of prose the parse leaves out for holding nothing. In the structure's order. The persons
+    /// and sources lists are not among them: the app's Browse opens each through a view of its own.
+    public static func sectionsReadAlone(in structure: [VolumeSection], documents: Set<String>) -> [String] {
+        var found: [String] = []
+        var seen = Set<String>()
+        func walk(_ sections: [VolumeSection]) {
+            for section in sections {
+                if section.canReadDirectly, !documents.contains(section.sectionId), seen.insert(section.sectionId).inserted {
+                    found.append(section.sectionId)
+                }
+                walk(section.subsections)
+            }
+        }
+        walk(structure)
+        return found
     }
 
     /// A document's rendering version, the kit's over the reader's model, which a highlight is stale
@@ -114,12 +207,12 @@ public actor ReaderService {
         if let kept = versions[volumeId], kept.signature == volume.signature, let version = kept.byDocument[documentId] {
             return version
         }
-        guard let ast = volume.documents[documentId] else {
-            throw APIProblem(.notFound, code: "DOCUMENT_NOT_FOUND", detail: "\(volumeId) has no document \(documentId).")
-        }
+        let ast = try await ast(documentId, in: volume, of: volumeId)
         let model = Self.model(Parsed(ast: ast, lookups: volume.lookups), volume: volumeId, classification: nil,
                                brokenRefs: resources.brokenRefs)
         let version = ASTToRenderNodeConverter.renderingVersion(for: model)
+        // Kept only while the parse it was made from is: a section's parse may have let the volume go.
+        guard parsed[volumeId]?.signature == volume.signature else { return version }
         var kept = versions[volumeId].flatMap { $0.signature == volume.signature ? $0 : nil } ?? (signature: volume.signature, byDocument: [:])
         kept.byDocument[documentId] = version
         versions[volumeId] = kept
@@ -188,11 +281,14 @@ public actor ReaderService {
         defer { parsing[volumeId] = nil }
         let volume = try await task.value
         parsed[volumeId] = volume
+        // Sections parsed alone from an earlier file are not this parse's.
+        sectionParses[volumeId] = sectionParses[volumeId]?.filter { $0.value.signature == volume.signature }
         touch(volumeId)
         while recency.count > capacity {
             let evicted = recency.removeFirst()
             parsed[evicted] = nil
             versions[evicted] = nil
+            sectionParses[evicted] = nil
         }
         return volume
     }

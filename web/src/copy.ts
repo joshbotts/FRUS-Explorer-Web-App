@@ -720,7 +720,7 @@ export const copy = {
       crossReferences: 'The reader follows each one.',
       editorialNotes: 'Search can limit its results to editorial notes.',
       footnotes: 'The reader shows each footnote with its document.',
-      printedAids: 'A volume’s page lists them under Front Matter and Back Matter, and the reader opens most of them; its index and its lists of sources and persons do not open here yet.',
+      printedAids: 'A volume’s page lists them under Front Matter and Back Matter, and the reader opens most of them, its index among them; its lists of sources and persons do not open here yet.',
       none: 'The reader shows these as printed. Nothing else in the app reads them yet.',
     },
     // A layer's lists.

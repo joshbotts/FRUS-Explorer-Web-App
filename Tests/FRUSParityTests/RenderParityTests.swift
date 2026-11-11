@@ -3,6 +3,8 @@
 // The rendering is FRUSParity's, which imports the kit without @testable, so these tests reach only
 // its public API, as the server will.
 
+import FRUSCoreKit
+import FRUSLightAPI
 import FRUSParity
 import Foundation
 import FRUSLightTestSupport
@@ -18,6 +20,23 @@ import Testing
         #expect(stale.isEmpty, "\(stale.joined(separator: "\n"))")
         let directory = Repository.layout.golden.appendingPathComponent(GoldenFile.render.rawValue).deletingLastPathComponent()
         return (golden, directory)
+    }
+
+    /// The sections the server parses alone in the fixture volumes, as `volume/section`, in the golden
+    /// rows' order.
+    static let expectedSectionsReadAlone = ["frus1894Nicaragua/toc", "frus1961-63v06/toc", "frus1961-63v06/index", "frus1969-76ve09p1/toc"]
+
+    /// The sections the server's rule (`ReaderService.sectionsReadAlone`) picks in `volumes`, from one
+    /// full parse of each, as `volume/section`.
+    static func sectionsReadAlone(in volumes: [String]) async throws -> [String] {
+        var found: [String] = []
+        for volume in volumes {
+            let url = Repository.layout.tei.appendingPathComponent("\(volume).xml")
+            let parse = try await FRUSDocumentParser().parseVolumeFull(volumeURL: url)
+            found += ReaderService.sectionsReadAlone(in: parse.structureSections, documents: Set(parse.documents.map(\.documentId)))
+                .map { "\(volume)/\($0)" }
+        }
+        return found
     }
 
     /// Check 4 along the reader's own path: each row of the golden manifest, parsed alone by a new
@@ -36,11 +55,13 @@ import Testing
         print("check 4, the reader's path: \(golden.rows.count - mismatches.count) of \(golden.rows.count) rows identical")
     }
 
-    /// The rows are exactly the documents one full parse of each volume yields, in its order,
-    /// volumes sorted. Rendering each from that parse, with its own persons and terms, is the path
-    /// the server will serve, without a parse per document, and it gives the same bytes. Since the
-    /// bytes would be the same with any lists, the parse's persons and terms are compared with
-    /// those the reader parses, field for field.
+    /// The rows are exactly the documents one full parse of each volume yields, in its order, then the
+    /// sections the server parses alone, as the app's Read Index does, in the structure's order,
+    /// volumes sorted: the Mac's choice of the sections its Read button opens, which the server's rule
+    /// (`ReaderService.sectionsReadAlone`) makes too. Rendering each from that parse, with its own
+    /// persons and terms, is the path the server serves, without a parse per document, and it gives
+    /// the same bytes. Since the bytes would be the same with any lists, the parse's persons and terms
+    /// are compared with those the reader parses, field for field.
     @Test func aFullParseYieldsTheRowsAndRendersThemTheSame() async throws {
         let (golden, directory) = try Self.currentGolden()
         let renderer = try ReaderRenderer(layout: Repository.layout)
@@ -48,6 +69,12 @@ import Testing
         let (rendered, lists) = try await renderer.fullParsePass(volumes)
         let goldenRows = golden.rows.map { "\($0.volume)/\($0.document)" }
         #expect(rendered.map { "\($0.volume)/\($0.document)" } == goldenRows)
+        // The sections read alone: each volume's table of contents, frus1894Nicaragua's a table, and
+        // frus1961-63v06's index, which holds the fixtures' eight "See" references. The persons and
+        // sources lists are not among them, since the app's Browse opens each as a list of its own.
+        let alone = try await Self.sectionsReadAlone(in: volumes)
+        #expect(alone == Self.expectedSectionsReadAlone, "the sections the server parses alone")
+        #expect(Set(alone).isSubset(of: Set(goldenRows)))
         let mismatches = RenderParity.mismatches(rendered, golden: golden, directory: directory)
         #expect(mismatches.isEmpty, "\(mismatches.count) of \(rendered.count) rows differ:\n\(mismatches.map(\.description).joined(separator: "\n"))")
 
@@ -61,6 +88,7 @@ import Testing
         // Not only empty lists: the two modern volumes list both persons and terms.
         #expect(lists.values.filter { !$0.persons.isEmpty && !$0.terms.isEmpty }.count >= 2)
         print("check 4, one full parse per volume: \(rendered.count - mismatches.count) of \(goldenRows.count) rows identical, "
+              + "\(alone.count) of them sections read alone (\(alone.joined(separator: ", "))), "
               + "and its persons and terms are the reader's: "
               + volumes.map { "\(lists[$0]?.persons.count ?? 0) and \(lists[$0]?.terms.count ?? 0)" }.joined(separator: ", "))
     }

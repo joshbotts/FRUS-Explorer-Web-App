@@ -143,24 +143,31 @@ import Testing
     /// A visit to a document the index does not hold, as front matter is, or to any while no index is
     /// served, is titled as the app's reader titles the document it parsed (S25c): the kit's display
     /// title of the head `IndexingPipeline.extractHeader(from:)` reads from its TEI, its footnotes left
-    /// out, which is the header the index would store. One the index holds takes the index's head.
+    /// out, which is the header the index would store. One the index holds takes the index's head. The
+    /// reader heads each one alike (`DocumentDetail(teiOnly:)`), the volume's index among them, which
+    /// it parses alone.
     @Test func aVisitTheIndexCannotTitleTakesTheHeadOfItsParsedTEI() async throws {
         let parsed = ["preface": "Preface", "d1": "1. Message From Chairman Khrushchev to President-elect Kennedy",
-                      "d3": "3. Message From Chairmen Khrushchev and Brezhnev to President Kennedy", "d20": "20. Editorial Note"]
+                      "d3": "3. Message From Chairmen Khrushchev and Brezhnev to President Kennedy", "d20": "20. Editorial Note",
+                      "index": "Index"]
         for indexed in [true, false] {
             let fixture = try await UserDataFixture(volumes: [Self.volume], indexed: indexed)
             defer { withExtendedLifetime(fixture) {} }
-            let volume = try await fixture.server.reader.volume(Self.volume)
             for (documentId, title) in parsed {
-                #expect(HistoryRoutes.parsedTitle(of: try #require(volume.documents[documentId])) == title, "\(documentId)'s parsed head")
+                let ast = try await fixture.server.reader.document(volume: Self.volume, document: documentId).ast
+                #expect(parsedTitle(of: ast) == title, "\(documentId)'s parsed head")
             }
             try await fixture.app.test(.router) { client in
                 let owner = Browser(client: client)
-                for documentId in ["preface", "d3", "d20", "d1"] {
+                for documentId in ["preface", "d3", "d20", "d1", "index"] {
                     let visit = try #require(try await Self.visit(owner, documentId).visit)
                     // The synthetic export holds d1 under a head of its own, which the index's title takes.
-                    let expected = indexed && documentId == "d1" ? SyntheticExport.documents[0].header : parsed[documentId]
+                    let held = indexed && documentId == "d1"
+                    let expected = held ? SyntheticExport.documents[0].header : parsed[documentId]
                     #expect(visit.title == expected && visit.displayTitle == expected, "\(documentId), indexed \(indexed)")
+                    // History and the reader name it alike.
+                    let detail = try decode(DocumentDetail.self, try await owner.get("/api/v1/volumes/\(Self.volume)/documents/\(documentId)"))
+                    #expect(detail.document.displayTitle == expected && detail.document.inIndex == held, "\(documentId), indexed \(indexed)")
                 }
             }
         }
@@ -186,14 +193,19 @@ import Testing
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try Data(tei.utf8).write(to: directory.appendingPathComponent("frus1894Nicaragua.xml"))
         let volume = try await fixture.server.reader.volume("frus1894Nicaragua")
-        #expect(HistoryRoutes.parsedTitle(of: try #require(volume.documents["d1"])) == nil, "no head, no note")
-        #expect(HistoryRoutes.parsedTitle(of: try #require(volume.documents["d2"])) == "Editorial Note 2", "the head names nothing, its footnote left out")
+        #expect(parsedTitle(of: try #require(volume.documents["d1"])) == nil, "no head, no note")
+        #expect(parsedTitle(of: try #require(volume.documents["d2"])) == "Editorial Note 2", "the head names nothing, its footnote left out")
         try await fixture.app.test(.router) { client in
             let owner = Browser(client: client)
             let printed = try await Self.visit(owner, "d1", volume: "frus1894Nicaragua")
             let note = try await Self.visit(owner, "d2", volume: "frus1894Nicaragua")
             #expect(printed.visit?.title == "Document 1", "the reader's label")
             #expect(note.visit?.title == "Editorial Note 2")
+            // The reader heads them alike.
+            for (documentId, title) in [("d1", "Document 1"), ("d2", "Editorial Note 2")] {
+                let detail = try decode(DocumentDetail.self, try await owner.get("/api/v1/volumes/frus1894Nicaragua/documents/\(documentId)"))
+                #expect(detail.document.displayTitle == title, "\(documentId)")
+            }
         }
     }
 

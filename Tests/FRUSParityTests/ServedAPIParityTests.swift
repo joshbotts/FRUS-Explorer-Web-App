@@ -205,7 +205,8 @@ struct ServedFile: Equatable {
         return try await found() == 1
     }
 
-    /// Check 4 through the page. Every golden row, read as the page the browser loads, holds the
+    /// Check 4 through the page. Every golden row, read as the page the browser loads, the index and
+    /// the tables of contents the reader parses alone among them, holds the
     /// golden fragment between its one `<body>\n` and `\n</body>`, once the 8 figure images, which
     /// the server names by its own address, are named by the app's again; the body alone is the
     /// same; and every page's head is the kit's `ReaderPage.build` head with the host script, at the
@@ -304,6 +305,35 @@ struct ServedFile: Equatable {
         print("the Reading Width through the API: \(keys.count) pages, each the kit's at 70, 87 or 120ch")
     }
 
+    /// A section the reader parses alone, which the index leaves out and its reading order holds, is
+    /// headed by its parsed head and takes its neighbours from that order, as the app's reader turns its
+    /// pages from any entry (`DocumentViewModel.loadAdjacentEntries`): frus1961-63v06's index follows
+    /// its last document, which turns to it, and its table of contents sits between two lists the
+    /// reader does not open, a subseries' list of volumes and the list of sources.
+    @Test func aSectionReadAloneTakesItsNeighboursFromTheIndexsReadingOrder() async throws {
+        let built = try await FixtureIndex.value()
+        let volume = "frus1961-63v06"
+        let order = try await built.index.pipeline.readingSequence(forVolume: volume).map(\.documentId)
+        let indexAt = try #require(order.firstIndex(of: "index"))
+        let tocAt = try #require(order.firstIndex(of: "toc"))
+        let last = order[indexAt - 1]
+        let (index, toc, before) = try await ServedFixture.run { client, _ in
+            func detail(_ id: String) async throws -> DocumentDetail {
+                try ServedFixture.decode(DocumentDetail.self, try await client.execute(uri: "/api/v1/volumes/\(volume)/documents/\(id)", method: .get))
+            }
+            return (try await detail("index"), try await detail("toc"), try await detail(last))
+        }
+        #expect(index.document.displayTitle == "Index" && !index.document.inIndex && index.teiAvailable)
+        #expect(index.previous?.documentId == last && index.previous?.inIndex == true && index.previous?.readable == true)
+        #expect(index.next?.documentId == (indexAt + 1 < order.count ? order[indexAt + 1] : nil))
+        #expect(before.next?.documentId == "index" && before.next?.inIndex == false && before.next?.readable == true)
+        #expect(toc.document.displayTitle == "Contents" && !toc.document.inIndex)
+        #expect(toc.previous?.documentId == order[tocAt - 1] && toc.next?.documentId == order[tocAt + 1])
+        #expect(toc.previous?.documentId == "subseriesvols" && toc.previous?.readable == false)
+        #expect(toc.next?.documentId == "sources" && toc.next?.readable == false)
+        print("a section read alone through the API: \(volume)'s index after \(last), its table of contents between \(order[tocAt - 1]) and \(order[tocAt + 1])")
+    }
+
     /// Browsing through the API: the catalogue's coverage, each fixture volume's documents, reading
     /// order and structure, and a document's neighbours, as the kit's index holds them.
     @Test func browsingThroughTheAPIShowsTheIndex() async throws {
@@ -338,7 +368,13 @@ struct ServedFile: Equatable {
         #expect(ParityFixtures.volumes.map { documents[$0]?.total } == [140, 128, 134], "front matter, documents and back matter")
         #expect(Set(list.items.filter(\.indexed).map(\.volumeId)) == Set(ParityFixtures.volumes))
         for volume in ParityFixtures.volumes {
-            let rows = Set(golden.rows.filter { $0.volume == volume }.map(\.document))
+            // The golden rows less the sections the reader parses alone, which the index leaves out and
+            // its reading order holds, as the app's reader turns its pages to them.
+            let alone = Set(RenderParityTests.expectedSectionsReadAlone.filter { $0.hasPrefix("\(volume)/") }
+                .map { String($0.dropFirst(volume.count + 1)) })
+            let rows = Set(golden.rows.filter { $0.volume == volume }.map(\.document)).subtracting(alone)
+            #expect(alone.isSubset(of: Set((documents[volume]?.items ?? []).filter { !$0.inIndex }.map(\.documentId))),
+                    "\(volume)'s sections read alone are in its reading order, and not in the index")
             #expect(volumes[volume]?.indexedDocuments == built.index.documents[volume] && volumes[volume]?.teiAvailable == true)
             #expect(volumes[volume]?.structure?.isEmpty == false, "\(volume) has a structure")
             #expect(volumes[volume]?.structureSource == "index", "\(volume)'s structure is the index's")

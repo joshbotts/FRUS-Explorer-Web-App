@@ -8237,6 +8237,59 @@
       "volume" : "frus1894Nicaragua"
     },
     {
+      "document" : "toc",
+      "length" : 16843,
+      "renderingVersion" : "89f9c093af6f3517",
+      "samples" : [
+        {
+          "color" : "yellow",
+          "endOffset" : 16843,
+          "isStale" : false,
+          "startOffset" : 0
+        },
+        {
+          "color" : "green",
+          "endOffset" : 5,
+          "isStale" : false,
+          "startOffset" : 0,
+          "text" : "Table"
+        },
+        {
+          "color" : "blue",
+          "endOffset" : 16843,
+          "isStale" : false,
+          "selectedText" : "question.\n\n208",
+          "startOffset" : 16831,
+          "text" : "question.208"
+        },
+        {
+          "color" : "pink",
+          "endOffset" : 29,
+          "isStale" : false,
+          "selectedText" : " of Contents\n\nNo:\n\nName.\n\nDate",
+          "startOffset" : 5,
+          "text" : " of ContentsNo:Name.Date"
+        },
+        {
+          "color" : "yellow",
+          "endOffset" : 7771,
+          "isStale" : false,
+          "selectedText" : " Mr. Gresham\n\nJuly 11\n\nRecog",
+          "startOffset" : 7747,
+          "text" : " Mr. GreshamJuly 11Recog"
+        },
+        {
+          "color" : "green",
+          "endOffset" : 8446,
+          "isStale" : true,
+          "startOffset" : 8421,
+          "text" : "him of a passage in note "
+        }
+      ],
+      "sha256" : "748a356e85156d1217971892a39849bc31e50d2e594aa783f479119dbbcdf13a",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
       "document" : "preface",
       "length" : 13568,
       "renderingVersion" : "500854ba6cc50055",
@@ -14695,6 +14748,114 @@
         }
       ],
       "sha256" : "9cf4b205ce35579a2de5e88b8d6f96d26d3418b7385b0ec207c2d17433f30b65",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "document" : "toc",
+      "length" : 149,
+      "renderingVersion" : "0a9253c14021ee11",
+      "samples" : [
+        {
+          "color" : "yellow",
+          "endOffset" : 149,
+          "isStale" : false,
+          "startOffset" : 0
+        },
+        {
+          "color" : "green",
+          "endOffset" : 31,
+          "isStale" : false,
+          "selectedText" : "Contents\n\nPreface\n\nIntroduction\n\nList",
+          "startOffset" : 0,
+          "text" : "ContentsPrefaceIntroductionList"
+        },
+        {
+          "color" : "blue",
+          "endOffset" : 149,
+          "isStale" : false,
+          "selectedText" : "Exchanges\n\nIndex",
+          "startOffset" : 135,
+          "text" : "ExchangesIndex"
+        },
+        {
+          "color" : "pink",
+          "endOffset" : 20,
+          "isStale" : false,
+          "selectedText" : "Contents\n\nPreface\n\nIntro",
+          "startOffset" : 0,
+          "text" : "ContentsPrefaceIntro"
+        },
+        {
+          "color" : "yellow",
+          "endOffset" : 92,
+          "isStale" : false,
+          "selectedText" : "t of Sources\n\nList of Abbr",
+          "startOffset" : 68,
+          "text" : "t of SourcesList of Abbr"
+        },
+        {
+          "color" : "green",
+          "endOffset" : 149,
+          "isStale" : true,
+          "selectedText" : "Sources\n\nList of Abbreviations\n\nList of Persons\n\nKennedy-Khrushchev Exchanges\n\nIndex",
+          "startOffset" : 73,
+          "text" : "SourcesList of AbbreviationsList of PersonsKennedy-Khrushchev ExchangesIndex"
+        }
+      ],
+      "sha256" : "849d7e7a7ef2a19bedc38ace647b1af6709c77d6dfbef62b6712b34db9473987",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "document" : "index",
+      "length" : 12997,
+      "renderingVersion" : "592009a1cb13f004",
+      "samples" : [
+        {
+          "color" : "yellow",
+          "endOffset" : 12997,
+          "isStale" : false,
+          "startOffset" : 0
+        },
+        {
+          "color" : "green",
+          "endOffset" : 14,
+          "isStale" : false,
+          "selectedText" : "Index\n\nAdenauer,",
+          "startOffset" : 0,
+          "text" : "IndexAdenauer,"
+        },
+        {
+          "color" : "blue",
+          "endOffset" : 12997,
+          "isStale" : false,
+          "startOffset" : 12994,
+          "text" : "309"
+        },
+        {
+          "color" : "pink",
+          "endOffset" : 17,
+          "isStale" : false,
+          "selectedText" : "Index\n\nAdenauer, Ko",
+          "startOffset" : 0,
+          "text" : "IndexAdenauer, Ko"
+        },
+        {
+          "color" : "yellow",
+          "endOffset" : 6592,
+          "isStale" : false,
+          "selectedText" : "government: \n\nKennedy on, ",
+          "startOffset" : 6568,
+          "text" : "government: Kennedy on, "
+        },
+        {
+          "color" : "green",
+          "endOffset" : 6527,
+          "isStale" : true,
+          "startOffset" : 6497,
+          "text" : "166, 187, 199, 202, 205, 221, "
+        }
+      ],
+      "sha256" : "affd2847f503cce7fd474413ede229ac9f5283beb2b60037748d2c86032ef4e1",
       "volume" : "frus1961-63v06"
     },
     {
@@ -21583,6 +21744,60 @@
         }
       ],
       "sha256" : "98727e4b91826a2c99f2b1573b88db7aab16ac67d2112156d2f219d77bd4b71c",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "document" : "toc",
+      "length" : 236,
+      "renderingVersion" : "820889c711dc2b20",
+      "samples" : [
+        {
+          "color" : "yellow",
+          "endOffset" : 236,
+          "isStale" : false,
+          "startOffset" : 0
+        },
+        {
+          "color" : "green",
+          "endOffset" : 40,
+          "isStale" : false,
+          "selectedText" : "Contents\n\nPrefaceIII\n\nSourcesXI\n\nAbbreviations",
+          "startOffset" : 0,
+          "text" : "ContentsPrefaceIIISourcesXIAbbreviations"
+        },
+        {
+          "color" : "blue",
+          "endOffset" : 236,
+          "isStale" : false,
+          "startOffset" : 224,
+          "text" : "1973–1976329"
+        },
+        {
+          "color" : "pink",
+          "endOffset" : 20,
+          "isStale" : false,
+          "selectedText" : "Contents\n\nPrefaceIII\n\nSo",
+          "startOffset" : 0,
+          "text" : "ContentsPrefaceIIISo"
+        },
+        {
+          "color" : "yellow",
+          "endOffset" : 105,
+          "isStale" : false,
+          "selectedText" : "t ActionsXXI\n\nDocuments on",
+          "startOffset" : 81,
+          "text" : "t ActionsXXIDocuments on"
+        },
+        {
+          "color" : "green",
+          "endOffset" : 203,
+          "isStale" : true,
+          "selectedText" : "Africa, 1973–1976\n\nAlgeria, 1973–19761\n\nLibya, 1973–197611\n\nMorocco, 1973–1976157\n\nSpanish Sahara, ",
+          "startOffset" : 112,
+          "text" : "Africa, 1973–1976Algeria, 1973–19761Libya, 1973–197611Morocco, 1973–1976157Spanish Sahara, "
+        }
+      ],
+      "sha256" : "be1aad0fe27b3573fa2fd902c59b1180bbc26b598cf147635c1d8695d7464de0",
       "volume" : "frus1969-76ve09p1"
     }
   ]

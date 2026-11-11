@@ -49,7 +49,7 @@ import Testing
             let golden = try GoldenJSON.read(RenderGolden.self, from: status.url(.render))
             let problems = GoldenValidation.renderProblems(golden, directory: status.url(.render).deletingLastPathComponent())
             #expect(problems.isEmpty, "\(problems.joined(separator: "\n"))")
-            print("\(GoldenFile.render.rawValue): \(golden.rows.count) documents, each present and matching its manifest row")
+            print("\(GoldenFile.render.rawValue): \(golden.rows.count) rows, each present and matching its manifest row")
         case .pending:
             Issue.record(Self.mustNotWait(.render))
         case nil:
