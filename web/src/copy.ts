@@ -1218,8 +1218,7 @@ export const copy = {
   /**
    * The collection editor, in the words of the app's iPad editor: its Contents and Add menu, Sort by
    * Date, each row's words and actions, the chips a document row shows, and the apparatus blocks'
-   * names. Add Documents' footer is the web's own, which has the app's Search and Browse but not yet its
-   * Citations and Tags.
+   * names.
    */
   collectionEditor: {
     untitled: 'Untitled Collection',
@@ -1232,7 +1231,8 @@ export const copy = {
     addProse: 'Add Note Block',
     addHighlights: 'Add Highlighted Passages…',
     apparatus: 'Apparatus',
-    addDocumentsFooter: 'Search the index or browse its volumes. New documents are added to the end of the list.',
+    addDocumentsFooter:
+      'Search the index, browse volumes, paste citations or history.state.gov links, or gather a tag. New documents are added to the end of the list.',
     sortByDate: 'Sort by Date',
     sortWhole: 'Across the Whole Collection',
     sortWholeHelp: 'Order every document into one chronology — a document may move past a section heading',
@@ -1555,8 +1555,10 @@ export const copy = {
     loading: 'Loading the highlights…',
   },
   /**
-   * Add Documents, in the app's words for its Search and Browse tabs. The Citations and Tags tabs wait for
-   * the kit's line resolver and tag union, internal to it at the pin.
+   * Add Documents, in the app's words for its four tabs, Citations and Tags since PLAN's S25d. The Citations
+   * tab's hint names the server's index where the app's names the device's, and its line while it resolves is
+   * the web's own, where the app shows a spinner; so is the line on a tag's document whose volume the catalogue
+   * does not list, which the app's sheet adds.
    */
   addDocuments: {
     title: 'Add Documents',
@@ -1564,6 +1566,8 @@ export const copy = {
     tabs: 'Find documents',
     search: 'Search',
     browse: 'Browse',
+    citations: 'Citations',
+    tags: 'Tags',
     add: (count: number) => `Add ${count} Document(s)`,
     searchPlaceholder: 'Search indexed documents',
     searchHint: 'Search the full text of the volumes this server has indexed.',
@@ -1576,6 +1580,19 @@ export const copy = {
     inCollection: 'In collection',
     loading: 'Loading…',
     notIndexed: 'This server has not indexed this volume, so its documents cannot be listed here.',
+    citationsPlaceholder: 'Paste citations or history.state.gov links, one per line…',
+    resolve: 'Resolve',
+    citationsHint:
+      'Each line is resolved against the FRUS manifest and this server’s index — footnotes, bibliography entries, and document links all work.',
+    citationsEmpty: 'Nothing to resolve — paste at least one line.',
+    resolvedCount: (resolved: number, total: number) => `${resolved} of ${total} resolved`,
+    toReview: (count: number) => `· ${count} to review`,
+    noMatch: (reason: string) => `No match — ${reason}`,
+    resolving: 'Resolving…',
+    tagsNone: 'No user tags yet. Tag documents or research notes to gather them here.',
+    tagsBack: 'Tags',
+    tagsEmpty: 'No documents carry this tag.',
+    notCatalogued: 'The published catalogue does not list this volume, so this server cannot add the document to a collection.',
   },
 
   // ─── Tools ────────────────────────────────────────────────────────────────

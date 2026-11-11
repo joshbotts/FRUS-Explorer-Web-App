@@ -394,6 +394,30 @@ import Testing
              "deselectAll: 'Deselect All'"),
             (addDocuments, "CollectionAddDocumentsSheet", "collection.addDocs.inCollection", "In collection", "addDocuments",
              "inCollection: 'In collection'"),
+            // Its Citations and Tags (S25d), and the editor's footer, which names all four tabs.
+            (addDocuments, "CollectionAddDocumentsSheet", "collection.addDocs.tab.citations", "Citations", "addDocuments", "citations: 'Citations'"),
+            (addDocuments, "CollectionAddDocumentsSheet", "collection.addDocs.tab.tags", "Tags", "addDocuments", "tags: 'Tags'"),
+            (addDocuments, "CollectionAddDocumentsSheet", "collection.addDocs.citations.placeholder",
+             "Paste citations or history.state.gov links, one per line…", "addDocuments",
+             "citationsPlaceholder: 'Paste citations or history.state.gov links, one per line…'"),
+            (addDocuments, "CollectionAddDocumentsSheet", "collection.addDocs.citations.resolve", "Resolve", "addDocuments", "resolve: 'Resolve'"),
+            // The hint names the server's index where the app's names the device's.
+            (addDocuments, "CollectionAddDocumentsSheet", "collection.addDocs.citations.hint",
+             "Each line is resolved against the FRUS manifest and your local index — footnotes, bibliography entries, and document links all work.",
+             "addDocuments",
+             "citationsHint: 'Each line is resolved against the FRUS manifest and this server’s index — footnotes, bibliography entries, and document links all work.'"),
+            (addDocuments, "CollectionAddDocumentsSheet", "collection.addDocs.citations.empty", "Nothing to resolve — paste at least one line.",
+             "addDocuments", "citationsEmpty: 'Nothing to resolve — paste at least one line.'"),
+            (addDocuments, "CollectionAddDocumentsSheet", "collection.addDocs.tags.none",
+             "No user tags yet. Tag documents or research notes to gather them here.", "addDocuments",
+             "tagsNone: 'No user tags yet. Tag documents or research notes to gather them here.'"),
+            (addDocuments, "CollectionAddDocumentsSheet", "collection.addDocs.tags.back", "Tags", "addDocuments", "tagsBack: 'Tags'"),
+            (addDocuments, "CollectionAddDocumentsSheet", "collection.addDocs.tags.empty", "No documents carry this tag.", "addDocuments",
+             "tagsEmpty: 'No documents carry this tag.'"),
+            (editor, "CollectionEditorView", "collection.editor.addDocuments.footer",
+             "Search the index, browse volumes, paste citations or history.state.gov links, or gather a tag. New documents are added to the end of the list.",
+             "collectionEditor",
+             "addDocumentsFooter: 'Search the index, browse volumes, paste citations or history.state.gov links, or gather a tag. New documents are added to the end of the list.'"),
         ]
         for word in words {
             #expect(NoteViewParityTests.writes(word.source, word.key, word.value), "\(word.file) writes \(word.key) as \(word.value)")
@@ -453,6 +477,16 @@ import Testing
              "addHighlights", "insert: (count: number) => `Insert ${count} Excerpt${count === 1 ? '' : 's'}`"),
             (addDocuments, "CollectionAddDocumentsSheet", #"String(localized: "collection.addDocs.add %lld", defaultValue: "Add %lld Document(s)")"#,
              "addDocuments", "add: (count: number) => `Add ${count} Document(s)`"),
+            // The Citations tab's count of lines resolved and to review, and a line that named no document (S25d).
+            (addDocuments, "CollectionAddDocumentsSheet",
+             #"Text(String(format: String(localized: "collection.addDocs.citations.resolvedHeader %1$lld %2$lld", defaultValue: "%1$lld of %2$lld resolved"), Int64(resolved), Int64(results.count)))"#,
+             "addDocuments", "resolvedCount: (resolved: number, total: number) => `${resolved} of ${total} resolved`"),
+            (addDocuments, "CollectionAddDocumentsSheet",
+             #"Text(String(format: String(localized: "collection.addDocs.citations.needReview %lld", defaultValue: "· %lld to review"), Int64(ambiguous)))"#,
+             "addDocuments", "toReview: (count: number) => `· ${count} to review`"),
+            (addDocuments, "CollectionAddDocumentsSheet",
+             #"Text(String(localized: "collection.addDocs.citations.noMatchPrefix", defaultValue: "No match — \(reason)"))"#,
+             "addDocuments", "noMatch: (reason: string) => `No match — ${reason}`"),
         ]
         for format in formats {
             #expect(format.source.contains(format.line), "\(format.file) holds \(format.line)")
@@ -724,5 +758,84 @@ import Testing
         ], file: "collectionRules.ts")
         let picker = try Self.web("collections/CollectionPicker.tsx")
         NoteViewParityTests.expect(picker, holds: ["export const addedPause = 600;", "export const heldPause = 800;"], file: "CollectionPicker.tsx")
+    }
+
+    /// Add Documents' Citations and Tags (PLAN's S25d): the app's sheet's tabs in their order, what Resolve and a tag
+    /// opened choose at once, what a pass passes over, the counts over a paste's lines, Resolve's gate and a row's words,
+    /// each held by the lines the app's source writes it in and the lines of the browser app that mirror it; and the kit's
+    /// two calls the server makes as the sheet makes them, over the notes and assignments the app's queries give it.
+    @Test func theAddDocumentsCitationsAndTagsAreTheApps() throws {
+        let sheet = try Self.app("Collections/CollectionAddDocumentsSheet.swift")
+        NoteViewParityTests.expect(sheet, holds: [
+            // The tabs: the segmented control lists every case, in the enum's order.
+            "ForEach(DiscoveryTab.allCases, id: \\.self) { t in Text(t.title).tag(t) }",
+            // A pass that chooses at once passes over what the reader unchose; choosing one again forgets it.
+            "select(picks.filter { !explicitlyDeselectedKeys.contains($0.key) })",
+            "for pick in picks where !selectedKeys.contains(pick.key) { selection.append(pick) selectedKeys.insert(pick.key) explicitlyDeselectedKeys.remove(pick.key) }",
+            "if selectedKeys.contains(pick.key) { selection.removeAll { $0.key == pick.key } selectedKeys.remove(pick.key) explicitlyDeselectedKeys.insert(pick.key) } else { selection.append(pick) selectedKeys.insert(pick.key) explicitlyDeselectedKeys.remove(pick.key) }",
+            // Resolve: the kit's resolver over the parser and the matcher; the lines that resolved chosen, in line order.
+            "let resolver = CollectionCitationLineResolver(parse: { parser.parse($0) }, match: { try await engine.match(input: $0) }) let results = await resolver.resolve(text: citationText)",
+            "if case .resolved(let vol, let doc, _) = result.outcome { picks.append(citationPick(volumeId: vol, documentId: doc)) } } preselect(picks)",
+            ".disabled(isResolvingCitations || citationText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)",
+            // The counts over the lines, and the second only where a line is to review.
+            "if case .resolved = result.outcome { count += 1 }", "if case .ambiguous = result.outcome { count += 1 }",
+            "if ambiguous > 0 { Text(String(format: String(localized: \"collection.addDocs.citations.needReview %lld\"",
+            // A row: a resolved line's note plain, an ambiguous line's a warning; the head or the id, then the id where the head
+            // shows, with the volume's title or id; a citation's and a tag's documents with no date.
+            "noteIsWarning: false) { toggle(pick) } case .ambiguous(let volumeId, let documentId, let note):",
+            "noteIsWarning: true) { toggle(pick) } case .unresolved(let reason):",
+            "Text(pick.header ?? pick.documentId)",
+            "pick.header != nil ? pick.documentId : nil, pick.volumeTitle ?? pick.volumeId, pick.dateISO, ].compactMap(\\.self).joined(separator: \" · \"))",
+            "header: citationHeaders[key], volumeTitle: volumeTitle(for: volumeId), dateISO: nil)",
+            // A tag opened: the kit's union over the notes and the assignments, its documents chosen at once.
+            "CollectionGeneratedBlocks.tagDocumentRefs(tagId: tagId, noteTags: notes.map { (volumeId: $0.volumeId, documentId: $0.documentId, tagIds: $0.userTagIds) }, assignments: assignments.map { (volumeId: $0.volumeId, documentId: $0.documentId, tagId: $0.tagId) })",
+            "selectedTag = tag preselect(tagPicks)",
+            "@Query private var tagAssignments: [DocumentTagAssignment]",
+        ], file: "CollectionAddDocumentsSheet.swift")
+        let enumStart = try #require(sheet.range(of: "private enum DiscoveryTab: Hashable, CaseIterable {"))
+        let cases = ["case search", "case browse", "case citations", "case tags"]
+            .map { sheet.range(of: $0, range: enumStart.upperBound..<sheet.endIndex)?.lowerBound }
+        #expect(cases.allSatisfy { $0 != nil } && zip(cases, cases.dropFirst()).allSatisfy { $0! < $1! }, "the app's tabs, in their order")
+        // The notes and tags the editors hand the sheet: newest note first, one copy of each; tags by name.
+        NoteViewParityTests.expect(try Self.app("Collections/CollectionEditorView.swift"), holds: [
+            "@Query(sort: \\ResearchNote.lastModified, order: .reverse) private var allNoteCopies: [ResearchNote] @Query(sort: \\UserTag.name) private var allTags: [UserTag]",
+            "private var allNotes: [ResearchNote] { ResearchNote.oneCopyEach(allNoteCopies) }",
+            "CollectionAddDocumentsSheet(allTags: allTags, allNotes: allNotes, existingDocumentKeys: existingDocumentKeys)",
+        ], file: "CollectionEditorView.swift")
+
+        // The server: the same resolver over the matcher Citation Lookup asks, a line at a time; the union over the
+        // store's notes and its assignments in the order the store took them, a note with no document passed over.
+        NoteViewParityTests.expect(try Self.server("Sources/FRUSLightAPI/AddDocuments.swift"), holds: [
+            "CollectionCitationLineResolver(parse: { parser.parse($0) }, match: { try await engine.match(input: $0) })",
+            "let matcher = CitationLookupRoutes.matcher(provider: provider, resources: resources)",
+            "try Task.checkCancellation() results.append(CollectionCitationLineResolver.LineResult(line: line, outcome: await resolver.resolve(line: line)))",
+            "noteTags = notes.filter { !$0.volumeId.isEmpty && !$0.documentId.isEmpty }.map { (volumeId: $0.volumeId, documentId: $0.documentId, tagIds: $0.userTagIds.compactMap(UUID.init(uuidString:))) }",
+            "TagUnion(notes: try store.notes(for: user), assignments: try store.tagAssignments(of: user))",
+            "CollectionGeneratedBlocks.tagDocumentRefs(tagId: tag, noteTags: own.notes, assignments: own.assignments)",
+        ], file: "AddDocuments.swift")
+        NoteViewParityTests.expect(try Self.server("Sources/FRUSLightCore/UserTags.swift"), holds: [
+            "SELECT id, volume_id, document_id, tag_id, created_at FROM tag_assignments WHERE user_id = ? ORDER BY rowid",
+        ], file: "UserTags.swift")
+
+        // The browser app's mirrors.
+        NoteViewParityTests.expect(try Self.web("collections/addDocumentsRules.ts"), holds: [
+            "if (unchosen.has(key) || keys.has(key)) continue; keys.add(key); added.push(pick);",
+            "if (line.outcome === 'resolved') resolved += 1; if (line.outcome === 'ambiguous') toReview += 1;",
+            "return lines.filter((line) => line.outcome === 'resolved' && line.volumeId !== undefined && line.documentId !== undefined);",
+            "title: document.header ?? document.documentId,",
+            "line: [document.header !== undefined ? document.documentId : undefined, document.volumeTitle ?? document.volumeId]",
+            ".join(' · '),",
+        ], file: "addDocumentsRules.ts")
+        NoteViewParityTests.expect(try Self.web("collections/AddDocuments.tsx"), holds: [
+            "['search', words.search], ['browse', words.browse], ['citations', words.citations], ['tags', words.tags],",
+            "if (on) unchosen.current.delete(key); else unchosen.current.add(key);",
+            "setPicks((held) => preselected(held, list, skipped));",
+            "if (citations.resolving || text.trim() === '') return;",
+            "preselect(resolvedDocuments(answer.items).map(",
+            "const blank = state.text.trim() === '';", "aria-disabled={state.resolving || blank}",
+            "summary = words.resolvedCount(counts.resolved, state.lines.length) + (counts.toReview > 0 ? ` ${words.toReview(counts.toReview)}` : '');",
+            "warning: line.outcome === 'ambiguous'",
+            "if (gathered && gathered.id === tagId) preselect(gathered.items.filter((item) => item.catalogued).map(choice));",
+        ], file: "AddDocuments.tsx")
     }
 }

@@ -21,6 +21,26 @@ public struct UserTagRecord: Sendable, Equatable {
     }
 }
 
+/// One of a user's tag assignments, as the store keeps the Mac's `DocumentTagAssignment`: a tag on a
+/// document, by the tag's id as it was written, which may name a tag the user no longer has.
+public struct TagAssignmentRecord: Sendable, Equatable {
+    public var id: String
+    public var volumeId: String
+    public var documentId: String
+    public var tagId: String
+    public var createdAt: Date?
+
+    public init(id: String, volumeId: String, documentId: String, tagId: String, createdAt: Date?) {
+        self.id = id
+        self.volumeId = volumeId
+        self.documentId = documentId
+        self.tagId = tagId
+        self.createdAt = createdAt
+    }
+
+    public var document: DocumentKey { DocumentKey(volumeId: volumeId, documentId: documentId) }
+}
+
 /// What deleting or merging a tag changed beside the tag itself.
 public struct TagChange: Sendable, Equatable {
     /// The documents whose assignment of the tag was deleted or now names the tag it joined, each
@@ -74,6 +94,11 @@ public protocol TagStore: Sendable {
     /// The tags a document carries, in the order `tags(of:)` gives them. An assignment of a tag the
     /// user no longer has names nothing, as the Research rail shows nothing for one.
     func tags(of document: DocumentKey, for user: String) throws -> [UserTagRecord]
+    /// Every assignment of the user's, each as it was written, in the order the store took them, as an
+    /// export reads them (`researchRows`), which stands for the app's fetch of its assignments with no
+    /// sort (`@Query`): what Add Documents' Tags tab hands the kit's tag union, as the app's sheet does,
+    /// with the user's notes (PLAN's S25d).
+    func tagAssignments(of user: String) throws -> [TagAssignmentRecord]
     /// Gives a document exactly these tags, as the tag picker's Done replaces a document's set:
     /// one assignment per tag, a tag it carries already keeping the one it has. Throws
     /// `TagStoreError.tagNotFound` for an id the user has no tag for, changing nothing.
@@ -211,6 +236,16 @@ extension RelationalUserStore: TagStore {
 
     public func tags(of document: DocumentKey, for user: String) throws -> [UserTagRecord] {
         try reading { try Self.tags(of: document, for: user, in: $0) }
+    }
+
+    public func tagAssignments(of user: String) throws -> [TagAssignmentRecord] {
+        try reading { db in
+            try db.query("SELECT id, volume_id, document_id, tag_id, created_at FROM tag_assignments WHERE user_id = ? ORDER BY rowid",
+                         [.text(user)]).map { row in
+                TagAssignmentRecord(id: row[0].text ?? "", volumeId: row[1].text ?? "", documentId: row[2].text ?? "",
+                                    tagId: row[3].text ?? "", createdAt: row[4].text.flatMap(UserStoreDate.date))
+            }
+        }
     }
 
     @discardableResult

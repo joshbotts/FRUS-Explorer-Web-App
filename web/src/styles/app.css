@@ -3698,6 +3698,70 @@ button.preset-card.active {
   padding: 0.25rem 0;
 }
 
+/* Add Documents' Citations and Tags (S25d): the paste beside Resolve, the line that counts what resolved, a
+   row's pasted line and the resolver's note, a warning on a line to review, and the tags with their counts. */
+.pick-paste {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 0.5rem;
+}
+
+.pick-paste textarea {
+  width: 100%;
+  min-height: 6rem;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.875rem;
+}
+
+.pick-summary {
+  margin: 0.5rem 0;
+  font-weight: 600;
+}
+
+.pick-summary:empty {
+  margin: 0;
+}
+
+.pick-heading {
+  margin: 0 0 0 1.5rem;
+}
+
+.pick-source,
+.pick-note {
+  margin: 0.125rem 0 0 1.5rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.pick-source {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.pick-note.warning {
+  color: var(--warning);
+}
+
+.pick-tags {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pick-tags li {
+  padding: 0.125rem 0;
+}
+
+.pick-tags button {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+}
+
 dialog.collection-picker input[type='search'],
 dialog.add-documents-sheet .tab-panel > input[type='search'] {
   margin: 0.5rem 0;

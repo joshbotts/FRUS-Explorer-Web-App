@@ -188,6 +188,45 @@ import Testing
         #expect(throws: TagStoreError.tagNotFound("x")) { try store.removeTag("x", from: Self.d1, for: "owner") }
     }
 
+    /// Add Documents' Tags tab reads every assignment of the user's (PLAN's S25d), each as it was written, in
+    /// the order the store took them, as an export reads them, which stands for the app's fetch with no
+    /// sort: not by when each was made, a time an import brings from another device, or none.
+    @Test(arguments: UserStoreKind.available) func aUsersAssignmentsAreReadInTheOrderTheStoreTookThem(_ kind: UserStoreKind) async throws {
+        let (store, rows, directory) = try await Self.open(kind)
+        defer { withExtendedLifetime(directory) {} }
+        try rows.addUser("reader")
+        let a = try store.createTag(named: "A", for: "owner", at: Self.created)
+        let b = try store.createTag(named: "B", for: "owner", at: Self.created)
+        #expect(try store.tagAssignments(of: "owner").isEmpty)
+        // The picker's Done writes them in the order it was given them.
+        try store.setTags([b.id, a.id], of: Self.d2, for: "owner", at: Self.later)
+        // As an import writes them: a later time first, then none, a tag's id in lower case, and an older
+        // assignment of a tag the user no longer has; and another user's.
+        try rows.addAssignment("IMPORTED", documentId: "d1", tagId: a.id, createdAt: "2026-12-01T00:00:00.000Z")
+        try rows.run("INSERT INTO tag_assignments (user_id, id, volume_id, document_id, tag_id) VALUES (?, ?, ?, ?, ?)",
+                     [.text("owner"), .text("UNDATED"), .text("frus1964-68v30"), .text("d5"), .text(b.id.lowercased())])
+        let gone = UUID().uuidString
+        try rows.addAssignment("DANGLING", documentId: "d3", tagId: gone, createdAt: "2020-01-01T00:00:00.000Z")
+        try rows.addAssignment("THEIRS", user: "reader", documentId: "d1", tagId: a.id)
+
+        let read = try store.tagAssignments(of: "owner")
+        #expect(read.count == 5)
+        #expect(read.prefix(2).map(\.tagId) == [b.id, a.id] && read.prefix(2).allSatisfy { $0.document == Self.d2 })
+        #expect(read.prefix(2).allSatisfy { $0.createdAt == UserStoreDate.date(Self.laterText) })
+        #expect(Array(read.dropFirst(2)) == [
+            TagAssignmentRecord(id: "IMPORTED", volumeId: "frus1961-63v06", documentId: "d1", tagId: a.id,
+                                createdAt: UserStoreDate.date("2026-12-01T00:00:00.000Z")),
+            TagAssignmentRecord(id: "UNDATED", volumeId: "frus1964-68v30", documentId: "d5", tagId: b.id.lowercased(), createdAt: nil),
+            TagAssignmentRecord(id: "DANGLING", volumeId: "frus1961-63v06", documentId: "d3", tagId: gone,
+                                createdAt: UserStoreDate.date("2020-01-01T00:00:00.000Z")),
+        ])
+        #expect(try store.tagAssignments(of: "reader").map(\.id) == ["THEIRS"], "each user's alone")
+        // A merge re-points an assignment where it stands.
+        try store.mergeTag(b.id, into: a.id, for: "owner", at: Self.later)
+        #expect(try store.tagAssignments(of: "owner").map(\.id) == read.map(\.id).filter { $0 != read[0].id },
+                "d2 kept A's own assignment, and the undated one is A's now")
+    }
+
     @Test func theAppsRewritesOfAListOfIds() {
         #expect(TagReferences.removing("A", from: ["B", "C"]) == nil)
         #expect(TagReferences.removing("A", from: ["A", "B", "A"]) == ["B"])

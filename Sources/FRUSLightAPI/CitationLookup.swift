@@ -261,14 +261,17 @@ enum CitationLookupRoutes {
         return try FormQuery(body.readableBytes > 0 ? String(buffer: body) : request.uri.query)
     }
 
-    static func add(to router: Router<APIRequestContext>, provider: ServedIndexProvider, resources: ServerResources) {
-        // With no index served, the matcher answers from the published catalogue alone, as the
-        // app's does with nothing downloaded: every volume it names is one to download.
+    /// The matcher a lookup asks: the served index's, or, with no index served, one over the published
+    /// catalogue alone, as the app's answers with nothing downloaded, so that every volume it names is one
+    /// to download. Add Documents' Citations asks the same (PLAN's S25d).
+    static func matcher(provider: ServedIndexProvider, resources: ServerResources) -> @Sendable () async throws -> CitationMatchingEngine {
         let catalogueOnly = CitationMatchingEngine(manifestStore: FixedVolumeCatalogue(entries: resources.manifest),
                                                    searchService: nil, pageRangeStore: nil, downloadedVolumeIds: [])
-        let engine: @Sendable () async throws -> CitationMatchingEngine = {
-            try await provider.servedIfReady()?.citations ?? catalogueOnly
-        }
+        return { try await provider.servedIfReady()?.citations ?? catalogueOnly }
+    }
+
+    static func add(to router: Router<APIRequestContext>, provider: ServedIndexProvider, resources: ServerResources) {
+        let engine = matcher(provider: provider, resources: resources)
 
         // Each answers GET, with the fields in the query, and POST, with them in a form body.
         let lookup: @Sendable (Request, APIRequestContext) async throws -> [CitationLookupMatch] = { request, context in
