@@ -363,7 +363,6 @@ export async function setActiveProject(client: QueryClient, projectId: string | 
   }
 }
 
-/** Suggested Next's ×. */
 /**
  * Suggested Next's Refresh (S23d): the project's leads computed again on the server, with the tuning
  * this browser keeps for a project with none of its own, as the app's recompute reads its device's.
@@ -376,6 +375,7 @@ export async function refreshLeads(client: QueryClient, projectId: string): Prom
   return job;
 }
 
+/** Suggested Next's ×. */
 export async function dismissLead(client: QueryClient, projectId: string, leadId: string): Promise<void> {
   await change(client, 'POST', `/api/v1/me/projects/${segment(projectId)}/leads/${segment(leadId)}/dismiss`);
   void client.invalidateQueries({ queryKey: ['projectHome', projectId] });

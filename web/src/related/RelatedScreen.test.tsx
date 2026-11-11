@@ -77,7 +77,7 @@ describe('Related Documents', () => {
     expect(row.textContent).toContain('Washington, January 2, 1961');
     // Each chip says its axis to a screen reader, then its words.
     const chips = within(row).getByRole('list', { name: 'Why related' });
-    expect(within(chips).getAllByRole('listitem').map((chip) => chip.textContent)).toEqual(['Corpus proximity, 100%', 'Close in date, 100%']);
+    expect(within(chips).getAllByRole('listitem').map((chip) => chip.textContent)).toEqual(['Corpus proximity 100%', 'Close in date 100%']);
     // A row with no head is titled by its id.
     expect(screen.getByRole('link', { name: 'd9' })).toBeTruthy();
     expect(screen.getByText('3 more related — raise a weight or narrow the scope to refine.')).toBeTruthy();
@@ -128,6 +128,38 @@ describe('Related Documents', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reset to app defaults' }));
     await waitFor(() => expect(localStorage.getItem('frus.related.weights')).toBeNull());
     await waitFor(() => expect((screen.getByRole('slider', { name: 'Corpus proximity' }) as HTMLInputElement).value).toBe('0.3'));
+  });
+
+  it('shows the scope and the weight asked for at once, while the server ranks, and Reset cancels a slider moved before it', async () => {
+    // The answers to anything but the opening list never come.
+    stubServer({
+      '/readyz': ready,
+      [anchor]: document,
+      [path]: (url: URL) => (url.search === '?scope=all' ? answer() : new Promise(() => {})),
+    });
+    const user = userEvent.setup();
+    renderAt('/related/frus1961-63v06/d1');
+    await screen.findByRole('link', { name: 'Memorandum From the President' });
+    await user.click(screen.getByRole('radio', { name: 'This volume' }));
+    await waitFor(() => expect((screen.getByRole('radio', { name: 'This volume' }) as HTMLInputElement).checked).toBe(true));
+    expect(screen.getByRole('status').textContent).toBe('Ranking the related documents…');
+    // The list on show stays, busy, with its rows.
+    expect(screen.getByRole('link', { name: 'Memorandum From the President' })).toBeTruthy();
+
+    const slider = screen.getByRole('slider', { name: 'Shared people' });
+    fireEvent.change(slider, { target: { value: '0.2' } });
+    await waitFor(() => expect(localStorage.getItem('frus.related.weights')).toBe('sharedPersons:0.2'));
+    // Shown as asked for, not as the list on show was ranked.
+    expect((screen.getByRole('slider', { name: 'Shared people' }) as HTMLInputElement).value).toBe('0.2');
+    fireEvent.change(screen.getByRole('slider', { name: 'Close in date' }), { target: { value: '0.9' } });
+    const reset = screen.getByRole('button', { name: 'Reset to app defaults' });
+    reset.focus();
+    await user.click(reset);
+    // Reset cancels the slider moved before it, and hands the focus to the weights' heading.
+    await new Promise((settled) => setTimeout(settled, 700));
+    expect(localStorage.getItem('frus.related.weights')).toBeNull();
+    expect((screen.getByRole('slider', { name: 'Close in date' }) as HTMLInputElement).value).toBe('0.5');
+    // Where the focus goes after Reset, a <summary>, which jsdom does not focus, the browser suite holds.
   });
 
   it('opens with the tuning this browser keeps', async () => {

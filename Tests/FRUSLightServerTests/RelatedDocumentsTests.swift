@@ -94,48 +94,61 @@ import Testing
         #expect(ProjectLeadsSeed.effectiveWeights(projectRaw: "not a tuning", browserRaw: nil) == .default)
     }
 
-    /// A Refresh is a job of the server's queue; one asked for while another waits is that one; another
-    /// user's project is refused, and their leads and notes never reach the first user's.
+    /// A Refresh is a job of the server's queue; two asked for at once, or one while another waits, are that
+    /// one; another user's project is refused; and a computation reads its own user's records alone, though
+    /// two users hold one project's id, as two who imported one export do.
     @Test func aRefreshIsAJobOneWaitingAProject() async throws {
         let fixture = try await UserDataFixture(indexed: true, auth: .header, trustedProxies: SignInTests.loopback)
         defer { withExtendedLifetime(fixture) {} }
-        try await fixture.app.test(.router) { client in
+        // Live, so that each request comes from the proxy's address.
+        try await fixture.app.test(.live) { client in
             let alice = Browser(client: client, user: "alice")
             let bob = Browser(client: client, user: "bob")
+            // Both import one export: one project's id, with a note on d3 filed under it, for each.
+            for browser in [alice, bob] {
+                let response = try await browser.send(.post, "/api/v1/me/import", try ImportRouteTests.export())
+                #expect(response.status == .accepted, "\(String(buffer: response.body))")
+                await fixture.jobs.waitUntilIdle()
+            }
+            let shared = ImportRouteTests.id(40).uuidString
+            let note = try await bob.send(.post, "/api/v1/me/volumes/\(Self.volume)/documents/d4/notes",
+                                          try ProjectHistoryTests.json(["bodyText": "Bob's", "runs": nil, "userTagIds": [String](),
+                                                                        "projectIds": [shared], "selectedSummaryIds": [String]()]))
+            #expect(note.status == .created, "\(String(buffer: note.body))")
+            let bobs = try fixture.rows.rows(of: "project_leads", user: "bob")
             let grain = try await ProjectHistoryTests.made(alice, "Grain")
+            // Bob's project is not Alice's to refresh, nor is a tuning the kit cannot read taken.
             let theirs = try await ProjectHistoryTests.made(bob, "Theirs")
-            _ = try await bob.send(.post, "/api/v1/me/volumes/\(Self.volume)/documents/d1/notes",
-                                   try ProjectHistoryTests.json(["bodyText": "Bob's", "userTagIds": [String](), "projectIds": [theirs.id],
-                                                                 "selectedSummaryIds": [String]()]))
-            // Bob's project is not Alice's to refresh.
             let refused = try await alice.send(.post, "/api/v1/me/projects/\(theirs.id)/leads/refresh", "{}")
             #expect(refused.status == .notFound && problemCode(refused) == "PROJECT_NOT_FOUND")
             let badWeights = try await alice.send(.post, "/api/v1/me/projects/\(grain.id)/leads/refresh", #"{"weights": "sharedPersons:3"}"#)
-            #expect(problemCode(badWeights) == "INVALID_PARAMETER")
+            #expect(problemCode(badWeights) == "INVALID_FIELD")
 
-            // Held at the queue's head, so the Refresh waits: a second is the same job.
+            // Held at the queue's head, so the Refreshes wait: two at once are one job.
             let gate = JobGate()
             _ = try await fixture.jobs.submit(.indexReset, subject: nil, requestedBy: nil, id: nil) { _ in
                 await gate.wait()
                 return nil
             }
-            let first = try await alice.send(.post, "/api/v1/me/projects/\(grain.id)/leads/refresh", #"{"weights": "sharedPersons:0.2"}"#)
-            #expect(first.status == .accepted && (try decode(LeadsRefresh.self, first)).state == "queued")
-            let second = try await alice.send(.post, "/api/v1/me/projects/\(grain.id)/leads/refresh", "{}")
-            #expect((try decode(LeadsRefresh.self, second)).state == "queued")
-            let leadsJobs = await fixture.jobs.jobs().filter { $0.kind == .projectLeads }
-            #expect(leadsJobs.count == 1 && leadsJobs.first?.requestedBy == "alice", "one job, the first")
-            let home = try await ProjectFocusTests.home(alice, grain)
-            #expect(home.leadsRefresh?.state == "queued")
+            async let first = alice.send(.post, "/api/v1/me/projects/\(shared)/leads/refresh", #"{"weights": "sharedPersons:0.2"}"#)
+            async let second = alice.send(.post, "/api/v1/me/projects/\(shared)/leads/refresh", "{}")
+            let (one, two) = try await (first, second)
+            let states = [try decode(LeadsRefresh.self, one), try decode(LeadsRefresh.self, two)]
+            #expect(one.status == .accepted && two.status == .accepted)
+            #expect(states.map(\.state) == ["queued", "queued"] && states[0].id == states[1].id, "one job, for both")
+            let third = try decode(LeadsRefresh.self, try await alice.send(.post, "/api/v1/me/projects/\(shared)/leads/refresh", "{}"))
+            #expect(third.id == states[0].id, "a Refresh while it waits is that job")
+            let leadsJobs = await fixture.jobs.jobs().filter { $0.kind == .projectLeads && $0.state == .queued }
+            #expect(leadsJobs.map(\.id) == [states[0].id] && leadsJobs.first?.requestedBy == "alice")
+            #expect(try await ProjectFocusTests.home(alice, try decode(Project.self, try await alice.get("/api/v1/me/projects/\(shared)"))).leadsRefresh?.id
+                    == states[0].id)
             gate.open()
             await fixture.jobs.waitUntilIdle()
-            let after = try await ProjectFocusTests.home(alice, grain)
-            #expect(after.leadsRefresh?.state == "succeeded" && after.leads.isEmpty, "a project with nothing to rank from")
-            let job = try #require(await fixture.jobs.job(try #require(leadsJobs.first?.id)))
-            #expect(job.progress?.contains("cleared") == true && job.progress?.contains("Bob") == false)
-            // Bob's project and its leads are his alone: Alice's computation read none of his notes.
-            let bobs = try await ProjectFocusTests.home(bob, theirs)
-            #expect(bobs.leadsRefresh == nil && bobs.leads.isEmpty)
+            let job = try #require(await fixture.jobs.job(states[0].id))
+            // Alice's seed is her note alone: Bob's note under the same project's id is not hers.
+            #expect(job.state == .succeeded && job.progress?.hasPrefix("Ranked from 1 document of a project of alice's") == true,
+                    "\(job.progress ?? "")")
+            #expect(try fixture.rows.rows(of: "project_leads", user: "bob") == bobs, "Bob's leads untouched")
         }
     }
 
@@ -152,7 +165,7 @@ import Testing
         }
     }
 
-    /// After a JSON import, each of that user's projects has its leads computed again, a job each, queued
+    /// After a JSON import, each of that user's projects has its leads computed again, in one job queued
     /// behind the import's.
     @Test func anImportQueuesEachProjectsLeads() async throws {
         let fixture = try await UserDataFixture(indexed: true)
@@ -167,8 +180,10 @@ import Testing
             await fixture.jobs.waitUntilIdle()
             let jobs = await fixture.jobs.jobs()
             #expect(jobs.filter { $0.kind == .researchImport }.map(\.state) == [.succeeded])
+            // One job for every project of the user's, two made here and one the export brought.
             let leads = jobs.filter { $0.kind == .projectLeads }
-            #expect(leads.count == 3 && leads.allSatisfy { $0.requestedBy == nil && $0.state == .succeeded }, "\(leads)")
+            #expect(leads.count == 1 && leads.first?.requestedBy == nil && leads.first?.state == .succeeded, "\(leads)")
+            #expect(leads.first?.subject == "Every project of owner's" && leads.first?.progress == "Found the leads of 3 projects")
         }
     }
 }

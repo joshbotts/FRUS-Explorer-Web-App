@@ -100,8 +100,10 @@ describe('Suggested Next’s Refresh', () => {
       [`/api/v1/me/projects/${grain}/home`]: { ...home, leadsRefresh: { state: 'failed', error: 'No index is served, so the project’s leads were kept as they were.' } },
     });
     renderAt(`/projects/${grain}`);
-    expect((await screen.findByRole('alert')).textContent).toBe(
-      'Suggested Next could not be refreshed: No index is served, so the project’s leads were kept as they were.',
-    );
+    // Said where it is seen, not announced at each visit.
+    expect(
+      await screen.findByText('Suggested Next could not be refreshed: No index is served, so the project’s leads were kept as they were.'),
+    ).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

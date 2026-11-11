@@ -2,7 +2,7 @@
 // overflow line and a tuning as the app stores one.
 import { describe, expect, it } from 'vitest';
 import type { RelatedAxis } from '../api/related';
-import { emptyDetail, encodedWeights, overflowLine, rowTitle, weightText } from './relatedRules';
+import { decodedWeights, emptyDetail, encodedWeights, overflowLine, rowTitle, weightText } from './relatedRules';
 
 const axes: RelatedAxis[] = [
   { id: 'archivalProvenance', name: 'Archival provenance', weight: 1, defaultWeight: 1, available: true },
@@ -32,9 +32,21 @@ describe('Related Documents’ rules', () => {
   it('writes a tuning as its departures from the defaults, sorted by the axis, and the defaults as nothing', () => {
     const at = (changes: Record<string, number>) => Object.fromEntries(axes.map((axis) => [axis.id, changes[axis.id] ?? axis.weight]));
     expect(encodedWeights(at({}), axes)).toBe('');
-    expect(encodedWeights(at({ subseries: 0.8, dateProximity: 0 }), axes)).toBe('dateProximity:0,subseries:0.8');
+    // A whole number is written as Swift writes a Double, with `.0`, as the app stores it.
+    expect(encodedWeights(at({ subseries: 0.8, dateProximity: 0 }), axes)).toBe('dateProximity:0.0,subseries:0.8');
     // An axis the tuning does not name keeps the weight the list was ranked with.
     expect(encodedWeights({ sharedPersons: 0.2 }, axes)).toBe('sharedPersons:0.2');
+  });
+
+  it('reads a tuning of the stored form back, each axis it leaves out at its default', () => {
+    expect(decodedWeights('', axes)).toEqual({ archivalProvenance: 1, crossReference: 1, dateProximity: 0.5, subseries: 0.3, sharedPersons: 0.7 });
+    expect(decodedWeights('dateProximity:0.0,subseries:0.8,unknown:1,sharedPersons:x', axes)).toEqual({
+      archivalProvenance: 1,
+      crossReference: 1,
+      dateProximity: 0,
+      subseries: 0.8,
+      sharedPersons: 0.7,
+    });
   });
 
   it('shows a weight to one decimal place, as the app’s row does', () => {

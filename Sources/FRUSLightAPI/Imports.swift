@@ -143,7 +143,7 @@ enum ImportRoutes {
                         }
                         await imports.succeed(status.id, with: report)
                         // Suggested Next from what came in (PLAN's S23d): each project's, queued behind this job.
-                        await leads.refreshEveryProject(of: user.id)
+                        await leads.refreshAfterImport(of: user.id)
                         return jobLine(report, for: user.id)
                     } catch is JobCancelled {
                         await imports.fail(status.id, with: ImportProblem(code: "IMPORT_CANCELLED", detail: cancelledDetail))

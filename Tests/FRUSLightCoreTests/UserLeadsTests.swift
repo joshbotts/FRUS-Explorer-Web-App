@@ -1,8 +1,9 @@
 // Suggested Next's leads kept as the app's `ProjectLeadsService` keeps them (PLAN's S23d), on each
 // store: a lead still ranked keeps its row and its first surfacing, and takes the new score, seeds and
 // record unless it was dismissed, a dismissed lead keeping what it showed; a new lead is added; a lead no
-// longer ranked is removed, dismissed or not; a project with nothing to rank from loses its leads but its
-// dismissed ones; and a project gone, or another user's, is written to not at all.
+// longer ranked is removed, but a dismissed one, which stays dismissed, the web's own; a project with
+// nothing to rank from loses its leads but its dismissed ones; and a project gone, or another user's, is
+// written to not at all.
 
 import FRUSLightCore
 import FRUSLightTestSupport
@@ -65,7 +66,8 @@ import Testing
         let time = UserStoreDate.text(UserStoreDate.rounded(Self.now))
         let leads = try rows.rows(of: "project_leads").filter { $0["project_id"]?.text == Self.grain }
         let byDocument = Dictionary(uniqueKeysWithValues: leads.map { ($0["document_id"]?.text ?? "", $0) })
-        #expect(Set(byDocument.keys) == ["d2", "d3", "d6", "d7"], "the leads no longer ranked are gone, dismissed or not")
+        #expect(Set(byDocument.keys) == ["d2", "d3", "d5", "d6", "d7"], "the leads no longer ranked are gone, but the dismissed one")
+        #expect(byDocument["d5"]?["dismissed"]?.integer == 1 && byDocument["d5"]?["last_computed_at"]?.text == Self.first)
         let d2 = try #require(byDocument["d2"])
         #expect(d2["id"]?.text == "L-KEPT" && d2["first_surfaced_at"]?.text == Self.first && d2["last_computed_at"]?.text == time)
         #expect(Self.real(d2["aggregate_score"]) == 2.5 && d2["header"]?.text == "New head" && d2["document_number"]?.text == "12")
@@ -86,7 +88,7 @@ import Testing
 
         // Nothing to rank from: the leads on show go, the dismissed one stays.
         #expect(try store.clearVisibleProjectLeads(ofProject: Self.grain, for: "owner"))
-        #expect(try rows.rows(of: "project_leads").filter { $0["project_id"]?.text == Self.grain }.map { $0["document_id"]?.text } == ["d3"])
+        #expect(try rows.rows(of: "project_leads").filter { $0["project_id"]?.text == Self.grain }.map { $0["document_id"]?.text } == ["d3", "d5"])
         #expect(try rows.rows(of: "project_leads").contains { $0["id"]?.text == "L-OTHER-PROJECT" })
 
         // A project the user does not have is written to not at all.

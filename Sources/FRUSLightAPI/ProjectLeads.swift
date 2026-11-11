@@ -10,11 +10,12 @@
 // leads; and the store keeps them as the app's `applyLeads` does (UserLeads.swift), where Project Home
 // reads them, each with its line (`ProjectHomeRoutes.withLines`, S25c).
 //
-// A computation runs when Project Home asks to Refresh, and after an import: for each project of the user
-// whose research a JSON import brought, and for each project of every user once an export is the served
-// index. A project has one computation waiting at most: a Refresh while one waits is that one, and one
-// while it runs waits behind it, so the leads are ranked from the seed as it stands after the change that
-// asked. The leads are computed over a served index only: with none, a Refresh is refused and the leads
+// A computation runs when Project Home asks to Refresh, and after an import: one job for every project of
+// the user whose research a JSON import brought, and one for every project of each user who can sign in
+// once an export is the served index. A project has one computation waiting at most: a Refresh while one
+// waits is that one, and one while it runs waits behind it, so the leads are ranked from the seed as it
+// stands after the change that asked; and each reads, when it starts, the tuning the project's newest
+// Refresh brought. The leads are computed over a served index only: with none, a Refresh is refused and the leads
 // stay as they were. Beyond your library, the app's count of the volumes the project reaches that the
 // device does not hold, is the semantic axis's, and waits for phase 4.
 
@@ -103,12 +104,24 @@ actor ProjectLeadsQueue {
     let provider: ServedIndexProvider
     let resources: ServerResources
     let now: @Sendable () -> Date
-    /// The newest computation queued for each project, by its user and its id.
+    /// The newest computation queued for each project, by its user and its id: its own, or the one an
+    /// import queued for every project concerned.
     private var latest: [Key: String] = [:]
+    /// A computation being queued for a project, which a Refresh arriving meanwhile is: the queue is
+    /// asked across an await, where another Refresh may run on this actor.
+    private var queueing: [Key: Task<Job, any Error>] = [:]
+    /// The tuning the newest Refresh of each project brought from its browser, which a computation of the
+    /// project reads when it starts, whoever queued it.
+    private var tunings: [Key: String] = [:]
 
-    private struct Key: Hashable {
+    struct Key: Hashable, Sendable {
         let user: String
         let project: String
+
+        init(user: String, project: String) {
+            self.user = user
+            self.project = UserSearchText.uuidString(project)
+        }
     }
 
     init(store: any UserDataStore, jobs: any JobQueue, provider: ServedIndexProvider, resources: ServerResources,
@@ -120,50 +133,92 @@ actor ProjectLeadsQueue {
         self.now = now
     }
 
-    /// Queues a computation of the leads of `project`, `user`'s, or gives the one waiting already.
-    /// `browserWeights` is the asking browser's tuning, which the project's own replaces; `requestedBy` the
-    /// user who asked, nil for the server after an import.
-    func refresh(_ project: String, of user: String, browserWeights: String?, requestedBy: String?) async throws -> Job {
-        let key = Key(user: user, project: UserSearchText.uuidString(project))
+    /// Queues a computation of the leads of `project`, `user`'s, or gives the one waiting already, which
+    /// reads `browserWeights`, the asking browser's tuning, when it starts, the project's own replacing it.
+    func refresh(_ project: String, of user: String, browserWeights: String?) async throws -> Job {
+        let key = Key(user: user, project: project)
+        if let browserWeights { tunings[key] = browserWeights } else { tunings[key] = nil }
+        if let pending = queueing[key] { return try await pending.value }
         if let id = latest[key], let waiting = await jobs.job(id), waiting.state == .queued { return waiting }
-        let (store, provider, resources, now) = (store, provider, resources, now)
-        let job = try await jobs.submit(.projectLeads, subject: "Project \(key.project)", requestedBy: requestedBy, id: nil) { job in
-            try await Self.compute(key.project, of: user, browserWeights: browserWeights, job: job, store: store,
-                                   provider: provider, resources: resources, now: now)
+        // Asked again while the queue answered: that Refresh's computation is this one.
+        if let pending = queueing[key] { return try await pending.value }
+        let pending = Task { [jobs] in
+            try await jobs.submit(.projectLeads, subject: "Project \(key.project)", requestedBy: user, id: nil) { job in
+                try await job.step("Finding the project's leads")
+                return try await self.compute(key, job: job)
+            }
         }
+        queueing[key] = pending
+        defer { queueing[key] = nil }
+        let job = try await pending.value
         latest[key] = job.id
         return job
     }
 
-    /// Queues a computation for each of `user`'s projects, as the server does after their import.
-    func refreshEveryProject(of user: String) async {
-        guard let projects = try? await Blocking.run({ [store] in try store.projects(for: user) }) else { return }
-        for project in projects {
-            _ = try? await refresh(project.id, of: user, browserWeights: nil, requestedBy: nil)
+    /// Queues one computation of every project of `user`'s, as the server does after their import; or of
+    /// every user's who can sign in, once an export is the served index. One job, so that the computations
+    /// an import asks for take one row of the admin's Jobs list, not one a project.
+    func refreshAfterImport(of user: String?) async {
+        let users: [String]
+        if let user {
+            users = [user]
+        } else {
+            guard let accounts = try? await Blocking.run({ [store] in try store.accounts() }) else { return }
+            users = accounts.filter { $0.disabledAt == nil }.map(\.id)
         }
-    }
-
-    /// Queues a computation for each project of every user, as the server does once an export is the
-    /// served index.
-    func refreshEveryone() async {
-        guard let users = try? await Blocking.run({ [store] in try store.accounts().map(\.id) }) else { return }
-        for user in users { await refreshEveryProject(of: user) }
+        var keys: [Key] = []
+        for user in users {
+            guard let projects = try? await Blocking.run({ [store] in try store.projects(for: user) }) else { continue }
+            keys += projects.map { Key(user: user, project: $0.id) }
+        }
+        guard !keys.isEmpty else { return }
+        let subject = user.map { "Every project of \($0)'s" } ?? "Every project"
+        let provider = provider
+        guard let job = try? await jobs.submit(.projectLeads, subject: subject, requestedBy: nil, id: nil, { job in
+            guard try await provider.servedIfReady() != nil else {
+                throw JobFailed("No index is served, so the projects' leads were kept as they were.")
+            }
+            var found = 0
+            for (index, key) in keys.enumerated() {
+                try await job.step("Finding a project's leads, \(index + 1) of \(keys.count)", fraction: Double(index) / Double(keys.count))
+                do {
+                    _ = try await self.compute(key, job: job)
+                    found += 1
+                } catch is JobCancelled {
+                    throw JobCancelled()
+                } catch {
+                    // One project whose records cannot be read keeps its leads; the others go on.
+                    continue
+                }
+            }
+            let projects = keys.count == 1 ? "1 project" : "\(keys.count) projects"
+            return found == keys.count ? "Found the leads of \(projects)" : "Found the leads of \(found) of \(projects)"
+        }) else { return }
+        // Each project's Refresh while it waits is this job, and Project Home says where it stands.
+        for key in keys where queueing[key] == nil { latest[key] = job.id }
     }
 
     /// The newest computation queued for the project, as the queue holds it, or nil for none since the
     /// server started.
     func latestJob(_ project: String, of user: String) async -> Job? {
-        guard let id = latest[Key(user: user, project: UserSearchText.uuidString(project))] else { return nil }
+        guard let id = latest[Key(user: user, project: project)] else { return nil }
         return await jobs.job(id)
     }
 
+    /// The tuning the newest Refresh of the project brought, if it brought one.
+    private func tuning(_ key: Key) -> String? { tunings[key] }
+
     /// A computation of the project's leads, as `ProjectLeadsService.recompute` runs one: the seed gathered,
     /// each of its first forty seeds ranked, the rankings aggregated, and the leads kept. Its lines say what
-    /// it does in the server's words, never what the project holds.
+    /// it does in the server's words, never what the project holds; a cancel stops it between two seeds.
+    private func compute(_ key: Key, job: JobContext) async throws -> String? {
+        try await Self.compute(key.project, of: key.user, browserWeights: tuning(key), job: job, store: store,
+                               provider: provider, resources: resources, now: now)
+    }
+
     static func compute(_ projectId: String, of user: String, browserWeights: String?, job: JobContext,
                         store: any UserDataStore, provider: ServedIndexProvider, resources: ServerResources,
                         now: @escaping @Sendable () -> Date) async throws -> String? {
-        try await job.step("Gathering the project's documents")
         let (rows, assignments) = try await Blocking.run {
             (try store.researchRows(for: user, tables: ["projects", "collections", "collection_entries", "notes"]),
              try store.tagAssignments(of: user))
@@ -184,12 +239,12 @@ actor ProjectLeadsQueue {
             }
             notes = try ResearchExport.records(rows, "notes") { try ResearchExport.note($0, links: [:]) }
         } catch let error as ResearchExportError {
-            throw JobFailed("The project's records could not be read, so its leads were kept as they were: \(error.description)")
+            // Its words name the table, the row and the column, never what the record holds.
+            throw JobFailed("A project's leads were kept as they were: \(error.description)")
         }
         let seed = ProjectLeadsSeed.keys(forProject: project, collections: collections, notes: notes, assignments: assignments)
         guard !seed.isEmpty else {
             // Nothing to rank from: the leads on show go, the dismissed ones stay, as the app's do.
-            try await job.commit()
             let kept = try await Blocking.run { try store.clearVisibleProjectLeads(ofProject: project.id.uuidString, for: user) }
             return kept ? "A project with no documents to rank from: its leads were cleared" : "The project was deleted before its leads were computed"
         }
@@ -202,8 +257,9 @@ actor ProjectLeadsQueue {
         var perSeed: [(seed: String, related: [(key: String, score: Double)])] = []
         var records: [String: CandidateRecord] = [:]
         for (index, seedKey) in ranked.enumerated() {
-            try await job.step("Ranking the documents related to the project's document \(index + 1) of \(ranked.count)",
-                               fraction: Double(index) / Double(ranked.count + 1))
+            // One line for the whole ranking, so that the job's row is written once a second at most.
+            try await job.checkpoint()
+            await job.progress("Ranking the documents related to the project's documents", fraction: Double(index) / Double(ranked.count))
             guard let anchor = DocumentKey(compositeString: seedKey) else { continue }
             let result = await rank(anchor, weights: weights, served: served, resources: resources, subjects: subjects)
             perSeed.append((seed: seedKey, related: result.rows.map { ($0.key.compositeString, $0.totalScore) }))
@@ -211,7 +267,7 @@ actor ProjectLeadsQueue {
                 records[row.key.compositeString] = row.record
             }
         }
-        try await job.step("Keeping the project's leads", fraction: Double(ranked.count) / Double(ranked.count + 1))
+        try await job.checkpoint()
         // The leads dismissed as they stand now, which keep their places hidden, and the next best fills.
         let leadRows = try await Blocking.run { try store.researchRows(for: user, tables: ["project_leads"]) }
         let dismissed: Set<String>
@@ -220,7 +276,7 @@ actor ProjectLeadsQueue {
                 .filter { $0.projectId == project.id && $0.dismissed }
                 .map { "\($0.volumeId)/\($0.documentId)" })
         } catch let error as ResearchExportError {
-            throw JobFailed("The project's leads could not be read, so they were kept as they were: \(error.description)")
+            throw JobFailed("A project's leads were kept as they were: \(error.description)")
         }
         let candidates = ProjectLeadsAggregator.aggregate(perSeedRelated: perSeed, seedKeys: Set(seed),
                                                           dismissedKeys: dismissed, limit: ProjectLeadsSeed.leadLimit)
@@ -233,7 +289,6 @@ actor ProjectLeadsQueue {
                     .init(header: $0.header, documentNumber: $0.documentNumber, isEditorialNote: $0.isEditorialNote)
                 })
         }
-        try await job.commit()
         let time = now()
         let kept = try await Blocking.run { try store.applyProjectLeads(writes, toProject: project.id.uuidString, for: user, at: time) }
         guard kept else { return "The project was deleted before its leads were kept" }
@@ -252,20 +307,23 @@ actor ProjectLeadsQueue {
     }
 }
 
-/// An export made the served index: every project's leads are computed again over it, each a job queued
-/// behind the import's, as the leads a project had were ranked over the index it replaced.
+/// An export made the served index: every project's leads are computed again over it, in one job queued
+/// behind the import's, as the leads a project had were ranked over the index it replaced. Queued off the
+/// import's step, so that making the index live waits for none of it.
 struct LeadsAfterIndexImport: ImportObserver {
     let leads: ProjectLeadsQueue
 
     func importDidReach(_ step: ReadinessStep, detail: String, progress: Double?) async {
-        // The import's last step: the computations queued now run once its job has ended.
+        // The import's last step: the computation queued now runs once its job has ended.
         guard step == .openingIndex else { return }
-        await leads.refreshEveryone()
+        Task { [leads] in await leads.refreshAfterImport(of: nil) }
     }
 }
 
 /// Suggested Next's Refresh, and where a computation stands.
 struct LeadsRefresh: Codable, Equatable, Sendable, ResponseEncodable {
+    /// The computation's job, the one an import queued for every project concerned included.
+    var id: String
     /// `queued`, `running`, `succeeded`, `failed` or `cancelled`.
     var state: String
     /// When it ended.
@@ -274,6 +332,7 @@ struct LeadsRefresh: Codable, Equatable, Sendable, ResponseEncodable {
     var error: String?
 
     init(_ job: Job) {
+        id = job.id
         state = job.state.rawValue
         finishedAt = job.finishedAt.map(UserStoreDate.text)
         error = job.state == .failed ? job.error : nil
@@ -294,7 +353,13 @@ enum ProjectLeadsRoutes {
             let user = try context.requireUser()
             let projectId = try context.parameters.require("projectId")
             let body = try await JSONBody.decode(Refresh.self, from: request, fields: ["weights"])
-            if let weights = body.weights { _ = try RelatedDocumentsRoutes.requestedWeights(weights) }
+            if let weights = body.weights {
+                do {
+                    _ = try RelatedDocumentsRoutes.requestedWeights(weights)
+                } catch let problem as APIProblem {
+                    throw APIProblem(.badRequest, code: "INVALID_FIELD", detail: problem.detail)
+                }
+            }
             let project = try await ProjectRoutes.project(projectId, of: user.id, in: store)
             // The leads are ranked over the served index, and kept as they are while none is served.
             guard try await leads.provider.servedIfReady() != nil else {
@@ -303,7 +368,7 @@ enum ProjectLeadsRoutes {
             }
             let job: Job
             do {
-                job = try await leads.refresh(project.id.uuidString, of: user.id, browserWeights: body.weights, requestedBy: user.id)
+                job = try await leads.refresh(project.id.uuidString, of: user.id, browserWeights: body.weights)
             } catch {
                 throw APIProblem(.serviceUnavailable, code: "LEADS_NOT_QUEUED",
                                  detail: "Suggested Next could not be computed, since the server could not keep its job: try again in a moment.")

@@ -43,7 +43,9 @@ export function ProjectHomeScreen() {
   let body;
   if (me.data && !keepsUserData) {
     body = <p>{copy.settings.userDataOff}</p>;
-  } else if (home.isError) {
+  } else if (home.isError && !home.data) {
+    // A read that failed while the workspace is on show, as one of the reads while the leads are found,
+    // keeps it on show, and its focus, until the next.
     body = (
       <>
         <h2>{copy.projectHome.missingTitle}</h2>
@@ -346,10 +348,9 @@ function Leads({ home, onFailure }: { home: ProjectHome; onFailure: () => void }
           {finding ? copy.projectHome.leadsComputing : ''}
         </p>
       </div>
+      {/* Said where it is seen, not announced at each visit: a computation an import asked for fails as well. */}
       {home.leadsRefresh?.state === 'failed' && !finding && (
-        <p className="error" role="alert">
-          {copy.projectHome.leadsRefreshFailed(home.leadsRefresh.error ?? '')}
-        </p>
+        <p className="note warning">{copy.projectHome.leadsRefreshFailed(home.leadsRefresh.error ?? copy.projectHome.leadsRefreshUnexplained)}</p>
       )}
       {failure && (
         <p className="error" role="alert">

@@ -40,18 +40,20 @@ test('opens Related from the reader by keyboard, changes its scope and a weight,
     const heading = page.getByRole('heading', { level: 1, name: 'Related Documents' });
     await expect(heading).toBeFocused();
     // The list, or the app's sentence for none, once ranked.
-    await expect(page.getByText('Ranking the related documents…')).toHaveCount(0);
-    const rows = page.getByRole('list').filter({ has: page.getByRole('list', { name: 'Why related' }) });
+    const list = page.locator('ol.related-list');
     const empty = page.getByRole('heading', { level: 2, name: 'No Related Documents' });
-    await expect(rows.or(empty).first()).toBeVisible();
+    await expect(list.or(empty).first()).toBeVisible();
+    await expect(page.getByText('Ranking the related documents…')).toHaveCount(0);
     await axeCheck(page);
 
     // The scope, by keyboard: the picker is a group of radios, as the app's segmented control.
     const thisVolume = page.getByRole('radio', { name: 'This volume' });
     await tabTo(page, page.getByRole('radio', { checked: true }));
     await expect(page.getByRole('radio', { name: 'All volumes' })).toBeChecked();
-    // The arrow keys move the choice along the group, as a segmented control's, to This volume, its first.
-    for (let step = 0; step < 3 && !(await thisVolume.isChecked()); step += 1) await page.keyboard.press('ArrowLeft');
+    // The arrow keys move the choice along the group, as a segmented control's, to This volume, its first,
+    // each choice shown at once.
+    const scopes = await page.getByRole('radio').count();
+    for (let step = 1; step < scopes; step += 1) await page.keyboard.press('ArrowLeft');
     await expect(thisVolume).toBeChecked();
     await expect(page).toHaveURL(/scope=volume/);
     await expect(thisVolume).toBeFocused();
@@ -70,15 +72,18 @@ test('opens Related from the reader by keyboard, changes its scope and a weight,
     await expect(page.getByRole('slider', { name: 'Cross-references' })).toBeDisabled();
     await expect(page.getByText('This server does not rank by cross-references yet.')).toBeVisible();
     await axeCheck(page);
-    const reset = page.getByRole('button', { name: 'Reset to app defaults' });
-    await tabTo(page, reset);
+    const resetWeights = page.getByRole('button', { name: 'Reset to app defaults' });
+    await tabTo(page, resetWeights);
     await page.keyboard.press('Enter');
     await expect(proximity).toHaveValue('0.3');
     await expect.poll(() => page.evaluate(() => localStorage.getItem('frus.related.weights'))).toBeNull();
+    // The focus goes back to the weights' heading, Reset being unavailable once it has reset.
+    await expect(page.getByText('Adjust weights')).toBeFocused();
 
-    // A row opens its document, and Back returns to the list as it was.
-    if ((await rows.count()) > 0) {
-      const first = rows.first().getByRole('link').first();
+    // A row opens its document, and Back returns to the list as it was. The synthetic export gives d1 no
+    // document of its archival container, so its list is empty there; the rows are the unit tests'.
+    if ((await list.count()) > 0) {
+      const first = list.getByRole('link').first();
       const title = (await first.textContent()) ?? '';
       await tabTo(page, first);
       await page.keyboard.press('Enter');
@@ -92,6 +97,7 @@ test('opens Related from the reader by keyboard, changes its scope and a weight,
     const project = (await send(page, 'POST', 'api/v1/me/projects', { name })) as { id: string };
     await send(page, 'POST', 'api/v1/me/volumes/frus1961-63v06/documents/d1/notes', {
       bodyText: 'A seed',
+      runs: null,
       userTagIds: [],
       projectIds: [project.id],
       selectedSummaryIds: [],

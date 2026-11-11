@@ -93,15 +93,19 @@ import Testing
         }
     }
 
-    /// A row as the comparison reads it: its key, its score, and its chips by axis and words.
+    /// A row as the comparison reads it: its key, its score to twelve places, and its chips by axis and
+    /// words. Twelve places, since a score read back from the API's JSON on Linux can differ from the
+    /// kit's in its last bit; the rows' order, which the scores decide, is compared whole.
     static func row(_ row: RelatedDocumentRow) -> String {
         let chips = row.whyRelatedChips.map { "\($0.axis.rawValue)=\($0.chip.displayText(locale: locale))" }
-        return "\(row.key.compositeString) \(row.totalScore) [\(chips.joined(separator: "; "))] \(row.snippet ?? "-")"
+        return "\(row.key.compositeString) \(score(row.totalScore)) [\(chips.joined(separator: "; "))] \(row.snippet ?? "-")"
     }
 
     static func row(_ row: RelatedDocuments.Row) -> String {
-        "\(row.volumeId)/\(row.documentId) \(row.score) [\(row.chips.map { "\($0.axis)=\($0.text)" }.joined(separator: "; "))] \(row.snippet ?? "-")"
+        "\(row.volumeId)/\(row.documentId) \(score(row.score)) [\(row.chips.map { "\($0.axis)=\($0.text)" }.joined(separator: "; "))] \(row.snippet ?? "-")"
     }
+
+    static func score(_ value: Double) -> String { String(format: "%.12f", value) }
 
     /// Every document the fixture index holds, by volume and id.
     static func documents() async throws -> [DocumentKey] {
@@ -185,7 +189,7 @@ import Testing
             let project = try await session.json(Project.self, .post, "/api/v1/me/projects", ["name": "Grain"])
             for document in noted {
                 _ = try await session.send(.post, "/api/v1/me/volumes/\(volume)/documents/\(document)/notes", try CollectionExportParityTests.json(
-                    ["bodyText": "", "userTagIds": [String](), "projectIds": [project.id], "selectedSummaryIds": [String]()]))
+                    ["bodyText": "", "runs": nil, "userTagIds": [String](), "projectIds": [project.id], "selectedSummaryIds": [String]()]))
             }
             let tag = try await session.json(UserTag.self, .post, "/api/v1/me/tags", ["name": "Focus"])
             _ = try await session.send(.put, "/api/v1/me/volumes/\(volume)/documents/\(tagged)/tags",
@@ -209,12 +213,17 @@ import Testing
         #expect(second.leads.map { "\($0.volumeId)/\($0.documentId)" } == next.map(\.key), "the dismissed lead hidden, the next best in its place")
     }
 
-    /// Project Home once Suggested Next's Refresh has run to its end.
+    /// Project Home once the computation a Refresh queued has run to its end, and succeeded.
     static func refreshed(_ session: CollectionExportParityTests.Session, _ project: String) async throws -> ProjectHome {
-        _ = try await session.send(.post, "/api/v1/me/projects/\(project)/leads/refresh", "{}")
+        let response = try await session.send(.post, "/api/v1/me/projects/\(project)/leads/refresh", "{}")
+        #expect(response.status == .accepted)
+        let asked = try ServedFixture.decode(LeadsRefresh.self, response)
         for _ in 0..<600 {
             let home = try ServedFixture.decode(ProjectHome.self, try await session.get("/api/v1/me/projects/\(project)/home"))
-            if let state = home.leadsRefresh?.state, state != "queued", state != "running" { return home }
+            if let refresh = home.leadsRefresh, refresh.id == asked.id, refresh.state != "queued", refresh.state != "running" {
+                #expect(refresh.state == "succeeded", "\(refresh)")
+                return home
+            }
             try await Task.sleep(for: .milliseconds(50))
         }
         throw APIParityError("Suggested Next's computation did not end")

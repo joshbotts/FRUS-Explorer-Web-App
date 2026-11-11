@@ -1240,6 +1240,15 @@ dialog.card .actions {
   font-variant-numeric: tabular-nums;
 }
 
+.related-chip-axis {
+  color: var(--text);
+}
+
+.related-status {
+  margin: 0.25rem 0;
+  min-height: 1.25rem;
+}
+
 .related .pool-cut {
   font-size: 0.8125rem;
 }
@@ -3024,11 +3033,6 @@ button.dismiss {
 
 .leads-footer .note {
   margin: 0;
-}
-
-.leads-footer button[aria-disabled='true'] {
-  opacity: 0.6;
-  cursor: default;
 }
 
 .recent ul {

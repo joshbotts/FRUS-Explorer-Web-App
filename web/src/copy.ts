@@ -1073,6 +1073,7 @@ export const copy = {
     leadsRefresh: 'Refresh',
     leadsComputing: 'Finding leads…',
     leadsRefreshFailed: (reason: string) => `Suggested Next could not be refreshed: ${reason}`,
+    leadsRefreshUnexplained: 'the server stopped it.',
     leadNew: 'NEW',
     relatedOne: 'Related to 1 of your documents',
     relatedMany: (count: number) => `Related to ${count.toLocaleString('en-US')} of your documents`,

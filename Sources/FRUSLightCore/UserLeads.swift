@@ -2,9 +2,11 @@
 // aggregator (Sources/FRUSLightAPI/ProjectLeads.swift), kept as the app's `ProjectLeadsService` keeps its
 // `ProjectLeadEntry` records. `applyLeads`: the leads still ranked keep their rows, each one not dismissed
 // taking its new score, seeds and record; a lead ranked for the first time is added with the time it
-// surfaced, which Project Home's NEW reads; and a lead no longer ranked is removed, dismissed or not. And
-// `clearVisibleLeads`: a project with nothing to rank from loses its leads but its dismissed ones, which
-// would otherwise come back as new once it has. Each is one transaction, written once for both stores,
+// surfaced, which Project Home's NEW reads; and a lead no longer ranked is removed. A dismissed lead is
+// kept even then, the web's own, where the app removes it: the server ranks with fewer axes than a Mac
+// whose export brought the dismissals, and a dismissal removed would come back as a new lead once the
+// ranking reached it again. And `clearVisibleLeads`: a project with nothing to rank from loses its leads
+// but its dismissed ones, which would otherwise come back as new once it has. Each is one transaction, written once for both stores,
 // and reads the project's leads as they stand when it writes, so that a lead dismissed while the ranking
 // ran stays dismissed.
 
@@ -52,7 +54,8 @@ public protocol ProjectLeadStore: Sendable {
     /// Keeps `leads`, the aggregator's ranking, as the project's (`ProjectLeadsService.applyLeads`): a
     /// lead the project holds keeps its row, and, unless it was dismissed, takes the new score, seeds and,
     /// where given, record; a new one is added, first surfaced and computed `now`; and every lead not in
-    /// `leads` is removed. False, writing nothing, when the user has no such project.
+    /// `leads` is removed but a dismissed one, which stays dismissed, the web's own. False, writing nothing,
+    /// when the user has no such project.
     @discardableResult
     func applyProjectLeads(_ leads: [ProjectLeadWrite], toProject project: String, for user: String, at now: Date) throws -> Bool
     /// Removes the project's leads but its dismissed ones (`ProjectLeadsService.clearVisibleLeads`), as the
@@ -115,7 +118,7 @@ extension RelationalUserStore: ProjectLeadStore {
                 }
             }
             let ranked = Set(leads.map(\.documentKey))
-            for lead in existing where !ranked.contains(lead.key) {
+            for lead in existing where !ranked.contains(lead.key) && !lead.dismissed {
                 _ = try db.query("DELETE FROM project_leads WHERE user_id = ? AND id = ?", [.text(user), .text(lead.id)])
             }
             return true
