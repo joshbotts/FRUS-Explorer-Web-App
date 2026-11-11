@@ -155,10 +155,12 @@ actor ProjectLeadsQueue {
         return job
     }
 
-    /// Queues one computation of every project of `user`'s, as the server does after their import; or of
-    /// every user's who can sign in, once an export is the served index. One job, so that the computations
-    /// an import asks for take one row of the admin's Jobs list, not one a project.
+    /// Queues one computation of every project of `user`'s, as the server does after their import, while an
+    /// index is served, which none can be computed without; or of every user's who can sign in, once an
+    /// export is about to be the served index. One job, so that the computations an import asks for take
+    /// one row of the admin's Jobs list, not one a project.
     func refreshAfterImport(of user: String?) async {
+        if user != nil, (try? await provider.servedIfReady()) == nil { return }
         let users: [String]
         if let user {
             users = [user]
