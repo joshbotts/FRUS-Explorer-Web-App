@@ -1,8 +1,8 @@
 // Administration's panes (PLAN's S20d), as Settings' are laid out: Status, Jobs, Users, Backups and the
 // instance's Keys, each a page of its own under /admin, for an admin; and the frame every pane is drawn
 // in, which says why there is nothing to show to anyone else, or on a server that keeps no user data.
-// The panes are grouped by area under a line each, as Settings' are (PLAN's S20a): a later row's pane,
-// the library's (S21c), goes beside its area's kin, never at the end.
+// The panes are grouped by area under a line each, as Settings' are (PLAN's S20a): a later row's pane
+// goes beside its area's kin, never at the end, as the library's (S21c) does.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { type ReactNode, useEffect } from 'react';
@@ -28,6 +28,11 @@ export function AdminPanes() {
           </Link>
         </li>
         {/* ─── The library ───────────────────────────────────────────────── */}
+        <li>
+          <Link to="/admin/library" activeProps={{ 'aria-current': 'page' }}>
+            {copy.admin.library.title}
+          </Link>
+        </li>
         {/* ─── People ────────────────────────────────────────────────────── */}
         <li>
           <Link to="/admin/users" activeProps={{ 'aria-current': 'page' }}>

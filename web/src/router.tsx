@@ -52,6 +52,7 @@ import { TagsSettingsScreen } from './settings/TagsSettings';
 import { AdminKeysScreen } from './admin/KeysPane';
 import { BackupsScreen } from './admin/BackupsPane';
 import { JobsScreen } from './admin/JobsPane';
+import { LibraryScreen } from './admin/LibraryPane';
 import { StatusScreen } from './admin/StatusPane';
 import { UsersScreen } from './admin/UsersPane';
 
@@ -321,6 +322,13 @@ const adminJobsRoute = createRoute({
   component: JobsScreen,
 });
 
+// From S21c: the library, a Standalone server's volumes and their downloads.
+const adminLibraryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/library',
+  component: LibraryScreen,
+});
+
 const adminUsersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin/users',
@@ -381,6 +389,7 @@ export const routeTree = rootRoute.addChildren([
   adminRoute,
   adminStatusRoute,
   adminJobsRoute,
+  adminLibraryRoute,
   adminUsersRoute,
   adminBackupsRoute,
   adminKeysRoute,

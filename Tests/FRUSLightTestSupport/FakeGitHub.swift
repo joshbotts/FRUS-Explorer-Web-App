@@ -28,6 +28,7 @@ public final class FakeGitHub: LibraryTransport, Sendable {
         var figures: [String: Data] = [:]
         var answers: [String: LibraryAnswer] = [:]
         var gates: [String: JobGate] = [:]
+        var unanswered: Set<String> = []
         var requests: [Request] = []
     }
 
@@ -65,6 +66,11 @@ public final class FakeGitHub: LibraryTransport, Sendable {
         state.withLock { $0.answers[url.absoluteString] = answer }
     }
 
+    /// Gives no answer for `url`, as a host that cannot be reached.
+    public func leaveUnanswered(_ url: URL) {
+        state.withLock { _ = $0.unanswered.insert(url.absoluteString) }
+    }
+
     /// Holds each request for `url` at `gate` until it opens.
     public func hold(_ url: URL, at gate: JobGate) {
         state.withLock { $0.gates[url.absoluteString] = gate }
@@ -98,11 +104,12 @@ public final class FakeGitHub: LibraryTransport, Sendable {
     // MARK: LibraryTransport
 
     public func get(_ url: URL, headers: [String: String], limit: Int, into file: URL?) async throws -> LibraryAnswer {
-        let gate = state.withLock { state -> JobGate? in
+        let (gate, unanswered) = state.withLock { state -> (JobGate?, Bool) in
             state.requests.append(Request(url: url.absoluteString, headers: headers))
-            return state.gates[url.absoluteString]
+            return (state.gates[url.absoluteString], state.unanswered.contains(url.absoluteString))
         }
         if let gate { await gate.wait() }
+        if unanswered { throw LibraryTransportError.unreachable("no connection to \(url.host ?? "its host")") }
         let answer = state.withLock { $0.answers[url.absoluteString] } ?? served(url, headers: headers)
         guard (200..<300).contains(answer.status) else { return answer }
         guard answer.body.count <= limit else { throw LibraryTransportError.tooLarge(limit: limit) }
