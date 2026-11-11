@@ -118,13 +118,16 @@ import Testing
     }
 
     /// While a job indexes, Status gives its line and how far through it is, the Library names the volume
-    /// under way, and Remove is refused for a volume the job may still index.
+    /// under way and lists one the job has indexed as indexed, and Remove is refused for every volume of the
+    /// job's, the one it indexed already among them, whose file the index it writes was made from.
     @Test func statusShowsTheJobsProgressAndRemoveWaits() async throws {
         let fixture = try await Fixture()
         defer { withExtendedLifetime(fixture) {} }
         let gate = JobGate()
         await fixture.indexer.setWriterOpenedTestHook { pipeline in
-            await pipeline.setDocumentBatchStoredTestHook { _, _ in await gate.wait() }
+            await pipeline.setDocumentBatchStoredTestHook { volumeId, _ in
+                if volumeId == "frus1961-63v06" { await gate.wait() }
+            }
         }
         try await fixture.app.test(.router) { client in
             let owner = Browser(client: client)
@@ -133,11 +136,12 @@ import Testing
             let status = try decode(AdminStatus.self, try await owner.get("/api/v1/admin/status"))
             let running = try #require(status.jobs.running)
             #expect(running.id == job.id && running.kind == "libraryIndex")
-            #expect(running.progress?.hasPrefix("Indexing frus1894Nicaragua (1 of 3)") == true, "\(running.progress ?? "")")
+            #expect(running.progress?.hasPrefix("Indexing frus1961-63v06 (2 of 3)") == true, "\(running.progress ?? "")")
             #expect(running.fraction != nil)
             let listed = try decode(AdminLibrary.self, try await owner.get(Self.library))
-            #expect(listed.indexing == .init(active: true, volume: "frus1894Nicaragua"))
-            #expect(try Self.volume(listed, "frus1894Nicaragua").status == "indexing")
+            #expect(listed.indexing == .init(active: true, volume: "frus1961-63v06"))
+            #expect(try Self.volume(listed, "frus1961-63v06").status == "indexing")
+            #expect(try Self.volume(listed, "frus1894Nicaragua").status == "indexed", "the job has indexed it")
             for id in Self.fixtures {
                 #expect(problemCode(try await owner.send(.delete, "\(Self.library)/volumes/\(id)")) == "INDEXING_IN_PROGRESS", "\(id)")
             }
@@ -238,9 +242,10 @@ import Testing
         }
         let state = fixture.users.server.state
         do {
-            let held = try await fixture.provider.served()
+            // A computation kept beside a search holds the stack's pipeline past the stack's last request.
+            let held = try await fixture.provider.served().pipeline
             await state.beginIndexWrite()
-            #expect(await !fixture.provider.letGoOfStacks(patience: .milliseconds(300)), "a request holds a stack")
+            #expect(await !fixture.provider.letGoOfStacks(patience: .milliseconds(300)), "a computation holds the pipeline")
             await #expect(throws: APIProblem.self) { try await fixture.provider.served() }
             #expect(try await fixture.provider.servedIfReady() == nil)
             withExtendedLifetime(held) {}

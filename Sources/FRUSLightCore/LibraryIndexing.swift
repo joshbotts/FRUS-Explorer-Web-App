@@ -40,6 +40,8 @@ public struct LibraryIndexingStatus: Sendable, Equatable {
     public var failures: [String: IndexingFailureRecord]
     /// The volumes whose pass began and never ended, as the kit's sentinel names them, but the one under way.
     public var interrupted: Set<String>
+    /// The volumes the job running has indexed so far, which the served index holds once it ends.
+    public var indexedSoFar: Set<String> = []
 }
 
 /// The library's indexer: a Standalone server's one writer of its index, through jobs of the queue.
@@ -92,23 +94,27 @@ public actor LibraryIndexer {
     public let volumesDirectory: URL
     public let mode: ServerConfiguration.Mode
     /// The stamps and the record of the volumes a pass did not index, beside the index.
-    public let stamps: IndexStampFile
+    nonisolated public let stamps: IndexStampFile
     let resources: IndexingResources
     let jobs: any JobQueue
     let state: ServerState
     let observer: (any IndexWritingObserver)?
     /// The kit's interrupted-indexing sentinel, kept in the stamps.
-    let tracker: IndexingStateTracker
+    nonisolated let tracker: IndexingStateTracker
     /// Free bytes on the index's volume.
     let capacity: @Sendable () throws -> Int64
     let now: @Sendable () -> Date
     let log: @Sendable (String) -> Void
-    /// A job queued and not yet begun, and what it will index.
-    private var pending: (job: String, request: Pending)?
-    /// The job running, the volumes it has still to index, and the one it indexes now.
+    /// What each job queued and not yet begun asked for, by its id, and the one that waits, which a request
+    /// may join.
+    private var requests: [String: Pending] = [:]
+    private var waitingJob: String?
+    /// The job running; its list, every volume of it until the job ends, or nil until it is read; the one it
+    /// indexes now; and those it has indexed.
     private var runningJob: String?
-    private var runningLeft: Set<String> = []
+    private var runningList: Set<String>?
     private var runningVolume: String?
+    private var runningIndexed: Set<String> = []
     /// Test hook: told the writer's pipeline once a job has opened it, before its first volume.
     private var writerOpenedTestHook: (@Sendable (IndexingPipeline) async -> Void)?
 
@@ -148,22 +154,45 @@ public actor LibraryIndexer {
     public func status() async -> LibraryIndexingStatus {
         var interrupted = Set(await tracker.interruptedVolumeIds())
         if let volume = runningVolume { interrupted.remove(volume) }
-        return LibraryIndexingStatus(indexing: runningVolume, jobActive: pending != nil || runningJob != nil,
-                                     failures: stamps.failures(), interrupted: interrupted)
+        return LibraryIndexingStatus(indexing: runningVolume, jobActive: waitingJob != nil || runningJob != nil,
+                                     failures: stamps.failures(), interrupted: interrupted, indexedSoFar: runningIndexed)
     }
 
-    /// Whether a job may index `volumeId`: the one running has it still to do, or one waits that may take
-    /// it. A volume a job may index is not removed meanwhile.
+    /// Whether a job may index `volumeId`, or has indexed it in an index not served yet: the one running holds
+    /// every volume of its list until it ends, and any while it has not read its list, and one that waits
+    /// may take any it was asked for. A volume a job holds is not removed meanwhile.
     public func holds(_ volumeId: String) -> Bool {
-        if runningJob != nil, runningVolume == volumeId || runningLeft.contains(volumeId) { return true }
-        guard let pending else { return false }
-        return pending.request.only?.contains(volumeId) ?? true
+        if runningJob != nil {
+            guard let runningList else { return true }
+            if runningList.contains(volumeId) { return true }
+        }
+        guard let waitingJob, let request = requests[waitingJob] else { return false }
+        return request.only?.contains(volumeId) ?? true
     }
 
-    /// Another index took this one's place, as an import's does: what was kept of this one's is forgotten.
+    /// Another index took this one's place, as an import's does: what was kept of this one's is forgotten,
+    /// and so is a write-ahead log or shared memory the file it replaced left beside its name, which SQLite
+    /// would otherwise read into the new file at its next read-write open.
     public func indexWasReplaced() {
         stamps.reset()
+        for suffix in ["-wal", "-shm"] { try? FileManager.default.removeItem(atPath: liveIndex.path + suffix) }
         log("A new index was installed in /data/index, so the stamps and records of the one it replaced were cleared")
+    }
+
+    /// At a start, before the index found there is opened, which is read immutable: a write-ahead log a stop
+    /// left beside it, mid-job, is folded into the file through a connection of the server's own, so that
+    /// the open reads every commit and no page a checkpoint left half written. Gives whether the file holds
+    /// them all.
+    @discardableResult
+    public func foldLogAtStart() async -> Bool {
+        guard mode == .standalone else { return true }
+        let wal = liveIndex.path + "-wal"
+        let size = ((try? FileManager.default.attributesOfItem(atPath: wal))?[.size] as? NSNumber)?.int64Value ?? 0
+        guard size > 0 else { return true }
+        let folded = await foldLog()
+        log(folded ? "The index's write-ahead log, which a stop left beside it, was folded into it before it was opened"
+                   : "The index's write-ahead log, which a stop left beside it, could not be folded into it")
+        return folded
     }
 
     /// Queues the indexing `request` asks for, in a job of the server's queue, or adds it to the job
@@ -173,10 +202,9 @@ public actor LibraryIndexer {
     public func index(_ request: Request, requestedBy: String?) async throws -> Job {
         guard mode == .standalone else { throw LibraryIndexingRefusal.importMode }
         let wanted = Pending(request)
-        if let waiting = pending, let job = await jobs.job(waiting.job), job.state == .queued,
-           pending?.job == waiting.job {
+        if let id = waitingJob, let job = await jobs.job(id), job.state == .queued, waitingJob == id, requests[id] != nil {
             // Checked again past the suspension: the job has not begun, and reads what is merged here.
-            pending?.request.merge(wanted)
+            requests[id]?.merge(wanted)
             return job
         }
         let subject: String = switch request {
@@ -188,7 +216,8 @@ public actor LibraryIndexer {
         case .asked(nil): "every volume waiting"
         }
         let id = UUID().uuidString
-        pending = (id, wanted)
+        requests[id] = wanted
+        waitingJob = id
         do {
             return try await jobs.submit(.libraryIndex, subject: subject, requestedBy: requestedBy, id: id, onCancel: {
                 await self.forget(id)
@@ -246,7 +275,8 @@ public actor LibraryIndexer {
     }
 
     private func forget(_ id: String) {
-        if pending?.job == id { pending = nil }
+        requests[id] = nil
+        if waitingJob == id { waitingJob = nil }
     }
 
     // MARK: The job
@@ -269,10 +299,11 @@ public actor LibraryIndexer {
     }
 
     private func run(_ id: String, job: JobContext) async throws -> String? {
-        let request = pending?.job == id ? pending?.request ?? Pending(.asked(nil)) : Pending(.asked(nil))
-        if pending?.job == id { pending = nil }
+        // What it asked for; were that lost, the most careful request, a start's, never every volume.
+        let request = requests.removeValue(forKey: id) ?? Pending(.atStart)
+        if waitingJob == id { waitingJob = nil }
         runningJob = id
-        defer { (runningJob, runningLeft, runningVolume) = (nil, [], nil) }
+        defer { (runningJob, runningList, runningVolume, runningIndexed) = (nil, nil, nil, []) }
 
         try await job.step("Opening the index to write into it", fraction: 0)
         // The index a start finds is opened once the server listens: a job queued meanwhile waits for it.
@@ -309,16 +340,25 @@ public actor LibraryIndexer {
         // write-ahead log into the file. The log is folded in here too, so that the file holds every commit
         // before the served index is told it is whole, whatever still has a connection open.
         writer = nil
-        await foldLog()
-        await observer?.didFinishWritingIndex(at: liveIndex)
+        var folded = await foldLog()
+        for _ in 0..<2 where !folded {
+            try? await Task.sleep(for: .seconds(1))
+            folded = await foldLog()
+        }
+        if folded {
+            await observer?.didFinishWritingIndex(at: liveIndex)
+        } else {
+            // Read immutable, the file would be served without the log's commits: search waits for a start.
+            await state.indexWriteUnfinished("the index's write-ahead log could not be folded into it after the library's indexing; search waits until the server starts again, which folds it")
+        }
         return try outcome.get()
     }
 
     /// Folds the index's write-ahead log into the file and empties the log, through a connection of the
     /// server's own, which closes at once.
-    private func foldLog() async {
+    private func foldLog() async -> Bool {
         let path = liveIndex.path
-        guard FileManager.default.fileExists(atPath: path + "-wal") else { return }
+        guard FileManager.default.fileExists(atPath: path + "-wal") else { return true }
         do {
             let busy = try await Blocking.run { () -> Bool in
                 let db = try SQLiteConnection(path, readOnly: false)
@@ -326,8 +366,10 @@ public actor LibraryIndexer {
                 return try db.query("PRAGMA wal_checkpoint(TRUNCATE)").first?.first?.integer != 0
             }
             if busy { log("The index's write-ahead log could not be folded into it at once: a connection still reads it") }
+            return !busy
         } catch {
             log("The index's write-ahead log could not be folded into it: \(error)")
+            return false
         }
     }
 
@@ -347,12 +389,37 @@ public actor LibraryIndexer {
 
     /// The volumes `request` takes, from the kit's list, through the writer's connection.
     private func volumes(for request: Pending, writer: Writer) async throws -> [String] {
-        let failed = Set(stamps.failures().filter { $0.value.kind == .failed }.keys)
-        var leftOut = request.retriesAll ? [] : failed.subtracting(request.retrying)
-        if request.leavesInterrupted { leftOut.formUnion(Set(await tracker.interruptedVolumeIds()).subtracting(request.retrying)) }
+        let records = stamps.failures()
+        let sentinel = Set(await tracker.interruptedVolumeIds())
+        if request.retriesAll || request.only != nil { await settle(Set(records.keys).union(sentinel), writer: writer) }
+        let failed = Set(records.filter { $0.value.kind == .failed }.keys)
+        // A pass the server's own stop or a cancel cut short keeps a `stopped` record; one the sentinel names with
+        // none was cut short by a stop of the process, which the volume may have brought about: it is taken again
+        // only when an admin asks, or its download fetched it again.
+        let crashed = sentinel.subtracting(records.keys)
+        var leftOut: Set<String> = []
+        if !request.retriesAll {
+            leftOut = failed.union(crashed)
+            if request.leavesInterrupted { leftOut.formUnion(sentinel) }
+            leftOut.subtract(request.retrying)
+        }
         let waiting = try writer.pipeline.volumesAwaitingIndex(excluding: leftOut)
         guard let only = request.only else { return waiting }
         return waiting.filter(only.contains)
+    }
+
+    /// Forgets what was kept of a pass before for each of `volumeIds` that the index holds whole, its store
+    /// finished: a stop after its last write and before the sentinel's, which the kit's list never takes again.
+    private func settle(_ volumeIds: Set<String>, writer: Writer) async {
+        for volumeId in volumeIds where Self.storedWhole(volumeId, writer: writer) {
+            stamps.clearFailure(of: volumeId)
+            await tracker.markCompleted(volumeId: volumeId)
+        }
+    }
+
+    /// Whether the index holds `volumeId` with the record that its last store pass finished (#1566).
+    static func storedWhole(_ volumeId: String, writer: Writer) -> Bool {
+        (try? writer.pipeline.isVolumeIndexed(volumeId)) == true && (try? writer.pipeline.isStoreUnfinished(volumeId)) == false
     }
 
     /// The job's work, with the writer open: each volume a step, then the passes after indexing.
@@ -363,7 +430,7 @@ public actor LibraryIndexer {
         var failed: [String] = []
         var stopped: (volume: String, reason: String?)?
         var cancelled = false
-        runningLeft = Set(list)
+        runningList = Set(list)
         do {
             for (position, volumeId) in list.enumerated() {
                 try await job.step("Indexing \(volumeId) (\(position + 1) of \(list.count))",
@@ -373,13 +440,13 @@ public actor LibraryIndexer {
                     break
                 }
                 runningVolume = volumeId
-                runningLeft.remove(volumeId)
                 await relay.begin(volumeId, position: position, count: list.count)
                 let outcome = await indexOne(volumeId, writer: writer, relay: relay, job: job)
                 runningVolume = nil
                 switch outcome {
                 case .indexed:
                     indexed += 1
+                    runningIndexed.insert(volumeId)
                     stamps.clearFailure(of: volumeId)
                 case .failed(let record):
                     failed.append(volumeId)
@@ -486,6 +553,12 @@ public actor LibraryIndexer {
             return .indexed
         case .failure(let error):
             let stage = await relay.stage(of: volumeId, waiting: !Self.isNotFound(error), patience: Self.streamPatience)
+            if stage == "storingTables", !(error is CancellationError), Self.storedWhole(volumeId, writer: writer) {
+                // Stored whole before it threw, as in the FTS merge after the store: indexed, the sentinel told.
+                log("\(volumeId)'s pass threw once its store had finished, so it is indexed: \(error)")
+                await tracker.markCompleted(volumeId: volumeId)
+                return .indexed
+            }
             return outcome(of: error, volumeId: volumeId, stage: stage)
         }
     }

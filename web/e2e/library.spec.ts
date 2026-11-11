@@ -30,7 +30,7 @@ test('an Import server’s Library lists its TEI folder and the index, and downl
   await axeCheck(page);
 });
 
-test('a Standalone server’s Library removes a volume after a question and downloads it again, by keyboard', async ({ page }) => {
+test('a Standalone server’s Library removes a volume after a question and downloads it again, by keyboard', async ({ page, problems }) => {
   test.skip(!standalone, 'runs on the smoke test’s Standalone server, with FRUS_E2E_LIBRARY');
   // Three axe passes over the catalogue's table, and a download the mirror serves slowly.
   test.setTimeout(90_000);
@@ -68,4 +68,8 @@ test('a Standalone server’s Library removes a volume after a question and down
   // The Library is read again every two seconds while the download waits or runs, and the indexing after it.
   await expect(row.getByText('Indexed', { exact: true })).toBeVisible({ timeout: 60_000 });
   await axeCheck(page);
+  // While the indexing job writes the index, /readyz answers 503, naming the indexing, which the shell's banner
+  // shows (PLAN's S21d): a reading of it then is the one console error this test expects.
+  const expected = problems.filter((problem) => problem.includes('the server responded with a status of 503'));
+  problems.splice(0, problems.length, ...problems.filter((problem) => !expected.includes(problem)));
 });

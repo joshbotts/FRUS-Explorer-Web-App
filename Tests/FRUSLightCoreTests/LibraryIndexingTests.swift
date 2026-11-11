@@ -8,6 +8,7 @@
 import FRUSCoreKit
 @testable import FRUSLightCore
 import FRUSLightTestSupport
+import FTS5Store
 import Foundation
 import Synchronization
 import Testing
@@ -351,6 +352,9 @@ import Testing
         #expect(try await next.finished(resumed).progress == "Indexed 1 volume.")
         #expect(try next.indexed().keys.sorted() == ["frus1894Nicaragua", "frus1969-76ve09p1"])
         #expect(try await next.restarted().indexer.resumeAtStart() == nil, "the volume a stop cut short is left for an admin")
+        // Nor does a download that did not fetch it take it: its pass may have brought the server down.
+        let other = try await next.finished(try await next.indexer.index(.afterDownload(["frus1894Nicaragua"]), requestedBy: nil))
+        #expect(other.state == .succeeded && other.progress == "No volume was waiting to be indexed.", "\(other)")
         let asked = try await next.finished(try await next.indexer.index(.asked(["frus1961-63v06"]), requestedBy: "alice"))
         #expect(asked.state == .succeeded && asked.progress == "Indexed 1 volume.")
         let counts = try next.indexed()
@@ -438,8 +442,59 @@ import Testing
         try Self.writeBroken(in: f.volumes)
         _ = try await f.finished(try await f.indexer.index(.asked(nil), requestedBy: nil))
         #expect(!IndexStampFile(url: f.stampsFile).failures().isEmpty)
+        for suffix in ["-wal", "-shm"] { try Data("the old file's".utf8).write(to: URL(fileURLWithPath: f.files.liveIndex.path + suffix)) }
         await f.indexer.indexWasReplaced()
         let stamps = IndexStampFile(url: f.stampsFile)
         #expect(stamps.failures().isEmpty && stamps.integer(forKey: IndexingPipeline.dateIndexVersionKey) == 0)
+        for suffix in ["-wal", "-shm"] {
+            #expect(!FileManager.default.fileExists(atPath: f.files.liveIndex.path + suffix), "the old file's \(suffix) is gone")
+        }
+    }
+
+    /// A volume the index holds whole, with a record or a sentinel entry a stop left after its last write,
+    /// is settled by an admin's Index: indexed, and forgotten by both.
+    @Test func aVolumeStoredWholeIsSettledByAnAdminsIndex() async throws {
+        let f = try await Self.open()
+        defer { withExtendedLifetime(f.directory) {} }
+        _ = try await f.finished(try await f.indexer.index(.asked(nil), requestedBy: nil))
+        f.indexer.stamps.recordFailure(IndexingFailureRecord(kind: .stopped, stage: "storingTables", sentence: "Cut short.", at: Date()),
+                                       for: "frus1894Nicaragua")
+        await f.indexer.tracker.markStarted(volumeId: "frus1961-63v06")
+        let before = await f.indexer.status()
+        #expect(before.failures.keys.sorted() == ["frus1894Nicaragua"] && before.interrupted == ["frus1961-63v06"])
+        let done = try await f.finished(try await f.indexer.index(.asked(["frus1894Nicaragua", "frus1961-63v06"]), requestedBy: "alice"))
+        #expect(done.state == .succeeded && done.progress == "No volume was waiting to be indexed.", "\(done)")
+        let after = await f.indexer.status()
+        #expect(after.failures.isEmpty && after.interrupted.isEmpty, "\(after)")
+    }
+
+    /// A stop of the server mid-job leaves the index's write-ahead log beside it, with commits a checkpoint
+    /// may not have reached: a start folds it before the index is opened, read immutable, which then reads
+    /// every volume the job stored.
+    @Test func aStartFoldsTheLogAStopLeftBeforeTheIndexIsOpened() async throws {
+        let f = try await Self.open()
+        defer { withExtendedLifetime(f.directory) {} }
+        // The job's writer, as a stop leaves it: the file and its log copied while the writer holds them open.
+        let built = f.directory.url.appendingPathComponent("built", isDirectory: true)
+        try FileManager.default.createDirectory(at: built, withIntermediateDirectories: true)
+        let database = built.appendingPathComponent("frus.db")
+        do {
+            let store = try FTS5Store(databaseURL: database)
+            let writer = try IndexingPipeline(fts5Store: store, databaseURL: database, volumesDirectory: f.volumes,
+                                              resources: try IndexingResources.loading(fromDirectory: RepositoryFiles.resources),
+                                              defaults: InMemoryIndexingStampStore())
+            for id in Self.fixtures { try await writer.indexVolume(id) }
+            for suffix in ["", "-wal"] {
+                try FileManager.default.copyItem(atPath: database.path + suffix, toPath: f.files.liveIndex.path + suffix)
+            }
+            withExtendedLifetime(writer) {}
+        }
+        let log = (try FileManager.default.attributesOfItem(atPath: f.files.liveIndex.path + "-wal")[.size] as? NSNumber)?.intValue ?? 0
+        #expect(log > 0, "the copy holds a log")
+        #expect(await f.indexer.foldLogAtStart())
+        let left = (try? FileManager.default.attributesOfItem(atPath: f.files.liveIndex.path + "-wal"))?[.size] as? NSNumber
+        #expect(left == nil || left == 0, "the log is folded: \(left ?? 0) bytes left")
+        let opened = try CorpusIndex.open(f.files.liveIndex)
+        #expect(opened.summary.documents == 393 && opened.summary.volumes == 3, "\(opened.summary)")
     }
 }

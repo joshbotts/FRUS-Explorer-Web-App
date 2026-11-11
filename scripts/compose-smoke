@@ -26,6 +26,10 @@
 # keyboard (PLAN's S25a). It needs python3, for scripts/pdf-text.
 #   scripts/compose-smoke                       builds the image as frus-light:smoke first
 #   FRUS_IMAGE=<image> scripts/compose-smoke    tests an image already built
+#   FRUS_PARITY_IMAGE=<image>                   names an image of the Dockerfile's parity stage, whose
+#                                               frus-parity summarizes the Standalone project's index for
+#                                               check 2 (PLAN's S21d); the script builds one beside an
+#                                               image it builds itself, and without either skips check 2
 #   scripts/compose-smoke --e2e                 also runs web/e2e, Playwright on Chromium, against the
 #                                               imported server at the root, then under the path
 #                                               through nginx, its accounts spec with local
@@ -63,6 +67,11 @@ if [ -z "${FRUS_IMAGE:-}" ]; then
   build_args=()
   while IFS= read -r arg; do build_args+=(--build-arg "$arg"); done < <(scripts/release build-args)
   docker build -f docker/Dockerfile "${build_args[@]}" -t "$FRUS_IMAGE" .
+  # frus-parity beside it, from the same build's cache, for check 2 over the Standalone index (S21d).
+  if [ -z "${FRUS_PARITY_IMAGE:-}" ]; then
+    export FRUS_PARITY_IMAGE=frus-light:smoke-parity
+    docker build -f docker/Dockerfile "${build_args[@]}" --target parity -t "$FRUS_PARITY_IMAGE" .
+  fi
 fi
 base="http://127.0.0.1:$FRUS_HOST_PORT"
 proxy="$COMPOSE_PROJECT_NAME-proxy"
@@ -470,22 +479,23 @@ cmp -s "$work/figure.png" "$figures/OpenPitMine.jpg.png" || fail "the served fig
 echo "   downloaded the three fixture volumes and 7 figure images, restarted mid-download, resumed by the server without asking again for the volume it had; every byte the fixture's; the reader renders them and serves their figures"
 
 echo "== admin: the library's indexing, its index summarized as check 2 does, and a volume that does not parse (PLAN's S21d)"
-# frus-parity from the image's parity stage, which builds in the server's cache: the index the job wrote,
-# copied out once the job has folded its log into it, is summarized and held to fixtures/golden's summary.
-parity_image="$FRUS_IMAGE-parity"
-parity_args=()
-while IFS= read -r arg; do parity_args+=(--build-arg "$arg"); done < <(scripts/release build-args)
-docker build -q -f docker/Dockerfile "${parity_args[@]}" --target parity --load -t "$parity_image" . > "$work/parity-build.log" 2>&1 \
-  || fail "frus-parity's image did not build: $(tail -5 "$work/parity-build.log")"
-library_compose cp frus:/data/index/frus.db "$work/standalone.db" || fail "the Standalone server's index could not be copied out"
-parity() { docker run --rm --user "$(id -u):$(id -g)" -v "$work:/work" -v "$PWD:/repo:ro" "$parity_image" frus-parity "$@"; }
-parity summarize /work/standalone.db --golden /work/standalone-summary.json --repo /repo \
-  --upstream-commit "$(git -C upstream/FRUS-Explorer rev-parse HEAD)" > "$work/standalone-summary.log" 2>&1 \
-  || fail "frus-parity did not summarize the Standalone server's index: $(tail -5 "$work/standalone-summary.log")"
-parity compare-summary /repo/fixtures/golden/index-summary.json /work/standalone-summary.json > "$work/standalone-compare.log" 2>&1 \
-  || fail "check 2 fails over the Standalone server's index: $(tail -8 "$work/standalone-compare.log")"
-grep -q '^check 2 passes' "$work/standalone-compare.log" || fail "check 2's comparison said nothing: $(cat "$work/standalone-compare.log")"
-echo "   over the index the server's indexing job wrote: $(grep '^check 2 passes' "$work/standalone-compare.log")"
+# frus-parity from an image of the Dockerfile's parity stage, which CI's compose job builds beside the image
+# (FRUS_PARITY_IMAGE): the index the job wrote, copied out once the job has folded its log into it, is
+# summarized and held to fixtures/golden's summary. Without one, as for a published image, check 2 is said
+# to be skipped.
+if [ -n "${FRUS_PARITY_IMAGE:-}" ]; then
+  library_compose cp frus:/data/index/frus.db "$work/standalone.db" || fail "the Standalone server's index could not be copied out"
+  parity() { docker run --rm --user "$(id -u):$(id -g)" -v "$work:/work" -v "$PWD:/repo:ro" "$FRUS_PARITY_IMAGE" frus-parity "$@"; }
+  parity summarize /work/standalone.db --golden /work/standalone-summary.json --repo /repo \
+    --upstream-commit "$(git -C upstream/FRUS-Explorer rev-parse HEAD)" > "$work/standalone-summary.log" 2>&1 \
+    || fail "frus-parity did not summarize the Standalone server's index: $(tail -5 "$work/standalone-summary.log")"
+  parity compare-summary /repo/fixtures/golden/index-summary.json /work/standalone-summary.json > "$work/standalone-compare.log" 2>&1 \
+    || fail "check 2 fails over the Standalone server's index: $(tail -8 "$work/standalone-compare.log")"
+  grep -q '^check 2 passes' "$work/standalone-compare.log" || fail "check 2's comparison said nothing: $(cat "$work/standalone-compare.log")"
+  echo "   over the index the server's indexing job wrote: $(grep '^check 2 passes' "$work/standalone-compare.log")"
+else
+  echo "   check 2 over the Standalone index: skipped, since FRUS_PARITY_IMAGE names no image of the parity stage"
+fi
 
 # The broken volume: downloaded and checked, then indexed in a job of its own, which fails it with its stage
 # and leaves the three as they were.

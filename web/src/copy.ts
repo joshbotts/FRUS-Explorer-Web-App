@@ -2127,6 +2127,7 @@ export const copy = {
         count === 1
           ? 'One volume is downloaded and not indexed, or its last pass did not index it.'
           : `${count.toLocaleString('en-US')} volumes are downloaded and not indexed, or their last pass did not index them.`,
+      noneWaitsForIndex: 'No volume waits to be indexed.',
       indexing: (volume: string) => `Indexing ${volume}: Jobs follows it.`,
       indexingWaits: 'An indexing job waits: Jobs follows it.',
       index: 'Index',

@@ -117,9 +117,12 @@ public actor ServedIndexProvider {
     /// How many stacks have been opened, for the tests.
     private(set) var opened = 0
 
-    /// A stack, held without keeping it.
+    /// A stack, and its pipeline, which a computation kept beside a search holds past the stack's last
+    /// request, held without keeping them.
     private struct WeakStack {
         weak var stack: ServedIndex?
+        weak var pipeline: IndexingPipeline?
+        var held: Bool { stack != nil || pipeline != nil }
     }
 
     /// Why no stack is given while the library's indexing writes the index (PLAN's S21d): a plain refusal,
@@ -164,7 +167,7 @@ public actor ServedIndexProvider {
         opened += 1
         defer { if opening?.corpus == key { opening = nil } }
         let served = try await task.value
-        stacks.append(WeakStack(stack: served))
+        stacks.append(WeakStack(stack: served, pipeline: served.pipeline))
         if await state.indexBeingWritten { throw Self.beingWritten }
         if current?.corpus != key, await state.index.map(ObjectIdentifier.init) == key { current = (key, served) }
         return served
@@ -179,7 +182,7 @@ public actor ServedIndexProvider {
         while true {
             if let opening { _ = try? await opening.task.value }
             current = nil
-            stacks.removeAll { $0.stack == nil }
+            stacks.removeAll { !$0.held }
             if stacks.isEmpty, opening == nil { return true }
             guard ContinuousClock.now < deadline else { return false }
             try? await Task.sleep(for: .milliseconds(50))

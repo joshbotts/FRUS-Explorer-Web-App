@@ -7,7 +7,7 @@
 // FRUS_OFFLINE downloads nothing, which the pane says. Read again every two seconds while a download or an
 // indexing job waits or runs.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
 import {
   type AdminLibrary,
@@ -65,8 +65,19 @@ function Library({ library }: { library: AdminLibrary }) {
   const [filter, setFilter] = useState('');
   const [shown, setShown] = useState<LibraryStatus | 'all'>('all');
   const area = useRef<HTMLDivElement>(null);
+  // The element in a row that had focus last: a reading of the Library can take its button away, as when a
+  // job takes the volume, and focus then goes to the row rather than to the page.
+  const lastFocused = useRef<{ element: HTMLElement; row: string } | null>(null);
   const filterId = useId();
   const shownId = useId();
+
+  useEffect(() => {
+    const last = lastFocused.current;
+    if (!last || last.element.isConnected) return;
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) return;
+    area.current?.querySelector<HTMLElement>(`th[data-volume="${CSS.escape(last.row)}"]`)?.focus();
+  }, [library]);
 
   const volumes = useMemo(() => {
     const wanted = filter.trim().toLowerCase();
@@ -148,12 +159,18 @@ function Library({ library }: { library: AdminLibrary }) {
           </span>
         </p>
       )}
-      {unindexed > 0 && (
+      {library.mode === 'standalone' && (
         <p>
-          <button type="button" aria-disabled={busy !== null} onClick={() => void ask('index', { all: true }, 'index-all')}>
+          <button
+            type="button"
+            aria-disabled={busy !== null || unindexed === 0}
+            onClick={() => {
+              if (unindexed > 0) void ask('index', { all: true }, 'index-all');
+            }}
+          >
             {words.indexAll}
           </button>{' '}
-          <span className="note">{words.indexAllNote(unindexed)}</span>
+          <span className="note">{unindexed > 0 ? words.indexAllNote(unindexed) : words.noneWaitsForIndex}</span>
         </p>
       )}
       {library.indexing.active && (
@@ -185,7 +202,18 @@ function Library({ library }: { library: AdminLibrary }) {
         {words.shownCount(volumes.length, library.volumes.length)}
       </p>
       {/* A region a keyboard can scroll, where the table is wider than the pane. */}
-      <div ref={area} className="admin-table" role="region" aria-label={words.caption} tabIndex={0}>
+      <div
+        ref={area}
+        className="admin-table"
+        role="region"
+        aria-label={words.caption}
+        tabIndex={0}
+        onFocus={(event) => {
+          const target = event.target as HTMLElement;
+          const row = target.closest('tr[data-volume]')?.getAttribute('data-volume');
+          lastFocused.current = row ? { element: target, row } : null;
+        }}
+      >
         <table>
           <caption>{words.caption}</caption>
           <thead>
@@ -249,7 +277,8 @@ function Library({ library }: { library: AdminLibrary }) {
                       {words.index}
                     </button>
                   )}{' '}
-                  {library.mode === 'standalone' && volume.downloaded && !volume.indexed && !isDownloading(volume) && volume.status !== 'indexing' && (
+                  {/* Not while an indexing job waits or runs, which may take the volume. */}
+                  {library.mode === 'standalone' && volume.downloaded && !volume.indexed && !isDownloading(volume) && !library.indexing.active && (
                     <button
                       type="button"
                       data-remove={volume.volumeId}

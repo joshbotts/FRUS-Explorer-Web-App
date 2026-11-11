@@ -100,7 +100,8 @@ enum AdminLibraryRoutes {
             var counts: [String: Int] = [:]
             let volumes = resources.manifest.map { entry -> AdminLibrary.Volume in
                 let row = rows[entry.volumeId]
-                let isIndexed = (indexed[entry.volumeId] ?? 0) > 0
+                // A volume the job running has indexed is in the index it writes, served once the job ends.
+                let isIndexed = (indexed[entry.volumeId] ?? 0) > 0 || indexing?.indexedSoFar.contains(entry.volumeId) == true
                 let isDownloaded = sizes[entry.volumeId] != nil
                 // A pass that did not index a volume whose file is in place: its record, or the kit's sentinel.
                 let pass = isDownloaded ? Self.pass(entry.volumeId, indexing) : nil

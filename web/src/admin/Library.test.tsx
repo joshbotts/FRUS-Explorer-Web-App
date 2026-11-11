@@ -151,7 +151,7 @@ describe('Administration ▸ Library', () => {
     expect(screen.getByRole('button', { name: 'Download All' }).getAttribute('aria-disabled')).toBe('true');
   });
 
-  it('indexes a volume whose last pass did not index it, and every volume waiting, saying what the job indexes', async () => {
+  it('indexes a volume whose last pass did not index it, and every volume waiting, keeping focus on its row as the job takes it', async () => {
     let volumes = [
       volume({
         volumeId: 'frus1961-63v06',
@@ -169,9 +169,9 @@ describe('Administration ▸ Library', () => {
       '/readyz': ready,
       '/api/v1/me': alice,
       '/api/v1/admin/library': () => library(volumes, { indexing }),
+      // As the server answers: the job is queued, and the volume's row is as it was until the job takes it.
       'POST /api/v1/admin/library/index': () => {
-        indexing = { active: true, volume: 'frus1961-63v06' };
-        volumes = [{ ...volumes[0]!, status: 'indexing', index: undefined, error: undefined }, ...volumes.slice(1)];
+        indexing = { active: true };
         return { ...job, kind: 'libraryIndex', subject: 'frus1961-63v06' };
       },
     });
@@ -181,21 +181,38 @@ describe('Administration ▸ Library', () => {
     expect(within(row('frus1961-63v06')).getByText('Its XML could not be parsed', { exact: false })).toBeTruthy();
     expect(within(row('frus1894Nicaragua')).queryByRole('button', { name: /^Index/ })).toBeNull();
     expect(screen.getByText('2 volumes are downloaded and not indexed, or their last pass did not index them.')).toBeTruthy();
+    expect(within(row('frus1969-76ve09p1')).getByRole('button', { name: 'Remove frus1969-76ve09p1' })).toBeTruthy();
 
-    await userEvent.click(within(row('frus1961-63v06')).getByRole('button', { name: 'Index frus1961-63v06' }));
-    await waitFor(() => expect(within(row('frus1961-63v06')).getByText('Indexing', { exact: true })).toBeTruthy());
-    expect(screen.getByText('Indexing frus1961-63v06: Jobs follows it.')).toBeTruthy();
-    expect(screen.getAllByRole('status').some((line) => line.textContent === 'The indexing of frus1961-63v06 is queued as a job: Jobs follows it.')).toBe(true);
-    // Its Index has gone with the job that holds it, so focus goes to its row.
-    await waitFor(() => expect(document.activeElement).toBe(within(table).getByRole('rowheader', { name: /^frus1961-63v06/ })));
-    expect(within(row('frus1961-63v06')).queryByRole('button')).toBeNull();
+    const index = within(row('frus1961-63v06')).getByRole('button', { name: 'Index frus1961-63v06' });
+    await userEvent.click(index);
+    await waitFor(() =>
+      expect(screen.getAllByRole('status').some((line) => line.textContent === 'The indexing of frus1961-63v06 is queued as a job: Jobs follows it.')).toBe(true),
+    );
     expect(JSON.parse(String(sent(fetch, 'POST', '/api/v1/admin/library/index')[0]![1]?.body))).toEqual({ volumeIds: ['frus1961-63v06'] });
+    expect(screen.getByText('An indexing job waits: Jobs follows it.')).toBeTruthy();
+    // While a job waits, a volume it may take offers no Remove….
+    expect(within(row('frus1969-76ve09p1')).queryByRole('button', { name: 'Remove frus1969-76ve09p1' })).toBeNull();
+    expect(document.activeElement).toBe(index);
+
+    // The job takes the volume: the Library, read again within two seconds, shows it under way, its Index gone,
+    // and focus goes to its row rather than to the page.
+    indexing = { active: true, volume: 'frus1961-63v06' };
+    volumes = [{ ...volumes[0]!, status: 'indexing', index: undefined, error: undefined }, ...volumes.slice(1)];
+    await waitFor(() => expect(within(row('frus1961-63v06')).getByText('Indexing', { exact: true })).toBeTruthy(), { timeout: 5_000 });
+    expect(screen.getByText('Indexing frus1961-63v06: Jobs follows it.')).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(within(table).getByRole('rowheader', { name: /^frus1961-63v06/ })));
 
     expect(screen.getByText('One volume is downloaded and not indexed, or its last pass did not index it.')).toBeTruthy();
     await userEvent.click(screen.getByRole('button', { name: 'Index All Waiting' }));
     await waitFor(() => expect(sent(fetch, 'POST', '/api/v1/admin/library/index')).toHaveLength(2));
     expect(JSON.parse(String(sent(fetch, 'POST', '/api/v1/admin/library/index')[1]![1]?.body))).toEqual({ all: true });
-  });
+
+    // Once nothing waits, Index All Waiting stays where it was, unavailable, so that focus on it is kept.
+    indexing = { active: false };
+    volumes = volumes.map((each) => ({ ...each, status: 'indexed', indexed: true, index: undefined, error: undefined }));
+    await waitFor(() => expect(screen.getByText('No volume waits to be indexed.')).toBeTruthy(), { timeout: 5_000 });
+    expect(screen.getByRole('button', { name: 'Index All Waiting' }).getAttribute('aria-disabled')).toBe('true');
+  }, 20_000);
 
   it('says why an Import server and an offline one download nothing, offering neither Download nor Remove', async () => {
     const volumes = [volume({ volumeId: 'frus1894Nicaragua', status: 'downloaded', downloaded: true, bytes: 1_273_810 })];

@@ -62,6 +62,8 @@ public actor ServerState: ImportObserver {
     /// Whether the library's indexing writes the index now (PLAN's S21d): from before its first write until
     /// its job has closed the file, nothing reads the index, search answers 503 and `/readyz` says so.
     public private(set) var indexBeingWritten = false
+    /// Why the index the library's indexing wrote is not served, when its write-ahead log could not be folded.
+    private var indexWriteProblem: String?
     private let log: @Sendable (String) -> Void
 
     public init(configuration: ServerConfiguration, log: @escaping @Sendable (String) -> Void = { _ in }) {
@@ -117,7 +119,8 @@ public actor ServerState: ImportObserver {
     public func readiness() -> Readiness {
         if indexBeingWritten {
             return Readiness(step: .indexingLibrary,
-                             detail: "The library's indexing is writing the index: search answers again once its job ends, and the reader opens documents meanwhile")
+                             detail: indexWriteProblem.map { "Search waits: \($0)" }
+                                 ?? "The library's indexing is writing the index: search answers again once its job ends, and the reader opens documents meanwhile")
         }
         if let index {
             let s = index.summary
@@ -207,6 +210,15 @@ public actor ServerState: ImportObserver {
     /// The library's indexing has closed the index without one to serve, as when it could not open it.
     public func endIndexWrite() {
         indexBeingWritten = false
+        indexWriteProblem = nil
+    }
+
+    /// The library's indexing closed the index, and its write-ahead log could not be folded into it: read
+    /// immutable, it would be served without the log's commits, so nothing reads it until a start folds it.
+    public func indexWriteUnfinished(_ reason: String) {
+        indexBeingWritten = true
+        indexWriteProblem = reason
+        log("Not serving the index: \(reason)")
     }
 
     /// The library's indexing has written the index (PLAN's S21d): `newIndex`, opened again over the file
@@ -216,6 +228,7 @@ public actor ServerState: ImportObserver {
         indexGeneration += 1
         startupProblem = nil
         indexBeingWritten = false
+        indexWriteProblem = nil
         let s = newIndex.summary
         log("Serving \(s.documents) documents from \(s.volumes) volumes, index version \(s.indexVersion), as the library's indexing left them")
     }

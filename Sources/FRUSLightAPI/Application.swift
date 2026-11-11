@@ -252,6 +252,7 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
         logger: logger)
     app.addServices(ImportWatcher(files: components.files, state: components.state,
                                   coordinator: components.imports, interval: configuration.importPollInterval,
+                                  beforeOpening: { [indexer = components.indexer] in await indexer.foldLogAtStart() },
                                   afterOpening: { [indexer = components.indexer] in await indexer.resumeAtStart() }))
     if let backups = components.backups, let serverLock = components.serverLock {
         app.addServices(BackupService(backups: backups, serverLock: serverLock, logger: logger))
@@ -348,10 +349,13 @@ struct ImportWatcher: Service {
     let state: ServerState
     let coordinator: ImportCoordinator
     let interval: Duration
+    /// Before the index found at start is opened: a Standalone server folds the log a stop left (S21d).
+    var beforeOpening: (@Sendable () async -> Void)? = nil
     /// Once the index found at start is open: a Standalone server's library indexes what waits (S21d).
     var afterOpening: (@Sendable () async -> Void)? = nil
 
     func run() async throws {
+        await beforeOpening?()
         await state.openExistingIndex(files: files)
         await afterOpening?()
         // Shutdown cancels the loop; that is the normal way out, not an error.
