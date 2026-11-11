@@ -21,6 +21,8 @@ public struct JobKind: RawRepresentable, Hashable, Sendable, Codable {
     public static let indexImport = JobKind(rawValue: "indexImport")
     /// A Mac JSON export, imported into one user's research (PLAN's S16c).
     public static let researchImport = JobKind(rawValue: "researchImport")
+    /// A project's Suggested Next computed again, from its collections, notes and focus tags (PLAN's S23d).
+    public static let projectLeads = JobKind(rawValue: "projectLeads")
     /// The served index removed in Import mode, so that the server waits for an export (S20d).
     public static let indexReset = JobKind(rawValue: "indexReset")
     /// Catalogue volumes a Standalone server downloads, with their figure images (PLAN's S21c).

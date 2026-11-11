@@ -206,7 +206,7 @@ final class CSRFTokens: Sendable {
 }
 
 /// What the user store keeps for the routes under /api/v1/me.
-typealias UserDataStore = UserStore & TagStore & HighlightStore & NoteStore & SummaryStore & ProjectStore & ResearchImportStore
+typealias UserDataStore = UserStore & TagStore & HighlightStore & NoteStore & SummaryStore & ProjectStore & ProjectLeadStore & ResearchImportStore
     & ResearchExportStore & UserSearchStore & SearchSetStore & ResearchRowStore & TrailStore & PreferenceStore & CollectionStore
     & AccountStore & SessionStore & ResearchErasureStore & SecretStore
 
@@ -437,7 +437,10 @@ public struct Me: Codable, Equatable, Sendable, ResponseEncodable {
 
 enum UserDataRoutes {
     static func add(to router: Router<APIRequestContext>, services: UserDataServices, resources: ServerResources,
-                    reader: ReaderService, provider: ServedIndexProvider) {
+                    reader: ReaderService, provider: ServedIndexProvider, leads: ProjectLeadsQueue? = nil) {
+        // Suggested Next's computations (PLAN's S23d): the server's, or one over these routes' stores.
+        let leads = leads ?? ProjectLeadsQueue(store: services.store, jobs: services.jobs, provider: provider, resources: resources,
+                                               now: services.now)
         let me = router.group("/api/v1/me").add(middleware: UserDataGuard(services: services))
         me.get { request, context -> EditedResponse<Me> in
             try FormQuery(request.uri.query).refuseUnknown([])
@@ -449,7 +452,7 @@ enum UserDataRoutes {
         TagRoutes.add(to: me, services: services, resources: resources)
         HighlightRoutes.add(to: me, services: services, resources: resources, reader: reader, provider: provider)
         SummaryRoutes.add(to: me, services: services, resources: resources)
-        ProjectRoutes.add(to: me, services: services, resources: resources, provider: provider)
+        ProjectRoutes.add(to: me, services: services, resources: resources, provider: provider, leads: leads)
         HistoryRoutes.add(to: me, services: services, provider: provider, resources: resources, reader: reader)
         ResearchRoutes.add(to: me, services: services, resources: resources, provider: provider)
         PreferenceRoutes.add(to: me, services: services)
@@ -482,7 +485,7 @@ enum UserDataRoutes {
         // And an import's, the export itself.
         let imports = router.group("/api/v1/me")
             .add(middleware: UserDataGuard(services: services, bodyLimit: services.importLimit))
-        ImportRoutes.add(to: imports, services: services)
+        ImportRoutes.add(to: imports, services: services, leads: leads)
     }
 
     /// The document a route names. Its volume must be in the catalogue; the document is named and
