@@ -68,7 +68,10 @@ import Testing
         defer { withExtendedLifetime(fixture) {} }
         // Held behind a job queued first, so the import is seen waiting.
         let (gate, open) = AsyncStream<Void>.makeStream()
-        _ = await fixture.jobs.submit("held") { for await _ in gate {} }
+        _ = try await fixture.jobs.submit(.indexImport) { _ in
+            for await _ in gate {}
+            return nil
+        }
         try await fixture.app.test(.router) { client in
             let browser = Browser(client: client)
             let posted = try await browser.send(.post, Self.path, try Self.export())

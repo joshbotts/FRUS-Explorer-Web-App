@@ -86,8 +86,8 @@ struct PostgreSQLUserStoreTests {
 
             let store = try await Self.open(configuration, in: directory)
             defer { store.close() }
-            #expect(store.migration == UserStoreMigration(from: 1, to: 5, backup: nil), "its backups are the database service's")
-            #expect(try store.schemaVersion() == 5 && store.user("owner")?.displayName == "Owner")
+            #expect(store.migration == UserStoreMigration(from: 1, to: PostgreSQLMigrations.all.count, backup: nil), "its backups are the database service's")
+            #expect(try store.schemaVersion() == PostgreSQLMigrations.all.count && store.user("owner")?.displayName == "Owner")
             let corrections = try store.classificationOverrides()
             #expect(corrections.count == 1)
             #expect(corrections.first?.isEditorialNote == true && corrections.first?.parsedIsEditorialNote == false)
@@ -107,11 +107,11 @@ struct PostgreSQLUserStoreTests {
                 _ = try await Self.open(configuration, in: directory, migrations: PostgreSQLMigrations.all + [failing])
             } throws: { error in
                 guard case .postgreSQLMigrationFailed(let leftAt, let to, _) = error as? UserStoreOpenError else { return false }
-                return leftAt == 5 && to == 6 && "\(error)".contains("left at 5")
+                return leftAt == PostgreSQLMigrations.all.count && to == PostgreSQLMigrations.all.count + 1 && "\(error)".contains("left at \(PostgreSQLMigrations.all.count)")
             }
             let store = try await Self.open(configuration, in: directory)
             defer { store.close() }
-            #expect(try store.schemaVersion() == 5 && store.migration == nil)
+            #expect(try store.schemaVersion() == PostgreSQLMigrations.all.count && store.migration == nil)
             let db = try PostgreSQLConnection.connect(configuration)
             defer { db.close() }
             #expect(try db.scalar("SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'later'", [])
@@ -127,7 +127,7 @@ struct PostgreSQLUserStoreTests {
                 _ = try await Self.open(configuration, in: directory)
             } throws: { error in
                 guard case .postgreSQLNewerThanThisBuild(let store, let build) = error as? UserStoreOpenError else { return false }
-                return store == 6 && build == 5
+                return store == PostgreSQLMigrations.all.count + 1 && build == PostgreSQLMigrations.all.count
             }
         }
     }

@@ -104,8 +104,11 @@ public actor ImportCoordinator {
         busy = true
         let name = file.lastPathComponent
         do {
-            let job = try await jobs.submit(.indexImport, subject: name, requestedBy: nil, id: nil) {
-                [importer, state, removeFile, alsoNotify] job in
+            let job = try await jobs.submit(.indexImport, subject: name, requestedBy: nil, id: nil, onCancel: { [state] in
+                // Cancelled before it began: the file waits as one cancelled between steps does.
+                await state.importCancelled(file: name)
+                await self.finished(file: file, signature: signature, retry: false)
+            }) { [importer, state, removeFile, alsoNotify] job in
                 await state.importStarted(file: name)
                 let observer = StateThenOthers(state: state, others: alsoNotify, job: job)
                 do {

@@ -147,8 +147,10 @@ public protocol JobQueue: Sendable {
     /// Queues `work` as a job of `kind`, asked for by `requestedBy`, nil for the server itself, under
     /// `id`, a new UUID unless given, and gives it as it was queued. Its row is kept before this returns,
     /// so a store that cannot keep it refuses the job. `work` gives the line its job ends with, or nil to
-    /// keep its last.
+    /// keep its last; `onCancel` is told when a cancel stops the job before `work` began, so that what
+    /// waited for it can say so, as `work` itself does for a cancel between its steps.
     func submit(_ kind: JobKind, subject: String?, requestedBy: String?, id: String?,
+                onCancel: (@Sendable () async -> Void)?,
                 _ work: @escaping @Sendable (JobContext) async throws -> String?) async throws -> Job
     /// The job with this id, or nil.
     func job(_ id: String) async -> Job?
@@ -159,10 +161,16 @@ public protocol JobQueue: Sendable {
 }
 
 extension JobQueue {
+    /// A job that needs no word when it is cancelled before it begins.
+    public func submit(_ kind: JobKind, subject: String?, requestedBy: String?, id: String?,
+                       _ work: @escaping @Sendable (JobContext) async throws -> String?) async throws -> Job {
+        try await submit(kind, subject: subject, requestedBy: requestedBy, id: id, onCancel: nil, work)
+    }
+
     /// A job the server asks for itself.
     public func submit(_ kind: JobKind, subject: String? = nil,
                        _ work: @escaping @Sendable (JobContext) async throws -> String?) async throws -> Job {
-        try await submit(kind, subject: subject, requestedBy: nil, id: nil, work)
+        try await submit(kind, subject: subject, requestedBy: nil, id: nil, onCancel: nil, work)
     }
 }
 
@@ -174,6 +182,7 @@ public actor InProcessJobQueue: JobQueue {
     private struct Entry {
         var job: Job
         var work: Work?
+        var onCancel: (@Sendable () async -> Void)?
         /// Past the point where it can stop (`JobContext.commit`).
         var committed = false
         /// The progress line last written to the store, and when, so that a job reporting often is
@@ -230,12 +239,12 @@ public actor InProcessJobQueue: JobQueue {
     // MARK: JobQueue
 
     public func submit(_ kind: JobKind, subject: String?, requestedBy: String?, id: String?,
-                       _ work: @escaping Work) async throws -> Job {
+                       onCancel: (@Sendable () async -> Void)?, _ work: @escaping Work) async throws -> Job {
         let job = Job(id: id ?? UUID().uuidString, kind: kind, subject: subject, requestedBy: requestedBy, state: .queued,
                       queuedAt: now())
         guard entries[job.id] == nil else { throw JobFailed("A job with the id \(job.id) is queued already.") }
         if let store { try await Blocking.run { try store.saveJob(job) } }
-        entries[job.id] = Entry(job: job, work: work, written: (nil, now()))
+        entries[job.id] = Entry(job: job, work: work, onCancel: onCancel, written: (nil, now()))
         order.append(job.id)
         waiting.append(job.id)
         startNext()
@@ -258,9 +267,12 @@ public actor InProcessJobQueue: JobQueue {
             entry.job.cancelRequestedBy = user
             entry.job.cancelRequestedAt = UserStoreDate.rounded(time)
             entry.job.cancellable = false
+            let told = entry.onCancel
             entry.work = nil
+            entry.onCancel = nil
             entries[id] = entry
             await persist(id)
+            await told?()
             await prune()
             resumeIdleWaiters()
             return entries[id]?.job ?? entry.job
@@ -337,6 +349,7 @@ public actor InProcessJobQueue: JobQueue {
         } else {
             outcome = .failure(JobFailed("The job had no work to run."))
         }
+        entries[id]?.onCancel = nil
         finish(id, outcome)
         await persist(id)
         await prune()

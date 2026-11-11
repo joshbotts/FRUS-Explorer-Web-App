@@ -128,7 +128,9 @@ enum ImportRoutes {
             let curator = user.roles.contains(.curator)
             do {
                 _ = try await jobs.submit(.researchImport, subject: "A Mac JSON export, format \(version)", requestedBy: user.id,
-                                          id: status.id) { job in
+                                          id: status.id, onCancel: {
+                    await imports.fail(status.id, with: ImportProblem(code: "IMPORT_CANCELLED", detail: cancelledDetail))
+                }) { job in
                     await imports.run(status.id)
                     do {
                         try await job.step("Reading the export")

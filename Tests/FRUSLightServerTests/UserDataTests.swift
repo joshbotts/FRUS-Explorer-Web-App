@@ -42,7 +42,8 @@ struct UserDataFixture {
         rows = try UserStoreRows(url)
         configuration = ServerConfiguration(auth: auth, dataDirectory: server.files.root, publicURL: publicURL, userData: userData,
                                             userStore: userStore, trustedProxies: trustedProxies, adminUsers: adminUsers)
-        jobs = InProcessJobQueue()
+        // As a server's start: the queue over the store, each job a row of it (S20d).
+        jobs = try await InProcessJobQueue.open(store: store)
         // As a server's start: the stored keys' vault, over a key file made beside the store (S20c).
         let secrets = try SecretVault.open(store: store, keyFile: server.files.secretKey, named: false).vault
         services = UserDataServices(store: store, configuration: configuration, secrets: secrets, jobs: jobs, importLimit: importLimit,
