@@ -1641,6 +1641,45 @@ Phase 2's row S18d, the first of the collection rows S18c's pin move opened. The
 
 **Next:** S18e, a collection's preview and exports: the kit's HTML export of the first 20 documents with Render All, HTML, Word, BibTeX and RIS, the excerpt check before each, and each export kept in the history.
 
+## Session 17f, second follow-up: a visit left before the preferences are read
+
+11 November 2026 · branch `claude/quirky-williamson-67c65f`, a follow-up session of the phase-3 orchestrator's · [#120](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/120) · upstream `68bffcf6`, unchanged
+
+`main`'s `ci` runs failed twice on one race in `compose`'s browser suite, each time in `projects-history.spec.ts`:
+- **On #115's merge,** `2a0f10a`, run 43077963858, at 18:45 UTC, at the root: line 76, "makes a project, works in it, and sees its Project Home and history fill, by keyboard". On Project Home, Recent Activity never showed the document the test had opened. The job passed when it was run again, at 19:08, and #115's own run of the same tree had passed both passes.
+- **On #119's merge,** `fd87bdc`, which changed only records, run 43089642231, at 19:53, under the path: line 125, "stops the trail with Log Research Sessions…". The Session Log said "Nothing recorded yet" where the test's visit should have been. That run had not been run again when this pull request opened.
+
+The suite's other tests passed, but for the one it skips in every pass.
+
+**What was wrong.** The app had a race. Since S17f (#84), the reader's arrival effect returned until the user's synced preferences had been read. Only Checklist Mode's list needs them, but the visit's `POST …/history/documents` waited with it, and nothing sent it if the reader was left first. The preferences are asked for only once `GET /api/v1/me` has answered.
+- **The first test** leaves the reader for Project Home by a click. On the search page the preferences are asked for alongside six other requests; the test clicks the first result about 20 ms later; the reader's account comes some 50 ms after that; and the test leaves as soon as the heading shows. A preferences answer later than about 70 ms (here; more on CI's slower runner) therefore lost the visit. Project Home read a trail with the search and no visit, and nothing read it again, since nothing had been written.
+- **The second test** opens the document with a page load and leaves it with another as soon as its heading shows. Its visit waited on the session, the user and the preferences, one after another, while the heading waited on the session and the document, and the page was closed before the visit was sent.
+
+The server's first backup of `app.db` also ran inside the first failure's 10 s wait, at 18:45:03, 300 s after the server started, because that runner ran about 10% faster than the passing ones. But it began some 4.5 s after the visit would have been written, and its reads, through the backup API on a read-only connection to a WAL store, hold up no writer: it was not the cause.
+
+**How it was found.** A diagnostic spec, never committed, ran the first test's opening with every API request logged against its start, and slowed one request at a time with `page.route`; a second ran the second test's opening as it was on `main`. They ran against a cut-down copy of the smoke test's root pass, on ports of this session's own, with the server's web folder mounted from builds of `main`'s web app and of the fix. The server was `frus-light:race`'s, built from `main` (the build took this worktree's context after the fix's first edit, so its own web app is the fix's).
+- **The first test's opening, the preferences answered 150, 250, 400 or 1,500 ms late:** with `main`'s web app, 0 of 20 passed. Each failure was the CI failure: Recent Activity held "Recent Searches, treaties" alone, and the server's trail held no visit. With the fix, 20 of 20 passed.
+- **The second test's opening, the preferences answered 100 or 400 ms late:** with `main`'s web app, 0 of 10 passed, each with "Nothing recorded yet"; with the fix, 10 of 10. On time, 5 of 5 on both.
+- **The visit's write sent 300 ms or 3 s late, or Project Home answered 300 ms late** (on `frus-light:s23d`, with its own web app): 6 of 6 passed, Project Home reading again once the write was answered.
+- **Nothing slowed:** 5 of 5 on both web apps; the first test itself, 30 times on each, passed 30 of 30 at load averages of 3 to 5.
+
+**The fix.** `ReaderScreen.tsx`'s arrival is `recordArrival`, which runs to its end after the reader is left. It sends the visit once the document's account has loaded and the user is known, since the server records it only while Log Research Sessions is on. It awaits the preferences only to take the document off Checklist Mode's list. While the server keeps user data the header's project picker holds the preferences query, so that read outlives the reader too. One behaviour changes: a preferences read that fails no longer drops the visit.
+
+**The spec.** A page closed before the reader has the user cannot send the visit, since a change carries the user's token. So the second test now waits for its visit on the server before it leaves the document, as the file's third test waits for its second search.
+
+**The tests.**
+- **A unit test,** `ReaderTrail.test.tsx`'s "records a document left before the user's preferences are read", holds the preferences and leaves the reader for Browse. It fails on `main`'s reader, with no visit sent, and passes with the fix, which then takes the document off the list once the preferences come.
+- **A browser test** in `projects-history.spec.ts` holds the search page's preferences until the reader has been left for Browse, and expects the visit in the server's trail. With `main`'s web app it failed 5 of 5; with the fix it passed 5 of 5, and the file's other four tests passed 20 of 20 on both. The browser suite goes from 80 tests to 81 in each pass.
+- **The rail's Notes and Summary tests** stub no preferences, so on `main` the reader never sent its visit there. Three of them count every POST; they now leave the visit out (`isVisitRecord`).
+
+**How it was checked:**
+- `scripts/npm run typecheck`, `run lint`, `test` and `run build`: clean; 556 tests in 60 files.
+- `scripts/compose-smoke --e2e` with `frus-light:race`, which holds this branch's web app byte for byte, on port 18240, passed every step: the browser suite's 81 tests at the root and 81 under the path, 80 passing and the one it skips in each, `projects-history.spec.ts`'s five among them, and the library, accounts and sign-in specs.
+
+**Delivered:** the reader's arrival outliving the reader, the second test's wait, the two new tests and the three narrowed counts, and this log. The diagnostic specs and the harness are in the shared notes folder, under `race-projects-history/`.
+
+**Next:** phase 3's rows go on, as PLAN's Phase 3 section has them, with S23c's pin move after #117 and #115.
+
 ## Session 17f, follow-up: Project Home's subjects and a lead's line, upstream
 
 28 October 2026 · branch `claude/admiring-bardeen-a3d5e2` · [#85](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/85) · upstream `32e295e5`, unchanged; [FRUS-Explorer#1813](https://github.com/joshbotts/FRUS-Explorer/pull/1813), open

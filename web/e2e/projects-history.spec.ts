@@ -149,9 +149,11 @@ test('stops the trail with Log Research Sessions, reads the Session Log, and del
   await page.goto('settings/sessions');
   await reset(page);
   try {
-    // A visit recorded while the switch is on.
+    // A visit recorded while the switch is on, before the page is closed: the reader sends it once it
+    // has the user, whose token a change carries, and a page closed sooner could not send it.
     await page.goto('doc/frus1961-63v06/d2');
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Memorandum');
+    await expect.poll(async () => (await getJSON<{ totalDocuments: number }>(page, 'api/v1/me/history')).totalDocuments).toBe(1);
     await page.goto('settings/sessions');
     const logging = page.getByRole('switch', { name: 'Log Research Sessions' });
     await expect(logging).toBeChecked();
