@@ -163,7 +163,8 @@ import Testing
         github.serve("frus1961-63v06.xml", data: try Self.fixture("frus1961-63v06"), listedSize: 25_000)
         github.serve("frus1969-76ve09p1.xml", data: try Self.fixture("frus1969-76ve09p1"))
         github.answer(github.volumeURL("frus1969-76ve09p1.xml"), with: LibraryAnswer(status: 404))
-        let f = try await Self.open(github: github)
+        let clock = JobClock()
+        let f = try await Self.open(github: github, clock: clock)
         defer { withExtendedLifetime(f.directory) {} }
         let done = try await Self.finished(f.queue, try await f.library.download(.volumes(Self.fixtures), requestedBy: "alice"))
         #expect(done.state == .failed && done.error == "Downloaded 0 of 3 volumes; 3 could not be downloaded, which the Library says why.")
@@ -175,12 +176,15 @@ import Testing
         }
         #expect(try FileManager.default.contentsOfDirectory(atPath: f.volumes.path).isEmpty, "nothing left behind")
 
-        // A copy in place, then a replacement whose hash is not the listing's: the copy stays.
+        // A copy in place, then a replacement whose hash is not the listing's: the copy stays. Each listing
+        // changed is read past the five minutes a reading is used as it is.
         github.serve("frus1894Nicaragua.xml", data: nicaragua)
+        clock.advance(by: 301)
         #expect(try await Self.finished(f.queue, try await f.library.download(.volumes(["frus1894Nicaragua"]), requestedBy: nil)).state == .succeeded)
         let kept = try #require(try f.row("frus1894Nicaragua"))
         let changed = nicaragua + Data(" ".utf8)
         github.serve("frus1894Nicaragua.xml", data: changed, listedSHA: String(repeating: "1", count: 40), listedSize: changed.count)
+        clock.advance(by: 301)
         #expect(try await Self.finished(f.queue, try await f.library.download(.volumes(["frus1894Nicaragua"]), requestedBy: nil)).state == .failed)
         #expect(try Data(contentsOf: f.file("frus1894Nicaragua")) == nicaragua)
         let after = try #require(try f.row("frus1894Nicaragua"))

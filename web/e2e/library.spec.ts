@@ -41,7 +41,8 @@ test('a Standalone server’s Library removes a volume after a question and down
   await tabTo(page, find, 60);
   await page.keyboard.type('frus1969-76ve09p1');
   const table = page.getByRole('table', { name: caption });
-  const header = table.getByRole('rowheader', { name: /^frus1969-76ve09p1/ });
+  // A filter's inner locator is read within the row: `page`'s, not the table's.
+  const header = page.getByRole('rowheader', { name: /^frus1969-76ve09p1/ });
   const row = table.getByRole('row').filter({ has: header });
   await expect(row.getByText('Downloaded', { exact: true })).toBeVisible();
 
