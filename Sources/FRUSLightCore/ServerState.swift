@@ -72,6 +72,9 @@ public actor ServerState: ImportObserver {
         openingAtStart = FileManager.default.fileExists(atPath: files.liveIndex.path)
     }
 
+    /// Whether the index found at start is being opened still: the library's indexing waits for it (S21d).
+    public var isOpeningIndexAtStart: Bool { openingAtStart }
+
     /// Opens the live index if there is one, off the cooperative pool. A restart copies nothing.
     public func openExistingIndex(files: any FileStore) async {
         defer { openingAtStart = false }

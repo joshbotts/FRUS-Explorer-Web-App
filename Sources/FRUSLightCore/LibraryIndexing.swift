@@ -269,8 +269,7 @@ public actor LibraryIndexer {
 
         try await job.step("Opening the index to write into it", fraction: 0)
         // The index a start finds is opened once the server listens: a job queued meanwhile waits for it.
-        while FileManager.default.fileExists(atPath: liveIndex.path), await state.index == nil,
-              await state.readiness().step == .openingIndex {
+        while await state.isOpeningIndexAtStart {
             try await Task.sleep(for: .milliseconds(100))
         }
         if FileManager.default.fileExists(atPath: liveIndex.path), await state.index == nil {
@@ -299,10 +298,29 @@ public actor LibraryIndexer {
         consumer.cancel()
         _ = await consumer.value
         // The writer's last reference: its connections close here, the last of them checkpointing the
-        // write-ahead log into the file, before the served index is told the file is whole.
+        // write-ahead log into the file. The log is folded in here too, so that the file holds every commit
+        // before the served index is told it is whole, whatever still has a connection open.
         writer = nil
+        await foldLog()
         await observer?.didFinishWritingIndex(at: liveIndex)
         return try outcome.get()
+    }
+
+    /// Folds the index's write-ahead log into the file and empties the log, through a connection of the
+    /// server's own, which closes at once.
+    private func foldLog() async {
+        let path = liveIndex.path
+        guard FileManager.default.fileExists(atPath: path + "-wal") else { return }
+        do {
+            let busy = try await Blocking.run { () -> Bool in
+                let db = try SQLiteConnection(path, readOnly: false)
+                defer { db.close() }
+                return try db.query("PRAGMA wal_checkpoint(TRUNCATE)").first?.first?.integer != 0
+            }
+            if busy { log("The index's write-ahead log could not be folded into it at once: a connection still reads it") }
+        } catch {
+            log("The index's write-ahead log could not be folded into it: \(error)")
+        }
     }
 
     /// Opens the index read-write, as the kit sets it up, with S21a's stop turned on, so that a job that
@@ -414,24 +432,51 @@ public actor LibraryIndexer {
 
     static func megabytes(_ bytes: Int64) -> String { "\(max(0, bytes) / 1_048_576) MB" }
 
-    /// One volume's pass, in a task of its own, which a cancel asked for meanwhile cancels: S21a's stop
-    /// then ends it once its documents are stored.
+    /// One volume's pass, in a child task beside a watcher that cancels it when an admin asks the job to
+    /// stop meanwhile: S21a's stop then ends the pass once its documents are stored. Both are children of
+    /// one group, so that nothing of the pass outlives it, and the writer's connections close with its
+    /// last reference.
     private func indexOne(_ volumeId: String, writer: Writer, relay: IndexingProgressRelay, job: JobContext) async -> Outcome {
-        let pass = Task { [pipeline = writer.pipeline] in try await pipeline.indexVolume(volumeId) }
-        let watcher = Task {
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(200))
-                if await job.cancelRequested {
-                    pass.cancel()
-                    return
+        enum Event: Sendable {
+            case ended(Result<Void, any Error>)
+            case cancelAsked
+        }
+        let pipeline = writer.pipeline
+        let ended = await withTaskGroup(of: Event?.self) { group -> Result<Void, any Error> in
+            group.addTask {
+                do {
+                    try await pipeline.indexVolume(volumeId)
+                    return .ended(.success(()))
+                } catch {
+                    return .ended(.failure(error))
                 }
             }
+            group.addTask {
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(200))
+                    if !Task.isCancelled, await job.cancelRequested { return .cancelAsked }
+                }
+                return nil
+            }
+            var outcome: Result<Void, any Error> = .success(())
+            while let event = await group.next() {
+                switch event {
+                case .ended(let result)?:
+                    outcome = result
+                    group.cancelAll()
+                case .cancelAsked?:
+                    // The pass stops at the kit's next check, and its end comes as another event.
+                    group.cancelAll()
+                case nil:
+                    break
+                }
+            }
+            return outcome
         }
-        defer { watcher.cancel() }
-        do {
-            try await pass.value
+        switch ended {
+        case .success:
             return .indexed
-        } catch {
+        case .failure(let error):
             let stage = await relay.stage(of: volumeId, waiting: !Self.isNotFound(error), patience: Self.streamPatience)
             return outcome(of: error, volumeId: volumeId, stage: stage)
         }
