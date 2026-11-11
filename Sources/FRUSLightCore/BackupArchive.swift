@@ -98,6 +98,13 @@ public struct BackupManifest: Codable, Equatable, Sendable {
         return UserStoreBackup.files(in: directory).map { version($0, copies: copies) }
     }
 
+    /// The newest daily backup `directory` keeps, as the manifest lists it, or nil before the first:
+    /// the admin's Status, which reads that one alone.
+    public static func newestDaily(in directory: URL, copyDirectory: URL?) -> Version? {
+        guard let newest = UserStoreBackup.files(in: directory).first(where: { $0.kind == .daily }) else { return nil }
+        return version(newest, copies: copyDirectory.map { UserStoreBackup.files(in: $0) })
+    }
+
     private static func version(_ file: UserStoreBackupFile, copies: [UserStoreBackupFile]?) -> Version {
         let bytes = size(of: file.url)
         let copied = copies.map { $0.contains { $0.name == file.name && size(of: $0.url) == bytes } }

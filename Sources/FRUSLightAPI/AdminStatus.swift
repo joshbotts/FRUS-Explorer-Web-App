@@ -88,17 +88,19 @@ enum AdminStatusRoutes {
             try FormQuery(request.uri.query).refuseUnknown([])
             let served = await state.status()
             let configuration = state.configuration
-            let (migration, stored) = try await Blocking.run { (try store.schemaVersion(), try store.secretCounts().values.reduce(0, +)) }
+            let (directory, copies) = (services.backupsDirectory, services.backupCopyDirectory)
+            // Off the cooperative pool: the store's reads, and the backups' folder with the newest's migration.
+            let (migration, stored, kept) = try await Blocking.run {
+                (try store.schemaVersion(), try store.secretCounts().values.reduce(0, +),
+                 directory.map { (UserStoreBackup.files(in: $0).filter { $0.kind == .daily }.count,
+                                  BackupManifest.newestDaily(in: $0, copyDirectory: copies)) })
+            }
             var backups: AdminStatus.Backups?
-            if let directory = services.backupsDirectory {
-                let daily = UserStoreBackup.files(in: directory).filter { $0.kind == .daily }
-                let newest = daily.first.flatMap { file in
-                    BackupManifest.versions(in: directory, copyDirectory: services.backupCopyDirectory).first { $0.name == file.name }
-                }
+            if let kept {
                 let schedule = BackupSchedule(hour: configuration.backupHour)
-                backups = .init(daily: daily.count, kept: UserStoreBackups.kept, newest: newest,
+                backups = .init(daily: kept.0, kept: UserStoreBackups.kept, newest: kept.1,
                                 hour: String(format: "%02d:00", schedule.hour), timeZone: schedule.timeZone.identifier,
-                                copiedToHost: services.backupCopyDirectory != nil)
+                                copiedToHost: copies != nil)
             }
             let jobs = await services.jobs.jobs()
             let status = AdminStatus(
