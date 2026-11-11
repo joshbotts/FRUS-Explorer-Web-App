@@ -204,18 +204,17 @@ final class JobClock: Sendable {
         defer { withExtendedLifetime(test) {} }
         let clock = JobClock()
         let queue = try await InProcessJobQueue.open(store: store, now: { clock.now })
-        let (reported, gate) = (JobGate(), JobGate())
+        let gate = JobGate()
         let fractions = { try rows.stored("SELECT progress, fraction FROM jobs") }
         let job = try await queue.submit(.indexImport) { job in
             try await job.step("Copying", fraction: 0.1)
             await job.progress("Copying", fraction: 0.2)
-            await reported.wait()
             await gate.wait()
             await job.progress("Copying", fraction: 0.3)
             try await job.step("Checking")
             return nil
         }
-        await reported.untilReached()
+        await gate.untilReached()
         #expect(await queue.job(job.id)?.fraction == 0.2, "the list is the queue's")
         #expect(try fractions() == [[.text("Copying"), .real(0.1)]], "the row waits for a second")
         clock.advance(by: 1)

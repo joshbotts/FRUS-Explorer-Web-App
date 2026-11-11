@@ -275,7 +275,8 @@ import Testing
             #expect(response.headers[.cacheControl] == "no-store")
             let status = try decode(AdminStatus.self, response)
             #expect(status.mode == "import" && status.auth == "none" && status.userData && status.version == FRUSLightVersion.string)
-            #expect(status.readiness.ready && status.index?.volumes == 3 && status.catalogueVolumes == 553)
+            let served = try decode(ServerStatus.self, try await owner.get("/api/v1/status"))
+            #expect(status.readiness.ready && status.index != nil && status.index == served.index && status.catalogueVolumes == 553)
             #expect(status.store == .init(kind: "sqlite", migration: UserStoreMigrations.all.count, latestMigration: UserStoreMigrations.all.count))
             #expect(status.keys == .init(keyFileId: fixture.services.secrets.key.id, stored: 0))
             #expect(status.backups?.daily == 0 && status.backups?.newest == nil && status.backups?.hour == "03:00")
@@ -292,7 +293,7 @@ import Testing
         defer { withExtendedLifetime(fixture) {} }
         try await fixture.app.test(.router) { client in
             let owner = Browser(client: client)
-            #expect(try await owner.get("/api/v1/search?q=wheat").status == .ok)
+            #expect(try await owner.get("/api/v1/search?keywords=containment").status == .ok)
             let posted = try await owner.send(.post, "/api/v1/admin/index/reset")
             let job = try decode(AdminJob.self, posted)
             #expect(posted.status == .accepted && posted.headers[.location] == "/api/v1/admin/jobs/\(job.id)")
@@ -300,7 +301,7 @@ import Testing
             await fixture.jobs.waitUntilIdle()
             let done = try decode(AdminJob.self, try await owner.get("/api/v1/admin/jobs/\(job.id)"))
             #expect(done.state == "succeeded" && done.progress?.hasPrefix("Removed the index of ") == true)
-            let refused = try await owner.get("/api/v1/search?q=wheat")
+            let refused = try await owner.get("/api/v1/search?keywords=containment")
             #expect(refused.status == .serviceUnavailable && problemCode(refused) == "INDEX_NOT_READY")
             #expect(await fixture.server.state.readiness().step == .waitingForExport)
             #expect(!FileManager.default.fileExists(atPath: fixture.server.files.liveIndex.path))
