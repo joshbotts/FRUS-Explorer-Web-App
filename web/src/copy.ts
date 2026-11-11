@@ -2053,7 +2053,7 @@ export const copy = {
     },
     jobs: {
       title: 'Jobs',
-      lead: 'Long work runs as a job, one at a time, in the order asked for: an index imported from /data/import, a JSON export imported into someone’s research, an index reset, and the library’s downloads. A job stops between two of its steps when it is cancelled.',
+      lead: 'Long work runs as a job, one at a time, in the order asked for: an index imported from /data/import, a JSON export imported into someone’s research, an index reset, and the library’s downloads and indexing. A job stops between two of its steps when it is cancelled.',
       caption: 'The jobs the server holds, newest first',
       empty: 'No jobs yet.',
       job: 'Job',
@@ -2070,6 +2070,7 @@ export const copy = {
         projectLeads: 'Suggested Next',
         indexReset: 'Index reset',
         libraryDownload: 'Library download',
+        libraryIndex: 'Library indexing',
       } as Record<string, string>,
       states: { queued: 'Waiting', running: 'Running', succeeded: 'Finished', failed: 'Failed', cancelled: 'Cancelled' },
       stopping: 'Stopping at its next step',
@@ -2088,7 +2089,7 @@ export const copy = {
     /** Administration ▸ Library (PLAN's S21c): a Standalone server's volumes and their downloads. */
     library: {
       title: 'Library',
-      lead: 'The volumes this server keeps, in /data/volumes, each downloaded from the address the catalogue names and kept only once its length and hash are those GitHub’s listing gives, with its figure images. A download is a job, which Jobs follows: it stops between two volumes when it is cancelled, and goes on volume by volume when the server starts again after a restart stopped it.',
+      lead: 'The volumes this server keeps, in /data/volumes, each downloaded from the address the catalogue names and kept only once its length and hash are those GitHub’s listing gives, with its figure images. A download is a job, which Jobs follows: it stops between two volumes when it is cancelled, and goes on volume by volume when the server starts again after a restart stopped it. The volumes a download brings are then indexed, in a job of their own, which search reads as each volume is stored.',
       leadImport:
         'This server serves an index exported from the Mac, and reads its volumes from the TEI folder mounted at /data/volumes, which it never writes. The library downloads in Standalone mode.',
       fromGitHub: 'Volumes come from GitHub’s HistoryAtState/frus repository, and their figure images from history.state.gov.',
@@ -2099,6 +2100,7 @@ export const copy = {
         queued: 'Waiting to download',
         downloading: 'Downloading',
         downloaded: 'Downloaded',
+        indexing: 'Indexing',
         indexed: 'Indexed',
         failed: 'Failed',
       },
@@ -2108,6 +2110,7 @@ export const copy = {
         queued: 'Waiting or downloading',
         downloading: 'Downloading',
         downloaded: 'Downloaded',
+        indexing: 'Indexing',
         indexed: 'Indexed',
         failed: 'Failed',
       },
@@ -2119,6 +2122,17 @@ export const copy = {
         count === 1 ? 'The one volume not downloaded waits for its download.' : `The ${count.toLocaleString('en-US')} volumes not downloaded wait for their download.`,
       queued: (subject: string) => `The download of ${subject} is queued as a job: Jobs follows it.`,
       queuedPlain: 'The download is queued as a job: Jobs follows it.',
+      indexAll: 'Index All Waiting',
+      indexAllNote: (count: number) =>
+        count === 1
+          ? 'One volume is downloaded and not indexed, or its last pass did not index it.'
+          : `${count.toLocaleString('en-US')} volumes are downloaded and not indexed, or their last pass did not index them.`,
+      indexing: (volume: string) => `Indexing ${volume}: Jobs follows it.`,
+      indexingWaits: 'An indexing job waits: Jobs follows it.',
+      index: 'Index',
+      indexA11y: (volume: string) => `Index ${volume}`,
+      indexQueued: (subject: string) => `The indexing of ${subject} is queued as a job: Jobs follows it.`,
+      indexQueuedPlain: 'The indexing is queued as a job: Jobs follows it.',
       filter: 'Find a volume',
       show: 'Show',
       showAll: 'All volumes',

@@ -1,13 +1,25 @@
 // Administration ▸ Library (PLAN's S21c): every catalogue volume with its state, not downloaded, waiting,
-// downloading, downloaded, indexed or failed, with why; Download for one, Download All for every volume not
-// downloaded, each a job of the server's queue, which Jobs follows and a cancel stops between two volumes;
-// and Remove…, after a question, for a downloaded volume the index does not hold. A Standalone server's:
-// an Import server lists its TEI folder and the index, and a server under FRUS_OFFLINE downloads nothing,
-// which the pane says. Read again every two seconds while a download waits or runs.
+// downloading, downloaded, indexing, indexed or failed, with why; Download for one, Download All for every
+// volume not downloaded, each a job of the server's queue, which Jobs follows and a cancel stops between two
+// volumes; Index for one and Index All Waiting (PLAN's S21d), for a volume downloaded and not indexed, or
+// whose last pass did not index it; and Remove…, after a question, for a downloaded volume the index does
+// not hold. A Standalone server's: an Import server lists its TEI folder and the index, and a server under
+// FRUS_OFFLINE downloads nothing, which the pane says. Read again every two seconds while a download or an
+// indexing job waits or runs.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useMemo, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
-import { type AdminLibrary, downloadVolumes, isDownloading, type LibraryStatus, type LibraryVolume, libraryQuery, removeVolume } from '../api/library';
+import {
+  type AdminLibrary,
+  downloadVolumes,
+  indexVolumes,
+  isDownloading,
+  type LibraryStatus,
+  type LibraryVolume,
+  libraryQuery,
+  removeVolume,
+  waitsForIndex,
+} from '../api/library';
 import { copy } from '../copy';
 import { closeAtOnce, Modal } from '../shell/Modal';
 import { AdminFrame, ReadFailure, useAdmin } from './AdminPanes';
@@ -15,7 +27,7 @@ import { AdminFrame, ReadFailure, useAdmin } from './AdminPanes';
 const words = copy.admin.library;
 
 /** The order the counts are said in. */
-const statuses: LibraryStatus[] = ['downloaded', 'indexed', 'queued', 'downloading', 'failed', 'notDownloaded'];
+const statuses: LibraryStatus[] = ['downloaded', 'indexed', 'indexing', 'queued', 'downloading', 'failed', 'notDownloaded'];
 
 /** A volume's state in words: an Import server's folder is its TEI mount, which it does not download into. */
 function statusWord(volume: LibraryVolume, mode: AdminLibrary['mode']): string {
@@ -65,24 +77,29 @@ function Library({ library }: { library: AdminLibrary }) {
     );
   }, [library.volumes, filter, shown]);
 
-  async function download(request: { volumeIds: string[] } | { all: true }, key: string) {
+  async function ask(what: 'download' | 'index', request: { volumeIds: string[] } | { all: true }, key: string) {
     if (busy) return;
     setBusy(key);
     setFailure(null);
     setSaid('');
     try {
-      const job = await downloadVolumes(client, request);
-      setSaid(job?.subject ? words.queued(job.subject) : words.queuedPlain);
+      if (what === 'download') {
+        const job = await downloadVolumes(client, request);
+        setSaid(job?.subject ? words.queued(job.subject) : words.queuedPlain);
+      } else {
+        const job = await indexVolumes(client, request);
+        setSaid(job?.subject ? words.indexQueued(job.subject) : words.indexQueuedPlain);
+      }
     } catch (error) {
       setFailure(errorMessage(error));
     } finally {
       setBusy(null);
-      // A volume waiting for its download has no Download: focus goes to its row, while it was on the button
-      // or nowhere, and the button has gone.
+      // A volume a download or an indexing holds has no Download or Index: focus goes to its row, while it
+      // was on the button or nowhere, and the button has gone.
       if ('volumeIds' in request) {
         window.requestAnimationFrame(() => {
           const active = document.activeElement;
-          const button = area.current?.querySelector<HTMLButtonElement>(`button[data-download="${CSS.escape(key)}"]`);
+          const button = area.current?.querySelector<HTMLButtonElement>(`button[data-${what}="${CSS.escape(key)}"]`);
           if (!button && (!active || active === document.body || !active.isConnected || area.current?.contains(active))) {
             (area.current?.querySelector<HTMLElement>(`th[data-volume="${CSS.escape(key)}"]`) ?? document.querySelector<HTMLElement>('main h1'))?.focus();
           }
@@ -103,6 +120,8 @@ function Library({ library }: { library: AdminLibrary }) {
   // server takes it, a failed one and an indexed one with no file among them.
   const missing = library.volumes.filter((volume) => !volume.downloaded && !isDownloading(volume)).length;
   const waiting = library.volumes.filter(isDownloading).length;
+  // What Index All Waiting asks for, as the server takes it.
+  const unindexed = library.mode === 'standalone' ? library.volumes.filter(waitsForIndex).length : 0;
 
   return (
     <>
@@ -119,7 +138,7 @@ function Library({ library }: { library: AdminLibrary }) {
             type="button"
             aria-disabled={busy !== null || missing === 0}
             onClick={() => {
-              if (missing > 0) void download({ all: true }, 'all');
+              if (missing > 0) void ask('download', { all: true }, 'all');
             }}
           >
             {words.downloadAll}
@@ -128,6 +147,17 @@ function Library({ library }: { library: AdminLibrary }) {
             {missing > 0 ? words.downloadAllNote(missing) : waiting > 0 ? words.allWaiting(waiting) : words.allDownloaded}
           </span>
         </p>
+      )}
+      {unindexed > 0 && (
+        <p>
+          <button type="button" aria-disabled={busy !== null} onClick={() => void ask('index', { all: true }, 'index-all')}>
+            {words.indexAll}
+          </button>{' '}
+          <span className="note">{words.indexAllNote(unindexed)}</span>
+        </p>
+      )}
+      {library.indexing.active && (
+        <p className="note">{library.indexing.volume ? words.indexing(library.indexing.volume) : words.indexingWaits}</p>
       )}
       {/* Always on the page, so that what a download or a removal did is announced when it comes. */}
       <p role="status">{said}</p>
@@ -196,19 +226,30 @@ function Library({ library }: { library: AdminLibrary }) {
                   )}
                 </td>
                 <td>
-                  {/* An indexed volume's file is not replaced until the corrections check comes. */}
-                  {library.downloads && !isDownloading(volume) && !(volume.indexed && volume.downloaded) && (
+                  {/* An indexed volume's file is not replaced until the corrections check comes, nor one a pass reads. */}
+                  {library.downloads && !isDownloading(volume) && volume.status !== 'indexing' && !(volume.indexed && volume.downloaded) && (
                     <button
                       type="button"
                       data-download={volume.volumeId}
                       aria-disabled={busy !== null}
                       aria-label={(volume.downloaded ? words.downloadAgainA11y : words.downloadA11y)(volume.volumeId)}
-                      onClick={() => void download({ volumeIds: [volume.volumeId] }, volume.volumeId)}
+                      onClick={() => void ask('download', { volumeIds: [volume.volumeId] }, volume.volumeId)}
                     >
                       {volume.downloaded ? words.downloadAgain : words.download}
                     </button>
                   )}{' '}
-                  {library.mode === 'standalone' && volume.downloaded && !volume.indexed && !isDownloading(volume) && (
+                  {library.mode === 'standalone' && waitsForIndex(volume) && (
+                    <button
+                      type="button"
+                      data-index={volume.volumeId}
+                      aria-disabled={busy !== null}
+                      aria-label={words.indexA11y(volume.volumeId)}
+                      onClick={() => void ask('index', { volumeIds: [volume.volumeId] }, volume.volumeId)}
+                    >
+                      {words.index}
+                    </button>
+                  )}{' '}
+                  {library.mode === 'standalone' && volume.downloaded && !volume.indexed && !isDownloading(volume) && volume.status !== 'indexing' && (
                     <button
                       type="button"
                       data-remove={volume.volumeId}
