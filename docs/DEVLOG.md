@@ -120,7 +120,7 @@ Not started: `PLAN.md`'s row S22c. The session that does it replaces this line, 
 
 ## Session 23d: Related Documents and Suggested Next
 
-11 November 2026 · branch `claude/frosty-hofstadter-4969d6` · [#PR](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/PR) · upstream `68bffcf6`, unchanged
+11 November 2026 · branch `claude/frosty-hofstadter-4969d6` · [#115](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/115) · upstream `68bffcf6`, unchanged
 
 Phase 3's features-track row of wave 3, beside S21c on the server track and S22c upstream, after S21b's pin move, with no upstream pull request, no pin move and no migration: Related Documents through the kit's engine, and Suggested Next computed here, over the code FRUS-Explorer#1872 (S23a) moved into FRUSCoreKit. The branch was cut from `main` at `698b9db`, after #114, and kept in local commits until the push.
 
@@ -159,7 +159,10 @@ Phase 3's features-track row of wave 3, beside S21c on the server track and S22c
 - **The browser suite:** `related.spec.ts`, by keyboard alone: Related from the reader's toolbar, the heading focused; the scope by the arrow keys; a weight by the arrow keys, ranked again and kept in the browser, the slider keeping the focus; Reset, the focus back on Adjust weights; a row, and Back to the list as it was, where the index gives one; then a project with a note, whose Refresh finds its leads, Refresh keeping the focus; axe at each step. The synthetic export gives d1 no document of its archival container, so the browser suite sees the empty list, and the rows are the unit tests' and the parity test's.
 
 **Results**
-[RESULTS]
+
+- **Linux, `swift:6.4-noble`, arm64,** CI's swift job replayed with its PostgreSQL (`scripts/swift --postgres test`), under the heavy lock, over a build folder cloned from S20d's worktree at the pin: 3,277 tests in 421 suites, all passing but one, S20d's `AdminRouteTests.theJobsListAndCancel`, which counts the jobs after a JSON import and found the leads' job beside the import's, on a server serving no index. A JSON import now queues it only while an index is served, which no computation can do without, which the suite holds; its re-run, with the row's and the import's suites, was queued behind another session's Mac check when the pull request opened, so CI's swift job is its first full run. The one skip is the named one, `FTS5StoreTests`' `backupExclusion()`. The build gives no warning.
+- **The browser app:** typecheck, lint and build pass; the unit suite, 551 tests in 59 files.
+- **The image and the smoke test:** `scripts/compose-smoke --e2e` with this branch's image as `frus-light:s23d` on port 18210, under the heavy lock: every step to the browser suite passed, and the suite passed its 78 specs at the root, `related.spec.ts` among them; under the path 77 of 78. S25c's `focus-subjects.spec.ts` failed on a console 404: its last save makes the app read Project Home again, which met the project the spec's cleanup deleted at the same moment, as the trace shows. Its cleanup, and this row's spec's, now leave Project Home first: a change to S25c's file (PLAN's rule 4), which no row now open touches. Its run again over the same image, the specs from the checkout, was queued behind another session's Mac check when the pull request opened, so CI's compose job is the first to run the path's pass and the steps after it, the accounts and sign-in phases, with the fix.
 
 **A cold review,** two subagents given the diff, the row and the app's source, and none of this session's reasoning, one for the server and one for the browser app. What held up is fixed, each with a test where one reaches it:
 - **Two Refreshes at once queued two jobs** (server): the queue's coalescing checked before two awaits; a Refresh arriving while one is being queued is that one now, tested with two at once.
