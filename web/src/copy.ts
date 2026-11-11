@@ -805,6 +805,35 @@ export const copy = {
     toCopy: 'Text to copy',
     close: 'Close',
   },
+  /**
+   * Related Documents (PLAN's S23d), in the words of the app's `RelatedDocumentsContent`, its weights' row
+   * (`AxisWeightRow`) and its rail's tile. What a weight says of an axis this server does not rank by yet,
+   * the line while a list is ranked, and the way back to the document are the web's own.
+   */
+  related: {
+    title: 'Related Documents',
+    tile: 'Related',
+    tileHelp: 'Find related documents by archival provenance, cross-references, date, and shared people',
+    scope: 'Scope',
+    scopes: { volume: 'This volume', subseries: 'This subseries', all: 'All volumes' },
+    weights: 'Adjust weights',
+    reset: 'Reset to app defaults',
+    preparing: 'Preparing your index…',
+    empty: 'No Related Documents',
+    emptyDetail:
+      'No indexed documents share this document’s archival provenance or cross-references — indexing more volumes may surface some.',
+    emptyDetailScoped: 'No related documents in this scope — switch to All volumes to search the whole index.',
+    overflow: (count: number) => `${count} more related — raise a weight or narrow the scope to refine.`,
+    subjectsUnavailable: 'Detected-topic data is unavailable on this server.',
+    notRanked: {
+      crossReference: 'This server does not rank by cross-references yet.',
+      lexicalSimilarity: 'This server does not rank by wording yet.',
+      semanticSimilarity: 'This server does not rank by meaning yet.',
+    } as Record<string, string>,
+    ranking: 'Ranking the related documents…',
+    back: (title: string) => `Back to ${title}`,
+    chips: 'Why related',
+  },
 
   // ─── Research ─────────────────────────────────────────────────────────────
   /** The reader's Research rail and its Tags section, in the app's words. */
@@ -994,10 +1023,9 @@ export const copy = {
     loading: 'Loading the notes…',
   },
   /**
-   * Project Home, in the words of the app's view, and of its focus subjects' editor (S25c). What
-   * Suggested Next says of the Mac's leads, which the web keeps but cannot compute until Related
-   * Documents, is the web's own, and so are the editor's line while its subjects load and what it
-   * says, for a screen reader, of a subject added or removed.
+   * Project Home, in the words of the app's view, and of its focus subjects' editor (S25c). Why a
+   * Refresh of Suggested Next failed (S23d) is the web's own, and so are the editor's line while its
+   * subjects load and what it says, for a screen reader, of a subject added or removed.
    */
   projectHome: {
     title: 'Project Home',
@@ -1042,8 +1070,9 @@ export const copy = {
     leadsTitle: 'Suggested Next',
     leadsPlaceholder:
       'As you add documents to this project’s collections, related documents you haven’t gathered yet will surface here.',
-    leadsFromMac:
-      'These are the leads FRUS Explorer found on the Mac. This server does not yet find leads of its own, so they change only when you dismiss one or import a newer export.',
+    leadsRefresh: 'Refresh',
+    leadsComputing: 'Finding leads…',
+    leadsRefreshFailed: (reason: string) => `Suggested Next could not be refreshed: ${reason}`,
     leadNew: 'NEW',
     relatedOne: 'Related to 1 of your documents',
     relatedMany: (count: number) => `Related to ${count.toLocaleString('en-US')} of your documents`,
@@ -2034,7 +2063,7 @@ export const copy = {
       started: 'Started',
       finished: 'Finished',
       actions: 'Actions',
-      kinds: { indexImport: 'Index import', researchImport: 'Research import', indexReset: 'Index reset' } as Record<string, string>,
+      kinds: { indexImport: 'Index import', researchImport: 'Research import', projectLeads: 'Suggested Next', indexReset: 'Index reset' } as Record<string, string>,
       states: { queued: 'Waiting', running: 'Running', succeeded: 'Finished', failed: 'Failed', cancelled: 'Cancelled' },
       stopping: 'Stopping at its next step',
       theServer: 'The server',

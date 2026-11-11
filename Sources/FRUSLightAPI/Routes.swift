@@ -11,6 +11,7 @@ import Logging
 /// the reader's page names; `ServedRouter` puts the routes under it.
 func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderService,
                  provider: ServedIndexProvider? = nil, webClient: WebClient? = nil, userData: UserDataServices? = nil,
+                 leads: ProjectLeadsQueue? = nil,
                  base: BasePath = .root, logger: Logger = Logger(label: "frus-light")) -> Router<APIRequestContext> {
     // With user data on, each stack attaches the user store's search database, for each user's half of
     // a search (S17d).
@@ -43,12 +44,13 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     ReadingRoutes.add(to: router, provider: provider, resources: resources, users: users)
     ReaderRoutes.add(to: router, reader: reader, provider: provider, resources: resources, base: base)
     CitationRoutes.add(to: router, reader: reader, provider: provider, resources: resources)
+    RelatedDocumentsRoutes.add(to: router, provider: provider, resources: resources)
     CitationLookupRoutes.add(to: router, provider: provider, resources: resources)
     PDFRoutes.add(to: router, service: state.pdf)
     ReaderLinkRoutes.add(to: router, state: state, provider: provider, reader: reader, resources: resources)
     if let userData {
         AuthRoutes.add(to: router, services: userData)
-        UserDataRoutes.add(to: router, services: userData, resources: resources, reader: reader, provider: provider)
+        UserDataRoutes.add(to: router, services: userData, resources: resources, reader: reader, provider: provider, leads: leads)
         AdminRoutes.add(to: router, services: userData, state: state, resources: resources)
     }
     // Last, so it wraps only the requests no route answers.

@@ -35,6 +35,9 @@ public struct ProjectHome: Codable, Equatable, Sendable, ResponseEncodable {
     public var focusTags: [FocusTag]
     /// Suggested Next: its leads the reader has not dismissed, the most related first.
     public var leads: [Lead]
+    /// Where the newest computation of its leads stands (PLAN's S23d), absent when none was asked for
+    /// since the server started.
+    var leadsRefresh: LeadsRefresh?
     /// Recent Activity's three feeds, five each at most: the documents read, each once; the notes; and
     /// the searches.
     public var recentVisits: [RecentVisit]
@@ -119,7 +122,7 @@ enum ProjectHomeRoutes {
                                       "trail_search", "project_leads", "working_corpora", "classification_overrides"]
 
     static func add(to me: RouterGroup<APIRequestContext>, services: UserDataServices, resources: ServerResources,
-                    provider: ServedIndexProvider) {
+                    provider: ServedIndexProvider, leads: ProjectLeadsQueue) {
         let store = services.store
         let now = services.now
 
@@ -145,6 +148,7 @@ enum ProjectHomeRoutes {
                 throw APIProblem(.internalServerError, code: "STORE_DAMAGED", detail: "Project Home could not be read: \(error.description)")
             }
             answer.leads = await withLines(answer.leads, provider: provider)
+            answer.leadsRefresh = await leads.latestJob(project.id.uuidString, of: user.id).map(LeadsRefresh.init)
             return answer
         }
         // Suggested Next's ×: the lead stays dismissed, so it does not surface again.

@@ -31,6 +31,7 @@ import { validateSearch } from './search/searchState';
 import { SearchScreen } from './search/SearchScreen';
 // ─── The reader ─────────────────────────────────────────────────────────────
 import { ReaderScreen } from './reader/ReaderScreen';
+import { RelatedScreen, type RelatedSearch } from './related/RelatedScreen';
 // ─── Research ───────────────────────────────────────────────────────────────
 import { AllNotesScreen, type NotesSearch, validateNotesSearch } from './research/AllNotesScreen';
 import { HistoryScreen } from './research/HistoryScreen';
@@ -189,6 +190,17 @@ const documentRoute = createRoute({
     note: typeof raw.note === 'string' && noteId.test(raw.note) ? raw.note : undefined,
   }),
   component: ReaderScreen,
+});
+
+// Related Documents (S23d), which the reader's Related opens, with its scope and its tuning in the address.
+const relatedRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/related/$volumeId/$documentId',
+  validateSearch: (raw: Record<string, unknown>): RelatedSearch => ({
+    scope: raw.scope === 'volume' || raw.scope === 'subseries' || raw.scope === 'all' ? raw.scope : undefined,
+    weights: typeof raw.weights === 'string' ? raw.weights : undefined,
+  }),
+  component: RelatedScreen,
 });
 
 // ─── Research ───────────────────────────────────────────────────────────────
@@ -358,6 +370,7 @@ export const routeTree = rootRoute.addChildren([
   searchRoute,
   // ─── The reader ───────────────────────────────────────────────────────────
   documentRoute,
+  relatedRoute,
   // ─── Research ─────────────────────────────────────────────────────────────
   researchRoute,
   researchNotesRoute,

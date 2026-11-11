@@ -103,7 +103,7 @@ actor ResearchImports {
 }
 
 enum ImportRoutes {
-    static func add(to me: RouterGroup<APIRequestContext>, services: UserDataServices) {
+    static func add(to me: RouterGroup<APIRequestContext>, services: UserDataServices, leads: ProjectLeadsQueue) {
         let store = services.store
         let imports = services.imports
         let jobs = services.jobs
@@ -142,6 +142,8 @@ enum ImportRoutes {
                             try MacImport.run(envelope, into: store, for: user.id, includingInstanceWide: curator)
                         }
                         await imports.succeed(status.id, with: report)
+                        // Suggested Next from what came in (PLAN's S23d): each project's, queued behind this job.
+                        await leads.refreshEveryProject(of: user.id)
                         return jobLine(report, for: user.id)
                     } catch is JobCancelled {
                         await imports.fail(status.id, with: ImportProblem(code: "IMPORT_CANCELLED", detail: cancelledDetail))
