@@ -122,7 +122,11 @@ public actor ServerState: ImportObserver {
         if let startupProblem {
             return Readiness(step: startupProblem.step, detail: startupProblem.reason)
         }
-        var detail = "Copy a FRUS Explorer research export into /data/import, for example with: docker compose cp <export file> frus:/data/import/"
+        // A Standalone server may be seeded from an export at its version (PLAN's S21c), and its reader reads
+        // the volumes its library downloads meanwhile.
+        var detail = configuration.mode == .standalone
+            ? "Copy a FRUS Explorer research export into /data/import to seed this Standalone server's index, for example with: docker compose cp <export file> frus:/data/import/. The reader reads the volumes the library downloads meanwhile"
+            : "Copy a FRUS Explorer research export into /data/import, for example with: docker compose cp <export file> frus:/data/import/"
         if !stillCopying.isEmpty {
             detail = "Waiting for \(stillCopying.joined(separator: ", ")) to finish copying into /data/import"
         } else if let lastImport {

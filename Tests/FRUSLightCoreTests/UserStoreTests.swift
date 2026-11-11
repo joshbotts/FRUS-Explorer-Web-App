@@ -34,7 +34,7 @@ import Testing
         let directory = try TemporaryDirectory()
         let store = try await Self.open(directory)
         #expect(try store.schemaVersion() == UserStoreMigrations.all.count)
-        #expect(UserStoreMigrations.all.count == 6)
+        #expect(UserStoreMigrations.all.count == 7)
         #expect(store.migration == UserStoreMigration(from: 0, to: 6, backup: nil))
         #expect(try Self.backups(in: directory).isEmpty, "a new store has nothing to copy")
         #expect(try store.singleUserID() == "owner")

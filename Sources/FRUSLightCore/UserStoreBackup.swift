@@ -153,17 +153,18 @@ public enum UserStoreBackup {
         return digest.hex
     }
 
-    /// Whether a store holds no research yet: no row in any table but its users, its migrations and
-    /// the server's jobs (S20d), whose first, an index's import, would otherwise hold off the backup of
-    /// the research that follows until the hour; a full-text table read as itself. Its backup would hold
-    /// nothing to restore (S14b).
+    /// Whether a store holds no research yet: no row in any table but its users, its migrations, the
+    /// server's jobs (S20d), whose first, an index's import, would otherwise hold off the backup of the
+    /// research that follows until the hour, and the library's volumes (S21c), which a Standalone server
+    /// downloads before anyone writes; a full-text table read as itself. Its backup would hold nothing to
+    /// restore (S14b).
     public static func holdsNoResearch(_ store: URL) throws -> Bool {
         let db = try SQLiteConnection(store.path, readOnly: true)
         defer { db.close() }
         let tables = try db.query("SELECT name, coalesce(sql, '') FROM sqlite_master WHERE type = 'table'")
         let virtual = tables.filter { ($0[1].text ?? "").uppercased().hasPrefix("CREATE VIRTUAL TABLE") }.compactMap { $0[0].text }
         for table in tables {
-            guard let name = table[0].text, !["users", "schema_migrations", "jobs"].contains(name), !name.hasPrefix("sqlite_"),
+            guard let name = table[0].text, !["users", "schema_migrations", "jobs", "library_volumes"].contains(name), !name.hasPrefix("sqlite_"),
                   !virtual.contains(where: { name.hasPrefix($0 + "_") }) else { continue }
             let quoted = "\"\(name.replacingOccurrences(of: "\"", with: "\"\""))\""
             if try db.scalar("SELECT EXISTS (SELECT 1 FROM \(quoted))")?.integer == 1 { return false }

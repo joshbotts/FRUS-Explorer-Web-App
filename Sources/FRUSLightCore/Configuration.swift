@@ -30,6 +30,14 @@ public struct ServerConfiguration: Sendable, Equatable {
     public var pdfURL: String?
     /// Blocks all outbound traffic (`FRUS_OFFLINE`).
     public var offline: Bool
+    /// In Standalone mode, a mirror of the places the library downloads from (`FRUS_LIBRARY_MIRROR`, PLAN's
+    /// S21c): one folder, served as GitHub serves its files, holding GitHub's API's, GitHub's raw files' and
+    /// history.state.gov's images' under each host's name, as the tests and the smoke test serve the
+    /// fixtures; nil for GitHub and history.state.gov themselves.
+    public var libraryMirror: URL?
+    /// A GitHub token (`FRUS_GITHUB_TOKEN`), sent with the library's listing to GitHub's own API alone, which
+    /// raises its limit of 60 requests an hour for an address without one. Never logged.
+    public var githubToken: String?
     /// Address to listen on (`FRUS_HOST`). 127.0.0.1 by default; the image sets 0.0.0.0 and
     /// Compose publishes the port on the host's 127.0.0.1 only.
     public var host: String
@@ -89,6 +97,7 @@ public struct ServerConfiguration: Sendable, Equatable {
     public init(
         mode: Mode = .import, auth: Auth = .none, dataDirectory: URL = URL(fileURLWithPath: "/data"),
         publicURL: String = "http://localhost:8080", pdfURL: String? = nil, offline: Bool = false,
+        libraryMirror: URL? = nil, githubToken: String? = nil,
         host: String = "127.0.0.1", port: Int = 8080, importPollInterval: Duration = .seconds(2),
         resourcesDirectory: URL = ServerConfiguration.imageResourcesDirectory,
         webDirectory: URL = ServerConfiguration.imageWebDirectory, requiresWebDirectory: Bool = false,
@@ -102,6 +111,8 @@ public struct ServerConfiguration: Sendable, Equatable {
         self.publicURL = publicURL
         self.pdfURL = pdfURL
         self.offline = offline
+        self.libraryMirror = libraryMirror
+        self.githubToken = githubToken
         self.host = host
         self.port = port
         self.importPollInterval = importPollInterval
@@ -133,9 +144,6 @@ public struct ServerConfiguration: Sendable, Equatable {
             if let mode = Mode(rawValue: raw) { config.mode = mode } else {
                 problems.append("FRUS_MODE must be import or standalone, not \(raw)")
             }
-        }
-        if config.mode == .standalone {
-            problems.append("FRUS_MODE=standalone arrives in phase 3; this build serves Import mode only")
         }
         if let raw = value("FRUS_AUTH") {
             if let auth = Auth(rawValue: raw) { config.auth = auth } else {
@@ -214,6 +222,23 @@ public struct ServerConfiguration: Sendable, Equatable {
             case "true": config.offline = true
             case "false": config.offline = false
             default: problems.append("FRUS_OFFLINE must be true or false, not \(raw)")
+            }
+        }
+        // The library's (PLAN's S21c): where a Standalone server downloads from, and GitHub's token.
+        if let raw = value("FRUS_LIBRARY_MIRROR") {
+            if config.mode != .standalone {
+                problems.append("FRUS_LIBRARY_MIRROR is where a Standalone server downloads its volumes from, and FRUS_MODE is \(config.mode.rawValue): set FRUS_MODE=standalone, or leave FRUS_LIBRARY_MIRROR out")
+            } else if Self.isHTTPOrigin(raw), let url = URL(string: raw), Self.components(of: raw)?.query == nil,
+                      Self.components(of: raw)?.fragment == nil {
+                config.libraryMirror = url
+            } else {
+                problems.append("FRUS_LIBRARY_MIRROR must be an http or https URL with no query or fragment, not \(raw)")
+            }
+        }
+        if let raw = value("FRUS_GITHUB_TOKEN") {
+            // Never echoed: it is a credential.
+            if raw.allSatisfy({ $0.isASCII && !$0.isWhitespace && !$0.isNewline }) { config.githubToken = raw } else {
+                problems.append("FRUS_GITHUB_TOKEN must be a GitHub token, without spaces or line breaks")
             }
         }
         if let raw = value("FRUS_USER_DATA") {

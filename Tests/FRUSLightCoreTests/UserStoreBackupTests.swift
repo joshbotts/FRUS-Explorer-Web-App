@@ -136,6 +136,9 @@ import Testing
         // A job's row, as an index's import leaves before any research comes (S20d), is none.
         try fixture.rows.run("INSERT INTO jobs (job_id, kind, state, queued_at) VALUES ('J1', 'indexImport', 'succeeded', '2026-10-27T03:00:00.000Z')")
         #expect(try UserStoreBackup.holdsNoResearch(fixture.files.userStore), "the server's jobs are no research")
+        // Nor is a volume a Standalone server downloaded (S21c).
+        try fixture.rows.run("INSERT INTO library_volumes (volume_id, state, updated_at) VALUES ('frus1894Nicaragua', 'downloaded', '2026-10-27T03:00:00.000Z')")
+        #expect(try UserStoreBackup.holdsNoResearch(fixture.files.userStore), "the library's volumes are no research")
         #expect(try await backups.check(at: Self.hour) == .empty)
         try fixture.rows.addNote("N1")
         try fixture.rows.run("INSERT INTO user_search (user_id, document_id, volume_id, note_text) VALUES ('owner', 'd1', 'frus1961-63v06', 'A note.')")
