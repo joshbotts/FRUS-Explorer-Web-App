@@ -60,7 +60,7 @@ Not started: `PLAN.md`'s row S24b. The session that does it replaces this line, 
 
 ## Session 24a: Corpus Analytics and the method block, upstream
 
-11 November 2026 · branch `claude/s24a-corpus-analytics-records-864084` · [#118](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/118) · upstream `68bffcf6`, unchanged; [FRUS-Explorer#1896](https://github.com/joshbotts/FRUS-Explorer/pull/1896), open, awaiting Mac check 21
+11 November 2026 · branch `claude/s24a-corpus-analytics-records-864084` · [#119](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/119) · upstream `68bffcf6`, unchanged; [FRUS-Explorer#1896](https://github.com/joshbotts/FRUS-Explorer/pull/1896), open, awaiting Mac check 21
 
 Phase 3's row S24a, the first pull request of the third upstream batch, opened alone on the owner's choice: Corpus Analytics and the method block into FRUSCoreKit, for S24f to S24i. The pull request is `claude/corpus-analytics-into-kit`, cut from `v2` at `9e6cc2af`, #1895's merge, which `v2` still is. It is labelled `Mac`, its body asks for Mac verification and lists Mac check 21, and it is not merged. Under rule 4 it changes shared files, and this repository changes only its records.
 
