@@ -558,7 +558,10 @@ echo "== admin: the library's side-load, and the index compacted and checked (PL
 # indexed, and cited with the app's sentence; then removed, out of the index first, in a job.
 cp fixtures/tei/frus1894Nicaragua.xml "$work/smoke-draft.xml"
 sideloaded=$(library_sideload smoke-draft.xml "$work/smoke-draft.xml")
-case "$sideloaded" in *'"volumeId":"smoke-draft"'*'"catalogued":false'*' 202') ;; *) fail "the side-load was not taken: $sideloaded" ;; esac
+# The answer's keys come in no set order, which a server's process draws for itself: each is looked for alone.
+for wanted in '"volumeId":"smoke-draft"' '"catalogued":false' '"kind":"libraryIndex"'; do
+  case "$sideloaded" in *"$wanted"*' 202') ;; *) fail "the side-load was not taken: $sideloaded" ;; esac
+done
 # One whose external entity names a file of the image's: its document is indexed without the file's text.
 cat > "$work/smoke-entity.xml" <<'XML'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -573,7 +576,7 @@ library_list || fail "the Library did not answer after the side-loads"
 python3 -c 'import json, sys
 volumes = {v["volumeId"]: v for v in json.load(open(sys.argv[1], encoding="utf-8"))["volumes"]}
 draft = volumes["smoke-draft"]
-assert draft["sideloaded"] and draft["status"] == "indexed" and draft["downloaded"] and "Nicaragua" in draft["title"], draft' "$work/library.json" \
+assert draft["sideloaded"] and not draft["catalogued"] and draft["status"] == "indexed" and draft["downloaded"] and "Nicaragua" in draft["title"], draft' "$work/library.json" \
   || fail "the side-loaded volume is not listed, indexed: $(grep -o '"volumeId":"smoke-draft"[^}]*' "$work/library.json" | head -c 400)"
 curl -s --max-time 10 -o "$work/draft-citation.json" "$library_base/api/v1/volumes/smoke-draft/documents/d1/citation"
 python3 -c 'import json, sys
