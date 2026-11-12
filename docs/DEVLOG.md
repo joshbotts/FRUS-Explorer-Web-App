@@ -428,6 +428,20 @@ Phase 3's round 3 on the server track, the S21 group's first row on the web, bes
 
 **Next:** S21d, indexing on the server: a job that indexes the library's volumes with the kit's read-write pipeline, as the hand-over note says (`s21c-handover.md`).
 
+## Session 21b, follow-up, upstream: an index's page links are targets 24 px square
+
+11 November 2026 · branch `claude/musing-rhodes-880e6d` · [#124](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/124) · upstream `4c252c33`, unchanged; [FRUS-Explorer#1898](https://github.com/joshbotts/FRUS-Explorer/pull/1898), open, awaiting Mac check 26
+
+The upstream fix for the allowance #118 left in the browser suite (`indexLinks`, a `KitKnownFailure`, in `web/e2e/read-index.spec.ts`): frus1961-63v06's index page, the kit's, failed axe's `target-size` (WCAG 2.2's 2.5.8) where the TEI prints an entry's page numbers with no comma between them, so that the entry holds no text but its links. The pull request is `claude/reader-index-link-targets`, cut from `v2` at `782127ff` and rebased onto `4c252c33` (#1897) before it opened, which `v2` still is. It is labelled `Mac`, its body asks for Mac verification as Mac check 26, and it is not merged. Under rule 4 it changes shared files, and this repository changes only its records.
+
+**What it changes:** the kit's serializer writes `<li class="links-only">` for a list item that holds links and no text beside them (`FRUSRenderNodeHTMLSerializer.holdsLinksAlone(_:)`), and on screen the reader's stylesheet draws that item's person and cross-reference links as boxes at least 24 px square. Every other item, and every printed page, is as before. A CSS-only first version boxed links beside commas, which a cold review measured and the marking replaced.
+
+**Measured** (the pull request has the figures): the Mac check beside `v2`, the iOS unit run failing only where `v2` fails; Linux over `main` at `f7ee098`, which pins `4c252c33`, beside `v2` alone; axe in Chromium over the kit's page for all 397 golden fragments, `v2`'s 75 `target-size` nodes none; and `read-index.spec.ts` against an image with the branch's kit, which fails as committed with "the kit no longer fails target-size here: drop the allowance" and passes with the allowance taken out.
+
+**For the pin move that takes it:** `axeCheck(page, indexLinks)` becomes `axeCheck(page)` in `read-index.spec.ts`, with `indexLinks` and, if nothing else uses it, `KitKnownFailure` removed; and the golden files are remade, 11 of the 397 rows gaining ` class="links-only"` and nothing else (53 items). The pull request names what it left: the serializer's nested links (a `<ref>` holding a `<persName>`), which leave an empty link on frus1961-63v06's contents page (axe's `link-name`), glosses and footnote markers in such items, and the lists below a document that names people on `@ana`. The hand-over note is `index-link-targets-handover.md` in the reader follow-up's notes folder.
+
+**Next:** the owner's Mac check 26 and merge of FRUS-Explorer#1898; then the pin move above.
+
 ## Session 21b, follow-up: the reader opens a volume's index, and titles a document by its parsed head
 
 11 November 2026 · branch `claude/pensive-chatterjee-427ea0` · [#118](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/118) · upstream `68bffcf6`, unchanged
