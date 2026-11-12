@@ -1,9 +1,9 @@
 // The kit's stack over the live index, opened read-only and immutable: search and browse (upstream
 // #1575), the page ranges and persons the reader's links need (upstream #1579), and the citation
 // matcher over both that Citation Lookup asks (PLAN's S19a); with the user store's search database
-// attached, read-only, for each user's half of a search (upstream #1806, PLAN's S17d); and a
-// connection of its own for what the app reads with its own queries, a collection document's
-// cross-references (PLAN's S18e).
+// attached, read-only, for each user's half of a search (upstream #1806, PLAN's S17d); and the
+// cross-reference store (upstream #1891), which Related Documents' cross-reference axis, a collection
+// document's "See also" line and the Research page's titles read, as the app's do.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -11,8 +11,8 @@ import FTS5Store
 import Foundation
 
 /// The live index as the kit reads it, for one installed `CorpusIndex`: `FTS5Store(readingDatabaseAt:)`,
-/// the pipeline's read-only open and a `SearchService` over both, and the page-range and person
-/// stores' read-only opens. Nothing here writes to the file: every connection is
+/// the pipeline's read-only open and a `SearchService` over both, and the page-range, person and
+/// cross-reference stores' read-only opens. Nothing here writes to the file: every connection is
 /// `mode=ro&immutable=1`, as `CorpusIndex`'s own. The pipeline's connection also attaches the user
 /// store's search database, when the server keeps user data, read-only and never immutable, as the
 /// kit attaches a store its host writes to while it is served (`attachedUserStoreSchema`).
@@ -29,9 +29,11 @@ public final class ServedIndex: Sendable {
     public let pages: PageRangeStore
     /// The persons' mentions and rollups, for a person card's count, and a collection's Persons Index.
     public let persons: PersonMentionStore
-    /// The index read as the app's own stores read it, where the kit offers no read: a collection
-    /// document's cross-references (PLAN's S18e, `outboundTargets`).
-    let references: SQLiteConnection
+    /// The cross-references, read by the kit's `CrossReferenceStore` (upstream #1891), opened immutable
+    /// with the catalogue and the two bundled files the app's store reads, as a host opens it (S23c's pin
+    /// move): Related Documents' cross-reference axis, a collection document's "See also" line and a
+    /// Research row's title read it here, as the app's read its `appState.crossReferenceStore`.
+    public let crossReferences: CrossReferenceStore
     /// The kit's citation matcher over this index and the published catalogue, with the volumes
     /// the index holds as the device's downloaded ones, as the reader's page links take them: the
     /// app builds its engine over its own index, its catalogue and the volumes on its disk.
@@ -61,7 +63,9 @@ public final class ServedIndex: Sendable {
         attachesUserStore = userStore != nil
         pages = try PageRangeStore(readingDatabaseAt: corpus.url)
         persons = try PersonMentionStore(readingDatabaseAt: corpus.url)
-        references = try SQLiteConnection.immutable(corpus.url)
+        crossReferences = try CrossReferenceStore(readingDatabaseAt: corpus.url, volumes: resources.manifest,
+                                                  resolvedEdgeIndex: resources.resolvedEdgeIndex,
+                                                  citedPageMap: resources.citedPages)
         indexedVolumeIds = Set(corpus.documentsByVolume.filter { $0.value > 0 }.keys)
         citations = CitationMatchingEngine(manifestStore: FixedVolumeCatalogue(entries: resources.manifest),
                                            searchService: service, pageRangeStore: pages,
@@ -117,12 +121,14 @@ public actor ServedIndexProvider {
     /// How many stacks have been opened, for the tests.
     private(set) var opened = 0
 
-    /// A stack, and its pipeline, which a computation kept beside a search holds past the stack's last
-    /// request, held without keeping them.
+    /// A stack, its pipeline, which a computation kept beside a search holds past the stack's last
+    /// request, and its cross-reference store, which reads the file through a connection of its own, held
+    /// without keeping them.
     private struct WeakStack {
         weak var stack: ServedIndex?
         weak var pipeline: IndexingPipeline?
-        var held: Bool { stack != nil || pipeline != nil }
+        weak var crossReferences: CrossReferenceStore?
+        var held: Bool { stack != nil || pipeline != nil || crossReferences != nil }
     }
 
     /// Why no stack is given while the library's indexing writes the index (PLAN's S21d): a plain refusal,
@@ -167,7 +173,7 @@ public actor ServedIndexProvider {
         opened += 1
         defer { if opening?.corpus == key { opening = nil } }
         let served = try await task.value
-        stacks.append(WeakStack(stack: served, pipeline: served.pipeline))
+        stacks.append(WeakStack(stack: served, pipeline: served.pipeline, crossReferences: served.crossReferences))
         if await state.indexBeingWritten { throw Self.beingWritten }
         if current?.corpus != key, await state.index.map(ObjectIdentifier.init) == key { current = (key, served) }
         return served

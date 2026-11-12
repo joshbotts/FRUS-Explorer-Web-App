@@ -267,37 +267,18 @@ import Testing
         ], file: "Research.swift")
     }
 
-    /// A row's title, as the app's `CrossReferenceStore.documentTitleFacts(for:)` reads it from the
-    /// index: its query, a head or a number that is empty none, and its ids by volume, each once, 400
-    /// to a query.
+    /// A row's title, as the app's `loadHeaders` reads it: the cross-reference store's
+    /// `documentTitleFacts(for:)` over the index, an error giving nothing. The store is the kit's since
+    /// FRUS-Explorer#1891, and the server asks the served stack's since S23c's pin move, where it ran a
+    /// copy of the store's query.
     @Test func aRowsTitleIsTheAppsQuery() throws {
-        let store = try Self.app("CrossReference/CrossReferenceStore.swift")
-        let server = try Self.server("Sources/FRUSLightAPI/Research.swift")
-        let shared = [
-            "SELECT document_id, header, document_number, is_editorial_note FROM document_cache WHERE volume_id = ? AND document_id IN (",
-            #"for (vol, doc) in keys where seen.insert("\(vol)/\(doc)").inserted {"#, "if byVolume[vol] == nil { order.append(vol) }",
-            "for start in stride(from: 0, to: ids.count, by: documentChunkSize) {",
-            "out.append((volumeId, Array(ids[start..<min(start + documentChunkSize, ids.count)])))",
-        ]
-        NoteViewParityTests.expect(store, holds: shared + [
-            "let head = columnString(stmt, 1).flatMap { $0.isEmpty ? nil : $0 }",
-            "let number = columnString(stmt, 2).flatMap { $0.isEmpty ? nil : $0 }",
-            #"result["\(volumeId)/\(doc)"] = DocumentTitleFacts("#, "isEditorialNote: sqlite3_column_int(stmt, 3) != 0)",
-            "private static let documentChunkSize = 400",
-        ], file: "CrossReferenceStore.swift")
-        NoteViewParityTests.expect(server, holds: shared + [
-            "let head = row[1].text.flatMap { $0.isEmpty ? nil : $0 }", "let number = row[2].text.flatMap { $0.isEmpty ? nil : $0 }",
-            #"result["\(volumeId)/\(doc)"] = DocumentDisplayTitle.Facts("#, "isEditorialNote: (row[3].integer ?? 0) != 0)",
+        NoteViewParityTests.expect(try Self.app("Research/ResearchView.swift"), holds: [
+            "guard let store = appState.crossReferenceStore, let item = selectedItem else { return }",
+            "if let headers = try? await store.documentTitleFacts(for: pairs) {",
+        ], file: "ResearchView.swift")
+        NoteViewParityTests.expect(try Self.server("Sources/FRUSLightAPI/Research.swift"), holds: [
+            "return (try? await served.crossReferences.documentTitleFacts(for: keys)) ?? [:]",
         ], file: "Research.swift")
-        #expect(ServedIndex.documentChunkSize == 400)
-        // The partition: by volume in the order each first comes, each key once, 400 ids at a time.
-        let keys = (0..<401).map { (volumeId: "v1", documentId: "d\($0)") }
-            + [(volumeId: "v2", documentId: "d1"), (volumeId: "v1", documentId: "d0"), (volumeId: "v2", documentId: "d1")]
-        let chunks = ServedIndex.documentChunks(keys)
-        #expect(chunks.map(\.volumeId) == ["v1", "v1", "v2"])
-        #expect(chunks.map(\.documentIds.count) == [400, 1, 1])
-        #expect(chunks[1].documentIds == ["d400"] && chunks[2].documentIds == ["d1"])
-        #expect(ServedIndex.documentChunks([]).isEmpty)
     }
 
     /// The lines the browser app mirrors: a row's highlights and the line for the rest, its footer,

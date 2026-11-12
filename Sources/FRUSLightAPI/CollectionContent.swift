@@ -13,10 +13,12 @@
 // that have none, with the app's reason (PLAN's S18f). A smart collection's documents are its saved
 // search's results, run before the resolve as the app's preview runs them (`CollectionSmartSearch`).
 //
+// A document's cross-references, for its "See also" line, are the kit's `CrossReferenceStore.outboundEdges`
+// over the served index (upstream #1891, since S23c's pin move), which the app's resolver asks of its store.
+//
 // App code mirrored here, held to its source by CollectionExportParityTests and CollectionFileParityTests:
 // - `ZoteroJSONExporter.fetchTagsAndNotes`'s tags: the names of the document's own tags and of its
 //   notes' tags, sorted;
-// - `CrossReferenceStore.outboundEdges`: a document's edges that are not broken and name a document;
 // - `CollectionContentResolver.smartRefs(for:)`: the saved search run as it is stored, at
 //   `SearchViewModel.searchHardLimit`, which is the kit's `SmartCollectionSnapshot.resultLimit`, with the
 //   kit's sentence when no index is open or the search is gone.
@@ -133,8 +135,10 @@ struct CollectionContentSource: CollectionContentDataSource {
 
     func crossReferenceTargets(volumeId: String, documentId: String) async -> [(volumeId: String, documentId: String)]? {
         guard let served else { return nil }
-        // As the app's: an edge that cannot be read is none.
-        return (try? await Blocking.run { try served.outboundTargets(volumeId: volumeId, documentId: documentId) }) ?? []
+        // As the app's resolver asks its store, the kit's since S23c's pin move: an edge that cannot be read
+        // is none.
+        let edges = (try? await served.crossReferences.outboundEdges(forDocumentId: documentId, volumeId: volumeId)) ?? []
+        return edges.map { (volumeId: $0.targetVolumeId, documentId: $0.targetDocumentId) }
     }
 
     var personMentionStore: PersonMentionStore? { served?.persons }
@@ -378,28 +382,5 @@ struct ServedFigureImages: FigureImageSource {
               FRUSURLScheme.isSafeComponent(volumeId), FRUSURLScheme.isSafeComponent(file),
               let url = ReaderRoutes.figureFile(volumeId: volumeId, file: file, in: volumesDirectory) else { return nil }
         return try? Data(contentsOf: url, options: .mappedIfSafe)
-    }
-}
-
-extension ServedIndex {
-    /// `CrossReferenceStore.outboundEdges(forDocumentId:volumeId:)`'s query, app code: a document's edges
-    /// that are not broken and whose target is a document, a reference to a whole volume being none
-    /// (`namesADocumentPredicate`), with a target in its own volume named by it.
-    static let outboundEdgesQuery = """
-        SELECT COALESCE(target_volume_id, source_volume_id) AS resolved_target_volume, target_document_id
-        FROM cross_references
-        WHERE source_document_id = ?
-          AND source_volume_id = ?
-          AND is_broken = 0
-          AND target_document_id != ''
-        """
-
-    /// The documents a document's outbound cross-references name, in the index's order, for the "See
-    /// also:" line, which keeps those the collection holds.
-    func outboundTargets(volumeId: String, documentId: String) throws -> [(volumeId: String, documentId: String)] {
-        try references.query(Self.outboundEdgesQuery, [.text(documentId), .text(volumeId)]).compactMap { row in
-            guard let volume = row[0].text, let document = row[1].text else { return nil }
-            return (volumeId: volume, documentId: document)
-        }
     }
 }

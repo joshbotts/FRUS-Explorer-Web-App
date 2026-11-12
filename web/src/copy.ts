@@ -826,7 +826,6 @@ export const copy = {
     overflow: (count: number) => `${count} more related — raise a weight or narrow the scope to refine.`,
     subjectsUnavailable: 'Detected-topic data is unavailable on this server.',
     notRanked: {
-      crossReference: 'This server does not rank by cross-references yet.',
       lexicalSimilarity: 'This server does not rank by wording yet.',
       semanticSimilarity: 'This server does not rank by meaning yet.',
     } as Record<string, string>,
