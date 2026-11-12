@@ -138,7 +138,7 @@ enum AdminStatusRoutes {
                                  detail: "An index import is queued or running: reset the index once it has ended, or cancel it first.")
             }
             // Standalone's reset (PLAN's S21e): the index emptied, and the library's volumes indexed into it again.
-            if state.configuration.mode == .standalone {
+            if state.configuration.mode == .standalone || indexer?.mode == .standalone {
                 guard let indexer else {
                     throw APIProblem(.conflict, code: "RESET_NOT_AVAILABLE", detail: "This server holds no indexer to index its volumes again.")
                 }

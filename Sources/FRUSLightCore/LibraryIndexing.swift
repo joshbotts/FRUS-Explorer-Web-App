@@ -97,7 +97,7 @@ public actor LibraryIndexer {
     /// The index the job writes, and its folder, where the stamps are.
     public let liveIndex: URL
     public let volumesDirectory: URL
-    public let mode: ServerConfiguration.Mode
+    nonisolated public let mode: ServerConfiguration.Mode
     /// The stamps and the record of the volumes a pass did not index, beside the index.
     nonisolated public let stamps: IndexStampFile
     let resources: IndexingResources

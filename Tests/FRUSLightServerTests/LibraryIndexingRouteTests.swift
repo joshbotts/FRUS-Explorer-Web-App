@@ -245,8 +245,9 @@ import Testing
             await fixture.users.jobs.waitUntilIdle()
 
             #expect(try decode(AdminJob.self, try await owner.get("/api/v1/admin/jobs/\(job.id)")).state == "succeeded")
-            let after = try decode(SearchResultList.self, try await owner.get("/api/v1/search?keywords=khrushchev"))
-            #expect(after.total >= found.total && after.total > 0)
+            #expect(try decode(SearchResultList.self, try await owner.get("/api/v1/search?keywords=khrushchev")).total > 0,
+                    "the answer kept from before the pass goes with the stack the job's end replaced")
+            #expect(try decode(SearchResultList.self, try await owner.get("/api/v1/search?keywords=kennedy")).total == found.total)
             #expect(try await !fixture.provider.served().pipeline.isStoreUnfinished("frus1961-63v06"))
             #expect(await fixture.users.server.state.index?.documentsByVolume["frus1961-63v06"] == 123, "the counts follow the job")
             #expect(try decode(Readiness.self, try await owner.get("/readyz")).ready)

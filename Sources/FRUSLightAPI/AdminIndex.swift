@@ -45,7 +45,7 @@ enum AdminIndexRoutes {
 
         admin.get("index") { request, _ -> EditedResponse<AdminIndex> in
             try FormQuery(request.uri.query).refuseUnknown([])
-            let standalone = state.configuration.mode == .standalone && indexer != nil
+            let standalone = indexer?.mode == .standalone
             var storage: AdminIndex.Storage?
             if standalone, let served = try? await provider?.servedIfReady(),
                let statistics = try? await served.pipeline.indexPageStatistics() {
@@ -63,7 +63,7 @@ enum AdminIndexRoutes {
                                 reclaimableBytes: statistics.reclaimableBytes, availableBytes: available,
                                 requiredBytes: Int(required), compaction: compaction)
             }
-            let body = AdminIndex(mode: state.configuration.mode.rawValue, upkeep: standalone && storage != nil,
+            let body = AdminIndex(mode: (indexer?.mode ?? state.configuration.mode).rawValue, upkeep: standalone && storage != nil,
                                   storage: storage, upgrade: await state.upgrade)
             return EditedResponse(headers: [.cacheControl: "no-store"], response: body)
         }
@@ -98,7 +98,7 @@ enum AdminIndexRoutes {
     /// The indexer of a Standalone server, which compacts and checks its index; an Import server's index is
     /// the Mac's export, which it serves as it was installed.
     static func standalone(_ state: ServerState, _ indexer: LibraryIndexer?) throws -> LibraryIndexer {
-        guard state.configuration.mode == .standalone, let indexer else {
+        guard let indexer, indexer.mode == .standalone else {
             throw APIProblem(.conflict, code: "UPKEEP_NOT_AVAILABLE",
                              detail: "An Import server serves the Mac's export as it was installed: it compacts and checks nothing, and the Mac's own Storage settings compact and check the index an export is made from.")
         }

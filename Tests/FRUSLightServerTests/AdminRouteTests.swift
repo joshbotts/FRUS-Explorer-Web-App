@@ -34,12 +34,16 @@ import Testing
         (.get, "/api/v1/admin/backups", nil),
         (.get, "/api/v1/admin/backup", nil),
         (.post, "/api/v1/admin/index/reset", nil),
+        (.get, "/api/v1/admin/index", nil),
+        (.post, "/api/v1/admin/index/compact", nil),
+        (.post, "/api/v1/admin/index/check", nil),
         (.get, "/api/v1/admin/secrets", nil),
         (.put, "/api/v1/admin/secrets/nara", #"{"value":"abc"}"#),
         (.delete, "/api/v1/admin/secrets/nara", nil),
         (.get, "/api/v1/admin/library", nil),
         (.post, "/api/v1/admin/library/downloads", #"{"all":true}"#),
         (.post, "/api/v1/admin/library/index", #"{"all":true}"#),
+        (.post, "/api/v1/admin/library/sideload?file=frusX.xml", nil),
         (.delete, "/api/v1/admin/library/volumes/frus1894Nicaragua", nil),
     ]
 
@@ -50,7 +54,8 @@ import Testing
         var registered: Set<String> = []
         for file in try FileManager.default.contentsOfDirectory(atPath: folder.path) where file.hasPrefix("Admin") {
             let source = try String(contentsOf: folder.appendingPathComponent(file), encoding: .utf8)
-            for match in source.matches(of: /admin\.(get|post|put|patch|delete)\("([^"]*)"\)/) {
+            // The admin group's, and the side-load's group of its own (PLAN's S21e).
+            for match in source.matches(of: /(?:admin|sideloads)\.(get|post|put|patch|delete)\("([^"]*)"\)/) {
                 registered.insert("\(match.1.uppercased()) \(match.2)")
             }
         }
@@ -59,6 +64,7 @@ import Testing
                 .replacingOccurrences(of: Self.anyJob, with: ":jobId")
                 .replacing(#/users/(bob|alice)/#, with: "users/:userName")
                 .replacingOccurrences(of: "library/volumes/frus1894Nicaragua", with: "library/volumes/:volumeId")
+                .replacingOccurrences(of: "?file=frusX.xml", with: "")
         })
         #expect(registered.isSubset(of: tested), "untested: \(registered.subtracting(tested).sorted())")
         #expect(registered.count >= 12)

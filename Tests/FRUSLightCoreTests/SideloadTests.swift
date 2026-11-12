@@ -44,8 +44,13 @@ import Testing
         await #expect(throws: VolumeLibrary.SideloadRefusal.self) {
             try await f.library.sideload(staged: try stage("not-a-volume", "<html><p>no</p></html>"), requestedBy: nil)
         }
+        // A header the kit's parser stops reading at an entity that expands without end, which libxml2 refuses.
+        var bomb = "<?xml version=\"1.0\"?>\n<!DOCTYPE TEI [\n<!ENTITY a \"aaaaaaaaaa\">\n"
+        for level in 1...9 { bomb += "<!ENTITY a\(level) \"" + String(repeating: "&a\(level == 1 ? "" : String(level - 1));", count: 10) + "\">\n" }
+        bomb += "]>\n<TEI xmlns=\"http://www.tei-c.org/ns/1.0\"><teiHeader><title>&a9;</title></teiHeader></TEI>\n"
+        let unreadable = bomb
         await #expect(throws: VolumeLibrary.SideloadRefusal.self) {
-            try await f.library.sideload(staged: try stage("no-header", "<TEI><unclosed></TEI>"), requestedBy: nil)
+            try await f.library.sideload(staged: try stage("no-header", unreadable), requestedBy: nil)
         }
         let left = try FileManager.default.contentsOfDirectory(atPath: f.volumes.path).sorted()
         #expect(left == ["draft-volume.xml", "frus1894Nicaragua.xml"], "\(left)")

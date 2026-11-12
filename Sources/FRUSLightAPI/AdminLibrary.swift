@@ -271,8 +271,13 @@ enum AdminLibraryRoutes {
                                  detail: "An indexing job may index \(volumeId), which waits or runs: remove it once the job has ended.")
             }
             if let indexer, await indexer.isRemoving(volumeId) { throw Self.removalInProgress(volumeId) }
-            // A volume the index holds leaves it first, in a job, the index's one writer, and then its files (PLAN's S21e).
-            if (await state.index?.documentsByVolume[volumeId] ?? 0) > 0, let indexer {
+            // A volume the index holds leaves it first, in a job, the index's one writer, and then its files (PLAN's S21e);
+            // a router with no indexer, as some tests', leaves it as S21c did.
+            if (await state.index?.documentsByVolume[volumeId] ?? 0) > 0 {
+                guard let indexer else {
+                    throw APIProblem(.conflict, code: "VOLUME_INDEXED",
+                                     detail: "\(volumeId) is in the served index, and this server holds no indexer to take it out.")
+                }
                 if let row = try? await Blocking.run({ try library.libraryVolumes().first { $0.volumeId == volumeId } }), row.isUnfinished {
                     throw problem(.inProgress(volumeId))
                 }
