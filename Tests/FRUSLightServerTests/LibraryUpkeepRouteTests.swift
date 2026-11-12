@@ -36,7 +36,8 @@ import Testing
     /// Browse, and cited with the app's sentence and no history.state.gov link; and side-loaded again, it
     /// is refused, as the app refuses a volume already present.
     @Test func aSideloadedVolumeIsReadAndCitedWithTheAppsSentence() async throws {
-        let fixture = try await Fixture(volumes: [])
+        // A catalogue volume beside it, whose file is in the library and not indexed, cited from its TEI.
+        let fixture = try await Fixture(volumes: ["frus1961-63v06"])
         defer { withExtendedLifetime(fixture) {} }
         let id = "frus1894Nicaragua-draft"
         try await fixture.app.test(.router) { client in
@@ -70,7 +71,7 @@ import Testing
             #expect(cited.provenanceNote == CitationRoutes.sideloadedNote)
             #expect(cited.canonicalURL == nil && !cited.bibtex.contains("history.state.gov") && !cited.ris.contains("history.state.gov"))
             let catalogued = try decode(DocumentCitation.self,
-                                        try await owner.get("/api/v1/volumes/frus1894Nicaragua/documents/d1/citation"))
+                                        try await owner.get("/api/v1/volumes/frus1961-63v06/documents/d1/citation"))
             #expect(catalogued.provenanceNote == nil && catalogued.canonicalURL != nil, "a catalogue volume's, as before")
 
             // Present already: refused, in the kit's words.
@@ -97,22 +98,32 @@ import Testing
             #expect(problemCode(try await Self.sideload(owner, file: "frusX.xml", xml, type: "application/json")) == "UNSUPPORTED_MEDIA_TYPE")
             #expect(problemCode(try await Self.sideload(owner, file: "frusX.xml", "<html><body>not a volume</body></html>")) == "NOT_A_VOLUME")
             #expect(problemCode(try await Self.sideload(owner, file: "frusX.xml", "this is not XML at all")) == "NOT_A_VOLUME")
-            // A body its length says is larger than 64 MiB is refused before it is read.
-            var headers = HTTPFields()
-            headers[.origin] = "http://localhost:8080"
-            headers[CSRFTokens.header] = try await owner.me().csrfToken
-            headers[.contentType] = "application/xml"
-            headers[.contentLength] = String(VolumeLibrary.sideloadLimit + 1)
-            let large = try await client.execute(uri: "\(Self.sideload)?file=frusX.xml", method: .post, headers: headers,
-                                                 body: ByteBuffer(string: "<TEI/>"))
-            #expect(problemCode(large) == "CONTENT_TOO_LARGE")
         }
+        // A body its length says is larger than 64 MiB is refused by the group's guard before it is read, and one
+        // sent with no length is refused as it streams past the limit, nothing of it kept.
+        var head = HTTPRequest(method: .post, scheme: "http", authority: "localhost:8080", path: "\(Self.sideload)?file=frusX.xml")
+        head.headerFields[.contentType] = "application/xml"
+        head.headerFields[.contentLength] = String(VolumeLibrary.sideloadLimit + 1)
+        #expect(throws: APIProblem.self) {
+            try UserDataGuard.checkBody(Request(head: head, body: RequestBody(buffer: ByteBuffer())), limit: VolumeLibrary.sideloadLimit,
+                                        mediaTypes: UserDataGuard.xml)
+        }
+        head.headerFields[.contentLength] = String(VolumeLibrary.sideloadLimit)
+        try UserDataGuard.checkBody(Request(head: head, body: RequestBody(buffer: ByteBuffer())), limit: VolumeLibrary.sideloadLimit,
+                                    mediaTypes: UserDataGuard.xml)
+        let streamed = folder.appendingPathComponent(".streamed.xml")
+        await #expect(throws: APIProblem.self) {
+            try await AdminLibraryRoutes.write(RequestBody(buffer: ByteBuffer(repeating: 0x41, count: 101)), to: streamed, limit: 100)
+        }
+        try await AdminLibraryRoutes.write(RequestBody(buffer: ByteBuffer(repeating: 0x41, count: 100)), to: streamed, limit: 100)
+        #expect(try Data(contentsOf: streamed).count == 100)
+        try? FileManager.default.removeItem(at: streamed)
         let left = try FileManager.default.contentsOfDirectory(atPath: folder.path)
         #expect(left.filter { !$0.hasPrefix(".write-check") }.isEmpty, "\(left)")
 
         let imports = try await Fixture(mode: .import, volumes: [])
         defer { withExtendedLifetime(imports) {} }
-        try await imports.app.test(.router) { client in
+        try await imports.app.test(.router) { (client) async throws in
             #expect(problemCode(try await Self.sideload(Browser(client: client), file: "frusX.xml", try Self.fixtureXML())) == "LIBRARY_NOT_AVAILABLE")
         }
     }
@@ -132,10 +143,11 @@ import Testing
             <TEI xmlns="http://www.tei-c.org/ns/1.0"><teiHeader><fileDesc><titleStmt><title type="complete">A volume naming a file</title></titleStmt></fileDesc></teiHeader>
             <text><body><div type="document" xml:id="d1" n="1"><head>One</head><p>Before &secret; after.</p></div></body></text></TEI>
             """
-        var bomb = "<?xml version=\"1.0\"?>\n<!DOCTYPE TEI [\n<!ENTITY a \"aaaaaaaaaa\">\n"
-        for level in 1...9 { bomb += "<!ENTITY a\(level) \"" + String(repeating: "&a\(level == 1 ? "" : String(level - 1));", count: 10) + "\">\n" }
-        bomb += "]>\n<TEI xmlns=\"http://www.tei-c.org/ns/1.0\"><teiHeader><fileDesc><titleStmt><title>A bomb</title></titleStmt></fileDesc></teiHeader>"
-        bomb += "<text><body><div type=\"document\" xml:id=\"d1\"><p>&a9;</p></div></body></text></TEI>\n"
+        var building = "<?xml version=\"1.0\"?>\n<!DOCTYPE TEI [\n<!ENTITY a \"aaaaaaaaaa\">\n"
+        for level in 1...9 { building += "<!ENTITY a\(level) \"" + String(repeating: "&a\(level == 1 ? "" : String(level - 1));", count: 10) + "\">\n" }
+        building += "]>\n<TEI xmlns=\"http://www.tei-c.org/ns/1.0\"><teiHeader><fileDesc><titleStmt><title>A bomb</title></titleStmt></fileDesc></teiHeader>"
+        building += "<text><body><div type=\"document\" xml:id=\"d1\"><p>&a9;</p></div></body></text></TEI>\n"
+        let bomb = building
         try await fixture.app.test(.router) { client in
             let owner = Browser(client: client)
             #expect(try await Self.sideload(owner, file: "frus2001entity.xml", entity).status == .accepted)
@@ -157,7 +169,7 @@ import Testing
 
     /// The row's done-when: a volume removed is gone from search, Browse and the reader. Remove of an indexed
     /// volume is a job, the index's one writer: the kit's `removeVolume`, then its file; the other volume
-    /// stays; and a removal refuses what holds the volume meanwhile.
+    /// stays; and a second removal of the volume, while the first waits, is refused.
     @Test func aRemovedVolumeIsGoneFromSearchBrowseAndTheReader() async throws {
         let fixture = try await Fixture(volumes: ["frus1894Nicaragua", "frus1961-63v06"])
         defer { withExtendedLifetime(fixture) {} }
@@ -168,10 +180,23 @@ import Testing
             #expect(try decode(SearchResultList.self, try await owner.get("/api/v1/search?keywords=nicaragua")).total > 0)
             #expect(try await owner.get("/api/v1/volumes/frus1894Nicaragua/documents/d1/html?part=body").status == .ok)
 
+            // The queue held by a job of its own, so that the removal waits.
+            let gate = JobGate()
+            _ = try await fixture.users.jobs.submit(.projectLeads, subject: "a job that holds the queue") { _ in
+                await gate.wait()
+                return nil
+            }
+            await gate.untilReached()
             let removal = try await owner.send(.delete, "\(Self.library)/volumes/frus1894Nicaragua")
             #expect(removal.status == .accepted, "\(problemCode(removal) ?? "")")
             let job = try decode(AdminJob.self, removal)
             #expect(job.kind == "libraryRemove" && job.subject == "frus1894Nicaragua")
+            #expect(problemCode(try await owner.send(.delete, "\(Self.library)/volumes/frus1894Nicaragua")) == "REMOVAL_IN_PROGRESS")
+            await #expect(throws: LibraryIndexingRefusal.removalInProgress("frus1894Nicaragua")) {
+                try await fixture.indexer.remove("frus1894Nicaragua", requestedBy: "owner") { _ in }
+            }
+            #expect(try decode(AdminLibrary.self, try await owner.get(Self.library)).removing == ["frus1894Nicaragua"])
+            gate.open()
             await fixture.users.jobs.waitUntilIdle()
             let ended = try decode(AdminJob.self, try await owner.get("/api/v1/admin/jobs/\(job.id)"))
             #expect(ended.state == "succeeded" && ended.progress == "Removed frus1894Nicaragua from the index and the library.", "\(ended)")
@@ -204,8 +229,8 @@ import Testing
             let room = try decode(AdminIndex.self, try await owner.get("/api/v1/admin/index"))
             let storage = try #require(room.storage)
             #expect(room.mode == "standalone" && room.upkeep && storage.reclaimableBytes > 0 && storage.compaction == "notWorthwhile", "\(room)")
-            #expect(storage.requiredBytes == IndexCompactionRule.required(IndexPageStatistics(fileBytes: storage.fileBytes,
-                                                                                                    reclaimableBytes: storage.reclaimableBytes)))
+            #expect(Int64(storage.requiredBytes) == IndexCompactionRule.serverRequired(IndexPageStatistics(fileBytes: storage.fileBytes,
+                                                                                                             reclaimableBytes: storage.reclaimableBytes)))
 
             let compacted = try await owner.send(.post, "/api/v1/admin/index/compact")
             #expect(compacted.status == .accepted, "\(problemCode(compacted) ?? "")")
@@ -226,7 +251,7 @@ import Testing
 
         let imports = try await Fixture(mode: .import, volumes: [])
         defer { withExtendedLifetime(imports) {} }
-        try await imports.app.test(.router) { client in
+        try await imports.app.test(.router) { (client) async throws in
             let owner = Browser(client: client)
             #expect(problemCode(try await owner.send(.post, "/api/v1/admin/index/compact")) == "UPKEEP_NOT_AVAILABLE")
             #expect(problemCode(try await owner.send(.post, "/api/v1/admin/index/check")) == "UPKEEP_NOT_AVAILABLE")
@@ -256,10 +281,8 @@ import Testing
             #expect(job.kind == "indexReset")
             await fixture.users.jobs.waitUntilIdle()
             let ended = try decode(AdminJob.self, try await owner.get("/api/v1/admin/jobs/\(job.id)"))
-            #expect(ended.state == "succeeded" && ended.progress?.hasPrefix("Emptied the index of 139 documents from 1 volumes: job") == true, "\(ended)")
-            let jobs = try decode(AdminJobList.self, try await owner.get("/api/v1/admin/jobs")).jobs
-            let again = try #require(jobs.first { $0.kind == "libraryIndex" })
-            #expect(again.state == "succeeded" && again.progress == "Indexed 2 volumes.", "\(again)")
+            #expect(ended.state == "succeeded" && ended.progress == "Emptied the index of 139 documents from 1 volumes, and indexed 2 of 2 volumes again.",
+                    "\(ended)")
             #expect(try decode(SearchResultList.self, try await owner.get("/api/v1/search?keywords=nicaragua")).total == before)
             #expect(fixture.indexer.stamps.failures().isEmpty, "the stamps begin again")
             #expect(await fixture.users.server.state.index?.documentsByVolume == ["frus1894Nicaragua": 139, "frus1961-63v06": 123])

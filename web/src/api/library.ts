@@ -38,6 +38,8 @@ export interface LibraryVolume {
   /** Whether the served index holds it. */
   indexed: boolean;
   sideloaded: boolean;
+  /** Whether the published catalogue lists it, so that it can be downloaded: not one side-loaded under an id it lacks (S21e). */
+  catalogued: boolean;
   bytes?: number;
   blobSha?: string;
   downloadedAt?: string;
@@ -66,6 +68,8 @@ export interface AdminLibrary {
    * (PLAN's S21e), while volumes of it are still to be re-indexed for the index version `to`.
    */
   indexing: { active: boolean; volume?: string; upgrade?: { from: number; to: number; volumes: string[] } };
+  /** The volumes a removal waits or runs for (PLAN's S21e). */
+  removing: string[];
   volumes: LibraryVolume[];
 }
 
@@ -76,11 +80,8 @@ export const isDownloading = (volume: LibraryVolume) => volume.status === 'queue
  * Whether Index takes the volume, as the server does: its file is in place, no download or pass holds it, and
  * the index lacks it, or holds it from a pass that did not finish.
  */
-export const waitsForIndex = (volume: LibraryVolume, upgrading?: readonly string[]) =>
-  volume.downloaded &&
-  !isDownloading(volume) &&
-  volume.status !== 'indexing' &&
-  (!volume.indexed || volume.index !== undefined || (upgrading?.includes(volume.volumeId) ?? false));
+export const waitsForIndex = (volume: LibraryVolume) =>
+  volume.downloaded && !isDownloading(volume) && volume.status !== 'indexing' && (!volume.indexed || volume.index !== undefined);
 
 /**
  * The Library, read again every two seconds while a download waits or runs, or an indexing job does, else every
@@ -94,7 +95,7 @@ export const libraryQuery = queryOptions({
   refetchInterval: (query) => {
     if (query.state.status === 'error') return false;
     const data = query.state.data;
-    return data?.volumes.some(isDownloading) || data?.indexing.active ? 2_000 : 30_000;
+    return data?.volumes.some(isDownloading) || data?.indexing.active || (data?.removing.length ?? 0) > 0 ? 2_000 : 30_000;
   },
 });
 
@@ -122,6 +123,7 @@ export async function removeVolume(client: QueryClient, volumeId: string): Promi
   const job = await change<AdminJob>(client, 'DELETE', `/api/v1/admin/library/volumes/${encodeURIComponent(volumeId)}`);
   await client.refetchQueries({ queryKey: ['admin', 'library'] });
   void client.invalidateQueries({ queryKey: ['admin'] });
+  corpusChanged(client);
   return job;
 }
 
@@ -159,5 +161,11 @@ export async function sideloadVolume(client: QueryClient, file: File): Promise<S
   }
   await client.refetchQueries({ queryKey: ['admin', 'library'] });
   void client.invalidateQueries({ queryKey: ['admin'] });
+  corpusChanged(client);
   return answer;
+}
+
+/** What Browse and search read of the server's volumes is asked again: a side-load or a removal changes it. */
+function corpusChanged(client: QueryClient) {
+  for (const key of ['volumes', 'volume', 'section', 'document', 'search', 'facets']) void client.invalidateQueries({ queryKey: [key] });
 }

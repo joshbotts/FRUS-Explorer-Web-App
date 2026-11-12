@@ -24,27 +24,33 @@ import Testing
         let users: UserDataFixture
         let library: VolumeLibrary
         let indexer: LibraryIndexer
-        /// The stacks every route reads the index through, which the indexing lets go of before it writes.
+        /// The stacks every route reads the index through, which a job that holds the index lets go of before it writes.
         let provider: ServedIndexProvider
+        /// The data files, with a catalogue overlay of the fixture's own (PLAN's S21e), and the reader over them.
+        let resources: ServerResources
+        let reader: ReaderService
 
         init(mode: ServerConfiguration.Mode = .standalone, volumes: [String] = LibraryIndexingRouteTests.fixtures) async throws {
             users = try await UserDataFixture()
             let files = users.server.files
             try RepositoryFiles.mountTEI(volumes, at: files.volumesDirectory)
+            // The process's data files are every test's: a side-load's overlay stays the fixture's.
+            resources = users.server.resources.withOwnCatalogueOverlay()
+            reader = ReaderService(volumesDirectory: files.volumesDirectory, resources: resources)
             library = VolumeLibrary(volumesDirectory: files.volumesDirectory, store: users.store, jobs: users.jobs,
-                                    catalogue: users.server.resources.manifest, sources: FakeGitHub().sources, transport: nil, mode: mode)
+                                    catalogue: resources.manifest, sources: FakeGitHub().sources, transport: nil, mode: mode)
             try library.prepare()
             let state = users.server.state
-            provider = ServedIndexProvider(state: state, resources: users.server.resources, volumesDirectory: files.volumesDirectory,
+            provider = ServedIndexProvider(state: state, resources: resources, volumesDirectory: files.volumesDirectory,
                                            userStore: users.store.searchDatabase)
             indexer = LibraryIndexer(liveIndex: files.liveIndex, volumesDirectory: files.volumesDirectory, mode: mode,
-                                     resources: users.server.resources.indexing, jobs: users.jobs, state: state,
+                                     resources: resources.indexing, jobs: users.jobs, state: state,
                                      observer: ServedIndexWriting(state: state, provider: provider, log: { _ in }), capacity: { .max })
         }
 
         var app: some ApplicationProtocol {
             Application(router: ServedRouter(base: .root, router: buildRouter(
-                state: users.server.state, resources: users.server.resources, reader: users.server.reader, provider: provider,
+                state: users.server.state, resources: resources, reader: reader, provider: provider,
                 userData: users.services, library: library, indexer: indexer)))
         }
 

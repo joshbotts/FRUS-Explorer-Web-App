@@ -444,15 +444,16 @@ enum ExportChecks {
     /// The version a Standalone server's own index is at (PLAN's S21e): its documents' own record,
     /// `document_revisions.index_version`, which the kit's indexing stamps each document with, read in place
     /// of any export's stamp the index was seeded from, since the server has indexed into it since. It is
-    /// the lowest a document now in its volume is at (a row the kit marks `vanished` keeps the version it
-    /// was last written at), the version the index is wholly at while an upgrade at a start re-indexes it
-    /// volume by volume, and this build's for an index that holds none. An index holding a document
-    /// written at a later version, by a later build, is refused: this one cannot read it back.
+    /// the lowest a document the index holds now is at, the kit's revisions kept through a removal and a
+    /// rebuild left aside as its own queries leave them (`EXISTS` in `document_cache`): the version the
+    /// index is wholly at while an upgrade at a start re-indexes it, and this build's for an index that
+    /// holds none. An index holding a document written at a later version, by a later build, is refused:
+    /// this one cannot read it back.
     static func checkLiveVersions(_ db: SQLiteConnection) throws -> Int {
         let supported = IndexCompatibility.supportedIndexVersion
         let row = try db.query("""
-            SELECT min(index_version), max(index_version) FROM document_revisions
-             WHERE change_kind IS NOT 'vanished'
+            SELECT min(r.index_version), max(r.index_version) FROM document_revisions r
+             WHERE EXISTS (SELECT 1 FROM document_cache c WHERE c.volume_id = r.volume_id AND c.document_id = r.document_id)
             """).first ?? []
         if let highest = row.count > 1 ? row[1].integer : nil, highest > Int64(supported) {
             throw ImportRefusal(.checkingVersions, "This index holds documents indexed at index version \(highest), by a later build of the server; this one indexes at \(supported). Run the later build, or reset the index so that this one indexes its volumes again.")

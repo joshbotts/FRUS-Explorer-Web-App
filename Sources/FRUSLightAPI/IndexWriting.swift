@@ -62,14 +62,19 @@ struct ImportObservers: ImportObserver {
     }
 }
 
-/// An export installed as a Standalone server's index (PLAN's S21c's seed): the stamps and the records of
-/// the index it replaced, which describe another file, are forgotten.
+/// An export installed as a Standalone server's index (PLAN's S21c's seed): before it takes the index's place,
+/// the log of the index it replaces is folded into that file (PLAN's S21e), so that no commit of it waits in a
+/// log beside the name a live read-only open reads the new file by; and once it has, the stamps and the
+/// records of the index it replaced, which describe another file, are forgotten.
 struct IndexerAfterIndexImport: ImportObserver {
     let indexer: LibraryIndexer
 
     func importDidReach(_ step: ReadinessStep, detail: String, progress: Double?) async {
+        switch step {
+        case .installingIndex: await indexer.indexWillBeReplaced()
         // The import's last step, reached once the new index is installed.
-        guard step == .openingIndex else { return }
-        await indexer.indexWasReplaced()
+        case .openingIndex: await indexer.indexWasReplaced()
+        default: break
+        }
     }
 }

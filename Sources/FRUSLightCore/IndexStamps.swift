@@ -40,8 +40,9 @@ public struct IndexingFailureRecord: Codable, Sendable, Equatable {
 
 /// The upgrade of a Standalone server's index a start began (PLAN's S21e), kept beside the stamps while it is
 /// under way: the date-index version the index was at, the kit's it is re-indexed for from the cached XML,
-/// and the volumes still to be re-indexed, so that an upgrade a stop of the server cut short is finished,
-/// from where it was, by the next start.
+/// and the volumes the kit's pass over every volume has still to take, which `/readyz` names. An upgrade a
+/// stop of the server cut short is begun again by the next start, whose pass takes every volume again, as
+/// the app's launch runs its pass again.
 public struct IndexUpgradeRecord: Codable, Sendable, Equatable {
     public var from: Int
     public var to: Int
@@ -86,6 +87,9 @@ public final class IndexStampFile: IndexingStampStore, @unchecked Sendable {
         /// The volumes a removal has begun to take out of the index whose files are still to go (PLAN's
         /// S21e), which the next start's removes; absent in a file from before.
         var removals: [String]?
+        /// Whether a reset has begun and its pass over every volume not ended (PLAN's S21e): the next start
+        /// empties the index again and runs the pass.
+        var resetting: Bool?
     }
 
     /// A stamp, as the kit stores it.
@@ -244,17 +248,22 @@ public final class IndexStampFile: IndexingStampStore, @unchecked Sendable {
         }
     }
 
-    /// Keeps of the upgrade's volumes those `still` holds: one that left the index has nothing left to upgrade.
-    public func keepUpgrading(_ still: Set<String>) {
-        change { contents in
-            guard let upgrade = contents.upgrade, upgrade.remaining.contains(where: { !still.contains($0) }) else { return }
-            contents.upgrade?.remaining.removeAll { !still.contains($0) }
-        }
-    }
-
     /// The upgrade has ended: its record goes.
     public func endUpgrade() {
         change { $0.upgrade = nil }
+    }
+
+    /// Whether a reset has begun and its pass over every volume not ended.
+    public func isResetting() -> Bool { locked { contents.resetting == true } }
+
+    /// A reset begins, or goes on past the stamps' clearing to its pass.
+    public func markResetting() {
+        change { $0.resetting = true }
+    }
+
+    /// The reset's pass over every volume has ended.
+    public func endResetting() {
+        change { $0.resetting = nil }
     }
 
     /// The volumes a removal has begun to take out of the index whose files are still to go.

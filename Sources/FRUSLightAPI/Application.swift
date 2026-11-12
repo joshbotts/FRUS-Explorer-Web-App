@@ -258,7 +258,7 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
                                   beforeOpening: { [indexer = components.indexer, library = components.library, resources = components.resources] in
                                       // The index brought to this build, and an upgrade begun or resumed (PLAN's S21e).
                                       await indexer.prepareAtStart(removingFiles: { volumeId in
-                                          do { try await library.remove(volumeId) } catch LibraryRefusal.notDownloaded {}
+                                          do { try await library.remove(volumeId) } catch LibraryRefusal.notDownloaded, LibraryRefusal.unknownVolume {}
                                           await resources.refreshLocalVolumes(in: library.volumesDirectory)
                                       })
                                   },

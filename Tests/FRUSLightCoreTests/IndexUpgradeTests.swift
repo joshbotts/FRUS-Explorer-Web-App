@@ -1,10 +1,11 @@
 // The index at a Standalone server's start (PLAN's S21e): an index whose stamps are behind the kit's
-// date-index version is re-indexed from the cached XML, volume by volume, by the start's job, while the
-// index is served and `/readyz` names the volumes still to go; an upgrade a stop cut short between volumes
-// is finished, from where it was, by the next start; full-text tables of an earlier generation are rebuilt
-// from the documents the index holds before it is served; and a removal a stop cut short is finished.
+// date-index version is re-indexed from the cached XML by the start's job, the kit's pass over every volume,
+// as the app's launch runs it, while the index is served and `/readyz` names the volumes still to go; an
+// upgrade a stop cut short is finished by the next start, whose pass takes every volume again, as the app's
+// does; full-text tables of an earlier generation are rebuilt from the documents the index holds before it
+// is served; and a removal or a reset a stop cut short is finished.
 
-import FRUSCoreKit
+@testable import FRUSCoreKit
 @testable import FRUSLightCore
 import FRUSLightTestSupport
 import FTS5Store
@@ -17,8 +18,8 @@ import Testing
     /// The server's next start over the same folders and store, in `ImportWatcher.run`'s order: the indexer
     /// brings the index to this build, then the index found there is opened and served, then the start's
     /// indexing is queued, which it gives.
-    static func start(after f: Fixture, held: JobGate? = nil,
-                      removingFiles: (@Sendable (String) async throws -> Void)? = nil) async throws -> (Fixture, Job?) {
+    static func start(after f: Fixture, held: JobGate? = nil, removingFiles: (@Sendable (String) async throws -> Void)? = nil,
+                      beforeTheJob: ((LibraryIndexer) async -> Void)? = nil) async throws -> (Fixture, Job?) {
         let queue = try await InProcessJobQueue.open(store: f.store)
         let state = ServerState(configuration: ServerConfiguration(mode: .standalone, dataDirectory: f.files.root))
         await state.prepareToOpenExistingIndex(files: f.files)
@@ -26,6 +27,7 @@ import Testing
         let indexer = LibraryIndexingTests.indexer(files: f.files, mode: .standalone, queue: queue, state: state, observer: recorder)
         await indexer.prepareAtStart(removingFiles: removingFiles)
         await state.openExistingIndex(files: f.files)
+        await beforeTheJob?(indexer)
         let job = await indexer.resumeAtStart()
         return (Fixture(directory: f.directory, files: f.files, store: f.store, queue: queue, state: state, recorder: recorder,
                         indexer: indexer), job)
@@ -48,10 +50,10 @@ import Testing
         await f.recorder.events.filter { $0.hasPrefix("wrote ") }.map { String($0.dropFirst(6)) }
     }
 
-    /// The row's done-when: a volume indexed under a lowered stamp is re-indexed at the start. The start's job
-    /// re-indexes each volume from its file, one after another, while the index found there is served and
-    /// `/readyz` names the volumes still to go; then the stamp is the kit's, the upgrade's record goes, and the
-    /// next start begins none.
+    /// The row's done-when: a volume indexed under a lowered stamp is re-indexed at the start. The start's job,
+    /// the kit's pass over every volume, re-indexes each from its file, one after another, while the index found
+    /// there is served and `/readyz` names the volumes still to go; then the stamp is the kit's, the upgrade's
+    /// record goes, and the next start begins none.
     @Test func aVolumeIndexedUnderALoweredStampIsReindexedAtTheStart() async throws {
         let f = try await Self.indexed(["frus1894Nicaragua", "frus1961-63v06"])
         defer { withExtendedLifetime(f.directory) {} }
@@ -73,8 +75,10 @@ import Testing
         #expect(await next.state.index != nil, "served while it is upgraded")
         gate.open()
 
+        #expect(running.subject == "every volume, re-indexed for index version \(IndexingPipeline.currentDateIndexVersion)")
         let ended = try await next.finished(running)
-        #expect(ended.state == .succeeded && ended.progress == "Indexed 2 volumes.", "\(ended)")
+        #expect(ended.state == .succeeded && ended.progress == "Re-indexed 2 of 2 volumes for index version \(IndexingPipeline.currentDateIndexVersion).",
+                "\(ended)")
         #expect(await Self.wrote(next) == ["frus1894Nicaragua", "frus1961-63v06"])
         #expect(next.indexer.stamps.integer(forKey: IndexingPipeline.dateIndexVersionKey) == IndexingPipeline.currentDateIndexVersion)
         #expect(next.indexer.stamps.upgrade() == nil)
@@ -86,34 +90,61 @@ import Testing
         #expect(none == nil && again.indexer.stamps.upgrade() == nil, "nothing is behind")
     }
 
-    /// The row's done-when: a run killed between volumes is finished at the next start. The server stops once
-    /// the upgrade's first volume is re-indexed, its job going no further; the next start finds the upgrade's
-    /// record and re-indexes the two volumes it had still to do, and only those, and then marks it done.
-    @Test func anUpgradeAStopCutShortBetweenVolumesIsFinishedAtTheNextStart() async throws {
+    /// The row's done-when: a run killed between volumes is finished at the next start. The server stops in the
+    /// upgrade's pass, its first volume re-indexed and the second's documents stored, its job going no
+    /// further; the next start begins the upgrade again, and its pass, as the app's launch runs its pass again,
+    /// re-indexes every volume, the one the stop cut short among them, and marks it done.
+    @Test func anUpgradeAStopCutShortIsFinishedAtTheNextStart() async throws {
         let f = try await Self.indexed(LibraryIndexingTests.fixtures)
         defer { withExtendedLifetime(f.directory) {} }
         Self.lowerTheStamp(f)
         let gate = JobGate()
-        let (stopped, job) = try await Self.start(after: f, held: gate)
+        let (stopped, job) = try await Self.start(after: f, beforeTheJob: { indexer in
+            await indexer.setWriterOpenedTestHook { pipeline in
+                await pipeline.setDocumentBatchStoredTestHook { volumeId, _ in
+                    if volumeId == "frus1961-63v06" { await gate.wait() }
+                }
+            }
+        })
         let abandoned = try #require(job)
         await gate.untilReached()
-        #expect(stopped.indexer.stamps.upgrade()?.remaining == ["frus1961-63v06", "frus1969-76ve09p1"])
+        #expect(await Self.wrote(stopped) == ["frus1894Nicaragua"])
 
-        // The next start, the stopped server's job going no further, as a stop leaves it.
+        // The next start, the stopped server's pass going no further, as a stop leaves it.
         let (next, resumed) = try await Self.start(after: stopped)
-        #expect(next.indexer.stamps.upgrade()?.remaining == ["frus1961-63v06", "frus1969-76ve09p1"])
-        #expect(await next.state.readiness().detail.contains("2 volumes are still to go (frus1961-63v06, frus1969-76ve09p1)"))
-        let ended = try await next.finished(try #require(resumed))
-        #expect(ended.state == .succeeded && ended.progress == "Indexed 2 volumes.", "\(ended)")
-        #expect(await Self.wrote(next) == ["frus1961-63v06", "frus1969-76ve09p1"])
+        #expect(next.indexer.stamps.upgrade()?.remaining == LibraryIndexingTests.fixtures)
+        #expect(await next.state.readiness().detail.contains("3 volumes are still to go (frus1894Nicaragua, frus1961-63v06, frus1969-76ve09p1)"))
+        let resumedJob = try #require(resumed)
+        let ended = try await next.finished(resumedJob)
+        #expect(ended.state == .succeeded && ended.progress == "Re-indexed 3 of 3 volumes for index version \(IndexingPipeline.currentDateIndexVersion).",
+                "\(ended)")
+        #expect(await Self.wrote(next) == LibraryIndexingTests.fixtures)
         #expect(next.indexer.stamps.integer(forKey: IndexingPipeline.dateIndexVersionKey) == IndexingPipeline.currentDateIndexVersion)
-        #expect(next.indexer.stamps.upgrade() == nil && (await next.state.upgrade) == nil)
+        #expect(next.indexer.stamps.upgrade() == nil)
+        #expect(await next.state.upgrade == nil)
         #expect(try next.indexed() == LibraryIndexingTests.documents)
+        #expect(try next.unfinished().isEmpty, "the volume the stop cut short is finished")
 
         // The stopped server's job, let go, so that nothing of it outlives the test.
         _ = try? await stopped.queue.cancel(abandoned.id, by: nil)
         gate.open()
         await stopped.queue.waitUntilIdle()
+    }
+
+    /// A reset a stop cut short, kept in the stamps, is finished by the next start: the index emptied again,
+    /// and every volume indexed again by the start's job, the kit's pass, after which the record goes.
+    @Test func aResetAStopCutShortIsFinishedAtTheNextStart() async throws {
+        let f = try await Self.indexed(["frus1894Nicaragua", "frus1961-63v06"])
+        defer { withExtendedLifetime(f.directory) {} }
+        IndexStampFile(url: f.stampsFile).markResetting()
+        let (next, job) = try await Self.start(after: f)
+        let running = try #require(job)
+        #expect(running.kind == .indexReset && running.subject == "every volume, indexed again after the index's reset")
+        let ended = try await next.finished(running)
+        #expect(ended.state == .succeeded && ended.progress == "indexed 2 of 2 volumes again.", "\(ended)")
+        #expect(!next.indexer.stamps.isResetting())
+        #expect(try next.indexed() == ["frus1894Nicaragua": 139, "frus1961-63v06": 123])
+        #expect(next.indexer.stamps.integer(forKey: IndexingPipeline.dateIndexVersionKey) == IndexingPipeline.currentDateIndexVersion)
     }
 
     /// Full-text tables of an earlier generation, as an older build's index has, are made again by the kit's
@@ -136,7 +167,8 @@ import Testing
         }
         let (next, job) = try await Self.start(after: f)
         #expect(job == nil, "nothing to index again")
-        #expect(await next.state.index != nil, "\(await next.state.readiness())")
+        let readiness = await next.state.readiness()
+        #expect(await next.state.index != nil, "\(readiness)")
         #expect(try matches() == before)
     }
 

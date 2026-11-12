@@ -135,9 +135,9 @@ function Library({ library }: { library: AdminLibrary }) {
   // server takes it, a failed one and an indexed one with no file among them.
   const missing = library.volumes.filter((volume) => !volume.downloaded && !isDownloading(volume)).length;
   const waiting = library.volumes.filter(isDownloading).length;
-  // What Index All Waiting asks for, as the server takes it, an upgrade's volumes still to go among them.
-  const upgrading = library.indexing.upgrade?.volumes;
-  const unindexed = library.mode === 'standalone' ? library.volumes.filter((volume) => waitsForIndex(volume, upgrading)).length : 0;
+  // What Index All Waiting asks for, as the server takes it.
+  const beingRemoved = new Set(library.removing);
+  const unindexed = library.mode === 'standalone' ? library.volumes.filter(waitsForIndex).length : 0;
 
   return (
     <>
@@ -246,6 +246,7 @@ function Library({ library }: { library: AdminLibrary }) {
                   <span className={`library-state ${volume.status}`}>{statusWord(volume, library.mode)}</span>
                   {volume.indexed && volume.status !== 'indexed' && <span className="note"> · {words.statuses.indexed}</span>}
                   {volume.sideloaded && <span className="note"> · {words.sideloadedMark}</span>}
+                  {beingRemoved.has(volume.volumeId) && <p className="note">{words.removing}</p>}
                   {volume.indexed && !volume.downloaded && (
                     <p className="note">{library.downloads ? words.indexedWithoutFile : words.indexedWithoutFileHere}</p>
                   )}
@@ -265,7 +266,7 @@ function Library({ library }: { library: AdminLibrary }) {
                 </td>
                 <td>
                   {/* An indexed volume's file is not replaced until the corrections check comes, nor one a pass reads. */}
-                  {library.downloads && !isDownloading(volume) && volume.status !== 'indexing' && !(volume.indexed && volume.downloaded) && (
+                  {library.downloads && volume.catalogued && !beingRemoved.has(volume.volumeId) && !isDownloading(volume) && volume.status !== 'indexing' && !(volume.indexed && volume.downloaded) && (
                     <button
                       type="button"
                       data-download={volume.volumeId}
@@ -276,7 +277,7 @@ function Library({ library }: { library: AdminLibrary }) {
                       {volume.downloaded ? words.downloadAgain : words.download}
                     </button>
                   )}{' '}
-                  {library.mode === 'standalone' && waitsForIndex(volume, upgrading) && (
+                  {library.mode === 'standalone' && !beingRemoved.has(volume.volumeId) && waitsForIndex(volume) && (
                     <button
                       type="button"
                       data-index={volume.volumeId}
@@ -288,7 +289,7 @@ function Library({ library }: { library: AdminLibrary }) {
                     </button>
                   )}{' '}
                   {/* Not while an indexing job waits or runs, which may take the volume; an indexed one leaves the index first. */}
-                  {library.mode === 'standalone' && volume.downloaded && !isDownloading(volume) && !library.indexing.active && (
+                  {library.mode === 'standalone' && (volume.downloaded || volume.indexed) && !beingRemoved.has(volume.volumeId) && !isDownloading(volume) && !library.indexing.active && (
                     <button
                       type="button"
                       data-remove={volume.volumeId}
@@ -374,7 +375,9 @@ function RemoveConfirmation({
       <h2 id={headingId} tabIndex={-1}>
         {words.removeTitle(volume.volumeId)}
       </h2>
-      <p id={messageId}>{volume.indexed ? words.removeMessageIndexed : words.removeMessage}</p>
+      <p id={messageId}>
+        {volume.indexed ? words.removeMessageIndexed : words.removeMessage} {volume.catalogued ? '' : words.removeSideloaded}
+      </p>
       {failure && (
         <p className="error" role="alert">
           {failure}

@@ -85,6 +85,12 @@ public final class ServerResources: Sendable {
         self.indexing = indexing
     }
 
+    /// The same data files with a catalogue overlay of its own, empty: for a test whose side-loads no other
+    /// test sharing the process's resources should see.
+    func withOwnCatalogueOverlay() -> ServerResources {
+        ServerResources(directory: directory, manifest: manifest, brokenRefs: brokenRefs, citedPages: citedPages, indexing: indexing)
+    }
+
     /// The manifest's entry for `volumeId`, or the catalogue overlay's for a volume side-loaded under an id
     /// the published catalogue lacks (PLAN's S21e), as the app's `ManifestStore.entry(forVolumeId:)` reads
     /// its local entries; nil for any other. Only an id one of them names is ever joined into a path: a
@@ -109,9 +115,11 @@ public final class ServerResources: Sendable {
     /// a sidecar whose file is gone removed. Off the cooperative pool: it reads each new file's header.
     public func refreshLocalVolumes(in volumesDirectory: URL) async {
         let known = Set(positions.keys)
+        // Two refreshes at once keep the later's listing, whichever ends first.
+        let ticket = local.ticket()
         // The reconcile throws nothing; the run's own error, should the queue fail it, leaves the overlay as it was.
         guard let entries = try? await Blocking.run({ LocalVolumeCatalog.reconcile(in: volumesDirectory, known: known) }) else { return }
-        local.set(entries)
+        local.set(entries, ticket: ticket)
     }
 
     /// `ArchivalIndexes.bundled`, app code: `central-files-index.json`, `volume-sources-index.json` and
@@ -145,6 +153,16 @@ private final class LocalVolumes: @unchecked Sendable {
     private let lock = NSLock()
     private var byId: [String: VolumeManifestEntry] = [:]
     private var ordered: [VolumeManifestEntry] = []
+    /// The refreshes asked for, and the latest whose listing is kept.
+    private var issued = 0
+    private var applied = 0
+
+    func ticket() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        issued += 1
+        return issued
+    }
 
     func entry(_ volumeId: String) -> VolumeManifestEntry? {
         lock.lock()
@@ -158,9 +176,11 @@ private final class LocalVolumes: @unchecked Sendable {
         return ordered
     }
 
-    func set(_ entries: [VolumeManifestEntry]) {
+    func set(_ entries: [VolumeManifestEntry], ticket: Int) {
         lock.lock()
         defer { lock.unlock() }
+        guard ticket > applied else { return }
+        applied = ticket
         ordered = entries.sorted { $0.volumeId < $1.volumeId }
         byId = Dictionary(ordered.map { ($0.volumeId, $0) }, uniquingKeysWith: { first, _ in first })
     }

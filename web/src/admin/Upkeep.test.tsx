@@ -28,13 +28,14 @@ const volume = (fields: Partial<LibraryVolume> & Pick<LibraryVolume, 'volumeId' 
   downloaded: false,
   indexed: false,
   sideloaded: false,
+  catalogued: true,
   ...fields,
 });
 
 function library(volumes: LibraryVolume[], fields: Partial<AdminLibrary> = {}): AdminLibrary {
   const counts: AdminLibrary['counts'] = {};
   for (const { status } of volumes) counts[status] = (counts[status] ?? 0) + 1;
-  return { mode: 'standalone', offline: false, downloads: true, source: 'github', counts, indexing: { active: false }, volumes, ...fields };
+  return { mode: 'standalone', offline: false, downloads: true, source: 'github', counts, indexing: { active: false }, removing: [], volumes, ...fields };
 }
 
 const job = (fields: Partial<AdminJob> & Pick<AdminJob, 'id' | 'kind'>): AdminJob => ({
@@ -57,7 +58,7 @@ describe('Administration ▸ Library, a Standalone server’s side-load and remo
       '/api/v1/admin/library': () => library(volumes),
       'POST /api/v1/admin/library/sideload': () => {
         if (refuse) return new ProblemAnswer(409, 'VOLUME_EXISTS', 'Volume ‘draft-volume’ is already present. Delete it first to replace it.');
-        volumes = [...volumes, volume({ volumeId: 'draft-volume', status: 'downloaded', downloaded: true, sideloaded: true, subseries: 'sideloaded' })];
+        volumes = [...volumes, volume({ volumeId: 'draft-volume', status: 'downloaded', downloaded: true, sideloaded: true, catalogued: false, subseries: 'sideloaded' })];
         return { volumeId: 'draft-volume', catalogued: false, job: job({ id: 'J2', kind: 'libraryIndex', subject: 'draft-volume' }) };
       },
     });
@@ -82,7 +83,11 @@ describe('Administration ▸ Library, a Standalone server’s side-load and remo
     expect(headers['X-CSRF-Token']).toBe(alice.csrfToken);
     const table = await screen.findByRole('table', { name: 'The catalogue’s volumes, with what this server holds of each' });
     await waitFor(() => expect(within(table).getByRole('row', { name: /^draft-volume/ })).toBeTruthy());
-    expect(within(within(table).getByRole('row', { name: /^draft-volume/ })).getByText('Side-loaded', { exact: false })).toBeTruthy();
+    const draft = within(table).getByRole('row', { name: /^draft-volume/ });
+    expect(within(draft).getByText('Side-loaded', { exact: false })).toBeTruthy();
+    // The catalogue does not list it, so nothing can download it.
+    expect(within(draft).queryByRole('button', { name: /Download/ })).toBeNull();
+    expect(within(draft).getByRole('button', { name: 'Remove draft-volume' })).toBeTruthy();
 
     refuse = true;
     await userEvent.upload(within(section).getByLabelText('TEI file'), file);
@@ -90,21 +95,23 @@ describe('Administration ▸ Library, a Standalone server’s side-load and remo
     await waitFor(() => expect(within(section).getByRole('alert').textContent).toBe('Volume ‘draft-volume’ is already present. Delete it first to replace it.'));
   });
 
-  it('removes an indexed volume through a job after a question that says it leaves the index, and names an upgrade under way', async () => {
+  it('removes an indexed volume through a job after a question that says it leaves the index, and says how far an upgrade is', async () => {
     const volumes = [volume({ volumeId: 'frus1894Nicaragua', status: 'indexed', indexed: true, downloaded: true, bytes: 1_273_810 })];
+    let removing: string[] = [];
     const fetch = stubServer({
       '/readyz': ready,
       '/api/v1/me': alice,
       '/api/v1/admin/library': () =>
-        library(volumes, { indexing: { active: false, upgrade: { from: 73, to: 74, volumes: ['frus1894Nicaragua', 'frus1961-63v06'] } } }),
-      'DELETE /api/v1/admin/library/volumes/frus1894Nicaragua': () => job({ id: 'J3', kind: 'libraryRemove', subject: 'frus1894Nicaragua' }),
+        library(volumes, { removing, indexing: { active: false, upgrade: { from: 73, to: 74, volumes: ['frus1894Nicaragua', 'frus1961-63v06'] } } }),
+      'DELETE /api/v1/admin/library/volumes/frus1894Nicaragua': () => {
+        removing = ['frus1894Nicaragua'];
+        return job({ id: 'J3', kind: 'libraryRemove', subject: 'frus1894Nicaragua' });
+      },
     });
     renderAt('/admin/library');
     expect(await screen.findByText('Re-indexing for index version 74: 2 volumes are still to go, while search answers.')).toBeTruthy();
     const table = await screen.findByRole('table', { name: 'The catalogue’s volumes, with what this server holds of each' });
     const row = within(table).getByRole('row', { name: /^frus1894Nicaragua/ });
-    // An upgrade's volume waits for Index.
-    expect(within(row).getByRole('button', { name: 'Index frus1894Nicaragua' })).toBeTruthy();
     await userEvent.click(within(row).getByRole('button', { name: 'Remove frus1894Nicaragua' }));
     const dialog = await screen.findByRole('alertdialog', { name: 'Remove frus1894Nicaragua?' });
     expect(within(dialog).getByText(/Its documents leave the index, in a job that Jobs follows/)).toBeTruthy();
@@ -113,6 +120,9 @@ describe('Administration ▸ Library, a Standalone server’s side-load and remo
       expect(screen.getAllByRole('status').some((line) => line.textContent === 'The removal of frus1894Nicaragua is queued as a job: Jobs follows it.')).toBe(true),
     );
     expect(sent(fetch, 'DELETE', '/api/v1/admin/library/volumes/frus1894Nicaragua')).toHaveLength(1);
+    // While its removal waits or runs, the row says so and offers nothing.
+    await waitFor(() => expect(within(row).getByText('Being removed, in a job: Jobs follows it.')).toBeTruthy());
+    expect(within(row).queryByRole('button')).toBeNull();
   });
 });
 

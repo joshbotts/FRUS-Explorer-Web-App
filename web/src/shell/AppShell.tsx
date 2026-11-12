@@ -170,24 +170,29 @@ function skipToMain(event: MouseEvent<HTMLAnchorElement>) {
   document.getElementById('main')?.focus();
 }
 
+/** The queries that read what the server indexes, asked again when its index changes. */
+const corpusQueryKeys = ['search', 'facets', 'inspect', 'timeline', 'concordance', 'citation', 'related', 'citationLookup', 'citationBatch', 'document', 'volumes', 'volume', 'section', 'readingOrder'];
+
 /** While no index is served, says which step the server is at; the reader works meanwhile. */
 function ReadinessBanner() {
   const readiness = useQuery(readinessQuery);
   const queryClient = useQueryClient();
   const ready = readiness.data?.ready;
   const wasReady = useRef(ready);
+  // A Standalone server's index changes while it is served (PLAN's S21e), which its ready sentence's counts say.
+  const detail = ready ? readiness.data?.detail : undefined;
+  const wasDetail = useRef(detail);
 
-  // When an index becomes ready, what was asked before it is asked again: searches and their
-  // readings, citations, related documents (S23d) and Citation Lookup's answers, documents, and what
+  // When an index becomes ready, or a served one changes, what was asked before is asked again: searches and
+  // their readings, citations, related documents (S23d) and Citation Lookup's answers, documents, and what
   // Browse shows of what the server indexes.
   useEffect(() => {
-    if (ready && wasReady.current === false) {
-      for (const key of ['search', 'facets', 'inspect', 'timeline', 'concordance', 'citation', 'related', 'citationLookup', 'citationBatch', 'document', 'volumes', 'volume', 'section', 'readingOrder']) {
-        void queryClient.invalidateQueries({ queryKey: [key] });
-      }
+    if ((ready && wasReady.current === false) || (ready && wasReady.current && detail !== wasDetail.current)) {
+      for (const key of corpusQueryKeys) void queryClient.invalidateQueries({ queryKey: [key] });
     }
     wasReady.current = ready;
-  }, [ready, queryClient]);
+    wasDetail.current = detail;
+  }, [ready, detail, queryClient]);
 
   if (!readiness.data || readiness.data.ready) return null;
   return (

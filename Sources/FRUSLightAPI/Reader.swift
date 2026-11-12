@@ -122,8 +122,9 @@ public actor ReaderService {
         self.capacity = max(1, capacity)
     }
 
-    /// `<volumeId>.xml` in `directory`, when it is there. Callers pass a manifest id only, so
-    /// nothing from a request is joined into a path.
+    /// `<volumeId>.xml` in `directory`, when it is there. Callers pass an id `ServerResources.volume(_:)`
+    /// names only, a manifest id or a side-loaded file's own name (PLAN's S21e), so nothing from a
+    /// request is joined into a path.
     nonisolated static func teiFile(for volumeId: String, in directory: URL) -> URL? {
         let url = directory.appendingPathComponent("\(volumeId).xml")
         var isDirectory: ObjCBool = false

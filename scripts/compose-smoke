@@ -428,10 +428,11 @@ wait_for_200 "$library_base/healthz" 30 || fail "the Standalone server's /health
 # between two of its readings a search, whose answer the indexing job's run holds on both sides of it (S21e).
 : > "$work/library-status.log"
 : > "$work/library-search.log"
-( while :; do
-    before=$(curl -s --max-time 2 -H "Host: localhost:8080" "$library_base/api/v1/admin/status" 2>/dev/null | tr -d '\n')
-    code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "$library_base/api/v1/search?keywords=nicaragua" 2>/dev/null)
-    after=$(curl -s --max-time 2 -H "Host: localhost:8080" "$library_base/api/v1/admin/status" 2>/dev/null | tr -d '\n')
+( set +e  # a reading that times out is a reading missed, not the poller's end
+  while :; do
+    before=$(curl -s --max-time 2 -H "Host: localhost:8080" "$library_base/api/v1/admin/status" 2>/dev/null | tr -d '\n' || true)
+    code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "$library_base/api/v1/search?keywords=nicaragua" 2>/dev/null || true)
+    after=$(curl -s --max-time 2 -H "Host: localhost:8080" "$library_base/api/v1/admin/status" 2>/dev/null | tr -d '\n' || true)
     printf '%s\n%s\n' "$before" "$after" >> "$work/library-status.log"
     printf '%s\t%s\t%s\n' "$code" "$before" "$after" >> "$work/library-search.log"
     sleep 0.05
@@ -591,7 +592,8 @@ for id in smoke-draft smoke-entity; do
   case "$removal" in *'"kind":"libraryRemove"'*' 202') ;; *) fail "$id's removal from the index was not queued: $removal" ;; esac
 done
 library_idle 60 || fail "the removals did not end: $(head -c 400 "$work/library-jobs.json")"
-curl -s --max-time 10 -H "Host: localhost:8080" -o "$work/index-room.json" "$library_base/api/v1/admin/index"
+curl -s --max-time 10 -H "Host: localhost:8080" -o "$work/index-room.json" "$library_base/api/v1/admin/index" \
+  || fail "the index's room did not answer"
 python3 -c 'import json, sys
 room = json.load(open(sys.argv[1], encoding="utf-8"))
 assert room["upkeep"] and room["storage"]["reclaimableBytes"] > 0, room' "$work/index-room.json" \
@@ -613,7 +615,14 @@ assert compaction["state"] == "succeeded" and compaction["progress"].startswith(
 assert check["state"] == "succeeded" and check["progress"].startswith("The index's check found no problems"), check
 print(f"   the side-loaded volumes removed from the index and the library; {compaction['progress']} {check['progress']}")
 PY
-curl -s --max-time 10 -H "Host: localhost:8080" -o "$work/index-room.json" "$library_base/api/v1/admin/index"
+curl -s --max-time 10 -H "Host: localhost:8080" -o "$work/index-room-after.json" "$library_base/api/v1/admin/index" \
+  || fail "the index's room did not answer after the compaction"
+python3 -c 'import json, sys
+before = json.load(open(sys.argv[1], encoding="utf-8"))["storage"]
+after = json.load(open(sys.argv[2], encoding="utf-8"))["storage"]
+assert after["fileBytes"] < before["fileBytes"] and after["reclaimableBytes"] < before["reclaimableBytes"], (before, after)
+print("   the compaction gave back %d bytes of the %d the removals left" % (before["fileBytes"] - after["fileBytes"], before["reclaimableBytes"]))' \
+  "$work/index-room.json" "$work/index-room-after.json" || fail "the compaction gave nothing back: $(cat "$work/index-room-after.json")"
 counts=$(library_counts 2>/dev/null || true)
 [ "$counts" = "indexed=3 notDownloaded=550" ] || fail "the Library is not as it was before the side-loads: $counts"
 found=$(curl -s --max-time 10 -w ' %{http_code}' "$library_base/api/v1/search?keywords=nicaragua")

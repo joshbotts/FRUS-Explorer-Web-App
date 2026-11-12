@@ -120,7 +120,7 @@ function StatusBody({ status }: { status: AdminStatus }) {
           <Link to="/admin/jobs">{copy.admin.jobs.title}</Link>
         </p>
       </section>
-      {status.mode === 'standalone' && <Upkeep />}
+      {status.mode === 'standalone' && <Upkeep busy={!!status.jobs.running || status.jobs.queued > 0} />}
       <Recovery status={status} />
     </>
   );
@@ -130,16 +130,19 @@ function StatusBody({ status }: { status: AdminStatus }) {
  * A Standalone server's index upkeep (PLAN's S21e): the index's room, with the app's line under it, and
  * Compact the Index and Check the Index, each a job.
  */
-function Upkeep() {
+function Upkeep({ busy: working }: { busy: boolean }) {
   const client = useQueryClient();
-  const room = useQuery(indexQuery);
+  // Read again while a job runs, which may compact the index or change what it holds.
+  const room = useQuery({ ...indexQuery, refetchInterval: working ? 2_000 : 30_000 });
   const [said, setSaid] = useState('');
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const storage = room.data?.storage;
+  // What the server takes: any index it serves, and for a compaction one the data volume has the room for.
+  const unavailable = { compact: busy || !room.data?.upkeep || storage?.compaction === 'insufficientSpace', check: busy || !room.data?.upkeep };
 
   async function ask(what: 'compact' | 'check') {
-    if (busy) return;
+    if (unavailable[what]) return;
     setBusy(true);
     setFailure(null);
     setSaid('');
@@ -178,10 +181,10 @@ function Upkeep() {
         </dl>
       )}
       <div className="actions">
-        <button type="button" aria-disabled={busy || !room.data?.upkeep} onClick={() => void ask('compact')}>
+        <button type="button" aria-disabled={unavailable.compact} onClick={() => void ask('compact')}>
           {words.compact}
         </button>
-        <button type="button" aria-disabled={busy || !room.data?.upkeep} onClick={() => void ask('check')}>
+        <button type="button" aria-disabled={unavailable.check} onClick={() => void ask('check')}>
           {words.check}
         </button>
         {/* Always on the page, so that the line is announced when it comes. */}

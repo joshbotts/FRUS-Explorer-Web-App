@@ -2194,6 +2194,8 @@ export const copy = {
       keep: 'Keep It',
       removed: (volume: string) => `Removed ${volume}.`,
       removalQueued: (volume: string) => `The removal of ${volume} is queued as a job: Jobs follows it.`,
+      removing: 'Being removed, in a job: Jobs follows it.',
+      removeSideloaded: 'The catalogue does not list it, so only a side-load of its file brings it back.',
     },
     users: {
       title: 'Users',

@@ -30,6 +30,8 @@ public protocol IndexWritingObserver: Sendable {
 public enum LibraryIndexingRefusal: Error, Equatable, Sendable {
     /// An Import server serves the Mac's export, and indexes nothing.
     case importMode
+    /// A removal of the volume waits or runs already (PLAN's S21e).
+    case removalInProgress(String)
 }
 
 /// Where the library's indexing stands, for the Library and Status: the volume a job indexes now, the
@@ -114,12 +116,12 @@ public actor LibraryIndexer {
     private var waitingJob: String?
     /// The job running; its list, every volume of it until the job ends, or nil until it is read; the one it
     /// indexes now; and those it has indexed.
-    private var runningJob: String?
-    private var runningList: Set<String>?
-    private var runningVolume: String?
-    private var runningIndexed: Set<String> = []
+    var runningJob: String?
+    var runningList: Set<String>?
+    var runningVolume: String?
+    var runningIndexed: Set<String> = []
     /// Test hook: told the writer's pipeline once a job has opened it, before its first volume.
-    private var writerOpenedTestHook: (@Sendable (IndexingPipeline) async -> Void)?
+    var writerOpenedTestHook: (@Sendable (IndexingPipeline) async -> Void)?
     /// The volumes a removal job waits or runs for (PLAN's S21e, IndexUpkeep.swift).
     var queuedRemovals: Set<String> = []
 
@@ -244,9 +246,20 @@ public actor LibraryIndexer {
     @discardableResult
     public func resumeAtStart() async -> Job? {
         guard mode == .standalone else { return nil }
+        // A reset a stop cut short, or an upgrade `prepareAtStart` began (PLAN's S21e): the kit's pass over every
+        // volume, which takes what an interrupted run left with the rest, as the app's launch's pass does.
+        if stamps.isResetting() || stamps.upgrade() != nil {
+            let reason: WholePass = stamps.isResetting() ? .reset : .upgrade
+            do {
+                let job = try await queueWholePass(reason, requestedBy: nil)
+                log("\(reason == .reset ? "Indexing every volume again, after a reset a stop of the server cut short" : "Re-indexing every volume for index version \(IndexingPipeline.currentDateIndexVersion)"), as job \(job.id)")
+                return job
+            } catch {
+                log("The pass over every volume the start owes could not be queued: \(error)")
+                return nil
+            }
+        }
         let leftOut = Set(await tracker.interruptedVolumeIds()).union(stamps.failures().filter { $0.value.kind == .failed }.keys)
-        // The upgrade a start began or resumes (PLAN's S21e, `prepareAtStart`), but what the start leaves out.
-        let upgrading = (stamps.upgrade()?.remaining ?? []).filter { !leftOut.contains($0) }
         let waiting: [String]
         do {
             waiting = try await Blocking.run { [liveIndex, volumesDirectory, resources] in
@@ -259,12 +272,10 @@ public actor LibraryIndexer {
         if !leftOut.isEmpty {
             log("\(leftOut.count) \(leftOut.count == 1 ? "volume is" : "volumes are") left for an admin's Index, since \(leftOut.count == 1 ? "its" : "their") last pass failed or a stop of the server cut it short: \(leftOut.sorted().joined(separator: ", "))")
         }
-        guard !waiting.isEmpty || !upgrading.isEmpty else { return nil }
+        guard !waiting.isEmpty else { return nil }
         do {
             let job = try await index(.atStart, requestedBy: nil)
-            let upgrade = upgrading.isEmpty ? "" : "\(waiting.isEmpty ? "Re-indexing" : ", then re-indexing") \(upgrading.count) for index version \(IndexingPipeline.currentDateIndexVersion)"
-            log(waiting.isEmpty ? "\(upgrade), as job \(job.id)"
-                : "Indexing \(waiting.count) \(waiting.count == 1 ? "volume" : "volumes") the library holds and the index lacks\(upgrade), as job \(job.id)")
+            log("Indexing \(waiting.count) \(waiting.count == 1 ? "volume" : "volumes") the library holds and the index lacks, as job \(job.id)")
             return job
         } catch {
             log("The indexing of the volumes waiting at the start could not be queued: \(error)")
@@ -276,15 +287,19 @@ public actor LibraryIndexer {
     /// lists, read through its live read-only open, as the served stack reads the index. Each less `leftOut`.
     static func waitingAtStart(index: URL, volumes: URL, resources: IndexingResources, leftOut: Set<String>) throws -> [String] {
         guard FileManager.default.fileExists(atPath: index.path) else {
-            return (try? FileManager.default.contentsOfDirectory(atPath: volumes.path))?
-                .filter { $0.hasSuffix(".xml") && !$0.hasPrefix(".") }
-                .map { String($0.dropLast(4)) }
-                .filter { !leftOut.contains($0) }
-                .sorted() ?? []
+            return volumeFiles(in: volumes).filter { !leftOut.contains($0) }
         }
         let store = try FTS5Store(readingLiveDatabaseAt: index)
         let pipeline = try IndexingPipeline(readingLiveIndexAt: index, fts5Store: store, resources: resources, volumesDirectory: volumes)
         return try pipeline.volumesAwaitingIndex(excluding: leftOut)
+    }
+
+    /// The volumes whose files are in the folder, by id, in order: what the kit's pass over every volume takes.
+    static func volumeFiles(in volumes: URL) -> [String] {
+        (try? FileManager.default.contentsOfDirectory(atPath: volumes.path))?
+            .filter { $0.hasSuffix(".xml") && !$0.hasPrefix(".") }
+            .map { String($0.dropLast(4)) }
+            .sorted() ?? []
     }
 
     private func forget(_ id: String) {
@@ -397,9 +412,7 @@ public actor LibraryIndexer {
         return writer
     }
 
-    /// The volumes `request` takes, from the kit's list, through the writer's connection: what an interrupted
-    /// run left first, as the kit lists it, then the volumes an upgrade has still to re-index (PLAN's S21e),
-    /// but those whose last pass failed, unless the request takes them again.
+    /// The volumes `request` takes, from the kit's list, through the writer's connection.
     private func volumes(for request: Pending, writer: Writer) async throws -> [String] {
         let records = stamps.failures()
         let sentinel = Set(await tracker.interruptedVolumeIds())
@@ -416,10 +429,8 @@ public actor LibraryIndexer {
             leftOut.subtract(request.retrying)
         }
         let waiting = try writer.pipeline.volumesAwaitingIndex(excluding: leftOut)
-        let upgrading = (stamps.upgrade()?.remaining ?? []).filter { !leftOut.contains($0) && !waiting.contains($0) }
-        let list = waiting + upgrading
-        guard let only = request.only else { return list }
-        return list.filter(only.contains)
+        guard let only = request.only else { return waiting }
+        return waiting.filter(only.contains)
     }
 
     /// Forgets what was kept of a pass before for each of `volumeIds` that the index holds whole, its store
@@ -488,18 +499,8 @@ public actor LibraryIndexer {
         // any other, and so does the open of the index found at a start, so the date-index and FTS
         // stamps are this build's, as the app records them after its first pass.
         await job.progress("Rebuilding the person rollup, the broken references' flags and the subjects", fraction: 1)
-        if stamps.upgrade() != nil {
-            // An upgrade a start began (PLAN's S21e): done once no volume of it is left, as the app marks its
-            // re-index done after its pass, before the passes after indexing.
-            if let still = try? writer.pipeline.allIndexedVolumeIds() { stamps.keepUpgrading(still) }
-            if let upgrade = stamps.upgrade(), upgrade.remaining.isEmpty {
-                await writer.pipeline.markDateReindexComplete()
-                await writer.pipeline.markFTSRebuildReindexComplete()
-                stamps.endUpgrade()
-                log("The index's upgrade to index version \(upgrade.to), from \(upgrade.from), is done")
-            }
-            await publishUpgrade()
-        } else if writer.pipeline.installedDateIndexVersion == 0 {
+        // Not while an upgrade waits for its pass (PLAN's S21e), which records the version once it has run.
+        if stamps.upgrade() == nil, writer.pipeline.installedDateIndexVersion == 0 {
             await writer.pipeline.markDateReindexComplete()
             await writer.pipeline.markFTSRebuildReindexComplete()
         }
@@ -660,6 +661,9 @@ public actor LibraryIndexer {
 /// last stage each volume reached kept, so that a volume whose pass failed is kept with where it was.
 actor IndexingProgressRelay {
     private let job: JobContext
+    /// Whether it says each update in the job's line: not for the pass over every volume (PLAN's S21e), whose
+    /// line says how far through the volumes it is, this relay keeping only each volume's stage.
+    private let writesLine: Bool
     private var position = 0
     private var count = 1
     /// Each volume's last update before its pass ended.
@@ -667,7 +671,10 @@ actor IndexingProgressRelay {
     /// Each volume's `.failed` or `.complete`.
     private var ended: [String: IndexingProgressUpdate] = [:]
 
-    init(job: JobContext) { self.job = job }
+    init(job: JobContext, writesLine: Bool = true) {
+        self.job = job
+        self.writesLine = writesLine
+    }
 
     /// The job takes `volumeId`, the volume at `position` of `count`.
     func begin(_ volumeId: String, position: Int, count: Int) {
@@ -685,6 +692,7 @@ actor IndexingProgressRelay {
             break
         case .reading, .storingBatch:
             last[update.volumeId] = update
+            guard writesLine else { return }
             let what = switch update.stage {
             case .reading where update.totalDocuments == 0: "reading its XML"
             case .reading: "read \(update.totalDocuments) \(update.totalDocuments == 1 ? "document" : "documents")"

@@ -33,6 +33,8 @@ public struct AdminLibrary: Codable, Equatable, Sendable, ResponseEncodable {
     public var counts: [String: Int]
     /// The library's indexing (PLAN's S21d): whether a job waits or runs, and the volume it indexes now.
     public var indexing: Indexing
+    /// The volumes a removal waits or runs for (PLAN's S21e).
+    public var removing: [String]
     /// Every catalogue volume, in the catalogue's order, then each volume side-loaded under an id the
     /// catalogue lacks, by id (PLAN's S21e).
     public var volumes: [Volume]
@@ -52,6 +54,9 @@ public struct AdminLibrary: Codable, Equatable, Sendable, ResponseEncodable {
         /// Whether the served index holds it.
         public var indexed: Bool
         public var sideloaded: Bool
+        /// Whether the published catalogue lists it, so that it can be downloaded: false for a volume side-loaded
+        /// under an id the catalogue lacks (PLAN's S21e).
+        public var catalogued: Bool
         /// The file's length and git blob SHA-1, checked against GitHub's listing, and when it was downloaded.
         public var bytes: Int?
         public var blobSha: String?
@@ -143,6 +148,7 @@ enum AdminLibraryRoutes {
                     volumeId: entry.volumeId, title: entry.title, subseries: entry.subseries, catalogueBytes: entry.sizeBytes,
                     status: status, downloaded: isDownloaded, indexed: isIndexed,
                     sideloaded: file?.sideloaded ?? false || (isDownloaded && entry.provenance == .sideloaded),
+                    catalogued: entry.provenance != .sideloaded,
                     bytes: sizes[entry.volumeId], blobSha: file?.blobSHA, downloadedAt: file?.downloadedAt.map(UserStoreDate.text),
                     figures: file?.figuresStored, figuresRefused: file?.figuresRefused,
                     error: row?.state == .failed || row?.isUnfinished == true ? row?.error : pass?.sentence ?? row?.error,
@@ -154,7 +160,7 @@ enum AdminLibraryRoutes {
                 mode: library.mode.rawValue, offline: library.offline, downloads: refusal == nil,
                 unavailable: refusal.map(sentence), source: library.sources.isGitHub ? "github" : "mirror",
                 counts: counts, indexing: .init(active: indexing?.jobActive ?? false, volume: indexing?.indexing, upgrade: upgrade),
-                volumes: volumes)
+                removing: (await indexer?.removing() ?? []).sorted(), volumes: volumes)
             return EditedResponse(headers: [.cacheControl: "no-store"], response: body)
         }
 
@@ -210,17 +216,16 @@ enum AdminLibraryRoutes {
             guard let indexer, library.mode == .standalone else { throw problem(.importMode) }
             let indexed = await state.index?.documentsByVolume ?? [:]
             let indexing = await indexer.status()
-            let upgrading = Set(await state.upgrade?.volumes ?? [])
             // What Index takes: a volume whose file is in place, and which the index lacks, or holds from a
-            // pass that did not finish, or which an upgrade has still to re-index (PLAN's S21e). One indexed
-            // whole is indexed again with the corrections check, which comes later (PLAN's S21f).
+            // pass that did not finish. One indexed whole is indexed again by an upgrade's pass over every volume
+            // (PLAN's S21e) and with the corrections check, which comes later (PLAN's S21f).
             func waits(_ id: String) -> Bool {
-                library.isVolumeDownloaded(id) && ((indexed[id] ?? 0) == 0 || Self.pass(id, indexing) != nil || upgrading.contains(id))
+                library.isVolumeDownloaded(id) && ((indexed[id] ?? 0) == 0 || Self.pass(id, indexing) != nil)
             }
             let wanted: LibraryIndexer.Request
             switch (body.volumeIds, body.all) {
             case (nil, true?):
-                guard resources.manifest.contains(where: { waits($0.volumeId) }) else {
+                guard (resources.manifest + resources.localVolumes).contains(where: { waits($0.volumeId) }) else {
                     throw APIProblem(.conflict, code: "NOTHING_TO_INDEX",
                                      detail: "Every volume in the library is indexed already, or waits for its download.")
                 }
@@ -276,11 +281,13 @@ enum AdminLibraryRoutes {
                     job = try await indexer.remove(volumeId, requestedBy: user.id) { id in
                         do {
                             try await library.remove(id)
-                        } catch LibraryRefusal.notDownloaded {
+                        } catch LibraryRefusal.notDownloaded, LibraryRefusal.unknownVolume {
                             // The index held it with no file in the library, as a volume of a seeding export can.
                         }
                         await resources.refreshLocalVolumes(in: library.volumesDirectory)
                     }
+                } catch LibraryIndexingRefusal.removalInProgress(let id) {
+                    throw Self.removalInProgress(id)
                 } catch {
                     throw APIProblem(.serviceUnavailable, code: "JOB_NOT_QUEUED",
                                      detail: "The removal could not be queued, since the server could not keep its job: try again in a moment.")

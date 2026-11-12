@@ -28,10 +28,12 @@ public struct AdminIndex: Codable, Equatable, Sendable, ResponseEncodable {
         public var fileBytes: Int
         public var liveBytes: Int
         public var reclaimableBytes: Int
-        /// The free room on the data volume, and what a compaction needs of it, by the app's rule.
+        /// The free room on the data volume, and what this server's compaction needs of it, for its copy and its
+        /// log (`IndexCompactionRule.serverRequired`).
         public var availableBytes: Int?
         public var requiredBytes: Int
-        /// Whether the app would offer a compaction (`notWorthwhile`, `insufficientSpace` or `available`).
+        /// `insufficientSpace` while the data volume has less than that; otherwise the app's word, whether a
+        /// compaction is worth offering, `available` once 200 MB or more could be reclaimed, else `notWorthwhile`.
         public var compaction: String
     }
 }
@@ -48,14 +50,18 @@ enum AdminIndexRoutes {
             if standalone, let served = try? await provider?.servedIfReady(),
                let statistics = try? await served.pipeline.indexPageStatistics() {
                 let available = (try? files.availableCapacity()).map { Int($0) }
-                let compaction = switch IndexCompactionRule.availability(statistics: statistics, availableBytes: available) {
-                case .notWorthwhile: "notWorthwhile"
-                case .insufficientSpace: "insufficientSpace"
-                case .available: "available"
+                let required = IndexCompactionRule.serverRequired(statistics)
+                let compaction = if let available, Int64(available) < required {
+                    "insufficientSpace"
+                } else {
+                    switch IndexCompactionRule.availability(statistics: statistics, availableBytes: Int(required)) {
+                    case .notWorthwhile: "notWorthwhile"
+                    case .insufficientSpace, .available: "available"
+                    }
                 }
                 storage = .init(fileBytes: statistics.fileBytes, liveBytes: statistics.liveBytes,
                                 reclaimableBytes: statistics.reclaimableBytes, availableBytes: available,
-                                requiredBytes: IndexCompactionRule.required(statistics), compaction: compaction)
+                                requiredBytes: Int(required), compaction: compaction)
             }
             let body = AdminIndex(mode: state.configuration.mode.rawValue, upkeep: standalone && storage != nil,
                                   storage: storage, upgrade: await state.upgrade)
@@ -67,11 +73,11 @@ enum AdminIndexRoutes {
             let user = try context.requireUser()
             let indexer = try standalone(state, indexer)
             guard let served = try await provider?.servedIfReady() else { throw noIndex(await state.readiness()) }
-            // The room the app's rule asks, before the job is queued; the job asks again before it compacts.
+            // The room this server's compaction needs, before the job is queued; the job asks again before it holds the index.
             if let statistics = try await served.pipeline.indexPageStatistics(), let free = try? files.availableCapacity(),
-               free < Int64(IndexCompactionRule.required(statistics)) {
+               free < IndexCompactionRule.serverRequired(statistics) {
                 throw APIProblem(.init(code: 507, reasonPhrase: "Insufficient Storage"), code: "NOT_ENOUGH_ROOM",
-                                 detail: "Compacting the index needs about \(LibraryIndexer.megabytes(Int64(IndexCompactionRule.required(statistics)))) free on the data volume, which has \(LibraryIndexer.megabytes(free)).")
+                                 detail: "Compacting the index needs about \(LibraryIndexer.megabytes(IndexCompactionRule.serverRequired(statistics))) free on the data volume, for its copy and its log, which has \(LibraryIndexer.megabytes(free)).")
             }
             let job = try await queued { try await indexer.compact(requestedBy: user.id) }
             context.logger.info("\(user.id) asked for the index to be compacted, as job \(job.id)")
