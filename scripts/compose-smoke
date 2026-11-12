@@ -621,7 +621,7 @@ python3 -c 'import json, sys
 before = json.load(open(sys.argv[1], encoding="utf-8"))["storage"]
 after = json.load(open(sys.argv[2], encoding="utf-8"))["storage"]
 assert after["fileBytes"] < before["fileBytes"] and after["reclaimableBytes"] < before["reclaimableBytes"], (before, after)
-print("   the compaction gave back %d bytes of the %d the removals left" % (before["fileBytes"] - after["fileBytes"], before["reclaimableBytes"]))' \
+print("   the index'"'"'s file %d bytes smaller after the compaction, the removals having left %d bytes in free pages" % (before["fileBytes"] - after["fileBytes"], before["reclaimableBytes"]))' \
   "$work/index-room.json" "$work/index-room-after.json" || fail "the compaction gave nothing back: $(cat "$work/index-room-after.json")"
 counts=$(library_counts 2>/dev/null || true)
 [ "$counts" = "indexed=3 notDownloaded=550" ] || fail "the Library is not as it was before the side-loads: $counts"
