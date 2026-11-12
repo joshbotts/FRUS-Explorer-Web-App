@@ -30,12 +30,13 @@ import Testing
         func entry(forVolumeId id: String) -> VolumeManifestEntry? { entries[id] }
     }
 
-    /// What a host has at this pin, read here apart from the server: the fixture index's pipeline and
-    /// person store, the bundled subject index and manifest, and no cross-reference query, lexical search
-    /// or semantic axis.
+    /// What a host has at this pin, read here apart from the server: the fixture index's pipeline, person
+    /// store and cross-reference store (FRUS-Explorer#1891, since S23c's pin move), the bundled subject
+    /// index and manifest, and no lexical search or semantic axis.
     struct Host: @unchecked Sendable {
         let pipeline: IndexingPipeline
         let persons: PersonMentionStore
+        let crossReferences: CrossReferenceStore
         let subjects: DocumentSubjectIndex
         let manifest: [String: VolumeManifestEntry]
         let catalogue: [VolumeManifestEntry]
@@ -46,7 +47,14 @@ import Testing
             let subjects = try JSONDecoder().decode(DocumentSubjectIndex.self,
                                                     from: Data(contentsOf: resources.appendingPathComponent("document-subject-index.json")))
             let catalogue = try FixedVolumeCatalogue(contentsOf: resources.appendingPathComponent("manifest.json")).citableEntries
-            return Host(pipeline: built.index.pipeline, persons: try PersonMentionStore(readingDatabaseAt: built.copy), subjects: subjects,
+            // Opened as a host opens it, with its own copies of the two bundled files the app's store reads.
+            let crossReferences = try CrossReferenceStore(
+                readingDatabaseAt: built.copy, volumes: catalogue,
+                resolvedEdgeIndex: try ResolvedEdgeIndex(contentsOf: resources.appendingPathComponent("resolved-edge-index.json")),
+                citedPageMap: try JSONDecoder().decode(CitedPageMap.self,
+                                                       from: Data(contentsOf: resources.appendingPathComponent("cited-page-map.json"))))
+            return Host(pipeline: built.index.pipeline, persons: try PersonMentionStore(readingDatabaseAt: built.copy),
+                        crossReferences: crossReferences, subjects: subjects,
                         manifest: Dictionary(catalogue.map { ($0.volumeId, $0) }, uniquingKeysWith: { first, _ in first }),
                         catalogue: catalogue)
         }
@@ -54,7 +62,7 @@ import Testing
         @MainActor
         func dependencies() -> RelatedDocumentsDependencies {
             RelatedDocumentsDependencies(
-                indexingPipeline: pipeline, crossReferenceStore: nil, personMentionStore: persons, documentSubjectIndex: subjects,
+                indexingPipeline: pipeline, crossReferenceStore: crossReferences, personMentionStore: persons, documentSubjectIndex: subjects,
                 manifestStore: Manifest(entries: manifest), searchService: nil, indexedVolumeIds: Set(ParityFixtures.volumes),
                 lexicalStopwords: [], semantic: nil)
         }
@@ -141,6 +149,7 @@ import Testing
 
         var rows = 0
         var chipsNamed = 0
+        var cited = 0
         for (index, document) in documents.enumerated() {
             let all = try #require(read["\(document.compositeString) all"])
             let kit = try await host.ranked(document, weights: .default, scope: nil)
@@ -151,6 +160,7 @@ import Testing
             #expect(all.scope == "all" && all.weights == "")
             rows += all.rows.count
             chipsNamed += all.rows.filter { $0.chips.contains { $0.axis == "sharedSubjects" && $0.text.hasPrefix("topics: ") } }.count
+            cited += all.rows.filter { $0.chips.contains { $0.axis == "crossReference" } }.count
             guard index.isMultiple(of: 7) else { continue }
             let subseries = host.manifest[document.volumeId]?.subseries ?? ""
             let members = Set(host.catalogue.filter { !subseries.isEmpty && $0.subseries == subseries }.map(\.volumeId))
@@ -170,9 +180,10 @@ import Testing
         }
         #expect(rows > 1_000, "the lists hold rows to compare: \(rows)")
         #expect(chipsNamed > 0, "a shared-topics chip names its topics")
+        #expect(cited > 0, "the cross-reference axis ranks: a row cites the anchor or is cited by it, and says so")
         let axes = try #require(read.values.first?.axes)
         #expect(axes.map(\.id) == SimilarityAxis.allCases.map(\.rawValue))
-        #expect(axes.filter { !$0.available }.map(\.id) == ["crossReference", "semanticSimilarity", "lexicalSimilarity"])
+        #expect(axes.filter { !$0.available }.map(\.id) == ["semanticSimilarity", "lexicalSimilarity"])
     }
 
     /// A project seeded through the API, by notes filed under it and a focus tag's assignment, has the

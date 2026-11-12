@@ -28,8 +28,8 @@ import Testing
             #expect(list.scope == "all" && list.weights == "" && list.scopes.first == "volume" && list.scopes.last == "all")
             #expect(list.axes.map(\.id) == SimilarityAxis.allCases.map(\.rawValue))
             #expect(list.axes.map(\.weight) == SimilarityAxis.allCases.map(\.defaultWeight))
-            #expect(list.axes.filter { !$0.available }.map(\.id) == ["crossReference", "semanticSimilarity", "lexicalSimilarity"],
-                    "no cross-reference query until S23c, no lexical search until S24d, no semantic axis until phase 4")
+            #expect(list.axes.filter { !$0.available }.map(\.id) == ["semanticSimilarity", "lexicalSimilarity"],
+                    "the kit's cross-reference store since S23c's pin move; no lexical search until S24d, no semantic axis until phase 4")
             #expect(list.axes.first { $0.id == "sharedSubjects" }?.available == true, "the image's subject index")
             // A tuning in the kit's stored form is answered in the kit's spelling.
             let tuned = try decode(RelatedDocuments.self, try await client.execute(uri: "\(base)?weights=sharedPersons:1,dateProximity:0.5", method: .get))

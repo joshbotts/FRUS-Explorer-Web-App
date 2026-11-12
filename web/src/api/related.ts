@@ -18,7 +18,7 @@ export interface RelatedAxis {
   name: string;
   weight: number;
   defaultWeight: number;
-  /** Whether it can contribute on this server (the cross-reference, lexical and semantic axes cannot yet). */
+  /** Whether it can contribute on this server (the lexical and semantic axes cannot yet). */
   available: boolean;
 }
 

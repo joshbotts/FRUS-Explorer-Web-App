@@ -69,8 +69,10 @@ test('opens Related from the reader by keyboard, changes its scope and a weight,
     await expect.poll(() => page.evaluate(() => localStorage.getItem('frus.related.weights'))).toBe('subseries:0.4');
     // The slider kept its place, and the focus, through the new ranking.
     await expect(proximity).toBeFocused();
-    await expect(page.getByRole('slider', { name: 'Cross-references' })).toBeDisabled();
-    await expect(page.getByText('This server does not rank by cross-references yet.')).toBeVisible();
+    // The axes this server does not rank by are set aside, and say so; the cross-references it ranks by.
+    await expect(page.getByRole('slider', { name: 'Semantically similar (experimental)' })).toBeDisabled();
+    await expect(page.getByText('This server does not rank by meaning yet.')).toBeVisible();
+    await expect(page.getByRole('slider', { name: 'Cross-references' })).toBeEnabled();
     await axeCheck(page);
     const resetWeights = page.getByRole('button', { name: 'Reset to app defaults' });
     await tabTo(page, resetWeights);

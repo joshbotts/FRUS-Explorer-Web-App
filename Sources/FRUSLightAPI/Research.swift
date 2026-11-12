@@ -11,9 +11,9 @@
 // - the three sections, `sortedCollectionsWithCounts`, `sortedTagsWithCounts` and
 //   `sortedHighlightColorsWithCounts`, with `DocumentHighlight.color`'s reading of a colour;
 // - `documents(for:)`, which documents a category lists and each row's facts, with their order;
-// - the row's newest annotation, its three highlights, and its tags' and collections' order;
-// - `CrossReferenceStore.documentTitleFacts(for:)`, the served index's query for a row's title, with
-//   `documentChunks`, its ids by volume, each once, 400 to a query.
+// - the row's newest annotation, its three highlights, and its tags' and collections' order.
+// A row's title is read by the kit's `CrossReferenceStore.documentTitleFacts(for:)` over the served index
+// (upstream #1891, since S23c's pin move), as the app's `loadHeaders` asks its store.
 // Changed by an update reads the index's `reviewed_at`, which a served index's reader cannot write, so
 // it waits for phase 3's review of changed text, and its list says so (`UPDATE_REVIEW_NOT_OFFERED`).
 
@@ -580,12 +580,13 @@ enum ResearchRoutes {
         }
     }
 
-    /// What the served index holds of each document a list names, for its title: the app's
-    /// `documentTitleFacts(for:)`, nothing while no index is served or for a document it does not hold.
+    /// What the served index holds of each document a list names, for its title: the kit's
+    /// `CrossReferenceStore.documentTitleFacts(for:)`, as the app's `loadHeaders` asks it, nothing while no
+    /// index is served, when it cannot be read or for a document it does not hold.
     static func titleFacts(_ keys: [(volumeId: String, documentId: String)], provider: ServedIndexProvider) async
         -> [String: DocumentDisplayTitle.Facts] {
         guard !keys.isEmpty, let served = try? await provider.servedIfReady() else { return [:] }
-        return (try? await Blocking.run { try served.documentTitleFacts(for: keys) }) ?? [:]
+        return (try? await served.crossReferences.documentTitleFacts(for: keys)) ?? [:]
     }
 
     /// Changed by an update's list, which reads the index's `reviewed_at`, a column a served index's
@@ -593,52 +594,5 @@ enum ResearchRoutes {
     static func updateReviewNotOffered() -> APIProblem {
         APIProblem(.conflict, code: "UPDATE_REVIEW_NOT_OFFERED",
                    detail: "Changed by an update lists the documents you annotated that an update changed, for a review of their new text, which this server does not offer yet.")
-    }
-}
-
-extension ServedIndex {
-    /// `CrossReferenceStore.documentTitleFacts(for:)`, app code: what a display title needs of each
-    /// document, one query for each volume's ids, 400 at a time, a head or a number that is empty none.
-    /// A key's presence says the index holds the document.
-    func documentTitleFacts(for keys: [(volumeId: String, documentId: String)]) throws -> [String: DocumentDisplayTitle.Facts] {
-        var result: [String: DocumentDisplayTitle.Facts] = [:]
-        for (volumeId, documentIds) in Self.documentChunks(keys) {
-            let sql = """
-                SELECT document_id, header, document_number, is_editorial_note
-                  FROM document_cache
-                 WHERE volume_id = ? AND document_id IN (\(Array(repeating: "?", count: documentIds.count).joined(separator: ", ")))
-                """
-            for row in try references.query(sql, [.text(volumeId)] + documentIds.map { .text($0) }) {
-                guard let doc = row[0].text else { continue }
-                let head = row[1].text.flatMap { $0.isEmpty ? nil : $0 }
-                let number = row[2].text.flatMap { $0.isEmpty ? nil : $0 }
-                result["\(volumeId)/\(doc)"] = DocumentDisplayTitle.Facts(header: head, documentNumber: number,
-                                                                          isEditorialNote: (row[3].integer ?? 0) != 0)
-            }
-        }
-        return result
-    }
-
-    /// How many document ids ride in one `IN (…)` list: the app's `documentChunkSize`.
-    static let documentChunkSize = 400
-
-    /// `CrossReferenceStore.documentChunks(_:)`, app code: the keys by volume, in the order each volume
-    /// first comes, each key once, its ids `documentChunkSize` at a time.
-    static func documentChunks(_ keys: [(volumeId: String, documentId: String)]) -> [(volumeId: String, documentIds: [String])] {
-        var byVolume: [String: [String]] = [:]
-        var order: [String] = []
-        var seen: Set<String> = []
-        for (vol, doc) in keys where seen.insert("\(vol)/\(doc)").inserted {
-            if byVolume[vol] == nil { order.append(vol) }
-            byVolume[vol, default: []].append(doc)
-        }
-        var out: [(volumeId: String, documentIds: [String])] = []
-        for volumeId in order {
-            let ids = byVolume[volumeId] ?? []
-            for start in stride(from: 0, to: ids.count, by: documentChunkSize) {
-                out.append((volumeId, Array(ids[start..<min(start + documentChunkSize, ids.count)])))
-            }
-        }
-        return out
     }
 }
