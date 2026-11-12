@@ -1,9 +1,11 @@
-// The kit's stack over the live index, opened read-only and immutable: search and browse (upstream
-// #1575), the page ranges and persons the reader's links need (upstream #1579), and the citation
-// matcher over both that Citation Lookup asks (PLAN's S19a); with the user store's search database
-// attached, read-only, for each user's half of a search (upstream #1806, PLAN's S17d); and the
-// cross-reference store (upstream #1891), which Related Documents' cross-reference axis, a collection
-// document's "See also" line and the Research page's titles read, as the app's do.
+// The kit's stack over the live index, opened read-only: immutable in Import mode, and on a Standalone
+// server, whose own indexing writes the file while it is served, without `immutable` (PLAN's S21e,
+// upstream #1897): search and browse (upstream #1575), the page ranges and persons the reader's links
+// need (upstream #1579), and the citation matcher over both that Citation Lookup asks (PLAN's S19a); with
+// the user store's search database attached, read-only, for each user's half of a search (upstream
+// #1806, PLAN's S17d); and the cross-reference store (upstream #1891), which Related Documents'
+// cross-reference axis, a collection document's "See also" line and the Research page's titles read, as
+// the app's do.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -12,10 +14,14 @@ import Foundation
 
 /// The live index as the kit reads it, for one installed `CorpusIndex`: `FTS5Store(readingDatabaseAt:)`,
 /// the pipeline's read-only open and a `SearchService` over both, and the page-range, person and
-/// cross-reference stores' read-only opens. Nothing here writes to the file: every connection is
-/// `mode=ro&immutable=1`, as `CorpusIndex`'s own. The pipeline's connection also attaches the user
-/// store's search database, when the server keeps user data, read-only and never immutable, as the
-/// kit attaches a store its host writes to while it is served (`attachedUserStoreSchema`).
+/// cross-reference stores' read-only opens. Nothing here writes to the file: in Import mode every
+/// connection is `mode=ro&immutable=1`, as `CorpusIndex`'s own; over a Standalone server's own index,
+/// which `CorpusIndex.isLive` marks, each is the kit's read-only open without `immutable`
+/// (`FTS5Store(readingLiveDatabaseAt:)`, `IndexingPipeline(readingLiveIndexAt:…)` and the three stores'
+/// `init(databaseURL:…)`), which reads the file as its writer last committed it (PLAN's S21e). The
+/// pipeline's connection also attaches the user store's search database, when the server keeps user
+/// data, read-only and never immutable, as the kit attaches a store its host writes to while it is served
+/// (`attachedUserStoreSchema`).
 public final class ServedIndex: Sendable {
     public let corpus: CorpusIndex
     public let pipeline: IndexingPipeline
@@ -55,17 +61,30 @@ public final class ServedIndex: Sendable {
     init(corpus: CorpusIndex, resources: ServerResources, volumesDirectory: URL, userStore: URL? = nil) throws {
         self.corpus = corpus
         let before = FileIdentity(corpus.url)
-        let store = try FTS5Store(readingDatabaseAt: corpus.url)
-        pipeline = try IndexingPipeline(readingIndexAt: corpus.url, fts5Store: store,
-                                        resources: resources.indexing, volumesDirectory: volumesDirectory, userStore: userStore)
-        service = SearchService(fts5Store: store, pipeline: pipeline)
-        fts5 = store
+        let url = corpus.url
+        if corpus.isLive {
+            let store = try FTS5Store(readingLiveDatabaseAt: url)
+            pipeline = try IndexingPipeline(readingLiveIndexAt: url, fts5Store: store, resources: resources.indexing,
+                                            volumesDirectory: volumesDirectory, userStore: userStore)
+            fts5 = store
+            pages = try PageRangeStore(databaseURL: url)
+            persons = try PersonMentionStore(databaseURL: url)
+            crossReferences = try CrossReferenceStore(databaseURL: url, volumes: resources.manifest,
+                                                      resolvedEdgeIndex: resources.resolvedEdgeIndex,
+                                                      citedPageMap: resources.citedPages)
+        } else {
+            let store = try FTS5Store(readingDatabaseAt: url)
+            pipeline = try IndexingPipeline(readingIndexAt: url, fts5Store: store, resources: resources.indexing,
+                                            volumesDirectory: volumesDirectory, userStore: userStore)
+            fts5 = store
+            pages = try PageRangeStore(readingDatabaseAt: url)
+            persons = try PersonMentionStore(readingDatabaseAt: url)
+            crossReferences = try CrossReferenceStore(readingDatabaseAt: url, volumes: resources.manifest,
+                                                      resolvedEdgeIndex: resources.resolvedEdgeIndex,
+                                                      citedPageMap: resources.citedPages)
+        }
+        service = SearchService(fts5Store: fts5, pipeline: pipeline)
         attachesUserStore = userStore != nil
-        pages = try PageRangeStore(readingDatabaseAt: corpus.url)
-        persons = try PersonMentionStore(readingDatabaseAt: corpus.url)
-        crossReferences = try CrossReferenceStore(readingDatabaseAt: corpus.url, volumes: resources.manifest,
-                                                  resolvedEdgeIndex: resources.resolvedEdgeIndex,
-                                                  citedPageMap: resources.citedPages)
         indexedVolumeIds = Set(corpus.documentsByVolume.filter { $0.value > 0 }.keys)
         citations = CitationMatchingEngine(manifestStore: FixedVolumeCatalogue(entries: resources.manifest),
                                            searchService: service, pageRangeStore: pages,
@@ -102,11 +121,13 @@ struct ServedSearch: Sendable {
 ///
 /// An import replaces `frus.db` by renaming the new file over it, and `ServerState` then holds a
 /// new `CorpusIndex`. The next request builds a stack over the new file, while requests already
-/// holding the old stack finish on the file they opened: its connections are immutable, and keep
-/// reading the replaced file, which is also `frus.db.prev`. A request that comes between the
-/// rename and the new `CorpusIndex` gets a 503, since the path no longer names the served index's
-/// file. Requests that arrive while a stack is being opened wait for it, and a stack that fails to
-/// open is tried again by the next request.
+/// holding the old stack finish on the file they opened: its connections keep reading the replaced
+/// file, which is also `frus.db.prev`. A request that comes between the rename and the new
+/// `CorpusIndex` gets a 503, since the path no longer names the served index's file. A Standalone
+/// server's indexing serves a new `CorpusIndex` after each volume, over the same file (PLAN's S21e),
+/// and the next request builds a stack over it, with its counts and caches. Requests that arrive while
+/// a stack is being opened wait for it, and a stack that fails to open is tried again by the next
+/// request.
 public actor ServedIndexProvider {
     let state: ServerState
     let resources: ServerResources
@@ -115,8 +136,8 @@ public actor ServedIndexProvider {
     let userStore: URL?
     private var current: (corpus: ObjectIdentifier, served: ServedIndex)?
     private var opening: (corpus: ObjectIdentifier, task: Task<ServedIndex, any Error>)?
-    /// Every stack opened, held weakly: one is released once its last request has finished with it, and the
-    /// library's indexing writes the file only once none is held (PLAN's S21d).
+    /// Every stack opened, held weakly: one is released once its last request has finished with it, and a
+    /// job that holds the index to itself writes the file only once none is held (PLAN's S21d, S21e).
     private var stacks: [WeakStack] = []
     /// How many stacks have been opened, for the tests.
     private(set) var opened = 0
@@ -131,11 +152,11 @@ public actor ServedIndexProvider {
         var held: Bool { stack != nil || pipeline != nil || crossReferences != nil }
     }
 
-    /// Why no stack is given while the library's indexing writes the index (PLAN's S21d): a plain refusal,
-    /// as the server's other unavailable answers are.
-    static let beingWritten = APIProblem(
-        .serviceUnavailable, code: "INDEX_BEING_WRITTEN",
-        detail: "The library's indexing is writing the index: search answers again once its job ends, and the reader opens documents meanwhile.")
+    /// Why no stack is given while a job of the library's holds the index to itself (PLAN's S21d, S21e): a
+    /// plain refusal, as the server's other unavailable answers are, in the job's sentence.
+    static func beingWritten(_ reason: String?) -> APIProblem {
+        APIProblem(.serviceUnavailable, code: "INDEX_BEING_WRITTEN", detail: "\(reason ?? ServerState.defaultHold).")
+    }
 
     public init(state: ServerState, resources: ServerResources, volumesDirectory: URL, userStore: URL? = nil) {
         self.state = state
@@ -147,10 +168,10 @@ public actor ServedIndexProvider {
     /// The stack for the index being served. Throws a 503 `INDEX_NOT_READY` problem naming the
     /// readiness step while none is, as before the first import.
     public func served() async throws -> ServedIndex {
-        // Its stacks' connections are immutable, which a file being written cannot be read through (S21d).
-        if await state.indexBeingWritten {
+        // A job holds the file to itself, as a compaction does (S21d, S21e).
+        if let hold = await state.indexHold {
             current = nil
-            throw Self.beingWritten
+            throw Self.beingWritten(hold)
         }
         guard let corpus = await state.index else {
             // An index reset (PLAN's S20d) leaves none: the stack over the file it removed is let go, so
@@ -173,15 +194,18 @@ public actor ServedIndexProvider {
         opened += 1
         defer { if opening?.corpus == key { opening = nil } }
         let served = try await task.value
+        // A Standalone server's indexing opens a stack a volume (S21e): those released are let go as it goes.
+        stacks.removeAll { !$0.held }
         stacks.append(WeakStack(stack: served, pipeline: served.pipeline, crossReferences: served.crossReferences))
-        if await state.indexBeingWritten { throw Self.beingWritten }
+        if let hold = await state.indexHold { throw Self.beingWritten(hold) }
         if current?.corpus != key, await state.index.map(ObjectIdentifier.init) == key { current = (key, served) }
         return served
     }
 
     /// Lets go of the stack over the index served, and waits until no request holds one, nor one being
-    /// opened, for at most `patience`: the library's indexing writes the file once nothing reads it through
-    /// an immutable connection, which cannot see a write (PLAN's S21d). Gives whether none is held.
+    /// opened, for at most `patience`: a job that holds the index to itself, a compaction or a reset while
+    /// it empties the index, writes the file once nothing reads it (PLAN's S21d, S21e). Gives whether none
+    /// is held.
     public func letGoOfStacks(patience: Duration = .seconds(300)) async -> Bool {
         current = nil
         let deadline = ContinuousClock.now.advanced(by: patience)

@@ -313,11 +313,18 @@ struct UserDataServices: Sendable {
 /// 4. a request that changes state, any but GET, HEAD and OPTIONS, comes from that address (its
 ///    `Origin`), carries the user's token in `X-CSRF-Token`, and declares a body it has as
 ///    `application/json`, of `bodyLimit` at most: `UserDataServices.bodyLimit`, or for the group of
-///    a note's routes `noteBodyLimit`, and of an import's `importLimit`.
+///    a note's routes `noteBodyLimit`, and of an import's `importLimit`; a side-loaded volume's group
+///    (PLAN's S21e) takes XML, `mediaTypes`, of `VolumeLibrary.sideloadLimit`.
 struct UserDataGuard: RouterMiddleware {
     typealias Context = APIRequestContext
     let services: UserDataServices
     var bodyLimit = UserDataServices.bodyLimit
+    /// The media types a change's body may be declared as: JSON, but for a side-loaded volume's XML.
+    var mediaTypes = UserDataGuard.json
+
+    static let json: Set<String> = ["application/json"]
+    /// A side-loaded volume's file (PLAN's S21e).
+    static let xml: Set<String> = ["application/xml", "text/xml"]
 
     func handle(_ request: Request, context: Context, next: (Request, Context) async throws -> Response) async throws -> Response {
         try Self.checkHost(request, services.address)
@@ -334,7 +341,7 @@ struct UserDataGuard: RouterMiddleware {
                 throw APIProblem(.forbidden, code: "CSRF_TOKEN_INVALID",
                                  detail: "A change must carry the token GET /api/v1/me gives, in X-CSRF-Token; this request's is missing or no longer current.")
             }
-            try Self.checkBody(request, limit: bodyLimit)
+            try Self.checkBody(request, limit: bodyLimit, mediaTypes: mediaTypes)
         }
         return try await next(request, context)
     }
@@ -355,13 +362,15 @@ struct UserDataGuard: RouterMiddleware {
         }
     }
 
-    /// Step 4's body: one it has is declared JSON, of `limit` bytes at most by its length.
-    static func checkBody(_ request: Request, limit: Int) throws {
+    /// Step 4's body: one it has is declared JSON, or one of the group's `mediaTypes`, of `limit` bytes at
+    /// most by its length.
+    static func checkBody(_ request: Request, limit: Int, mediaTypes: Set<String> = UserDataGuard.json) throws {
         let length = request.headers[.contentLength].flatMap { Int($0) }
         if (length ?? 0) > 0 || request.headers[.transferEncoding] != nil {
-            guard JSONBody.isJSON(request.headers[.contentType]) else {
+            guard JSONBody.isType(request.headers[.contentType], among: mediaTypes) else {
                 throw APIProblem(.unsupportedMediaType, code: "UNSUPPORTED_MEDIA_TYPE",
-                                 detail: "A change's body must be JSON, sent as application/json.")
+                                 detail: mediaTypes == UserDataGuard.json ? "A change's body must be JSON, sent as application/json."
+                                     : "The body must be sent as \(mediaTypes.sorted().joined(separator: " or ")).")
             }
             if let length, length > limit { throw JSONBody.tooLarge(limit) }
         }
@@ -371,8 +380,13 @@ struct UserDataGuard: RouterMiddleware {
 /// A request's JSON body.
 enum JSONBody {
     static func isJSON(_ contentType: String?) -> Bool {
+        isType(contentType, among: UserDataGuard.json)
+    }
+
+    /// Whether `contentType`, its parameters aside, is one of `types`.
+    static func isType(_ contentType: String?, among types: Set<String>) -> Bool {
         guard let type = contentType?.split(separator: ";").first else { return false }
-        return type.trimmingCharacters(in: .whitespaces).lowercased() == "application/json"
+        return types.contains(type.trimmingCharacters(in: .whitespaces).lowercased())
     }
 
     static func tooLarge(_ limit: Int) -> APIProblem {

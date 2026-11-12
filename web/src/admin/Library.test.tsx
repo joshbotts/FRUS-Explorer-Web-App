@@ -25,13 +25,14 @@ const volume = (fields: Partial<LibraryVolume> & Pick<LibraryVolume, 'volumeId' 
   downloaded: false,
   indexed: false,
   sideloaded: false,
+  catalogued: true,
   ...fields,
 });
 
 function library(volumes: LibraryVolume[], fields: Partial<AdminLibrary> = {}): AdminLibrary {
   const counts: AdminLibrary['counts'] = {};
   for (const { status } of volumes) counts[status] = (counts[status] ?? 0) + 1;
-  return { mode: 'standalone', offline: false, downloads: true, source: 'github', counts, indexing: { active: false }, volumes, ...fields };
+  return { mode: 'standalone', offline: false, downloads: true, source: 'github', counts, indexing: { active: false }, removing: [], volumes, ...fields };
 }
 
 const job: AdminJob = { id: 'J1', kind: 'libraryDownload', subject: 'frus1894Nicaragua', state: 'queued', queuedAt: '2026-11-11T12:00:00.000Z', cancellable: true };
@@ -76,7 +77,8 @@ describe('Administration ▸ Library', () => {
     expect(within(row('frus1969-76ve09p1')).getByText('7 figure images', { exact: false })).toBeTruthy();
     expect(within(row('frus1961-63v06')).getByText('api.github.com answered 500.')).toBeTruthy();
     expect(within(row('frus1969-76v01')).getByText('Its file is not downloaded', { exact: false })).toBeTruthy();
-    expect(within(row('frus1969-76v01')).queryByRole('button', { name: /Remove/ })).toBeNull();
+    // Held by the index with no file here, as a seeding export's volume can be: Remove takes it out of the index (S21e).
+    expect(within(row('frus1969-76v01')).getByRole('button', { name: 'Remove frus1969-76v01' })).toBeTruthy();
     expect(screen.getByText('1 downloaded · 1 indexed · 1 failed · 1 not downloaded')).toBeTruthy();
     expect(screen.getByText('Volumes come from GitHub’s HistoryAtState/frus repository, and their figure images from history.state.gov.')).toBeTruthy();
 

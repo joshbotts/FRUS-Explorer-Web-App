@@ -1,11 +1,13 @@
 // The admin's Library (PLAN's S21c), under /api/v1/admin/library: every catalogue volume with its state, a
-// download of some or all of them, a job of the server's queue, and Remove; and from S21d its indexing,
-// which follows each download and which Index asks for. An admin's, as every route under /api/v1/admin
-// is; a change carries the user's token, as every change does.
+// download of some or all of them, a job of the server's queue, and Remove; from S21d its indexing, which
+// follows each download and which Index asks for; and from S21e a side-loaded volume's file, and Remove of
+// an indexed volume, a job. An admin's, as every route under /api/v1/admin is; a change carries the user's
+// token, as every change does.
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
 import type { AdminJob } from './admin';
-import { getJSON } from './client';
-import { change } from './userData';
+import { servedPath } from './base';
+import { ApiError, getJSON } from './client';
+import { change, meQuery } from './userData';
 
 /**
  * Where a volume stands: a download waiting or under way first, then one that failed, then its pass under way,
@@ -36,6 +38,8 @@ export interface LibraryVolume {
   /** Whether the served index holds it. */
   indexed: boolean;
   sideloaded: boolean;
+  /** Whether the published catalogue lists it, so that it can be downloaded: not one side-loaded under an id it lacks (S21e). */
+  catalogued: boolean;
   bytes?: number;
   blobSha?: string;
   downloadedAt?: string;
@@ -59,8 +63,13 @@ export interface AdminLibrary {
   unavailable?: string;
   source: 'github' | 'mirror';
   counts: Partial<Record<LibraryStatus, number>>;
-  /** The library's indexing: whether a job waits or runs, and the volume it indexes now. */
-  indexing: { active: boolean; volume?: string };
+  /**
+   * The library's indexing: whether a job waits or runs, the volume it indexes now, and an upgrade a start began
+   * (PLAN's S21e), while volumes of it are still to be re-indexed for the index version `to`.
+   */
+  indexing: { active: boolean; volume?: string; upgrade?: { from: number; to: number; volumes: string[] } };
+  /** The volumes a removal waits or runs for (PLAN's S21e). */
+  removing: string[];
   volumes: LibraryVolume[];
 }
 
@@ -86,7 +95,7 @@ export const libraryQuery = queryOptions({
   refetchInterval: (query) => {
     if (query.state.status === 'error') return false;
     const data = query.state.data;
-    return data?.volumes.some(isDownloading) || data?.indexing.active ? 2_000 : 30_000;
+    return data?.volumes.some(isDownloading) || data?.indexing.active || (data?.removing.length ?? 0) > 0 ? 2_000 : 30_000;
   },
 });
 
@@ -106,9 +115,57 @@ export async function indexVolumes(client: QueryClient, request: { volumeIds: st
   return job;
 }
 
-/** Removes a downloaded volume's file and figure images; the Library is read again. */
-export async function removeVolume(client: QueryClient, volumeId: string): Promise<void> {
-  await change<null>(client, 'DELETE', `/api/v1/admin/library/volumes/${encodeURIComponent(volumeId)}`);
+/**
+ * Removes a downloaded volume's file and figure images; for a volume the index holds (PLAN's S21e), a job that
+ * takes it out of the index first, which it gives. The Library is read again.
+ */
+export async function removeVolume(client: QueryClient, volumeId: string): Promise<AdminJob | null> {
+  const job = await change<AdminJob>(client, 'DELETE', `/api/v1/admin/library/volumes/${encodeURIComponent(volumeId)}`);
   await client.refetchQueries({ queryKey: ['admin', 'library'] });
   void client.invalidateQueries({ queryKey: ['admin'] });
+  corpusChanged(client);
+  return job;
+}
+
+/** What a side-load answers (PLAN's S21e): the volume, whether the catalogue lists it, and its indexing's job. */
+export interface SideloadAnswer {
+  volumeId: string;
+  catalogued: boolean;
+  job: AdminJob;
+}
+
+/** The largest file a side-load takes, the server's. */
+export const sideloadLimit = 64 * 1_048_576;
+
+/**
+ * Side-loads a volume's TEI file (PLAN's S21e): sent as it is, named by its file, with the user's token, again
+ * with a fresh one should the server no longer take it; the Library and the jobs are read again.
+ */
+export async function sideloadVolume(client: QueryClient, file: File): Promise<SideloadAnswer> {
+  async function send(token: string) {
+    const response = await fetch(servedPath(`/api/v1/admin/library/sideload?file=${encodeURIComponent(file.name)}`), {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/xml', 'X-CSRF-Token': token },
+      body: file,
+    });
+    if (!response.ok) throw await ApiError.from(response);
+    return (await response.json()) as SideloadAnswer;
+  }
+  const me = await client.ensureQueryData(meQuery);
+  let answer: SideloadAnswer;
+  try {
+    answer = await send(me.csrfToken);
+  } catch (error) {
+    if (!(error instanceof ApiError && error.code === 'CSRF_TOKEN_INVALID')) throw error;
+    answer = await send((await client.fetchQuery({ ...meQuery, staleTime: 0 })).csrfToken);
+  }
+  await client.refetchQueries({ queryKey: ['admin', 'library'] });
+  void client.invalidateQueries({ queryKey: ['admin'] });
+  corpusChanged(client);
+  return answer;
+}
+
+/** What Browse and search read of the server's volumes is asked again: a side-load or a removal changes it. */
+function corpusChanged(client: QueryClient) {
+  for (const key of ['volumes', 'volume', 'section', 'document', 'search', 'facets']) void client.invalidateQueries({ queryKey: [key] });
 }

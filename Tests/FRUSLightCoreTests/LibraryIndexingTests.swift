@@ -31,7 +31,7 @@ import Testing
             self.held = held
         }
 
-        func willWriteIndex(at url: URL) async { events.append("will write") }
+        func willWriteIndex(at url: URL, holding: String?) async { events.append(holding == nil ? "will write" : "will hold") }
 
         func didWriteVolume(_ volumeId: String, at url: URL) async {
             events.append("wrote \(volumeId)")
@@ -41,7 +41,7 @@ import Testing
         func didFinishWritingIndex(at url: URL) async {
             events.append("finished")
             guard FileManager.default.fileExists(atPath: url.path) else { return }
-            if let index = try? await Blocking.run({ try CorpusIndex.open(url) }) { await state.indexWritten(index) }
+            if let index = try? await Blocking.run({ try CorpusIndex.open(url, live: true) }) { await state.indexWritten(index) }
         }
     }
 

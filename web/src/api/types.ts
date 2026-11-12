@@ -193,7 +193,8 @@ export interface ReaderLinkTarget {
 
 export interface DocumentDetail {
   document: DocumentEntry;
-  canonicalURL: string;
+  /** Its page on history.state.gov; absent for a side-loaded volume's (PLAN's S21e). */
+  canonicalURL?: string;
   previous?: Neighbour;
   next?: Neighbour;
   teiAvailable: boolean;
@@ -432,7 +433,10 @@ export interface DocumentCitation {
   citation: string;
   /** What Copy writes. */
   plainText: string;
-  canonicalURL: string;
+  /** Its page on history.state.gov; absent for a side-loaded volume's, whose page the server cannot vouch for (S21e). */
+  canonicalURL?: string;
+  /** The app's note beneath a side-loaded volume's citation, the server's; absent for a catalogue volume's (S21e). */
+  provenanceNote?: string;
   documentNumber?: string;
   documentLabel: string;
   /** Where documentNumber came from; absent when there is none. */

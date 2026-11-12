@@ -39,8 +39,12 @@ public struct DocumentCitation: Codable, Equatable, Sendable {
     public var citation: String
     /// What Copy writes: `CitationPlainText.plain(citation)`.
     public var plainText: String
-    /// The document's page on history.state.gov.
-    public var canonicalURL: String
+    /// The document's page on history.state.gov; absent for a side-loaded volume's (PLAN's S21e), as the
+    /// app's `canonicalDocumentURL` gives none for a volume it cannot confirm is published.
+    public var canonicalURL: String?
+    /// The app's note beneath the citation of a side-loaded volume's document, made the server's (PLAN's
+    /// S21e, `DocumentViewModel.citationProvenanceNote`); absent for a catalogue volume's.
+    public var provenanceNote: String?
     /// The number the citation names, or nil for a document the volume prints without one.
     public var documentNumber: String?
     /// How the app labels the document beside its citation: "Doc 12", or "Unnumbered (d710a-1)".
@@ -72,8 +76,14 @@ struct CitedDocument: Sendable {
     let documentLabel: String
     let year: String
     let yearSource: String?
+    /// Whether the volume is side-loaded, an id the published catalogue lacks (PLAN's S21e).
+    var sideloaded = false
 
-    var canonicalURL: String { FRUSCanonicalURL.string(volumeId: volumeId, documentId: documentId) }
+    /// None for a side-loaded volume's document, whose page the server cannot vouch for, as the app gives none.
+    var canonicalURL: String? { sideloaded ? nil : FRUSCanonicalURL.string(volumeId: volumeId, documentId: documentId) }
+
+    /// The app's sentence for a side-loaded volume's citation, or nil.
+    var provenanceNote: String? { sideloaded ? CitationRoutes.sideloadedNote : nil }
 
     var bibtex: String {
         BibtexExporter().export(volumeId: volumeId, document: document, volume: volume, year: year, url: canonicalURL)
@@ -94,6 +104,11 @@ struct CitedDocument: Sendable {
 }
 
 enum CitationRoutes {
+    /// The app's note beneath a side-loaded volume's citation (`citation.sideloaded.note`, in
+    /// `FRUSExplorer/DocumentView/DocumentViewModel.swift`, app code), made the server's: the app's "The app
+    /// cannot confirm" is this server's. `SideloadParityTests` holds it to the app's.
+    static let sideloadedNote = "This volume was side-loaded, not downloaded from the published catalogue. This server cannot confirm it is published, so no history.state.gov link is included — check the citation before using it."
+
     static let styles = CitationStyle.allCases.map {
         DocumentCitation.Style(style: $0.rawValue, name: $0.displayName, shortName: $0.shortDisplayName)
     }
@@ -125,7 +140,7 @@ enum CitationRoutes {
             return DocumentCitation(
                 volumeId: cited.volumeId, documentId: cited.documentId, style: style.rawValue,
                 citation: citation, plainText: CitationPlainText.plain(citation),
-                canonicalURL: cited.canonicalURL, documentNumber: cited.documentNumber,
+                canonicalURL: cited.canonicalURL, provenanceNote: cited.provenanceNote, documentNumber: cited.documentNumber,
                 documentLabel: cited.documentLabel, numberSource: cited.numberSource,
                 publicationYear: cited.year, publicationYearSource: cited.yearSource,
                 bibtex: cited.bibtex, ris: cited.ris, styles: styles)
@@ -201,6 +216,6 @@ enum CitationRoutes {
             document: FRUSDocumentMetadata(citing: entry, printedNumber: number), volume: metadata,
             documentNumber: documentNumber, numberSource: numberSource,
             documentLabel: CitableDocumentNumber.captionLabel(printed: number, documentId: entry.documentId),
-            year: year, yearSource: yearSource)
+            year: year, yearSource: yearSource, sideloaded: volume.provenance == .sideloaded)
     }
 }

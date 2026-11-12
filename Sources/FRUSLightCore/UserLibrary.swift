@@ -109,6 +109,9 @@ public protocol LibraryStore: Sendable {
     /// Its file took its place at `time`, as `record` says, or was found in place already: when the file is
     /// the one the row named, its download's time is kept.
     func recordLibraryDownload(_ volumeId: String, _ record: LibraryDownloadRecord, at time: Date) throws
+    /// An admin side-loaded its file at `time` (PLAN's S21e), as `record` says: the row is `downloaded`,
+    /// marked `sideloaded`, with no figure images, in place of any it had.
+    func recordLibrarySideload(_ volumeId: String, _ record: LibraryDownloadRecord, requestedBy: String?, at time: Date) throws
     /// Its download failed, why in the server's sentence; what the row says of a file in place is kept.
     func recordLibraryFailure(_ volumeId: String, error: String, at time: Date) throws
     /// Takes back the volumes a job was stopped before fetching: each still queued or downloading goes
@@ -190,6 +193,22 @@ extension RelationalUserStore: LibraryStore {
                 [.text(volumeId), .text(record.blobSHA), Self.integer(record.sizeBytes), Self.stamp(time),
                  Self.integer(record.figuresStored), Self.integer(record.figuresRefused), Self.text(record.problem), Self.stamp(time),
                  record.modifiedAt.map(Self.stamp) ?? .null])
+        }
+    }
+
+    public func recordLibrarySideload(_ volumeId: String, _ record: LibraryDownloadRecord, requestedBy: String?, at time: Date) throws {
+        try writing(outsideSearch: true) { db in
+            _ = try db.query(
+                """
+                INSERT INTO library_volumes (volume_id, state, blob_sha, size_bytes, downloaded_at, sideloaded, figures_stored,
+                    figures_refused, error, requested_by, updated_at, modified_at) VALUES (?, 'downloaded', ?, ?, ?, 1, 0, 0, NULL, ?, ?, ?)
+                ON CONFLICT (volume_id) DO UPDATE SET state = 'downloaded', blob_sha = excluded.blob_sha,
+                    size_bytes = excluded.size_bytes, modified_at = excluded.modified_at, downloaded_at = excluded.downloaded_at,
+                    sideloaded = 1, figures_stored = 0, figures_refused = 0, error = NULL, requested_by = excluded.requested_by,
+                    updated_at = excluded.updated_at
+                """,
+                [.text(volumeId), record.blobSHA.isEmpty ? .null : .text(record.blobSHA), Self.integer(record.sizeBytes), Self.stamp(time),
+                 Self.text(requestedBy), Self.stamp(time), record.modifiedAt.map(Self.stamp) ?? .null])
         }
     }
 

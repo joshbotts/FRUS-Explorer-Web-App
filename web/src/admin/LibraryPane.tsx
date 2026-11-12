@@ -2,10 +2,12 @@
 // downloading, downloaded, indexing, indexed or failed, with why; Download for one, Download All for every
 // volume not downloaded, each a job of the server's queue, which Jobs follows and a cancel stops between two
 // volumes; Index for one and Index All Waiting (PLAN's S21d), for a volume downloaded and not indexed, or
-// whose last pass did not index it; and Remove…, after a question, for a downloaded volume the index does
-// not hold. A Standalone server's: an Import server lists its TEI folder and the index, and a server under
-// FRUS_OFFLINE downloads nothing, which the pane says. Read again every two seconds while a download or an
-// indexing job waits or runs.
+// whose last pass did not index it; Remove…, after a question, for a downloaded volume, which for one the
+// index holds is a job that takes it out of the index first (PLAN's S21e); and Side-Load a Volume, a TEI file
+// of the admin's, which the server checks, keeps and indexes, and lists with the catalogue's when the
+// catalogue lacks it. A Standalone server's: an Import server lists its TEI folder and the index, and a server
+// under FRUS_OFFLINE downloads nothing, which the pane says. Read again every two seconds while a download or
+// an indexing job waits or runs.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
@@ -18,6 +20,8 @@ import {
   type LibraryVolume,
   libraryQuery,
   removeVolume,
+  sideloadLimit,
+  sideloadVolume,
   waitsForIndex,
 } from '../api/library';
 import { copy } from '../copy';
@@ -132,6 +136,7 @@ function Library({ library }: { library: AdminLibrary }) {
   const missing = library.volumes.filter((volume) => !volume.downloaded && !isDownloading(volume)).length;
   const waiting = library.volumes.filter(isDownloading).length;
   // What Index All Waiting asks for, as the server takes it.
+  const beingRemoved = new Set(library.removing);
   const unindexed = library.mode === 'standalone' ? library.volumes.filter(waitsForIndex).length : 0;
 
   return (
@@ -176,6 +181,10 @@ function Library({ library }: { library: AdminLibrary }) {
       {library.indexing.active && (
         <p className="note">{library.indexing.volume ? words.indexing(library.indexing.volume) : words.indexingWaits}</p>
       )}
+      {library.indexing.upgrade && library.indexing.upgrade.volumes.length > 0 && (
+        <p className="note">{words.upgrade(library.indexing.upgrade.to, library.indexing.upgrade.volumes.length)}</p>
+      )}
+      {library.mode === 'standalone' && <Sideload onSaid={setSaid} />}
       {/* Always on the page, so that what a download or a removal did is announced when it comes. */}
       <p role="status">{said}</p>
       <p className="error" role="alert">
@@ -236,6 +245,8 @@ function Library({ library }: { library: AdminLibrary }) {
                 <td>
                   <span className={`library-state ${volume.status}`}>{statusWord(volume, library.mode)}</span>
                   {volume.indexed && volume.status !== 'indexed' && <span className="note"> · {words.statuses.indexed}</span>}
+                  {volume.sideloaded && <span className="note"> · {words.sideloadedMark}</span>}
+                  {beingRemoved.has(volume.volumeId) && <p className="note">{words.removing}</p>}
                   {volume.indexed && !volume.downloaded && (
                     <p className="note">{library.downloads ? words.indexedWithoutFile : words.indexedWithoutFileHere}</p>
                   )}
@@ -255,7 +266,7 @@ function Library({ library }: { library: AdminLibrary }) {
                 </td>
                 <td>
                   {/* An indexed volume's file is not replaced until the corrections check comes, nor one a pass reads. */}
-                  {library.downloads && !isDownloading(volume) && volume.status !== 'indexing' && !(volume.indexed && volume.downloaded) && (
+                  {library.downloads && volume.catalogued && !beingRemoved.has(volume.volumeId) && !isDownloading(volume) && volume.status !== 'indexing' && !(volume.indexed && volume.downloaded) && (
                     <button
                       type="button"
                       data-download={volume.volumeId}
@@ -266,7 +277,7 @@ function Library({ library }: { library: AdminLibrary }) {
                       {volume.downloaded ? words.downloadAgain : words.download}
                     </button>
                   )}{' '}
-                  {library.mode === 'standalone' && waitsForIndex(volume) && (
+                  {library.mode === 'standalone' && !beingRemoved.has(volume.volumeId) && waitsForIndex(volume) && (
                     <button
                       type="button"
                       data-index={volume.volumeId}
@@ -277,8 +288,8 @@ function Library({ library }: { library: AdminLibrary }) {
                       {words.index}
                     </button>
                   )}{' '}
-                  {/* Not while an indexing job waits or runs, which may take the volume. */}
-                  {library.mode === 'standalone' && volume.downloaded && !volume.indexed && !isDownloading(volume) && !library.indexing.active && (
+                  {/* Not while an indexing job waits or runs, which may take the volume; an indexed one leaves the index first. */}
+                  {library.mode === 'standalone' && (volume.downloaded || volume.indexed) && !beingRemoved.has(volume.volumeId) && !isDownloading(volume) && !library.indexing.active && (
                     <button
                       type="button"
                       data-remove={volume.volumeId}
@@ -298,7 +309,7 @@ function Library({ library }: { library: AdminLibrary }) {
         <RemoveConfirmation
           key={removing.volumeId}
           volume={removing}
-          onRemoved={(volume) => setSaid(words.removed(volume.volumeId))}
+          onRemoved={(volume, queued) => setSaid(queued ? words.removalQueued(volume.volumeId) : words.removed(volume.volumeId))}
           onClose={(removed) => {
             const id = removing.volumeId;
             closeAtOnce(() => setRemoving(null));
@@ -314,14 +325,17 @@ function Library({ library }: { library: AdminLibrary }) {
   );
 }
 
-/** "Remove this volume?", with Remove and Keep It, which waits for the removal and the Library read again. */
+/**
+ * "Remove this volume?", with Remove and Keep It, which waits for the removal, or for an indexed volume the
+ * removal's job to be queued, and the Library read again.
+ */
 function RemoveConfirmation({
   volume,
   onRemoved,
   onClose,
 }: {
   volume: LibraryVolume;
-  onRemoved: (volume: LibraryVolume) => void;
+  onRemoved: (volume: LibraryVolume, queued: boolean) => void;
   onClose: (removed: boolean) => void;
 }) {
   const client = useQueryClient();
@@ -336,9 +350,9 @@ function RemoveConfirmation({
     setBusy(true);
     setFailure(null);
     try {
-      await removeVolume(client, volume.volumeId);
+      const job = await removeVolume(client, volume.volumeId);
       setBusy(false);
-      onRemoved(volume);
+      onRemoved(volume, job !== null);
       onClose(true);
     } catch (error) {
       setFailure(errorMessage(error));
@@ -361,7 +375,9 @@ function RemoveConfirmation({
       <h2 id={headingId} tabIndex={-1}>
         {words.removeTitle(volume.volumeId)}
       </h2>
-      <p id={messageId}>{words.removeMessage}</p>
+      <p id={messageId}>
+        {volume.indexed ? words.removeMessageIndexed : words.removeMessage} {volume.catalogued ? '' : words.removeSideloaded}
+      </p>
       {failure && (
         <p className="error" role="alert">
           {failure}
@@ -383,5 +399,68 @@ function RemoveConfirmation({
         </button>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * Side-Load a Volume (PLAN's S21e): a TEI file the admin chooses, sent as it is, and what the server made of it:
+ * its indexing's job, or why it refused the file, in its words.
+ */
+function Sideload({ onSaid }: { onSaid: (said: string) => void }) {
+  const client = useQueryClient();
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const inputId = useId();
+  const headingId = useId();
+
+  async function send() {
+    if (busy) return;
+    setFailure(null);
+    onSaid('');
+    if (!file) {
+      setFailure(words.sideloadChoose);
+      input.current?.focus();
+      return;
+    }
+    if (file.size > sideloadLimit) {
+      setFailure(words.sideloadTooLarge(copy.admin.bytes(file.size)));
+      return;
+    }
+    setBusy(true);
+    try {
+      const answer = await sideloadVolume(client, file);
+      onSaid(words.sideloaded(answer.volumeId));
+      setFile(null);
+      if (input.current) input.current.value = '';
+    } catch (error) {
+      setFailure(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section aria-labelledby={headingId} className="library-sideload">
+      <h2 id={headingId}>{words.sideload}</h2>
+      <p className="note">{words.sideloadLead}</p>
+      <p>
+        <label htmlFor={inputId}>{words.sideloadFile}</label>{' '}
+        <input
+          ref={input}
+          id={inputId}
+          type="file"
+          accept=".xml,application/xml,text/xml"
+          onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+        />{' '}
+        <button type="button" aria-disabled={busy} onClick={() => void send()}>
+          {words.sideloadButton}
+        </button>
+      </p>
+      <p className="error" role="alert">
+        {failure}
+      </p>
+    </section>
   );
 }

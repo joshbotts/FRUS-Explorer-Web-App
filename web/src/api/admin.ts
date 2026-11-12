@@ -186,6 +186,45 @@ export async function cancelJob(client: QueryClient, id: string): Promise<AdminJ
   return job;
 }
 
+/** `GET /api/v1/admin/index` (PLAN's S21e): a Standalone server's index, its room, and an upgrade under way. */
+export interface AdminIndex {
+  mode: 'import' | 'standalone';
+  /** Whether this server compacts and checks its index: a Standalone server's, while it serves one. */
+  upkeep: boolean;
+  storage?: {
+    fileBytes: number;
+    liveBytes: number;
+    reclaimableBytes: number;
+    availableBytes?: number;
+    requiredBytes: number;
+    /** The app's rule: whether compacting is worth it, and fits. */
+    compaction: 'notWorthwhile' | 'insufficientSpace' | 'available';
+  };
+  upgrade?: { from: number; to: number; volumes: string[] };
+}
+
+export const indexQuery = queryOptions({
+  queryKey: ['admin', 'index'],
+  queryFn: ({ signal }) => getJSON<AdminIndex>('/api/v1/admin/index', undefined, signal),
+  staleTime: 0,
+  retry: false,
+});
+
+/** Queues the index's compaction (PLAN's S21e), which Jobs follows. */
+export async function compactIndex(client: QueryClient): Promise<AdminJob | null> {
+  const job = await change<AdminJob>(client, 'POST', '/api/v1/admin/index/compact');
+  changed(client);
+  void client.invalidateQueries({ queryKey: ['readyz'] });
+  return job;
+}
+
+/** Queues the index's check (PLAN's S21e), which Jobs follows. */
+export async function checkIndex(client: QueryClient): Promise<AdminJob | null> {
+  const job = await change<AdminJob>(client, 'POST', '/api/v1/admin/index/check');
+  changed(client);
+  return job;
+}
+
 export async function resetIndex(client: QueryClient): Promise<AdminJob | null> {
   const job = await change<AdminJob>(client, 'POST', '/api/v1/admin/index/reset');
   changed(client);

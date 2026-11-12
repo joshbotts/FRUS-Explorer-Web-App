@@ -24,27 +24,33 @@ import Testing
         let users: UserDataFixture
         let library: VolumeLibrary
         let indexer: LibraryIndexer
-        /// The stacks every route reads the index through, which the indexing lets go of before it writes.
+        /// The stacks every route reads the index through, which a job that holds the index lets go of before it writes.
         let provider: ServedIndexProvider
+        /// The data files, with a catalogue overlay of the fixture's own (PLAN's S21e), and the reader over them.
+        let resources: ServerResources
+        let reader: ReaderService
 
         init(mode: ServerConfiguration.Mode = .standalone, volumes: [String] = LibraryIndexingRouteTests.fixtures) async throws {
             users = try await UserDataFixture()
             let files = users.server.files
             try RepositoryFiles.mountTEI(volumes, at: files.volumesDirectory)
+            // The process's data files are every test's: a side-load's overlay stays the fixture's.
+            resources = users.server.resources.withOwnCatalogueOverlay()
+            reader = ReaderService(volumesDirectory: files.volumesDirectory, resources: resources)
             library = VolumeLibrary(volumesDirectory: files.volumesDirectory, store: users.store, jobs: users.jobs,
-                                    catalogue: users.server.resources.manifest, sources: FakeGitHub().sources, transport: nil, mode: mode)
+                                    catalogue: resources.manifest, sources: FakeGitHub().sources, transport: nil, mode: mode)
             try library.prepare()
             let state = users.server.state
-            provider = ServedIndexProvider(state: state, resources: users.server.resources, volumesDirectory: files.volumesDirectory,
+            provider = ServedIndexProvider(state: state, resources: resources, volumesDirectory: files.volumesDirectory,
                                            userStore: users.store.searchDatabase)
             indexer = LibraryIndexer(liveIndex: files.liveIndex, volumesDirectory: files.volumesDirectory, mode: mode,
-                                     resources: users.server.resources.indexing, jobs: users.jobs, state: state,
+                                     resources: resources.indexing, jobs: users.jobs, state: state,
                                      observer: ServedIndexWriting(state: state, provider: provider, log: { _ in }), capacity: { .max })
         }
 
         var app: some ApplicationProtocol {
             Application(router: ServedRouter(base: .root, router: buildRouter(
-                state: users.server.state, resources: users.server.resources, reader: users.server.reader, provider: provider,
+                state: users.server.state, resources: resources, reader: reader, provider: provider,
                 userData: users.services, library: library, indexer: indexer)))
         }
 
@@ -196,10 +202,14 @@ import Testing
         }
     }
 
-    /// While a job writes the index, by the owner's choice of 11 November: search answers 503, naming the
-    /// indexing, `/readyz` says so, and the reader renders from the volumes' files; once it has ended, search
-    /// answers over what it wrote.
-    @Test func searchWaitsWhileAJobWritesTheIndexAndTheReaderWorks() async throws {
+    /// While a job writes the index, search answers (PLAN's S21e, S21d's follow-up, the second half of the
+    /// owner's choice B of 11 November): held inside a volume's pass, once its documents are committed and
+    /// before its other tables are stored, a search finds that volume's documents through the live stack,
+    /// while the kit names the volume unfinished; the volume indexed before it answers too; `/readyz` is
+    /// ready; the reader renders; and once the job ends search answers over all it wrote. A search asked
+    /// before the volume's pass keeps its answer, which the stack keeps (`RecentSearches`), until the pass
+    /// ends and the index is opened again with the volume, as each volume's end opens it.
+    @Test func searchAnswersWhileAJobWritesTheIndex() async throws {
         let fixture = try await Fixture(volumes: ["frus1894Nicaragua", "frus1961-63v06"])
         defer { withExtendedLifetime(fixture) {} }
         let gate = JobGate()
@@ -210,27 +220,42 @@ import Testing
             let before = try decode(SearchResultList.self, try await owner.get("/api/v1/search?keywords=khrushchev"))
             #expect(before.total == 0)
 
-            // The next job, held once its writer is open: past the point where the index is read no more.
-            await fixture.indexer.setWriterOpenedTestHook { _ in await gate.wait() }
-            #expect(try await owner.send(.post, Self.index, #"{"volumeIds":["frus1961-63v06"]}"#).status == .accepted)
+            // The next job, held inside frus1961-63v06's pass, its documents committed and its other tables not.
+            await fixture.indexer.setWriterOpenedTestHook { pipeline in
+                await pipeline.setDocumentBatchStoredTestHook { volumeId, _ in
+                    if volumeId == "frus1961-63v06" { await gate.wait() }
+                }
+            }
+            let job = try decode(AdminJob.self, try await owner.send(.post, Self.index, #"{"volumeIds":["frus1961-63v06"]}"#))
             await gate.untilReached()
-            let refused = try await owner.get("/api/v1/search?keywords=nicaragua")
-            #expect(refused.status == .serviceUnavailable && problemCode(refused) == "INDEX_BEING_WRITTEN")
+            #expect(try decode(AdminJob.self, try await owner.get("/api/v1/admin/jobs/\(job.id)")).state == "running")
+            #expect(try decode(SearchResultList.self, try await owner.get("/api/v1/search?keywords=khrushchev")).total == 0,
+                    "the answer kept from before the pass")
+            let during = try await owner.get("/api/v1/search?keywords=kennedy")
+            #expect(during.status == .ok, "\(problemCode(during) ?? "")")
+            let found = try decode(SearchResultList.self, during)
+            #expect(found.total > 0 && found.items.allSatisfy { $0.volumeId == "frus1961-63v06" }, "\(found.total)")
+            #expect(try await fixture.provider.served().pipeline.isStoreUnfinished("frus1961-63v06"), "its pass has not finished")
+            #expect(try decode(SearchResultList.self, try await owner.get("/api/v1/search?keywords=nicaragua")).total > 0)
             let readyz = try await owner.get("/readyz")
             let readiness = try decode(Readiness.self, readyz)
-            #expect(readyz.status == .serviceUnavailable && readiness.step == .indexingLibrary && !readiness.ready)
+            #expect(readyz.status == .ok && readiness.step == .ready, "\(readiness.detail)")
             #expect(try await owner.get("/api/v1/volumes/frus1894Nicaragua/documents/d1/html?part=body").status == .ok)
             gate.open()
             await fixture.users.jobs.waitUntilIdle()
 
-            let after = try decode(SearchResultList.self, try await owner.get("/api/v1/search?keywords=khrushchev"))
-            #expect(after.total > 0)
+            #expect(try decode(AdminJob.self, try await owner.get("/api/v1/admin/jobs/\(job.id)")).state == "succeeded")
+            #expect(try decode(SearchResultList.self, try await owner.get("/api/v1/search?keywords=khrushchev")).total > 0,
+                    "the answer kept from before the pass goes with the stack the job's end replaced")
+            #expect(try decode(SearchResultList.self, try await owner.get("/api/v1/search?keywords=kennedy")).total == found.total)
+            #expect(try await !fixture.provider.served().pipeline.isStoreUnfinished("frus1961-63v06"))
+            #expect(await fixture.users.server.state.index?.documentsByVolume["frus1961-63v06"] == 123, "the counts follow the job")
             #expect(try decode(Readiness.self, try await owner.get("/readyz")).ready)
         }
     }
 
-    /// Before a job writes, the provider lets go of its stack and waits until no request holds one, for at
-    /// most its patience: an immutable connection cannot read a file being written.
+    /// Before a job that holds the index to itself writes, as a compaction does (PLAN's S21e), the provider
+    /// lets go of its stack and waits until no request holds one, for at most its patience.
     @Test func theProviderWaitsUntilNoRequestHoldsAStack() async throws {
         let fixture = try await Fixture(volumes: ["frus1894Nicaragua"])
         defer { withExtendedLifetime(fixture) {} }
@@ -244,7 +269,7 @@ import Testing
         do {
             // A computation kept beside a search holds the stack's pipeline past the stack's last request.
             let held = try await fixture.provider.served().pipeline
-            await state.beginIndexWrite()
+            await state.beginIndexWrite("A compaction holds the index")
             #expect(await !fixture.provider.letGoOfStacks(patience: .milliseconds(300)), "a computation holds the pipeline")
             await #expect(throws: APIProblem.self) { try await fixture.provider.served() }
             #expect(try await fixture.provider.servedIfReady() == nil)

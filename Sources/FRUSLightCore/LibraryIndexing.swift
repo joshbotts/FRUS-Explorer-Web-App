@@ -13,10 +13,13 @@ import FRUSCoreKit
 import FTS5Store
 import Foundation
 
-/// What the served index is told while the library's indexing writes the file it serves.
+/// What the served index is told while a job of the library's writes the file it serves.
 public protocol IndexWritingObserver: Sendable {
-    /// A job is about to write the index at `url`, which may not exist yet.
-    func willWriteIndex(at url: URL) async
+    /// A job is about to write the index at `url`, which may not exist yet. With `holding` nil the index is
+    /// served while the job writes it, through the kit's live read-only opens (PLAN's S21e); with a sentence,
+    /// the job holds the file to itself, as a compaction does, and nothing reads it until the job has
+    /// closed it, the sentence saying why meanwhile.
+    func willWriteIndex(at url: URL, holding: String?) async
     /// A volume's pass has ended, indexed or not: what it committed is in the file.
     func didWriteVolume(_ volumeId: String, at url: URL) async
     /// The job has closed the index: its writer's connections are closed, and the file holds every commit.
@@ -27,6 +30,8 @@ public protocol IndexWritingObserver: Sendable {
 public enum LibraryIndexingRefusal: Error, Equatable, Sendable {
     /// An Import server serves the Mac's export, and indexes nothing.
     case importMode
+    /// A removal of the volume waits or runs already (PLAN's S21e).
+    case removalInProgress(String)
 }
 
 /// Where the library's indexing stands, for the Library and Status: the volume a job indexes now, the
@@ -92,7 +97,7 @@ public actor LibraryIndexer {
     /// The index the job writes, and its folder, where the stamps are.
     public let liveIndex: URL
     public let volumesDirectory: URL
-    public let mode: ServerConfiguration.Mode
+    nonisolated public let mode: ServerConfiguration.Mode
     /// The stamps and the record of the volumes a pass did not index, beside the index.
     nonisolated public let stamps: IndexStampFile
     let resources: IndexingResources
@@ -111,12 +116,14 @@ public actor LibraryIndexer {
     private var waitingJob: String?
     /// The job running; its list, every volume of it until the job ends, or nil until it is read; the one it
     /// indexes now; and those it has indexed.
-    private var runningJob: String?
-    private var runningList: Set<String>?
-    private var runningVolume: String?
-    private var runningIndexed: Set<String> = []
+    var runningJob: String?
+    var runningList: Set<String>?
+    var runningVolume: String?
+    var runningIndexed: Set<String> = []
     /// Test hook: told the writer's pipeline once a job has opened it, before its first volume.
-    private var writerOpenedTestHook: (@Sendable (IndexingPipeline) async -> Void)?
+    var writerOpenedTestHook: (@Sendable (IndexingPipeline) async -> Void)?
+    /// The volumes a removal job waits or runs for (PLAN's S21e, IndexUpkeep.swift).
+    var queuedRemovals: Set<String> = []
 
     /// Test hook: installs `writerOpenedTestHook`.
     func setWriterOpenedTestHook(_ hook: (@Sendable (IndexingPipeline) async -> Void)?) {
@@ -172,17 +179,21 @@ public actor LibraryIndexer {
 
     /// Another index took this one's place, as an import's does: what was kept of this one's is forgotten,
     /// and so is a write-ahead log or shared memory the file it replaced left beside its name, which SQLite
-    /// would otherwise read into the new file at its next read-write open.
-    public func indexWasReplaced() {
+    /// would otherwise read into the new file at its next read-write open. `sameFile` is a Standalone reset's
+    /// (PLAN's S21e), which empties the index in place: its side files are its own, and stay.
+    public func indexWasReplaced(sameFile: Bool = false) {
         stamps.reset()
-        for suffix in ["-wal", "-shm"] { try? FileManager.default.removeItem(atPath: liveIndex.path + suffix) }
-        log("A new index was installed in /data/index, so the stamps and records of the one it replaced were cleared")
+        if !sameFile {
+            for suffix in ["-wal", "-shm"] { try? FileManager.default.removeItem(atPath: liveIndex.path + suffix) }
+        }
+        log(sameFile ? "The index in /data/index was emptied, so its stamps and records were cleared"
+                     : "A new index was installed in /data/index, so the stamps and records of the one it replaced were cleared")
     }
 
-    /// At a start, before the index found there is opened, which is read immutable: a write-ahead log a stop
-    /// left beside it, mid-job, is folded into the file through a connection of the server's own, so that
-    /// the open reads every commit and no page a checkpoint left half written. Gives whether the file holds
-    /// them all.
+    /// At a start, before the index found there is opened: a write-ahead log a stop left beside it, mid-job,
+    /// is folded into the file through a connection of the server's own, so that the log a start leaves is
+    /// short, as each job's end leaves it. The served stack reads through the log (PLAN's S21e), so a log
+    /// that cannot be folded is said in the log alone. Gives whether the file holds every commit.
     @discardableResult
     public func foldLogAtStart() async -> Bool {
         guard mode == .standalone else { return true }
@@ -235,6 +246,19 @@ public actor LibraryIndexer {
     @discardableResult
     public func resumeAtStart() async -> Job? {
         guard mode == .standalone else { return nil }
+        // A reset a stop cut short, or an upgrade `prepareAtStart` began (PLAN's S21e): the kit's pass over every
+        // volume, which takes what an interrupted run left with the rest, as the app's launch's pass does.
+        if stamps.isResetting() || stamps.upgrade() != nil {
+            let reason: WholePass = stamps.isResetting() ? .reset : .upgrade
+            do {
+                let job = try await queueWholePass(reason, requestedBy: nil)
+                log("\(reason == .reset ? "Indexing every volume again, after a reset a stop of the server cut short" : "Re-indexing every volume for index version \(IndexingPipeline.currentDateIndexVersion)"), as job \(job.id)")
+                return job
+            } catch {
+                log("The pass over every volume the start owes could not be queued: \(error)")
+                return nil
+            }
+        }
         let leftOut = Set(await tracker.interruptedVolumeIds()).union(stamps.failures().filter { $0.value.kind == .failed }.keys)
         let waiting: [String]
         do {
@@ -260,18 +284,22 @@ public actor LibraryIndexer {
     }
 
     /// The volumes a start indexes: with no index, every volume file in the folder; else those the kit
-    /// lists, read through its read-only open, which nothing writes yet at a start. Each less `leftOut`.
+    /// lists, read through its live read-only open, as the served stack reads the index. Each less `leftOut`.
     static func waitingAtStart(index: URL, volumes: URL, resources: IndexingResources, leftOut: Set<String>) throws -> [String] {
         guard FileManager.default.fileExists(atPath: index.path) else {
-            return (try? FileManager.default.contentsOfDirectory(atPath: volumes.path))?
-                .filter { $0.hasSuffix(".xml") && !$0.hasPrefix(".") }
-                .map { String($0.dropLast(4)) }
-                .filter { !leftOut.contains($0) }
-                .sorted() ?? []
+            return volumeFiles(in: volumes).filter { !leftOut.contains($0) }
         }
-        let store = try FTS5Store(readingDatabaseAt: index)
-        let pipeline = try IndexingPipeline(readingIndexAt: index, fts5Store: store, resources: resources, volumesDirectory: volumes)
+        let store = try FTS5Store(readingLiveDatabaseAt: index)
+        let pipeline = try IndexingPipeline(readingLiveIndexAt: index, fts5Store: store, resources: resources, volumesDirectory: volumes)
         return try pipeline.volumesAwaitingIndex(excluding: leftOut)
+    }
+
+    /// The volumes whose files are in the folder, by id, in order: what the kit's pass over every volume takes.
+    static func volumeFiles(in volumes: URL) -> [String] {
+        (try? FileManager.default.contentsOfDirectory(atPath: volumes.path))?
+            .filter { $0.hasSuffix(".xml") && !$0.hasPrefix(".") }
+            .map { String($0.dropLast(4)) }
+            .sorted() ?? []
     }
 
     private func forget(_ id: String) {
@@ -314,7 +342,8 @@ public actor LibraryIndexer {
             let readiness = await state.readiness()
             throw JobFailed("The index in /data/index is not being served (\(readiness.detail)), so nothing was indexed into it.")
         }
-        await observer?.willWriteIndex(at: liveIndex)
+        // Served while it is written: search reads each volume as its store commits (PLAN's S21e).
+        await observer?.willWriteIndex(at: liveIndex, holding: nil)
         var writer: Writer?
         do {
             writer = try await openWriter()
@@ -336,27 +365,23 @@ public actor LibraryIndexer {
         }
         consumer.cancel()
         _ = await consumer.value
-        // The writer's last reference: its connections close here, the last of them checkpointing the
-        // write-ahead log into the file. The log is folded in here too, so that the file holds every commit
-        // before the served index is told it is whole, whatever still has a connection open.
+        // The writer's last reference: its connections close here. The log is folded into the file through
+        // a connection of the server's own, so that it stays short; the served stack reads through it
+        // (PLAN's S21e), so a log a reader keeps from folding at once is folded by the next job or start.
         writer = nil
-        var folded = await foldLog()
-        for _ in 0..<2 where !folded {
+        if !(await foldLog()) {
             try? await Task.sleep(for: .seconds(1))
-            folded = await foldLog()
+            if !(await foldLog()) {
+                log("The index's write-ahead log could not be folded into it after the job: the served index reads through it, and the next job or start folds it")
+            }
         }
-        if folded {
-            await observer?.didFinishWritingIndex(at: liveIndex)
-        } else {
-            // Read immutable, the file would be served without the log's commits: search waits for a start.
-            await state.indexWriteUnfinished("the index's write-ahead log could not be folded into it after the library's indexing; search waits until the server starts again, which folds it")
-        }
+        await observer?.didFinishWritingIndex(at: liveIndex)
         return try outcome.get()
     }
 
     /// Folds the index's write-ahead log into the file and empties the log, through a connection of the
     /// server's own, which closes at once.
-    private func foldLog() async -> Bool {
+    func foldLog() async -> Bool {
         let path = liveIndex.path
         guard FileManager.default.fileExists(atPath: path + "-wal") else { return true }
         do {
@@ -375,7 +400,7 @@ public actor LibraryIndexer {
 
     /// Opens the index read-write, as the kit sets it up, with S21a's stop turned on, so that a job that
     /// is cancelled stops within the volume under way once its documents are stored.
-    private func openWriter() async throws -> Writer {
+    func openWriter() async throws -> Writer {
         let (live, volumes, resources, stamps, tracker) = (liveIndex, volumesDirectory, self.resources, self.stamps, self.tracker)
         let writer = try await Blocking.run {
             let store = try FTS5Store(databaseURL: live)
@@ -448,6 +473,7 @@ public actor LibraryIndexer {
                     indexed += 1
                     runningIndexed.insert(volumeId)
                     stamps.clearFailure(of: volumeId)
+                    stamps.upgradeDone(volumeId)
                 case .failed(let record):
                     failed.append(volumeId)
                     stamps.recordFailure(record, for: volumeId)
@@ -459,6 +485,7 @@ public actor LibraryIndexer {
                     stamps.recordFailure(record, for: volumeId)
                     stopped = (volumeId, reason)
                 }
+                await publishUpgrade()
                 await observer?.didWriteVolume(volumeId, at: liveIndex)
                 if stopped != nil { break }
             }
@@ -472,7 +499,8 @@ public actor LibraryIndexer {
         // any other, and so does the open of the index found at a start, so the date-index and FTS
         // stamps are this build's, as the app records them after its first pass.
         await job.progress("Rebuilding the person rollup, the broken references' flags and the subjects", fraction: 1)
-        if writer.pipeline.installedDateIndexVersion == 0 {
+        // Not while an upgrade waits for its pass (PLAN's S21e), which records the version once it has run.
+        if stamps.upgrade() == nil, writer.pipeline.installedDateIndexVersion == 0 {
             await writer.pipeline.markDateReindexComplete()
             await writer.pipeline.markFTSRebuildReindexComplete()
         }
@@ -505,7 +533,7 @@ public actor LibraryIndexer {
         return "the data volume has \(Self.megabytes(free)) free, and indexing \(volumeId) needs about \(Self.megabytes(needed)), with room for the user store and its backups."
     }
 
-    static func megabytes(_ bytes: Int64) -> String { "\(max(0, bytes) / 1_048_576) MB" }
+    public static func megabytes(_ bytes: Int64) -> String { "\(max(0, bytes) / 1_048_576) MB" }
 
     /// One volume's pass, in a child task beside a watcher that cancels it when an admin asks the job to
     /// stop meanwhile: S21a's stop then ends the pass once its documents are stored. Both are children of
@@ -633,6 +661,9 @@ public actor LibraryIndexer {
 /// last stage each volume reached kept, so that a volume whose pass failed is kept with where it was.
 actor IndexingProgressRelay {
     private let job: JobContext
+    /// Whether it says each update in the job's line: not for the pass over every volume (PLAN's S21e), whose
+    /// line says how far through the volumes it is, this relay keeping only each volume's stage.
+    private let writesLine: Bool
     private var position = 0
     private var count = 1
     /// Each volume's last update before its pass ended.
@@ -640,7 +671,10 @@ actor IndexingProgressRelay {
     /// Each volume's `.failed` or `.complete`.
     private var ended: [String: IndexingProgressUpdate] = [:]
 
-    init(job: JobContext) { self.job = job }
+    init(job: JobContext, writesLine: Bool = true) {
+        self.job = job
+        self.writesLine = writesLine
+    }
 
     /// The job takes `volumeId`, the volume at `position` of `count`.
     func begin(_ volumeId: String, position: Int, count: Int) {
@@ -658,6 +692,7 @@ actor IndexingProgressRelay {
             break
         case .reading, .storingBatch:
             last[update.volumeId] = update
+            guard writesLine else { return }
             let what = switch update.stage {
             case .reading where update.totalDocuments == 0: "reading its XML"
             case .reading: "read \(update.totalDocuments) \(update.totalDocuments == 1 ? "document" : "documents")"
