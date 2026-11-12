@@ -2043,7 +2043,22 @@ export const copy = {
       reset: 'Reset the Index…',
       resetLead:
         'Removes the index this server serves, so that it waits for an export in /data/import, as at its first start. Search stops until one is imported; the reader keeps working from the TEI files, and nobody’s research changes.',
-      resetStandalone: 'A Standalone server’s index is reset by indexing its library again, which comes with the library’s own screens.',
+      resetStandalone:
+        'Empties the index and indexes every volume of the library into it again, one after another, in a job that Jobs follows. Search answers over what is indexed meanwhile, and nobody’s research changes.',
+      resetMessageStandalone:
+        'The server empties its index and indexes every volume in its library again. Search finds less until the indexing ends, which takes hours for the whole corpus. Nobody’s notes, highlights or other research change.',
+      upkeep: 'Index upkeep',
+      upkeepLead:
+        'Compacting gives the disk back the room that removed and re-indexed volumes left in the index; search waits while it runs. Checking runs SQLite’s quick check and both full-text indexes’ own, while search answers. Each is a job that Jobs follows.',
+      indexFile: 'Index file',
+      indexRoom: (file: string, reclaimable: string) => `${file}, of which ${reclaimable} is free space a compaction would give back`,
+      // The app's words for its Storage pane's line under the index's size (`IndexCompaction.subtitle`).
+      compactAvailable: (reclaimable: string, percent: number) => `${reclaimable} of this is free space left by reindexing — ${percent}% of the file.`,
+      compactBlocked: (reclaimable: string, required: string) => `${reclaimable} could be reclaimed, but compacting needs about ${required} of free space first.`,
+      compact: 'Compact the Index',
+      compactQueued: 'The compaction is queued as a job: Jobs follows it.',
+      check: 'Check the Index',
+      checkQueued: 'The check is queued as a job: Jobs follows it.',
       resetTitle: 'Reset the index?',
       resetMessage:
         'The server stops serving its index and removes it, with the index the last import replaced. Search stops until you copy an export into /data/import. Nobody’s notes, highlights or other research change.',
@@ -2070,6 +2085,9 @@ export const copy = {
         indexReset: 'Index reset',
         libraryDownload: 'Library download',
         libraryIndex: 'Library indexing',
+        libraryRemove: 'Library removal',
+        indexCompact: 'Index compaction',
+        indexCheck: 'Index check',
       } as Record<string, string>,
       states: { queued: 'Waiting', running: 'Running', succeeded: 'Finished', failed: 'Failed', cancelled: 'Cancelled' },
       stopping: 'Stopping at its next step',
@@ -2089,6 +2107,19 @@ export const copy = {
     library: {
       title: 'Library',
       lead: 'The volumes this server keeps, in /data/volumes, each downloaded from the address the catalogue names and kept only once its length and hash are those GitHub’s listing gives, with its figure images. A download is a job, which Jobs follows: it stops between two volumes when it is cancelled, and goes on volume by volume when the server starts again after a restart stopped it. The volumes a download brings are then indexed, in a job of their own, which search reads as each volume is stored.',
+      sideload: 'Side-Load a Volume',
+      sideloadLead:
+        'A volume’s TEI file from elsewhere, of 64 MB at most, named after the volume, as frus1969-76v99.xml: the server checks it as FRUS Explorer does, keeps it in the library and indexes it. A volume the catalogue does not list is described by its own header, and its citations say that this server cannot confirm it is published.',
+      sideloadFile: 'TEI file',
+      sideloadButton: 'Side-Load',
+      sideloadChoose: 'Choose a volume’s TEI file first.',
+      sideloadTooLarge: (size: string) => `The file is ${size}: a side-load takes 64 MB at most.`,
+      sideloaded: (volume: string) => `${volume} is side-loaded: its indexing is queued as a job, which Jobs follows.`,
+      sideloadedMark: 'Side-loaded',
+      upgrade: (to: number, count: number) =>
+        count === 1
+          ? `Re-indexing for index version ${to}: one volume is still to go, while search answers.`
+          : `Re-indexing for index version ${to}: ${count.toLocaleString('en-US')} volumes are still to go, while search answers.`,
       leadImport:
         'This server serves an index exported from the Mac, and reads its volumes from the TEI folder mounted at /data/volumes, which it never writes. The library downloads in Standalone mode.',
       fromGitHub: 'Volumes come from GitHub’s HistoryAtState/frus repository, and their figure images from history.state.gov.',
@@ -2157,9 +2188,12 @@ export const copy = {
       removeTitle: (volume: string) => `Remove ${volume}?`,
       removeMessage:
         'Its file and figure images are deleted from /data/volumes, and the reader can no longer open its documents until it is downloaded again.',
+      removeMessageIndexed:
+        'Its documents leave the index, in a job that Jobs follows, and then its file and figure images are deleted from /data/volumes: search, Browse and the reader no longer have it until it is downloaded again.',
       removeConfirm: 'Remove',
       keep: 'Keep It',
       removed: (volume: string) => `Removed ${volume}.`,
+      removalQueued: (volume: string) => `The removal of ${volume} is queued as a job: Jobs follows it.`,
     },
     users: {
       title: 'Users',

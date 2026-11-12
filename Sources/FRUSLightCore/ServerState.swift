@@ -59,11 +59,16 @@ public actor ServerState: ImportObserver {
     /// for at one removes nothing an import installed after it, and an index the start was opening when
     /// a reset removed it is not served.
     public private(set) var indexGeneration = 0
-    /// Whether the library's indexing writes the index now (PLAN's S21d): from before its first write until
-    /// its job has closed the file, nothing reads the index, search answers 503 and `/readyz` says so.
-    public private(set) var indexBeingWritten = false
-    /// Why the index the library's indexing wrote is not served, when its write-ahead log could not be folded.
-    private var indexWriteProblem: String?
+    /// Whether a job of the library's holds the index to itself now (PLAN's S21d, S21e): from before its
+    /// first write until it has closed the file, nothing reads the index, search answers 503 and `/readyz`
+    /// says so. A Standalone server's indexing serves the index while it writes it, through the kit's live
+    /// read-only opens (S21e); only a compaction, and a reset while it empties the index, hold it so.
+    public var indexBeingWritten: Bool { indexHold != nil }
+    /// What holds the index to itself, in a sentence, while one does.
+    public private(set) var indexHold: String?
+    /// The upgrade a start began (PLAN's S21e): the index's version, the kit's it is re-indexed for, and
+    /// the volumes still to be re-indexed, which `/readyz` names while search answers.
+    public private(set) var upgrade: IndexUpgradeStatus?
     private let log: @Sendable (String) -> Void
 
     public init(configuration: ServerConfiguration, log: @escaping @Sendable (String) -> Void = { _ in }) {
@@ -88,8 +93,10 @@ public actor ServerState: ImportObserver {
         openingAtStart = true
         let generation = indexGeneration
         let outcome: Result<CorpusIndex, any Error>
+        // A Standalone server serves its own index read-only without `immutable` (PLAN's S21e).
+        let reading = configuration.mode == .standalone
         do {
-            outcome = .success(try await Blocking.run { try CorpusIndex.open(live) })
+            outcome = .success(try await Blocking.run { try CorpusIndex.open(live, live: reading) })
         } catch {
             outcome = .failure(error)
         }
@@ -117,14 +124,14 @@ public actor ServerState: ImportObserver {
     func setStillCopying(_ files: [String]) { stillCopying = files }
 
     public func readiness() -> Readiness {
-        if indexBeingWritten {
-            return Readiness(step: .indexingLibrary,
-                             detail: indexWriteProblem.map { "Search waits: \($0)" }
-                                 ?? "The library's indexing is writing the index: search answers again once its job ends, and the reader opens documents meanwhile")
+        if let indexHold {
+            return Readiness(step: .indexingLibrary, detail: indexHold)
         }
         if let index {
             let s = index.summary
-            return Readiness(step: .ready, detail: "Serving \(s.documents) documents from \(s.volumes) volumes, index version \(s.indexVersion)")
+            var detail = "Serving \(s.documents) documents from \(s.volumes) volumes, index version \(s.indexVersion)"
+            if let upgrade, !upgrade.volumes.isEmpty { detail += ". \(upgrade.sentence)" }
+            return Readiness(step: .ready, detail: detail)
         }
         if let importing {
             return Readiness(step: importing.step, detail: importing.detail, progress: importing.progress)
@@ -201,36 +208,37 @@ public actor ServerState: ImportObserver {
         return message
     }
 
-    /// The library's indexing is about to write the index (PLAN's S21d): it is read no more until the job
-    /// has closed it.
-    public func beginIndexWrite() {
-        indexBeingWritten = true
+    /// A job of the library's is about to hold the index to itself (PLAN's S21d, S21e): it is read no more
+    /// until the job has closed it, and `reason` says why meanwhile, in `/readyz` and search's 503.
+    public func beginIndexWrite(_ reason: String = ServerState.defaultHold) {
+        indexHold = reason
     }
 
-    /// The library's indexing has closed the index without one to serve, as when it could not open it.
+    /// What `/readyz` says while the library's indexing holds the index, when nothing else is said.
+    public static let defaultHold = "The library's indexing is writing the index: search answers again once its job ends, and the reader opens documents meanwhile"
+
+    /// The job that held the index has closed it without one to serve, as when it could not open it.
     public func endIndexWrite() {
-        indexBeingWritten = false
-        indexWriteProblem = nil
+        indexHold = nil
     }
 
-    /// The library's indexing closed the index, and its write-ahead log could not be folded into it: read
-    /// immutable, it would be served without the log's commits, so nothing reads it until a start folds it.
-    public func indexWriteUnfinished(_ reason: String) {
-        indexBeingWritten = true
-        indexWriteProblem = reason
-        log("Not serving the index: \(reason)")
-    }
-
-    /// The library's indexing has written the index (PLAN's S21d): `newIndex`, opened again over the file
-    /// it closed, is served.
-    public func indexWritten(_ newIndex: CorpusIndex) {
+    /// The library's indexing has written the index: `newIndex`, opened again over the file, is served,
+    /// with what it holds now. A Standalone server's job does so after each volume it indexes, and once it
+    /// has closed the index (PLAN's S21e), so that the counts, the stack and its caches follow each volume.
+    public func indexWritten(_ newIndex: CorpusIndex, quietly: Bool = false) {
         index = newIndex
         indexGeneration += 1
         startupProblem = nil
-        indexBeingWritten = false
-        indexWriteProblem = nil
+        indexHold = nil
         let s = newIndex.summary
-        log("Serving \(s.documents) documents from \(s.volumes) volumes, index version \(s.indexVersion), as the library's indexing left them")
+        if !quietly {
+            log("Serving \(s.documents) documents from \(s.volumes) volumes, index version \(s.indexVersion), as the library's indexing left them")
+        }
+    }
+
+    /// Where the upgrade a start began stands, or nil once none is under way (PLAN's S21e).
+    public func setUpgrade(_ status: IndexUpgradeStatus?) {
+        upgrade = status.flatMap { $0.volumes.isEmpty ? nil : $0 }
     }
 
     /// An admin stopped the import between two of its steps (PLAN's S20d): nothing changed.
@@ -299,6 +307,27 @@ public actor ServerState: ImportObserver {
 
     static func timestamp(_ date: Date) -> String {
         date.formatted(.iso8601)
+    }
+}
+
+/// The upgrade of a Standalone server's index a start began (PLAN's S21e): the date-index version it was
+/// at, the kit's it is re-indexed for, from the cached XML, volume by volume, and the volumes still to go.
+public struct IndexUpgradeStatus: Sendable, Equatable, Codable {
+    public var from: Int
+    public var to: Int
+    public var volumes: [String]
+
+    public init(from: Int, to: Int, volumes: [String]) {
+        self.from = from
+        self.to = to
+        self.volumes = volumes
+    }
+
+    /// The volumes still to go, in words: the first ten named, then how many more.
+    public var sentence: String {
+        let named = volumes.prefix(10).joined(separator: ", ")
+        let more = volumes.count > 10 ? ", and \(volumes.count - 10) more" : ""
+        return "The index is being re-indexed from the volumes' files for index version \(to), from \(from), while search answers: \(volumes.count) \(volumes.count == 1 ? "volume is" : "volumes are") still to go (\(named)\(more))"
     }
 }
 

@@ -13,6 +13,7 @@
 //   the kit since session 8, but that step is not built yet.
 
 import CSQLite
+import FTS5Store
 import Foundation
 
 /// Told about each step of an import as it starts, and about copying progress.
@@ -59,7 +60,10 @@ public struct FileIdentity: Equatable, Sendable {
     }
 }
 
-/// The live corpus index, open read-only with `immutable=1`.
+/// The live corpus index, open read-only: with `immutable=1` in Import mode, which serves the Mac's export
+/// as it was installed and writes nothing to it; or, on a Standalone server, read-only without it (PLAN's
+/// S21e), through the kit's `FTS5Store.readOnlyURI(for:)`, so that each statement reads the file as the
+/// server's own indexing last committed it, its write-ahead log included.
 public final class CorpusIndex: Sendable {
     public let url: URL
     /// The file this index's connection opened, as it was just after opening.
@@ -68,19 +72,25 @@ public final class CorpusIndex: Sendable {
     /// How many documents each volume has in `document_cache`, by volume id. It is not part of
     /// the status: the volume endpoints report it per volume.
     public let documentsByVolume: [String: Int]
+    /// Whether it was opened read-only without `immutable`: a Standalone server's index, which its own
+    /// indexing writes while it is served, and over which the served stack opens the kit's live read-only
+    /// opens too (`ServedIndex`). Its counts are those of the moment it was opened.
+    public let isLive: Bool
     let connection: SQLiteConnection
 
-    /// Opens an installed index after checking its format and version, but not its
-    /// integrity, which the import checked. Throws `ImportRefusal` for an index this build
-    /// cannot serve, such as one from before an upgrade.
-    public static func open(_ url: URL) throws -> CorpusIndex {
-        let db = try SQLiteConnection.immutable(url)
+    /// Opens an installed index after checking its format and version, but not its integrity, which the
+    /// import checked. Throws `ImportRefusal` for an index this build cannot serve, such as one from
+    /// before an upgrade. `live` opens it as a Standalone server serves its own index: read-only without
+    /// `immutable`, and at the version its documents' own record gives (`ExportChecks.checkLiveVersions`),
+    /// which an upgrade at a start raises volume by volume while the index is served (PLAN's S21e).
+    public static func open(_ url: URL, live: Bool = false) throws -> CorpusIndex {
+        let db = try live ? SQLiteConnection(FTS5Store.readOnlyURI(for: url), readOnly: true) : SQLiteConnection.immutable(url)
         let file = FileIdentity(url)
         try ExportChecks.checkFormat(db)
         let provenance = try ExportChecks.provenance(db)
         let version: Int
         do {
-            version = try ExportChecks.checkVersions(db, provenance: provenance)
+            version = live ? try ExportChecks.checkLiveVersions(db) : try ExportChecks.checkVersions(db, provenance: provenance)
         } catch let refusal as ImportRefusal {
             throw ImportRefusal(.indexVersionMismatch, refusal.reason)
         }
@@ -97,14 +107,16 @@ public final class CorpusIndex: Sendable {
             exportedAt: provenance?["exported_at"],
             appVersion: provenance?["app_version"],
             appBuild: provenance?["app_build"])
-        return CorpusIndex(url: url, file: file, summary: summary, documentsByVolume: documentsByVolume, connection: db)
+        return CorpusIndex(url: url, file: file, summary: summary, documentsByVolume: documentsByVolume, isLive: live, connection: db)
     }
 
-    private init(url: URL, file: FileIdentity?, summary: IndexSummary, documentsByVolume: [String: Int], connection: SQLiteConnection) {
+    private init(url: URL, file: FileIdentity?, summary: IndexSummary, documentsByVolume: [String: Int], isLive: Bool,
+                 connection: SQLiteConnection) {
         self.url = url
         self.file = file
         self.summary = summary
         self.documentsByVolume = documentsByVolume
+        self.isLive = isLive
         self.connection = connection
     }
 }
@@ -124,11 +136,15 @@ public struct IndexImporter: Sendable {
     /// What becomes of the owner's writing in an export made with it; nil on a server that keeps
     /// no user data, which refuses such an export.
     let writingMove: WritingMove?
+    /// Whether the index it installs is opened as a Standalone server serves its own (PLAN's S21e):
+    /// read-only without `immutable`, since the server's indexing writes into it afterwards.
+    let liveReads: Bool
 
-    public init(files: any FileStore, writer: any IndexWriter, writing: WritingMove? = nil) {
+    public init(files: any FileStore, writer: any IndexWriter, writing: WritingMove? = nil, liveReads: Bool = false) {
         self.files = files
         self.writer = writer
         self.writingMove = writing
+        self.liveReads = liveReads
     }
 
     /// Imports one export. On success its copy is the live index and open; the old index is kept
@@ -263,9 +279,9 @@ public struct IndexImporter: Sendable {
         }
 
         await observer.importDidReach(.openingIndex, detail: "Opening the index read-only", progress: nil)
-        let live = files.liveIndex
+        let (live, liveReads) = (files.liveIndex, self.liveReads)
         do {
-            return ImportedExport(index: try await Blocking.run { try CorpusIndex.open(live) }, writing: moved)
+            return ImportedExport(index: try await Blocking.run { try CorpusIndex.open(live, live: liveReads) }, writing: moved)
         } catch let error as SQLiteError {
             throw ImportProblem(.openingIndex, "The new index was installed but could not be opened: \(error.message).")
         }
@@ -423,6 +439,25 @@ enum ExportChecks {
             }
         }
         return supported
+    }
+
+    /// The version a Standalone server's own index is at (PLAN's S21e): its documents' own record,
+    /// `document_revisions.index_version`, which the kit's indexing stamps each document with, read in place
+    /// of any export's stamp the index was seeded from, since the server has indexed into it since. It is
+    /// the lowest a document now in its volume is at (a row the kit marks `vanished` keeps the version it
+    /// was last written at), the version the index is wholly at while an upgrade at a start re-indexes it
+    /// volume by volume, and this build's for an index that holds none. An index holding a document
+    /// written at a later version, by a later build, is refused: this one cannot read it back.
+    static func checkLiveVersions(_ db: SQLiteConnection) throws -> Int {
+        let supported = IndexCompatibility.supportedIndexVersion
+        let row = try db.query("""
+            SELECT min(index_version), max(index_version) FROM document_revisions
+             WHERE change_kind IS NOT 'vanished'
+            """).first ?? []
+        if let highest = row.count > 1 ? row[1].integer : nil, highest > Int64(supported) {
+            throw ImportRefusal(.checkingVersions, "This index holds documents indexed at index version \(highest), by a later build of the server; this one indexes at \(supported). Run the later build, or reset the index so that this one indexes its volumes again.")
+        }
+        return (row.first?.integer).map { Int($0) } ?? supported
     }
 
     /// The owner's writing an export made with it holds, to be kept in the user's store, or nil for

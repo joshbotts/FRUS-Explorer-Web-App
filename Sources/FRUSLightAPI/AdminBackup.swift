@@ -27,16 +27,22 @@ struct AdminRoleGuard: RouterMiddleware {
 
 enum AdminRoutes {
     static func add(to router: Router<APIRequestContext>, services: UserDataServices, state: ServerState, resources: ServerResources,
-                    library: VolumeLibrary? = nil, indexer: LibraryIndexer? = nil) {
+                    library: VolumeLibrary? = nil, indexer: LibraryIndexer? = nil, provider: ServedIndexProvider? = nil) {
         let admin = router.group("/api/v1/admin").add(middleware: UserDataGuard(services: services)).add(middleware: AdminRoleGuard())
+        // A side-loaded volume's XML, of 64 MiB at most, in a group of its own, whose guard takes it (PLAN's S21e).
+        let sideloads = router.group("/api/v1/admin")
+            .add(middleware: UserDataGuard(services: services, bodyLimit: VolumeLibrary.sideloadLimit, mediaTypes: UserDataGuard.xml))
+            .add(middleware: AdminRoleGuard())
         let (directory, copyDirectory) = (services.backupsDirectory, services.backupCopyDirectory)
         // The instance's stored keys (PLAN's S20c), an admin's too.
         SecretRoutes.addInstance(to: admin, services: services)
         // Status, the backups' list and the index's reset; the jobs; the users and an erasure (S20d).
-        AdminStatusRoutes.add(to: admin, services: services, state: state, resources: resources)
+        AdminStatusRoutes.add(to: admin, services: services, state: state, resources: resources, indexer: indexer)
+        // The index's compaction, its check, Standalone's reset and its room (S21e).
+        AdminIndexRoutes.add(to: admin, services: services, state: state, indexer: indexer, provider: provider)
         AdminJobRoutes.add(to: admin, services: services)
-        // The library's volumes, their downloads (S21c) and their indexing (S21d).
-        AdminLibraryRoutes.add(to: admin, state: state, resources: resources, library: library, indexer: indexer)
+        // The library's volumes, their downloads (S21c), their indexing (S21d), the side-load and removal (S21e).
+        AdminLibraryRoutes.add(to: admin, sideloads: sideloads, state: state, resources: resources, library: library, indexer: indexer)
         AdminUserRoutes.add(to: admin, services: services)
 
         admin.get("backup") { request, context -> Response in

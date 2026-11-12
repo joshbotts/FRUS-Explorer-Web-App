@@ -114,13 +114,17 @@ export function CitePanel({
           <p className="citation" data-style={data.style} aria-busy={loadingStyle}>
             {citationNodes(data.citation)}
           </p>
+          {/* A side-loaded volume's, which the server cannot confirm is published, as the app's Cite says (S21e). */}
+          {data.provenanceNote && <p className="note">{data.provenanceNote}</p>}
           <div className="actions">
             <button type="button" disabled={loadingStyle} onClick={() => void copyText(data.plainText)}>
               {copy.cite.copyCitation}
             </button>
-            <button type="button" onClick={() => void copyText(data.canonicalURL)}>
-              {copy.cite.copyLink}
-            </button>
+            {data.canonicalURL && (
+              <button type="button" onClick={() => void copyText(data.canonicalURL ?? '')}>
+                {copy.cite.copyLink}
+              </button>
+            )}
           </div>
           {/* The records name no style, so another style loading leaves them as they are. */}
           <div className="actions">

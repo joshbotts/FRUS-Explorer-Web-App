@@ -59,6 +59,9 @@ public struct Volume: Codable, Equatable, Sendable {
     /// How many documents `structure` holds, and how many of those the index holds.
     public var documentCount: Int?
     public var indexedDocumentCount: Int?
+    /// True for a volume side-loaded under an id the published catalogue lacks, which the catalogue overlay
+    /// lists (PLAN's S21e), the app's Side-loaded badge; absent for a catalogue volume.
+    public var sideloaded: Bool?
 
     /// A section of a volume: its divisions, in source order, with the documents directly in it.
     /// Its flags are the kit's `VolumeSection` properties.
@@ -119,6 +122,7 @@ public struct Volume: Codable, Equatable, Sendable {
         indexedDocuments = index?.documentsByVolume[entry.volumeId] ?? 0
         indexed = indexedDocuments > 0
         teiAvailable = ReaderService.teiFile(for: entry.volumeId, in: volumesDirectory) != nil
+        sideloaded = entry.provenance == .sideloaded ? true : nil
     }
 }
 
@@ -150,7 +154,8 @@ enum CatalogRoutes {
             let status = try query.choice("status", among: [VolumeStatus.published, .partiallyPublished, .planned])
             let subseries = try query.single("subseries")
             let index = await state.index
-            let matching = resources.manifest.filter {
+            // The catalogue's volumes, then those side-loaded under an id it lacks, as the app's Browse lists them (S21e).
+            let matching = (resources.manifest + resources.localVolumes).filter {
                 (status == nil || $0.status == status) && (subseries == nil || $0.subseries == subseries)
             }
             let page = matching.dropFirst(offset).prefix(limit)
@@ -244,6 +249,7 @@ enum CatalogRoutes {
                 guard let parsed, parsed.opens(documentId) else { throw problem }
                 let ast = try await reader.document(volume: volumeId, document: documentId).ast
                 var detail = DocumentDetail(teiOnly: ast, structure: parsed.structure, volumeId: volumeId)
+                detail.canonicalURL = resources.canonicalURL(volumeId: volumeId, documentId: ast.documentId)
                 if let browse { (detail.previous, detail.next) = browse.neighbours(of: documentId, readable: parsed) }
                 return detail
             }
@@ -272,7 +278,7 @@ enum CatalogRoutes {
             var document = DocumentEntry(entry, inIndex: true, dateISO: date["\(volumeId)/\(entry.documentId)"])
             document.classify(asEditorialNote: classification ?? entry.isEditorialNote)
             return DocumentDetail(document: document,
-                                  canonicalURL: FRUSCanonicalURL.string(volumeId: volumeId, documentId: entry.documentId),
+                                  canonicalURL: resources.canonicalURL(volumeId: volumeId, documentId: entry.documentId),
                                   previous: previous, next: next, teiAvailable: teiAvailable)
         }
     }
@@ -517,8 +523,8 @@ public struct DocumentDetail: Codable, Equatable, Sendable {
     }
 
     public var document: DocumentEntry
-    /// The document's page on history.state.gov.
-    public var canonicalURL: String
+    /// The document's page on history.state.gov; absent for a side-loaded volume's (PLAN's S21e).
+    public var canonicalURL: String?
     /// The entries before and after it in the volume's reading order.
     public var previous: Neighbour?
     public var next: Neighbour?

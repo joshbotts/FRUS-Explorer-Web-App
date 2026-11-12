@@ -36,6 +36,9 @@ public final class ServerResources: Sendable {
     private let documentSubjects = DocumentSubjectIndexFile()
     /// The corpus-wide citation index, `resolved-edge-index.json`, decoded on first use (ServedIndex.swift).
     private let resolvedEdges = ResolvedEdgeIndexFile()
+    /// The catalogue overlay (PLAN's S21e): the volumes a Standalone server's library holds that the published
+    /// catalogue does not list, side-loaded, each described by the kit's `LocalVolumeCatalog` from its own header.
+    private let local = LocalVolumes()
 
     /// The files the server cannot start without: those it reads here, and the five
     /// `IndexingResources` requires.
@@ -82,10 +85,33 @@ public final class ServerResources: Sendable {
         self.indexing = indexing
     }
 
-    /// The manifest's entry for `volumeId`, or nil when the published catalogue has no such
-    /// volume. Only a manifest id is ever joined into a path.
+    /// The manifest's entry for `volumeId`, or the catalogue overlay's for a volume side-loaded under an id
+    /// the published catalogue lacks (PLAN's S21e), as the app's `ManifestStore.entry(forVolumeId:)` reads
+    /// its local entries; nil for any other. Only an id one of them names is ever joined into a path: a
+    /// manifest id, or the name of a volume's file in a Standalone server's own folder, which the side-load
+    /// checked before it took its place.
     public func volume(_ volumeId: String) -> VolumeManifestEntry? {
-        positions[volumeId].map { manifest[$0] }
+        positions[volumeId].map { manifest[$0] } ?? local.entry(volumeId)
+    }
+
+    /// A document's page on history.state.gov, or nil for a side-loaded volume's, whose page the server
+    /// cannot vouch for, as the app's `canonicalDocumentURL` gives none (PLAN's S21e).
+    public func canonicalURL(volumeId: String, documentId: String) -> String? {
+        volume(volumeId)?.provenance == .sideloaded ? nil : FRUSCanonicalURL.string(volumeId: volumeId, documentId: documentId)
+    }
+
+    /// The volumes the catalogue overlay holds, by id: side-loaded, each marked `.sideloaded` (PLAN's S21e).
+    public var localVolumes: [VolumeManifestEntry] { local.entries() }
+
+    /// Reads the catalogue overlay again from a Standalone server's volumes folder, through the kit's
+    /// `LocalVolumeCatalog.reconcile(in:known:)`, as the app's boot and its corpus-change refresh do: a sidecar
+    /// for each volume file the catalogue lacks that has none, minted from the file's own header, beside it;
+    /// a sidecar whose file is gone removed. Off the cooperative pool: it reads each new file's header.
+    public func refreshLocalVolumes(in volumesDirectory: URL) async {
+        let known = Set(positions.keys)
+        // The reconcile throws nothing; the run's own error, should the queue fail it, leaves the overlay as it was.
+        guard let entries = try? await Blocking.run({ LocalVolumeCatalog.reconcile(in: volumesDirectory, known: known) }) else { return }
+        local.set(entries)
     }
 
     /// `ArchivalIndexes.bundled`, app code: `central-files-index.json`, `volume-sources-index.json` and
@@ -112,6 +138,32 @@ public final class ServerResources: Sendable {
     /// `ResolvedEdgeIndex(contentsOf:)`; nil for a file missing or malformed, and a graph's inbound half
     /// is then the index's own table alone, as the app's is when its store fails to load.
     var resolvedEdgeIndex: ResolvedEdgeIndex? { resolvedEdges.index(in: directory) }
+}
+
+/// The catalogue overlay's entries, set whole each time it is read again.
+private final class LocalVolumes: @unchecked Sendable {
+    private let lock = NSLock()
+    private var byId: [String: VolumeManifestEntry] = [:]
+    private var ordered: [VolumeManifestEntry] = []
+
+    func entry(_ volumeId: String) -> VolumeManifestEntry? {
+        lock.lock()
+        defer { lock.unlock() }
+        return byId[volumeId]
+    }
+
+    func entries() -> [VolumeManifestEntry] {
+        lock.lock()
+        defer { lock.unlock() }
+        return ordered
+    }
+
+    func set(_ entries: [VolumeManifestEntry]) {
+        lock.lock()
+        defer { lock.unlock() }
+        ordered = entries.sorted { $0.volumeId < $1.volumeId }
+        byId = Dictionary(ordered.map { ($0.volumeId, $0) }, uniquingKeysWith: { first, _ in first })
+    }
 }
 
 /// The corpus-wide citation index, decoded the first time a served index's stack opens: 1.1 MB of JSON.

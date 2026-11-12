@@ -611,7 +611,8 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
         }
         for name in (try? manager.contentsOfDirectory(atPath: volumesDirectory.path)) ?? [] {
             let url = volumesDirectory.appendingPathComponent(name)
-            if name.hasPrefix("."), name.hasSuffix(Self.partialSuffix) {
+            if name.hasPrefix("."), name.hasSuffix(Self.partialSuffix) || name.hasPrefix(Self.stagingPrefix) {
+                // A file a download was writing, or a side-load's staging folder (PLAN's S21e).
                 try? manager.removeItem(at: url)
             } else if name.hasSuffix(".figures"), Self.kind(at: url) == .typeDirectory {
                 for image in (try? manager.contentsOfDirectory(atPath: url.path)) ?? []
@@ -1106,12 +1107,15 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
 
     /// Removes a downloaded volume's file and figure images, and forgets it: refused while a job waits for
     /// it or fetches it, which the store's forgetting checks in one step, and in Import mode, whose folder
-    /// is the operator's.
+    /// is the operator's. A side-loaded volume the catalogue does not list is removed by its file's name
+    /// (PLAN's S21e), with the sidecar the kit's `LocalVolumeCatalog` wrote beside it.
     public func remove(_ volumeId: String) async throws {
         guard mode == .standalone else { throw LibraryRefusal.importMode }
-        guard entries[volumeId] != nil, let file = fileURL(volumeId), let folder = figuresDirectory(volumeId) else {
+        guard entries[volumeId] != nil || isVolumeDownloaded(volumeId), let file = fileURL(volumeId),
+              let folder = figuresDirectory(volumeId) else {
             throw LibraryRefusal.unknownVolume(volumeId)
         }
+        let sidecar = volumesDirectory.appendingPathComponent("\(volumeId).frusmeta.json")
         let present = isVolumeDownloaded(volumeId) || Self.kind(at: folder) != nil
         let forgotten = try await Blocking.run { [store] in try store.forgetLibraryVolume(volumeId) }
         switch forgotten {
@@ -1120,9 +1124,132 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
         case .nothing, .forgotten: break
         }
         try await Blocking.run {
-            for url in [file, folder] where Self.kind(at: url) != nil { try FileManager.default.removeItem(at: url) }
+            for url in [file, folder, sidecar] where Self.kind(at: url) != nil { try FileManager.default.removeItem(at: url) }
         }
         log("Removed \(volumeId)'s file and figure images from the library")
+    }
+
+    // MARK: Side-load (PLAN's S21e)
+
+    /// The largest file a side-load takes, the row's.
+    public static let sideloadLimit = 64 * 1_048_576
+    /// The prefix of a side-load's staging folder, hidden by its dot, which `prepare()` removes at a start.
+    static let stagingPrefix = ".sideload-"
+
+    /// The volume id a side-loaded file's name gives, as the app's validator takes it (the name less its
+    /// extension), or nil for a name the server takes no volume by: one that is not `<id>.xml`, or whose id
+    /// is not a name of letters, digits, `.`, `_` and `-`, beginning with a letter or a digit, of 128
+    /// characters at most, so that the id, which becomes a file's name, is one path component, hidden by
+    /// no dot, and no other volume's sidecar or figures folder.
+    public static func sideloadedVolumeId(fromFileName name: String) -> String? {
+        guard name.hasSuffix(".xml") else { return nil }
+        let id = String(name.dropLast(4))
+        let allowed = Set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+        guard (1...128).contains(id.count), id.allSatisfy(allowed.contains), let first = id.first, first.isLetter || first.isNumber,
+              !id.hasSuffix(".figures"), !id.hasSuffix(".frusmeta"), FRUSURLScheme.isSafeComponent(id) else { return nil }
+        return id
+    }
+
+    /// Why a side-load is refused.
+    public enum SideloadRefusal: Error, Equatable, Sendable {
+        /// An Import server's folder is the operator's mount.
+        case importMode
+        /// A volume of that id is in the library already, or a download waits for it or fetches it: the
+        /// kit's sentence, or the server's.
+        case exists(String, sentence: String)
+        /// The kit's `SideloadValidator` refused the file, in its sentence.
+        case notAVolume(String)
+        /// The data volume would keep less than 64 MB free beyond the file.
+        case noRoom(String)
+    }
+
+    /// A staging folder of its own for one upload, hidden in the volumes folder, and the file the upload is
+    /// written to there, `<volumeId>.xml`, the name the kit's validator takes the volume's id from.
+    public func sideloadStaging(for volumeId: String) throws -> URL {
+        let folder = volumesDirectory.appendingPathComponent("\(Self.stagingPrefix)\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
+        return folder.appendingPathComponent("\(volumeId).xml")
+    }
+
+    /// Side-loads the file at `staged`, which `sideloadStaging(for:)` gave and an upload wrote (PLAN's S21e):
+    /// the kit's `SideloadValidator` reads it, with the parser's external entities off, as the kit's parsers
+    /// keep them, and copies it into a hidden folder of the library's own; there it is flushed, and it takes
+    /// its name in the volumes folder by `link(2)`, which refuses a name taken meanwhile, so that it is in
+    /// place whole or not at all, as a download's file is; and its row says it was side-loaded
+    /// (`sideloaded = 1`), with its length, modification time and git blob SHA-1, the kit's. The staging
+    /// folder goes, however it ends. Gives the volume's id; throws `SideloadRefusal`.
+    public func sideload(staged: URL, requestedBy: String?) async throws -> String {
+        let folder = staged.deletingLastPathComponent()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        guard mode == .standalone else { throw SideloadRefusal.importMode }
+        let volumeId = staged.deletingPathExtension().lastPathComponent
+        guard let destination = fileURL(volumeId) else { throw SideloadRefusal.notAVolume("The file's name names no volume.") }
+        if let row = try? await Blocking.run({ [store] in try store.libraryVolume(volumeId) }), row.isUnfinished {
+            throw SideloadRefusal.exists(volumeId, sentence: "A download of \(volumeId) is queued or under way.")
+        }
+        let size = Int64(Self.regularFileSize(staged) ?? 0)
+        if let free = Self.freeBytes(at: volumesDirectory), free < 2 * size + Self.spareBytes {
+            throw SideloadRefusal.noRoom("The data volume has \(Self.megabytes(Int(free))) free, and side-loading this file needs about \(Self.megabytes(Int(2 * size + Self.spareBytes))), with room for the user store and its backups.")
+        }
+        let checked = folder.appendingPathComponent("checked", isDirectory: true)
+        try FileManager.default.createDirectory(at: checked, withIntermediateDirectories: false)
+        do {
+            _ = try await Blocking.run { try SideloadValidator().validate(url: staged, volumesDirectory: checked) }
+        } catch let error as SideloadError {
+            throw SideloadRefusal.notAVolume(error.errorDescription ?? "The file is not a FRUS volume.")
+        }
+        let copy = checked.appendingPathComponent("\(volumeId).xml")
+        // A volume the catalogue lacks is listed by its own header, which the kit's `LocalVolumeCatalog` reads
+        // (PLAN's S21e): one it cannot read would be listed nowhere, so it is refused, as the app leaves it out.
+        if entries[volumeId] == nil {
+            let bytes = Self.regularFileSize(copy) ?? 0
+            guard try await Blocking.run({ LocalVolumeCatalog.entry(volumeId: volumeId, url: copy, sizeBytes: bytes) }) != nil else {
+                throw SideloadRefusal.notAVolume("Its TEI header could not be read, so the volume could not be listed: the catalogue does not know \(volumeId), and a side-loaded volume is described by its own header.")
+            }
+        }
+        // The kit's duplicate check is the volumes folder's here, made in one step by the link.
+        let placed = try await Blocking.run { () -> Int32 in
+            try Self.flush(copy)
+            return link(copy.path, destination.path) == 0 ? 0 : errno
+        }
+        if placed == EEXIST {
+            throw SideloadRefusal.exists(volumeId, sentence: SideloadError.duplicateVolume(volumeId: volumeId).errorDescription
+                                             ?? "Volume \(volumeId) is already present.")
+        }
+        guard placed == 0 else {
+            throw LibraryFolderError(path: volumesDirectory.path, underlying: String(cString: strerror(placed)))
+        }
+        Self.flushFolder(volumesDirectory)
+        let time = now()
+        guard let file = Self.regularFile(destination) else { return volumeId }
+        let sha = try? await Blocking.run { VolumeUpdateChecker.gitBlobSHA1(for: try Data(contentsOf: destination, options: .alwaysMapped)) }
+        do {
+            try await Blocking.run { [store] in
+                try store.recordLibrarySideload(volumeId, LibraryDownloadRecord(blobSHA: sha ?? "", sizeBytes: file.size, modifiedAt: file.modified,
+                                                                                 figuresStored: 0, figuresRefused: 0),
+                                                requestedBy: requestedBy, at: time)
+            }
+        } catch {
+            log("The library could not record that \(volumeId) was side-loaded: \(error)")
+        }
+        log("Side-loaded \(volumeId), \(file.size) bytes, into the library")
+        return volumeId
+    }
+
+    /// Flushes a file's bytes to the disk.
+    static func flush(_ url: URL) throws {
+        let descriptor = open(url.path, O_RDONLY | O_CLOEXEC)
+        guard descriptor >= 0 else { throw CocoaError(.fileReadUnknown) }
+        defer { close(descriptor) }
+        guard fsync(descriptor) == 0 else { throw CocoaError(.fileWriteUnknown) }
+    }
+
+    /// Flushes a folder, so that a name it took is kept through a loss of power.
+    static func flushFolder(_ url: URL) {
+        let descriptor = open(url.path, O_RDONLY | O_CLOEXEC)
+        guard descriptor >= 0 else { return }
+        _ = fsync(descriptor)
+        close(descriptor)
     }
 }
 

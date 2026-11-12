@@ -1,11 +1,13 @@
 // Administration ▸ Status (PLAN's S20d): the server's version, mode and sign-in; the index, the volumes it
 // serves and its version; the user store and its migration; the backups; the stored keys' key file; the
-// job running; and the recovery action that resets the index in Import mode, after a question, as a job
-// that Jobs follows. Read again every two seconds while a job runs.
+// job running; and the recovery action that resets the index, after a question, as a job that Jobs
+// follows: in Import mode it removes the index, and on a Standalone server (PLAN's S21e) it empties the
+// index and indexes the library again. A Standalone server's pane also has the index's upkeep: its room,
+// Compact the Index and Check the Index, each a job. Read again every two seconds while a job runs.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useId, useRef, useState } from 'react';
-import { type AdminStatus, resetIndex, statusQuery } from '../api/admin';
+import { type AdminStatus, checkIndex, compactIndex, indexQuery, resetIndex, statusQuery } from '../api/admin';
 import { errorMessage } from '../api/client';
 import { copy } from '../copy';
 import { closeAtOnce, Modal } from '../shell/Modal';
@@ -118,12 +120,87 @@ function StatusBody({ status }: { status: AdminStatus }) {
           <Link to="/admin/jobs">{copy.admin.jobs.title}</Link>
         </p>
       </section>
+      {status.mode === 'standalone' && <Upkeep />}
       <Recovery status={status} />
     </>
   );
 }
 
-/** The index's reset, in Import mode, after a question. */
+/**
+ * A Standalone server's index upkeep (PLAN's S21e): the index's room, with the app's line under it, and
+ * Compact the Index and Check the Index, each a job.
+ */
+function Upkeep() {
+  const client = useQueryClient();
+  const room = useQuery(indexQuery);
+  const [said, setSaid] = useState('');
+  const [failure, setFailure] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const storage = room.data?.storage;
+
+  async function ask(what: 'compact' | 'check') {
+    if (busy) return;
+    setBusy(true);
+    setFailure(null);
+    setSaid('');
+    try {
+      if (what === 'compact') {
+        await compactIndex(client);
+        setSaid(words.compactQueued);
+      } else {
+        await checkIndex(client);
+        setSaid(words.checkQueued);
+      }
+    } catch (error) {
+      setFailure(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  let line: string | null = null;
+  if (storage?.compaction === 'available') {
+    line = words.compactAvailable(copy.admin.bytes(storage.reclaimableBytes), Math.round((100 * storage.reclaimableBytes) / Math.max(storage.fileBytes, 1)));
+  } else if (storage?.compaction === 'insufficientSpace') {
+    line = words.compactBlocked(copy.admin.bytes(storage.reclaimableBytes), copy.admin.bytes(storage.requiredBytes));
+  }
+  return (
+    <section aria-labelledby="status-upkeep">
+      <h2 id="status-upkeep">{words.upkeep}</h2>
+      <p className="note">{words.upkeepLead}</p>
+      {storage && (
+        <dl className="admin-facts">
+          <dt>{words.indexFile}</dt>
+          <dd>
+            {words.indexRoom(copy.admin.bytes(storage.fileBytes), copy.admin.bytes(storage.reclaimableBytes))}
+            {line && <p className="note">{line}</p>}
+          </dd>
+        </dl>
+      )}
+      <div className="actions">
+        <button type="button" aria-disabled={busy || !room.data?.upkeep} onClick={() => void ask('compact')}>
+          {words.compact}
+        </button>
+        <button type="button" aria-disabled={busy || !room.data?.upkeep} onClick={() => void ask('check')}>
+          {words.check}
+        </button>
+        {/* Always on the page, so that the line is announced when it comes. */}
+        <p role="status">
+          {said && (
+            <>
+              {said} <Link to="/admin/jobs">{copy.admin.jobs.title}</Link>
+            </>
+          )}
+        </p>
+      </div>
+      <p className="error" role="alert">
+        {failure}
+      </p>
+    </section>
+  );
+}
+
+/** The index's reset, after a question: Import mode's, and a Standalone server's, which indexes the library again. */
 function Recovery({ status }: { status: AdminStatus }) {
   const client = useQueryClient();
   const [asking, setAsking] = useState(false);
@@ -162,41 +239,35 @@ function Recovery({ status }: { status: AdminStatus }) {
   return (
     <section aria-labelledby="status-recovery">
       <h2 id="status-recovery">{words.recovery}</h2>
-      {status.mode === 'import' ? (
-        <>
-          <p className="note">{words.resetLead}</p>
-          <div className="actions">
-            <button
-              ref={opener}
-              type="button"
-              className="destructive"
-              onClick={() => {
-                setQueued(false);
-                setFailure(null);
-                setAsking(true);
-              }}
-            >
-              {words.reset}
-            </button>
-            {/* Always on the page, so that the line is announced when it comes. */}
-            <p role="status">
-              {queued && (
-                <>
-                  {words.resetQueued} <Link to="/admin/jobs">{copy.admin.jobs.title}</Link>
-                </>
-              )}
-            </p>
-          </div>
-        </>
-      ) : (
-        <p className="note">{words.resetStandalone}</p>
-      )}
+      <p className="note">{status.mode === 'import' ? words.resetLead : words.resetStandalone}</p>
+      <div className="actions">
+        <button
+          ref={opener}
+          type="button"
+          className="destructive"
+          onClick={() => {
+            setQueued(false);
+            setFailure(null);
+            setAsking(true);
+          }}
+        >
+          {words.reset}
+        </button>
+        {/* Always on the page, so that the line is announced when it comes. */}
+        <p role="status">
+          {queued && (
+            <>
+              {words.resetQueued} <Link to="/admin/jobs">{copy.admin.jobs.title}</Link>
+            </>
+          )}
+        </p>
+      </div>
       {asking && (
         <Modal className="confirm" role="alertdialog" labelledBy={headingId} describedBy={messageId} initial={cancel} onCancel={close} onClose={() => closeAtOnce(() => setAsking(false))}>
           <h2 id={headingId} tabIndex={-1}>
             {words.resetTitle}
           </h2>
-          <p id={messageId}>{words.resetMessage}</p>
+          <p id={messageId}>{status.mode === 'import' ? words.resetMessage : words.resetMessageStandalone}</p>
           {failure && (
             <p className="error" role="alert">
               {failure}

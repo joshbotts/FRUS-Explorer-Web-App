@@ -3,8 +3,9 @@
 // migration, the backups, the stored keys' key file and the server's version, with the job running;
 // the backups the server keeps, for its Backups list beside S14b's archive; and the recovery action
 // that removes the served index in Import mode, a job of the queue, so that it waits for any import
-// before it and the server then waits for an export, as at its first start. Standalone's reset, which
-// indexes again, comes with PLAN's S21e. An admin's, behind `AdminRoutes`' guard.
+// before it and the server then waits for an export, as at its first start; in Standalone mode, from PLAN's
+// S21e, the indexer's job that empties the index and indexes the library again (IndexUpkeep.swift). An
+// admin's, behind `AdminRoutes`' guard.
 //   GET  /api/v1/admin/status
 //   GET  /api/v1/admin/backups
 //   POST /api/v1/admin/index/reset   202, with the job
@@ -80,7 +81,7 @@ public struct AdminBackups: Codable, Equatable, Sendable, ResponseEncodable {
 
 enum AdminStatusRoutes {
     static func add(to admin: RouterGroup<APIRequestContext>, services: UserDataServices, state: ServerState,
-                    resources: ServerResources) {
+                    resources: ServerResources, indexer: LibraryIndexer? = nil) {
         let store = services.store
         let files = DataDirectory(root: state.configuration.dataDirectory)
 
@@ -130,15 +131,27 @@ enum AdminStatusRoutes {
         admin.post("index/reset") { request, context -> EditedResponse<AdminJob> in
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
-            guard state.configuration.mode == .import else {
-                throw APIProblem(.conflict, code: "RESET_NOT_AVAILABLE",
-                                 detail: "A Standalone server's index is reset by indexing its volumes again, which comes with the library's own indexing.")
-            }
             // An index import before it would make an index live that the reset then removed, with its
             // file gone from the drop zone: the reset waits for none, and one queued after it runs after it.
             if await services.jobs.jobs().contains(where: { $0.kind == .indexImport && !$0.state.isFinished }) {
                 throw APIProblem(.conflict, code: "IMPORT_IN_PROGRESS",
                                  detail: "An index import is queued or running: reset the index once it has ended, or cancel it first.")
+            }
+            // Standalone's reset (PLAN's S21e): the index emptied, and the library's volumes indexed into it again.
+            if state.configuration.mode == .standalone {
+                guard let indexer else {
+                    throw APIProblem(.conflict, code: "RESET_NOT_AVAILABLE", detail: "This server holds no indexer to index its volumes again.")
+                }
+                let job: Job
+                do {
+                    job = try await indexer.reset(requestedBy: user.id)
+                } catch {
+                    throw APIProblem(.serviceUnavailable, code: "JOB_NOT_QUEUED",
+                                     detail: "The reset could not be queued, since the server could not keep its job: try again in a moment.")
+                }
+                context.logger.info("\(user.id) asked for the index to be emptied and indexed again, as job \(job.id)")
+                let location = context.basePath.prefixing("/api/v1/admin/jobs/\(job.id)")
+                return EditedResponse(status: .accepted, headers: [.location: location, .cacheControl: "no-store"], response: AdminJob(job))
             }
             let generation = await state.indexGeneration
             let job: Job

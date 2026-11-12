@@ -3,11 +3,14 @@
 // the queue; and Remove, which takes a downloaded volume's file and figure images away. A Standalone
 // server's: an Import server lists its TEI folder and the index, and downloads and removes nothing; a
 // server under FRUS_OFFLINE downloads nothing. From S21d a Standalone server indexes what it keeps, in
-// jobs of the queue, and Index asks for one. An admin's, behind `AdminRoutes`' guard.
+// jobs of the queue, and Index asks for one. From S21e an admin side-loads a volume's file, which the
+// catalogue overlay lists when the catalogue does not, and Remove takes an indexed volume out of the index
+// first, in a job. An admin's, behind `AdminRoutes`' guard.
 //   GET    /api/v1/admin/library                       the volumes, with what this server may do
 //   POST   /api/v1/admin/library/downloads             {"volumeIds": [...]} or {"all": true}: 202, with the job
 //   POST   /api/v1/admin/library/index                 {"volumeIds": [...]} or {"all": true}: 202, with the job
-//   DELETE /api/v1/admin/library/volumes/{volumeId}    204
+//   POST   /api/v1/admin/library/sideload?file=<name>  the volume's XML: 202, with its indexing's job
+//   DELETE /api/v1/admin/library/volumes/{volumeId}    204, or 202 with the removal's job for an indexed volume
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -30,7 +33,8 @@ public struct AdminLibrary: Codable, Equatable, Sendable, ResponseEncodable {
     public var counts: [String: Int]
     /// The library's indexing (PLAN's S21d): whether a job waits or runs, and the volume it indexes now.
     public var indexing: Indexing
-    /// Every catalogue volume, in the catalogue's order.
+    /// Every catalogue volume, in the catalogue's order, then each volume side-loaded under an id the
+    /// catalogue lacks, by id (PLAN's S21e).
     public var volumes: [Volume]
 
     public struct Volume: Codable, Equatable, Sendable {
@@ -69,6 +73,22 @@ public struct AdminLibrary: Codable, Equatable, Sendable, ResponseEncodable {
         public var active: Bool
         /// The volume it indexes now.
         public var volume: String?
+        /// The upgrade a start began, while volumes of it are still to be re-indexed (PLAN's S21e).
+        public var upgrade: IndexUpgradeStatus?
+
+        public init(active: Bool, volume: String?, upgrade: IndexUpgradeStatus? = nil) {
+            self.active = active
+            self.volume = volume
+            self.upgrade = upgrade
+        }
+    }
+
+    /// What `POST /api/v1/admin/library/sideload` answers (PLAN's S21e): the volume, whether the published
+    /// catalogue lists it, and its indexing's job.
+    public struct Sideload: Codable, Equatable, Sendable, ResponseEncodable {
+        public var volumeId: String
+        public var catalogued: Bool
+        public var job: AdminJob
     }
 
     /// A volume's last pass, which did not index it: `failed`, for a reason of its own, and not tried again
@@ -84,21 +104,24 @@ public struct AdminLibrary: Codable, Equatable, Sendable, ResponseEncodable {
 }
 
 enum AdminLibraryRoutes {
-    static func add(to admin: RouterGroup<APIRequestContext>, state: ServerState, resources: ServerResources,
-                    library: VolumeLibrary?, indexer: LibraryIndexer?) {
+    static func add(to admin: RouterGroup<APIRequestContext>, sideloads: RouterGroup<APIRequestContext>, state: ServerState,
+                    resources: ServerResources, library: VolumeLibrary?, indexer: LibraryIndexer?) {
         admin.get("library") { request, _ -> EditedResponse<AdminLibrary> in
             try FormQuery(request.uri.query).refuseUnknown([])
             let library = try available(library)
             let indexed = await state.index?.documentsByVolume ?? [:]
             let indexing = await indexer?.status()
+            let upgrade = await state.upgrade
+            // The catalogue's volumes, then those side-loaded under an id it lacks (PLAN's S21e), in Standalone mode.
+            let entries = resources.manifest + (library.mode == .standalone ? resources.localVolumes : [])
             // Off the cooperative pool: the store's rows, and a look at each volume's file.
             let (rows, sizes) = try await Blocking.run {
                 (Dictionary(try library.libraryVolumes().map { ($0.volumeId, $0) }, uniquingKeysWith: { first, _ in first }),
-                 Dictionary(resources.manifest.compactMap { entry in library.fileSize(entry.volumeId).map { (entry.volumeId, $0) } },
+                 Dictionary(entries.compactMap { entry in library.fileSize(entry.volumeId).map { (entry.volumeId, $0) } },
                             uniquingKeysWith: { first, _ in first }))
             }
             var counts: [String: Int] = [:]
-            let volumes = resources.manifest.map { entry -> AdminLibrary.Volume in
+            let volumes = entries.map { entry -> AdminLibrary.Volume in
                 let row = rows[entry.volumeId]
                 // A volume the job running has indexed is in the index it writes, served once the job ends.
                 let isIndexed = (indexed[entry.volumeId] ?? 0) > 0 || indexing?.indexedSoFar.contains(entry.volumeId) == true
@@ -118,7 +141,8 @@ enum AdminLibraryRoutes {
                 let file = isDownloaded ? row : nil
                 return AdminLibrary.Volume(
                     volumeId: entry.volumeId, title: entry.title, subseries: entry.subseries, catalogueBytes: entry.sizeBytes,
-                    status: status, downloaded: isDownloaded, indexed: isIndexed, sideloaded: file?.sideloaded ?? false,
+                    status: status, downloaded: isDownloaded, indexed: isIndexed,
+                    sideloaded: file?.sideloaded ?? false || (isDownloaded && entry.provenance == .sideloaded),
                     bytes: sizes[entry.volumeId], blobSha: file?.blobSHA, downloadedAt: file?.downloadedAt.map(UserStoreDate.text),
                     figures: file?.figuresStored, figuresRefused: file?.figuresRefused,
                     error: row?.state == .failed || row?.isUnfinished == true ? row?.error : pass?.sentence ?? row?.error,
@@ -129,7 +153,7 @@ enum AdminLibraryRoutes {
             let body = AdminLibrary(
                 mode: library.mode.rawValue, offline: library.offline, downloads: refusal == nil,
                 unavailable: refusal.map(sentence), source: library.sources.isGitHub ? "github" : "mirror",
-                counts: counts, indexing: .init(active: indexing?.jobActive ?? false, volume: indexing?.indexing),
+                counts: counts, indexing: .init(active: indexing?.jobActive ?? false, volume: indexing?.indexing, upgrade: upgrade),
                 volumes: volumes)
             return EditedResponse(headers: [.cacheControl: "no-store"], response: body)
         }
@@ -149,6 +173,10 @@ enum AdminLibraryRoutes {
             default:
                 throw APIProblem(.badRequest, code: "INVALID_FIELD",
                                  detail: "volumeIds: one catalogue volume's id or more, at most \(resources.manifest.count); or all: true, alone.")
+            }
+            // A volume whose removal waits or runs is not downloaded meanwhile (PLAN's S21e).
+            if case .volumes(let ids) = wanted, let indexer {
+                for id in ids where await indexer.isRemoving(id) { throw Self.removalInProgress(id) }
             }
             // A file the served index was made from is not replaced until the corrections check and the
             // review of what a correction touched come (PLAN's S21f).
@@ -182,11 +210,12 @@ enum AdminLibraryRoutes {
             guard let indexer, library.mode == .standalone else { throw problem(.importMode) }
             let indexed = await state.index?.documentsByVolume ?? [:]
             let indexing = await indexer.status()
+            let upgrading = Set(await state.upgrade?.volumes ?? [])
             // What Index takes: a volume whose file is in place, and which the index lacks, or holds from a
-            // pass that did not finish. One indexed whole is indexed again with the corrections check and the
-            // upgrade, which come later (PLAN's S21e and S21f).
+            // pass that did not finish, or which an upgrade has still to re-index (PLAN's S21e). One indexed
+            // whole is indexed again with the corrections check, which comes later (PLAN's S21f).
             func waits(_ id: String) -> Bool {
-                library.isVolumeDownloaded(id) && ((indexed[id] ?? 0) == 0 || Self.pass(id, indexing) != nil)
+                library.isVolumeDownloaded(id) && ((indexed[id] ?? 0) == 0 || Self.pass(id, indexing) != nil || upgrading.contains(id))
             }
             let wanted: LibraryIndexer.Request
             switch (body.volumeIds, body.all) {
@@ -199,6 +228,7 @@ enum AdminLibraryRoutes {
             case (let ids?, nil) where !ids.isEmpty && ids.count <= resources.manifest.count:
                 for id in ids {
                     guard resources.volume(id) != nil else { throw APIProblem.volumeNotFound(id) }
+                    if await indexer.isRemoving(id) { throw Self.removalInProgress(id) }
                     guard library.isVolumeDownloaded(id) else { throw problem(.notDownloaded(id)) }
                     guard waits(id) else {
                         throw APIProblem(.conflict, code: "VOLUME_INDEXED",
@@ -231,21 +261,119 @@ enum AdminLibraryRoutes {
             let volumeId = try context.parameters.require("volumeId")
             guard resources.volume(volumeId) != nil else { throw APIProblem.volumeNotFound(volumeId) }
             guard library.mode == .standalone else { throw problem(.importMode) }
-            if (await state.index?.documentsByVolume[volumeId] ?? 0) > 0 {
-                throw APIProblem(.conflict, code: "VOLUME_INDEXED",
-                                 detail: "\(volumeId) is in the served index, and the reader renders its documents from this file: a volume leaves the index with the library's indexing, which comes later.")
-            }
             if await indexer?.holds(volumeId) == true {
                 throw APIProblem(.conflict, code: "INDEXING_IN_PROGRESS",
                                  detail: "An indexing job may index \(volumeId), which waits or runs: remove it once the job has ended.")
+            }
+            if let indexer, await indexer.isRemoving(volumeId) { throw Self.removalInProgress(volumeId) }
+            // A volume the index holds leaves it first, in a job, the index's one writer, and then its files (PLAN's S21e).
+            if (await state.index?.documentsByVolume[volumeId] ?? 0) > 0, let indexer {
+                if let row = try? await Blocking.run({ try library.libraryVolumes().first { $0.volumeId == volumeId } }), row.isUnfinished {
+                    throw problem(.inProgress(volumeId))
+                }
+                let job: Job
+                do {
+                    job = try await indexer.remove(volumeId, requestedBy: user.id) { id in
+                        do {
+                            try await library.remove(id)
+                        } catch LibraryRefusal.notDownloaded {
+                            // The index held it with no file in the library, as a volume of a seeding export can.
+                        }
+                        await resources.refreshLocalVolumes(in: library.volumesDirectory)
+                    }
+                } catch {
+                    throw APIProblem(.serviceUnavailable, code: "JOB_NOT_QUEUED",
+                                     detail: "The removal could not be queued, since the server could not keep its job: try again in a moment.")
+                }
+                context.logger.info("\(user.id) asked for the removal of \(volumeId) from the index and the library, as job \(job.id)")
+                let location = context.basePath.prefixing("/api/v1/admin/jobs/\(job.id)")
+                return try EditedResponse(status: .accepted, headers: [.location: location, .cacheControl: "no-store"], response: AdminJob(job))
+                    .response(from: request, context: context)
             }
             do {
                 try await library.remove(volumeId)
             } catch let refusal as LibraryRefusal {
                 throw problem(refusal)
             }
+            await resources.refreshLocalVolumes(in: library.volumesDirectory)
             context.logger.info("\(user.id) removed \(volumeId) from the library")
             return Response(status: .noContent, headers: [.cacheControl: "no-store"])
+        }
+
+        // A volume's file, side-loaded (PLAN's S21e): XML of 64 MiB at most, in a group of its own, whose guard
+        // takes it; refused if the volume exists; checked by the kit's validator; then indexed, in a job.
+        sideloads.post("library/sideload") { request, context -> EditedResponse<AdminLibrary.Sideload> in
+            let query = try FormQuery(request.uri.query)
+            try query.refuseUnknown(["file"])
+            let user = try context.requireUser()
+            let library = try available(library)
+            guard library.mode == .standalone, let indexer else { throw problem(.importMode) }
+            guard let name = try query.single("file"), let volumeId = VolumeLibrary.sideloadedVolumeId(fromFileName: name) else {
+                throw APIProblem(.badRequest, code: "INVALID_FILE_NAME",
+                                 detail: "file: the volume's file name, <volume id>.xml, its id of letters, digits, '.', '_' and '-', beginning with a letter or a digit, of 128 characters at most.")
+            }
+            if (await state.index?.documentsByVolume[volumeId] ?? 0) > 0 || library.isVolumeDownloaded(volumeId) {
+                throw Self.exists(volumeId, SideloadError.duplicateVolume(volumeId: volumeId).errorDescription)
+            }
+            if await indexer.isRemoving(volumeId) { throw Self.removalInProgress(volumeId) }
+            let staged = try library.sideloadStaging(for: volumeId)
+            do {
+                try await Self.write(request.body, to: staged, limit: VolumeLibrary.sideloadLimit)
+                try await library.sideload(staged: staged, requestedBy: user.id)
+            } catch let refusal as VolumeLibrary.SideloadRefusal {
+                try? FileManager.default.removeItem(at: staged.deletingLastPathComponent())
+                switch refusal {
+                case .importMode: throw problem(.importMode)
+                case .exists(let id, let sentence): throw Self.exists(id, sentence)
+                case .notAVolume(let sentence): throw APIProblem(.unprocessableContent, code: "NOT_A_VOLUME", detail: sentence)
+                case .noRoom(let sentence): throw APIProblem(.init(code: 507, reasonPhrase: "Insufficient Storage"), code: "NOT_ENOUGH_ROOM", detail: sentence)
+                }
+            } catch {
+                try? FileManager.default.removeItem(at: staged.deletingLastPathComponent())
+                throw error
+            }
+            await resources.refreshLocalVolumes(in: library.volumesDirectory)
+            let job: Job
+            do {
+                job = try await indexer.index(.asked([volumeId]), requestedBy: user.id)
+            } catch {
+                throw APIProblem(.serviceUnavailable, code: "JOB_NOT_QUEUED",
+                                 detail: "\(volumeId) was side-loaded, and its indexing could not be queued, since the server could not keep its job: Index asks again.")
+            }
+            context.logger.info("\(user.id) side-loaded \(volumeId), indexed in job \(job.id)")
+            let location = context.basePath.prefixing("/api/v1/admin/jobs/\(job.id)")
+            return EditedResponse(status: .accepted, headers: [.location: location, .cacheControl: "no-store"],
+                                  response: AdminLibrary.Sideload(volumeId: volumeId, catalogued: resources.manifest.contains { $0.volumeId == volumeId },
+                                                                  job: AdminJob(job)))
+        }
+    }
+
+    /// A volume of that id exists, in the kit's sentence for a duplicate side-load, or the server's.
+    static func exists(_ volumeId: String, _ sentence: String?) -> APIProblem {
+        APIProblem(.conflict, code: "VOLUME_EXISTS", detail: sentence ?? "\(volumeId) is in the library already.")
+    }
+
+    /// A removal waits or runs for the volume (PLAN's S21e).
+    static func removalInProgress(_ volumeId: String) -> APIProblem {
+        APIProblem(.conflict, code: "REMOVAL_IN_PROGRESS", detail: "\(volumeId) is being removed from the index and the library, in a job that waits or runs.")
+    }
+
+    /// Writes a request's body to `file` as it comes, refusing it past `limit` bytes, which its length
+    /// header, when it has one, the group's guard has refused already.
+    static func write(_ body: RequestBody, to file: URL, limit: Int) async throws {
+        guard FileManager.default.createFile(atPath: file.path, contents: nil) else {
+            throw APIProblem(.internalServerError, code: "INTERNAL_ERROR", detail: "The server could not write the file it was sent.")
+        }
+        let handle = try FileHandle(forWritingTo: file)
+        defer { try? handle.close() }
+        var written = 0
+        for try await buffer in body {
+            written += buffer.readableBytes
+            guard written <= limit else { throw JSONBody.tooLarge(limit) }
+            try handle.write(contentsOf: Data(buffer: buffer))
+        }
+        guard written > 0 else {
+            throw APIProblem(.badRequest, code: "INVALID_BODY", detail: "The body must be the volume's XML file.")
         }
     }
 

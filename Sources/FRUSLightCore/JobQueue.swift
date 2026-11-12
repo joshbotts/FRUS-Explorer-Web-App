@@ -23,12 +23,18 @@ public struct JobKind: RawRepresentable, Hashable, Sendable, Codable {
     public static let researchImport = JobKind(rawValue: "researchImport")
     /// A project's Suggested Next computed again, from its collections, notes and focus tags (PLAN's S23d).
     public static let projectLeads = JobKind(rawValue: "projectLeads")
-    /// The served index removed in Import mode, so that the server waits for an export (S20d).
+    /// The served index removed in Import mode, so that the server waits for an export (S20d); in Standalone
+    /// mode emptied and indexed again (PLAN's S21e).
     public static let indexReset = JobKind(rawValue: "indexReset")
     /// Catalogue volumes a Standalone server downloads, with their figure images (PLAN's S21c).
     public static let libraryDownload = JobKind(rawValue: "libraryDownload")
     /// The volumes a Standalone server's library holds, indexed into its own index (PLAN's S21d).
     public static let libraryIndex = JobKind(rawValue: "libraryIndex")
+    /// A volume a Standalone server's library holds, taken out of its index and then its files (PLAN's S21e).
+    public static let libraryRemove = JobKind(rawValue: "libraryRemove")
+    /// A Standalone server's index compacted, and checked (PLAN's S21e).
+    public static let indexCompact = JobKind(rawValue: "indexCompact")
+    public static let indexCheck = JobKind(rawValue: "indexCheck")
 }
 
 /// One job, as the queue holds it and the store keeps it.

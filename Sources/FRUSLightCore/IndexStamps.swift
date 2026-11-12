@@ -38,6 +38,25 @@ public struct IndexingFailureRecord: Codable, Sendable, Equatable {
     }
 }
 
+/// The upgrade of a Standalone server's index a start began (PLAN's S21e), kept beside the stamps while it is
+/// under way: the date-index version the index was at, the kit's it is re-indexed for from the cached XML,
+/// and the volumes still to be re-indexed, so that an upgrade a stop of the server cut short is finished,
+/// from where it was, by the next start.
+public struct IndexUpgradeRecord: Codable, Sendable, Equatable {
+    public var from: Int
+    public var to: Int
+    /// The volumes the upgrade has still to re-index, in the order it takes them.
+    public var remaining: [String]
+    public var began: Date
+
+    public init(from: Int, to: Int, remaining: [String], began: Date) {
+        self.from = from
+        self.to = to
+        self.remaining = remaining
+        self.began = began
+    }
+}
+
 /// The kit's stamp store for a Standalone server's index (`IndexingStampStore`), kept in a file beside
 /// it, with the server's record of the volumes its passes did not index.
 ///
@@ -62,6 +81,11 @@ public final class IndexStampFile: IndexingStampStore, @unchecked Sendable {
         var stamps: [String: Value] = [:]
         /// The server's record of the volumes a pass did not index, by volume id.
         var failures: [String: IndexingFailureRecord] = [:]
+        /// The upgrade a start began, while it is under way (PLAN's S21e); absent in a file from before.
+        var upgrade: IndexUpgradeRecord?
+        /// The volumes a removal has begun to take out of the index whose files are still to go (PLAN's
+        /// S21e), which the next start's removes; absent in a file from before.
+        var removals: [String]?
     }
 
     /// A stamp, as the kit stores it.
@@ -196,9 +220,61 @@ public final class IndexStampFile: IndexingStampStore, @unchecked Sendable {
         change { $0.failures[volumeId] = nil }
     }
 
-    /// Forgets every stamp and record: for an index that another took the place of, as an import's.
+    /// Forgets every stamp and record: for an index that another took the place of, as an import's, or
+    /// that a reset emptied (PLAN's S21e).
     public func reset() {
         change { $0 = Contents() }
+    }
+
+    // MARK: The upgrade and the removals under way (PLAN's S21e)
+
+    /// The upgrade a start began, while it is under way.
+    public func upgrade() -> IndexUpgradeRecord? { locked { contents.upgrade } }
+
+    /// Begins an upgrade from `from` to `to`, of `volumes`, in their order, in place of any before it.
+    public func beginUpgrade(from: Int, to: Int, volumes: [String], at time: Date) {
+        change { $0.upgrade = IndexUpgradeRecord(from: from, to: to, remaining: volumes, began: time) }
+    }
+
+    /// The upgrade has re-indexed `volumeId`, or has no more to do with it, as when it left the index.
+    public func upgradeDone(_ volumeId: String) {
+        change { contents in
+            guard let upgrade = contents.upgrade, upgrade.remaining.contains(volumeId) else { return }
+            contents.upgrade?.remaining.removeAll { $0 == volumeId }
+        }
+    }
+
+    /// Keeps of the upgrade's volumes those `still` holds: one that left the index has nothing left to upgrade.
+    public func keepUpgrading(_ still: Set<String>) {
+        change { contents in
+            guard let upgrade = contents.upgrade, upgrade.remaining.contains(where: { !still.contains($0) }) else { return }
+            contents.upgrade?.remaining.removeAll { !still.contains($0) }
+        }
+    }
+
+    /// The upgrade has ended: its record goes.
+    public func endUpgrade() {
+        change { $0.upgrade = nil }
+    }
+
+    /// The volumes a removal has begun to take out of the index whose files are still to go.
+    public func removals() -> [String] { locked { contents.removals ?? [] } }
+
+    /// A removal of `volumeId` begins: kept before its first write to the index.
+    public func beginRemoval(_ volumeId: String) {
+        change { contents in
+            guard !(contents.removals ?? []).contains(volumeId) else { return }
+            contents.removals = (contents.removals ?? []) + [volumeId]
+        }
+    }
+
+    /// The removal of `volumeId` has ended, its files gone with it.
+    public func endRemoval(_ volumeId: String) {
+        change { contents in
+            guard let removals = contents.removals, removals.contains(volumeId) else { return }
+            let left = removals.filter { $0 != volumeId }
+            contents.removals = left.isEmpty ? nil : left
+        }
     }
 
     // MARK: Writing

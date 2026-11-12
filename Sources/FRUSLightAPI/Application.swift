@@ -63,6 +63,8 @@ struct ServerComponents: Sendable {
         let library = VolumeLibrary.make(configuration: configuration, files: files, store: userStore, jobs: jobs,
                                          catalogue: resources.manifest, log: { logger.info("\($0)") })
         try library.prepare()
+        // The volumes side-loaded under an id the catalogue lacks, which the catalogue overlay lists (PLAN's S21e).
+        if configuration.mode == .standalone { await resources.refreshLocalVolumes(in: files.volumesDirectory) }
         let indexer = LibraryIndexer(liveIndex: files.liveIndex, volumesDirectory: files.volumesDirectory, mode: configuration.mode,
                                      resources: resources.indexing, jobs: jobs, state: state,
                                      observer: ServedIndexWriting(state: state, provider: provider, log: { logger.info("\($0)") }),
@@ -93,7 +95,8 @@ struct ServerComponents: Sendable {
             imports: ImportCoordinator(
                 files: files,
                 importer: IndexImporter(files: files, writer: writer,
-                                        writing: configuration.userData ? ResearchDatabaseImport.move(into: userStore) : nil),
+                                        writing: configuration.userData ? ResearchDatabaseImport.move(into: userStore) : nil,
+                                        liveReads: configuration.mode == .standalone),
                 state: state, jobs: jobs,
                 alsoNotify: ImportObservers(observers: (configuration.userData ? [LeadsAfterIndexImport(leads: leads)] : [])
                     + (configuration.mode == .standalone ? [IndexerAfterIndexImport(indexer: indexer)] : []))),
@@ -252,7 +255,13 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
         logger: logger)
     app.addServices(ImportWatcher(files: components.files, state: components.state,
                                   coordinator: components.imports, interval: configuration.importPollInterval,
-                                  beforeOpening: { [indexer = components.indexer] in await indexer.foldLogAtStart() },
+                                  beforeOpening: { [indexer = components.indexer, library = components.library, resources = components.resources] in
+                                      // The index brought to this build, and an upgrade begun or resumed (PLAN's S21e).
+                                      await indexer.prepareAtStart(removingFiles: { volumeId in
+                                          do { try await library.remove(volumeId) } catch LibraryRefusal.notDownloaded {}
+                                          await resources.refreshLocalVolumes(in: library.volumesDirectory)
+                                      })
+                                  },
                                   afterOpening: { [indexer = components.indexer] in await indexer.resumeAtStart() }))
     if let backups = components.backups, let serverLock = components.serverLock {
         app.addServices(BackupService(backups: backups, serverLock: serverLock, logger: logger))
