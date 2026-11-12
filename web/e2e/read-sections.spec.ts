@@ -7,11 +7,23 @@
 // fixtures/tei mounted: the export's index does not hold frus1969-76ve09p1, so its contents come from
 // its TEI and its pages turn no pages, as the app's reader turns none in a volume it has not indexed;
 // FRUSParityTests turn the pages of a volume the index holds through the API.
-import { axeCheck } from './axe';
+import { axeCheck, type KitKnownFailure } from './axe';
 import { expect, test } from './fixtures';
 import { tabTo } from './keyboard';
 
 const volume = 'frus1969-76ve09p1';
+
+/**
+ * The kit's table of contents, which the app's reader shows alike, fails axe's target-size (WCAG 2.2's
+ * 2.5.8) as its index does: each line is a title's link and a page's, a space apart, and a narrow page
+ * number ("III", "1") is a link smaller than 24 pixels with no room around it. The page is the app's byte
+ * for byte (check 4), so its fix is the kit's reader stylesheet's, upstream, as the index's is.
+ */
+const contentsLinks: KitKnownFailure = {
+  rule: 'target-size',
+  target: / >>> .*\[href[$]?="(frusexplorer:\/\/doc\/)?%23pg_[0-9A-Za-z]+"\]$/,
+  why: 'the kit’s reader stylesheet gives a table of contents’ page links no room, upstream',
+};
 
 /**
  * The contents' links this spec follows: the section's id, the link's name, the reader's heading, and
@@ -44,7 +56,7 @@ test('a table of contents’ links open its lists and a chapter in the reader, a
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(new RegExp(`/doc/${volume}/toc$`));
   await expect(heading).toHaveText('Contents');
-  await axeCheck(page);
+  await axeCheck(page, contentsLinks);
 
   // Each link the contents print opens its section in the reader, headed by its parsed head, its page
   // the kit's parse of the section alone; Back returns to the contents.
