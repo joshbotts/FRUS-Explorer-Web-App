@@ -49,7 +49,8 @@ import Testing
         }
         let left = try FileManager.default.contentsOfDirectory(atPath: f.volumes.path).sorted()
         #expect(left == ["draft-volume.xml", "frus1894Nicaragua.xml"], "\(left)")
-        #expect(await f.library.isSideloaded("frus1894Nicaragua") && (await f.library.isSideloaded("draft-volume")))
+        #expect(await f.library.isSideloaded("frus1894Nicaragua"))
+        #expect(await f.library.isSideloaded("draft-volume"))
         // Removed by its file's name, a volume the catalogue lacks among them, with the sidecar beside it.
         try "{}".write(to: f.volumes.appendingPathComponent("draft-volume.frusmeta.json"), atomically: true, encoding: .utf8)
         try await f.library.remove("draft-volume")

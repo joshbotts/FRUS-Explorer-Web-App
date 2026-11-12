@@ -2,7 +2,8 @@
 // on the smoke test's Import server, the Library lists the TEI folder and the index and downloads nothing,
 // saying why. With FRUS_E2E_LIBRARY, on the smoke test's Standalone server, whose library has downloaded
 // the three fixture volumes from a folder served as GitHub serves them, a volume is removed after a question
-// and downloaded again, its state followed until it is indexed, which follows its download (PLAN's S21d).
+// and downloaded again, its state followed until it is indexed, which follows its download (PLAN's S21d),
+// the index served meanwhile (PLAN's S21e).
 // frus1969-76ve09p1 is in both servers' folders and in neither's index: the synthetic export that seeds the
 // Standalone server's indexes frus1961-63v06 and frus1894Nicaragua.
 import { axeCheck } from './axe';
@@ -30,7 +31,7 @@ test('an Import server’s Library lists its TEI folder and the index, and downl
   await axeCheck(page);
 });
 
-test('a Standalone server’s Library removes a volume after a question and downloads it again, by keyboard', async ({ page, problems }) => {
+test('a Standalone server’s Library removes a volume after a question and downloads it again, by keyboard', async ({ page }) => {
   test.skip(!standalone, 'runs on the smoke test’s Standalone server, with FRUS_E2E_LIBRARY');
   // Three axe passes over the catalogue's table, and a download the mirror serves slowly.
   test.setTimeout(90_000);
@@ -68,8 +69,6 @@ test('a Standalone server’s Library removes a volume after a question and down
   // The Library is read again every two seconds while the download waits or runs, and the indexing after it.
   await expect(row.getByText('Indexed', { exact: true })).toBeVisible({ timeout: 60_000 });
   await axeCheck(page);
-  // While the indexing job writes the index, /readyz answers 503, naming the indexing, which the shell's banner
-  // shows (PLAN's S21d): a reading of it then is the one console error this test expects.
-  const expected = problems.filter((problem) => problem.includes('the server responded with a status of 503'));
-  problems.splice(0, problems.length, ...problems.filter((problem) => !expected.includes(problem)));
+  // The index is served while the indexing job writes it (PLAN's S21e), so /readyz answers 200 throughout, and the
+  // page meets no 503, which the fixture's check of the console would name.
 });

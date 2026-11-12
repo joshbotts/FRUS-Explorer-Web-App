@@ -319,7 +319,7 @@ enum AdminLibraryRoutes {
             let staged = try library.sideloadStaging(for: volumeId)
             do {
                 try await Self.write(request.body, to: staged, limit: VolumeLibrary.sideloadLimit)
-                try await library.sideload(staged: staged, requestedBy: user.id)
+                _ = try await library.sideload(staged: staged, requestedBy: user.id)
             } catch let refusal as VolumeLibrary.SideloadRefusal {
                 try? FileManager.default.removeItem(at: staged.deletingLastPathComponent())
                 switch refusal {

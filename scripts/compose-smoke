@@ -348,13 +348,20 @@ library_counts() {  # the Library read again, and how many volumes it counts in 
 library = json.load(open(sys.argv[1], encoding="utf-8"))
 print(" ".join(f"{k}={v}" for k, v in sorted(library["counts"].items())))' "$work/library.json"
 }
+library_sideload() {  # $1: the file's name, $2: the file; prints the body and the status (S21e)
+  local token
+  token=$(curl -s --max-time 5 -H "Host: localhost:8080" "$library_base/api/v1/me" | sed -nE 's/.*"csrfToken":"([0-9a-f]+)".*/\1/p')
+  curl -s --max-time 30 -X POST -H "Host: localhost:8080" -H "Origin: http://localhost:8080" -H "X-CSRF-Token: $token" \
+    -H 'Content-Type: application/xml' --data-binary "@$2" -w ' %{http_code}' "$library_base/api/v1/admin/library/sideload?file=$1"
+}
 library_jobs() { curl -s --max-time 10 -H "Host: localhost:8080" -o "$work/library-jobs.json" "$library_base/api/v1/admin/jobs"; }
-library_idle() {  # waits until no download or indexing job waits or runs (S21d), for at most $1 seconds
+library_idle() {  # waits until no job of the library's waits or runs (S21d, S21e), for at most $1 seconds
   local deadline=$((SECONDS + $1))
   while [ "$SECONDS" -lt "$deadline" ]; do
     if library_jobs && python3 -c 'import json, sys
 jobs = json.load(open(sys.argv[1], encoding="utf-8"))["jobs"]
-sys.exit(0 if not any(j["kind"] in ("libraryDownload", "libraryIndex") and j["state"] in ("queued", "running") for j in jobs) else 1)' "$work/library-jobs.json"; then
+kinds = ("libraryDownload", "libraryIndex", "libraryRemove", "indexCompact", "indexCheck", "indexReset")
+sys.exit(0 if not any(j["kind"] in kinds and j["state"] in ("queued", "running") for j in jobs) else 1)' "$work/library-jobs.json"; then
       return 0
     fi
     sleep 0.25
@@ -417,11 +424,16 @@ for _ in $(seq 1 120); do
 done
 [ -n "$restarted" ] || fail "no moment with one volume downloaded and one downloading came to restart in: $counts"
 wait_for_200 "$library_base/healthz" 30 || fail "the Standalone server's /healthz did not answer 200 after its restart"
-# Status read every twentieth of a second while the download goes on and the indexing follows it (S21d).
+# Status read every twentieth of a second while the download goes on and the indexing follows it (S21d), and
+# between two of its readings a search, whose answer the indexing job's run holds on both sides of it (S21e).
 : > "$work/library-status.log"
+: > "$work/library-search.log"
 ( while :; do
-    curl -s --max-time 2 -H "Host: localhost:8080" "$library_base/api/v1/admin/status" >> "$work/library-status.log" 2>/dev/null
-    echo >> "$work/library-status.log"
+    before=$(curl -s --max-time 2 -H "Host: localhost:8080" "$library_base/api/v1/admin/status" 2>/dev/null | tr -d '\n')
+    code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "$library_base/api/v1/search?keywords=nicaragua" 2>/dev/null)
+    after=$(curl -s --max-time 2 -H "Host: localhost:8080" "$library_base/api/v1/admin/status" 2>/dev/null | tr -d '\n')
+    printf '%s\n%s\n' "$before" "$after" >> "$work/library-status.log"
+    printf '%s\t%s\t%s\n' "$code" "$before" "$after" >> "$work/library-search.log"
     sleep 0.05
   done ) &
 status_poller=$!
@@ -454,6 +466,24 @@ for line in open(sys.argv[1], encoding="utf-8"):
         seen.append(running["progress"])
 assert seen, "no reading named the indexing job running"
 print(f"   Status gave the indexing job's progress {len(seen)} times, among them: {seen[0]}")
+PY
+# A search answered while the indexing job wrote the index (S21e, S21d's follow-up): 200 between two readings
+# of Status that each name the job running, its first volume stored.
+python3 - "$work/library-search.log" <<'PY' || fail "no search answered 200 while the indexing job ran: $(cut -f1 "$work/library-search.log" | sort | uniq -c | tr '\n' ' ')"
+import json, sys
+def running(text):
+    try:
+        job = json.loads(text)["jobs"].get("running")
+    except (ValueError, KeyError, AttributeError):
+        return None
+    return job["id"] if job and job["kind"] == "libraryIndex" else None
+held = []
+for line in open(sys.argv[1], encoding="utf-8"):
+    parts = line.rstrip("\n").split("\t")
+    if len(parts) == 3 and parts[0] == "200" and running(parts[1]) and running(parts[1]) == running(parts[2]):
+        held.append(parts[0])
+assert held, "no 200 inside the job's run"
+print(f"   search answered 200 {len(held)} times while the indexing job wrote the index, each between two readings of Status naming it running")
 PY
 (cd fixtures/tei && shasum -a 256 frus1894Nicaragua.xml frus1961-63v06.xml frus1969-76ve09p1.xml) | awk '{print $1, $NF}' | LC_ALL=C sort -k2 > "$work/expected.sha256"
 library_compose exec -T frus sh -c 'cd /data/volumes && sha256sum frus1894Nicaragua.xml frus1961-63v06.xml frus1969-76ve09p1.xml' \
@@ -521,6 +551,73 @@ assert jobs[0]["state"] == "failed" and jobs[0]["error"] == "Indexed 0 of 1 volu
 removed=$(library_api DELETE "/api/v1/admin/library/volumes/$broken")
 case "$removed" in *' 204') ;; *) fail "the broken volume was not removed: $removed" ;; esac
 echo "   $broken, which does not parse, is listed failed while its XML was read, its job failed, the three still indexed; then removed"
+
+echo "== admin: the library's side-load, and the index compacted and checked (PLAN's S21e)"
+# A volume's file under an id the catalogue lacks, side-loaded: checked, kept, listed from its own header,
+# indexed, and cited with the app's sentence; then removed, out of the index first, in a job.
+cp fixtures/tei/frus1894Nicaragua.xml "$work/smoke-draft.xml"
+sideloaded=$(library_sideload smoke-draft.xml "$work/smoke-draft.xml")
+case "$sideloaded" in *'"volumeId":"smoke-draft"'*'"catalogued":false'*' 202') ;; *) fail "the side-load was not taken: $sideloaded" ;; esac
+# One whose external entity names a file of the image's: its document is indexed without the file's text.
+cat > "$work/smoke-entity.xml" <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE TEI [<!ENTITY passwd SYSTEM "file:///etc/passwd">]>
+<TEI xmlns="http://www.tei-c.org/ns/1.0"><teiHeader><fileDesc><titleStmt><title type="complete">A volume naming a file of the image's</title></titleStmt></fileDesc></teiHeader>
+<text><body><div type="document" xml:id="d1" n="1"><head>One</head><p>Smokeprobe before &passwd; after.</p></div></body></text></TEI>
+XML
+entity=$(library_sideload smoke-entity.xml "$work/smoke-entity.xml")
+case "$entity" in *'"volumeId":"smoke-entity"'*' 202') ;; *) fail "the side-load naming a file was not taken: $entity" ;; esac
+library_idle 60 || fail "the side-loads' indexing did not end: $(head -c 400 "$work/library-jobs.json")"
+library_list || fail "the Library did not answer after the side-loads"
+python3 -c 'import json, sys
+volumes = {v["volumeId"]: v for v in json.load(open(sys.argv[1], encoding="utf-8"))["volumes"]}
+draft = volumes["smoke-draft"]
+assert draft["sideloaded"] and draft["status"] == "indexed" and draft["downloaded"] and "Nicaragua" in draft["title"], draft' "$work/library.json" \
+  || fail "the side-loaded volume is not listed, indexed: $(grep -o '"volumeId":"smoke-draft"[^}]*' "$work/library.json" | head -c 400)"
+curl -s --max-time 10 -o "$work/draft-citation.json" "$library_base/api/v1/volumes/smoke-draft/documents/d1/citation"
+python3 -c 'import json, sys
+cited = json.load(open(sys.argv[1], encoding="utf-8"))
+assert cited["provenanceNote"].startswith("This volume was side-loaded, not downloaded from the published catalogue. This server cannot confirm it is published"), cited
+assert "canonicalURL" not in cited and "history.state.gov" not in cited["bibtex"], cited' "$work/draft-citation.json" \
+  || fail "the side-loaded volume's citation does not carry the app's sentence: $(head -c 400 "$work/draft-citation.json")"
+probe=$(curl -s --max-time 10 "$library_base/api/v1/search?keywords=smokeprobe" | sed -nE 's/.*"total":([0-9]+).*/\1/p')
+leaked=$(curl -s --max-time 10 "$library_base/api/v1/search?keywords=nologin" | sed -nE 's/.*"total":([0-9]+).*/\1/p')
+[ "$probe" = 1 ] && [ "$leaked" = 0 ] || fail "the side-load naming a file: its document found $probe times, the file's text $leaked times"
+echo "   smoke-draft side-loaded under an id the catalogue lacks: listed from its header, indexed, cited with the app's sentence and no link; a file's external entity read nothing of the image's"
+
+# The index compacted, after the side-loaded volumes leave it, and checked: each a job, which ends well.
+for id in smoke-draft smoke-entity; do
+  removal=$(library_api DELETE "/api/v1/admin/library/volumes/$id")
+  case "$removal" in *'"kind":"libraryRemove"'*' 202') ;; *) fail "$id's removal from the index was not queued: $removal" ;; esac
+done
+library_idle 60 || fail "the removals did not end: $(head -c 400 "$work/library-jobs.json")"
+curl -s --max-time 10 -H "Host: localhost:8080" -o "$work/index-room.json" "$library_base/api/v1/admin/index"
+python3 -c 'import json, sys
+room = json.load(open(sys.argv[1], encoding="utf-8"))
+assert room["upkeep"] and room["storage"]["reclaimableBytes"] > 0, room' "$work/index-room.json" \
+  || fail "the index's room does not show what the removals left: $(cat "$work/index-room.json")"
+compacted=$(library_api POST /api/v1/admin/index/compact)
+case "$compacted" in *'"kind":"indexCompact"'*' 202') ;; *) fail "the compaction was not queued: $compacted" ;; esac
+library_idle 60 || fail "the compaction did not end: $(head -c 400 "$work/library-jobs.json")"
+checked=$(library_api POST /api/v1/admin/index/check)
+case "$checked" in *'"kind":"indexCheck"'*' 202') ;; *) fail "the check was not queued: $checked" ;; esac
+library_idle 60 || fail "the check did not end: $(head -c 400 "$work/library-jobs.json")"
+python3 - "$work/library-jobs.json" "$work/index-room.json" <<'PY' || fail "the compaction or the check did not end well: $(head -c 800 "$work/library-jobs.json")"
+import json, sys
+jobs = json.load(open(sys.argv[1], encoding="utf-8"))["jobs"]
+compaction = next(j for j in jobs if j["kind"] == "indexCompact")
+check = next(j for j in jobs if j["kind"] == "indexCheck")
+removals = [j for j in jobs if j["kind"] == "libraryRemove"]
+assert len(removals) == 2 and all(j["state"] == "succeeded" for j in removals), removals
+assert compaction["state"] == "succeeded" and compaction["progress"].startswith("Compacted the index from"), compaction
+assert check["state"] == "succeeded" and check["progress"].startswith("The index's check found no problems"), check
+print(f"   the side-loaded volumes removed from the index and the library; {compaction['progress']} {check['progress']}")
+PY
+curl -s --max-time 10 -H "Host: localhost:8080" -o "$work/index-room.json" "$library_base/api/v1/admin/index"
+counts=$(library_counts 2>/dev/null || true)
+[ "$counts" = "indexed=3 notDownloaded=550" ] || fail "the Library is not as it was before the side-loads: $counts"
+found=$(curl -s --max-time 10 -w ' %{http_code}' "$library_base/api/v1/search?keywords=nicaragua")
+case "$found" in *'"total":0,'*) fail "search found nothing after the compaction" ;; *' 200') ;; *) fail "search did not answer after the compaction: ${found: -120}" ;; esac
 
 scripts/synthetic-export "$work/seed.sqlite"
 library_compose cp "$work/seed.sqlite" frus:/data/import/seed.sqlite

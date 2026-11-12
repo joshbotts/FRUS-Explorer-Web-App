@@ -143,9 +143,10 @@ extension LibraryIndexer {
         try await job.step("Removing \(volumeId) from the index", fraction: 0)
         // From its first write it runs to its end; a stop of the server meanwhile is finished at the next start.
         try await job.commit()
-        stamps.beginRemoval(volumeId)
         if FileManager.default.fileExists(atPath: liveIndex.path) {
             try await withWriter(holding: nil) { writer in
+                // Kept from before the first write, once the writer is open over the index served.
+                stamps.beginRemoval(volumeId)
                 try await takeOut(volumeId, writer: writer)
                 await job.progress("Rebuilding the person rollup, the broken references' flags and the subjects", fraction: 0.5)
                 await writer.pipeline.runPostIndexPasses()
@@ -214,14 +215,18 @@ extension LibraryIndexer {
     public func checkIntegrity(requestedBy: String?) async throws -> Job {
         guard mode == .standalone else { throw LibraryIndexingRefusal.importMode }
         return try await jobs.submit(.indexCheck, subject: nil, requestedBy: requestedBy, id: nil) { job in
-            try await job.step("Checking the index: SQLite's quick check, and both full-text indexes' own", fraction: 0)
-            let problems = try await self.withWriter(holding: nil) { writer in try await writer.pipeline.checkIndexIntegrity() }
-            guard problems.isEmpty else {
-                let shown = problems.prefix(3).joined(separator: "; ")
-                throw JobFailed("The index's check found \(problems.count) \(problems.count == 1 ? "problem" : "problems"): \(shown)\(problems.count > 3 ? "; and more" : ""). Resetting the index indexes the library's volumes into it again.")
-            }
-            return "The index's check found no problems: SQLite's quick check and both full-text indexes' checks passed."
+            try await self.runCheck(job: job)
         }
+    }
+
+    private func runCheck(job: JobContext) async throws -> String? {
+        try await job.step("Checking the index: SQLite's quick check, and both full-text indexes' own", fraction: 0)
+        let problems = try await withWriter(holding: nil) { writer in try await writer.pipeline.checkIndexIntegrity() }
+        guard problems.isEmpty else {
+            let shown = problems.prefix(3).joined(separator: "; ")
+            throw JobFailed("The index's check found \(problems.count) \(problems.count == 1 ? "problem" : "problems"): \(shown)\(problems.count > 3 ? "; and more" : ""). Resetting the index indexes the library's volumes into it again.")
+        }
+        return "The index's check found no problems: SQLite's quick check and both full-text indexes' checks passed."
     }
 
     // MARK: Reset
