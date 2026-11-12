@@ -76,8 +76,11 @@ public struct Volume: Codable, Equatable, Sendable {
         public var isFrontMatter: Bool
         /// Prose with no documents, read as a whole, such as a preface.
         public var canReadDirectly: Bool
-        /// Whether the reader can open it as a document, which only a parse of its TEI can say;
-        /// absent when the TEI is not mounted.
+        /// Whether Browse opens it in the reader, as the app's Read opens it: a section the full parse
+        /// makes a document, such as a preface, or one Read opens that the reader parses alone, such as
+        /// a back-of-volume index (`ReaderService.ParsedVolume.browseReaderIds`), which only a parse of
+        /// its TEI can say; absent when the TEI is not mounted. The reader opens more sections than
+        /// these, by Previous and Next and by links, the lists of persons and sources among them.
         public var readable: Bool?
         /// Whether the index holds a row of the text it prints outside the documents and sections
         /// it holds, which its page lists first: the kit's `VolumeSection.ownTextEntry(among:)`
@@ -85,18 +88,18 @@ public struct Volume: Codable, Equatable, Sendable {
         /// id, or a volume the index does not hold.
         public var hasOwnText: Bool
 
-        init(_ section: VolumeSection, indexed: Set<String>, rows: [DocumentBrowserEntry], readerDocuments: Set<String>?) {
+        init(_ section: VolumeSection, indexed: Set<String>, rows: [DocumentBrowserEntry], browseOpens: Set<String>?) {
             sectionId = section.sectionId
             divType = section.divType
             title = section.title
             documentIds = section.documentIds
-            subsections = section.subsections.map { Section($0, indexed: indexed, rows: rows, readerDocuments: readerDocuments) }
+            subsections = section.subsections.map { Section($0, indexed: indexed, rows: rows, browseOpens: browseOpens) }
             let all = section.allDocumentIds
             documentCount = all.count
             indexedDocumentCount = all.filter(indexed.contains).count
             isFrontMatter = section.isFrontMatterKind
             canReadDirectly = section.canReadDirectly
-            readable = readerDocuments.map { $0.contains(section.sectionId) }
+            readable = browseOpens.map { $0.contains(section.sectionId) }
             hasOwnText = section.ownTextEntry(among: rows) != nil
         }
     }
@@ -162,9 +165,9 @@ enum CatalogRoutes {
             var volume = Volume(entry, index: await state.index, volumesDirectory: volumesDirectory)
             if let contents = try await VolumeContents(volumeId, indexed: volume.indexed, provider: provider, reader: reader) {
                 // Each set made once, not once for each section.
-                let (indexed, readerDocuments) = (contents.indexed, contents.readerDocuments)
+                let (indexed, browseOpens) = (contents.indexed, contents.browseOpens)
                 let sections = contents.sections.map {
-                    Volume.Section($0, indexed: indexed, rows: contents.rows, readerDocuments: readerDocuments)
+                    Volume.Section($0, indexed: indexed, rows: contents.rows, browseOpens: browseOpens)
                 }
                 volume.structure = sections
                 volume.structureSource = contents.source
@@ -185,21 +188,21 @@ enum CatalogRoutes {
                                  detail: "\(volumeId) has no section \(sectionId) in its structure.")
             }
             // Made once, not once for each document.
-            let readerDocuments = contents.readerDocuments
+            let browseOpens = contents.browseOpens
             let documents = section.documentIds.map { documentId -> SectionDocument in
                 if let indexed = contents.entries[documentId] {
-                    return SectionDocument(indexed, readable: readerDocuments?.contains(documentId))
+                    return SectionDocument(indexed, readable: browseOpens?.contains(documentId))
                 }
                 return SectionDocument(documentId: documentId, ast: contents.parsed?.documents[documentId],
-                                       structure: contents.sections, readable: readerDocuments?.contains(documentId))
+                                       structure: contents.sections, readable: browseOpens?.contains(documentId))
             }
             // The app's Browse finds the row by the same rule, among the same rows (#1536).
             let ownText = section.ownTextEntry(among: contents.rows).map {
-                SectionDocument($0, readable: readerDocuments?.contains($0.documentId))
+                SectionDocument($0, readable: browseOpens?.contains($0.documentId))
             }
             return VolumeSectionPage(
                 volumeId: volumeId, volumeTitle: entry.title,
-                section: Volume.Section(section, indexed: contents.indexed, rows: contents.rows, readerDocuments: readerDocuments),
+                section: Volume.Section(section, indexed: contents.indexed, rows: contents.rows, browseOpens: browseOpens),
                 path: path.map { .init(sectionId: $0.sectionId, title: $0.title) },
                 ownText: ownText, documents: documents, structureSource: contents.source)
         }
@@ -252,10 +255,11 @@ enum CatalogRoutes {
                 return try await fromTEI(otherwise: error)
             }
             guard let entry = try await served.pipeline.document(forDocumentId: documentId, inVolume: volumeId) else {
-                // A section the index leaves out, such as a back-of-volume index, is in its reading order
-                // all the same, and the app's reader turns its pages from it as from a document
-                // (`DocumentViewModel.loadAdjacentEntries`): read for a page the reader opens alone. An
-                // order that cannot be read leaves none.
+                // A leaf the index leaves out, such as a back-of-volume index or a list of persons, is in
+                // its reading order all the same, and the app's reader turns its pages from it as from a
+                // document (`DocumentViewModel.loadAdjacentEntries`): read for a page the reader opens
+                // alone. A chapter that prints only its heading is not in it, so its page has none, in
+                // the app as here; an order that cannot be read leaves none.
                 let browse = parsed?.opens(documentId) == true ? try? await VolumeBrowse(volumeId, served: served) : nil
                 return try await fromTEI(otherwise: APIProblem(.notFound, code: "DOCUMENT_NOT_FOUND",
                                                                detail: "The index holds no document \(documentId) in \(volumeId)."),
@@ -276,7 +280,7 @@ enum CatalogRoutes {
 
 /// What a volume's contents come from: the index's cached structure when it holds the volume, else
 /// the structure the kit parses from its TEI; with the index's entries for its documents, and the
-/// documents the reader can open, from the same parse the reader renders.
+/// documents Browse opens in the reader, from the same parse the reader renders.
 struct VolumeContents {
     let sections: [VolumeSection]
     let source: String
@@ -286,8 +290,10 @@ struct VolumeContents {
     let entries: [String: DocumentBrowserEntry]
     var indexed: Set<String> { Set(entries.keys) }
     let parsed: ReaderService.ParsedVolume?
-    /// What the reader opens: the full parse's documents and the sections it parses alone.
-    var readerDocuments: Set<String>? { parsed.map(\.readerIds) }
+    /// What Browse opens in the reader, as the app's Browse does: the full parse's documents and the
+    /// sections its Read opens (`ReaderService.ParsedVolume.browseReaderIds`), not every section the
+    /// reader opens.
+    var browseOpens: Set<String>? { parsed.map(\.browseReaderIds) }
 
     /// Nil when neither the index nor the TEI gives the volume a structure. An index that cannot be
     /// read, or TEI that will not parse when the index gives no structure, throws its problem; TEI
@@ -502,11 +508,11 @@ public struct DocumentDetail: Codable, Equatable, Sendable {
         public var documentId: String
         public var header: String
         public var inIndex: Bool
-        /// Whether the reader can open it; absent when the TEI is not mounted. The lists of names and of
-        /// sources, and a subseries' list of volumes, are in the reading order, where the app's reader
-        /// turns to them as printed pages, but this reader does not open them: the app's Browse opens
-        /// the first two as lists of their own, which this server does not have yet, and the third not
-        /// at all.
+        /// Whether the reader can open it; absent when the TEI is not mounted. The reader opens every
+        /// entry of the reading order its volume's TEI holds, the lists of names and of sources and a
+        /// subseries' list of volumes among them, which the app's reader turns to as printed pages
+        /// (`ReaderService.sectionsReadAlone`), so this is false only for an entry the mounted TEI does
+        /// not hold, such as one of an index made from another copy of the volume.
         public var readable: Bool?
     }
 

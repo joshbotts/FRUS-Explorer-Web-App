@@ -159,8 +159,9 @@ public struct ReaderRenderer: Sendable {
 
     /// The path the server serves (FRUSLightAPI's `ReaderService`): one `parseVolumeFull` of each volume, whose
     /// persons and terms make the lookups, then every document it yields, in parse order, then each
-    /// section the server parses alone, as the app's Read Index does (`ReaderService.sectionsReadAlone`:
-    /// a back-of-volume index, a table of contents), in the structure's order, with the reader's
+    /// section the server parses alone, as the app's reader parses any division it opens by its id
+    /// (`ReaderService.sectionsReadAlone`: a back-of-volume index, a table of contents, a list of names,
+    /// a chapter that prints only its heading), in the structure's order, with the reader's
     /// converter, written by `write`: the reader's serializer unless a test passes another, such as one
     /// with a host's figure addresses or the whole page. Volumes render concurrently, in the order given.
     /// Each volume's persons and terms are returned too, to be compared with `readerLists`.

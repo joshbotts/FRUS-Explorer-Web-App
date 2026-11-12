@@ -6,10 +6,11 @@
 // The path is check 4's (Tests/FRUSParity/RenderParity.swift, `fullParsePass`): one
 // `parseVolumeFull` of the volume, whose persons and glossary terms make the reader's lookups,
 // then the reader's converter with the app's broken-refs index, and the reader's serializer, here
-// with the server's own figure addresses (upstream #1575's `reader(figureURL:)`). A section the
-// app's Browse opens in its reader that a full parse gives no document, a back-of-volume index or a
-// table of contents, is parsed alone, as the app's Read Index parses it
-// (`parseDocument(documentId:volumeURL:)`), with the same lookups. The page is the
+// with the server's own figure addresses (upstream #1575's `reader(figureURL:)`). A section with an
+// id of its own that a full parse gives no document, such as a back-of-volume index, a table of
+// contents, a list of persons or a chapter that prints only its heading, is parsed alone, as the
+// app's reader parses any division it is opened on (`parseDocument(documentId:volumeURL:)`), with the
+// same lookups (`ReaderService.sectionsReadAlone`). The page is the
 // kit's `ReaderPage.build`, which the app's `HTMLTemplate.build` forwards to, in the appearance,
 // text size and Reading Width the request names (#1665, `ReaderMeasure`). When an index is
 // served, its effective classification of the document reshapes the parse first, as the app's
@@ -22,6 +23,7 @@ import FRUSCoreKit
 import FRUSLightCore
 import Foundation
 import Hummingbird
+import Synchronization
 
 /// Parses each volume's TEI once and keeps the most recent few, so a reader paging through a
 /// volume parses it once. A volume whose file changes, by size or modification time, is parsed
@@ -36,6 +38,9 @@ public actor ReaderService {
         let structure: [VolumeSection]
         /// The sections the reader parses alone (`ReaderService.sectionsReadAlone`).
         let sectionsReadAlone: Set<String>
+        /// Of those, the ones the app's Browse opens in its reader, as its Read button does
+        /// (`ReaderService.sectionsReadOpens`).
+        let sectionsReadOpens: Set<String>
 
         init(signature: FileSignature, documents: [String: FRUSDocumentAST], lookups: ReaderLookups,
              structure: [VolumeSection]) {
@@ -43,14 +48,18 @@ public actor ReaderService {
             self.documents = documents
             self.lookups = lookups
             self.structure = structure
-            sectionsReadAlone = Set(ReaderService.sectionsReadAlone(in: structure, documents: Set(documents.keys)))
+            let parsed = Set(documents.keys)
+            sectionsReadAlone = Set(ReaderService.sectionsReadAlone(in: structure, documents: parsed))
+            sectionsReadOpens = Set(ReaderService.sectionsReadOpens(in: structure, documents: parsed))
         }
 
         /// Whether the reader opens the id: a document of the full parse, or a section it parses alone.
         func opens(_ id: String) -> Bool { documents[id] != nil || sectionsReadAlone.contains(id) }
 
-        /// Every id the reader opens.
-        var readerIds: Set<String> { Set(documents.keys).union(sectionsReadAlone) }
+        /// What the app's Browse opens in the reader: the full parse's documents, a preface among them,
+        /// and the sections its Read opens that the reader parses alone. Browse links no other section to
+        /// the reader, though the reader opens it.
+        var browseReaderIds: Set<String> { Set(documents.keys).union(sectionsReadOpens) }
     }
 
     struct FileSignature: Hashable, Sendable {
@@ -100,6 +109,8 @@ public actor ReaderService {
     private var sectionParses: [String: [String: (signature: FileSignature, ast: FRUSDocumentAST?)]] = [:]
     /// Sections being parsed alone.
     private var parsingSections: [SectionParse: Task<FRUSDocumentAST?, any Error>] = [:]
+    /// The places for those parses, two at once across volumes (`SectionParseSlots`).
+    nonisolated let sectionSlots = SectionParseSlots()
     /// How many parses have started.
     private(set) var parseCount = 0
     /// How many parses of a section alone have started.
@@ -151,8 +162,10 @@ public actor ReaderService {
     /// One section, parsed alone from the file `volume` was parsed from, as the app's reader parses a
     /// section it opens by its id (`DocumentViewModel.load`): the kit's parse of the one division,
     /// which reads the file until the division closes and captures a list the index keeps out of its
-    /// rows, such as an index, whole. Kept while the volume's parse is; nil when the parse finds no
-    /// such division, which is kept too.
+    /// rows, such as an index, whole, and reads a division the index leaves out a second time, to give
+    /// it whole but for its documents (`parseTarget`), a chapter's heading. Two such parses run at once,
+    /// and more wait their turn (`sectionSlots`). Kept while the volume's parse is; nil when the parse
+    /// finds no such division, which is kept too.
     private func section(_ sectionId: String, in volume: ParsedVolume, of volumeId: String) async throws -> FRUSDocumentAST? {
         if let kept = sectionParses[volumeId]?[sectionId], kept.signature == volume.signature { return kept.ast }
         let key = SectionParse(volumeId: volumeId, sectionId: sectionId, signature: volume.signature)
@@ -161,7 +174,10 @@ public actor ReaderService {
             throw APIProblem(.notFound, code: "TEI_NOT_AVAILABLE", detail: "\(volumeId).xml is no longer in the TEI folder, \(volumesDirectory.path).")
         }
         sectionParseCount += 1
+        let slots = sectionSlots
         let task = Task<FRUSDocumentAST?, any Error> {
+            await slots.acquire()
+            defer { slots.release() }
             do {
                 return try await FRUSDocumentParser().parseDocument(documentId: sectionId, volumeURL: url)
             } catch {
@@ -178,18 +194,48 @@ public actor ReaderService {
         return ast
     }
 
-    /// The sections the app's Browse opens in its reader by their ids, as its Read button does
-    /// (`CompilationView`, and the Mac's corpus browser, over the kit's `VolumeSection.canReadDirectly`),
-    /// that a full parse gives no document: chiefly a back-of-volume index and a table of contents, the
-    /// kinds Read opens that the index does not promote (`promotableQuasiDocumentKinds`), and any
-    /// section of prose the parse leaves out for holding nothing. In the structure's order. The persons
-    /// and sources lists are not among them: the app's Browse opens each through a view of its own.
+    /// The sections the reader parses alone: every section of the volume's structure with an `xml:id` of
+    /// its own that a full parse gives no document, in the structure's order. The app's reader opens any
+    /// division by its id (`DocumentViewModel.load`, by the kit's `parseDocument(documentId:volumeURL:)`
+    /// or `parseDocumentWindow`), from wherever it is asked to:
+    /// - from Browse's Read, a section the kit's `VolumeSection.canReadDirectly` passes
+    ///   (`sectionsReadOpens`), such as a back-of-volume index or a table of contents;
+    /// - by Previous and Next, any leaf of the kit's reading order, which holds every leaf with an id of
+    ///   its own (`IndexingPipeline.mergeReadingSequence`): the lists of persons and of sources, which the
+    ///   app's Browse opens as lists of their own, a subseries' list of volumes, frus1902app2's Table of
+    ///   Citations, a title page;
+    /// - by a link, such as a table of contents' entry, a chapter, a compilation or an appendix the index
+    ///   leaves out for printing nothing of its own but its heading, which the kit gives whole but for
+    ///   its documents: a chapter's page is its heading, and a compilation's its heading and its
+    ///   chapters', with any text they hold that is not a document. The reading order holds no such
+    ///   container, so its page has no Previous or Next, in the app as here.
+    ///
+    /// A section with a generated id, such as the `<front>` and `<back>` wrappers, has no id to be opened
+    /// by, and the reading order skips it too.
     public static func sectionsReadAlone(in structure: [VolumeSection], documents: Set<String>) -> [String] {
+        sections(in: structure, notIn: documents) { $0.hasExplicitSectionId }
+    }
+
+    /// Of the sections the reader parses alone, those the app's Browse opens in its reader by their ids,
+    /// as its Read button does (`CompilationView`, and the Mac's corpus browser, over the kit's
+    /// `VolumeSection.canReadDirectly`): chiefly a back-of-volume index and a table of contents, the kinds
+    /// Read opens that the index does not promote (`promotableQuasiDocumentKinds`), and any section of
+    /// prose the parse leaves out for holding nothing. In the structure's order. Browse links these to
+    /// the reader and no other section: the app's Browse opens the persons and sources lists through
+    /// views of their own, a section that holds documents on its own page, and the rest nowhere.
+    public static func sectionsReadOpens(in structure: [VolumeSection], documents: Set<String>) -> [String] {
+        sections(in: structure, notIn: documents) { $0.canReadDirectly }
+    }
+
+    /// The sections of `structure` that `opens` passes and `documents` does not hold, each once, in the
+    /// structure's order.
+    private static func sections(in structure: [VolumeSection], notIn documents: Set<String>,
+                                 where opens: (VolumeSection) -> Bool) -> [String] {
         var found: [String] = []
         var seen = Set<String>()
         func walk(_ sections: [VolumeSection]) {
             for section in sections {
-                if section.canReadDirectly, !documents.contains(section.sectionId), seen.insert(section.sectionId).inserted {
+                if opens(section), !documents.contains(section.sectionId), seen.insert(section.sectionId).inserted {
                     found.append(section.sectionId)
                 }
                 walk(section.subsections)
@@ -303,6 +349,60 @@ public actor ReaderService {
         return FileSignature(size: (attributes?[.size] as? NSNumber)?.intValue ?? -1,
                              modified: attributes?[.modificationDate] as? Date)
     }
+}
+
+/// At most two sections parsed alone at once, across volumes, and the rest waiting their turn, first come
+/// first served. Each parse reads its volume's file to the section's close, and a section the index
+/// leaves out to its close twice (`parseTarget`), so a compilation that holds the rest of its volume costs
+/// two parses of the volume, and while the XML parser runs it holds a thread the server answers with: a
+/// burst of requests for a volume's many chapters at once waits here rather than taking every thread.
+/// What each parse gives is kept, so a section is parsed once while its volume's parse is kept.
+final class SectionParseSlots: Sendable {
+    static let running = 2
+
+    private struct State {
+        var free = SectionParseSlots.running
+        var queue: [CheckedContinuation<Void, Never>] = []
+    }
+
+    private let state = Mutex(State())
+
+    /// Returns once a place is free, which the caller holds until `release()`.
+    func acquire() async {
+        let taken = state.withLock { state -> Bool in
+            guard state.free > 0 else { return false }
+            state.free -= 1
+            return true
+        }
+        guard !taken else { return }
+        await withCheckedContinuation { continuation in
+            let resumeNow = state.withLock { state -> Bool in
+                // A place freed between the two locks is taken here.
+                if state.free > 0 {
+                    state.free -= 1
+                    return true
+                }
+                state.queue.append(continuation)
+                return false
+            }
+            if resumeNow { continuation.resume() }
+        }
+    }
+
+    /// Frees a place, for the parse that has waited longest if one waits: the place passes to it.
+    func release() {
+        let next = state.withLock { state -> CheckedContinuation<Void, Never>? in
+            if state.queue.isEmpty {
+                state.free += 1
+                return nil
+            }
+            return state.queue.removeFirst()
+        }
+        next?.resume()
+    }
+
+    /// How many parses wait for a place, for the tests.
+    var waiting: Int { state.withLock { $0.queue.count } }
 }
 
 /// The reader's Reading Width, which the app's Settings ▸ Display offers beside Document Text Size

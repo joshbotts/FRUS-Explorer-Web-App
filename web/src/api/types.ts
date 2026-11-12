@@ -78,7 +78,11 @@ export interface Section {
   indexedDocumentCount: number;
   isFrontMatter: boolean;
   canReadDirectly: boolean;
-  /** Whether the reader can open it as a document; absent without the TEI. */
+  /**
+   * Whether Browse opens it in the reader, as the app's Read does: a section the full parse makes a
+   * document, or one Read opens that the reader parses alone; absent without the TEI. The reader opens
+   * more, the lists of persons and of sources among them, by Previous and Next and by links.
+   */
   readable?: boolean;
   /**
    * Whether the index holds a row of the text it prints outside the documents and sections it holds,

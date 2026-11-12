@@ -288,4 +288,27 @@ describe('a volume’s back matter, as the app’s Read Index opens it', () => {
     // The index's reading order holds it, as the app's reader turns its pages to it.
     expect((await screen.findByRole('link', { name: /Previous/ })).getAttribute('href')).toBe(`/doc/${v06}/d2`);
   });
+
+  it('turns to a list the server says the reader opens, and leaves out a neighbour it cannot open', async () => {
+    // A table of contents between the subseries' list of volumes, which the reader opens as the app's
+    // reader turns to it, and a section an index made from another copy of the volume names, which this
+    // volume's TEI does not hold.
+    const detail: DocumentDetail = {
+      document: { documentId: 'toc', volumeId: v06, header: 'Contents', displayTitle: 'Contents', isEditorialNote: false, inIndex: false },
+      canonicalURL: `https://history.state.gov/historicaldocuments/${v06}/toc`,
+      previous: { documentId: 'subseriesvols', header: 'List of Kennedy Administration Volumes', inIndex: false, readable: true },
+      next: { documentId: 'errata', header: 'Errata', inIndex: false, readable: false },
+      teiAvailable: true,
+    };
+    stubServer({
+      '/readyz': ready,
+      '/api/v1/volumes': { total: 0, limit: 1000, offset: 0, items: [], coverage },
+      [`/api/v1/volumes/${v06}/documents/toc`]: detail,
+      [`/api/v1/volumes/${v06}/documents/toc/html`]: '',
+    });
+    renderAt(`/doc/${v06}/toc`);
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Contents'));
+    expect((await screen.findByRole('link', { name: 'Previous' })).getAttribute('href')).toBe(`/doc/${v06}/subseriesvols`);
+    expect(screen.queryByRole('link', { name: 'Next' })).toBeNull();
+  });
 });

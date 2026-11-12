@@ -8290,6 +8290,42 @@
       "volume" : "frus1894Nicaragua"
     },
     {
+      "document" : "comp1",
+      "length" : 21,
+      "renderingVersion" : "13218a845107fe8a",
+      "samples" : [
+        {
+          "color" : "yellow",
+          "endOffset" : 21,
+          "isStale" : false,
+          "startOffset" : 0
+        },
+        {
+          "color" : "green",
+          "endOffset" : 7,
+          "isStale" : false,
+          "startOffset" : 0,
+          "text" : "Affairs"
+        },
+        {
+          "color" : "blue",
+          "endOffset" : 21,
+          "isStale" : false,
+          "startOffset" : 11,
+          "text" : "Bluefields"
+        },
+        {
+          "color" : "pink",
+          "endOffset" : 21,
+          "isStale" : true,
+          "startOffset" : 8,
+          "text" : "at Bluefields"
+        }
+      ],
+      "sha256" : "fb7908e0fd46922bcc794c1c603e22f318c5e123b2e1601ef8841aa33a089acf",
+      "volume" : "frus1894Nicaragua"
+    },
+    {
       "document" : "preface",
       "length" : 13568,
       "renderingVersion" : "500854ba6cc50055",
@@ -14751,6 +14787,59 @@
       "volume" : "frus1961-63v06"
     },
     {
+      "document" : "subseriesvols",
+      "length" : 1287,
+      "renderingVersion" : "54a9bf59c186ae14",
+      "samples" : [
+        {
+          "color" : "yellow",
+          "endOffset" : 1287,
+          "isStale" : false,
+          "startOffset" : 0
+        },
+        {
+          "color" : "green",
+          "endOffset" : 4,
+          "isStale" : false,
+          "startOffset" : 0,
+          "text" : "List"
+        },
+        {
+          "color" : "blue",
+          "endOffset" : 1287,
+          "isStale" : false,
+          "startOffset" : 1282,
+          "text" : "XXIV)"
+        },
+        {
+          "color" : "pink",
+          "endOffset" : 50,
+          "isStale" : false,
+          "selectedText" : "tion Volumes\n\nFollowing is",
+          "startOffset" : 26,
+          "text" : "tion VolumesFollowing is"
+        },
+        {
+          "color" : "yellow",
+          "endOffset" : 643,
+          "isStale" : false,
+          "selectedText" : "da (1994)\n\nXIV\n\nBerlin Crisi",
+          "startOffset" : 619,
+          "text" : "da (1994)XIVBerlin Crisi"
+        },
+        {
+          "color" : "green",
+          "endOffset" : 706,
+          "isStale" : true,
+          "selectedText" : "Crisis, 1961-1962 (1994)\n\nXV\n\nBerlin Crisis, 1962-1963 (1994)\n\nXVI\n\nEastern ",
+          "startOffset" : 638,
+          "text" : "Crisis, 1961-1962 (1994)XVBerlin Crisis, 1962-1963 (1994)XVIEastern "
+        }
+      ],
+      "sha256" : "3819aeadb5302a360ae4a6bb74c5de88ff7fc6e45578cf56e23c7c10a490a59e",
+      "volume" : "frus1961-63v06"
+    },
+    {
       "document" : "toc",
       "length" : 149,
       "renderingVersion" : "0a9253c14021ee11",
@@ -14803,6 +14892,141 @@
         }
       ],
       "sha256" : "849d7e7a7ef2a19bedc38ace647b1af6709c77d6dfbef62b6712b34db9473987",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "document" : "sources",
+      "length" : 2773,
+      "renderingVersion" : "706e87f1fd4bd608",
+      "samples" : [
+        {
+          "color" : "yellow",
+          "endOffset" : 2773,
+          "isStale" : false,
+          "startOffset" : 0
+        },
+        {
+          "color" : "green",
+          "endOffset" : 4,
+          "isStale" : false,
+          "startOffset" : 0,
+          "text" : "List"
+        },
+        {
+          "color" : "blue",
+          "endOffset" : 2773,
+          "isStale" : false,
+          "startOffset" : 2763,
+          "text" : "1962-1964."
+        },
+        {
+          "color" : "pink",
+          "endOffset" : 27,
+          "isStale" : false,
+          "selectedText" : "t of Sources\n\nUnpublished ",
+          "startOffset" : 3,
+          "text" : "t of SourcesUnpublished "
+        },
+        {
+          "color" : "yellow",
+          "endOffset" : 1491,
+          "isStale" : false,
+          "selectedText" : "ustin, Texas\n\nNational Sec",
+          "startOffset" : 1467,
+          "text" : "ustin, TexasNational Sec"
+        },
+        {
+          "color" : "green",
+          "endOffset" : 1457,
+          "isStale" : true,
+          "selectedText" : "Kennedy-Khrushchev Letters\n\nPresident’s Appointment Books\n\nLyndon B. Johnson ",
+          "startOffset" : 1384,
+          "text" : "Kennedy-Khrushchev LettersPresident’s Appointment BooksLyndon B. Johnson "
+        }
+      ],
+      "sha256" : "e470c30411676f098972890a2e73c0fda7028167b7bf23b73daa2bc57940058d",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "document" : "persons",
+      "length" : 5340,
+      "renderingVersion" : "11064cc0071c3186",
+      "samples" : [
+        {
+          "color" : "yellow",
+          "endOffset" : 5340,
+          "isStale" : false,
+          "startOffset" : 0
+        },
+        {
+          "color" : "green",
+          "endOffset" : 4,
+          "isStale" : false,
+          "startOffset" : 0,
+          "text" : "List"
+        },
+        {
+          "color" : "blue",
+          "endOffset" : 5340,
+          "isStale" : false,
+          "startOffset" : 5331,
+          "text" : "Exchanges"
+        },
+        {
+          "color" : "pink",
+          "endOffset" : 25,
+          "isStale" : false,
+          "selectedText" : "ist of Names\n\nAdenauer, Co",
+          "startOffset" : 1,
+          "text" : "ist of NamesAdenauer, Co"
+        },
+        {
+          "color" : "yellow",
+          "endOffset" : 2704,
+          "isStale" : false,
+          "selectedText" : "Soviet Union\n\nKretzmann, E",
+          "startOffset" : 2680,
+          "text" : "Soviet UnionKretzmann, E"
+        },
+        {
+          "color" : "green",
+          "endOffset" : 2709,
+          "isStale" : true,
+          "selectedText" : "Ambassador to the Soviet Union\n\nKretzmann, Edwin ",
+          "startOffset" : 2662,
+          "text" : "Ambassador to the Soviet UnionKretzmann, Edwin "
+        }
+      ],
+      "sha256" : "b36dc9dc0f2170314a2ab39e886d0ee9aa4f40a0d171e0c1aefc4dd8d6572785",
+      "volume" : "frus1961-63v06"
+    },
+    {
+      "document" : "comp1",
+      "length" : 28,
+      "renderingVersion" : "5a4805954cf94574",
+      "samples" : [
+        {
+          "color" : "yellow",
+          "endOffset" : 28,
+          "isStale" : false,
+          "startOffset" : 0
+        },
+        {
+          "color" : "green",
+          "endOffset" : 18,
+          "isStale" : false,
+          "startOffset" : 0,
+          "text" : "Kennedy-Khrushchev"
+        },
+        {
+          "color" : "blue",
+          "endOffset" : 28,
+          "isStale" : true,
+          "startOffset" : 19,
+          "text" : "Exchanges"
+        }
+      ],
+      "sha256" : "2bccd2b5e85b277fe8c0dc7b8e2926f3b032e5a7f609582676a8d62433166db8",
       "volume" : "frus1961-63v06"
     },
     {
@@ -21798,6 +22022,317 @@
         }
       ],
       "sha256" : "be1aad0fe27b3573fa2fd902c59b1180bbc26b598cf147635c1d8695d7464de0",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "document" : "sources",
+      "length" : 8309,
+      "renderingVersion" : "a5273272bfb4a06f",
+      "samples" : [
+        {
+          "color" : "yellow",
+          "endOffset" : 8309,
+          "isStale" : false,
+          "startOffset" : 0
+        },
+        {
+          "color" : "green",
+          "endOffset" : 14,
+          "isStale" : false,
+          "selectedText" : "Sources\n\nSources",
+          "startOffset" : 0,
+          "text" : "SourcesSources"
+        },
+        {
+          "color" : "blue",
+          "endOffset" : 8309,
+          "isStale" : false,
+          "startOffset" : 8300,
+          "text" : "1970–1978"
+        },
+        {
+          "color" : "pink",
+          "endOffset" : 19,
+          "isStale" : false,
+          "selectedText" : "Sources\n\nSources for ",
+          "startOffset" : 0,
+          "text" : "SourcesSources for "
+        },
+        {
+          "color" : "yellow",
+          "endOffset" : 6731,
+          "isStale" : false,
+          "selectedText" : "ations Staff\n\nTrip Briefin",
+          "startOffset" : 6707,
+          "text" : "ations StaffTrip Briefin"
+        },
+        {
+          "color" : "green",
+          "endOffset" : 4188,
+          "isStale" : true,
+          "startOffset" : 4146,
+          "text" : "National Security Adviser file contains a "
+        }
+      ],
+      "sha256" : "f17f9f8820d35a356ac45b9aa6ecced9bbb10daac6b82b8c680c835caa53405b",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "document" : "persons",
+      "length" : 7913,
+      "renderingVersion" : "af9266d9e017f8d5",
+      "samples" : [
+        {
+          "color" : "yellow",
+          "endOffset" : 7913,
+          "isStale" : false,
+          "startOffset" : 0
+        },
+        {
+          "color" : "green",
+          "endOffset" : 16,
+          "isStale" : false,
+          "selectedText" : "Persons\n\nAnderson,",
+          "startOffset" : 0,
+          "text" : "PersonsAnderson,"
+        },
+        {
+          "color" : "blue",
+          "endOffset" : 7913,
+          "isStale" : false,
+          "startOffset" : 7908,
+          "text" : "State"
+        },
+        {
+          "color" : "pink",
+          "endOffset" : 19,
+          "isStale" : false,
+          "selectedText" : "Persons\n\nAnderson, Ro",
+          "startOffset" : 0,
+          "text" : "PersonsAnderson, Ro"
+        },
+        {
+          "color" : "yellow",
+          "endOffset" : 3658,
+          "isStale" : false,
+          "selectedText" : "5 until 1981\n\nNelson, Will",
+          "startOffset" : 3634,
+          "text" : "5 until 1981Nelson, Will"
+        },
+        {
+          "color" : "green",
+          "endOffset" : 3996,
+          "isStale" : true,
+          "startOffset" : 3953,
+          "text" : "Ambassador to Indonesia from February 1974 "
+        }
+      ],
+      "sha256" : "bc868d70428f7cbc905f0b562e744b19211ca8b88d48a9e78ddc39127b525087",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "document" : "comp1",
+      "length" : 131,
+      "renderingVersion" : "f2e9390f8d83f6ff",
+      "samples" : [
+        {
+          "color" : "yellow",
+          "endOffset" : 131,
+          "isStale" : false,
+          "startOffset" : 0
+        },
+        {
+          "color" : "green",
+          "endOffset" : 9,
+          "isStale" : false,
+          "startOffset" : 0,
+          "text" : "Documents"
+        },
+        {
+          "color" : "blue",
+          "endOffset" : 131,
+          "isStale" : false,
+          "startOffset" : 122,
+          "text" : "1973–1976"
+        },
+        {
+          "color" : "pink",
+          "endOffset" : 48,
+          "isStale" : false,
+          "selectedText" : "a, 1973–1976\n\nAlgeria, 197",
+          "startOffset" : 24,
+          "text" : "a, 1973–1976Algeria, 197"
+        },
+        {
+          "color" : "yellow",
+          "endOffset" : 82,
+          "isStale" : false,
+          "selectedText" : "a, 1973–1976\n\nMorocco, 197",
+          "startOffset" : 58,
+          "text" : "a, 1973–1976Morocco, 197"
+        },
+        {
+          "color" : "green",
+          "endOffset" : 131,
+          "isStale" : true,
+          "selectedText" : "1973–1976\n\nMorocco, 1973–1976\n\nSpanish Sahara, 1973–1976\n\nTunisia, 1973–1976",
+          "startOffset" : 61,
+          "text" : "1973–1976Morocco, 1973–1976Spanish Sahara, 1973–1976Tunisia, 1973–1976"
+        }
+      ],
+      "sha256" : "a79c98da54d58971ca06f0dd44d07f7c3f2d403cc809da1687eeccbece55c0fc",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "document" : "ch1",
+      "length" : 18,
+      "renderingVersion" : "7fcf73a2c2a50500",
+      "samples" : [
+        {
+          "color" : "yellow",
+          "endOffset" : 18,
+          "isStale" : false,
+          "startOffset" : 0
+        },
+        {
+          "color" : "green",
+          "endOffset" : 8,
+          "isStale" : false,
+          "startOffset" : 0,
+          "text" : "Algeria,"
+        },
+        {
+          "color" : "blue",
+          "endOffset" : 18,
+          "isStale" : true,
+          "startOffset" : 9,
+          "text" : "1973–1976"
+        }
+      ],
+      "sha256" : "35995fee1e978a301b454f41ed14451c743e59c567b237b85ffd6b1b5e7e3eda",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "document" : "ch2",
+      "length" : 16,
+      "renderingVersion" : "aa7729f498f6f37a",
+      "samples" : [
+        {
+          "color" : "yellow",
+          "endOffset" : 16,
+          "isStale" : false,
+          "startOffset" : 0
+        },
+        {
+          "color" : "green",
+          "endOffset" : 6,
+          "isStale" : false,
+          "startOffset" : 0,
+          "text" : "Libya,"
+        },
+        {
+          "color" : "blue",
+          "endOffset" : 16,
+          "isStale" : true,
+          "startOffset" : 7,
+          "text" : "1973–1976"
+        }
+      ],
+      "sha256" : "47088a070b962ad5b93b63376ca62cb7ebd4c22e6ff30ae457d09f63af310f34",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "document" : "ch3",
+      "length" : 18,
+      "renderingVersion" : "0a84ce40c0f9fcb6",
+      "samples" : [
+        {
+          "color" : "yellow",
+          "endOffset" : 18,
+          "isStale" : false,
+          "startOffset" : 0
+        },
+        {
+          "color" : "green",
+          "endOffset" : 8,
+          "isStale" : false,
+          "startOffset" : 0,
+          "text" : "Morocco,"
+        },
+        {
+          "color" : "blue",
+          "endOffset" : 18,
+          "isStale" : true,
+          "startOffset" : 9,
+          "text" : "1973–1976"
+        }
+      ],
+      "sha256" : "6b1ff953a377387137712b1d113d71f8748894f44f2bd70782a1ee5241be7aba",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "document" : "ch4",
+      "length" : 25,
+      "renderingVersion" : "98f01be6c359c021",
+      "samples" : [
+        {
+          "color" : "yellow",
+          "endOffset" : 25,
+          "isStale" : false,
+          "startOffset" : 0
+        },
+        {
+          "color" : "green",
+          "endOffset" : 7,
+          "isStale" : false,
+          "startOffset" : 0,
+          "text" : "Spanish"
+        },
+        {
+          "color" : "blue",
+          "endOffset" : 25,
+          "isStale" : false,
+          "startOffset" : 16,
+          "text" : "1973–1976"
+        },
+        {
+          "color" : "pink",
+          "endOffset" : 25,
+          "isStale" : true,
+          "startOffset" : 8,
+          "text" : "Sahara, 1973–1976"
+        }
+      ],
+      "sha256" : "93fbf3e81a1ae91ade4ff3d99524b0f9c826a47f64d5558eafcfe61703e1205f",
+      "volume" : "frus1969-76ve09p1"
+    },
+    {
+      "document" : "ch5",
+      "length" : 18,
+      "renderingVersion" : "7b8776b73020ca1b",
+      "samples" : [
+        {
+          "color" : "yellow",
+          "endOffset" : 18,
+          "isStale" : false,
+          "startOffset" : 0
+        },
+        {
+          "color" : "green",
+          "endOffset" : 8,
+          "isStale" : false,
+          "startOffset" : 0,
+          "text" : "Tunisia,"
+        },
+        {
+          "color" : "blue",
+          "endOffset" : 18,
+          "isStale" : true,
+          "startOffset" : 9,
+          "text" : "1973–1976"
+        }
+      ],
+      "sha256" : "cf046e05643fd5c1f5299b06d0c0aa58e1920ae055aa9851803011f5e96e5dee",
       "volume" : "frus1969-76ve09p1"
     }
   ]

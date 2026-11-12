@@ -1,5 +1,5 @@
 // render: check 4's golden HTML, as the Mac reader renders each fixture document, and each section
-// the app's Browse opens in the reader that a full parse leaves out.
+// with an id of its own that a full parse leaves out, which the app's reader opens by that id.
 
 import Foundation
 import ParityFormat
@@ -15,23 +15,27 @@ let renderConfiguration = """
     HTMLTemplate.build(model:colorScheme: .light), keeping the body: the fragment \
     FRUSRenderNodeHTMLSerializer.reader writes (annotateSourceClassification: true, \
     figureImages: .reader, listsNamedReferences: true). \
-    Rows are every document a full parse of each volume yields, in parse order, then each section the \
-    app's Browse opens in the reader by its id, as its Read button does (VolumeSection.canReadDirectly), \
-    that the full parse yields no document for, in the structure's order: a back-of-volume index and a \
-    table of contents; volumes sorted. \
+    Rows are every document a full parse of each volume yields, in parse order, then each section with \
+    an id of its own (VolumeSection.hasExplicitSectionId) that the full parse yields no document for, in \
+    the structure's order, which the app's reader opens by its id: from Browse's Read, a back-of-volume \
+    index and a table of contents; by Previous and Next, which turn through the kit's reading order, the \
+    lists of names and of sources and a subseries' list of volumes; by a link, such as a table of \
+    contents', a compilation or a chapter that prints only its heading. Volumes sorted. \
     A release build of the app module, with testing enabled, compiled from the submodule unmodified.
     """
 
-/// The sections the app's Browse opens in the reader by their ids, as `CompilationView`'s Read button
-/// and the Mac corpus browser's `proseSectionView` do (`VolumeSection.canReadDirectly`), that a full
-/// parse yields no document for, chiefly a back-of-volume index and a table of contents, in the
-/// structure's order: the reader parses each alone, as the app's Read Index does.
+/// The sections with an id of their own (`VolumeSection.hasExplicitSectionId`) that a full parse yields
+/// no document for, in the structure's order: the reader parses each alone when it is opened on its
+/// id, as the app's Read opens a back-of-volume index or a table of contents
+/// (`VolumeSection.canReadDirectly`), its Previous and Next turn to a leaf of the kit's reading order
+/// (`IndexingPipeline.mergeReadingSequence`), such as a list of names, and a link opens a chapter that
+/// prints only its heading.
 func sectionsReadAlone(in structure: [VolumeSection], documents: Set<String>) -> [String] {
     var found: [String] = []
     var seen = Set<String>()
     func walk(_ sections: [VolumeSection]) {
         for section in sections {
-            if section.canReadDirectly, !documents.contains(section.sectionId), seen.insert(section.sectionId).inserted {
+            if section.hasExplicitSectionId, !documents.contains(section.sectionId), seen.insert(section.sectionId).inserted {
                 found.append(section.sectionId)
             }
             walk(section.subsections)

@@ -1,6 +1,7 @@
 // A volume's sections as the kit's structure gives them, nested: a section with documents, or with a
-// row of its own text, opens its own page, a prose section the reader can open opens in the reader,
-// and the rest are named only.
+// row of its own text, opens its own page, a section the app's Read opens in the reader opens there,
+// and the rest are named only, the lists of persons and of sources among them, though the reader opens
+// those where Previous and Next or a table of contents' link reach them.
 import { Link } from '@tanstack/react-router';
 import type { Section } from '../api/types';
 import { copy } from '../copy';
