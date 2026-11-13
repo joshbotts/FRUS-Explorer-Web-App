@@ -636,6 +636,8 @@ echo "== the reader: the cross-reference graph over the Standalone server's inde
 # archival nodes, a unit and central-file classes.
 # With --e2e, the graph spec walks every node by keyboard on the timeline and in the network, on Chromium with
 # no axe violations. The answer is read from a file, which a graph of any size fits (Linux caps an argument).
+# The graph's dates are formatted in the smoke test's TZ, America/New_York, a zone the image must hold:
+# without tzdata, Foundation's date formatters trapped the server at every graph (S23e).
 graphed=$(curl -s --max-time 30 -o "$work/graph.json" -w '%{http_code}' \
   "$library_base/api/v1/volumes/frus1961-63v06/documents/d79/graph?degree=3&width=1200&height=700")
 [ "$graphed" = 200 ] || fail "the graph did not answer: $graphed $(head -c 400 "$work/graph.json")"
