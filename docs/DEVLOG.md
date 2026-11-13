@@ -994,23 +994,24 @@ A batch of four small kit leftovers that phase 3's hand-overs named, in one upst
 - **S23d's,** the subject index: `IndexingResources.documentSubjects` is public, so the server can read the one decode of `document-subject-index.json` its search makes, where Related decodes it again.
 - **S21b's follow-up's** (#1898's leftovers), the reader's lists, which the app shows alike:
   - in a list item of links alone, a gloss link and a footnote marker are boxes at least 24 px square, as #1898 made its person and cross-reference links, and so is each link of the two lists below a document that names its people and terms on `@ana`;
-  - a link inside a link is written as its text inside the outer link, where the browser split a nested `<a>` into an empty link, the inner link and loose text: on frus1961-63v06's contents a tap on "Kennedy-Khrushchev" opened a person card and nothing on the line reached page 1. The outer link gives way, written as plain text around the inner one, where it leads nowhere (a name with no `@corresp`, a dead reference) and the inner link works, or is a card around a working reference, as an index's "See" reference inside a name: 171 of the catalogue's 3,268 such links, in 37 volumes, where a tap reaches what it reached before. The orchestrator was asked before the fix was built, with "the outer link wins" as the default, and no answer came before the pull request opened, so it takes that default with the cold review's "gives way", in a commit of its own (`69397990`) that the owner can change or drop alone.
+  - a link inside a link is written as its text inside the outer link, where the browser split a nested `<a>` into an empty link, the inner link and loose text: on frus1961-63v06's contents a tap on "Kennedy-Khrushchev" opened a person card and nothing on the line reached page 1. The outer link gives way, written as plain text around the inner one, where it leads nowhere (a name with no `@corresp`, a dead reference) and the inner link works, or is a card around a working reference, as an index's "See" reference inside a name: 171 of the catalogue's 3,268 such links, in 37 volumes, where a tap reaches what it reached before. Both are the owner's choices, of 13 November: "Outer link wins", at the cost that on such a line the inner person or term is not tappable (3,268 such links in 258 volumes, 2,136 of them empty links before), and "Keep gives way", for the cold review's 171. Mac check 27 taps both: v06's contents line, frus1873p1v1's index's "De Long" and "JAY, JOHN", and "Bill Martin" in frus1964-68v12's document 238.
 
   The `<br>`-segment case is left, named in the pull request.
 
 **Measured** (the pull request has the figures): the Mac check beside `v2` (`02e38a12`), on an iPhone 17e: both builds with `v2`'s warning lines, line for line; the full iOS unit run 7,999 tests in 962 suites against 7,989, with `v2`'s one failure alone and the same skips; `swift test` 4,490 tests in 529 suites (`FRUSCoreKitTests` 2,509 against 2,500); and a symbol diff of 7 names removed and 20 added, each explained. Linux over `main` at `f09ce5f`, with S24d's `Package.swift` patch in the scratch alone: `FRUSCoreKitTests` 2,509 tests, all passing; the parity suite's 28 issues, `v2` alone's line for line; the access proof compiling; and of the golden rows only frus1961-63v06's `toc` rendering otherwise than at `v2`. Axe in Chromium, over pages of each shape: `v2`'s 26 `target-size` violations and v06's contents' `link-name` violation are gone. One cold review found that "the outer link wins" hid a working link in 171 places; the rule's "gives way" fixes that.
 
-**For S24e, or a web follow-up after it** (the hand-over note, `upstream-followups-handover.md` in the orchestrator's notes folder, has each change with its file and function):
+**For S24e, which waits for FRUS-Explorer#1902 and carries it with the batch** (the owner's word of 13 November, "Yes, wait for it"; the hand-over note, `upstream-followups-handover.md` in the orchestrator's notes folder, has each change with its file and function):
 - The golden files are remade as at every move. Of item 4's changes, only the nested links change a fragment: frus1961-63v06's contents, `toc`, 1,142 bytes at `v2` to 1,085 (its two contents lines become one link each, and items of links alone). The stylesheet's growth, 1,346 bytes a head, changes no fragment.
-- The browser suite needs nothing for this pull request; `indexLinks` and `contentsLinks` are #1898's, S24e's to drop.
-- The web's uses of items 1–3:
+- #1898's two allowances become obsolete with the move, and must be dropped, since each requires its failure: `indexLinks` in `read-index.spec.ts` and `contentsLinks` in `read-sections.spec.ts`. Over the five pages those specs scan, axe in Chromium finds no violation with #1898's stylesheet or with #1902's. This pull request adds or makes obsolete no allowance of its own.
+- The web's uses of items 1–3 are a web follow-up's; the pin move needs none. Over `main` with #1902's tree, every parity test that reads the app's source passes.
+  The uses:
   - `parsedTitle(of:)` takes the number fallback.
-  - `ProjectHomeRoutes.withLines` reads the user's summaries, with `ProjectHistoryParityTests`' line and SPEC's gap.
+  - `ProjectHomeRoutes.withLines` reads the user's summaries, with `ProjectHistoryParityTests`' line for it, changed in the same commit, and SPEC's gap.
   - `ServerResources.documentSubjectIndex` reads the kit's decode, and `DocumentSubjectIndexFile` goes.
 
   Related Documents' rows still show a summarised document's opening text: the kit's engine takes its lines with no user source, proposed to the orchestrator as a follow-up.
 
-**Next:** the owner's Mac check 27 and merge of FRUS-Explorer#1902, which S24e may carry with the batch; then the web's uses above.
+**Next:** the owner's Mac check 27 and merge of FRUS-Explorer#1902; then S24e's pin move, which waits for it, by the owner's word of 13 November, and carries it with the batch; then the web's uses above.
 
 ## Session 25c: Project Home's focus subjects and a lead's line
 
