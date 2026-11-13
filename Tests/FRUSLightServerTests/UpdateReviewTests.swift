@@ -207,6 +207,11 @@ import Testing
         let owners = try await ResearchRoutes.unreviewedChanges(for: "owner", store: fixture.users.store, provider: fixture.provider,
                                                                reviews: UpdateReviewSources(indexer: fixture.indexer, teiCheck: nil))
         #expect(owners.unreviewed.isEmpty)
+        // The index's stamp keeps it out of the tallies, as the kit's `VolumeUpdateReview` counts it, while bob sees it.
+        try await fixture.app.test(.router) { client in
+            let tallies = try decode(AdminUpdates.self, try await Browser(client: client).get("/api/v1/admin/library/updates"))
+            #expect(tallies.totals == .init(changedDocuments: 0, volumes: 0, annotatedDocuments: 0))
+        }
     }
 
     /// A download whose re-index a stop cut short: the volume is owed in the stamps from before its file took its
@@ -355,6 +360,16 @@ import Testing
                                                      for: "bob", at: UserDataFixture.now)
             let settled = try decode(AdminUpdates.self, try await owner.get("/api/v1/admin/library/updates"))
             #expect(settled.totals == .init(changedDocuments: 0, volumes: 0, annotatedDocuments: 0) && settled.volumes.isEmpty)
+            // Someone new annotates it, and it counts again, since this index holds no stamp of it, where a Standalone
+            // server's would keep it out; an account disabled, which can review nothing, waits on no review.
+            _ = try users.store.signedInUser("carol", at: UserDataFixture.now)
+            _ = try users.store.createHighlight(in: Self.document, start: 0, end: 5, colorTag: "yellow", selectedText: "words",
+                                                renderingVersion: "0000000000000001", for: "carol", at: UserDataFixture.now)
+            let again = try decode(AdminUpdates.self, try await owner.get("/api/v1/admin/library/updates"))
+            #expect(again.totals == .init(changedDocuments: 1, volumes: 1, annotatedDocuments: 1), "carol has not reviewed it")
+            try users.store.setDisabled(true, of: "carol", at: UserDataFixture.now)
+            let disabled = try decode(AdminUpdates.self, try await owner.get("/api/v1/admin/library/updates"))
+            #expect(disabled.totals == .init(changedDocuments: 0, volumes: 0, annotatedDocuments: 0))
         }
         _ = reviews
         await users.jobs.waitUntilIdle()
@@ -363,6 +378,68 @@ import Testing
                 "nor its folder")
         #expect(try users.store.documentReviews(of: Self.document, for: "owner").count == 1)
         _ = highlight
+    }
+
+    /// An export whose change its reader reviewed on the Mac, the index's stamp brought with it: Administration's tallies
+    /// leave it out, as the kit's `VolumeUpdateReview` and the app's After an Update do, whoever reviews it on the server;
+    /// a user of the server still sees the change, their own ledger holding no review of it.
+    @Test func anExportsReviewedChangeIsLeftOutOfTheTalliesAndShownToEachUser() async throws {
+        let users = try await UserDataFixture(volumes: [Self.volume])
+        defer { withExtendedLifetime(users) {} }
+        let files = users.server.files
+        // The Mac's index: the volume as first published, then corrected and indexed again, its change reviewed there.
+        try await Self.buildIndex(of: [Self.volume], from: RepositoryFiles.tei, at: files.liveIndex, resources: users.server.resources)
+        let corrected = try TemporaryDirectory()
+        try Self.corrected().write(to: corrected.url.appendingPathComponent("\(Self.volume).xml"))
+        do {
+            let pipeline = try IndexingPipeline(fts5Store: try FTS5Store(databaseURL: files.liveIndex), databaseURL: files.liveIndex,
+                                                volumesDirectory: corrected.url, resources: users.server.resources.indexing,
+                                                defaults: InMemoryIndexingStampStore())
+            try await pipeline.indexVolume(Self.volume)
+            let change = try #require(try await pipeline.documentRevision(volumeId: Self.volume, documentId: "d2"))
+            #expect(change.changeKind == "body")
+            _ = try await pipeline.applyAnnotationReviews([AnnotationReviewData(
+                annotationType: AnnotationReviewLedger.documentKind, volumeId: Self.volume, documentId: "d2",
+                contentHash: change.contentHash, changeKind: "body")])
+        }
+        let db = try SQLiteConnection(files.liveIndex.path, readOnly: false)
+        _ = try db.query("PRAGMA wal_checkpoint(TRUNCATE)")
+        _ = try db.query("PRAGMA journal_mode=DELETE")
+        db.close()
+        // The TEI folder holds the volume the Mac indexed last.
+        try FileManager.default.removeItem(at: files.volumesDirectory.appendingPathComponent("\(Self.volume).xml"))
+        try Self.corrected().write(to: files.volumesDirectory.appendingPathComponent("\(Self.volume).xml"))
+        await users.server.state.openExistingIndex(files: files)
+        let served = try #require(await users.server.state.index)
+        #expect(served.summary.documents > 0)
+        let reader = ReaderService(volumesDirectory: files.volumesDirectory, resources: users.server.resources)
+        let provider = ServedIndexProvider(state: users.server.state, resources: users.server.resources,
+                                           volumesDirectory: files.volumesDirectory, userStore: users.store.searchDatabase)
+        _ = try users.store.signedInUser("bob", at: UserDataFixture.now)
+        for user in ["owner", "bob"] {
+            _ = try users.store.createHighlight(in: Self.document, start: 0, end: 5, colorTag: "yellow", selectedText: "words",
+                                                renderingVersion: "0000000000000001", for: user, at: UserDataFixture.now)
+        }
+        let app = Application(router: ServedRouter(base: .root, router: buildRouter(
+            state: users.server.state, resources: users.server.resources, reader: reader, provider: provider,
+            userData: users.services)))
+        try await app.test(.router) { client in
+            let owner = Browser(client: client)
+            let left = try decode(AdminUpdates.self, try await owner.get("/api/v1/admin/library/updates"))
+            #expect(left.totals == .init(changedDocuments: 0, volumes: 0, annotatedDocuments: 0), "the Mac's reader reviewed it")
+            let banner = try decode(DocumentChange.self, try await owner.get("/api/v1/me/volumes/\(Self.volume)/documents/d2/change"))
+            #expect(banner.changeKind == "body" && banner.canMarkReviewed, "the owner's own ledger holds no review of it")
+            // The owner reviews it, and bob, whose research is on it too, still has it to review.
+            let reviewed = try decode(DocumentChange.self, try await owner.send(
+                .post, "/api/v1/me/volumes/\(Self.volume)/documents/d2/review",
+                #"{"contentHash":"\#(banner.contentHash ?? "")","changeKind":"body"}"#))
+            #expect(!reviewed.canMarkReviewed && reviewed.changeKind == nil)
+            let bobs = try await ResearchRoutes.unreviewedChanges(for: "bob", store: users.store, provider: provider,
+                                                                 reviews: UpdateReviewSources(indexer: nil, teiCheck: nil))
+            #expect(bobs.unreviewed.keys.sorted() == ["frus1894Nicaragua/d2"])
+            let still = try decode(AdminUpdates.self, try await owner.get("/api/v1/admin/library/updates"))
+            #expect(still.totals == .init(changedDocuments: 0, volumes: 0, annotatedDocuments: 0))
+        }
     }
 
     /// An index of `volumes`, built by the kit's read-write pipeline from `tei`, as the Mac's export holds one, with

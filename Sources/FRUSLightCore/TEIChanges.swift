@@ -13,19 +13,20 @@
 //
 // It is a job of the queue (`teiComparison`), by the owner's choice of 13 November: after each import it compares
 // every volume of the export, and later each volume whose file in the TEI folder has changed since it was compared,
-// by the file's device, inode, length and modification time, which the record keeps. Over the full corpus the
+// by the file's inode, length and modification time, which the record keeps. Over the full corpus the
 // first comparison takes about as long as indexing it, 8 to 10 minutes on the owner's Mac, so the job gives way
 // after each volume to any job queued behind it and goes on after them from where it stopped, its progress kept in
-// its work folder, where a start after a stop finds it too.
+// its work folder, where a start after a stop finds it too. The folder's files are read and copied off the actor,
+// which every reader of the comparison waits for.
 
 import FRUSCoreKit
 import FTS5Store
 import Foundation
 
-/// A file of the TEI folder as the check compared it: a later file in its place has another identity, length or
-/// modification time, and is compared again.
+/// A file of the TEI folder as the check compared it: a later file in its place has another inode, length or
+/// modification time, and is compared again. The device is left out: a mount of the folder, as Docker Desktop's share
+/// of a Mac's folder, can number it anew at each start, which would compare every volume again.
 public struct TEIFileStamp: Codable, Sendable, Equatable {
-    public var device: UInt64
     public var inode: UInt64
     public var bytes: Int64
     /// Its modification time, in nanoseconds since 1970: a whole number, which the record keeps exactly.
@@ -35,11 +36,10 @@ public struct TEIFileStamp: Codable, Sendable, Equatable {
     public static func of(_ url: URL) -> TEIFileStamp? {
         guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.resolvingSymlinksInPath().path),
               attributes[.type] as? FileAttributeType == .typeRegular,
-              let device = (attributes[.systemNumber] as? NSNumber)?.uint64Value,
               let inode = (attributes[.systemFileNumber] as? NSNumber)?.uint64Value,
               let bytes = (attributes[.size] as? NSNumber)?.int64Value,
               let modified = attributes[.modificationDate] as? Date else { return nil }
-        return TEIFileStamp(device: device, inode: inode, bytes: bytes,
+        return TEIFileStamp(inode: inode, bytes: bytes,
                             modified: Int64((modified.timeIntervalSince1970 * 1_000_000_000).rounded()))
     }
 }
@@ -158,6 +158,9 @@ public actor TEIChangeCheck {
     private var stoppedFor: TEIServedFile?
     private var phase = TEICheckStatus.idle
     private var opened: TEIComparison?
+    /// The record of the last whole comparison, read from its file at the first look and kept as each job places one.
+    private var lastRecord: TEIChangeRecord?
+    private var lastRecordRead = false
     /// Test hook: told each volume once it has been compared.
     var volumeComparedTestHook: (@Sendable (String) async -> Void)?
 
@@ -205,10 +208,12 @@ public actor TEIChangeCheck {
             opened = nil
         }
         guard !underWay, stoppedFor != served else { return }
-        if let work = Self.readWork(workURL), work.served == served {
+        if let work = Self.readWork(workURL), work.served == served, FileManager.default.fileExists(atPath: buildingURL.path) {
             await queue(served, recheck: work.recheck, done: work.done, total: work.plan.count)
         } else if let record {
-            let stale = staleVolumes(of: index, against: record)
+            let stale = await staleVolumes(of: index, against: record)
+            // The sweep ran off the actor, where another look could have queued a job meanwhile.
+            guard !underWay, stoppedFor != served else { return }
             guard !stale.isEmpty else {
                 if !phase.running { phase = Self.finished(record, problem: phase.problem) }
                 return
@@ -222,7 +227,8 @@ public actor TEIChangeCheck {
     /// The comparison index of the served index's last whole comparison, opened through the kit's immutable
     /// read-only open, or nil while none describes it.
     public func comparison() async -> TEIComparison? {
-        guard let record = phase.record, let index = await state.index, record.describes(index) else { return nil }
+        let index = await state.index
+        guard let record = phase.record, record.describes(index) else { return nil }
         if let opened, opened.record == record { return opened }
         do {
             let url = comparisonURL
@@ -241,7 +247,11 @@ public actor TEIChangeCheck {
 
     /// The record of a whole comparison of `served`, with its comparison index in place.
     private func currentRecord(for served: TEIServedFile) -> TEIChangeRecord? {
-        guard let record = Self.read(recordURL), record.served == served,
+        if !lastRecordRead {
+            lastRecord = Self.read(recordURL)
+            lastRecordRead = true
+        }
+        guard let record = lastRecord, record.served == served,
               FileManager.default.fileExists(atPath: comparisonURL.path) else { return nil }
         return record
     }
@@ -254,9 +264,12 @@ public actor TEIChangeCheck {
     func teiFile(_ volumeId: String) -> URL { volumesDirectory.appendingPathComponent("\(volumeId).xml") }
 
     /// The volumes whose file in the TEI folder is not the one the record compared, or is there now where none
-    /// was, or has gone.
-    private func staleVolumes(of index: CorpusIndex, against record: TEIChangeRecord) -> [String] {
-        Self.volumes(of: index).filter { TEIFileStamp.of(teiFile($0)) != record.files[$0] }
+    /// was, or has gone: a look at each file, off the actor.
+    private func staleVolumes(of index: CorpusIndex, against record: TEIChangeRecord) async -> [String] {
+        let volumes = Self.volumes(of: index), files = record.files, directory = volumesDirectory
+        return (try? await Blocking.run {
+            volumes.filter { TEIFileStamp.of(directory.appendingPathComponent("\($0).xml")) != files[$0] }
+        }) ?? []
     }
 
     /// Queues a job of the comparison, which plans it when it begins; the status says what it will compare.
@@ -303,6 +316,7 @@ public actor TEIChangeCheck {
     }
 
     static let cancelled = "An admin stopped the comparison. It goes on at the server's next start, or begins again after the next import."
+    static let interrupted = "The comparison stopped. It goes on at the server's next start, or begins again after the next import."
 
     private func show(_ work: TEIComparisonWork, volume: String?) {
         phase.running = true
@@ -329,7 +343,7 @@ public actor TEIChangeCheck {
         }
         phase.record = currentRecord(for: served)
         do {
-            guard var work = try plan(index, served) else {
+            guard var work = try await plan(index, served) else {
                 if let record = phase.record { phase = Self.finished(record, problem: nil) }
                 return "No file of the TEI folder has changed since the last comparison."
             }
@@ -343,7 +357,8 @@ public actor TEIChangeCheck {
                 // It gives way to the jobs queued behind it, and goes on after them.
                 try await submit(work.served)
                 handedOver = true
-                phase.waiting = true
+                // Unless an admin cancelled the next job before this one ended.
+                phase.waiting = underWay
                 phase.volume = nil
                 return "Compared \(work.done) of \(work.plan.count) volumes with the TEI folder; goes on once the jobs waiting have run."
             }
@@ -358,6 +373,7 @@ public actor TEIChangeCheck {
             log("An admin stopped the comparison of the index with the TEI folder")
             throw JobCancelled()
         } catch is CancellationError {
+            stopped(served, problem: Self.interrupted)
             throw CancellationError()
         } catch {
             stopped(served, problem: "The index could not be compared with the TEI folder, which the server's log says why. It goes on at the server's next start, or begins again after the next import.")
@@ -369,17 +385,18 @@ public actor TEIChangeCheck {
     /// The comparison the job takes up: the one under way for the served index, or one of the volumes whose file
     /// changed since the last whole comparison, over a copy of it, or one of every volume. Nil when no file has
     /// changed since the last.
-    private func plan(_ index: CorpusIndex, _ served: TEIServedFile) throws -> TEIComparisonWork? {
+    private func plan(_ index: CorpusIndex, _ served: TEIServedFile) async throws -> TEIComparisonWork? {
         if let work = Self.readWork(workURL), work.served == served, FileManager.default.fileExists(atPath: buildingURL.path) {
             return work
         }
         try? FileManager.default.removeItem(at: workFolder)
         var work: TEIComparisonWork
         if let record = phase.record {
-            let stale = staleVolumes(of: index, against: record)
+            let stale = await staleVolumes(of: index, against: record)
             guard !stale.isEmpty else { return nil }
             try FileManager.default.createDirectory(at: workFolder, withIntermediateDirectories: true)
-            try FileManager.default.copyItem(at: comparisonURL, to: buildingURL)
+            let comparison = comparisonURL, building = buildingURL
+            try await Blocking.run { try FileManager.default.copyItem(at: comparison, to: building) }
             let again = Set(stale)
             work = TEIComparisonWork(served: served, recheck: true, plan: stale, done: 0,
                                      checked: record.checked.filter { !again.contains($0) },
@@ -415,12 +432,16 @@ public actor TEIChangeCheck {
                 show(work, volume: volumeId)
                 try await compareVolume(volumeId, in: &work, pipeline: pipeline, from: served, seeder: seeder)
                 work.done += 1
-                try Self.write(work, to: workURL)
+                let kept = work, url = workURL
+                try await Blocking.run { try Self.write(kept, to: url) }
                 show(work, volume: nil)
                 if let hook = volumeComparedTestHook { await hook(volumeId) }
-                if work.done < work.plan.count,
-                   await jobs.jobs().contains(where: { $0.state == .queued && $0.kind != .teiComparison }) {
-                    return (false, seeder)
+                if work.done < work.plan.count {
+                    // A cancel asked for during the volume stops it here, rather than in the job it would give way to.
+                    try await context.checkpoint()
+                    if await jobs.jobs().contains(where: { $0.state == .queued && $0.kind != .teiComparison }) {
+                        return (false, seeder)
+                    }
                 }
             }
             try await pipeline.vacuumIndex()
@@ -472,7 +493,8 @@ public actor TEIChangeCheck {
     }
 
     /// The comparison whole: its log folded into it and its journal a rollback journal's, a file a reader opens
-    /// immutable, renamed into place with its record, and the work folder removed.
+    /// immutable, renamed into place after its record, and the work folder removed. A stop between the two leaves
+    /// the work folder whole, which the next start places again.
     private func place(_ work: TEIComparisonWork, seeder: SQLiteConnection) throws -> TEIChangeRecord {
         let folded = try seeder.query("PRAGMA wal_checkpoint(TRUNCATE)").first?.first?.integer ?? 1
         let journal = try seeder.query("PRAGMA journal_mode=DELETE").first?.first?.text ?? ""
@@ -484,8 +506,10 @@ public actor TEIChangeCheck {
         let checkedAt = Date(timeIntervalSince1970: now().timeIntervalSince1970.rounded(.down))
         let record = TEIChangeRecord(served: work.served, checkedAt: checkedAt, checked: work.checked.sorted(),
                                      changed: work.changed.sorted(), unchecked: work.unchecked, files: work.files)
-        try Self.place(buildingURL, at: comparisonURL)
         try Self.write(record, to: recordURL)
+        lastRecord = record
+        lastRecordRead = true
+        try Self.place(buildingURL, at: comparisonURL)
         try? FileManager.default.removeItem(at: workFolder)
         return record
     }

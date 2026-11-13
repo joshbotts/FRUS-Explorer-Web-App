@@ -126,6 +126,33 @@ import Testing
         #expect(settled.count == 2, "compared, so nothing more is queued")
     }
 
+    /// A cancel asked for during a volume stops the comparison there, though a job is queued that it would give way to:
+    /// the queued job runs, and no job of the comparison follows it.
+    @Test func aCancelDuringAVolumeHoldsThoughAJobIsQueued() async throws {
+        let fixture = try await Fixture()
+        defer { withExtendedLifetime(fixture) {} }
+        let check = fixture.check()
+        let events = Events()
+        let jobs = fixture.jobs
+        await check.setVolumeComparedTestHook { volume in
+            guard volume == TEIComparisonTests.volumes[0],
+                  let running = await jobs.jobs().first(where: { $0.kind == .teiComparison && $0.state == .running }) else { return }
+            _ = try? await jobs.submit(JobKind(rawValue: "aUsersJob"), subject: "a user's job") { _ in
+                await events.add("the user's job")
+                return "Done."
+            }
+            _ = try? await jobs.cancel(running.id, by: "owner")
+        }
+        await check.ensureCurrent()
+        await jobs.waitUntilIdle()
+        let comparisons = await fixture.comparisons()
+        #expect(comparisons.map(\.state) == [.cancelled])
+        let order = await events.all
+        #expect(order == ["the user's job"])
+        let stopped = await check.status()
+        #expect(!stopped.running && !stopped.waiting && stopped.problem == TEIChangeCheck.cancelled)
+    }
+
     /// An admin's cancel stops the comparison at its next volume, which no look in /data/import queues again; a
     /// start goes on with what the stop left, the volume compared before it kept.
     @Test func aStartGoesOnWithTheComparisonACancelLeft() async throws {

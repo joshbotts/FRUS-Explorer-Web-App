@@ -73,16 +73,20 @@ public enum AnnotationReviewLedger {
     /// AND content_hash = ? AND change_kind IS ?`), held to the kit by `UpdateReviewParityTests`. A change the
     /// index has not stamped is no change to review.
     public static func reviews(_ rows: [AnnotationReviewRecord], _ revision: IndexingPipeline.DocumentRevision) -> Bool {
-        reviews(rows.map(\.data), revision)
+        reviews(Set(rows.map(\.data)), revision)
     }
 
     /// The same match over rows as the kit's `applyAnnotationReviews` reads them.
-    public static func reviews(_ rows: [AnnotationReviewData], _ revision: IndexingPipeline.DocumentRevision) -> Bool {
-        guard revision.changedAt != nil else { return false }
-        return rows.contains {
-            $0.annotationType == documentKind && $0.volumeId == revision.volumeId && $0.documentId == revision.documentId
-                && $0.contentHash == revision.contentHash && $0.changeKind == revision.changeKind
-        }
+    public static func reviews(_ rows: Set<AnnotationReviewData>, _ revision: IndexingPipeline.DocumentRevision) -> Bool {
+        key(of: revision).map(rows.contains) ?? false
+    }
+
+    /// The row of the `document` kind that reviews `revision`, as the match finds it: the same document, content hash
+    /// and change kind. Nil for a change the index has not stamped, which is no change to review.
+    public static func key(of revision: IndexingPipeline.DocumentRevision) -> AnnotationReviewData? {
+        guard revision.changedAt != nil else { return nil }
+        return AnnotationReviewData(annotationType: documentKind, volumeId: revision.volumeId, documentId: revision.documentId,
+                                    contentHash: revision.contentHash, changeKind: revision.changeKind)
     }
 }
 

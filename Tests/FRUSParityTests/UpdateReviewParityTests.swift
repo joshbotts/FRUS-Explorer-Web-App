@@ -334,7 +334,7 @@ import Testing
             "let lines = ExcerptReview.lines(outcome: outcome, storedVersion: quotation.version, currentVersion: version)",
             "warning: ExcerptReview.isWarning(outcome)",
             "open = unstamped.filter { !AnnotationReviewLedger.reviews(settled, $0) }",
-            "let summaries = VolumeUpdateReview.summaries(revisions: open, annotatedKeys: Set(annotators.keys))",
+            "let summaries = VolumeUpdateReview.summaries(revisions: open, annotatedKeys: annotated)",
             "let totals = VolumeUpdateReview.totals(of: summaries)",
         ], file: "Reviews.swift")
         NoteViewParityTests.expect(try Self.server("Sources/FRUSLightAPI/Research.swift"), holds: [

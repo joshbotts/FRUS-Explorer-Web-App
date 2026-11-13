@@ -2196,7 +2196,7 @@ export const copy = {
       changedVanished: (count: number) => `${count} no longer in the volume`,
       changedAnnotated: (annotated: number, changed: number) => `${annotated} of ${changed} changed documents carry research`,
       afterUpdateFooter:
-        'When a volume is updated, the server compares every document with the copy it indexed before and records which ones changed. A document counts if it carries a note, tag, highlight, quotation, collection entry, summary, or archive-visit plan of anyone’s. Each user’s Research page lists the changed documents they annotated under Changed by an update, until they review them. A change leaves these counts once everyone whose research is on the document has reviewed it.',
+        'When a volume is updated, the server compares every document with the copy it indexed before and records which ones changed. A document counts if it carries a note, tag, highlight, quotation, collection entry, summary, or archive-visit plan of anyone’s. Each user’s Research page lists the changed documents they annotated under Changed by an update, until they review them. A change leaves these counts once everyone whose research is on the document has reviewed it, or, on a document no one annotated, once anyone has.',
       // Import mode's comparison of the served index with the TEI folder (SPEC's import step 5), the web's own.
       teiCheck: 'The TEI folder against the index',
       teiCheckRunning: (done: number, total: number, volume?: string, waiting = false, recheck = false) =>

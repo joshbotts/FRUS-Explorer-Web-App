@@ -554,7 +554,7 @@ enum ReviewRoutes {
     static func settledReviews(store: any UserDataStore) async throws -> [AnnotationReviewData] {
         let ledgers = try await Blocking.run { try store.everyDocumentReview() }
         guard !ledgers.isEmpty else { return [] }
-        return settledReviews(ledgers: ledgers, annotators: try await annotators(store: store))
+        return settledReviews(ledgers: ledgers, annotators: try await annotators(store: store).concerned)
     }
 
     /// The same, over every user's ledger and whose research is on each document.
@@ -572,15 +572,19 @@ enum ReviewRoutes {
         }
     }
 
-    /// Whose research is on each document, by `"volumeId/documentId"`: every user's, as the Research page gathers it.
-    static func annotators(store: any UserDataStore) async throws -> [String: Set<String>] {
-        var annotators: [String: Set<String>] = [:]
+    /// Whose research is on each document, by `"volumeId/documentId"`, as the Research page gathers it: the users
+    /// concerned, a disabled account aside, since it cannot review; and every document anyone's research is on,
+    /// a disabled account's too, as the tallies count them.
+    static func annotators(store: any UserDataStore) async throws -> (concerned: [String: Set<String>], annotated: Set<String>) {
+        var concerned: [String: Set<String>] = [:]
+        var annotated: Set<String> = []
         for account in try await Blocking.run({ try store.accounts() }) {
-            for key in ResearchGroups(sources: try await ResearchSources.read(for: account.id, in: store)).allAnnotatedKeys {
-                annotators[key, default: []].insert(account.id)
-            }
+            let keys = ResearchGroups(sources: try await ResearchSources.read(for: account.id, in: store)).allAnnotatedKeys
+            annotated.formUnion(keys)
+            guard account.disabledAt == nil else { continue }
+            for key in keys { concerned[key, default: []].insert(account.id) }
         }
-        return annotators
+        return (concerned, annotated)
     }
 
     /// What the banner says, for the user: the change's kind while they have not reviewed it.
@@ -648,8 +652,8 @@ enum ReviewRoutes {
 
 /// `GET /api/v1/admin/library/updates`: what the updates changed, at the grain an admin acts, per volume, by the
 /// kit's `VolumeUpdateReview` over the changes that wait for review and every user's research (PLAN's S21f), a
-/// change waiting until the index holds its review stamp or everyone whose research is on the document has reviewed
-/// it, the same rule in both modes; and in Import mode, where the comparison of the served export with the TEI
+/// change waiting, by the same rule in both modes, until the index holds its review stamp or everyone whose research
+/// is on the document has reviewed it; and in Import mode, where the comparison of the served export with the TEI
 /// folder stands.
 public struct AdminUpdates: Codable, Equatable, Sendable, ResponseEncodable {
     public var mode: String
@@ -703,22 +707,24 @@ enum AdminUpdateRoutes {
         admin.get("library/updates") { request, _ -> EditedResponse<AdminUpdates> in
             try FormQuery(request.uri.query).refuseUnknown([])
             let served = try? await provider?.servedIfReady()
-            // The changes that wait for review, by one rule in both modes: a change the index holds no review stamp of
-            // (a Standalone server's own, recorded by this rule, or one an export brought from the Mac) and that the
-            // ledgers do not settle, everyone whose research is on the document having reviewed it. An Import server's
-            // index holds no stamp of the server's, and its comparison with the TEI none at all, so there the ledgers
-            // are all of it; on a Standalone server they count a review before its job records it.
+            // The changes that wait for review, by one rule in both modes: a change counts as reviewed once the index
+            // holds its review stamp, as the kit's `VolumeUpdateReview` counts it, or, where it holds none, once the
+            // ledgers settle it, everyone whose research is on the document having reviewed it. A Standalone server
+            // records its stamp by the same rule, through its one writer, and the ledgers count a review before its job
+            // records it; an Import server's index, never written, holds no stamp but those an export brings from the
+            // Mac, and its comparison with the TEI none at all.
             let unstamped = await reviews.changes(served).values.map(\.revision).filter { $0.reviewedAt == nil }
             // Every user's research: a document counts if it carries anyone's, as the app counts its reader's.
-            var annotators: [String: Set<String>] = [:]
+            var annotated: Set<String> = []
             var open: [IndexingPipeline.DocumentRevision] = []
             if !unstamped.isEmpty {
-                annotators = try await ReviewRoutes.annotators(store: store)
+                let research = try await ReviewRoutes.annotators(store: store)
+                annotated = research.annotated
                 let ledgers = try await Blocking.run { try store.everyDocumentReview() }
-                let settled = ReviewRoutes.settledReviews(ledgers: ledgers, annotators: annotators)
+                let settled = Set(ReviewRoutes.settledReviews(ledgers: ledgers, annotators: research.concerned))
                 open = unstamped.filter { !AnnotationReviewLedger.reviews(settled, $0) }
             }
-            let summaries = VolumeUpdateReview.summaries(revisions: open, annotatedKeys: Set(annotators.keys))
+            let summaries = VolumeUpdateReview.summaries(revisions: open, annotatedKeys: annotated)
             let totals = VolumeUpdateReview.totals(of: summaries)
             var check: AdminUpdates.TEICheck?
             if state.configuration.mode == .import, let teiCheck = reviews.teiCheck {
