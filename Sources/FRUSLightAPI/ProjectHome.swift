@@ -37,7 +37,7 @@ public struct ProjectHome: Codable, Equatable, Sendable, ResponseEncodable {
     /// Suggested Next: its leads the reader has not dismissed, the most related first.
     public var leads: [Lead]
     /// Where the newest computation of its leads stands (PLAN's S23d), absent when none was asked for
-    /// since the server started.
+    /// since the server started. Read before `leads`, so that one given as ended shows the leads it kept.
     var leadsRefresh: LeadsRefresh?
     /// Recent Activity's three feeds, five each at most: the documents read, each once; the notes; and
     /// the searches.
@@ -131,6 +131,12 @@ enum ProjectHomeRoutes {
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
             let id = try context.parameters.require("projectId")
+            // Where the newest computation of the leads stands, read before the leads are: one it gives
+            // as ended kept its leads before it ended, so the leads read next are its own or newer. Read
+            // after them, past the leads' lines, which wait on the served index the computation ranks
+            // over, one that ended meanwhile was given as ended beside the leads from before it, and the
+            // browser, which reads Project Home again only while one waits or runs, kept those.
+            let refresh = await leads.latestJob(id, of: user.id).map(LeadsRefresh.init)
             let (rows, tags, active, preferences) = try await Blocking.run {
                 (try store.researchRows(for: user.id, tables: tables), try store.tags(of: user.id),
                  try store.activeProjectId(of: user.id), try store.preferences(of: user.id))
@@ -149,7 +155,7 @@ enum ProjectHomeRoutes {
                 throw APIProblem(.internalServerError, code: "STORE_DAMAGED", detail: "Project Home could not be read: \(error.description)")
             }
             answer.leads = await withLines(answer.leads, provider: provider)
-            answer.leadsRefresh = await leads.latestJob(project.id.uuidString, of: user.id).map(LeadsRefresh.init)
+            answer.leadsRefresh = refresh
             return answer
         }
         // Suggested Next's ×: the lead stays dismissed, so it does not surface again.
