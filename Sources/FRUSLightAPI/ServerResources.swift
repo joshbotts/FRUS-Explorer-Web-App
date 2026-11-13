@@ -36,6 +36,8 @@ public final class ServerResources: Sendable {
     private let documentSubjects = DocumentSubjectIndexFile()
     /// The corpus-wide citation index, `resolved-edge-index.json`, decoded on first use (ServedIndex.swift).
     private let resolvedEdges = ResolvedEdgeIndexFile()
+    /// The collection authority, `collection-authority.json`, decoded on first use (CrossReferenceGraph.swift).
+    private let collections = CollectionAuthorityFile()
     /// The catalogue overlay (PLAN's S21e): the volumes a Standalone server's library holds that the published
     /// catalogue does not list, side-loaded, each described by the kit's `LocalVolumeCatalog` from its own header.
     private let local = LocalVolumes()
@@ -146,6 +148,12 @@ public final class ServerResources: Sendable {
     /// `ResolvedEdgeIndex(contentsOf:)`; nil for a file missing or malformed, and a graph's inbound half
     /// is then the index's own table alone, as the app's is when its store fails to load.
     var resolvedEdgeIndex: ResolvedEdgeIndex? { resolvedEdges.index(in: directory) }
+
+    /// `CollectionAuthorityStore.shared`, app code: the bundled collection authority, which a graph's
+    /// unprinted units are joined to (PLAN's S23e), decoded once by the kit's
+    /// `CollectionAuthorityIndex(contentsOf:)`; nil for a file missing or malformed, and a graph then draws
+    /// no unit or class nodes, as the app's draws none when its store cannot load.
+    var collectionAuthority: CollectionAuthorityIndex? { collections.index(in: directory) }
 }
 
 /// The catalogue overlay's entries, set whole each time it is read again.
@@ -196,6 +204,21 @@ private final class ResolvedEdgeIndexFile: @unchecked Sendable {
         defer { lock.unlock() }
         if let held { return held }
         let index = try? ResolvedEdgeIndex(contentsOf: directory.appendingPathComponent("resolved-edge-index.json"))
+        held = .some(index)
+        return index
+    }
+}
+
+/// The collection authority, decoded the first time a graph asks for it: 2 MB of JSON.
+private final class CollectionAuthorityFile: @unchecked Sendable {
+    private let lock = NSLock()
+    private var held: CollectionAuthorityIndex??
+
+    func index(in directory: URL) -> CollectionAuthorityIndex? {
+        lock.lock()
+        defer { lock.unlock() }
+        if let held { return held }
+        let index = try? CollectionAuthorityIndex(contentsOf: directory.appendingPathComponent("collection-authority.json"))
         held = .some(index)
         return index
     }

@@ -31,6 +31,7 @@ import { validateSearch } from './search/searchState';
 import { SearchScreen } from './search/SearchScreen';
 // ─── The reader ─────────────────────────────────────────────────────────────
 import { ReaderScreen } from './reader/ReaderScreen';
+import { GraphScreen, type GraphSearch } from './graph/GraphScreen';
 import { RelatedScreen, type RelatedSearch } from './related/RelatedScreen';
 // ─── Research ───────────────────────────────────────────────────────────────
 import { AllNotesScreen, type NotesSearch, validateNotesSearch } from './research/AllNotesScreen';
@@ -202,6 +203,40 @@ const relatedRoute = createRoute({
     weights: typeof raw.weights === 'string' ? raw.weights : undefined,
   }),
   component: RelatedScreen,
+});
+
+/** A list of keys from the address: one value, several, or none. */
+function keyList(raw: unknown, prefix: RegExp): string[] | undefined {
+  const values = (Array.isArray(raw) ? raw : [raw]).filter((value): value is string => typeof value === 'string' && prefix.test(value));
+  return values.length > 0 ? values : undefined;
+}
+
+/** A finite number from the address, or from a navigation, which gives one as it is; or none. */
+function finite(raw: unknown): number | undefined {
+  const value = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : Number.NaN;
+  return Number.isFinite(value) ? value : undefined;
+}
+
+// The cross-reference graph (S23e), which the reader's Graph opens, with its degree, layout and expanded clusters in the address.
+const graphRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/graph/$volumeId/$documentId',
+  validateSearch: (raw: Record<string, unknown>): GraphSearch => {
+    const hops = finite(raw.degree);
+    const degree = hops === 1 || hops === 2 || hops === 3 ? hops : undefined;
+    const from = finite(raw.from);
+    const to = finite(raw.to);
+    const windowed = from !== undefined && to !== undefined && from < to;
+    return {
+      degree,
+      layout: raw.layout === 'timeline' || raw.layout === 'network' ? raw.layout : undefined,
+      expand: keyList(raw.expand, /^cluster\/(inbound|outbound)\/./),
+      dates: keyList(raw.dates, /^datecluster\/./),
+      from: windowed ? from : undefined,
+      to: windowed ? to : undefined,
+    };
+  },
+  component: GraphScreen,
 });
 
 // ─── Research ───────────────────────────────────────────────────────────────
@@ -378,6 +413,7 @@ export const routeTree = rootRoute.addChildren([
   searchRoute,
   // ─── The reader ───────────────────────────────────────────────────────────
   documentRoute,
+  graphRoute,
   relatedRoute,
   // ─── Research ─────────────────────────────────────────────────────────────
   researchRoute,

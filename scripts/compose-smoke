@@ -631,6 +631,33 @@ counts=$(library_counts 2>/dev/null || true)
 found=$(curl -s --max-time 10 -w ' %{http_code}' "$library_base/api/v1/search?keywords=nicaragua")
 case "$found" in *'"total":0,'*) fail "search found nothing after the compaction" ;; *' 200') ;; *) fail "search did not answer after the compaction: ${found: -120}" ;; esac
 
+echo "== the reader: the cross-reference graph over the Standalone server's index of the three fixture volumes (PLAN's S23e)"
+# frus1961-63v06's d79 at three hops: the kit's graph through the API, on the timeline, with its date clusters and its
+# archival nodes, a unit and central-file classes.
+# With --e2e, the graph spec walks every node by keyboard on the timeline and in the network, on Chromium with
+# no axe violations. The answer is read from a file, which a graph of any size fits (Linux caps an argument).
+# The graph's dates are formatted in the smoke test's TZ, America/New_York, a zone the image must hold:
+# without tzdata, Foundation's date formatters trapped the server at every graph (S23e).
+graphed=$(curl -s --max-time 30 -o "$work/graph.json" -w '%{http_code}' \
+  "$library_base/api/v1/volumes/frus1961-63v06/documents/d79/graph?degree=3&width=1200&height=700" || true)
+[ "$graphed" = 200 ] || fail "the graph did not answer: $graphed $(head -c 400 "$work/graph.json")"
+python3 - "$work/graph.json" <<'PY' || fail "the graph is not the kit's at three hops: $(head -c 600 "$work/graph.json")"
+import json, sys
+graph = json.load(open(sys.argv[1], encoding="utf-8"))
+kinds = {node["kind"] for node in graph["nodes"]}
+assert graph["degree"] == 3 and graph["layout"] == "timeline" and graph["timeline"]["width"] == 1200, graph["layout"]
+assert {"central", "inbound", "outbound", "extended", "unit", "centralFileClass"} <= kinds and graph["timeline"]["dateClusters"], kinds
+placed = graph["timeline"]["positions"]
+assert all(0 <= p["x"] <= 1200 and 0 <= p["y"] <= 700 for p in placed.values()), placed
+print(f"   d79 at three hops: {len(graph['nodes'])} nodes and {len(graph['edges'])} edges, {len(placed)} placed on the timeline with "
+      f"{len(graph['timeline']['dateClusters'])} date clusters, kinds {sorted(kinds)}")
+PY
+if [ -n "$e2e" ]; then
+  echo "   the graph spec in Playwright on Chromium: every node by keyboard, on the timeline and in the network"
+  FRUS_E2E_GRAPH=1 FRUS_E2E_NETWORK="container:$(library_compose ps -q frus)" FRUS_E2E_BASE_URL=http://localhost:8080/ scripts/npm --playwright \
+    || fail "the graph spec failed; web/playwright-report has its report"
+fi
+
 echo "== admin: the corrections check and the update review, a fixture volume corrected upstream (PLAN's S21f)"
 # frus1894Nicaragua's d2 corrected in the mirror, as the Office of the Historian corrects a volume in place: two
 # letters more in its first paragraph, before a passage a highlight covers. Check for Corrections finds it by the

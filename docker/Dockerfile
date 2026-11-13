@@ -61,10 +61,15 @@ RUN npm run build && chmod -R a+rX dist
 # FRUSCoreKit reads TEI with and which the static Swift runtime links dynamically, the C++ runtime
 # the Swift runtime needs, libargon2 for local accounts' passwords (S20b), libcurl for
 # FoundationNetworking's URLSession, which the static Swift runtime links dynamically and through which
-# a Standalone server downloads its library (S21c), CA certificates and tini.
+# a Standalone server downloads its library (S21c), the time zones (S23e), CA certificates and tini.
+# Foundation's date formatters read a zone from /usr/share/zoneinfo: without it, a TZ such as
+# America/New_York, which the install guide offers for the backup's hour, traps the server in the first
+# formatter, as in each of the cross-reference graph's dates; UTC needs no file. tzdata-legacy keeps the
+# older names, such as US/Eastern, which Ubuntu 24.04 moved out of tzdata.
 FROM ${RUNTIME_IMAGE}
 RUN apt-get update -qq \
- && apt-get install -y -qq --no-install-recommends libsqlite3-0 libxml2 libstdc++6 libargon2-1 libcurl4t64 ca-certificates tini \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+      libsqlite3-0 libxml2 libstdc++6 libargon2-1 libcurl4t64 tzdata tzdata-legacy ca-certificates tini \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --gid 10001 frus \
  && useradd --uid 10001 --gid 10001 --home-dir /data --no-create-home --shell /usr/sbin/nologin frus \
