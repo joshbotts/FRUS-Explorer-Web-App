@@ -6,7 +6,8 @@
 // kit's vocabulary it chose, with those their editor suggests (ProjectFocus.swift, PLAN's S25c); its
 // focus tags are the user's tags it chose; and Suggested Next is the leads the Mac computed, which
 // Dismiss keeps from surfacing again, until phase 3's Related Documents computes them here, each with
-// the line the kit reads for it from the served index (`documentSnippets(forKeys:maxLength:)`, S25c).
+// the line the kit reads for it from the served index (`documentSnippets(forKeys:maxLength:userSource:)`
+// with its default source, the index, S25c).
 
 import FRUSCoreKit
 import FRUSLightCore

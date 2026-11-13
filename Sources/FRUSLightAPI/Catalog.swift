@@ -549,9 +549,9 @@ func teiHeader(documentId: String, printed: String?, structure: [VolumeSection])
 /// shaped as an editorial note, which the reader leaves to the title it was opened with. The reader's
 /// heading for a document the index does not hold and History's title of a visit to one both take it
 /// (S25c), so the two name it alike. The app's number falls back to the first head that begins with one
-/// (`extractDocumentNumber(from:)`, internal to the kit), which a title shows only for a note with no
-/// `@n` whose first head names nothing; every shipped document carries `@n`, as that rule's own doc says,
-/// so the server takes `printedNumber` alone.
+/// (`extractDocumentNumber(from:)`, public since FRUS-Explorer#1902, for a follow-up to adopt here), which
+/// a title shows only for a note with no `@n` whose first head names nothing; every shipped document
+/// carries `@n`, as that rule's own doc says, so the server takes `printedNumber` alone.
 func parsedTitle(of ast: FRUSDocumentAST) -> String? {
     let extracted = IndexingPipeline.extractHeader(from: ast.nodes)
     let isEditorialNote = ast.isShapedAsEditorialNote

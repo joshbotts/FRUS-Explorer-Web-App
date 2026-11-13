@@ -7,25 +7,13 @@ import { expect } from './fixtures';
 const tags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
 
 /**
- * A failure the kit's own page is known to have on one page the reader serves, which the app's reader
- * shows alike: violations of `rule` in the frame whose target matches `target` are allowed there, and
- * at least one must occur, so that the allowance fails, and is dropped, once a pin move brings the
- * kit's fix.
- */
-export interface KitKnownFailure {
-  rule: string;
-  target: RegExp;
-  /** Why it is the kit's, and where its fix belongs. */
-  why: string;
-}
-
-/**
  * Scans the page as it is: neither the app's own markup nor the kit's page in the reader's frame
- * may violate a rule, but for a failure the kit is known to have on this page (`kitKnown`). The kit's
- * page has met WCAG 2.2 AA since joshbotts/FRUS-Explorer#1578; until then its known failures were
- * allowed in the frame.
+ * may violate a rule. The kit's known failures were allowed in the frame until
+ * joshbotts/FRUS-Explorer#1578, and so, from S21b's follow-ups to S24e's pin move, was target-size on
+ * an index's and a table of contents' links in entries that hold links alone, under 24 pixels, which
+ * joshbotts/FRUS-Explorer#1898 boxes.
  */
-export async function axeCheck(page: Page, kitKnown?: KitKnownFailure): Promise<void> {
+export async function axeCheck(page: Page): Promise<void> {
   let results = await new AxeBuilder({ page }).withTags(tags).analyze();
   // A collection's live preview builds its page again a second after a change (S18e), and a scan that
   // meets its frame between two pages cannot reach it: the scan is made again once the frame holds its
@@ -42,9 +30,7 @@ export async function axeCheck(page: Page, kitKnown?: KitKnownFailure): Promise<
         .map((node) => `${violation.id} (${violation.impact}): ${node.target.join(' >>> ')}`),
     );
   expect(lines(false), 'violations in the app’s own markup').toEqual([]);
-  const known = (line: string) => kitKnown !== undefined && line.startsWith(`${kitKnown.rule} `) && kitKnown.target.test(line);
-  expect(lines(true).filter((line) => !known(line)), 'violations in the reader’s frame').toEqual([]);
-  if (kitKnown) expect(lines(true).some(known), `the kit no longer fails ${kitKnown.rule} here: drop the allowance (${kitKnown.why})`).toBe(true);
+  expect(lines(true), 'violations in the reader’s frame').toEqual([]);
   // A frame axe could not reach is reported as incomplete, not as a violation; none may be.
   expect(results.incomplete.filter((result) => result.id === 'frame-tested')).toEqual([]);
 }
