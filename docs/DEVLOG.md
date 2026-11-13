@@ -984,6 +984,34 @@ Phase 3's row S23a, the third pull request of the first upstream batch, beside S
 
 **Next:** Mac check 17 and the owner's merge of FRUS-Explorer#1872; then S21b's pin move past the first batch, once Mac checks 15 to 17 are done, which makes the `DocumentKey` and TEIHeaderKit changes (above); then S23d, after S21b.
 
+## Session 25c, follow-up, upstream: a document's number, a lead's own summary and the subject index public, and the reader's lists without small targets or nested links
+
+12 November 2026 · branch `claude/upstream-followups-records-bc3415` · [#130](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/130) · upstream `4c252c33`, unchanged; [FRUS-Explorer#1902](https://github.com/joshbotts/FRUS-Explorer/pull/1902), open, awaiting Mac check 27
+
+A batch of four small kit leftovers that phase 3's hand-overs named, in one upstream pull request, by the owner's word ("start a session for the small upstream follow ups"); no PLAN row names it. The pull request is `claude/kit-followups-public-seams`, cut from `v2` at `02e38a12`, #1901's merge, which `v2` still is. It is labelled `Mac`, asks for Mac verification as Mac check 27, and is not merged. Under rule 4 it changes shared files, and this repository changes only its records. Each item follows a row:
+- **S25c's,** a document's number: `IndexingPipeline.extractDocumentNumber(from:)` is public, the fallback the app's reader numbers a document by where it has no `@n`, which S25c's hand-over and the reader follow-up's left internal.
+- **S25c's,** a lead's own summary: `documentSnippets(forKeys:maxLength:userSource:)` takes the kit's `SearchUserSource`. With `.attachedStore(userId:)`, a lead's line reads the summary from that reader's row of app.db's `user_search`, where the served copy holds none, so a lead the user summarised showed its opening text (S17f's #1813 filed it, SPEC's Known gaps names it). The store's rows are read once a statement: about 10 ms for 24 keys over 100,000 rows, where looking up each document's row alone took 250 ms. From the index the statement is the same text, and the app's call is unchanged.
+- **S23d's,** the subject index: `IndexingResources.documentSubjects` is public, so the server can read the one decode of `document-subject-index.json` its search makes, where Related decodes it again.
+- **S21b's follow-up's** (#1898's leftovers), the reader's lists, which the app shows alike:
+  - in a list item of links alone, a gloss link and a footnote marker are boxes at least 24 px square, as #1898 made its person and cross-reference links, and so is each link of the two lists below a document that names its people and terms on `@ana`;
+  - a link inside a link is written as its text inside the outer link, where the browser split a nested `<a>` into an empty link, the inner link and loose text: on frus1961-63v06's contents a tap on "Kennedy-Khrushchev" opened a person card and nothing on the line reached page 1. The outer link gives way, written as plain text around the inner one, where it leads nowhere (a name with no `@corresp`, a dead reference) and the inner link works, or is a card around a working reference, as an index's "See" reference inside a name: 171 of the catalogue's 3,268 such links, in 37 volumes, where a tap reaches what it reached before. The orchestrator was asked before the fix was built, with "the outer link wins" as the default, and no answer came before the pull request opened, so it takes that default with the cold review's "gives way", in a commit of its own (`69397990`) that the owner can change or drop alone.
+
+  The `<br>`-segment case is left, named in the pull request.
+
+**Measured** (the pull request has the figures): the Mac check beside `v2` (`02e38a12`), on an iPhone 17e: both builds with `v2`'s warning lines, line for line; the full iOS unit run 7,999 tests in 962 suites against 7,989, with `v2`'s one failure alone and the same skips; `swift test` 4,490 tests in 529 suites (`FRUSCoreKitTests` 2,509 against 2,500); and a symbol diff of 7 names removed and 20 added, each explained. Linux over `main` at `f09ce5f`, with S24d's `Package.swift` patch in the scratch alone: `FRUSCoreKitTests` 2,509 tests, all passing; the parity suite's 28 issues, `v2` alone's line for line; the access proof compiling; and of the golden rows only frus1961-63v06's `toc` rendering otherwise than at `v2`. Axe in Chromium, over pages of each shape: `v2`'s 26 `target-size` violations and v06's contents' `link-name` violation are gone. One cold review found that "the outer link wins" hid a working link in 171 places; the rule's "gives way" fixes that.
+
+**For S24e, or a web follow-up after it** (the hand-over note, `upstream-followups-handover.md` in the orchestrator's notes folder, has each change with its file and function):
+- The golden files are remade as at every move. Of item 4's changes, only the nested links change a fragment: frus1961-63v06's contents, `toc`, 1,142 bytes at `v2` to 1,085 (its two contents lines become one link each, and items of links alone). The stylesheet's growth, 1,346 bytes a head, changes no fragment.
+- The browser suite needs nothing for this pull request; `indexLinks` and `contentsLinks` are #1898's, S24e's to drop.
+- The web's uses of items 1–3:
+  - `parsedTitle(of:)` takes the number fallback.
+  - `ProjectHomeRoutes.withLines` reads the user's summaries, with `ProjectHistoryParityTests`' line and SPEC's gap.
+  - `ServerResources.documentSubjectIndex` reads the kit's decode, and `DocumentSubjectIndexFile` goes.
+
+  Related Documents' rows still show a summarised document's opening text: the kit's engine takes its lines with no user source, proposed to the orchestrator as a follow-up.
+
+**Next:** the owner's Mac check 27 and merge of FRUS-Explorer#1902, which S24e may carry with the batch; then the web's uses above.
+
 ## Session 25c: Project Home's focus subjects and a lead's line
 
 10 November 2026 · branch `claude/s25c-project-home-focus-subjects-e1e80d` · [#108](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/108) · upstream `fe9325b2`, unchanged
