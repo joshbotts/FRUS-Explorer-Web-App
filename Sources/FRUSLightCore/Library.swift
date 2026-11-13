@@ -775,7 +775,8 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
     /// nothing, and `JobFailed`, in the server's words, when the listing cannot be read.
     public func checkForCorrections() async throws -> [UpdatableVolume] {
         if let refusal = downloadsRefusal { throw refusal }
-        let diff = try await liveDiff()
+        // A press asks GitHub, with the last answer's ETag, whatever was read in the last five minutes.
+        let diff = try await liveDiff(fresh: true)
         return await VolumeUpdateChecker.updatableVolumes(known: diff.known, liveInfoByVolumeId: diff.liveInfoByVolumeId,
                                                           downloadManager: self)
     }
@@ -854,13 +855,15 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
     }
 
     /// The kit's diff of the catalogue against GitHub's listing, as `liveListing()` reads it: the catalogue's
-    /// volumes the listing names (`known`) and each one's git blob SHA-1 and size (`liveInfoByVolumeId`).
-    func liveDiff() async throws -> ManifestDiffResult {
+    /// volumes the listing names (`known`) and each one's git blob SHA-1 and size (`liveInfoByVolumeId`). `fresh`
+    /// asks GitHub again, with the last answer's ETag, though a reading of the last five minutes is kept: Check for
+    /// Corrections' press (PLAN's S21f).
+    func liveDiff(fresh: Bool = false) async throws -> ManifestDiffResult {
         guard let transport else { throw JobFailed("The server makes no request outside (FRUS_OFFLINE=true).") }
         let time = now()
         let cached = lastListing.withLock { $0 }
         let body: Data
-        if let cached, time.timeIntervalSince(cached.at) < Self.listingReuse, time >= cached.at {
+        if !fresh, let cached, time.timeIntervalSince(cached.at) < Self.listingReuse, time >= cached.at {
             body = cached.body
         } else {
             var headers = ["User-Agent": Self.userAgent, "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"]

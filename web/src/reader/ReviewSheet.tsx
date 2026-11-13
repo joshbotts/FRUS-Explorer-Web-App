@@ -171,6 +171,10 @@ function Sections({
   );
   const version = review.currentVersion;
 
+  /**
+   * Runs a change, says what it did, and, where the change took away the control that had focus, sends focus on:
+   * a highlight's row to its Remove…, the change section to its heading.
+   */
   async function act(key: string, work: () => Promise<unknown>, done: string) {
     if (busy) return;
     setBusy(key);
@@ -179,6 +183,15 @@ function Sections({
     try {
       await work();
       setSaid(done);
+      requestAnimationFrame(() => {
+        const active = document.activeElement;
+        if (active && active !== document.body && active.isConnected) return;
+        const target =
+          key === 'review'
+            ? document.getElementById(changeId)
+            : document.querySelector<HTMLElement>(`button[data-remove="${CSS.escape(key)}"]`);
+        target?.focus();
+      });
     } catch (error) {
       setFailure(error instanceof ApiError ? error.message : errorMessage(error));
     } finally {
@@ -204,7 +217,9 @@ function Sections({
         {failure}
       </p>
       <section aria-labelledby={changeId} className="review-section">
-        <h3 id={changeId}>{words.changeHeader}</h3>
+        <h3 id={changeId} tabIndex={-1}>
+          {words.changeHeader}
+        </h3>
         <p className={review.change.vanished ? 'error' : review.change.changeKind || review.change.highlightsStale ? 'review-change' : 'note'}>
           {review.changeLine}
         </p>
@@ -224,7 +239,9 @@ function Sections({
       </section>
       {highlights.length > 0 && (
         <section aria-labelledby={highlightsId} className="review-section">
-          <h3 id={highlightsId}>{words.highlightsHeader}</h3>
+          <h3 id={highlightsId} tabIndex={-1}>
+            {words.highlightsHeader}
+          </h3>
           <ul className="review-rows">
             {highlights.map((row) => (
               <li key={row.id} className={`review-highlight hl-${row.colorTag as HighlightColor}`}>
