@@ -149,8 +149,9 @@ public struct DocumentGraph: Codable, Equatable, Sendable, ResponseEncodable {
         public var visible: [String]
         /// The date clusters, whose members are left out of `visible`.
         public var dateClusters: [Node]
-        /// The clustered display's edges, an edge to a member of a date cluster drawn to the cluster.
-        public var edges: [Edge]
+        /// The clustered display's edges, an edge to a member of a date cluster drawn to the cluster; nil when no
+        /// date cluster formed, and the display's own `edges` are drawn.
+        public var edges: [Edge]?
         /// Each node's place on the canvas; a dated node outside the brushed window has none.
         public var positions: [String: Point]
         /// The date axis's ticks, its height, and whether an Undated column is drawn at its end.
@@ -207,6 +208,10 @@ enum CrossReferenceGraphRoutes {
     /// The most expanded clusters, of either kind, a request names, and the longest key.
     static let maximumExpanded = 512
     static let maximumKeyLength = 1_024
+    /// The furthest a brushed window may reach from 2001, in seconds: about 3,170 years either way, past every date
+    /// the corpus prints. The app's brush lies inside the graph's own dates; a window far outside the calendar's
+    /// range would have the kit's ticks walk it day by day.
+    static let farthestWindow = 1e11
 
     static func add(to router: Router<APIRequestContext>, provider: ServedIndexProvider, resources: ServerResources) {
         router.get("/api/v1/volumes/:volumeId/documents/:documentId/graph") { request, context -> DocumentGraph in
@@ -247,6 +252,9 @@ enum CrossReferenceGraphRoutes {
                 throw APIProblem.invalidParameter("from", "from and to must be numbers of seconds since 2001, not \(from) and \(to)")
             }
             guard lower < upper else { throw APIProblem.invalidParameter("from", "the window must start before it ends") }
+            guard abs(lower) <= farthestWindow, abs(upper) <= farthestWindow else {
+                throw APIProblem.invalidParameter("from", "the window must lie within \(Int(farthestWindow)) seconds of 2001")
+            }
             asked.domain = lower...upper
         default:
             throw APIProblem.invalidParameter("from", "a window needs both from and to")
@@ -311,6 +319,9 @@ enum CrossReferenceGraphRoutes {
         let (nodes, edges) = CrossReferenceGraphDisplay.attachingUnits(units, to: built.nodes, edges: built.edges)
         let dateLabels = CrossReferenceGraphDisplay.buildDateLabels(for: nodes)
         let dateValues = CrossReferenceGraphDisplay.buildDateValues(for: nodes)
+        // Over the display build's nodes, as the app's `rebuildDisplay` asks it when a graph is loaded; the app's later
+        // layouts (a resize, a date cluster expanded, a brush) ask it over the clustered nodes they drew last, which
+        // this server, holding no state between requests, does not.
         let eligible = CrossReferenceGraphDisplay.isTimelineEligible(centralKey: centralKey, dateValues: dateValues,
                                                                      nodes: nodes)
         let layout = request.chosenLayout ?? (eligible ? .timeline : .network)
@@ -389,7 +400,8 @@ enum CrossReferenceGraphRoutes {
                 node($0, dateLabel: nil, dateValue: clustered.clusterDateValues[$0.id], connectionCount: counts[$0.id],
                      metadata: metadata[$0.id])
             },
-            edges: clustered.edges.map(edge),
+            // The display's own edges when no date cluster formed, which the kit then gives back unchanged.
+            edges: clusters.isEmpty ? nil : clustered.edges.map(edge),
             positions: result.positions.mapValues { .init(x: $0.x, y: $0.y) },
             ticks: result.ticks.map { .init(x: $0.x, label: $0.label) },
             axisY: result.axisY, hasParkedNodes: result.hasParkedNodes,

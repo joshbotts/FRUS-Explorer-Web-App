@@ -147,7 +147,9 @@ describe('the graph’s rules', () => {
     expect(undownloadedBanner(12, 3)).toBe(
       '12 documents in 3 volumes this server does not hold also cite this one. They are shown without titles.',
     );
-    expect(undownloadedBanner(1, 1)).toBe('1 document in 1 volume this server does not hold also cites this one. It is shown without a title.');
+    expect(undownloadedBanner(1, 1)).toBe(
+      '1 document in 1 volume this server does not hold also cites this one. It is shown without a title.',
+    );
     expect(undownloadedBanner(0, 0)).toBe('Some volumes that may reference this document are not on this server.');
   });
 });

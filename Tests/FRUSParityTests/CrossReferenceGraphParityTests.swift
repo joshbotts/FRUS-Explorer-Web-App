@@ -155,7 +155,10 @@ import Testing
             lines += clustered.nodes.filter(\.isDateCluster).map { node in
                 "cluster " + nodeLine(node, label: nil, value: clustered.clusterDateValues[node.id], count: nil, opens: false)
             }
-            lines += clustered.edges.map { "timeline " + edgeLine($0) }
+            if clustered.nodes.contains(where: \.isDateCluster) { lines += clustered.edges.map { "timeline " + edgeLine($0) } }
+            let all = values.values
+            let spans = (all.min() ?? 0) < (all.max() ?? 0)
+            lines.append("range \(spans ? number(all.min() ?? 0) : "-") \(spans ? number(all.max() ?? 0) : "-") \(spans ? "" : "none") domain \(ask.domain.map { "\(number($0.lowerBound)) \(number($0.upperBound))" } ?? "-") dates \(ask.expandedDates)")
             lines += laid.positions.sorted { $0.key < $1.key }.map { "at \($0.key) \(number($0.value.x)) \(number($0.value.y))" }
             lines += laid.ticks.map { "tick \(number($0.x)) \($0.label)" }
         }
@@ -163,7 +166,7 @@ import Testing
     }
 
     static func edgeLine(_ edge: DisplayEdge) -> String {
-        "edge \(edge.id) \(edge.referenceType.rawValue) \(edge.referenceCount) \(edge.degree) \(edge.contexts)"
+        "edge \(edge.id) \(edge.source) \(edge.target) \(edge.referenceType.rawValue) \(edge.referenceCount) \(edge.degree) \(edge.contexts)"
     }
 
     /// A kit node as a line: its kind with what the kind carries, its place, its words and its numbers.
@@ -246,7 +249,9 @@ import Testing
             lines.append("timeline \(number(timeline.width)) \(number(timeline.height)) axis \(number(timeline.axisY)) parked \(timeline.hasParkedNodes)")
             lines.append("visible " + timeline.visible.joined(separator: " "))
             lines += timeline.dateClusters.map { "cluster " + nodeLine($0) }
-            lines += timeline.edges.map { "timeline " + edgeLine($0) }
+            lines += (timeline.edges ?? []).map { "timeline " + edgeLine($0) }
+            let range = timeline.fullRange
+            lines.append("range \(range.map { number($0.from) } ?? "-") \(range.map { number($0.to) } ?? "-") \(range == nil ? "none" : "") domain \(timeline.domain.map { "\(number($0.from)) \(number($0.to))" } ?? "-") dates \(timeline.expandedDateClusters)")
             lines += timeline.positions.sorted { $0.key < $1.key }.map { "at \($0.key) \(number($0.value.x)) \(number($0.value.y))" }
             lines += timeline.ticks.map { "tick \(number($0.x)) \($0.label)" }
         }
@@ -254,7 +259,7 @@ import Testing
     }
 
     static func edgeLine(_ edge: DocumentGraph.Edge) -> String {
-        "edge \(edge.id) \(edge.referenceType) \(edge.referenceCount) \(edge.degree) \(edge.contexts)"
+        "edge \(edge.id) \(edge.source) \(edge.target) \(edge.referenceType) \(edge.referenceCount) \(edge.degree) \(edge.contexts)"
     }
 
     /// Every document the fixture index holds.
@@ -415,8 +420,18 @@ import Testing
             "if layoutMode == .timeline && timelineEligible {",
             "let layoutDates = nodeDateValues.merging(clustered.clusterDateValues) { base, _ in base }",
             "return graph.inboundEdges.count { missing.contains($0.sourceVolumeId) }",
+            "let clustered = CrossReferenceGraphDisplay.dateClusteredDisplay( nodes: sourceNodes, edges: sourceEdges, dateValues: nodeDateValues, canvasWidth: Double(canvasSize.width), expandedKeys: expandedDateClusterKeys, domain: timelineBrushRange )",
+            "nodes: displayNodes, dateValues: layoutDates, centralKey: centralKey, canvasWidth: Double(canvasSize.width), canvasHeight: Double(canvasSize.height), domain: timelineBrushRange )",
+            "let values = nodeDateValues.values guard let lower = values.min(), let upper = values.max(), upper > lower else { return nil }",
+            "CrossReferenceGraphDisplay.isTimelineEligible(centralKey: centralKey, dateValues: nodeDateValues, nodes: displayNodes)",
             "guard let meta = graph?.nodeMetadata[nodeKey], meta.citedPage == nil, let header = meta.header else { return nil }",
         ], file: "CrossReferenceGraphViewModel.swift")
+        // The reference list's sections, a row's title and whether its document opens, the panel's and the server's.
+        NoteViewParityTests.expect(try ProjectHistoryParityTests.app("CrossReference/ReferenceListPanel.swift"), holds: [
+            "vm.baseDisplayNodes .filter { !$0.isCentral && predicate($0) } .sorted(by: CrossReferenceGraphViewModel.precedesInReferenceList)",
+            "let opens = node.isDownloaded && vm.makeEntry(for: node.id) != nil",
+            "let row = DocumentHeaderDisplay.numberedRow(header: node.metadata?.header ?? node.id, number: node.metadata?.documentNumber)",
+        ], file: "ReferenceListPanel.swift")
         let server = try ProjectHistoryParityTests.server("Sources/FRUSLightAPI/CrossReferenceGraph.swift")
         NoteViewParityTests.expect(server, holds: [
             "let degree = request.chosenDegree ?? 1",
@@ -432,6 +447,9 @@ import Testing
             "let layoutDates = dateValues.merging(clustered.clusterDateValues) { base, _ in base }",
             "undownloadedCitingCount: loaded.inboundEdges.count { missing.contains($0.sourceVolumeId) }",
             "guard let meta = metadata, meta.citedPage == nil, meta.header != nil else { return false }",
+            "nodes.filter { !$0.isCentral && belongs($0) }.sorted(by: CrossReferenceGraphDisplay.precedesInReferenceList).map(\\.id)",
+            "opens: node.isDownloaded && opensEntry(metadata),",
+            "let row = DocumentHeaderDisplay.numberedRow(header: node.metadata?.header ?? node.id, number: node.metadata?.documentNumber)",
         ], file: "CrossReferenceGraph.swift")
         // A node's first label line, the view's `labelText(for:)`, and the server's.
         let view = try ProjectHistoryParityTests.app("CrossReference/CrossReferenceGraphView.swift")

@@ -35,7 +35,7 @@ import Testing
                 ("layout=circle", "INVALID_PARAMETER"), ("width=0", "INVALID_PARAMETER"), ("height=4097", "INVALID_PARAMETER"),
                 ("expand=everything", "INVALID_PARAMETER"), ("expand=cluster/inbound/", "INVALID_PARAMETER"),
                 ("expandDates=cluster/inbound/frus1961-63v06", "INVALID_PARAMETER"), ("from=1", "INVALID_PARAMETER"),
-                ("from=5&to=5", "INVALID_PARAMETER"), ("from=a&to=b", "INVALID_PARAMETER"), ("from=nan&to=1", "INVALID_PARAMETER"),
+                ("from=5&to=5", "INVALID_PARAMETER"), ("from=-1e12&to=1", "INVALID_PARAMETER"), ("from=1&to=1e300", "INVALID_PARAMETER"), ("from=a&to=b", "INVALID_PARAMETER"), ("from=nan&to=1", "INVALID_PARAMETER"),
                 ("degree=1&degree=2", "INVALID_PARAMETER"), ("scope=all", "UNKNOWN_PARAMETER"),
             ] {
                 #expect(problemCode(try await client.execute(uri: "\(base)?\(query)", method: .get)) == code, "\(query)")

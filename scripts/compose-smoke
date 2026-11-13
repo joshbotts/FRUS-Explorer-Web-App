@@ -639,7 +639,7 @@ echo "== the reader: the cross-reference graph over the Standalone server's inde
 # The graph's dates are formatted in the smoke test's TZ, America/New_York, a zone the image must hold:
 # without tzdata, Foundation's date formatters trapped the server at every graph (S23e).
 graphed=$(curl -s --max-time 30 -o "$work/graph.json" -w '%{http_code}' \
-  "$library_base/api/v1/volumes/frus1961-63v06/documents/d79/graph?degree=3&width=1200&height=700")
+  "$library_base/api/v1/volumes/frus1961-63v06/documents/d79/graph?degree=3&width=1200&height=700" || true)
 [ "$graphed" = 200 ] || fail "the graph did not answer: $graphed $(head -c 400 "$work/graph.json")"
 python3 - "$work/graph.json" <<'PY' || fail "the graph is not the kit's at three hops: $(head -c 600 "$work/graph.json")"
 import json, sys

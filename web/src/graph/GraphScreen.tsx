@@ -63,7 +63,9 @@ function useCanvasSize(frame: RefObject<HTMLDivElement | null>) {
     const measure = () => {
       const width = Math.round(element.clientWidth);
       const height = Math.round(element.clientHeight);
-      setSize(width > 0 && height > 0 ? { width, height } : fallbackSize);
+      const next = width > 0 && height > 0 ? { width, height } : fallbackSize;
+      // The same size, kept, so that nothing is laid out or asked for again.
+      setSize((previous) => (previous && previous.width === next.width && previous.height === next.height ? previous : next));
     };
     measure();
     if (typeof ResizeObserver === 'undefined') return;
@@ -108,14 +110,18 @@ export function GraphScreen() {
       expandDates: search.dates,
       from: search.from,
       to: search.to,
-      width: size?.width ?? fallbackSize.width,
+      // A chosen network is laid out here, so the server's answer does not depend on the canvas.
+      width: search.layout === 'network' ? fallbackSize.width : (size?.width ?? fallbackSize.width),
       height: size?.height ?? fallbackSize.height,
     }),
     enabled: size !== undefined,
     // The graph on show stays while the next of the same document is built, so the toolbar keeps its place.
     placeholderData: (previous: DocumentGraph | undefined) => (previous?.centralKey === key ? previous : undefined),
   });
-  const data = graph.data;
+  // The last graph the server gave for this document, which stays on show while a later one cannot be had.
+  const [lastGood, setLastGood] = useState<DocumentGraph | undefined>(undefined);
+  if (graph.data && graph.data !== lastGood && !graph.isPlaceholderData) setLastGood(graph.data);
+  const data = graph.data ?? (lastGood?.centralKey === key ? lastGood : undefined);
   const title = anchor.data ? plainTitle(anchor.data.document.displayTitle ?? documentId) : documentId;
   useDocumentTitle(copy.graph.title);
   useHeadingReady(!graph.isPending);
@@ -140,15 +146,38 @@ export function GraphScreen() {
   const order = useMemo(() => (data && drawn ? keyboardOrder(drawn.nodes, data.centralKey, data.referenceList) : []), [data, drawn]);
   const selectedNode = selection && 'node' in selection ? selection.node : undefined;
   const selectedEdge = selection && 'edge' in selection ? selection.edge : undefined;
-  const labelled = useMemo(
-    () => (drawn ? labelledNodes(drawn.nodes, drawn.edges, selectedNode) : new Set<string>()),
-    [drawn, selectedNode],
-  );
-  const focus = useMemo(
-    () => (drawn ? focusKeys(drawn.edges, selectedNode, selectedEdge) : undefined),
-    [drawn, selectedNode, selectedEdge],
-  );
+  const labelled = useMemo(() => {
+    if (!drawn) return new Set<string>();
+    const labels = labelledNodes(drawn.nodes, drawn.edges, selectedNode);
+    if (active) labels.add(active);
+    return labels;
+  }, [drawn, selectedNode, active]);
+  const focus = useMemo(() => {
+    if (!drawn) return undefined;
+    // A selection the graph no longer draws, after a change of degree, layout or window, dims nothing.
+    const shown = selectedNode
+      ? drawn.nodes.some((node) => node.id === selectedNode)
+      : drawn.edges.some((edge) => edge.id === selectedEdge);
+    return shown ? focusKeys(drawn.edges, selectedNode, selectedEdge) : undefined;
+  }, [drawn, selectedNode, selectedEdge]);
+  // After an expansion, the keyboard goes to the first document it reveals, once the graph that draws it has come.
+  const [pending, setPending] = useState<((node: GraphNode) => boolean) | undefined>(undefined);
+  const revealed = pending ? order.find(pending) : undefined;
+  if (pending && revealed) {
+    setPending(undefined);
+    setActive(revealed.id);
+  }
   const activeNode = active && order.some((node) => node.id === active) ? active : order[0]?.id;
+  // A cluster expanded from its row hands the focus to the first row it reveals, since its own row is gone.
+  const rowFocus = useRef(false);
+  useEffect(() => {
+    if (!rowFocus.current || pending || !active) return;
+    const row = document.querySelector<HTMLElement>(`.graph-row[data-node="${CSS.escape(active)}"]`);
+    if (row) {
+      row.focus();
+      rowFocus.current = false;
+    }
+  }, [pending, active, data]);
 
   function retune(change: (previous: GraphSearch) => GraphSearch) {
     void navigate({ search: change, replace: true });
@@ -161,21 +190,24 @@ export function GraphScreen() {
         void navigate({
           search: (previous: GraphSearch) => ({
             ...previous,
-            dates: [...(previous.dates ?? []), node.id],
+            dates: [...new Set([...(previous.dates ?? []), node.id])],
           }),
           replace: true,
         });
-        setActive(node.members?.[0]);
+        const members = new Set(node.members ?? []);
+        setPending(() => (each: GraphNode) => members.has(each.id));
         return;
       }
       if (isCluster(node)) {
         void navigate({
           search: (previous: GraphSearch) => ({
             ...previous,
-            expand: [...(previous.expand ?? []), node.id],
+            expand: [...new Set([...(previous.expand ?? []), node.id])],
           }),
           replace: true,
         });
+        const direction = node.kind === 'clusterInbound' ? 'inbound' : 'outbound';
+        setPending(() => (each: GraphNode) => each.kind === direction && each.volumeId === node.volumeId);
         return;
       }
       setSelection((current) => (current && 'node' in current && current.node === node.id ? undefined : { node: node.id }));
@@ -244,6 +276,7 @@ export function GraphScreen() {
       {data && (
         <Toolbar
           graph={data}
+          chosen={search.layout}
           degree={search.degree ?? 1}
           onLayout={(layout) =>
             retune((previous) => ({
@@ -266,6 +299,11 @@ export function GraphScreen() {
           }
           onReset={() => setResetToken((token) => token + 1)}
         />
+      )}
+      {graph.isError && data && (
+        <p className="error" role="alert">
+          {errorMessage(graph.error)}
+        </p>
       )}
       <p className="note graph-status" role="status">
         {graph.isFetching ? copy.graph.building : ''}
@@ -315,10 +353,24 @@ export function GraphScreen() {
               node={selectedNode ? byId.get(selectedNode) : undefined}
               drawnEdges={drawn.edges}
               search={search}
-              onClose={() => setSelection(undefined)}
+              onClose={() => {
+                // The focus goes back to the selected row, or to the canvas's nodes, not to the page.
+                const row = document.querySelector<HTMLElement>('.graph-row[aria-pressed="true"]');
+                setSelection(undefined);
+                (row ?? document.querySelector<HTMLElement>('.graph-keys'))?.focus();
+              }}
               onActivate={activate}
             />
-            <ReferenceList graph={data} byId={byId} selected={selectedNode} onSelect={selectFromList} onExpand={activate} />
+            <ReferenceList
+              graph={data}
+              byId={byId}
+              selected={selectedNode}
+              onSelect={selectFromList}
+              onExpand={(node) => {
+                rowFocus.current = true;
+                activate(node);
+              }}
+            />
           </aside>
         )}
       </div>
@@ -337,13 +389,12 @@ function drawnGraph(graph: DocumentGraph, size: { width: number; height: number 
       const node = byId.get(id);
       return node && timeline.positions[id] ? [node] : [];
     });
-    return { nodes, edges: timeline.edges, positions: timeline.positions };
+    return { nodes, edges: timeline.edges ?? graph.edges, positions: timeline.positions };
   }
-  return {
-    nodes: graph.nodes,
-    edges: graph.edges,
-    positions: networkLayout(graph.nodes, graph.edges, graph.centralKey, size.width, size.height),
-  };
+  // The three columns place the central document and its direct references alone, as the app's do: what a layout
+  // leaves unplaced is not drawn, so the keyboard does not reach it.
+  const positions = networkLayout(graph.nodes, graph.edges, graph.centralKey, size.width, size.height);
+  return { nodes: graph.nodes.filter((node) => positions[node.id] !== undefined), edges: graph.edges, positions };
 }
 
 function Toolbar({
@@ -352,6 +403,7 @@ function Toolbar({
   onLayout,
   onDegree,
   onReset,
+  chosen,
 }: {
   graph: DocumentGraph;
   /** The degree the reader chose, one while they have chosen none, as the app's picker shows it. */
@@ -359,11 +411,13 @@ function Toolbar({
   onLayout: (layout: GraphLayout) => void;
   onDegree: (degree: 1 | 2 | 3) => void;
   onReset: () => void;
+  /** The layout the address asks for, shown at once while its graph is built. */
+  chosen?: GraphLayout;
 }) {
   const layoutName = useId();
   const degreeName = useId();
   const depthLabel = useId();
-  const layout = graph.chosenLayout ?? graph.layout;
+  const layout = chosen ?? graph.chosenLayout ?? graph.layout;
   return (
     <div className="graph-toolbar">
       <fieldset className="pane-picker" disabled={!graph.timelineEligible} title={copy.graph.layoutHelp}>
@@ -471,6 +525,10 @@ function NodeList({
       id={`${prefix}-${position.get(node.id)}`}
       aria-selected={selected === node.id}
       className="graph-option"
+      onClick={() => {
+        onActive(node.id);
+        onActivate(node);
+      }}
     >
       {node.label}
     </div>
@@ -728,6 +786,7 @@ function ReferenceList({
                     <button
                       type="button"
                       className={`graph-row cluster ${node.kind}`}
+                      data-node={id}
                       aria-describedby={clusterHint}
                       onClick={() => onExpand(node)}
                     >
@@ -742,6 +801,7 @@ function ReferenceList({
                   <button
                     type="button"
                     className="graph-row"
+                    data-node={id}
                     aria-label={node.label}
                     aria-describedby={rowHint}
                     aria-pressed={selected === id}

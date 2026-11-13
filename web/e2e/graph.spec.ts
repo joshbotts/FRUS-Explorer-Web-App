@@ -21,7 +21,7 @@ interface Node {
 interface Graph {
   nodes: Node[];
   layout: string;
-  timeline?: { visible: string[]; dateClusters: Node[]; positions: Record<string, unknown> };
+  timeline?: { visible: string[]; dateClusters: (Node & { members?: string[] })[]; positions: Record<string, unknown> };
 }
 
 /** The node the keyboard is on, as the list box says it. */
@@ -52,6 +52,14 @@ async function walk(page: Page, list: Locator): Promise<string[]> {
   return heard;
 }
 
+/** Moves the keyboard to the node `label` names, from the first, failing once it has passed every node. */
+async function moveTo(page: Page, list: Locator, label: string): Promise<void> {
+  await page.keyboard.press('Home');
+  const count = await list.getByRole('option').count();
+  for (let step = 0; step < count && (await spoken(list)) !== label; step++) await page.keyboard.press('ArrowDown');
+  expect(await spoken(list)).toBe(label);
+}
+
 /** The labels of the nodes a graph's answer draws, in no order. */
 function drawnLabels(graph: Graph): string[] {
   if (!graph.timeline) return graph.nodes.map((node) => node.label).sort();
@@ -72,7 +80,9 @@ test('opens the graph from the reader by keyboard, reaches its nodes, and shows 
   await expect(page).toHaveURL(/graph\/frus1961-63v06\/d2/);
   await expect(page.getByRole('heading', { level: 1, name: 'Cross-References' })).toBeFocused();
   // A document of a volume the server does not hold cites d2, by the bundled index, and the banner counts it.
-  await expect(page.getByText('1 document in 1 volume this server does not hold also cites this one. It is shown without a title.')).toBeVisible();
+  await expect(
+    page.getByText('1 document in 1 volume this server does not hold also cites this one. It is shown without a title.'),
+  ).toBeVisible();
   const list = page.getByRole('listbox', { name: 'Cross-reference graph' });
   await expect(list.getByRole('option')).toHaveCount(2);
   await expect(page.getByText('Drawing the graph…')).toHaveCount(0);
@@ -115,7 +125,10 @@ test('walks every node of a graph at three hops by keyboard, on the timeline and
   const list = page.getByRole('listbox', { name: 'Cross-reference graph' });
   await expect(page.getByText('Drawing the graph…')).toHaveCount(0);
   expect(graph.layout).toBe('timeline');
-  expect(graph.nodes.some((node) => node.kind === 'unit' || node.kind === 'centralFileClass'), 'an archival node').toBe(true);
+  expect(
+    graph.nodes.some((node) => node.kind === 'unit' || node.kind === 'centralFileClass'),
+    'an archival node',
+  ).toBe(true);
   // Every node the timeline draws, and none other, each said by the kit's words.
   const onTimeline = await walk(page, list);
   expect([...onTimeline].sort()).toEqual(drawnLabels(graph));
@@ -124,15 +137,18 @@ test('walks every node of a graph at three hops by keyboard, on the timeline and
   // A date cluster, where the timeline gathers four or more, expands on Enter, and its documents are reached.
   const cluster = graph.timeline?.dateClusters[0];
   if (cluster) {
-    await page.keyboard.press('Home');
-    while ((await spoken(list)) !== cluster.label) await page.keyboard.press('ArrowDown');
+    await moveTo(page, list, cluster.label);
     const expanded = page.waitForResponse(asked);
     await page.keyboard.press('Enter');
-    await expanded;
+    const opened = (await (await expanded).json()) as Graph;
     await expect(page).toHaveURL(/dates=datecluster/);
     await expect(page.getByText('Drawing the graph…')).toHaveCount(0);
     await expect(list.getByRole('option', { name: cluster.label, exact: true })).toHaveCount(0);
-    await walk(page, list);
+    // Its documents are drawn now, and the keyboard reaches each.
+    const reached = await walk(page, list);
+    const members = opened.nodes.filter((node) => cluster.members?.includes(node.id)).map((node) => node.label);
+    expect(members.length).toBeGreaterThan(0);
+    for (const member of members) expect(reached).toContain(member);
   }
 
   // The network, by keyboard: every node of the graph, the date clusters' documents among them.
@@ -152,8 +168,7 @@ test('walks every node of a graph at three hops by keyboard, on the timeline and
 
   // An archival node's details: its collection's name, and no document to open or recentre on.
   const archival = inNetwork.nodes.find((node) => node.kind === 'unit' || node.kind === 'centralFileClass')!;
-  await page.keyboard.press('Home');
-  while ((await spoken(list)) !== archival.label) await page.keyboard.press('ArrowDown');
+  await moveTo(page, list, archival.label);
   await page.keyboard.press('Enter');
   const details = page.locator('.graph-details');
   await expect(details.getByText(archival.kind === 'unit' ? 'Not printed' : 'Central file, not printed', { exact: true })).toBeVisible();

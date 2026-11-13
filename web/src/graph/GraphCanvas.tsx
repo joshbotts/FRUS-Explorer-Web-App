@@ -101,6 +101,10 @@ function stylesheet(): StylesheetJson {
     // The node the keyboard is on.
     { selector: 'node.active', style: { 'outline-width': 3, 'outline-color': t.focus, 'outline-offset': 2, 'outline-opacity': 1 } },
     { selector: '.dimmed', style: { opacity: 0.3 } },
+    { selector: 'edge.dimmed', style: { opacity: 0.15 } },
+    // The keyboard's node stays bright, over its neighbours, whatever is selected.
+    { selector: 'node.active', style: { opacity: 1, 'z-index': 10 } },
+    { selector: 'node.extended.selected', style: { 'background-opacity': 0.5 } },
     {
       selector: 'edge.graph-edge',
       style: {
@@ -114,7 +118,7 @@ function stylesheet(): StylesheetJson {
       },
     },
     { selector: 'edge.editorial', style: { 'line-color': t.accent, 'target-arrow-color': t.accent } },
-    { selector: 'edge.extended', style: { 'line-opacity': 0.25 } },
+    { selector: 'edge.extended', style: { 'line-opacity': 0.25, 'line-color': t.secondary, 'target-arrow-color': t.secondary } },
     {
       selector: 'edge.selected',
       style: { width: 'data(selectedWidth)', 'line-color': t.accent, 'target-arrow-color': t.accent, 'line-opacity': 0.7 },
@@ -258,17 +262,29 @@ export function GraphCanvas(props: GraphCanvasProps) {
     };
   }, []);
 
-  // The graph drawn afresh whenever what is drawn changes, at the places it was laid out at.
+  // The graph drawn afresh whenever what is drawn or where changes, at the places it was laid out at.
   const { nodes, edges, positions, timeline, labelled } = props;
   useEffect(() => {
     const instance = cy.current;
     if (!instance) return;
     instance.batch(() => {
       instance.elements().remove();
-      instance.add(elements(nodes, edges, positions, timeline, labelled));
+      instance.add(elements(nodes, edges, positions, timeline, new Set()));
     });
     instance.resize();
     instance.viewport({ zoom: 1, pan: { x: 0, y: 0 } });
+  }, [nodes, edges, positions, timeline]);
+
+  // The labels, which a selection changes, without drawing the graph again or moving the view.
+  useEffect(() => {
+    const instance = cy.current;
+    if (!instance) return;
+    instance.batch(() => {
+      for (const node of nodes) {
+        const drawn = instance.getElementById(node.id);
+        if (drawn.nonempty()) drawn.data('text', labelText(node, labelled));
+      }
+    });
   }, [nodes, edges, positions, timeline, labelled]);
 
   // The selection, the keyboard's node and the dimming, as classes on what is drawn.
@@ -301,8 +317,9 @@ export function GraphCanvas(props: GraphCanvasProps) {
     if (node.empty()) return;
     const box = node.renderedBoundingBox();
     if (box.x1 >= 0 && box.y1 >= 0 && box.x2 <= instance.width() && box.y2 <= instance.height()) return;
+    instance.stop();
     if (reducedMotion) instance.center(node);
-    else instance.animate({ center: { eles: node } }, { duration: 200 });
+    else instance.animate({ center: { eles: node } }, { duration: 200, queue: false });
   }, [activeNode, reducedMotion]);
 
   const resetToken = props.resetToken;
