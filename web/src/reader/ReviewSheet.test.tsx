@@ -159,6 +159,32 @@ describe('the review sheet', () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: `Review Changes…: ${row.title}` })));
   });
 
+  it('stays open when Mark Reviewed takes the row out of Changed by an update, and sends focus to the list’s heading once done', async () => {
+    let reviewedYet = false;
+    stubServer({
+      '/readyz': ready,
+      '/api/v1/me': me,
+      '/api/v1/me/research': () => ({ ...page, updated: reviewedYet ? 0 : 1 }),
+      '/api/v1/me/research/documents': () => ({ group: 'updated', total: reviewedYet ? 0 : 1, items: reviewedYet ? [] : [row] }),
+      [`${documentPath}/review`]: () => (reviewedYet ? { ...review, change: { ...change, canMarkReviewed: false } } : review),
+      [`POST ${documentPath}/review`]: () => {
+        reviewedYet = true;
+        return { ...change, line: undefined, changeKind: undefined, canMarkReviewed: false };
+      },
+    });
+    renderAt('/research?group=updated');
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: `Review Changes…: ${row.title}` }));
+    const sheet = await screen.findByRole('dialog', { name: row.title });
+    await user.click(await within(sheet).findByRole('button', { name: 'Mark Reviewed' }));
+    expect(await within(sheet).findByText('The document is marked reviewed.')).toBeTruthy();
+    // The list has been read again, without the row, and the sheet is still open.
+    await waitFor(() => expect(screen.queryByRole('button', { name: `Review Changes…: ${row.title}` })).toBeNull());
+    expect(screen.getByRole('dialog', { name: row.title })).toBeTruthy();
+    await user.click(within(sheet).getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Changed by an update' })));
+  });
+
   it('asks before Remove… removes a highlight', async () => {
     const fetch = server({ 'DELETE /api/v1/me/highlights/H1': null });
     renderAt('/research?group=updated');

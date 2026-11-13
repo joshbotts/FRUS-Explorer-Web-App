@@ -164,7 +164,7 @@ export function ResearchScreen() {
           <h2 id={listId} ref={listHeading} tabIndex={-1}>
             {title ?? copy.researchPage.loading}
           </h2>
-          <DocumentList group={shown} documents={documents} now={now} />
+          <DocumentList group={shown} documents={documents} now={now} heading={listId} />
         </section>
       </div>
     );
@@ -273,11 +273,33 @@ function DocumentList({
   group,
   documents,
   now,
+  heading,
 }: {
   group: ResearchGroup;
   documents: UseQueryResult<ResearchDocumentList>;
   now: number;
+  /** The list's heading, where focus goes when a review takes away the row it opened from. */
+  heading: string;
 }) {
+  // The document a row's Review Changes… opened, kept here rather than in the row (PLAN's S21f): a review can take
+  // the row out of Changed by an update, and the sheet stays open while the list is read again.
+  const [reviewing, setReviewing] = useState<ResearchDocument | null>(null);
+  const sheet = reviewing && (
+    <ReviewSheet
+      volumeId={reviewing.volumeId}
+      documentId={reviewing.documentId}
+      title={reviewing.title}
+      onClose={() => {
+        const key = `${reviewing.volumeId}/${reviewing.documentId}`;
+        setReviewing(null);
+        // Back to its row's Review Changes…, or, once the review has taken the row away, to the list's heading.
+        requestAnimationFrame(() => {
+          const button = document.querySelector<HTMLElement>(`button[data-review="${CSS.escape(key)}"]`);
+          (button ?? document.getElementById(heading))?.focus();
+        });
+      }}
+    />
+  );
   if (documents.isError) {
     return (
       <p className="error" role="alert">
@@ -288,17 +310,23 @@ function DocumentList({
   if (!documents.data) return <p role="status">{copy.researchPage.loading}</p>;
   if (documents.data.items.length === 0) {
     return (
-      <p className="empty">
-        <strong>{copy.researchPage.noDocs}</strong> {emptyDescription(group)}
-      </p>
+      <>
+        <p className="empty">
+          <strong>{copy.researchPage.noDocs}</strong> {emptyDescription(group)}
+        </p>
+        {sheet}
+      </>
     );
   }
   return (
-    <ul className="research-documents">
-      {documents.data.items.map((row) => (
-        <DocumentRow key={`${row.volumeId}/${row.documentId}`} row={row} now={now} />
-      ))}
-    </ul>
+    <>
+      <ul className="research-documents">
+        {documents.data.items.map((row) => (
+          <DocumentRow key={`${row.volumeId}/${row.documentId}`} row={row} now={now} onReview={() => setReviewing(row)} />
+        ))}
+      </ul>
+      {sheet}
+    </>
   );
 }
 
@@ -307,15 +335,13 @@ function DocumentList({
  * annotation; its summaries and visit plan; its three newest highlights, each beside a bar of its colour,
  * and how many more; its newest note; and its tags, its notes past one and its collections.
  */
-function DocumentRow({ row, now }: { row: ResearchDocument; now: number }) {
+function DocumentRow({ row, now, onReview }: { row: ResearchDocument; now: number; onReview: () => void }) {
   const more = moreHighlights(row.highlightCount);
-  const [reviewing, setReviewing] = useState(false);
-  const reviewButton = useRef<HTMLButtonElement>(null);
   return (
     <li className="research-document">
       {/* A document an update removed opens its review, the only way to it, as the app's row does (PLAN's S21f). */}
       {row.opens === 'review' ? (
-        <button type="button" className="research-document-title" onClick={() => setReviewing(true)}>
+        <button type="button" className="research-document-title" onClick={onReview}>
           {row.title}
         </button>
       ) : (
@@ -371,21 +397,15 @@ function DocumentRow({ row, now }: { row: ResearchDocument; now: number }) {
       )}
       {row.reviewable && (
         <p>
-          <button ref={reviewButton} type="button" aria-label={copy.researchPage.reviewChangesA11y(row.title)} onClick={() => setReviewing(true)}>
+          <button
+            type="button"
+            data-review={`${row.volumeId}/${row.documentId}`}
+            aria-label={copy.researchPage.reviewChangesA11y(row.title)}
+            onClick={onReview}
+          >
             {copy.researchPage.reviewChanges}
           </button>
         </p>
-      )}
-      {reviewing && (
-        <ReviewSheet
-          volumeId={row.volumeId}
-          documentId={row.documentId}
-          title={row.title}
-          onClose={() => {
-            setReviewing(false);
-            requestAnimationFrame(() => reviewButton.current?.focus());
-          }}
-        />
       )}
     </li>
   );
