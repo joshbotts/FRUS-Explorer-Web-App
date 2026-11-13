@@ -20,9 +20,12 @@ import Foundation
 /// place once the comparison index it describes is whole.
 public struct TEIChangeRecord: Codable, Sendable, Equatable {
     public var format = 1
-    /// The served index's file the check compared, by device and inode: an import's rename makes another.
+    /// The served index's file the check compared, by device and inode, which an import's rename makes another, and by
+    /// its length and the export's stamp, since a file made later can take an inode a removed one freed.
     public var device: UInt64
     public var inode: UInt64
+    public var bytes: Int64
+    public var exportedAt: String?
     public var checkedAt: Date
     /// The volumes compared, and those with a document whose TEI changed, by id.
     public var checked: [String]
@@ -34,10 +37,22 @@ public struct TEIChangeRecord: Codable, Sendable, Equatable {
     /// The comparison index the record describes.
     public static let indexName = "tei-changes.db"
 
-    func describes(_ file: FileIdentity?) -> Bool {
-        guard let file else { return false }
-        return file.device == device && file.inode == inode
+    /// Whether it describes the served index `index`.
+    func describes(_ index: CorpusIndex?) -> Bool {
+        guard let index, let file = index.file else { return false }
+        return file.device == device && file.inode == inode && Self.bytes(of: index.url) == bytes
+            && index.summary.exportedAt == exportedAt
     }
+
+    static func bytes(of url: URL) -> Int64 {
+        ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.int64Value ?? -1
+    }
+}
+
+/// Why a check stopped, in the server's words.
+struct TEICheckProblem: Error, CustomStringConvertible {
+    let description: String
+    init(_ description: String) { self.description = description }
 }
 
 /// Where the check stands, for Administration.
@@ -74,6 +89,9 @@ public actor TEIChangeCheck {
     /// The served index's file the check last began for, so that it begins once for each.
     private var begunFor: FileIdentity?
     private var task: Task<Void, Never>?
+    /// Each check's own number: a check cancelled for another index's goes on to its next step, and what it does
+    /// then, to the status or the files, it does only while it is the latest.
+    private var generation = 0
     private var phase = TEICheckStatus(volume: nil, done: 0, total: 0, running: false, record: nil, problem: nil)
     private var opened: TEIComparison?
     /// Test hook: told each volume once it has been compared.
@@ -92,8 +110,9 @@ public actor TEIChangeCheck {
 
     var recordURL: URL { folder.appendingPathComponent(TEIChangeRecord.fileName) }
     var comparisonURL: URL { folder.appendingPathComponent(TEIChangeRecord.indexName) }
-    /// Where a check builds its comparison index, a folder of its own, removed when a check begins.
-    var workFolder: URL { folder.appendingPathComponent(".tei-changes", isDirectory: true) }
+    /// Where a check builds its comparison index, a folder of its own for each, removed when it ends, or by a start
+    /// for one a stop cut short.
+    func workFolder(_ generation: Int) -> URL { folder.appendingPathComponent(".tei-changes-\(generation)", isDirectory: true) }
 
     func setVolumeComparedTestHook(_ hook: (@Sendable (String) async -> Void)?) { volumeComparedTestHook = hook }
 
@@ -104,26 +123,52 @@ public actor TEIChangeCheck {
     /// whole check of it is in place: at a start, once the index found there is open, and after each import, which
     /// serves another file. A check under way for an index the server no longer serves is cancelled first.
     public func ensureCurrent() async {
-        guard state.configuration.mode == .import, let index = await state.index, let file = index.file else { return }
+        guard state.configuration.mode == .import else { return }
+        if generation == 0 {
+            // A start: the folders a stop left a check building in.
+            for name in (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? [] where name.hasPrefix(".tei-changes") {
+                try? FileManager.default.removeItem(at: folder.appendingPathComponent(name))
+            }
+        }
+        guard let index = await state.index, let file = index.file else {
+            // No index served, as after a reset: nothing to compare, and a check under way stops.
+            if begunFor != nil || task != nil { forget() }
+            return
+        }
         guard begunFor != file else { return }
-        task?.cancel()
-        task = nil
+        forget()
         begunFor = file
-        opened = nil
-        if let record = Self.read(recordURL), record.describes(file),
+        if let record = Self.read(recordURL), record.describes(index),
            FileManager.default.fileExists(atPath: comparisonURL.path) {
             phase = TEICheckStatus(volume: nil, done: record.checked.count, total: record.checked.count, running: false,
                                    record: record, problem: nil)
             return
         }
         phase = TEICheckStatus(volume: nil, done: 0, total: 0, running: true, record: nil, problem: nil)
-        task = Task { [weak self] in await self?.run(index, file: file) }
+        let mine = generation
+        task = Task { [weak self] in await self?.run(index, file: file, generation: mine) }
+    }
+
+    /// Stops the check under way, which ends at its next step, and forgets what was found of the index before.
+    private func forget() {
+        task?.cancel()
+        task = nil
+        generation += 1
+        begunFor = nil
+        opened = nil
+        phase = TEICheckStatus(volume: nil, done: 0, total: 0, running: false, record: nil, problem: nil)
+    }
+
+    /// Changes the status, for the check numbered `mine` while it is the latest.
+    private func update(_ mine: Int, _ change: (inout TEICheckStatus) -> Void) {
+        guard mine == generation else { return }
+        change(&phase)
     }
 
     /// The comparison index of the served index's last whole check, opened through the kit's immutable read-only
     /// open, or nil while none describes it.
     public func comparison() async -> TEIComparison? {
-        guard let record = phase.record, let index = await state.index, record.describes(index.file) else { return nil }
+        guard let record = phase.record, let index = await state.index, record.describes(index) else { return nil }
         if let opened, opened.record == record { return opened }
         do {
             let url = comparisonURL
@@ -145,10 +190,11 @@ public actor TEIChangeCheck {
 
     // MARK: The check
 
-    private func run(_ index: CorpusIndex, file: FileIdentity) async {
+    private func run(_ index: CorpusIndex, file: FileIdentity, generation mine: Int) async {
         let volumes = index.documentsByVolume.filter { $0.value > 0 }.keys.sorted()
-        let work = workFolder
+        let work = workFolder(mine)
         let building = work.appendingPathComponent(TEIChangeRecord.indexName)
+        defer { try? FileManager.default.removeItem(at: work) }
         var checked: [String] = []
         var changed: [String] = []
         var unchecked: [String: String] = [:]
@@ -160,37 +206,41 @@ public actor TEIChangeCheck {
             defer { served.close() }
             // The comparison index's writer, the kit's, let go once every volume is compared, so that the connection
             // of the check's own that seeds each volume is the file's last, and folds its log and ends it.
-            let seeder = try await compare(volumes, from: served, into: building, checked: &checked, changed: &changed,
-                                           unchecked: &unchecked)
+            let seeder = try await compare(volumes, from: served, into: building, generation: mine, checked: &checked,
+                                           changed: &changed, unchecked: &unchecked)
             defer { seeder.close() }
-            // A file a reader opens immutable: its log folded and gone.
-            _ = try seeder.query("PRAGMA wal_checkpoint(TRUNCATE)")
-            _ = try seeder.query("PRAGMA journal_mode=DELETE")
+            // A file a reader opens immutable: its log folded, the fold whole, and its journal a rollback journal's.
+            let folded = try seeder.query("PRAGMA wal_checkpoint(TRUNCATE)").first?.first?.integer ?? 1
+            let journal = try seeder.query("PRAGMA journal_mode=DELETE").first?.first?.text ?? ""
+            guard folded == 0, journal.lowercased() == "delete" else {
+                throw TEICheckProblem("the comparison index's log could not be folded into it (busy \(folded), journal \(journal))")
+            }
         } catch is CancellationError {
-            try? FileManager.default.removeItem(at: work)
-            phase.running = false
-            phase.volume = nil
+            update(mine) { $0 = TEICheckStatus(volume: nil, done: 0, total: 0, running: false, record: nil, problem: nil) }
             log("The comparison of the index with the TEI folder stopped, for another index")
             return
         } catch {
-            try? FileManager.default.removeItem(at: work)
             log("The index could not be compared with the TEI folder: \(error)")
-            phase = TEICheckStatus(volume: nil, done: 0, total: volumes.count, running: false, record: nil,
-                                   problem: "The index could not be compared with the TEI folder, which the server's log says why.")
+            update(mine) {
+                $0 = TEICheckStatus(volume: nil, done: 0, total: volumes.count, running: false, record: nil,
+                                    problem: "The index could not be compared with the TEI folder, which the server's log says why.")
+            }
             return
         }
+        // A check cancelled for another index's places nothing.
+        guard mine == generation else { return }
         // To the second, as the record's file keeps it.
         let checkedAt = Date(timeIntervalSince1970: now().timeIntervalSince1970.rounded(.down))
-        let record = TEIChangeRecord(device: file.device, inode: file.inode, checkedAt: checkedAt, checked: checked, changed: changed,
+        let record = TEIChangeRecord(device: file.device, inode: file.inode, bytes: TEIChangeRecord.bytes(of: index.url),
+                                     exportedAt: index.summary.exportedAt, checkedAt: checkedAt, checked: checked, changed: changed,
                                      unchecked: unchecked)
         do {
             try Self.place(building, at: comparisonURL)
             try Self.write(record, to: recordURL)
-            try? FileManager.default.removeItem(at: work)
         } catch {
             log("The comparison of the index with the TEI folder could not be kept: \(error)")
             phase = TEICheckStatus(volume: nil, done: checked.count, total: volumes.count, running: false, record: nil,
-                                   problem: "The comparison of the index with the TEI folder could not be kept in /data/index, which the server's log says why.")
+                                   problem: "The comparison of the index with the TEI folder could not be kept in /data/tei-check, which the server's log says why.")
             return
         }
         opened = nil
@@ -202,23 +252,26 @@ public actor TEIChangeCheck {
     /// `indexVolume`, over the export's record of its documents: a volume nothing moved in is removed again, and one
     /// something moved in kept. Gives the connection of the check's own that seeded each volume, once the kit's
     /// writer, packed, is let go.
-    private func compare(_ volumes: [String], from served: SQLiteConnection, into building: URL, checked: inout [String],
-                         changed: inout [String], unchecked: inout [String: String]) async throws -> SQLiteConnection {
+    private func compare(_ volumes: [String], from served: SQLiteConnection, into building: URL, generation mine: Int,
+                         checked: inout [String], changed: inout [String], unchecked: inout [String: String]) async throws -> SQLiteConnection {
         let pipeline = try await Blocking.run { [volumesDirectory, resources] in
             try IndexingPipeline(fts5Store: try FTS5Store(databaseURL: building), databaseURL: building,
                                  volumesDirectory: volumesDirectory, resources: resources, defaults: InMemoryIndexingStampStore())
         }
         let seeder = try SQLiteConnection(building.path, readOnly: false)
-        phase.total = volumes.count
+        update(mine) { $0.total = volumes.count }
         do {
             for (position, volumeId) in volumes.enumerated() {
                 try Task.checkCancellation()
-                phase.volume = volumeId
-                phase.done = position
+                update(mine) { ($0.volume, $0.done) = (volumeId, position) }
                 let tei = volumesDirectory.appendingPathComponent("\(volumeId).xml")
-                guard FileManager.default.fileExists(atPath: tei.path) else {
+                guard let size = VolumeLibrary.regularFileSize(tei) else {
                     unchecked[volumeId] = "Its file, \(volumeId).xml, is not in the TEI folder, so the reader opens none of its documents."
                     continue
+                }
+                // Room for the volume's tables and their log, beside the user store and its backups.
+                if let free = VolumeLibrary.freeBytes(at: folder), free < 2 * Int64(size) + LibraryIndexer.spareBytes {
+                    throw TEICheckProblem("the data volume has \(LibraryIndexer.megabytes(free)) free, and comparing \(volumeId) needs about \(LibraryIndexer.megabytes(2 * Int64(size) + LibraryIndexer.spareBytes))")
                 }
                 do {
                     try Self.seed(volumeId, from: served, into: seeder)

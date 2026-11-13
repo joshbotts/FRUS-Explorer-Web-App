@@ -801,7 +801,7 @@ export const copy = {
    */
   review: {
     review: 'Review…',
-    bannerLabel: 'A change since you annotated this document',
+    bannerLabel: 'A change to this document',
     done: 'Done',
     loading: 'Reading the change record…',
     changeHeader: 'What Changed',

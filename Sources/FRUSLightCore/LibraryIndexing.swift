@@ -451,7 +451,8 @@ public actor LibraryIndexer {
 
     /// A download is about to put another file in `volumeId`'s place (PLAN's S21f): kept in the stamps before
     /// the file takes its name, so that the next pass, or the next start's, indexes the volume again from it.
-    nonisolated public func oweReindex(_ volumeId: String) {
+    @discardableResult
+    nonisolated public func oweReindex(_ volumeId: String) -> Bool {
         stamps.oweReindex(volumeId)
     }
 

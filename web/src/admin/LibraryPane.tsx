@@ -188,7 +188,7 @@ function Library({ library }: { library: AdminLibrary }) {
       {library.mode === 'standalone' && <Sideload onSaid={setSaid} />}
       {/* Check for Corrections and Update; and what the updates changed, or an Import server's TEI folder did (S21f). */}
       {library.downloads && <KeepingCurrent />}
-      <AfterAnUpdate />
+      <AfterAnUpdate busy={library.indexing.active || waiting > 0} />
       {/* Always on the page, so that what a download or a removal did is announced when it comes. */}
       <p role="status">{said}</p>
       <p className="error" role="alert">

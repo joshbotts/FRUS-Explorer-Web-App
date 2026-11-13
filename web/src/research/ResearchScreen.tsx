@@ -164,7 +164,8 @@ export function ResearchScreen() {
           <h2 id={listId} ref={listHeading} tabIndex={-1}>
             {title ?? copy.researchPage.loading}
           </h2>
-          <DocumentList group={shown} documents={documents} now={now} heading={listId} />
+          {/* Another category is another list, with no review open over it. */}
+          <DocumentList key={shownKey} group={shown} documents={documents} now={now} heading={listId} />
         </section>
       </div>
     );
@@ -300,14 +301,24 @@ function DocumentList({
       }}
     />
   );
-  if (documents.isError) {
+  if (documents.isError && !documents.data) {
     return (
-      <p className="error" role="alert">
-        {errorMessage(documents.error)}
-      </p>
+      <>
+        <p className="error" role="alert">
+          {errorMessage(documents.error)}
+        </p>
+        {sheet}
+      </>
     );
   }
-  if (!documents.data) return <p role="status">{copy.researchPage.loading}</p>;
+  if (!documents.data) {
+    return (
+      <>
+        <p role="status">{copy.researchPage.loading}</p>
+        {sheet}
+      </>
+    );
+  }
   if (documents.data.items.length === 0) {
     return (
       <>

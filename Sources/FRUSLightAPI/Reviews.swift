@@ -47,7 +47,9 @@ struct UpdateReviewSources: Sendable {
             }
         }
         if let comparison = await teiCheck?.comparison() {
-            for row in (try? await comparison.pipeline.unreviewedDocumentRevisions()) ?? [] where row.changedAt != nil {
+            let changedVolumes = Set(comparison.record.changed)
+            for row in (try? await comparison.pipeline.unreviewedDocumentRevisions()) ?? []
+            where row.changedAt != nil && changedVolumes.contains(row.volumeId) {
                 changes[Self.key(row.volumeId, row.documentId)] = Change(revision: row, comparison: comparison)
             }
         }
@@ -56,7 +58,8 @@ struct UpdateReviewSources: Sendable {
 
     /// One document's change, if one is stamped.
     func change(of document: DocumentKey, _ served: ServedIndex?) async -> Change? {
-        if let comparison = await teiCheck?.comparison(),
+        // A volume the comparison found changed: one it could not compare holds no change of its.
+        if let comparison = await teiCheck?.comparison(), comparison.record.changed.contains(document.volumeId),
            let row = try? await comparison.pipeline.documentRevision(volumeId: document.volumeId, documentId: document.documentId),
            row.changedAt != nil {
             return Change(revision: row, comparison: comparison)
@@ -194,6 +197,8 @@ public struct DocumentChange: Codable, Equatable, Sendable, ResponseEncodable {
     /// When the change was stamped, and when the user reviewed it.
     public var changedAt: String?
     public var reviewedAt: String?
+    /// The change's content hash, which Mark Reviewed sends back, so that it reviews the change the user was shown.
+    public var contentHash: String?
     /// Whether one of the user's highlights on it was made against another version of its text.
     public var highlightsStale: Bool
     /// Whether an update removed the document from its volume (the kit's `recordsRemoval`).
@@ -282,6 +287,12 @@ enum ReviewRoutes {
         let renderingVersion: String
     }
 
+    /// What Mark Reviewed reviews: the change the sheet showed.
+    struct Reviewed: Decodable {
+        let contentHash: String
+        let changeKind: String?
+    }
+
     static func add(to me: RouterGroup<APIRequestContext>, services: UserDataServices, resources: ServerResources,
                     reader: ReaderService, provider: ServedIndexProvider, reviews: UpdateReviewSources) {
         let store = services.store
@@ -311,15 +322,21 @@ enum ReviewRoutes {
             return EditedResponse(headers: [.cacheControl: "no-store"], response: body)
         }
 
-        // Mark Reviewed: the user's ledger row, from the change the user is dispositioning, as the app records it
-        // first; then, on a Standalone server, the index's own stamp, a job of its one writer.
+        // Mark Reviewed: the user's ledger row, from the change the user is dispositioning, the one the sheet showed, as
+        // the app records it first; then, on a Standalone server, the index's own stamp, a job of its one writer.
         me.post("volumes/:volumeId/documents/:documentId/review") { request, context -> EditedResponse<DocumentChange> in
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
             let key = try UserDataRoutes.document(context, resources: resources)
-            let served = try? await provider.servedIfReady()
+            let shown = try await JSONBody.decode(Reviewed.self, from: request, fields: ["contentHash", "changeKind"])
+            // While a job holds the index to itself, its 503, rather than nothing to review.
+            let served = try await provider.served()
             guard let change = await reviews.change(of: key, served) else { throw nothingToReview(key) }
             let revision = change.revision
+            guard revision.contentHash == shown.contentHash, revision.changeKind == shown.changeKind else {
+                throw APIProblem(.conflict, code: "DOCUMENT_CHANGED",
+                                 detail: "The change to \(key.volumeId)/\(key.documentId) is not the one the review showed: another update has changed the document since. Load the review again.")
+            }
             let ledger = try await Blocking.run { try store.documentReviews(of: key, for: user.id) }
             guard !AnnotationReviewLedger.reviews(ledger, revision) else { throw nothingToReview(key) }
             guard !revision.contentHash.isEmpty else { throw nothingToReview(key) }
@@ -330,9 +347,7 @@ enum ReviewRoutes {
             }
             if change.comparison == nil, let indexer = reviews.indexer, indexer.mode == .standalone {
                 do {
-                    try await indexer.recordReviews(requestedBy: user.id) {
-                        try await Blocking.run { try store.everyDocumentReview().map(\.data) }
-                    }
+                    try await indexer.recordReviews(requestedBy: user.id) { try await settledReviews(store: store) }
                 } catch {
                     // The user's review is theirs already; the index's own record of it waits for the next.
                     context.logger.warning("A review of \(key.volumeId)/\(key.documentId) could not be queued for the index: \(error)")
@@ -533,6 +548,35 @@ enum ReviewRoutes {
 
     // MARK: Helpers
 
+    /// The reviews the index records (ReviewStamps.swift): a change every user whose research is on the document has
+    /// reviewed, by their ledgers, one row for each, which the kit's `applyAnnotationReviews` matches to the change.
+    static func settledReviews(store: any UserDataStore) async throws -> [AnnotationReviewData] {
+        let ledgers = try await Blocking.run { try store.everyDocumentReview() }
+        guard !ledgers.isEmpty else { return [] }
+        // Who reviewed each change, by its document, content hash and change kind.
+        struct Change: Hashable { let volumeId, documentId, contentHash: String; let changeKind: String? }
+        var reviewers: [Change: Set<String>] = [:]
+        for (user, rows) in ledgers {
+            for row in rows {
+                reviewers[Change(volumeId: row.volumeId, documentId: row.documentId, contentHash: row.contentHash,
+                                 changeKind: row.changeKind), default: []].insert(user)
+            }
+        }
+        // Whose research is on each document: every user's, as the Research page gathers it.
+        var annotators: [String: Set<String>] = [:]
+        for account in try await Blocking.run({ try store.accounts() }) {
+            for key in ResearchGroups(sources: try await ResearchSources.read(for: account.id, in: store)).allAnnotatedKeys {
+                annotators[key, default: []].insert(account.id)
+            }
+        }
+        return reviewers.compactMap { change, users in
+            let concerned = annotators[UpdateReviewSources.key(change.volumeId, change.documentId)] ?? []
+            guard concerned.isSubset(of: users) else { return nil }
+            return AnnotationReviewData(annotationType: AnnotationReviewLedger.documentKind, volumeId: change.volumeId,
+                                        documentId: change.documentId, contentHash: change.contentHash, changeKind: change.changeKind)
+        }
+    }
+
     /// What the banner says, for the user: the change's kind while they have not reviewed it.
     static func documentChange(_ key: DocumentKey, change: UpdateReviewSources.Change?, ledger: [AnnotationReviewRecord],
                                highlightsStale: Bool) -> DocumentChange {
@@ -548,6 +592,7 @@ enum ReviewRoutes {
                               line: DocumentChangeWords.bannerLine(kind: kind, highlightsStale: highlightsStale),
                               changeKind: kind, changedAt: revision?.changedAt,
                               reviewedAt: reviewed ? review?.reviewedAt.map(UserStoreDate.text) : nil,
+                              contentHash: revision?.contentHash,
                               highlightsStale: highlightsStale, vanished: revision?.recordsRemoval ?? false,
                               canMarkReviewed: revision != nil && !reviewed, foundInTEI: change?.comparison != nil)
     }

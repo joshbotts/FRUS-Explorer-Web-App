@@ -34,6 +34,7 @@ const change: DocumentChange = {
   line: 'The text of this document changed in a volume update. Some highlights may be misaligned.',
   changeKind: 'body',
   changedAt: '2026-11-13T12:00:00Z',
+  contentHash: 'c1',
   highlightsStale: true,
   vanished: false,
   canMarkReviewed: true,
@@ -151,7 +152,8 @@ describe('the review sheet', () => {
     const mark = within(sheet).getByRole('button', { name: 'Mark Reviewed' });
     mark.focus();
     await user.keyboard('{Enter}');
-    await waitFor(() => expect(sent(fetch)).toContain(`POST ${documentPath}/review `));
+    // The change the sheet showed, which the server checks is still the one stamped.
+    await waitFor(() => expect(sent(fetch)).toContain(`POST ${documentPath}/review {"contentHash":"c1","changeKind":"body"}`));
     expect(await within(sheet).findByText('The document is marked reviewed.')).toBeTruthy();
     // Done closes the sheet, and focus goes back to the row's Review Changes….
     await user.click(within(sheet).getByRole('button', { name: 'Done' }));

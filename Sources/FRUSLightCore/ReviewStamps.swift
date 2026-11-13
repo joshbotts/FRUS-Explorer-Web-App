@@ -3,9 +3,11 @@
 // reader marks a document reviewed and when its ledger brings a review from another device (the kit's
 // `applyAnnotationReviews`, which stamps a change only where the ledger's row holds its content hash and change
 // kind). Each user's review is their ledger's row, which Changed by an update, the banner and the review sheet
-// read; the index's stamp says that someone has reviewed a change, which Administration's Volume updates counts
-// and a copy of the index carries. It is a job of the queue, the index's one writer, which reads every user's
-// ledger when it runs, so that a review whose job a stop of the server lost is recorded by the next.
+// read; the index's stamp says that every user whose research is on the document has reviewed the change, which
+// Administration's After an Update counts and a copy of the index carries. Not before: the kit keeps a change of
+// the text marked so through a later change of the notes alone only while it is unreviewed, and one user's review
+// must not tell another that the text did not change. It is a job of the queue, the index's one writer, which reads
+// the ledgers when it runs, so that a review whose job a stop of the server lost is recorded by the next.
 
 import FRUSCoreKit
 import Foundation

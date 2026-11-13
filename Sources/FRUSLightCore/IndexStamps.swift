@@ -294,12 +294,15 @@ public final class IndexStampFile: IndexingStampStore, @unchecked Sendable {
     /// The volumes a download gave a new file, which a pass owes an `indexVolume` (PLAN's S21f).
     public func reindexOwed() -> Set<String> { locked { Set(contents.reindex ?? []) } }
 
-    /// A download is about to put another file in `volumeId`'s place: kept before the file takes its name.
-    public func oweReindex(_ volumeId: String) {
+    /// A download is about to put another file in `volumeId`'s place: kept before the file takes its name. Gives whether
+    /// the file holds it, so that a file is not put in place that a restart would not know to index again.
+    @discardableResult
+    public func oweReindex(_ volumeId: String) -> Bool {
         change { contents in
             guard !(contents.reindex ?? []).contains(volumeId) else { return }
             contents.reindex = (contents.reindex ?? []) + [volumeId]
         }
+        return locked { problem == nil }
     }
 
     /// A pass has indexed `volumeId` from the file in its place, or it left the library.

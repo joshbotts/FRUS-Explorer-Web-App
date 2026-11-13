@@ -174,10 +174,16 @@ import Testing
             #expect(problemCode(try await owner.send(.post, "/api/v1/me/highlights/\(highlight.id)/confirm",
                                                     #"{"renderingVersion":"\#(after.renderingVersion)"}"#)) == "HIGHLIGHT_ALIGNED")
 
-            // Mark Reviewed: the user's ledger row, the change hidden from them, and the index's own stamp.
-            let reviewed = try decode(DocumentChange.self, try await owner.send(.post, "/api/v1/me/volumes/\(Self.volume)/documents/d2/review"))
+            // Mark Reviewed: refused for a change the sheet did not show; then the user's ledger row, the change hidden from
+            // them, and the index's own stamp, since no one else's research is on the document.
+            #expect(banner.contentHash == revision.contentHash)
+            let path = "/api/v1/me/volumes/\(Self.volume)/documents/d2/review"
+            #expect(problemCode(try await owner.send(.post, path, #"{"contentHash":"0000","changeKind":"body"}"#)) == "DOCUMENT_CHANGED")
+            #expect(problemCode(try await owner.send(.post, path, #"{"contentHash":"\#(revision.contentHash)","changeKind":"apparatus"}"#)) == "DOCUMENT_CHANGED")
+            let shown = #"{"contentHash":"\#(revision.contentHash)","changeKind":"body"}"#
+            let reviewed = try decode(DocumentChange.self, try await owner.send(.post, path, shown))
             #expect(reviewed.line == nil && reviewed.changeKind == nil && !reviewed.canMarkReviewed && reviewed.reviewedAt != nil)
-            #expect(problemCode(try await owner.send(.post, "/api/v1/me/volumes/\(Self.volume)/documents/d2/review")) == "NOTHING_TO_REVIEW")
+            #expect(problemCode(try await owner.send(.post, path, shown)) == "NOTHING_TO_REVIEW")
             let ledger = try fixture.users.store.documentReviews(of: Self.document, for: "owner")
             #expect(ledger.map(\.contentHash) == [revision.contentHash] && ledger.map(\.changeKind) == ["body"])
             #expect(try decode(ResearchPage.self, try await owner.get("/api/v1/me/research")).updated == 0)
@@ -223,6 +229,48 @@ import Testing
         #expect(try await served.pipeline.documentRevision(volumeId: Self.volume, documentId: "d2")?.changeKind == "body")
     }
 
+    /// A reset while a corrected file waits for its pass: the volume stays owed through the emptying, and is indexed
+    /// with `indexVolume` before the reset's pass over every volume, so that its change is stamped, and kept.
+    @Test func aResetKeepsTheChangeOfACorrectedFileThatWaitsForItsPass() async throws {
+        let fixture = try await Standalone()
+        defer { withExtendedLifetime(fixture) {} }
+        _ = try await fixture.indexer.index(.asked(nil), requestedBy: nil)
+        await fixture.users.jobs.waitUntilIdle()
+        fixture.indexer.oweReindex(Self.volume)
+        try Self.corrected().write(to: fixture.users.server.files.volumesDirectory.appendingPathComponent("\(Self.volume).xml"))
+        _ = try await fixture.indexer.reset(requestedBy: nil)
+        await fixture.users.jobs.waitUntilIdle()
+        #expect(!fixture.indexer.owesReindex(Self.volume))
+        let served = try #require(try await fixture.provider.servedIfReady())
+        let revision = try #require(try await served.pipeline.documentRevision(volumeId: Self.volume, documentId: "d2"))
+        #expect(revision.changeKind == "body" && revision.changedAt != nil, "\(revision)")
+        #expect(try await served.pipeline.unreviewedDocumentRevisions().map(\.documentId) == ["d2"])
+    }
+
+    /// The index records a change as reviewed once every user whose research is on the document has reviewed it, so
+    /// that one user's review never tells another, at the next correction, that the text did not change.
+    @Test func theIndexRecordsAReviewOnceEveryoneConcernedHasMadeIt() async throws {
+        let users = try await UserDataFixture()
+        defer { withExtendedLifetime(users) {} }
+        let store = users.store
+        _ = try store.signedInUser("bob", at: UserDataFixture.now)
+        _ = try store.signedInUser("carol", at: UserDataFixture.now)
+        for user in ["owner", "bob"] {
+            _ = try store.createHighlight(in: Self.document, start: 0, end: 5, colorTag: "yellow", selectedText: "words",
+                                          renderingVersion: "0000000000000001", for: user, at: UserDataFixture.now)
+        }
+        _ = try store.recordDocumentReview(of: Self.document, contentHash: "c1", changeKind: "body", for: "owner", at: UserDataFixture.now)
+        // Carol, who has no research on it, reviewed it too: hers counts for nothing.
+        _ = try store.recordDocumentReview(of: Self.document, contentHash: "c1", changeKind: "body", for: "carol", at: UserDataFixture.now)
+        #expect(try await ReviewRoutes.settledReviews(store: store).isEmpty, "bob, whose highlight is on it, has not reviewed it")
+        _ = try store.recordDocumentReview(of: Self.document, contentHash: "c1", changeKind: "apparatus", for: "bob", at: UserDataFixture.now)
+        #expect(try await ReviewRoutes.settledReviews(store: store).isEmpty, "bob reviewed another change")
+        _ = try store.recordDocumentReview(of: Self.document, contentHash: "c1", changeKind: "body", for: "bob", at: UserDataFixture.now)
+        let settled = try await ReviewRoutes.settledReviews(store: store)
+        #expect(settled == [AnnotationReviewData(annotationType: "document", volumeId: Self.volume, documentId: "d2",
+                                                 contentHash: "c1", changeKind: "body")])
+    }
+
     /// Import mode's step 5: the served export compared with the mounted TEI, the document whose TEI changed found,
     /// the banner and the sheet reading it as they read an update's, and Mark Reviewed recording the user's review
     /// alone, the served index, the Mac's, never written.
@@ -251,7 +299,7 @@ import Testing
         let status = await check.status()
         #expect(!status.running && status.problem == nil)
         #expect(status.record?.checked == [Self.volume] && status.record?.changed == [Self.volume], "\(String(describing: status.record))")
-        #expect(status.record?.describes(served.file) == true)
+        #expect(status.record?.describes(served) == true)
         let comparison = try #require(await check.comparison())
         let changed = try await comparison.pipeline.unreviewedDocumentRevisions()
         #expect(changed.map(\.documentId) == ["d2"] && changed.first?.changeKind == "body")
@@ -281,7 +329,9 @@ import Testing
             let tallies = try decode(AdminUpdates.self, try await owner.get("/api/v1/admin/library/updates"))
             #expect(tallies.mode == "import" && tallies.totals == .init(changedDocuments: 1, volumes: 1, annotatedDocuments: 1))
             #expect(tallies.volumes.first?.body == 1 && tallies.teiCheck?.changed == [Self.volume] && tallies.teiCheck?.running == false)
-            let reviewed = try decode(DocumentChange.self, try await owner.send(.post, "/api/v1/me/volumes/\(Self.volume)/documents/d2/review"))
+            let reviewed = try decode(DocumentChange.self, try await owner.send(
+                .post, "/api/v1/me/volumes/\(Self.volume)/documents/d2/review",
+                #"{"contentHash":"\#(banner.contentHash ?? "")","changeKind":"body"}"#))
             #expect(!reviewed.canMarkReviewed && reviewed.line == "Some highlights may be misaligned — the document has been updated since they were created.")
             #expect(try decode(ResearchPage.self, try await owner.get("/api/v1/me/research")).updated == 0)
         }

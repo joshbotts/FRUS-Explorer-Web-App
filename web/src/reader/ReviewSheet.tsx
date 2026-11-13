@@ -13,9 +13,9 @@ import {
   type DocumentReview,
   documentChangeQuery,
   documentReviewQuery,
-  highlightRemoved,
   markReviewed,
   moveHighlight,
+  reviewChanged,
   type ReviewHighlight,
 } from '../api/reviews';
 import type { Highlight, HighlightColor } from '../api/types';
@@ -70,6 +70,7 @@ export function ReviewSheet({
   documentNumber?: string;
   onClose: () => void;
 }) {
+  const client = useQueryClient();
   const review = useQuery(documentReviewQuery(volumeId, documentId));
   const headingId = useId();
   // The rows' order as the sheet opened, which a move does not change.
@@ -77,6 +78,19 @@ export function ReviewSheet({
   if (review.data && order === null) setOrder(review.data.highlights.map((row) => row.id));
   const [opening, setOpening] = useState<{ kind: 'note'; id: string } | { kind: 'tags' } | null>(null);
   const tags = useQuery({ ...documentTagsQuery(volumeId, documentId), enabled: opening?.kind === 'tags' });
+  // Edit Tags… waits for the document's tags; one that cannot read them says so, and Escape closes the sheet again.
+  const tagsFailed = opening?.kind === 'tags' && tags.isError;
+
+  /** A note editor or the tag picker closed: the review read again, then focus back to what opened it. */
+  function closed(selector: string) {
+    closeAtOnce(() => setOpening(null));
+    void reviewChanged(client, volumeId, documentId).finally(() => {
+      requestAnimationFrame(() => {
+        const opener = document.querySelector<HTMLElement>(selector);
+        (opener ?? document.getElementById(headingId))?.focus();
+      });
+    });
+  }
 
   return (
     <>
@@ -84,7 +98,7 @@ export function ReviewSheet({
         className="review-sheet"
         labelledBy={headingId}
         onCancel={() => {
-          if (!opening) onClose();
+          if (!opening || tagsFailed) onClose();
         }}
         onClose={onClose}
       >
@@ -96,6 +110,11 @@ export function ReviewSheet({
             {words.done}
           </button>
         </div>
+        {tagsFailed && (
+          <p className="error" role="alert">
+            {errorMessage(tags.error)}
+          </p>
+        )}
         {review.isError ? (
           <p className="error" role="alert">
             {errorMessage(review.error)}
@@ -118,11 +137,7 @@ export function ReviewSheet({
           volumeId={volumeId}
           documentId={documentId}
           note={{ id: opening.id, volumeId, documentId }}
-          onClose={() => {
-            const id = opening.id;
-            closeAtOnce(() => setOpening(null));
-            requestAnimationFrame(() => document.querySelector<HTMLElement>(`button[data-note="${CSS.escape(id)}"]`)?.focus());
-          }}
+          onClose={() => closed(`button[data-note="${CSS.escape(opening.id)}"]`)}
         />
       )}
       {opening?.kind === 'tags' && tags.data && (
@@ -131,10 +146,7 @@ export function ReviewSheet({
           documentId={documentId}
           documentNumber={documentNumber}
           applied={tags.data.items}
-          onClose={() => {
-            closeAtOnce(() => setOpening(null));
-            requestAnimationFrame(() => document.querySelector<HTMLElement>('button[data-edit-tags]')?.focus());
-          }}
+          onClose={() => closed('button[data-edit-tags]')}
         />
       )}
     </>
@@ -229,7 +241,7 @@ function Sections({
             <button
               type="button"
               aria-disabled={busy !== null}
-              onClick={() => void act('review', () => markReviewed(client, volumeId, documentId), words.markedReviewed)}
+              onClick={() => void act('review', () => markReviewed(client, review.change), words.markedReviewed)}
             >
               {words.markReviewed}
             </button>
@@ -343,15 +355,19 @@ function Sections({
           onClose={(removed) => {
             const id = removing.id;
             closeAtOnce(() => setRemoving(null));
-            if (removed) {
-              void highlightRemoved(client, volumeId, documentId);
-              setSaid(words.removed);
+            // Back to the row's Remove…, or, once the review read again has taken the row away, to the section's
+            // heading, or the change's when the section has gone with its last row.
+            const refocus = () =>
+              requestAnimationFrame(() => {
+                const button = document.querySelector<HTMLElement>(`button[data-remove="${CSS.escape(id)}"]`);
+                (button ?? document.getElementById(highlightsId) ?? document.getElementById(changeId))?.focus();
+              });
+            if (!removed) {
+              refocus();
+              return;
             }
-            // Back to the row's Remove…, or, once the row has gone, to the section's heading.
-            requestAnimationFrame(() => {
-              const button = document.querySelector<HTMLElement>(`button[data-remove="${CSS.escape(id)}"]`);
-              (button ?? document.getElementById(highlightsId) ?? document.getElementById(changeId))?.focus();
-            });
+            setSaid(words.removed);
+            void reviewChanged(client, volumeId, documentId).finally(refocus);
           }}
         />
       )}

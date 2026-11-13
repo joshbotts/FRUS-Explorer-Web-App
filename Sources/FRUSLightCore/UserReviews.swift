@@ -87,8 +87,8 @@ public protocol AnnotationReviewStore: Sendable {
     func documentReviews(for user: String) throws -> [AnnotationReviewRecord]
     /// The user's ledger rows of the `document` kind on one document.
     func documentReviews(of document: DocumentKey, for user: String) throws -> [AnnotationReviewRecord]
-    /// Every user's ledger rows of the `document` kind, for the index's own record that a change was reviewed.
-    func everyDocumentReview() throws -> [AnnotationReviewRecord]
+    /// Every user's ledger rows of the `document` kind, by user id, for the index's own record that a change was reviewed.
+    func everyDocumentReview() throws -> [String: [AnnotationReviewRecord]]
     /// Records that the user reviewed a document's change, the content hash and change kind the index stamped,
     /// as the app's `AnnotationReviewStore.record` does: a row with the app's derived id, or the row of that id
     /// the user has already, kept as it is.
@@ -123,13 +123,17 @@ extension RelationalUserStore: AnnotationReviewStore {
         }
     }
 
-    public func everyDocumentReview() throws -> [AnnotationReviewRecord] {
+    public func everyDocumentReview() throws -> [String: [AnnotationReviewRecord]] {
         try reading { db in
-            try db.query(
+            var reviews: [String: [AnnotationReviewRecord]] = [:]
+            for row in try db.query(
                 """
-                SELECT \(Self.reviewColumns) FROM annotation_reviews WHERE annotation_type = ?
-                    ORDER BY volume_id, document_id, user_id, upper(id)
-                """, [.text(AnnotationReviewLedger.documentKind)]).map(Self.review)
+                SELECT user_id, \(Self.reviewColumns) FROM annotation_reviews WHERE annotation_type = ?
+                    ORDER BY user_id, volume_id, document_id, upper(id)
+                """, [.text(AnnotationReviewLedger.documentKind)]) {
+                reviews[row[0].text ?? "", default: []].append(Self.review(Array(row.dropFirst())))
+            }
+            return reviews
         }
     }
 

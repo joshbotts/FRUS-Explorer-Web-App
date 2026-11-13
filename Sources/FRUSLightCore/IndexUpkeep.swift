@@ -167,6 +167,24 @@ extension LibraryIndexer {
         (runningJob, runningList, runningIndexed) = (job.id, Set(volumes), [])
         defer { (runningJob, runningList, runningVolume, runningIndexed) = (nil, nil, nil, []) }
         try await job.commit()
+        // A reset's pass, over the revision rows the kit keeps through its emptying: each volume a download gave a new
+        // file is indexed first with `indexVolume`, whose stamp records what the new file changed, which the pass's
+        // rebaseline then keeps (PLAN's S21f); with a writer of its own, whose events are not the pass's. An upgrade's
+        // records none, the version having moved.
+        let owed = reason == .reset
+            ? stamps.reindexOwed().filter { FileManager.default.fileExists(atPath: volumesDirectory.appendingPathComponent("\($0).xml").path) }.sorted()
+            : []
+        if !owed.isEmpty {
+            try await withWriter(holding: nil) { writer in
+                for volumeId in owed {
+                    do {
+                        try await writer.pipeline.indexVolume(volumeId)
+                    } catch {
+                        log("\(volumeId), owed a pass for its new file, could not be indexed before the reset's pass: \(error)")
+                    }
+                }
+            }
+        }
         let counted = try await withWriter(holding: nil) { writer -> (indexed: Int, failed: Int) in
             let relay = IndexingProgressRelay(job: job, writesLine: false)
             let updates = Task { [stream = writer.pipeline.progressStream] in
@@ -453,8 +471,11 @@ extension LibraryIndexer {
             try await withWriter(holding: Self.resetHold) { writer in
                 try await writer.pipeline.removeAllVolumesFromIndex()
             }
-            // The same file, emptied: its side files are its own.
+            // The same file, emptied: its side files are its own; and the revision rows the kit keeps through its
+            // emptying still describe it, so a volume a download gave a new file stays owed its pass (PLAN's S21f).
+            let owed = stamps.reindexOwed()
             indexWasReplaced(sameFile: true)
+            for volumeId in owed.sorted() { stamps.oweReindex(volumeId) }
         } else {
             // An index the server does not serve, as one the start refused, goes whole, as Import mode's reset removes its index.
             for suffix in ["", "-wal", "-shm", "-journal"] where FileManager.default.fileExists(atPath: liveIndex.path + suffix) {

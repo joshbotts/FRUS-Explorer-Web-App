@@ -84,7 +84,7 @@ test('after the update: Changed by an update, the banner, and the highlight move
   await page.keyboard.press('Enter');
 
   // The reader's banner, in the app's words, and Review….
-  const banner = page.getByRole('region', { name: 'A change since you annotated this document' });
+  const banner = page.getByRole('region', { name: 'A change to this document' });
   await expect(banner).toContainText('The text of this document changed in a volume update. Some highlights may be misaligned.');
   await expect(page.frameLocator('iframe.reader-frame').getByText(/touching an invasion of the troops/)).toBeVisible();
   await axeCheck(page);

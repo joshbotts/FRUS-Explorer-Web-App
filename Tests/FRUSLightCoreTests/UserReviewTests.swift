@@ -38,7 +38,8 @@ import Testing
         let bobs = try store.recordDocumentReview(of: Self.d2, contentHash: "c1", changeKind: "body", for: "bob", at: Self.at)
         #expect(bobs.id == first.id)
         #expect(try store.documentReviews(of: Self.d2, for: "bob") == [bobs])
-        #expect(try store.everyDocumentReview().count == 4)
+        let every = try store.everyDocumentReview()
+        #expect(every.keys.sorted() == ["bob", "owner"] && every["owner"]?.count == 3 && every["bob"] == [bobs])
         #expect(try store.documentReviews(of: DocumentKey(volumeId: "frus1894Nicaragua", documentId: "d3"), for: "owner").isEmpty)
     }
 

@@ -20,6 +20,8 @@ export interface DocumentChange {
   changeKind?: 'body' | 'apparatus' | 'vanished' | string;
   changedAt?: string;
   reviewedAt?: string;
+  /** The change's content hash, which Mark Reviewed sends back. */
+  contentHash?: string;
   highlightsStale: boolean;
   vanished: boolean;
   canMarkReviewed: boolean;
@@ -108,10 +110,16 @@ function reviewed(client: QueryClient, volumeId: string, documentId: string) {
   ]);
 }
 
-/** Mark Reviewed: the user's review of the change, as the app's ledger records it. */
-export async function markReviewed(client: QueryClient, volumeId: string, documentId: string): Promise<DocumentChange> {
-  const answer = (await change<DocumentChange>(client, 'POST', `${documentPath(volumeId, documentId)}/review`))!;
-  await reviewed(client, volumeId, documentId);
+/**
+ * Mark Reviewed: the user's review of the change the sheet showed, as the app's ledger records it; refused
+ * (`DOCUMENT_CHANGED`) when another update has changed the document since.
+ */
+export async function markReviewed(client: QueryClient, shown: DocumentChange): Promise<DocumentChange> {
+  const answer = (await change<DocumentChange>(client, 'POST', `${documentPath(shown.volumeId, shown.documentId)}/review`, {
+    contentHash: shown.contentHash ?? '',
+    changeKind: shown.changeKind ?? null,
+  }))!;
+  await reviewed(client, shown.volumeId, shown.documentId);
   return answer;
 }
 
@@ -129,8 +137,8 @@ export async function moveHighlight(client: QueryClient, volumeId: string, docum
   return answer;
 }
 
-/** After a highlight's removal in the sheet. */
-export function highlightRemoved(client: QueryClient, volumeId: string, documentId: string) {
+/** After a highlight's removal, a note's edit or the tags' in the sheet: what reads the document's review again. */
+export function reviewChanged(client: QueryClient, volumeId: string, documentId: string) {
   return reviewed(client, volumeId, documentId);
 }
 
@@ -174,7 +182,7 @@ export interface AdminUpdates {
 }
 
 export const adminUpdatesQuery = queryOptions({
-  queryKey: ['adminUpdates'],
+  queryKey: ['admin', 'library', 'updates'],
   queryFn: ({ signal }) => getJSON<AdminUpdates>('/api/v1/admin/library/updates', undefined, signal),
   // Read again every few seconds while Import mode's comparison runs.
   refetchInterval: (query) => (query.state.data?.teiCheck?.running ? 3_000 : 30_000),

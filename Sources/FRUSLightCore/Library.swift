@@ -463,7 +463,7 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
     private let downloadsEnd = Mutex<(@Sendable ([String]) async -> Void)?>(nil)
     /// Told a volume a download is about to give a file, a new one or another in place of a copy, before the
     /// file takes its name: the library's indexing owes it a pass (PLAN's S21f). Set once, at the server's start.
-    private let fileReplaced = Mutex<(@Sendable (String) -> Void)?>(nil)
+    private let fileReplaced = Mutex<(@Sendable (String) -> Bool)?>(nil)
 
     /// The longest listing the library reads: GitHub's of 553 volumes is about 400 KB.
     static let listingLimit = 16 * 1_048_576
@@ -760,8 +760,8 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
     }
 
     /// Has `hook` told each volume a download is about to give a file, before the file takes its name (PLAN's
-    /// S21f).
-    public func whenFileWillBeReplaced(_ hook: @escaping @Sendable (String) -> Void) {
+    /// S21f); a hook that says it could not keep that the volume is owed a pass keeps the file from its place.
+    public func whenFileWillBeReplaced(_ hook: @escaping @Sendable (String) -> Bool) {
         fileReplaced.withLock { $0 = hook }
     }
 
@@ -986,7 +986,11 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
             // A file the index was not made from, in place of a copy, or of none where the index holds the volume
             // from elsewhere, as a seeding export's: the library's indexing owes the volume a pass, kept before the
             // file takes its name, so that a stop meanwhile loses nothing (PLAN's S21f).
-            if let hook = fileReplaced.withLock({ $0 }) { hook(id) }
+            if let hook = fileReplaced.withLock({ $0 }), !hook(id) {
+                try? FileManager.default.removeItem(at: partial)
+                throw Problem(sentence: "\(entry.filename) was downloaded and checked, but the index's stamps could not record that it needs indexing again, so the copy in place was kept: the server's log says why.",
+                              stops: "the index's stamps could not be written")
+            }
             do {
                 try await Blocking.run { try Self.rename(partial, over: final) }
             } catch {

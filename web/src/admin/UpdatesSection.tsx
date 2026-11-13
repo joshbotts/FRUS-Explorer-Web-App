@@ -3,7 +3,7 @@
 // Keeping Current; and the tallies of what the updates changed, by volume, the kit's `VolumeUpdateReview` over
 // every user's research, with an Import server's comparison of its index with the TEI folder.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
 import { downloadVolumes } from '../api/library';
 import { adminUpdatesQuery, checkForCorrections, type Corrections } from '../api/reviews';
@@ -20,6 +20,7 @@ export function KeepingCurrent() {
   const [said, setSaid] = useState('');
   const [failure, setFailure] = useState<string | null>(null);
   const headingId = useId();
+  const checkButton = useRef<HTMLButtonElement>(null);
 
   async function check() {
     if (checking) return;
@@ -45,8 +46,10 @@ export function KeepingCurrent() {
     try {
       const job = await downloadVolumes(client, { volumeIds });
       setSaid(words.updateQueued(job?.subject ?? volumeIds.join(', ')));
-      // Those asked for leave the list, which a check later finds up to date.
+      // Those asked for leave the list, which a check later finds up to date, and focus goes on to the check, where
+      // the row's Update was.
       setFound((current) => current && { ...current, volumes: current.volumes.filter((volume) => !volumeIds.includes(volume.volumeId)) });
+      requestAnimationFrame(() => checkButton.current?.focus());
     } catch (error) {
       setFailure(errorMessage(error));
     } finally {
@@ -58,7 +61,7 @@ export function KeepingCurrent() {
     <section aria-labelledby={headingId} className="library-updates">
       <h2 id={headingId}>{words.keepingCurrent}</h2>
       <p>
-        <button type="button" aria-disabled={checking} aria-describedby={`${headingId}-help`} onClick={() => void check()}>
+        <button ref={checkButton} type="button" aria-disabled={checking} aria-describedby={`${headingId}-help`} onClick={() => void check()}>
           {checking ? words.checkingCorrections : words.checkCorrections}
         </button>{' '}
         <span className="note" id={`${headingId}-help`}>
@@ -110,9 +113,12 @@ export function KeepingCurrent() {
   );
 }
 
-/** After an Update: what the updates changed, by volume, and an Import server's comparison with its TEI folder. */
-export function AfterAnUpdate() {
-  const updates = useQuery(adminUpdatesQuery);
+/**
+ * After an Update: what the updates changed, by volume, and an Import server's comparison with its TEI folder; read
+ * again every two seconds while the library downloads or indexes, `busy`.
+ */
+export function AfterAnUpdate({ busy }: { busy: boolean }) {
+  const updates = useQuery({ ...adminUpdatesQuery, ...(busy ? { refetchInterval: 2_000 } : {}) });
   const headingId = useId();
   const data = updates.data;
   return (
