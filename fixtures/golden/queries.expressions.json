@@ -9,13 +9,13 @@
     "platform" : {
       "arch" : "arm64",
       "locale" : "en_US",
-      "os" : "macOS 27.2.0",
+      "os" : "macOS 27.2.1",
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "f287bff74d0d9983137e8671cc569aba6a15b5f0d93c06bf27aab7bcfa5d7ff0",
+    "sourceDigest" : "691f8b175057a3e95603f23cd6ce697b81955d3f177537cc52fc51d3ce281e31",
     "tool" : "tools/mac-golden expressions",
-    "upstreamCommit" : "4c252c331aecfb0a58e9e18a718a1aaaa53595d5"
+    "upstreamCommit" : "39859a51b07863d7391c6e92aa70b0a14a0c066f"
   },
   "queries" : [
     {

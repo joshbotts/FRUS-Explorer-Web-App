@@ -1,28 +1,17 @@
 // S21b's follow-up: the reader opens a volume's back-of-volume index, which it parses alone, as the app's
 // Read Index does, from where the app offers it, the volume's contents, and an index's "See" reference
 // lands on its entry in the same page (FRUS-Explorer#1875), by keyboard alone, with no axe violations,
-// the reader's frame scanned with the app, but the kit's own on the index's page links (below). Against
-// the image, with the synthetic export imported and
-// fixtures/tei mounted: frus1961-63v06's index holds nine "See" links to eight of its entries, among
-// them "Cuba (see also Cuban missile crisis)", whose entry follows a few entries on.
-import { axeCheck, type KitKnownFailure } from './axe';
+// the reader's frame scanned with the app, the links of its entries that hold links alone among them,
+// which the kit boxes at least 24 pixels square since S24e's pin move (FRUS-Explorer#1898). Against the
+// image, with the synthetic export imported and fixtures/tei mounted: frus1961-63v06's index holds nine
+// "See" links to eight of its entries, among them "Cuba (see also Cuban missile crisis)", whose entry
+// follows a few entries on.
+import { axeCheck } from './axe';
 import { v06Title } from './expected';
 import { expect, test } from './fixtures';
 import { tabTo } from './keyboard';
 
 const volume = 'frus1961-63v06';
-
-/**
- * The kit's index page, which the app's reader shows alike, fails axe's target-size (WCAG 2.2's 2.5.8)
- * where the index prints an entry's page numbers with no comma between them, as in "Davis, Richard H.,
- * 18n 24n 131n": its links stand a space apart, smaller than 24 pixels with no room around them. The
- * page is the app's byte for byte (check 4), so its fix is the kit's reader stylesheet's, upstream.
- */
-const indexLinks: KitKnownFailure = {
-  rule: 'target-size',
-  target: / >>> li[^>]* > \.(cross-ref|pers-name)\[href="frusexplorer:\/\/(doc\/%23pg_\d+|person\/[^"]+)"\]$/,
-  why: 'the kit’s reader stylesheet gives an index’s page links no room, upstream',
-};
 
 test('opens a volume’s index from its contents and follows a “See” reference to its entry, by keyboard alone', async ({ page }) => {
   // About 150 links come before the reference in the frame, the index's page numbers and names, after
@@ -54,7 +43,7 @@ test('opens a volume’s index from its contents and follows a “See” referen
   const frame = page.frameLocator('iframe.reader-frame');
   const entry = frame.locator('#ix-in1');
   await expect(entry).toContainText('Cuban missile crisis:');
-  await axeCheck(page, indexLinks);
+  await axeCheck(page);
 
   // The "see also" in Cuba's entry: Enter on it, and the page lands on the entry it names, in place.
   // The walk checks for the link by its address, which is quick among the frame's 1,200 links.
@@ -70,5 +59,5 @@ test('opens a volume’s index from its contents and follows a “See” referen
   // The next Tab goes on from the entry, to its first link, a name.
   await page.keyboard.press('Tab');
   await expect(entry.getByRole('link').first()).toBeFocused();
-  await axeCheck(page, indexLinks);
+  await axeCheck(page);
 });

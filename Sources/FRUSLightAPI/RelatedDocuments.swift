@@ -11,8 +11,9 @@
 // The cross-reference axis ranks by the kit's `CrossReferenceStore` (FRUS-Explorer#1891) over the served
 // index, since S23c's pin move, as the app's ranks by its `appState.crossReferenceStore`. Two of the app's
 // eight axes contribute nothing here, which the answer's `axes` says: the lexical axis, which ships at
-// weight 0 and then skips its generation, until S24d compiles WordCloudKit, whose stopwords its query terms
-// are chosen past; and the semantic axis, which reads the bundled vectors, until phase 4.
+// weight 0 and then skips its generation, until a follow-up of S24e's pin move gives it a search service and
+// WordCloudKit's stopwords, which its query terms are chosen past (the kit compiles here since that move,
+// FRUS-Explorer#1900); and the semantic axis, which reads the bundled vectors, until phase 4.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -49,9 +50,9 @@ public struct RelatedDocuments: Codable, Equatable, Sendable, ResponseEncodable 
         /// Its weight in this tuning.
         public var weight: Double
         public var defaultWeight: Double
-        /// Whether it can contribute on this server: never the lexical axis until S24d, or the semantic
-        /// axis until phase 4; nor shared topics on a server whose data files hold no document subject
-        /// index, as the app's slider says on a device without one.
+        /// Whether it can contribute on this server: never the lexical axis until S24e's follow-up, or the
+        /// semantic axis until phase 4; nor shared topics on a server whose data files hold no document
+        /// subject index, as the app's slider says on a device without one.
         public var available: Bool
     }
 
@@ -178,7 +179,8 @@ enum RelatedDocumentsRoutes {
 
     /// The engine's dependencies over the served index and the data files: the index's pipeline, its
     /// cross-reference and person stores, the document subject index, and the catalogue's manifest; no
-    /// search service or stopwords for the lexical axis until S24d, and no semantic axis until phase 4.
+    /// search service or stopwords for the lexical axis until S24e's follow-up, and no semantic axis until
+    /// phase 4.
     @MainActor
     static func dependencies(served: ServedIndex, resources: ServerResources,
                              subjects: DocumentSubjectIndex?) -> RelatedDocumentsDependencies {
@@ -189,7 +191,8 @@ enum RelatedDocumentsRoutes {
             personMentionStore: served.persons,
             documentSubjectIndex: subjects,
             manifestStore: ServedManifest(resources: resources),
-            // The lexical axis's: none until S24d brings WordCloudKit's stopwords.
+            // The lexical axis's: none until S24e's follow-up brings WordCloudKit's stopwords, which compiles
+            // here since that move.
             searchService: nil,
             indexedVolumeIds: served.indexedVolumeIds,
             lexicalStopwords: [],

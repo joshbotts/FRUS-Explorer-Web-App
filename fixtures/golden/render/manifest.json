@@ -13,13 +13,13 @@
     "platform" : {
       "arch" : "arm64",
       "locale" : "en_US",
-      "os" : "macOS 27.2.0",
+      "os" : "macOS 27.2.1",
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "f287bff74d0d9983137e8671cc569aba6a15b5f0d93c06bf27aab7bcfa5d7ff0",
+    "sourceDigest" : "691f8b175057a3e95603f23cd6ce697b81955d3f177537cc52fc51d3ce281e31",
     "tool" : "tools/mac-golden render",
-    "upstreamCommit" : "4c252c331aecfb0a58e9e18a718a1aaaa53595d5"
+    "upstreamCommit" : "39859a51b07863d7391c6e92aa70b0a14a0c066f"
   },
   "rows" : [
     {
@@ -989,9 +989,9 @@
       "volume" : "frus1961-63v06"
     },
     {
-      "bytes" : 5317,
+      "bytes" : 5355,
       "document" : "d18",
-      "sha256" : "1f8aa964bf150b9dde03f7e68b4ea3e18a86adb4de345d3ee28e53ff87b39f0f",
+      "sha256" : "b27f9eb5496d42dee58f71d3d73ae6c59aa25986b042acb2d0756df046d0f5bb",
       "volume" : "frus1961-63v06"
     },
     {
@@ -1169,9 +1169,9 @@
       "volume" : "frus1961-63v06"
     },
     {
-      "bytes" : 3793,
+      "bytes" : 3831,
       "document" : "d48",
-      "sha256" : "0b1bd2352b18dd16316f8415ca8ec655bcf2368dff126a27d3493c435cc060f0",
+      "sha256" : "57b7cb9c6439695301a874c868712f61ab7ff733c6b050038eb1b6013a6719d8",
       "volume" : "frus1961-63v06"
     },
     {
@@ -1415,9 +1415,9 @@
       "volume" : "frus1961-63v06"
     },
     {
-      "bytes" : 4720,
+      "bytes" : 4758,
       "document" : "d89",
-      "sha256" : "6319cec19d5f8534adde4685a93febcea273d34b71fa755a9fda282c5a14493a",
+      "sha256" : "090da6441d5bd5a55a6cca271692f3f37ff206c83a28dd062107885f41c5f988",
       "volume" : "frus1961-63v06"
     },
     {
@@ -1529,9 +1529,9 @@
       "volume" : "frus1961-63v06"
     },
     {
-      "bytes" : 4220,
+      "bytes" : 4258,
       "document" : "d108",
-      "sha256" : "3c07d4baa82a606e7b1aeb63503c5512bc8ff1f3ae04e211f3979657019d4a0c",
+      "sha256" : "884d76cdca819b971dd4516d0fba4ad9e485a049e0a02fcd62fc53070756f3a4",
       "volume" : "frus1961-63v06"
     },
     {
@@ -1613,9 +1613,9 @@
       "volume" : "frus1961-63v06"
     },
     {
-      "bytes" : 1028,
+      "bytes" : 1085,
       "document" : "toc",
-      "sha256" : "47d32363f69774c30062b0367f15063735f7c76bfa873698fc9da5c26620c8f5",
+      "sha256" : "35dc3fa3ba671fdfe9b294d9b7014fd9678f1e4311cb1e227449eb132d55b450",
       "volume" : "frus1961-63v06"
     },
     {
@@ -1637,9 +1637,9 @@
       "volume" : "frus1961-63v06"
     },
     {
-      "bytes" : 96448,
+      "bytes" : 96600,
       "document" : "index",
-      "sha256" : "adfb23e88e395f6f683b4c1a493f653f4ad7020c702174ac80f7438692ef3a93",
+      "sha256" : "6123be84c1679926f2258a07ee168581d693514dc5f1e6bfa876e57185d381fd",
       "volume" : "frus1961-63v06"
     },
     {
@@ -1733,9 +1733,9 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 28182,
+      "bytes" : 28334,
       "document" : "d13",
-      "sha256" : "d7e881291a03a60e4adabeb81661234474eeb891da370cbddf05512f4a8385ab",
+      "sha256" : "dc779db17de25e39ad9baa5210e72d14f80e256def7550101f68bd9dbf347a83",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -1787,9 +1787,9 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 34282,
+      "bytes" : 34472,
       "document" : "d22",
-      "sha256" : "86a57cacabba28f37d10fa03f0259eeaea16cebcacb06fb990dba2399ffc46a8",
+      "sha256" : "63e93e96294178d57d7e6f3de7c8a3dc6998bca1c2510019f86a4a4ec9248874",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -2231,9 +2231,9 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 10989,
+      "bytes" : 11008,
       "document" : "d96",
-      "sha256" : "6c2960991ebe86371baa7b2207f98e422475c9ae9416f2db5e1a643e8d7acc70",
+      "sha256" : "882334f7104133243ce0d5d4165a0bb6d5de83ef0cc70239ac216f83d1137417",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -2417,9 +2417,9 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 8902,
+      "bytes" : 8921,
       "document" : "d127",
-      "sha256" : "9b8119c1ca5758d515b037f4a571339782d1016b3a48656a04c8870f7cc5e967",
+      "sha256" : "2e4ac7a806ad60c97b83d2e69fd6bbe0ca5e9d87c38c9b9513e78ccd3e4cc8e6",
       "volume" : "frus1969-76ve09p1"
     },
     {
@@ -2429,9 +2429,9 @@
       "volume" : "frus1969-76ve09p1"
     },
     {
-      "bytes" : 2225,
+      "bytes" : 2434,
       "document" : "toc",
-      "sha256" : "71552b153f11979a648f2761fe612f81b765f3d49b2a2bf92a032fb1fb37854a",
+      "sha256" : "5b092dca78a7fbda7a0388f7629972749a1edac669bff476dc53dcc0b324b005",
       "volume" : "frus1969-76ve09p1"
     },
     {

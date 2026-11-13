@@ -658,7 +658,7 @@
     "timings" : {
       "cross_references" : 0.002,
       "cross_references.sequence" : 0.001,
-      "document_cache" : 0.005,
+      "document_cache" : 0.004,
       "document_cache.sequence" : 0.001,
       "document_dates" : 0.001,
       "document_dates.sequence" : 0.001,
@@ -666,7 +666,7 @@
       "document_revisions.sequence" : 0.001,
       "document_sources" : 0.001,
       "document_sources.sequence" : 0,
-      "document_subject_refs" : 0.003,
+      "document_subject_refs" : 0.002,
       "document_subject_volumes" : 0,
       "document_subjects" : 0.002,
       "external_citations" : 0,
@@ -674,12 +674,12 @@
       "frus_documents.averages" : 0,
       "frus_documents.config" : 0,
       "frus_documents.docsize" : 0.001,
-      "frus_documents.vocab_col" : 0.025,
-      "frus_documents.vocab_instance" : 1.485,
-      "frus_documents.vocab_row" : 0.033,
-      "integrity" : 0.037,
-      "page_ranges" : 0.004,
-      "page_ranges.sequence" : 0.004,
+      "frus_documents.vocab_col" : 0.022,
+      "frus_documents.vocab_instance" : 1.08,
+      "frus_documents.vocab_row" : 0.029,
+      "integrity" : 0.028,
+      "page_ranges" : 0.003,
+      "page_ranges.sequence" : 0.003,
       "person_cluster_candidate" : 0,
       "person_list_sources" : 0,
       "person_mentions" : 0.002,
@@ -692,7 +692,7 @@
       "schema.export_only" : 0,
       "terms" : 0,
       "terms.sequence" : 0,
-      "total" : 1.642,
+      "total" : 1.214,
       "user_content.averages" : 0,
       "user_content.config" : 0,
       "user_content.docsize" : 0.001,
@@ -737,8 +737,8 @@
       "sqlite" : "3.45.1",
       "timeZone" : "Etc/UTC"
     },
-    "sourceDigest" : "f287bff74d0d9983137e8671cc569aba6a15b5f0d93c06bf27aab7bcfa5d7ff0",
+    "sourceDigest" : "691f8b175057a3e95603f23cd6ce697b81955d3f177537cc52fc51d3ce281e31",
     "tool" : "frus-parity summarize",
-    "upstreamCommit" : "4c252c331aecfb0a58e9e18a718a1aaaa53595d5"
+    "upstreamCommit" : "39859a51b07863d7391c6e92aa70b0a14a0c066f"
   }
 }

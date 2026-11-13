@@ -101,7 +101,8 @@ jobs:
         run: apt-get update -qq && apt-get install -y -qq --no-install-recommends libsqlite3-dev libargon2-dev
 
       # The submodule is public, and checked out whole: a SourceNoteKit test reads an app resource,
-      # and FRUSCoreKitTests reads the app's data files and manifest in FRUSExplorer/Resources.
+      # FRUSCoreKitTests reads the app's data files and manifest in FRUSExplorer/Resources, and
+      # WordCloudKitTests (since S24e's pin move) the bundled clouds, references, lexicons and stopwords.
       - uses: actions/checkout@v5
         with:
           submodules: true

@@ -2,11 +2,12 @@
 // FRUS Explorer Light: the server, plus Linux builds of the Mac app's shared kits.
 //
 // The shared kits are compiled from the pinned FRUS-Explorer submodule, never copied
-// (CLAUDE.md, rule 4). Each kit keeps the settings upstream's Package.swift gives it. Seven kits so
+// (CLAUDE.md, rule 4). Each kit keeps the settings upstream's Package.swift gives it. Eight kits so
 // far, each with upstream's tests: SourceNoteKit, CrossRefKit and GeneratorKit since session 0;
 // TEIHeaderKit, SemanticVectorsKit and FTS5Store since session 1's Linux guards, with
-// ManifestGeneratorCore, whose tests hold TEIHeaderKit's; and FRUSCoreKit, part 1 since session 3
-// and part 2 since session 6's pin move. The server links FRUSCoreKit and FTS5Store since session 8,
+// ManifestGeneratorCore, whose tests hold TEIHeaderKit's; FRUSCoreKit, part 1 since session 3
+// and part 2 since session 6's pin move; and WordCloudKit since S24e's pin move, whose suites that
+// tag compile on Apple platforms alone. The server links FRUSCoreKit and FTS5Store since session 8,
 // through FRUSLightAPI.
 // Build and test through scripts/swift, which runs this package in swift:6.4-noble.
 
@@ -119,6 +120,24 @@ let package = Package(
             name: "SemanticVectorsKitTests",
             dependencies: ["SemanticVectorsKit"],
             path: "\(upstream)/SemanticVectorsKitTests",
+            swiftSettings: swift6
+        ),
+        // WordCloudKit, since S24e's pin move (S24d, FRUS-Explorer#1900): the bundled clouds' and keyness
+        // references' formats, the keyness measure, the cloud's measures and the tuning's reading of the
+        // settings. Upstream's Package.swift declares no dependency for it, so the one its Linux guard
+        // needs, swift-crypto's Crypto where CryptoKit is missing, is declared here for Linux only, as for
+        // SemanticVectorsKit. Its tokenizers' counting and its readiness gate need NaturalLanguage and are
+        // unavailable here, each saying why; its suites that tag are behind the same guard, so the rest run.
+        .target(
+            name: "WordCloudKit",
+            dependencies: [.product(name: "Crypto", package: "swift-crypto", condition: .when(platforms: [.linux]))],
+            path: "\(upstream)/WordCloudKit",
+            swiftSettings: swift6
+        ),
+        .testTarget(
+            name: "WordCloudKitTests",
+            dependencies: ["WordCloudKit"],
+            path: "\(upstream)/WordCloudKitTests",
             swiftSettings: swift6
         ),
         // The whole of FTS5Store. It replaces session 0's FTS5Schema target, which compiled only its
@@ -256,9 +275,10 @@ let package = Package(
         // and settings, with the generator's own tests. The parity harness alone links them, and no
         // image a release ships holds it: the server needs none of them. A file that imports both
         // FRUSCoreKit and these cores sees two each of CentralFilesIndex, CollectionAuthorityIndex,
-        // CountryRoll, LotFileEntry, NumericalFileIndex, NumericalFileRoll and VolumeSourcesIndex, and
-        // names them by module; and CountrySeriesIndex and GeoKeyNormalizer, internal to the kit, are the
-        // cores' alone there, but twice over where the file imports the kit `@testable`.
+        // CountryRoll, LotFileEntry, NumericalFileIndex, NumericalFileRoll, SourceProvenanceIndex (public
+        // in the kit since FRUS-Explorer#1899) and VolumeSourcesIndex, and names them by module; and
+        // CountrySeriesIndex and GeoKeyNormalizer, internal to the kit, are the cores' alone there, but
+        // twice over where the file imports the kit `@testable`.
         .target(
             name: "LotClaimantsIndexGeneratorCore",
             dependencies: ["GeneratorKit", "SourceNoteKit"],
