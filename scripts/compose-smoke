@@ -360,7 +360,7 @@ library_idle() {  # waits until no job of the library's waits or runs (S21d, S21
   while [ "$SECONDS" -lt "$deadline" ]; do
     if library_jobs && python3 -c 'import json, sys
 jobs = json.load(open(sys.argv[1], encoding="utf-8"))["jobs"]
-kinds = ("libraryDownload", "libraryIndex", "libraryRemove", "indexCompact", "indexCheck", "indexReset")
+kinds = ("libraryDownload", "libraryIndex", "libraryRemove", "indexCompact", "indexCheck", "indexReset", "indexReviews")
 sys.exit(0 if not any(j["kind"] in kinds and j["state"] in ("queued", "running") for j in jobs) else 1)' "$work/library-jobs.json"; then
       return 0
     fi
@@ -630,6 +630,92 @@ counts=$(library_counts 2>/dev/null || true)
 [ "$counts" = "indexed=3 notDownloaded=550" ] || fail "the Library is not as it was before the side-loads: $counts"
 found=$(curl -s --max-time 10 -w ' %{http_code}' "$library_base/api/v1/search?keywords=nicaragua")
 case "$found" in *'"total":0,'*) fail "search found nothing after the compaction" ;; *' 200') ;; *) fail "search did not answer after the compaction: ${found: -120}" ;; esac
+
+echo "== admin: the corrections check and the update review, a fixture volume corrected upstream (PLAN's S21f)"
+# frus1894Nicaragua's d2 corrected in the mirror, as the Office of the Historian corrects a volume in place: two
+# letters more in its first paragraph, before a passage a highlight covers. Check for Corrections finds it by the
+# kit's rule, Download (the app's Update) fetches it, the indexing after it indexes the volume again with the kit's
+# indexVolume, whose stamp records d2's change, and Changed by an update lists d2, which a note annotates. With
+# --e2e, the update review spec makes a highlight on d2 before the correction is fetched, and reviews it by
+# keyboard after it, Move Here and Mark Reviewed, on Chromium with no axe violations.
+review_e2e() {  # $1: the spec's phase, before or after the update
+  FRUS_E2E_UPDATE_REVIEW="$1" FRUS_E2E_NETWORK="container:$(library_compose ps -q frus)" FRUS_E2E_BASE_URL=http://localhost:8080/ \
+    scripts/npm --playwright || fail "the update review spec failed $1 the update; web/playwright-report has its report"
+}
+noted=$(library_api POST /api/v1/me/volumes/frus1894Nicaragua/documents/d2/notes \
+  '{"bodyText":"Gresham on the Honduran invasion","runs":null,"userTagIds":[],"projectIds":[],"selectedSummaryIds":[]}')
+case "$noted" in *' 201') ;; *) fail "the note on d2 was not made: $noted" ;; esac
+if [ -n "$e2e" ]; then
+  echo "   the update review spec, before the update: a highlight on d2"
+  review_e2e before
+fi
+python3 - "$raw/frus1894Nicaragua.xml" "$mirror/api.github.com/repos/HistoryAtState/frus/contents/volumes" <<'PY' \
+  || fail "the corrected volume could not be written to the mirror"
+import json, os, subprocess, sys
+volume, listing_path = sys.argv[1:3]
+xml = open(volume, encoding="utf-8").read()
+d2 = xml.index('xml:id="d2"')
+at = xml.index("information a copy of a", d2)
+xml = xml[:at] + "information a copy of the" + xml[at + len("information a copy of a"):]
+open(volume, "w", encoding="utf-8").write(xml)
+sha = subprocess.check_output(["git", "hash-object", "--no-filters", volume], text=True).strip()
+listing = json.load(open(listing_path, encoding="utf-8"))
+for entry in listing:
+    if entry["name"] == os.path.basename(volume):
+        entry["sha"], entry["size"] = sha, os.path.getsize(volume)
+json.dump(listing, open(listing_path, "w"))
+PY
+chmod -R a+rX "$mirror"
+checked=$(library_api POST /api/v1/admin/library/corrections)
+case "$checked" in *'"volumeId":"frus1894Nicaragua"'*' 200') ;; *) fail "Check for Corrections did not find the corrected volume: ${checked: -400}" ;; esac
+python3 -c 'import json, sys
+answer = json.loads(sys.stdin.read().rsplit(" ", 1)[0])
+assert [v["volumeId"] for v in answer["volumes"]] == ["frus1894Nicaragua"], answer' <<<"$checked" \
+  || fail "Check for Corrections listed more than the corrected volume: ${checked: -400}"
+updated=$(library_api POST /api/v1/admin/library/downloads '{"volumeIds":["frus1894Nicaragua"]}')
+case "$updated" in *'"kind":"libraryDownload"'*' 202') ;; *) fail "the update was not queued: $updated" ;; esac
+library_idle 120 || fail "the update's download and indexing did not end: $(head -c 400 "$work/library-jobs.json")"
+library_compose exec -T frus sh -c 'sha256sum /data/volumes/frus1894Nicaragua.xml' | cut -d' ' -f1 >"$work/updated.sha" \
+  || fail "the updated volume could not be read"
+python3 - "$work/updated.sha" "$raw/frus1894Nicaragua.xml" <<'PY' || fail "the library's frus1894Nicaragua is not the corrected file"
+import hashlib, sys
+assert open(sys.argv[1]).read().strip() == hashlib.sha256(open(sys.argv[2], "rb").read()).hexdigest()
+PY
+curl -s --max-time 10 -H "Host: localhost:8080" -o "$work/updates.json" "$library_base/api/v1/admin/library/updates" \
+  || fail "the updates' tallies did not answer"
+curl -s --max-time 10 -H "Host: localhost:8080" -o "$work/updated-list.json" "$library_base/api/v1/me/research/documents?group=updated" \
+  || fail "Changed by an update did not answer"
+curl -s --max-time 10 -H "Host: localhost:8080" -o "$work/d2-change.json" "$library_base/api/v1/me/volumes/frus1894Nicaragua/documents/d2/change" \
+  || fail "d2's change did not answer"
+python3 - "$work/library-jobs.json" "$work/updates.json" "$work/updated-list.json" "$work/d2-change.json" <<'PY' \
+  || fail "the update's change was not recorded or listed: $(head -c 600 "$work/updates.json") $(head -c 600 "$work/updated-list.json")"
+import json, sys
+jobs, updates, listed, change = (json.load(open(path, encoding="utf-8")) for path in sys.argv[1:5])
+indexing = next(j for j in jobs["jobs"] if j["kind"] == "libraryIndex")
+assert indexing["state"] == "succeeded" and indexing["progress"] == "Indexed 1 volume.", indexing
+assert updates["totals"] == {"changedDocuments": 1, "volumes": 1, "annotatedDocuments": 1}, updates
+assert updates["volumes"][0]["volumeId"] == "frus1894Nicaragua" and updates["volumes"][0]["body"] == 1, updates
+assert [item["documentId"] for item in listed["items"]] == ["d2"], listed
+assert listed["items"][0]["change"] == {"kind": "body", "line": "Text changed in an update — highlight positions may have moved"}, listed
+assert change["changeKind"] == "body" and change["canMarkReviewed"], change
+print("   Check for Corrections found the corrected volume, Update downloaded it and indexed it again with indexVolume, "
+      "and Changed by an update lists d2: " + change["line"])
+PY
+if [ -n "$e2e" ]; then
+  echo "   the update review spec, after the update: the highlight reviewed by keyboard"
+  review_e2e after
+  library_idle 60 || fail "the review's record in the index did not end: $(head -c 400 "$work/library-jobs.json")"
+  curl -s --max-time 10 -H "Host: localhost:8080" -o "$work/updates.json" "$library_base/api/v1/admin/library/updates" \
+    || fail "the updates' tallies did not answer after the review"
+  python3 - "$work/library-jobs.json" "$work/updates.json" <<'PY' || fail "the review was not recorded in the index: $(head -c 600 "$work/library-jobs.json")"
+import json, sys
+jobs, updates = (json.load(open(path, encoding="utf-8")) for path in sys.argv[1:3])
+recorded = next(j for j in jobs["jobs"] if j["kind"] == "indexReviews")
+assert recorded["state"] == "succeeded" and recorded["progress"] == "Recorded 1 review in the index.", recorded
+assert updates["totals"]["changedDocuments"] == 0, updates
+print("   the review recorded in the user's ledger and, by the index's one writer, in the index: " + recorded["progress"])
+PY
+fi
 
 scripts/synthetic-export "$work/seed.sqlite"
 library_compose cp "$work/seed.sqlite" frus:/data/import/seed.sqlite

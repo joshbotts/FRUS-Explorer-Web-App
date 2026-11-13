@@ -461,6 +461,9 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
     /// Told the volumes a download job fetched once the job ends, however it ends, with any: the
     /// library's indexing queues their pass there (PLAN's S21d). Set once, at the server's start.
     private let downloadsEnd = Mutex<(@Sendable ([String]) async -> Void)?>(nil)
+    /// Told a volume a download is about to give a file, a new one or another in place of a copy, before the
+    /// file takes its name: the library's indexing owes it a pass (PLAN's S21f). Set once, at the server's start.
+    private let fileReplaced = Mutex<(@Sendable (String) -> Bool)?>(nil)
 
     /// The longest listing the library reads: GitHub's of 553 volumes is about 400 KB.
     static let listingLimit = 16 * 1_048_576
@@ -756,6 +759,28 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
         await hook(fetched)
     }
 
+    /// Has `hook` told each volume a download is about to give a file, before the file takes its name (PLAN's
+    /// S21f); a hook that says it could not keep that the volume is owed a pass keeps the file from its place.
+    public func whenFileWillBeReplaced(_ hook: @escaping @Sendable (String) -> Bool) {
+        fileReplaced.withLock { $0 = hook }
+    }
+
+    // MARK: The corrections check (PLAN's S21f)
+
+    /// Check for Corrections, as the app's Settings ▸ Keeping Current runs it: GitHub's listing, read once
+    /// (`liveDiff()`), and the kit's `VolumeUpdateChecker.updatableVolumes(known:liveInfoByVolumeId:downloadManager:)`
+    /// over this library, which compares each downloaded volume's git blob SHA-1 with the listing's, or its
+    /// length where either has none. Gives the volumes changed upstream since they were downloaded, in the
+    /// catalogue's order, a side-loaded copy among them. Throws `LibraryRefusal` on a server that downloads
+    /// nothing, and `JobFailed`, in the server's words, when the listing cannot be read.
+    public func checkForCorrections() async throws -> [UpdatableVolume] {
+        if let refusal = downloadsRefusal { throw refusal }
+        // A press asks GitHub, with the last answer's ETag, whatever was read in the last five minutes.
+        let diff = try await liveDiff(fresh: true)
+        return await VolumeUpdateChecker.updatableVolumes(known: diff.known, liveInfoByVolumeId: diff.liveInfoByVolumeId,
+                                                          downloadManager: self)
+    }
+
     private func run(_ ids: [String], job: JobContext, skipUnlisted: Bool, fetched: FetchedVolumes) async throws -> String? {
         var next = 0
         do {
@@ -826,11 +851,19 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
     /// has not changed, which with a token its rate limit does not count; and with `FRUS_GITHUB_TOKEN` to
     /// GitHub's own API alone. Throws `JobFailed` in the server's words.
     func liveListing() async throws -> [String: LiveVolumeInfo] {
+        try await liveDiff().liveInfoByVolumeId
+    }
+
+    /// The kit's diff of the catalogue against GitHub's listing, as `liveListing()` reads it: the catalogue's
+    /// volumes the listing names (`known`) and each one's git blob SHA-1 and size (`liveInfoByVolumeId`). `fresh`
+    /// asks GitHub again, with the last answer's ETag, though a reading of the last five minutes is kept: Check for
+    /// Corrections' press (PLAN's S21f).
+    func liveDiff(fresh: Bool = false) async throws -> ManifestDiffResult {
         guard let transport else { throw JobFailed("The server makes no request outside (FRUS_OFFLINE=true).") }
         let time = now()
         let cached = lastListing.withLock { $0 }
         let body: Data
-        if let cached, time.timeIntervalSince(cached.at) < Self.listingReuse, time >= cached.at {
+        if !fresh, let cached, time.timeIntervalSince(cached.at) < Self.listingReuse, time >= cached.at {
             body = cached.body
         } else {
             var headers = ["User-Agent": Self.userAgent, "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"]
@@ -870,7 +903,7 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
         // first of each is kept.
         var names = Set<String>()
         let live = listed.filter { names.insert($0.name).inserted }
-        return ManifestDiffResult.diff(bundled: catalogue, live: live).liveInfoByVolumeId
+        return ManifestDiffResult.diff(bundled: catalogue, live: live)
     }
 
     /// The sentence for GitHub's rate limit: how many requests an hour it allows this server, and when its
@@ -949,6 +982,14 @@ public final class VolumeLibrary: DownloadedVolumeFiles, Sendable {
             guard let (size, sha) = check, size == live.sizeBytes, sha == live.sha else {
                 try? FileManager.default.removeItem(at: partial)
                 throw Problem(sentence: "The file served for \(entry.filename) is not the one GitHub's listing names, so \(local == nil ? "it was not kept" : "the copy in place was kept"): GitHub may still serve the copy from before a correction, so try again in a few minutes.")
+            }
+            // A file the index was not made from, in place of a copy, or of none where the index holds the volume
+            // from elsewhere, as a seeding export's: the library's indexing owes the volume a pass, kept before the
+            // file takes its name, so that a stop meanwhile loses nothing (PLAN's S21f).
+            if let hook = fileReplaced.withLock({ $0 }), !hook(id) {
+                try? FileManager.default.removeItem(at: partial)
+                throw Problem(sentence: "\(entry.filename) was downloaded and checked, but the index's stamps could not record that it needs indexing again, so the copy in place was kept: the server's log says why.",
+                              stops: "the index's stamps could not be written")
             }
             do {
                 try await Blocking.run { try Self.rename(partial, over: final) }

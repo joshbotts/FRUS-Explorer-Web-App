@@ -78,8 +78,8 @@ test('lists the annotated documents by category, by keyboard and pointer, each r
     await expect(categories.getByRole('link', { name: /^All Notes/ })).toHaveText(`All Notes, ${grouped(counts.notes)}`);
     await expect(categories.getByRole('link', { name: 'Research page tag' })).toHaveText('Research page tag, 1');
     await expect(categories.getByRole('link', { name: 'Research page collection' })).toHaveText('Research page collection, 1');
-    // Changed by an update says why it lists nothing here, and is no link.
-    await expect(categories.getByText(/^Documents an update changed after you annotated them wait for a review/)).toBeVisible();
+    // Changed by an update is in the categories only while a change waits for the user's review (PLAN's S21f): none
+    // here, where the export records the text of the TEI folder the server reads.
     await expect(categories.getByRole('link', { name: /Changed by an update/ })).toHaveCount(0);
 
     // All Research Documents, shown until another is chosen: d1's row, the note and the highlight just made.

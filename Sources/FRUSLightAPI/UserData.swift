@@ -207,6 +207,7 @@ final class CSRFTokens: Sendable {
 
 /// What the user store keeps for the routes under /api/v1/me.
 typealias UserDataStore = UserStore & TagStore & HighlightStore & NoteStore & SummaryStore & ProjectStore & ProjectLeadStore & ResearchImportStore
+    & AnnotationReviewStore
     & ResearchExportStore & UserSearchStore & SearchSetStore & ResearchRowStore & TrailStore & PreferenceStore & CollectionStore
     & AccountStore & SessionStore & ResearchErasureStore & SecretStore
 
@@ -451,7 +452,8 @@ public struct Me: Codable, Equatable, Sendable, ResponseEncodable {
 
 enum UserDataRoutes {
     static func add(to router: Router<APIRequestContext>, services: UserDataServices, resources: ServerResources,
-                    reader: ReaderService, provider: ServedIndexProvider, leads: ProjectLeadsQueue? = nil) {
+                    reader: ReaderService, provider: ServedIndexProvider, leads: ProjectLeadsQueue? = nil,
+                    reviews: UpdateReviewSources? = nil) {
         // Suggested Next's computations (PLAN's S23d): the server's, or one over these routes' stores.
         let leads = leads ?? ProjectLeadsQueue(store: services.store, jobs: services.jobs, provider: provider, resources: resources,
                                                now: services.now)
@@ -465,10 +467,14 @@ enum UserDataRoutes {
         }
         TagRoutes.add(to: me, services: services, resources: resources)
         HighlightRoutes.add(to: me, services: services, resources: resources, reader: reader, provider: provider)
+        // The review of what an update changed in a document (PLAN's S21f): the banner, the sheet, Mark Reviewed.
+        ReviewRoutes.add(to: me, services: services, resources: resources, reader: reader, provider: provider,
+                         reviews: reviews ?? UpdateReviewSources(indexer: nil, teiCheck: nil))
         SummaryRoutes.add(to: me, services: services, resources: resources)
         ProjectRoutes.add(to: me, services: services, resources: resources, provider: provider, leads: leads)
         HistoryRoutes.add(to: me, services: services, provider: provider, resources: resources, reader: reader)
-        ResearchRoutes.add(to: me, services: services, resources: resources, provider: provider)
+        ResearchRoutes.add(to: me, services: services, resources: resources, provider: provider,
+                           reviews: reviews ?? UpdateReviewSources(indexer: nil, teiCheck: nil))
         PreferenceRoutes.add(to: me, services: services)
         SecretRoutes.add(to: me, services: services)
         ExportRoutes.add(to: me, services: services)

@@ -87,7 +87,7 @@ export function emptyDescription(group: ResearchGroup): string {
     case 'highlightColor':
       return copy.researchPage.emptyHighlight;
     case 'updated':
-      return copy.researchPage.updatedWaits;
+      return copy.researchPage.emptyUpdated;
   }
 }
 

@@ -1149,6 +1149,104 @@ dialog.card .actions {
   margin-top: 1rem;
 }
 
+/* ─── The update review (PLAN's S21f) ────────────────────────────────────── */
+
+/* The strip above a document that changed since it was annotated: the app's orange, as a tint under the
+   warning's text, at 4.5:1 or more in both themes. */
+.change-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background: var(--tone-orange-tint);
+  color: var(--tone-orange);
+}
+
+.change-banner p {
+  flex: 1 1 20rem;
+  margin: 0;
+}
+
+dialog.review-sheet {
+  width: min(44rem, calc(100vw - 2rem));
+  max-width: min(44rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+
+.review-sheet-header {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.review-section {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.review-change {
+  color: var(--warning);
+}
+
+.review-rows,
+.review-links {
+  padding-left: 0;
+  list-style: none;
+}
+
+.review-rows > li {
+  margin: 0.75rem 0;
+  padding-left: 0.75rem;
+  border-left: 4px solid var(--border);
+}
+
+.review-rows > li p {
+  margin: 0.25rem 0;
+}
+
+/* A highlight's row beside a bar of its colour, as the rail's are. */
+.review-rows > li.review-highlight {
+  border-left-color: var(--hl, var(--border));
+}
+
+.review-passage,
+.review-context {
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.review-links li {
+  margin: 0.25rem 0;
+}
+
+.research-change {
+  margin: 0.25rem 0;
+  color: var(--warning);
+}
+
+.library-updates {
+  margin-top: 1.5rem;
+}
+
+.library-corrections {
+  padding-left: 0;
+  list-style: none;
+}
+
+.library-corrections li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  justify-content: space-between;
+  margin: 0.5rem 0;
+}
+
 /* ─── Related Documents (PLAN's S23d) ────────────────────────────────────── */
 
 .related {

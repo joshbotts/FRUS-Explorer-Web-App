@@ -10,11 +10,12 @@
 // yet; a choice sends focus to the list's title; and a highlight's colour named for a screen reader.
 import { type UseQueryResult, useQuery } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
-import { type MouseEvent, type ReactNode, useEffect, useId, useRef, useSyncExternalStore } from 'react';
-import { ApiError, errorMessage } from '../api/client';
+import { type MouseEvent, type ReactNode, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
+import { errorMessage } from '../api/client';
 import { type ResearchDocument, type ResearchDocumentList, researchDocumentsQuery, type ResearchPage, researchPageQuery } from '../api/researchPage';
 import { meQuery } from '../api/userData';
 import { copy } from '../copy';
+import { ReviewSheet } from '../reader/ReviewSheet';
 import { useHeadingReady } from '../shell/headingFocus';
 import { useNow } from '../shell/useNow';
 import { useDocumentTitle } from '../shell/useDocumentTitle';
@@ -65,7 +66,7 @@ export function ResearchScreen() {
   const shown: ResearchGroup = (group && parseGroup(group)) || { kind: 'allAnnotated' };
   const shownKey = group ?? groupKey(shown);
   const page = useQuery({ ...researchPageQuery, enabled: keepsUserData });
-  const documents = useQuery({ ...researchDocumentsQuery(shownKey), enabled: keepsUserData && shown.kind !== 'updated' });
+  const documents = useQuery({ ...researchDocumentsQuery(shownKey), enabled: keepsUserData });
   const heading = useRef<HTMLHeadingElement>(null);
   const listHeading = useRef<HTMLHeadingElement>(null);
   const categories = useRef<HTMLElement>(null);
@@ -163,7 +164,8 @@ export function ResearchScreen() {
           <h2 id={listId} ref={listHeading} tabIndex={-1}>
             {title ?? copy.researchPage.loading}
           </h2>
-          <DocumentList group={shown} documents={documents} now={now} />
+          {/* Another category is another list, with no review open over it. */}
+          <DocumentList key={shownKey} group={shown} documents={documents} now={now} heading={listId} />
         </section>
       </div>
     );
@@ -223,10 +225,8 @@ function Categories({
             <span className="research-category-count">{copy.researchPage.count(page.notes)}</span>
           </Link>
         </li>
-        <li className="research-waits">
-          <span className="research-category-name">{copy.researchPage.updated}</span>
-          <span className="research-category-detail">{copy.researchPage.updatedWaits}</span>
-        </li>
+        {/* Shown only while something waits for a review, as the app's "badge that waits" (PLAN's S21f). */}
+        {page.updated > 0 && category('updated', copy.researchPage.updated, page.updated)}
         <li>
           <Link to="/research/history" className="research-category">
             <span className="research-category-name">{copy.researchPage.history}</span>
@@ -274,35 +274,70 @@ function DocumentList({
   group,
   documents,
   now,
+  heading,
 }: {
   group: ResearchGroup;
   documents: UseQueryResult<ResearchDocumentList>;
   now: number;
+  /** The list's heading, where focus goes when a review takes away the row it opened from. */
+  heading: string;
 }) {
-  if (group.kind === 'updated' || (documents.error instanceof ApiError && documents.error.code === 'UPDATE_REVIEW_NOT_OFFERED')) {
-    return <p className="note">{copy.researchPage.updatedWaits}</p>;
-  }
-  if (documents.isError) {
+  // The document a row's Review Changes… opened, kept here rather than in the row (PLAN's S21f): a review can take
+  // the row out of Changed by an update, and the sheet stays open while the list is read again.
+  const [reviewing, setReviewing] = useState<ResearchDocument | null>(null);
+  const sheet = reviewing && (
+    <ReviewSheet
+      volumeId={reviewing.volumeId}
+      documentId={reviewing.documentId}
+      title={reviewing.title}
+      onClose={() => {
+        const key = `${reviewing.volumeId}/${reviewing.documentId}`;
+        setReviewing(null);
+        // Back to its row's Review Changes…, or, once the review has taken the row away, to the list's heading.
+        requestAnimationFrame(() => {
+          const button = document.querySelector<HTMLElement>(`button[data-review="${CSS.escape(key)}"]`);
+          (button ?? document.getElementById(heading))?.focus();
+        });
+      }}
+    />
+  );
+  if (documents.isError && !documents.data) {
     return (
-      <p className="error" role="alert">
-        {errorMessage(documents.error)}
-      </p>
+      <>
+        <p className="error" role="alert">
+          {errorMessage(documents.error)}
+        </p>
+        {sheet}
+      </>
     );
   }
-  if (!documents.data) return <p role="status">{copy.researchPage.loading}</p>;
+  if (!documents.data) {
+    return (
+      <>
+        <p role="status">{copy.researchPage.loading}</p>
+        {sheet}
+      </>
+    );
+  }
   if (documents.data.items.length === 0) {
     return (
-      <p className="empty">
-        <strong>{copy.researchPage.noDocs}</strong> {emptyDescription(group)}
-      </p>
+      <>
+        <p className="empty">
+          <strong>{copy.researchPage.noDocs}</strong> {emptyDescription(group)}
+        </p>
+        {sheet}
+      </>
     );
   }
   return (
-    <ul className="research-documents">
-      {documents.data.items.map((row) => (
-        <DocumentRow key={`${row.volumeId}/${row.documentId}`} row={row} now={now} />
-      ))}
-    </ul>
+    <>
+      <ul className="research-documents">
+        {documents.data.items.map((row) => (
+          <DocumentRow key={`${row.volumeId}/${row.documentId}`} row={row} now={now} onReview={() => setReviewing(row)} />
+        ))}
+      </ul>
+      {sheet}
+    </>
   );
 }
 
@@ -311,13 +346,20 @@ function DocumentList({
  * annotation; its summaries and visit plan; its three newest highlights, each beside a bar of its colour,
  * and how many more; its newest note; and its tags, its notes past one and its collections.
  */
-function DocumentRow({ row, now }: { row: ResearchDocument; now: number }) {
+function DocumentRow({ row, now, onReview }: { row: ResearchDocument; now: number; onReview: () => void }) {
   const more = moreHighlights(row.highlightCount);
   return (
     <li className="research-document">
-      <Link className="research-document-title" to="/doc/$volumeId/$documentId" params={{ volumeId: row.volumeId, documentId: row.documentId }}>
-        {row.title}
-      </Link>
+      {/* A document an update removed opens its review, the only way to it, as the app's row does (PLAN's S21f). */}
+      {row.opens === 'review' ? (
+        <button type="button" className="research-document-title" onClick={onReview}>
+          {row.title}
+        </button>
+      ) : (
+        <Link className="research-document-title" to="/doc/$volumeId/$documentId" params={{ volumeId: row.volumeId, documentId: row.documentId }}>
+          {row.title}
+        </Link>
+      )}
       <p className="research-document-volume">
         <span>{row.volumeTitle}</span>
         {row.annotatedAt && <span className="research-document-time">{timeSince(row.annotatedAt, now)}</span>}
@@ -339,6 +381,12 @@ function DocumentRow({ row, now }: { row: ResearchDocument; now: number }) {
         </ul>
       )}
       {more && <p className="research-more">{more}</p>}
+      {/* What an update changed, in the kit's words; a document an update removed, once its change is reviewed too. */}
+      {row.change ? (
+        <p className={row.change.kind === 'vanished' ? 'research-change error' : 'research-change'}>{row.change.line}</p>
+      ) : (
+        row.vanished && <p className="research-change error">{copy.researchPage.vanished}</p>
+      )}
       {row.latestNote && <p className="research-note">{row.latestNote}</p>}
       {hasFooter(row) && (
         <p className="research-footer">
@@ -356,6 +404,18 @@ function DocumentRow({ row, now }: { row: ResearchDocument; now: number }) {
               {collection.name}
             </span>
           ))}
+        </p>
+      )}
+      {row.reviewable && (
+        <p>
+          <button
+            type="button"
+            data-review={`${row.volumeId}/${row.documentId}`}
+            aria-label={copy.researchPage.reviewChangesA11y(row.title)}
+            onClick={onReview}
+          >
+            {copy.researchPage.reviewChanges}
+          </button>
         </p>
       )}
     </li>

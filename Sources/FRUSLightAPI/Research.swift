@@ -14,8 +14,9 @@
 // - the row's newest annotation, its three highlights, and its tags' and collections' order.
 // A row's title is read by the kit's `CrossReferenceStore.documentTitleFacts(for:)` over the served index
 // (upstream #1891, since S23c's pin move), as the app's `loadHeaders` asks its store.
-// Changed by an update reads the index's `reviewed_at`, which a served index's reader cannot write, so
-// it waits for phase 3's review of changed text, and its list says so (`UPDATE_REVIEW_NOT_OFFERED`).
+// Changed by an update (PLAN's S21f) lists the annotated documents a change touched that the user has not
+// reviewed, each user's review their own ledger's (Reviews.swift), and a row of any list with such a change, or
+// whose document an update removed, says so in the kit's words and opens the review.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -36,6 +37,9 @@ public struct ResearchPage: Codable, Equatable, Sendable, ResponseEncodable {
     public var tags: [Group]
     /// By Highlight: the colours in use, in the kit's order.
     public var highlightColors: [ColorGroup]
+    /// Changed by an update: the annotated documents a change touched that the user has not reviewed, which the
+    /// page lists only when there are any (PLAN's S21f).
+    public var updated: Int
 
     /// A collection or a tag, with what its row prints and how many documents its list holds.
     public struct Group: Codable, Equatable, Sendable {
@@ -89,6 +93,20 @@ public struct ResearchDocument: Codable, Equatable, Sendable {
     public var tags: [Named]
     /// The collections it is in, by the name each prints.
     public var collections: [Named]
+    /// What an update changed in it that the user has not reviewed, in the kit's words (`changeLine(for:)`), and
+    /// its kind; absent for none (PLAN's S21f).
+    public var change: Change?
+    /// Whether an update removed it from its volume, reviewed or not, which its row says, in the kit's words.
+    public var vanished: Bool?
+    /// Where its row opens it, by the kit's `rowDestination`: `review`, the review sheet, for a document an update
+    /// removed, the only way to it; absent for the document itself. And whether it offers Review Changes….
+    public var opens: String?
+    public var reviewable: Bool?
+
+    public struct Change: Codable, Equatable, Sendable {
+        public var kind: String?
+        public var line: String
+    }
 
     /// A highlight's colour, the kit's, and its words, empty for one that stored none.
     public struct Highlight: Codable, Equatable, Sendable {
@@ -111,7 +129,7 @@ enum ResearchGroup: Equatable, Sendable {
     case tag(UUID)
     case collection(UUID)
     case highlightColor(HighlightColor)
-    /// Changed by an update, which waits for phase 3.
+    /// Changed by an update (PLAN's S21f).
     case updated
 
     init?(_ raw: String) {
@@ -248,6 +266,8 @@ struct ResearchSources: Sendable {
 /// as its computed property makes it, the kit's aggregation where it calls the kit.
 struct ResearchGroups {
     let sources: ResearchSources
+    /// The documents a change touched that the user has not reviewed, by `"volumeId/documentId"` (PLAN's S21f).
+    var unreviewedKeys: Set<String> = []
 
     /// `ResearchDocumentEntry`: one row's facts.
     struct Entry {
@@ -402,8 +422,7 @@ struct ResearchGroups {
     }
 
     /// A category's rows, the most recently annotated first, then by key. Changed by an update lists
-    /// the annotated documents an unreviewed change touched, and a served index records none this
-    /// server may review, so it lists none (the route refuses it first).
+    /// the annotated documents an unreviewed change touched.
     func documents(for item: ResearchGroup) -> [Entry] {
         let matchingKeys: Set<String>
         switch item {
@@ -425,7 +444,7 @@ struct ResearchGroups {
                     .map { "\($0.volumeId)/\($0.documentId)" }
             )
         case .updated:
-            matchingKeys = []
+            matchingKeys = allAnnotatedKeys.intersection(unreviewedKeys)
         }
 
         // The store holds one copy of each note, one row for each user and id, as the app's
@@ -525,13 +544,15 @@ enum ResearchRoutes {
     static let shownHighlights = 3
 
     static func add(to me: RouterGroup<APIRequestContext>, services: UserDataServices, resources: ServerResources,
-                    provider: ServedIndexProvider) {
+                    provider: ServedIndexProvider, reviews: UpdateReviewSources = UpdateReviewSources(indexer: nil, teiCheck: nil)) {
         let store = services.store
 
         me.get("research") { request, context -> ResearchPage in
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
-            let groups = ResearchGroups(sources: try await ResearchSources.read(for: user.id, in: store))
+            let sources = try await ResearchSources.read(for: user.id, in: store)
+            let changes = try await unreviewedChanges(for: user.id, store: store, provider: provider, reviews: reviews)
+            let groups = ResearchGroups(sources: sources, unreviewedKeys: Set(changes.unreviewed.keys))
             return ResearchPage(
                 allAnnotated: groups.allAnnotatedKeys.count,
                 hasNotes: groups.documentsWithNotesCount,
@@ -543,7 +564,8 @@ enum ResearchRoutes {
                 tags: groups.sortedTagsWithCounts.map { ResearchPage.Group(id: $0.tag.id.uuidString, name: $0.tag.name, count: $0.count) },
                 highlightColors: groups.sortedHighlightColorsWithCounts.map {
                     ResearchPage.ColorGroup(color: $0.color.rawValue, count: $0.count)
-                })
+                },
+                updated: groups.allAnnotatedKeys.intersection(groups.unreviewedKeys).count)
         }
         me.get("research/documents") { request, context -> ResearchDocumentList in
             let query = try FormQuery(request.uri.query)
@@ -554,8 +576,9 @@ enum ResearchRoutes {
                 throw APIProblem.invalidParameter(
                     "group", "\(raw) is none of allAnnotated, hasNotes, tag.{id}, collection.{id} and highlightColor.{color}.")
             }
-            if item == .updated { throw updateReviewNotOffered() }
-            let groups = ResearchGroups(sources: try await ResearchSources.read(for: user.id, in: store))
+            let sources = try await ResearchSources.read(for: user.id, in: store)
+            let changes = try await unreviewedChanges(for: user.id, store: store, provider: provider, reviews: reviews)
+            let groups = ResearchGroups(sources: sources, unreviewedKeys: Set(changes.unreviewed.keys))
             let entries = groups.documents(for: item)
             let facts = await titleFacts(entries.map { (volumeId: $0.volumeId, documentId: $0.documentId) }, provider: provider)
             let items = entries.map { entry in
@@ -574,7 +597,17 @@ enum ResearchRoutes {
                     tags: groups.tagRows(entry).map { ResearchDocument.Named(id: $0.id.uuidString, name: $0.name) },
                     collections: groups.collectionRows(entry).map {
                         ResearchDocument.Named(id: $0.id.uuidString, name: CollectionEditorNaming.listName(savedName: $0.name))
-                    })
+                    },
+                    // What an update changed, the kit's words, as the app's row says it; and a document an update
+                    // removed, whose row opens the review, the only way to it.
+                    change: changes.unreviewed[entry.id].flatMap { revision in
+                        ResearchDocumentAggregation.changeLine(for: revision).map { ResearchDocument.Change(kind: revision.changeKind, line: $0) }
+                    },
+                    vanished: changes.vanished.contains(entry.id) ? true : nil,
+                    opens: ResearchDocumentAggregation.rowDestination(revision: changes.unreviewed[entry.id],
+                                                                      isVanished: changes.vanished.contains(entry.id)) == .reviewSheet
+                        ? "review" : nil,
+                    reviewable: changes.unreviewed[entry.id] != nil || changes.vanished.contains(entry.id) ? true : nil)
             }
             return ResearchDocumentList(group: raw, name: groups.name(of: item), total: items.count, items: items)
         }
@@ -589,10 +622,23 @@ enum ResearchRoutes {
         return (try? await served.crossReferences.documentTitleFacts(for: keys)) ?? [:]
     }
 
-    /// Changed by an update's list, which reads the index's `reviewed_at`, a column a served index's
-    /// reader cannot write: it waits for phase 3's review of changed text.
-    static func updateReviewNotOffered() -> APIProblem {
-        APIProblem(.conflict, code: "UPDATE_REVIEW_NOT_OFFERED",
-                   detail: "Changed by an update lists the documents you annotated that an update changed, for a review of their new text, which this server does not offer yet.")
+    /// The changes the user has not reviewed, by `"volumeId/documentId"`, and the documents an update removed,
+    /// reviewed or not: every change stamped, less those the user's ledger reviews by the kit's rule.
+    static func unreviewedChanges(for user: String, store: any UserDataStore, provider: ServedIndexProvider,
+                                  reviews: UpdateReviewSources) async throws
+        -> (unreviewed: [String: IndexingPipeline.DocumentRevision], vanished: Set<String>) {
+        let served = try? await provider.servedIfReady()
+        let changes = await reviews.changes(served)
+        guard !changes.isEmpty else { return ([:], []) }
+        let ledger = Dictionary(grouping: try await Blocking.run { try store.documentReviews(for: user) }) {
+            UpdateReviewSources.key($0.volumeId, $0.documentId)
+        }
+        var unreviewed: [String: IndexingPipeline.DocumentRevision] = [:]
+        var vanished: Set<String> = []
+        for (key, change) in changes {
+            if change.revision.recordsRemoval { vanished.insert(key) }
+            if !AnnotationReviewLedger.reviews(ledger[key] ?? [], change.revision) { unreviewed[key] = change.revision }
+        }
+        return (unreviewed, vanished)
     }
 }

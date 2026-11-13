@@ -28,6 +28,7 @@ import { useHeadingReady } from '../shell/headingFocus';
 import { plainTitle, useDocumentTitle } from '../shell/useDocumentTitle';
 import { LinkCard } from './LinkCard';
 import { readerMessage } from './readerMessages';
+import { DocumentChangeBanner, ReviewSheet } from './ReviewSheet';
 import { useReaderHighlights } from './useReaderHighlights';
 
 const route = getRouteApi('/doc/$volumeId/$documentId');
@@ -119,6 +120,9 @@ export function ReaderScreen() {
   const [composing, setComposing] = useState(false);
   // The selection the bar's Excerpt freezes, while the Add Excerpt to Collection picker is open (S18d).
   const [excerpting, setExcerpting] = useState<ExcerptCapture | null>(null);
+  // Whether the review of what an update changed is open (PLAN's S21f).
+  const [reviewing, setReviewing] = useState(false);
+  const reviewButton = useRef<HTMLDivElement>(null);
   const [shownKey, setShownKey] = useState(documentKey);
   if (shownKey !== documentKey) {
     setShownKey(documentKey);
@@ -127,6 +131,7 @@ export function ReaderScreen() {
     setPendingHighlight(null);
     setComposing(false);
     setExcerpting(null);
+    setReviewing(false);
   }
   // Each arrival at a document, once its account has loaded (`recordArrival`), taken once: a reader
   // left before the user's preferences are read still records it.
@@ -437,6 +442,10 @@ export function ReaderScreen() {
               </button>
             )}
           </div>
+          {/* What an update changed since the user annotated the document, in the app's words (PLAN's S21f). */}
+          <div ref={reviewButton}>
+            <DocumentChangeBanner volumeId={volumeId} documentId={documentId} enabled={keepsUserData} onReview={() => setReviewing(true)} />
+          </div>
           <p className="notice" role="status">
             {notice}
           </p>
@@ -504,6 +513,22 @@ export function ReaderScreen() {
           onClose={() => {
             setExcerpting(null);
             requestAnimationFrame(() => frame.current?.focus({ preventScroll: true }));
+          }}
+        />
+      )}
+      {reviewing && keepsUserData && (
+        <ReviewSheet
+          volumeId={volumeId}
+          documentId={documentId}
+          title={plainTitle(header)}
+          documentNumber={entry?.documentNumber}
+          onClose={() => {
+            setReviewing(false);
+            // Back to Review…, or, once the banner has gone with the change reviewed, to the text.
+            requestAnimationFrame(() => {
+              const button = reviewButton.current?.querySelector<HTMLElement>('button');
+              (button ?? frame.current)?.focus({ preventScroll: true });
+            });
           }}
         />
       )}

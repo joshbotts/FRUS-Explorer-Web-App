@@ -127,7 +127,7 @@ describe('Administration ▸ Library', () => {
     expect(screen.getByText('1 of 2 volumes')).toBeTruthy();
   });
 
-  it('counts for Download All every volume whose file is missing and no download holds, and offers no Download Again for an indexed file', async () => {
+  it('counts for Download All every volume whose file is missing and no download holds, and offers Download Again for an indexed file, the app’s Update', async () => {
     let volumes = [
       volume({ volumeId: 'frus1894Nicaragua', status: 'failed', error: 'api.github.com answered 500.' }),
       volume({ volumeId: 'frus1969-76v01', status: 'indexed', indexed: true }),
@@ -146,7 +146,8 @@ describe('Administration ▸ Library', () => {
     renderAt('/admin/library');
     expect(await screen.findByText('Every volume not downloaded: 2 of the catalogue’s, less any GitHub’s listing no longer names.')).toBeTruthy();
     const table = screen.getByRole('table', { name: 'The catalogue’s volumes, with what this server holds of each' });
-    expect(within(table).queryByRole('button', { name: 'Download Again frus1961-63v06' })).toBeNull();
+    // Since S21f a corrected file replaces an indexed one, indexed again after it.
+    expect(within(table).getByRole('button', { name: 'Download Again frus1961-63v06' })).toBeTruthy();
     expect(within(table).getByRole('button', { name: 'Download frus1969-76v01' })).toBeTruthy();
     await userEvent.click(screen.getByRole('button', { name: 'Download All' }));
     expect(await screen.findByText('The 3 volumes not downloaded wait for their download.')).toBeTruthy();

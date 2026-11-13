@@ -38,6 +38,8 @@ struct ServerComponents: Sendable {
     /// The library's indexing (PLAN's S21d): a Standalone server's one writer of its index, jobs of the
     /// queue, one after each download that fetched volumes, and one for what waits at a start.
     let indexer: LibraryIndexer
+    /// Import mode's step 5 (PLAN's S21f): the served export compared with the mounted TEI, beside the queue.
+    let teiCheck: TEIChangeCheck
 
     static func make(configuration: ServerConfiguration, logger: Logger) async throws -> ServerComponents {
         // Before anything is written: a server without its data files cannot serve the reader.
@@ -77,6 +79,11 @@ struct ServerComponents: Sendable {
                 logger.warning("The indexing of \(fetched.count) downloaded volumes could not be queued: \(error)")
             }
         }
+        // A corrected file, as Update downloads one, owes its volume a pass of `indexVolume` (PLAN's S21f).
+        library.whenFileWillBeReplaced { volumeId in indexer.oweReindex(volumeId) }
+        let teiCheck = TEIChangeCheck(liveIndex: files.liveIndex, volumesDirectory: files.volumesDirectory,
+                                      folder: files.root.appendingPathComponent("tei-check", isDirectory: true),
+                                      resources: resources.indexing, state: state, jobs: jobs, log: { logger.info("\($0)") })
         await library.resumeUnfinished()
         return ServerComponents(
             files: files,
@@ -103,7 +110,8 @@ struct ServerComponents: Sendable {
             provider: provider,
             leads: leads,
             library: library,
-            indexer: indexer)
+            indexer: indexer,
+            teiCheck: teiCheck)
     }
 
     /// The user store `FRUS_USER_STORE` names, migrated to this build's schema: app.db in the data
@@ -249,7 +257,8 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
                             userData: UserDataServices(store: components.userStore, configuration: configuration,
                                                        secrets: components.secrets, jobs: components.jobs),
                             leads: components.leads,
-                            library: components.library, indexer: components.indexer, base: configuration.basePath, logger: logger),
+                            library: components.library, indexer: components.indexer, teiCheck: components.teiCheck,
+                            base: configuration.basePath, logger: logger),
         base: configuration.basePath,
         configuration: .init(address: .hostname(configuration.host, port: configuration.port), serverName: "frus-light"),
         logger: logger)
@@ -262,7 +271,10 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
                                           await resources.refreshLocalVolumes(in: library.volumesDirectory)
                                       })
                                   },
-                                  afterOpening: { [indexer = components.indexer] in await indexer.resumeAtStart() }))
+                                  afterOpening: { [indexer = components.indexer] in await indexer.resumeAtStart() },
+                                  // Import mode's step 5, a job of the queue for the index found at the start and each an import
+                                  // serves, and for each volume whose TEI file changes afterwards (PLAN's S21f).
+                                  eachScan: { [teiCheck = components.teiCheck] in await teiCheck.ensureCurrent() }))
     if let backups = components.backups, let serverLock = components.serverLock {
         app.addServices(BackupService(backups: backups, serverLock: serverLock, logger: logger))
     }
@@ -362,15 +374,20 @@ struct ImportWatcher: Service {
     var beforeOpening: (@Sendable () async -> Void)? = nil
     /// Once the index found at start is open: a Standalone server's library indexes what waits (S21d).
     var afterOpening: (@Sendable () async -> Void)? = nil
+    /// Once the index found at start is open, and after each look in /data/import: Import mode's step 5 begins
+    /// for the index served, once for each (PLAN's S21f).
+    var eachScan: (@Sendable () async -> Void)? = nil
 
     func run() async throws {
         await beforeOpening?()
         await state.openExistingIndex(files: files)
         await afterOpening?()
+        await eachScan?()
         // Shutdown cancels the loop; that is the normal way out, not an error.
         try? await cancelWhenGracefulShutdown {
             while !Task.isCancelled {
                 await coordinator.scan()
+                await eachScan?()
                 try await Task.sleep(for: interval)
             }
         }

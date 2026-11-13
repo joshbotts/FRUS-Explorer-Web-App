@@ -51,6 +51,8 @@ export interface LibraryVolume {
   index?: LibraryIndexPass;
   /** Who asked for a download waiting or under way. */
   requestedBy?: string;
+  /** Whether a download gave it a file the index was not made from, as Update's corrected one, which its next pass indexes (S21f). */
+  updateWaits?: boolean;
 }
 
 /** `GET /api/v1/admin/library`. */
@@ -81,7 +83,10 @@ export const isDownloading = (volume: LibraryVolume) => volume.status === 'queue
  * the index lacks it, or holds it from a pass that did not finish.
  */
 export const waitsForIndex = (volume: LibraryVolume) =>
-  volume.downloaded && !isDownloading(volume) && volume.status !== 'indexing' && (!volume.indexed || volume.index !== undefined);
+  volume.downloaded &&
+  !isDownloading(volume) &&
+  volume.status !== 'indexing' &&
+  (!volume.indexed || volume.index !== undefined || volume.updateWaits === true);
 
 /**
  * The Library, read again every two seconds while a download waits or runs, or an indexing job does, else every
