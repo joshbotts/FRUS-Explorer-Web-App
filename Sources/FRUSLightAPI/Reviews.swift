@@ -675,7 +675,11 @@ public struct AdminUpdates: Codable, Equatable, Sendable, ResponseEncodable {
     }
 
     public struct TEICheck: Codable, Equatable, Sendable {
+        /// Whether a comparison is under way, a job of the queue: queued, running, or waiting behind the jobs it gave
+        /// way to (`waiting`), over every volume or over those whose file changed since (`recheck`).
         public var running: Bool
+        public var waiting: Bool
+        public var recheck: Bool
         public var volume: String?
         public var done: Int
         public var total: Int
@@ -720,7 +724,8 @@ enum AdminUpdateRoutes {
             if state.configuration.mode == .import, let teiCheck = reviews.teiCheck {
                 let status = await teiCheck.status()
                 check = AdminUpdates.TEICheck(
-                    running: status.running, volume: status.volume, done: status.done, total: status.total,
+                    running: status.running, waiting: status.waiting, recheck: status.recheck, volume: status.volume,
+                    done: status.done, total: status.total,
                     checkedAt: status.record.map { UserStoreDate.text($0.checkedAt) }, checked: status.record?.checked.count,
                     changed: status.record?.changed,
                     unchecked: status.record.map { $0.unchecked.sorted { $0.key < $1.key }.map { .init(volumeId: $0.key, reason: $0.value) } },

@@ -169,7 +169,7 @@ export function AfterAnUpdate({ busy }: { busy: boolean }) {
           <p className="note">{words.teiCheckLead}</p>
           <p role="status">
             {data.teiCheck.running
-              ? words.teiCheckRunning(data.teiCheck.done, data.teiCheck.total, data.teiCheck.volume)
+              ? words.teiCheckRunning(data.teiCheck.done, data.teiCheck.total, data.teiCheck.volume, data.teiCheck.waiting, data.teiCheck.recheck)
               : data.teiCheck.checked !== undefined
                 ? words.teiCheckDone(data.teiCheck.checked, data.teiCheck.changed?.length ?? 0)
                 : ''}

@@ -169,7 +169,11 @@ export interface AdminUpdates {
     vanished: number;
   }[];
   teiCheck?: {
+    /** A comparison under way, a job of the queue: queued, running, or waiting behind the jobs it gave way to. */
     running: boolean;
+    waiting: boolean;
+    /** Whether it compares only the volumes whose TEI file changed since the last comparison. */
+    recheck: boolean;
     volume?: string;
     done: number;
     total: number;

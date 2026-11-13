@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AdminLibrary } from '../api/library';
 import type { AdminUpdates, Corrections } from '../api/reviews';
+import { copy } from '../copy';
 import { me } from '../test/notes';
 import { ready, renderAt, stubServer } from '../test/renderRoute';
 
@@ -80,7 +81,16 @@ describe('Administration ▸ Library’s corrections', () => {
       '/api/v1/admin/library/updates': {
         ...updates,
         mode: 'import',
-        teiCheck: { running: false, done: 3, total: 3, checked: 3, changed: ['frus1894Nicaragua'], unchecked: [{ volumeId: 'frus1964-68v01', reason: 'Its file is not in the TEI folder.' }] },
+        teiCheck: {
+          running: false,
+          waiting: false,
+          recheck: false,
+          done: 3,
+          total: 3,
+          checked: 3,
+          changed: ['frus1894Nicaragua'],
+          unchecked: [{ volumeId: 'frus1964-68v01', reason: 'Its file is not in the TEI folder.' }],
+        },
       },
     });
     renderAt('/admin/library');
@@ -89,5 +99,26 @@ describe('Administration ▸ Library’s corrections', () => {
     expect(within(after).getByText('frus1964-68v01: Its file is not in the TEI folder.')).toBeTruthy();
     // An Import server downloads nothing, so it offers no check.
     expect(screen.queryByRole('region', { name: 'Keeping Current' })).toBeNull();
+  });
+
+  it('says how far an Import server’s comparison has come, while it waits for the jobs it gave way to, and of a re-check', async () => {
+    stubServer({
+      '/readyz': ready,
+      '/api/v1/me': me,
+      '/api/v1/admin/library': library({ mode: 'import', downloads: false, unavailable: 'An Import server reads the TEI folder.' }),
+      '/api/v1/admin/library/updates': {
+        ...updates,
+        mode: 'import',
+        teiCheck: { running: true, waiting: true, recheck: false, done: 12, total: 553 },
+      },
+    });
+    renderAt('/admin/library');
+    const after = await screen.findByRole('region', { name: 'After an Update' });
+    expect(
+      await within(after).findByText('Comparing the index with the TEI folder: 12 of 553 volumes, going on once the jobs waiting have run.'),
+    ).toBeTruthy();
+    expect(
+      copy.admin.library.teiCheckRunning(0, 1, 'frus1894Nicaragua', false, true),
+    ).toBe('Comparing the volumes whose TEI file changed since the last comparison: 0 of 1 volumes, now frus1894Nicaragua.');
   });
 });

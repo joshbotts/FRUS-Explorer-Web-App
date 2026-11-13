@@ -300,9 +300,9 @@ import Testing
 
         let check = TEIChangeCheck(liveIndex: files.liveIndex, volumesDirectory: files.volumesDirectory,
                                    folder: files.root.appendingPathComponent("tei-check"),
-                                   resources: users.server.resources.indexing, state: users.server.state)
+                                   resources: users.server.resources.indexing, state: users.server.state, jobs: users.jobs)
         await check.ensureCurrent()
-        await check.settled()
+        await users.jobs.waitUntilIdle()
         let status = await check.status()
         #expect(!status.running && status.problem == nil)
         #expect(status.record?.checked == [Self.volume] && status.record?.changed == [Self.volume], "\(String(describing: status.record))")
@@ -310,16 +310,22 @@ import Testing
         let comparison = try #require(await check.comparison())
         let changed = try await comparison.pipeline.unreviewedDocumentRevisions()
         #expect(changed.map(\.documentId) == ["d2"] && changed.first?.changeKind == "body")
-        // Begun once for the index served: a second look changes nothing, and a new start reads the record.
+        let comparisons = await users.jobs.jobs().filter { $0.kind == .teiComparison }
+        #expect(comparisons.map(\.state) == [.succeeded], "a job of the queue")
+        #expect(comparisons.first?.progress == "Compared 1 of the index's 1 volumes with the TEI folder: 1 with a document whose TEI changed after the export was indexed")
+        // Once for the index served while its files stay as they were compared: a second look queues nothing, and a
+        // new start reads the record.
         await check.ensureCurrent()
         let looked = await check.status()
         #expect(looked.record == status.record && !looked.running)
         let again = TEIChangeCheck(liveIndex: files.liveIndex, volumesDirectory: files.volumesDirectory,
                                    folder: files.root.appendingPathComponent("tei-check"),
-                                   resources: users.server.resources.indexing, state: users.server.state)
+                                   resources: users.server.resources.indexing, state: users.server.state, jobs: users.jobs)
         await again.ensureCurrent()
         let read = await again.status()
         #expect(read.record == status.record && !read.running)
+        let afterwards = await users.jobs.jobs().filter { $0.kind == .teiComparison }
+        #expect(afterwards.count == 1)
 
         let reviews = UpdateReviewSources(indexer: nil, teiCheck: check)
         let app = Application(router: ServedRouter(base: .root, router: buildRouter(

@@ -83,7 +83,7 @@ struct ServerComponents: Sendable {
         library.whenFileWillBeReplaced { volumeId in indexer.oweReindex(volumeId) }
         let teiCheck = TEIChangeCheck(liveIndex: files.liveIndex, volumesDirectory: files.volumesDirectory,
                                       folder: files.root.appendingPathComponent("tei-check", isDirectory: true),
-                                      resources: resources.indexing, state: state, log: { logger.info("\($0)") })
+                                      resources: resources.indexing, state: state, jobs: jobs, log: { logger.info("\($0)") })
         await library.resumeUnfinished()
         return ServerComponents(
             files: files,
@@ -272,7 +272,8 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
                                       })
                                   },
                                   afterOpening: { [indexer = components.indexer] in await indexer.resumeAtStart() },
-                                  // Import mode's step 5, for the index found at the start and each an import serves (PLAN's S21f).
+                                  // Import mode's step 5, a job of the queue for the index found at the start and each an import
+                                  // serves, and for each volume whose TEI file changes afterwards (PLAN's S21f).
                                   eachScan: { [teiCheck = components.teiCheck] in await teiCheck.ensureCurrent() }))
     if let backups = components.backups, let serverLock = components.serverLock {
         app.addServices(BackupService(backups: backups, serverLock: serverLock, logger: logger))

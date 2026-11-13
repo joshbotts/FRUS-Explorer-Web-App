@@ -2138,6 +2138,7 @@ export const copy = {
         indexCompact: 'Index compaction',
         indexCheck: 'Index check',
         indexReviews: 'Reviews recorded in the index',
+        teiComparison: 'Comparison with the TEI folder',
       } as Record<string, string>,
       states: { queued: 'Waiting', running: 'Running', succeeded: 'Finished', failed: 'Failed', cancelled: 'Cancelled' },
       stopping: 'Stopping at its next step',
@@ -2198,8 +2199,8 @@ export const copy = {
         'When a volume is updated, the server compares every document with the copy it indexed before and records which ones changed. A document counts if it carries a note, tag, highlight, quotation, collection entry, summary, or archive-visit plan of anyone’s. Each user’s Research page lists the changed documents they annotated under Changed by an update, until they review them. A change leaves these counts once everyone whose research is on the document has reviewed it.',
       // Import mode's comparison of the served index with the TEI folder (SPEC's import step 5), the web's own.
       teiCheck: 'The TEI folder against the index',
-      teiCheckRunning: (done: number, total: number, volume?: string) =>
-        `Comparing the index with the TEI folder: ${done.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} volumes${volume ? `, now ${volume}` : ''}.`,
+      teiCheckRunning: (done: number, total: number, volume?: string, waiting = false, recheck = false) =>
+        `${recheck ? 'Comparing the volumes whose TEI file changed since the last comparison' : 'Comparing the index with the TEI folder'}: ${done.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} volumes${waiting ? ', going on once the jobs waiting have run' : volume ? `, now ${volume}` : ''}.`,
       teiCheckDone: (checked: number, changed: number) =>
         changed === 0
           ? `The index matches the TEI folder in all ${checked.toLocaleString('en-US')} volumes compared.`

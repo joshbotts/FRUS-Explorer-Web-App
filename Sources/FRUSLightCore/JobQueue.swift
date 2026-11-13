@@ -37,6 +37,9 @@ public struct JobKind: RawRepresentable, Hashable, Sendable, Codable {
     public static let indexCheck = JobKind(rawValue: "indexCheck")
     /// The reviews users have marked, recorded in a Standalone server's index as its `reviewed_at` (PLAN's S21f).
     public static let indexReviews = JobKind(rawValue: "indexReviews")
+    /// An Import server's index compared with its TEI folder, a volume at a time, giving way to the jobs queued
+    /// behind it (PLAN's S21f).
+    public static let teiComparison = JobKind(rawValue: "teiComparison")
 }
 
 /// One job, as the queue holds it and the store keeps it.
