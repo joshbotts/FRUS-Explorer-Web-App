@@ -8,7 +8,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
-import { tabTo } from './keyboard';
+import { backTabTo, tabTo } from './keyboard';
 
 const standalone = !!process.env.FRUS_E2E_GRAPH;
 
@@ -93,7 +93,8 @@ test('opens the graph from the reader by keyboard, reaches its nodes, and shows 
   await expect(page.getByRole('button', { name: 'Inbound: frus1961-63v05/d134' })).toBeVisible();
   // Two hops, by keyboard: the degree is kept in the address.
   const twoHops = page.getByRole('radio', { name: '2 hops' });
-  await tabTo(page, page.getByRole('radio', { name: '1 hop' }));
+  // Back from the node list, past Reset view, to the depth's radios.
+  await backTabTo(page, page.getByRole('radio', { name: '1 hop' }));
   await page.keyboard.press('ArrowRight');
   await expect(twoHops).toBeChecked();
   await expect(page).toHaveURL(/degree=2/);
@@ -137,7 +138,7 @@ test('walks every node of a graph at three hops by keyboard, on the timeline and
   // The network, by keyboard: every node of the graph, the date clusters' documents among them.
   const network = page.getByRole('radio', { name: 'Network' });
   const relaid = page.waitForResponse(asked);
-  await tabTo(page, page.getByRole('radio', { name: 'Timeline' }));
+  await backTabTo(page, page.getByRole('radio', { name: 'Timeline' }));
   await page.keyboard.press('ArrowRight');
   const inNetwork = (await (await relaid).json()) as Graph;
   await expect(network).toBeChecked();
