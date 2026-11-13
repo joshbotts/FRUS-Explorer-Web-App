@@ -193,6 +193,10 @@ import Testing
                     "the index's own record that the change was reviewed, by the job of its one writer")
             let review = try decode(AdminJobList.self, try await owner.get("/api/v1/admin/jobs")).jobs.first { $0.kind == "indexReviews" }
             #expect(review?.state == "succeeded" && review?.progress == "Recorded 1 review in the index.", "\(String(describing: review))")
+            // Administration's tallies: the change reviewed by everyone whose research is on it, and stamped.
+            let tallies = try decode(AdminUpdates.self, try await owner.get("/api/v1/admin/library/updates"))
+            #expect(tallies.volumes.isEmpty, "\(tallies.volumes)")
+            #expect(tallies.totals == .init(changedDocuments: 0, volumes: 0, annotatedDocuments: 0))
         }
         // Another user's review is their own: one who annotated the document still has the change to review.
         _ = try fixture.users.store.signedInUser("bob", at: UserDataFixture.now)
@@ -288,6 +292,9 @@ import Testing
                                            volumesDirectory: files.volumesDirectory, userStore: users.store.searchDatabase)
         let page = { try await HighlightRoutes.page(of: Self.document, reader: reader, provider: provider, resources: users.server.resources) }
         let highlight = try Self.highlightThePassage(on: try await page(), store: users.store)
+        // Bob's research is on the document too, so Administration's tallies wait for his review as well as the owner's.
+        _ = try users.store.signedInUser("bob", at: UserDataFixture.now)
+        _ = try Self.highlightThePassage(on: try await page(), store: users.store, for: "bob")
         try FileManager.default.removeItem(at: files.volumesDirectory.appendingPathComponent("\(Self.volume).xml"))
         try Self.corrected().write(to: files.volumesDirectory.appendingPathComponent("\(Self.volume).xml"))
 
@@ -334,6 +341,14 @@ import Testing
                 #"{"contentHash":"\#(banner.contentHash ?? "")","changeKind":"body"}"#))
             #expect(!reviewed.canMarkReviewed && reviewed.line == "Some highlights may be misaligned — the document has been updated since they were created.")
             #expect(try decode(ResearchPage.self, try await owner.get("/api/v1/me/research")).updated == 0)
+            // The tallies, by the rule a Standalone server stamps its index by: the change waits for everyone whose
+            // research is on the document, by their ledgers, since this index is never written.
+            let waiting = try decode(AdminUpdates.self, try await owner.get("/api/v1/admin/library/updates"))
+            #expect(waiting.totals == .init(changedDocuments: 1, volumes: 1, annotatedDocuments: 1), "bob has not reviewed it")
+            _ = try users.store.recordDocumentReview(of: Self.document, contentHash: banner.contentHash ?? "", changeKind: "body",
+                                                     for: "bob", at: UserDataFixture.now)
+            let settled = try decode(AdminUpdates.self, try await owner.get("/api/v1/admin/library/updates"))
+            #expect(settled.totals == .init(changedDocuments: 0, volumes: 0, annotatedDocuments: 0) && settled.volumes.isEmpty)
         }
         _ = reviews
         await users.jobs.waitUntilIdle()

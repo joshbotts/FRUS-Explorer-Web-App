@@ -333,7 +333,8 @@ import Testing
             "ExcerptVerifier.verify(requests, bodyTexts: bodies)", "ExcerptVerifier.upgradingVanished(",
             "let lines = ExcerptReview.lines(outcome: outcome, storedVersion: quotation.version, currentVersion: version)",
             "warning: ExcerptReview.isWarning(outcome)",
-            "let summaries = VolumeUpdateReview.summaries(revisions: open, annotatedKeys: annotated)",
+            "open = unstamped.filter { !AnnotationReviewLedger.reviews(settled, $0) }",
+            "let summaries = VolumeUpdateReview.summaries(revisions: open, annotatedKeys: Set(annotators.keys))",
             "let totals = VolumeUpdateReview.totals(of: summaries)",
         ], file: "Reviews.swift")
         NoteViewParityTests.expect(try Self.server("Sources/FRUSLightAPI/Research.swift"), holds: [

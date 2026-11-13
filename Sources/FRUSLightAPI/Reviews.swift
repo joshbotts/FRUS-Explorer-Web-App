@@ -548,33 +548,39 @@ enum ReviewRoutes {
 
     // MARK: Helpers
 
-    /// The reviews the index records (ReviewStamps.swift): a change every user whose research is on the document has
-    /// reviewed, by their ledgers, one row for each, which the kit's `applyAnnotationReviews` matches to the change.
+    /// The reviews the index records (ReviewStamps.swift), and those Administration's tallies count, in both modes: a
+    /// change every user whose research is on the document has reviewed, by their ledgers, or, on a document no one's
+    /// research is on, one anyone has, one row for each, which the kit's `applyAnnotationReviews` matches to the change.
     static func settledReviews(store: any UserDataStore) async throws -> [AnnotationReviewData] {
         let ledgers = try await Blocking.run { try store.everyDocumentReview() }
         guard !ledgers.isEmpty else { return [] }
+        return settledReviews(ledgers: ledgers, annotators: try await annotators(store: store))
+    }
+
+    /// The same, over every user's ledger and whose research is on each document.
+    static func settledReviews(ledgers: [String: [AnnotationReviewRecord]], annotators: [String: Set<String>]) -> [AnnotationReviewData] {
         // Who reviewed each change, by its document, content hash and change kind.
-        struct Change: Hashable { let volumeId, documentId, contentHash: String; let changeKind: String? }
-        var reviewers: [Change: Set<String>] = [:]
+        var reviewers: [AnnotationReviewData: Set<String>] = [:]
         for (user, rows) in ledgers {
-            for row in rows {
-                reviewers[Change(volumeId: row.volumeId, documentId: row.documentId, contentHash: row.contentHash,
-                                 changeKind: row.changeKind), default: []].insert(user)
+            for row in rows where row.annotationType == AnnotationReviewLedger.documentKind {
+                reviewers[row.data, default: []].insert(user)
             }
         }
-        // Whose research is on each document: every user's, as the Research page gathers it.
+        return reviewers.compactMap { change, users in
+            let concerned = annotators[UpdateReviewSources.key(change.volumeId, change.documentId)] ?? []
+            return concerned.isSubset(of: users) ? change : nil
+        }
+    }
+
+    /// Whose research is on each document, by `"volumeId/documentId"`: every user's, as the Research page gathers it.
+    static func annotators(store: any UserDataStore) async throws -> [String: Set<String>] {
         var annotators: [String: Set<String>] = [:]
         for account in try await Blocking.run({ try store.accounts() }) {
             for key in ResearchGroups(sources: try await ResearchSources.read(for: account.id, in: store)).allAnnotatedKeys {
                 annotators[key, default: []].insert(account.id)
             }
         }
-        return reviewers.compactMap { change, users in
-            let concerned = annotators[UpdateReviewSources.key(change.volumeId, change.documentId)] ?? []
-            guard concerned.isSubset(of: users) else { return nil }
-            return AnnotationReviewData(annotationType: AnnotationReviewLedger.documentKind, volumeId: change.volumeId,
-                                        documentId: change.documentId, contentHash: change.contentHash, changeKind: change.changeKind)
-        }
+        return annotators
     }
 
     /// What the banner says, for the user: the change's kind while they have not reviewed it.
@@ -641,8 +647,10 @@ enum ReviewRoutes {
 // MARK: - Administration's Volume updates
 
 /// `GET /api/v1/admin/library/updates`: what the updates changed, at the grain an admin acts, per volume, by the
-/// kit's `VolumeUpdateReview` over the changes no one has reviewed and every user's research (PLAN's S21f); and in
-/// Import mode, where the comparison of the served export with the TEI folder stands.
+/// kit's `VolumeUpdateReview` over the changes that wait for review and every user's research (PLAN's S21f), a
+/// change waiting until the index holds its review stamp or everyone whose research is on the document has reviewed
+/// it, the same rule in both modes; and in Import mode, where the comparison of the served export with the TEI
+/// folder stands.
 public struct AdminUpdates: Codable, Equatable, Sendable, ResponseEncodable {
     public var mode: String
     public var totals: Totals
@@ -691,18 +699,22 @@ enum AdminUpdateRoutes {
         admin.get("library/updates") { request, _ -> EditedResponse<AdminUpdates> in
             try FormQuery(request.uri.query).refuseUnknown([])
             let served = try? await provider?.servedIfReady()
-            // The changes no one has reviewed: on a Standalone server its index records each user's review once its
-            // job has; an Import server's comparison with the TEI records none.
-            let open = await reviews.changes(served).values.map(\.revision).filter { $0.reviewedAt == nil }
+            // The changes that wait for review, by one rule in both modes: a change the index holds no review stamp of
+            // (a Standalone server's own, recorded by this rule, or one an export brought from the Mac) and that the
+            // ledgers do not settle, everyone whose research is on the document having reviewed it. An Import server's
+            // index holds no stamp of the server's, and its comparison with the TEI none at all, so there the ledgers
+            // are all of it; on a Standalone server they count a review before its job records it.
+            let unstamped = await reviews.changes(served).values.map(\.revision).filter { $0.reviewedAt == nil }
             // Every user's research: a document counts if it carries anyone's, as the app counts its reader's.
-            var annotated: Set<String> = []
-            if !open.isEmpty {
-                let accounts = try await Blocking.run { try store.accounts() }
-                for account in accounts {
-                    annotated.formUnion(ResearchGroups(sources: try await ResearchSources.read(for: account.id, in: store)).allAnnotatedKeys)
-                }
+            var annotators: [String: Set<String>] = [:]
+            var open: [IndexingPipeline.DocumentRevision] = []
+            if !unstamped.isEmpty {
+                annotators = try await ReviewRoutes.annotators(store: store)
+                let ledgers = try await Blocking.run { try store.everyDocumentReview() }
+                let settled = ReviewRoutes.settledReviews(ledgers: ledgers, annotators: annotators)
+                open = unstamped.filter { !AnnotationReviewLedger.reviews(settled, $0) }
             }
-            let summaries = VolumeUpdateReview.summaries(revisions: open, annotatedKeys: annotated)
+            let summaries = VolumeUpdateReview.summaries(revisions: open, annotatedKeys: Set(annotators.keys))
             let totals = VolumeUpdateReview.totals(of: summaries)
             var check: AdminUpdates.TEICheck?
             if state.configuration.mode == .import, let teiCheck = reviews.teiCheck {

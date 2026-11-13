@@ -73,6 +73,11 @@ public enum AnnotationReviewLedger {
     /// AND content_hash = ? AND change_kind IS ?`), held to the kit by `UpdateReviewParityTests`. A change the
     /// index has not stamped is no change to review.
     public static func reviews(_ rows: [AnnotationReviewRecord], _ revision: IndexingPipeline.DocumentRevision) -> Bool {
+        reviews(rows.map(\.data), revision)
+    }
+
+    /// The same match over rows as the kit's `applyAnnotationReviews` reads them.
+    public static func reviews(_ rows: [AnnotationReviewData], _ revision: IndexingPipeline.DocumentRevision) -> Bool {
         guard revision.changedAt != nil else { return false }
         return rows.contains {
             $0.annotationType == documentKind && $0.volumeId == revision.volumeId && $0.documentId == revision.documentId
