@@ -1351,6 +1351,351 @@ dialog.review-sheet {
   font-size: 0.8125rem;
 }
 
+/* ─── The cross-reference graph (PLAN's S23e) ────────────────────────────── */
+
+.graph-page .back {
+  margin: 0 0 0.25rem;
+}
+
+/* The app's orange banner over a graph some volumes the server does not serve cite. */
+.graph-banner {
+  margin: 0.5rem 0;
+  padding: 0.375rem 0.75rem;
+  border-radius: 6px;
+  background: var(--tone-orange-tint);
+  color: var(--text);
+  font-size: 0.875rem;
+}
+
+.graph-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin: 0.5rem 0;
+}
+
+.graph-toolbar .pane-picker {
+  margin: 0;
+}
+
+.graph-toolbar fieldset:disabled {
+  opacity: 0.6;
+}
+
+.graph-depth-label {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.graph-widened {
+  margin: 0;
+}
+
+.graph-reset {
+  margin-left: auto;
+}
+
+.graph-status {
+  margin: 0;
+  min-height: 1.25rem;
+}
+
+.graph-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 20rem;
+  gap: 1rem;
+  align-items: start;
+}
+
+/* Below 900 px the panel follows the canvas, as the reader's rail becomes a sheet. */
+@media (max-width: 899px) {
+  .graph-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.graph-canvas-frame {
+  position: relative;
+  height: clamp(360px, 62vh, 760px);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.graph-body-waiting .graph-canvas-frame {
+  background: var(--surface);
+}
+
+.graph-cy {
+  position: absolute;
+  inset: 0;
+}
+
+/* The keyboard's list of the canvas's nodes: over the canvas, which takes the pointer, ringed when it has
+   the focus; its options are read, not seen, and the node they name is ringed on the canvas. */
+.graph-keys {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 8px;
+}
+
+.graph-keys:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
+}
+
+.graph-option {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0.375rem 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.graph-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.swatch,
+.kind-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--tone-secondary);
+  opacity: 0.55;
+}
+
+.swatch.inbound,
+.kind-dot.inbound {
+  background: var(--tone-blue);
+}
+
+.swatch.outbound,
+.kind-dot.outbound {
+  background: var(--tone-orange);
+}
+
+.swatch.archival {
+  background: var(--tone-teal);
+}
+
+.graph-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.graph-placeholder {
+  margin: 0;
+}
+
+.graph-details {
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.graph-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.graph-detail-head h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.graph-edge-title {
+  color: var(--text-secondary);
+}
+
+.graph-close {
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0 0.375rem;
+  line-height: 1;
+}
+
+.graph-dateline,
+.graph-volume,
+.graph-not-served {
+  margin: 0.25rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.graph-not-served {
+  color: var(--warning);
+}
+
+.graph-context {
+  margin: 0.5rem 0 0;
+  padding-top: 0.375rem;
+  border-top: 1px solid var(--border);
+}
+
+.graph-direction {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.graph-context-text {
+  margin: 0.25rem 0;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  white-space: pre-line;
+}
+
+.graph-context-text.clamped {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.graph-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.graph-list h3 {
+  margin: 0.5rem 0 0.25rem;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.graph-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.graph-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.graph-list li.selected {
+  background: var(--tone-blue-tint);
+}
+
+.graph-row {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+  min-height: 24px;
+  padding: 0.375rem 0.25rem;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.graph-row-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+  font-size: 0.9375rem;
+  overflow-wrap: anywhere;
+}
+
+.graph-row-number {
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+
+.graph-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.graph-row-snippet {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.graph-open {
+  min-width: 24px;
+  min-height: 24px;
+  margin: 0.25rem;
+  padding: 0 0.25rem;
+  text-align: center;
+  text-decoration: none;
+}
+
+.graph-about {
+  margin: 1rem 0;
+  max-width: 48rem;
+}
+
+.graph-about summary {
+  cursor: pointer;
+}
+
+.graph-about h2 {
+  font-size: 1rem;
+}
+
+.graph-about h3 {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 0.875rem;
+}
+
+.graph-about p {
+  margin: 0.25rem 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.graph-empty h2 {
+  font-size: 1.125rem;
+}
+
 /* ─── The Research rail ──────────────────────────────────────────────────── */
 
 .rail-section {

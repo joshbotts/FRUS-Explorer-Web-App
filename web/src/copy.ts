@@ -881,6 +881,110 @@ export const copy = {
     chips: 'Why related',
   },
 
+  /**
+   * The cross-reference graph (PLAN's S23e), in the words of the app's `CrossReferenceGraphView`, its
+   * reference list (`ReferenceListPanel`), its node's details and its rail's tile. Where the app speaks of
+   * the volumes a device has downloaded, the web speaks of those the server serves, and its Download
+   * Volume, which a reader cannot do here, is left out; the canvas's keyboard words, the way back, the
+   * line while a graph is built and the two groups the keyboard reaches past the app's three are the
+   * web's own.
+   */
+  graph: {
+    title: 'Cross-References',
+    tile: 'Graph',
+    tileHelp: 'Show this document’s cross-reference graph',
+    back: (title: string) => `Back to ${title}`,
+    building: 'Drawing the graph…',
+    error: 'Graph Error',
+    empty: 'No References',
+    emptyDetail: 'This document has no recorded cross-references.',
+    layout: 'Graph layout',
+    layouts: { timeline: 'Timeline', network: 'Network' },
+    layoutHelp:
+      'Timeline arranges documents chronologically along a date axis; Network uses the spring layout. Timeline is unavailable when too few documents have dates.',
+    depthLabel: 'Depth:',
+    depth: 'Reference depth',
+    degrees: { 1: '1 hop', 2: '2 hops', 3: '3 hops' } as Record<number, string>,
+    degreeHelp: {
+      1: 'Direct inbound and outbound references only',
+      2: 'Add references to and from each direct neighbor',
+      3: 'Extend one further hop from each 2nd-degree node',
+    } as Record<number, string>,
+    widened: 'Few direct references — showing 2 hops',
+    resetView: 'Reset view',
+    resetViewHelp: 'Restore the graph’s pan and zoom to their original position',
+    undownloaded: 'Some volumes that may reference this document are not on this server.',
+    // The app's sentence, with the singulars its one form lacks, the web's own.
+    undownloadedCounted: (count: number, volumes: number) =>
+      `${count} ${count === 1 ? 'document' : 'documents'} in ${volumes} ${volumes === 1 ? 'volume' : 'volumes'} this server does not hold also ${
+        count === 1 ? 'cites this one. It is shown without a title.' : 'cite this one. They are shown without titles.'
+      }`,
+    canvas: 'Cross-reference graph',
+    canvasHelp:
+      'The arrow keys move from node to node, Home and End to the first and last; Enter or Space shows a document’s details or expands a cluster, and Escape closes the details.',
+    undated: 'Undated',
+    legend: 'Graph legend',
+    legendInbound: 'Cites this document',
+    legendOutbound: 'Cited by this document',
+    legendExtended: 'Further hops',
+    legendArrow: 'Points to the cited document',
+    legendSize: 'Size = connection count',
+    legendUnit: 'Not printed',
+    sections: { inbound: 'Inbound References', outbound: 'Outbound References', extended: 'Extended References' },
+    dateGroups: 'Date groups',
+    archival: 'Archival material',
+    list: { inbound: 'Cites This Document', outbound: 'Cited By This Document', extended: 'Further Hops' },
+    listRowHint: 'Highlights this document in the graph',
+    listClusterHint: 'Expands this volume’s documents',
+    open: 'Open document',
+    referenceCount: (count: number) => `×${count}`,
+    detailPlaceholder: 'Select a document in the graph or the list below to see its details.',
+    close: 'Close details',
+    closeHelp: 'Hide this document’s details panel',
+    separateReferences: (count: number) => `${count} separate references`,
+    referencedIn: 'Referenced in',
+    referencesFrom: 'References from',
+    extendedReference: 'Extended reference',
+    context: 'Context',
+    unprinted: 'Not printed',
+    centralFile: 'Central file, not printed',
+    showMore: 'Show more',
+    showLess: 'Show less',
+    notServed: 'Not on this server',
+    expandCluster: 'Expand Cluster',
+    expandDateGroup: 'Expand Date Group',
+    recenter: 'Recenter',
+    viewDocument: 'View Document',
+    about: 'About this graph',
+    aboutHeading: 'About the Cross-Reference Graph',
+    aboutRows: [
+      [
+        'What the graph shows',
+        'Nodes are either FRUS documents or archival locations of documents referenced in FRUS documents. Light blue nodes represent incoming cross-references from other FRUS documents. Orange nodes represent outgoing cross-references to other FRUS documents. Teal nodes represent outgoing archival references. Gray nodes are 2nd- or 3rd-degree neighbors. Larger nodes have more connections across the corpus. Each arrow points at the document being cited.',
+      ],
+      [
+        'Edge context',
+        'Wherever feasible, lines between nodes carry the original footnote or editorial-note text that contain the reference that connects them. Select a line, or a document, to read it. A thicker line means the two documents are linked by several separate references.',
+      ],
+      [
+        'Timeline and Network layouts',
+        'Timeline mode places each document at its date along a horizontal time axis. Outgoing references usually sit to the left, since they are earlier. Incoming references usually sit to the right, since they are later. A cited page sits at the dates of the documents printed on it. A document or page in a volume this server does not hold sits at the dates the server has for it, often only its volume’s span, which its label then shows. Documents with no recorded date go in the Undated column. Network mode arranges nodes by their connections alone.',
+      ],
+      [
+        'Neighborhood degree',
+        '1° shows only direct references to and from the central document. 2° adds neighbors of those neighbors. 3° extends one further hop.',
+      ],
+      [
+        'Navigating the graph',
+        'Click a node to see its details; Recenter redraws the graph around that document, and Back returns to the one before. Drag to pan and scroll to zoom. From the keyboard, the arrow keys move from node to node, and Enter shows a document’s details or expands a cluster. The reference list beside the graph lists every document it draws.\n\nTeal nodes are archival material the editors pointed to in a footnote but did not print. There is no document behind one, so the walk ends there (unless you track the cited record down yourself in the archives).\n\nThis graph draws three kinds of archival citation: State Department lot files, collections in the presidential libraries, and the central files cited by decimal number, such as 681.8229/8–2950 — the usual practice in the earlier volumes, and still most archival footnotes in the volumes covering the 1950s. A central-file node is labeled by the number alone, with no subject beside it. A citation that was read but could not be matched is left off rather than drawn as a guess.',
+      ],
+      [
+        'Volumes this server does not hold',
+        'A reference can point to a document in a volume this server does not hold. The graph still shows it, because the connection was recorded when the citing volume was indexed. Those nodes have a dashed border.\n\nUsing bundled series-wide cross-reference data, the graph displays documents that cite this one even when this server does not hold their volumes. They carry a dashed border and appear without titles or footnote text; an orange banner at the top of the graph counts them. The 2nd- and 3rd-degree neighbors come only from volumes this server holds.',
+      ],
+    ] as [string, string][],
+  },
+
   // ─── Research ─────────────────────────────────────────────────────────────
   /** The reader's Research rail and its Tags section, in the app's words. */
   research: {

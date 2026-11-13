@@ -19,6 +19,10 @@ const standalone = !!process.env.FRUS_E2E_LIBRARY;
 // The update review (PLAN's S21f): on the smoke test's Standalone server, before and after its update.
 const updateReview = /update-review\.spec\.ts$/;
 const reviewing = !!process.env.FRUS_E2E_UPDATE_REVIEW;
+// The cross-reference graph (PLAN's S23e): its spec's second test, on the smoke test's Standalone server,
+// over its index of the three fixture volumes.
+const graph = /graph\.spec\.ts$/;
+const graphing = !!process.env.FRUS_E2E_GRAPH;
 
 export default defineConfig({
   testDir: './e2e',
@@ -30,7 +34,9 @@ export default defineConfig({
         ? { testMatch: library }
         : reviewing
           ? { testMatch: updateReview }
-          : { testIgnore: [signIn, accounts, updateReview] }),
+          : graphing
+            ? { testMatch: graph }
+            : { testIgnore: [signIn, accounts, updateReview] }),
   timeout: 30_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,

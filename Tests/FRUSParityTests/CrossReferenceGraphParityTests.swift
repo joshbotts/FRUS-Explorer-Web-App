@@ -182,8 +182,9 @@ import Testing
         }
         let volume = node.terminatesWalk || node.isDateCluster ? nil : node.volumeId
         let meta = node.metadata
+        let row = DocumentHeaderDisplay.numberedRow(header: meta?.header ?? node.id, number: meta?.documentNumber)
         let fields: [String?] = [
-            node.id, kind, "\(node.degree)", "\(node.isDownloaded)", node.accessibilityLabel, title(for: node), label,
+            node.id, kind, "\(node.degree)", "\(node.isDownloaded)", node.accessibilityLabel, title(for: node), row.title, row.number, label,
             value.map(number), volume, node.documentId, "\(node.isPageNode)", "\(opens)", meta?.header, meta?.dateline,
             meta?.documentNumber, meta?.citedPage.map(String.init), meta?.dating.map { "\($0)" }, count.map(String.init),
         ]
@@ -201,7 +202,7 @@ import Testing
         default: break
         }
         let fields: [String?] = [
-            node.id, kind, "\(node.degree)", "\(node.isDownloaded)", node.label, node.title, node.dateLabel,
+            node.id, kind, "\(node.degree)", "\(node.isDownloaded)", node.label, node.title, node.rowTitle, node.rowNumber, node.dateLabel,
             node.dateValue.map(number), node.volumeId, node.documentId, "\(node.isPageNode)", "\(node.opens)", node.header,
             node.dateline, node.documentNumber, node.citedPage.map(String.init), node.dating, node.connectionCount.map(String.init),
         ]

@@ -77,6 +77,10 @@ public struct DocumentGraph: Codable, Equatable, Sendable, ResponseEncodable {
         public var label: String
         /// Its first label line on the canvas, as the app's view writes it, or nil for none.
         public var title: String?
+        /// Its row in the reference list, the kit's `DocumentHeaderDisplay.numberedRow` of its header, or its
+        /// key for none, and its number: the title less the number it prints, and the number beside it.
+        public var rowTitle: String
+        public var rowNumber: String?
         /// Its date as the canvas labels it (`buildDateLabels`), or nil.
         public var dateLabel: String?
         /// Its date as the timeline places it (`buildDateValues`): seconds since 2001, or nil.
@@ -393,9 +397,13 @@ enum CrossReferenceGraphRoutes {
 
     static func node(_ node: DisplayNode, dateLabel: String?, dateValue: TimeInterval?, connectionCount: Int?,
                      metadata: CrossReferenceNodeMetadata?) -> DocumentGraph.Node {
+        // The reference list's row (`ReferenceListPanel.rowContent`, #1391), so that a head printing its own
+        // number does not read "256. 256. …".
+        let row = DocumentHeaderDisplay.numberedRow(header: node.metadata?.header ?? node.id, number: node.metadata?.documentNumber)
         var encoded = DocumentGraph.Node(
             id: node.id, kind: kindName(node.kind), degree: node.degree, isDownloaded: node.isDownloaded,
-            label: node.accessibilityLabel, title: labelText(for: node), dateLabel: dateLabel, dateValue: dateValue,
+            label: node.accessibilityLabel, title: labelText(for: node), rowTitle: row.title, rowNumber: row.number,
+            dateLabel: dateLabel, dateValue: dateValue,
             // The kit's best-effort volume reads a key's first part, which an archival node's and a date
             // cluster's name no volume.
             volumeId: node.terminatesWalk || node.isDateCluster ? nil : node.volumeId,
