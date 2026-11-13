@@ -27,7 +27,8 @@ struct AdminRoleGuard: RouterMiddleware {
 
 enum AdminRoutes {
     static func add(to router: Router<APIRequestContext>, services: UserDataServices, state: ServerState, resources: ServerResources,
-                    library: VolumeLibrary? = nil, indexer: LibraryIndexer? = nil, provider: ServedIndexProvider? = nil) {
+                    library: VolumeLibrary? = nil, indexer: LibraryIndexer? = nil, provider: ServedIndexProvider? = nil,
+                    teiCheck: TEIChangeCheck? = nil) {
         let admin = router.group("/api/v1/admin").add(middleware: UserDataGuard(services: services)).add(middleware: AdminRoleGuard())
         // A side-loaded volume's XML, of 64 MiB at most, in a group of its own, whose guard takes it (PLAN's S21e).
         let sideloads = router.group("/api/v1/admin")
@@ -43,6 +44,9 @@ enum AdminRoutes {
         AdminJobRoutes.add(to: admin, services: services)
         // The library's volumes, their downloads (S21c), their indexing (S21d), the side-load and removal (S21e).
         AdminLibraryRoutes.add(to: admin, sideloads: sideloads, state: state, resources: resources, library: library, indexer: indexer)
+        // What the updates changed, by volume, and Import mode's comparison with the TEI folder (S21f).
+        AdminUpdateRoutes.add(to: admin, services: services, state: state, resources: resources, provider: provider,
+                              reviews: UpdateReviewSources(indexer: indexer, teiCheck: teiCheck))
         AdminUserRoutes.add(to: admin, services: services)
 
         admin.get("backup") { request, context -> Response in

@@ -234,6 +234,8 @@ extension LibraryIndexer {
         runningIndexed.insert(volumeId)
         stamps.clearFailure(of: volumeId)
         stamps.upgradeDone(volumeId)
+        // Indexed from the file in place, rebaselined, as the kit's pass records no change (PLAN's S21f).
+        stamps.reindexDone(volumeId)
         await publishUpgrade()
         await observer?.didWriteVolume(volumeId, at: liveIndex)
         let what = reason == .upgrade ? "Re-indexed \(current) of \(total) volumes for index version \(IndexingPipeline.currentDateIndexVersion)"
@@ -328,6 +330,7 @@ extension LibraryIndexer {
         stamps.clearFailure(of: volumeId)
         await tracker.markCompleted(volumeId: volumeId)
         stamps.upgradeDone(volumeId)
+        stamps.reindexDone(volumeId)
     }
 
     // MARK: Compaction

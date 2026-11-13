@@ -71,6 +71,12 @@ public protocol HighlightStore: Sendable {
     /// Gives a highlight another colour, keeping its id, offsets, text, version and time. Throws
     /// `HighlightStoreError.highlightNotFound` for an id the user has no highlight for.
     @discardableResult func recolorHighlight(_ id: String, to colorTag: String, for user: String) throws -> HighlightRecord
+    /// Anchors a highlight to the text as it reads now (PLAN's S21f), as the app's review sheet does: its rendering
+    /// version, and with `span` its offsets, the review's Move Here (`HighlightReview.move`), or without its
+    /// Confirm (`HighlightReview.confirm`), which keeps them. Its text, colour, note and time are kept. Throws
+    /// `HighlightStoreError.highlightNotFound` for an id the user has no highlight for.
+    @discardableResult func anchorHighlight(_ id: String, renderingVersion: String, span: (start: Int, end: Int)?,
+                                            for user: String) throws -> HighlightRecord
     /// Deletes a highlight. A note linked to it stays, as the app keeps one. Throws
     /// `HighlightStoreError.highlightNotFound` for an id the user has no highlight for.
     func deleteHighlight(_ id: String, for user: String) throws
@@ -134,6 +140,25 @@ extension RelationalUserStore: HighlightStore {
             highlight.colorTag = colorTag
             _ = try db.query("UPDATE highlights SET color_tag = ? WHERE user_id = ? AND upper(id) = ?",
                              [.text(colorTag), .text(user), .text(key)])
+            return highlight
+        }
+    }
+
+    @discardableResult
+    public func anchorHighlight(_ id: String, renderingVersion: String, span: (start: Int, end: Int)?,
+                                for user: String) throws -> HighlightRecord {
+        try writing { db in
+            guard let key = TagReferences.normalized(id), var highlight = try Self.highlight(key, of: user, in: db) else {
+                throw HighlightStoreError.highlightNotFound(id)
+            }
+            highlight.renderingVersion = renderingVersion
+            if let span {
+                highlight.startOffset = span.start
+                highlight.endOffset = span.end
+            }
+            _ = try db.query("UPDATE highlights SET start_offset = ?, end_offset = ?, rendering_version = ? WHERE user_id = ? AND upper(id) = ?",
+                             [.integer(Int64(highlight.startOffset)), .integer(Int64(highlight.endOffset)), .text(renderingVersion),
+                              .text(user), .text(key)])
             return highlight
         }
     }

@@ -90,6 +90,11 @@ public final class IndexStampFile: IndexingStampStore, @unchecked Sendable {
         /// Whether a reset has begun and its pass over every volume not ended (PLAN's S21e): the next start
         /// empties the index again and runs the pass.
         var resetting: Bool?
+        /// The volumes whose file a download replaced with another, kept before the new file takes its name
+        /// until a pass indexes the volume again with `indexVolume`, which stamps what the new file changed
+        /// (PLAN's S21f): a volume the index holds whole is on no list of the kit's, and a stop of the server
+        /// before its pass leaves it here for the next start's; absent in a file from before.
+        var reindex: [String]?
     }
 
     /// A stamp, as the kit stores it.
@@ -283,6 +288,26 @@ public final class IndexStampFile: IndexingStampStore, @unchecked Sendable {
             guard let removals = contents.removals, removals.contains(volumeId) else { return }
             let left = removals.filter { $0 != volumeId }
             contents.removals = left.isEmpty ? nil : left
+        }
+    }
+
+    /// The volumes a download gave a new file, which a pass owes an `indexVolume` (PLAN's S21f).
+    public func reindexOwed() -> Set<String> { locked { Set(contents.reindex ?? []) } }
+
+    /// A download is about to put another file in `volumeId`'s place: kept before the file takes its name.
+    public func oweReindex(_ volumeId: String) {
+        change { contents in
+            guard !(contents.reindex ?? []).contains(volumeId) else { return }
+            contents.reindex = (contents.reindex ?? []) + [volumeId]
+        }
+    }
+
+    /// A pass has indexed `volumeId` from the file in its place, or it left the library.
+    public func reindexDone(_ volumeId: String) {
+        change { contents in
+            guard let owed = contents.reindex, owed.contains(volumeId) else { return }
+            let left = owed.filter { $0 != volumeId }
+            contents.reindex = left.isEmpty ? nil : left
         }
     }
 

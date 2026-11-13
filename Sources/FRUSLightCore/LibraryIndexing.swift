@@ -124,6 +124,8 @@ public actor LibraryIndexer {
     var writerOpenedTestHook: (@Sendable (IndexingPipeline) async -> Void)?
     /// The volumes a removal job waits or runs for (PLAN's S21e, IndexUpkeep.swift).
     var queuedRemovals: Set<String> = []
+    /// The job that records users' reviews in the index and waits, which a review joins (PLAN's S21f, ReviewStamps.swift).
+    var waitingReviewJob: String?
 
     /// Test hook: installs `writerOpenedTestHook`.
     func setWriterOpenedTestHook(_ hook: (@Sendable (IndexingPipeline) async -> Void)?) {
@@ -429,8 +431,28 @@ public actor LibraryIndexer {
             leftOut.subtract(request.retrying)
         }
         let waiting = try writer.pipeline.volumesAwaitingIndex(excluding: leftOut)
-        guard let only = request.only else { return waiting }
-        return waiting.filter(only.contains)
+        // A volume a download gave a new file (PLAN's S21f), which the index may hold whole and so the kit
+        // lists not: taken as the kit's waiting volumes are, by the same rules, while its file is in place,
+        // so that `indexVolume` stamps in `document_revisions` what the new file changed.
+        let listed = Set(waiting)
+        let owed = stamps.reindexOwed()
+            .filter { !leftOut.contains($0) && !listed.contains($0) }
+            .filter { FileManager.default.fileExists(atPath: volumesDirectory.appendingPathComponent("\($0).xml").path) }
+            .sorted()
+        let list = waiting + owed
+        guard let only = request.only else { return list }
+        return list.filter(only.contains)
+    }
+
+    /// A download is about to put another file in `volumeId`'s place (PLAN's S21f): kept in the stamps before
+    /// the file takes its name, so that the next pass, or the next start's, indexes the volume again from it.
+    nonisolated public func oweReindex(_ volumeId: String) {
+        stamps.oweReindex(volumeId)
+    }
+
+    /// Whether a download gave `volumeId` a file the index has not been made from yet (PLAN's S21f).
+    nonisolated public func owesReindex(_ volumeId: String) -> Bool {
+        stamps.reindexOwed().contains(volumeId)
     }
 
     /// Forgets what was kept of a pass before for each of `volumeIds` that the index holds whole, its store
@@ -474,6 +496,7 @@ public actor LibraryIndexer {
                     runningIndexed.insert(volumeId)
                     stamps.clearFailure(of: volumeId)
                     stamps.upgradeDone(volumeId)
+                    stamps.reindexDone(volumeId)
                 case .failed(let record):
                     failed.append(volumeId)
                     stamps.recordFailure(record, for: volumeId)

@@ -5,8 +5,12 @@
 // server under FRUS_OFFLINE downloads nothing. From S21d a Standalone server indexes what it keeps, in
 // jobs of the queue, and Index asks for one. From S21e an admin side-loads a volume's file, which the
 // catalogue overlay lists when the catalogue does not, and Remove takes an indexed volume out of the index
-// first, in a job. An admin's, behind `AdminRoutes`' guard.
+// first, in a job. From S21f Check for Corrections lists the downloaded volumes changed upstream, by the kit's
+// rule, and Download of one, the app's Update, downloads its corrected file, which the library's indexing then
+// indexes again with `indexVolume`, recording in `document_revisions` what the correction changed. An admin's,
+// behind `AdminRoutes`' guard.
 //   GET    /api/v1/admin/library                       the volumes, with what this server may do
+//   POST   /api/v1/admin/library/corrections           Check for Corrections: the volumes changed upstream
 //   POST   /api/v1/admin/library/downloads             {"volumeIds": [...]} or {"all": true}: 202, with the job
 //   POST   /api/v1/admin/library/index                 {"volumeIds": [...]} or {"all": true}: 202, with the job
 //   POST   /api/v1/admin/library/sideload?file=<name>  the volume's XML: 202, with its indexing's job
@@ -70,6 +74,9 @@ public struct AdminLibrary: Codable, Equatable, Sendable, ResponseEncodable {
         public var index: IndexPass?
         /// Who asked for its download; absent for the server itself.
         public var requestedBy: String?
+        /// Whether a download gave it a file the index has not been made from, as Update's corrected file, which
+        /// its next pass indexes (PLAN's S21f); absent otherwise.
+        public var updateWaits: Bool?
     }
 
     /// Where the library's indexing stands.
@@ -85,6 +92,23 @@ public struct AdminLibrary: Codable, Equatable, Sendable, ResponseEncodable {
             self.active = active
             self.volume = volume
             self.upgrade = upgrade
+        }
+    }
+
+    /// What `POST /api/v1/admin/library/corrections` answers (PLAN's S21f): when the check ran, and each
+    /// downloaded volume whose file GitHub's listing now gives another git blob SHA-1, or another length, in
+    /// the catalogue's order, by the kit's `VolumeUpdateChecker.updatableVolumes`.
+    public struct Corrections: Codable, Equatable, Sendable, ResponseEncodable {
+        public var checkedAt: String
+        public var volumes: [Changed]
+
+        public struct Changed: Codable, Equatable, Sendable {
+            public var volumeId: String
+            public var title: String
+            /// Whether the copy in place was side-loaded, which Update replaces with the published volume.
+            public var sideloaded: Bool
+            /// Whether the served index holds it, made from the copy in place.
+            public var indexed: Bool
         }
     }
 
@@ -133,13 +157,15 @@ enum AdminLibraryRoutes {
                 let isDownloaded = sizes[entry.volumeId] != nil
                 // A pass that did not index a volume whose file is in place: its record, or the kit's sentinel.
                 let pass = isDownloaded ? Self.pass(entry.volumeId, indexing) : nil
+                // A file a download put in place that the index was not made from, which waits for its pass (PLAN's S21f).
+                let updateWaits = isDownloaded && indexer?.owesReindex(entry.volumeId) == true
                 let status: String = switch row?.state {
                 case .queued?: "queued"
                 case .downloading?: "downloading"
                 case .failed?: "failed"
                 default:
                     indexing?.indexing == entry.volumeId && isDownloaded ? "indexing"
-                        : pass != nil ? "failed" : isIndexed ? "indexed" : isDownloaded ? "downloaded" : "notDownloaded"
+                        : pass != nil ? "failed" : updateWaits ? "downloaded" : isIndexed ? "indexed" : isDownloaded ? "downloaded" : "notDownloaded"
                 }
                 counts[status, default: 0] += 1
                 // What the row says of a file, while the file is there.
@@ -153,7 +179,8 @@ enum AdminLibraryRoutes {
                     figures: file?.figuresStored, figuresRefused: file?.figuresRefused,
                     error: row?.state == .failed || row?.isUnfinished == true ? row?.error : pass?.sentence ?? row?.error,
                     index: row?.state == .failed || row?.isUnfinished == true ? nil : pass?.pass,
-                    requestedBy: row?.isUnfinished == true ? row?.requestedBy : nil)
+                    requestedBy: row?.isUnfinished == true ? row?.requestedBy : nil,
+                    updateWaits: updateWaits ? true : nil)
             }
             let refusal = library.downloadsRefusal
             let body = AdminLibrary(
@@ -164,7 +191,35 @@ enum AdminLibraryRoutes {
             return EditedResponse(headers: [.cacheControl: "no-store"], response: body)
         }
 
-        // 202 with the download's job, and its address.
+        // Check for Corrections (PLAN's S21f): GitHub's listing read once and the kit's check over the library, as the
+        // app's Keeping Current runs it, on a press, never at a start. It changes nothing: Download of a volume it
+        // lists is the app's Update.
+        admin.post("library/corrections") { request, context -> EditedResponse<AdminLibrary.Corrections> in
+            try FormQuery(request.uri.query).refuseUnknown([])
+            let user = try context.requireUser()
+            let library = try available(library)
+            let found: [UpdatableVolume]
+            do {
+                found = try await library.checkForCorrections()
+            } catch let refusal as LibraryRefusal {
+                throw problem(refusal)
+            } catch let failure as JobFailed {
+                throw APIProblem(.badGateway, code: "LISTING_NOT_READ", detail: failure.jobMessage)
+            }
+            let indexed = await state.index?.documentsByVolume ?? [:]
+            context.logger.info("\(user.id) checked the library for corrections: \(found.count) changed upstream")
+            let body = AdminLibrary.Corrections(
+                checkedAt: UserStoreDate.text(Date()),
+                volumes: found.map { volume in
+                    AdminLibrary.Corrections.Changed(volumeId: volume.id, title: volume.entry.title, sideloaded: volume.isSideloaded,
+                                                     indexed: (indexed[volume.id] ?? 0) > 0)
+                })
+            return EditedResponse(headers: [.cacheControl: "no-store"], response: body)
+        }
+
+        // 202 with the download's job, and its address. A volume the served index holds is downloaded again too
+        // (PLAN's S21f): its file is replaced only by one GitHub's listing names, which the library's indexing then
+        // indexes again with `indexVolume`, as the app's Update downloads and indexes a corrected volume.
         admin.post("library/downloads") { request, context -> EditedResponse<AdminJob> in
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
@@ -183,15 +238,6 @@ enum AdminLibraryRoutes {
             // A volume whose removal waits or runs is not downloaded meanwhile (PLAN's S21e).
             if case .volumes(let ids) = wanted, let indexer {
                 for id in ids where await indexer.isRemoving(id) { throw Self.removalInProgress(id) }
-            }
-            // A file the served index was made from is not replaced until the corrections check and the
-            // review of what a correction touched come (PLAN's S21f).
-            if case .volumes(let ids) = wanted, library.downloadsRefusal == nil {
-                let indexed = await state.index?.documentsByVolume ?? [:]
-                if let held = ids.first(where: { (indexed[$0] ?? 0) > 0 && library.isVolumeDownloaded($0) }) {
-                    throw APIProblem(.conflict, code: "VOLUME_INDEXED",
-                                     detail: "\(held) is in the served index, which was made from the file in place: a corrected file replaces it with the corrections check, which comes later.")
-                }
             }
             let job: Job
             do {
@@ -217,10 +263,11 @@ enum AdminLibraryRoutes {
             let indexed = await state.index?.documentsByVolume ?? [:]
             let indexing = await indexer.status()
             // What Index takes: a volume whose file is in place, and which the index lacks, or holds from a
-            // pass that did not finish. One indexed whole is indexed again by an upgrade's pass over every volume
-            // (PLAN's S21e) and with the corrections check, which comes later (PLAN's S21f).
+            // pass that did not finish, or from a file before the one a download put in place (PLAN's S21f). One
+            // indexed whole from its file is indexed again by an upgrade's pass over every volume (PLAN's S21e).
             func waits(_ id: String) -> Bool {
-                library.isVolumeDownloaded(id) && ((indexed[id] ?? 0) == 0 || Self.pass(id, indexing) != nil)
+                library.isVolumeDownloaded(id)
+                    && ((indexed[id] ?? 0) == 0 || Self.pass(id, indexing) != nil || indexer.owesReindex(id))
             }
             let wanted: LibraryIndexer.Request
             switch (body.volumeIds, body.all) {
@@ -237,7 +284,7 @@ enum AdminLibraryRoutes {
                     guard library.isVolumeDownloaded(id) else { throw problem(.notDownloaded(id)) }
                     guard waits(id) else {
                         throw APIProblem(.conflict, code: "VOLUME_INDEXED",
-                                         detail: "\(id) is in the served index already: a volume indexed whole is indexed again with the corrections check and the upgrade, which come later.")
+                                         detail: "\(id) is in the served index already, made from the file in place: Check for Corrections finds whether GitHub has a corrected one, which Download takes and indexes.")
                     }
                 }
                 wanted = .asked(ids)

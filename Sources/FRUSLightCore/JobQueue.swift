@@ -35,6 +35,8 @@ public struct JobKind: RawRepresentable, Hashable, Sendable, Codable {
     /// A Standalone server's index compacted, and checked (PLAN's S21e).
     public static let indexCompact = JobKind(rawValue: "indexCompact")
     public static let indexCheck = JobKind(rawValue: "indexCheck")
+    /// The reviews users have marked, recorded in a Standalone server's index as its `reviewed_at` (PLAN's S21f).
+    public static let indexReviews = JobKind(rawValue: "indexReviews")
 }
 
 /// One job, as the queue holds it and the store keeps it.
