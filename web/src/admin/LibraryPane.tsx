@@ -27,6 +27,7 @@ import {
 import { copy } from '../copy';
 import { closeAtOnce, Modal } from '../shell/Modal';
 import { AdminFrame, ReadFailure, useAdmin } from './AdminPanes';
+import { AfterAnUpdate, KeepingCurrent } from './UpdatesSection';
 
 const words = copy.admin.library;
 
@@ -185,6 +186,9 @@ function Library({ library }: { library: AdminLibrary }) {
         <p className="note">{words.upgrade(library.indexing.upgrade.to, library.indexing.upgrade.volumes.length)}</p>
       )}
       {library.mode === 'standalone' && <Sideload onSaid={setSaid} />}
+      {/* Check for Corrections and Update; and what the updates changed, or an Import server's TEI folder did (S21f). */}
+      {library.downloads && <KeepingCurrent />}
+      <AfterAnUpdate />
       {/* Always on the page, so that what a download or a removal did is announced when it comes. */}
       <p role="status">{said}</p>
       <p className="error" role="alert">
@@ -247,6 +251,7 @@ function Library({ library }: { library: AdminLibrary }) {
                   {volume.indexed && volume.status !== 'indexed' && <span className="note"> · {words.statuses.indexed}</span>}
                   {volume.sideloaded && <span className="note"> · {words.sideloadedMark}</span>}
                   {beingRemoved.has(volume.volumeId) && <p className="note">{words.removing}</p>}
+                  {volume.updateWaits && <p className="note">{words.updateWaits}</p>}
                   {volume.indexed && !volume.downloaded && (
                     <p className="note">{library.downloads ? words.indexedWithoutFile : words.indexedWithoutFileHere}</p>
                   )}
@@ -265,8 +270,8 @@ function Library({ library }: { library: AdminLibrary }) {
                   )}
                 </td>
                 <td>
-                  {/* An indexed volume's file is not replaced until the corrections check comes, nor one a pass reads. */}
-                  {library.downloads && volume.catalogued && !beingRemoved.has(volume.volumeId) && !isDownloading(volume) && volume.status !== 'indexing' && !(volume.indexed && volume.downloaded) && (
+                  {/* Download Again of an indexed volume is the app's Update (S21f): a corrected file replaces it, indexed again. Not one a pass reads. */}
+                  {library.downloads && volume.catalogued && !beingRemoved.has(volume.volumeId) && !isDownloading(volume) && volume.status !== 'indexing' && (
                     <button
                       type="button"
                       data-download={volume.volumeId}

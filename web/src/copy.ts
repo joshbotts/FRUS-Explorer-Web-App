@@ -792,6 +792,53 @@ export const copy = {
       `Mentioned in ${count.toLocaleString('en-US')} indexed ${count === 1 ? 'document' : 'documents'}`,
     notMentioned: 'Not found in indexed documents',
   },
+  /**
+   * The review of what an update changed in a document since it was annotated (PLAN's S21f): the banner's
+   * Review… and the review sheet's sections, in the app's words (`DocumentChangeBanner`,
+   * `DocumentChangeReviewSheet`), the web's own where the app speaks of a device or iCloud. The sentences the
+   * kit's rules give, the banner's line, each highlight's standing and its search, and a quotation's check, the
+   * server says.
+   */
+  review: {
+    review: 'Review…',
+    bannerLabel: 'A change since you annotated this document',
+    done: 'Done',
+    loading: 'Reading the change record…',
+    changeHeader: 'What Changed',
+    markReviewed: 'Mark Reviewed',
+    changeFooter:
+      'Marking the document reviewed clears it from “Changed by an update” for you, and for no one else. Highlights stay flagged until you confirm each one, and the next update re-opens the document if it changes again.',
+    foundInTEI:
+      'This server found the change by comparing the text it serves with its TEI folder, which the reader reads: the Mac indexed an earlier copy.',
+    markedReviewed: 'The document is marked reviewed.',
+    highlightsHeader: 'Highlights',
+    highlightsFooter:
+      'Confirm keeps a highlight exactly where it is and clears its warning everywhere you are signed in. Where the app can find the passage again it offers to move the highlight, showing you the words and what surrounds them — it never moves one on its own, and it never guesses when the words appear more than once.',
+    noPassage: 'Highlighted passage',
+    move: 'Move Here',
+    confirm: 'Confirm',
+    remove: 'Remove…',
+    moveA11y: (passage: string) => `Move Here: ${passage}`,
+    confirmA11y: (passage: string) => `Confirm: ${passage}`,
+    removeA11y: (passage: string) => `Remove…: ${passage}`,
+    moved: 'The highlight is moved to the corrected text.',
+    confirmed: 'The highlight is kept where it is.',
+    removed: 'The highlight is removed.',
+    excerptsHeader: 'Quotations',
+    excerptsFooter:
+      'A quotation is a copy, so a correction cannot change what it prints — what it can change is whether those words are still in the record it cites. This is the same check that runs when a collection is exported, and it reads the whole document, footnotes included. So a quotation can be affected by a correction described above as touching only the notes, and a quotation can fail this check for reasons older than any correction. Nothing here edits or removes a quotation: it belongs to its collection, and the collection editor is where you change it.',
+    othersHeader: 'Other Annotations',
+    othersNone: 'No other annotations on this document.',
+    notesCount: (count: number) => `${count} notes`,
+    tagsCount: (count: number) => `${count} tags`,
+    collectionsCount: (count: number) => `in ${count} collections`,
+    summariesCount: (count: number) => `${count} summaries`,
+    inVisitPlan: 'in an archive-visit plan',
+    openNote: 'Open note',
+    editTags: 'Edit Tags…',
+    othersFooter:
+      'These carry no position in the text, so the app cannot judge them against the change — it can only take you to them. Review them by eye; a summary describes the text as it was when it was written, and the app cannot tell you which of these predate the correction.',
+  },
   cite: {
     title: 'Cite',
     style: 'Citation style',
@@ -1138,8 +1185,10 @@ export const copy = {
     hasNotes: 'Contains Notes',
     notes: 'All Notes',
     updated: 'Changed by an update',
-    updatedWaits:
-      'Documents an update changed after you annotated them wait for a review of their new text, which this server does not offer yet, so none is listed here.',
+    emptyUpdated: 'No document you have annotated has changed since it was indexed on this server.',
+    reviewChanges: 'Review Changes…',
+    reviewChangesA11y: (title: string) => `Review Changes…: ${title}`,
+    vanished: 'No longer in the volume',
     history: 'History',
     historyDetail: 'Documents opened and searches run',
     collections: 'By Collection',
@@ -2088,6 +2137,7 @@ export const copy = {
         libraryRemove: 'Library removal',
         indexCompact: 'Index compaction',
         indexCheck: 'Index check',
+        indexReviews: 'Reviews recorded in the index',
       } as Record<string, string>,
       states: { queued: 'Waiting', running: 'Running', succeeded: 'Finished', failed: 'Failed', cancelled: 'Cancelled' },
       stopping: 'Stopping at its next step',
@@ -2116,6 +2166,47 @@ export const copy = {
       sideloadTooLarge: (size: string) => `The file is ${size}: a side-load takes 64 MB at most.`,
       sideloaded: (volume: string) => `${volume} is side-loaded: its indexing is queued as a job, which Jobs follows.`,
       sideloadedMark: 'Side-loaded',
+      // Check for Corrections and Update (PLAN's S21f), in the app's Keeping Current's words.
+      keepingCurrent: 'Keeping Current',
+      keepingCurrentFooter: 'Updating re-downloads and re-indexes a volume. Your notes, highlights, tags, and summaries are preserved.',
+      checkCorrections: 'Check for Corrections',
+      checkingCorrections: 'Checking…',
+      checkCorrectionsHelp:
+        'Compares each downloaded volume against the FRUS repository and lists any that changed since you downloaded them',
+      upToDate: 'All downloaded volumes are up to date',
+      upToDateDetail: 'Nothing has changed upstream since you downloaded them.',
+      changedUpstream: (count: number) =>
+        count === 1 ? 'One downloaded volume changed upstream.' : `${count.toLocaleString('en-US')} downloaded volumes changed upstream.`,
+      update: 'Update',
+      updateA11y: (volume: string) => `Update ${volume}`,
+      updateAll: 'Update All',
+      sideloadedCopy: 'Your side-loaded copy. Update replaces it with the published volume.',
+      updateQueued: (subject: string) => `The update of ${subject} is queued as a job, which Jobs follows: its indexing follows it.`,
+      updateWaits: 'Its corrected file waits to be indexed again, which the indexing after a download does, and Index asks for.',
+      // After an Update, in the app's words, of every user's research on this server.
+      afterUpdate: 'After an Update',
+      noChanges: 'No changes waiting',
+      noChangesDetail: 'No volume update on this server has changed a document since it was last indexed.',
+      changesWaiting: 'Updates changed documents',
+      changesTotals: (changed: number, volumes: number, annotated: number) =>
+        `${changed} documents changed in ${volumes} updated volumes. ${annotated} of them carry research on this server.`,
+      changedBody: (count: number) => `${count} with changed text`,
+      changedApparatus: (count: number) => `${count} with changed footnotes, source note, or heading`,
+      changedVanished: (count: number) => `${count} no longer in the volume`,
+      changedAnnotated: (annotated: number, changed: number) => `${annotated} of ${changed} changed documents carry research`,
+      afterUpdateFooter:
+        'When a volume is updated, the server compares every document with the copy it indexed before and records which ones changed. A document counts if it carries a note, tag, highlight, quotation, collection entry, summary, or archive-visit plan of anyone’s. Each user’s Research page lists the changed documents they annotated under Changed by an update, until they review them.',
+      // Import mode's comparison of the served index with the TEI folder (SPEC's import step 5), the web's own.
+      teiCheck: 'The TEI folder against the index',
+      teiCheckRunning: (done: number, total: number, volume?: string) =>
+        `Comparing the index with the TEI folder: ${done.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} volumes${volume ? `, now ${volume}` : ''}.`,
+      teiCheckDone: (checked: number, changed: number) =>
+        changed === 0
+          ? `The index matches the TEI folder in all ${checked.toLocaleString('en-US')} volumes compared.`
+          : `${changed.toLocaleString('en-US')} of the ${checked.toLocaleString('en-US')} volumes compared have a document whose TEI changed after the export was indexed.`,
+      teiCheckLead:
+        'Each document of the export is indexed again from the TEI folder, as FRUS Explorer indexes it, and compared with the export’s record of it, so that a document whose TEI changed after the Mac indexed it is listed for review, as an update’s is.',
+      teiUnchecked: (volume: string, reason: string) => `${volume}: ${reason}`,
       upgrade: (to: number, count: number) =>
         count === 1
           ? `Re-indexing for index version ${to}: one volume is still to go, while search answers.`

@@ -19,6 +19,7 @@ const page: ResearchPage = {
     { color: 'yellow', count: 2 },
     { color: 'pink', count: 1 },
   ],
+  updated: 0,
 };
 
 const kennedy: ResearchDocument = {
@@ -56,11 +57,11 @@ const bare: ResearchDocument = {
 };
 
 /** The server: the page, and each category's documents by its key. */
-function server(lists: Record<string, Partial<ResearchDocumentList>> = {}) {
+function server(lists: Record<string, Partial<ResearchDocumentList>> = {}, updated = 0) {
   return stubServer({
     '/readyz': ready,
     '/api/v1/me': me,
-    '/api/v1/me/research': page,
+    '/api/v1/me/research': { ...page, updated },
     '/api/v1/me/research/documents': (url: URL) => {
       const group = url.searchParams.get('group') ?? '';
       const list = lists[group] ?? { items: [] };
@@ -106,7 +107,6 @@ describe('the Research page', () => {
       'All Research Documents, 1,204',
       'Contains Notes, 2',
       'All Notes, 3',
-      `Changed by an update${'Documents an update changed after you annotated them wait for a review of their new text, which this server does not offer yet, so none is listed here.'}`,
       'History, Documents opened and searches run',
       'Briefing book, 1',
       'Berlin, 2',
@@ -247,16 +247,32 @@ describe('the Research page', () => {
     );
   });
 
-  it('says that Changed by an update waits for a review this server does not offer, and asks for no list', async () => {
-    const fetch = server();
+  it('lists Changed by an update while a change waits for the user, each row in the kit’s words with Review Changes…', async () => {
+    const changed: ResearchDocument = {
+      ...kennedy,
+      change: { kind: 'body', line: 'Text changed in an update — highlight positions may have moved' },
+      reviewable: true,
+    };
+    const fetch = server({ updated: { items: [changed] } }, 1);
     renderAt('/research?group=updated');
     expect(await screen.findByRole('heading', { level: 2, name: 'Changed by an update' })).toBeTruthy();
+    const categories = screen.getByRole('navigation', { name: 'Categories' });
+    expect((await within(categories).findByRole('link', { name: /^Changed by an update/ })).textContent).toBe('Changed by an update, 1');
     const list = screen.getByRole('region', { name: 'Changed by an update' });
-    expect(within(list).getByText(/^Documents an update changed after you annotated them wait/)).toBeTruthy();
+    expect(await within(list).findByText('Text changed in an update — highlight positions may have moved')).toBeTruthy();
+    expect(within(list).getByRole('button', { name: `Review Changes…: ${kennedy.title}` })).toBeTruthy();
+    expect(asked(fetch)).toEqual(['updated']);
+  });
+
+  it('leaves Changed by an update out of the categories while nothing waits, and says so of its empty list', async () => {
+    server();
+    renderAt('/research?group=updated');
+    expect(await screen.findByRole('heading', { level: 2, name: 'Changed by an update' })).toBeTruthy();
     await screen.findByRole('link', { name: /^All Research Documents/ });
-    expect(asked(fetch)).toEqual([]);
-    // Its row in the categories is a line, not a link.
     expect(screen.queryByRole('link', { name: /^Changed by an update/ })).toBeNull();
+    expect((await screen.findByText('No Documents')).closest('p')?.textContent).toBe(
+      'No Documents No document you have annotated has changed since it was indexed on this server.',
+    );
   });
 
   it('lists nothing on a server that keeps no user data, and says so', async () => {

@@ -24,6 +24,8 @@ export interface ResearchPage {
   tags: ResearchGroup[];
   /** By Highlight: in the kit's order of the colours. */
   highlightColors: { color: HighlightColor; count: number }[];
+  /** Changed by an update (PLAN's S21f): the annotated documents a change touched that the user has not reviewed. */
+  updated: number;
 }
 
 /** A row of a Research list, as the app's draws it. */
@@ -46,6 +48,14 @@ export interface ResearchDocument {
   /** Its tags by name, and its collections by the name each prints. */
   tags: { id: string; name: string }[];
   collections: { id: string; name: string }[];
+  /** What an update changed that the user has not reviewed, in the kit's words (PLAN's S21f). */
+  change?: { kind?: string; line: string };
+  /** Whether an update removed it from its volume, reviewed or not. */
+  vanished?: boolean;
+  /** `review` where its row opens the review sheet, the only way to a document an update removed. */
+  opens?: 'review';
+  /** Whether its row offers Review Changes…. */
+  reviewable?: boolean;
 }
 
 /** One category's documents, the most recently annotated first. */
@@ -64,7 +74,7 @@ export const researchPageQuery = queryOptions({
   retry: false,
 });
 
-/** A category's documents, by its key: `allAnnotated`, `hasNotes`, `tag.{id}`, `collection.{id}` or `highlightColor.{color}`. */
+/** A category's documents, by its key: `allAnnotated`, `hasNotes`, `updated`, `tag.{id}`, `collection.{id}` or `highlightColor.{color}`. */
 export function researchDocumentsQuery(group: string) {
   return queryOptions({
     queryKey: ['researchDocuments', group],
