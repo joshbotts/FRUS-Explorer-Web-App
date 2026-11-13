@@ -26,6 +26,39 @@ Not started: `PLAN.md`'s row S24f. The session that does it replaces this line, 
 
 Not started: `PLAN.md`'s row S21g. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
 
+## Session 24e, follow-up, upstream: the kit's stamp tests, each over a store of its own
+
+13 November 2026 · branch `claude/kit-test-race-records-1efabb` · [#135](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/135) · upstream `39859a51`, unchanged; [FRUS-Explorer#1903](https://github.com/joshbotts/FRUS-Explorer/pull/1903), open
+
+A race in the kit's tests, which the daily watch met at the pin, fixed upstream by the owner's word of 13 November; no PLAN row names it. The watch's run that day ([43444877747](https://github.com/joshbotts/FRUS-Explorer-Web-App/actions/runs/43444877747), at `39859a51`, reported in [#106](https://github.com/joshbotts/FRUS-Explorer-Web-App/issues/106)) failed `FRUSCoreKitTests` on one test, `DateIndexingAccuracyTests`' "needsDateReindex — returns true before markDateReindexComplete is called", which this repository's CI had passed at the same commit (run 43439295815). The CI runs the kit's suites at the pin, so the race could turn `main` red too. The pull request is `claude/kit-test-race-date-reindex`, cut from `v2` at `39859a51`, which `v2` still is. It is labelled `Mac`, asks for Mac verification as Mac check 28, and is not merged. Under rule 4 it changes shared files, the kit's test folder alone, and this repository changes only its records.
+
+**The race.** Every test pipeline built without a stamp store of its own shares one: `testIndexingStamps` in the package, `UserDefaults.standard` in Xcode. The failing test removed the date-index stamp from it, built a pipeline and read the stamp, while `needsDateReindexFalse`, which Swift Testing runs beside it, marked the same key and removed it after. The FTS stamp test and the rollup gate's fingerprint test cleared and read stamps in the same store. The first never failed, since no other test writes its key, and the second was safe only through fixture ids unique to it.
+
+**The fix,** test files only: `makeTestPipeline` builds a pipeline over a store of the test's own when given a suite name. `makeIsolatedStamps(_:)` makes it: the kit's `InMemoryIndexingStampStore` in the package, a `UserDefaults` suite in Xcode, whose app initialiser takes one. The four tests take one, and `testStamps`, the accessor they cleared the shared store through, goes. No test's result now depends on a stamp in the shared store, and nothing needed `.serialized`. One cold review found no defect, and two comments that said too much, now fixed.
+
+**Measured** (the pull request has the figures, each against `v2` run the same way):
+- **Linux,** over `main` at `fedd7cd` in `swift:6.4-noble`:
+  - `DateIndexingAccuracyTests` run alone 100 times failed 5 times at `v2`, each at the watch's line, and never at the branch.
+  - A repro suite, never committed, calls the real tests: the pair together 300 times in one process, two copies of the FTS test 100 times, and two of the fingerprint test 50 times. It had 1 to 2, 0 and 24 to 40 issues a run at `v2`, and none at the branch in three runs.
+  - The whole run: 4,156 tests at both heads, every target passing, with the one named skip. `FRUSCoreKitTests` ran 2,509 tests, and three more runs of it at each head all passed.
+  - Over the new `main`, `3f8cd6a` (S23e's #134), whose own CI passed at `v2`, the branch's tree passed every target but two of the web server's PostgreSQL tests. Those failed on "too many clients already", a known failure under load, and passed when `FRUSLightServerTests` ran alone (359 tests).
+- **Xcode,** on an iPhone 17e (iOS 27.2):
+  - The repro had 153 to 170, 101 to 108 and 1 to 3 issues a run at `v2`, and none at the branch.
+  - The three changed suites, 47 tests, passed ten repetitions at both heads.
+  - The rest of Mac check 28 gives `v2`'s figures at the branch: both builds with `v2`'s warning lines, the unit target's 7,999 tests with `v2`'s one failure and skips, `swift test`'s 4,490, and the Mac app's symbols identical.
+  - In Xcode the host app writes the shared store too. After the branch's runs it held the date-index, FTS and broken-references stamps, which no test there writes.
+
+**For the next pin move, which carries it:** nothing to follow.
+- No kit source changes, so no `Package.swift`, CI allow-list or `Compatibility.swift` change.
+- `FRUSCoreKitTests` keeps 2,509 tests and gains no skip.
+- The golden files' source digest (`UpstreamDigest.directories`) covers no test folder. The parity suite passed over `main` with the branch's tree, and this pull request alone stales no golden file.
+
+`kit-test-race-handover.md`, in the orchestrator's notes folder, has the rest.
+
+**Left, named in the pull request:** `CitationStyleTests`, Xcode's alone, and the app's `SettingsSyncCoordinatorTests` clear and set `SettingsKeys.citationStyle` in `UserDefaults.standard`, beside each other. It is the same kind of race on another store. It needs an app change, since `CitationStyle.current` reads `.standard` itself.
+
+**Next:** the owner's Mac check 28 and merge of FRUS-Explorer#1903; the next pin move carries it.
+
 ## Session 24e: pin move past the third batch
 
 13 November 2026 · branch `claude/s24e-pin-move-aa0129` · [#132](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/132) · upstream `39859a51`
