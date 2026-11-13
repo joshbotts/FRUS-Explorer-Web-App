@@ -1587,7 +1587,7 @@ dialog.review-sheet {
   margin-top: 0.5rem;
 }
 
-.graph-list h3 {
+.graph-list h2 {
   margin: 0.5rem 0 0.25rem;
   color: var(--text-secondary);
   font-size: 0.8125rem;

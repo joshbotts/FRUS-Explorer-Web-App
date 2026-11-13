@@ -717,7 +717,7 @@ function ReferenceList({
       </p>
       {sections.map((section) => (
         <section key={section.title}>
-          <h3>{section.title}</h3>
+          <h2>{section.title}</h2>
           <ul>
             {section.ids.flatMap((id) => {
               const node = byId.get(id);

@@ -89,7 +89,7 @@ test('opens the graph from the reader by keyboard, reaches its nodes, and shows 
   await page.keyboard.press('Escape');
   await expect(details).toHaveCount(0);
   // The reference list lists it, under the app's heading.
-  await expect(page.getByRole('heading', { level: 3, name: 'Cites This Document' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'Cites This Document' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Inbound: frus1961-63v05/d134' })).toBeVisible();
   // Two hops, by keyboard: the degree is kept in the address.
   const twoHops = page.getByRole('radio', { name: '2 hops' });

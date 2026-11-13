@@ -180,9 +180,9 @@ describe('the cross-reference graph', () => {
     const legend = screen.getByRole('list', { name: 'Graph legend' });
     expect(within(legend).getByText('Not printed')).toBeTruthy();
     // The reference list's sections, each row its number and title, its date, volume and count.
-    expect(screen.getByRole('heading', { level: 3, name: 'Cites This Document' })).toBeTruthy();
-    expect(screen.getByRole('heading', { level: 3, name: 'Further Hops' })).toBeTruthy();
-    expect(screen.queryByRole('heading', { level: 3, name: 'Cited By This Document' })).toBeNull();
+    expect(screen.getByRole('heading', { level: 2, name: 'Cites This Document' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'Further Hops' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { level: 2, name: 'Cited By This Document' })).toBeNull();
     const row = screen.getByRole('button', { name: 'Inbound: Memorandum of Conversation' });
     expect(row.textContent).toContain('2.Memorandum of Conversation');
     expect(row.textContent).toContain('Jan 3, 1961');

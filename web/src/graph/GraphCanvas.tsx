@@ -214,6 +214,9 @@ function elements(
   return out;
 }
 
+/** The id of the stylesheet Cytoscape would otherwise add to the page. */
+const cytoscapeStylesheetId = '__________cytoscape_stylesheet';
+
 export function GraphCanvas(props: GraphCanvasProps) {
   const container = useRef<HTMLDivElement>(null);
   const cy = useRef<Core | null>(null);
@@ -226,6 +229,13 @@ export function GraphCanvas(props: GraphCanvasProps) {
   // One instance for the page's life, restyled when the theme changes.
   useEffect(() => {
     if (!container.current) return;
+    // Cytoscape prepends a <style> giving its container `position: relative` unless an element with this id is
+    // in the page; the server's policy refuses an inline style, and app.css positions the container already.
+    if (!document.getElementById(cytoscapeStylesheetId)) {
+      const marker = document.createElement('meta');
+      marker.id = cytoscapeStylesheetId;
+      document.head.append(marker);
+    }
     const instance = cytoscape({
       container: container.current,
       style: stylesheet(),
