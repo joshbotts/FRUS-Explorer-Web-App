@@ -221,8 +221,11 @@ enum CrossReferenceGraphRoutes {
             let asked = try graphRequest(query)
             let served = try await provider.served()
             let authority = try await Blocking.run { resources.collectionAuthority }
-            return try await graph(volumeId: volumeId, documentId: documentId, request: asked, served: served,
-                                   authority: authority)
+            // The stack is held until the graph is built, so that a job waits for it before it writes (PLAN's S21d).
+            let graph = try await graph(volumeId: volumeId, documentId: documentId, request: asked, store: served.crossReferences,
+                                        pipeline: served.pipeline, downloaded: served.indexedVolumeIds, authority: authority)
+            withExtendedLifetime(served) {}
+            return graph
         }
     }
 
@@ -266,11 +269,11 @@ enum CrossReferenceGraphRoutes {
         return keys
     }
 
-    /// The graph of one document, as the app's view model loads, builds and lays it out.
-    static func graph(volumeId: String, documentId: String, request: GraphRequest, served: ServedIndex,
+    /// The graph of one document, as the app's view model loads, builds and lays it out, over the served index's
+    /// cross-reference store and pipeline, the volumes it serves standing for the downloaded ones.
+    static func graph(volumeId: String, documentId: String, request: GraphRequest, store: CrossReferenceStore,
+                      pipeline: IndexingPipeline, downloaded: Set<String>,
                       authority: CollectionAuthorityIndex?) async throws -> DocumentGraph {
-        let store = served.crossReferences
-        let downloaded = served.indexedVolumeIds
         let centralKey = "\(volumeId)/\(documentId)"
 
         // `loadGraph`: the reader's degree, or one hop widened to two while they have chosen none.
@@ -299,7 +302,7 @@ enum CrossReferenceGraphRoutes {
         // Then the connection counts and the unprinted units, over every node the graph holds metadata for.
         let keys = loaded.nodeMetadata.values.map { (volumeId: $0.volumeId, documentId: $0.documentId) }
         let counts = (try? await store.connectionCounts(forKeys: keys)) ?? [:]
-        let units = await unitNodes(keys: keys, pipeline: served.pipeline, authority: authority)
+        let units = await unitNodes(keys: keys, pipeline: pipeline, authority: authority)
 
         // `rebuildDisplay`.
         let built = CrossReferenceGraphDisplay.buildDisplayNodesAndEdges(
