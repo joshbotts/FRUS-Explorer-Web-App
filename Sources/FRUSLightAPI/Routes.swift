@@ -46,6 +46,7 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     ReaderRoutes.add(to: router, reader: reader, provider: provider, resources: resources, base: base)
     CitationRoutes.add(to: router, reader: reader, provider: provider, resources: resources)
     RelatedDocumentsRoutes.add(to: router, provider: provider, resources: resources)
+    CrossReferenceGraphRoutes.add(to: router, provider: provider, resources: resources)
     CitationLookupRoutes.add(to: router, provider: provider, resources: resources)
     PDFRoutes.add(to: router, service: state.pdf)
     ReaderLinkRoutes.add(to: router, state: state, provider: provider, reader: reader, resources: resources)
