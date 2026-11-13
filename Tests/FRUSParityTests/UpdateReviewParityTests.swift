@@ -178,6 +178,106 @@ import Testing
         withExtendedLifetime(directory) {}
     }
 
+    /// The words the browser app takes, where the app's source writes each under its key, and in copy.ts's block;
+    /// "this device" the web's "this server", and "your research" an admin's "research on this server".
+    @Test func theWebsWordsAreTheApps() throws {
+        let raw = try NoteViewParityTests.read(NoteViewParityTests.web, "copy.ts")
+        let review = try NoteViewParityTests.block("review", of: raw)
+        let research = try NoteViewParityTests.block("researchPage", of: raw)
+        let library = try #require(raw.range(of: "\n    library: {")).lowerBound
+        let admin = NoteViewParityTests.flattened(String(raw[library...].prefix(40_000)))
+        let banner = try Self.app("DocumentView/DocumentChangeBanner.swift")
+        let sheet = try Self.app("DocumentView/DocumentChangeReviewSheet.swift")
+        let keeping = try Self.app("Settings/KeepingCurrentSection.swift")
+        let model = try Self.app("Settings/KeepingCurrentModel.swift")
+        let section = try Self.app("Settings/VolumeUpdateReviewSection.swift")
+        let view = try Self.app("Research/ResearchView.swift")
+        let kit = SearchSetParityTests.self
+        let aggregation = try kit.kit("FRUSCoreKit/Research/ResearchDocumentAggregation.swift")
+        let words: [(source: String, file: String, key: String, value: String, block: String, web: String)] = [
+            (banner, "DocumentChangeBanner", "document.changed.review", "Review…", review, "review: 'Review…'"),
+            (sheet, "DocumentChangeReviewSheet", "document.review.done", "Done", review, "done: 'Done'"),
+            (sheet, "DocumentChangeReviewSheet", "document.review.loading", "Reading the change record…", review, "loading: 'Reading the change record…'"),
+            (sheet, "DocumentChangeReviewSheet", "document.review.change.header", "What Changed", review, "changeHeader: 'What Changed'"),
+            (sheet, "DocumentChangeReviewSheet", "document.review.markReviewed", "Mark Reviewed", review, "markReviewed: 'Mark Reviewed'"),
+            (sheet, "DocumentChangeReviewSheet", "document.review.highlights.header", "Highlights", review, "highlightsHeader: 'Highlights'"),
+            (sheet, "DocumentChangeReviewSheet", "document.review.highlights.footer.v2",
+             "Confirm keeps a highlight exactly where it is and clears its warning everywhere you are signed in. Where the app can find the passage again it offers to move the highlight, showing you the words and what surrounds them — it never moves one on its own, and it never guesses when the words appear more than once.",
+             review, "highlightsFooter: 'Confirm keeps a highlight exactly where it is and clears its warning everywhere you are signed in. Where the app can find the passage again it offers to move the highlight, showing you the words and what surrounds them — it never moves one on its own, and it never guesses when the words appear more than once.'"),
+            (sheet, "DocumentChangeReviewSheet", "document.review.highlight.noPassage", "Highlighted passage", review, "noPassage: 'Highlighted passage'"),
+            (sheet, "DocumentChangeReviewSheet", "document.review.highlight.move", "Move Here", review, "move: 'Move Here'"),
+            (sheet, "DocumentChangeReviewSheet", "document.review.highlight.confirm", "Confirm", review, "confirm: 'Confirm'"),
+            (sheet, "DocumentChangeReviewSheet", "document.review.highlight.remove", "Remove…", review, "remove: 'Remove…'"),
+            (sheet, "DocumentChangeReviewSheet", "document.review.excerpts.header", "Quotations", review, "excerptsHeader: 'Quotations'"),
+            (sheet, "DocumentChangeReviewSheet", "document.review.other.header", "Other Annotations", review, "othersHeader: 'Other Annotations'"),
+            (sheet, "DocumentChangeReviewSheet", "document.review.other.none", "No other annotations on this document.", review,
+             "othersNone: 'No other annotations on this document.'"),
+            (sheet, "DocumentChangeReviewSheet", "document.review.other.visit", "in an archive-visit plan", review, "inVisitPlan: 'in an archive-visit plan'"),
+            (sheet, "DocumentChangeReviewSheet", "document.review.other.editTags", "Edit Tags…", review, "editTags: 'Edit Tags…'"),
+            (sheet, "DocumentChangeReviewSheet", "document.review.other.note.untitled", "Open note", review, "openNote: 'Open note'"),
+            (view, "ResearchView", "research.action.reviewChanges", "Review Changes…", research, "reviewChanges: 'Review Changes…'"),
+            (aggregation, "ResearchDocumentAggregation", "research.row.changed.vanished", "No longer in the volume", research, "vanished: 'No longer in the volume'"),
+            (keeping, "KeepingCurrentSection", "settings.hub.keepingCurrent.header", "Keeping Current", admin, "keepingCurrent: 'Keeping Current'"),
+            (keeping, "KeepingCurrentSection", "settings.hub.keepingCurrent.footer",
+             "Updating re-downloads and re-indexes a volume. Your notes, highlights, tags, and summaries are preserved.", admin,
+             "keepingCurrentFooter: 'Updating re-downloads and re-indexes a volume. Your notes, highlights, tags, and summaries are preserved.'"),
+            (keeping, "KeepingCurrentSection", "settings.hub.corrections.button", "Check for Corrections", admin, "checkCorrections: 'Check for Corrections'"),
+            (keeping, "KeepingCurrentSection", "settings.hub.corrections.checking", "Checking…", admin, "checkingCorrections: 'Checking…'"),
+            (keeping, "KeepingCurrentSection", "settings.hub.corrections.help",
+             "Compares each downloaded volume against the FRUS repository and lists any that changed since you downloaded them", admin,
+             "'Compares each downloaded volume against the FRUS repository and lists any that changed since you downloaded them'"),
+            (keeping, "KeepingCurrentSection", "settings.hub.corrections.upToDate", "All downloaded volumes are up to date", admin,
+             "upToDate: 'All downloaded volumes are up to date'"),
+            (keeping, "KeepingCurrentSection", "settings.hub.corrections.upToDate.detail", "Nothing has changed upstream since you downloaded them.",
+             admin, "upToDateDetail: 'Nothing has changed upstream since you downloaded them.'"),
+            (keeping, "KeepingCurrentSection", "settings.hub.corrections.update", "Update", admin, "update: 'Update'"),
+            (keeping, "KeepingCurrentSection", "settings.hub.corrections.updateAll", "Update All", admin, "updateAll: 'Update All'"),
+            (model, "KeepingCurrentModel", "settings.hub.corrections.sideloaded", "Your side-loaded copy. Update replaces it with the published volume.",
+             admin, "sideloadedCopy: 'Your side-loaded copy. Update replaces it with the published volume.'"),
+            (section, "VolumeUpdateReviewSection", "settings.updateReview.header", "After an Update", admin, "afterUpdate: 'After an Update'"),
+            (section, "VolumeUpdateReviewSection", "settings.updateReview.none.label", "No changes waiting", admin, "noChanges: 'No changes waiting'"),
+            (section, "VolumeUpdateReviewSection", "settings.updateReview.summary.label", "Updates changed documents", admin,
+             "changesWaiting: 'Updates changed documents'"),
+        ]
+        for word in words {
+            #expect(NoteViewParityTests.writes(word.source, word.key, word.value), "\(word.file) writes \(word.key) as \(word.value)")
+            #expect(word.block.contains(NoteViewParityTests.flattened(word.web)), "copy.ts holds \(word.web)")
+        }
+        // A long footer, flattened as the source splits it: its text in the app's file and in copy.ts.
+        let footers: [(source: String, value: String, block: String)] = [
+            (sheet, "A quotation is a copy, so a correction cannot change what it prints — what it can change is whether those words are still in the record it cites. This is the same check that runs when a collection is exported, and it reads the whole document, footnotes included. So a quotation can be affected by a correction described above as touching only the notes, and a quotation can fail this check for reasons older than any correction. Nothing here edits or removes a quotation: it belongs to its collection, and the collection editor is where you change it.", review),
+            (sheet, "These carry no position in the text, so the app cannot judge them against the change — it can only take you to them. Review them by eye; a summary describes the text as it was when it was written, and the app cannot tell you which of these predate the correction.", review),
+        ]
+        for footer in footers {
+            #expect(footer.source.contains(footer.value), "the app's file holds \(footer.value.prefix(40))")
+            #expect(footer.block.contains(footer.value), "copy.ts holds \(footer.value.prefix(40))")
+        }
+        // "This device" is the web's "this server"; "your research", an admin's, everyone's on this server.
+        #expect(NoteViewParityTests.writes(view, "research.empty.noDocs.updated", "No document you have annotated has changed since it was indexed on this device."))
+        #expect(research.contains("emptyUpdated: 'No document you have annotated has changed since it was indexed on this server.'"))
+        #expect(NoteViewParityTests.writes(section, "settings.updateReview.none.detail", "No volume update on this device has changed a document since it was last indexed."))
+        #expect(admin.contains("noChangesDetail: 'No volume update on this server has changed a document since it was last indexed.'"))
+        // The words with a count, as the app formats them and copy.ts's functions say them.
+        let formats: [(source: String, line: String, block: String, web: String)] = [
+            (sheet, #"String(localized: "document.review.other.notes %lld", defaultValue: "\(notes.count) notes")"#, review, "notesCount: (count: number) => `${count} notes`"),
+            (sheet, #"String(localized: "document.review.other.tags %lld", defaultValue: "\(tagAssignments.count) tags")"#, review, "tagsCount: (count: number) => `${count} tags`"),
+            (sheet, #"String(localized: "document.review.other.collections %lld", defaultValue: "in \(documentEntries) collections")"#, review,
+             "collectionsCount: (count: number) => `in ${count} collections`"),
+            (sheet, #"String(localized: "document.review.other.summaries %lld", defaultValue: "\(liveSummaries) summaries")"#, review,
+             "summariesCount: (count: number) => `${count} summaries`"),
+            (section, #"String(localized: "settings.updateReview.part.body %lld", defaultValue: "\(v.body) with changed text")"#, admin,
+             "changedBody: (count: number) => `${count} with changed text`"),
+            (section, #"String(localized: "settings.updateReview.part.apparatus %lld", defaultValue: "\(v.apparatus) with changed footnotes, source note, or heading")"#,
+             admin, "changedApparatus: (count: number) => `${count} with changed footnotes, source note, or heading`"),
+            (section, #"String(localized: "settings.updateReview.part.vanished %lld", defaultValue: "\(v.vanished) no longer in the volume")"#, admin,
+             "changedVanished: (count: number) => `${count} no longer in the volume`"),
+        ]
+        for format in formats {
+            #expect(format.source.contains(NoteViewParityTests.flattened(format.line)), "the app holds \(format.line)")
+            #expect(format.block.contains(NoteViewParityTests.flattened(format.web)), "copy.ts holds \(format.web)")
+        }
+    }
+
     /// What the review reads is the kit's: the corrections check, the indexer's pass of a corrected volume, the
     /// sheet's rules, Research's row and Administration's tallies, each a call to the kit's code.
     @Test func theRulesAreTheKits() throws {
