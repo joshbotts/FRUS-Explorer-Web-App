@@ -233,17 +233,19 @@ import Testing
         }
     }
 
-    /// Changed by an update waits for phase 3's review of changed text, and says so; a key that names
-    /// no category, given twice, or beside another parameter is refused; and a server keeping no user
-    /// data keeps no page.
+    /// Changed by an update lists nothing where no change is recorded (PLAN's S21f, UpdateReviewTests for one that
+    /// is); a key that names no category, given twice, or beside another parameter is refused; and a server keeping
+    /// no user data keeps no page.
     @Test func whatWaitsAndWhatIsRefused() async throws {
         let fixture = try await Self.fixture()
         defer { withExtendedLifetime(fixture) {} }
         try await fixture.app.test(.router) { client in
             let browser = Browser(client: client)
             let updated = try await browser.get("/api/v1/me/research/documents?group=updated")
-            #expect(updated.status == .conflict && problemCode(updated) == "UPDATE_REVIEW_NOT_OFFERED")
-            #expect(String(buffer: updated.body).contains("which this server does not offer yet"))
+            #expect(updated.status == .ok)
+            let list = try decode(ResearchDocumentList.self, updated)
+            #expect(list.group == "updated" && list.total == 0 && list.items.isEmpty)
+            #expect(try decode(ResearchPage.self, try await browser.get("/api/v1/me/research")).updated == 0)
             for group in ["notes", "history", "tag.d1", "highlightColor.red", "collection", ""] {
                 let response = try await browser.get("/api/v1/me/research/documents?group=\(group)")
                 #expect(response.status == .badRequest && problemCode(response) == "INVALID_PARAMETER", "\(group)")

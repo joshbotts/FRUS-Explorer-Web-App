@@ -177,7 +177,9 @@ public actor TEIChangeCheck {
                                    problem: "The index could not be compared with the TEI folder, which the server's log says why.")
             return
         }
-        let record = TEIChangeRecord(device: file.device, inode: file.inode, checkedAt: now(), checked: checked, changed: changed,
+        // To the second, as the record's file keeps it.
+        let checkedAt = Date(timeIntervalSince1970: now().timeIntervalSince1970.rounded(.down))
+        let record = TEIChangeRecord(device: file.device, inode: file.inode, checkedAt: checkedAt, checked: checked, changed: changed,
                                      unchecked: unchecked)
         do {
             try Self.place(building, at: comparisonURL)

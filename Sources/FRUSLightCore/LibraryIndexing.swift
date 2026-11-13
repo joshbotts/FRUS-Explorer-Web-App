@@ -274,10 +274,15 @@ public actor LibraryIndexer {
         if !leftOut.isEmpty {
             log("\(leftOut.count) \(leftOut.count == 1 ? "volume is" : "volumes are") left for an admin's Index, since \(leftOut.count == 1 ? "its" : "their") last pass failed or a stop of the server cut it short: \(leftOut.sorted().joined(separator: ", "))")
         }
-        guard !waiting.isEmpty else { return nil }
+        // A volume a download gave a file the index was not made from, before a stop took the indexing after it (PLAN's S21f).
+        let owed = stamps.reindexOwed().subtracting(leftOut).filter {
+            FileManager.default.fileExists(atPath: volumesDirectory.appendingPathComponent("\($0).xml").path)
+        }
+        guard !waiting.isEmpty || !owed.isEmpty else { return nil }
         do {
             let job = try await index(.atStart, requestedBy: nil)
-            log("Indexing \(waiting.count) \(waiting.count == 1 ? "volume" : "volumes") the library holds and the index lacks, as job \(job.id)")
+            let count = Set(waiting).union(owed).count
+            log("Indexing \(count) \(count == 1 ? "volume" : "volumes") the library holds and the index lacks, or holds from another file, as job \(job.id)")
             return job
         } catch {
             log("The indexing of the volumes waiting at the start could not be queued: \(error)")

@@ -98,8 +98,8 @@ public struct ResearchDocument: Codable, Equatable, Sendable {
     public var change: Change?
     /// Whether an update removed it from its volume, reviewed or not, which its row says, in the kit's words.
     public var vanished: Bool?
-    /// Where its row opens it: `review`, the review sheet, for a document an update removed, the only way to it,
-    /// or `document`, the kit's `rowDestination`; and whether it offers Review Changes….
+    /// Where its row opens it, by the kit's `rowDestination`: `review`, the review sheet, for a document an update
+    /// removed, the only way to it; absent for the document itself. And whether it offers Review Changes….
     public var opens: String?
     public var reviewable: Bool?
 
@@ -606,7 +606,7 @@ enum ResearchRoutes {
                     vanished: changes.vanished.contains(entry.id) ? true : nil,
                     opens: ResearchDocumentAggregation.rowDestination(revision: changes.unreviewed[entry.id],
                                                                       isVanished: changes.vanished.contains(entry.id)) == .reviewSheet
-                        ? "review" : "document",
+                        ? "review" : nil,
                     reviewable: changes.unreviewed[entry.id] != nil || changes.vanished.contains(entry.id) ? true : nil)
             }
             return ResearchDocumentList(group: raw, name: groups.name(of: item), total: items.count, items: items)
