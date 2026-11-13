@@ -73,6 +73,7 @@ INSERT INTO document_cache (volume_id, document_id, header, body_text) VALUES
 $own_sql
 INSERT INTO document_revisions (volume_id, document_id, content_hash, body_hash, index_version)
   SELECT volume_id, document_id, printf('%064d', 0), printf('%016d', 0), $version FROM document_cache;
+.read '$root/Tests/FRUSLightTestSupport/Fixtures/export-revisions.sql'
 INSERT INTO page_ranges (volume_id, document_id, section_id, page_number_type, page_number_int, page_number_raw, is_start)
   VALUES ('frus1961-63v06', 'd1', 'd1', 'arabic', 1, '1', 1), ('frus1961-63v06', 'd2', 'd2', 'arabic', 2, '2', 1);
 INSERT INTO person_mentions (volume_id, document_id, person_ref)

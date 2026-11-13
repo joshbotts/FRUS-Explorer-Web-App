@@ -244,6 +244,7 @@ import Testing
         try Self.corrected().write(to: files.volumesDirectory.appendingPathComponent("\(Self.volume).xml"))
 
         let check = TEIChangeCheck(liveIndex: files.liveIndex, volumesDirectory: files.volumesDirectory,
+                                   folder: files.root.appendingPathComponent("tei-check"),
                                    resources: users.server.resources.indexing, state: users.server.state)
         await check.ensureCurrent()
         await check.settled()
@@ -259,6 +260,7 @@ import Testing
         let looked = await check.status()
         #expect(looked.record == status.record && !looked.running)
         let again = TEIChangeCheck(liveIndex: files.liveIndex, volumesDirectory: files.volumesDirectory,
+                                   folder: files.root.appendingPathComponent("tei-check"),
                                    resources: users.server.resources.indexing, state: users.server.state)
         await again.ensureCurrent()
         let read = await again.status()
@@ -286,6 +288,8 @@ import Testing
         _ = reviews
         await users.jobs.waitUntilIdle()
         #expect(try Data(contentsOf: files.liveIndex) == indexBytes, "the served index, the Mac's, is never written")
+        #expect(try FileManager.default.contentsOfDirectory(atPath: files.liveIndex.deletingLastPathComponent().path).sorted() == ["frus.db"],
+                "nor its folder")
         #expect(try users.store.documentReviews(of: Self.document, for: "owner").count == 1)
         _ = highlight
     }

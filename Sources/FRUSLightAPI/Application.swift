@@ -82,6 +82,7 @@ struct ServerComponents: Sendable {
         // A corrected file, as Update downloads one, owes its volume a pass of `indexVolume` (PLAN's S21f).
         library.whenFileWillBeReplaced { volumeId in indexer.oweReindex(volumeId) }
         let teiCheck = TEIChangeCheck(liveIndex: files.liveIndex, volumesDirectory: files.volumesDirectory,
+                                      folder: files.root.appendingPathComponent("tei-check", isDirectory: true),
                                       resources: resources.indexing, state: state, log: { logger.info("\($0)") })
         await library.resumeUnfinished()
         return ServerComponents(

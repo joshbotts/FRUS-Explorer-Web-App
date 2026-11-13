@@ -71,7 +71,9 @@ test('after the update: Changed by an update, the banner, and the highlight move
 
   // Research: Changed by an update, by keyboard, listing d2 in the kit's words.
   await page.goto('research');
-  const category = page.getByRole('link', { name: /^Changed by an update, 1/ });
+  // Its name, as the accessibility tree joins the row's parts: "Changed by an update , 1".
+  const category = page.getByRole('link', { name: /^Changed by an update\b/ });
+  await expect(category).toContainText('1');
   await tabTo(page, category, 60);
   await page.keyboard.press('Enter');
   const list = page.getByRole('region', { name: 'Changed by an update' });

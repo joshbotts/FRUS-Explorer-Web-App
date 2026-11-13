@@ -125,6 +125,8 @@ public struct SyntheticExport: Sendable {
             _ = try db.query("INSERT INTO volume_structures (volume_id, structure_json) VALUES (?, ?)",
                              [.text(volume), .text(try Self.ownTextOutline())])
         }
+        // Each document's hashes, the kit's of the fixtures' TEI, as a Mac's export of those files records them (S21f).
+        try db.execute(try Self.fixture("export-revisions"))
         if includesWriting {
             try db.execute(try Self.fixture("export-writing"))
         }

@@ -164,8 +164,8 @@ import Testing
         }
     }
 
-    /// A volume the served index holds is downloaded while its file is missing, which the reader needs, and
-    /// then not again, since the index was made from that file.
+    /// A volume the served index holds is downloaded while its file is missing, which the reader needs; and since
+    /// S21f, Download asks for it again, the app's Update, which keeps a file that is the listing's as it is.
     @Test func anIndexedVolumesFileIsDownloadedOnceAndNotReplaced() async throws {
         let fixture = try await Fixture(indexed: true)
         defer { withExtendedLifetime(fixture) {} }
@@ -175,7 +175,12 @@ import Testing
             await fixture.users.jobs.waitUntilIdle()
             let listed = try Self.volume(try decode(AdminLibrary.self, try await owner.get(Self.path)), "frus1894Nicaragua")
             #expect(listed.status == "indexed" && listed.downloaded)
-            #expect(problemCode(try await owner.send(.post, Self.downloads, #"{"volumeIds":["frus1894Nicaragua"]}"#)) == "VOLUME_INDEXED")
+            let file = fixture.users.server.files.volumesDirectory.appendingPathComponent("frus1894Nicaragua.xml")
+            let kept = try FileManager.default.attributesOfItem(atPath: file.path)[.modificationDate] as? Date
+            #expect(try await owner.send(.post, Self.downloads, #"{"volumeIds":["frus1894Nicaragua"]}"#).status == .accepted)
+            await fixture.users.jobs.waitUntilIdle()
+            #expect(try FileManager.default.attributesOfItem(atPath: file.path)[.modificationDate] as? Date == kept,
+                    "the file in place is the listing's, and is not replaced")
             #expect(problemCode(try await owner.send(.delete, "\(Self.path)/volumes/frus1894Nicaragua")) == "VOLUME_INDEXED")
         }
     }

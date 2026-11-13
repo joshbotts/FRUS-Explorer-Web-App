@@ -278,6 +278,38 @@ import Testing
         }
     }
 
+    /// The synthetic export, which the Compose smoke test's Import server serves over fixtures/tei and fixtures/own-text,
+    /// records its documents' texts as a Mac's export of those files does: each document's content and body hashes the
+    /// kit's indexer's at the pin (`Fixtures/export-revisions.sql`), so that the server's comparison of its export with
+    /// the TEI folder finds no change in them. A pin move that changes one fails here, printing the file's lines.
+    @Test func theSyntheticExportRecordsTheFixturesAsTheKitIndexesThem() async throws {
+        let wanted: [(volume: String, document: String, folder: URL)] = SyntheticExport.documents.map {
+            ($0.volume, $0.id, RepositoryFiles.tei)
+        } + SyntheticExport.ownTextRows.map { (SyntheticExport.ownTextVolume, $0.id, RepositoryFiles.ownText) }
+        let resources = try IndexingResources.loading(fromDirectory: RepositoryFiles.resources)
+        var kits: [String: IndexingPipeline.DocumentRevision] = [:]
+        for (volume, folder) in Set(wanted.map { "\($0.volume)|\($0.folder.path)" }).sorted().map({ pair -> (String, URL) in
+            let parts = pair.split(separator: "|", maxSplits: 1).map(String.init)
+            return (parts[0], URL(fileURLWithPath: parts[1]))
+        }) {
+            let directory = try TemporaryDirectory()
+            let url = directory.url.appendingPathComponent("scratch.db")
+            let pipeline = try IndexingPipeline(fts5Store: try FTS5Store(databaseURL: url), databaseURL: url, volumesDirectory: folder,
+                                                resources: resources, defaults: InMemoryIndexingStampStore())
+            try await pipeline.indexVolume(volume)
+            for row in try await pipeline.documentRevisions(forVolumeId: volume) { kits["\(volume)/\(row.documentId)"] = row }
+            withExtendedLifetime(directory) {}
+        }
+        let lines = try wanted.map { document -> String in
+            let row = try #require(kits["\(document.volume)/\(document.document)"], "the kit indexes \(document.volume)/\(document.document)")
+            return "UPDATE document_revisions SET content_hash = '\(row.contentHash)', body_hash = '\(row.bodyHash)' WHERE volume_id = '\(document.volume)' AND document_id = '\(document.document)';"
+        }
+        let fixture = try String(contentsOf: RepositoryFiles.root.appendingPathComponent("Tests/FRUSLightTestSupport/Fixtures/export-revisions.sql"),
+                                 encoding: .utf8)
+        let held = fixture.split(separator: "\n").filter { $0.hasPrefix("UPDATE") }.map(String.init)
+        #expect(held == lines, "Fixtures/export-revisions.sql's lines, as the kit gives them at the pin:\n\(lines.joined(separator: "\n"))")
+    }
+
     /// What the review reads is the kit's: the corrections check, the indexer's pass of a corrected volume, the
     /// sheet's rules, Research's row and Administration's tallies, each a call to the kit's code.
     @Test func theRulesAreTheKits() throws {

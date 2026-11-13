@@ -643,7 +643,7 @@ review_e2e() {  # $1: the spec's phase, before or after the update
     scripts/npm --playwright || fail "the update review spec failed $1 the update; web/playwright-report has its report"
 }
 noted=$(library_api POST /api/v1/me/volumes/frus1894Nicaragua/documents/d2/notes \
-  '{"bodyText":"Gresham on the Honduran invasion","userTagIds":[],"projectIds":[],"selectedSummaryIds":[]}')
+  '{"bodyText":"Gresham on the Honduran invasion","runs":null,"userTagIds":[],"projectIds":[],"selectedSummaryIds":[]}')
 case "$noted" in *' 201') ;; *) fail "the note on d2 was not made: $noted" ;; esac
 if [ -n "$e2e" ]; then
   echo "   the update review spec, before the update: a highlight on d2"

@@ -7,9 +7,9 @@
 // first the export's, so that the kit stamps what moved, `body`, `apparatus` or `vanished`, by its own rules, as
 // it stamps an update. A volume nothing moved in is removed from the comparison index again, which keeps its
 // revision rows; one something moved in is kept, so that the review reads its text as it reads now. The
-// comparison index is the server's own file, beside the served index, which the server never writes in Import
-// mode (Compatibility contract, rule 7), and it is read through the kit's immutable read-only open, once it is
-// whole. The check runs beside the queue, not in it: over a full corpus it is hours of indexing, which would hold
+// comparison index is the server's own file, in a folder of its own, `/data/tei-check`, apart from the served
+// index's, which the server never writes in Import mode (Compatibility contract, rule 7), and it is read through
+// the kit's immutable read-only open, once it is whole. The check runs beside the queue, not in it: over a full corpus it is hours of indexing, which would hold
 // every job behind it, and it writes nothing another job reads.
 
 import FRUSCoreKit
@@ -65,6 +65,8 @@ public struct TEIComparison: Sendable {
 public actor TEIChangeCheck {
     public let liveIndex: URL
     public let volumesDirectory: URL
+    /// The check's own folder, `/data/tei-check`: the comparison index, its record, and the folder a check builds in.
+    public let folder: URL
     let resources: IndexingResources
     let state: ServerState
     let now: @Sendable () -> Date
@@ -77,17 +79,17 @@ public actor TEIChangeCheck {
     /// Test hook: told each volume once it has been compared.
     var volumeComparedTestHook: (@Sendable (String) async -> Void)?
 
-    public init(liveIndex: URL, volumesDirectory: URL, resources: IndexingResources, state: ServerState,
+    public init(liveIndex: URL, volumesDirectory: URL, folder: URL, resources: IndexingResources, state: ServerState,
                 now: @escaping @Sendable () -> Date = Date.init, log: @escaping @Sendable (String) -> Void = { _ in }) {
         self.liveIndex = liveIndex.standardizedFileURL
         self.volumesDirectory = volumesDirectory.standardizedFileURL
+        self.folder = folder.standardizedFileURL
         self.resources = resources
         self.state = state
         self.now = now
         self.log = log
     }
 
-    var folder: URL { liveIndex.deletingLastPathComponent() }
     var recordURL: URL { folder.appendingPathComponent(TEIChangeRecord.fileName) }
     var comparisonURL: URL { folder.appendingPathComponent(TEIChangeRecord.indexName) }
     /// Where a check builds its comparison index, a folder of its own, removed when a check begins.
