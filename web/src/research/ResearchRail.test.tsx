@@ -283,6 +283,7 @@ describe('the Research rail’s Highlights', () => {
       'Highlights, 2 highlights',
       'Tags, 1 tag',
       'Collections',
+      'Classification',
     ]);
     expect(within(rail).queryByRole('button', { name: 'Remove…' })).toBeNull();
     await userEvent.click(section);

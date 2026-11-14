@@ -92,8 +92,13 @@ struct CorrectionLogList: Codable, Equatable, Sendable, ResponseEncodable {
         let userName: String
         let madeAt: String
         let appliedAt: String?
+        /// The document's head, from the served index, for a classification's entry.
+        let title: String?
+        /// The records' names, or their `volumeId/ref` where the served index no longer has them, for a person's.
+        let nameA: String?
+        let nameB: String?
 
-        init(_ entry: CorrectionLogEntry) {
+        init(_ entry: CorrectionLogEntry, title: String? = nil, nameA: String? = nil, nameB: String? = nil) {
             id = entry.id
             correction = entry.correction.rawValue
             action = entry.action.rawValue
@@ -110,10 +115,15 @@ struct CorrectionLogList: Codable, Equatable, Sendable, ResponseEncodable {
             userName = entry.userName
             madeAt = UserStoreDate.text(entry.madeAt)
             appliedAt = entry.appliedAt.map(UserStoreDate.text)
+            self.title = title
+            self.nameA = nameA
+            self.nameB = nameB
         }
     }
 
     let entries: [Entry]
+    /// `import` or `standalone`: whether an entry waits for a job or for the next export.
+    let mode: String
 }
 
 enum CorrectionRoutes {
@@ -329,15 +339,32 @@ enum CorrectionRoutes {
         }
     }
 
-    /// The log, an admin's to read (`/api/v1/admin`'s guard and role).
-    static func add(toAdmin admin: RouterGroup<APIRequestContext>, services: UserDataServices) {
+    /// The log, an admin's to read (`/api/v1/admin`'s guard and role), each entry named from the served index: a
+    /// classification's document by its head, a person correction's records by their names.
+    static func add(toAdmin admin: RouterGroup<APIRequestContext>, services: UserDataServices, provider: ServedIndexProvider?,
+                    mode: ServerConfiguration.Mode) {
         let store = services.store
         admin.get("corrections") { request, _ -> EditedResponse<CorrectionLogList> in
             let query = try FormQuery(request.uri.query)
             try query.refuseUnknown(["limit"])
             let limit = try query.optionalInteger("limit", in: 1...10_000) ?? 500
             let entries = try await Blocking.run { try store.correctionLog(limit: limit) }
-            return EditedResponse(headers: [.cacheControl: "no-store"], response: CorrectionLogList(entries: entries.map(CorrectionLogList.Entry.init)))
+            let served = try? await provider?.servedIfReady()
+            func name(_ volumeId: String?, _ ref: String?) async -> String? {
+                guard let volumeId, let ref else { return nil }
+                if let name = try? await served?.persons.personName(volumeId: volumeId, ref: ref), !name.isEmpty { return name }
+                return "\(volumeId)/\(ref)"
+            }
+            var named: [CorrectionLogList.Entry] = []
+            for entry in entries {
+                var title: String?
+                if let document = entry.document {
+                    title = (try? await served?.pipeline.documentHeader(volumeId: document.volumeId, documentId: document.documentId)) ?? nil
+                }
+                named.append(CorrectionLogList.Entry(entry, title: title, nameA: await name(entry.volumeIdA, entry.refA),
+                                                     nameB: await name(entry.volumeIdB, entry.refB)))
+            }
+            return EditedResponse(headers: [.cacheControl: "no-store"], response: CorrectionLogList(entries: named, mode: mode.rawValue))
         }
     }
 

@@ -57,6 +57,7 @@ import { TagsSettingsScreen } from './settings/TagsSettings';
 // ─── Admin ──────────────────────────────────────────────────────────────────
 import { AdminKeysScreen } from './admin/KeysPane';
 import { BackupsScreen } from './admin/BackupsPane';
+import { CorrectionsScreen } from './admin/CorrectionsPane';
 import { JobsScreen } from './admin/JobsPane';
 import { LibraryScreen } from './admin/LibraryPane';
 import { StatusScreen } from './admin/StatusPane';
@@ -435,6 +436,13 @@ const adminLibraryRoute = createRoute({
   component: LibraryScreen,
 });
 
+// From S21g: the log of the corrections curators made.
+const adminCorrectionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/corrections',
+  component: CorrectionsScreen,
+});
+
 const adminUsersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin/users',
@@ -502,6 +510,7 @@ export const routeTree = rootRoute.addChildren([
   adminStatusRoute,
   adminJobsRoute,
   adminLibraryRoute,
+  adminCorrectionsRoute,
   adminUsersRoute,
   adminBackupsRoute,
   adminKeysRoute,

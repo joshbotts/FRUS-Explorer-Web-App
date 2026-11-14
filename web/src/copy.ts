@@ -2788,6 +2788,27 @@ export const copy = {
       removing: 'Being removed, in a job: Jobs follows it.',
       removeSideloaded: 'The catalogue does not list it, so only a side-load of its file brings it back.',
     },
+    /** Administration ▸ Corrections (PLAN's S21g), the web's own: the log of the corrections curators made, newest first. */
+    corrections: {
+      title: 'Corrections',
+      lead: 'The corrections curators made to the index everyone shares on this server, newest first: who made each, when, and whether the index holds it yet.',
+      empty: 'No curator has corrected the index on this server.',
+      caption: 'The corrections, newest first',
+      when: 'When',
+      who: 'Who',
+      what: 'Correction',
+      state: 'Index',
+      asNote: (document: string) => `${document} reclassified as an editorial note`,
+      asDocument: (document: string) => `${document} reclassified as a document`,
+      restored: (document: string) => `FRUS’s classification of ${document} restored`,
+      merged: (a: string, b: string) => `${a} and ${b} merged`,
+      separated: (a: string) => `${a} separated`,
+      mergeUndone: (a: string, b: string) => `The merge of ${a} and ${b} undone`,
+      separationUndone: (a: string) => `The separation of ${a} undone`,
+      applied: 'Applied',
+      waitingExport: 'Waits for the next export',
+      waitingJob: 'Waiting',
+    },
     users: {
       title: 'Users',
       leads: {

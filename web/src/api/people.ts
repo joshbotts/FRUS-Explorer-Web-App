@@ -85,6 +85,37 @@ export interface DocumentClassification {
  * The served rollup's people, some 18,000 on a full corpus: read once, and again only after a correction, or when a
  * correction finds the rollup rebuilt since (`PEOPLE_CHANGED`).
  */
+/** One entry of the log, as an admin reads it. */
+export interface CorrectionLogEntry {
+  id: string;
+  correction: 'classification' | 'person';
+  action: 'made' | 'undone';
+  overrideId: string;
+  volumeId?: string | null;
+  documentId?: string | null;
+  isEditorialNote?: boolean | null;
+  kind?: 'merge' | 'split' | null;
+  userId: string;
+  userName: string;
+  madeAt: string;
+  appliedAt?: string | null;
+  title?: string | null;
+  nameA?: string | null;
+  nameB?: string | null;
+}
+
+export interface CorrectionLog {
+  entries: CorrectionLogEntry[];
+  mode: 'import' | 'standalone';
+}
+
+export const correctionLogQuery = queryOptions({
+  queryKey: ['admin', 'corrections'],
+  queryFn: ({ signal }) => getJSON<CorrectionLog>('/api/v1/admin/corrections', undefined, signal),
+  staleTime: 0,
+  retry: false,
+});
+
 export const peopleQuery = queryOptions({
   queryKey: ['people'],
   queryFn: ({ signal }) => getJSON<PeopleList>('/api/v1/people', undefined, signal),

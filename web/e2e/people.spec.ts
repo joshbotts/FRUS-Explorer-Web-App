@@ -29,6 +29,11 @@ test('reaches People from Browse and opens a person’s sheet by keyboard', asyn
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
   await expect(row).toBeFocused();
+  // Administration ▸ Corrections, the log, empty on the synthetic export's server.
+  await page.goto('admin/corrections');
+  await expect(page.getByRole('heading', { level: 1, name: 'Corrections' })).toBeVisible();
+  await expect(page.getByText('No curator has corrected the index on this server.')).toBeVisible();
+  await axeCheck(page);
 });
 
 test('merges two people by keyboard, and undoes it from Corrections', async ({ page }) => {
@@ -93,4 +98,11 @@ test('merges two people by keyboard, and undoes it from Corrections', async ({ p
   await expect(page.getByRole('button', { name: 'Corrections' })).toBeFocused();
   await expect(adenauer).toHaveCount(1);
   await expect(adzhubei).toHaveCount(1);
+
+  // The log names both, newest first, each applied, above the smoke test's own correction of d1.
+  await page.goto('admin/corrections');
+  const log = page.getByRole('table', { name: 'The corrections, newest first' });
+  await expect(log.getByRole('row').nth(1)).toContainText(/The merge of Adenauer, .+ and Adzhubei, .+ undone.*Applied$/);
+  await expect(log.getByRole('row').nth(2)).toContainText(/Adenauer, .+ and Adzhubei, .+ merged.*Applied$/);
+  await axeCheck(page);
 });

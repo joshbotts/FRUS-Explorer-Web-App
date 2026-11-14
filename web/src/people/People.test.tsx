@@ -178,7 +178,7 @@ describe('the People screen’s rules', () => {
     expect(folded('Ádzhubeĩ')).toBe('adzhubei');
     expect(pickerRows(list, 1, 'adzhubei').map((row) => row.rollupId)).toEqual([2]);
     expect(pickerRows(list, 1, '').map((row) => row.rollupId)).toEqual([2, 3]);
-    expect(rowLabel(list.sections[1].people[0])).toBe('Khrushchev, Nikita S.');
+    expect(rowLabel(list.sections[1]!.people[0]!)).toBe('Khrushchev, Nikita S.');
     expect(mergeQuestion({ name: 'B', authorityId: 1 }, { name: 'A', authorityId: 1 })).not.toContain('different entries');
     expect(mergeQuestion({ name: 'B', authorityId: null }, { name: 'A', authorityId: 1 })).not.toContain('different entries');
     expect(correctionTitle({ kind: 'split', nameA: 'Adzhubei' })).toBe('Adzhubei — separated');
