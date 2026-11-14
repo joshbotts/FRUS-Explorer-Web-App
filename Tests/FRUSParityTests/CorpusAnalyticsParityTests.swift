@@ -64,11 +64,17 @@ import Testing
         var end: Int
         var volumes: [String]?
         var colors = 8
+        /// A detected topic the request names, whose indexed volumes `volumes` holds, resolved here by the kit.
+        var topic: (category: String, subcategory: String)?
 
         var query: String {
             var parts = ["term=\(Self.encoded(term))", "axis=\(axis.rawValue)", "measure=\(unit.rawValue)",
                          "values=\(normalization.rawValue)", "from=\(start)", "to=\(end)", "colors=\(colors)"]
-            for volume in volumes ?? [] { parts.append("volumes=\(volume)") }
+            if let topic {
+                parts += ["topic=\(Self.encoded(topic.category))", "subtopic=\(Self.encoded(topic.subcategory))"]
+            } else {
+                for volume in volumes ?? [] { parts.append("volumes=\(volume)") }
+            }
             return parts.joined(separator: "&")
         }
 
@@ -83,8 +89,18 @@ import Testing
 
     /// The requests: every term on every axis; By Year and By Decade with each measure and values, narrowed and
     /// not, scoped and not, and with the colours at their fewest.
-    static func asks(corpusMaxYear: Int) -> [Ask] {
+    static func asks(corpusMaxYear: Int, topic: (category: String, subcategory: String, volumes: [String])? = nil) -> [Ask] {
         var asks: [Ask] = []
+        // By Detected Topic: the scope menu's first item with indexed volumes, on the time views and a breakdown.
+        if let topic {
+            for term in ["Soviet", "treaty", "president -Nicaragua"] {
+                for axis in [AnalyticsChartAxis.byYear, .byDecade, .byVolume] {
+                    asks.append(Ask(term: term, axis: axis, end: corpusMaxYear, volumes: topic.volumes, topic: (topic.category, topic.subcategory)))
+                }
+                asks.append(Ask(term: term, axis: .byYear, normalization: .percentOfDocuments, start: 1950, end: 1975, volumes: topic.volumes,
+                                colors: 6, topic: (topic.category, topic.subcategory)))
+            }
+        }
         for term in terms {
             for axis in AnalyticsChartAxis.allCases {
                 asks.append(Ask(term: term, axis: axis, end: corpusMaxYear))
@@ -151,6 +167,15 @@ import Testing
             return ["state empty"]
         }
         lines.append("unit \(unit.rawValue) normalized \(normalized)")
+        let quoted = QueryQuoting.quotable(ask.term)
+        let names: [AnalyticsChartAxis: String] = [.byYear: "Year", .byDecade: "Decade", .byMonth: "Month", .byDay: "Day"]
+        lines.append("heading " + (ask.axis.isCategorical ? "“\(quoted)” — by \(ask.axis == .bySubseries ? "Subseries" : "Volume")"
+                                                       : "\"\(quoted)\" — by \(names[ask.axis] ?? "")"))
+        lines.append("value axis \(AnalyticsValueUnit.axisLabel(unit: unit, isNormalized: normalized))")
+        let narrowed = ask.start != 1861 || ask.end != corpusMaxYear
+        func full(_ filtered: Int, _ all: Int) -> String {
+            narrowed && all != filtered ? AnalyticsValueUnit.fullCorpusTotal(all) : "none"
+        }
         let points: [CorpusSeriesPoint]
         switch ask.axis {
         case .byYear, .byDecade:
@@ -169,13 +194,20 @@ import Testing
             for (period, count) in fit { if let value = plotted(count, period) { lines.append("fit \(period) \(number(value))") } }
             let filtered = fit.reduce(0) { $0 + $1.1 }
             lines.append("footnote \(unit.matchedPhrase(count: filtered))")
+            let all = ask.axis == .byDecade ? decades.reduce(0) { $0 + $1.count } : years.reduce(0) { $0 + $1.count }
+            lines.append("full \(full(filtered, all))")
             points = ask.axis == .byDecade
                 ? inDecades.map { CorpusSeriesPoint(periodLabel: "\($0.decadeStart)s", denominatorKey: $0.decadeStart, count: $0.count) }
                 : inYears.map { CorpusSeriesPoint(periodLabel: "\($0.year)", denominatorKey: $0.year, count: $0.count) }
         case .byMonth, .byDay:
             let labelled = ask.axis == .byMonth ? months.map { ($0.label, $0.count) } : days.map { ($0.label, $0.count) }
             for (label, count) in labelled { lines.append("point \(label) \(count)") }
+            if labelled.isEmpty {
+                lines.append("notice " + (ask.axis == .byMonth ? "No documents with month-level dates" : "No documents with day-level dates"))
+            }
             lines.append("footnote \(unit.matchedPhrase(count: labelled.reduce(0) { $0 + $1.1 }))")
+            let all = ask.axis == .byMonth ? allMonths.reduce(0) { $0 + $1.count } : allDays.reduce(0) { $0 + $1.count }
+            lines.append("full \(full(labelled.reduce(0) { $0 + $1.1 }, all))")
             points = labelled.map { CorpusSeriesPoint(periodLabel: $0.0, denominatorKey: nil, count: $0.1) }
         case .bySubseries:
             for row in subseries {
@@ -183,10 +215,12 @@ import Testing
                 lines.append("bar \(row.subseries) \(row.count) \(ids.joined(separator: ","))")
             }
             lines.append("footnote \(unit.matchedPhrase(count: subseries.reduce(0) { $0 + $1.count }))")
+            lines.append("full none")
             points = subseries.map { CorpusSeriesPoint(periodLabel: $0.subseries, denominatorKey: nil, count: $0.count) }
         case .byVolume:
             for row in volumes { lines.append("bar \(host.title(row.volumeId)) \(row.count) \(row.volumeId)") }
             lines.append("footnote \(unit.matchedPhrase(count: volumes.reduce(0) { $0 + $1.count }))")
+            lines.append("full none")
             points = volumes.map { CorpusSeriesPoint(periodLabel: host.title($0.volumeId), denominatorKey: nil, count: $0.count) }
         }
         let table = AnalyticsChartTables.corpusSeriesTable(
@@ -201,15 +235,18 @@ import Testing
     /// The same lines, of the API's answer.
     static func api(_ answer: CorpusAnalyticsAnswer) -> [String] {
         guard answer.state == "chart" else { return ["state \(answer.state)"] }
-        var lines = ["unit \(answer.measure.effective) normalized \(answer.values.isNormalized)"]
+        var lines = ["unit \(answer.measure.effective) normalized \(answer.values.isNormalized)", "heading \(answer.heading)",
+                     "value axis \(answer.valueAxisLabel)"]
         for segment in answer.segments {
             lines.append("segment \(segment.period) \(segment.seriesKey) \(segment.count) \(segment.plotted.map(number) ?? "none")")
         }
         for series in answer.series { lines.append("series \(series.key) \(series.total)") }
         for point in answer.fit { lines.append("fit \(point.period) \(number(point.value))") }
         for point in answer.points { lines.append("point \(point.label) \(point.count)") }
+        if let notice = answer.notice { lines.append("notice \(notice.title)") }
         for bar in answer.bars { lines.append("bar \(bar.label) \(bar.count) \(bar.volumeIds.joined(separator: ","))") }
         lines.append("footnote \(answer.footnote ?? "")")
+        lines.append("full \(answer.fullCorpusTotal ?? "none")")
         lines.append("columns \(answer.table.columns.dropFirst(2).joined(separator: " | "))")
         for row in answer.table.rows { lines.append("row \(row.joined(separator: " | "))") }
         return lines
@@ -229,7 +266,22 @@ import Testing
     @Test func everySeriesIsTheKits() async throws {
         let host = try await Host.open()
         let corpusMaxYear = CorpusAnalyticsRoutes.corpusMaxYear(host.catalogue)
-        let asks = Self.asks(corpusMaxYear: corpusMaxYear)
+        // The scope menu's first detected topic with a fixture volume, resolved by the kit's `ScopeFacets` over a host's
+        // own copy of the document subject index, apart from the server's.
+        let subjects = try #require(try IndexingResources.loading(fromDirectory: ServedFixture.resources).documentSubjects())
+        let resolved = subjects.subjectsByVolume
+        var topic: (category: String, subcategory: String, volumes: [String])?
+        search: for category in ScopeFacets.narrowingCategories(resolvedByVolume: resolved) {
+            for sub in ScopeFacets.subCategoryCatalog(forCategory: category.label, resolvedByVolume: resolved) {
+                let ids = ScopeFacets.volumeIds(forCategory: sub.category, subcategory: sub.subcategory, resolvedByVolume: resolved)
+                    .intersection(host.indexed)
+                if !ids.isEmpty {
+                    topic = (category.label, sub.subcategory, ids.sorted())
+                    break search
+                }
+            }
+        }
+        let asks = Self.asks(corpusMaxYear: corpusMaxYear, topic: try #require(topic))
         let read = try await ServedFixture.run { client, _ in
             var read: [(CorpusAnalyticsAnswer, CorpusAnalyticsDocuments?)] = []
             for ask in asks {
@@ -241,7 +293,7 @@ import Testing
             }
             return read
         }
-        var tally = (charts: 0, shares: 0, occurrences: 0, folded: 0, exact: 0, empty: 0, notices: 0)
+        var tally = (charts: 0, shares: 0, occurrences: 0, folded: 0, exact: 0, empty: 0, notices: 0, topics: 0, totals: 0)
         for (ask, (answer, documents)) in zip(asks, read) {
             let kit = try await Self.kit(host, ask, corpusMaxYear: corpusMaxYear)
             let api = Self.api(answer)
@@ -255,6 +307,11 @@ import Testing
             if answer.measure.effective == "occurrences" { tally.occurrences += 1 }
             if answer.series.contains(where: \.isOther) { tally.folded += 1 }
             if answer.measure.notice != nil { tally.notices += 1 }
+            if answer.fullCorpusTotal != nil { tally.totals += 1 }
+            if let named = ask.topic {
+                #expect(answer.scope.label == "\(named.category) · \(named.subcategory)" && answer.scope.volumeIds == ask.volumes, "\(ask)")
+                if answer.state == "chart" { tally.topics += 1 }
+            }
             // The hand-off's count and dispersion are the kit's over a search the kit's hand-off makes.
             let parameters = AnalyticsSearchHandoff.parameters(
                 term: ask.term, axis: ask.axis, startYear: ask.start, endYear: ask.end,
@@ -277,7 +334,7 @@ import Testing
         #expect(tally.charts > 100 && tally.shares > 0 && tally.occurrences > 0 && tally.exact > 0 && tally.empty > 0, "\(tally)")
         // The fixtures hold three volumes, fewer than the fewest colours, so no chart folds a volume into Other volumes:
         // the folding is the kit's `AnalyticsSourceColoring`, which its own suites hold.
-        #expect(tally.folded == 0 && tally.notices > 0, "\(tally)")
+        #expect(tally.folded == 0 && tally.notices > 0 && tally.topics > 0 && tally.totals > 0, "\(tally)")
     }
 
     /// Each CSV's method block is the kit's, for the statement the app's view writes (`exportProvenance`), and its

@@ -80,29 +80,56 @@ import Testing
                      "domain \(ChronologyGrouping.isoDay(ChronologyGrouping.startOfBucket(startDay, bucket: viewBucket, calendar: cal))) "
                         + ChronologyGrouping.isoDay(ChronologyGrouping.endOfBucket(endDay, bucket: viewBucket, calendar: cal)),
                      "summary \(CountCopy.documents(inRange.count, locale: Locale(identifier: "en_US")))"]
+        // Each label in US English by the kit's three formats, at the granularity the kit gave its section.
+        let granularities = Dictionary(groups.map { ($0.bucketKey, $0.granularity) }, uniquingKeysWith: { first, _ in first })
         for bucket in chart.buckets {
-            lines.append("bucket \(bucket.bucketKey) " + bucket.segments.map { "\($0.seriesKey)=\($0.count)" }.joined(separator: " "))
+            let label = ChronologyLabels.label(forBucketKey: bucket.bucketKey, granularity: granularities[bucket.bucketKey] ?? viewBucket)
+            lines.append("bucket \(bucket.bucketKey) \(label) " + bucket.segments.map { "\($0.seriesKey)=\($0.count)" }.joined(separator: " "))
         }
         for series in chart.series { lines.append("series \(series.key) \(series.total)") }
         for group in groups {
             let kept = group.rows.filter(shown)
             guard !kept.isEmpty else { continue }
-            lines.append("group \(group.bucketKey) \(group.granularity) \(kept.count) \(Set(kept.map(\.volumeId)).count) "
-                         + "\(kept.filter(\.isEditorialNote).count)")
-            lines += kept.map { "row \($0.id)" }
+            let volumes = Set(kept.map(\.volumeId)).count
+            let subseries = Set(kept.compactMap { CorpusAnalyticsService.subseries(fromVolumeId: $0.volumeId) }).count
+            let notes = kept.filter(\.isEditorialNote).count
+            lines.append("group \(group.bucketKey) \(group.granularity) \(kept.count) \(volumes) \(notes) "
+                         + "\(ChronologyLabels.label(forBucketKey: group.bucketKey, granularity: group.granularity)) | "
+                         + ChronologyViewRules.aggregateLine(volumes: volumes, subseries: subseries, editorialNotes: notes))
+            lines += kept.map { Self.rowLine($0, span: nil) }
         }
         let spanningShown = spanning.sorted { $0.dateISO < $1.dateISO }.filter(shown)
         if !spanningShown.isEmpty {
             lines.append("spanning \(ChronologyGrouping.spanningChipTitle(spanningShown.count, locale: Locale(identifier: "en_US")))")
-            lines += spanningShown.map { "row \($0.id)" }
+            lines += spanningShown.map { row in
+                // The span's years, the app's `spanLabel`.
+                let start = String(row.dateISO.prefix(4))
+                let end = row.dateISOMax.map { String($0.prefix(4)) } ?? start
+                return Self.rowLine(row, span: start == end ? start : "\(start)–\(end)")
+            }
         }
         let overflowShown = overflow.sorted { $0.dateISO < $1.dateISO }.filter(shown)
         if !overflowShown.isEmpty {
             let counts = ChronologyGrouping.overflowCounts(overflowShown, startISO: startISO, endISO: endISO, locale: Locale(identifier: "en_US"))
             lines.append("overflow \(counts.chipTitle) \(counts.chipBreakdown)")
-            lines += overflowShown.map { "row \($0.id)" }
+            lines += overflowShown.map { row in
+                // The directions, the app's `overflowDirectionLabel`.
+                let direction = ChronologyGrouping.overflowDirection(row, startISO: startISO, endISO: endISO)
+                var parts: [String] = []
+                if direction.leading { parts.append("begins \(row.dateISO.prefix(4)) · before range") }
+                if direction.trailing { parts.append("ends \((row.dateISOMax ?? row.dateISO).prefix(4)) · after range") }
+                return Self.rowLine(row, span: parts.joined(separator: " · "))
+            }
         }
         return lines
+    }
+
+    /// A row's line: its key, its snippet (`ChronologyRowView.snippet`: the summary, else the head, else the id), its
+    /// approximate mark and its span or directions.
+    static func rowLine(_ row: ChronologyRow, span: String?) -> String {
+        let summary = row.summary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let snippet = summary.isEmpty ? (row.header.isEmpty ? row.documentId : row.header) : (row.summary ?? "")
+        return "row \(row.id) | \(snippet) | \(row.certainty == .approximate) | \(span ?? "-")"
     }
 
     /// The same lines, of the API's answer.
@@ -110,25 +137,30 @@ import Testing
         var lines = ["range \(answer.from) \(answer.to) \(answer.granularity)", "domain \(answer.domainFrom) \(answer.domainTo)",
                      "summary \(answer.summary)"]
         for bucket in answer.buckets {
-            lines.append("bucket \(bucket.key) " + bucket.segments.map { "\($0.seriesKey)=\($0.count)" }.joined(separator: " "))
+            lines.append("bucket \(bucket.key) \(bucket.label) " + bucket.segments.map { "\($0.seriesKey)=\($0.count)" }.joined(separator: " "))
         }
         for series in answer.series { lines.append("series \(series.key) \(series.total)") }
         for group in answer.groups {
             let volumes = Set(group.rows.map(\.volumeId)).count
             let notes = group.rows.filter(\.isEditorialNote).count
             let granularity = group.key.count == 4 ? "year" : group.key.count == 7 ? "month" : "day"
-            lines.append("group \(group.key) \(granularity) \(group.count) \(volumes) \(notes)")
-            lines += group.rows.map { "row \($0.volumeId)/\($0.documentId)" }
+            lines.append("group \(group.key) \(granularity) \(group.count) \(volumes) \(notes) \(group.label) | \(group.aggregate)")
+            lines += group.rows.map(Self.rowLine)
         }
         if let spanning = answer.spanning {
             lines.append("spanning \(spanning.chipTitle)")
-            lines += spanning.rows.map { "row \($0.volumeId)/\($0.documentId)" }
+            lines += spanning.rows.map(Self.rowLine)
         }
         if let overflow = answer.overflow {
             lines.append("overflow \(overflow.chipTitle) \(overflow.chipBreakdown ?? "")")
-            lines += overflow.rows.map { "row \($0.volumeId)/\($0.documentId)" }
+            lines += overflow.rows.map(Self.rowLine)
         }
         return lines
+    }
+
+    /// An answer's row as `rowLine` writes the kit's.
+    static func rowLine(_ row: ChronologyAnswer.Row) -> String {
+        "row \(row.volumeId)/\(row.documentId) | \(row.snippet) | \(row.approximate) | \(row.spanLabel ?? "-")"
     }
 
     @Test func everyRangesChronologyIsTheKits() async throws {
@@ -174,7 +206,7 @@ import Testing
             }
         }
         #expect(tally.days > 0 && tally.months > 0 && tally.years > 0 && tally.spanning > 0 && tally.overflow > 0, "\(tally)")
-        #expect(tally.filtered > 0 && tally.empty > 0, "\(tally)")
+        #expect(tally.filtered > 0 && tally.empty > 0 && tally.approximate > 0, "\(tally)")
     }
 
     /// The labels the server writes in US English are the kit's formats, and its first day is the kit's sort date.

@@ -198,8 +198,10 @@ export function validateCorpusSearch(raw: Record<string, unknown>): CorpusSearch
   const colors = Number(text(raw.colors));
   const volumes = (Array.isArray(raw.volumes) ? raw.volumes : raw.volumes === undefined ? [] : [raw.volumes])
     .filter((value): value is string => typeof value === 'string' && value !== '');
+  // The term as the server takes it, its spaces trimmed (`addTerm()`), and none for a term of spaces alone.
+  const term = text(raw.term)?.trim();
   return {
-    term: text(raw.term),
+    term: term === '' ? undefined : term,
     axis: axis && (['byDecade', 'byYear', 'byMonth', 'byDay', 'bySubseries', 'byVolume'] as string[]).includes(axis)
       ? (axis as AnalyticsAxis) : undefined,
     measure: measure === 'documents' || measure === 'occurrences' ? measure : undefined,

@@ -31,6 +31,8 @@ async function table(page: Page): Promise<string[][]> {
 }
 
 test('charts a term, changes its axis and unit by keyboard, reads the table and exports it', async ({ page }) => {
+  // Six charts, four scans and three exports, with Vega's chunk loaded once.
+  test.setTimeout(90_000);
   await page.goto('search');
   await forget(page);
   try {
@@ -135,6 +137,7 @@ test('charts a term, changes its axis and unit by keyboard, reads the table and 
 });
 
 test('shows a range in Chronology, filters its list by the legend by keyboard, and reads its table', async ({ page }) => {
+  test.setTimeout(90_000);
   await page.goto('search');
   await forget(page);
   try {
@@ -151,7 +154,7 @@ test('shows a range in Chronology, filters its list by the legend by keyboard, a
     // The range opens on the corpus's last year; one of November 1960 is shown by keyboard.
     await page.getByLabel('From').fill('1960-11-01');
     await page.getByLabel('To').fill('1960-11-30');
-    await tabTo(page, page.getByRole('button', { name: 'Show' }));
+    await tabTo(page, page.getByRole('button', { name: 'Show', exact: true }));
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/from=1960-11-01&to=1960-11-30/);
     await expect(page.getByText('2 documents', { exact: true })).toBeVisible();
@@ -167,22 +170,36 @@ test('shows a range in Chronology, filters its list by the legend by keyboard, a
     await expect(page.getByRole('link', { name: 'Search in this range' })).toBeVisible();
     await axeCheck(page);
 
-    // The legend's entry filters the list to its volume, by keyboard, and Show all clears it.
-    const legend = page.getByRole('list', { name: 'Volumes' }).getByRole('button').first();
-    await tabTo(page, legend);
+    // A range of both volumes: 1890 to 1965, a year a section, one document of 1894 and two of 1960.
+    await page.getByLabel('From').fill('1890-01-01');
+    await page.getByLabel('To').fill('1965-12-31');
+    await tabTo(page, page.getByRole('button', { name: 'Show', exact: true }));
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/from=1890-01-01&to=1965-12-31/);
+    await expect(page.getByText('3 documents', { exact: true })).toBeVisible();
+    await expect(page.locator('.chronology-section h2')).toHaveText([/^1894/, /^1960/]);
+    const entries = page.getByRole('list', { name: 'Volumes' }).getByRole('button');
+    await expect(entries).toHaveCount(2);
+
+    // The legend's entry filters the list to its volume, by keyboard; the other entry stays legible, and Show all
+    // clears the filter.
+    await tabTo(page, entries.first());
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/series=frus1961-63v06/);
-    await expect(page.getByRole('list', { name: 'Volumes' }).getByRole('button').first()).toHaveAttribute('aria-pressed', 'true');
+    await expect(entries.first()).toHaveAttribute('aria-pressed', 'true');
+    await expect(entries.nth(1)).toHaveAttribute('aria-pressed', 'false');
     await expect(page.getByText(/^Showing .* only$/)).toBeVisible();
+    await expect(page.locator('.chronology-section h2')).toHaveText([/^1960/]);
     await axeCheck(page);
     await page.getByRole('button', { name: 'Show all', exact: true }).click();
     await expect(page).not.toHaveURL(/series=/);
+    await expect(page.locator('.chronology-section h2')).toHaveCount(2);
 
     // Newest first, by keyboard, and the chart hidden and shown.
     await tabTo(page, page.getByRole('button', { name: 'Oldest first' }));
     await page.keyboard.press('Enter');
     await expect(page.getByRole('button', { name: 'Newest first' })).toBeVisible();
-    await expect(page.locator('.chronology-section h2').first()).toHaveText(/^November 10, 1960/);
+    await expect(page.locator('.chronology-section h2').first()).toHaveText(/^1960/);
     await page.getByRole('button', { name: 'Hide chart' }).click();
     await expect(page.locator('.chronology-chart')).toHaveCount(0);
     await page.getByRole('button', { name: 'Show chart' }).click();

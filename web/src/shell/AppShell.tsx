@@ -92,7 +92,9 @@ export function AppShell() {
    * screen takes the focus at its heading only from the page itself, so the button lets it go first.
    */
   function openTool(to: '/analytics/corpus' | '/chronology') {
-    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    // On the tool's own page no new screen comes, so the button keeps the focus.
+    const leaving = !router.state.location.pathname.endsWith(to);
+    if (leaving && document.activeElement instanceof HTMLElement) document.activeElement.blur();
     void router.navigate({ to });
   }
 

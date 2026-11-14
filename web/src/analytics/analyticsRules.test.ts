@@ -154,6 +154,9 @@ describe('the addresses', () => {
     expect(validateChronologySearch({ from: '1969-01-01', to: '1969-12-31', order: 'newest', chart: 'hidden', colors: '6' }))
       .toEqual({ from: '1969-01-01', to: '1969-12-31', order: 'newest', colors: 6, series: undefined, chart: 'hidden' });
     expect(validateChronologySearch({ from: '1969-01-01' })).toMatchObject({ from: undefined, to: undefined });
+    // The term as the server takes it, its spaces trimmed, and none for spaces alone.
+    expect(validateCorpusSearch({ term: ' cold war ' }).term).toBe('cold war');
+    expect(validateCorpusSearch({ term: '   ' }).term).toBeUndefined();
   });
 
   it('carry a scope both ways, and as the routes read it', () => {

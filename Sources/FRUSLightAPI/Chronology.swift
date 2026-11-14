@@ -170,6 +170,9 @@ enum ChronologyRoutes {
             let now = Date()
             let provenance = provenance(answer, indexedVolumeCount: served.indexedVolumeIds.count, exportDate: now)
             withExtendedLifetime(served) {}
+            guard !answer.buckets.isEmpty else {
+                throw APIProblem(.notFound, code: "NOTHING_TO_EXPORT", detail: "No document of the range is placed on the chart.")
+            }
             return AnalyticsPlate(provenance, host: CorpusAnalyticsRoutes.host(timeZone: timeZone), date: now)
         }
     }
@@ -253,6 +256,22 @@ enum ChronologyRoutes {
         let rows = try await pipeline.documentsInDateRange(range, scopeVolumeIds: nil, ascending: ask.ascending,
                                                            limit: ChronologyGrouping.loadLimit)
         let isCapped = rows.count >= ChronologyGrouping.loadLimit
+        let viewBucket = ChronologyGrouping.bucket(forDaysBetween: startDay, and: endDay, calendar: cal)
+        // The list is truncated to `loadLimit`, but the distribution chart reflects the whole range: from an aggregate
+        // count (no row materialisation), as `reload()` takes it.
+        let counts = isCapped ? ((try? await pipeline.dateBucketVolumeCounts(range, bucket: viewBucket, scopeVolumeIds: nil)) ?? []) : []
+        return assemble(ask, rows: rows, counts: counts, startDay: startDay, endDay: endDay, resources: resources)
+    }
+
+    /// The answer from the rows `documentsInDateRange` gave and, for a capped list, the aggregate counts, as
+    /// `reload()` makes its state of them, with the legend's filter applied to the list: apart from the pipeline, so a
+    /// test reaches the capped path, which the fixtures' 393 documents cannot.
+    static func assemble(_ ask: ChronologyAsk, rows: [ChronologyRow], counts: [(bucketKey: String, volumeId: String, count: Int)],
+                         startDay: Date, endDay: Date, resources: ServerResources) -> ChronologyAnswer {
+        let cal = Calendar(identifier: .gregorian)
+        let startISO = ChronologyGrouping.isoDay(startDay)
+        let endISO = ChronologyGrouping.isoDay(endDay)
+        let isCapped = rows.count >= ChronologyGrouping.loadLimit
         let (placed, spanning) = ChronologyGrouping.partition(rows)
         let spanningRows = spanning.sorted { $0.dateISO < $1.dateISO }
         let (inRange, overflow) = ChronologyGrouping.splitOverflow(placed, startISO: startISO, endISO: endISO)
@@ -269,8 +288,6 @@ enum ChronologyRoutes {
         var granularities: [String: DateBucket] = Dictionary(groups.map { ($0.bucketKey, $0.granularity) },
                                                              uniquingKeysWith: { first, _ in first })
         if isCapped {
-            // The list is truncated to `loadLimit`, but the distribution chart reflects the whole range.
-            let counts = (try? await pipeline.dateBucketVolumeCounts(range, bucket: viewBucket, scopeVolumeIds: nil)) ?? []
             if !counts.isEmpty {
                 chart = ChronologyGrouping.makeChart(fromCounts: counts, viewBucket: viewBucket, maxSeries: ask.colors)
                 totalShown = counts.reduce(0) { $0 + $1.count }

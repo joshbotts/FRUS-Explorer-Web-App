@@ -11,7 +11,7 @@
 // scrolls to it.
 import { useQuery } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
-import { type FormEvent, lazy, Suspense, useId, useMemo, useState } from 'react';
+import { type FormEvent, lazy, Suspense, useEffect, useId, useMemo, useState } from 'react';
 import { analyticsContextQuery, type ChronologyAnswer, type ChronologyApart, type ChronologyAsk, chronologyCSV, chronologyPlate, chronologyQuery, type ChronologyRow } from '../api/analytics';
 import { ApiError, errorMessage } from '../api/client';
 import { copy } from '../copy';
@@ -41,21 +41,25 @@ export function ChronologyScreen() {
   const ask: ChronologyAsk | undefined =
     search.from && search.to ? { from: search.from, to: search.to, newest: search.order === 'newest', colors, series: search.series } : undefined;
   const loaded = useQuery({ ...chronologyQuery(ask ?? { from: '', to: '' }), enabled: ask !== undefined });
-  const answer = loaded.data;
+  // No range shown, no answer, though the query keeps its last for the next range.
+  const answer = ask ? loaded.data : undefined;
   useDocumentTitle(words.title);
   useHeadingReady(!context.isPending);
 
-  const [draftFrom, setDraftFrom] = useState(search.from ?? '');
-  const [draftTo, setDraftTo] = useState(search.to ?? '');
-  // The range the address shows, or the corpus's last year until one is shown (`seedDefaultsAndApply`).
-  const [shown, setShown] = useState(`${search.from ?? ''}|${search.to ?? ''}`);
-  if (shown !== `${search.from ?? ''}|${search.to ?? ''}`) {
-    setShown(`${search.from ?? ''}|${search.to ?? ''}`);
-    setDraftFrom(search.from ?? '');
-    setDraftTo(search.to ?? '');
+  // The fields hold the range the address shows, or the corpus's last year until one is shown
+  // (`seedDefaultsAndApply`); a field emptied while a date is typed stays empty until it holds one.
+  const defaults = context.data ? { from: context.data.chronologyFrom, to: context.data.chronologyTo } : undefined;
+  const address = `${search.from ?? ''}|${search.to ?? ''}|${defaults ? 'seeded' : ''}`;
+  const [draftFrom, setDraftFrom] = useState(search.from ?? defaults?.from ?? '');
+  const [draftTo, setDraftTo] = useState(search.to ?? defaults?.to ?? '');
+  const [shown, setShown] = useState(address);
+  if (shown !== address) {
+    setShown(address);
+    setDraftFrom(search.from ?? defaults?.from ?? '');
+    setDraftTo(search.to ?? defaults?.to ?? '');
   }
-  const from = draftFrom || (context.data?.chronologyFrom ?? '');
-  const to = draftTo || (context.data?.chronologyTo ?? '');
+  const from = draftFrom;
+  const to = draftTo;
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState<{ spanning: boolean; overflow: boolean }>({ spanning: false, overflow: false });
   const [exportError, setExportError] = useState<string | undefined>(undefined);
@@ -134,7 +138,7 @@ export function ChronologyScreen() {
           )}
           {answer && answer.state === 'loaded' && (
             <div className="analytics-options">
-              <button type="button" aria-pressed={search.chart !== 'hidden'} title={words.chartToggleHelp} disabled={!hasChart}
+              <button type="button" title={words.chartToggleHelp} disabled={!hasChart}
                 onClick={() => change({ chart: search.chart === 'hidden' ? undefined : 'hidden' })}>
                 {search.chart === 'hidden' ? words.showChart : words.hideChart}
               </button>
@@ -150,8 +154,9 @@ export function ChronologyScreen() {
                 label={exportWords.export}
                 entries={[
                   { kind: 'item', label: exportWords.exportCSV, onSelect: () => void exportCSV(), disabled: !hasChart },
-                  { kind: 'item', label: exportWords.exportPNG, onSelect: () => void exportFigure('png'), disabled: !hasChart },
-                  { kind: 'item', label: exportWords.exportSVG, onSelect: () => void exportFigure('svg'), disabled: !hasChart },
+                  // A figure draws the chart on show, so it waits for the range asked for.
+                  { kind: 'item', label: exportWords.exportPNG, onSelect: () => void exportFigure('png'), disabled: !hasChart || loaded.isPlaceholderData },
+                  { kind: 'item', label: exportWords.exportSVG, onSelect: () => void exportFigure('svg'), disabled: !hasChart || loaded.isPlaceholderData },
                 ]}
               />
             </div>
@@ -174,6 +179,7 @@ export function ChronologyScreen() {
           ) : (
             <Loaded
               answer={answer}
+              busy={loaded.isPlaceholderData}
               dark={scheme === 'dark'}
               showChart={search.chart !== 'hidden'}
               expanded={expanded}
@@ -217,6 +223,7 @@ function ColorsPicker({ colors, counts, disabled, onChange }: { colors: number; 
 /** The loaded range: the chart pane and its table, the chips and their sections, and the date sections. */
 function Loaded({
   answer,
+  busy,
   dark,
   showChart,
   expanded,
@@ -226,6 +233,8 @@ function Loaded({
   onFilter,
 }: {
   answer: ChronologyAnswer;
+  /** Whether the range on show is the last one, while the one asked for loads. */
+  busy: boolean;
   dark: boolean;
   showChart: boolean;
   expanded: Set<string>;
@@ -238,8 +247,20 @@ function Loaded({
   const maxCount = Math.max(1, ...answer.groups.map((group) => group.count));
   const spanningId = useId();
   const overflowId = useId();
+  // A chip opens its section and brings it into view, its heading taking the focus, as the app's scrolls to it.
+  const [opened, setOpened] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (!opened) return;
+    const heading = document.getElementById(`${opened}-h`);
+    heading?.scrollIntoView({ block: 'start' });
+    heading?.focus({ preventScroll: true });
+  }, [opened]);
+  function toggle(part: 'spanning' | 'overflow', id: string) {
+    setOpened(open[part] ? undefined : id);
+    onToggle(part);
+  }
   return (
-    <>
+    <div className="chronology-loaded" aria-busy={busy || undefined}>
       {showChart && answer.buckets.length > 0 && (
         <section className="analytics-pane chronology-chart" aria-label={words.chartDescription}>
           <div className="analytics-figure">
@@ -301,8 +322,8 @@ function Loaded({
           </div>
         </section>
       )}
-      {answer.spanning && <Chip part={answer.spanning} open={open.spanning} controls={spanningId} onToggle={() => onToggle('spanning')} />}
-      {answer.overflow && <Chip part={answer.overflow} open={open.overflow} controls={overflowId} onToggle={() => onToggle('overflow')} />}
+      {answer.spanning && <Chip part={answer.spanning} open={open.spanning} controls={spanningId} onToggle={() => toggle('spanning', spanningId)} />}
+      {answer.overflow && <Chip part={answer.overflow} open={open.overflow} controls={overflowId} onToggle={() => toggle('overflow', overflowId)} />}
       <div className="chronology-sections">
         {answer.groups.map((group) => {
           const visible = expanded.has(group.key) ? group.rows : group.rows.slice(0, denseThreshold);
@@ -334,7 +355,7 @@ function Loaded({
         {answer.overflow && open.overflow && <ApartSection id={overflowId} part={answer.overflow} />}
         {answer.totalShown > 0 && <p className="analytics-caption">{words.undatedNote}</p>}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -358,7 +379,9 @@ function ApartSection({ id, part }: { id: string; part: ChronologyApart }) {
   return (
     <section id={id} className="chronology-section" aria-labelledby={`${id}-h`}>
       <header>
-        <h2 id={`${id}-h`}>{part.header}</h2>
+        <h2 id={`${id}-h`} tabIndex={-1}>
+          {part.header}
+        </h2>
       </header>
       <ul>
         {part.rows.map((row) => (

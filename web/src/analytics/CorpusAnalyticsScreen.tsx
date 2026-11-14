@@ -180,6 +180,7 @@ export function CorpusAnalyticsScreen() {
           <Options
             ask={ask}
             answer={answer}
+            busy={chart.isPlaceholderData}
             colorCounts={context.data?.colorCounts ?? [6, 7, 8, 9, 10, 11, 12]}
             fitLine={fitLine}
             onChange={change}
@@ -249,8 +250,9 @@ function Filters({
   const options = groups.flatMap((group) => group.options);
   const missing = !options.some((option) => option.value === chosen);
   const categorical = !isDateBased(ask.axis);
-  const start = answer?.years.start ?? ask.from ?? context.floorYear;
-  const end = answer?.years.end ?? ask.to ?? context.corpusMaxYear;
+  // The years asked for, the server's defaults where the address names none: never a chart still on show.
+  const start = ask.from ?? context.floorYear;
+  const end = ask.to ?? context.corpusMaxYear;
   const isCustom = start !== context.floorYear || end !== context.corpusMaxYear;
   const scopeId = useId();
   const axisId = useId();
@@ -273,7 +275,6 @@ function Filters({
         </select>
       </div>
       <YearRange
-        key={`${start}-${end}`}
         start={start}
         end={end}
         context={context}
@@ -342,6 +343,14 @@ function YearRange({
 }) {
   const [draftStart, setDraftStart] = useState(String(start));
   const [draftEnd, setDraftEnd] = useState(String(end));
+  // The field being edited keeps what is typed in it when the years change, as a preset or Back changes them.
+  const [editing, setEditing] = useState<'start' | 'end' | undefined>(undefined);
+  const [shown, setShown] = useState(`${start}-${end}`);
+  if (shown !== `${start}-${end}`) {
+    setShown(`${start}-${end}`);
+    if (editing !== 'start') setDraftStart(String(start));
+    if (editing !== 'end') setDraftEnd(String(end));
+  }
   const startId = useId();
   const endId = useId();
 
@@ -369,7 +378,11 @@ function YearRange({
         max={end}
         value={draftStart}
         onChange={(event) => setDraftStart(event.target.value)}
-        onBlur={keep}
+        onFocus={() => setEditing('start')}
+        onBlur={() => {
+          setEditing(undefined);
+          keep();
+        }}
         onKeyDown={(event) => {
           if (event.key === 'Enter') keep();
         }}
@@ -386,7 +399,11 @@ function YearRange({
         max={context.corpusMaxYear}
         value={draftEnd}
         onChange={(event) => setDraftEnd(event.target.value)}
-        onBlur={keep}
+        onFocus={() => setEditing('end')}
+        onBlur={() => {
+          setEditing(undefined);
+          keep();
+        }}
         onKeyDown={(event) => {
           if (event.key === 'Enter') keep();
         }}
@@ -404,6 +421,7 @@ function YearRange({
 function Options({
   ask,
   answer,
+  busy,
   colorCounts,
   fitLine,
   onChange,
@@ -411,6 +429,8 @@ function Options({
 }: {
   ask: CorpusAsk;
   answer: CorpusAnswer | undefined;
+  /** Whether the chart on show is the last one, while the one asked for is computed. */
+  busy: boolean;
   colorCounts: number[];
   fitLine: boolean;
   onChange: (fields: Partial<CorpusSearch>) => void;
@@ -420,6 +440,8 @@ function Options({
   const periodic = ask.axis === 'byYear' || ask.axis === 'byDecade';
   const dated = isDateBased(ask.axis);
   const canExport = answer?.state === 'chart';
+  // A figure draws the chart on show, so it waits for the one asked for; the CSV is the server's, of the request.
+  const canDraw = canExport && !busy;
   const colorsId = useId();
 
   function measure(value: AnalyticsMeasure) {
@@ -491,8 +513,8 @@ function Options({
         entries={[
           { kind: 'item', label: words.exportCSV, onSelect: () => onExport('csv'), disabled: !canExport },
           // The app exports a figure of the date axes alone (`canExportFigure`).
-          { kind: 'item', label: words.exportPNG, onSelect: () => onExport('png'), disabled: !canExport || !dated },
-          { kind: 'item', label: words.exportSVG, onSelect: () => onExport('svg'), disabled: !canExport || !dated },
+          { kind: 'item', label: words.exportPNG, onSelect: () => onExport('png'), disabled: !canDraw || !dated },
+          { kind: 'item', label: words.exportSVG, onSelect: () => onExport('svg'), disabled: !canDraw || !dated },
         ]}
       />
     </div>

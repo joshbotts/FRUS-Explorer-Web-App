@@ -58,6 +58,40 @@ import Testing
             ] {
                 #expect(problemCode(try await client.execute(uri: "/api/v1/analytics/corpus?\(query)", method: .get)) == code, "\(query)")
             }
+            // By Detected Topic: an item with indexed volumes scopes the chart to them, under the menu's label; one with
+            // none, a sub-category the menu does not offer, and a category alone are refused.
+            let topic = try #require(context.topics.first { $0.items.contains { $0.indexed > 0 } }, "the synthetic export's volumes have detected topics")
+            let item = try #require(topic.items.first { $0.indexed > 0 })
+            let query = "term=the&topic=\(Self.encoded(topic.label))&subtopic=\(Self.encoded(item.subcategory))"
+            let byTopic = try decode(CorpusAnalyticsAnswer.self, try await client.execute(uri: "/api/v1/analytics/corpus?\(query)", method: .get))
+            let indexed = Set(context.subseries.flatMap { $0.volumes.map(\.id) })
+            #expect(byTopic.scope.label == "\(topic.label) · \(item.subcategory)" && byTopic.scope.volumeIds?.count == item.indexed)
+            #expect(Set(byTopic.scope.volumeIds ?? []).isSubset(of: indexed) && item.label.hasSuffix("(\(item.indexed) of \(item.total) indexed)"))
+            if let none = context.topics.flatMap({ category in category.items.map { (category.label, $0) } }).first(where: { $0.1.indexed == 0 }) {
+                #expect(none.1.label == "\(none.1.subcategory) — none indexed yet")
+                #expect(problemCode(try await client.execute(
+                    uri: "/api/v1/analytics/corpus?term=the&topic=\(Self.encoded(none.0))&subtopic=\(Self.encoded(none.1.subcategory))",
+                    method: .get)) == "INVALID_PARAMETER")
+            }
+            for refused in ["term=the&topic=\(Self.encoded(topic.label))&subtopic=Nowhere", "term=the&topic=\(Self.encoded(topic.label))",
+                            "term=the&topic=Nowhere&subtopic=\(Self.encoded(item.subcategory))"] {
+                #expect(problemCode(try await client.execute(uri: "/api/v1/analytics/corpus?\(refused)", method: .get)) == "INVALID_PARAMETER", "\(refused)")
+            }
+            // A volume the index does not hold is no scope the menu offers; a sub-category or a label without its scope is
+            // refused, not dropped.
+            for refused in ["term=x&volume=frus1964-68v01", "term=x&subseries=\(subseries.name)&subtopic=x",
+                            "term=x&volume=\(volume.id)&scopeLabel=Mine", "term=x&topic=\(Self.encoded(topic.label))&scopeLabel=Mine"] {
+                #expect(problemCode(try await client.execute(uri: "/api/v1/analytics/corpus?\(refused)", method: .get)) == "INVALID_PARAMETER", "\(refused)")
+            }
+            // A query with nothing left to search charts nothing, and Search refuses to count it, as its own route does.
+            let excluded = try decode(CorpusAnalyticsAnswer.self, try await client.execute(uri: "/api/v1/analytics/corpus?term=-war", method: .get))
+            #expect(excluded.state == "empty")
+            #expect(problemCode(try await client.execute(uri: "/api/v1/analytics/corpus/documents?term=-war", method: .get)) == "EMPTY_QUERY")
+            // A figure is a chart's on a time view alone.
+            for refused in ["term=zyzzyvaqq", "term=the&axis=bySubseries", "term=%3Dthe"] {
+                #expect(problemCode(try await client.execute(uri: "/api/v1/analytics/corpus/plate?\(refused)", method: .get)) == "NOTHING_TO_EXPORT", "\(refused)")
+            }
+
             // An exact word is refused by the chart, so its documents are not counted.
             let exact = try decode(CorpusAnalyticsAnswer.self, try await client.execute(uri: "/api/v1/analytics/corpus?term=%3Dthe", method: .get))
             #expect(exact.state == "exactUnsupported" && exact.stateDetail?.hasPrefix("=the can’t be charted") == true)
@@ -90,8 +124,14 @@ import Testing
             ] {
                 #expect(problemCode(try await client.execute(uri: "/api/v1/chronology?\(query)", method: .get)) == code, "\(query)")
             }
-            let plateOfRange = try decode(AnalyticsPlate.self, try await client.execute(uri: "/api/v1/chronology/plate?\(range)", method: .get))
-            #expect(plateOfRange.lines.first?.text == "Chronology, \(context.chronologyFrom) to \(context.chronologyTo)")
+            let dated = "from=1960-11-01&to=1960-11-30"
+            let plateOfRange = try decode(AnalyticsPlate.self, try await client.execute(uri: "/api/v1/chronology/plate?\(dated)", method: .get))
+            #expect(plateOfRange.lines.first?.text == "Chronology, 1960-11-01 to 1960-11-30")
+            // A range with nothing on its chart has no figure, as it has no CSV.
+            #expect(problemCode(try await client.execute(uri: "/api/v1/chronology/plate?from=1800-01-01&to=1800-12-31", method: .get))
+                    == "NOTHING_TO_EXPORT")
+            #expect(problemCode(try await client.execute(uri: "/api/v1/chronology/export?from=1800-01-01&to=1800-12-31", method: .get))
+                    == "NOTHING_TO_EXPORT")
         }
         let waiting = try await UserDataFixture()
         defer { withExtendedLifetime(waiting) {} }
@@ -101,6 +141,13 @@ import Testing
                 #expect(response.status == .serviceUnavailable && problemCode(response) == "INDEX_NOT_READY", "\(uri)")
             }
         }
+    }
+
+    /// A query value, percent-encoded.
+    static func encoded(_ text: String) -> String {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        return text.addingPercentEncoding(withAllowedCharacters: allowed) ?? text
     }
 
     /// The export's file name is the app's `AnalyticsExportDelivery.filenameStem`: the title's letters, digits,

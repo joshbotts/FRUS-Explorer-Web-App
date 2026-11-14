@@ -2443,8 +2443,9 @@ dialog.merge-picker {
   border-color: var(--accent);
 }
 
-.analytics-legend button.dimmed {
-  opacity: 0.55;
+/* A filter dims the other entries' swatches alone, so their names keep their contrast; the chosen one is outlined. */
+.analytics-legend button.dimmed .swatch {
+  opacity: 0.35;
 }
 
 .analytics-legend .swatch {
@@ -2460,6 +2461,10 @@ dialog.merge-picker {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-secondary);
+}
+
+.analytics-legend .total {
+  white-space: nowrap;
 }
 
 .analytics-legend .total,

@@ -20,6 +20,7 @@
 
 import FRUSCoreKit
 import FRUSLightCore
+import FTS5Store
 import Foundation
 import Hummingbird
 
@@ -376,6 +377,10 @@ enum CorpusAnalyticsRoutes {
             let now = Date()
             let provenance = provenance(ask, answer: answer, indexedVolumeCount: served.indexedVolumeIds.count, exportDate: now)
             withExtendedLifetime(served) {}
+            // The app exports a figure of a chart on a time view alone (`canExportFigure`).
+            guard answer.state == "chart", ask.axis.isDateBased else {
+                throw APIProblem(.notFound, code: "NOTHING_TO_EXPORT", detail: "The chart for \(ask.term) on \(ask.axis.pickerLabel) has no figure to export.")
+            }
             return AnalyticsPlate(provenance, host: host(timeZone: timeZone), date: now)
         }
     }
@@ -410,13 +415,22 @@ enum CorpusAnalyticsRoutes {
     }
 
     /// The scope a request names, resolved to its volumes as the scope menu's item seeds them: a subseries's
-    /// indexed volumes, a volume, a detected topic's indexed volumes, or the volumes a scope of the user's holds,
-    /// with the label each gives; the whole corpus for none. A scope that holds no indexed volume is refused,
-    /// as the menu disables it, rather than read as the whole corpus (`setScope`'s empty→nil).
+    /// indexed volumes, an indexed volume, a detected topic's indexed volumes, or the volumes a scope of the user's
+    /// holds, with the label each gives; the whole corpus for none. A subseries, a volume or a topic that holds no
+    /// indexed volume is refused, as the menu disables it, rather than read as the whole corpus (`setScope`'s
+    /// empty→nil), and so is a topic the menu does not offer; a scope of volumes is taken as given, as the app's
+    /// hand-off takes one, each a volume of the catalogue.
     static func scope(_ query: FormQuery, served: ServedIndex, resources: ServerResources) throws -> CorpusAnalyticsAsk.ResolvedScope {
         let named = ["subseries", "volume", "topic", "volumes"].filter { !query.values($0).isEmpty }
         guard named.count <= 1 else {
             throw APIProblem.invalidParameter(named[1], "a scope is one of subseries, volume, topic or volumes, not \(named.joined(separator: " and "))")
+        }
+        // A sub-category is taken with a topic alone, and a label with a scope of volumes alone.
+        if !query.values("subtopic").isEmpty, named != ["topic"] {
+            throw APIProblem.invalidParameter("subtopic", "is taken only with a topic")
+        }
+        if !query.values("scopeLabel").isEmpty, named != ["volumes"] {
+            throw APIProblem.invalidParameter("scopeLabel", "is taken only with a scope of volumes")
         }
         let indexed = served.indexedVolumeIds
         if let subseries = try query.single("subseries") {
@@ -426,6 +440,8 @@ enum CorpusAnalyticsRoutes {
         }
         if let volume = try query.single("volume") {
             guard resources.volume(volume) != nil else { throw APIProblem.volumeNotFound(volume) }
+            // The By Volume menu offers the indexed volumes alone.
+            guard indexed.contains(volume) else { throw APIProblem.invalidParameter("volume", "\(volume) is not indexed") }
             return .volumes([volume], label: volumeTitle(volume, resources: resources))
         }
         if let category = try query.single("topic") {
@@ -435,6 +451,12 @@ enum CorpusAnalyticsRoutes {
             guard let resolved = detectedTopics(resources), !resolved.isEmpty else {
                 throw APIProblem.invalidParameter("topic", "this server has no detected topics")
             }
+            // The menu's own items: a category that narrows, and one of its sub-categories.
+            guard ScopeFacets.narrowingCategories(resolvedByVolume: resolved).contains(where: { $0.label == category }),
+                  ScopeFacets.subCategoryCatalog(forCategory: category, resolvedByVolume: resolved)
+                    .contains(where: { $0.subcategory == subcategory }) else {
+                throw APIProblem.invalidParameter("topic", "\(category) · \(subcategory) is not a detected topic the scope menu offers")
+            }
             let ids = ScopeFacets.volumeIds(forCategory: category, subcategory: subcategory, resolvedByVolume: resolved)
                 .intersection(indexed)
             guard !ids.isEmpty else {
@@ -442,7 +464,6 @@ enum CorpusAnalyticsRoutes {
             }
             return .volumes(ids.sorted(), label: "\(category) · \(subcategory)")
         }
-        if try query.single("subtopic") != nil { throw APIProblem.invalidParameter("subtopic", "is given with a topic") }
         if let ids = try query.list("volumes") {
             guard !ids.isEmpty else { throw APIProblem.invalidParameter("volumes", "a scope names at least one volume") }
             guard ids.count <= maximumScopeVolumes else {
@@ -452,7 +473,6 @@ enum CorpusAnalyticsRoutes {
             let label = try query.single("scopeLabel")
             return .volumes(Array(Set(ids)).sorted(), label: label?.isEmpty == true ? nil : label)
         }
-        if try query.single("scopeLabel") != nil { throw APIProblem.invalidParameter("scopeLabel", "names a scope of volumes") }
         return .wholeCorpus
     }
 
@@ -507,7 +527,13 @@ enum CorpusAnalyticsRoutes {
         guard CorpusAnalyticsService.unsupportedExactTerms(in: ask.term).isEmpty else {
             throw APIProblem(.notFound, code: "NOTHING_TO_COUNT", detail: "The chart refuses \(ask.term), so its documents are not counted.")
         }
-        let match = try await AnalyticsSearchHandoff.match(for: parameters, in: served.service)
+        let match: AnalyticsSearchHandoff.Match
+        do {
+            match = try await AnalyticsSearchHandoff.match(for: parameters, in: served.service)
+        } catch let error as FTS5Error {
+            // A query Search refuses, one with nothing left to search, as Search's route refuses it.
+            throw SearchRoutes.refusal(error)
+        }
         let dispersion = CorpusDispersion.make(volumeCounts: match.volumeCounts, indexedVolumeCount: served.indexedVolumeIds.count)
         return CorpusAnalyticsDocuments(
             count: match.count, linkTitle: CorpusAnalyticsView.handoffLinkTitle(count: match.count),
