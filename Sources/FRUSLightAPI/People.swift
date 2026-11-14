@@ -5,16 +5,20 @@
 // `PersonIndexSection.makeSections` groups them, each row's line the app's `PersonIndexRow.subtitle` (the kit's
 // `roleEraSubtitle` and the volume count), its mention count and whether a "possibly the same person" suggestion
 // waits (`rollupIdsWithCandidates()`); GET /api/v1/people/{rollupId} gives the sheet: the name, the volumes'
-// description, the register's life years and role and the reconciled mark (the bundled name authority, as the
-// app's sheet reads it), the mentions, Active (the kit's `eraText`), the VIAF and Wikidata links, the suggestions
-// and the records the identity holds. The rules the views apply are the app's, mirrored as `PeopleRules` and held
-// to its source by `PeopleParityTests`.
+// description; the lifespan line, the kit's `PersonLifespan.text(authority:career:)`, the bundled name authority's
+// years with a year it lacks filled from the register of principal officers and chiefs of mission (POCOM), with the
+// authority's role and the reconciled mark, as the app's sheet reads them; the mentions and Active (the kit's
+// `eraText`); Subjects, the kit's `PersonSubjectAffinity.rank` of the person's mentions in each volume over the
+// bundled volume profiles; the VIAF and Wikidata links; Career, the register's posts for the authority's slug
+// (`POCOMIndex.career(forSlug:)`), each its kit title, dates and note; the suggestions and the records the identity
+// holds (S21g's follow-up, after FRUS-Explorer#1906). GET /api/v1/subjects/{ref}/volumes is a subject chip's pivot,
+// the app's `VolumeSubjectVolumesSheet` (`Browser/VolumeSubjectsView.swift`): every volume covering the subject.
+// The rules the views apply are the app's, mirrored as `PeopleRules` and `SubjectPivot` and held to its source by
+// `PeopleParityTests`; the kit's rules are called, never copied (CLAUDE.md, rule 4).
 //
 // A rollup's ids are renumbered whenever it is built again, so each answer carries `version`, a digest of the list
 // it came from, which a correction sends back (Corrections.swift): one made against another rollup is refused,
-// since its ids may name other people now. The career the register gives (POCOM) and the subjects of the volumes a
-// person is mentioned in read kit members internal at the pin, and wait for an upstream pull request that makes them
-// public (the log's entry, Session 21g).
+// since its ids may name other people now.
 
 import Crypto
 import FRUSCoreKit
@@ -22,7 +26,8 @@ import FRUSLightCore
 import Foundation
 import Hummingbird
 
-/// The app's rules over the rollup's rows, mirrored from `Browser/PersonIndexView.swift`.
+/// The app's views' rules over the rollup's rows and the sheet's sections, mirrored from `Browser/PersonIndexView.swift`.
+/// The kit's rules the sheet reads, the lifespan line's, the subjects' ranking and a post's words, are the kit's calls.
 enum PeopleRules {
     /// `PersonIndexRow.subtitle`: `role · era · N volumes`, leaving out whichever is absent, the count only past one.
     static func subtitle(_ entry: PersonIndexEntry) -> String? {
@@ -45,14 +50,33 @@ enum PeopleRules {
         return byLetter.keys.sorted().map { ($0, byLetter[$0]!) }
     }
 
-    /// `PersonLifespan.text(born:died:)`: "1893–1971", "Born 1893", "Died 1971", or nil; a year never grouped.
-    static func lifespan(born: Int?, died: Int?) -> String? {
-        switch (born, died) {
-        case let (born?, died?): "\(born)–\(died)"
-        case let (born?, nil): "Born \(born)"
-        case let (nil, died?): "Died \(died)"
-        case (nil, nil): nil
-        }
+    /// The sheet's `career`: the register's entry for the slug the name authority gives the person, none without one.
+    static func career(_ authority: PersonAuthorityIndex.AuthorityEntry?, in register: POCOMIndex?) -> POCOMCareer? {
+        guard let slug = authority?.s, !slug.isEmpty else { return nil }
+        return register?.career(forSlug: slug)
+    }
+
+    /// Career's rows, drawn only for a career that holds a post (`if let career, !career.a.isEmpty`), in the
+    /// register's order, each the kit's title and dates and the register's note where it has one.
+    static func posts(_ career: POCOMCareer?) -> [PersonSheet.Post] {
+        guard let career, !career.a.isEmpty else { return [] }
+        return career.a.map(PersonSheet.Post.init)
+    }
+
+    /// How many subjects the sheet's Subjects shows (`loadSubjectAffinities`).
+    static let subjectLimit = 8
+
+    /// The sheet's Subjects (`loadSubjectAffinities`): the kit's ranking of the person's mentions in each volume
+    /// over the bundled volume profiles, the producer its ranking needs, never the document subject index, whose
+    /// scores are another measure (`ResolvedSubject.score`); none without the profiles or a mention, and none when
+    /// the store cannot count them, as the app's `try?` shows none.
+    static func subjects(_ persons: PersonMentionStore, rollupId: Int,
+                         profiles: VolumeSubjectProfiles?) async -> [PersonSubjectAffinity.Ranked] {
+        guard let profiles,
+              let counts = try? await persons.volumeMentionCounts(forRollupId: rollupId),
+              !counts.isEmpty else { return [] }
+        return PersonSubjectAffinity.rank(mentionCounts: counts, topSubjectsByVolume: profiles.topSubjects(forVolumeId:),
+                                          limit: subjectLimit)
     }
 
     /// The register's role, as the sheet shows it: only when it says something the volumes' own description does not.
@@ -157,12 +181,49 @@ struct PersonSheet: ResponseEncodable, Codable, Equatable, Sendable {
         let name: String
     }
 
+    /// A subject chip: a subject of the volumes the person is mentioned in (`PersonSubjectAffinity.Ranked`).
+    struct Subject: Codable, Equatable, Sendable {
+        /// The subject's ref, which its pivot is asked by.
+        let ref: String
+        let name: String
+        let category: String
+        /// How many of the volumes the person is mentioned in carry it, which the chip's spoken value says.
+        let volumeCount: Int
+
+        init(_ ranked: PersonSubjectAffinity.Ranked) {
+            ref = ranked.subject.ref
+            name = ranked.subject.name
+            category = ranked.subject.category
+            volumeCount = ranked.volumeCount
+        }
+    }
+
+    /// A post of Career (`POCOMAssignment`).
+    struct Post: Codable, Equatable, Sendable {
+        /// The kit's id, stable within one career.
+        let id: String
+        /// The kit's `titleText`: "Under Secretary of State" or "Ambassador — France".
+        let title: String
+        /// The kit's `dateRangeText`, the register's dates as it writes them; nil where it has none.
+        let dates: String?
+        /// The register's note on the post's end ("Left Tehran on"), nil where it has none.
+        let note: String?
+
+        init(_ assignment: POCOMAssignment) {
+            id = assignment.id
+            title = assignment.titleText
+            dates = assignment.dateRangeText
+            note = assignment.nt.flatMap { $0.isEmpty ? nil : $0 }
+        }
+    }
+
     let version: String
     let rollupId: Int
     let name: String
     /// The volumes' own words, from their lists of persons.
     let description: String?
-    /// The register's life years, the name authority's (`PersonLifespan`), and its role where it adds to the description.
+    /// The lifespan line, the kit's `PersonLifespan.text(authority:career:)`: the name authority's years, a year it
+    /// lacks filled from the register's career; and the authority's role where it adds to the description.
     let lifespan: String?
     let registerRole: String?
     /// Whether the identity is matched to the bundled name authority.
@@ -173,12 +234,46 @@ struct PersonSheet: ResponseEncodable, Codable, Equatable, Sendable {
     let mentions: String
     /// The volumes' years, the kit's `eraText`.
     let active: String?
+    /// Subjects, the kit's ranking in its order, at most eight; empty where the sheet shows no Subjects section.
+    let subjects: [Subject]
     let viafURL: String?
     let wikidataURL: String?
+    /// Career, the register's posts in its order; empty where the sheet shows no Career section.
+    let career: [Post]
     /// "Possibly the Same Person".
     let candidates: [Candidate]
     /// "Records in This Identity", each a volume's persons-list record, which Separate names.
     let records: [Record]
+}
+
+/// A subject's covering volumes, which its chip opens, each with the catalogue's title.
+struct SubjectVolumes: ResponseEncodable, Codable, Equatable, Sendable {
+    struct Volume: Codable, Equatable, Sendable {
+        let volumeId: String
+        /// The catalogue's title; nil for a volume the catalogue does not list, whose row names it by its id.
+        let title: String?
+    }
+
+    let ref: String
+    /// The sheet's order, by volume id.
+    let volumes: [Volume]
+}
+
+/// A subject chip's pivot, the app's `VolumeSubjectVolumesSheet` (`Browser/VolumeSubjectsView.swift`), mirrored.
+enum SubjectPivot {
+    /// `coveringVolumes(excluding:)`: every volume whose documents carry the subject, from the bundled document
+    /// subject index, which is complete; else from the volume profiles, whose reach is each volume's top fifteen; the
+    /// volume `excluded` left out, `""` leaving out none, as the person sheet's pivot passes; sorted by volume id.
+    static func coveringVolumes(ref: String, excluding excluded: String, documents: DocumentSubjectIndex?,
+                                profiles: VolumeSubjectProfiles?) -> [String] {
+        if let index = documents {
+            return index.volumeIds(forSubjectRef: ref)
+                .filter { $0 != excluded }
+                .sorted()
+        }
+        guard let profiles else { return [] }
+        return profiles.otherVolumes(forSubjectRef: ref, excluding: excluded).sorted()
+    }
 }
 
 extension ServerResources {
@@ -186,6 +281,11 @@ extension ServerResources {
     /// years, role and Wikidata link from, decoded once on first use; nil for a file missing or malformed, and the
     /// sheet then shows what the volumes say alone.
     var personAuthority: PersonAuthorityIndex? { people.personAuthority.value(in: directory) }
+
+    /// `POCOMIndexStore.shared`, app code: the register of principal officers and chiefs of mission, whose careers the
+    /// sheet's Career draws and whose life years fill the lifespan line's gaps, decoded once on first use by the kit's
+    /// loader; nil for a file missing or malformed, and the sheet then has no Career and the authority's years alone.
+    var careerRegister: POCOMIndex? { people.careerRegister.value(in: directory) }
 }
 
 /// The bundled files the People screen reads.
@@ -193,6 +293,7 @@ final class PeopleFiles: Sendable {
     let personAuthority = DecodedFile("person-authority-index.json") { url -> PersonAuthorityIndex in
         try JSONDecoder().decode(PersonAuthorityIndex.self, from: Data(contentsOf: url))
     }
+    let careerRegister = DecodedFile("pocom-index.json") { try POCOMIndex(contentsOf: $0) }
 }
 
 enum PeopleRoutes {
@@ -219,18 +320,36 @@ enum PeopleRoutes {
             let records = try await served.persons.members(forRollupId: rollupId).map {
                 PersonSheet.Record(volumeId: $0.volumeId, ref: $0.entry.ref, name: $0.entry.name)
             }
-            let authority = entry.authorityId.flatMap { resources.personAuthority?.entry(for: $0) }
+            // The three bundled files, each decoded once, the first time off the cooperative pool.
+            let (authorities, register, profiles) = try await Blocking.run {
+                (resources.personAuthority, resources.careerRegister, resources.subjectProfiles.profiles)
+            }
+            let authority = entry.authorityId.flatMap { authorities?.entry(for: $0) }
+            let career = PeopleRules.career(authority, in: register)
+            let subjects = await PeopleRules.subjects(served.persons, rollupId: rollupId, profiles: profiles)
             return PersonSheet(
                 version: list.version, rollupId: rollupId, name: entry.entry.name,
                 description: entry.entry.description.flatMap { $0.isEmpty ? nil : $0 },
-                lifespan: PeopleRules.lifespan(born: authority?.b, died: authority?.d),
+                lifespan: PersonLifespan.text(authority: authority, career: career),
                 registerRole: PeopleRules.registerRole(authority?.r, description: entry.entry.description),
                 reconciled: entry.authorityId != nil, authorityId: entry.authorityId,
                 mentionCount: entry.mentionCount, mentions: PeopleRules.mentions(entry.mentionCount),
                 active: entry.entry.eraText,
+                subjects: subjects.map(PersonSheet.Subject.init),
                 viafURL: entry.viafId.flatMap { $0.isEmpty ? nil : URL(string: "https://viaf.org/viaf/\($0)")?.absoluteString },
                 wikidataURL: authority?.wikidataURL?.absoluteString,
+                career: PeopleRules.posts(career),
                 candidates: candidates, records: records)
+        }
+
+        // A subject chip's pivot (S21g's follow-up): every volume covering the subject, from the bundled files alone,
+        // so it answers whatever the served index holds, as the app's sheet lists volumes the reader has not downloaded.
+        router.get("/api/v1/subjects/:ref/volumes") { request, context -> SubjectVolumes in
+            try FormQuery(request.uri.query).refuseUnknown([])
+            let ref = try context.parameters.require("ref")
+            let (documents, profiles) = try await Blocking.run { (resources.documentSubjectIndex, resources.subjectProfiles.profiles) }
+            let ids = SubjectPivot.coveringVolumes(ref: ref, excluding: "", documents: documents, profiles: profiles)
+            return SubjectVolumes(ref: ref, volumes: ids.map { SubjectVolumes.Volume(volumeId: $0, title: resources.volume($0)?.title) })
         }
     }
 
