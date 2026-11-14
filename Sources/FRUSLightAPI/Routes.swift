@@ -48,6 +48,7 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     SourceExplorerRoutes.add(to: router, provider: provider, resources: resources, reader: reader)
     ArchivalNeighborsRoutes.add(to: router, provider: provider, resources: resources)
     ArchivalCollectionRoutes.add(to: router, provider: provider, resources: resources)
+    VolumeSourcesRoutes.add(to: router, provider: provider, resources: resources)
     RelatedDocumentsRoutes.add(to: router, provider: provider, resources: resources)
     CrossReferenceGraphRoutes.add(to: router, provider: provider, resources: resources)
     CitationLookupRoutes.add(to: router, provider: provider, resources: resources)

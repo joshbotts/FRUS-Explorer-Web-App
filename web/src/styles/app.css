@@ -1519,6 +1519,112 @@ dialog.review-sheet {
   font-size: 1.125rem;
 }
 
+/* A volume's Sources outline, on Browse's page for its Sources section: the app's list sections, the outline
+   nested by depth with a disclosure beside each row that has rows beneath it. */
+.vs-group .se-section-heading {
+  align-items: center;
+}
+
+.vs-group .se-section-heading h2 {
+  margin: 0;
+}
+
+.vs-group > .se-section-heading + * {
+  margin-top: 0.5rem;
+}
+
+.vs-prose {
+  margin: 0;
+  user-select: text;
+}
+
+.vs-prose + .vs-prose {
+  margin-top: 0.5rem;
+}
+
+.vs-plain,
+.vs-tree {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vs-plain > li {
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--border);
+  user-select: text;
+}
+
+.vs-plain > li:last-child {
+  border-bottom: 0;
+}
+
+.vs-tree .vs-tree {
+  padding-inline-start: 1.25rem;
+}
+
+.vs-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 0.125rem 0;
+}
+
+.vs-toggle,
+.vs-leaf {
+  flex: none;
+  width: 24px;
+  min-height: 24px;
+}
+
+.vs-toggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  line-height: 24px;
+  cursor: pointer;
+}
+
+.vs-entry {
+  flex: 1;
+  min-width: 0;
+  padding-top: 0.125rem;
+}
+
+.vs-entry > * + * {
+  margin-top: 0.125rem;
+}
+
+.vs-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.125rem 1rem;
+  margin: 0;
+}
+
+.vs-text {
+  user-select: text;
+}
+
+.vs-heading {
+  font-weight: 600;
+}
+
+.vs-catalog {
+  font-size: 0.8125rem;
+}
+
+.vs-note {
+  user-select: text;
+}
+
+.vs-empty h2 {
+  font-size: 1.125rem;
+}
+
 /* ─── Related Documents (PLAN's S23d) ────────────────────────────────────── */
 
 .related {

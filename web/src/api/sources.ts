@@ -320,3 +320,38 @@ export function archivalCollectionQuery(id: string) {
     retry: false,
   });
 }
+
+/** One row of a volume's Sources section (`VolumeSourceEntry`), with what the app's view draws for it. */
+export interface OutlineRow {
+  /** About These Sources, Archival Collections or Published Sources. */
+  kind: 'prose' | 'item' | 'bibliography';
+  /** An outline row's depth, 0 for a top-level collection. */
+  depth: number;
+  /** A major named collection, which the view sets in bold. */
+  isHeading: boolean;
+  text: string;
+  /** The editors' description of an outline row's collection, where the volume writes it apart. */
+  note?: string;
+  /** The catalogue record an outline row resolves to. */
+  catalogURL?: string;
+  /** The file series the resolved record sits in, when the record is a file unit. */
+  seriesTitle?: string;
+  /** The resolved record's HMS/MLR entry numbers, or, where it carries none, its series'. */
+  entryNumbers?: string[];
+  seriesEntryNumbers?: string[];
+}
+
+/** A volume's Sources section, as the app's `VolumeSourcesView` lists it: its rows in the volume's order. */
+export interface VolumeSourcesOutline {
+  volumeId: string;
+  rows: OutlineRow[];
+}
+
+export function volumeSourcesQuery(volumeId: string) {
+  return queryOptions({
+    queryKey: ['volumeSources', volumeId],
+    queryFn: ({ signal }) => getJSON<VolumeSourcesOutline>(`/api/v1/volumes/${segment(volumeId)}/sources`, undefined, signal),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}

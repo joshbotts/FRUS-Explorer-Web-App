@@ -249,6 +249,18 @@ import Testing
             ("Browser/ArchivesBrowseView.swift", "browser.archives.collection.unavailable.title", "Collection Unavailable", "archivalCollection", "unavailable"),
             ("Browser/ArchivesBrowseView.swift", "browser.archives.collection.unavailable.detail",
              "This collection is not in the bundled archival authority.", "archivalCollection", "unavailableDetail"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.loading", "Loading sources…", "volumeSources", "loading"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.empty.title", "No Sources Listed", "volumeSources", "empty"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.empty.detail", "Index this volume to load its archival sources list.",
+             "volumeSources", "emptyDetail"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.about.header", "About These Sources", "volumeSources", "about"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.collections.header", "Archival Collections", "volumeSources", "collections"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.expandAll", "Expand All", "volumeSources", "expandAll"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.collapseAll", "Collapse All", "volumeSources", "collapseAll"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.bibliography.header", "Published Sources", "volumeSources", "bibliography"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.catalog", "View in National Archives Catalog", "volumeSources", "catalog"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.catalog.help", "View this collection in the National Archives Catalog",
+             "volumeSources", "catalogHelp"),
         ]
         let copy = try NoteViewParityTests.read(NoteViewParityTests.web, "copy.ts")
         let sources = NoteViewParityTests.Sources()
@@ -257,6 +269,29 @@ import Testing
             #expect(try NoteViewParityTests.block(word.block, of: copy).contains("\(word.web): '\(word.value)'"),
                     "copy.\(word.block).\(word.web) is \(word.value)")
         }
+    }
+
+    /// A volume's Sources outline over the fixture index and the bundled files: the TEI's rows in its order, and the
+    /// catalogue records the kit resolves them to, a lot's from the central files and a library's collection's from
+    /// the library catalogue; and none for a volume without a Sources section.
+    @Test func theOutlineOverTheFixtures() async throws {
+        let (v06, ve09, nicaragua) = try await ServedFixture.run { client, _ in
+            func outline(_ volume: String) async throws -> VolumeSourcesOutline {
+                try ServedFixture.decode(VolumeSourcesOutline.self, try await client.execute(uri: "/api/v1/volumes/\(volume)/sources", method: .get))
+            }
+            return (try await outline("frus1961-63v06"), try await outline("frus1969-76ve09p1"), try await outline("frus1894Nicaragua"))
+        }
+        #expect(v06.rows.map(\.kind).filter { $0 == "prose" }.count == 2 && v06.rows.filter { $0.kind == "item" }.count == 15
+                && v06.rows.filter { $0.kind == "bibliography" }.count == 10)
+        #expect(v06.rows.first { $0.kind == "item" }?.text == "Department of State")
+        let linked = v06.rows.compactMap { row in row.catalogURL.map { (row.text, $0) } }
+        #expect(linked.map(\.0) == ["Presidential Correspondence: Lot 66 D 204", "Presidential Correspondence: Lot 77 D 163",
+                                    "National Security Files", "President’s Appointment Books", "National Security File"])
+        #expect(linked.map(\.1) == ["2538452", "622626", "1164", "1154", "567979"].map { "https://catalog.archives.gov/id/\($0)" })
+        #expect(v06.rows.compactMap(\.entryNumbers) == [["A1 1590"], ["A1 5196"]])
+        #expect(ve09.rows.filter { $0.kind == "item" }.count == 50
+                && ve09.rows.compactMap(\.catalogURL) == ["https://catalog.archives.gov/id/388"])
+        #expect(nicaragua.rows.isEmpty)
     }
 
     /// The app's format strings and interpolations, each a function in copy.ts that writes what the app writes: a
@@ -294,6 +329,12 @@ import Testing
              "showAllVolumes: (count: number) => `Show all ${count} volumes`,"),
             ("SourceExplorer/CollectionDetailView.swift", "collection.detail.child.volumes %lld", "Cited in %lld volumes", "archivalCollection",
              "childVolumes: (count: number) => `Cited in ${count} volumes`,"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.lotFile.series %@", "File Series: %@", "volumeSources",
+             "fileSeries: (title: string) => `File Series: ${title}`,"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.lotFile.hmsMlr %@", "HMS/MLR Entry: %@", "volumeSources",
+             "entryNumbers: (numbers: string) => `HMS/MLR Entry: ${numbers}`,"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.lotFile.hmsMlr.series %@", "HMS/MLR Entry (series): %@", "volumeSources",
+             "seriesEntryNumbers: (numbers: string) => `HMS/MLR Entry (series): ${numbers}`,"),
         ]
         let copy = try NoteViewParityTests.read(NoteViewParityTests.web, "copy.ts")
         let sources = NoteViewParityTests.Sources()
@@ -477,6 +518,46 @@ import Testing
             "const parts = [series.entryNumber, series.dateRange].filter((part): part is string => !!part);",
             "return parts.length > 0 ? parts.join(' · ') : undefined;",
         ], file: "sourcesRules.ts")
+        // A volume's Sources outline: the view's rows, its tree and its control, the server's and the web's.
+        let outline = try sources.app("Browser/VolumeSourcesView.swift")
+        NoteViewParityTests.expect(outline, holds: [
+            "let resolution = ArchivalResolver.frontMatterResolution( recordGroup: entry.recordGroup, lotFile: entry.lotFile, entryText: entry.rawText, repository: entry.repository)",
+            "if let url = resolution?.url {",
+            "if let note = entry.note, !note.isEmpty {",
+            "if !resolution.isSeriesLevel, let seriesTitle = resolution.displaySeriesTitle {",
+            "if let entries = resolution.hmsMlrEntryNumbers, !entries.isEmpty {",
+            "} else if let seriesEntries = resolution.seriesHmsMlrEntryNumbers, !seriesEntries.isEmpty {",
+            #"entries.joined(separator: ", ")"#, #"seriesEntries.joined(separator: ", ")"#,
+            "if item.depth < depth { break }",
+            "let children = build(items, &index, depth: item.depth + 1)",
+            "nodes.append(SourceTreeNode(entry: item, children: children.isEmpty ? nil : children))",
+            "guard let children = node.children, !children.isEmpty else { continue }",
+            "collectionTree = Self.buildTree(entries.filter { $0.kind == .item }) expandedNodes = Self.expandableIDs(collectionTree)",
+            "if hasExpandableNodes {",
+            "expandedNodes = allExpanded ? [] : Self.expandableIDs(collectionTree)",
+        ], file: "VolumeSourcesView.swift")
+        NoteViewParityTests.expect(try ProjectHistoryParityTests.server("Sources/FRUSLightAPI/VolumeSources.swift"), holds: [
+            "guard entry.kind == .item else { return row }",
+            "if let note = entry.note, !note.isEmpty { row.note = note }",
+            "recordGroup: entry.recordGroup, lotFile: entry.lotFile, entryText: entry.rawText, repository: entry.repository,",
+            "row.catalogURL = resolution.url?.absoluteString",
+            "if !resolution.isSeriesLevel, let series = resolution.displaySeriesTitle { row.seriesTitle = series }",
+            "if let numbers = resolution.hmsMlrEntryNumbers, !numbers.isEmpty {",
+            "} else if let numbers = resolution.seriesHmsMlrEntryNumbers, !numbers.isEmpty {",
+        ], file: "VolumeSources.swift")
+        NoteViewParityTests.expect(try sources.web("sources/VolumeSourcesOutline.tsx"), holds: [
+            "if (row.depth < depth) break;",
+            "const children = build(row.depth + 1);",
+            "nodes.push(children.length > 0 ? { id, row, children } : { id, row });",
+            "if (!node.children?.length) continue;",
+            "const tree = useMemo(() => buildTree(rows.filter((row) => row.kind === 'item')), [rows]);",
+            "const [expanded, setExpanded] = useState<Set<number>>(() => new Set(expandable));",
+            "expandable.size > 0 && (",
+            "onClick={() => setExpanded(allExpanded ? new Set() : new Set(expandable))}",
+            "words.entryNumbers(row.entryNumbers.join(', '))",
+            "words.seriesEntryNumbers(row.seriesEntryNumbers.join(', '))",
+        ], file: "VolumeSourcesOutline.tsx")
+
         // The provenance chip's glyphs by tier, drawn here as shapes.
         NoteViewParityTests.expect(try sources.app("Provenance/ProvenanceChip.swift"), holds: [
             #"case .frusOnly: return "square.fill" case .joined: return "triangle.fill" case .computed: return "circle.fill""#,

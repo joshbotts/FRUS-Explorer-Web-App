@@ -1118,6 +1118,26 @@ export const copy = {
     back: 'Back',
   },
   /**
+   * A volume's Sources outline (PLAN's S22d), in the words of the app's `VolumeSourcesView`, which Browse
+   * opens for a Sources section. Its rows' Archival Neighbors button, collection and cross-volume links
+   * and line for a lot NARA divides read kit members still internal at this pin.
+   */
+  volumeSources: {
+    loading: 'Loading sources…',
+    empty: 'No Sources Listed',
+    emptyDetail: 'Index this volume to load its archival sources list.',
+    about: 'About These Sources',
+    collections: 'Archival Collections',
+    expandAll: 'Expand All',
+    collapseAll: 'Collapse All',
+    bibliography: 'Published Sources',
+    catalog: 'View in National Archives Catalog',
+    catalogHelp: 'View this collection in the National Archives Catalog',
+    fileSeries: (title: string) => `File Series: ${title}`,
+    entryNumbers: (numbers: string) => `HMS/MLR Entry: ${numbers}`,
+    seriesEntryNumbers: (numbers: string) => `HMS/MLR Entry (series): ${numbers}`,
+  },
+  /**
    * Related Documents (PLAN's S23d), in the words of the app's `RelatedDocumentsContent`, its weights' row
    * (`AxisWeightRow`) and its rail's tile. What a weight says of an axis this server does not rank by yet,
    * the line while a list is ranked, and the way back to the document are the web's own.

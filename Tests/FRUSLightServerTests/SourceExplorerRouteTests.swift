@@ -41,7 +41,8 @@ import Testing
         try await waiting.app.test(.router) { client in
             for path in ["/api/v1/volumes/\(Self.volume)/documents/d1/sources",
                          "/api/v1/archival-neighbors?volumeId=\(Self.volume)&documentId=d1",
-                         "/api/v1/archival-collection?id=lot:66D204"] {
+                         "/api/v1/archival-collection?id=lot:66D204",
+                         "/api/v1/volumes/\(Self.volume)/sources"] {
                 let response = try await client.execute(uri: path, method: .get)
                 #expect(response.status == .serviceUnavailable && problemCode(response) == "INDEX_NOT_READY", "\(path)")
             }
@@ -127,6 +128,47 @@ import Testing
 
     /// The panels for notes of the kinds the fixtures lack, through the kit's resolution with no index, as the app's
     /// view draws them while its index starts.
+    @Test func aVolumesOutlineAndItsRefusals() async throws {
+        let fixture = try await UserDataFixture(indexed: true)
+        defer { withExtendedLifetime(fixture) {} }
+        try await fixture.app.test(.router) { client in
+            let base = "/api/v1/volumes/\(Self.volume)/sources"
+            let outline = try decode(VolumeSourcesOutline.self, try await client.execute(uri: base, method: .get))
+            #expect(outline.volumeId == Self.volume)
+            #expect(problemCode(try await client.execute(uri: "\(base)?scope=all", method: .get)) == "UNKNOWN_PARAMETER")
+            #expect(problemCode(try await client.execute(uri: "/api/v1/volumes/frus1800nowhere/sources", method: .get)) == "VOLUME_NOT_FOUND")
+        }
+    }
+
+    /// The outline's rows as the app's view draws them, from rows of the kinds a volume's Sources section holds,
+    /// with the server's bundled files: a lot's record and entry numbers, a record group the row names and not one
+    /// it inherits, nothing for a lot NARA divides, and plain prose and published works.
+    @Test func theOutlinesRows() throws {
+        let resources = try TestResources.value()
+        let rows = VolumeSourcesRoutes.outline(volumeId: Self.volume, entries: [
+            VolumeSourceEntry(kind: .prose, rawText: "Unpublished Sources", note: "A note no prose row shows."),
+            VolumeSourceEntry(kind: .item, depth: 0, isHeading: true, rawText: "National Archives and Records Administration"),
+            VolumeSourceEntry(kind: .item, depth: 1, recordGroup: "59", rawText: "RG 59, Records of the Department of State"),
+            VolumeSourceEntry(kind: .item, depth: 2, recordGroup: "59", rawText: "Central Files, 1970–1973"),
+            VolumeSourceEntry(kind: .item, depth: 2, recordGroup: "59", lotFile: "66 D 204", lotFileNorm: "66D204",
+                              rawText: "Presidential Correspondence: Lot 66 D 204", note: "Correspondence of the President."),
+            VolumeSourceEntry(kind: .item, depth: 2, recordGroup: "59", lotFile: "62 D 430", lotFileNorm: "62D430",
+                              rawText: "Executive Secretariat Files: Lot 62 D 430"),
+            VolumeSourceEntry(kind: .bibliography, lotFile: "66 D 204", rawText: "A book that names Lot 66 D 204."),
+        ], resources: resources).rows
+        #expect(rows.map(\.kind) == ["prose", "item", "item", "item", "item", "item", "bibliography"])
+        #expect(rows[0].note == nil && rows[0].catalogURL == nil)
+        #expect(rows[1].isHeading && rows[1].catalogURL == nil)
+        #expect(rows[2].catalogURL == "https://catalog.archives.gov/id/388")
+        // A row beneath the record group that does not name it borrows no link.
+        #expect(rows[3].catalogURL == nil)
+        #expect(rows[4].catalogURL == "https://catalog.archives.gov/id/2538452" && rows[4].entryNumbers == ["A1 1590"])
+        #expect(rows[4].note == "Correspondence of the President." && rows[4].seriesEntryNumbers == nil)
+        // NARA divides 62 D 430 across several series, so it resolves to none of them.
+        #expect(rows[5].catalogURL == nil && rows[5].entryNumbers == nil)
+        #expect(rows[6].catalogURL == nil && rows[6].entryNumbers == nil)
+    }
+
     @Test func thePanelsTheFixturesLack() async throws {
         let resources = try TestResources.value()
         func answer(_ note: String, dateline: String? = nil) async -> SourceExplorerAnswer {

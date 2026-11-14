@@ -1,6 +1,7 @@
 // Answers of the server's Source Explorer routes over the kit's fixture index, taken from a run of the
-// server (PLAN's S22d) and trimmed: each list of neighbours to three rows, a record's volumes to seven.
-import type { ArchivalCollection, ArchivalNeighbours, SourceExplorer } from '../api/sources';
+// server (PLAN's S22d) and trimmed: each list of neighbours to three rows, a record's volumes to seven, and
+// frus1961-63v06's Sources outline, whole.
+import type { ArchivalCollection, ArchivalNeighbours, SourceExplorer, VolumeSourcesOutline } from '../api/sources';
 
 export const sources = {
   "centralFiles": {
@@ -651,3 +652,182 @@ export const collection = {
     }
   ]
 } as unknown as ArchivalCollection;
+
+export const outline = {
+  "volumeId": "frus1961-63v06",
+  "rows": [
+    {
+      "kind": "prose",
+      "depth": 0,
+      "isHeading": false,
+      "text": "Unpublished Sources"
+    },
+    {
+      "kind": "item",
+      "depth": 0,
+      "isHeading": true,
+      "text": "Department of State"
+    },
+    {
+      "kind": "item",
+      "depth": 1,
+      "isHeading": false,
+      "text": "Indexed Central Files: Up to January 1963 the Department of State used a central indexed decimal file system for a large part of its records. For this volume the most important decimal files were: 611.61 (general U.S.-Soviet relations); 711.11/KE (President Kennedy); and 761.13: (Soviet Government). In February 1963 the Department of State changed to a subject-numeric central file system, which divided records into broad categories within which were subject and country breakdowns."
+    },
+    {
+      "kind": "item",
+      "depth": 1,
+      "isHeading": false,
+      "text": "Lot Files: Documents from the central files have been supplemented by materials from decentralized office files, the lot files of the Department of State. The two major lot files used in this volume were:"
+    },
+    {
+      "kind": "item",
+      "depth": 2,
+      "isHeading": false,
+      "text": "Presidential Correspondence: Lot 66 D 204",
+      "catalogURL": "https://catalog.archives.gov/id/2538452",
+      "entryNumbers": [
+        "A1 1590"
+      ]
+    },
+    {
+      "kind": "item",
+      "depth": 3,
+      "isHeading": false,
+      "text": "Correspondence of the President and Secretary of State with their counterparts in the Soviet Union, the United Kingdom, France, and the Federal Republic of Germany, 1953-1964."
+    },
+    {
+      "kind": "item",
+      "depth": 2,
+      "isHeading": false,
+      "text": "Presidential Correspondence: Lot 77 D 163",
+      "catalogURL": "https://catalog.archives.gov/id/622626",
+      "entryNumbers": [
+        "A1 5196"
+      ]
+    },
+    {
+      "kind": "item",
+      "depth": 3,
+      "isHeading": false,
+      "text": "Correspondence of Presidents Kennedy and Johnson with the leaders of the Soviet Union, 1961-1964, the so-called Pen Pal correspondence. This lot also contains drafts of messages and memoranda to the President and Secretary of State about the correspondence."
+    },
+    {
+      "kind": "item",
+      "depth": 0,
+      "isHeading": true,
+      "text": "John F. Kennedy Library, Boston, Massachusetts"
+    },
+    {
+      "kind": "item",
+      "depth": 1,
+      "isHeading": false,
+      "text": "National Security Files",
+      "catalogURL": "https://catalog.archives.gov/id/1164"
+    },
+    {
+      "kind": "item",
+      "depth": 2,
+      "isHeading": false,
+      "text": "Countries Series, USSR, Khrushchev Correspondence, and Kennedy-Khrushchev Letters"
+    },
+    {
+      "kind": "item",
+      "depth": 1,
+      "isHeading": false,
+      "text": "President’s Appointment Books",
+      "catalogURL": "https://catalog.archives.gov/id/1154"
+    },
+    {
+      "kind": "item",
+      "depth": 0,
+      "isHeading": true,
+      "text": "Lyndon B. Johnson Library, Austin, Texas"
+    },
+    {
+      "kind": "item",
+      "depth": 1,
+      "isHeading": false,
+      "text": "National Security File",
+      "catalogURL": "https://catalog.archives.gov/id/567979"
+    },
+    {
+      "kind": "item",
+      "depth": 2,
+      "isHeading": false,
+      "text": "Bundy Files"
+    },
+    {
+      "kind": "item",
+      "depth": 1,
+      "isHeading": false,
+      "text": "Rusk Appointment Book"
+    },
+    {
+      "kind": "prose",
+      "depth": 0,
+      "isHeading": false,
+      "text": "Published Sources"
+    },
+    {
+      "kind": "bibliography",
+      "depth": 0,
+      "isHeading": false,
+      "text": "“Back from the Brink: The Correspondence Between President John F. Kennedy and Chairman Nikita S. Khrushchev on the Cuban Missile Crisis of Autumn 1962,” Problems of Communism, XLI (Spring 1992): pages 1-120."
+    },
+    {
+      "kind": "bibliography",
+      "depth": 0,
+      "isHeading": false,
+      "text": "Beschloss, Michael R. The Crisis Years, Kennedy and Khrushchev, 1960-1963. New York: HarperCollins, 1991."
+    },
+    {
+      "kind": "bibliography",
+      "depth": 0,
+      "isHeading": false,
+      "text": "Claflin, Edward B., ed. The President Wants To Know: Memos from the President’s Office, 1961-1963. New York: Morrow, 1991."
+    },
+    {
+      "kind": "bibliography",
+      "depth": 0,
+      "isHeading": false,
+      "text": "Manchester, William. The Death of a President, November 20-November 25, 1963. New York: Harper-Row, 1967."
+    },
+    {
+      "kind": "bibliography",
+      "depth": 0,
+      "isHeading": false,
+      "text": "Schlesinger, Arthur M., Jr., Robert Kennedy and His Times. Boston: Houghton Mifflin, 1978."
+    },
+    {
+      "kind": "bibliography",
+      "depth": 0,
+      "isHeading": false,
+      "text": "Sulzberger, Cyrus L. The Last of the Giants. New York:Macmillan, 1970."
+    },
+    {
+      "kind": "bibliography",
+      "depth": 0,
+      "isHeading": false,
+      "text": "U.S. Arms Control and Disarmament Agency. Documents on Disarmament, 1961, 1962, and 1963. Washington: U.S. Government Printing Office, 1962-1964."
+    },
+    {
+      "kind": "bibliography",
+      "depth": 0,
+      "isHeading": false,
+      "text": "U.S. Department of State. American Foreign Policy: Current Documents, 1961-1963. Washington: U.S. Government Printing Office, 1965-1967."
+    },
+    {
+      "kind": "bibliography",
+      "depth": 0,
+      "isHeading": false,
+      "text": "———Department of State Bulletin, 1961-1963."
+    },
+    {
+      "kind": "bibliography",
+      "depth": 0,
+      "isHeading": false,
+      "text": "U.S. National Archives and Records Administration. Public Papers of the Presidents of the United States:John F. Kennedy, 1961, 1962, and 1963. Washington: U.S. Government Printing Office, 1962-1964."
+    }
+  ]
+} satisfies VolumeSourcesOutline;
