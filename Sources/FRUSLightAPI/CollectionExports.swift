@@ -550,8 +550,15 @@ enum CollectionExportRoutes {
     /// written is said in the log, as the file is the export.
     static func recordKept(_ format: CollectionExportFormat, documents: Int, of collection: CollectionExport, for user: String,
                            in store: any UserDataStore, at time: Date, context: APIRequestContext) async throws {
+        try await recordKept(format: format.rawValue, documents: documents, of: collection, for: user, in: store, at: time, context: context)
+    }
+
+    /// The same for a format's raw value: one of `CollectionExportFormat`'s, or `zotero-api` for Send to Zotero
+    /// Library (PLAN's S22e), as the app's sheet records its send.
+    static func recordKept(format: String, documents: Int, of collection: CollectionExport, for user: String,
+                           in store: any UserDataStore, at time: Date, context: APIRequestContext) async throws {
         do {
-            try await record(format, documents: documents, of: collection, for: user, in: store, at: time)
+            try await record(format: format, documents: documents, of: collection, for: user, in: store, at: time)
         } catch {
             context.logger.error("A collection's export could not be kept in the history: \(error)")
         }
@@ -572,10 +579,15 @@ enum CollectionExportRoutes {
     /// user works in, unless Log Research Sessions is off.
     static func record(_ format: CollectionExportFormat, documents: Int, of collection: CollectionExport, for user: String,
                        in store: any UserDataStore, at time: Date) async throws {
+        try await record(format: format.rawValue, documents: documents, of: collection, for: user, in: store, at: time)
+    }
+
+    static func record(format: String, documents: Int, of collection: CollectionExport, for user: String,
+                       in store: any UserDataStore, at time: Date) async throws {
         guard try await PreferenceRoutes.isLogging(user, in: store) else { return }
         let name = collection.name.trimmingCharacters(in: .whitespacesAndNewlines)
         let project = try await Blocking.run { try store.activeProjectId(of: user) }.flatMap(UUID.init(uuidString:))
-        let entry = ExportHistoryEntryExport(id: UUID(), format: format.rawValue, documentCount: documents,
+        let entry = ExportHistoryEntryExport(id: UUID(), format: format, documentCount: documents,
                                              collectionName: name.isEmpty ? nil : name, projectId: project,
                                              exportedAt: UserStoreDate.rounded(time))
         try await Blocking.run {
