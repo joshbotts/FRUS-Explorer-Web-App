@@ -868,6 +868,8 @@ export const copy = {
     sentTitle: 'Sent to Zotero',
     viewInZotero: 'View in Zotero',
     errorTitle: 'Couldn’t Send to Zotero',
+    section: 'Send to a Reference Manager',
+    recover: 'Save a Zotero file instead',
     documentResult: (items: number, notes: number) => `Added ${items} document and ${notes} notes to Zotero.`,
     collectionResult: (items: number, notes: number) => `Added ${items} documents and ${notes} notes to Zotero.`,
     failed: (count: number) => `${count} failed.`,
@@ -877,8 +879,9 @@ export const copy = {
    * (`FloatingSelectionBar`) and its Look Up in NARA Catalog sheet (`NARACatalogLookupView`), whose key
    * warning names the web's place for keys, Settings ▸ Keys, where the app's names Settings → Connections.
    * The strategies' names and hints, and the filing periods, are the kit's, in the server's answer. The web's
-   * own: the line while the passage is read, what the results' line says of a search that found records, and
-   * the sheet's Close as a button where the app's is its title bar's.
+   * own: the line while the passage is read, what the results' line says of a search that found records, the
+   * sheet's Close as a button where the app's is its title bar's, and the warning on a server that is offline or
+   * keeps no user data, where the app's would name a place for keys that server does not have.
    */
   lookUp: {
     verb: 'Look Up in NARA',
@@ -905,6 +908,10 @@ export const copy = {
     viewRecord: 'View in NARA Catalog',
     reading: 'Reading the passage…',
     found: (count: number) => `${count} record${count === 1 ? '' : 's'} found.`,
+    offline:
+      'This server is offline, so it asks the NARA Catalog nothing. The “Central files identifier” strategy does not need it.',
+    noServerKey:
+      'This server has no NARA Catalog API key, and keeps no user data, so it has no place for yours. The “Central files identifier” strategy does not require a key.',
   },
   /**
    * Source Explorer (PLAN's S22d), in the words of the app's `SourceExplorerView`, its chips
@@ -913,7 +920,9 @@ export const copy = {
    * panel's titles, notes and rows, come in the answer. The web's own: the way back, the line while the
    * note is resolved, the link to a document's neighbours in their three scopes, and "this server" where the
    * app's pre-1906 section speaks of "this device". From PLAN's S22e the NARA Catalog section searches the
-   * catalogue through the server, in the app's words, its key prompt naming the web's place for keys.
+   * catalogue through the server, in the app's words, its key prompt naming the web's place for keys; the
+   * web's own: the line a screen reader hears when the search has answered, and the section's words on a
+   * server that is offline or keeps no user data.
    */
   sources: {
     title: 'Source Explorer',
@@ -1041,6 +1050,9 @@ export const copy = {
     searchManually: 'Search NARA Catalog Manually',
     naraLoading: 'Searching NARA Catalog…',
     naraNoResult: 'No matching record found in the NARA Catalog.',
+    naraFound: (count: number) => `${count} record${count === 1 ? '' : 's'} found in the NARA Catalog.`,
+    naraOffline: 'This server is offline, so it asks the NARA Catalog nothing.',
+    noServerKey: 'This server has no NARA Catalog API key, and keeps no user data, so it has no place for yours.',
     noKeyLabel: 'NARA Catalog API Key Required',
     noKeyExplanation:
       'A free NARA Catalog API key is required to search for lot file and Presidential Library records. Add your key in Settings ▸ Keys.',

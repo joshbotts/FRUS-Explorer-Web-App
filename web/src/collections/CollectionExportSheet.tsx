@@ -49,6 +49,13 @@ export function CollectionExportSheet({ detail, onClose }: { detail: CollectionD
   const unavailable = detail.entries.length === 0 && !smart;
   const label = words.grid[format]!.label;
 
+  /** `exportZoteroRIS()`: the collection as the file Zotero imports, saved; the row's way without a key, and after a failed send. */
+  async function saveZoteroFile() {
+    const file = await exportCollection(client, detail.id, 'zoteroJSON');
+    saveFile(file.blob, file.name);
+    setSaved(file.name);
+  }
+
   async function run() {
     if (unavailable || exporting || !known) return;
     setExporting(true);
@@ -113,18 +120,22 @@ export function CollectionExportSheet({ detail, onClose }: { detail: CollectionD
           {failure}
         </p>
       )}
-      {/* `zoteroSendRow`: the web API's send with a key, the RIS file without one (`sendToZotero()`). */}
+      {/* `zoteroSendRow` under its header: the web API's send with a key, the RIS file without one (`sendToZotero()`). */}
+      <h3 className="export-section">{copy.zotero.section}</h3>
       <ZoteroSendRow
         caption={zoteroKey ? copy.zotero.collectionCaption : copy.zotero.collectionCaptionNoAccount}
+        disabled={unavailable || exporting}
+        working={zoteroKey ? copy.zotero.sending : words.exporting}
         send={async () => {
+          setFailure(null);
+          setSaved(null);
           // The key as it is now, the list read again: one added in another tab sends.
           const keys = await client.fetchQuery({ ...secretsQuery, staleTime: 0 });
           if (keys.secrets.some((secret) => secret.name === 'zotero' && secret.set)) return await sendCollectionToZotero(client, detail.id);
-          const file = await exportCollection(client, detail.id, 'zoteroJSON');
-          saveFile(file.blob, file.name);
-          setSaved(file.name);
+          await saveZoteroFile();
           return null;
         }}
+        recovery={saveZoteroFile}
         message={(sent) =>
           sent.failedItems > 0
             ? `${copy.zotero.collectionResult(sent.addedItems, sent.addedNotes)} ${copy.zotero.failed(sent.failedItems)}`

@@ -2,10 +2,11 @@
 // the app's menu does while an account is connected, sends the document through the server and says what was
 // added in the app's words, with View in Zotero, or why it was not, in the server's.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SecretList } from '../api/secrets';
+import { meQuery } from '../api/userData';
 import { me } from '../test/notes';
 import { ProblemAnswer, stubServer } from '../test/renderRoute';
 import { CiteZoteroSend } from './ZoteroSend';
@@ -34,7 +35,7 @@ function open(answers: Record<string, unknown>) {
       <CiteZoteroSend volumeId="frus1961-63v06" documentId="d3" />
     </QueryClientProvider>,
   );
-  return { fetch, ...rendered };
+  return { fetch, client, ...rendered };
 }
 
 describe('Cite’s Send to Zotero Library', () => {
@@ -44,7 +45,9 @@ describe('Cite’s Send to Zotero Library', () => {
     expect(container.textContent).toBe('');
     cleanup();
     const readOnly = open({ '/api/v1/me': { ...me, userData: false } });
-    await waitFor(() => expect(readOnly.fetch.mock.calls.length).toBeGreaterThan(0));
+    // Once the server has said it keeps no user data, and the row has drawn again with that answer.
+    await waitFor(() => expect(readOnly.client.getQueryData(meQuery.queryKey)).toBeDefined());
+    await act(async () => {});
     expect(readOnly.fetch.mock.calls.some(([url]) => String(url).endsWith('/secrets'))).toBe(false);
     expect(readOnly.container.textContent).toBe('');
   });

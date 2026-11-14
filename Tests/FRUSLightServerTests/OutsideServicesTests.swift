@@ -28,8 +28,9 @@ import Testing
 
 /// The NARA Catalog's and Zotero's stand-in: it answers from the request alone, by the key it carries, and
 /// keeps each request under that key, so that tests running beside each other, each with keys of its own, see
-/// their own. A NARA key names its answer: `…-ok-…` the records a query finds, `…-403-…`, `…-429-…` and `…-500-…`
-/// those statuses, `…-down-…` no answer at all. A Zotero key: `…-writer-…` an account that writes, `…-reader-…`
+/// their own. A NARA key names its answer: `…-ok-…` the records a query finds, `…-empty-…` none, `…-403-…`,
+/// `…-429-…` and `…-500-…` those statuses, `…-down-…` no answer at all. A Zotero key: `…-writer-…` an account that
+/// writes, `…-reader-…`
 /// one that cannot, anything else a 403.
 final class ServiceStub: URLProtocol {
     struct Asked: Sendable {
@@ -87,6 +88,7 @@ final class ServiceStub: URLProtocol {
             if key.contains("-403-") { return (403, "{}") }
             if key.contains("-429-") { return (429, "{}") }
             if key.contains("-500-") { return (500, "{}") }
+            if key.contains("-empty-") { return (200, #"{"opaResponse": {"results": {"result": []}}}"#) }
             let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
             func item(_ name: String) -> String? { query.first { $0.name == name }?.value }
             if let lot = item("variantControlNumber_is") {
@@ -264,6 +266,14 @@ private func body(_ response: TestResponse) -> String { String(buffer: response.
             let unsent = try problem(send, .conflict)
             #expect(unsent.code == "ZOTERO_KEY_REQUIRED" && unsent.detail == "Connect a Zotero account in Settings ▸ Keys first.")
         }
+        // A server that keeps no user data has no Settings ▸ Keys: its sentence names the server's key.
+        let readOnly = try await OutsideFixture(userData: false)
+        defer { withExtendedLifetime(readOnly) {} }
+        try await readOnly.app.test(.router) { client in
+            let search = try await Browser(client: client).send(.post, "/api/v1/nara/search", #"{"strategy": "keyword", "query": "Laos"}"#)
+            let refused = try problem(search, .conflict)
+            #expect(refused.code == "NARA_KEY_REQUIRED" && refused.detail.contains("FRUS_NARA_API_KEY") && !refused.detail.contains("Settings ▸ Keys"))
+        }
     }
 
     /// The kit's sentences the server says, each naming the Mac's place for keys where the web names its own: a
@@ -339,6 +349,10 @@ private func body(_ response: TestResponse) -> String { String(buffer: response.
             func searched(_ query: String) async throws -> TestResponse {
                 try await browser.send(.post, "/api/v1/nara/search", #"{"strategy": "keywordRG84", "query": "\#(query)"}"#)
             }
+            // A lot's search holds the four calls it can make, more than the two allowed, and asks nothing.
+            let lot = try problem(try await browser.send(.post, "/api/v1/nara/search", #"{"strategy": "lotFileRG59", "query": "66 D 204"}"#),
+                                  .tooManyRequests)
+            #expect(lot.code == "NARA_QUOTA_REACHED")
             #expect(try await searched("one").status == .ok)
             #expect(try await searched("two").status == .ok)
             #expect(try decode(NARAStatus.self, try await browser.get("/api/v1/nara")).quota == NARAStatus.Quota(used: 2, limit: 2))
@@ -358,19 +372,20 @@ private func body(_ response: TestResponse) -> String { String(buffer: response.
         #expect(await quota.used(by: "a", at: day) == 1)
         #expect(await quota.used(by: "b", at: day) == 0)
         #expect(await quota.used(by: "a", at: day.addingTimeInterval(NARAQuota.window)) == 0)
-        // Searches sent at once each hold a place until they end, so none passes on a count not yet made.
-        let held = NARAQuota(limit: 2)
-        #expect(await held.admit("a", at: day))
-        #expect(await held.admit("a", at: day))
-        #expect(await !held.admit("a", at: day))
-        #expect(await held.admit("b", at: day))
-        await held.end("a")
-        #expect(await held.admit("a", at: day))
+        // Searches sent at once each hold the most calls they can make until they end, so none passes on a count
+        // not yet made; at the end, only the calls made stay counted.
+        let held = NARAQuota(limit: 5)
+        #expect(await held.admit("a", cost: 4, at: day))
+        #expect(await !held.admit("a", cost: 4, at: day))
+        #expect(await held.admit("a", cost: 1, at: day))
+        #expect(await !held.admit("a", cost: 1, at: day))
+        #expect(await held.admit("b", cost: 4, at: day))
         await held.record("a", at: day)
-        await held.end("a")
-        await held.end("a")
-        #expect(await held.admit("a", at: day))
-        #expect(await !held.admit("a", at: day))
+        await held.end("a", cost: 4)
+        #expect(await held.admit("a", cost: 1, at: day))
+        #expect(await held.admit("a", cost: 1, at: day))
+        #expect(await held.admit("a", cost: 1, at: day))
+        #expect(await !held.admit("a", cost: 1, at: day))
     }
 
     // MARK: Refusals
@@ -393,6 +408,14 @@ private func body(_ response: TestResponse) -> String { String(buffer: response.
                 #expect(!String(buffer: refused.body).contains(key) && !String(buffer: refused.body).contains("catalog.archives.gov"))
             }
             #expect(await fixture.services.outside.answers.count == 0, "a refusal is never kept")
+            // Nor is an answer with no records, which the kit's client gives for refusals it passes over too.
+            try fixture.store("stub-nara-empty-x", as: .nara, for: .user("owner"))
+            for _ in 0..<2 {
+                let none = try await browser.send(.post, "/api/v1/nara/search", #"{"strategy": "keywordRG59", "query": "nothing"}"#)
+                #expect(try decode(NARASearchAnswer.self, none) == NARASearchAnswer(results: [], cached: false))
+            }
+            #expect(ServiceStub.requests(with: "stub-nara-empty-x").count == 2)
+            #expect(await fixture.services.outside.answers.count == 0)
             // What a search must name, refused before anything is asked.
             for (search, field) in [(#"{"strategy": "centralURL", "query": "611.61"}"#, "strategy"), (#"{"strategy": "lotFileRG59"}"#, "query"),
                                     (#"{"strategy": "lotFileRG59", "query": "  "}"#, "query"), (#"{"route": "lotVariants", "lot": "66 D 204"}"#, "recordGroup"),
@@ -403,6 +426,15 @@ private func body(_ response: TestResponse) -> String { String(buffer: response.
             }
         }
         for key in ["stub-nara-403-x", "stub-nara-429-x", "stub-nara-500-x", "stub-nara-down-x"] { #expect(!fixture.logs.contains(key)) }
+
+        // The instance's key refused is not the user's to change: the web's sentence names who can.
+        let instance = try await OutsideFixture(environmentKey: "stub-nara-403-instance")
+        defer { withExtendedLifetime(instance) {} }
+        try await instance.app.test(.router) { client in
+            let refused = try await Browser(client: client).send(.post, "/api/v1/nara/search", #"{"strategy": "keyword", "query": "Laos"}"#)
+            let body = try problem(refused, .conflict)
+            #expect(body.code == "NARA_KEY_REJECTED" && body.detail.contains("this server’s API key") && body.detail.contains("Administration ▸ Keys"))
+        }
     }
 
     /// FRUS_OFFLINE: a search and a send are refused, and neither service is asked.
@@ -554,6 +586,13 @@ private func body(_ response: TestResponse) -> String { String(buffer: response.
             #expect(inText == LookUpRoutes.answer(NARALookupAnalyzer.candidates(
                 selection: words, context: around, centralFiles: archival.centralFiles, volumeSources: archival.volumeSources,
                 claimants: archival.claimants)))
+
+            // Offsets past the text, to the largest an Int holds, read to its end; a footnote's text is the bridge's
+            // 5,000 characters at most.
+            #expect(try await asked(#"{"text": "x", "start": 0, "end": 9223372036854775807}"#).status == .ok)
+            #expect(try await asked(#"{"text": "x", "start": 9223372036854775000, "end": 9223372036854775807}"#).status == .ok)
+            let long = String(repeating: "a", count: LookUpRoutes.longestBlock + 1)
+            #expect(problemCode(try await asked(#"{"text": "x", "blockText": "\#(long)"}"#)) == "INVALID_FIELD")
 
             // Nothing to read: no candidates, and the sheet opens on Keywords in RG 59, as the app's does.
             let nothing = try decode(LookUpAnswer.self, try await asked(#"{"text": ""}"#))

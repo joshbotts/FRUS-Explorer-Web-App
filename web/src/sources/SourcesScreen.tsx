@@ -14,6 +14,7 @@ import { ApiError, errorMessage } from '../api/client';
 import { documentQuery } from '../api/endpoints';
 import { canSearch, naraStatusQuery, searchNARA } from '../api/nara';
 import { type SourceExplorer, sourceExplorerQuery, type SourcePanel, type SourceRecord, type SourceScan } from '../api/sources';
+import { meQuery } from '../api/userData';
 import { copy } from '../copy';
 import { useHeadingReady } from '../shell/headingFocus';
 import { plainTitle, useDocumentTitle } from '../shell/useDocumentTitle';
@@ -511,6 +512,7 @@ function NARACatalog({ panel }: { panel: SourcePanel }) {
   const client = useQueryClient();
   const query = panel.catalogQuery;
   const status = useQuery(naraStatusQuery);
+  const me = useQuery(meQuery);
   const keyed = canSearch(status.data);
   const search = useQuery({
     queryKey: ['naraSearch', query?.search],
@@ -521,18 +523,37 @@ function NARACatalog({ panel }: { panel: SourcePanel }) {
   });
   const evidence = keyed ? query?.evidence : undefined;
   const manual = query?.manualSearchURL && <Out href={query.manualSearchURL}>{words.searchManually}</Out>;
+  // What a screen reader hears once the search has answered, in a region that was there while it searched.
+  const outcome =
+    !keyed || !query?.search || search.isPending || search.isError
+      ? ''
+      : search.data.results.length > 0
+        ? words.naraFound(Math.min(5, search.data.results.length))
+        : words.naraNoResult;
   if (status.isPending) return <Section title={words.naraHeader}>{null}</Section>;
   return (
     <Section title={evidence?.sectionTitle ?? words.naraHeader}>
-      {!keyed ? (
+      <p className="visually-hidden" role="status">
+        {outcome}
+      </p>
+      {status.isError ? (
+        <p className="se-warning" role="alert">
+          {errorMessage(status.error)}
+        </p>
+      ) : status.data.offline ? (
+        <p className="se-text">{words.naraOffline}</p>
+      ) : !keyed && me.data?.userData === false ? (
+        <div className="se-nokey">
+          <p className="se-label">{words.noKeyLabel}</p>
+          <Caption>{words.noServerKey}</Caption>
+        </div>
+      ) : !keyed ? (
         <div className="se-nokey">
           <p className="se-label">{words.noKeyLabel}</p>
           <Caption>{words.noKeyExplanation}</Caption>
         </div>
       ) : !query?.search ? null : search.isPending ? (
-        <p className="se-text" role="status">
-          {words.naraLoading}
-        </p>
+        <p className="se-text">{words.naraLoading}</p>
       ) : search.isError ? (
         <>
           <p className="se-warning" role="alert">

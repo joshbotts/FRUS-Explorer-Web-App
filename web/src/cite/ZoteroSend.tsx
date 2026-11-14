@@ -26,29 +26,55 @@ export function useZoteroKey(): boolean | undefined {
 
 /**
  * The row: Send to Zotero Library and its caption, then the send's result or error. `send` sends, or does
- * what the row does without a key; `message` says what a send added.
+ * what the row does without a key; `message` says what a send added. `disabled` holds it, as the app's sheet
+ * holds it while it exports and for a collection with nothing to send; `working` is the line while it works,
+ * the sheet's own when it saves a file; `recovery`, offered once after a failed send, is the app's way on
+ * (#358), which saves the file instead.
  */
 export function ZoteroSendRow({
   caption,
   send,
   message,
+  disabled = false,
+  working = words.sending,
+  recovery,
 }: {
   caption: string;
   send: () => Promise<ZoteroSent | null>;
   message: (sent: ZoteroSent) => string;
+  disabled?: boolean;
+  working?: string;
+  recovery?: () => Promise<void>;
 }) {
   const id = useId();
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState<ZoteroSent | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const [recoverable, setRecoverable] = useState(false);
 
   async function run() {
-    if (sending) return;
+    if (sending || disabled) return;
     setSending(true);
     setSent(null);
     setFailure(null);
+    setRecoverable(false);
     try {
       setSent(await send());
+    } catch (error) {
+      setFailure(errorMessage(error));
+      setRecoverable(!!recovery);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function recover() {
+    if (!recovery || sending) return;
+    setRecoverable(false);
+    setFailure(null);
+    setSending(true);
+    try {
+      await recovery();
     } catch (error) {
       setFailure(errorMessage(error));
     } finally {
@@ -59,7 +85,7 @@ export function ZoteroSendRow({
   return (
     <div className="zotero-send">
       {/* aria-disabled, not disabled, so a press by keyboard keeps its focus while the send is out. */}
-      <button type="button" aria-describedby={`${id}-caption`} aria-disabled={sending} onClick={() => void run()}>
+      <button type="button" aria-describedby={`${id}-caption`} aria-disabled={sending || disabled} onClick={() => void run()}>
         {words.send}
       </button>
       <p id={`${id}-caption`} className="note">
@@ -67,7 +93,7 @@ export function ZoteroSendRow({
       </p>
       <div role="status" className="zotero-result">
         {sending ? (
-          <p>{words.sending}</p>
+          <p>{working}</p>
         ) : sent ? (
           <p>
             <strong>{words.sentTitle}.</strong> {message(sent)}{' '}
@@ -83,6 +109,11 @@ export function ZoteroSendRow({
         <p className="error" role="alert">
           <strong>{words.errorTitle}.</strong> {failure}
         </p>
+      )}
+      {recoverable && (
+        <button type="button" onClick={() => void recover()}>
+          {words.recover}
+        </button>
       )}
     </div>
   );

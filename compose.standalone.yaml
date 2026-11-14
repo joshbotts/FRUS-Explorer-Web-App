@@ -14,7 +14,8 @@
 #                        folder served as they serve them, each host's files under its name
 #   FRUS_OFFLINE         true to download nothing and make no request outside, serving what is kept
 #   FRUS_SERVICES_MIRROR a stand-in for the NARA Catalog's and Zotero's APIs to ask instead, one address under
-#                        which each host's paths are served under its name, as the smoke test serves its stubs
+#                        which each host's paths are served under its name, as the smoke test serves its stubs;
+#                        for tests: it is sent every key the server sends either service
 
 services:
   frus:

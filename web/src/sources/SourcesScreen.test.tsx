@@ -165,6 +165,8 @@ describe('Source Explorer', () => {
     expect(within(catalog).getAllByRole('link', { name: 'View in NARA Catalog' })).toHaveLength(5);
     expect(within(catalog).getAllByText('1961–1963')).toHaveLength(5);
     expect(within(catalog).getAllByText('Possible').length).toBeGreaterThan(0);
+    // What a screen reader hears when the search has answered, in the region that was there while it searched.
+    expect(within(catalog).getByRole('status').textContent).toBe('5 records found in the NARA Catalog.');
     cleanup();
 
     // A refusal says the server's words, with the manual search; none says the app's line, with it too.
@@ -181,8 +183,18 @@ describe('Source Explorer', () => {
       'POST /api/v1/nara/search': { results: [], cached: true },
     });
     const none = section('NARA Catalog');
-    expect(await within(none).findByText('No matching record found in the NARA Catalog.')).toBeTruthy();
+    expect(await within(none).findByText('No matching record found in the NARA Catalog.', { selector: 'p.se-text' })).toBeTruthy();
+    expect(within(none).getByRole('status').textContent).toBe('No matching record found in the NARA Catalog.');
     expect(within(none).getByRole('link', { name: 'Search NARA Catalog Manually' })).toBeTruthy();
+    cleanup();
+
+    // An offline server asks nothing and says so, where the key prompt would mislead.
+    await open(withQuery({ sectionTitle: 'NARA Catalog', isVerified: true }), {
+      '/api/v1/nara': { key: 'instance', offline: true } satisfies NARAStatus,
+    });
+    const offline = section('NARA Catalog');
+    expect(await within(offline).findByText('This server is offline, so it asks the NARA Catalog nothing.')).toBeTruthy();
+    expect(within(offline).queryByText('NARA Catalog API Key Required')).toBeNull();
   });
 
   it('says why no roll was found for a document with no note, and the era’s likely series', async () => {

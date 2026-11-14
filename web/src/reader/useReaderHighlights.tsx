@@ -227,7 +227,8 @@ export function useReaderHighlights({
   // and the bar put away by a press or focus elsewhere in the app, the selection kept.
   const onKey = useEffectEvent((event: KeyboardEvent) => {
     const pressed = chord(event);
-    if (!pressed || !selected || editing(event.target)) return;
+    // With no user data the chord highlights nothing, so it stays the browser's.
+    if (!pressed || !selected || editing(event.target) || (pressed === 'highlight' && !enabled)) return;
     event.preventDefault();
     // Yellow at once; the bar from the frame, which places the selection as it is now.
     if (pressed === 'highlight') void make('yellow');

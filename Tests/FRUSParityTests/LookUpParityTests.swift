@@ -57,6 +57,8 @@ import Testing
              "zotero", "collectionCaptionNoAccount"),
             (exportSheet, "export.zotero.result.title", "Sent to Zotero", "zotero", "sentTitle"),
             (exportSheet, "export.zotero.viewInZotero", "View in Zotero", "zotero", "viewInZotero"),
+            (exportSheet, "export.zotero.section", "Send to a Reference Manager", "zotero", "section"),
+            (exportSheet, "export.zotero.recover", "Save a Zotero file instead", "zotero", "recover"),
             ("DocumentView/DocumentView.swift", "document.share.zotero.error.title", "Couldn’t Send to Zotero", "zotero", "errorTitle"),
         ]
         let copy = try NoteViewParityTests.read(NoteViewParityTests.web, "copy.ts")

@@ -7,12 +7,23 @@
 // NARA's finding aids for each filing period, and for the others, once Search has run, NARA Catalog
 // Results. Nothing is searched until Search, which needs text and a key, the user's or the instance's: a
 // tap fills, Search looks up, as the app's sheet does, through the server's NARA proxy. A reading, a change
-// of strategy and a new search each clear the last results. The web's own: the line while the passage is
-// read, and what the results' line says of a search that found records.
+// of strategy and a new search each clear the last results, and an answer that comes after them is dropped;
+// as the app's `isSearching` outlasts them, Search waits for the search out to answer. The web's own: the
+// line while the passage is read, what the results' line says of a search that found records, Search held
+// until the passage is read, and the warning on a server that is offline or keeps no user data.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
-import { type LookUpCandidate, type LookUpSelection, lookUpQuery, type NARACatalogRecord, naraStatusQuery, searchNARA } from '../api/nara';
+import {
+  canSearch,
+  type LookUpCandidate,
+  type LookUpSelection,
+  lookUpQuery,
+  type NARACatalogRecord,
+  naraStatusQuery,
+  searchNARA,
+} from '../api/nara';
+import { meQuery } from '../api/userData';
 import { copy } from '../copy';
 import { Modal } from '../shell/Modal';
 
@@ -35,36 +46,54 @@ export function LookUpDialog({
   const id = useId();
   const sheet = useQuery(lookUpQuery(client, volumeId, documentId, selection));
   const status = useQuery(naraStatusQuery);
-  // The app's `hasAPIKey`: a key the server would search with, the user's or the instance's.
-  const keyed = !!status.data?.key;
+  const me = useQuery(meQuery);
+  // The app's `hasAPIKey`: a key the server would search with, the user's or the instance's, on a server not offline.
+  const keyed = canSearch(status.data);
   const [text, setText] = useState(selection.text.trim());
   const [chosen, setChosen] = useState<string | null>(null);
   const [search, setSearch] = useState<Search | null>(null);
+  // The search out, which Search waits for, and the count of changes since it was asked, whose answer is
+  // dropped once the sheet has changed under it.
+  const [asking, setAsking] = useState(false);
+  const generation = useRef(0);
   // The sheet opens on the first reading's strategy, else Keywords in RG 59, as the server says the app's does.
   const strategy = chosen ?? sheet.data?.strategy ?? 'keywordRG59';
   const strategies = sheet.data?.strategies ?? [];
   const current = strategies.find((each) => each.id === strategy);
   const showsPeriodLinks = strategy === 'centralURL';
   const query = text.trim();
-  const searching = search?.state === 'searching';
-  const searchable = !searching && query !== '' && keyed;
+  // The strategies come with the passage's reading, so Search waits for it, and has none when it failed.
+  const searchable = !asking && sheet.isSuccess && query !== '' && keyed;
+  const warning = status.data?.offline ? words.offline : me.data?.userData === false ? words.noServerKey : words.noKey;
+  const warns = !!current?.searches && !!status.data && !keyed;
+
+  /** A change under the last results: they are cleared, and an answer still out is dropped. */
+  function cleared() {
+    generation.current += 1;
+    setSearch(null);
+  }
 
   /** `apply(_:)`: the reading's query and strategy, and the last results cleared. */
   function apply(candidate: LookUpCandidate) {
     setText(candidate.query);
     setChosen(candidate.strategy);
-    setSearch(null);
+    cleared();
   }
 
   /** `runSearch()`, through the server: the strategy over the text, trimmed. */
   async function run() {
     if (!searchable || showsPeriodLinks) return;
+    const asked = ++generation.current;
+    setChosen(strategy);
+    setAsking(true);
     setSearch({ state: 'searching' });
     try {
       const answer = await searchNARA(client, { strategy, query });
-      setSearch({ state: 'found', results: answer.results });
+      if (generation.current === asked) setSearch({ state: 'found', results: answer.results });
     } catch (error) {
-      setSearch({ state: 'failed', message: errorMessage(error) });
+      if (generation.current === asked) setSearch({ state: 'failed', message: errorMessage(error) });
+    } finally {
+      setAsking(false);
     }
   }
 
@@ -107,6 +136,11 @@ export function LookUpDialog({
             {errorMessage(sheet.error)}
           </p>
         )}
+        {status.isError && (
+          <p className="error" role="alert">
+            {errorMessage(status.error)}
+          </p>
+        )}
         {candidates.length > 0 && (
           <section aria-labelledby={`${id}-detected`}>
             <h3 id={`${id}-detected`}>{words.detectedHeader}</h3>
@@ -143,7 +177,7 @@ export function LookUpDialog({
                   checked={each.id === strategy}
                   onChange={() => {
                     setChosen(each.id);
-                    setSearch(null);
+                    cleared();
                   }}
                 />{' '}
                 {each.name}
@@ -152,7 +186,11 @@ export function LookUpDialog({
             <p id={`${id}-strategy-hint`} className="hint">
               {current?.hint}
             </p>
-            {current?.searches && status.data && !keyed && <p className="hint warning">{words.noKey}</p>}
+            {warns && (
+              <p id={`${id}-warning`} className="hint warning">
+                {warning}
+              </p>
+            )}
           </fieldset>
         )}
         {showsPeriodLinks ? (
@@ -219,7 +257,7 @@ export function LookUpDialog({
           </button>
           {/* aria-disabled, not disabled, so Search pressed by keyboard keeps its focus while it runs. */}
           {!showsPeriodLinks && (
-            <button type="submit" className="primary" aria-disabled={!searchable}>
+            <button type="submit" className="primary" aria-disabled={!searchable} aria-describedby={warns ? `${id}-warning` : undefined}>
               {words.search}
             </button>
           )}

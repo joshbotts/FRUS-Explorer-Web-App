@@ -5,6 +5,7 @@
 // send gives what Zotero took.
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
 import { getJSON } from './client';
+import { whenAnswered } from './collections';
 import { change } from './userData';
 
 const segment = encodeURIComponent;
@@ -55,9 +56,9 @@ export const naraStatusQuery = queryOptions({
   retry: false,
 });
 
-/** Whether a search has a key to be asked with: the user's or the instance's. An offline server says why it asks nothing. */
+/** Whether a search can be made: a key to ask with, the user's or the instance's, on a server that is not offline. */
 export function canSearch(status: NARAStatus | undefined): boolean {
-  return !!status?.key;
+  return !!status?.key && !status.offline;
 }
 
 /** Runs `search`; the user's count of the day is read again after it. */
@@ -137,6 +138,8 @@ export async function sendDocumentToZotero(client: QueryClient, volumeId: string
 
 /** The export sheet's: the collection's documents, into a Zotero collection of its name; kept in the history. */
 export async function sendCollectionToZotero(client: QueryClient, collectionId: string): Promise<ZoteroSent> {
+  // The collection as the user last left it: its name and entries once their edits have been answered.
+  await whenAnswered(collectionId);
   const sent = (await change<ZoteroSent>(client, 'POST', `/api/v1/me/collections/${segment(collectionId)}/zotero`))!;
   void client.invalidateQueries({ queryKey: ['history'] });
   return sent;

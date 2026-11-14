@@ -1022,8 +1022,20 @@ button.facet-row:hover {
 }
 
 /* Send to Zotero Library (PLAN's S22e), in Cite and the export sheet: the row, its caption, then what came of it. */
+.export-section {
+  margin: 1.25rem 0 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
 .zotero-send {
   margin-top: 1rem;
+}
+
+.export-section + .zotero-send {
+  margin-top: 0.5rem;
 }
 
 .zotero-send .note,
