@@ -7,7 +7,7 @@
 // call the kit's rules rather than restating them. A pin move that changes one fails here until the web follows it.
 
 import FRUSCoreKit
-import FRUSLightCore
+@testable import FRUSLightCore
 import FRUSLightTestSupport
 import FTS5Store
 import Foundation
@@ -310,6 +310,51 @@ import Testing
         #expect(held == lines, "Fixtures/export-revisions.sql's lines, as the kit gives them at the pin:\n\(lines.joined(separator: "\n"))")
     }
 
+    /// Import mode's comparison hashes a document of the TEI as the kit's indexer stamps it (S21f's follow-up): over
+    /// every document of the fixture volumes, the hashes `TEIChangeCheck.revisionHashes(of:)` computes with the kit's
+    /// public functions are the row the kit's `indexVolume` stamps; and they are the synthetic export's rows, which the
+    /// test above holds to the kit, so that its comparison gives the kit's indexer nothing it records differently.
+    @Test func theComparisonHashesEachDocumentAsTheKitStampsIt() async throws {
+        let resources = try IndexingResources.loading(fromDirectory: RepositoryFiles.resources)
+        let volumes = ["frus1894Nicaragua", "frus1961-63v06", "frus1969-76ve09p1"].map { ($0, RepositoryFiles.tei) }
+            + [(SyntheticExport.ownTextVolume, RepositoryFiles.ownText)]
+        var hashes: [String: TEIRevisionHashes] = [:]
+        var stamped = 0
+        for (volume, folder) in volumes {
+            let parsed = try await TEIChangeCheck.revisionHashes(of: folder.appendingPathComponent("\(volume).xml"))
+            let directory = try TemporaryDirectory()
+            let url = directory.url.appendingPathComponent("scratch.db")
+            let pipeline = try IndexingPipeline(fts5Store: try FTS5Store(databaseURL: url), databaseURL: url, volumesDirectory: folder,
+                                                resources: resources, defaults: InMemoryIndexingStampStore())
+            try await pipeline.indexVolume(volume)
+            let rows = try await pipeline.documentRevisions(forVolumeId: volume)
+            #expect(rows.count == parsed.count, "\(volume): a row for each document the comparison hashes")
+            for row in rows {
+                #expect(parsed[row.documentId] == TEIRevisionHashes(content: row.contentHash, body: row.bodyHash),
+                        "\(volume)/\(row.documentId)")
+            }
+            stamped += rows.count
+            for (id, pair) in parsed { hashes["\(volume)/\(id)"] = pair }
+            withExtendedLifetime(directory) {}
+        }
+        #expect(stamped > 400, "every document of the four fixture volumes")
+
+        let directory = try TemporaryDirectory()
+        let url = directory.url.appendingPathComponent("export.sqlite")
+        var export = SyntheticExport()
+        export.includesOwnText = true
+        try export.write(to: url)
+        let db = try SQLiteConnection.immutable(url)
+        defer { db.close() }
+        let rows = try db.query("SELECT volume_id, document_id, content_hash, body_hash FROM document_revisions")
+        #expect(rows.count == SyntheticExport.documents.count + SyntheticExport.ownTextRows.count)
+        for row in rows {
+            let key = "\(row[0].text ?? "")/\(row[1].text ?? "")"
+            #expect(hashes[key] == TEIRevisionHashes(content: row[2].text ?? "", body: row[3].text ?? ""), "\(key)")
+        }
+        withExtendedLifetime(directory) {}
+    }
+
     /// What the review reads is the kit's: the corrections check, the indexer's pass of a corrected volume, the
     /// sheet's rules, Research's row and Administration's tallies, each a call to the kit's code.
     @Test func theRulesAreTheKits() throws {
@@ -321,6 +366,10 @@ import Testing
             "try await pipeline.indexVolume(volumeId)", "let owed = stamps.reindexOwed()",
         ], file: "LibraryIndexing.swift")
         NoteViewParityTests.expect(try Self.server("Sources/FRUSLightCore/TEIChanges.swift"), holds: [
+            "let documents = try await FRUSDocumentParser().parseVolumeFull(volumeURL: url).documents",
+            "content: IndexingPipeline.contentHash(header: IndexingPipeline.extractHeader(from: nodes), dateline: IndexingPipeline.extractDateline(from: nodes), sourceNote: IndexingPipeline.extractSourceNote(from: nodes), bodyText: IndexingPipeline.extractBodyText(from: nodes)),",
+            "body: IndexingPipeline.bodyHash(for: document))",
+            "let version = IndexingPipeline.currentDateIndexVersion",
             "try await pipeline.indexVolume(volumeId)",
             "let moved = try await pipeline.documentRevisions(forVolumeId: volumeId).filter { $0.changedAt != nil }",
         ], file: "TEIChanges.swift")
