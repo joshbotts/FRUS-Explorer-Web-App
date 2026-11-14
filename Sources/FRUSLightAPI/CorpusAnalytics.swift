@@ -634,7 +634,9 @@ enum CorpusAnalyticsRoutes {
             figureTitle: answer.figureTitle,
             terms: [ask.term],
             axisLabel: axis.pickerLabel,
-            scopeLabel: ask.scope.label,
+            // The chip's name for a scope: the view passes its `scopeLabel`, which a hand-off may leave nil beside its
+            // volumes, and the statement would then call a scoped chart the whole corpus; the chip says Selected volumes.
+            scopeLabel: ask.scope.volumeIds == nil ? nil : answer.scope.label,
             indexedVolumeCount: indexedVolumeCount,
             // The categorical breakdowns ignore the range entirely — say so rather than implying it applied.
             yearRange: axis.isCategorical ? nil : ask.start...ask.end,
