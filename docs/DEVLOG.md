@@ -269,7 +269,7 @@ Nothing the indexer stores or reads changes, and the build is 1812. So, under S2
 
 ## Session 22e: NARA, Look Up and Zotero
 
-14 November 2026 · branch `claude/modest-mcclintock-c554fc` · upstream `6b6932aa`, then `b124a59b` with `main`'s merge
+14 November 2026 · branch `claude/modest-mcclintock-c554fc` · [#144](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/144) · upstream `6b6932aa`, then `b124a59b` with `main`'s merge
 
 Phase 3's row S22e, on the features track after S22d, with no upstream pull request, no pin move and no migration, the S22 group's last row. The keys are the owner's word of 14 November, "Stubs alone": every test asks a stand-in of the NARA Catalog's API or of Zotero's, with placeholder keys, and no real key is anywhere. The branch was cut from `main` at `48dbc22`, #139's merge, and kept in local commits until the push.
 
@@ -301,7 +301,9 @@ Phase 3's row S22e, on the features track after S22d, with no upstream pull requ
 
 **Results**
 
-RESULTS_RUNS
+- **Linux, `swift:6.4-noble`, arm64, over the merged tree at `b124a59b`** (`main`'s `59d8c87` merged, this package's own targets rebuilt clean): `scripts/swift --postgres test` ran 4,211 tests in 14 targets, every one passing with the one named skip: FRUSCoreKitTests 2,509, FRUSLightServerTests 389, FRUSParityTests 274, FRUSLightCoreTests 279, SourceNoteKitTests 327, FTS5StoreTests 219 and the rest. FRUSLightCoreTests' first run met PostgreSQL's limit on clients in 8 of the store's conformance tests ("too many clients already"), and passed whole when run again; this row changes no store code. Before the merge, at `6b6932aa`, the row's suites passed alone: OutsideServicesTests 12, LookUpParityTests 3.
+- **The web,** over the merged tree: `scripts/npm ci`, `run typecheck`, `run lint`, `test`, 629 tests in 71 files with S21g's, and `run build`.
+- **`scripts/compose-smoke --e2e`** with this branch's `frus-light:s22e` on 18330, the library's project on 18331: every step passes, this row's with the look-up spec, whose search reached NARA's stand-in with the spec's key, and S21g's People spec beside it; the browser suite, 85 at the root and 85 under the path.
 
 **Notes**
 
