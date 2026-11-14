@@ -52,7 +52,8 @@ struct OutsideServices: Sendable {
         self.quota = quota
     }
 
-    /// A session that keeps nothing: no cookie, no cache, no credential. Through the mirror when there is one.
+    /// A session that keeps nothing: no cookie, no cache, no credential. Through the mirror when there is one,
+    /// whose relay keeps nothing either.
     static func session(mirrored: Bool) -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 30
@@ -93,12 +94,13 @@ struct OutsideServices: Sendable {
 
 /// `FRUS_SERVICES_MIRROR`: a request of a service's own address asked of the mirror instead, at
 /// `<mirror>/<host>/<path>?<query>`, with its method, headers and body, and the mirror's answer given back as
-/// the service's. Only the two services' hosts go there; the session asks no other.
+/// the service's. Only the two services' hosts go there; the session asks any other itself. A test's: the mirror is
+/// sent every key the server sends either service.
 final class ServicesMirrorProtocol: URLProtocol {
     /// The mirror, set once as the server starts.
     private static let mirror = Mutex<URL?>(nil)
     /// The session the mirrored requests go out on, which no protocol of ours sits in front of.
-    private static let relay = URLSession(configuration: .ephemeral)
+    private static let relay = OutsideServices.session(mirrored: false)
 
     /// The task asking the mirror, which `stopLoading()` cancels.
     private let relayed = Relayed()
@@ -137,9 +139,9 @@ final class ServicesMirrorProtocol: URLProtocol {
         // session waits for a queue the two sessions' queues share, a trap in `dispatch_sync`.
         DispatchQueue.global().async { [forwarded] in
             let dataTask = Self.relay.dataTask(with: forwarded) { data, response, error in
-                if !relayed.stopped { Self.give(data, response, error, to: reply) }
+                if relayed.finish() { Self.give(data, response, error, to: reply) }
             }
-            if relayed.begin(dataTask) { dataTask.resume() }
+            if relayed.begin(dataTask) { dataTask.resume() } else { dataTask.cancel() }
         }
     }
 
@@ -177,25 +179,38 @@ final class ServicesMirrorProtocol: URLProtocol {
         return data
     }
 
-    /// The task asking the mirror, which `stopLoading()` cancels, even before it has begun.
+    /// The task asking the mirror, which `stopLoading()` cancels, even before it has begun; and whether the
+    /// request is over, answered or stopped, so that the protocol's client hears of it once.
     private final class Relayed: Sendable {
-        private let state = Mutex<(task: URLSessionDataTask?, stopped: Bool)>((nil, false))
+        private let state = Mutex<(task: URLSessionDataTask?, over: Bool)>((nil, false))
 
-        var stopped: Bool { state.withLock { $0.stopped } }
-
-        /// Keeps the task to cancel, unless the request was stopped first, when the task never begins.
+        /// Keeps the task to cancel, unless the request was stopped first, when the task is cancelled unbegun.
         func begin(_ task: URLSessionDataTask) -> Bool {
             state.withLock { held in
-                guard !held.stopped else { return false }
+                guard !held.over else { return false }
                 held.task = task
                 return true
             }
         }
 
-        func stop() {
+        /// Whether the relay's answer is the request's to give: once, and not after a stop.
+        func finish() -> Bool {
             state.withLock { held in
-                held.stopped = true
-                held.task?.cancel()
+                defer { held.over = true }
+                return !held.over
+            }
+        }
+
+        /// Stops the task, if it began and has not answered, off the session's queue, which `stopLoading()`
+        /// holds, as the task began.
+        func stop() {
+            let running = state.withLock { held in
+                defer { held.over = true }
+                return !held.over && held.task != nil
+            }
+            guard running else { return }
+            DispatchQueue.global().async { [self] in
+                state.withLock { $0.task?.cancel() }
             }
         }
     }
@@ -283,17 +298,18 @@ actor NARAAnswerCache {
 /// The calls each user has made to NARA with the instance's key in the last day, of `limit` at most: a user's
 /// own key is theirs, and NARA limits it, so none of its calls are counted. A call is one NARA answered (the
 /// kit's client tells its key provider of each), and a lot's lookup may make up to four. A search is admitted
-/// while the user's calls and their searches still running are fewer than the limit, so that searches sent at
-/// once cannot each pass before any is counted. Kept in memory, so a restart empties it, and each server
-/// sharing a store counts its own.
+/// only while the user's calls, the calls held for their searches still running and its own most come to the
+/// limit at most, so that searches sent at once cannot pass it together. A user is who the server says: with
+/// `FRUS_AUTH=none` every visitor is the one user, and shares one count. Kept in memory, so a restart empties
+/// it, and each server sharing a store counts its own.
 actor NARAQuota {
     static let callsPerDay = 100
     static let window: TimeInterval = 24 * 60 * 60
 
     let limit: Int
     private var calls: [String: [Date]] = [:]
-    /// Each user's searches admitted and not yet ended.
-    private var running: [String: Int] = [:]
+    /// The calls held for each user's searches admitted and not yet ended.
+    private var held: [String: Int] = [:]
 
     init(limit: Int = NARAQuota.callsPerDay) {
         self.limit = limit
@@ -306,17 +322,17 @@ actor NARAQuota {
         return recent.count
     }
 
-    /// Whether `user` may search now, holding a place for the search until `end(_:)`.
-    func admit(_ user: String, at now: Date) -> Bool {
-        guard used(by: user, at: now) + running[user, default: 0] < limit else { return false }
-        running[user, default: 0] += 1
+    /// Whether `user` may make a search that can make `cost` calls, holding them for it until `end(_:cost:)`.
+    func admit(_ user: String, cost: Int, at now: Date) -> Bool {
+        guard used(by: user, at: now) + held[user, default: 0] + cost <= limit else { return false }
+        held[user, default: 0] += cost
         return true
     }
 
-    /// A search `admit(_:at:)` let through has ended, however it ended.
-    func end(_ user: String) {
-        let left = running[user, default: 0] - 1
-        running[user] = left > 0 ? left : nil
+    /// A search `admit(_:cost:at:)` let through has ended, however it ended: its calls are counted as made.
+    func end(_ user: String, cost: Int) {
+        let left = held[user, default: 0] - cost
+        held[user] = left > 0 ? left : nil
     }
 
     func record(_ user: String, at now: Date) {

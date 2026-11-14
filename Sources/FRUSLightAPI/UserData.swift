@@ -314,7 +314,8 @@ struct UserDataServices: Sendable {
 /// 1. the request's `Host` names `FRUS_PUBLIC_URL`'s address, for a read as for a write, since a
 ///    page under a name pointed at this server could otherwise read a user's data;
 /// 2. the user it acts for is resolved, into its context;
-/// 3. with `FRUS_USER_DATA=off`, nothing but /api/v1/me itself answers;
+/// 3. with `FRUS_USER_DATA=off`, nothing but /api/v1/me itself and a group that `answersWithoutUserData`
+///    answers, the NARA Catalog's;
 /// 4. a request that changes state, any but GET, HEAD and OPTIONS, comes from that address (its
 ///    `Origin`), carries the user's token in `X-CSRF-Token`, and declares a body it has as
 ///    `application/json`, of `bodyLimit` at most: `UserDataServices.bodyLimit`, or for the group of

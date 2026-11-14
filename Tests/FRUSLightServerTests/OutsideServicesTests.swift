@@ -587,6 +587,10 @@ private func body(_ response: TestResponse) -> String { String(buffer: response.
                 {"opaResponse": {"results": {"result": [{"naId": "77", "title": "Mirrored", "recordGroupNumber": 59, "levelOfDescription": "series"}]}}}
                 """)))
         }
+        router.get("/catalog.archives.gov/api/v2/held") { _, _ -> Response in
+            try? await Task.sleep(for: .seconds(2))
+            return Response(status: .ok)
+        }
         router.post("/api.zotero.org/users/{user}/items") { request, _ -> Response in
             let posted = try await request.body.collect(upTo: 65_536)
             seen.withLock { $0.append("POST \(request.headers[.authorization] ?? "") \(String(buffer: posted))") }
@@ -608,8 +612,17 @@ private func body(_ response: TestResponse) -> String { String(buffer: response.
             #expect((response as? HTTPURLResponse)?.statusCode == 200 && response.url?.host == OutsideServices.zoteroHost)
             // Another host is not the mirror's.
             #expect(!ServicesMirrorProtocol.canInit(with: URLRequest(url: URL(string: "https://example.org/")!)))
+
+            // A request stopped while the mirror holds it stops its relay, off the session's queue as the relay
+            // began, and the next is answered.
+            let held = Task { try await services.naraSession.data(for: URLRequest(url: URL(string: "https://catalog.archives.gov/api/v2/held")!)) }
+            try await Task.sleep(for: .milliseconds(300))
+            held.cancel()
+            await #expect(throws: (any Error).self) { try await held.value }
+            #expect(try await nara.searchByRecordGroup("59", keywords: "Lot 66", maxResults: 3).map(\.title) == ["Mirrored"])
         }
-        #expect(seen.withLock { $0 } == ["GET q=Lot%2066&description.recordGroupNumber=59&resultType=description&rows=3 stub-nara-mirror",
-                                         #"POST Bearer stub-zotero-mirror [{"itemType": "note"}]"#])
+        let query = "q=Lot%2066&description.recordGroupNumber=59&resultType=description&rows=3"
+        #expect(seen.withLock { $0 } == ["GET \(query) stub-nara-mirror", #"POST Bearer stub-zotero-mirror [{"itemType": "note"}]"#,
+                                         "GET \(query) stub-nara-mirror"])
     }
 }
