@@ -46,6 +46,9 @@ import { ResearchScreen, type ResearchSearch, validateResearchSearch } from './r
 import { CollectionEditorScreen } from './collections/CollectionEditorScreen';
 import { CollectionsScreen } from './collections/CollectionsScreen';
 // ─── Tools ──────────────────────────────────────────────────────────────────
+import { type ChronologySearch, type CorpusSearch, validateChronologySearch, validateCorpusSearch } from './analytics/analyticsRules';
+import { ChronologyScreen } from './analytics/ChronologyScreen';
+import { CorpusAnalyticsScreen } from './analytics/CorpusAnalyticsScreen';
 import { LookupScreen } from './lookup/LookupScreen';
 // ─── Settings ───────────────────────────────────────────────────────────────
 import { DataSettingsScreen } from './settings/DataSettings';
@@ -345,6 +348,21 @@ const collectionRoute = createRoute({
 });
 
 // ─── Tools ──────────────────────────────────────────────────────────────────
+// Corpus Analytics and Chronology (S24f), which the app opens from its Analytics menu, each with its state in the address.
+const corpusAnalyticsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/analytics/corpus',
+  validateSearch: (raw: Record<string, unknown>): CorpusSearch => validateCorpusSearch(raw),
+  component: CorpusAnalyticsScreen,
+});
+
+const chronologyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/chronology',
+  validateSearch: (raw: Record<string, unknown>): ChronologySearch => validateChronologySearch(raw),
+  component: ChronologyScreen,
+});
+
 // Citation Lookup, which the app opens in a window of its own from Search's Find by Citation. Its form
 // is kept for the tab's session rather than in the address, since a block of footnotes outgrows one.
 const lookupRoute = createRoute({
@@ -495,6 +513,8 @@ export const routeTree = rootRoute.addChildren([
   collectionsRoute,
   collectionRoute,
   // ─── Tools ────────────────────────────────────────────────────────────────
+  corpusAnalyticsRoute,
+  chronologyRoute,
   lookupRoute,
   // ─── Settings ─────────────────────────────────────────────────────────────
   settingsRoute,

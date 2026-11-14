@@ -62,6 +62,10 @@ export const copy = {
     research: 'Research',
     /** From S18d, between Research and Settings, as the app's tabs order them. */
     collections: 'Collections',
+    /** From S24f, the Mac's Analytics menu, its items in the app's order. */
+    analytics: 'Analytics',
+    corpusAnalytics: 'Corpus Analytics',
+    chronology: 'Chronology',
     settings: 'Settings',
     /** The browser tab's title for a screen. */
     title: (screen: string) => `${screen} – FRUS Explorer Light`,
@@ -2250,6 +2254,128 @@ export const copy = {
   },
 
   // ─── Tools ────────────────────────────────────────────────────────────────
+  /**
+   * Corpus Analytics (S24f), in the app's words: its field and Search, its scope, year and Group by chips, the
+   * administration presets, Measure and Values, the fit line and the colours, Export, the hand-off link, the
+   * empty states and the notes. The headings, the axis titles, the footnotes, the occurrence notice, the
+   * dispersion line and the table's words are the kit's or the view's, from the server. Figure (SVG)… beside the
+   * app's PNG, a volume group's label, a detected topic's group label, the chart's description and the table's
+   * title are the web's own.
+   */
+  corpusAnalytics: {
+    title: 'Corpus Analytics',
+    term: 'Term',
+    termPlaceholder: 'Term…',
+    search: 'Search',
+    promptTitle: 'Enter a Term',
+    promptDetail: 'Type a keyword and click Search to chart its frequency across the FRUS corpus.',
+    unavailableTitle: 'Analytics Unavailable',
+    unavailableDetail: 'The search index is not available. Index at least one volume to enable analytics.',
+    errorTitle: 'Error',
+    loading: 'Loading…',
+    scope: 'Analysis scope',
+    scopeHelp: 'Restrict the analysis to a subseries or a single volume, or chart the whole corpus.',
+    wholeCorpus: 'Whole corpus',
+    bySubseries: 'By Subseries',
+    byVolumeIn: (subseries: string) => `By Volume — ${subseries}`,
+    customScopes: 'My Volume Scopes',
+    customScope: (name: string, indexed: number, total: number) => `${name} (${indexed} of ${total} indexed)`,
+    customScopeNone: (name: string) => `${name} — none indexed yet`,
+    topicGroup: (category: string) => `By Detected Topic — ${category}`,
+    topicsNote: 'Detected topics — experimental',
+    yearRange: 'Year range',
+    startYear: 'Start year',
+    endYear: 'End year',
+    reset: 'Reset',
+    resetHelp: 'Reset the year range to 1861 – current year (the full FRUS corpus span)',
+    categoricalNote: 'The year range applies to the time views; the breakdowns show the whole span.',
+    groupBy: 'Group by',
+    groupByHelp: 'Group the chart',
+    overTime: 'Over time',
+    brokenDown: 'Broken down by',
+    axes: {
+      byDecade: 'By Decade',
+      byYear: 'By Year',
+      byMonth: 'By Month',
+      byDay: 'By Day',
+      bySubseries: 'By Subseries',
+      byVolume: 'By Volume',
+    },
+    administration: 'Administration',
+    administrationHelp: 'Set the year range to a presidential administration’s years in office',
+    measure: 'Measure',
+    measureHelp:
+      'Count matching documents, or every occurrence of the word. A term mentioned fifty times in one document is one document and fifty occurrences — the two can move in opposite directions.',
+    documents: 'Documents',
+    occurrences: 'Occurrences',
+    values: 'Values',
+    valuesHelp:
+      'Plot raw matching-document counts, or each period’s matches as a share of the indexed documents in that period so a rising corpus size doesn’t masquerade as a rising term.',
+    raw: 'Raw count',
+    percent: '% of documents',
+    fitLine: 'Fit line',
+    fitLineHelp: 'Toggle the smoothed trend line overlay on the chart.',
+    colors: 'Colors per chart',
+    colorsHelp: 'How many colors the bars use; with more volumes, the last is a gray “Other volumes”',
+    export: 'Export',
+    exportHelp: 'Export this chart’s data with its method and caveats',
+    exportCSV: 'Chart data (CSV)…',
+    exportPNG: 'Figure (PNG)…',
+    exportSVG: 'Figure (SVG)…',
+    exportFailed: 'Export Failed',
+    renderError: 'The figure could not be rendered.',
+    viewDocuments: 'View documents',
+    handoffHelp:
+      'Switch to Search with this term — and, if you narrowed the years of a date-based view, those years — to see the matching documents. The count is Search’s: it takes in a document whose dates overlap the years, even one the chart places before them, and leaves out an undated one, which the chart places in its volume’s first year. Search opens over document text only, with your own notes and summaries left out.',
+    drillHint: 'Select a bar to open the matching documents in Search.',
+    volume: 'Volume',
+    chartDescription: (heading: string) => `${heading}. The table beside the chart lists its numbers.`,
+    table: 'Chart data',
+    legend: 'Volumes',
+  },
+  /**
+   * Chronology (S24f), in the app's words: its range, Show, the summary's Search in this range, the toolbar's
+   * chart, order and colours, the legend's filter, the chips' sections, the badges, the empty states and the
+   * notes. The summary, the sections' labels and lines, the chips and the span labels are the kit's or the
+   * view's, from the server. The export and its table's title are the web's own: the app's Chronology exports
+   * nothing.
+   */
+  chronology: {
+    title: 'Chronology',
+    from: 'From',
+    to: 'To',
+    show: 'Show',
+    searchRange: 'Search in this range',
+    promptTitle: 'Choose a Date Range',
+    promptDetail: 'Pick a start and end date, then click Show to browse every corpus document from that period.',
+    emptyTitle: 'No Documents',
+    emptyDetail: 'No indexed documents fall within this date range. Try widening it or indexing more volumes.',
+    errorTitle: 'Error',
+    unavailableTitle: 'Chronology Unavailable',
+    unavailableDetail: 'The search index is not available. Index at least one volume to browse by date.',
+    loading: 'Loading…',
+    hideChart: 'Hide chart',
+    showChart: 'Show chart',
+    chartToggleHelp: 'Show or hide the document distribution chart',
+    oldestFirst: 'Oldest first',
+    newestFirst: 'Newest first',
+    sortHelp: 'Toggle chronological order',
+    colors: 'Colors per chart',
+    colorsHelp: 'How many colors the chart uses; with more volumes, the last is a gray “Other volumes”',
+    chartX: 'Date',
+    chartY: 'Documents',
+    chartSeries: 'Volume',
+    chartDescription:
+      'Document distribution over the selected dates, stacked by volume. Counts are listed in the legend and in each date section below.',
+    legend: 'Volumes',
+    legendHint: 'Filters the list to this volume',
+    showAll: 'Show all',
+    approximate: '~ approximate',
+    editorialNote: 'Editorial note',
+    frontMatter: 'Front matter',
+    undatedNote: 'Documents without a machine-readable date are not shown.',
+    table: 'Chart data',
+  },
   /**
    * Citation Lookup, in the words of the app's window and of Search's Find by Citation, with the kit's
    * names for the modes. Each result's label, a Batch row's own label and the table's summary are the

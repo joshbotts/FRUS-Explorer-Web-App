@@ -15,6 +15,7 @@ import { meQuery } from '../api/userData';
 import { copy } from '../copy';
 import { type Appearance, useAppearance, useResolvedScheme } from '../settings/preferences';
 import { requestHeadingFocus } from './headingFocus';
+import { MenuButton } from './MenuButton';
 import { ProjectPicker, WorkingOn } from './ProjectPicker';
 import { SignInScreen } from './SignInScreen';
 
@@ -120,6 +121,16 @@ export function AppShell() {
             </Link>
           )}
           {/* ─── Tools ─────────────────────────────────────────────────── */}
+          {/* From S24f, the Mac's Analytics menu: its items in the app's order, Chronology after a divider. */}
+          <MenuButton
+            label={copy.app.analytics}
+            className="nav-menu"
+            entries={[
+              { kind: 'item', label: copy.app.corpusAnalytics, onSelect: () => void router.navigate({ to: '/analytics/corpus' }) },
+              { kind: 'separator' },
+              { kind: 'item', label: copy.app.chronology, onSelect: () => void router.navigate({ to: '/chronology' }) },
+            ]}
+          />
           {/* ─── Settings ──────────────────────────────────────────────── */}
           <Link to="/settings" activeProps={{ 'aria-current': 'page' }}>
             {copy.app.settings}
