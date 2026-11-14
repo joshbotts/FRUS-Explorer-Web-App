@@ -365,6 +365,50 @@ Phase 3's row S24c, the third pull request of the third upstream batch: the arch
 
 **Next:** Mac check 23 and the owner's merge of FRUS-Explorer#1901; beside it S24d's FRUS-Explorer#1900, the batch's last, awaiting Mac check 24, which changes four of the same files (`CLAUDE.md`, the project file, `Package.swift` and the plan), so the second of the two to merge has `v2` merged into it; then S24e's pin move past the batch, and S24f, Corpus Analytics and Chronology.
 
+## Session 22d, follow-up, upstream: the collection record's and the Sources outline's kit members, and the revision hashes, public
+
+14 November 2026 · branch `claude/musing-khayyam-1d687c` · [#139](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/139) · upstream `6b6932aa`, unchanged; [FRUS-Explorer#1904](https://github.com/joshbotts/FRUS-Explorer/pull/1904), open
+
+An access-only pull request upstream for what S22d's collection record and Sources outline, and S21f's step 5, read and may not copy (rule 4); no PLAN row names it. S22d shipped without those parts, naming them as a known gap, by the orchestrator's decision. The pull request is `claude/kit-access-collection-record-hashes`, cut from `v2` at `6b6932aa`, which `v2` still is. It is labelled `Mac`, asks for Mac verification as Mac check 29, and is not merged. Under rule 4 it changes shared files, and this repository changes only its records.
+
+**What becomes public,** unchanged:
+- **For S22d's collection record:**
+  - `CollectionRelations`, whole, with `RelatedCollection`, `CollectionCoverageEra` and `CollectionEraCount`, for Related Collections and Cited Over Time;
+  - `LotClaimantsIndex.claimants(forRawLot:)` with `LotClaimant`, and `lots` with `Entry`, for Divided at NARA and its footer;
+  - `ExternalCitationIndex.referenceCount(forCollectionId:)` and `volumeCounts(forCollectionId:)`, for Pointed At and Not Printed;
+  - `CentralFilesIndex.isUntrustworthyNAID(_:)`, the guard on the NARA Catalog link.
+- **For S22d's Sources outline:** `CollectionAuthorityIndex.record(forFrontMatterText:repository:lotFileNorm:decimalClass:)`, `VolumeSourcesIndex.authority(recordGroup:lotFile:text:)` with `MajorCollectionRecord`, `ArchivalResolver.dividedLotClaimants(lotFile:claimants:)`, `IndexingPipeline.isLibraryRepository(_:)` and `CollectionAliasFallback`'s `init(record:)`.
+- **For S21f's step 5:** `IndexingPipeline.contentHash(header:dateline:sourceNote:bodyText:)` and `bodyHash(for:)`, with `extractDateline(from:)`, `extractSourceNote(from:)` and `extractBodyText(from:)`. `contentHash`'s doc gives the recipe, and says that a stored row compares only at the current index version.
+
+The list is the orchestrator's, checked against `v2`, against the app's two views and against S22d's own, the eight its entry below names. The footer's `lots` and the alias fallback's initialiser were added on the orchestrator's word: without them the web would copy both. One cold review found nothing either view reads still internal, and found that the hash recipe is `indexVolume`'s own. Its doc and wording findings are fixed.
+
+**Measured** (the pull request has the figures, each against `v2` run the same way):
+- **Mac check 29 at the branch gives `v2`'s figures:**
+  - both builds, with `v2`'s warning lines;
+  - the unit target's 7,999 tests, with `v2`'s one failure and its skips;
+  - `swift test`'s 4,490;
+  - the Mac app's symbols, identical (257,245 normalized).
+- **Linux,** over `main` at `6dc82ff`:
+  - Every target passed: 4,166 tests, with the one named skip.
+  - With the golden files' digest set to the branch tree's, the parity suite passed whole.
+  - A file of `FRUSLightAPI` that imports the kit without `@testable` used every newly public name and compiled.
+  - A suite hashed each document of the three fixture volumes (393) and of `fixtures/sample`'s 24 (13,687) through the public members. Every pair equalled the row the kit's `indexVolume` stamped.
+
+**For the pin move that carries it:**
+- No `Package.swift`, CI allow-list or `Compatibility.swift` change. `FRUSCoreKitTests` keeps 2,509 tests and gains no skip.
+- No newly public name collides with one the web declares, rechecked at `main` `ccba2d2` once S22d had merged. The kit texts the web's parity tests hold in `CollectionRelations.swift` and `IndexingPipeline.swift` are still in the pull request's files.
+- The golden files go stale by digest, since the pull request changes kit files, but their contents do not change.
+  - On the indexing path its diff is access and doc comments in `IndexingPipeline.swift` alone.
+  - So the owner may let the 1812 export serve `make-golden` again.
+
+**For the web's follow-ups:**
+- **S22d's** adds the record's four sections, with Cited Over Time in Vega-Lite, and the outline's four affordances.
+- **S21f's** compares the hashes with no scratch index, as the orchestrator set it out and S21f's paragraph in PLAN foresaw. The server hashes each mounted volume's documents with the public functions and compares them with the index's stored hashes, a parse only, about half the pass's cost. It runs the scratch index only over the volumes that differ, taking the kit's own change kind from it, so an unchanged corpus needs no scratch index at all. The kit's change-kind SQL is not copied.
+
+`kit-access-handover.md`, in the orchestrator's notes folder, has the rest.
+
+**Next:** the owner's Mac check 29 and merge of FRUS-Explorer#1904; then a pin move that carries it, and S22d's and S21f's web follow-ups.
+
 ## Session 22d: Source Explorer, and check 8
 
 14 November 2026 · branch `claude/reverent-lewin-5e8e5e` · upstream `39859a51`, unchanged
