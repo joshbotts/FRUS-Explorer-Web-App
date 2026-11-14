@@ -68,11 +68,8 @@ describe('Settings ▸ Keys', () => {
       ['Keys', 'page'],
     ]);
     const nara = await screen.findByRole('region', { name: 'NARA Catalog' });
-    expect(
-      screen.getByText(
-        'Nothing on this server uses these keys yet: Source Explorer’s archival search and Send to Zotero Library, which will, are still to come.',
-      ),
-    ).toBeTruthy();
+    // The server uses them since PLAN's S22e: the pane no longer says that nothing does.
+    expect(screen.queryByText(/^Nothing on this server uses these keys yet/)).toBeNull();
     expect(within(nara).getByText('No key stored')).toBeTruthy();
     expect(within(nara).getByText('This server has a NARA Catalog key of its own, which serves you while you have none.')).toBeTruthy();
     expect(

@@ -2346,9 +2346,6 @@ export const copy = {
     removeTitle: 'Remove the stored key?',
     removeConfirm: 'Remove',
     removeMessage: 'The server forgets it, for every browser you sign in from. Nothing you’ve already saved is affected.',
-    // The web's own: the server keeps the key, and nothing here uses it yet.
-    pending:
-      'Nothing on this server uses these keys yet: Source Explorer’s archival search and Send to Zotero Library, which will, are still to come.',
     instanceNara: 'This server has a NARA Catalog key of its own, which serves you while you have none.',
     footer:
       'Each key is kept on this server, encrypted, and is never shown again once it is saved: the server alone uses it, to reach the service for you. Whoever runs this server holds the key file that opens them.',

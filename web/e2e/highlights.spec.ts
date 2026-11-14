@@ -80,14 +80,13 @@ test('a selection in a footnote offers no colour, and a link inside a highlight 
   await expect(frame.getByText(d1Text)).toBeVisible();
 
   // In the list of footnotes, the kit's bridge has no offsets: none of the colours applies, so the
-  // bar offers Note alone (notes.spec.ts follows it).
+  // bar offers Look Up in NARA and Note (notes.spec.ts follows Note, look-up.spec.ts Look Up).
   await frame.locator('.footnotes-section').scrollIntoViewIfNeeded();
   await dragOver(page, 'American Foreign Policy', { within: '.footnotes-section' });
   await expect.poll(() => frame.locator('body').evaluate(() => getSelection()?.toString() ?? '')).toBe('American Foreign Policy');
   const footnoteBar = page.getByRole('toolbar', { name: 'Selection' });
   await expect(footnoteBar).toBeVisible();
-  await expect(footnoteBar.getByRole('button')).toHaveCount(1);
-  await expect(footnoteBar.getByRole('button')).toHaveAccessibleName('Note');
+  await expect(footnoteBar.getByRole('button')).toHaveText(['Look Up in NARA', 'Note']);
 
   // Khrushchev's name in the heading is a reader link, to his card. Highlighted, from the words
   // after it back to its first letter, so the press is not on the link, a click on it opens the card,

@@ -13,6 +13,8 @@
 #   FRUS_LIBRARY_MIRROR  a mirror of GitHub's and history.state.gov's files to download from instead, one
 #                        folder served as they serve them, each host's files under its name
 #   FRUS_OFFLINE         true to download nothing and make no request outside, serving what is kept
+#   FRUS_SERVICES_MIRROR a stand-in for the NARA Catalog's and Zotero's APIs to ask instead, one address under
+#                        which each host's paths are served under its name, as the smoke test serves its stubs
 
 services:
   frus:
@@ -21,6 +23,7 @@ services:
       FRUS_GITHUB_TOKEN: ${FRUS_GITHUB_TOKEN:-}
       FRUS_LIBRARY_MIRROR: ${FRUS_LIBRARY_MIRROR:-}
       FRUS_OFFLINE: ${FRUS_OFFLINE:-false}
+      FRUS_SERVICES_MIRROR: ${FRUS_SERVICES_MIRROR:-}
     # compose.yaml's list without its read-only TEI folder: the server writes /data/volumes itself.
     volumes: !override
       - frus-data:/data

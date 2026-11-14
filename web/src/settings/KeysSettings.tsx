@@ -6,7 +6,8 @@
 // that it is stored. Removing asks first, as the app does, and while the removal is sent its question
 // waits for it, as Delete Note's does. While the instance has a NARA key of its own, an admin's, the
 // pane says that it serves the user who has none. From S20d the admin's Keys pane shows that key with the
-// same section, over the instance's routes.
+// same section, over the instance's routes. From PLAN's S22e the server uses them: Source Explorer's NARA
+// Catalog search and Look Up, and Send to Zotero Library.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
 import { removeInstanceSecret, setInstanceSecret } from '../api/admin';
@@ -69,7 +70,6 @@ export function KeysSettingsScreen() {
     const instance = secrets.data.instance ?? [];
     body = (
       <>
-        <p className="note">{copy.keys.pending}</p>
         {secrets.data.secrets.map((secret) => (
           <KeySection key={secret.name} name={secret.name} stored={secret.set} instanceHasOne={instance.includes(secret.name)} />
         ))}

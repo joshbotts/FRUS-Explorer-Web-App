@@ -107,7 +107,7 @@ cleanup() {
     fi
   fi
   docker rm -f "$proxy" "$COMPOSE_PROJECT_NAME-tmp-volume" "$COMPOSE_PROJECT_NAME-tmp-tmp" "$COMPOSE_PROJECT_NAME-keyless" \
-    "$COMPOSE_PROJECT_NAME-library-github" >/dev/null 2>&1 || true
+    "$COMPOSE_PROJECT_NAME-library-github" "$COMPOSE_PROJECT_NAME-library-services" >/dev/null 2>&1 || true
   # The library's Standalone project (PLAN's S21c), with its volume.
   docker compose -p "$COMPOSE_PROJECT_NAME-library" -f compose.yaml -f compose.standalone.yaml down --volumes --remove-orphans >/dev/null 2>&1 || true
   docker volume rm "$COMPOSE_PROJECT_NAME-tmp-volume" "$COMPOSE_PROJECT_NAME-tmp-tmp" >/dev/null 2>&1 || true
@@ -281,6 +281,8 @@ library_project="$COMPOSE_PROJECT_NAME-library"
 library_port=$((FRUS_HOST_PORT + 1))
 library_base="http://127.0.0.1:$library_port"
 library_github="$library_project-github"
+# The stand-in of the NARA Catalog's API and of Zotero's (PLAN's S22e), which FRUS_SERVICES_MIRROR names.
+library_services="$library_project-services"
 mirror="$work/mirror"
 raw="$mirror/raw.githubusercontent.com/HistoryAtState/frus/master/volumes"
 figures="$mirror/static.history.state.gov/frus/frus1969-76ve09p1"
@@ -332,6 +334,7 @@ NGINX
 library_compose() {
   FRUS_AUTH=none FRUS_AUTH_HEADER='' FRUS_TRUSTED_PROXIES='' FRUS_ADMIN_USERS='' FRUS_USER_DATA=on FRUS_PUBLIC_URL=http://localhost:8080 \
     FRUS_HOST_PORT="$library_port" FRUS_BACKUP_DIR="$work/library-backups" FRUS_LIBRARY_MIRROR=http://github:8000/ COMPOSE_PROFILES='' \
+    FRUS_SERVICES_MIRROR=http://services:8000/ \
     docker compose -p "$library_project" -f compose.yaml -f compose.standalone.yaml "$@"
 }
 library_api() {  # $1: method, $2: path, $3: body; prints the body and the status
@@ -691,6 +694,90 @@ if [ -n "$e2e" ]; then
   echo "   the sources spec in Playwright on Chromium: d3's note to its collection's record and their neighbours, by keyboard"
   FRUS_E2E_SOURCES=1 FRUS_E2E_NETWORK="container:$(library_compose ps -q frus)" FRUS_E2E_BASE_URL=http://localhost:8080/ scripts/npm --playwright \
     || fail "the sources spec failed; web/playwright-report has its report"
+fi
+
+echo "== the reader: Look Up, the NARA proxy and Send to Zotero Library over the Standalone server, through stand-ins of the services (PLAN's S22e)"
+# An nginx answering as the NARA Catalog's API and Zotero's do, on the project's network as "services", which
+# FRUS_SERVICES_MIRROR names, each host's paths under its name, logging each request with its key. With no key, a
+# search and a send say so in the app's words and ask nothing. With placeholder keys, which no service would take:
+# Look Up's readings of d3's source note, the bundled answer for its lot first; a search through the proxy, the
+# stand-in's record, the key in x-api-key; the same search again from the cache, the stand-in asked nothing more;
+# and d3 sent to Zotero's stand-in with the Zotero key. Neither key in an answer or the server's log. With --e2e, the
+# look-up spec looks a passage up and sends a citation by keyboard on Chromium with no axe violations. Answers are
+# read from files (Linux caps an argument).
+cat > "$work/services.conf" <<'NGINX'
+log_format services '$request_method $uri key=$http_x_api_key auth=$http_authorization';
+server {
+    listen 8000;
+    access_log /dev/stdout services;
+    default_type application/json;
+    location /catalog.archives.gov/api/ {
+        return 200 '{"opaResponse": {"results": {"result": [{"naId": "596518", "title": "Presidential Correspondence (stand-in)", "recordGroupNumber": 59, "levelOfDescription": "series", "scopeContent": "The stand-in of the NARA Catalog.", "inclusiveStartDate": {"year": 1953}, "inclusiveEndDate": {"year": 1964}, "variantControlNumbers": [{"number": "66D204"}, {"number": "66 D 204"}]}]}}}';
+    }
+    location /api.zotero.org/keys/ {
+        return 200 '{"userID": 4210, "username": "frus-stub", "access": {"user": {"library": true, "write": true, "notes": true}}}';
+    }
+    location /api.zotero.org/users/4210/ {
+        return 200 '{"successful": {"0": {"key": "ITEM0000", "version": 1}}, "failed": {}}';
+    }
+}
+NGINX
+docker run -d --name "$library_services" --network "${library_project}_default" --network-alias services --pull missing -q \
+  -v "$work/services.conf:/etc/nginx/conf.d/default.conf:ro" "$proxy_image" >/dev/null || fail "the services' stand-in did not start"
+services_asked() { docker logs "$library_services" 2>/dev/null | grep -c -E '^(GET|POST) /(catalog\.archives\.gov|api\.zotero\.org)/' || true; }
+nara_key=stub-nara-key-not-real
+zotero_key=stub-zotero-key-not-real
+search='{"strategy":"lotFileRG59","query":"66 D 204"}'
+refused=$(library_api POST /api/v1/nara/search "$search")
+case "$refused" in *'"code":"NARA_KEY_REQUIRED"'*'Add your key in Settings ▸ Keys.'*' 409') ;; *) fail "a search with no key answered $refused" ;; esac
+unsent=$(library_api POST /api/v1/me/volumes/frus1961-63v06/documents/d3/zotero)
+case "$unsent" in *'"code":"ZOTERO_KEY_REQUIRED"'*'Connect a Zotero account in Settings ▸ Keys first.'*' 409') ;; *) fail "a send with no key answered $unsent" ;; esac
+[ "$(services_asked)" = 0 ] || fail "with no key the stand-in was asked: $(docker logs "$library_services" 2>&1 | tail -3)"
+library_api PUT /api/v1/me/secrets/nara "{\"value\":\"$nara_key\"}" | grep -q ' 200$' || fail "the NARA key was not stored"
+library_api PUT /api/v1/me/secrets/zotero "{\"value\":\"$zotero_key\"}" | grep -q ' 200$' || fail "the Zotero key was not stored"
+note='Source: Department of State, Presidential Correspondence: Lot 66 D 204. No classification marking.'
+library_api POST /api/v1/volumes/frus1961-63v06/documents/d3/lookup "{\"text\":\"Correspondence. This message\",\"blockText\":\"$note\"}" \
+  > "$work/lookup.txt" || fail "Look Up did not answer"
+for round in first second; do
+  library_api POST /api/v1/nara/search "$search" > "$work/search-$round.txt" || fail "the $round search did not answer"
+done
+library_api POST /api/v1/me/volumes/frus1961-63v06/documents/d3/zotero > "$work/zotero.txt" || fail "the send did not answer"
+docker logs "$library_services" > "$work/services.log" 2>/dev/null
+library_compose logs --no-color frus > "$work/library-server.log" 2>&1
+python3 - "$work" "$nara_key" "$zotero_key" <<'PY' || fail "the proxy, Look Up or the send is not as they should be: $(tail -c 600 "$work/search-first.txt")"
+import json, os, sys
+work, nara, zotero = sys.argv[1:4]
+def answer(name, status="200"):
+    text = open(os.path.join(work, name), encoding="utf-8").read()
+    body, code = text.rsplit(" ", 1)
+    assert code == status, (name, code, body[:300])
+    assert nara not in body and zotero not in body, f"{name} gives a key back"
+    return json.loads(body)
+lookup = answer("lookup.txt")
+first = lookup["candidates"][0]
+assert first["label"] == "Lot 66 D 204" and first["strategy"] == "lotFileRG59" and first["origin"] == "context" and first["resolution"]["naId"], first
+assert lookup["strategy"] == "lotFileRG59" and len(lookup["strategies"]) == 6 and lookup["periods"], lookup["strategy"]
+once, again = answer("search-first.txt"), answer("search-second.txt")
+assert once["cached"] is False and again["cached"] is True and once["results"] == again["results"], (once, again)
+assert once["results"][0]["title"] == "Presidential Correspondence (stand-in)" and once["results"][0]["dateRange"] == "1953–1964", once
+sent = answer("zotero.txt")
+assert sent == {"addedItems": 1, "failedItems": 0, "addedNotes": 0, "webURL": "https://www.zotero.org/frus-stub/library"}, sent
+asked = [line.strip() for line in open(os.path.join(work, "services.log"), encoding="utf-8") if line.startswith(("GET ", "POST "))]
+naras = [line for line in asked if line.split()[1].startswith("/catalog.archives.gov/")]
+zoteros = [line for line in asked if line.split()[1].startswith("/api.zotero.org/")]
+assert len(naras) == 1 and naras[0].endswith(f"key={nara} auth="), naras
+assert zoteros[0] == f"GET /api.zotero.org/keys/{zotero} key= auth=" and zoteros[1] == f"POST /api.zotero.org/users/4210/items key= auth=Bearer {zotero}", zoteros
+log = open(os.path.join(work, "library-server.log"), encoding="utf-8").read()
+assert nara not in log and zotero not in log, "the server's log holds a key"
+print(f"   Look Up: {len(lookup['candidates'])} readings of d3's note, {first['label']} first, the bundled {first['resolution']['naId']}; "
+      f"the search asked the stand-in once with the key and was kept, the second from the cache; d3 sent to Zotero's")
+PY
+library_api DELETE /api/v1/me/secrets/nara | grep -q ' 204$' || fail "the NARA key was not cleared"
+library_api DELETE /api/v1/me/secrets/zotero | grep -q ' 204$' || fail "the Zotero key was not cleared"
+if [ -n "$e2e" ]; then
+  echo "   the look-up spec in Playwright on Chromium: a passage looked up and a citation sent to Zotero's stand-in, by keyboard"
+  FRUS_E2E_LOOK_UP=1 FRUS_E2E_NETWORK="container:$(library_compose ps -q frus)" FRUS_E2E_BASE_URL=http://localhost:8080/ scripts/npm --playwright \
+    || fail "the look-up spec failed; web/playwright-report has its report"
 fi
 
 echo "== admin: the corrections check and the update review, a fixture volume corrected upstream (PLAN's S21f)"
