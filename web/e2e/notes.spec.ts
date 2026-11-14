@@ -42,11 +42,11 @@ test('writes a formatted note from the bar’s Note, edits it in the rail, and f
   await openDocument(page);
   expect(await notes(page)).toEqual([]);
 
-  // The bar's verbs: the four colours, then Excerpt and Note, as the app's bar orders them.
+  // The bar's verbs: the four colours, then Excerpt, Look Up in NARA and Note, as the app's bar orders them.
   await dragOver(page, phrase);
   const bar = page.getByRole('toolbar', { name: 'Selection' });
-  await expect(bar.getByRole('button')).toHaveCount(6);
-  await expect(bar.getByRole('button').nth(5)).toHaveAccessibleName('Note');
+  await expect(bar.getByRole('button')).toHaveCount(7);
+  await expect(bar.getByRole('button').nth(6)).toHaveAccessibleName('Note');
   await axeCheck(page);
   await bar.getByRole('button', { name: 'Note' }).click();
 
@@ -304,15 +304,14 @@ test('makes a note for a highlight from the rail’s Add Note to Highlight, whic
   await expect(rail.locator('#research-notes').getByRole('button', { name: /^On this passage\./ })).toBeVisible();
 });
 
-test('a footnote’s selection offers Note alone, which opens a new note on the document', async ({ page }) => {
+test('a footnote’s selection offers Look Up and Note, whose Note opens a new note on the document', async ({ page }) => {
   await openDocument(page);
   const frame = page.frameLocator('iframe.reader-frame');
   await frame.locator('.footnotes-section').scrollIntoViewIfNeeded();
   await dragOver(page, 'American Foreign Policy', { within: '.footnotes-section' });
   const bar = page.getByRole('toolbar', { name: 'Selection' });
   await expect(bar).toBeVisible();
-  await expect(bar.getByRole('button')).toHaveCount(1);
-  await expect(bar.getByRole('button')).toHaveAccessibleName('Note');
+  await expect(bar.getByRole('button')).toHaveText(['Look Up in NARA', 'Note']);
   await axeCheck(page);
   await bar.getByRole('button', { name: 'Note' }).click();
   const editor = page.getByRole('dialog', { name: 'New Research Note' });

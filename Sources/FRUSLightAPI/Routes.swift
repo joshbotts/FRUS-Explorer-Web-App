@@ -47,6 +47,8 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     ReaderRoutes.add(to: router, reader: reader, provider: provider, resources: resources, base: base)
     CitationRoutes.add(to: router, reader: reader, provider: provider, resources: resources)
     SourceExplorerRoutes.add(to: router, provider: provider, resources: resources, reader: reader)
+    // Look Up's readings of a selection (PLAN's S22e), which need no key.
+    LookUpRoutes.add(to: router, provider: provider, resources: resources, reader: reader)
     ArchivalNeighborsRoutes.add(to: router, provider: provider, resources: resources)
     ArchivalCollectionRoutes.add(to: router, provider: provider, resources: resources)
     VolumeSourcesRoutes.add(to: router, provider: provider, resources: resources)
@@ -59,6 +61,8 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
         AuthRoutes.add(to: router, services: userData)
         UserDataRoutes.add(to: router, services: userData, resources: resources, reader: reader, provider: provider, leads: leads,
                            reviews: UpdateReviewSources(indexer: indexer, teiCheck: teiCheck))
+        // The NARA Catalog proxy (PLAN's S22e), under the guard, with or without user data.
+        NARARoutes.add(to: router, services: userData)
         AdminRoutes.add(to: router, services: userData, state: state, resources: resources, library: library, indexer: indexer,
                         provider: provider, teiCheck: teiCheck)
     }

@@ -19,12 +19,13 @@ test('highlights a phrase, recolours it, reloads and removes it, by pointer', as
   await expect(page.frameLocator('iframe.reader-frame').getByText(d1Text)).toBeVisible();
   expect(await listed(page)).toEqual([]);
 
-  // The bar comes with a selection in the text: the four colours, then Excerpt and Note, in the app's order.
+  // The bar comes with a selection in the text: the four colours, then Excerpt, Look Up in NARA and Note, in the
+  // app's order.
   await dragOver(page, phrase);
   const bar = page.getByRole('toolbar', { name: 'Selection' });
   await expect(bar).toBeVisible();
-  await expect(bar.getByRole('button')).toHaveCount(6);
-  for (const [index, name] of ['Highlight Yellow', 'Highlight Green', 'Highlight Blue', 'Highlight Pink', 'Excerpt', 'Note'].entries()) {
+  await expect(bar.getByRole('button')).toHaveCount(7);
+  for (const [index, name] of ['Highlight Yellow', 'Highlight Green', 'Highlight Blue', 'Highlight Pink', 'Excerpt', 'Look Up in NARA', 'Note'].entries()) {
     await expect(bar.getByRole('button').nth(index)).toHaveAccessibleName(name);
   }
   // It sits over the frame, as the Mac's sits over its web view.
@@ -80,14 +81,13 @@ test('a selection in a footnote offers no colour, and a link inside a highlight 
   await expect(frame.getByText(d1Text)).toBeVisible();
 
   // In the list of footnotes, the kit's bridge has no offsets: none of the colours applies, so the
-  // bar offers Note alone (notes.spec.ts follows it).
+  // bar offers Look Up in NARA and Note (notes.spec.ts follows Note, look-up.spec.ts Look Up).
   await frame.locator('.footnotes-section').scrollIntoViewIfNeeded();
   await dragOver(page, 'American Foreign Policy', { within: '.footnotes-section' });
   await expect.poll(() => frame.locator('body').evaluate(() => getSelection()?.toString() ?? '')).toBe('American Foreign Policy');
   const footnoteBar = page.getByRole('toolbar', { name: 'Selection' });
   await expect(footnoteBar).toBeVisible();
-  await expect(footnoteBar.getByRole('button')).toHaveCount(1);
-  await expect(footnoteBar.getByRole('button')).toHaveAccessibleName('Note');
+  await expect(footnoteBar.getByRole('button')).toHaveText(['Look Up in NARA', 'Note']);
 
   // Khrushchev's name in the heading is a reader link, to his card. Highlighted, from the words
   // after it back to its first letter, so the press is not on the link, a click on it opens the card,

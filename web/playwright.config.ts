@@ -27,6 +27,10 @@ const graphing = !!process.env.FRUS_E2E_GRAPH;
 // the three fixture volumes.
 const sources = /sources\.spec\.ts$/;
 const sourcing = !!process.env.FRUS_E2E_SOURCES;
+// Look Up and Send to Zotero Library (PLAN's S22e): its spec, on the smoke test's Standalone server, whose stand-ins
+// of NARA and Zotero FRUS_SERVICES_MIRROR names.
+const lookUp = /look-up\.spec\.ts$/;
+const lookingUp = !!process.env.FRUS_E2E_LOOK_UP;
 // The People screen (PLAN's S21g): its spec's second test, a merge by keyboard, on the smoke test's Standalone server,
 // which applies a correction at once.
 const people = /people\.spec\.ts$/;
@@ -46,9 +50,11 @@ export default defineConfig({
             ? { testMatch: graph }
             : sourcing
               ? { testMatch: sources }
-              : correcting
-                ? { testMatch: people }
-                : { testIgnore: [signIn, accounts, updateReview] }),
+              : lookingUp
+                ? { testMatch: lookUp }
+                : correcting
+                  ? { testMatch: people }
+                  : { testIgnore: [signIn, accounts, updateReview] }),
   timeout: 30_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,

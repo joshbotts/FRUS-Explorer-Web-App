@@ -5,13 +5,16 @@
 // links lead to: another document or a note in one, the document on a printed page, a whole
 // volume in Browse or, outside the catalogue, on history.state.gov, or a card for a person, a term
 // or an unresolved reference. From S17f each document opened is recorded in the trail, and opens in
-// the mode Settings ▸ Reading names when the link that opened it names no rail.
+// the mode Settings ▸ Reading names when the link that opened it names no rail. From PLAN's S22e the
+// bar's Look Up in NARA opens the Look Up in NARA Catalog sheet over the selection, with or without
+// user data.
 import { type QueryClient, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from 'react';
 import { ApiError } from '../api/client';
 import { documentQuery, linkQuery, type ReadingWidth, readerPageURL, type TextSize, volumesQuery } from '../api/endpoints';
 import type { ReaderLinkTarget } from '../api/types';
+import type { LookUpSelection } from '../api/nara';
 import { pendingPreferenceChanges, preferencesQuery, recordVisit } from '../api/research';
 import { meQuery } from '../api/userData';
 import { CitePanel } from '../cite/CitePanel';
@@ -27,6 +30,7 @@ import { useScheme } from '../shell/AppShell';
 import { useHeadingReady } from '../shell/headingFocus';
 import { plainTitle, useDocumentTitle } from '../shell/useDocumentTitle';
 import { LinkCard } from './LinkCard';
+import { LookUpDialog } from './LookUpDialog';
 import { readerMessage } from './readerMessages';
 import { DocumentChangeBanner, ReviewSheet } from './ReviewSheet';
 import { useReaderHighlights } from './useReaderHighlights';
@@ -120,6 +124,8 @@ export function ReaderScreen() {
   const [composing, setComposing] = useState(false);
   // The selection the bar's Excerpt freezes, while the Add Excerpt to Collection picker is open (S18d).
   const [excerpting, setExcerpting] = useState<ExcerptCapture | null>(null);
+  // The selection the bar's Look Up in NARA reads, while its sheet is open (PLAN's S22e).
+  const [lookingUp, setLookingUp] = useState<LookUpSelection | null>(null);
   // Whether the review of what an update changed is open (PLAN's S21f).
   const [reviewing, setReviewing] = useState(false);
   // A new frame once a curator's correction of the document's classification is applied, which reshapes its text (S21g).
@@ -133,6 +139,7 @@ export function ReaderScreen() {
     setPendingHighlight(null);
     setComposing(false);
     setExcerpting(null);
+    setLookingUp(null);
     setReviewing(false);
   }
   // Each arrival at a document, once its account has loaded (`recordArrival`), taken once: a reader
@@ -184,6 +191,7 @@ export function ReaderScreen() {
     onHighlightMade: (made) => setPendingHighlight({ documentKey: `${made.volumeId}/${made.documentId}`, id: made.id }),
     onNote: () => setComposing(true),
     onExcerpt: (selection) => setExcerpting({ volumeId, documentId, ...selection }),
+    onLookUp: setLookingUp,
   });
 
   /** Opens a link's destination: a note of this document in place, else its document, if this server has it. */
@@ -526,6 +534,17 @@ export function ReaderScreen() {
           excerpt={excerpting}
           onClose={() => {
             setExcerpting(null);
+            requestAnimationFrame(() => frame.current?.focus({ preventScroll: true }));
+          }}
+        />
+      )}
+      {lookingUp && (
+        <LookUpDialog
+          volumeId={volumeId}
+          documentId={documentId}
+          selection={lookingUp}
+          onClose={() => {
+            setLookingUp(null);
             requestAnimationFrame(() => frame.current?.focus({ preventScroll: true }));
           }}
         />

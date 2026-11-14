@@ -78,6 +78,14 @@ public struct ServerConfiguration: Sendable, Equatable {
     /// mounted secret is named; nil for the server's own, `secret.key` beside app.db, which it makes at
     /// its first start.
     public var secretKeyFile: URL?
+    /// The instance's NARA Catalog API key from the environment (`FRUS_NARA_API_KEY`, PLAN's S22e), which
+    /// serves a user who has no key of their own when the store holds no instance key, as on a server with
+    /// `FRUS_USER_DATA=off`, whose admin cannot store one. Never logged.
+    public var naraAPIKey: String?
+    /// A stand-in for the two outside services' APIs (`FRUS_SERVICES_MIRROR`, PLAN's S22e): one http or https
+    /// address under which the server asks the NARA Catalog's and Zotero's, each by its host's name, as the
+    /// tests and the smoke test serve their stubs; nil for the services themselves.
+    public var servicesMirror: URL?
 
     /// The path the server answers under, `FRUS_PUBLIC_URL`'s: the root unless it ends in a path.
     public var basePath: BasePath {
@@ -103,7 +111,8 @@ public struct ServerConfiguration: Sendable, Equatable {
         webDirectory: URL = ServerConfiguration.imageWebDirectory, requiresWebDirectory: Bool = false,
         userData: Bool = true, userStore: UserStoreChoice = .sqlite, backupHour: Int = 3,
         backupCopyDirectory: URL? = nil, authHeader: String = "X-Forwarded-User",
-        trustedProxies: [AddressRange] = [], adminUsers: Set<String> = [], secretKeyFile: URL? = nil
+        trustedProxies: [AddressRange] = [], adminUsers: Set<String> = [], secretKeyFile: URL? = nil,
+        naraAPIKey: String? = nil, servicesMirror: URL? = nil
     ) {
         self.mode = mode
         self.auth = auth
@@ -127,6 +136,8 @@ public struct ServerConfiguration: Sendable, Equatable {
         self.trustedProxies = trustedProxies
         self.adminUsers = adminUsers
         self.secretKeyFile = secretKeyFile
+        self.naraAPIKey = naraAPIKey
+        self.servicesMirror = servicesMirror
     }
 
     /// Reads the configuration, reporting every problem at once.
@@ -299,6 +310,23 @@ public struct ServerConfiguration: Sendable, Equatable {
         if let raw = value("FRUS_SECRET_KEY_FILE") {
             if raw.hasPrefix("/") { config.secretKeyFile = URL(fileURLWithPath: raw) } else {
                 problems.append("FRUS_SECRET_KEY_FILE must be the key file's whole path, such as /run/secrets/frus_secret_key, not \(raw)")
+            }
+        }
+        // The outside services' (PLAN's S22e): the instance's NARA key, and where the server asks the two services.
+        if let raw = value("FRUS_NARA_API_KEY") {
+            // Never echoed: it is a credential. The rule a stored key keeps (`SecretValues`).
+            switch SecretValues.checked(raw) {
+            case .success(let key): config.naraAPIKey = key
+            case .failure(let problem): problems.append("FRUS_NARA_API_KEY must be a NARA Catalog API key as NARA gives it. \(problem.reason)")
+            }
+        }
+        if let raw = value("FRUS_SERVICES_MIRROR") {
+            if Self.isHTTPOrigin(raw), let url = URL(string: raw), let parts = Self.components(of: raw), parts.query == nil,
+               parts.fragment == nil, parts.user == nil, parts.password == nil {
+                config.servicesMirror = url
+            } else {
+                // Not echoed: a URL given with a password in it would leave it in the log.
+                problems.append("FRUS_SERVICES_MIRROR must be an http or https URL with no user, password, query or fragment")
             }
         }
 
