@@ -67,10 +67,12 @@ struct ServerComponents: Sendable {
         try library.prepare()
         // The volumes side-loaded under an id the catalogue lacks, which the catalogue overlay lists (PLAN's S21e).
         if configuration.mode == .standalone { await resources.refreshLocalVolumes(in: files.volumesDirectory) }
+        // The corrections curators make (PLAN's S21g), kept in the store, which every writer and every export installed is given.
+        let corrections = IndexCorrections(store: userStore, volumesDirectory: files.volumesDirectory, log: { logger.info("\($0)") })
         let indexer = LibraryIndexer(liveIndex: files.liveIndex, volumesDirectory: files.volumesDirectory, mode: configuration.mode,
                                      resources: resources.indexing, jobs: jobs, state: state,
                                      observer: ServedIndexWriting(state: state, provider: provider, log: { logger.info("\($0)") }),
-                                     capacity: { try files.availableCapacity() }, log: { logger.info("\($0)") })
+                                     capacity: { try files.availableCapacity() }, corrections: corrections, log: { logger.info("\($0)") })
         library.whenDownloadsEnd { fetched in
             do {
                 try await indexer.index(.afterDownload(fetched), requestedBy: nil)
@@ -103,7 +105,8 @@ struct ServerComponents: Sendable {
                 files: files,
                 importer: IndexImporter(files: files, writer: writer,
                                         writing: configuration.userData ? ResearchDatabaseImport.move(into: userStore) : nil,
-                                        liveReads: configuration.mode == .standalone),
+                                        liveReads: configuration.mode == .standalone,
+                                        corrections: IndexCorrectionReplay(corrections: corrections, resources: resources.indexing)),
                 state: state, jobs: jobs,
                 alsoNotify: ImportObservers(observers: (configuration.userData ? [LeadsAfterIndexImport(leads: leads)] : [])
                     + (configuration.mode == .standalone ? [IndexerAfterIndexImport(indexer: indexer)] : []))),
@@ -271,7 +274,11 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
                                           await resources.refreshLocalVolumes(in: library.volumesDirectory)
                                       })
                                   },
-                                  afterOpening: { [indexer = components.indexer] in await indexer.resumeAtStart() },
+                                  // And the corrections a stop left waiting (PLAN's S21g).
+                                  afterOpening: { [indexer = components.indexer] in
+                                      await indexer.resumeAtStart()
+                                      await indexer.resumeCorrectionsAtStart()
+                                  },
                                   // Import mode's step 5, a job of the queue for the index found at the start and each an import
                                   // serves, and for each volume whose TEI file changes afterwards (PLAN's S21f).
                                   eachScan: { [teiCheck = components.teiCheck] in await teiCheck.ensureCurrent() }))

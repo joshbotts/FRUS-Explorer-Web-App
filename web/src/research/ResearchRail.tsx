@@ -7,7 +7,9 @@
 // keyboard's way to remove one: the app's review sheet removes a stale one, but the app has no
 // keyboard way to remove one that is not. From S15d, above them, the app's Summary and Notes
 // sections, open until they are closed, as the app's are. From S18d, below Tags, the app's Collections
-// section: the collections that hold the document, by name, and Add to Collection.
+// section: the collections that hold the document, by name, and Add to Collection. From S21g, below Collections,
+// Classification, the app's control from its Document tools: the document's classification, and a curator's
+// correction of it.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useEffect, useId, useRef, useState } from 'react';
@@ -33,6 +35,7 @@ import {
   useSummarySectionOpen,
   useTagsSectionOpen,
 } from '../settings/preferences';
+import { ClassificationSection } from './ClassificationSection';
 import { NotesSection } from './NotesSection';
 import { noteCount, summaryPreview } from './notesRules';
 import { shownSummaries, SummarySection } from './SummarySection';
@@ -47,6 +50,7 @@ export function ResearchRail({
   onPendingUsed,
   autoFocus,
   onClose,
+  onClassificationChanged,
 }: {
   volumeId: string;
   documentId: string;
@@ -60,6 +64,8 @@ export function ResearchRail({
   /** Whether opening it takes focus to it: when the reader opens it, not when a page loads with it open. */
   autoFocus: boolean;
   onClose: () => void;
+  /** Told once a curator's correction of the document's classification is applied (S21g). */
+  onClassificationChanged?: () => void;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
   const summaryToggle = useRef<HTMLButtonElement>(null);
@@ -70,6 +76,8 @@ export function ResearchRail({
   const [tagsOpen, setTagsOpen] = useTagsSectionOpen();
   const [highlightsOpen, setHighlightsOpen] = useHighlightsSectionOpen();
   const [collectionsOpen, setCollectionsOpen] = useCollectionsSectionOpen();
+  // Closed until it is opened, the web's own, as the app keeps its control one step away in an info popover.
+  const [classificationOpen, setClassificationOpen] = useState(false);
   const summaries = useQuery(documentSummariesQuery(volumeId, documentId));
   const notes = useQuery(documentNotesQuery(volumeId, documentId));
   const tags = useQuery(documentTagsQuery(volumeId, documentId));
@@ -283,6 +291,27 @@ export function ResearchRail({
               items={collections.data?.items}
               error={collections.error}
             />
+          </div>
+        )}
+      </section>
+      <section className="rail-section">
+        <h3>
+          <button
+            type="button"
+            className="disclosure"
+            aria-expanded={classificationOpen}
+            aria-controls="research-classification"
+            onClick={() => setClassificationOpen(!classificationOpen)}
+          >
+            <span className="disclosure-mark" aria-hidden="true">
+              {classificationOpen ? '▾' : '▸'}
+            </span>
+            {copy.classification.title}
+          </button>
+        </h3>
+        {classificationOpen && (
+          <div id="research-classification">
+            <ClassificationSection key={documentKey} volumeId={volumeId} documentId={documentId} onChanged={onClassificationChanged} />
           </div>
         )}
       </section>

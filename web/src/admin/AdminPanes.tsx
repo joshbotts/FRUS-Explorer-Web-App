@@ -33,6 +33,11 @@ export function AdminPanes() {
             {copy.admin.library.title}
           </Link>
         </li>
+        <li>
+          <Link to="/admin/corrections" activeProps={{ 'aria-current': 'page' }}>
+            {copy.admin.corrections.title}
+          </Link>
+        </li>
         {/* ─── People ────────────────────────────────────────────────────── */}
         <li>
           <Link to="/admin/users" activeProps={{ 'aria-current': 'page' }}>

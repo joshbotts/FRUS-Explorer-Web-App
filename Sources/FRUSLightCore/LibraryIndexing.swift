@@ -126,6 +126,11 @@ public actor LibraryIndexer {
     var queuedRemovals: Set<String> = []
     /// The job that records users' reviews in the index and waits, which a review joins (PLAN's S21f, ReviewStamps.swift).
     var waitingReviewJob: String?
+    /// The corrections the store keeps, which every writer is given, and the job that applies those waiting and
+    /// waits, which a correction joins, with whether it gives every one again, as after an import of the Mac's
+    /// (PLAN's S21g, IndexCorrections.swift); nil for a server keeping none.
+    let corrections: IndexCorrections?
+    var waitingCorrectionJob: (id: String, all: Bool)?
 
     /// Test hook: installs `writerOpenedTestHook`.
     func setWriterOpenedTestHook(_ hook: (@Sendable (IndexingPipeline) async -> Void)?) {
@@ -142,8 +147,9 @@ public actor LibraryIndexer {
     public init(liveIndex: URL, volumesDirectory: URL, mode: ServerConfiguration.Mode, resources: IndexingResources,
                 jobs: any JobQueue, state: ServerState, observer: (any IndexWritingObserver)? = nil,
                 capacity: @escaping @Sendable () throws -> Int64, now: @escaping @Sendable () -> Date = Date.init,
-                log: @escaping @Sendable (String) -> Void = { _ in }) {
+                corrections: IndexCorrections? = nil, log: @escaping @Sendable (String) -> Void = { _ in }) {
         self.liveIndex = liveIndex.standardizedFileURL
+        self.corrections = corrections
         self.volumesDirectory = volumesDirectory.standardizedFileURL
         self.mode = mode
         self.resources = resources
@@ -416,6 +422,8 @@ public actor LibraryIndexer {
             return Writer(store: store, pipeline: pipeline)
         }
         await writer.pipeline.setStopsBetweenBatchesWhenCancelled(true)
+        // The corrections the store keeps, re-asserted, and kept for `indexVolume`'s replay (PLAN's S21g).
+        try await reassertCorrections(writer.pipeline)
         return writer
     }
 
@@ -533,7 +541,7 @@ public actor LibraryIndexer {
             await writer.pipeline.markDateReindexComplete()
             await writer.pipeline.markFTSRebuildReindexComplete()
         }
-        await writer.pipeline.runPostIndexPasses()
+        await postIndexPasses(writer.pipeline)
         if let problem = stamps.writeProblem {
             log("The index's stamps could not be written after the indexing: \(problem)")
         }
