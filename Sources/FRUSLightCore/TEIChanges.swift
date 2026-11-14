@@ -1,23 +1,26 @@
 // Import mode's step 5 (SPEC's Import procedure; PLAN's S21f, the hash comparison S2 deferred): each document of
 // the served export recomputed from the mounted TEI as the kit's indexer computes it, and compared with the
 // export's `document_revisions`, so that a document whose TEI changed after the Mac indexed it is listed for the
-// review of what changed, as the Mac's After an Update lists one a volume update changed. The two hashes are the
-// kit's indexer's own and not public, so the comparison runs the indexer itself: each volume is indexed with
-// `indexVolume`, the volume-update path, into a comparison index of the server's own, whose revision rows are
-// first the export's, so that the kit stamps what moved, `body`, `apparatus` or `vanished`, by its own rules, as
-// it stamps an update. A volume nothing moved in is deleted from the comparison index as soon as it is compared,
-// its revision rows with it; one something moved in is kept, so that the review reads its text as it reads now.
-// The comparison index is the server's own file, in a folder of its own, `/data/tei-check`, apart from the served
-// index's, which the server never writes in Import mode (Compatibility contract, rule 7), and it is read through
-// the kit's immutable read-only open, once it is whole.
+// review of what changed, as the Mac's After an Update lists one a volume update changed. Since S21f's follow-up the
+// comparison computes the two hashes itself, with the kit's functions that FRUS-Explorer#1904 made public, over the
+// parse `indexVolume` makes, and compares them with the export's rows (`differences`). A volume whose TEI gives every
+// document as the export records it is compared with nothing written. A volume that differs is indexed with
+// `indexVolume`, the volume-update path, into a comparison index of the server's own, whose revision rows are first
+// the export's, so that the kit stamps what moved, `body`, `apparatus` or `vanished`, by its own rules, as it stamps
+// an update: the hashes choose which volumes the kit sees, and the kit alone says what changed and how. A volume
+// nothing moved in is deleted from the comparison index as soon as it is compared, its revision rows with it; one
+// something moved in is kept, so that the review reads its text as it reads now. The comparison index is the
+// server's own file, in a folder of its own, `/data/tei-check`, apart from the served index's, which the server never
+// writes in Import mode (Compatibility contract, rule 7), and it is read through the kit's immutable read-only open,
+// once it is whole.
 //
 // It is a job of the queue (`teiComparison`), by the owner's choice of 13 November: after each import it compares
 // every volume of the export, and later each volume whose file in the TEI folder has changed since it was compared,
-// by the file's inode, length and modification time, which the record keeps. Over the full corpus the
-// first comparison takes about as long as indexing it, 8 to 10 minutes on the owner's Mac, so the job gives way
-// after each volume to any job queued behind it and goes on after them from where it stopped, its progress kept in
-// its work folder, where a start after a stop finds it too. The folder's files are read and copied off the actor,
-// which every reader of the comparison waits for.
+// by the file's inode, length and modification time, which the record keeps. Over the full corpus the first
+// comparison still reads and parses every volume, so the job gives way after each volume to any job queued behind it
+// and goes on after them from where it stopped, its progress kept in its work folder, where a start after a stop
+// finds it too. The folder's files are read and copied, and each volume parsed, off the actor, which every reader of
+// the comparison waits for.
 
 import FRUSCoreKit
 import FTS5Store
@@ -111,6 +114,55 @@ struct TEICheckProblem: Error, CustomStringConvertible {
     init(_ description: String) { self.description = description }
 }
 
+/// A document's two revision hashes, as the kit's indexer stamps them in `document_revisions`, from its TEI.
+struct TEIRevisionHashes: Sendable, Equatable {
+    var content: String
+    var body: String
+}
+
+/// A document of a TEI file, as its parse gives it, in the file's order: its id and its two hashes.
+struct TEIParsedDocument: Sendable, Equatable {
+    var id: String
+    var hashes: TEIRevisionHashes
+}
+
+/// The export's revision row of a document, as the comparison reads it: its two hashes, the index version that wrote
+/// them, and whether it records the document as vanished.
+struct TEIStoredRevision: Sendable, Equatable {
+    var content: String
+    var body: String
+    var indexVersion: Int?
+    var vanished: Bool
+}
+
+/// Where a volume's TEI file differs from the export's record of its documents, by document id: what has the
+/// comparison give the volume to the kit's indexer, which says what changed and how (`TEIChangeCheck.differences`).
+struct TEIDifferences: Sendable, Equatable, CustomStringConvertible {
+    /// The export's rows, at the indexer's version, of documents the file no longer gives.
+    var notInTEI: [String] = []
+    /// The file's documents with no row in the export, or with one that records them as vanished.
+    var notInExport: [String] = []
+    /// The file's documents whose content or body hash is not their row's, at the indexer's version.
+    var hashes: [String] = []
+    /// The ids the file gives to more than one document, hashed differently: the indexer writes each in turn over
+    /// the one before, so the kit is given the volume to say what that is.
+    var repeated: [String] = []
+
+    var isEmpty: Bool { notInTEI.isEmpty && notInExport.isEmpty && hashes.isEmpty && repeated.isEmpty }
+
+    /// For the server's log.
+    var description: String {
+        func part(_ ids: [String], _ what: String) -> String? {
+            guard !ids.isEmpty else { return nil }
+            let named = ids.prefix(3).joined(separator: ", ") + (ids.count > 3 ? ", …" : "")
+            return "\(ids.count) \(ids.count == 1 ? "document" : "documents") \(what) (\(named))"
+        }
+        return [part(hashes, "hashed otherwise"), part(notInExport, "with no row in the export, or a vanished one"),
+                part(notInTEI, "no longer in the file"), part(repeated, "given more than once, hashed differently")]
+            .compactMap { $0 }.joined(separator: "; ")
+    }
+}
+
 /// Where the check stands, for Administration.
 public struct TEICheckStatus: Sendable, Equatable {
     /// The volume being compared, and how far through the volumes to compare the check is.
@@ -163,6 +215,8 @@ public actor TEIChangeCheck {
     private var lastRecordRead = false
     /// Test hook: told each volume once it has been compared.
     var volumeComparedTestHook: (@Sendable (String) async -> Void)?
+    /// Test hook: told each volume the kit's indexer is given in the comparison index, before it indexes it.
+    var volumeIndexedTestHook: (@Sendable (String) async -> Void)?
 
     public init(liveIndex: URL, volumesDirectory: URL, folder: URL, resources: IndexingResources, state: ServerState,
                 jobs: any JobQueue, now: @escaping @Sendable () -> Date = Date.init,
@@ -185,6 +239,7 @@ public actor TEIChangeCheck {
     var buildingURL: URL { workFolder.appendingPathComponent(TEIChangeRecord.indexName) }
 
     func setVolumeComparedTestHook(_ hook: (@Sendable (String) async -> Void)?) { volumeComparedTestHook = hook }
+    func setVolumeIndexedTestHook(_ hook: (@Sendable (String) async -> Void)?) { volumeIndexedTestHook = hook }
 
     /// Where the check stands.
     public func status() -> TEICheckStatus { phase }
@@ -383,39 +438,57 @@ public actor TEIChangeCheck {
     }
 
     /// The comparison the job takes up: the one under way for the served index, or one of the volumes whose file
-    /// changed since the last whole comparison, over a copy of it, or one of every volume. Nil when no file has
-    /// changed since the last.
+    /// changed since the last whole comparison, over a copy of it, or one of every volume, as also when the copy does
+    /// not read whole. Nil when no file has changed since the last.
     private func plan(_ index: CorpusIndex, _ served: TEIServedFile) async throws -> TEIComparisonWork? {
         if let work = Self.readWork(workURL), work.served == served, FileManager.default.fileExists(atPath: buildingURL.path) {
             return work
         }
         try? FileManager.default.removeItem(at: workFolder)
-        var work: TEIComparisonWork
+        var work = TEIComparisonWork(served: served, recheck: false, plan: Self.volumes(of: index), done: 0, checked: [],
+                                     changed: [], unchecked: [:], files: [:])
         if let record = phase.record {
             let stale = await staleVolumes(of: index, against: record)
             guard !stale.isEmpty else { return nil }
             try FileManager.default.createDirectory(at: workFolder, withIntermediateDirectories: true)
             let comparison = comparisonURL, building = buildingURL
-            try await Blocking.run { try FileManager.default.copyItem(at: comparison, to: building) }
-            let again = Set(stale)
-            work = TEIComparisonWork(served: served, recheck: true, plan: stale, done: 0,
-                                     checked: record.checked.filter { !again.contains($0) },
-                                     changed: record.changed.filter { !again.contains($0) },
-                                     unchecked: record.unchecked.filter { !again.contains($0.key) },
-                                     files: record.files.filter { !again.contains($0.key) })
+            let whole = try await Blocking.run { () -> Bool in
+                try FileManager.default.copyItem(at: comparison, to: building)
+                return Self.readsWhole(building)
+            }
+            if whole {
+                let again = Set(stale)
+                work = TEIComparisonWork(served: served, recheck: true, plan: stale, done: 0,
+                                         checked: record.checked.filter { !again.contains($0) },
+                                         changed: record.changed.filter { !again.contains($0) },
+                                         unchecked: record.unchecked.filter { !again.contains($0.key) },
+                                         files: record.files.filter { !again.contains($0.key) })
+            } else {
+                // A comparison index that does not read whole, such as one a comparison that indexed no volume placed
+                // before S21f's follow-up folded its log through a connection of its own, cannot be compared again
+                // over: every volume is compared afresh, which places a whole one.
+                log("The last comparison of the index with the TEI folder does not read whole, so every volume is compared again")
+                try FileManager.default.removeItem(at: building)
+            }
         } else {
             try FileManager.default.createDirectory(at: workFolder, withIntermediateDirectories: true)
-            work = TEIComparisonWork(served: served, recheck: false, plan: Self.volumes(of: index), done: 0, checked: [],
-                                     changed: [], unchecked: [:], files: [:])
         }
         try Self.write(work, to: workURL)
         return work
     }
 
+    /// Whether the SQLite file at `url` reads whole, by its `quick_check`.
+    static func readsWhole(_ url: URL) -> Bool {
+        guard let db = try? SQLiteConnection.immutable(url) else { return false }
+        defer { db.close() }
+        return (try? db.query("PRAGMA quick_check").first?.first?.text) == "ok"
+    }
+
     /// Compares the volumes of `work` not yet compared, keeping `work` in its folder after each, and gives way to
     /// the jobs queued behind it after each but the last. Gives whether every volume is compared, the comparison
     /// index then packed, and the connection of the check's own that seeds each volume and deletes what is not
-    /// kept, which is the file's last once the kit's writer is let go, as it is when this returns, and folds its log.
+    /// kept, which `place` closes, once the kit's writer is let go, as it is when this returns, before it folds the
+    /// file's log through a connection of its own.
     private func compare(_ work: inout TEIComparisonWork, from served: SQLiteConnection,
                          context: JobContext) async throws -> (finished: Bool, seeder: SQLiteConnection) {
         let building = buildingURL
@@ -452,8 +525,11 @@ public actor TEIChangeCheck {
         }
     }
 
-    /// One volume: its revision rows the export's, its TEI indexed over them with the kit's `indexVolume`, and its
-    /// tables kept when the kit stamped a change, or deleted with its revision rows when it stamped none.
+    /// One volume: each document of its TEI hashed as the kit's indexer stamps it, and compared with the export's
+    /// revision rows. A volume the TEI gives as the export records it is compared, with nothing written. One that
+    /// differs has its revision rows the export's in the comparison index and its TEI indexed over them with the kit's
+    /// `indexVolume`, which stamps what moved, and its tables kept when the kit stamped a change, or deleted with its
+    /// revision rows when it stamped none.
     private func compareVolume(_ volumeId: String, in work: inout TEIComparisonWork, pipeline: IndexingPipeline,
                                from served: SQLiteConnection, seeder: SQLiteConnection) async throws {
         // A volume compared before, as a re-check's, or one a stop left half compared, leaves the comparison first.
@@ -461,17 +537,41 @@ public actor TEIChangeCheck {
         work.checked.removeAll { $0 == volumeId }
         work.changed.removeAll { $0 == volumeId }
         work.unchecked[volumeId] = nil
-        // The file as it is before the indexer reads it, so that one changed meanwhile is compared again.
+        // The file as it is before it is read, so that one changed meanwhile is compared again.
         guard let file = TEIFileStamp.of(teiFile(volumeId)) else {
             work.files[volumeId] = nil
             work.unchecked[volumeId] = "Its file, \(volumeId).xml, is not in the TEI folder, so the reader opens none of its documents."
             return
         }
+        work.files[volumeId] = file
+        let stored: [String: TEIStoredRevision]
+        do {
+            stored = try Self.storedRevisions(volumeId, in: served)
+        } catch {
+            log("The export's record of \(volumeId) could not be read to compare it with its TEI: \(error)")
+            work.unchecked[volumeId] = "The export's record of it could not be read to compare it, which the server's log says why."
+            return
+        }
+        let differences: TEIDifferences
+        do {
+            differences = Self.differences(parsed: try await Self.revisionHashes(of: teiFile(volumeId)), stored: stored)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            log("\(volumeId) could not be compared with its TEI: \(error)")
+            work.unchecked[volumeId] = "Its TEI could not be read to compare it, which the server's log says why."
+            return
+        }
+        guard !differences.isEmpty else {
+            work.checked.append(volumeId)
+            return
+        }
+        log("\(volumeId): given to the kit's indexer to compare, for \(differences)")
         // Room for the volume's tables and their log, beside the user store and its backups.
         if let free = VolumeLibrary.freeBytes(at: folder), free < 2 * file.bytes + LibraryIndexer.spareBytes {
             throw TEICheckProblem("the data volume has \(LibraryIndexer.megabytes(free)) free, and comparing \(volumeId) needs about \(LibraryIndexer.megabytes(2 * file.bytes + LibraryIndexer.spareBytes))")
         }
-        work.files[volumeId] = file
+        if let hook = volumeIndexedTestHook { await hook(volumeId) }
         do {
             try Self.seed(volumeId, from: served, into: seeder)
             try await pipeline.indexVolume(volumeId)
@@ -495,13 +595,21 @@ public actor TEIChangeCheck {
     /// The comparison whole: its log folded into it and its journal a rollback journal's, a file a reader opens
     /// immutable, renamed into place after its record, and the work folder removed. A stop between the two leaves
     /// the work folder whole, which the next start places again.
+    ///
+    /// The log is folded through a connection opened here, after the kit's writer and the seeder are let go, so that
+    /// it is the file's only one and sees the file as the kit left it. The seeder's own view can be older than the
+    /// kit's packing of the file: a comparison that indexed no volume, whose seeder had only read the scratch index,
+    /// left one that read as malformed when its log was folded through the seeder.
     private func place(_ work: TEIComparisonWork, seeder: SQLiteConnection) throws -> TEIChangeRecord {
-        let folded = try seeder.query("PRAGMA wal_checkpoint(TRUNCATE)").first?.first?.integer ?? 1
-        let journal = try seeder.query("PRAGMA journal_mode=DELETE").first?.first?.text ?? ""
+        seeder.close()
+        let last = try SQLiteConnection(buildingURL.path, readOnly: false)
+        defer { last.close() }
+        let folded = try last.query("PRAGMA wal_checkpoint(TRUNCATE)").first?.first?.integer ?? 1
+        let journal = try last.query("PRAGMA journal_mode=DELETE").first?.first?.text ?? ""
         guard folded == 0, journal.lowercased() == "delete" else {
             throw TEICheckProblem("the comparison index's log could not be folded into it (busy \(folded), journal \(journal))")
         }
-        seeder.close()
+        last.close()
         // To the second, as the record's file keeps it.
         let checkedAt = Date(timeIntervalSince1970: now().timeIntervalSince1970.rounded(.down))
         let record = TEIChangeRecord(served: work.served, checkedAt: checkedAt, checked: work.checked.sorted(),
@@ -520,6 +628,87 @@ public actor TEIChangeCheck {
         return recheck
             ? "Compared again the \(compared) \(compared == 1 ? "volume" : "volumes") whose TEI file changed: of the index's \(record.checked.count) volumes compared, \(found)\(failed)"
             : "Compared \(record.checked.count) of the index's \(record.checked.count + record.unchecked.count) volumes with the TEI folder: \(found)\(failed)"
+    }
+
+    // MARK: The selection
+
+    /// Each document of the volume's TEI file at `url`, in the file's order, with its two revision hashes as the kit's
+    /// indexer stamps them: the parse `indexVolume` makes, `parseVolumeFull`, and every document it gives, front
+    /// matter and editorial notes among them, hashed by the kit's public functions over the strings the indexer
+    /// stores. Not isolated to the check, so the parse runs off the actor.
+    static func revisionHashes(of url: URL) async throws -> [TEIParsedDocument] {
+        try await FRUSDocumentParser().parseVolumeFull(volumeURL: url).documents.map {
+            TEIParsedDocument(id: $0.documentId, hashes: revisionHashes(of: $0))
+        }
+    }
+
+    /// A parsed document's two revision hashes: `content_hash` over its head, dateline, source note and text as the
+    /// indexer stores them, and `body_hash`, its rendering version, each by the kit's own function.
+    static func revisionHashes(of document: FRUSDocumentAST) -> TEIRevisionHashes {
+        let nodes = document.nodes
+        return TEIRevisionHashes(
+            content: IndexingPipeline.contentHash(header: IndexingPipeline.extractHeader(from: nodes),
+                                                  dateline: IndexingPipeline.extractDateline(from: nodes),
+                                                  sourceNote: IndexingPipeline.extractSourceNote(from: nodes),
+                                                  bodyText: IndexingPipeline.extractBodyText(from: nodes)),
+            body: IndexingPipeline.bodyHash(for: document))
+    }
+
+    /// The export's revision rows of `volumeId`, by document id.
+    static func storedRevisions(_ volumeId: String, in served: SQLiteConnection) throws -> [String: TEIStoredRevision] {
+        var rows: [String: TEIStoredRevision] = [:]
+        try served.forEachRow(
+            "SELECT document_id, content_hash, body_hash, index_version, change_kind FROM document_revisions WHERE volume_id = ?",
+            [.text(volumeId)]) { row in
+            guard let id = row[0].text else { return }
+            rows[id] = TEIStoredRevision(content: row[1].text ?? "", body: row[2].text ?? "",
+                                         indexVersion: row[3].integer.map { Int($0) }, vanished: row[4].text == "vanished")
+        }
+        return rows
+    }
+
+    /// Where a volume's documents, `parsed` from its TEI file in its order, differ from `stored`, the export's revision
+    /// rows of it: what has the comparison give the volume to the kit's indexer, so that the kit states what changed
+    /// and how. A document's row is compared with the last document of its id, as the indexer's writes keep the last.
+    /// Four things count:
+    /// - a row at the indexer's version, `IndexingPipeline.currentDateIndexVersion`, of a document the file no longer
+    ///   gives;
+    /// - a document of the file with no row, or with a row that records it as vanished, at any version;
+    /// - a document whose content or body hash is not its row's, where the row is at the indexer's version;
+    /// - an id the file gives to more than one document, hashed differently, which the indexer writes in turn.
+    ///
+    /// The version is the plan's rule for this comparison (PLAN's S21f follow-up): the kit's `contentHash` says a
+    /// stored row compares only at its version, since a version can move a document's hashes with no change to its
+    /// file, and the indexer stamps no change across one, a row of a document that has gone included.
+    /// `TEIComparisonTests.theVolumesTheSelectionSkipsAreOnesTheKitStampsNothingIn` holds the kit to that: it runs the
+    /// kit's indexer over the rows this passes over and finds nothing stamped. Which change a difference is, and
+    /// whether it is one, is the kit's to say.
+    static func differences(parsed: [TEIParsedDocument], stored: [String: TEIStoredRevision]) -> TEIDifferences {
+        let version = IndexingPipeline.currentDateIndexVersion
+        var last: [String: TEIRevisionHashes] = [:]
+        var repeated = Set<String>()
+        for document in parsed {
+            if let before = last[document.id], before != document.hashes { repeated.insert(document.id) }
+            last[document.id] = document.hashes
+        }
+        var found = TEIDifferences()
+        for (id, row) in stored where last[id] == nil && row.indexVersion == version {
+            found.notInTEI.append(id)
+        }
+        for (id, hashes) in last {
+            guard let row = stored[id], !row.vanished else {
+                found.notInExport.append(id)
+                continue
+            }
+            if row.indexVersion == version, row.content != hashes.content || row.body != hashes.body {
+                found.hashes.append(id)
+            }
+        }
+        found.notInTEI.sort()
+        found.notInExport.sort()
+        found.hashes.sort()
+        found.repeated = repeated.sorted()
+        return found
     }
 
     // MARK: The comparison index's rows
