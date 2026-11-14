@@ -69752,8 +69752,8 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "691f8b175057a3e95603f23cd6ce697b81955d3f177537cc52fc51d3ce281e31",
+    "sourceDigest" : "621edf669a6eba8a63a6527ddedb4706b6fbc4fcfbf0d8a5c28ad70cdb4a8d1f",
     "tool" : "tools/mac-golden rich-text",
-    "upstreamCommit" : "39859a51b07863d7391c6e92aa70b0a14a0c066f"
+    "upstreamCommit" : "b124a59b1b43c0b662754a060e0727ce3989ad1f"
   }
 }
