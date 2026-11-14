@@ -147,7 +147,7 @@ import Testing
         NoteViewParityTests.expect(page, holds: [
             "const evidence = keyed ? query?.evidence : undefined;",
             "<Section title={evidence?.sectionTitle ?? words.naraHeader}>",
-            "{!keyed ? (",
+            ") : !keyed ? (",
             "{evidence?.caveat && <Caption>{evidence.caveat}</Caption>}",
             "{search.data.results.slice(0, 5).map((result) => (",
             "{result.title} {evidence && !evidence.isVerified && <ConfidenceChip />}",
@@ -171,10 +171,14 @@ import Testing
         let dialog = try sources.web("reader/LookUpDialog.tsx")
         NoteViewParityTests.expect(dialog, holds: [
             "const [text, setText] = useState(selection.text.trim());",
-            "setText(candidate.query); setChosen(candidate.strategy); setSearch(null);",
-            "setChosen(each.id); setSearch(null);",
-            "{current?.searches && status.data && !keyed && <p className=\"hint warning\">{words.noKey}</p>}",
-            "const searchable = !searching && query !== '' && keyed;",
+            // A reading's fill and a strategy's change clear the results, as the app's do; the web's also drops an
+            // answer still out, which the app's `hasSearched` hides.
+            "setText(candidate.query); setChosen(candidate.strategy); cleared();",
+            "setChosen(each.id); cleared();",
+            "function cleared() { generation.current += 1; setSearch(null); }",
+            "const warns = !!current?.searches && !!status.data && !keyed;",
+            // `isSearching` outlasts a change, as `asking` does; the web's also waits for the passage's reading.
+            "const searchable = !asking && sheet.isSuccess && query !== '' && keyed;",
             "const showsPeriodLinks = strategy === 'centralURL';",
             "const answer = await searchNARA(client, { strategy, query });",
         ], file: "LookUpDialog.tsx")
@@ -186,7 +190,8 @@ import Testing
         ], file: "DocumentView.swift")
         NoteViewParityTests.expect(proxy, holds: [
             "if let block = selection.blockText, !block.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return block }",
-            "return flatTextExcerpt(from: page.model, start: max(0, start - NARALookupAnalyzer.contextBefore), end: end + NARALookupAnalyzer.contextAfter)",
+            // The app's end, with the web's guard for an end no addition can take, which a request can send.
+            "return flatTextExcerpt(from: page.model, start: max(0, start - NARALookupAnalyzer.contextBefore), end: end > Int.max - after ? Int.max : end + after)",
         ], file: "NARACatalog.swift")
 
         // The Zotero sends: the document's tags and notes, its send with no collection; the collection's items in
@@ -204,7 +209,6 @@ import Testing
             "let items = documents.sorted { $0.sortOrder < $1.sortOrder }.compactMap(\\.zoteroItem)",
             "collectionName: CollectionExportNaming.zoteroCollectionName(savedName: collection.name),",
             #"try await CollectionExportRoutes.recordKept(format: "zotero-api", documents: result.addedItems, of: collection,"#,
-            "let account = try await client.resolveAccount(key: key)",
         ], file: "ZoteroSend.swift")
         NoteViewParityTests.expect(try sources.app("DocumentView/DocumentView.swift"), holds: [
             "let result = try await ZoteroAPIClient().send( items: [item], collectionName: nil,",
