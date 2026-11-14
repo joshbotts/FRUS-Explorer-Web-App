@@ -1,9 +1,12 @@
-// A person's sheet (PLAN's S21g), the app's `PersonIndexDetailSheet`: the name, the volumes' description, the
-// register's life years and role, the reconciled mark, Mentions and Active, Find all mentions, the VIAF and Wikidata
-// links, and for a curator the app's corrections: Merge with another person…, its picker (`PersonMergePickerSheet`)
-// and its question; Possibly the Same Person, each with Merge; and the identity's records, each with Separate. A
-// correction ends the sheet, as the app's dismisses it, once the server has answered, and the screen says what it did.
-// The register's career and the volumes' subjects wait for kit members an upstream pull request makes public.
+// A person's sheet (PLAN's S21g), the app's `PersonIndexDetailSheet`, in its order: the name; the volumes' description
+// under its source's chip; the lifespan line, the kit's (`PersonLifespan`), and the register's role, under the
+// register's chip; the reconciled mark; Mentions and Active; Subjects, the kit's ranking of the subjects of the volumes
+// the person is mentioned in, each a chip that opens its pivot, the volumes covering it (SubjectVolumesSheet.tsx); Find
+// all mentions, the VIAF and Wikidata links; Career, the register's posts, each its title, dates and note, over the
+// register's sentence and chip (S21g's follow-up); and for a curator the app's corrections: Merge with another
+// person…, its picker (`PersonMergePickerSheet`) and its question; Possibly the Same Person, each with Merge; and the
+// identity's records, each with Separate. A correction ends the sheet, as the app's dismisses it, once the server has
+// answered, and the screen says what it did.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useId, useRef, useState } from 'react';
@@ -15,11 +18,14 @@ import {
   personQuery,
   type PersonRow,
   type PersonSheet as Sheet,
+  type PersonSubject,
   separatePerson,
 } from '../api/people';
 import { copy } from '../copy';
 import { closeAtOnce, Modal } from '../shell/Modal';
-import { mergeQuestion, pickerRows, roleEraLine } from './peopleRules';
+import { ProvenanceChip } from '../sources/Chips';
+import { mergeQuestion, pickerRows, roleEraLine, subjectChipValue } from './peopleRules';
+import { SubjectVolumesSheet } from './SubjectVolumesSheet';
 
 /** What a correction made, or one undone, did, as the screen's line says it. */
 export function outcomeLine(done: string, outcome: CorrectionOutcome, undone = false): string {
@@ -52,6 +58,9 @@ export function PersonSheet({
   const body = useRef<HTMLDivElement>(null);
   const mergeButton = useRef<HTMLButtonElement>(null);
   const [picking, setPicking] = useState(false);
+  // The chip whose pivot is open, and the chip itself, which focus goes back to when the pivot closes.
+  const [pivot, setPivot] = useState<PersonSubject | null>(null);
+  const chip = useRef<HTMLButtonElement | null>(null);
   const [confirming, setConfirming] = useState<PersonRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -126,6 +135,10 @@ export function PersonSheet({
             curator={curator}
             busy={busy}
             mergeButton={mergeButton}
+            onPivot={(subject, opener) => {
+              chip.current = opener;
+              setPivot(subject);
+            }}
             onPick={() => setPicking(true)}
             onMerge={(candidate) => void merge(candidate)}
             onSeparate={(record) =>
@@ -146,6 +159,19 @@ export function PersonSheet({
           </button>
         </div>
       </div>
+      {pivot && (
+        <SubjectVolumesSheet
+          subject={pivot}
+          onClose={() => {
+            setPivot(null);
+            // Back to the chip, or to the sheet's heading where the sheet was read again meanwhile and the chip is gone.
+            requestAnimationFrame(() => {
+              const back = chip.current;
+              (back?.isConnected ? back : body.current?.querySelector<HTMLElement>('h2'))?.focus();
+            });
+          }}
+        />
+      )}
       {picking && (
         <MergePicker
           list={list}
@@ -178,6 +204,7 @@ function SheetBody({
   curator,
   busy,
   mergeButton,
+  onPivot,
   onPick,
   onMerge,
   onSeparate,
@@ -186,6 +213,7 @@ function SheetBody({
   curator: boolean;
   busy: boolean;
   mergeButton: { current: HTMLButtonElement | null };
+  onPivot: (subject: PersonSubject, opener: HTMLButtonElement) => void;
   onPick: () => void;
   onMerge: (candidate: { rollupId: number; name: string }) => void;
   onSeparate: (record: { volumeId: string; ref: string; name: string }) => void;
@@ -193,14 +221,24 @@ function SheetBody({
   const mergeFooterId = useId();
   const candidatesId = useId();
   const recordsId = useId();
+  const subjectsId = useId();
+  const careerId = useId();
   return (
     <>
       <div className="person-head">
-        {data.description && <p className="person-description">{data.description}</p>}
+        {/* Each claim under its source's chip, the volumes' words apart from the register's, as the app badges them. */}
+        {data.description && (
+          <div className="person-claim">
+            <p className="person-description">{data.description}</p>
+            <ProvenanceChip source="frusText" />
+          </div>
+        )}
         {(data.lifespan || data.registerRole) && (
-          <p className="meta">
-            {[data.lifespan, data.registerRole].filter(Boolean).join(' · ')}
-          </p>
+          <div className="person-claim">
+            {data.lifespan && <p className="meta person-lifespan">{data.lifespan}</p>}
+            {data.registerRole && <p className="meta">{data.registerRole}</p>}
+            <ProvenanceChip source="ohPeopleRegister" />
+          </div>
         )}
         {data.reconciled && (
           <p className="meta" title={copy.people.reconciledHelp}>
@@ -218,6 +256,29 @@ function SheetBody({
           </>
         )}
       </dl>
+      {data.subjects.length > 0 && (
+        <section className="person-subjects" aria-labelledby={subjectsId}>
+          <h3 id={subjectsId}>{copy.people.subjectsHeader}</h3>
+          <ul className="chips">
+            {data.subjects.map((subject, index) => (
+              <li key={subject.ref}>
+                <button type="button" className="chip" title={copy.people.subjectChipHelp}
+                  aria-describedby={`${subjectsId}-value-${index} ${subjectsId}-hint`}
+                  onClick={(event) => onPivot(subject, event.currentTarget)}>
+                  {subject.name}
+                </button>
+                <span id={`${subjectsId}-value-${index}`} hidden>
+                  {subjectChipValue(subject)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <span id={`${subjectsId}-hint`} hidden>
+            {copy.people.subjectChipHint}
+          </span>
+          <p className="note">{copy.people.subjectsNote}</p>
+        </section>
+      )}
       <ul className="person-links">
         <li>
           {data.mentionCount > 0 ? (
@@ -250,6 +311,36 @@ function SheetBody({
           </li>
         )}
       </ul>
+      {data.career.length > 0 && (
+        <section className="person-career" aria-labelledby={careerId}>
+          <h3 id={careerId}>{copy.people.careerHeader}</h3>
+          <ul>
+            {data.career.map((post, index) => (
+              // One stop each, its lines read in turn, as the app combines a post's. Known by its place: the register
+              // can give one career two posts alike but for when they end.
+              <li key={index}>
+                <span className="post-title">{post.title}</span>
+                {post.dates && (
+                  <>
+                    {' '}
+                    <span className="meta post-dates">{post.dates}</span>
+                  </>
+                )}
+                {post.note && (
+                  <>
+                    {' '}
+                    <span className="note post-note">{post.note}</span>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+          <div className="person-claim note">
+            <p>{copy.people.careerSource}</p>
+            <ProvenanceChip source="ohPeopleRegister" />
+          </div>
+        </section>
+      )}
       {curator && (
         <div className="person-merge">
           <button ref={mergeButton} type="button" aria-disabled={busy} aria-describedby={mergeFooterId} title={copy.people.mergeManualHelp}

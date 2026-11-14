@@ -858,7 +858,7 @@ assert any(n.startswith("Adenauer") for n in names) and any(n.startswith("Adzhub
 print(f"   d1 corrected and restored at once, both in the log; {people['count']} people in {len(people['sections'])} letters")
 PY
 if [ -n "$e2e" ]; then
-  echo "   the People spec in Playwright on Chromium: two people merged by keyboard, and the merge undone"
+  echo "   the People spec in Playwright on Chromium: a sheet's Career and Subjects read and a chip followed, two people merged by keyboard, and the merge undone"
   FRUS_E2E_PEOPLE=1 FRUS_E2E_NETWORK="container:$(library_compose ps -q frus)" FRUS_E2E_BASE_URL=http://localhost:8080/ scripts/npm --playwright \
     || fail "the People spec failed; web/playwright-report has its report"
 fi

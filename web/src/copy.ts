@@ -372,7 +372,10 @@ export const copy = {
    * this server, where a curator undoes them (Corrections' help and its empty list), and the corrections "the app
    * kept apart" are the index's. An empty server's sentence, who made a correction, the lines for one kept or undone
    * for the next export or a job and for people rebuilt since a page was loaded, and the note on an Import server
-   * are the web's own.
+   * are the web's own. S21g's follow-up adds the sheet's Subjects and Career and a chip's pivot, the app's
+   * `VolumeSubjectVolumesSheet` opened from a person, in the app's words, its counts in the app's one and many as
+   * the kit's `CountCopy` chooses them (browse/annotationRules.ts's `counted`); the pivot's line while its volumes
+   * load is the web's own.
    */
   people: {
     title: 'People',
@@ -394,6 +397,14 @@ export const copy = {
     reconciledHelp: 'Matched to the bundled name-authority data',
     mentions: 'Mentions',
     active: 'Active',
+    subjectsHeader: 'Subjects',
+    subjectsNote: 'Volume-level: subjects characteristic of the volumes where this person is mentioned — not per-document tags.',
+    /** A chip's spoken value, its category and how many of the person's volumes carry it. */
+    subjectChipValue: (category: string, volumes: string) => `${category}, in ${volumes} mentioning this person`,
+    subjectChipVolumeOne: (count: string) => `${count} volume`,
+    subjectChipVolumeMany: (count: string) => `${count} volumes`,
+    subjectChipHint: 'Shows other volumes covering this subject',
+    subjectChipHelp: 'Subject of volumes where this person is mentioned — click to see all volumes covering it',
     findMentions: 'Find all mentions',
     findMentionsHelp: 'Open Search filtered to documents that mention this person',
     noMentions: 'This person has no indexed document mentions to open — they appear only in a volume’s front-matter person list.',
@@ -401,6 +412,15 @@ export const copy = {
     viafHelp: 'Open this person’s VIAF authority record',
     wikidata: 'View on Wikidata',
     wikidataHelp: 'Open this person’s Wikidata item',
+    careerHeader: 'Career',
+    careerSource: 'From the Department’s Principal Officers and Chiefs of Mission register.',
+    /** A chip's pivot: the volumes covering its subject, none excluded, as the app's sheet lists them from a person. */
+    subjectVolumesOne: (count: string) => `${count} volume covers this subject`,
+    subjectVolumesMany: (count: string) => `${count} volumes cover this subject`,
+    subjectVolumeHint: 'Opens this volume in the browser',
+    subjectVolumesEmptyTitle: 'No volumes',
+    subjectVolumesEmptyDetail: 'No volume in the series carries documents on this subject.',
+    subjectVolumesLoading: 'Loading volumes…',
     mergeManual: 'Merge with another person…',
     mergeManualHelp: 'Combine this identity with another person you choose',
     mergeManualFooter:

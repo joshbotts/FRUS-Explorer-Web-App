@@ -1,10 +1,20 @@
-import { cleanup, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { PeopleList, PersonCorrections, PersonSheet } from '../api/people';
+import type { PeopleList, PersonCorrections, PersonSheet, SubjectVolumes } from '../api/people';
 import type { Me } from '../api/types';
 import { ProblemAnswer, ready, renderAt, stubServer } from '../test/renderRoute';
-import { correctionTitle, displaySections, folded, mergeQuestion, pickerRows, roleEraLine, rowLabel } from './peopleRules';
+import {
+  correctionTitle,
+  displaySections,
+  folded,
+  mergeQuestion,
+  pickerRows,
+  roleEraLine,
+  rowLabel,
+  subjectChipValue,
+  subjectVolumesHeader,
+} from './peopleRules';
 
 const curator: Me = { userId: 'owner', displayName: 'Owner', auth: 'none', roles: ['reader', 'curator', 'admin'], userData: true, csrfToken: 't1' };
 const reader: Me = { userId: 'bob', displayName: 'bob', auth: 'header', roles: ['reader'], userData: true, csrfToken: 't2' };
@@ -36,12 +46,49 @@ const adenauer: PersonSheet = {
   mentionCount: 12,
   mentions: '12 documents',
   active: '1961–1963',
+  subjects: [],
   viafURL: 'https://viaf.org/viaf/12345',
   wikidataURL: 'https://www.wikidata.org/wiki/Q2492',
+  career: [],
   candidates: [{ rollupId: 2, name: 'Adzhubei, Aleksei I.', reason: 'Same surname, overlapping years' }],
   records: [
     { volumeId: 'frus1961-63v06', ref: 'p_AK3', name: 'Adenauer, Conrad' },
     { volumeId: 'frus1969-76ve09p1', ref: 'p_AK1', name: 'Adenauer, Konrad' },
+  ],
+};
+
+/** A sheet with Subjects and Career, a person the register knows, and one chip's pivot. */
+const thompsonRow = { rollupId: 7, name: 'Thompson, Llewellyn E.', subtitle: 'Ambassador to the Soviet Union', mentionCount: 40, volumeCount: 1, authorityId: 70, possibleDuplicate: false };
+const thompson: PersonSheet = {
+  version: 'v1',
+  rollupId: 7,
+  name: 'Thompson, Llewellyn E.',
+  description: 'Ambassador to the Soviet Union',
+  lifespan: '1904–1972',
+  registerRole: 'Foreign Service officer',
+  reconciled: true,
+  authorityId: 70,
+  mentionCount: 40,
+  mentions: '40 documents',
+  active: '1961–1963',
+  subjects: [
+    { ref: 'berlin-crisis', name: 'Berlin Crisis', category: 'Crises', volumeCount: 1 },
+    { ref: 'arms-control', name: 'Arms Control', category: 'Arms Control and Disarmament', volumeCount: 2 },
+  ],
+  viafURL: null,
+  wikidataURL: null,
+  career: [
+    { title: 'Ambassador Extraordinary and Plenipotentiary — Soviet Union', dates: '1957-07-16 – 1962-07-27', note: null },
+    { title: 'Ambassador-at-Large', dates: null, note: 'Left post' },
+  ],
+  candidates: [],
+  records: [],
+};
+const berlin: SubjectVolumes = {
+  ref: 'berlin-crisis',
+  volumes: [
+    { volumeId: 'frus1958-60v08', title: 'Foreign Relations of the United States, 1958–1960, Volume VIII, Berlin Crisis, 1958–1959' },
+    { volumeId: 'frus1961-63v14', title: null },
   ],
 };
 
@@ -99,6 +146,90 @@ describe('the People screen', () => {
     expect(within(sheet).queryByRole('button', { name: 'Merge with another person…' })).toBeNull();
     expect(within(sheet).queryByRole('button', { name: /^Separate/ })).toBeNull();
     expect(within(sheet).queryByRole('button', { name: /^Merge Adzhubei/ })).toBeNull();
+    // No subject ranked and no post in the register: neither section, as the app's sheet draws neither.
+    expect(within(sheet).queryByRole('region', { name: 'Subjects' })).toBeNull();
+    expect(within(sheet).queryByRole('region', { name: 'Career' })).toBeNull();
+  });
+
+  it('draws Subjects and Career as the app’s sheet does, and a chip opens the volumes covering its subject, by keyboard', async () => {
+    server(reader, {
+      '/api/v1/people': { version: 'v1', count: 1, sections: [{ letter: 'T', people: [thompsonRow] }] } satisfies PeopleList,
+      '/api/v1/people/7': thompson,
+      '/api/v1/subjects/berlin-crisis/volumes': berlin,
+    });
+    renderAt('/people');
+    await userEvent.click(await screen.findByRole('button', { name: /^Thompson, Llewellyn E\./ }));
+    const sheet = await screen.findByRole('dialog', { name: 'Thompson, Llewellyn E.' });
+    // The lifespan line and the register's role under the register's chip, the volumes' words under their own.
+    expect(await within(sheet).findByText('1904–1972')).toBeTruthy();
+    expect(within(sheet).getByText('Foreign Service officer')).toBeTruthy();
+    expect(within(sheet).getAllByRole('img', { name: 'Source: the FRUS volumes only.' })).toHaveLength(1);
+    expect(within(sheet).getAllByRole('img', { name: /^Source: FRUS joined to the Office of the Historian's working data on people/ })).toHaveLength(2);
+    // The app's order: Mentions and Active, Subjects, the links, Career.
+    const headings = within(sheet).getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent);
+    expect(headings).toEqual(['Subjects', 'Career']);
+    const subjects = within(sheet).getByRole('region', { name: 'Subjects' });
+    const career = within(sheet).getByRole('region', { name: 'Career' });
+    const active = within(sheet).getByText('Active');
+    const mentions = within(sheet).getByRole('link', { name: 'Find all mentions' });
+    const follows = (first: Node, then: Node) => Boolean(first.compareDocumentPosition(then) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(active, subjects) && follows(subjects, mentions) && follows(mentions, career)).toBe(true);
+    // Each chip its subject's name, said with its category and count and the hint, in the server's order.
+    const chips = within(subjects).getAllByRole('button');
+    expect(chips.map((chip) => chip.textContent)).toEqual(['Berlin Crisis', 'Arms Control']);
+    const described = (chip: HTMLElement) =>
+      (chip.getAttribute('aria-describedby') ?? '').split(' ').map((id) => document.getElementById(id)?.textContent).join(' ');
+    expect(described(chips[0]!)).toBe('Crises, in 1 volume mentioning this person Shows other volumes covering this subject');
+    expect(described(chips[1]!)).toBe('Arms Control and Disarmament, in 2 volumes mentioning this person Shows other volumes covering this subject');
+    expect(chips[0]!.getAttribute('title')).toBe('Subject of volumes where this person is mentioned — click to see all volumes covering it');
+    expect(within(subjects).getByText(/^Volume-level: subjects characteristic of the volumes/)).toBeTruthy();
+    // Career's posts in order, each its title, its dates where the register has them and its note, over its sentence.
+    expect(within(career).getAllByRole('listitem').map((post) => post.textContent)).toEqual([
+      'Ambassador Extraordinary and Plenipotentiary — Soviet Union 1957-07-16 – 1962-07-27',
+      'Ambassador-at-Large Left post',
+    ]);
+    expect(within(career).getByText('From the Department’s Principal Officers and Chiefs of Mission register.')).toBeTruthy();
+
+    // The first chip by keyboard: its pivot lists the volumes covering it, each a link to its page, by its title or id.
+    chips[0]!.focus();
+    await userEvent.keyboard('{Enter}');
+    const pivot = await screen.findByRole('dialog', { name: 'Berlin Crisis' });
+    await waitFor(() => expect(document.activeElement).toBe(within(pivot).getByRole('heading', { level: 2, name: 'Berlin Crisis' })));
+    expect(await within(pivot).findByRole('heading', { name: '2 volumes cover this subject' })).toBeTruthy();
+    // Done beside the title, before the rows, as the app's toolbar keeps it.
+    const done = within(pivot).getByRole('button', { name: 'Done' });
+    expect(Boolean(done.compareDocumentPosition(within(pivot).getAllByRole('link')[0]!) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    const rows = within(pivot).getAllByRole('link');
+    expect(rows.map((row) => row.getAttribute('href'))).toEqual(['/browse/frus1958-60v08', '/browse/frus1961-63v14']);
+    expect(rows.map((row) => row.textContent)).toEqual([
+      'Foreign Relations of the United States, 1958–1960, Volume VIII, Berlin Crisis, 1958–1959 frus1958-60v08',
+      'frus1961-63v14 frus1961-63v14',
+    ]);
+    expect(rows[0]!.getAttribute('title')).toBe('Opens this volume in the browser');
+    // Done, and focus is back on the chip.
+    done.focus();
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Berlin Crisis' })).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(chips[0]));
+  });
+
+  it('says a subject no volume carries as the app’s pivot does, and closes on Escape', async () => {
+    server(reader, {
+      '/api/v1/people': { version: 'v1', count: 1, sections: [{ letter: 'T', people: [thompsonRow] }] } satisfies PeopleList,
+      '/api/v1/people/7': thompson,
+      '/api/v1/subjects/arms-control/volumes': { ref: 'arms-control', volumes: [] } satisfies SubjectVolumes,
+    });
+    renderAt('/people');
+    await userEvent.click(await screen.findByRole('button', { name: /^Thompson, Llewellyn E\./ }));
+    const sheet = await screen.findByRole('dialog', { name: 'Thompson, Llewellyn E.' });
+    await userEvent.click(await within(sheet).findByRole('button', { name: 'Arms Control' }));
+    const pivot = await screen.findByRole('dialog', { name: 'Arms Control' });
+    expect(await within(pivot).findByRole('heading', { name: 'No volumes' })).toBeTruthy();
+    expect(within(pivot).getByText('No volume in the series carries documents on this subject.')).toBeTruthy();
+    expect(within(pivot).queryByRole('link')).toBeNull();
+    fireEvent(pivot, new Event('cancel', { cancelable: true }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Arms Control' })).toBeNull());
+    expect(screen.getByRole('dialog', { name: 'Thompson, Llewellyn E.' })).toBeTruthy();
   });
 
   it('merges two people by keyboard for a curator: the picker, the question, and the line the screen says', async () => {
@@ -192,6 +323,17 @@ describe('the People screen’s rules', () => {
     expect(mergeQuestion({ name: 'B', authorityId: 1 }, { name: 'A', authorityId: 1 })).not.toContain('different entries');
     expect(mergeQuestion({ name: 'B', authorityId: null }, { name: 'A', authorityId: 1 })).not.toContain('different entries');
     expect(correctionTitle({ kind: 'split', nameA: 'Adzhubei' })).toBe('Adzhubei — separated');
+  });
+
+  it('says a chip’s value and its pivot’s count in the one form at exactly one, grouped, as the kit’s CountCopy does', () => {
+    const subject = { ref: 'warfare', name: 'Warfare', category: 'Warfare', volumeCount: 1 };
+    expect(subjectChipValue(subject)).toBe('Warfare, in 1 volume mentioning this person');
+    expect(subjectChipValue({ ...subject, volumeCount: 2 })).toBe('Warfare, in 2 volumes mentioning this person');
+    expect(subjectVolumesHeader(1)).toBe('1 volume covers this subject');
+    expect(subjectVolumesHeader(69)).toBe('69 volumes cover this subject');
+    expect(subjectVolumesHeader(0)).toBe('0 volumes cover this subject');
+    expect(subjectVolumesHeader(1204)).toBe('1,204 volumes cover this subject');
+    expect(subjectChipValue({ ...subject, volumeCount: 1204 })).toBe('Warfare, in 1,204 volumes mentioning this person');
   });
 
   it('gives the merge picker the role and era alone, as the app’s picker shows them', () => {

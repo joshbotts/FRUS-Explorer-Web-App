@@ -2,7 +2,8 @@
 // People browser lists it, an identity's sheet, the corrections a curator makes to it, Merge and Separate, and the
 // one made to a document's classification in the rail. Each correction is answered once the index has taken it, on a
 // Standalone server, or kept for the next export an Import server installs; either way what the browser holds of
-// the people, of search and of the document is asked for again.
+// the people, of search and of the document is asked for again. A sheet's subject chip asks for the volumes covering
+// its subject, its pivot (S21g's follow-up), which the bundled files answer whatever the index holds.
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
 import { getJSON } from './client';
 import { corpusQueryKeys, retryServerFaults } from './endpoints';
@@ -31,12 +32,22 @@ export interface PeopleList {
   sections: { letter: string; people: PersonRow[] }[];
 }
 
+/** A subject of the volumes a person is mentioned in, the kit's ranking's, as the sheet's chip draws it. */
+export interface PersonSubject {
+  ref: string;
+  name: string;
+  category: string;
+  /** How many of the volumes the person is mentioned in carry it. */
+  volumeCount: number;
+}
+
 /** An identity's sheet. */
 export interface PersonSheet {
   version: string;
   rollupId: number;
   name: string;
   description?: string | null;
+  /** The kit's lifespan line: the name authority's years, a gap filled from the register's career. */
   lifespan?: string | null;
   registerRole?: string | null;
   reconciled: boolean;
@@ -44,10 +55,20 @@ export interface PersonSheet {
   mentionCount: number;
   mentions: string;
   active?: string | null;
+  /** Subjects, in the kit's order; none where the sheet shows no section. */
+  subjects: PersonSubject[];
   viafURL?: string | null;
   wikidataURL?: string | null;
+  /** Career, the register's posts in its order, each the kit's title and dates; none where the sheet shows no section. */
+  career: { title: string; dates?: string | null; note?: string | null }[];
   candidates: { rollupId: number; name: string; reason?: string | null }[];
   records: { volumeId: string; ref: string; name: string }[];
+}
+
+/** A chip's pivot: every volume covering a subject, by volume id, each with the catalogue's title. */
+export interface SubjectVolumes {
+  ref: string;
+  volumes: { volumeId: string; title?: string | null }[];
 }
 
 /** Where a correction stands once it is kept. */
@@ -129,6 +150,16 @@ export function personQuery(rollupId: number) {
     queryKey: ['people', 'person', rollupId],
     queryFn: ({ signal }) => getJSON<PersonSheet>(`/api/v1/people/${rollupId}`, undefined, signal),
     // A rollup built again since the list was read may number no one so: said at once, not after retries.
+    retry: retryServerFaults,
+  });
+}
+
+/** A subject's covering volumes, from the server's bundled files, which do not change while it runs. */
+export function subjectVolumesQuery(ref: string) {
+  return queryOptions({
+    queryKey: ['subjects', ref, 'volumes'],
+    queryFn: ({ signal }) => getJSON<SubjectVolumes>(`/api/v1/subjects/${segment(ref)}/volumes`, undefined, signal),
+    staleTime: Infinity,
     retry: retryServerFaults,
   });
 }

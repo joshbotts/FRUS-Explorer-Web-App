@@ -1348,7 +1348,8 @@ dialog.review-sheet {
 
 dialog.person-sheet,
 dialog.corrections-sheet,
-dialog.merge-picker {
+dialog.merge-picker,
+dialog.subject-volumes {
   width: min(40rem, calc(100vw - 2rem));
   max-width: min(40rem, calc(100vw - 2rem));
   max-height: calc(100vh - 4rem);
@@ -1357,6 +1358,67 @@ dialog.merge-picker {
 
 .person-description {
   margin-top: 0;
+}
+
+/* A claim of the sheet's, its lines over its source's chip, as the app badges each (S21g's follow-up). */
+.person-claim {
+  margin: 0 0 0.5rem;
+}
+
+.person-claim p {
+  margin: 0 0 0.125rem;
+}
+
+.person-lifespan {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Subjects, each chip a button that opens its pivot; Career, the register's posts, each its lines. */
+.person-subjects .chips,
+.person-career ul,
+.subject-volume-rows {
+  margin: 0 0 0.375rem;
+  padding: 0;
+  list-style: none;
+}
+
+.person-career li,
+.subject-volume-rows a {
+  display: flex;
+  flex-direction: column;
+  margin: 0.375rem 0;
+}
+
+.post-dates {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.subject-volume-rows a .meta {
+  margin: 0;
+}
+
+/* A chip's pivot: its title and Done stay in reach above a list that can hold hundreds of volumes, as the app's sheet
+   keeps its toolbar, and a row the focus reaches stays clear of them (WCAG 2.4.11). */
+dialog.subject-volumes {
+  padding-top: 0;
+  scroll-padding-top: 4.5rem;
+}
+
+.subject-volumes .sheet-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 0 0.5rem;
+  background: var(--bg);
+}
+
+.subject-volumes .sheet-header h2 {
+  margin: 0;
 }
 
 .person-facts {
