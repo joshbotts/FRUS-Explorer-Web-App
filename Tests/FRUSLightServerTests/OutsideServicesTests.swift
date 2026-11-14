@@ -14,6 +14,7 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
+import HTTPTypes
 import Hummingbird
 import HummingbirdTesting
 import Logging
@@ -411,9 +412,12 @@ private func body(_ response: TestResponse) -> String { String(buffer: response.
         try fixture.store("stub-zotero-writer-offline", as: .zotero, for: .user("owner"))
         try await fixture.app.test(.router) { client in
             let browser = Browser(client: client)
-            #expect(try decode(NARAStatus.self, try await browser.get("/api/v1/nara")).offline)
-            #expect(try problem(try await browser.send(.post, "/api/v1/nara/search", #"{"strategy": "keyword", "query": "x"}"#), .conflict).code == "OFFLINE")
-            #expect(try problem(try await browser.send(.post, "/api/v1/me/volumes/frus1961-63v06/documents/d3/zotero"), .conflict).code == "OFFLINE")
+            let status = try decode(NARAStatus.self, try await browser.get("/api/v1/nara"))
+            #expect(status.offline)
+            let search = try problem(try await browser.send(.post, "/api/v1/nara/search", #"{"strategy": "keyword", "query": "x"}"#), .conflict)
+            #expect(search.code == "OFFLINE")
+            let send = try problem(try await browser.send(.post, "/api/v1/me/volumes/frus1961-63v06/documents/d3/zotero"), .conflict)
+            #expect(send.code == "OFFLINE")
         }
         #expect(ServiceStub.requests(with: "stub-nara-ok-offline").isEmpty && ServiceStub.requests(with: "stub-zotero-writer-offline").isEmpty)
     }
@@ -588,10 +592,11 @@ private func body(_ response: TestResponse) -> String { String(buffer: response.
             seen.withLock { $0.append("POST \(request.headers[.authorization] ?? "") \(String(buffer: posted))") }
             return Response(status: .ok, headers: [.contentType: "application/json"], body: .init(byteBuffer: ByteBuffer(string: #"{"successful": {}, "failed": {}}"#)))
         }
-        let mirror = Application(router: router, configuration: .init(address: .hostname("127.0.0.1", port: 0)))
+        // `.live` serves the stand-in at localhost, on a port of its own.
+        let mirror = Application(router: router)
         try await mirror.test(.live) { client in
             let port = try #require(client.port)
-            let services = OutsideServices(configuration: ServerConfiguration(servicesMirror: URL(string: "http://127.0.0.1:\(port)/")!))
+            let services = OutsideServices(configuration: ServerConfiguration(servicesMirror: URL(string: "http://localhost:\(port)/")!))
             let nara = NARACatalogClient(keyProvider: FixedKey(key: "stub-nara-mirror"), urlSession: services.naraSession)
             let found = try await nara.searchByRecordGroup("59", keywords: "Lot 66", maxResults: 3)
             #expect(found.map(\.title) == ["Mirrored"])

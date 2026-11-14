@@ -101,7 +101,7 @@ final class ServicesMirrorProtocol: URLProtocol {
     private static let relay = URLSession(configuration: .ephemeral)
 
     /// The task asking the mirror, which `stopLoading()` cancels.
-    private let relayed = Mutex<URLSessionDataTask?>(nil)
+    private let relayed = Relayed()
 
     static func use(_ base: URL) { mirror.withLock { $0 = base } }
 
@@ -132,26 +132,35 @@ final class ServicesMirrorProtocol: URLProtocol {
         forwarded.httpMethod = request.httpMethod
         for (name, value) in request.allHTTPHeaderFields ?? [:] { forwarded.setValue(value, forHTTPHeaderField: name) }
         forwarded.httpBody = request.httpBody ?? request.httpBodyStream.map(Self.drain)
-        let dataTask = Self.relay.dataTask(with: forwarded) { data, response, error in
-            if let error { reply.fail(error); return }
-            var headers: [String: String] = [:]
-            for (name, value) in (response as? HTTPURLResponse)?.allHeaderFields ?? [:] {
-                if let name = name as? String, let value = value as? String { headers[name] = value }
+        let relayed = self.relayed
+        // Off the session's own queue, which this call holds: on Linux a task made here for the relay's
+        // session waits for a queue the two sessions' queues share, a trap in `dispatch_sync`.
+        DispatchQueue.global().async { [forwarded] in
+            let dataTask = Self.relay.dataTask(with: forwarded) { data, response, error in
+                if !relayed.stopped { Self.give(data, response, error, to: reply) }
             }
-            guard let answer = response as? HTTPURLResponse, let url = reply.url,
-                  let given = HTTPURLResponse(url: url, statusCode: answer.statusCode, httpVersion: "HTTP/1.1",
-                                              headerFields: headers) else {
-                reply.fail(URLError(.badServerResponse))
-                return
-            }
-            reply.answer(given, data ?? Data())
+            if relayed.begin(dataTask) { dataTask.resume() }
         }
-        relayed.withLock { $0 = dataTask }
-        dataTask.resume()
     }
 
     override func stopLoading() {
-        relayed.withLock { $0?.cancel() }
+        relayed.stop()
+    }
+
+    /// The mirror's answer given to the protocol's client as the service's, at the address the session asked.
+    private static func give(_ data: Data?, _ response: URLResponse?, _ error: (any Error)?, to reply: Reply) {
+        if let error { reply.fail(error); return }
+        var headers: [String: String] = [:]
+        for (name, value) in (response as? HTTPURLResponse)?.allHeaderFields ?? [:] {
+            if let name = name as? String, let value = value as? String { headers[name] = value }
+        }
+        guard let answer = response as? HTTPURLResponse, let url = reply.url,
+              let given = HTTPURLResponse(url: url, statusCode: answer.statusCode, httpVersion: "HTTP/1.1",
+                                          headerFields: headers) else {
+            reply.fail(URLError(.badServerResponse))
+            return
+        }
+        reply.answer(given, data ?? Data())
     }
 
     /// A body the session gave as a stream, read whole.
@@ -166,6 +175,29 @@ final class ServicesMirrorProtocol: URLProtocol {
             data.append(buffer, count: read)
         }
         return data
+    }
+
+    /// The task asking the mirror, which `stopLoading()` cancels, even before it has begun.
+    private final class Relayed: Sendable {
+        private let state = Mutex<(task: URLSessionDataTask?, stopped: Bool)>((nil, false))
+
+        var stopped: Bool { state.withLock { $0.stopped } }
+
+        /// Keeps the task to cancel, unless the request was stopped first, when the task never begins.
+        func begin(_ task: URLSessionDataTask) -> Bool {
+            state.withLock { held in
+                guard !held.stopped else { return false }
+                held.task = task
+                return true
+            }
+        }
+
+        func stop() {
+            state.withLock { held in
+                held.stopped = true
+                held.task?.cancel()
+            }
+        }
     }
 
     /// What the mirror's answer is handed to: the protocol's client, from the relay's queue.
