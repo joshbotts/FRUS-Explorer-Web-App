@@ -363,7 +363,8 @@ library_idle() {  # waits until no job of the library's waits or runs (S21d, S21
   while [ "$SECONDS" -lt "$deadline" ]; do
     if library_jobs && python3 -c 'import json, sys
 jobs = json.load(open(sys.argv[1], encoding="utf-8"))["jobs"]
-kinds = ("libraryDownload", "libraryIndex", "libraryRemove", "indexCompact", "indexCheck", "indexReset", "indexReviews")
+kinds = ("libraryDownload", "libraryIndex", "libraryRemove", "indexCompact", "indexCheck", "indexReset", "indexReviews",
+         "indexCorrections")
 sys.exit(0 if not any(j["kind"] in kinds and j["state"] in ("queued", "running") for j in jobs) else 1)' "$work/library-jobs.json"; then
       return 0
     fi
@@ -388,8 +389,12 @@ for _ in $(seq 1 80); do
   sleep 0.25
 done
 [ "$refusal" -gt 0 ] || fail "a Standalone server whose /data/volumes is root's did not refuse to start with its sentence: $(library_compose logs --no-color frus 2>&1 | tail -5)"
-library_compose logs --no-color frus 2>&1 | grep -q -- '--cap-add CHOWN --entrypoint chown frus 10001:10001 /data/volumes' \
-  || fail "the refusal does not give the remedy"
+# The whole log first: grep -q would stop reading it at its match, and under pipefail the writer's
+# broken pipe would fail the check.
+refused_log=$(library_compose logs --no-color frus 2>&1)
+case "$refused_log" in *'--cap-add CHOWN --entrypoint chown frus 10001:10001 /data/volumes'*) ;;
+  *) fail "the refusal does not give the remedy" ;;
+esac
 # The install guide's remedy, then the start again.
 library_compose stop frus >/dev/null
 library_compose run --rm --no-deps --user 0 --cap-add CHOWN --entrypoint chown frus 10001:10001 /data/volumes \
@@ -804,6 +809,58 @@ if [ -n "$e2e" ]; then
   services_log "$work/services-spec.log" 6
   spec_asked=$(grep -c -E '^GET /catalog\.archives\.gov/.* key=stub-nara-key-e2e-not-real ' "$work/services-spec.log" || true)
   [ "$spec_asked" -ge 1 ] || fail "the look-up spec's search did not reach NARA's stand-in: $(tail -5 "$work/services-spec.log")"
+fi
+
+echo "== the people: a curator's corrections on the Standalone server's index, at once (PLAN's S21g)"
+# The owner, a curator on a server with no sign-in, corrects frus1961-63v06's d1, a document, as an editorial note:
+# the one writer's job applies it before the request answers, and search finds d1 as an editorial note and the
+# reader draws it as one; Restore FRUS's Classification puts the TEI's back, and the log names both, applied. The
+# People screen's list is the kit's rollup of the three volumes. With --e2e, the People spec merges two people by
+# keyboard and undoes the merge, on Chromium with no axe violations. Answers are read from files.
+correction_api() {  # $1: method, $2: path, $3: body; prints the body and the status: a request waits for its job
+  local token
+  token=$(curl -s --max-time 5 -H "Host: localhost:8080" "$library_base/api/v1/me" | sed -nE 's/.*"csrfToken":"([0-9a-f]+)".*/\1/p')
+  curl -s --max-time 60 -X "$1" -H "Host: localhost:8080" -H "Origin: http://localhost:8080" -H "X-CSRF-Token: $token" \
+    -H 'Content-Type: application/json' ${3:+--data "$3"} -w ' %{http_code}' "$library_base$2"
+}
+d1_classification=/api/v1/me/volumes/frus1961-63v06/documents/d1/classification
+corrected=$(correction_api PUT "$d1_classification" '{"isEditorialNote":true}')
+case "$corrected" in *'"state":"applied"'*' 200') ;; *) fail "d1's classification was not applied at once: $corrected" ;; esac
+as_note=$(curl -s --max-time 10 -H "Host: localhost:8080" -o "$work/as-note.json" -w '%{http_code}' \
+  "$library_base/api/v1/search?keywords=deliverance&documentType=editorialNotesOnly" || true)
+[ "$as_note" = 200 ] && python3 -c 'import json, sys
+found = json.load(open(sys.argv[1], encoding="utf-8"))
+sys.exit(0 if [i["documentId"] for i in found["items"]] == ["d1"] else 1)' "$work/as-note.json" \
+  || fail "search did not find d1 as an editorial note: $as_note $(head -c 400 "$work/as-note.json")"
+curl -s --max-time 10 -H "Host: localhost:8080" -o "$work/d1-body.html" \
+  "$library_base/api/v1/volumes/frus1961-63v06/documents/d1/html?part=body" || true
+grep -q 'class="editorial-note"' "$work/d1-body.html" || fail "the reader did not draw d1 as an editorial note"
+restored=$(correction_api DELETE "$d1_classification")
+case "$restored" in *'"state":"applied"'*' 200') ;; *) fail "d1's classification was not restored at once: $restored" ;; esac
+restored_page=$(curl -s --max-time 10 -H "Host: localhost:8080" -o "$work/d1-restored.html" -w '%{http_code}' \
+  "$library_base/api/v1/volumes/frus1961-63v06/documents/d1/html?part=body" || true)
+{ [ "$restored_page" = 200 ] && [ -s "$work/d1-restored.html" ] && ! grep -q 'class="editorial-note"' "$work/d1-restored.html"; } \
+  || fail "the reader did not draw d1 as a document again: $restored_page $(head -c 400 "$work/d1-restored.html")"
+curl -s --max-time 10 -H "Host: localhost:8080" -o "$work/corrections-log.json" "$library_base/api/v1/admin/corrections" || true
+python3 - "$work/corrections-log.json" <<'PY' || fail "the log does not name the two corrections: $(head -c 600 "$work/corrections-log.json")"
+import json, sys
+entries = json.load(open(sys.argv[1], encoding="utf-8"))["entries"]
+assert [e["action"] for e in entries] == ["undone", "made"], entries
+assert all(e["userId"] == "owner" and e["appliedAt"] and e["documentId"] == "d1" for e in entries), entries
+PY
+curl -s --max-time 10 -H "Host: localhost:8080" -o "$work/people.json" "$library_base/api/v1/people" || true
+python3 - "$work/people.json" <<'PY' || fail "the People screen's list is not the rollup's: $(head -c 600 "$work/people.json")"
+import json, sys
+people = json.load(open(sys.argv[1], encoding="utf-8"))
+names = [row["name"] for section in people["sections"] for row in section["people"]]
+assert people["count"] == len(names) > 50 and people["version"], people["count"]
+assert any(n.startswith("Adenauer") for n in names) and any(n.startswith("Adzhubei") for n in names), names[:10]
+print(f"   d1 corrected and restored at once, both in the log; {people['count']} people in {len(people['sections'])} letters")
+PY
+if [ -n "$e2e" ]; then
+  echo "   the People spec in Playwright on Chromium: two people merged by keyboard, and the merge undone"
+  FRUS_E2E_PEOPLE=1 FRUS_E2E_NETWORK="container:$(library_compose ps -q frus)" FRUS_E2E_BASE_URL=http://localhost:8080/ scripts/npm --playwright \
+    || fail "the People spec failed; web/playwright-report has its report"
 fi
 
 echo "== admin: the corrections check and the update review, a fixture volume corrected upstream (PLAN's S21f)"

@@ -31,6 +31,10 @@ const sourcing = !!process.env.FRUS_E2E_SOURCES;
 // of NARA and Zotero FRUS_SERVICES_MIRROR names.
 const lookUp = /look-up\.spec\.ts$/;
 const lookingUp = !!process.env.FRUS_E2E_LOOK_UP;
+// The People screen (PLAN's S21g): its spec's second test, a merge by keyboard, on the smoke test's Standalone server,
+// which applies a correction at once.
+const people = /people\.spec\.ts$/;
+const correcting = !!process.env.FRUS_E2E_PEOPLE;
 
 export default defineConfig({
   testDir: './e2e',
@@ -48,7 +52,9 @@ export default defineConfig({
               ? { testMatch: sources }
               : lookingUp
                 ? { testMatch: lookUp }
-                : { testIgnore: [signIn, accounts, updateReview] }),
+                : correcting
+                  ? { testMatch: people }
+                  : { testIgnore: [signIn, accounts, updateReview] }),
   timeout: 30_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,

@@ -47,6 +47,8 @@ enum AdminRoutes {
         // What the updates changed, by volume, and Import mode's comparison with the TEI folder (S21f).
         AdminUpdateRoutes.add(to: admin, services: services, state: state, resources: resources, provider: provider,
                               reviews: UpdateReviewSources(indexer: indexer, teiCheck: teiCheck))
+        // The log of the corrections curators made, the audit of the shared index (S21g).
+        CorrectionRoutes.add(toAdmin: admin, services: services, provider: provider, mode: indexer?.mode ?? .import)
         AdminUserRoutes.add(to: admin, services: services)
 
         admin.get("backup") { request, context -> Response in

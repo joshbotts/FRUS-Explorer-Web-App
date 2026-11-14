@@ -139,12 +139,17 @@ public struct IndexImporter: Sendable {
     /// Whether the index it installs is opened as a Standalone server serves its own (PLAN's S21e):
     /// read-only without `immutable`, since the server's indexing writes into it afterwards.
     let liveReads: Bool
+    /// The corrections curators made on this server, which the copy is given before it is installed (PLAN's
+    /// S21g); nil for none.
+    let corrections: IndexCorrectionReplay?
 
-    public init(files: any FileStore, writer: any IndexWriter, writing: WritingMove? = nil, liveReads: Bool = false) {
+    public init(files: any FileStore, writer: any IndexWriter, writing: WritingMove? = nil, liveReads: Bool = false,
+                corrections: IndexCorrectionReplay? = nil) {
         self.files = files
         self.writer = writer
         self.writingMove = writing
         self.liveReads = liveReads
+        self.corrections = corrections
     }
 
     /// Imports one export. On success its copy is the live index and open; the old index is kept
@@ -171,6 +176,7 @@ public struct IndexImporter: Sendable {
             }
         }
         var moved: MovedWriting?
+        var corrected: IndexCorrectionReplay.Plan?
 
         await observer.importDidReach(.copyingExport, detail: "Copying \(name)", progress: 0)
         // Checked before anything reads the file, since every read would follow the link.
@@ -248,6 +254,35 @@ public struct IndexImporter: Sendable {
                 try await strip(copy, of: name, with: move.strip, observer: observer)
             }
 
+            // The server's corrections, given to the copy as the app replays its overrides at launch, before the
+            // checks that follow read it (PLAN's S21g): the export served is the Mac's with them.
+            if let replay = corrections {
+                try await job?.checkpoint()
+                let plan: IndexCorrectionReplay.Plan
+                do {
+                    plan = try await Blocking.run { try replay.plan() }
+                } catch {
+                    throw ImportProblem(.applyingCorrections, "The corrections made on this server could not be read, so \(name) was not installed. The server's log says why",
+                                        logged: "\(error)")
+                }
+                if plan.givesAnything {
+                    await observer.importDidReach(.applyingCorrections, detail: "Giving the new index the corrections curators made on this server",
+                                                  progress: nil)
+                    do {
+                        _ = try await replay.apply(plan, to: candidate, through: copy)
+                    } catch let error as SQLiteError where error.code & 0xFF == SQLITE_CORRUPT || error.code & 0xFF == SQLITE_NOTADB {
+                        // A damaged page the kit read: the export's, as the integrity check after would say.
+                        throw ExportChecks.classify(error, at: .applyingCorrections, file: name, while: "giving it this server's corrections")
+                    } catch {
+                        // The server's own failure, a busy file, a full disk or the kit's: the export is not to blame, and
+                        // the import can be run again.
+                        throw ImportProblem(.applyingCorrections, "The corrections made on this server could not be given to \(name), so it was not installed. The server's log says why",
+                                            logged: "\(error)")
+                    }
+                }
+                corrected = plan
+            }
+
             try await job?.checkpoint()
             await observer.importDidReach(.checkingIntegrity, detail: "Checking the database and both full-text indexes", progress: nil)
             try await run(.checkingIntegrity) { try ExportChecks.checkIntegrity(copy) }
@@ -277,6 +312,8 @@ public struct IndexImporter: Sendable {
             throw ImportProblem(.installingIndex, "The new index could not be made live, so the index before it is still the one served. The server's log says why",
                                 logged: error.localizedDescription)
         }
+        // The corrections waiting when the copy was given them are the served index's now.
+        if let corrected, let replay = corrections { await replay.installed(corrected, at: Date()) }
 
         await observer.importDidReach(.openingIndex, detail: "Opening the index read-only", progress: nil)
         let (live, liveReads) = (files.liveIndex, self.liveReads)

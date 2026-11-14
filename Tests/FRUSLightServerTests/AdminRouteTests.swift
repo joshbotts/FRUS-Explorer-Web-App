@@ -45,6 +45,7 @@ import Testing
         (.post, "/api/v1/admin/library/index", #"{"all":true}"#),
         (.post, "/api/v1/admin/library/corrections", nil),
         (.get, "/api/v1/admin/library/updates", nil),
+        (.get, "/api/v1/admin/corrections", nil),
         (.post, "/api/v1/admin/library/sideload?file=frusX.xml", nil),
         (.delete, "/api/v1/admin/library/volumes/frus1894Nicaragua", nil),
     ]

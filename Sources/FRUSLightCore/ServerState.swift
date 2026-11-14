@@ -71,9 +71,12 @@ public actor ServerState: ImportObserver {
     public private(set) var upgrade: IndexUpgradeStatus?
     private let log: @Sendable (String) -> Void
 
-    public init(configuration: ServerConfiguration, log: @escaping @Sendable (String) -> Void = { _ in }) {
+    /// `pdfCheckWithin` bounds the PDF service's health check: the server's three seconds, or longer for
+    /// a test whose stand-in answers beside the test target's other work.
+    public init(configuration: ServerConfiguration, pdfCheckWithin: Duration = PDFService.checkTimeout,
+                log: @escaping @Sendable (String) -> Void = { _ in }) {
         self.configuration = configuration
-        pdf = configuration.pdfURL.flatMap { PDFService(url: $0, log: log) }
+        pdf = configuration.pdfURL.flatMap { PDFService(url: $0, checkWithin: pdfCheckWithin, log: log) }
         self.log = log
     }
 

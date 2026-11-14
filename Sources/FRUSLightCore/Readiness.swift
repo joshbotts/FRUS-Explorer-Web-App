@@ -9,6 +9,8 @@ public enum ReadinessStep: String, Sendable, Codable, CaseIterable {
     case checkingWriting = "checking_writing"
     /// Removing the owner's writing from the copy, with the kit's own statements (S16e).
     case strippingWriting = "stripping_writing"
+    /// Giving the copy the corrections curators made on this server, before it is served (PLAN's S21g).
+    case applyingCorrections = "applying_corrections"
     case checkingIntegrity = "checking_integrity"
     /// Keeping the writing it held in the importing user's store (S16e).
     case movingWriting = "moving_writing"

@@ -58,7 +58,7 @@ describe('Administration', () => {
     const header = screen.getByRole('navigation', { name: 'Main' });
     expect(within(header).getByRole('link', { name: 'Admin' }).getAttribute('aria-current')).toBe('page');
     const panes = screen.getByRole('navigation', { name: 'Administration' });
-    expect(within(panes).getAllByRole('link').map((link) => link.textContent)).toEqual(['Status', 'Jobs', 'Library', 'Users', 'Backups', 'Keys']);
+    expect(within(panes).getAllByRole('link').map((link) => link.textContent)).toEqual(['Status', 'Jobs', 'Library', 'Corrections', 'Users', 'Backups', 'Keys']);
     expect(screen.getByText('6, this build’s')).toBeTruthy();
     expect(screen.getByText('9f3a6c0d51e27b48')).toBeTruthy();
     expect(screen.getByText('No job is running.')).toBeTruthy();
@@ -266,5 +266,33 @@ describe('Administration', () => {
     expect(await within(nara).findByText('Key stored', { exact: true })).toBeTruthy();
     expect(sent(fetch, 'PUT', '/api/v1/admin/secrets/nara')).toHaveLength(1);
     expect(sent(fetch, 'PUT', '/api/v1/me/secrets/nara')).toHaveLength(0);
+  });
+});
+
+describe('Administration ▸ Corrections', () => {
+  it('lists the log of the corrections curators made, newest first, each named, with whether the index holds it', async () => {
+    stubServer({
+      '/readyz': ready,
+      '/api/v1/me': alice,
+      '/api/v1/admin/corrections': {
+        mode: 'import',
+        entries: [
+          { id: 'E2', correction: 'person', action: 'made', overrideId: 'O2', kind: 'merge', userId: 'alice', userName: 'Alice',
+            madeAt: '2026-11-14T13:05:00.000Z', appliedAt: null, nameA: 'Adenauer, Conrad', nameB: 'Adzhubei, Aleksei I.' },
+          { id: 'E1', correction: 'classification', action: 'made', overrideId: 'O1', volumeId: 'frus1961-63v06', documentId: 'd1',
+            isEditorialNote: true, userId: 'alice', userName: 'Alice', madeAt: '2026-11-14T13:00:00.000Z',
+            appliedAt: '2026-11-14T13:00:01.000Z', title: '1. Message From Chairman Khrushchev to President-elect Kennedy' },
+        ],
+      },
+    });
+    renderAt('/admin/corrections');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Corrections' })).toBeTruthy();
+    const table = await screen.findByRole('table', { name: 'The corrections, newest first' });
+    const rows = within(table).getAllByRole('row').slice(1).map((row) => within(row).getAllByRole('cell').map((cell) => cell.textContent));
+    expect(rows.map((cells) => cells.slice(1))).toEqual([
+      ['Alice', 'Adenauer, Conrad and Adzhubei, Aleksei I. merged', 'Waits for the next export'],
+      ['Alice', '1. Message From Chairman Khrushchev to President-elect Kennedy reclassified as an editorial note', 'Applied'],
+    ]);
+    expect(within(table).getByRole('link', { name: /reclassified as an editorial note$/ }).getAttribute('href')).toBe('/doc/frus1961-63v06/d1');
   });
 });

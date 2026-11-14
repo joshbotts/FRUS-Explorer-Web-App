@@ -18,6 +18,7 @@ export type ReadinessStep =
   | 'checking_versions'
   | 'checking_writing'
   | 'stripping_writing'
+  | 'applying_corrections'
   | 'checking_integrity'
   | 'moving_writing'
   | 'installing_index'

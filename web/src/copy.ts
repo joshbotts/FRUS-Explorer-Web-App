@@ -360,8 +360,93 @@ export const copy = {
     label: 'Browse by',
     volumes: 'All Volumes',
     annotations: 'Editors’ Annotations',
+    people: 'People',
     corpora: 'Working Corpora',
     scopes: 'My Scopes',
+  },
+  /**
+   * The People screen (PLAN's S21g), the app's People browser (`PersonIndexView`), its person sheet
+   * (`PersonIndexDetailSheet`), its merge picker and its Corrections sheet (`PersonCorrectionsView`), in the
+   * app's words. "Syncs across your devices" is "for everyone on this server", where one curator's correction
+   * changes everyone's people; "your" corrections and those "you make in the People browser" are the ones made on
+   * this server, where a curator undoes them (Corrections' help and its empty list), and the corrections "the app
+   * kept apart" are the index's. An empty server's sentence, who made a correction, the lines for one kept or undone
+   * for the next export or a job and for people rebuilt since a page was loaded, and the note on an Import server
+   * are the web's own.
+   */
+  people: {
+    title: 'People',
+    loading: 'Loading people…',
+    emptyTitle: 'No People Indexed',
+    emptyDetail: 'The served index lists no people yet: they come with the volumes it holds.',
+    searchPrompt: 'Search people',
+    noResults: (query: string) => `No Results for “${query}”`,
+    noResultsDetail: 'Check the spelling or try a new search.',
+    corrections: 'Corrections',
+    correctionsHelp: 'Review and undo the merge and separate corrections made on this server',
+    mentionCountSpoken: (count: number) => `${count} mentions`,
+    possibleDuplicate: 'Possible duplicate',
+    candidateHelp: 'May be the same as another person — open to review',
+    taggingCaption: (volumes: string) =>
+      `People are tagged in ${volumes}, and only those volumes' people appear here. In the others, search for the names.`,
+    taggingLink: 'Volumes that tag people',
+    reconciled: 'Reconciled identity',
+    reconciledHelp: 'Matched to the bundled name-authority data',
+    mentions: 'Mentions',
+    active: 'Active',
+    findMentions: 'Find all mentions',
+    findMentionsHelp: 'Open Search filtered to documents that mention this person',
+    noMentions: 'This person has no indexed document mentions to open — they appear only in a volume’s front-matter person list.',
+    viaf: 'View on VIAF',
+    viafHelp: 'Open this person’s VIAF authority record',
+    wikidata: 'View on Wikidata',
+    wikidataHelp: 'Open this person’s Wikidata item',
+    mergeManual: 'Merge with another person…',
+    mergeManualHelp: 'Combine this identity with another person you choose',
+    mergeManualFooter:
+      'Use this when one person appears under different names and the index kept them apart. The change is for everyone on this server and can be undone from Corrections.',
+    possiblySameHeader: 'Possibly the Same Person',
+    possiblySameFooter: 'Merge if these records refer to the same person. The change is for everyone on this server.',
+    merge: 'Merge',
+    mergeSpoken: (name: string) => `Merge ${name} into this person`,
+    recordsHeader: (count: number) => `Records in This Identity (${count})`,
+    recordsFooter: 'Separate a record if it refers to a different person.',
+    separate: 'Separate',
+    separateSpoken: (name: string) => `Separate ${name} into its own identity`,
+    done: 'Done',
+    cancel: 'Cancel',
+    mergeConfirmTitle: 'Merge these identities?',
+    mergeConfirmAction: 'Merge',
+    mergeConfirmMessage: (a: string, b: string) =>
+      `“${a}” and “${b}” will become a single identity. Merging is transitive — if you later merge a third record with either one, all three become one identity. You can undo this from Corrections.`,
+    mergeAuthorityWarning:
+      'These records match different entries in the bundled name-authority data, so they may be distinct. Merge only if you’re sure.',
+    inProgress: 'Applying correction…',
+    mergeDone: (a: string, b: string) => `Merged ${a} into ${b}`,
+    separateDone: (name: string) => `Separated ${name}`,
+    pickerTitle: 'Merge With…',
+    pickerHint: 'Merges this person into the current identity',
+    pickerMore: (count: number) => `${count.toLocaleString('en-US')} more — type more of the name to find them.`,
+    correctionsTitle: 'Corrections',
+    correctionsEmptyTitle: 'No Corrections',
+    correctionsEmptyDetail: 'Merges and separations made on this server’s People screen appear here, where a curator can undo them.',
+    correctionsFooter: 'Undoing a correction rebuilds the affected identities for everyone on this server.',
+    correctionMerged: (a: string, b: string) => `${a} and ${b} — merged`,
+    correctionSeparated: (a: string) => `${a} — separated`,
+    undo: 'Undo',
+    undoSpoken: (title: string) => `Undo: ${title}`,
+    undoInProgress: 'Undoing correction…',
+    undoDone: 'Correction undone',
+    madeBy: (when: string, who: string) => `${when}, by ${who}`,
+    waitingExport: 'Applied when the next export is installed',
+    waitingJob: 'Waiting to be applied',
+    keptForExport: 'The correction is kept, and the next export this server installs is given it.',
+    keptForJob: 'The correction is kept, and is applied once the jobs before it end.',
+    undoneForExport: 'The next export this server installs is given the change.',
+    undoneForJob: 'The index takes the change once the jobs before it end.',
+    importNote:
+      'This server serves an export made on the Mac: a correction made here is kept, and the next export installed is given it. Until then the people are the export’s.',
+    peopleChanged: 'The people have been rebuilt since this page was loaded, so they have been loaded again: choose once more.',
   },
   /** The Reading picker, as the Mac's window titles it, and the set each reading covers, from its tooltip. */
   readings: {
@@ -1376,6 +1461,38 @@ export const copy = {
       'Made against an earlier version of the text, and the words it covered were not stored — it can only be checked by eye.',
     notDrawn: 'This highlight could not be drawn in the text.',
     loading: 'Loading the highlights…',
+  },
+  /**
+   * The rail's Classification (PLAN's S21g), the app's classification control (`ClassificationInfoSection`, the
+   * footer of the rail's Document tools), in the app's words, with "reclassified by you" a curator's of this
+   * server and "on all your devices" everyone on it; in the warning, the app's other "windows" that reflect it when
+   * "reopened" are the browser's pages, reloaded, and the restore is offered here alone, since the web's Settings has
+   * no Search pane with the app's list of corrections. The section, which the web's rail has in place of the app's
+   * info popover, a document the index does not hold, a correction kept for the next export, the warning's sentence
+   * on an Import server, and what a change did once made, are the web's own.
+   */
+  classification: {
+    title: 'Classification',
+    note: 'Editorial note',
+    document: 'Document',
+    restore: 'Restore FRUS’s Classification',
+    toDocument: 'Reclassify as Document…',
+    toNote: 'Reclassify as Editorial Note…',
+    overridden: (what: string) => `FRUS tags this as ${what} — reclassified on this server.`,
+    overriddenBy: (what: string, who: string) => `FRUS tags this as ${what} — reclassified on this server by ${who}.`,
+    noteInline: 'an editorial note',
+    documentInline: 'a document',
+    nowRedundant: 'FRUS now tags this the same way, so this server’s correction no longer changes anything. You can restore FRUS’s classification.',
+    warning:
+      'The document’s body styling, badges, search filters, counts, and exports will follow the new classification for everyone on this server. Bundled series-analytics dashboards are computed from the published corpus and cannot see this change, and other open pages reflect it when reloaded. You can restore FRUS’s own classification at any time from here.',
+    warningImport: 'This server serves an export made on the Mac, so the change is applied when the next export is installed.',
+    cancel: 'Cancel',
+    notIndexed: 'The served index does not hold this document, so its classification cannot be corrected here.',
+    waitingExport: 'Kept on this server, and applied when the next export is installed.',
+    waitingRestore: 'FRUS’s classification is put back when the next export is installed.',
+    waitingJob: 'Waiting to be applied.',
+    applied: 'The index follows the new classification.',
+    loading: 'Loading the classification…',
   },
   /**
    * The selection bar's Note, which makes a note on the document, as the app's does, and the rail's
@@ -2594,6 +2711,7 @@ export const copy = {
         indexCompact: 'Index compaction',
         indexCheck: 'Index check',
         indexReviews: 'Reviews recorded in the index',
+        indexCorrections: 'Corrections applied to the index',
         teiComparison: 'Comparison with the TEI folder',
       } as Record<string, string>,
       states: { queued: 'Waiting', running: 'Running', succeeded: 'Finished', failed: 'Failed', cancelled: 'Cancelled' },
@@ -2744,6 +2862,27 @@ export const copy = {
       removalQueued: (volume: string) => `The removal of ${volume} is queued as a job: Jobs follows it.`,
       removing: 'Being removed, in a job: Jobs follows it.',
       removeSideloaded: 'The catalogue does not list it, so only a side-load of its file brings it back.',
+    },
+    /** Administration ▸ Corrections (PLAN's S21g), the web's own: the log of the corrections curators made, newest first. */
+    corrections: {
+      title: 'Corrections',
+      lead: 'The corrections curators made to the index everyone shares on this server, newest first: who made each, when, and whether the index holds it yet.',
+      empty: 'No curator has corrected the index on this server.',
+      caption: 'The corrections, newest first',
+      when: 'When',
+      who: 'Who',
+      what: 'Correction',
+      state: 'Index',
+      asNote: (document: string) => `${document} reclassified as an editorial note`,
+      asDocument: (document: string) => `${document} reclassified as a document`,
+      restored: (document: string) => `FRUS’s classification of ${document} restored`,
+      merged: (a: string, b: string) => `${a} and ${b} merged`,
+      separated: (a: string) => `${a} separated`,
+      mergeUndone: (a: string, b: string) => `The merge of ${a} and ${b} undone`,
+      separationUndone: (a: string) => `The separation of ${a} undone`,
+      applied: 'Applied',
+      waitingExport: 'Waits for the next export',
+      waitingJob: 'Waiting',
     },
     users: {
       title: 'Users',

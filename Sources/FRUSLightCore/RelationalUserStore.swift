@@ -146,35 +146,7 @@ public class RelationalUserStore: UserStore, CorrectionStore, UserSearchStore, @
 
     @discardableResult
     public func record(_ given: ClassificationOverride) throws -> ClassificationOverride {
-        // To the store's precision, so what is returned is what is stored.
-        var correction = given
-        correction.createdAt = given.createdAt.map(UserStoreDate.rounded)
-        let time: SQLiteValue = correction.createdAt.map { .text(UserStoreDate.text($0)) } ?? .null
-        return try writing { db in
-            // The newest for the document, as the app's fetch sorted by createdAt, newest first,
-            // finds it: one with no time last. Two of one time fall to their ids.
-            let existing = try db.query(
-                """
-                SELECT \(Self.overrideColumns) FROM classification_overrides WHERE volume_id = ? AND document_id = ?
-                    ORDER BY created_at DESC NULLS LAST, id DESC LIMIT 1
-                """,
-                [.text(correction.volumeId), .text(correction.documentId)]).first.map(Self.correction)
-            var stored = correction
-            if let existing {
-                stored = existing
-                stored.isEditorialNote = correction.isEditorialNote
-                stored.createdAt = correction.createdAt
-                _ = try db.query("UPDATE classification_overrides SET is_editorial_note = ?, created_at = ? WHERE id = ?",
-                                 [.integer(correction.isEditorialNote ? 1 : 0), time, .text(existing.id)])
-            } else {
-                _ = try db.query(
-                    "INSERT INTO classification_overrides (\(Self.overrideColumns)) VALUES (?, ?, ?, ?, ?, ?)",
-                    [.text(correction.id), .text(correction.volumeId), .text(correction.documentId),
-                     .integer(correction.isEditorialNote ? 1 : 0), .integer(correction.parsedIsEditorialNote ? 1 : 0),
-                     time])
-            }
-            return stored
-        }
+        try writing { db in try Self.storeClassification(given, in: db) }
     }
 
     public func classificationOverrides() throws -> [ClassificationOverride] {

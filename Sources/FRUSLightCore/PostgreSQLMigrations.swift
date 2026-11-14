@@ -13,7 +13,7 @@
 /// reads as the order the store took its rows in. `user_search` is not here: search reads FTS5, in
 /// the store's local SQLite copy (`PostgreSQLUserStore`).
 enum PostgreSQLMigrations {
-    static let all: [[String]] = [one, two, three, four, five, six, seven]
+    static let all: [[String]] = [one, two, three, four, five, six, seven, eight]
 
     /// S2's: the single user, and corrections as override rows.
     static let one = [
@@ -560,5 +560,33 @@ enum PostgreSQLMigrations {
         )
         """,
         "CREATE INDEX library_volumes_by_state ON library_volumes (state, queued_at)",
+    ]
+
+    /// S21g's: app.db's eight, the log of the corrections made on this server, with `rowid`, the order the store
+    /// took its entries in, which app.db's SQLite keeps for every table.
+    static let eight = [
+        """
+        CREATE TABLE correction_log (
+            rowid BIGINT GENERATED ALWAYS AS IDENTITY,
+            entry_id TEXT COLLATE "C" PRIMARY KEY,
+            correction TEXT COLLATE "C" NOT NULL CHECK (correction IN ('classification', 'person')),
+            action TEXT COLLATE "C" NOT NULL CHECK (action IN ('made', 'undone')),
+            override_id TEXT COLLATE "C" NOT NULL,
+            volume_id TEXT COLLATE "C",
+            document_id TEXT COLLATE "C",
+            is_editorial_note BIGINT,
+            parsed_is_editorial_note BIGINT,
+            kind TEXT COLLATE "C" CHECK (kind IN ('merge', 'split')),
+            volume_id_a TEXT COLLATE "C",
+            ref_a TEXT COLLATE "C",
+            volume_id_b TEXT COLLATE "C",
+            ref_b TEXT COLLATE "C",
+            user_id TEXT COLLATE "C" NOT NULL,
+            made_at TEXT COLLATE "C" NOT NULL,
+            applied_at TEXT COLLATE "C"
+        )
+        """,
+        "CREATE INDEX correction_log_by_document ON correction_log (volume_id, document_id)",
+        "CREATE INDEX correction_log_by_override ON correction_log (override_id)",
     ]
 }

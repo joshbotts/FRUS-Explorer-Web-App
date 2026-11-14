@@ -24,6 +24,7 @@ import {
 } from './browse/AnnotationsScreen';
 import { CatalogueScreen, type CatalogueSearch, validateCatalogueSearch } from './browse/CatalogueScreen';
 import { CorporaScreen, CorpusScreen } from './browse/CorporaScreen';
+import { PeopleScreen } from './people/PeopleScreen';
 import { ScopeEditorScreen, ScopeScreen, ScopesScreen } from './browse/ScopesScreen';
 import { SectionScreen } from './browse/SectionScreen';
 import { VolumeScreen } from './browse/VolumeScreen';
@@ -56,6 +57,7 @@ import { TagsSettingsScreen } from './settings/TagsSettings';
 // ─── Admin ──────────────────────────────────────────────────────────────────
 import { AdminKeysScreen } from './admin/KeysPane';
 import { BackupsScreen } from './admin/BackupsPane';
+import { CorrectionsScreen } from './admin/CorrectionsPane';
 import { JobsScreen } from './admin/JobsPane';
 import { LibraryScreen } from './admin/LibraryPane';
 import { StatusScreen } from './admin/StatusPane';
@@ -154,6 +156,13 @@ const annotationEraRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/browse/annotations/$layer/era/$era',
   component: AnnotationEraScreen,
+});
+
+// The People screen (S21g), the app's cross-volume index of people, one of Browse's axes.
+const peopleRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/people',
+  component: PeopleScreen,
 });
 
 const volumeRoute = createRoute({
@@ -427,6 +436,13 @@ const adminLibraryRoute = createRoute({
   component: LibraryScreen,
 });
 
+// From S21g: the log of the corrections curators made.
+const adminCorrectionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/corrections',
+  component: CorrectionsScreen,
+});
+
 const adminUsersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin/users',
@@ -459,6 +475,7 @@ export const routeTree = rootRoute.addChildren([
   annotationLayerRoute,
   annotationDrillRoute,
   annotationEraRoute,
+  peopleRoute,
   volumeRoute,
   sectionRoute,
   searchRoute,
@@ -493,6 +510,7 @@ export const routeTree = rootRoute.addChildren([
   adminStatusRoute,
   adminJobsRoute,
   adminLibraryRoute,
+  adminCorrectionsRoute,
   adminUsersRoute,
   adminBackupsRoute,
   adminKeysRoute,
