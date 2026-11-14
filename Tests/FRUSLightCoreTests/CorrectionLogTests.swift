@@ -1,7 +1,8 @@
 // The corrections a curator makes and their log (PLAN's S21g), migration 8, on both stores: a merge kept once
 // either way round and never of a record with itself, a separation once, each undone by its id; a document's
 // classification kept one per document and restored with FRUS's value; and each change an entry of the log, in
-// the same transaction, naming who and when, waiting until the index takes it, newest first when read.
+// the same transaction, naming who and when, waiting until the index takes it, newest first when read. Serialized:
+// each PostgreSQL case holds two or three connections, and the target's cases at once can pass PostgreSQL's hundred.
 
 import FRUSCoreKit
 @testable import FRUSLightCore
@@ -9,7 +10,7 @@ import FRUSLightTestSupport
 import Foundation
 import Testing
 
-@Suite struct CorrectionLogTests {
+@Suite(.serialized) struct CorrectionLogTests {
     static let made = Date(timeIntervalSince1970: 1_794_700_000)  // 2026-11-14
     static let later = made.addingTimeInterval(60)
     static let adenauer = PersonRecordKey(volumeId: "frus1961-63v06", ref: "p_AK3")

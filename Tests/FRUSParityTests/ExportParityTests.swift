@@ -200,6 +200,7 @@ import Testing
         "secrets": "the stored API keys (S20c), each sealed under the server's key file, which no export carries",
         "jobs": "the server's jobs (S20d), each its kind, its state and the server's own lines, and who asked",
         "library_volumes": "the volumes a Standalone server downloaded (S21c), each its state, its file's hash and size, and who asked",
+        "correction_log": "the log of the corrections curators made to the index everyone shares (S21g), an admin's audit of who made each and when",
         "user_search": "made again from the notes and summaries by every write and import (S15d, S16c), with FTS5's own tables",
     ]
 
