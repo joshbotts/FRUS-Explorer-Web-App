@@ -22,6 +22,83 @@ Not started: `PLAN.md`'s row S24g. The session that does it replaces this line, 
 
 Not started: `PLAN.md`'s row S24f. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
 
+## Session 21g, second follow-up: the pin moves to `f011ab04`
+
+14 November 2026 · branch `claude/amazing-ptolemy-3530c0`, a follow-up session of the phase-3 orchestrator's · [#146](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/146) · upstream `f011ab04`
+
+The pin moves from `b124a59b` to `f011ab04`, `v2`'s head, in a pull request of its own under rule 5, with no PLAN row: the move that the entry below, "Session 21g, follow-up, upstream", said would carry [FRUS-Explorer#1906](https://github.com/joshbotts/FRUS-Explorer/pull/1906). `f011ab04` is #1906's merge. The owner merged it after Mac check 30, on 14 November (17:57 UTC), onto `v2` at `b124a59b`. Its squash's tree is its head's, `5469ebf9`, both `ab2f16ea`, which this session compared. It is the only commit between the two pins. The branch was cut from `main` at `8707814`, #143's merge, and merged `main` once, at `b3ecb37`, once S22e's #144 had merged, as its brief asked; git reported no conflict. The daily watch's issue, [#106](https://github.com/joshbotts/FRUS-Explorer-Web-App/issues/106), still describes `v2` at `b124a59b`, one commit past `6b6932aa` (run [43600706620](https://github.com/joshbotts/FRUS-Explorer-Web-App/actions/runs/43600706620)); it should close at the watch's first run after this merges, when it finds `v2` at the pin and the kits passing.
+
+**What the move brought:**
+- **Three of the app's rules, moved into the kit,** each the app's text but for `public`, `Sendable` on its value types and its comments, which this session compared block by block:
+  - `PersonLifespan`, from the app's `Browser/PersonIndexView.swift` into `FRUSCoreKit/Models/POCOMIndex.swift`;
+  - `PersonSubjectAffinity`, with `Ranked`, from the same file into `FRUSCoreKit/Browser/VolumeSubjectProfiles.swift`;
+  - `ScopeFacets`, from the app's `Models/CustomVolumeScope.swift` into `FRUSCoreKit/Models/CustomScopeResolver.swift`.
+- **Kit members made public,** unchanged: `POCOMIndex.career(forSlug:)`, `POCOMCareer`, and `POCOMAssignment`'s title, dates and note; `VolumeSubjectProfiles.topSubjects(forVolumeId:)`, `otherVolumes(forSubjectRef:excluding:)`, `resolvedByVolume` and `ResolvedSubject`; `CountCopy`'s six statics; and `DocumentSubjectIndex.volumeIds(forSubjectRef:)` and `subjectsByVolume`.
+- **The kit's tests:** `PersonLifespanTests` and `PersonSubjectAffinityTests`, in `FRUSExplorerTests/FRUSCoreKit/POCOMIndexTests.swift`, and two of `POCOMIndexTests`' own, run in the package now that what they test is the kit's. The app's `VolumeSubjectProfilesTests.swift` gives up the affinity suite, and `SourceExplorerTestSupport.swift` gains the name authority's store for the package.
+- **The app:** its `Browser/PersonIndexView.swift` and `Models/CustomVolumeScope.swift` lose the moved code; and its `CLAUDE.md`, `Docs/EditableContent/07-Search-and-Browse.md` with its amendment log, and its plan record the move.
+
+No behaviour changed, and no file was added or removed.
+
+**What the move asks of the web:**
+- **`PeopleParityTests`,** S21g's, held four lines of `PersonLifespan` in the app's `Browser/PersonIndexView.swift`, where #1906 removed them. It holds them now in the kit's `FRUSCoreKit/Models/POCOMIndex.swift`, where #1906 moved them unchanged, and checks the server's mirror against the kit's rule, public since #1906, for each of the four shapes, as S21b's move pointed `HighlightViewParityTests` at the kit's `HighlightReviewStatus.swift` and called the kit's rule. The suite came with S21g's #142, after #1906's Linux check over `main` at `84666ee`, so that check could not see it. The server's `PeopleRules.lifespan` still mirrors the rule, for S21g's follow-up to replace with the kit's call.
+- **The build:** no folder this package compiles gained or lost a file, so `Package.swift` stands. Build 1812, index version 74, FTS generation 4 and the export's format version 7 are unchanged, so `Compatibility.swift` and the install guide stand.
+- **The tests:** `FRUSCoreKitTests` runs 2,518 tests in 309 suites, where it ran 2,509 in 307: `PersonLifespanTests` (2) and `PersonSubjectAffinityTests` (5), and `POCOMIndexTests`' two lifespan tests. No test gains a skip, so CI's allow-list stands.
+- **Names:** none of the names #1906 makes public or moves into the kit (`PersonLifespan`, `PersonSubjectAffinity`, `ScopeFacets`, `CountCopy`, `POCOMCareer` and `POCOMAssignment`, and the nested `Ranked`, `ResolvedSubject`, `SubjectEntry`, `CategoryEntry`, `SubCategoryEntry` and `TagEntry`) is declared in this repository's `Sources`, `Tests` or `tools/mac-golden`, at `main` as merged with S22e's code, and none of the changed kit types has an extension here.
+- **`AnnotationsParityTests`** holds two of `CountCopy.swift`'s body lines and six of its words, which #1906 leaves unchanged, and passes at `f011ab04`. No other web test holds a line of a file #1906 changes, S22e's `LookUpParityTests` among them. Two scans of the app's whole tree, in `ImportParityTests` and `AppModelSource`, read `PersonIndexView.swift` and `CustomVolumeScope.swift` for patterns #1906 does not touch, and pass.
+
+**The indexing path,** compared from `b124a59b` to `f011ab04` before the golden files were made, over COORDINATION §5's list: unchanged. #1906 changes no file under `FRUSCoreKit/Search/` or `FRUSCoreKit/TEI/`, in FTS5Store or SourceNoteKit, or under `FRUSExplorer/Resources`, and `setupDatabase(_:)` is at lines 8355–9010, as at `b124a59b`. What it changes besides is access, and the place of three rules the indexer never calls. So the golden files come from the export S21b's, S23c's and S24e's moves and the move to `b124a59b` used, by the owner's choice of 14 November ("Yes, reuse it"), asked through the orchestrator before the remake.
+
+**The golden files,** made by `scripts/make-golden` under the app's heavy lock, on this Mac (macOS 27.2.1, Xcode 27.2): first from the app's source alone, while the owner's answer was pending, then with `--export /Users/Shared/frus-index-build1812-2026-11-10-golden.sqlite`, the owner's ninth three-volume export: TestFlight's 1.0 (1812), index version 74, 393 documents and no writing. `tools/mac-golden` was built at the pin first (214 s), and the export's run passed every step, `check-golden` among them, in 55 s.
+- **Provenance:** five files moved in their provenance, the render's manifest, the expressions, the results, the golden spans and the index summary: the source digest, `621edf66…` to `eae28e77…`, and the upstream commit. The index summary's timings, which are information and never gated, moved besides; its gating, 36 digests and 7 checks, is as it was. The Mac's system line is unchanged.
+- **Unchanged:** all 410 render rows, byte for byte; `fixtures/rich-text/web`; and `fixtures/highlights/samples.json`, written again by `frus-parity highlight-samples` (410 rows, 2,581 highlights). `PENDING` stays empty, and `make-golden`'s rewrite of `tools/mac-golden/Package.resolved` is left out, as at every move.
+
+**Results**
+- **Linux, `swift:6.4-noble`, arm64:** CI's swift job replayed with its PostgreSQL (`scripts/swift --postgres --exec`), under the heavy lock, at the final code and golden files, over the merged tree. This package's own targets were built clean.
+  - 4,220 tests in 541 suites, all passing on the first run. The only skip is the named one, `FTS5StoreTests`' `backupExclusion()`, in Swift Testing's results file and in the log, with no cancellation. No target calls `Test.cancel`, and the build gave no warning outside `.build`.
+  - Per target: CrossRefKitTests 10, FRUSCoreKitTests 2,518 in 309 suites, FRUSLightCoreTests 279, FRUSLightServerTests 389, FRUSParityTests 274, FRUSRichTextTests 42, FTS5CheckTests 3, FTS5StoreTests 219, GeneratorKitTests 7, ManifestGeneratorTests 60, SemanticVectorsKitTests 40, SourceExplorerExportGeneratorTests 22, SourceNoteKitTests 327 and WordCloudKitTests 30. Each target runs as many tests as `main`'s CI at `b3ecb37` (run 43632530035), but FRUSCoreKitTests, which runs #1906's nine more.
+  - The checks print what `main`'s CI at `b3ecb37` prints:
+    - check 2's 36 digests and 7 checks, the Mac's, and the same through the server's indexing;
+    - check 3's 482 queries, identical;
+    - check 4's 410 of 410 rows;
+    - check 6's 2,581 highlights;
+    - check 7's lookups;
+    - check 8's 245 source notes, every record the export generator's.
+  - One line differs from CI's, and it is information, never gated: check 3 counts 318 queries with other score bits here on arm64, and 332 on CI's x86_64.
+  - `check-golden`, over the merged tree: the five golden files present and valid, none pending.
+- **The first run,** before the merge, at the pin over `main` at `8707814`, without S22e's tests: 4,205 tests, every target passing but `FRUSLightCoreTests`' PostgreSQL arm. There five tests were refused "too many clients" by the PostgreSQL container every session on this Mac shares. Run alone at once, the target passed its 279 tests in 41 suites, and over the merged tree it passed whole.
+- **After the review,** `PeopleParityTests` gained the check of the server's mirror against the kit's rule, and passed alone again, its 3 tests, with no warning.
+- **The suites the move touches,** run alone first over the pre-built tree: `PeopleParityTests` and `AnnotationsParityTests`, 10 tests in 2 suites, and `POCOMIndexTests`, `PersonLifespanTests` and `PersonSubjectAffinityTests`, 32 tests in 3 suites, all passed.
+- **The browser app and the image** are CI's to test. Nothing changes under `web/`, under `docker/` or in the server, and the compose job builds the image at the new pin.
+
+**Records,** each a clause where earlier moves wrote one:
+- `COORDINATION.md`:
+  - the pin's history;
+  - §1's count of the kit's tests, 2,518;
+  - §5's list of app changes, #1906 in its item on public access for kit types, and a sentence after S21g's item on the People sheet's Career and Subjects, which named them internal at `b124a59b`;
+  - a paragraph after §5's on what a pin move leaves, naming S21g's follow-up, which #1906 unblocks, as the moves before it named theirs;
+  - §6's exports, the ninth reused by the owner's choice.
+- `README.md`: Status, the count of this project's pull requests on the kit; Known gaps, the pin with #1906, and the People screen's line, whose members are public since this move; and Next, the People screen's career and subjects, now a web follow-up alone.
+- `DEVLOG.md`: this entry, and a "Since carried" line at the end of #1906's entry below, which already calls it merged.
+- `PLAN.md`:
+  - a "Since carried" paragraph after the sentence on #1906;
+  - where the plan stands;
+  - S12d's row, from `f011ab04`;
+  - the golden files' checkpoint, with this move among those that remade them;
+  - the owner checkpoints' Mac check 30, done, which makes forty-nine steps, twenty-one of them phase 3's.
+- `SPEC.md`: the compatibility contract's index version at `f011ab04`, and `setupDatabase(_:)`'s lines there.
+- `docs/prep/README.md`: the pin, and this move among those that changed a file its claims cite.
+
+**Left for S21g's follow-up,** whose row's lines they are: lines that call internal what #1906 made public, false since this move. The follow-up rewrites them as it uses the members.
+- The header of `Sources/FRUSLightAPI/People.swift` (:15–17), and `PeopleRules`' doc line (:25), whose lifespan rule is the kit's since #1906.
+- `web/src/people/PersonSheet.tsx`'s header (:6).
+- SPEC's People screen, in its section on corrections and the People screen (:350), and its line in Browse's feature list (:419).
+
+**Notes**
+- **The build folder:** this worktree's own `.build/linux`, from 13 November, was set aside, and the people-access session's was cloned in its place: its package targets were built from #1906's branch before its review fixes, whose package-compiled code is `f011ab04`'s. As in CI, this package's own targets were then rebuilt clean.
+- **#1906's Linux check,** in the entry below, ran over `main` at `2f13891` and `84666ee`, before S21g's #142 brought `PeopleParityTests`, so this move's runs are the first of the two together.
+
+**Next:** S21g's follow-up: the person sheet's lifespan line with POCOM's fill, its Career section, and its Subjects chips with their pivot, from what #1906 made public, with the kit's `PersonLifespan` in place of the server's mirror. On the features track, S24f, then S24g to S24i, which print their counts through `CountCopy`, S24f's and S24h's scope bars offering "By Detected Topic" through `ScopeFacets`; and then S25b. And, as before, S22d's follow-up, S21f's, in its final runs beside this move, and S24e's.
+
 ## Session 21g, follow-up, upstream: the person sheet's, the scope bars' and the counts' kit members, public, and three rules moved into the kit
 
 14 November 2026 · branch `claude/gracious-tereshkova-1ec0b7` · [#143](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/143) · upstream `b124a59b`, unchanged; [FRUS-Explorer#1906](https://github.com/joshbotts/FRUS-Explorer/pull/1906), merged as `f011ab04`
@@ -52,6 +129,8 @@ A pull request upstream, moves and access only, for what S21g's People screen an
 `people-access-handover.md`, in the orchestrator's notes folder, has the rest.
 
 **Next:** a pin move to `f011ab04` that carries FRUS-Explorer#1906; then S21g's and the S24 rows' web follow-ups.
+
+**Since carried:** the pin move to `f011ab04`, the entry above, took the pin to #1906's merge ([#146](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/146)), and S21g's `PeopleParityTests`, which came with #142 after this entry's Linux check, reads the lifespan rule's lines in the kit's `POCOMIndex.swift` since.
 
 ## Session 21g: corrections on the web, and the People screen
 

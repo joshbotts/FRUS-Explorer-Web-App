@@ -30,11 +30,6 @@ import Testing
             // PersonIndexSection.makeSections
             ##"let letter = e.entry.name.isEmpty ? "#" : String(e.entry.name.prefix(1).uppercased())"##,
             "return dict.keys.sorted().map { PersonIndexSection(letter: $0, entries: dict[$0]!) }",
-            // PersonLifespan.text(born:died:), each year never grouped
-            #"defaultValue: "\(born, format: plain)–\(died, format: plain)")"#,
-            #"defaultValue: "Born \(born, format: plain)")"#,
-            #"defaultValue: "Died \(died, format: plain)")"#,
-            "(authority?.b ?? career?.b, authority?.d ?? career?.d)",
             // The sheet: the register's role where it adds to the description; Mentions; Active; the VIAF link.
             #"&& role.caseInsensitiveCompare(indexEntry.entry.description ?? "") != .orderedSame"#,
             #"Text("\(displayCount) document\(displayCount == 1 ? "" : "s")")"#,
@@ -46,6 +41,14 @@ import Testing
             "let theirs = try? await store.representativeMember(forRollupId: otherRollupId)",
             "if members.count > 1 {",
         ], file: "PersonIndexView.swift")
+        // PersonLifespan.text(born:died:), each year never grouped: the kit's since FRUS-Explorer#1906, which moved it
+        // unchanged from the view's file into Models/POCOMIndex.swift.
+        NoteViewParityTests.expect(try Self.kit("FRUSCoreKit/Models/POCOMIndex.swift"), holds: [
+            #"defaultValue: "\(born, format: plain)–\(died, format: plain)")"#,
+            #"defaultValue: "Born \(born, format: plain)")"#,
+            #"defaultValue: "Died \(died, format: plain)")"#,
+            "(authority?.b ?? career?.b, authority?.d ?? career?.d)",
+        ], file: "POCOMIndex.swift")
 
         func entry(_ name: String, role: String? = nil, start: Int? = nil, end: Int? = nil, volumes: Int = 1) -> PersonIndexEntry {
             PersonIndexEntry(entry: PersonEntry(ref: "p_X", name: name, description: role, role: role, startYear: start, endYear: end),
@@ -61,6 +64,10 @@ import Testing
         #expect(PeopleRules.lifespan(born: 1893, died: 1971) == "1893–1971")
         #expect(PeopleRules.lifespan(born: 1893, died: nil) == "Born 1893" && PeopleRules.lifespan(born: nil, died: 1971) == "Died 1971")
         #expect(PeopleRules.lifespan(born: nil, died: nil) == nil)
+        // And as the kit's rule answers, public since FRUS-Explorer#1906.
+        for (born, died) in [(1893, 1971), (1893, nil), (nil, 1971), (nil, nil)] as [(Int?, Int?)] {
+            #expect(PeopleRules.lifespan(born: born, died: died) == PersonLifespan.text(born: born, died: died))
+        }
         #expect(PeopleRules.registerRole("Ambassador", description: "ambassador") == nil && PeopleRules.registerRole("Ambassador", description: nil) == "Ambassador")
         #expect(PeopleRules.mentions(1) == "1 document" && PeopleRules.mentions(12) == "12 documents")
     }
