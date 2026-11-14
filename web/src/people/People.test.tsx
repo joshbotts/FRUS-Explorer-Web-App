@@ -78,8 +78,8 @@ const thompson: PersonSheet = {
   viafURL: null,
   wikidataURL: null,
   career: [
-    { id: 'p1', title: 'Ambassador Extraordinary and Plenipotentiary — Soviet Union', dates: '1957-07-16 – 1962-07-27', note: null },
-    { id: 'p2', title: 'Ambassador-at-Large', dates: null, note: 'Left post' },
+    { title: 'Ambassador Extraordinary and Plenipotentiary — Soviet Union', dates: '1957-07-16 – 1962-07-27', note: null },
+    { title: 'Ambassador-at-Large', dates: null, note: 'Left post' },
   ],
   candidates: [],
   records: [],
@@ -146,6 +146,9 @@ describe('the People screen', () => {
     expect(within(sheet).queryByRole('button', { name: 'Merge with another person…' })).toBeNull();
     expect(within(sheet).queryByRole('button', { name: /^Separate/ })).toBeNull();
     expect(within(sheet).queryByRole('button', { name: /^Merge Adzhubei/ })).toBeNull();
+    // No subject ranked and no post in the register: neither section, as the app's sheet draws neither.
+    expect(within(sheet).queryByRole('region', { name: 'Subjects' })).toBeNull();
+    expect(within(sheet).queryByRole('region', { name: 'Career' })).toBeNull();
   });
 
   it('draws Subjects and Career as the app’s sheet does, and a chip opens the volumes covering its subject, by keyboard', async () => {
@@ -167,9 +170,10 @@ describe('the People screen', () => {
     expect(headings).toEqual(['Subjects', 'Career']);
     const subjects = within(sheet).getByRole('region', { name: 'Subjects' });
     const career = within(sheet).getByRole('region', { name: 'Career' });
+    const active = within(sheet).getByText('Active');
     const mentions = within(sheet).getByRole('link', { name: 'Find all mentions' });
-    expect(subjects.compareDocumentPosition(mentions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(mentions.compareDocumentPosition(career) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const follows = (first: Node, then: Node) => Boolean(first.compareDocumentPosition(then) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(active, subjects) && follows(subjects, mentions) && follows(mentions, career)).toBe(true);
     // Each chip its subject's name, said with its category and count and the hint, in the server's order.
     const chips = within(subjects).getAllByRole('button');
     expect(chips.map((chip) => chip.textContent)).toEqual(['Berlin Crisis', 'Arms Control']);
@@ -190,7 +194,11 @@ describe('the People screen', () => {
     chips[0]!.focus();
     await userEvent.keyboard('{Enter}');
     const pivot = await screen.findByRole('dialog', { name: 'Berlin Crisis' });
+    await waitFor(() => expect(document.activeElement).toBe(within(pivot).getByRole('heading', { level: 2, name: 'Berlin Crisis' })));
     expect(await within(pivot).findByRole('heading', { name: '2 volumes cover this subject' })).toBeTruthy();
+    // Done beside the title, before the rows, as the app's toolbar keeps it.
+    const done = within(pivot).getByRole('button', { name: 'Done' });
+    expect(Boolean(done.compareDocumentPosition(within(pivot).getAllByRole('link')[0]!) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     const rows = within(pivot).getAllByRole('link');
     expect(rows.map((row) => row.getAttribute('href'))).toEqual(['/browse/frus1958-60v08', '/browse/frus1961-63v14']);
     expect(rows.map((row) => row.textContent)).toEqual([
@@ -199,7 +207,7 @@ describe('the People screen', () => {
     ]);
     expect(rows[0]!.getAttribute('title')).toBe('Opens this volume in the browser');
     // Done, and focus is back on the chip.
-    within(pivot).getByRole('button', { name: 'Done' }).focus();
+    done.focus();
     await userEvent.keyboard('{Enter}');
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Berlin Crisis' })).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(chips[0]));
@@ -324,6 +332,8 @@ describe('the People screen’s rules', () => {
     expect(subjectVolumesHeader(1)).toBe('1 volume covers this subject');
     expect(subjectVolumesHeader(69)).toBe('69 volumes cover this subject');
     expect(subjectVolumesHeader(0)).toBe('0 volumes cover this subject');
+    expect(subjectVolumesHeader(1204)).toBe('1,204 volumes cover this subject');
+    expect(subjectChipValue({ ...subject, volumeCount: 1204 })).toBe('Warfare, in 1,204 volumes mentioning this person');
   });
 
   it('gives the merge picker the role and era alone, as the app’s picker shows them', () => {

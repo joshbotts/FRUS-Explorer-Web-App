@@ -60,7 +60,7 @@ export interface PersonSheet {
   viafURL?: string | null;
   wikidataURL?: string | null;
   /** Career, the register's posts in its order, each the kit's title and dates; none where the sheet shows no section. */
-  career: { id: string; title: string; dates?: string | null; note?: string | null }[];
+  career: { title: string; dates?: string | null; note?: string | null }[];
   candidates: { rollupId: number; name: string; reason?: string | null }[];
   records: { volumeId: string; ref: string; name: string }[];
 }

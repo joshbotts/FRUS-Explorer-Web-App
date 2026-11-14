@@ -31,8 +31,8 @@ const sourcing = !!process.env.FRUS_E2E_SOURCES;
 // of NARA and Zotero FRUS_SERVICES_MIRROR names.
 const lookUp = /look-up\.spec\.ts$/;
 const lookingUp = !!process.env.FRUS_E2E_LOOK_UP;
-// The People screen (PLAN's S21g): its spec's second test, a merge by keyboard, on the smoke test's Standalone server,
-// which applies a correction at once.
+// The People screen (PLAN's S21g): its spec's Standalone tests, a sheet's Career and Subjects with a chip followed (its
+// follow-up) and a merge by keyboard, on the smoke test's Standalone server, which applies a correction at once.
 const people = /people\.spec\.ts$/;
 const correcting = !!process.env.FRUS_E2E_PEOPLE;
 

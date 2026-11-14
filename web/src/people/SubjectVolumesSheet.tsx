@@ -1,7 +1,8 @@
 // A subject chip's pivot (S21g's follow-up), the app's `VolumeSubjectVolumesSheet` as a person's sheet opens it, with no
-// volume excluded: titled by the subject, how many volumes cover it, each covering volume a row that opens its page in
-// Browse by its title, with its id below, and the subject's name under the list; or the app's empty state. The order
-// and the volumes are the server's, the app's sheet's two branches over the bundled files (People.swift's
+// volume excluded: titled by the subject, with Done beside the title, where the app's toolbar keeps it, so that a list
+// of hundreds of volumes is not between them; how many volumes cover the subject; each covering volume a row that opens
+// its page in Browse by its title, with its id below; and the subject's name under the list; or the app's empty state.
+// The order and the volumes are the server's, the app's sheet's two branches over the bundled files (People.swift's
 // `SubjectPivot`). The app's sheet's two doors, the archival profile of these volumes and the topic in the index, open
 // surfaces this server does not have yet: Archival Analytics, and the Topic Index.
 import { useQuery } from '@tanstack/react-query';
@@ -27,9 +28,14 @@ export function SubjectVolumesSheet({ subject, onClose }: { subject: PersonSubje
   return (
     <Modal className="subject-volumes" labelledBy={headingId} onCancel={close} onClose={onClose}>
       <div ref={body}>
-        <h2 id={headingId} tabIndex={-1}>
-          {subject.name}
-        </h2>
+        <div className="sheet-header">
+          <h2 id={headingId} tabIndex={-1}>
+            {subject.name}
+          </h2>
+          <button type="button" onClick={close}>
+            {copy.people.done}
+          </button>
+        </div>
         {volumes.isError ? (
           <p className="error" role="alert">
             {errorMessage(volumes.error)}
@@ -57,11 +63,6 @@ export function SubjectVolumesSheet({ subject, onClose }: { subject: PersonSubje
             <p className="note">{subject.name}</p>
           </section>
         )}
-        <div className="actions">
-          <button type="button" onClick={close}>
-            {copy.people.done}
-          </button>
-        </div>
       </div>
     </Modal>
   );

@@ -1398,6 +1398,29 @@ dialog.subject-volumes {
   margin: 0;
 }
 
+/* A chip's pivot: its title and Done stay in reach above a list that can hold hundreds of volumes, as the app's sheet
+   keeps its toolbar, and a row the focus reaches stays clear of them (WCAG 2.4.11). */
+dialog.subject-volumes {
+  padding-top: 0;
+  scroll-padding-top: 4.5rem;
+}
+
+.subject-volumes .sheet-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 0 0.5rem;
+  background: var(--bg);
+}
+
+.subject-volumes .sheet-header h2 {
+  margin: 0;
+}
+
 .person-facts {
   display: grid;
   grid-template-columns: max-content 1fr;

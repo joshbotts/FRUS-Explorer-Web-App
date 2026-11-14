@@ -164,7 +164,11 @@ export function PersonSheet({
           subject={pivot}
           onClose={() => {
             setPivot(null);
-            requestAnimationFrame(() => chip.current?.focus());
+            // Back to the chip, or to the sheet's heading where the sheet was read again meanwhile and the chip is gone.
+            requestAnimationFrame(() => {
+              const back = chip.current;
+              (back?.isConnected ? back : body.current?.querySelector<HTMLElement>('h2'))?.focus();
+            });
           }}
         />
       )}
@@ -311,9 +315,10 @@ function SheetBody({
         <section className="person-career" aria-labelledby={careerId}>
           <h3 id={careerId}>{copy.people.careerHeader}</h3>
           <ul>
-            {data.career.map((post) => (
-              // One stop each, its lines read in turn, as the app combines a post's.
-              <li key={post.id}>
+            {data.career.map((post, index) => (
+              // One stop each, its lines read in turn, as the app combines a post's. Known by its place: the register
+              // can give one career two posts alike but for when they end.
+              <li key={index}>
                 <span className="post-title">{post.title}</span>
                 {post.dates && (
                   <>

@@ -198,10 +198,9 @@ struct PersonSheet: ResponseEncodable, Codable, Equatable, Sendable {
         }
     }
 
-    /// A post of Career (`POCOMAssignment`).
+    /// A post of Career (`POCOMAssignment`), known by its place in the list: the kit's `id` is not one, since the
+    /// register gives one career two posts of one title, place and dates that end apart (`taylor-francis-xavier`).
     struct Post: Codable, Equatable, Sendable {
-        /// The kit's id, stable within one career.
-        let id: String
         /// The kit's `titleText`: "Under Secretary of State" or "Ambassador — France".
         let title: String
         /// The kit's `dateRangeText`, the register's dates as it writes them; nil where it has none.
@@ -210,7 +209,6 @@ struct PersonSheet: ResponseEncodable, Codable, Equatable, Sendable {
         let note: String?
 
         init(_ assignment: POCOMAssignment) {
-            id = assignment.id
             title = assignment.titleText
             dates = assignment.dateRangeText
             note = assignment.nt.flatMap { $0.isEmpty ? nil : $0 }
@@ -346,7 +344,10 @@ enum PeopleRoutes {
         // so it answers whatever the served index holds, as the app's sheet lists volumes the reader has not downloaded.
         router.get("/api/v1/subjects/:ref/volumes") { request, context -> SubjectVolumes in
             try FormQuery(request.uri.query).refuseUnknown([])
-            let ref = try context.parameters.require("ref")
+            // The path gives the ref percent-encoded, as the browser app writes every segment.
+            let given = try context.parameters.require("ref")
+            let ref = given.removingPercentEncoding ?? given
+            guard ref.utf8.count <= 256 else { throw APIProblem.invalidParameter("ref", "\(given.prefix(64))… is not a subject's ref.") }
             let (documents, profiles) = try await Blocking.run { (resources.documentSubjectIndex, resources.subjectProfiles.profiles) }
             let ids = SubjectPivot.coveringVolumes(ref: ref, excluding: "", documents: documents, profiles: profiles)
             return SubjectVolumes(ref: ref, volumes: ids.map { SubjectVolumes.Volume(volumeId: $0, title: resources.volume($0)?.title) })

@@ -13,7 +13,7 @@ import { tabTo } from './keyboard';
 const standalone = !!process.env.FRUS_E2E_PEOPLE;
 
 test('reaches People from Browse and opens a person’s sheet by keyboard', async ({ page }) => {
-  test.skip(standalone, 'the Standalone server’s merge is the test below');
+  test.skip(standalone, 'the Standalone server’s sheet and merge are the tests below');
   await page.goto('browse');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await tabTo(page, page.getByRole('navigation', { name: 'Browse by' }).getByRole('link', { name: 'People', exact: true }));

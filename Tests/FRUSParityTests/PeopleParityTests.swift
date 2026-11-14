@@ -75,6 +75,8 @@ import Testing
             "dates = assignment.dateRangeText",
             "note = assignment.nt.flatMap { $0.isEmpty ? nil : $0 }",
             "static let subjectLimit = 8",
+            "let counts = try? await persons.volumeMentionCounts(forRollupId: rollupId),",
+            "!counts.isEmpty else { return [] }",
             "return PersonSubjectAffinity.rank(mentionCounts: counts, topSubjectsByVolume: profiles.topSubjects(forVolumeId:), limit: subjectLimit)",
         ], file: "People.swift")
         #expect(!people.contains(#""Born \("#) && !people.contains(#""Died \("#), "the lifespan line is the kit's call, not a copy")
@@ -93,6 +95,29 @@ import Testing
         #expect(PeopleRules.sections([entry("Bundy"), entry("Ball")]).first?.entries.map(\.entry.name) == ["Bundy", "Ball"], "the store's order")
         #expect(PeopleRules.registerRole("Ambassador", description: "ambassador") == nil && PeopleRules.registerRole("Ambassador", description: nil) == "Ambassador")
         #expect(PeopleRules.mentions(1) == "1 document" && PeopleRules.mentions(12) == "12 documents")
+    }
+
+    /// The sheet's gates that the bundled files never meet, over the kit's own values decoded as its files decode: a
+    /// slug left empty names no career; a career with no post draws no Career and still gives the lifespan line its
+    /// year; a post with no date gives none, and an empty note draws none.
+    @Test func theSheetsGatesHoldOverValuesTheBundledFilesLack() throws {
+        let register = try JSONDecoder().decode(POCOMIndex.self, from: Data(#"""
+            {"careers": {"b-a": {"n": "B, A", "b": 1900, "a": []},
+                         "d-c": {"n": "D, C", "a": [{"r": "Counselor", "nt": ""},
+                                                    {"r": "Ambassador", "p": "France", "st": "1961", "nt": "Left post on"}]}}}
+            """#.utf8))
+        func authority(_ slug: String) throws -> PersonAuthorityIndex.AuthorityEntry {
+            try JSONDecoder().decode(PersonAuthorityIndex.AuthorityEntry.self, from: Data(#"{"n": "B, A", "s": "\#(slug)"}"#.utf8))
+        }
+        let unslugged = try authority(""), unposted = try authority("b-a"), posted = try authority("d-c")
+        #expect(PeopleRules.career(unslugged, in: register) == nil, "an empty slug names no career")
+        #expect(PeopleRules.career(nil, in: register) == nil && PeopleRules.career(unposted, in: nil) == nil)
+        let bare = try #require(PeopleRules.career(unposted, in: register))
+        #expect(PeopleRules.posts(bare).isEmpty, "a career with no post draws no Career")
+        #expect(PersonLifespan.text(authority: unposted, career: bare) == "Born 1900", "and still fills the lifespan line")
+        let full = try #require(PeopleRules.career(posted, in: register))
+        #expect(PeopleRules.posts(full).map { [$0.title, $0.dates ?? "-", $0.note ?? "-"] }
+            == [["Counselor", "-", "-"], ["Ambassador — France", "from 1961", "Left post on"]])
     }
 
     /// A chip's pivot, the app's `VolumeSubjectVolumesSheet.coveringVolumes(excluding:)`: the server's two branches are
@@ -183,9 +208,9 @@ import Testing
             if sheet.lifespan != PersonLifespan.text(born: authority?.b, died: authority?.d) { filled += 1 }
             // `careerSection`, drawn for a career with a post: each post's title, its dates and its note where it has one.
             let posts = (career.map { $0.a.isEmpty ? [] : $0.a } ?? []).map {
-                [$0.id, $0.titleText, $0.dateRangeText ?? "-", $0.nt.flatMap { $0.isEmpty ? nil : $0 } ?? "-"]
+                [$0.titleText, $0.dateRangeText ?? "-", $0.nt.flatMap { $0.isEmpty ? nil : $0 } ?? "-"]
             }
-            #expect(sheet.career.map { [$0.id, $0.title, $0.dates ?? "-", $0.note ?? "-"] } == posts, "\(sheet.name)'s Career")
+            #expect(sheet.career.map { [$0.title, $0.dates ?? "-", $0.note ?? "-"] } == posts, "\(sheet.name)'s Career")
             // `loadSubjectAffinities`: the kit's ranking of the person's mentions in each volume over the profiles.
             let counts = try await persons.volumeMentionCounts(forRollupId: sheet.rollupId)
             let ranked = counts.isEmpty ? [] : PersonSubjectAffinity.rank(mentionCounts: counts,
@@ -200,9 +225,10 @@ import Testing
             #expect(pivot.volumes.map(\.title) == covering.map { titles[$0] }, "\(ref)'s titles")
         }
 
-        // Not vacuous: careers, a lifespan line, subjects and a pivot of many volumes, over the fixtures.
+        // Not vacuous: careers, lifespan lines, one with a year the register filled, subjects and a pivot of many volumes.
         let careers = sheets.filter { !$0.career.isEmpty }
         #expect(careers.count > 0 && sheets.contains { $0.lifespan != nil } && pivots.values.contains { $0.volumes.count > 1 })
+        #expect(filled > 0, "a year the name authority lacks, filled from the register, as the app's sheet fills it")
         #expect(sheets.filter { !$0.subjects.isEmpty }.count > sheets.count / 2, "most people have subjects")
         print("PeopleParityTests: \(sheets.count) sheets, \(sheets.filter { $0.lifespan != nil }.count) with a lifespan line, "
               + "\(filled) of them with a year the register filled, \(careers.count) with Career, "

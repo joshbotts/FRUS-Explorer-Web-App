@@ -2,7 +2,8 @@
 // `Browser/VolumeSubjectsView.swift`, app code), mirrored: the list's filter, a row's spoken line, the merge picker's
 // filter, the merge's question with its warning when the two records match different entries of the name authority,
 // a subject chip's spoken value and its pivot's count, each count in the one form at exactly one, grouped, as the
-// kit's `CountCopy` has it. The sheet's sections and their order are the server's, from the kit (People.swift).
+// kit's `CountCopy` has it. The sheet's values, whether a section has any and the order within each are the server's,
+// from the kit (People.swift); PersonSheet.tsx lays the sections out in the app's order.
 import type { PeopleList, PersonRow, PersonSubject } from '../api/people';
 import { counted } from '../browse/annotationRules';
 import { copy } from '../copy';
