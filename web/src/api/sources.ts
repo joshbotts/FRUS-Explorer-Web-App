@@ -4,6 +4,7 @@
 // answers; the words the app's views write themselves are copy.ts's.
 import { queryOptions } from '@tanstack/react-query';
 import { getJSON } from './client';
+import type { NARASearch } from './nara';
 
 const segment = encodeURIComponent;
 
@@ -162,7 +163,16 @@ export interface SourcePanel {
   lot?: BundledLot;
   libraryOutcome?: LibraryOutcome;
   guidance?: RepositoryGuidance;
-  catalogQuery?: { route?: string; manualSearchURL?: string };
+  /**
+   * The NARA Catalog query the app's `load()` runs for the note, which the NARA proxy runs (PLAN's S22e): its
+   * search, and how far its answer is tied to the citation (`CatalogQueryEvidence`).
+   */
+  catalogQuery?: {
+    route?: string;
+    manualSearchURL?: string;
+    search?: NARASearch;
+    evidence?: { sectionTitle: string; caveat?: string; isVerified: boolean };
+  };
   rationale?: string;
   /** A previously published citation the grammar recognizes: its publication and what to look for. */
   publication?: string;

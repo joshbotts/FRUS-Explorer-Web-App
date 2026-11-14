@@ -333,6 +333,8 @@ enum LookUpRoutes {
         router.post("/api/v1/volumes/:volumeId/documents/:documentId/lookup") { request, context -> LookUpAnswer in
             try FormQuery(request.uri.query).refuseUnknown([])
             let document = try UserDataRoutes.document(context, resources: resources)
+            // JSON, as a change's body is: a page elsewhere can send none without the browser asking first.
+            try UserDataGuard.checkBody(request, limit: UserDataServices.bodyLimit)
             let selection = try await JSONBody.decode(Selection.self, from: request, fields: ["text", "start", "end", "blockText"])
             guard selection.text.count <= longest else { throw NARARoutes.invalidField("text", "may be \(longest) characters at most.") }
             if let blockText = selection.blockText, blockText.count > longest {

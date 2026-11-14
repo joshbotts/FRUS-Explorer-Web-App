@@ -15,13 +15,18 @@ export type ReaderMessage =
   | { kind: 'link'; href: string }
   /**
    * The selection, in the kit's flat-text offsets: `start >= 0 && end > start` inside the
-   * document's text, -1 for both in a footnote or when nothing is selected, as `text` then says.
+   * document's text, -1 for both in a footnote or when nothing is selected, as `text` then says;
+   * a footnote's comes with the footnote's text, `blockText`, which Look Up reads it in (PLAN's S22e).
    */
-  | { kind: 'selectionChanged'; start: number; end: number; text?: string; rect?: SelectionRect }
+  | { kind: 'selectionChanged'; start: number; end: number; text?: string; blockText?: string; rect?: SelectionRect }
   | { kind: 'selectionScrolled' }
   | { kind: 'highlightTapped'; startOffset: number; endOffset: number; color: string }
-  /** ⇧⌘H or Ctrl+Shift+H, Highlight Selection ▸ Yellow, or Alt+F10, the bar: over a selection in the text. */
-  | { kind: 'highlightShortcut' | 'selectionBarShortcut'; start: number; end: number; rect?: SelectionRect }
+  /**
+   * ⇧⌘H or Ctrl+Shift+H, Highlight Selection ▸ Yellow, or Alt+F10, the bar: over a selection in the text, and
+   * from PLAN's S22e Alt+F10 over a footnote's too, its offsets -1; each with the selection's text, and a
+   * footnote's with the footnote's.
+   */
+  | { kind: 'highlightShortcut' | 'selectionBarShortcut'; start: number; end: number; text?: string; blockText?: string; rect?: SelectionRect }
   | { kind: 'selectionEscape' }
   | { kind: 'highlightsRendered'; drawn: number; skipped: number[] };
 
@@ -55,7 +60,8 @@ export function readerMessage(event: Pick<MessageEvent, 'data' | 'origin' | 'sou
     case 'selectionChanged': {
       if (!isOffset(detail.start) || !isOffset(detail.end)) return null;
       const text = typeof detail.text === 'string' ? detail.text : undefined;
-      return { kind: 'selectionChanged', start: detail.start, end: detail.end, text, rect: rect(detail.rect) };
+      const blockText = typeof detail.blockText === 'string' ? detail.blockText : undefined;
+      return { kind: 'selectionChanged', start: detail.start, end: detail.end, text, ...(blockText !== undefined && { blockText }), rect: rect(detail.rect) };
     }
     case 'selectionScrolled':
       return { kind: 'selectionScrolled' };
@@ -64,8 +70,14 @@ export function readerMessage(event: Pick<MessageEvent, 'data' | 'origin' | 'sou
         ? { kind: 'highlightTapped', startOffset: detail.startOffset, endOffset: detail.endOffset, color: detail.color }
         : null;
     case 'highlightShortcut':
-    case 'selectionBarShortcut':
-      return isOffset(detail.start) && isOffset(detail.end) ? { kind: message.kind, start: detail.start, end: detail.end, rect: rect(detail.rect) } : null;
+    case 'selectionBarShortcut': {
+      if (!isOffset(detail.start) || !isOffset(detail.end)) return null;
+      const said = {
+        ...(typeof detail.text === 'string' && { text: detail.text }),
+        ...(typeof detail.blockText === 'string' && { blockText: detail.blockText }),
+      };
+      return { kind: message.kind, start: detail.start, end: detail.end, ...said, rect: rect(detail.rect) };
+    }
     case 'selectionEscape':
       return { kind: 'selectionEscape' };
     case 'highlightsRendered':

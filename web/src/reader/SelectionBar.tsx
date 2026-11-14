@@ -3,8 +3,11 @@
 // selection with the verbs the selection allows, in the kit's order. In the web edition so far those
 // are the four colours, each a dot named as VoiceOver reads the app's, "Highlight Yellow", and from
 // S15d Note, which opens a new note on the document, as the app's does, and from S18d Excerpt, which
-// freezes the selection into a collection; a footnote's selection allows Note alone. A toolbar for the keyboard, which Alt+F10 reaches from the text: the arrow keys,
-// Home and End move between its buttons, Return or Space chooses one, and Escape puts the bar away.
+// freezes the selection into a collection; from PLAN's S22e Look Up in NARA, before Note, as the kit orders
+// them, which opens the Look Up in NARA Catalog sheet. A footnote's selection allows Look Up and Note, and
+// a server that keeps no user data Look Up alone. A toolbar for the keyboard, which Alt+F10 reaches from the
+// text or a footnote: the arrow keys, Home and End move between its buttons, Return or Space chooses one, and
+// Escape puts the bar away.
 import { type RefObject, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
 import type { HighlightColor } from '../api/types';
 import { copy } from '../copy';
@@ -15,11 +18,13 @@ export function SelectionBar({
   rect,
   frame,
   inText = true,
+  keepsUserData = true,
   focusRequest,
   onFocused = () => {},
   onChoose,
   onNote = () => {},
   onExcerpt = () => {},
+  onLookUp = () => {},
   onDismiss,
 }: {
   /** The selection's rectangle in the frame's viewport, as the kit's bridge measured it. */
@@ -27,6 +32,8 @@ export function SelectionBar({
   frame: RefObject<HTMLIFrameElement | null>;
   /** Whether the selection is in the document's text, which a colour needs: not a footnote's. */
   inText?: boolean;
+  /** Whether the server keeps user data, which every verb but Look Up keeps something in. */
+  keepsUserData?: boolean;
   /** Changes when the keyboard asks for the bar, 0 for no request: its first button then takes focus. */
   focusRequest: number;
   /** The request it answered, so that its owner asks no more. */
@@ -34,13 +41,14 @@ export function SelectionBar({
   onChoose: (color: HighlightColor) => void;
   onNote?: () => void;
   onExcerpt?: () => void;
+  onLookUp?: () => void;
   onDismiss: () => void;
 }) {
   const bar = useRef<HTMLDivElement>(null);
   const dots = useRef<(HTMLButtonElement | null)[]>([]);
   const [active, setActive] = useState(0);
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
-  const verbs = offeredVerbs(inText).filter((verb) => verb.kind === 'highlight' || verb.kind === 'excerpt' || verb.kind === 'note');
+  const verbs = offeredVerbs(inText, keepsUserData);
   // The button in the Tab order, kept among those offered when a selection offers fewer.
   const at = Math.min(active, verbs.length - 1);
 
@@ -118,6 +126,10 @@ export function SelectionBar({
         ) : verb.kind === 'excerpt' ? (
           <button key={verb.kind} type="button" {...place} className="selection-verb" onClick={onExcerpt}>
             {copy.collections.excerpt}
+          </button>
+        ) : verb.kind === 'lookUpInNARA' ? (
+          <button key={verb.kind} type="button" {...place} className="selection-verb" onClick={onLookUp}>
+            {copy.lookUp.verb}
           </button>
         ) : (
           <button key={verb.kind} type="button" {...place} className="selection-verb" onClick={onNote}>

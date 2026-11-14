@@ -1,12 +1,14 @@
 // Cite (SPEC, Citation): the document's citation in the kit's three styles, as the server writes
 // it, with Copy Citation and Copy URL; and its BibTeX and RIS records, with the Mac popover's Copy
-// BibTeX, Copy RIS and Save as .bib.
+// BibTeX, Copy RIS and Save as .bib. From PLAN's S22e, Send to Zotero Library, the Mac's Share popover's,
+// while the user has a Zotero key stored.
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { citationFileURL, citationQuery } from '../api/endpoints';
 import type { CitationStyleName } from '../api/types';
 import { copy } from '../copy';
 import { useCitationStyleSetting } from '../settings/syncedPreferences';
+import { CiteZoteroSend } from './ZoteroSend';
 
 /** The formatter's Markdown emphasis, `_…_` or `*…*`, as <em>; everything else stays text. */
 export function citationNodes(citation: string): ReactNode[] {
@@ -138,6 +140,7 @@ export function CitePanel({
               {copy.cite.saveBibTeX}
             </a>
           </div>
+          <CiteZoteroSend volumeId={volumeId} documentId={documentId} />
         </>
       )}
       <p role="status" className="copy-status">

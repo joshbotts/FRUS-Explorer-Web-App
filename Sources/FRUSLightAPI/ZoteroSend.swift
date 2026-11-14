@@ -27,12 +27,12 @@ public struct ZoteroSent: Codable, Equatable, Sendable, ResponseEncodable {
     public var failedItems: Int
     public var addedNotes: Int
     public var webURL: String?
+}
 
+extension ZoteroSent {
     init(_ result: ZoteroSendResult) {
-        addedItems = result.addedItems
-        failedItems = result.failedItems
-        addedNotes = result.addedNotes
-        webURL = result.webURL?.absoluteString
+        self.init(addedItems: result.addedItems, failedItems: result.failedItems, addedNotes: result.addedNotes,
+                  webURL: result.webURL?.absoluteString)
     }
 }
 

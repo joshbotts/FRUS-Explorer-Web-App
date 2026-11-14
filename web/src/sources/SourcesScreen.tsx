@@ -4,13 +4,15 @@
 // scans, the lot cards, the series facts and the library catalogue's answer; the pre-1906 rolls, or what a
 // document with no note shows; the Archival Neighbors; the Archival Collection; and the Unprinted Material.
 // Everything shown is resolved on the server by the kit, the panels' words where the kit writes them, and the
-// app's own words otherwise (copy.ts). The web's own: the way back, the NARA Catalog section's line until this
-// server searches the catalogue (PLAN's S22e), and a link to the neighbours in their three scopes.
-import { useQuery } from '@tanstack/react-query';
+// app's own words otherwise (copy.ts). The web's own: the way back, and a link to the neighbours in their three
+// scopes. From PLAN's S22e the NARA Catalog section runs the query the app's `load()` runs, through the server's
+// NARA proxy, once there is a key, the user's or the instance's, and shows what the app's section shows.
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { Children, type ReactNode, useId } from 'react';
 import { ApiError, errorMessage } from '../api/client';
 import { documentQuery } from '../api/endpoints';
+import { canSearch, naraStatusQuery, searchNARA } from '../api/nara';
 import { type SourceExplorer, sourceExplorerQuery, type SourcePanel, type SourceRecord, type SourceScan } from '../api/sources';
 import { copy } from '../copy';
 import { useHeadingReady } from '../shell/headingFocus';
@@ -233,12 +235,7 @@ function Panel({ panel }: { panel: SourcePanel }) {
     case 'bundledLot':
       return <BundledLot panel={panel} />;
     case 'naraCatalog':
-      return (
-        <Section title={words.naraHeader}>
-          <p className="se-text">{words.notSearched}</p>
-          {panel.catalogQuery?.manualSearchURL && <Out href={panel.catalogQuery.manualSearchURL}>{words.searchManually}</Out>}
-        </Section>
-      );
+      return <NARACatalog panel={panel} />;
     case 'cia':
       return (
         <>
@@ -501,6 +498,69 @@ function RecordRow({ record, candidate }: { record: SourceRecord; candidate?: bo
       {record.dates && <p className="se-dates">{record.dates}</p>}
       {record.catalogURL && <Out href={record.catalogURL}>{words.viewRecord}</Out>}
     </div>
+  );
+}
+
+/**
+ * `naraResultSection(requiresKey:fallbackURL:)`: the query `load()` runs, through the server, once a key is there; the
+ * app's prompt without one; then its line while it searches, its error, its first five records, each a candidate's
+ * chip when the query is not tied to the citation, under the evidence's caveat, or its line for none; and the manual
+ * search, after an error or none. Titled by the evidence once there is a key, as the app titles it then.
+ */
+function NARACatalog({ panel }: { panel: SourcePanel }) {
+  const client = useQueryClient();
+  const query = panel.catalogQuery;
+  const status = useQuery(naraStatusQuery);
+  const keyed = canSearch(status.data);
+  const search = useQuery({
+    queryKey: ['naraSearch', query?.search],
+    queryFn: () => searchNARA(client, query!.search!),
+    enabled: keyed && !!query?.search,
+    staleTime: Infinity,
+    retry: false,
+  });
+  const evidence = keyed ? query?.evidence : undefined;
+  const manual = query?.manualSearchURL && <Out href={query.manualSearchURL}>{words.searchManually}</Out>;
+  if (status.isPending) return <Section title={words.naraHeader}>{null}</Section>;
+  return (
+    <Section title={evidence?.sectionTitle ?? words.naraHeader}>
+      {!keyed ? (
+        <div className="se-nokey">
+          <p className="se-label">{words.noKeyLabel}</p>
+          <Caption>{words.noKeyExplanation}</Caption>
+        </div>
+      ) : !query?.search ? null : search.isPending ? (
+        <p className="se-text" role="status">
+          {words.naraLoading}
+        </p>
+      ) : search.isError ? (
+        <>
+          <p className="se-warning" role="alert">
+            {errorMessage(search.error)}
+          </p>
+          {manual}
+        </>
+      ) : search.data.results.length > 0 ? (
+        <>
+          {evidence?.caveat && <Caption>{evidence.caveat}</Caption>}
+          {search.data.results.slice(0, 5).map((result) => (
+            <div key={result.naId} className="se-record">
+              <p className="se-record-title">
+                {result.title} {evidence && !evidence.isVerified && <ConfidenceChip />}
+              </p>
+              {result.scopeNote && <p className="se-scope">{result.scopeNote}</p>}
+              {result.dateRange && <p className="se-dates">{result.dateRange}</p>}
+              <Out href={result.catalogURL}>{words.viewRecord}</Out>
+            </div>
+          ))}
+        </>
+      ) : (
+        <>
+          <p className="se-text">{words.naraNoResult}</p>
+          {manual}
+        </>
+      )}
+    </Section>
   );
 }
 

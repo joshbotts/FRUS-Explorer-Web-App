@@ -9,11 +9,15 @@
 // the document, as the app's does; and each highlight made is reported, for the rail's Add Note to
 // Highlight. A footnote's Note has no key of its own: the host script asks the bar only over the
 // text, and the rail's Add Note makes the same note. From S18d the bar's Excerpt hands the selection's
-// offsets and the page's version on, to freeze it into a collection, and lets the selection go.
+// offsets and the page's version on, to freeze it into a collection, and lets the selection go. From PLAN's
+// S22e its Look Up in NARA hands on the selection's text, with its offsets in the text or a footnote's
+// text, and lets the selection go; Alt+F10 reaches a footnote's bar too; and on a server that keeps no user
+// data the bar is shown for Look Up alone.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, type RefObject, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { ApiError, errorMessage } from '../api/client';
 import type { Highlight, HighlightColor } from '../api/types';
+import type { LookUpSelection } from '../api/nara';
 import { createHighlight, documentHighlightsQuery } from '../api/userData';
 import { hasOffsets, readerHighlight, tappedHighlight } from './highlightRules';
 import type { ReaderMessage, SelectionRect } from './readerMessages';
@@ -27,6 +31,9 @@ interface Selected {
   start: number;
   end: number;
   rect?: SelectionRect;
+  /** The selection's text, and a footnote's text, which Look Up reads (PLAN's S22e). */
+  text?: string;
+  blockText?: string;
 }
 
 /** ⇧⌘H on a Mac and Ctrl+Shift+H elsewhere, the app's Highlight Selection ▸ Yellow; Alt+F10, the bar. */
@@ -58,6 +65,7 @@ export function useReaderHighlights({
   onHighlightMade,
   onNote,
   onExcerpt,
+  onLookUp,
 }: {
   volumeId: string;
   documentId: string;
@@ -76,6 +84,11 @@ export function useReaderHighlights({
   onNote?: () => void;
   /** The bar's Excerpt was chosen over a selection in the text: its offsets, in the page's version. */
   onExcerpt?: (selection: { startOffset: number; endOffset: number; renderingVersion: string }) => void;
+  /**
+   * The bar's Look Up in NARA was chosen (PLAN's S22e): the selection's text, with its offsets in the text, or
+   * a footnote's text. Offered with or without user data.
+   */
+  onLookUp?: (selection: LookUpSelection) => void;
 }) {
   const client = useQueryClient();
   const highlights = useQuery({ ...documentHighlightsQuery(volumeId, documentId), enabled });
@@ -95,6 +108,8 @@ export function useReaderHighlights({
   const making = useRef(false);
   const clearing = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const version = pageVersion ?? highlights.data?.renderingVersion;
+  // The bar, for the highlights' verbs on a server that keeps user data, and for Look Up on any.
+  const barEnabled = enabled || !!onLookUp;
 
   function post(message: Record<string, unknown>) {
     frame.current?.contentWindow?.postMessage({ source: 'frus-app', ...message }, '*');
@@ -158,17 +173,17 @@ export function useReaderHighlights({
   }
 
   function onMessage(message: ReaderMessage) {
-    if (!enabled) return;
+    if (!barEnabled) return;
     switch (message.kind) {
       case 'selectionChanged':
         if (hasOffsets(message.start, message.end)) {
           clearTimeout(clearing.current);
-          setSelected({ start: message.start, end: message.end, rect: message.rect });
+          setSelected({ start: message.start, end: message.end, rect: message.rect, text: message.text });
           setBarShown(message.rect !== undefined && !!message.text);
         } else if (message.text) {
-          // A footnote's selection: its bar offers Note alone, which needs no offsets.
+          // A footnote's selection: its bar offers Look Up and Note, which need no offsets.
           clearTimeout(clearing.current);
-          setSelected({ start: -1, end: -1, rect: message.rect });
+          setSelected({ start: -1, end: -1, rect: message.rect, text: message.text, blockText: message.blockText });
           setBarShown(message.rect !== undefined);
         } else {
           clearTimeout(clearing.current);
@@ -178,7 +193,7 @@ export function useReaderHighlights({
       case 'selectionScrolled':
         // The selection has moved on the screen: its rectangle is the frame's to give again.
         setBarShown(false);
-        setSelected((held) => held && { start: held.start, end: held.end });
+        setSelected((held) => held && { start: held.start, end: held.end, text: held.text, blockText: held.blockText });
         return;
       case 'selectionEscape':
         setBarShown(false);
@@ -196,7 +211,7 @@ export function useReaderHighlights({
         return;
       case 'selectionBarShortcut':
         clearTimeout(clearing.current);
-        setSelected({ start: message.start, end: message.end, rect: message.rect });
+        setSelected({ start: message.start, end: message.end, rect: message.rect, text: message.text, blockText: message.blockText });
         setBarShown(message.rect !== undefined);
         setFocusRequest((request) => request + 1);
         return;
@@ -226,7 +241,7 @@ export function useReaderHighlights({
   });
   const onMoved = useEffectEvent(() => {
     setBarShown(false);
-    setSelected((held) => held && { start: held.start, end: held.end });
+    setSelected((held) => held && { start: held.start, end: held.end, text: held.text, blockText: held.blockText });
   });
   useEffect(() => {
     window.addEventListener('keydown', onKey);
@@ -245,12 +260,13 @@ export function useReaderHighlights({
 
   const elements: ReactNode = (
     <>
-      {enabled && barShown && selected?.rect && (
+      {barEnabled && barShown && selected?.rect && (
         <SelectionBar
           rect={selected.rect}
           frame={frame}
           // A colour needs the selection's offsets and the version of the text they are in.
           inText={hasOffsets(selected.start, selected.end) && !!version}
+          keepsUserData={enabled}
           focusRequest={focusRequest > answeredFocus ? focusRequest : 0}
           onFocused={setAnsweredFocus}
           onChoose={(color) => void make(color)}
@@ -267,6 +283,16 @@ export function useReaderHighlights({
             forget();
             post({ kind: 'collapseSelection' });
             onExcerpt?.(excerpt);
+          }}
+          onLookUp={() => {
+            // The selection's text, and where it is: its offsets in the text, or its footnote's text.
+            if (!selected) return;
+            const lookUp: LookUpSelection = hasOffsets(selected.start, selected.end)
+              ? { text: selected.text ?? '', start: selected.start, end: selected.end }
+              : { text: selected.text ?? '', ...(selected.blockText !== undefined && { blockText: selected.blockText }) };
+            forget();
+            post({ kind: 'collapseSelection' });
+            onLookUp?.(lookUp);
           }}
           onDismiss={() => {
             setBarShown(false);
