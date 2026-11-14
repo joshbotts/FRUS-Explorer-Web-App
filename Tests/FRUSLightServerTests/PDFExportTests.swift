@@ -5,12 +5,15 @@
 // `index.html` with the app's page, US Letter with an inch's margin, and its backgrounds; the service's
 // PDF is answered under the name the app gives its file, and kept in the history as a PDF. What goes
 // wrong is the sheet's refusal, kept nowhere: a service that does not answer or is too busy a 503 the
-// sheet can try again, any other failure a 502 with the service's words.
+// sheet can try again, any other failure a 502 with the service's words. The servers here wait longer than
+// the server's three seconds for the stand-in's health check, which answers beside the target's other
+// tests; one test holds the bound itself.
 
 import FRUSLightCore
 import Foundation
 import Hummingbird
 import HummingbirdTesting
+import Synchronization
 import Testing
 
 @testable import FRUSLightAPI
@@ -22,6 +25,8 @@ actor StandInPDFService {
     static let pdf = Data("%PDF-1.4\n% A stand-in's PDF\n%%EOF\n".utf8)
 
     private(set) var health: (status: HTTPResponse.Status, body: String) = (.ok, up)
+    /// How long the health check's answer waits once the check is counted.
+    private(set) var healthDelay: Duration = .zero
     private(set) var answer: (status: HTTPResponse.Status, contentType: String, body: Data) = (.ok, "application/pdf", pdf)
     private(set) var checks = 0
     private(set) var prints: [(contentType: String, body: Data)] = []
@@ -30,13 +35,17 @@ actor StandInPDFService {
         health = (status, body)
     }
 
+    func delayHealth(_ delay: Duration) {
+        healthDelay = delay
+    }
+
     func answerPrints(_ status: HTTPResponse.Status, _ contentType: String, _ body: Data) {
         answer = (status, contentType, body)
     }
 
-    fileprivate func checked() -> (status: HTTPResponse.Status, body: String) {
+    fileprivate func checked() -> (status: HTTPResponse.Status, body: String, delay: Duration) {
         checks += 1
-        return health
+        return (health.status, health.body, healthDelay)
     }
 
     fileprivate func printed(_ contentType: String, _ body: Data) -> (status: HTTPResponse.Status, contentType: String, body: Data) {
@@ -49,6 +58,7 @@ actor StandInPDFService {
         let router = Router()
         router.get("/health") { _, _ -> Response in
             let health = await self.checked()
+            if health.delay > .zero { try await Task.sleep(for: health.delay) }
             return Response(status: health.status, headers: [.contentType: "application/json"],
                             body: .init(byteBuffer: ByteBuffer(string: health.body)))
         }
@@ -99,13 +109,17 @@ struct FormPart: Equatable {
 
 @Suite struct PDFExportTests {
     static let base = CollectionTests.base
+    /// How long these tests' servers wait for the stand-in's health check: longer than the server's three
+    /// seconds, which the stand-in may not answer in while the target's other tests hold the cooperative
+    /// pool, as the first check of two tests did not in CI (run 43548678478, 14 November).
+    static let checkWithin: Duration = .seconds(60)
 
     /// The fixture's server, its PDF service the one at `pdfURL`, or none, in a state of its own, so that
     /// each server asks its service afresh.
     static func app(_ fixture: UserDataFixture, pdfURL: String?) -> some ApplicationProtocol {
         var configuration = ServerConfiguration(dataDirectory: fixture.server.files.root)
         configuration.pdfURL = pdfURL
-        let state = ServerState(configuration: configuration)
+        let state = ServerState(configuration: configuration, pdfCheckWithin: checkWithin)
         return Application(router: ServedRouter(base: .root, router: buildRouter(
             state: state, resources: fixture.server.resources, reader: fixture.server.reader, userData: fixture.services)))
     }
@@ -217,6 +231,35 @@ struct FormPart: Equatable {
                 try decode(HistoryPage.self, try await Browser(client: client).get("/api/v1/me/history"))
             }
             #expect(history.totalExports == 0, "a refusal is kept nowhere")
+        }
+    }
+
+    /// The health check's bound: an answer after it is none, so no PDF is offered. The server's three seconds
+    /// are what CI's two tests met; a bound below a second keeps its fraction, for the connection as for the
+    /// log; and a server given longer, as these tests' servers are, takes the answer.
+    @Test func aHealthCheckAnsweredAfterItsBoundOffersNoPDF() async throws {
+        let service = StandInPDFService()
+        try await service.app.test(.live) { standIn in
+            let address = "http://localhost:\(try #require(standIn.port))"
+            await service.delayHealth(PDFService.checkTimeout + .milliseconds(500))
+            let said = Mutex<[String]>([])
+            let saying = PDFService(url: address, log: { line in said.withLock { $0.append(line) } })
+            let server = try #require(saying)
+            let saidBriefly = Mutex<[String]>([])
+            let sayingBriefly = PDFService(url: address, checkWithin: .milliseconds(500),
+                                           log: { line in saidBriefly.withLock { $0.append(line) } })
+            let brief = try #require(sayingBriefly)
+            let patient = try #require(PDFService(url: address, checkWithin: Self.checkWithin))
+            async let late = server.isAvailable()
+            async let briefly = brief.isAvailable()
+            async let waited = patient.isAvailable()
+            let (lateAnswer, briefAnswer, waitedAnswer) = await (late, briefly, waited)
+            #expect(!lateAnswer, "within the server's three seconds")
+            #expect(!briefAnswer, "within half a second")
+            #expect(waitedAnswer, "within \(Self.checkWithin)")
+            let refusal = "The PDF service at \(address) does not answer, so no PDF is offered until it does: no answer within"
+            #expect(said.withLock { $0 } == ["\(refusal) 3 seconds"])
+            #expect(saidBriefly.withLock { $0 } == ["\(refusal) 500 ms"], "connected, then given up on, not refused a connection")
         }
     }
 

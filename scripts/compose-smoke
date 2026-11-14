@@ -385,8 +385,12 @@ for _ in $(seq 1 80); do
   sleep 0.25
 done
 [ "$refusal" -gt 0 ] || fail "a Standalone server whose /data/volumes is root's did not refuse to start with its sentence: $(library_compose logs --no-color frus 2>&1 | tail -5)"
-library_compose logs --no-color frus 2>&1 | grep -q -- '--cap-add CHOWN --entrypoint chown frus 10001:10001 /data/volumes' \
-  || fail "the refusal does not give the remedy"
+# The whole log first: grep -q would stop reading it at its match, and under pipefail the writer's
+# broken pipe would fail the check.
+refused_log=$(library_compose logs --no-color frus 2>&1)
+case "$refused_log" in *'--cap-add CHOWN --entrypoint chown frus 10001:10001 /data/volumes'*) ;;
+  *) fail "the refusal does not give the remedy" ;;
+esac
 # The install guide's remedy, then the start again.
 library_compose stop frus >/dev/null
 library_compose run --rm --no-deps --user 0 --cap-add CHOWN --entrypoint chown frus 10001:10001 /data/volumes \
