@@ -580,7 +580,13 @@ extension LibraryIndexer {
                 log("\(volumeId), whose removal a stop of the server cut short, could not be taken out of the index: \(error)")
             }
         }
-        if !removals.isEmpty { await postIndexPasses(pipeline) }
+        if !removals.isEmpty {
+            await postIndexPasses(pipeline)
+        } else if !stamps.isResetting() {
+            // The person corrections the store keeps, which a stop may have kept a job from giving the rollup
+            // (PLAN's S21g): the kit's gate rebuilds it only when it was built with others.
+            await reassertPersonCorrections(pipeline)
+        }
 
         guard !stamps.isResetting() else {
             withExtendedLifetime(writer) {}

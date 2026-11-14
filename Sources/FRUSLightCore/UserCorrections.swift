@@ -152,8 +152,9 @@ extension RelationalUserStore: CorrectionLogStore {
     }
 
     private static func personOverrides(in db: UserStoreTransaction) throws -> [PersonOverride] {
-        // Newest first, as the app's fetch sorts them; one with no time last, and two of one time by their ids.
-        try db.query("SELECT \(personColumns) FROM person_overrides ORDER BY created_at DESC NULLS LAST, id DESC", [])
+        // Newest first, as the app's fetch sorts them; one with no time last, and two of one time the later made
+        // first, as the store numbers its rows.
+        try db.query("SELECT \(personColumns) FROM person_overrides ORDER BY created_at DESC NULLS LAST, rowid DESC", [])
             .compactMap { row in
                 guard let kind = row[1].text.flatMap(PersonClusterOverrideKind.init(rawValue:)) else { return nil }
                 return PersonOverride(id: row[0].text ?? "", kind: kind, volumeIdA: row[2].text ?? "", refA: row[3].text ?? "",

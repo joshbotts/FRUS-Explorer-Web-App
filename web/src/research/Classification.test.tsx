@@ -88,6 +88,26 @@ describe('the rail’s Classification', () => {
     await waitFor(() => expect(within(rail).getByRole('button', { name: 'Restore FRUS’s Classification' })).toBeTruthy());
   });
 
+  it('says on an Import server that a restore waits for the next export, as its question says the change does', async () => {
+    let restored = false;
+    const kept: DocumentClassification = {
+      ...plain, mode: 'import', isEditorialNote: true, correction: { isEditorialNote: true, madeBy: 'Owner', madeAt: '2026-11-14T13:00:00.000Z' },
+    };
+    server(curator, () => (restored ? { ...plain, mode: 'import', isEditorialNote: true, waiting: 'restore' } : kept), {
+      [`DELETE ${path}`]: () => {
+        restored = true;
+        return { state: 'nextExport', entryId: 'E2' };
+      },
+    });
+    const rail = await openSection();
+    await userEvent.click(await within(rail).findByRole('button', { name: 'Restore FRUS’s Classification' }));
+    const question = await screen.findByRole('alertdialog', { name: 'Restore FRUS’s Classification' });
+    expect(question.textContent).toContain('so the change is applied when the next export is installed.');
+    await userEvent.click(within(question).getByRole('button', { name: 'Restore FRUS’s Classification' }));
+    expect(await within(rail).findByText('FRUS’s classification is put back when the next export is installed.', { selector: '[role=status]' })).toBeTruthy();
+    expect(await within(rail).findByRole('button', { name: 'Reclassify as Editorial Note…' })).toBeTruthy();
+  });
+
   it('shows a reader the classification and no control', async () => {
     server(reader, { ...plain, canCorrect: false });
     const rail = await openSection();

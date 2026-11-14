@@ -28,7 +28,7 @@ import Testing
             #"parts.append(String(localized: "people.row.volumeCount", defaultValue: "\(indexEntry.volumeCount) volumes"))"#,
             #"return parts.isEmpty ? nil : parts.joined(separator: " · ")"#,
             // PersonIndexSection.makeSections
-            #"let letter = e.entry.name.isEmpty ? "#" : String(e.entry.name.prefix(1).uppercased())"#,
+            ##"let letter = e.entry.name.isEmpty ? "#" : String(e.entry.name.prefix(1).uppercased())"##,
             "return dict.keys.sorted().map { PersonIndexSection(letter: $0, entries: dict[$0]!) }",
             // PersonLifespan.text(born:died:), each year never grouped
             #"defaultValue: "\(born, format: plain)–\(died, format: plain)")"#,
@@ -65,7 +65,7 @@ import Testing
         #expect(PeopleRules.mentions(1) == "1 document" && PeopleRules.mentions(12) == "12 documents")
     }
 
-    /// The corrections' sequence, the app's stores' over the kit's calls, and the server's over the same calls.
+    /// The corrections' calls, the app's stores' over the kit's, and the server's over the same calls.
     @Test func theCorrectionsCallTheKitAsTheAppsStoresCallIt() throws {
         let persons = try Self.app("Models/PersonClusterOverrideStore.swift")
         let classification = try Self.app("Models/DocumentClassificationOverride.swift")
@@ -91,7 +91,7 @@ import Testing
         ], file: "ResearchRailView.swift")
         let kit = try Self.kit("FRUSCoreKit/TEI/FRUSASTNode.swift")
         #expect(kit.contains("public var isShapedAsEditorialNote: Bool {"), "the rule the indexer applies, which a restore reads")
-        // The server's: the same calls, in the same order.
+        // The server's: the same calls, each where the server writes it (the order is `IndexCorrections.apply`'s, read there).
         let corrections = try Self.server("Sources/FRUSLightCore/IndexCorrections.swift")
         NoteViewParityTests.expect(corrections, holds: [
             "isEditorialNote: value, parsedIsEditorialNote: value)], volumeId: document.volumeId)",
@@ -105,7 +105,7 @@ import Testing
             "(o.volumeIdA == a.volumeId && o.refA == a.ref && o.volumeIdB == b.volumeId && o.refB == b.ref)",
             "|| (o.volumeIdA == b.volumeId && o.refA == b.ref && o.volumeIdB == a.volumeId && o.refB == a.ref))",
             "$0.kind == .split && $0.volumeIdA == member.volumeId && $0.refA == member.ref",
-            "ORDER BY created_at DESC NULLS LAST, id DESC",
+            "FROM person_overrides ORDER BY created_at DESC NULLS LAST, rowid DESC",
         ], file: "UserCorrections.swift")
         let routes = try Self.server("Sources/FRUSLightAPI/Corrections.swift")
         NoteViewParityTests.expect(routes, holds: [

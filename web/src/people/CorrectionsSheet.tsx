@@ -13,7 +13,14 @@ import { Modal } from '../shell/Modal';
 import { outcomeLine } from './PersonSheet';
 import { correctionTitle } from './peopleRules';
 
-export function CorrectionsSheet({ onClose }: { onClose: (said?: string) => void }) {
+export function CorrectionsSheet({
+  onClose,
+  onSaid,
+}: {
+  onClose: (said?: string) => void;
+  /** Told what an Undo did when the sheet had closed before the server answered; its own line says it otherwise. */
+  onSaid?: (said: string) => void;
+}) {
   const client = useQueryClient();
   const corrections = useQuery(personCorrectionsQuery);
   const headingId = useId();
@@ -24,6 +31,7 @@ export function CorrectionsSheet({ onClose }: { onClose: (said?: string) => void
   const [status, setStatus] = useState('');
   const [failure, setFailure] = useState<string | null>(null);
   const said = useRef<string | undefined>(undefined);
+  const closed = useRef(false);
   const data = corrections.data;
 
   function close() {
@@ -37,8 +45,9 @@ export function CorrectionsSheet({ onClose }: { onClose: (said?: string) => void
     setStatus(copy.people.undoInProgress);
     try {
       const outcome = await undoPersonCorrection(client, item.id);
-      said.current = outcomeLine(copy.people.undoDone, outcome);
+      said.current = outcomeLine(copy.people.undoDone, outcome, true);
       setStatus(said.current);
+      if (closed.current) onSaid?.(said.current);
     } catch (error) {
       // Undone elsewhere: the list, read again, no longer holds it.
       if (!(error instanceof ApiError && error.code === 'CORRECTION_NOT_FOUND')) setFailure(errorMessage(error));
@@ -51,7 +60,10 @@ export function CorrectionsSheet({ onClose }: { onClose: (said?: string) => void
   }
 
   return (
-    <Modal className="corrections-sheet" labelledBy={headingId} onCancel={() => !busy && close()} onClose={() => onClose(said.current)}>
+    <Modal className="corrections-sheet" labelledBy={headingId} onCancel={() => !busy && close()} onClose={() => {
+      closed.current = true;
+      onClose(said.current);
+    }}>
       <div ref={body}>
         <h2 ref={heading} id={headingId} tabIndex={-1}>
           {copy.people.correctionsTitle}

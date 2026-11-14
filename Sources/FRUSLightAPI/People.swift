@@ -88,6 +88,12 @@ public actor ServedPeople {
 
     public init() {}
 
+    /// The version of the rollup `persons` reads now, uncached: on a Standalone server a writer's job may have
+    /// rebuilt it under a stack's list, which is read again only once the stack is opened again after the job.
+    static func version(now persons: PersonMentionStore) async throws -> String {
+        PeopleRules.version(try await persons.allPersonsSortedByName().filter { $0.rollupId != nil })
+    }
+
     /// The kit's list of the rollup `persons` reads, read on first use.
     func list(_ persons: PersonMentionStore) async throws -> List {
         if let list { return list }

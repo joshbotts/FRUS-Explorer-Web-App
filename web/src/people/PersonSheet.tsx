@@ -19,12 +19,12 @@ import {
 } from '../api/people';
 import { copy } from '../copy';
 import { closeAtOnce, Modal } from '../shell/Modal';
-import { mergeQuestion, pickerRows } from './peopleRules';
+import { mergeQuestion, pickerRows, roleEraLine } from './peopleRules';
 
-/** What a correction did, as the screen's line says it. */
-export function outcomeLine(done: string, outcome: CorrectionOutcome): string {
-  if (outcome.state === 'nextExport') return `${done}. ${copy.people.keptForExport}`;
-  if (outcome.state === 'waiting') return `${done}. ${copy.people.keptForJob}`;
+/** What a correction made, or one undone, did, as the screen's line says it. */
+export function outcomeLine(done: string, outcome: CorrectionOutcome, undone = false): string {
+  if (outcome.state === 'nextExport') return `${done}. ${undone ? copy.people.undoneForExport : copy.people.keptForExport}`;
+  if (outcome.state === 'waiting') return `${done}. ${undone ? copy.people.undoneForJob : copy.people.keptForJob}`;
   return done;
 }
 
@@ -33,12 +33,18 @@ export function PersonSheet({
   list,
   curator,
   onClose,
+  onSaid,
 }: {
   row: PersonRow;
   list: PeopleList;
   curator: boolean;
   /** Called once it has closed, with what a correction did, or nothing. */
   onClose: (said?: string) => void;
+  /**
+   * Told what a correction did when the sheet had closed before the server answered, as a second Escape closes a
+   * dialog in Chrome whatever its page says; otherwise `onClose` is told, once the page behind is no longer inert.
+   */
+  onSaid?: (said: string) => void;
 }) {
   const client = useQueryClient();
   const sheet = useQuery(personQuery(row.rollupId));
@@ -50,29 +56,47 @@ export function PersonSheet({
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const said = useRef<string | undefined>(undefined);
+  const closed = useRef(false);
   const data = sheet.data;
 
   function close() {
     body.current?.closest('dialog')?.close();
   }
 
-  /** A correction's tail, the app's `applyCorrection`: say it is under way, send it, and close with what it did. */
+  /** What a correction did: said as the sheet closes, or at once where it has closed already. */
+  function finish(line: string) {
+    said.current = line;
+    if (closed.current) onSaid?.(line);
+    else closeAtOnce(close);
+  }
+
+  /** The people rebuilt since the list was read: the sheet closes, saying so, and the list is read again. */
+  function changed() {
+    finish(copy.people.peopleChanged);
+    void client.invalidateQueries({ queryKey: ['people'] });
+  }
+
+  /**
+   * A correction's tail, the app's `applyCorrection`: say it is under way, send it, and close with what it did. It
+   * is checked against the list the row and the picker's ids came from, which the sheet's own must match.
+   */
   async function correct(done: string, send: (version: string) => Promise<CorrectionOutcome>) {
     if (busy || !data) return;
+    if (data.version !== list.version) {
+      changed();
+      return;
+    }
     setBusy(true);
     setFailure(null);
     try {
-      const outcome = await send(data.version);
-      said.current = outcomeLine(done, outcome);
-      closeAtOnce(close);
+      const outcome = await send(list.version);
+      finish(outcomeLine(done, outcome));
     } catch (error) {
-      setBusy(false);
       if (error instanceof ApiError && error.code === 'PEOPLE_CHANGED') {
-        await client.invalidateQueries({ queryKey: ['people'] });
-        said.current = copy.people.peopleChanged;
-        closeAtOnce(close);
+        changed();
         return;
       }
+      setBusy(false);
       setFailure(errorMessage(error));
     }
   }
@@ -81,7 +105,11 @@ export function PersonSheet({
     correct(copy.people.mergeDone(other.name, row.name), (version) => mergePeople(client, row.rollupId, other.rollupId, version));
 
   return (
-    <Modal className="person-sheet" labelledBy={headingId} onCancel={() => !busy && close()} onClose={() => onClose(said.current)}>
+    <Modal className="person-sheet" labelledBy={headingId} onCancel={() => !busy && close()}
+      onClose={() => {
+        closed.current = true;
+        onClose(said.current);
+      }}>
       <div ref={body}>
         <h2 id={headingId} tabIndex={-1}>
           {row.name}
@@ -105,7 +133,8 @@ export function PersonSheet({
             }
           />
         )}
-        {busy && <p role="status">{copy.people.inProgress}</p>}
+        {/* Mounted while the sheet is, so that its words are announced when they change. */}
+        <p role="status">{busy ? copy.people.inProgress : ''}</p>
         {failure && (
           <p className="error" role="alert">
             {failure}
@@ -321,13 +350,13 @@ function MergePicker({ list, excluding, onClose }: { list: PeopleList; excluding
             {rows.map((row) => (
               <li key={row.rollupId}>
                 <button type="button" aria-describedby={hintId}
-                  aria-label={[row.name, row.subtitle].filter(Boolean).join(', ')}
+                  aria-label={[row.name, roleEraLine(row)].filter(Boolean).join(', ')}
                   onClick={() => {
                     picked.current = row;
                     close();
                   }}>
                   <span className="person-name">{row.name}</span>
-                  {row.subtitle && <span className="meta">{row.subtitle}</span>}
+                  {roleEraLine(row) && <span className="meta">{roleEraLine(row)}</span>}
                 </button>
               </li>
             ))}

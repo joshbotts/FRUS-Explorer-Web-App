@@ -1,7 +1,8 @@
 // A curator's corrections (PLAN's S21g), through the router. On a Standalone server a document's classification
 // corrected shows at once in search, its document-type facet and the reader, and restored goes back; a merge and a
 // separation of people give the served rollup the kit builds with them over the same index, and undone give it
-// back; the indexing and the pass over every volume keep the corrections, where S21d's dropped them. On an Import
+// back; the indexing and the pass over every volume keep the corrections, where S21d's dropped them, and so does an
+// import of the Mac's research that brings one. On an Import
 // server a correction is kept, the served export left as it is, and given to the next export it installs. A reader is
 // refused every correction, and the log names each one, who made it and when.
 
@@ -228,7 +229,10 @@ import Testing
                                                     #"{"rollupId":\#(adenauer.rollupId),"otherRollupId":\#(adzhubei.rollupId),"version":"\#(list.version)"}"#))
                     == "PEOPLE_CHANGED")
 
-            // The merged identity's sheet, then Separate of Adzhubei's record.
+            // The merged identity's sheet, then Separate of Adzhubei's record. Every identity of the fixture's is one
+            // record, so the two are one by the merge alone, and the kit's clusterer detaches a record before it
+            // links the merges' pairs (`PersonClusterer.applyConstraints`): the record stays, as in the app, whose
+            // Separate records the same correction, and the merge is undone from Corrections.
             let fresh = try decode(PeopleList.self, try await owner.get("/api/v1/people"))
             #expect(fresh.version != list.version && fresh.count == list.count - 1)
             let identity = try #require(fresh.sections.flatMap(\.people).first { row in
@@ -243,10 +247,10 @@ import Testing
                                                  #"{"rollupId":\#(identity.rollupId),"volumeId":"\#(Self.volume)","ref":"p_AAI1","version":"\#(fresh.version)"}"#)
             #expect(try decode(CorrectionOutcome.self, separated).state == "applied")
             let both = try fixture.users.store.personOverrides()
-            #expect(both.map(\.kind) == [.split, .merge], "newest first, as the app's snapshot gives them")
+            #expect(both.map(\.kind) == [.split, .merge], "newest first, as the app's snapshot gives them, two of one time the later first")
             let afterSplit = try Self.identities(live)
             #expect(afterSplit == (try await Self.kitsRollup(over: before, with: both.map(\.data), resources: fixture.resources)))
-            #expect(afterSplit.contains(["\(Self.volume)/p_AAI1"]), "Adzhubei's record a person of its own")
+            #expect(afterSplit == afterMerge, "the merge links the separated record again, as the kit's clusterer has it")
 
             // Corrections: the sheet's two rows, newest first, by name; Undo of each, the rollup back each time.
             let rows = try decode(PersonCorrectionList.self, try await owner.get("/api/v1/me/people/corrections"))
@@ -255,7 +259,7 @@ import Testing
             #expect(rows.mode == "standalone")
             let split = try #require(rows.items.first?.id)
             #expect(try decode(CorrectionOutcome.self, try await owner.send(.delete, "/api/v1/me/people/corrections/\(split)")).state == "applied")
-            #expect(try Self.identities(live) == afterMerge)
+            #expect(try Self.identities(live) == afterMerge && fixture.users.store.personOverrides().map(\.kind) == [.merge])
             #expect(problemCode(try await owner.send(.delete, "/api/v1/me/people/corrections/\(split)")) == "CORRECTION_NOT_FOUND")
             let merge = try #require(rows.items.last?.id)
             #expect(try decode(CorrectionOutcome.self, try await owner.send(.delete, "/api/v1/me/people/corrections/\(merge)")).state == "applied")
@@ -302,9 +306,36 @@ import Testing
         await fixture.users.jobs.waitUntilIdle()
         #expect(try fixture.users.store.waitingCorrections().isEmpty)
         try await fixture.app.test(.router) { client in
-            #expect(try await Self.seen(Browser(client: client)) == Self.asNote)
+            let seen = try await Self.seen(Browser(client: client))
+            #expect(seen == Self.asNote)
         }
         #expect(await fixture.indexer.resumeCorrectionsAtStart() == nil, "nothing waits")
+    }
+
+    /// A curator's import of the Mac's research that brings a person correction: a Standalone server's job gives the
+    /// index every correction kept, the rollup built with the Mac's merge, which the log does not hold.
+    @Test func anImportOfTheMacsResearchGivesTheIndexItsCorrections() async throws {
+        let fixture = try await Standalone().indexed()
+        defer { withExtendedLifetime(fixture) {} }
+        let live = fixture.users.server.files.liveIndex
+        let original = try Self.identities(live)
+        let envelope = ResearchDataEnvelope(
+            formatVersion: 7, exportedAt: ImportRouteTests.date("2026-10-24T20:00:00Z"), notes: [], tags: [], tagAssignments: [],
+            highlights: [], collections: [], prompts: [], projects: [], summaries: [],
+            personClusterOverrides: [PersonClusterOverrideExport(
+                id: ImportRouteTests.id(160), kind: "merge", volumeIdA: Self.volume, refA: "p_AK3", volumeIdB: Self.volume,
+                refB: "p_AAI1", createdAt: ImportRouteTests.date("2026-06-12T00:00:00Z"))])
+        try await fixture.app.test(.router) { client in
+            let posted = try await Browser(client: client).send(.post, ImportRouteTests.path, String(decoding: try envelope.jsonData(), as: UTF8.self))
+            #expect(posted.status == .accepted)
+        }
+        await fixture.users.jobs.waitUntilIdle()
+        await fixture.users.jobs.waitUntilIdle()
+        let jobs = await fixture.users.jobs.jobs().filter { $0.kind == .indexCorrections }
+        #expect(jobs.map(\.state) == [.succeeded], "queued by the import")
+        let merged = try Self.identities(live)
+        #expect(merged.count == original.count - 1 && merged.contains(["\(Self.volume)/p_AK3", "\(Self.volume)/p_AAI1"]))
+        #expect(try fixture.users.store.correctionLog(limit: 10).isEmpty, "the Mac's correction, which the log does not hold")
     }
 
     // MARK: Import mode
@@ -352,6 +383,11 @@ import Testing
         #expect(await recorder.steps.contains(.applyingCorrections))
         #expect(!imported.index.isLive, "served immutable, as Import mode serves an export")
         #expect(try Data(contentsOf: export) == exported, "the export itself never written")
+        // The kit's write-ahead log folded into the copy, and its header a rollback journal's again (bytes 18 and 19,
+        // the file format's write and read versions), as the import's checks left the export before the step.
+        let header = try Data(contentsOf: files.liveIndex).prefix(20)
+        #expect(header.count == 20 && header[18] == 1 && header[19] == 1, "the installed index in rollback journal mode")
+        #expect(!FileManager.default.fileExists(atPath: files.liveIndex.path + "-wal"))
         let overrides = try users.store.personOverrides().map(\.data)
         #expect(try Self.identities(files.liveIndex) == (try await Self.kitsRollup(over: export, with: overrides, resources: users.server.resources)))
         #expect(try Self.identities(files.liveIndex).count == original.count - 1)
@@ -388,16 +424,26 @@ import Testing
         try await users.app.test(.router) { client in
             let owner = Browser(client: client)
             #expect(try await Self.seen(owner) == Self.asNote, "the Mac's correction, served")
-            let restored = try await owner.send(.delete, "/api/v1/me/volumes/\(Self.volume)/documents/d1/classification")
+            let path = "/api/v1/me/volumes/\(Self.volume)/documents/d1/classification"
+            let restored = try await owner.send(.delete, path)
             #expect(try decode(CorrectionOutcome.self, restored).state == "nextExport")
-            #expect(try decode(DocumentClassification.self, try await owner.get("/api/v1/me/volumes/\(Self.volume)/documents/d1/classification")).waiting == "restore")
+            #expect(try decode(DocumentClassification.self, try await owner.get(path)).waiting == "restore")
+            // Taken back before the export it waits for: the flip of the value it puts back, which the index's own
+            // value, the correction's still, would refuse as unchanged.
+            #expect(try decode(CorrectionOutcome.self, try await owner.send(.put, path, #"{"isEditorialNote":true}"#)).state == "nextExport")
+            let again = try decode(DocumentClassification.self, try await owner.get(path))
+            #expect(again.correction?.isEditorialNote == true && again.waiting == "correction" && again.correction?.madeBy == "Owner")
+            #expect(problemCode(try await owner.send(.put, path, #"{"isEditorialNote":false}"#)) == "CORRECTION_EXISTS")
+            #expect(try decode(CorrectionOutcome.self, try await owner.send(.delete, path)).state == "nextExport")
+            #expect(try decode(DocumentClassification.self, try await owner.get(path)).waiting == "restore")
         }
         for _ in 0..<2 {
             let imported = try await IndexImporter(files: files, writer: LocalIndexWriter(files: files), corrections: replay)
                 .importExport(at: export, observer: WritingStepRecorder())
             _ = await users.server.state.importFinished(file: export.lastPathComponent, index: imported.index)
             try await users.app.test(.router) { client in
-                #expect(try await Self.seen(Browser(client: client)) == Self.asDocument, "FRUS's classification, at each install")
+                let seen = try await Self.seen(Browser(client: client))
+                #expect(seen == Self.asDocument, "FRUS's classification, at each install")
             }
         }
     }
@@ -406,9 +452,11 @@ import Testing
 
     /// A reader is refused every correction, before anything is read or written; a curator is not.
     @Test func aReaderIsRefusedEveryCorrection() async throws {
-        let fixture = try await UserDataFixture(volumes: [Self.volume], indexed: true, auth: .header,
-                                                trustedProxies: SignInTests.loopback, adminUsers: ["alice"])
+        let fixture = try await UserDataFixture(volumes: [Self.volume], indexed: true, auth: .local)
         defer { withExtendedLifetime(fixture) {} }
+        let hash = try LocalAccountTests.hasher.hash(LocalAccountTests.password)
+        try fixture.store.addAccount("alice", displayName: "Alice Liddell", role: .admin, passwordHash: hash, at: UserDataFixture.now)
+        try fixture.store.addAccount("bob", displayName: "bob", role: .reader, passwordHash: hash, at: UserDataFixture.now)
         let writes: [(HTTPRequest.Method, String, String?)] = [
             (.put, "/api/v1/me/volumes/\(Self.volume)/documents/d1/classification", #"{"isEditorialNote":true}"#),
             (.delete, "/api/v1/me/volumes/\(Self.volume)/documents/d1/classification", nil),
@@ -418,14 +466,16 @@ import Testing
             (.delete, "/api/v1/me/people/corrections/5E21G000-0000-4000-8000-000000000001", nil),
         ]
         try await fixture.app.test(.router) { client in
-            let bob = Browser(client: client, user: "bob")
+            var bob = AccountBrowser(client: client)
+            _ = try await bob.signIn("bob", LocalAccountTests.password)
             for (method, path, body) in writes {
-                let response = method == .get ? try await bob.get(path) : try await bob.send(method, path, body)
+                let response = try await method == .get ? bob.get(path) : bob.send(method, path, body)
                 #expect(response.status == .forbidden && problemCode(response) == "ROLE_REQUIRED", "\(method) \(path)")
             }
             let seen = try decode(DocumentClassification.self, try await bob.get("/api/v1/me/volumes/\(Self.volume)/documents/d1/classification"))
             #expect(!seen.canCorrect, "a reader reads it, and corrects nothing")
-            let alice = Browser(client: client, user: "alice")
+            var alice = AccountBrowser(client: client)
+            _ = try await alice.signIn("alice", LocalAccountTests.password)
             #expect(try await alice.get("/api/v1/me/people/corrections").status == .ok, "an admin is a curator too")
             #expect(try decode(DocumentClassification.self, try await alice.get("/api/v1/me/volumes/\(Self.volume)/documents/d1/classification")).canCorrect)
         }

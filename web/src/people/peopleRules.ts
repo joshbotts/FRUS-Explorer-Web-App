@@ -22,6 +22,18 @@ export function rowLabel(row: PersonRow): string {
   return parts.join(', ');
 }
 
+/**
+ * The merge picker's line, the app's `PersonEntry.roleEraSubtitle` (`PersonMergePickerSheet`): the row's line without
+ * the volume count `PersonIndexRow.subtitle` adds to it past one volume.
+ */
+export function roleEraLine(row: PersonRow): string | null {
+  const line = row.subtitle ?? null;
+  if (line == null || row.volumeCount <= 1) return line;
+  const count = `${row.volumeCount} volumes`;
+  if (line === count) return null;
+  return line.endsWith(` · ${count}`) ? line.slice(0, line.length - count.length - 3) : line;
+}
+
 /** `PersonMergePickerSheet.filter`'s folding: case and diacritics aside. */
 export function folded(text: string): string {
   return text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();

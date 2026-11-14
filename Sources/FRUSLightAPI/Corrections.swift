@@ -174,7 +174,9 @@ enum CorrectionRoutes {
                  try store.correctionLog(of: document))
             }
             let parsed = await parse(document, reader: reader) ?? correction?.parsedIsEditorialNote ?? (correction == nil ? effective : nil)
-            let made = entries.first { $0.action == .made }
+            // Who made the correction kept: its own entry, since the newest made may be of one undone since, and a
+            // correction an import of the Mac's research brought has none.
+            let made = correction.flatMap { kept in entries.first { $0.action == .made && $0.overrideId == kept.id } }
             let waiting = entries.first.flatMap { $0.appliedAt == nil ? ($0.action == .made ? "correction" : "restore") : nil }
             let body = DocumentClassification(
                 indexed: effective != nil, isEditorialNote: effective, parsedIsEditorialNote: parsed,
@@ -198,14 +200,19 @@ enum CorrectionRoutes {
                 throw APIProblem(.conflict, code: "DOCUMENT_NOT_INDEXED",
                                  detail: "The served index does not hold \(document.volumeId)/\(document.documentId), so its classification cannot be corrected.")
             }
-            let kept = try await Blocking.run {
-                try store.classificationOverrides().contains { $0.volumeId == document.volumeId && $0.documentId == document.documentId }
+            let (kept, latest) = try await Blocking.run {
+                (try store.classificationOverrides().contains { $0.volumeId == document.volumeId && $0.documentId == document.documentId },
+                 try store.correctionLog(of: document).first)
             }
             guard !kept else {
                 throw APIProblem(.conflict, code: "CORRECTION_EXISTS",
                                  detail: "This document's classification is corrected already: restore FRUS’s classification first.")
             }
-            guard body.isEditorialNote != effective else {
+            // What the index says once what waits is applied, as the rail's section shows it: a restore an Import
+            // server keeps for its next export, or one a job has not applied yet, else what it says now. So a restore
+            // waiting is taken back by the flip of the value it puts back.
+            let pending = latest.flatMap { $0.appliedAt == nil ? $0.isEditorialNote : nil } ?? effective
+            guard body.isEditorialNote != pending else {
                 throw APIProblem(.conflict, code: "CLASSIFICATION_UNCHANGED",
                                  detail: "isEditorialNote: the index classifies the document so already.")
             }
@@ -285,6 +292,10 @@ enum CorrectionRoutes {
                   let theirs = try await served.persons.representativeMember(forRollupId: body.otherRollupId) else {
                 throw APIProblem(.notFound, code: "PERSON_NOT_FOUND", detail: "The served index holds no record of one of the two people.")
             }
+            // The records are read live, and on a Standalone server a job may have rebuilt the rollup under the
+            // stack's list, which is opened again only once the job ends: the version is read again from the store,
+            // after them, so that the ids are the ones the page was given.
+            try current(body.version, served: try await ServedPeople.version(now: served.persons))
             let time = services.now()
             let entry = try await stored {
                 try store.recordPersonMerge(PersonRecordKey(volumeId: mine.volumeId, ref: mine.ref),
@@ -378,7 +389,12 @@ enum CorrectionRoutes {
 
     /// Refuses a correction made against another rollup than the one served.
     static func current(_ version: String, _ list: ServedPeople.List) throws {
-        guard version == list.version else {
+        try current(version, served: list.version)
+    }
+
+    /// Refuses a correction made against another rollup than the one whose version is `served`.
+    static func current(_ version: String, served: String) throws {
+        guard version == served else {
             throw APIProblem(.conflict, code: "PEOPLE_CHANGED",
                              detail: "The people have been rebuilt since the page was loaded, by a correction or an indexing, so their numbers may name others now: load them again.")
         }

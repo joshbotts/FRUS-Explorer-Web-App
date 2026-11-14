@@ -720,8 +720,10 @@ curl -s --max-time 10 -H "Host: localhost:8080" -o "$work/d1-body.html" \
 grep -q 'class="editorial-note"' "$work/d1-body.html" || fail "the reader did not draw d1 as an editorial note"
 restored=$(correction_api DELETE "$d1_classification")
 case "$restored" in *'"state":"applied"'*' 200') ;; *) fail "d1's classification was not restored at once: $restored" ;; esac
-grep -q 'class="editorial-note"' <(curl -s --max-time 10 -H "Host: localhost:8080" \
-  "$library_base/api/v1/volumes/frus1961-63v06/documents/d1/html?part=body") && fail "the reader still drew d1 as an editorial note"
+restored_page=$(curl -s --max-time 10 -H "Host: localhost:8080" -o "$work/d1-restored.html" -w '%{http_code}' \
+  "$library_base/api/v1/volumes/frus1961-63v06/documents/d1/html?part=body" || true)
+{ [ "$restored_page" = 200 ] && [ -s "$work/d1-restored.html" ] && ! grep -q 'class="editorial-note"' "$work/d1-restored.html"; } \
+  || fail "the reader did not draw d1 as a document again: $restored_page $(head -c 400 "$work/d1-restored.html")"
 curl -s --max-time 10 -H "Host: localhost:8080" -o "$work/corrections-log.json" "$library_base/api/v1/admin/corrections" || true
 python3 - "$work/corrections-log.json" <<'PY' || fail "the log does not name the two corrections: $(head -c 600 "$work/corrections-log.json")"
 import json, sys

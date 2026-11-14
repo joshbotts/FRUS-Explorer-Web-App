@@ -33,6 +33,17 @@ public struct IndexCorrections: Sendable {
         self.log = log
     }
 
+    /// Whether an application builds the rollup again.
+    public enum RollupRebuild: Sendable, Equatable {
+        /// Left as it is.
+        case no
+        /// Built again with every person correction, none included: an undone correction is dropped so.
+        case yes
+        /// Built again only when the store keeps a person correction when it is read, as an Import server's export
+        /// is given them: the rollup the Mac built with its own corrections stands otherwise.
+        case whenAnyKept
+    }
+
     /// What one application gave the index.
     public struct Applied: Sendable, Equatable {
         public var classifications = 0
@@ -72,10 +83,10 @@ public struct IndexCorrections: Sendable {
     /// Gives `pipeline`, a writer's, the corrections: first each of `restores`, FRUS's own classification put back
     /// through the kit's volume-scoped entry point, which keeps nothing for the replay, as the app's `saveAndApply`
     /// restores one; then every classification correction, which the pipeline keeps for `indexVolume`'s replay;
-    /// and, when `rebuildingRollup`, the rollup built again with every person correction, as the app's live merge
-    /// and separation build it (`PersonClusterOverrideStore.saveAndReconsolidate`).
+    /// and, as `rebuildingRollup` says, the rollup built again with every person correction, as the app's live
+    /// merge and separation build it (`PersonClusterOverrideStore.saveAndReconsolidate`).
     public func apply(to pipeline: IndexingPipeline, restoring restores: [CorrectionLogEntry],
-                      rebuildingRollup: Bool) async throws -> Applied {
+                      rebuildingRollup: RollupRebuild) async throws -> Applied {
         var applied = Applied()
         for entry in restores {
             guard let document = entry.document,
@@ -89,8 +100,9 @@ public struct IndexCorrections: Sendable {
         let classification = try await Blocking.run { [self] in try self.classification() }
         try await pipeline.applyClassificationOverrides(classification)
         applied.classifications = classification.count
-        if rebuildingRollup {
+        if rebuildingRollup != .no {
             let person = try await Blocking.run { [self] in try self.person() }
+            guard rebuildingRollup == .yes || !person.isEmpty else { return applied }
             // `forceReload: false`, as the app's live correction calls it: a writer opened for this job holds no
             // cluster inputs, so the kit loads them.
             try await pipeline.consolidatePersonRollup(overrides: person, forceReload: false)
@@ -116,7 +128,8 @@ extension LibraryIndexer {
     /// The kit's passes after indexing, `runPostIndexPasses`, with every person correction, as the app's launch
     /// passes its overrides, so that a rollup the gate rebuilds keeps the merges and separations made here, and an
     /// import's (S21d's passed none). With no corrections the passes run as before; with a store that cannot say
-    /// what they are, they wait for the next job, since a rollup rebuilt without them would drop them.
+    /// what they are, the rollup's waits for the next job, since a rollup rebuilt without them would drop them, and
+    /// the broken references' and the subjects' run, as `runPostIndexPasses` runs them.
     func postIndexPasses(_ pipeline: IndexingPipeline) async {
         guard let corrections else {
             await pipeline.runPostIndexPasses()
@@ -126,7 +139,25 @@ extension LibraryIndexer {
             let person = try await Blocking.run { try corrections.person() }
             await pipeline.runPostIndexPasses(overrides: person)
         } catch {
-            log("The passes after indexing wait for the next job, since the person corrections could not be read: \(error)")
+            log("The person rollup waits for the next job, since the person corrections could not be read: \(error)")
+            try? await pipeline.applyBrokenRefsIndexIfNeeded()
+            try? await pipeline.applyDocumentSubjectsIfNeeded()
+        }
+    }
+
+    /// At a start's opening of the writer: the rollup built again with every person correction when it was built
+    /// with others (the kit's gate, cheap when it was not), as when a stop kept an import's job from giving it the
+    /// ones the Mac's research brought. A server that keeps none is left as before.
+    func reassertPersonCorrections(_ pipeline: IndexingPipeline) async {
+        guard let corrections else { return }
+        do {
+            let person = try await Blocking.run { try corrections.person() }
+            guard !person.isEmpty else { return }
+            if try await pipeline.consolidatePersonRollupIfNeeded(overrides: person) {
+                log("The person rollup was built again at the start with the \(person.count) person corrections this server keeps")
+            }
+        } catch {
+            log("The person corrections could not be given to the rollup at the start, which the next job gives them: \(error)")
         }
     }
 
@@ -146,7 +177,8 @@ extension LibraryIndexer {
             return job
         }
         let id = UUID().uuidString
-        waitingCorrectionJob = (id, all)
+        // One the queue was still saving, not yet seen above, gives its slot to this one: what it asked for is kept.
+        waitingCorrectionJob = (id, all || (waitingCorrectionJob?.all ?? false))
         do {
             return try await jobs.submit(.indexCorrections, subject: nil, requestedBy: requestedBy, id: id, onCancel: {
                 await self.forgetCorrectionJob(id)
@@ -193,7 +225,7 @@ extension LibraryIndexer {
         let restores = waiting.filter { $0.correction == .classification && $0.action == .undone }
         let rollup = all || waiting.contains { $0.correction == .person }
         let applied = try await withWriter(holding: nil) { writer in
-            try await corrections.apply(to: writer.pipeline, restoring: restores, rebuildingRollup: rollup)
+            try await corrections.apply(to: writer.pipeline, restoring: restores, rebuildingRollup: rollup ? .yes : .no)
         }
         if let problem = stamps.writeProblem {
             log("The index's stamps could not be written after the corrections: \(problem)")
@@ -231,8 +263,11 @@ public struct IndexCorrectionReplay: Sendable {
 
     public func plan() throws -> Plan {
         let store = corrections.store
+        // The entries waiting first: one made after them waits for the next install, since the sets read after may
+        // or may not hold it, and the copy is given whatever the sets hold.
+        let waiting = try store.waitingCorrections().map(\.id)
         return Plan(classification: try store.classificationOverrides().count, restores: try store.standingRestores(),
-                    person: try store.personOverrides().count, waiting: try store.waitingCorrections().map(\.id))
+                    person: try store.personOverrides().count, waiting: waiting)
     }
 
     /// Records that the export installed took the entries `plan` read waiting; a failure is said in the log alone,
@@ -248,10 +283,10 @@ public struct IndexCorrectionReplay: Sendable {
     }
 
     /// Gives the copy at `candidate` the corrections, through the kit's read-write pipeline, as the app replays its
-    /// overrides at launch, and leaves it whole: the log folded into it through `copy`, the import's own
-    /// connection, and its journal a rollback journal's again, as the immutable open an Import server serves needs.
-    /// The rollup is built again only when the store keeps a person correction: an export's own, which the Mac built
-    /// with its corrections, stands otherwise.
+    /// overrides at launch, and leaves it whole: the kit's connections closed, the log folded into the file through
+    /// `copy`, the import's own connection, and its journal a rollback journal's again, as the immutable open an
+    /// Import server serves needs. The rollup is built again only when the store keeps a person correction when the
+    /// kit is given them: an export's own, which the Mac built with its corrections, stands otherwise.
     func apply(_ plan: Plan, to candidate: URL, through copy: SQLiteConnection) async throws -> IndexCorrections.Applied {
         let volumes = corrections.volumesDirectory
         var applied = IndexCorrections.Applied()
@@ -260,16 +295,27 @@ public struct IndexCorrectionReplay: Sendable {
                 try IndexingPipeline(fts5Store: try FTS5Store(databaseURL: candidate), databaseURL: candidate,
                                      volumesDirectory: volumes, resources: resources, defaults: InMemoryIndexingStampStore())
             }
-            applied = try await corrections.apply(to: pipeline, restoring: plan.restores, rebuildingRollup: plan.person > 0)
+            applied = try await corrections.apply(to: pipeline, restoring: plan.restores, rebuildingRollup: .whenAnyKept)
         }
         let (folded, journal) = try await Blocking.run { () -> (Int64, String) in
+            // A statement first, so that `copy`, idle since the kit switched the file to a write-ahead log, reads its
+            // header again and takes the log mode: the checkpoint and the switch back are then its own, and the
+            // switch fails while any other connection still holds the file.
+            _ = try copy.query("SELECT count(*) FROM sqlite_master")
             let folded = try copy.query("PRAGMA wal_checkpoint(TRUNCATE)").first?.first?.integer ?? 1
             let journal = try copy.query("PRAGMA journal_mode=DELETE").first?.first?.text ?? ""
             return (folded, journal)
         }
         guard folded == 0, journal.lowercased() == "delete" else {
-            throw SQLiteError(code: 5, message: "the copy's log could not be folded into it after its corrections (busy \(folded), journal \(journal))")
+            throw CorrectionReplayError(detail: "the copy's write-ahead log could not be folded into it after its corrections (busy \(folded), journal \(journal))")
         }
         return applied
     }
+}
+
+/// The replay's own failure, which says nothing of the export: the copy was given its corrections and could not be
+/// left whole.
+struct CorrectionReplayError: Error, CustomStringConvertible {
+    let detail: String
+    var description: String { detail }
 }

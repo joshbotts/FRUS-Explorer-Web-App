@@ -39,8 +39,9 @@ test('reaches People from Browse and opens a person’s sheet by keyboard', asyn
 test('merges two people by keyboard, and undoes it from Corrections', async ({ page }) => {
   test.skip(!standalone, 'runs on the smoke test’s Standalone server, with FRUS_E2E_PEOPLE');
   test.setTimeout(120_000);
+  // A page just loaded starts at its top, as the shell has it: the field is reached from there.
   await page.goto('people');
-  await expect(page.getByRole('heading', { level: 1, name: 'People' })).toBeFocused();
+  await expect(page.getByRole('heading', { level: 1, name: 'People' })).toBeVisible();
   const search = page.getByRole('searchbox', { name: 'Search people' });
   await tabTo(page, search);
   await page.keyboard.type('Ad');

@@ -10,7 +10,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, useRouter } from '@tanstack/react-router';
 import { createContext, type MouseEvent, useContext, useEffect, useRef, useState } from 'react';
 import { isSignedOut, sessionQuery, signedOut, signOut } from '../api/auth';
-import { readinessQuery } from '../api/endpoints';
+import { corpusQueryKeys, readinessQuery } from '../api/endpoints';
 import { meQuery } from '../api/userData';
 import { copy } from '../copy';
 import { type Appearance, useAppearance, useResolvedScheme } from '../settings/preferences';
@@ -170,8 +170,6 @@ function skipToMain(event: MouseEvent<HTMLAnchorElement>) {
   document.getElementById('main')?.focus();
 }
 
-/** The queries that read what the server indexes, asked again when its index changes. */
-const corpusQueryKeys = ['search', 'facets', 'inspect', 'timeline', 'concordance', 'citation', 'related', 'citationLookup', 'citationBatch', 'document', 'volumes', 'volume', 'section', 'readingOrder', 'sources', 'archivalNeighbours', 'archivalCollection', 'volumeSources'];
 
 /** While no index is served, says which step the server is at; the reader works meanwhile. */
 function ReadinessBanner() {

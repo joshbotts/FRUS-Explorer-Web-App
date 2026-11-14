@@ -22,7 +22,8 @@ import Testing
         let entry = try #require(try store.recordPersonMerge(Self.adenauer, Self.adzhubei, by: "owner", at: Self.made))
         #expect(entry.correction == .person && entry.action == .made && entry.kind == .merge)
         #expect(entry.volumeIdA == Self.adenauer.volumeId && entry.refA == "p_AK3" && entry.volumeIdB == Self.adzhubei.volumeId && entry.refB == "p_AAI1")
-        #expect(entry.userId == "owner" && entry.userName == (try store.user("owner")?.displayName) && entry.madeAt == Self.made)
+        let owner = try store.user("owner")?.displayName
+        #expect(entry.userId == "owner" && entry.userName == owner && entry.madeAt == Self.made)
         #expect(entry.appliedAt == nil, "waiting for the index")
         let overrides = try store.personOverrides()
         #expect(overrides.map(\.id) == [entry.overrideId] && overrides.first?.createdAt == Self.made)

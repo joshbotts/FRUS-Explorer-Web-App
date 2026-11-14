@@ -5,6 +5,7 @@
 // the people, of search and of the document is asked for again.
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
 import { getJSON } from './client';
+import { corpusQueryKeys, retryServerFaults } from './endpoints';
 import { change, searchesChanged } from './userData';
 
 const segment = encodeURIComponent;
@@ -120,18 +121,22 @@ export const peopleQuery = queryOptions({
   queryKey: ['people'],
   queryFn: ({ signal }) => getJSON<PeopleList>('/api/v1/people', undefined, signal),
   staleTime: Infinity,
+  retry: retryServerFaults,
 });
 
 export function personQuery(rollupId: number) {
   return queryOptions({
     queryKey: ['people', 'person', rollupId],
     queryFn: ({ signal }) => getJSON<PersonSheet>(`/api/v1/people/${rollupId}`, undefined, signal),
+    // A rollup built again since the list was read may number no one so: said at once, not after retries.
+    retry: retryServerFaults,
   });
 }
 
 export const personCorrectionsQuery = queryOptions({
   queryKey: ['people', 'corrections'],
   queryFn: ({ signal }) => getJSON<PersonCorrections>('/api/v1/me/people/corrections', undefined, signal),
+  retry: retryServerFaults,
 });
 
 export function classificationQuery(volumeId: string, documentId: string) {
@@ -139,17 +144,17 @@ export function classificationQuery(volumeId: string, documentId: string) {
     queryKey: ['classification', volumeId, documentId],
     queryFn: ({ signal }) =>
       getJSON<DocumentClassification>(`/api/v1/me/volumes/${segment(volumeId)}/documents/${segment(documentId)}/classification`, undefined, signal),
+    retry: retryServerFaults,
   });
 }
 
 /**
- * After a correction: the people, every search and facet, whose type filter and counts read a document's
- * classification, and every document's classification and page, which the reader shapes by it.
+ * After a correction: every query that reads what the server indexes, as when its index changes, since a
+ * document's classification shapes searches, their facets, Browse's badges and the reader's page, and a person
+ * correction renumbers the people; and the searches' own.
  */
 function corrected(client: QueryClient) {
-  void client.invalidateQueries({ queryKey: ['people'] });
-  void client.invalidateQueries({ queryKey: ['classification'] });
-  void client.invalidateQueries({ queryKey: ['document'] });
+  for (const key of corpusQueryKeys) void client.invalidateQueries({ queryKey: [key] });
   searchesChanged(client);
 }
 

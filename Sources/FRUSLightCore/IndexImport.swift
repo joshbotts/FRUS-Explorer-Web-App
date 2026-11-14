@@ -270,9 +270,12 @@ public struct IndexImporter: Sendable {
                                                   progress: nil)
                     do {
                         _ = try await replay.apply(plan, to: candidate, through: copy)
-                    } catch let error as SQLiteError {
+                    } catch let error as SQLiteError where error.code & 0xFF == SQLITE_CORRUPT || error.code & 0xFF == SQLITE_NOTADB {
+                        // A damaged page the kit read: the export's, as the integrity check after would say.
                         throw ExportChecks.classify(error, at: .applyingCorrections, file: name, while: "giving it this server's corrections")
                     } catch {
+                        // The server's own failure, a busy file, a full disk or the kit's: the export is not to blame, and
+                        // the import can be run again.
                         throw ImportProblem(.applyingCorrections, "The corrections made on this server could not be given to \(name), so it was not installed. The server's log says why",
                                             logged: "\(error)")
                     }

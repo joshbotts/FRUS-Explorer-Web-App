@@ -4,7 +4,9 @@
 // of it, what FRUS says, the TEI's own, or that FRUS now agrees; and for a curator, the flip, Reclassify as Document…
 // or Reclassify as Editorial Note…, or Restore FRUS's Classification, each after the app's question. The web's own:
 // the section, which the web's rail has in place of the app's info popover; a document the index does not hold, for
-// which the app shows nothing; who made the correction; and a correction an Import server keeps for its next export.
+// which the app shows nothing; who made the correction; and a correction or a restore that waits, for an Import
+// server's next export or a job, which the section shows as the document will be once it is applied, with a line
+// saying it waits, and whose flip the server checks against that.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
@@ -12,7 +14,10 @@ import { classificationQuery, type DocumentClassification, reclassify, restoreCl
 import { copy } from '../copy';
 import { Modal } from '../shell/Modal';
 
-/** What the section says the document is: the correction kept, a restore waiting, else the index's. */
+/**
+ * What the section says the document is: the correction kept, a restore waiting, else the index's; so what the index
+ * says once what waits is applied, as the server checks a flip against it.
+ */
 export function shownClassification(data: DocumentClassification): boolean | null {
   if (data.isEditorialNote == null) return null;
   if (data.correction) return data.correction.isEditorialNote;
@@ -77,13 +82,15 @@ export function ClassificationSection({
     setBusy(true);
     setFailure(null);
     try {
-      const outcome = data.correction
+      const restoring = !!data.correction;
+      const outcome = restoring
         ? await restoreClassification(client, volumeId, documentId)
         : await reclassify(client, volumeId, documentId, !shown);
       await client.invalidateQueries({ queryKey: ['classification', volumeId, documentId] });
       setStatus(
         outcome.state === 'applied' ? copy.classification.applied
-          : outcome.state === 'nextExport' ? copy.people.keptForExport : copy.people.keptForJob,
+          : outcome.state === 'nextExport' ? (restoring ? copy.classification.waitingRestore : copy.classification.waitingExport)
+            : copy.classification.waitingJob,
       );
       if (outcome.state === 'applied') onChanged?.();
     } catch (error) {
@@ -114,6 +121,7 @@ export function ClassificationSection({
       {asking && (
         <ClassificationQuestion
           title={title}
+          importMode={data.mode === 'import'}
           onClose={(confirmed) => {
             setAsking(false);
             if (confirmed) void apply();
@@ -125,8 +133,8 @@ export function ClassificationSection({
   );
 }
 
-/** The app's confirmation: the action's title, its warning, the action and Cancel. */
-function ClassificationQuestion({ title, onClose }: { title: string; onClose: (confirmed: boolean) => void }) {
+/** The app's confirmation: the action's title, its warning, the action and Cancel; on an Import server, when. */
+function ClassificationQuestion({ title, importMode, onClose }: { title: string; importMode: boolean; onClose: (confirmed: boolean) => void }) {
   const headingId = useId();
   const messageId = useId();
   const cancel = useRef<HTMLButtonElement>(null);
@@ -144,7 +152,10 @@ function ClassificationQuestion({ title, onClose }: { title: string; onClose: (c
         <h2 id={headingId} tabIndex={-1}>
           {title}
         </h2>
-        <p id={messageId}>{copy.classification.warning}</p>
+        <p id={messageId}>
+          {copy.classification.warning}
+          {importMode && ` ${copy.classification.warningImport}`}
+        </p>
         <div className="actions">
           <button ref={cancel} type="button" onClick={close}>
             {copy.classification.cancel}

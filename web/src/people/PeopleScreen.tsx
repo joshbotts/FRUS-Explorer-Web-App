@@ -141,6 +141,7 @@ export function PeopleScreen() {
           row={open}
           list={list}
           curator={curator}
+          onSaid={setStatus}
           onClose={(said) => {
             setOpen(null);
             if (said) {
@@ -156,6 +157,7 @@ export function PeopleScreen() {
       )}
       {showCorrections && (
         <CorrectionsSheet
+          onSaid={setStatus}
           onClose={(said) => {
             setShowCorrections(false);
             if (said) setStatus(said);

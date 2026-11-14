@@ -368,8 +368,11 @@ export const copy = {
    * The People screen (PLAN's S21g), the app's People browser (`PersonIndexView`), its person sheet
    * (`PersonIndexDetailSheet`), its merge picker and its Corrections sheet (`PersonCorrectionsView`), in the
    * app's words. "Syncs across your devices" is "for everyone on this server", where one curator's correction
-   * changes everyone's people; an empty server's sentence, who made a correction, the lines for one kept for the
-   * next export and for people rebuilt since a page was loaded, and the note on an Import server are the web's own.
+   * changes everyone's people; "your" corrections and those "you make in the People browser" are the ones made on
+   * this server, where a curator undoes them (Corrections' help and its empty list), and the corrections "the app
+   * kept apart" are the index's. An empty server's sentence, who made a correction, the lines for one kept or undone
+   * for the next export or a job and for people rebuilt since a page was loaded, and the note on an Import server
+   * are the web's own.
    */
   people: {
     title: 'People',
@@ -439,6 +442,8 @@ export const copy = {
     waitingJob: 'Waiting to be applied',
     keptForExport: 'The correction is kept, and the next export this server installs is given it.',
     keptForJob: 'The correction is kept, and is applied once the jobs before it end.',
+    undoneForExport: 'The next export this server installs is given the change.',
+    undoneForJob: 'The index takes the change once the jobs before it end.',
     importNote:
       'This server serves an export made on the Mac: a correction made here is kept, and the next export installed is given it. Until then the people are the export’s.',
     peopleChanged: 'The people have been rebuilt since this page was loaded, so they have been loaded again: choose once more.',
@@ -1390,9 +1395,11 @@ export const copy = {
   /**
    * The rail's Classification (PLAN's S21g), the app's classification control (`ClassificationInfoSection`, the
    * footer of the rail's Document tools), in the app's words, with "reclassified by you" a curator's of this
-   * server and "on all your devices" everyone on it. The section, which the web's rail has in place of the app's
-   * info popover, a document the index does not hold, a correction kept for the next export, and what a change
-   * did once made, are the web's own.
+   * server and "on all your devices" everyone on it; in the warning, the app's other "windows" that reflect it when
+   * "reopened" are the browser's pages, reloaded, and the restore is offered here alone, since the web's Settings has
+   * no Search pane with the app's list of corrections. The section, which the web's rail has in place of the app's
+   * info popover, a document the index does not hold, a correction kept for the next export, the warning's sentence
+   * on an Import server, and what a change did once made, are the web's own.
    */
   classification: {
     title: 'Classification',
@@ -1408,6 +1415,7 @@ export const copy = {
     nowRedundant: 'FRUS now tags this the same way, so this server’s correction no longer changes anything. You can restore FRUS’s classification.',
     warning:
       'The document’s body styling, badges, search filters, counts, and exports will follow the new classification for everyone on this server. Bundled series-analytics dashboards are computed from the published corpus and cannot see this change, and other open pages reflect it when reloaded. You can restore FRUS’s own classification at any time from here.',
+    warningImport: 'This server serves an export made on the Mac, so the change is applied when the next export is installed.',
     cancel: 'Cancel',
     notIndexed: 'The served index does not hold this document, so its classification cannot be corrected here.',
     waitingExport: 'Kept on this server, and applied when the next export is installed.',

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PeopleList, PersonCorrections, PersonSheet } from '../api/people';
 import type { Me } from '../api/types';
 import { ProblemAnswer, ready, renderAt, stubServer } from '../test/renderRoute';
-import { correctionTitle, displaySections, folded, mergeQuestion, pickerRows, rowLabel } from './peopleRules';
+import { correctionTitle, displaySections, folded, mergeQuestion, pickerRows, roleEraLine, rowLabel } from './peopleRules';
 
 const curator: Me = { userId: 'owner', displayName: 'Owner', auth: 'none', roles: ['reader', 'curator', 'admin'], userData: true, csrfToken: 't1' };
 const reader: Me = { userId: 'bob', displayName: 'bob', auth: 'header', roles: ['reader'], userData: true, csrfToken: 't2' };
@@ -147,6 +147,16 @@ describe('the People screen', () => {
     expect(lists.length).toBeGreaterThan(1);
   });
 
+  it('sends no correction from a sheet of another rollup than the list its ids came from', async () => {
+    const fetch = server(curator, { '/api/v1/people/1': { ...adenauer, version: 'v2' } });
+    renderAt('/people');
+    await userEvent.click(await screen.findByRole('button', { name: /^Adenauer, Conrad/ }));
+    const sheet = await screen.findByRole('dialog', { name: 'Adenauer, Conrad' });
+    await userEvent.click(await within(sheet).findByRole('button', { name: 'Separate Adenauer, Konrad into its own identity' }));
+    expect(await screen.findByText('The people have been rebuilt since this page was loaded, so they have been loaded again: choose once more.')).toBeTruthy();
+    expect(fetch.mock.calls.some(([url]) => String(url).endsWith('/api/v1/me/people/separations'))).toBe(false);
+  });
+
   it('lists the corrections for a curator, with Undo, and says a correction an Import server keeps for its next export', async () => {
     const corrections: PersonCorrections = {
       items: [{ id: 'C1', kind: 'merge', nameA: 'Adenauer, Conrad', nameB: 'Adzhubei, Aleksei I.', madeBy: 'Owner', madeAt: '2026-11-14T13:00:00.000Z', applied: false }],
@@ -167,7 +177,7 @@ describe('the People screen', () => {
     await waitFor(() =>
       expect(fetch.mock.calls.some(([url, init]) => String(url).endsWith('/api/v1/me/people/corrections/C1') && init?.method === 'DELETE')).toBe(true),
     );
-    expect(await within(sheet).findByText(/Correction undone\. The correction is kept/)).toBeTruthy();
+    expect(await within(sheet).findByText('Correction undone. The next export this server installs is given the change.')).toBeTruthy();
   });
 });
 
@@ -182,5 +192,13 @@ describe('the People screen’s rules', () => {
     expect(mergeQuestion({ name: 'B', authorityId: 1 }, { name: 'A', authorityId: 1 })).not.toContain('different entries');
     expect(mergeQuestion({ name: 'B', authorityId: null }, { name: 'A', authorityId: 1 })).not.toContain('different entries');
     expect(correctionTitle({ kind: 'split', nameA: 'Adzhubei' })).toBe('Adzhubei — separated');
+  });
+
+  it('gives the merge picker the role and era alone, as the app’s picker shows them', () => {
+    const row = list.sections[0]!.people[0]!;
+    expect(roleEraLine(row)).toBe('Chancellor of the Federal Republic of Germany · 1961–1963');
+    expect(roleEraLine({ ...row, subtitle: 'Ambassador · 1961–1963 · 2 volumes', volumeCount: 2 })).toBe('Ambassador · 1961–1963');
+    expect(roleEraLine({ ...row, subtitle: '3 volumes', volumeCount: 3 })).toBeNull();
+    expect(roleEraLine({ ...row, subtitle: null, volumeCount: 1 })).toBeNull();
   });
 });
