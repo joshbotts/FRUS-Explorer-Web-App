@@ -133,9 +133,7 @@ export function LookUpDialog({
         )}
         {strategies.length > 0 && (
           <fieldset aria-describedby={`${id}-strategy-hint`}>
-            <legend>
-              <h3>{words.strategyHeader}</h3>
-            </legend>
+            <legend>{words.strategyHeader}</legend>
             {strategies.map((each) => (
               <label key={each.id}>
                 <input

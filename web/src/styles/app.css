@@ -2910,8 +2910,11 @@ dialog.lookup-sheet {
   margin-top: 1rem;
 }
 
-.lookup-sheet h3 {
+.lookup-sheet h3,
+.lookup-sheet legend {
   margin: 0 0 0.375rem;
+  font-size: 1rem;
+  font-weight: 600;
 }
 
 .lookup-sheet input[type='search'] {
