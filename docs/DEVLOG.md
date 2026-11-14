@@ -22,6 +22,37 @@ Not started: `PLAN.md`'s row S24g. The session that does it replaces this line, 
 
 Not started: `PLAN.md`'s row S24f. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
 
+## Session 21g, follow-up, upstream: the person sheet's, the scope bars' and the counts' kit members, public, and three rules moved into the kit
+
+14 November 2026 · branch `claude/gracious-tereshkova-1ec0b7` · [#143](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/143) · upstream `b124a59b`, unchanged; [FRUS-Explorer#1906](https://github.com/joshbotts/FRUS-Explorer/pull/1906), merged as `f011ab04`
+
+A pull request upstream, moves and access only, for what S21g's People screen and the features rows S24f to S24i read and may not copy (rule 4); no PLAN row names it. S21g shipped without the person sheet's Career section, lifespan line and Subjects section, naming them a known gap, by the orchestrator's decision. The pull request is `claude/kit-access-people`, cut from `v2` at `b124a59b`, which `v2` still is. It was labelled `Mac` and asked for Mac verification as Mac check 30, which covered moves as well as access. The owner merged it the same day (17:57 UTC) as `f011ab04`, its squash's tree its head's, `5469ebf9`, so the runs below are of `v2` as merged. Under rule 4 it changes shared files, and this repository changes only its records.
+
+**What it moves and makes public,** by the orchestrator's six groups of 14 November:
+- **1. The person sheet's lifespan line, Career and Subjects (S21g's follow-up):**
+  - `PersonLifespan` moves, unchanged and public, from the app's `PersonIndexView.swift` into `FRUSCoreKit/Models/POCOMIndex.swift`, and `PersonSubjectAffinity` with `Ranked` into `FRUSCoreKit/Browser/VolumeSubjectProfiles.swift`: the two rules are the app's own, so access alone would have left the web copying them;
+  - public: `POCOMIndex.career(forSlug:)`, `POCOMCareer`'s life years and posts, `POCOMAssignment`'s title, dates and note, `VolumeSubjectProfiles.topSubjects(forVolumeId:)` and `ResolvedSubject`.
+- **2. The chips' pivot (S21g's follow-up):** `DocumentSubjectIndex.volumeIds(forSubjectRef:)` and `VolumeSubjectProfiles.otherVolumes(forSubjectRef:excluding:)`. The order between them is the view's, and the follow-up mirrors it with a test that reads the app's source.
+- **3. The count phrases (S24f to S24i, and S22d's Archival Collections list):** `CountCopy`'s six statics; `StatusBarCopy` stays internal.
+- **4. "By Detected Topic" (S24f, S24h):** `ScopeFacets` moves, unchanged and public, from the app's `CustomVolumeScope.swift` into `FRUSCoreKit/Models/CustomScopeResolver.swift`, with `VolumeSubjectProfiles.resolvedByVolume` and `DocumentSubjectIndex.subjectsByVolume` public.
+- **5. S24h:** nothing more; its archival tabs' and About the Series' reads were public already.
+- **6. Left out:** what no browser needs (`AXChartDescriptorBuilder`, `ArchivalExportRequest`, `DecadeFrequency`'s initialiser, the `storageKey`s) and a live word cloud's members, phase 4's.
+
+**How the list was found:** by the compiler. The app's 432 files were typechecked as a module of their own against the six kits as separate modules, as this server sees them, so each kit member they read that is not public was an error naming it: 76 against `v2`, 68 against the branch. In the rows' views only the left-out ones remain. The moved suites follow their rules into the package's run: `FRUSCoreKitTests` grows from 2,509 tests to 2,518 on Linux and on the Mac. No file is added.
+
+**Measured** (the pull request has the figures, each against `v2` run the same way):
+- **Mac check 30 at the branch gives `v2`'s figures:** both builds with `v2`'s warning lines; the unit target's 7,999 tests with `v2`'s one failure and its skips; `swift test`'s 4,499, `v2`'s 4,490 and the 9 moved in; the Mac app's normalized symbols identical (257,245).
+- **Linux,** over `main` at `2f13891` and again at `84666ee`: every target passed, with the one named skip; with the golden files' digest set to the branch tree's, the parity suite passed whole; a file of `FRUSLightAPI` that imports the kit without `@testable` used every newly public and moved name and compiled; its suite printed, over the bundled files, each lifespan line with the authority's years first (Kissinger 1923–2023, Byrnes 1879–1972, Deming 1910–2007, Truman 1884–1972), Kissinger's post, the Subjects weights, the pivot's 69 volumes for "Cuban missile crisis", the 11 narrowing topic categories, and the count phrases.
+- **One cold review** found no defect. A test's failure message and CLAUDE.md's clause were corrected after it.
+
+**For the pin move that carries it:** no `Package.swift`, CI allow-list or `Compatibility.swift` change. `FRUSCoreKitTests` gains 9 tests and no skip. The golden files go stale by digest, but their contents do not change, and nothing on the indexing path changes, so the owner may let the 1812 export serve `make-golden` again: ask, as every move does. No newly public name collides with the web's. `POCOMCareer` and `POCOMAssignment` are public in `POCOMIndexGeneratorCore` too, which the web does not compile.
+
+**For the web's follow-ups:** S21g's adds the person sheet's lifespan line, Career section and Subjects chips with their pivot; S24f to S24i print their counts through `CountCopy`; and S24f and S24h offer "By Detected Topic" through `ScopeFacets`, over `documents?.subjectsByVolume ?? profiles.resolvedByVolume`, as the app's scope bars do.
+
+`people-access-handover.md`, in the orchestrator's notes folder, has the rest.
+
+**Next:** a pin move to `f011ab04` that carries FRUS-Explorer#1906; then S21g's and the S24 rows' web follow-ups.
+
 ## Session 21g: corrections on the web, and the People screen
 
 14 November 2026 · branch `claude/heuristic-pascal-dd9ccc` · upstream `6b6932aa`, then `b124a59b` with `main` (#140)
