@@ -38,6 +38,8 @@ public final class ServerResources: Sendable {
     private let resolvedEdges = ResolvedEdgeIndexFile()
     /// The collection authority, `collection-authority.json`, decoded on first use (CrossReferenceGraph.swift).
     private let collections = CollectionAuthorityFile()
+    /// Source Explorer's other bundled files, each decoded on first use (SourceExplorerFiles.swift, PLAN's S22d).
+    private let sourceExplorerFiles = SourceExplorerFiles()
     /// The catalogue overlay (PLAN's S21e): the volumes a Standalone server's library holds that the published
     /// catalogue does not list, side-loaded, each described by the kit's `LocalVolumeCatalog` from its own header.
     private let local = LocalVolumes()
@@ -154,6 +156,13 @@ public final class ServerResources: Sendable {
     /// `CollectionAuthorityIndex(contentsOf:)`; nil for a file missing or malformed, and a graph then draws
     /// no unit or class nodes, as the app's draws none when its store cannot load.
     var collectionAuthority: CollectionAuthorityIndex? { collections.index(in: directory) }
+
+    /// The archival index `file` names, decoded once by the kit's loader on first use (PLAN's S22d), as the
+    /// app's store decodes it; nil for a file missing or malformed, and the panel that reads it then shows
+    /// what the app shows without it.
+    func sourceExplorer<Value>(_ file: KeyPath<SourceExplorerFiles, DecodedFile<Value>>) -> Value? {
+        sourceExplorerFiles[keyPath: file].value(in: directory)
+    }
 }
 
 /// The catalogue overlay's entries, set whole each time it is read again.

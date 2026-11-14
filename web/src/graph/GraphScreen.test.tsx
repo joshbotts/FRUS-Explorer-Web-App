@@ -237,6 +237,10 @@ describe('the cross-reference graph', () => {
     // Escape closes the details.
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('region', { name: '2. Memorandum of Conversation' })).toBeNull();
+    // The archival unit's details open its collection's record (PLAN's S22d).
+    await user.keyboard('{End}{Enter}');
+    const unit = await screen.findByRole('region', { name: /Lot 59 D 95/ });
+    expect(within(unit).getByRole('link', { name: 'View Collection' }).getAttribute('href')).toBe('/archival-collection?id=c9');
   });
 
   it('expands a cluster on Enter, with the cluster in the address', async () => {

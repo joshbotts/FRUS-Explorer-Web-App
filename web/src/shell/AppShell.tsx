@@ -171,7 +171,7 @@ function skipToMain(event: MouseEvent<HTMLAnchorElement>) {
 }
 
 /** The queries that read what the server indexes, asked again when its index changes. */
-const corpusQueryKeys = ['search', 'facets', 'inspect', 'timeline', 'concordance', 'citation', 'related', 'citationLookup', 'citationBatch', 'document', 'volumes', 'volume', 'section', 'readingOrder'];
+const corpusQueryKeys = ['search', 'facets', 'inspect', 'timeline', 'concordance', 'citation', 'related', 'citationLookup', 'citationBatch', 'document', 'volumes', 'volume', 'section', 'readingOrder', 'sources', 'archivalNeighbours', 'archivalCollection', 'volumeSources'];
 
 /** While no index is served, says which step the server is at; the reader works meanwhile. */
 function ReadinessBanner() {

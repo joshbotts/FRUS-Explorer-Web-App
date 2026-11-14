@@ -22,13 +22,15 @@ test('opens a volume’s index from its contents and follows a “See” referen
   await expect(heading).toHaveText(v06Title);
 
   // The volume's contents list the index under its back matter, and the reader opens it, as the app's
-  // Read Index does; the lists of names and sources, which the app's Browse opens as lists of their
-  // own, and the subseries' list of volumes, which it does not open, are named only.
+  // Read Index does; the list of sources opens its page, with the volume's Sources outline (S22d), as the
+  // app's Browse opens it; the list of names, which the app's Browse opens as a list of its own, and the
+  // subseries' list of volumes, which it does not open, are named only.
   const index = page.getByRole('link', { name: 'Index', exact: true });
   await expect(index).toHaveAttribute('href', new RegExp(`/doc/${volume}/index$`));
   await expect(page.getByRole('link', { name: 'Contents', exact: true })).toHaveAttribute('href', new RegExp(`/doc/${volume}/toc$`));
   const contents = page.locator('.section-tree');
-  for (const list of ['List of Names', 'List of Sources', 'List of Kennedy Administration Volumes']) {
+  await expect(contents.getByRole('link', { name: 'List of Sources', exact: true })).toHaveAttribute('href', new RegExp(`/browse/${volume}/sources$`));
+  for (const list of ['List of Names', 'List of Kennedy Administration Volumes']) {
     await expect(contents.getByText(list, { exact: true })).toBeVisible();
     await expect(contents.getByRole('link', { name: list, exact: true })).toHaveCount(0);
   }

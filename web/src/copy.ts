@@ -853,6 +853,291 @@ export const copy = {
     close: 'Close',
   },
   /**
+   * Source Explorer (PLAN's S22d), in the words of the app's `SourceExplorerView`, its chips
+   * (`ClassificationChip`, `ConfidenceChip`, `ProvenanceChip`), its published-source guidance
+   * (`PublishedSourceGuidanceView`), its info button and its rail's tile. The words the kit writes, a
+   * panel's titles, notes and rows, come in the answer. The web's own: the way back, the line while the
+   * note is resolved, the NARA Catalog section's line until this server searches the catalogue (PLAN's
+   * S22e), the link to a document's neighbours in their three scopes, and "this server" where the app's
+   * pre-1906 section speaks of "this device".
+   */
+  sources: {
+    title: 'Source Explorer',
+    tile: 'Sources',
+    tileHelp: 'Resolve this document’s source note in the NARA Catalog or RG-59 records',
+    back: (title: string) => `Back to ${title}`,
+    resolving: 'Resolving the source note…',
+    preparing: 'Preparing your index…',
+    info: {
+      heading: 'About Source Explorer',
+      rows: [
+        {
+          title: 'What you’re seeing',
+          detail:
+            'A structured breakdown of a document’s source note — the State Department editors’ record of where the document came from (archive, file, lot, telegram or despatch number) and how it was handled.',
+        },
+        {
+          title: 'Why it matters',
+          detail:
+            'Source notes are your trail back to the original record. The parsed fields let you cite the document precisely and understand its provenance at a glance.',
+        },
+        {
+          title: 'Links to the National Archives',
+          detail:
+            'Whenever a source note or footnote resolves to a NARA series or file unit, the explorer links straight to the National Archives Catalog so you can locate the original record.',
+        },
+      ],
+    },
+    rawNote: 'Source Note',
+    classification: (marking: string) => `Classification markings: ${marking}`,
+    provenance: 'Provenance',
+    type: 'Type',
+    fileIdentifier: 'File Identifier',
+    recordGroup: 'Record Group',
+    viewRecord: 'View in NARA Catalog',
+    centralFilesType: (recordGroup: string) => `State Dept. Central Files (${recordGroup})`,
+    centralFilesCite:
+      'To request the original record from NARA, give them the decimal file number above. Add any telegram serial number, the from/to information, and the document’s date from the source note. Archivists use these details to find the record within the file.',
+    subjectNumericType: 'State Dept. Subject-Numeric File (February 1963–1973)',
+    designation: 'File Designation',
+    block: 'File Years',
+    subjectNumericCite:
+      'To request the original record from NARA, give them the file designation above and the block of years it was filed in (1963, 1964–66, 1967–69 or 1970–73). Add any telegram or airgram number, the from/to information, and the document’s date from the source note. NARA asks that a central-file citation name the file designation, not a folder or a box.',
+    periodHeader: 'NARA Finding Aids by Period',
+    filingPeriod: 'Filing Period',
+    subjectNumericPeriod: 'February 1963–1973 (Subject-Numeric File)',
+    periodLink: 'Open NARA Finding Aids for This Period',
+    manualLink: 'Filing Manual for This Period (PDF)',
+    periodHint:
+      'Purport indexes and the filing manual for this period are available on the linked NARA page. Box lists are available on-site at the National Archives at College Park.',
+    subjectNumericHint:
+      'The filing handbooks are on the linked NARA page: the 1963 handbook for 1963 and the 1965 handbook for 1964–1973. Box lists are available on-site at the National Archives at College Park.',
+    noYear: 'Select the filing period that matches the document date:',
+    cfpfType: 'State Dept. Central Foreign Policy File (1973–1979)',
+    cfpfCite:
+      'To request the original record from NARA, give them the file identifier above. Add any telegram channel and serial numbers, the from/to information, and the document’s date from the source note.',
+    cfpfResources: 'Research Resources',
+    cfpfGuide: 'CFPF Research Guide (PDF)',
+    cfpfAAD: 'Search AAD Electronic Telegrams Database',
+    cfpfNote:
+      'CFPF records are available on microfilm (P-Reels, D-Reels, N-Reels) printouts at NARA and as P-Reel index descriptions and electronic telegrams in the AAD database. No API key is required for either resource.',
+    numericalFile: 'Digitized Numerical File (M862)',
+    numericalGap:
+      'No digitized roll directly covers this file number. Use the Card Index to confirm the case number, then browse the Numerical File series.',
+    cardIndex: 'Open Card Index (M1889) in NARA Catalog',
+    numericalSeries: 'Browse the Numerical File series',
+    numericalFound: (fileIdentifier: string) =>
+      `These digitized rolls hold File No. ${fileIdentifier}. Open one and review the images page by page — documents are filed in numeric order by case.`,
+    scans: 'Digitized Scans',
+    scansMultiple: (count: number, fileIdentifier: string) =>
+      `${count.toLocaleString('en-US')} scanned file ranges contain ${fileIdentifier}. They are listed narrowest first. NARA digitized this file in overlapping sets, so the widest range is not wrong. The narrowest is simply the most specific.`,
+    scansClassOnly: (count: number, decimalClass: string, fileIdentifier: string) =>
+      `NARA has scanned ${count.toLocaleString('en-US')} file ranges in decimal class ${decimalClass}, but none of them covers ${fileIdentifier}. The scans for this file are partial.`,
+    lotType: 'State Dept. Lot File',
+    lotTypePost: 'State Dept. Post Records Lot File (RG 84)',
+    lotNumber: 'Lot Number',
+    possibleHeader: 'Possible NARA Catalog Record',
+    openSeries: 'Open Series in NARA Catalog',
+    possibleNote:
+      'This match was made by collection name, not by a catalog control number. Confirm the lot number against the series before citing it.',
+    candidatesHeader: 'Candidate NARA Series',
+    creator: 'NARA Creator',
+    seeAll: 'See all series by this creator',
+    candidatesNote:
+      'NARA did not accession this lot as a single series, so no one record is the answer. Review the candidates against the document’s date and type and consult with NARA archivist staff.',
+    referralHeader: 'Ask a NARA Archivist',
+    seriesCount: 'Series in the collection',
+    entryRange: 'HMS/MLR Entry Range',
+    browseSeries: 'Browse the collection’s series',
+    hmsMlr: 'HMS/MLR Entry',
+    seriesDates: 'Series Dates',
+    bundledHeader: 'NARA Catalog Record',
+    fileSeries: 'File Series',
+    access: 'Access',
+    use: 'Use',
+    extent: 'Extent',
+    heldAt: 'Held At',
+    findingAids: 'Finding Aids',
+    hmsMlrSeries: 'HMS/MLR Entry (series)',
+    hmsMlrSeriesNote: 'These entry numbers identify the enclosing file series, not this specific file unit.',
+    lotCite:
+      'When requesting the original records from NARA, cite the HMS/MLR entry number together with the lot number — it is the identifier archives staff use to locate the series.',
+    bundledNote:
+      'Resolved from the bundled index — no API key required. Records may be described at the series level rather than digitized page-by-page.',
+    repository: 'Repository',
+    nara: 'National Archives and Records Administration',
+    series: 'Series',
+    lotFile: 'Lot File',
+    box: 'Box',
+    cia: 'Central Intelligence Agency',
+    ciaJob: 'Job/Accession No.',
+    ciaHeader: 'CIA Research',
+    ciaLink: 'Search CIA CREST for This Job Number',
+    ciaLinkGeneral: 'Browse CIA CREST Database',
+    ciaNote:
+      'CIA records are not in the NARA Catalog. The CREST database (cia.gov/readingroom) holds declassified CIA documents, including released operational files and historical collections.',
+    libraryType: 'Presidential Library',
+    library: 'Library',
+    collection: 'Collection',
+    findingAid: 'Finding Aid',
+    catalogRecord: 'NARA Catalog Record',
+    naraHeader: 'NARA Catalog',
+    outsideCustody: (repository: string) =>
+      `${repository} is not a National Archives repository, so the NARA Catalog has no record of this collection. A search on the collection name alone can return results that look authoritative but are not. None are shown here.`,
+    searchManually: 'Search NARA Catalog Manually',
+    notSearched: 'This server does not search the NARA Catalog yet.',
+    file: 'File',
+    foreignType: 'Foreign Government Archive',
+    foreignNote: 'Foreign government archives are not indexed in the NARA Catalog. Consult the archive directly for access.',
+    publishedType: 'Previously Published',
+    publishedNote: 'This document was previously published. Consult the cited publication for the original source.',
+    publishedLookFor: (designation: string) => `Look for ${designation} in this publication.`,
+    publishedStale: (date: string) => `Link last verified ${date}.`,
+    publications: {
+      treatySeries: { name: 'Treaty Series (Department of State)', link: 'Open the U.S. treaties research guide (Library of Congress)' },
+      executiveAgreementSeries: {
+        name: 'Executive Agreement Series (Department of State)',
+        link: 'Open the U.S. treaties research guide (Library of Congress)',
+      },
+      stateBulletin: { name: 'Department of State Bulletin', link: 'Browse the Bulletin on the Internet Archive' },
+      publicPapers: { name: 'Public Papers of the Presidents', link: 'Browse the Public Papers on GovInfo' },
+    } as Record<string, { name: string; link: string }>,
+    unrecognizedType: 'Unrecognized Format',
+    unrecognizedExplanation:
+      'The source note format was not recognized. Its raw text is shown under Source Note. Automated NARA Catalog resolution is unavailable for this entry.',
+    countrySeries: 'Digitized Department of State Records (pre-1906)',
+    countrySeriesIntro:
+      'This document predates the 1906 Numerical File. Based on its dateline and FRUS chapter, it was likely filed in the digitized series below — open a roll and review the images for the document’s date.',
+    noNote: 'Archival Source',
+    noNoteDetail:
+      'This document carries no archival source note, and its exact filing couldn’t be predicted from its dateline and FRUS chapter.',
+    predictedSeries: {
+      diplomatic:
+        'Documents of this era are held in the country-arranged diplomatic series (Despatches and Instructions) at the National Archives, Record Group 59.',
+      numerical:
+        'Documents of this era are filed in the 1906–1910 Numerical File at the National Archives, Record Group 59, arranged by case number rather than by country or date.',
+    },
+    /** The two reasons whose app words speak of "this device", said of this server. */
+    notChecked: {
+      documentNotIndexed:
+        'Not checked — this document is not in the search index on this server, so its dateline and FRUS chapter could not be read.',
+      noVolumeStructure:
+        'Not checked — this volume’s chapters are not in the search index on this server, and the chapter is what names the country.',
+    } as Record<string, string>,
+    neighbours: 'Archival Neighbors',
+    neighboursMore: (count: number) => `${count.toLocaleString('en-US')} more documents not shown`,
+    neighboursEmpty: {
+      noNeighbors:
+        'No other indexed documents cite this archival source. Index more volumes to surface related documents.',
+      subjectNumericNoNeighbors:
+        'This source note cites the Subject-Numeric File. No other indexed document was matched to the same file. Index more volumes to surface related documents.',
+      subjectNumericUnkeyed:
+        'This source note cites the Subject-Numeric File, but not in a form the app can match on, so documents from the same file can’t be matched.',
+      unmatched:
+        'This source note doesn’t cite a recognized lot file, central file, or presidential library, so related documents can’t be matched.',
+    },
+    matchKey: (key: string) => `Matching archival source: ${key}`,
+    allNeighbours: 'Archival Neighbors…',
+    collectionHeader: 'Archival Collection',
+    collectionCited: (count: number) => `Cited in ${count} volumes across the series`,
+    collectionFooter: 'Matched against the bundled cross-volume collection authority.',
+    openCollection: 'View Collection',
+    unprinted: 'Unprinted Material',
+    inherited: 'Carried from the previous note',
+    /** The chips' words (`CentralFilesConfidence`, `ProvenanceSource`) and what a screen reader hears. */
+    confidence: (label: string) => `Confidence: ${label}`,
+    possible: 'Possible',
+    provenanceSources: {
+      frusText: { label: 'FRUS text', tier: 'frusOnly', spoken: 'Source: the FRUS volumes only.' },
+      naraCatalog: {
+        label: 'FRUS + NARA catalog',
+        tier: 'joined',
+        spoken: 'Source: FRUS joined to the National Archives catalog.',
+      },
+      ohPeopleRegister: {
+        label: 'FRUS + OH people data',
+        tier: 'joined',
+        spoken:
+          "Source: FRUS joined to the Office of the Historian's working data on people (its HistoryAtState/people repository) and its Principal Officers and Chiefs of Mission.",
+      },
+      stateDeptSchedule: {
+        label: 'FRUS + State Dept. schedule',
+        tier: 'joined',
+        spoken: "Source: FRUS joined to the State Department's decimal classification schedule.",
+      },
+    } as Record<string, { label: string; tier: 'frusOnly' | 'joined' | 'computed'; spoken: string }>,
+  },
+  /**
+   * Archival Neighbors (PLAN's S22d), in the words of the app's `ArchivalNeighborsSheet`. The way back is
+   * the web's own; its Add to an Archives Visit waits for phase 4's visits.
+   */
+  archivalNeighbors: {
+    title: 'Archival Neighbors',
+    scope: 'Scope',
+    scopes: { volume: 'This volume', subseries: 'This subseries', all: 'All volumes' },
+    preparing: 'Preparing your index…',
+    loading: 'Searching indexed volumes…',
+    empty: 'No Archival Neighbors',
+    emptyDetail: 'No documents in your indexed volumes cite this archival source — indexing more volumes may surface some.',
+    emptyDetailScoped: 'No documents in this scope cite this archival source — switch to All volumes to search the whole index.',
+    overflow: (count: number) => `${count} more share this source — open Source Explorer to see them all.`,
+    backToSources: 'Back to Source Explorer',
+    backToCollection: 'Back to the collection',
+    back: 'Back',
+  },
+  /**
+   * An archival collection's record (PLAN's S22d), in the words of the app's `CollectionDetailView`: the
+   * sections the kit's public readers give at this pin. The way back is the web's own.
+   */
+  archivalCollection: {
+    title: 'Collection',
+    overview: 'Archival Collection',
+    repository: 'Repository',
+    recordGroup: 'Record Group',
+    lot: 'Lot File',
+    aliases: 'Also cited as',
+    aliasesMore: (count: number) => `${count} more variant forms`,
+    local: 'In Your Library',
+    localLoading: 'Counting your indexed documents…',
+    localCounts: (documents: number, volumes: number) =>
+      `${documents} documents in ${volumes} of your indexed volumes cite this collection.`,
+    localEmpty: 'Nothing in your index cites this collection yet. Index more of its citing volumes to surface documents.',
+    localFooter: 'Counted from your own indexed volumes — the series-wide list below is independent of what you have downloaded.',
+    neighbours: 'Show Archival Neighbors',
+    neighboursHint: 'Lists your indexed documents drawn from this collection',
+    volumes: (count: number) => `Cited Across the Series (${count} volumes)`,
+    showAllVolumes: (count: number) => `Show all ${count} volumes`,
+    showFewer: 'Show fewer',
+    volumeHint: 'Opens this volume in the browser',
+    children: 'Sub-Series',
+    childVolumes: (count: number) => `Cited in ${count} volumes`,
+    childNeighbours: 'Archival Neighbors',
+    childNeighboursHelp: 'Show indexed documents drawn from this archival source',
+    unavailable: 'Collection Unavailable',
+    unavailableDetail: 'This collection is not in the bundled archival authority.',
+    back: 'Back',
+  },
+  /**
+   * A volume's Sources outline (PLAN's S22d), in the words of the app's `VolumeSourcesView`, which Browse
+   * opens for a Sources section. Its rows' Archival Neighbors button, collection and cross-volume links
+   * and line for a lot NARA divides read kit members still internal at this pin.
+   */
+  volumeSources: {
+    loading: 'Loading sources…',
+    empty: 'No Sources Listed',
+    emptyDetail: 'Index this volume to load its archival sources list.',
+    about: 'About These Sources',
+    collections: 'Archival Collections',
+    expandAll: 'Expand All',
+    collapseAll: 'Collapse All',
+    bibliography: 'Published Sources',
+    catalog: 'View in National Archives Catalog',
+    catalogHelp: 'View this collection in the National Archives Catalog',
+    fileSeries: (title: string) => `File Series: ${title}`,
+    entryNumbers: (numbers: string) => `HMS/MLR Entry: ${numbers}`,
+    seriesEntryNumbers: (numbers: string) => `HMS/MLR Entry (series): ${numbers}`,
+  },
+  /**
    * Related Documents (PLAN's S23d), in the words of the app's `RelatedDocumentsContent`, its weights' row
    * (`AxisWeightRow`) and its rail's tile. What a weight says of an axis this server does not rank by yet,
    * the line while a list is ranked, and the way back to the document are the web's own.

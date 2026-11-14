@@ -1247,6 +1247,389 @@ dialog.review-sheet {
   margin: 0.5rem 0;
 }
 
+/* ─── Source Explorer (PLAN's S22d) ──────────────────────────────────────── */
+
+.sources,
+.neighbours,
+.collection-record {
+  max-width: 48rem;
+}
+
+.sources .back,
+.neighbours .back,
+.collection-record .back {
+  margin: 0 0 0.25rem;
+}
+
+.sources-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 1rem;
+}
+
+.sources-about summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+
+.sources-about dl {
+  margin: 0.5rem 0;
+}
+
+.sources-about dt {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.sources-about dd {
+  margin: 0 0 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+/* Each of the app's Form sections: a heading, rows and a footer. */
+.se-section {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+
+.se-section h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.se-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.se-count {
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.se-body > * + * {
+  margin-top: 0.5rem;
+}
+
+.se-footer {
+  margin: 0.5rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+
+.se-note {
+  margin: 0;
+  color: var(--text-secondary);
+  user-select: text;
+}
+
+.se-text {
+  margin: 0;
+}
+
+.se-caption,
+.se-label {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+
+.se-dates {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.se-rows {
+  margin: 0;
+}
+
+.se-rows > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.125rem 1rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.se-rows > div:last-child {
+  border-bottom: 0;
+}
+
+.se-rows dt {
+  font-weight: 500;
+}
+
+.se-rows dd {
+  margin: 0;
+  color: var(--text-secondary);
+  text-align: end;
+}
+
+.se-record {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.25rem 0;
+}
+
+.se-record-title {
+  margin: 0;
+  font-weight: 500;
+}
+
+.se-links,
+.se-periods,
+.se-candidates,
+.se-neighbours,
+.se-unprinted,
+.se-volumes,
+.se-children,
+.se-aliases ul,
+.neighbours-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.se-links > li + li,
+.se-candidates > li + li {
+  margin-top: 0.25rem;
+}
+
+.se-periods > li {
+  padding: 0.25rem 0;
+}
+
+.se-periods .se-links {
+  padding-inline-start: 1rem;
+}
+
+.se-minor {
+  font-size: 0.8125rem;
+}
+
+.se-neighbours > li,
+.se-unprinted > li,
+.se-volumes > li,
+.se-children > li,
+.neighbours-list > li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.se-neighbours > li:last-child,
+.se-unprinted > li:last-child,
+.se-volumes > li:last-child,
+.se-children > li:last-child {
+  border-bottom: 0;
+}
+
+.se-number {
+  display: inline-block;
+  min-width: 2rem;
+  margin-inline-end: 0.25rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.se-disclosure summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+
+/* The app's chips: a capsule each, its words in a small caption. */
+.se-chip {
+  display: inline-block;
+  padding: 0.0625rem 0.4375rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+
+.se-classification {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-secondary);
+  /* A marking is a sentence, which wraps at a phone's width. */
+  white-space: normal;
+}
+
+.se-confidence-high {
+  background: var(--tone-green-tint);
+  color: var(--text);
+}
+
+.se-confidence-medium {
+  background: var(--tone-orange-tint);
+  color: var(--text);
+}
+
+/* `ProvenanceChip`: the tier's tint as the text, a wash of it as the fill, a hairline of it as the border. */
+.se-provenance {
+  --tint: #4a5568;
+  border: 1px solid color-mix(in srgb, var(--tint) 32%, transparent);
+  background: color-mix(in srgb, var(--tint) 12%, transparent);
+  color: var(--tint);
+}
+
+.se-provenance-frusOnly {
+  --tint: #a61c2a;
+}
+
+.se-provenance-joined {
+  --tint: #3b4e8c;
+}
+
+:root[data-theme='dark'] .se-provenance {
+  --tint: #a0aec0;
+}
+
+:root[data-theme='dark'] .se-provenance-frusOnly {
+  /* Lighter than the app's #E8798A, which is 6.1:1 on its own background and 4.2:1 here, over its wash on a
+     section's surface: this is 5.3:1. */
+  --tint: #f59aa7;
+}
+
+:root[data-theme='dark'] .se-provenance-joined {
+  /* 5.2:1 over its wash on a section's surface, where the app's #8FA5DE is 4.6:1. */
+  --tint: #9db1e6;
+}
+
+.neighbours-basis {
+  margin: -0.25rem 0 0.5rem;
+  color: var(--text-secondary);
+}
+
+.neighbours-empty h2 {
+  font-size: 1.125rem;
+}
+
+/* A volume's Sources outline, on Browse's page for its Sources section: the app's list sections, the outline
+   nested by depth with a disclosure beside each row that has rows beneath it. */
+.vs-group .se-section-heading {
+  align-items: center;
+}
+
+.vs-group .se-section-heading h2 {
+  margin: 0;
+}
+
+.vs-group > .se-section-heading + * {
+  margin-top: 0.5rem;
+}
+
+.vs-prose {
+  margin: 0;
+  user-select: text;
+}
+
+.vs-prose + .vs-prose {
+  margin-top: 0.5rem;
+}
+
+.vs-plain,
+.vs-tree {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vs-plain > li {
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--border);
+  user-select: text;
+}
+
+.vs-plain > li:last-child {
+  border-bottom: 0;
+}
+
+.vs-tree .vs-tree {
+  padding-inline-start: 1.25rem;
+}
+
+.vs-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 0.125rem 0;
+}
+
+.vs-toggle,
+.vs-leaf {
+  flex: none;
+  width: 24px;
+  min-height: 24px;
+}
+
+.vs-toggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  line-height: 24px;
+  cursor: pointer;
+}
+
+.vs-entry {
+  flex: 1;
+  min-width: 0;
+  padding-top: 0.125rem;
+}
+
+.vs-entry > * + * {
+  margin-top: 0.125rem;
+}
+
+.vs-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.125rem 1rem;
+  margin: 0;
+}
+
+.vs-text {
+  user-select: text;
+}
+
+.vs-heading {
+  font-weight: 600;
+}
+
+.vs-catalog {
+  font-size: 0.8125rem;
+}
+
+.vs-note {
+  user-select: text;
+}
+
+.vs-empty h2 {
+  font-size: 1.125rem;
+}
+
 /* ─── Related Documents (PLAN's S23d) ────────────────────────────────────── */
 
 .related {

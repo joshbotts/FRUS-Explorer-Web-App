@@ -231,7 +231,7 @@ describe('a volume’s back matter, as the app’s Read Index opens it', () => {
     subsections,
   });
 
-  it('links to the reader the index and the table of contents the server reads, and names the lists it does not', async () => {
+  it('links to the reader the index and the table of contents the server reads, opens the Sources section, and names the list it does not', async () => {
     const volume: Volume = {
       volumeId: v06,
       filename: `${v06}.xml`,
@@ -261,11 +261,11 @@ describe('a volume’s back matter, as the app’s Read Index opens it', () => {
     renderAt(`/browse/${v06}`);
     expect((await screen.findByRole('link', { name: 'Index' })).getAttribute('href')).toBe(`/doc/${v06}/index`);
     expect(screen.getByRole('link', { name: 'Contents' }).getAttribute('href')).toBe(`/doc/${v06}/toc`);
-    // The app's Browse opens these as lists of their own, which this server does not have yet.
-    for (const name of ['List of Sources', 'List of Names']) {
-      expect(screen.queryByRole('link', { name })).toBeNull();
-      expect(screen.getByText(name)).toBeTruthy();
-    }
+    // The Sources section opens its page, with the volume's outline (S22d); the app's Browse opens the list of
+    // names as a list of its own, which this server does not have yet.
+    expect(screen.getByRole('link', { name: 'List of Sources' }).getAttribute('href')).toBe(`/browse/${v06}/sources`);
+    expect(screen.queryByRole('link', { name: 'List of Names' })).toBeNull();
+    expect(screen.getByText('List of Names')).toBeTruthy();
   });
 
   it('heads a document the index does not hold by the title the server gives it, its parsed head, not its header', async () => {

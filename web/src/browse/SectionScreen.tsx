@@ -1,7 +1,8 @@
 // A section of a volume (SPEC, Browse): the row of the text it prints outside the documents and
 // sections it holds, first, as the app's Browse lists it; its subsections; and its documents in the
 // volume's order, each named as the reader heads it: by the kit's rule for lists from the index's
-// entry, or, for one the index lacks, by the head the server parses from its TEI.
+// entry, or, for one the index lacks, by the head the server parses from its TEI. A Sources section
+// shows the volume's Sources outline, as the app's Browse opens `VolumeSourcesView` for one (S22d).
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { useId } from 'react';
@@ -12,6 +13,7 @@ import { copy } from '../copy';
 import { Badge } from '../shell/Badge';
 import { useHeadingReady } from '../shell/headingFocus';
 import { plainTitle, useDocumentTitle } from '../shell/useDocumentTitle';
+import { VolumeSourcesOutline } from '../sources/VolumeSourcesOutline';
 import { Breadcrumb } from './Breadcrumb';
 import { SectionTree } from './SectionTree';
 
@@ -69,6 +71,7 @@ export function SectionScreen() {
               <SectionTree volumeId={volumeId} sections={data.section.subsections} />
             </>
           )}
+          {data.section.divType === 'sources' && <VolumeSourcesOutline volumeId={volumeId} />}
           {data.documents.length > 0 && (
             <>
               <h2>{copy.browse.documents(data.documents.length)}</h2>

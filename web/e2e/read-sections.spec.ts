@@ -3,7 +3,8 @@
 // lists of their own and its reader shows as printed, and a chapter that prints nothing of its own but
 // its heading, which the app's reader shows as that heading; each is parsed alone from the TEI, by
 // keyboard alone, with no axe violations, the reader's frame scanned with the app. Browse still links to
-// the reader only what the app's Read opens. Against the image, with the synthetic export imported and
+// the reader only what the app's Read opens, and the list of sources to its page with the volume's Sources
+// outline (S22d), as the app's Browse opens it. Against the image, with the synthetic export imported and
 // fixtures/tei mounted: the export's index does not hold frus1969-76ve09p1, so its contents come from
 // its TEI and its pages turn no pages, as the app's reader turns none in a volume it has not indexed;
 // FRUSParityTests turn the pages of a volume the index holds through the API.
@@ -31,15 +32,15 @@ test('a table of contents’ links open its lists and a chapter in the reader, a
   const heading = page.getByRole('heading', { level: 1 });
   await expect(heading).toHaveText(/Documents on North Africa, 1973–1976$/);
 
-  // The volume's contents link the table of contents to the reader, as the app's Read opens it, and name
-  // the lists, which the app's Browse opens as lists of their own.
+  // The volume's contents link the table of contents to the reader, as the app's Read opens it, and the
+  // list of sources to its page with the volume's outline (S22d), as the app's Browse opens it; they name
+  // the list of persons, which the app's Browse opens as a list of its own.
   const contents = page.getByRole('link', { name: 'Contents', exact: true });
   await expect(contents).toHaveAttribute('href', new RegExp(`/doc/${volume}/toc$`));
   const tree = page.locator('.section-tree');
-  for (const list of ['Sources', 'Persons']) {
-    await expect(tree.getByText(list, { exact: true })).toBeVisible();
-    await expect(tree.getByRole('link', { name: list, exact: true })).toHaveCount(0);
-  }
+  await expect(tree.getByRole('link', { name: 'Sources', exact: true })).toHaveAttribute('href', new RegExp(`/browse/${volume}/sources$`));
+  await expect(tree.getByText('Persons', { exact: true })).toBeVisible();
+  await expect(tree.getByRole('link', { name: 'Persons', exact: true })).toHaveCount(0);
   await tabTo(page, contents, 120);
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(new RegExp(`/doc/${volume}/toc$`));
