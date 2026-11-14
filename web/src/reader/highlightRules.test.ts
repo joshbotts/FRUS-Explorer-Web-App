@@ -35,16 +35,23 @@ describe('the selection’s verbs', () => {
     ]);
   });
 
-  it('offer the four colours, Excerpt and Note for a selection in the text, and Note alone for a footnote’s', () => {
+  it('offer every verb for a selection in the text, Look Up and Note for a footnote’s, and Look Up alone with no user data', () => {
     expect(offeredVerbs(true)).toEqual([
       { kind: 'highlight', color: 'yellow', needsDocumentOffsets: true },
       { kind: 'highlight', color: 'green', needsDocumentOffsets: true },
       { kind: 'highlight', color: 'blue', needsDocumentOffsets: true },
       { kind: 'highlight', color: 'pink', needsDocumentOffsets: true },
       { kind: 'excerpt', needsDocumentOffsets: true },
+      { kind: 'lookUpInNARA', needsDocumentOffsets: false },
       { kind: 'note', needsDocumentOffsets: false },
     ]);
-    expect(offeredVerbs(false)).toEqual([{ kind: 'note', needsDocumentOffsets: false }]);
+    expect(offeredVerbs(false)).toEqual([
+      { kind: 'lookUpInNARA', needsDocumentOffsets: false },
+      { kind: 'note', needsDocumentOffsets: false },
+    ]);
+    // A server that keeps no user data keeps no highlight, excerpt or note: Look Up needs none.
+    expect(offeredVerbs(true, false)).toEqual([{ kind: 'lookUpInNARA', needsDocumentOffsets: false }]);
+    expect(offeredVerbs(false, false)).toEqual([{ kind: 'lookUpInNARA', needsDocumentOffsets: false }]);
   });
 });
 

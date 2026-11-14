@@ -285,6 +285,43 @@ describe('the export sheet', () => {
     click.mockRestore();
   });
 
+  it('sends the collection to Zotero with the user’s key, as the app’s row does, and saves the RIS file without one (PLAN’s S22e)', async () => {
+    const keys = (zotero: boolean) => ({ secrets: [{ name: 'nara', set: false }, { name: 'zotero', set: zotero }], instance: [] });
+    let keyed = true;
+    const fetch = server({
+      [path]: detail(),
+      [`${path}/excerpt-check`]: { summary: '', hasFailures: false, verified: 0 },
+      '/api/v1/me/secrets': () => keys(keyed),
+      [`POST ${path}/zotero`]: { addedItems: 2, failedItems: 1, addedNotes: 1, webURL: 'https://www.zotero.org/frus-stub/collections/COLL0000' },
+      [`POST ${path}/export`]: () =>
+        new Response('TY  - CHAP', {
+          headers: { 'content-type': 'application/x-research-info-systems', 'content-disposition': 'attachment; filename="Berlin-zotero.ris"' },
+        }),
+    });
+    URL.createObjectURL = vi.fn(() => 'blob:export');
+    URL.revokeObjectURL = vi.fn();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    renderAt(`/collections/${berlinId}`);
+    await userEvent.click(await screen.findByRole('button', { name: 'Export…' }));
+    const sheet = screen.getByRole('dialog', { name: 'Export collection' });
+    expect(await within(sheet).findByText('Over the Zotero web API — carries your tags & research notes.')).toBeTruthy();
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Send to Zotero Library' }));
+    await waitFor(() =>
+      expect(within(sheet).getByText(/^Added 2 documents and 1 notes to Zotero\. 1 failed\.$/)).toBeTruthy(),
+    );
+    expect(within(sheet).getByRole('link', { name: 'View in Zotero' }).getAttribute('href')).toBe('https://www.zotero.org/frus-stub/collections/COLL0000');
+    expect(fetch.mock.calls.filter(([url, init]) => String(url).endsWith(`${path}/zotero`) && init?.method === 'POST')).toHaveLength(1);
+
+    // With no key, the row saves the RIS file, as the app's does with no account.
+    keyed = false;
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Send to Zotero Library' }));
+    await waitFor(() => expect(within(sheet).getByText('Export Complete: Berlin-zotero.ris')).toBeTruthy());
+    const exported = fetch.mock.calls.find(([url, init]) => String(url).endsWith('/export') && init?.method === 'POST');
+    expect(sent(exported?.[1]).body).toMatchObject({ format: 'zoteroJSON' });
+    expect(fetch.mock.calls.filter(([url, init]) => String(url).endsWith(`${path}/zotero`) && init?.method === 'POST')).toHaveLength(1);
+    click.mockRestore();
+  });
+
   it('says why the server refused an export, and offers none for a collection with nothing in it', async () => {
     server({
       [path]: detail(),

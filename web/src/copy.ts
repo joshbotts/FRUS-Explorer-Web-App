@@ -938,13 +938,76 @@ export const copy = {
     close: 'Close',
   },
   /**
+   * Send to Zotero Library (PLAN's S22e), from Cite, in the words of the Mac's Share popover
+   * (`DocumentSharePopover`), and from a collection's export sheet, in the words of the app's sheet
+   * (`CollectionExportSheet`): the row, its captions, and the result and the error, which the app shows as
+   * alerts and the web says under the row. The line while a send is out is the web's own.
+   */
+  zotero: {
+    send: 'Send to Zotero Library',
+    documentCaption: 'Adds this document — with your tags and research notes — straight to your Zotero library.',
+    collectionCaption: 'Over the Zotero web API — carries your tags & research notes.',
+    collectionCaptionNoAccount:
+      'Connect a Zotero account to send with your tags & research notes. Without one this saves an RIS file for Zotero’s File → Import.',
+    sending: 'Sending to Zotero…',
+    sentTitle: 'Sent to Zotero',
+    viewInZotero: 'View in Zotero',
+    errorTitle: 'Couldn’t Send to Zotero',
+    section: 'Send to a Reference Manager',
+    recover: 'Save a Zotero file instead',
+    documentResult: (items: number, notes: number) => `Added ${items} document and ${notes} notes to Zotero.`,
+    collectionResult: (items: number, notes: number) => `Added ${items} documents and ${notes} notes to Zotero.`,
+    failed: (count: number) => `${count} failed.`,
+  },
+  /**
+   * Look Up (PLAN's S22e), the selection bar's fourth verb, in the words of the app's selection bar
+   * (`FloatingSelectionBar`) and its Look Up in NARA Catalog sheet (`NARACatalogLookupView`), whose key
+   * warning names the web's place for keys, Settings ▸ Keys, where the app's names Settings → Connections.
+   * The strategies' names and hints, and the filing periods, are the kit's, in the server's answer. The web's
+   * own: the line while the passage is read, what the results' line says of a search that found records, the
+   * sheet's Close as a button where the app's is its title bar's, and the warning on a server that is offline or
+   * keeps no user data, where the app's would name a place for keys that server does not have.
+   */
+  lookUp: {
+    verb: 'Look Up in NARA',
+    title: 'Look Up in NARA Catalog',
+    close: 'Close',
+    search: 'Search',
+    queryHeader: 'Search Text',
+    queryPlaceholder: 'Lot number, file identifier, or keywords',
+    queryHint: 'Edit the selected text before searching if needed.',
+    detectedHeader: 'Detected in This Passage',
+    detectedHint: 'Archival citations found in the selected text and around it — select one to fill the search.',
+    detectedTapHint: 'Fills the search text with this citation',
+    resolved: (naId: string) => `NAID ${naId} — from the bundled index; no API key needed`,
+    strategyHeader: 'Query Strategy',
+    strategyPicker: 'Strategy',
+    noKey:
+      'A NARA Catalog API key is required for this strategy. Add your key in Settings ▸ Keys. The “Central files identifier” strategy does not require a key.',
+    periodHeader: 'NARA Finding Aids by Period',
+    periodIntro:
+      'Select the filing period that matches the document date. Each link goes directly to the NARA research page for that period — no API key required.',
+    resultsHeader: 'NARA Catalog Results',
+    searching: 'Searching NARA Catalog…',
+    noResults: 'No matching records found. Try editing the search text or selecting a different strategy.',
+    viewRecord: 'View in NARA Catalog',
+    reading: 'Reading the passage…',
+    found: (count: number) => `${count} record${count === 1 ? '' : 's'} found.`,
+    offline:
+      'This server is offline, so it asks the NARA Catalog nothing. The “Central files identifier” strategy does not need it.',
+    noServerKey:
+      'This server has no NARA Catalog API key, and keeps no user data, so it has no place for yours. The “Central files identifier” strategy does not require a key.',
+  },
+  /**
    * Source Explorer (PLAN's S22d), in the words of the app's `SourceExplorerView`, its chips
    * (`ClassificationChip`, `ConfidenceChip`, `ProvenanceChip`), its published-source guidance
    * (`PublishedSourceGuidanceView`), its info button and its rail's tile. The words the kit writes, a
    * panel's titles, notes and rows, come in the answer. The web's own: the way back, the line while the
-   * note is resolved, the NARA Catalog section's line until this server searches the catalogue (PLAN's
-   * S22e), the link to a document's neighbours in their three scopes, and "this server" where the app's
-   * pre-1906 section speaks of "this device".
+   * note is resolved, the link to a document's neighbours in their three scopes, and "this server" where the
+   * app's pre-1906 section speaks of "this device". From PLAN's S22e the NARA Catalog section searches the
+   * catalogue through the server, in the app's words, its key prompt naming the web's place for keys; the
+   * web's own: the line a screen reader hears when the search has answered, and the section's words on a
+   * server that is offline or keeps no user data.
    */
   sources: {
     title: 'Source Explorer',
@@ -1070,7 +1133,14 @@ export const copy = {
     outsideCustody: (repository: string) =>
       `${repository} is not a National Archives repository, so the NARA Catalog has no record of this collection. A search on the collection name alone can return results that look authoritative but are not. None are shown here.`,
     searchManually: 'Search NARA Catalog Manually',
-    notSearched: 'This server does not search the NARA Catalog yet.',
+    naraLoading: 'Searching NARA Catalog…',
+    naraNoResult: 'No matching record found in the NARA Catalog.',
+    naraFound: (count: number) => `${count} record${count === 1 ? '' : 's'} found in the NARA Catalog.`,
+    naraOffline: 'This server is offline, so it asks the NARA Catalog nothing.',
+    noServerKey: 'This server has no NARA Catalog API key, and keeps no user data, so it has no place for yours.',
+    noKeyLabel: 'NARA Catalog API Key Required',
+    noKeyExplanation:
+      'A free NARA Catalog API key is required to search for lot file and Presidential Library records. Add your key in Settings ▸ Keys.',
     file: 'File',
     foreignType: 'Foreign Government Archive',
     foreignNote: 'Foreign government archives are not indexed in the NARA Catalog. Consult the archive directly for access.',
@@ -2405,9 +2475,6 @@ export const copy = {
     removeTitle: 'Remove the stored key?',
     removeConfirm: 'Remove',
     removeMessage: 'The server forgets it, for every browser you sign in from. Nothing you’ve already saved is affected.',
-    // The web's own: the server keeps the key, and nothing here uses it yet.
-    pending:
-      'Nothing on this server uses these keys yet: Source Explorer’s archival search and Send to Zotero Library, which will, are still to come.',
     instanceNara: 'This server has a NARA Catalog key of its own, which serves you while you have none.',
     footer:
       'Each key is kept on this server, encrypted, and is never shown again once it is saved: the server alone uses it, to reach the service for you. Whoever runs this server holds the key file that opens them.',

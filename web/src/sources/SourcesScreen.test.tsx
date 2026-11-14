@@ -1,11 +1,15 @@
 // Source Explorer's pages (PLAN's S22d) over a stubbed server answering with the server's own answers for
 // fixture documents (sourcesFixtures.ts): a document's sections in the app's order and words, each panel kind
 // the fixtures reach, the chips and what a screen reader hears of them, the neighbours' picker and states, and
-// a collection's record.
+// a collection's record. From PLAN's S22e, the NARA Catalog section's search through the server's proxy: the
+// app's prompt without a key, and with one its records, the evidence's caveat and chip, its error and its line
+// for none, each with the manual search where the app offers it.
 import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ArchivalNeighbours, SourceExplorer } from '../api/sources';
+import type { NARASearch, NARAStatus } from '../api/nara';
+import { me } from '../test/notes';
 import { ProblemAnswer, ready, renderAt, stubServer } from '../test/renderRoute';
 import { collection, neighbours, sources } from './sourcesFixtures';
 import { confirmedDay, curatedSubtitle, publishedLinkStale, statusValue } from './sourcesRules';
@@ -24,13 +28,19 @@ function document(volumeId: string, documentId: string, displayTitle: string) {
   };
 }
 
-/** Opens a fixture document's Source Explorer, the server answering with `answer`. */
-async function open(answer: SourceExplorer) {
+/**
+ * Opens a fixture document's Source Explorer, the server answering with `answer`, and for the NARA proxy (PLAN's
+ * S22e) with `nara`, no key unless it gives one.
+ */
+async function open(answer: SourceExplorer, nara: Record<string, unknown> = {}) {
   const { volumeId, documentId } = answer;
   stubServer({
     '/readyz': ready,
+    '/api/v1/me': me,
+    '/api/v1/nara': { offline: false } satisfies NARAStatus,
     [`/api/v1/volumes/${volumeId}/documents/${documentId}`]: document(volumeId, documentId, answer.documentTitle),
     [`/api/v1/volumes/${volumeId}/documents/${documentId}/sources`]: answer,
+    ...nara,
   });
   const rendered = renderAt(`/sources/${volumeId}/${documentId}`);
   await screen.findByRole('heading', { level: 1, name: 'Source Explorer' });
@@ -63,10 +73,15 @@ describe('Source Explorer', () => {
     const bundled = section('NARA Catalog Record');
     expect(within(bundled).getByRole('link', { name: 'Open Series in NARA Catalog' }).getAttribute('target')).toBe('_blank');
     expect(within(bundled).getByText(/^Resolved from the bundled index/)).toBeTruthy();
-    // No NARA Catalog search runs here yet; the app's manual search does.
+    // With no key, the user's or the instance's, the app's prompt, naming the web's place for keys, and no search.
     const catalog = section('NARA Catalog');
-    expect(within(catalog).getByText('This server does not search the NARA Catalog yet.')).toBeTruthy();
-    expect(within(catalog).getByRole('link', { name: 'Search NARA Catalog Manually' })).toBeTruthy();
+    expect(await within(catalog).findByText('NARA Catalog API Key Required')).toBeTruthy();
+    expect(
+      within(catalog).getByText(
+        'A free NARA Catalog API key is required to search for lot file and Presidential Library records. Add your key in Settings ▸ Keys.',
+      ),
+    ).toBeTruthy();
+    expect(within(catalog).queryByRole('link', { name: 'Search NARA Catalog Manually' })).toBeNull();
     // The neighbours: the kit's line, the rows, the count, the match and the way to their three scopes.
     const neighbours = section('Archival Neighbors');
     expect(within(neighbours).getByText(sources.lot!.neighbours.basis!)).toBeTruthy();
@@ -120,6 +135,66 @@ describe('Source Explorer', () => {
     expect(within(series).getByRole('img', { name: 'Source: FRUS joined to the National Archives catalog.' })).toBeTruthy();
     const roll = sources.pre1906!.countrySeries!.homes[0]!.rolls[0]!;
     expect(within(series).getByRole('link', { name: roll.title }).getAttribute('href')).toBe(roll.catalogURL);
+  });
+
+  it('searches the NARA Catalog through the server once there is a key, as the app’s section does (PLAN’s S22e)', async () => {
+    const search: NARASearch = { route: 'lotVariants', lot: '66 D 204', recordGroup: '59' };
+    const lot = sources.lot!;
+    // The query and evidence the server gives the section now: an unverified one, to see the caveat and chip.
+    const withQuery = (evidence: { sectionTitle: string; caveat?: string; isVerified: boolean }): SourceExplorer => ({
+      ...lot,
+      provenance: lot.provenance.map((panel) =>
+        panel.kind === 'naraCatalog' ? { ...panel, catalogQuery: { ...panel.catalogQuery, search, evidence } } : panel,
+      ),
+    });
+    const record = { naId: '4567', title: 'Records Relating to Lot 66D204', catalogURL: 'https://catalog.archives.gov/id/4567', dateRange: '1961–1963' };
+    const asked: unknown[] = [];
+    await open(withQuery({ sectionTitle: 'Candidate NARA Records', caveat: 'Matched by keyword within record group 59.', isVerified: false }), {
+      '/api/v1/nara': { key: 'instance', quota: { used: 0, limit: 100 }, offline: false } satisfies NARAStatus,
+      'POST /api/v1/nara/search': (_: URL, init?: RequestInit) => {
+        asked.push(JSON.parse(String(init?.body)));
+        return { results: Array.from({ length: 7 }, (_, index) => ({ ...record, naId: `${4567 + index}` })), cached: false };
+      },
+    });
+    const catalog = await screen.findByRole('region', { name: 'Candidate NARA Records' });
+    await within(catalog).findAllByText('Records Relating to Lot 66D204');
+    expect(asked).toEqual([search]);
+    // The caveat first, then the first five, each a candidate's chip and the app's link.
+    expect(within(catalog).getByText('Matched by keyword within record group 59.')).toBeTruthy();
+    expect(within(catalog).getAllByText('Records Relating to Lot 66D204')).toHaveLength(5);
+    expect(within(catalog).getAllByRole('link', { name: 'View in NARA Catalog' })).toHaveLength(5);
+    expect(within(catalog).getAllByText('1961–1963')).toHaveLength(5);
+    expect(within(catalog).getAllByText('Possible').length).toBeGreaterThan(0);
+    // What a screen reader hears when the search has answered, in the region that was there while it searched.
+    expect(within(catalog).getByRole('status').textContent).toBe('5 records found in the NARA Catalog.');
+    cleanup();
+
+    // A refusal says the server's words, with the manual search; none says the app's line, with it too.
+    await open(withQuery({ sectionTitle: 'NARA Catalog', isVerified: true }), {
+      '/api/v1/nara': { key: 'user', offline: false } satisfies NARAStatus,
+      'POST /api/v1/nara/search': new ProblemAnswer(502, 'NARA_UNREACHABLE', 'Network unavailable. Connect to look up this source in the NARA Catalog.'),
+    });
+    const failed = section('NARA Catalog');
+    expect((await within(failed).findByRole('alert')).textContent).toBe('Network unavailable. Connect to look up this source in the NARA Catalog.');
+    expect(within(failed).getByRole('link', { name: 'Search NARA Catalog Manually' })).toBeTruthy();
+    cleanup();
+    await open(withQuery({ sectionTitle: 'NARA Catalog', isVerified: true }), {
+      '/api/v1/nara': { key: 'user', offline: false } satisfies NARAStatus,
+      'POST /api/v1/nara/search': { results: [], cached: true },
+    });
+    const none = section('NARA Catalog');
+    expect(await within(none).findByText('No matching record found in the NARA Catalog.', { selector: 'p.se-text' })).toBeTruthy();
+    expect(within(none).getByRole('status').textContent).toBe('No matching record found in the NARA Catalog.');
+    expect(within(none).getByRole('link', { name: 'Search NARA Catalog Manually' })).toBeTruthy();
+    cleanup();
+
+    // An offline server asks nothing and says so, where the key prompt would mislead.
+    await open(withQuery({ sectionTitle: 'NARA Catalog', isVerified: true }), {
+      '/api/v1/nara': { key: 'instance', offline: true } satisfies NARAStatus,
+    });
+    const offline = section('NARA Catalog');
+    expect(await within(offline).findByText('This server is offline, so it asks the NARA Catalog nothing.')).toBeTruthy();
+    expect(within(offline).queryByText('NARA Catalog API Key Required')).toBeNull();
   });
 
   it('says why no roll was found for a document with no note, and the era’s likely series', async () => {

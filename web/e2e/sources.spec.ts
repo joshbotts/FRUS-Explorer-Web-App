@@ -43,9 +43,8 @@ test('follows a lot file’s note to its collection’s record and their neighbo
   const provenance = page.getByRole('region', { name: 'Provenance' });
   await expect(provenance.getByText('State Dept. Lot File')).toBeVisible();
   await expect(page.getByRole('region', { name: 'NARA Catalog Record', exact: true })).toBeVisible();
-  await expect(
-    page.getByRole('region', { name: 'NARA Catalog', exact: true }).getByText('This server does not search the NARA Catalog yet.'),
-  ).toBeVisible();
+  // With no key, the user's or the instance's, the app's prompt (PLAN's S22e): the look-up spec searches with one.
+  await expect(page.getByRole('region', { name: 'NARA Catalog', exact: true }).getByText('NARA Catalog API Key Required')).toBeVisible();
   const neighbours = page.getByRole('region', { name: 'Archival Neighbors', exact: true });
   await expect(neighbours.getByRole('listitem').first()).toBeVisible();
   await axeCheck(page);

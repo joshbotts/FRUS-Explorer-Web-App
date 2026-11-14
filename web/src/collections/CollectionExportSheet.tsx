@@ -6,12 +6,16 @@
 // quotation is not found, as the app's; and a refusal in red, in the app's words. From S25a, PDF first,
 // the app's choice as the sheet opens, while the server's PDF service answers, which the sheet asks
 // before it shows the grid; without it the grid has no PDF and opens on HTML. The saved file's line and
-// the word cloud's note are the web's own.
+// the word cloud's note are the web's own. From PLAN's S22e, Send to Zotero Library, the app's row under
+// the grid: with the user's Zotero key it sends the collection's documents, else it saves the RIS file.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { ApiError, errorMessage } from '../api/client';
 import { excerptCheckQuery, exportCollection, type CollectionDetail, type ExportFormat } from '../api/collections';
+import { sendCollectionToZotero } from '../api/nara';
+import { secretsQuery } from '../api/secrets';
 import { offersPdf, pdfServiceQuery } from '../api/pdf';
+import { useZoteroKey, ZoteroSendRow } from '../cite/ZoteroSend';
 import { copy } from '../copy';
 import { Modal } from '../shell/Modal';
 import { saveFile } from '../shell/saveFile';
@@ -40,9 +44,17 @@ export function CollectionExportSheet({ detail, onClose }: { detail: CollectionD
   const [exporting, setExporting] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  const zoteroKey = useZoteroKey();
   // The app's Export is disabled for a collection with nothing in it that is not smart.
   const unavailable = detail.entries.length === 0 && !smart;
   const label = words.grid[format]!.label;
+
+  /** `exportZoteroRIS()`: the collection as the file Zotero imports, saved; the row's way without a key, and after a failed send. */
+  async function saveZoteroFile() {
+    const file = await exportCollection(client, detail.id, 'zoteroJSON');
+    saveFile(file.blob, file.name);
+    setSaved(file.name);
+  }
 
   async function run() {
     if (unavailable || exporting || !known) return;
@@ -108,6 +120,28 @@ export function CollectionExportSheet({ detail, onClose }: { detail: CollectionD
           {failure}
         </p>
       )}
+      {/* `zoteroSendRow` under its header: the web API's send with a key, the RIS file without one (`sendToZotero()`). */}
+      <h3 className="export-section">{copy.zotero.section}</h3>
+      <ZoteroSendRow
+        caption={zoteroKey ? copy.zotero.collectionCaption : copy.zotero.collectionCaptionNoAccount}
+        disabled={unavailable || exporting}
+        working={zoteroKey ? copy.zotero.sending : words.exporting}
+        send={async () => {
+          setFailure(null);
+          setSaved(null);
+          // The key as it is now, the list read again: one added in another tab sends.
+          const keys = await client.fetchQuery({ ...secretsQuery, staleTime: 0 });
+          if (keys.secrets.some((secret) => secret.name === 'zotero' && secret.set)) return await sendCollectionToZotero(client, detail.id);
+          await saveZoteroFile();
+          return null;
+        }}
+        recovery={saveZoteroFile}
+        message={(sent) =>
+          sent.failedItems > 0
+            ? `${copy.zotero.collectionResult(sent.addedItems, sent.addedNotes)} ${copy.zotero.failed(sent.failedItems)}`
+            : copy.zotero.collectionResult(sent.addedItems, sent.addedNotes)
+        }
+      />
       <p className="export-progress" role="status">
         {exporting ? words.exporting : saved ? `${words.complete}: ${saved}` : ''}
       </p>

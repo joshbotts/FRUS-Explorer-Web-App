@@ -244,12 +244,24 @@ public struct SourceExplorerAnswer: Codable, Equatable, Sendable, ResponseEncoda
         public var link: Link?
     }
 
-    /// The NARA Catalog query the app's `load()` would run for the note with a key, and the manual search
-    /// its section offers. Nothing runs it here.
+    /// The NARA Catalog query the app's `load()` runs for the note with a key, and the manual search its section
+    /// offers. The NARA proxy runs it (PLAN's S22e): `search` is its body for `POST /api/v1/nara/search`.
     public struct CatalogQuery: Codable, Equatable, Sendable {
         /// `lotVariants`, `recordGroup` or `presidentialMaterials`, or nil when the app would run none.
         public var route: String?
         public var manualSearchURL: String?
+        /// The query, with the fields `load()` gives it.
+        public var search: NARASearch?
+        /// How far the query's answer is tied to the citation (`CatalogQueryEvidence`): the section's title,
+        /// its caveat and whether its rows are verified, which the app shows once it has a key.
+        public var evidence: CatalogEvidence?
+    }
+
+    /// `CatalogQueryEvidence`, in the kit's words.
+    public struct CatalogEvidence: Codable, Equatable, Sendable {
+        public var sectionTitle: String
+        public var caveat: String?
+        public var isVerified: Bool
     }
 
     /// The pre-1906 section's homes (`CountrySeriesOutcome.resolved`), in the kit's words.
@@ -858,8 +870,35 @@ extension SourceExplorerRoutes {
         /// query finds nothing, and PLAN's S22e runs the query.
         func catalogPanel(route: String?, fallback: URL?) -> Panel {
             var panel = Panel(kind: "naraCatalog")
-            panel.catalogQuery = SourceExplorerAnswer.CatalogQuery(route: route, manualSearchURL: fallback?.absoluteString)
+            let evidence = CatalogQueryEvidence.forNote(resolution.parsed, rawNote: note).map {
+                SourceExplorerAnswer.CatalogEvidence(sectionTitle: $0.sectionTitle, caveat: $0.caveat, isVerified: $0.isVerified)
+            }
+            panel.catalogQuery = SourceExplorerAnswer.CatalogQuery(route: route, manualSearchURL: fallback?.absoluteString,
+                                                                   search: catalogSearch(), evidence: evidence)
             return panel
+        }
+
+        /// `load()`'s live query for the note, once it has a key (PLAN's S22e): a lot's variants in the record group
+        /// the note names, RG 59 for none; a collection's lot the same way; a collection with no lot by its record
+        /// group and series; and a library citation by its library and collection. A Subject-Numeric citation, which
+        /// `load()` searches for nothing, has its own panel and none of this.
+        func catalogSearch() -> NARASearch? {
+            switch resolution.parsed {
+            case .lotFile(let rg, let lotNumber, _):
+                let rgToUse = (rg ?? "RG-59").replacingOccurrences(of: "RG-", with: "")
+                return NARASearch(route: "lotVariants", lot: lotNumber, recordGroup: rgToUse)
+            case .naraCollection(let rg, let series, let lot, _):
+                if let lot {
+                    let rgToUse = rg.replacingOccurrences(of: "RG-", with: "")
+                    return NARASearch(route: "lotVariants", lot: lot, recordGroup: rgToUse)
+                }
+                let keywords = [series].compactMap { $0 }.joined(separator: " ")
+                return NARASearch(route: "recordGroup", recordGroup: rg, keywords: keywords)
+            case .presidentialLibrary(let library, let collection, _):
+                return NARASearch(route: "presidentialMaterials", library: library, collection: collection)
+            default:
+                return nil
+            }
         }
 
         /// `presidentialLibraryPanel(library:collection:fileIdentifier:)`: the Provenance rows, a curated finding

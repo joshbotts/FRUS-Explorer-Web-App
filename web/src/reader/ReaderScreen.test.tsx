@@ -300,7 +300,7 @@ describe('the reader’s highlights', () => {
     await waitFor(() => expect(highlightsSent(again.posted)).toHaveLength(1), { timeout: 200 });
   });
 
-  it('asks for no highlights, and offers no bar, on a server that keeps no user data', async () => {
+  it('asks for no highlights, and offers Look Up alone, on a server that keeps no user data', async () => {
     const fetch = highlighting({ '/api/v1/me': { ...me, userData: false } });
     renderAt('/doc/frus1961-63v06/d1');
     const { frame, posted } = await loadedFrame();
@@ -309,7 +309,8 @@ describe('the reader’s highlights', () => {
     fromFrame(frame, 'selectionChanged', { start: 12, end: 40, text: 'Allow me to say', rect });
     fromFrame(frame, 'highlightShortcut', { start: 12, end: 40, rect });
     await pause(20);
-    expect(bar()).toBeNull();
+    // Look Up keeps nothing of the user's (PLAN's S22e): its bar is there, with nothing else in it.
+    expect(within(bar()!).getAllByRole('button').map((button) => button.textContent)).toEqual(['Look Up in NARA']);
     expect(posted()).toEqual([]);
     expect(fetch.mock.calls.some(([url]) => String(url).includes('/highlights'))).toBe(false);
   });
@@ -429,7 +430,7 @@ describe('the reader’s highlights', () => {
     expect(creates(fetch)).toHaveLength(1);
   });
 
-  it('offers Note alone for a footnote’s selection, and keeps a bar through a clear shorter than 200 ms', async () => {
+  it('offers Look Up and Note for a footnote’s selection, and keeps a bar through a clear shorter than 200 ms', async () => {
     const fetch = highlighting({
       [highlightsPath]: documentHighlights([]),
       [`POST ${highlightsPath}`]: (_: URL, init?: RequestInit) => highlight({ id: 'N', ...sent(init).body }),
@@ -442,9 +443,9 @@ describe('the reader’s highlights', () => {
 
     selectInText();
     expect(bar()).not.toBeNull();
-    // A footnote's selection lets the one in the text go at once: its bar offers Note alone.
+    // A footnote's selection lets the one in the text go at once: its bar offers Look Up and Note.
     fromFrame(frame, 'selectionChanged', { start: -1, end: -1, text: 'a note', rect });
-    expect(within(bar()!).getAllByRole('button').map((button) => button.textContent)).toEqual(['Note']);
+    expect(within(bar()!).getAllByRole('button').map((button) => button.textContent)).toEqual(['Look Up in NARA', 'Note']);
     // One with no rectangle to place a bar by shows none.
     fromFrame(frame, 'selectionChanged', { start: -1, end: -1, text: 'a note' });
     expect(bar()).toBeNull();
@@ -764,6 +765,7 @@ describe('the reader’s notes', () => {
       'Highlight Blue',
       'Highlight Pink',
       'Excerpt',
+      'Look Up in NARA',
       'Note',
     ]);
     await userEvent.click(within(bar()!).getByRole('button', { name: 'Note' }));
@@ -781,7 +783,7 @@ describe('the reader’s notes', () => {
     await pause(20);
     expect(creates(fetch)).toEqual([]);
 
-    // A footnote's selection offers Note alone, which opens the same editor.
+    // A footnote's selection offers Look Up and Note, whose Note opens the same editor.
     fromFrame(frame, 'selectionChanged', { start: -1, end: -1, text: 'a note', rect });
     await userEvent.click(within(bar()!).getByRole('button', { name: 'Note' }));
     expect(await screen.findByRole('dialog', { name: 'New Research Note' })).toBeTruthy();

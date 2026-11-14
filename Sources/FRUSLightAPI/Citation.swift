@@ -78,6 +78,8 @@ struct CitedDocument: Sendable {
     let yearSource: String?
     /// Whether the volume is side-loaded, an id the published catalogue lacks (PLAN's S21e).
     var sideloaded = false
+    /// Whether the index holds the document as an editorial note, which its Zotero item says (PLAN's S22e).
+    var isEditorialNote = false
 
     /// None for a side-loaded volume's document, whose page the server cannot vouch for, as the app gives none.
     var canonicalURL: String? { sideloaded ? nil : FRUSCanonicalURL.string(volumeId: volumeId, documentId: documentId) }
@@ -216,6 +218,7 @@ enum CitationRoutes {
             document: FRUSDocumentMetadata(citing: entry, printedNumber: number), volume: metadata,
             documentNumber: documentNumber, numberSource: numberSource,
             documentLabel: CitableDocumentNumber.captionLabel(printed: number, documentId: entry.documentId),
-            year: year, yearSource: yearSource, sideloaded: volume.provenance == .sideloaded)
+            year: year, yearSource: yearSource, sideloaded: volume.provenance == .sideloaded,
+            isEditorialNote: entry.isEditorialNote)
     }
 }

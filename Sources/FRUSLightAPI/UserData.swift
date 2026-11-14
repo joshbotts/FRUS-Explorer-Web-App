@@ -223,6 +223,9 @@ struct UserDataServices: Sendable {
     /// The stored API keys (PLAN's S20c), a user's and the instance's: what a route sets, clears and
     /// reads one through.
     let secrets: SecretVault
+    /// The NARA Catalog and Zotero, which the server asks with those keys (PLAN's S22e): the services the
+    /// configuration names, or a test's stubs.
+    var outside: OutsideServices
     let tokens: CSRFTokens
     /// `FRUS_PUBLIC_URL`'s address.
     let address: PublicAddress
@@ -251,6 +254,7 @@ struct UserDataServices: Sendable {
          now: @escaping @Sendable () -> Date = Date.init) {
         self.store = store
         self.secrets = secrets
+        outside = OutsideServices(configuration: configuration)
         switch configuration.auth {
         case .header:
             let proxies = TrustedProxies(configuration.trustedProxies)
@@ -311,7 +315,8 @@ struct UserDataServices: Sendable {
 /// 1. the request's `Host` names `FRUS_PUBLIC_URL`'s address, for a read as for a write, since a
 ///    page under a name pointed at this server could otherwise read a user's data;
 /// 2. the user it acts for is resolved, into its context;
-/// 3. with `FRUS_USER_DATA=off`, nothing but /api/v1/me itself answers;
+/// 3. with `FRUS_USER_DATA=off`, nothing but /api/v1/me itself and a group that `answersWithoutUserData`
+///    answers, the NARA Catalog's;
 /// 4. a request that changes state, any but GET, HEAD and OPTIONS, comes from that address (its
 ///    `Origin`), carries the user's token in `X-CSRF-Token`, and declares a body it has as
 ///    `application/json`, of `bodyLimit` at most: `UserDataServices.bodyLimit`, or for the group of
@@ -323,6 +328,9 @@ struct UserDataGuard: RouterMiddleware {
     var bodyLimit = UserDataServices.bodyLimit
     /// The media types a change's body may be declared as: JSON, but for a side-loaded volume's XML.
     var mediaTypes = UserDataGuard.json
+    /// Whether the group answers with `FRUS_USER_DATA=off` too: the NARA Catalog's (PLAN's S22e), which keeps
+    /// nothing of the user's and serves the instance's key.
+    var answersWithoutUserData = false
 
     static let json: Set<String> = ["application/json"]
     /// A side-loaded volume's file (PLAN's S21e).
@@ -333,7 +341,7 @@ struct UserDataGuard: RouterMiddleware {
         var context = context
         let user = try await services.resolver.user(for: request, context: context)
         context.user = user
-        if !services.enabled, request.uri.path != "/api/v1/me" {
+        if !services.enabled, !answersWithoutUserData, request.uri.path != "/api/v1/me" {
             throw APIProblem(.forbidden, code: "USER_DATA_OFF",
                              detail: "This server keeps no tags, notes or other user data: FRUS_USER_DATA is off.")
         }
@@ -501,6 +509,8 @@ enum UserDataRoutes {
         CollectionEntryRoutes.add(to: collections, services: services, resources: resources, reader: reader, provider: provider)
         AddDocumentsRoutes.add(to: collections, services: services, resources: resources, provider: provider)
         CollectionExportRoutes.add(to: collections, services: services, resources: resources, reader: reader, provider: provider)
+        // Send to Zotero Library, a collection's and Cite's document's (PLAN's S22e).
+        ZoteroRoutes.add(to: collections, services: services, resources: resources, reader: reader, provider: provider)
         // A `.fruscollection` file's import takes the file whole, with its notes, in a group of its own (S18f).
         let collectionFiles = router.group("/api/v1/me")
             .add(middleware: UserDataGuard(services: services, bodyLimit: CollectionFileRoutes.fileLimit))

@@ -24,17 +24,24 @@ export const selectionVerbs: readonly SelectionVerb[] = [
 ];
 
 /**
- * The verbs the web edition has so far: the colours, from S15d Note, which needs no offsets, so a
- * footnote's selection offers it alone, and from S18d Excerpt. Look Up in NARA comes with phase 3.
+ * The verbs the web edition has: the colours, from S15d Note, which needs no offsets, from S18d Excerpt, and
+ * from PLAN's S22e Look Up in NARA, which needs no offsets either, so a footnote's selection offers Look Up
+ * and Note.
  */
-const available = new Set<SelectionVerb['kind']>(['highlight', 'excerpt', 'note']);
+const available = new Set<SelectionVerb['kind']>(['highlight', 'excerpt', 'lookUpInNARA', 'note']);
+
+/** The verbs that keep something of the user's, which a server with FRUS_USER_DATA=off offers none of. */
+const keepUserData = new Set<SelectionVerb['kind']>(['highlight', 'excerpt', 'note']);
 
 /**
  * What the bar offers a selection: every verb the web has, but a verb that needs offsets only for a
- * selection in the text, as the kit's `needsDocumentOffsets` rules a footnote's out.
+ * selection in the text, as the kit's `needsDocumentOffsets` rules a footnote's out; and on a server that
+ * keeps no user data, Look Up alone.
  */
-export function offeredVerbs(inText: boolean): SelectionVerb[] {
-  return selectionVerbs.filter((verb) => available.has(verb.kind) && (inText || !verb.needsDocumentOffsets));
+export function offeredVerbs(inText: boolean, keepsUserData = true): SelectionVerb[] {
+  return selectionVerbs.filter(
+    (verb) => available.has(verb.kind) && (inText || !verb.needsDocumentOffsets) && (keepsUserData || !keepUserData.has(verb.kind)),
+  );
 }
 
 /** The app's `hasOffsets`: a selection in the document's text, not a footnote's and not nothing. */

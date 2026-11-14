@@ -32,7 +32,16 @@ describe('readerMessage', () => {
       text: 'Allow me',
       rect,
     });
+    // A footnote's, with the footnote's text, which Look Up reads it in (PLAN's S22e).
     expect(from('selectionChanged', { start: -1, end: -1, text: 'a note', blockText: 'the note', rect })).toEqual({
+      kind: 'selectionChanged',
+      start: -1,
+      end: -1,
+      text: 'a note',
+      blockText: 'the note',
+      rect,
+    });
+    expect(from('selectionChanged', { start: -1, end: -1, text: 'a note', blockText: 7, rect })).toEqual({
       kind: 'selectionChanged',
       start: -1,
       end: -1,
@@ -57,6 +66,22 @@ describe('readerMessage', () => {
     const rect = { x: 1, y: 2, w: 3, h: 4 };
     expect(from('highlightShortcut', { start: 4, end: 9, rect })).toEqual({ kind: 'highlightShortcut', start: 4, end: 9, rect });
     expect(from('selectionBarShortcut', { start: 4, end: 9 })).toEqual({ kind: 'selectionBarShortcut', start: 4, end: 9, rect: undefined });
+    // From PLAN's S22e, with the selection's text, and over a footnote's selection with the footnote's text.
+    expect(from('selectionBarShortcut', { start: 4, end: 9, text: 'Lot 66', rect })).toEqual({
+      kind: 'selectionBarShortcut',
+      start: 4,
+      end: 9,
+      text: 'Lot 66',
+      rect,
+    });
+    expect(from('selectionBarShortcut', { start: -1, end: -1, text: 'Lot 66', blockText: 'Source: Lot 66 D 204.', rect })).toEqual({
+      kind: 'selectionBarShortcut',
+      start: -1,
+      end: -1,
+      text: 'Lot 66',
+      blockText: 'Source: Lot 66 D 204.',
+      rect,
+    });
     expect(from('highlightShortcut', {})).toBeNull();
     expect(from('selectionEscape', {})).toEqual({ kind: 'selectionEscape' });
     expect(from('highlightsRendered', { drawn: 2, skipped: [1] })).toEqual({ kind: 'highlightsRendered', drawn: 2, skipped: [1] });

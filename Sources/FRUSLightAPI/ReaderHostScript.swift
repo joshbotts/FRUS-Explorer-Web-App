@@ -26,7 +26,10 @@ import FRUSCoreKit
 /// offsets and rectangle; Escape with any selection is posted as `selectionEscape`, which hides the
 /// bar. The parent page acts on them, since the frame's keys never reach it; for Alt+F10 pressed in
 /// the parent page it asks (`{kind: 'selectionBarRequest'}`), and the host answers as for the key
-/// in the frame.
+/// in the frame. From PLAN's S22e, Alt+F10 over a footnote's selection, which the kit's bridge cannot
+/// place in the text, is posted too, with offsets of -1, the selection's text and the footnote's, as the
+/// bridge reports such a selection, so that its bar, Look Up in NARA and Note, has a key; and the
+/// selection's text comes with one in the text, for Look Up.
 /// A tap the kit reports is passed on unless it came from the keyboard, whose click has no point
 /// for the kit's hit test to read, or from a reader link, which is followed instead: a link inside
 /// a highlight would otherwise open its card and the question to remove the highlight at once.
@@ -82,7 +85,17 @@ enum ReaderHostScript {
             var start = rangeEndpointToOffset(range.startContainer, range.startOffset);
             var end = rangeEndpointToOffset(range.endContainer, range.endOffset);
             if (!(start >= 0 && end > start)) { return null; }
-            return { start: start, end: end, rect: selectionGeometry(range).rect };
+            return { start: start, end: end, text: selection.toString(), rect: selectionGeometry(range).rect };
+          }
+          // A selection the kit's bridge cannot place in the text, a footnote's: its text and the footnote's,
+          // by the bridge's own `enclosingBlockText`, as it reports one, and its rectangle; null for none.
+          function selectionInFootnote() {
+            var selection = window.getSelection();
+            if (!selection || selection.isCollapsed || !selection.rangeCount || typeof enclosingBlockText !== 'function') { return null; }
+            var text = selection.toString();
+            if (!text) { return null; }
+            var range = selection.getRangeAt(0);
+            return { start: -1, end: -1, text: text, blockText: enclosingBlockText(range, text), rect: selectionGeometry(range).rect };
           }
           // FRUS Explorer's highlights, drawn by the kit's renderer: those whose ranges the kit can
           // build, and the indexes of the others, for the parent to name.
@@ -142,6 +155,12 @@ enum ReaderHostScript {
                 post(highlight ? 'highlightShortcut' : 'selectionBarShortcut', inText);
                 return;
               }
+              var inFootnote = bar ? selectionInFootnote() : null;
+              if (inFootnote) {
+                event.preventDefault();
+                post('selectionBarShortcut', inFootnote);
+                return;
+              }
             }
             if (event.key === 'Escape') {
               var live = window.getSelection();
@@ -164,8 +183,8 @@ enum ReaderHostScript {
             }
             // Alt+F10 pressed in the app around the frame: the bar, where the selection is now.
             if (data.kind === 'selectionBarRequest') {
-              var inText = selectionInText();
-              if (inText) { post('selectionBarShortcut', inText); }
+              var selected = selectionInText() || selectionInFootnote();
+              if (selected) { post('selectionBarShortcut', selected); }
             }
             if (data.kind === 'collapseSelection') {
               var selection = window.getSelection();
