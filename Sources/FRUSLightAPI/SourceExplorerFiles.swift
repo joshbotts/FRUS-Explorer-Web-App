@@ -1,9 +1,11 @@
-// Source Explorer's bundled files (PLAN's S22d): the archival indexes the panels, the collection record and
-// the classifier read beyond the four the server read already (the central files, the volume sources and the
-// lot claimants, for a collection's Sources & Archives block, and the collection authority, for the graph),
-// each the app's `Bundle.main` store's file read through the kit's own loader, once, on the first request that
-// needs it, as the app's stores decode on first use. A file missing or malformed gives nothing, as the app's
-// store gives `nil`, and the panel that reads it shows what the app shows without it.
+// Source Explorer's bundled files (PLAN's S22d): the indexes its panels and its classifier read beyond the four
+// the server read already (the central files, the volume sources and the lot claimants, for a collection's
+// Sources & Archives block, and the collection authority, for the graph), each the app's `Bundle.main` store's
+// file read through the kit's own loader, once, on the first request that needs it, as the app's stores decode on
+// first use: nothing is read at start. A file missing or malformed gives nothing, as the app's store gives `nil`,
+// and the panel that reads it shows what the app shows without it. The collection record's sections that read
+// the usage, external-citation and lot-claimant indexes through kit members still internal at the pin add their
+// files here when those members are public.
 
 import FRUSCoreKit
 import Foundation
@@ -30,13 +32,6 @@ final class DecodedFile<Value: Sendable>: @unchecked Sendable {
         held = .some(value)
         return value
     }
-
-    /// Whether the file has been read, decoded or not.
-    var isRead: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return held != nil
-    }
 }
 
 /// The files Source Explorer reads, each the app store named beside it, decoded once on first use.
@@ -53,17 +48,6 @@ final class SourceExplorerFiles: Sendable {
     let digitizedRanges = DecodedFile("digitized-ranges-index.json") { try DigitizedRangeIndex(contentsOf: $0) }
     /// `RollScansIndexStore`: each Numerical File roll's scan, by its NAID.
     let rollScans = DecodedFile("roll-scans-index.json") { try RollScansIndex(contentsOf: $0) }
-    /// `CollectionUsageIndexStore`: the documents each collection's notes name, by volume.
-    let collectionUsage = DecodedFile("collection-usage-index.json") { try CollectionUsageIndex(contentsOf: $0) }
-    /// `ExternalCitationIndexStore`: the footnotes that point at each collection, by volume.
-    let externalCitations = DecodedFile("external-citation-index.json") { try ExternalCitationIndex(contentsOf: $0) }
-    /// `ProvenanceFlowIndexStore`: the cross-references between the collections documents were drawn from.
-    let provenanceFlows = DecodedFile("provenance-flow-index.json") { try ProvenanceFlowIndex(contentsOf: $0) }
-    /// `SubjectNumericLabelStore`: the Subject-Numeric File's labels.
-    let subjectNumericLabels = DecodedFile("subject-numeric-labels.json") { try SubjectNumericLabelTable(contentsOf: $0) }
-    /// `DecimalClassLabelStore`: the decimal file's class labels, which the indexer reads through its own
-    /// resources and keeps to itself.
-    let decimalClassLabels = DecodedFile("decimal-class-labels.json") { try DecimalClassLabelTable(contentsOf: $0) }
     /// `ChiefsOfMissionRoster.bundled`: the register the pre-1906 addressee rule reads, from `pocom-index.json`;
     /// the app's roster is empty without the file, and so is this.
     let chiefsOfMission = DecodedFile("pocom-index.json") { ChiefsOfMissionRoster(index: try POCOMIndex(contentsOf: $0)) }
