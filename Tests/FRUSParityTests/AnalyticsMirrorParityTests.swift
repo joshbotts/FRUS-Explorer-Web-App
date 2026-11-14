@@ -263,7 +263,7 @@ import Testing
             "let viewBucket = ChronologyGrouping.bucket(forDaysBetween: startDay, and: endDay, calendar: cal)",
             "let domainStart = ChronologyGrouping.startOfBucket(startDay, bucket: viewBucket, calendar: cal)",
             "let groups = ChronologyGrouping.group(inRange, viewBucket: viewBucket, ascending: ask.ascending)",
-            "let counts = (try? await pipeline.dateBucketVolumeCounts(range, bucket: viewBucket, scopeVolumeIds: nil)) ?? []",
+            "let counts = isCapped ? ((try? await pipeline.dateBucketVolumeCounts(range, bucket: viewBucket, scopeVolumeIds: nil)) ?? []) : []",
             "totalShown = counts.reduce(0) { $0 + $1.count }",
             "chart = ChronologyGrouping.makeChart(from: groups, maxSeries: ask.colors)",
             "let isCapped = rows.count >= ChronologyGrouping.loadLimit",

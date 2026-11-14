@@ -281,7 +281,8 @@ import Testing
                 }
             }
         }
-        let asks = Self.asks(corpusMaxYear: corpusMaxYear, topic: try #require(topic))
+        let found = try #require(topic, "no detected topic holds a fixture volume")
+        let asks = Self.asks(corpusMaxYear: corpusMaxYear, topic: found)
         let read = try await ServedFixture.run { client, _ in
             var read: [(CorpusAnalyticsAnswer, CorpusAnalyticsDocuments?)] = []
             for ask in asks {
