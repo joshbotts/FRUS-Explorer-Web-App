@@ -1780,6 +1780,123 @@ Phase 3's row S21a, in wave 1. The library's rules move into FRUSCoreKit, Founda
 - Then S22a's session merges `v2` into its branch and re-runs what the merge touches, before Mac check 16.
 - S21b's pin move follows the batch.
 
+## Session 25a, follow-up: the PDF tests' servers wait a minute for the stand-in's health check, and the smoke test reads the refusal's whole log
+
+14 November 2026 · branch `claude/timing-flakes-1e4438`, a follow-up session of the phase-3 orchestrator's · [#141](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/141) · upstream `6b6932aa`, unchanged
+
+Two checks failed on 14 November on timing alone. The owner asked for both to be fixed in one pull request, by the session whose pull request merged last (PLAN's rule 3): the pin move's, since the first failure showed at #137's merge. The two are S25a's `PDFExportTests` and S21c's refusal check in `scripts/compose-smoke`, which came with S21c's review fixes (`736a9d1`, 11 November). This is a pull request of its own, outside the plan's table, branched from `main` at `48dbc22`. Line numbers below are `48dbc22`'s, as CI's runs and the brief gave them.
+
+**The PDF tests: what failed.** `main`'s `ci` on `6dc82ff`, #137's merge: run 43548678478, attempt 1, in the swift job. Attempt 2 passed.
+- **`aCollectionsPDFIsItsHTMLExportPrintedByTheService`, 8 issues.** It found no PDF offered at :152 and :153. The export it then asked for was refused (:159–:162), so the stand-in printed nothing (:168, :169).
+- **`noPDFIsOfferedWhileTheServiceDoesNotAnswer`, 1 issue.** It found no PDF offered at :202, though the stand-in's Chromium was up.
+- **The same moment.** Both expectations were recorded at 03:16:53.38Z, 28.5 s into the suite, under the whole target's load. The suite's other two tests took 32 and 45 s.
+- **`:154` passed.** The stand-in had been asked once, so the check reached it and its answer did not count.
+- **The log's `error` line is expected.** "The PDF service at http://localhost:36347 made no PDF of a collection: it answered 503: Service Unavailable" is the first case of `aPDFTheServiceCannotMakeIsTheSheetsRefusal`. Its stand-in's port, 36347, is the one that test's 400 and no-PDF answers name.
+- **Rare.** The suite has failed this once in CI, in about 100 runs since S25a on 8 November.
+
+**The PDF tests: the cause.** `PDFService`'s health check gives up after three seconds (`checkTimeout`) and keeps its answer for ten.
+- In the test process, every step of the exchange waits for a thread of Swift's cooperative pool: the connection's continuation, the stand-in's handler and its actor, and the client's read.
+- The target's other tests share that pool, and their work holds it for seconds at a time.
+- So a stalled exchange's answer came after the three seconds. The server offered no PDF, and the export met the answer it had kept.
+
+**The PDF tests: how it was found.** A trace, never committed and gated on an environment variable, logged each check's start, connection, first bytes and end, and when the stand-in handled the check. It could also hold the stand-in's answer, and set the real tests' servers' bound.
+- **CI's failure, forced.** With the stand-in's answer held 3.5 s and the server's three seconds, the two tests failed 2 runs of 2 with CI's nine issues, at the expectations CI named, and `:154` passed. Every check of the stand-in ended at 3,002 to 3,005 ms with "no answer within 3 seconds". With the fix's minute, 2 of 2 passed.
+- **The load.** CI's swift job runs each target's runner in turn, so the server target's own tests are its load. `taskset` pins a runner to 4 CPUs and gives the pool and NIO 4 threads, as on CI's 4 vCPUs.
+  - One runner on 4 of this Mac's CPUs runs the target in 38 s, where CI's took 108.
+  - Three at once on the same 4 CPUs take 62 to 84 s each, and the PDF suite 31 to 40 s, against CI's 44.7 (`main`'s 30 runs below).
+- **`main`'s code under that load:** 30 runs, ten rounds of three. The PDF suite passed in all 30.
+- **An A/B under the same load:** 18 runs in six rounds, with the trace on. The rounds alternated the real tests' servers between the server's three seconds and the fix's minute. Beside the tests ran six sample copies, never committed, and a heartbeat:
+  - each copy asked a fresh service, of a stand-in of its own, every second for 50 s, three copies within three seconds and three within a minute;
+  - the heartbeat was a task that asked to wake every 100 ms.
+- **What the A/B showed:**
+  - CI's four tests passed in all 18 runs, in both arms. The new test failed by construction in the nine runs on three seconds, whose switch also shortened its patient service's minute.
+  - Within three seconds, 3 of 1,852 sample checks found the healthy stand-in not answering. Within a minute, none of 1,850 did, and the slowest healthy exchange took 9.8 s.
+  - The heartbeat woke more than a second late 145 times, and more than three seconds late 16 times. The worst in a run ranged from 2.0 to 8.6 s.
+- **The three misses** came at one moment, in one runner, as its run began.
+  - They connected 1.5 to 3.9 s after they began. The stand-in's handler ran 4.6 s in, and the first bytes came 5.1 s in. Meanwhile the heartbeat was 1.4 to 3.2 s late.
+  - The three copies within a minute, at the same moment, took the stand-in's answer after 7.9 s.
+  - So a missed answer is rare here, as in CI: CI's four tests met none in the 39 runs on the server's three seconds.
+- **Production is not measured here.** A production server's pool runs only its own requests, and Gotenberg answers from a container of its own.
+
+**The PDF tests: the fix.**
+- **The bound is a parameter.** `PDFService(url:checkWithin:log:)` and `ServerState(configuration:pdfCheckWithin:log:)` take the health check's bound, as `RecentComputations` takes its grace. The default is the server's three seconds, `PDFService.checkTimeout`, now public.
+- **Production is unchanged.** The server still waits three seconds and keeps an answer for ten.
+- **`PDFExportTests`' servers wait a minute** (`checkWithin`), six times the slowest exchange seen.
+- **The stand-in can hold its health answer** (`delayHealth`).
+- **A bound below a second keeps its fraction,** for the connection's cap and the log's words. This was the cold review's finding, below: the cap was the bound's whole seconds, so half a second would have left the connection none.
+- **A new test, `aHealthCheckAnsweredAfterItsBoundOffersNoPDF`.** It holds the stand-in's answer 3.5 s and asks it three times at once.
+  - Within the server's three seconds, that answer counts for nothing, and the log says "no answer within 3 seconds".
+  - Within half a second, it counts for nothing too, and the log says "no answer within 500 ms": the service connected, then gave up.
+  - Within the tests' minute, it counts.
+- **`:154`'s ten seconds are left as they are.** The test's two calls came within them in every run here and in CI's.
+
+**The refusal check: what failed.** The image workflow on `ccba2d2`, #138's merge: run 43558647619.
+- Its `verify (arm64)` job failed at 05:03:42Z with "FAIL: the refusal does not give the remedy". So `verify (amd64)` was cancelled, and edge was not promoted.
+- The Standalone server's log, printed just below, holds the remedy line twice: the server refused to start, started again and refused again.
+- `48dbc22`'s image run passed and promoted edge.
+- The check, S21c's from `736a9d1`, has failed this once since it landed, in 39 image runs and about 50 of `ci`.
+
+**The refusal check: the cause.** Line 388 runs `library_compose logs --no-color frus 2>&1 | grep -q -- '<remedy>' || fail …` under the script's `set -euo pipefail`.
+- `grep -q` exits at its first match, the first of the two remedy lines.
+- `docker compose logs` writes a line at a time, so it meets a closed pipe for the lines after that one, and fails.
+- `pipefail` then fails the pipeline, though grep found the remedy.
+
+Lines 196–198 and the writing's check at 1163–1166 already avoid this: they read the whole log first, then match it with `case`.
+- That was S14e's fix (`3ba14dd`, 27 October), for the same race in S14b's backup check (`bff7e47`). The writing's check (`d481563`, S16e) was written that way after it.
+- S21c's refusal check brought the old form back.
+
+**The refusal check: shown.**
+- **On Linux,** as CI's runner runs the script: bash 5.2 in the swift container, with a writer of the run's six lines, one write a line.
+  - Written back to back, `grep -q` under `pipefail` failed 0 times in 200.
+  - Written 1 ms or 10 ms apart, it failed 200 of 200. Each time the writer was killed by SIGPIPE (141), and grep exited 0.
+  - Without `pipefail` it failed none, and the whole log first, then `case`, failed none.
+- **On the Mac, with Docker's own CLI:** `docker compose logs` of a container whose log is the six lines, through line 388's pipeline, failed 9 times in 300. `docker compose` exited 255 and grep 0. The fix's form failed 0 of 300.
+
+**The refusal check: the fix.** Line 388 reads the whole log first, then `case`, as lines 196–198 do.
+
+**The rest of the smoke test's script.** Every other pipeline into `grep -q` or `head` was checked for the same race. Only line 388 changes.
+- **The `printf '%s' "$var" | grep -q` lines** (234, 246, 833, 1012) match the server's JSON, which is one line with no break. `grep` cannot match within a line until it has the line's end.
+  - With the match first, such a value of 1 KiB to 256 KiB failed 0 times in 1,800.
+  - The same value broken into lines of 100 bytes failed none at 4 and 8 KiB, which the pipe holds whole, and 298 of 300 at 64 KiB.
+  - In this branch's smoke test, the catalogue's, the status's and the search's values were 920, 581 and 1,344 bytes, each a single line, so neither limit is near.
+- **Line 507's `curl -w '%{http_code}'`** writes its three digits once, at its end.
+- **The `head`s at 218, 900, 1008 and 1056** read `sed`'s single match.
+- **Lines 580, 952, 1055 and 1270** pipe into fail messages.
+- **Every other pipe's reader** reads its input to the end.
+
+**How it was checked:**
+- **The bound's test over the old connection cap,** a variant never committed, failed at its half-second line: the service said "no connection to localhost:57381: Connect timeout (0 s)". At the head it passes.
+- **The server target under the load, at the head:** 21 runs, seven rounds of three on 4 CPUs, as above.
+  - The PDF suite passed in all 21, in 39 to 50 s, with each run taking 74 to 88 s.
+  - Before the review's fix, at `b56a3ef`, 21 more runs passed too. So the fix has passed 42 runs under the load in which three seconds missed a healthy answer.
+- **Linux, `swift:6.4-noble`, arm64:** CI's swift job (`scripts/swift --postgres test`), under the heavy lock.
+  - 4,179 tests in 534 suites in fourteen runners, all passing, the server's 368 in 55 suites among them.
+  - The one skip is the named one, `FTS5StoreTests`' `backupExclusion()`, and the build gives no warning.
+  - Two earlier runs at `b56a3ef` lost three and five of `FRUSLightCoreTests`' PostgreSQL tests to "too many clients already", the shared container's 100 connections. Every other target passed in them, and no CI run since 8 November has met that refusal.
+- **The image and the smoke test, at `b56a3ef`:** `scripts/compose-smoke` with this branch's image as `frus-light:flakes`, on 18310 with the library's step on 18311.
+  - It passed every step, among them the refusal check's and the collection's PDF through the `pdf` profile's Gotenberg.
+  - The review's fix after it changes only bounds below a second, which the server never uses.
+  - The browser app is unchanged, so neither `--e2e` nor the npm suites ran.
+
+**A cold review,** by a subagent given the diff and none of this session's reasoning, found no correctness bug in the change as it is used today. What held up is fixed:
+- **A bound below a second** would have given the connection a cap of none, now that the bound is a parameter. It keeps its fraction, and the bound's test asks within half a second (the PDF tests' fix, above).
+- **This log:**
+  - It said the 18 runs were green, where the new test failed by construction in nine of them.
+  - It named S14b's `bff7e47`, which brought the race into the backup's check, where S14e's `3ba14dd` fixed it.
+  - It gave the runs' times too narrowly, said "every check" of the stand-in's alone, quoted the 503 line short, and listed some of the script's other readers as if they were all of them.
+- **Two things were not yet true when it read them:** this pull request's number, checked when it opened, and the notes folder's `timing-flakes/`, made before the push.
+
+It set aside three more of its candidates, on NIO's code and the trace:
+- whether the connection's own cap could fire under the stall: NIO schedules it on the event loop, and no traced check of 3,828 met it;
+- whether the half second between the stand-in's 3.5 s and the server's three could be crossed: the timeout's wake is queued before the request is written;
+- whether a slow first check eats into `:154`'s ten seconds: the answer's time is taken when the check ends.
+
+**Seen in passing, not changed:** `HTTPTests.healthCheckAsksTheServersOwnPort` failed in 24 of the 93 runs under the three-runner load, on `main`'s code and the branch's alike, though never in CI's history. `HealthCheck.isHealthy`, `frus-light --check-health`, probes a live test server within three seconds from one of the pool's threads, so the same stalls can hold its answer. It is left for the owner.
+
+**Delivered:** the two fixes, the health check's bound as a parameter and its test, and this log. The trace, the samples, the heartbeat, the harness, the demos and the runs' logs are in the shared notes folder, under `timing-flakes/`.
+
+**Next:** nothing of its own; the plan's rows go on as they stand.
+
 ## Session 25a: PDF through Gotenberg
 
 8 November 2026 · branch `claude/s25a-pdf-gotenberg-1a2861` · [#100](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/100) · upstream `fe9325b2`, unchanged
