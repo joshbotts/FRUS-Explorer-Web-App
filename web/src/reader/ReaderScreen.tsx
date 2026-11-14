@@ -122,6 +122,8 @@ export function ReaderScreen() {
   const [excerpting, setExcerpting] = useState<ExcerptCapture | null>(null);
   // Whether the review of what an update changed is open (PLAN's S21f).
   const [reviewing, setReviewing] = useState(false);
+  // A new frame once a curator's correction of the document's classification is applied, which reshapes its text (S21g).
+  const [frameRevision, setFrameRevision] = useState(0);
   const reviewButton = useRef<HTMLDivElement>(null);
   const [shownKey, setShownKey] = useState(documentKey);
   if (shownKey !== documentKey) {
@@ -461,7 +463,7 @@ export function ReaderScreen() {
             // A new frame for each page: changing a frame's address would add entries to the
             // browser's history inside it, which Back would walk before leaving the document.
             <iframe
-              key={frameURL}
+              key={`${frameURL}|${frameRevision}`}
               ref={frame}
               className="reader-frame"
               title={copy.reader.frameTitle(plainTitle(header))}
@@ -500,6 +502,10 @@ export function ReaderScreen() {
           onPendingUsed={() => setPendingHighlight(null)}
           autoFocus={focusRail}
           onClose={() => setRail(undefined)}
+          onClassificationChanged={() => {
+            void queryClient.invalidateQueries({ queryKey: ['page', pageURL] });
+            setFrameRevision((revision) => revision + 1);
+          }}
         />
       )}
       {/* Outside the text's part of the page, which is inert while the rail is a sheet over it. */}

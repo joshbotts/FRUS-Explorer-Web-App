@@ -103,7 +103,8 @@ actor ResearchImports {
 }
 
 enum ImportRoutes {
-    static func add(to me: RouterGroup<APIRequestContext>, services: UserDataServices, leads: ProjectLeadsQueue) {
+    static func add(to me: RouterGroup<APIRequestContext>, services: UserDataServices, leads: ProjectLeadsQueue,
+                    indexer: LibraryIndexer? = nil) {
         let store = services.store
         let imports = services.imports
         let jobs = services.jobs
@@ -144,6 +145,14 @@ enum ImportRoutes {
                         await imports.succeed(status.id, with: report)
                         // Suggested Next from what came in (PLAN's S23d): each project's, queued behind this job.
                         await leads.refreshAfterImport(of: user.id)
+                        // The Mac's corrections a curator brought, given to a Standalone server's index (PLAN's S21g).
+                        if curator, report.types.contains(where: {
+                            ["PersonClusterOverride", "DocumentClassificationOverride"].contains($0.type) && $0.added + $0.replaced > 0
+                        }) {
+                            if let indexer, FileManager.default.fileExists(atPath: await indexer.liveIndex.path) {
+                                _ = try? await indexer.applyCorrections(requestedBy: user.id, all: true)
+                            }
+                        }
                         return jobLine(report, for: user.id)
                     } catch is JobCancelled {
                         await imports.fail(status.id, with: ImportProblem(code: "IMPORT_CANCELLED", detail: cancelledDetail))

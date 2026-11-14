@@ -208,6 +208,7 @@ final class CSRFTokens: Sendable {
 /// What the user store keeps for the routes under /api/v1/me.
 typealias UserDataStore = UserStore & TagStore & HighlightStore & NoteStore & SummaryStore & ProjectStore & ProjectLeadStore & ResearchImportStore
     & AnnotationReviewStore
+    & CorrectionStore & CorrectionLogStore
     & ResearchExportStore & UserSearchStore & SearchSetStore & ResearchRowStore & TrailStore & PreferenceStore & CollectionStore
     & AccountStore & SessionStore & ResearchErasureStore & SecretStore
 
@@ -470,6 +471,8 @@ enum UserDataRoutes {
         // The review of what an update changed in a document (PLAN's S21f): the banner, the sheet, Mark Reviewed.
         ReviewRoutes.add(to: me, services: services, resources: resources, reader: reader, provider: provider,
                          reviews: reviews ?? UpdateReviewSources(indexer: nil, teiCheck: nil))
+        // A curator's corrections of the index everyone shares, a classification and the people (PLAN's S21g).
+        CorrectionRoutes.add(to: me, services: services, resources: resources, reader: reader, provider: provider, indexer: reviews?.indexer)
         SummaryRoutes.add(to: me, services: services, resources: resources)
         ProjectRoutes.add(to: me, services: services, resources: resources, provider: provider, leads: leads)
         HistoryRoutes.add(to: me, services: services, provider: provider, resources: resources, reader: reader)
@@ -505,7 +508,7 @@ enum UserDataRoutes {
         // And an import's, the export itself.
         let imports = router.group("/api/v1/me")
             .add(middleware: UserDataGuard(services: services, bodyLimit: services.importLimit))
-        ImportRoutes.add(to: imports, services: services, leads: leads)
+        ImportRoutes.add(to: imports, services: services, leads: leads, indexer: reviews?.indexer)
     }
 
     /// The document a route names. Its volume must be in the catalogue; the document is named and

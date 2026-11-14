@@ -217,6 +217,12 @@ extension LibraryIndexer {
                 updates.cancel()
                 throw error
             }
+            // The pass rebaselines each volume's documents and replays no correction: the set again (PLAN's S21g).
+            do {
+                try await reassertCorrections(writer.pipeline)
+            } catch {
+                log("The classification corrections could not be given again after the pass over every volume, which the next job gives them: \(error)")
+            }
             // The pass's last event says it ended; a pass that never says so is not waited for long.
             let watchdog = Task {
                 try? await Task.sleep(for: .seconds(30))
@@ -236,7 +242,7 @@ extension LibraryIndexer {
             }
             await publishUpgrade()
             await job.progress("Rebuilding the person rollup, the broken references' flags and the subjects", fraction: 1)
-            await writer.pipeline.runPostIndexPasses()
+            await postIndexPasses(writer.pipeline)
             if let problem = stamps.writeProblem {
                 log("The index's stamps could not be written after the pass over every volume: \(problem)")
             }
@@ -326,7 +332,7 @@ extension LibraryIndexer {
                     stamps.beginRemoval(volumeId)
                     try await takeOut(volumeId, writer: writer)
                     await job.progress("Rebuilding the person rollup, the broken references' flags and the subjects", fraction: 0.5)
-                    await writer.pipeline.runPostIndexPasses()
+                    await postIndexPasses(writer.pipeline)
                 }
             }
             await job.progress("Removing \(volumeId)'s file and figure images", fraction: 0.9)
@@ -574,7 +580,7 @@ extension LibraryIndexer {
                 log("\(volumeId), whose removal a stop of the server cut short, could not be taken out of the index: \(error)")
             }
         }
-        if !removals.isEmpty { await pipeline.runPostIndexPasses() }
+        if !removals.isEmpty { await postIndexPasses(pipeline) }
 
         guard !stamps.isResetting() else {
             withExtendedLifetime(writer) {}

@@ -24,6 +24,7 @@ import {
 } from './browse/AnnotationsScreen';
 import { CatalogueScreen, type CatalogueSearch, validateCatalogueSearch } from './browse/CatalogueScreen';
 import { CorporaScreen, CorpusScreen } from './browse/CorporaScreen';
+import { PeopleScreen } from './people/PeopleScreen';
 import { ScopeEditorScreen, ScopeScreen, ScopesScreen } from './browse/ScopesScreen';
 import { SectionScreen } from './browse/SectionScreen';
 import { VolumeScreen } from './browse/VolumeScreen';
@@ -154,6 +155,13 @@ const annotationEraRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/browse/annotations/$layer/era/$era',
   component: AnnotationEraScreen,
+});
+
+// The People screen (S21g), the app's cross-volume index of people, one of Browse's axes.
+const peopleRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/people',
+  component: PeopleScreen,
 });
 
 const volumeRoute = createRoute({
@@ -459,6 +467,7 @@ export const routeTree = rootRoute.addChildren([
   annotationLayerRoute,
   annotationDrillRoute,
   annotationEraRoute,
+  peopleRoute,
   volumeRoute,
   sectionRoute,
   searchRoute,

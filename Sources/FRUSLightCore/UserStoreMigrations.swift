@@ -4,7 +4,7 @@
 /// starting at 1. Never edit one that has shipped: add another, and with it any change to
 /// `UserStoreSchema`.
 public enum UserStoreMigrations {
-    public static let all: [String] = [one, two, three, four, five, six, seven]
+    public static let all: [String] = [one, two, three, four, five, six, seven, eight]
 
     /// S2: the single user, and corrections as override rows.
     static let one = """
@@ -512,5 +512,36 @@ public enum UserStoreMigrations {
             updated_at TEXT NOT NULL
         );
         CREATE INDEX library_volumes_by_state ON library_volumes (state, queued_at);
+        """
+
+    /// S21g's: the log of the corrections made on this server, a curator's (SPEC, Tenancy and roles), the audit
+    /// SPEC's risk of shared corrections asks for. Each entry is one correction made or undone: a document's
+    /// classification, editorial note or document, as `classification_overrides` holds it, with what the TEI said;
+    /// or a person-identity correction, a merge or a separation, as `person_overrides` holds it, by the members it
+    /// anchors on; the override row it made or removed (`override_id`); who, by their id, and when; and when the
+    /// index took it (`applied_at`), NULL while it waits, for a Standalone server's job or an Import server's next
+    /// export. An undone classification records the value it restored, FRUS's own. No entry is research: no export
+    /// carries one, and erasing a user's research leaves the entries that name them, the instance's record.
+    static let eight = """
+        CREATE TABLE correction_log (
+            entry_id TEXT PRIMARY KEY,
+            correction TEXT NOT NULL CHECK (correction IN ('classification', 'person')),
+            action TEXT NOT NULL CHECK (action IN ('made', 'undone')),
+            override_id TEXT NOT NULL,
+            volume_id TEXT,
+            document_id TEXT,
+            is_editorial_note INTEGER,
+            parsed_is_editorial_note INTEGER,
+            kind TEXT CHECK (kind IN ('merge', 'split')),
+            volume_id_a TEXT,
+            ref_a TEXT,
+            volume_id_b TEXT,
+            ref_b TEXT,
+            user_id TEXT NOT NULL,
+            made_at TEXT NOT NULL,
+            applied_at TEXT
+        );
+        CREATE INDEX correction_log_by_document ON correction_log (volume_id, document_id);
+        CREATE INDEX correction_log_by_override ON correction_log (override_id);
         """
 }

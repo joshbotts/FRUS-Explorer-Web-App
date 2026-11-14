@@ -40,6 +40,8 @@ public final class ServerResources: Sendable {
     private let collections = CollectionAuthorityFile()
     /// Source Explorer's other bundled files, each decoded on first use (SourceExplorerFiles.swift, PLAN's S22d).
     private let sourceExplorerFiles = SourceExplorerFiles()
+    /// The People screen's bundled name authority, decoded on first use (People.swift, PLAN's S21g).
+    let people = PeopleFiles()
     /// The catalogue overlay (PLAN's S21e): the volumes a Standalone server's library holds that the published
     /// catalogue does not list, side-loaded, each described by the kit's `LocalVolumeCatalog` from its own header.
     private let local = LocalVolumes()

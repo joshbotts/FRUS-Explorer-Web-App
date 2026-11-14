@@ -50,6 +50,8 @@ public final class ServedIndex: Sendable {
     public let retained = RetainedResults()
     /// The pages and counts of the searches run lately by relevance over this index.
     public let recent = RecentSearches()
+    /// The People screen's list of this index's person rollup, read once (People.swift, PLAN's S21g).
+    public let people = ServedPeople()
     /// The volumes the index holds documents of: what a working corpus and a volume scope resolve
     /// against (PLAN's S17e), as the app resolves them against the volumes its device has indexed.
     public let indexedVolumeIds: Set<String>
