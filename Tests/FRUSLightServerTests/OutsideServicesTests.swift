@@ -507,9 +507,10 @@ private func body(_ response: TestResponse) -> String { String(buffer: response.
                         try decode(NARASearchAnswer.self, try await Browser(client: client).send(.post, "/api/v1/nara/search", search, token: token))
                     }
                 }
-                // The first asks NARA, whose answer the stand-in holds, and the other three wait for it.
+                // The first asks NARA, whose answer the stand-in holds, and the other three wait for it: both seen before
+                // the answer is let go, the search's request reaching the stand-in later than the joins under load.
                 var waited = 0
-                while await answers.joined < 3, waited < 500 {
+                while waited < 1_500, await answers.joined < 3 || ServiceStub.requests(with: shared).isEmpty {
                     try await Task.sleep(for: .milliseconds(10))
                     waited += 1
                 }

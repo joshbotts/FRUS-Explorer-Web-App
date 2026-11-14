@@ -123,8 +123,10 @@ test('highlights by keyboard alone, recolours, reloads and removes', async ({ pa
 test('leaves the highlight chord to the browser in the frame on a server that keeps no user data', async ({ page }) => {
   await page.route(/\/api\/v1\/me$/, async (route) => {
     const response = await route.fetch();
-    // Its headers but its length, which the changed body no longer has.
-    const headers = Object.fromEntries(Object.entries(response.headers()).filter(([name]) => name.toLowerCase() !== 'content-length'));
+    // Its headers but its length and encoding, which the changed body, sent plain, no longer has.
+    const headers = Object.fromEntries(
+      Object.entries(response.headers()).filter(([name]) => !['content-length', 'content-encoding'].includes(name.toLowerCase())),
+    );
     await route.fulfill({ status: response.status(), headers, json: { ...(await response.json()), userData: false } });
   });
   await page.goto(documentPath);
