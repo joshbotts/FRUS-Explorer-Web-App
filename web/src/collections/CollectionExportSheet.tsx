@@ -7,7 +7,8 @@
 // the app's choice as the sheet opens, while the server's PDF service answers, which the sheet asks
 // before it shows the grid; without it the grid has no PDF and opens on HTML. The saved file's line and
 // the word cloud's note are the web's own. From PLAN's S22e, Send to Zotero Library, the app's row under
-// the grid: with the user's Zotero key it sends the collection's documents, else it saves the RIS file.
+// the grid: with the user's Zotero key it sends the collection's documents, else it saves the RIS file. Export
+// and the row hold each other while either works, as the app's one `isExporting` holds both.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { ApiError, errorMessage } from '../api/client';
@@ -15,7 +16,7 @@ import { excerptCheckQuery, exportCollection, type CollectionDetail, type Export
 import { sendCollectionToZotero } from '../api/nara';
 import { secretsQuery } from '../api/secrets';
 import { offersPdf, pdfServiceQuery } from '../api/pdf';
-import { useZoteroKey, ZoteroSendRow } from '../cite/ZoteroSend';
+import { holdsZoteroKey, useZoteroKey, ZoteroSendRow } from '../cite/ZoteroSend';
 import { copy } from '../copy';
 import { Modal } from '../shell/Modal';
 import { saveFile } from '../shell/saveFile';
@@ -42,6 +43,8 @@ export function CollectionExportSheet({ detail, onClose }: { detail: CollectionD
   if (known && chosen === null) setFormat(format);
   const [includeNotes, setIncludeNotes] = useState(false);
   const [exporting, setExporting] = useState(false);
+  // The Zotero row's send, or the RIS file it saves, under way: Export waits for it, as the row waits for Export.
+  const [zoteroWorking, setZoteroWorking] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const zoteroKey = useZoteroKey();
@@ -56,8 +59,18 @@ export function CollectionExportSheet({ detail, onClose }: { detail: CollectionD
     setSaved(file.name);
   }
 
+  /** The row's work, holding Export until it ends, however it ends. */
+  async function holdingExport<T>(work: () => Promise<T>): Promise<T> {
+    setZoteroWorking(true);
+    try {
+      return await work();
+    } finally {
+      setZoteroWorking(false);
+    }
+  }
+
   async function run() {
-    if (unavailable || exporting || !known) return;
+    if (unavailable || exporting || zoteroWorking || !known) return;
     setExporting(true);
     setFailure(null);
     setSaved(null);
@@ -126,16 +139,18 @@ export function CollectionExportSheet({ detail, onClose }: { detail: CollectionD
         caption={zoteroKey ? copy.zotero.collectionCaption : copy.zotero.collectionCaptionNoAccount}
         disabled={unavailable || exporting}
         working={zoteroKey ? copy.zotero.sending : words.exporting}
-        send={async () => {
-          setFailure(null);
-          setSaved(null);
-          // The key as it is now, the list read again: one added in another tab sends.
-          const keys = await client.fetchQuery({ ...secretsQuery, staleTime: 0 });
-          if (keys.secrets.some((secret) => secret.name === 'zotero' && secret.set)) return await sendCollectionToZotero(client, detail.id);
-          await saveZoteroFile();
-          return null;
-        }}
-        recovery={saveZoteroFile}
+        send={() =>
+          holdingExport(async () => {
+            setFailure(null);
+            setSaved(null);
+            // The key as it is now, the list read again: one added in another tab sends.
+            const keys = await client.fetchQuery({ ...secretsQuery, staleTime: 0 });
+            if (holdsZoteroKey(keys)) return await sendCollectionToZotero(client, detail.id);
+            await saveZoteroFile();
+            return null;
+          })
+        }
+        recovery={() => holdingExport(saveZoteroFile)}
         message={(sent) =>
           sent.failedItems > 0
             ? `${copy.zotero.collectionResult(sent.addedItems, sent.addedNotes)} ${copy.zotero.failed(sent.failedItems)}`
@@ -150,7 +165,7 @@ export function CollectionExportSheet({ detail, onClose }: { detail: CollectionD
           {words.close}
         </button>
         {/* aria-disabled, not disabled, so Export pressed by keyboard keeps its focus while the file is made. */}
-        <button type="button" className="primary" aria-disabled={unavailable || exporting || !known} onClick={() => void run()}>
+        <button type="button" className="primary" aria-disabled={unavailable || exporting || zoteroWorking || !known} onClick={() => void run()}>
           {words.exportFormat(label)}
         </button>
       </div>

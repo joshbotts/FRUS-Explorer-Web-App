@@ -188,6 +188,27 @@ describe('Source Explorer', () => {
     expect(within(none).getByRole('link', { name: 'Search NARA Catalog Manually' })).toBeTruthy();
     cleanup();
 
+    // With a key and no query to run, the app's section falls through to its line for none, with the manual search,
+    // and asks nothing (S22e's follow-up, finding 4).
+    const unasked: unknown[] = [];
+    await open(
+      { ...lot, provenance: lot.provenance.map((panel) => (panel.kind === 'naraCatalog' ? { ...panel, catalogQuery: { ...panel.catalogQuery, search: undefined } } : panel)) },
+      {
+        '/api/v1/nara': { key: 'user', offline: false } satisfies NARAStatus,
+        'POST /api/v1/nara/search': (_: URL, init?: RequestInit) => {
+          unasked.push(init?.body);
+          return { results: [], cached: false };
+        },
+      },
+    );
+    const noQuery = section('NARA Catalog');
+    expect(await within(noQuery).findByText('No matching record found in the NARA Catalog.', { selector: 'p.se-text' })).toBeTruthy();
+    expect(within(noQuery).getByRole('status').textContent).toBe('No matching record found in the NARA Catalog.');
+    expect(within(noQuery).getByRole('link', { name: 'Search NARA Catalog Manually' })).toBeTruthy();
+    expect(within(noQuery).queryByText('Searching NARA Catalog…')).toBeNull();
+    expect(unasked).toEqual([]);
+    cleanup();
+
     // An offline server asks nothing and says so, where the key prompt would mislead.
     await open(withQuery({ sectionTitle: 'NARA Catalog', isVerified: true }), {
       '/api/v1/nara': { key: 'instance', offline: true } satisfies NARAStatus,

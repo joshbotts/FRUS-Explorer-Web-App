@@ -322,6 +322,42 @@ describe('the export sheet', () => {
     click.mockRestore();
   });
 
+  it('holds Export while the Zotero row sends, as the app’s one flag holds both, so neither runs over the other (S22e’s follow-up)', async () => {
+    let answer: (sent: unknown) => void = () => {};
+    const fetch = server({
+      [path]: detail(),
+      [`${path}/excerpt-check`]: { summary: '', hasFailures: false, verified: 0 },
+      '/api/v1/me/secrets': { secrets: [{ name: 'nara', set: false }, { name: 'zotero', set: true }], instance: [] },
+      [`POST ${path}/zotero`]: () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+      [`POST ${path}/export`]: () =>
+        new Response('<html></html>', { headers: { 'content-type': 'text/html', 'content-disposition': 'attachment; filename="Berlin.html"' } }),
+    });
+    URL.createObjectURL = vi.fn(() => 'blob:export');
+    URL.revokeObjectURL = vi.fn();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    renderAt(`/collections/${berlinId}`);
+    await userEvent.click(await screen.findByRole('button', { name: 'Export…' }));
+    const sheet = screen.getByRole('dialog', { name: 'Export collection' });
+    await within(sheet).findAllByRole('radio');
+    const exportHTML = within(sheet).getByRole('button', { name: 'Export HTML' });
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Send to Zotero Library' }));
+    expect(await within(sheet).findByText('Sending to Zotero…')).toBeTruthy();
+    expect(exportHTML.getAttribute('aria-disabled')).toBe('true');
+    await userEvent.click(exportHTML);
+    const exports = () => fetch.mock.calls.filter(([url, init]) => String(url).endsWith(`${path}/export`) && init?.method === 'POST');
+    expect(exports()).toHaveLength(0);
+    answer({ addedItems: 2, failedItems: 0, addedNotes: 0 });
+    expect(await within(sheet).findByText(/^Added 2 documents and 0 notes to Zotero\.$/)).toBeTruthy();
+    expect(exportHTML.getAttribute('aria-disabled')).toBe('false');
+    await userEvent.click(exportHTML);
+    await waitFor(() => expect(within(sheet).getByText('Export Complete: Berlin.html')).toBeTruthy());
+    expect(exports()).toHaveLength(1);
+    click.mockRestore();
+  });
+
   it('says why the server refused an export, and offers none for a collection with nothing in it', async () => {
     server({
       [path]: detail(),

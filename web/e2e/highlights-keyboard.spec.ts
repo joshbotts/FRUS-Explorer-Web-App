@@ -116,3 +116,39 @@ test('highlights by keyboard alone, recolours, reloads and removes', async ({ pa
   await expect.poll(() => drawn(page)).toEqual({});
   expect(await listed(page)).toEqual([]);
 });
+
+// S22e's follow-up, finding 5: on a server that keeps no user data the chord highlights nothing, so the frame leaves
+// it to the browser, as the page around it does, where it took the key and posted a shortcut the page dropped. The
+// page is told that the server keeps none, as such a server's /api/v1/me says, and tells the frame as it loads.
+test('leaves the highlight chord to the browser in the frame on a server that keeps no user data', async ({ page }) => {
+  await page.route(/\/api\/v1\/me$/, async (route) => {
+    const response = await route.fetch();
+    // Its headers but its length, which the changed body no longer has.
+    const headers = Object.fromEntries(Object.entries(response.headers()).filter(([name]) => name.toLowerCase() !== 'content-length'));
+    await route.fulfill({ status: response.status(), headers, json: { ...(await response.json()), userData: false } });
+  });
+  await page.goto(documentPath);
+  const frame = page.frameLocator('iframe.reader-frame');
+  await expect(frame.getByText(d1Text)).toBeVisible();
+  const selection = () => frame.locator('body').evaluate(() => getSelection()?.toString() ?? '');
+  // Whether the chord had been taken when it reached the frame's window, whose listener hears it after the host script's.
+  await frame.locator('body').evaluate(() => {
+    const seen = window as unknown as { chordTaken: boolean | null };
+    seen.chordTaken = null;
+    window.addEventListener('keydown', (event) => {
+      if (event.key.toLowerCase() === 'h' && event.shiftKey) seen.chordTaken = event.defaultPrevented;
+    });
+  });
+  const taken = () => frame.locator('body').evaluate(() => (window as unknown as { chordTaken: boolean | null }).chordTaken);
+
+  await tabTo(page, frame.locator('p.body').getByRole('link', { name: 'Kennedy' }));
+  await page.keyboard.press('ArrowRight');
+  for (let word = 0; word < 3; word++) await page.keyboard.press('Control+Shift+ArrowRight');
+  await expect.poll(selection).not.toBe('');
+  await page.keyboard.press('Control+Shift+H');
+  await expect.poll(taken).toBe(false);
+  await page.waitForTimeout(300);
+  expect(await selection()).not.toBe('');
+  expect(await listed(page)).toEqual([]);
+  await page.unroute(/\/api\/v1\/me$/);
+});

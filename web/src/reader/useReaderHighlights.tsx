@@ -12,7 +12,8 @@
 // offsets and the page's version on, to freeze it into a collection, and lets the selection go. From PLAN's
 // S22e its Look Up in NARA hands on the selection's text, with its offsets in the text or a footnote's
 // text, and lets the selection go; Alt+F10 reaches a footnote's bar too; and on a server that keeps no user
-// data the bar is shown for Look Up alone.
+// data the bar is shown for Look Up alone. From S22e's follow-up the frame is told, as each page loads, whether
+// the highlight chord is the app's, so that on such a server the frame leaves it to the browser too.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, type RefObject, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { ApiError, errorMessage } from '../api/client';
@@ -141,6 +142,13 @@ export function useReaderHighlights({
       '*',
     );
   }, [enabled, loaded, frameURL, highlights.data, frame]);
+
+  // Whether the frame takes the highlight chord, on every load and whenever it changes: only on a server that
+  // keeps user data, so that elsewhere it stays the browser's in the frame as it does around it (S22e's follow-up).
+  useEffect(() => {
+    if (loaded?.url !== frameURL) return;
+    frame.current?.contentWindow?.postMessage({ source: 'frus-app', kind: 'highlightKey', on: enabled }, '*');
+  }, [enabled, loaded, frameURL, frame]);
 
   /** A colour chosen: a highlight over the selection's offsets, in the page's version of the text. */
   async function make(color: HighlightColor, over: Selected | null = selected) {
