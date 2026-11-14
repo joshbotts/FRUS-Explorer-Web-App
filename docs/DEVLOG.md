@@ -716,6 +716,62 @@ Phase 3's row S22c, the last pull request of the second upstream batch, after S2
 
 **Next:** Mac check 19 and the owner's merge of FRUS-Explorer#1895, the batch's last; then S23c's pin move past the second batch, with libcurl in the image unless S21c added it; then S22d, Source Explorer over the API and check 8, and S22e, NARA, Look Up and Zotero.
 
+## Session 23d, follow-up: Project Home gives a computation as ended only beside the leads it kept
+
+13 November 2026 · branch `claude/leads-flake-91bba9`, a follow-up session of the phase-3 orchestrator's · [#136](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/136) · upstream `39859a51`, unchanged
+
+S23d's `RelatedDocumentsParityTests.aSeededProjectsLeadsAreTheAggregators` failed again on `main`, on #133's merge, `fedd7cd`: run 43464716109, attempt 1, in the swift job, after 148.8 s. Only its second comparison failed. Once the first lead had been dismissed and the leads refreshed, Project Home showed 23 leads, `frus1961-63v06/d18` to `d11`, where the kit's aggregator gives 24, the same followed by `d109`. It had failed the same way before: on S21d's branch and over `v2` at `782127ff`, value for value, and once at S24a's head. S23c's and S24e's briefs listed it as a known flake. The owner asked on 13 November for it to be fixed for good. This is a pull request of its own, outside the plan's table, branched from `main` at `fedd7cd`.
+
+**What was wrong: the server.** Project Home's answer read the project's leads first, then the line under each lead from the served index, and only then where the newest computation of the leads stood. A computation that ended between the two reads was given as `succeeded` beside the leads from before it.
+- **The window is the leads' lines** (S25c's `withLines`). The kit's `IndexingPipeline` is an actor, so their read waits behind the computation's own rankings over the same served index, and a loaded runner stretches the wait. The window opens only when there are leads to line, which is why the first comparison never failed: its Project Home has none until its computation ends.
+- **The 23 leads were the first computation's 24**, with the dismissed one hidden, as the store held them between the dismissal and the second computation's write. The second computation's own 24 were already in the store when the answer went out.
+- **Users would have seen it too.** The browser app reads Project Home again every two seconds only while a computation waits or runs. So after a Refresh, a user could be left with the leads from before it until Project Home was next read.
+
+**How it was found.** A trace, never committed and gated on an environment variable, logged four things: when Project Home read its rows, its lines and the computation's state; when each computation read the dismissals and wrote its leads; and the dismissal. A second variable held the leads' lines open for a given time.
+- **The lines held 1.5 s, on `main`'s code:** the test failed 2 runs of 2, each time with CI's values exactly: the same 23 leads, `d109` missing. In each, Project Home read the rows 3 or 4 ms after the dismissal and 18 or 19 ms before the second computation wrote its leads. That computation had read the dismissal (`dismissed=["frus1961-63v06/d3"]`). The state, read once the lines were done, was `succeeded`, and Project Home read 2 s later held the kit's 24. With nothing held and no load, 2 of 2 passed.
+- **Under the load that failed it.** CI's swift job runs each test target's runner in turn, so the parity target's own 258 tests are the load. Each run here is that runner whole, pinned with `taskset` to 4 CPUs as on CI's runner, the trace on.
+  - On `main`'s code, 1 run in 4 failed with nothing held, CI's failure again.
+  - Then an A/B: three rounds, each run adding ten copies of the test (never committed), so eleven samples a run, alternately on `main`'s Project Home and on the fix's. On `main`'s, the second comparison was wrong in 9 of 33 samples. On the fix's, it was wrong in none of 33, and no other test failed in either arm.
+  - Each run took 167–178 s here, where the parity target took 411 s in CI's run.
+- **What the trace showed in each wrong sample** (the 9, and the unforced one): the answer the test took read its rows 4 to 56 ms before the computation wrote, and its state 10 to 54 ms after.
+- **And with the fix:** every one of the 66 answers the test took read the state first and showed that computation's own leads. Eleven reads met a computation writing between the two reads, and gave it as still running.
+- **Ruled out by the trace:**
+  - The dismissal's write against the computation's read: each second computation read the dismissal it followed.
+  - Two computations at once: S20d's queue runs one job at a time.
+  - A Refresh merged with another: each had a job of its own, the second queued after the dismissal.
+  - The aggregator's ties: the store's leads were the kit's, in its order.
+  - S21f's step-5 comparison, which shares the queue: it gives way after each volume, so a computation waits a volume at most. That lengthens the test and adds load, but opens no window of its own.
+  - The import's computation for every project, queued once the fixture's export is served: in every traced run it found no project, since the test makes its project afterwards.
+
+**The fix.** Project Home's answer reads where the newest computation stands before it reads the leads (`ProjectHomeRoutes`, `Sources/FRUSLightAPI/ProjectHome.swift`). A computation given as ended wrote its leads before it ended, so the leads read after are its own, or newer. One that ends between the two reads is given as still running beside its new leads, and the browser reads once more. A computation another browser asks for while Project Home is being read shows at its next reading, as one asked for just after it always has.
+
+**The tests.**
+- **FRUSLightServerTests:** `RelatedDocumentsTests.projectHomeGivesAComputationAsEndedBesideTheLeadsItKept`, new.
+  - The setup: a project whose note on d1 is its seed, and a lead on d1, which its computation ranks from d1 and removes, since a seed is never its own lead. A Refresh waits behind a job held at the queue's head.
+  - The computation then runs to its end at the moment Project Home reads where it stands, through a queue of the test's own that holds that read (`ReadHoldingQueue`).
+  - On `main`'s Project Home it fails, giving the lead from before beside `succeeded`. With the fix it passes.
+- **The parity test is unchanged.** It asks what the kit's rule gives, and the server now answers it.
+
+**How it was checked:**
+- **Linux, `swift:6.4-noble`, arm64,** CI's swift job replayed with its PostgreSQL (`scripts/swift --postgres test`), under the heavy lock: 4,157 tests in 529 suites in fourteen runners, all passing, the server's 356 in 53 suites and the parity target's 258 in 52 among them. The one skip is the named one, `FTS5StoreTests`' `backupExclusion()`, and the build gives no warning.
+- **The parity target as CI runs it,** over the branch's head alone, its runner whole and pinned to 4 CPUs: 8 runs of 8 passed, the test among them, in 150 to 162 s each. With the A/B's 33 samples and the suite's run, the test passed 42 times under the load that failed it, and failed in none.
+- **The image and the smoke test:** `scripts/compose-smoke --e2e` with this branch's image as `frus-light:leads`, its parity stage beside it, on port 18280, passed every step:
+  - check 2 over the Standalone index, 36 digests and 7 checks identical;
+  - the browser suite's 83 tests at the root and 83 under the path, 82 passing and the one it skips in each, `related.spec.ts`'s Refresh of the leads among them;
+  - and the library, accounts and sign-in specs.
+
+**A cold review,** by a subagent given the diff and none of this session's reasoning, found nothing blocking. What held up is fixed:
+- The server test ranks, as the flake did, rather than clearing a project with nothing to rank.
+- It builds the served index's provider as `buildRouter` builds its own.
+- It opens the gate however it ends.
+- Its queue keeps one lock.
+
+It also asked whether a computation queued by another browser while Project Home is read should be reported at once, by a second read of the state after the leads. That is left as it is (the fix, above).
+
+**Delivered:** the fix, the server test, and this log. The trace, its switches, the A/B harness and the logs of the runs above are in the shared notes folder, under `leads-flake/`.
+
+**Next:** nothing of its own; the plan's rows go on as they stand.
+
 ## Session 23d: Related Documents and Suggested Next
 
 11 November 2026 · branch `claude/frosty-hofstadter-4969d6` · [#115](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/115) · upstream `68bffcf6`, unchanged

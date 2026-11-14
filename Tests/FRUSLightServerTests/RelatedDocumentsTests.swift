@@ -1,10 +1,10 @@
 // Related Documents and Suggested Next through the router (PLAN's S23d), over the synthetic export: the
 // list's refusals and what it answers of each axis; Suggested Next's Refresh, a job of the server's
 // queue, one waiting a project at most, refused while no index is served and for another user's project,
-// whose leads and notes never reach another user's; the leads' seed and tuning as the app's
-// `ProjectLeadsService` gathers them; and the leads computed again after a JSON import, for each of that
-// user's projects. The kit's ranking itself is held to the API's over the fixture index in
-// `RelatedDocumentsParityTests`.
+// whose leads and notes never reach another user's; Project Home giving a computation as ended only
+// beside the leads it kept; the leads' seed and tuning as the app's `ProjectLeadsService` gathers them;
+// and the leads computed again after a JSON import, for each of that user's projects. The kit's ranking
+// itself is held to the API's over the fixture index in `RelatedDocumentsParityTests`.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -12,6 +12,7 @@ import FRUSLightTestSupport
 import Foundation
 import Hummingbird
 import HummingbirdTesting
+import Synchronization
 import Testing
 
 @testable import FRUSLightAPI
@@ -152,6 +153,68 @@ import Testing
         }
     }
 
+    /// Project Home gives a computation as ended only beside the leads it kept: where the newest stands is
+    /// read before the leads are, so one that ends while Project Home is read is given as still running,
+    /// or as ended with its own leads, and never as ended beside the leads from before it, which the
+    /// browser, reading Project Home again only while one waits or runs, would keep. Here the computation
+    /// runs to its end at the moment Project Home reads where it stands, as one did under the parity
+    /// suite's load, where the leads' lines waited on the served index it ranked over.
+    @Test func projectHomeGivesAComputationAsEndedBesideTheLeadsItKept() async throws {
+        let fixture = try await UserDataFixture(indexed: true)
+        defer { withExtendedLifetime(fixture) {} }
+        // The server's routes, as `UserDataFixture.app` builds them, with the provider `buildRouter` makes
+        // when given none, and the leads' queue reading its jobs through `holding`.
+        let holding = ReadHoldingQueue(fixture.jobs)
+        let provider = ServedIndexProvider(state: fixture.server.state, resources: fixture.server.resources,
+                                           volumesDirectory: await fixture.server.reader.volumesDirectory,
+                                           userStore: fixture.services.enabled ? fixture.services.store.searchDatabase : nil)
+        let leads = ProjectLeadsQueue(store: fixture.services.store, jobs: holding, provider: provider, resources: fixture.server.resources,
+                                      now: fixture.services.now)
+        let app = Application(router: ServedRouter(base: .root, router: buildRouter(
+            state: fixture.server.state, resources: fixture.server.resources, reader: fixture.server.reader, provider: provider,
+            userData: fixture.services, leads: leads)))
+        try await app.test(.router) { client in
+            let owner = Browser(client: client)
+            let grain = try await ProjectHistoryTests.made(owner, "Grain")
+            // Its seed is d1, which a note filed under it is on; and its lead is d1 too, which its
+            // computation ranks from d1 and removes, as a seed is never its own lead.
+            let note = try await owner.send(.post, "/api/v1/me/volumes/\(Self.volume)/documents/d1/notes", try ProjectHistoryTests.json(
+                ["bodyText": "", "runs": nil, "userTagIds": [String](), "projectIds": [grain.id], "selectedSummaryIds": [String]()]))
+            #expect(note.status == .created, "\(String(buffer: note.body))")
+            try fixture.rows.run(
+                """
+                INSERT INTO project_leads (user_id, id, project_id, volume_id, document_id, aggregate_score, contributing_seed_keys,
+                                           header, is_editorial_note, first_surfaced_at, last_computed_at, dismissed)
+                    VALUES ('owner', ?, ?, ?, 'd1', 1, '[]', 'Lead', 0, ?, ?, 0)
+                """, [.text(ProjectFocusTests.entry(1)), .text(grain.id), .text(Self.volume),
+                      .text(UserStoreDate.text(UserDataFixture.now)), .text(UserStoreDate.text(UserDataFixture.now))])
+            #expect(try await ProjectFocusTests.home(owner, grain).leads.map(\.documentId) == ["d1"])
+            // Held at the queue's head, so the Refresh's computation waits; and let go however the test ends.
+            let gate = JobGate()
+            defer { gate.open() }
+            _ = try await fixture.jobs.submit(.indexReset, subject: nil, requestedBy: nil, id: nil) { _ in
+                await gate.wait()
+                return nil
+            }
+            let asked = try decode(LeadsRefresh.self, try await owner.send(.post, "/api/v1/me/projects/\(grain.id)/leads/refresh", "{}"))
+            #expect(asked.state == "queued")
+            // The computation runs to its end as Project Home reads where it stands.
+            holding.atNextRead {
+                gate.open()
+                await fixture.jobs.waitUntilIdle()
+            }
+            let home = try await ProjectFocusTests.home(owner, grain)
+            #expect(holding.held, "Project Home read where the computation stands")
+            #expect(home.leadsRefresh?.id == asked.id && home.leadsRefresh?.state == "succeeded", "\(String(describing: home.leadsRefresh))")
+            let job = try #require(await fixture.jobs.job(asked.id))
+            #expect(job.progress?.hasPrefix("Ranked from 1 document of a project of owner's") == true, "\(job.progress ?? "")")
+            // The leads the computation kept, as Project Home reads them once it has ended, not those from before it.
+            let kept = try await ProjectFocusTests.home(owner, grain).leads.map(\.documentId)
+            #expect(!kept.contains("d1"))
+            #expect(home.leads.map(\.documentId) == kept)
+        }
+    }
+
     /// While no index is served a Refresh is refused, and the leads stay as they were.
     @Test func aRefreshWaitsForAnIndex() async throws {
         let fixture = try await UserDataFixture()
@@ -186,4 +249,41 @@ import Testing
             #expect(leads.first?.subject == "Every project of owner's" && leads.first?.progress == "Found the leads of 3 projects")
         }
     }
+}
+
+/// The server's queue, whose next read of a job, once a test asks, first waits for the test's `work`:
+/// Project Home's read of where a computation stands, at which the test ends the computation.
+private final class ReadHoldingQueue: JobQueue {
+    let queue: InProcessJobQueue
+    /// The work the next read of a job waits for, and whether a read has waited for one.
+    private let state = Mutex<(work: (@Sendable () async -> Void)?, held: Bool)>((nil, false))
+
+    init(_ queue: InProcessJobQueue) { self.queue = queue }
+
+    /// Holds the next read of a job until `work` has run.
+    func atNextRead(_ work: @escaping @Sendable () async -> Void) { state.withLock { $0.work = work } }
+
+    /// Whether a read was held.
+    var held: Bool { state.withLock { $0.held } }
+
+    func submit(_ kind: JobKind, subject: String?, requestedBy: String?, id: String?, onCancel: (@Sendable () async -> Void)?,
+                _ work: @escaping @Sendable (JobContext) async throws -> String?) async throws -> Job {
+        try await queue.submit(kind, subject: subject, requestedBy: requestedBy, id: id, onCancel: onCancel, work)
+    }
+
+    func job(_ id: String) async -> Job? {
+        let work = state.withLock { state in
+            defer { state.work = nil }
+            return state.work
+        }
+        if let work {
+            await work()
+            state.withLock { $0.held = true }
+        }
+        return await queue.job(id)
+    }
+
+    func jobs() async -> [Job] { await queue.jobs() }
+
+    func cancel(_ id: String, by user: String?) async throws -> Job { try await queue.cancel(id, by: user) }
 }
