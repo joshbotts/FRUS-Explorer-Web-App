@@ -1,9 +1,11 @@
 // S21g's done-when (docs/PLAN.md): Playwright merges two people by keyboard on Chromium with no axe violations. In
-// the main suite, over the synthetic export, People is reached from Browse by keyboard and a person's sheet opened
-// and closed, axe at each step. With FRUS_E2E_PEOPLE, on the smoke test's Standalone server, whose index holds the
-// three fixture volumes and corrects at once, the owner, a curator, merges Adenauer and Adzhubei by keyboard: the
-// sheet's Merge with another person…, the picker searched by name, the question, Merge; the screen says what was
-// done and lists one identity of the two; and Corrections undoes it by keyboard, the list as it was again.
+// the main suite, over the synthetic export, People is reached from Browse by keyboard and a person's sheet opened,
+// a subject chip's pivot opened and closed, and the sheet closed, axe at each step. With FRUS_E2E_PEOPLE, on the
+// smoke test's Standalone server, whose index holds the three fixture volumes and corrects at once: S21g's
+// follow-up's done-when, a sheet's Career and Subjects read and a subject chip followed to a volume covering it, by
+// keyboard; and the owner, a curator, merges Adenauer and Adzhubei by keyboard: the sheet's Merge with another
+// person…, the picker searched by name, the question, Merge; the screen says what was done and lists one identity of
+// the two; and Corrections undoes it by keyboard, the list as it was again.
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
 import { tabTo } from './keyboard';
@@ -25,7 +27,19 @@ test('reaches People from Browse and opens a person’s sheet by keyboard', asyn
   await page.keyboard.press('Enter');
   const sheet = page.getByRole('dialog', { name: 'Khrushchev, Nikita Sergeyevich' });
   await expect(sheet.getByRole('link', { name: 'Find all mentions' })).toBeVisible();
+  // Subjects, from his volume's profile: the first chip's pivot by keyboard, and Escape back to the chip.
+  const chip = sheet.getByRole('region', { name: 'Subjects' }).getByRole('button').first();
+  await expect(chip).toBeVisible();
   await axeCheck(page);
+  await tabTo(page, chip, 20);
+  const subject = (await chip.textContent()) ?? '';
+  await page.keyboard.press('Enter');
+  const pivot = page.getByRole('dialog', { name: subject, exact: true });
+  await expect(pivot.getByRole('heading', { level: 3, name: /^\d+ volumes? covers? this subject$/ })).toBeVisible();
+  await axeCheck(page);
+  await page.keyboard.press('Escape');
+  await expect(pivot).toBeHidden();
+  await expect(chip).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
   await expect(row).toBeFocused();
@@ -33,6 +47,53 @@ test('reaches People from Browse and opens a person’s sheet by keyboard', asyn
   await page.goto('admin/corrections');
   await expect(page.getByRole('heading', { level: 1, name: 'Corrections' })).toBeVisible();
   await expect(page.getByText('No curator has corrected the index on this server.')).toBeVisible();
+  await axeCheck(page);
+});
+
+test('reads a person’s Career and Subjects, and follows a subject chip to a volume, by keyboard', async ({ page }) => {
+  test.skip(!standalone, 'runs on the smoke test’s Standalone server, with FRUS_E2E_PEOPLE');
+  test.setTimeout(120_000);
+  await page.goto('people');
+  await expect(page.getByRole('heading', { level: 1, name: 'People' })).toBeVisible();
+  await tabTo(page, page.getByRole('searchbox', { name: 'Search people' }));
+  await page.keyboard.type('Bohlen');
+  const row = page.getByRole('button', { name: /^Bohlen, Charles Eustis/ });
+  await expect(row).toHaveCount(1);
+  await tabTo(page, row, 60);
+  await page.keyboard.press('Enter');
+  const sheet = page.getByRole('dialog', { name: /^Bohlen, Charles Eustis/ });
+
+  // The lifespan line, and Career: the register's posts in its order, each its title, its dates and its note.
+  await expect(sheet.getByText('1904–1974', { exact: true })).toBeVisible();
+  const career = sheet.getByRole('region', { name: 'Career' });
+  const posts = career.getByRole('listitem');
+  await expect(posts).toHaveCount(8);
+  await expect(posts.nth(0)).toHaveText('Counselor 1947-08-01 – 1949-08-03');
+  await expect(posts.nth(4)).toHaveText('Career Ambassador from 1960-06-24');
+  await expect(posts.nth(5)).toHaveText('Ambassador Extraordinary and Plenipotentiary — France 1962-10-27 – 1968-02-09 Left post on');
+  await expect(career).toContainText('From the Department’s Principal Officers and Chiefs of Mission register.');
+
+  // Subjects: the chips of the kit's ranking, each said with its category and how many of his volumes carry it.
+  const chip = sheet.getByRole('region', { name: 'Subjects' }).getByRole('button').first();
+  await expect(chip).toHaveAccessibleDescription(/^.+, in \d+ volumes? mentioning this person Shows other volumes covering this subject$/);
+  await axeCheck(page);
+
+  // The first chip, followed: its pivot lists the volumes covering its subject, and the first opens its page.
+  await tabTo(page, chip, 30);
+  const subject = (await chip.textContent()) ?? '';
+  await page.keyboard.press('Enter');
+  const pivot = page.getByRole('dialog', { name: subject, exact: true });
+  await expect(pivot.getByRole('heading', { level: 3, name: /^\d+ volumes? covers? this subject$/ })).toBeVisible();
+  const volume = pivot.getByRole('link').first();
+  await expect(volume).toBeVisible();
+  await axeCheck(page);
+  const href = (await volume.getAttribute('href')) ?? '';
+  expect(href).toMatch(/\/browse\/frus[^/]+$/);
+  await tabTo(page, volume, 10);
+  await page.keyboard.press('Enter');
+  await page.waitForURL((url) => url.pathname === href);
+  await expect(pivot).toBeHidden();
+  await expect(page.getByRole('heading', { level: 1 })).toBeFocused();
   await axeCheck(page);
 });
 

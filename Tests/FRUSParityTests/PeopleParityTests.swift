@@ -174,11 +174,13 @@ import Testing
         }
         #expect(sheets.count > 50, "the fixture volumes' people")
 
+        var filled = 0
         for sheet in sheets {
             // `authorityEntry` and `career`, as the app's sheet reads them, then its header's lifespan line.
             let authority = sheet.authorityId.flatMap { authorities.entry(for: $0) }
             let career = authority?.s.flatMap { $0.isEmpty ? nil : register.career(forSlug: $0) }
             #expect(sheet.lifespan == PersonLifespan.text(authority: authority, career: career), "\(sheet.name)'s lifespan line")
+            if sheet.lifespan != PersonLifespan.text(born: authority?.b, died: authority?.d) { filled += 1 }
             // `careerSection`, drawn for a career with a post: each post's title, its dates and its note where it has one.
             let posts = (career.map { $0.a.isEmpty ? [] : $0.a } ?? []).map {
                 [$0.id, $0.titleText, $0.dateRangeText ?? "-", $0.nt.flatMap { $0.isEmpty ? nil : $0 } ?? "-"]
@@ -202,7 +204,8 @@ import Testing
         let careers = sheets.filter { !$0.career.isEmpty }
         #expect(careers.count > 0 && sheets.contains { $0.lifespan != nil } && pivots.values.contains { $0.volumes.count > 1 })
         #expect(sheets.filter { !$0.subjects.isEmpty }.count > sheets.count / 2, "most people have subjects")
-        print("PeopleParityTests: \(sheets.count) sheets, \(careers.count) with Career (\(careers.prefix(6).map(\.name).joined(separator: "; "))), "
+        print("PeopleParityTests: \(sheets.count) sheets, \(sheets.filter { $0.lifespan != nil }.count) with a lifespan line, "
+              + "\(filled) of them with a year the register filled, \(careers.count) with Career, "
               + "\(sheets.filter { !$0.subjects.isEmpty }.count) with Subjects, \(pivots.count) pivots")
     }
 
