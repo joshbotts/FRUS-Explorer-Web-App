@@ -86,17 +86,17 @@ test('charts a term, changes its axis and unit by keyboard, reads the table and 
     // Back to By Year, and the unit, by keyboard: Measure's arrow keys move from Documents to Occurrences.
     for (let step = 0; step < 4; step += 1) await page.keyboard.press('ArrowUp');
     await expect(page.getByRole('heading', { level: 2, name: '"treaties" — by Year' })).toBeVisible();
-    const documents = page.getByRole('radio', { name: 'Documents' });
+    const documents = page.getByRole('radio', { name: 'Documents', exact: true });
     await tabTo(page, documents);
     await expect(documents).toBeChecked();
     await page.keyboard.press('ArrowRight');
-    await expect(page.getByRole('radio', { name: 'Occurrences' })).toBeChecked();
+    await expect(page.getByRole('radio', { name: 'Occurrences', exact: true })).toBeChecked();
     await expect(page).toHaveURL(/measure=occurrences/);
     await expect.poll(async () => (await table(page))[0]?.[2]).toBe('Occurrences (index stems)');
     expect((await table(page))[1]).toEqual(['treaties', '1960', '2', '2', '100', '2']);
     await expect(page.getByText('2 occurrences', { exact: true })).toBeVisible();
     // Values are a share of documents alone, so they yield under Occurrences.
-    await expect(page.getByRole('radio', { name: '% of documents' })).toBeDisabled();
+    await expect(page.getByRole('radio', { name: '% of documents', exact: true })).toBeDisabled();
     await axeCheck(page);
 
     // The CSV, its method block the kit's, and the figure, PNG and SVG, drawn in the browser.
@@ -135,9 +135,17 @@ test('charts a term, changes its axis and unit by keyboard, reads the table and 
 });
 
 test('shows a range in Chronology, filters its list by the legend by keyboard, and reads its table', async ({ page }) => {
-  await page.goto('chronology');
+  await page.goto('search');
   await forget(page);
   try {
+    // The header's Analytics menu, its second item past the divider, by keyboard.
+    const menu = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Analytics' });
+    await tabTo(page, menu);
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('menuitem', { name: 'Chronology' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/chronology$/);
     await expect(page.getByRole('heading', { level: 1, name: 'Chronology' })).toBeFocused();
     await expect(page.getByRole('heading', { level: 2, name: 'Choose a Date Range' })).toBeVisible();
     // The range opens on the corpus's last year; one of November 1960 is shown by keyboard.

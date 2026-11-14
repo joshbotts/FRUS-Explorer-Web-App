@@ -56,8 +56,13 @@ export function VegaChart({
       result?.finalize();
     };
   }, [spec]);
-  // An image to a screen reader, named by the page: Vega's marks inside it are its presentation alone.
-  return <div className="analytics-chart" ref={frame} role="img" aria-label={label} />;
+  // An image to a screen reader, named by the page: Vega's marks inside it are its presentation alone. Vega writes a
+  // role and a label of its own onto the element it draws into, so that element is inside the one the page names.
+  return (
+    <div className="analytics-chart" role="img" aria-label={label}>
+      <div ref={frame} className="analytics-canvas" />
+    </div>
+  );
 }
 
 /** A figure drawn apart from the page, at its own width, as a PNG twice its size or as SVG text. */

@@ -81,7 +81,8 @@ import Testing
             ("let coloring = sourceColoring(raw)", "let coloring = AnalyticsSourceColoring.sourceColoring(raw, seriesCount: ask.colors)"),
             ("guard decade + 9 >= yearRangeStart && decade <= yearRangeEnd else { return nil } return (period: decade, volumeId: $0.volumeId, count: $0.count)",
              "guard decade + 9 >= yearRangeStart && decade <= yearRangeEnd else { return nil } return (period: decade, volumeId: $0.volumeId, count: $0.count)"),
-            ("Text(unsupportedExactTerms.map { \"=\\($0)\" }", "\\(unsupportedExactTerms.map { \"=\\($0)\" }.formatted(.list(type: .and).locale(SearchItem.locale)))"),
+            ("\\(unsupportedExactTerms.map { \"=\\($0)\" }.formatted(.list(type: .and))) can’t be charted: Analytics counts by word stem in the search index,",
+             "\\(unsupportedExactTerms.map { \"=\\($0)\" }.formatted(.list(type: .and).locale(SearchItem.locale))) can’t be charted: Analytics counts by word stem in the search index,"),
         ]
         for (app, mirror) in pairs {
             #expect(view.contains(NoteViewParityTests.flattened(app)), "AnalyticsView.swift holds \(app)")

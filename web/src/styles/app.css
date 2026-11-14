@@ -2265,11 +2265,15 @@ dialog.merge-picker {
 }
 
 /* ─── Corpus Analytics and Chronology (PLAN's S24f) ──────────────────────── */
-/* The header's Analytics menu sits among the links as one of them. */
+/* The header's Analytics menu sits among the links, spaced as they are, in their colour. */
+.app-header nav .nav-menu {
+  margin-right: 0.75rem;
+}
+
 .app-header nav .nav-menu > button {
   border: none;
   background: none;
-  color: inherit;
+  color: var(--accent);
   font: inherit;
   padding: 0;
   cursor: pointer;
@@ -2398,7 +2402,8 @@ dialog.merge-picker {
   }
 }
 
-.analytics-chart {
+.analytics-chart,
+.analytics-canvas {
   width: 100%;
   min-height: 150px;
 }
