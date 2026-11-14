@@ -26,9 +26,57 @@ Not started: `PLAN.md`'s row S24f. The session that does it replaces this line, 
 
 Not started: `PLAN.md`'s row S21g. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
 
+## Session 24e, second follow-up: the pin moves to `6b6932aa`
+
+14 November 2026 · branch `claude/zealous-pare-1e4438`, a follow-up session of the phase-3 orchestrator's · [#137](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/137) · upstream `6b6932aa`
+
+The pin moves from `39859a51` to `6b6932aa`, `v2`'s head, in a pull request of its own under rule 5, with no PLAN row: the move that the entry below, "Session 24e, follow-up, upstream", said would carry [FRUS-Explorer#1903](https://github.com/joshbotts/FRUS-Explorer/pull/1903). `6b6932aa` is #1903's merge. The owner merged it after Mac check 28, on 14 November (02:01 UTC), onto `v2` at `39859a51`. Its squash's tree is its head's, `ffc3fc32`, both `59068acb`, which this session compared. It is the only commit between the two pins. The branch was cut from `main` at `0fd99b5`, #136's merge. The daily watch's issue, [#106](https://github.com/joshbotts/FRUS-Explorer-Web-App/issues/106), which its run of 13 November rewrote for the kits' failure at `39859a51` (run [43444877747](https://github.com/joshbotts/FRUS-Explorer-Web-App/actions/runs/43444877747)), should close at the watch's first run after this merges, when it finds `v2` at the pin and the kits passing.
+
+**What the move brought:**
+- Two of the kit's test files, `FRUSExplorerTests/FRUSCoreKit/IndexingPipelineTests.swift` and `IndexingTestSupport.swift`. Every stamp test now builds its pipeline over a stamp store of its own, so the two date-index tests no longer race over a shared one.
+- The app's plan, `Planning/DEVELOPMENT-PLAN.md`.
+
+No kit or app source changed.
+
+**Nothing to follow,** as #1903's entry foresaw:
+- **The build:** the kit's test folder is the only folder this package compiles that changed, and no file in it was added or removed, so `Package.swift` stands. Build 1812, index version 74, FTS generation 4 and the export's format version 7 are unchanged, so `Compatibility.swift` and the install guide stand.
+- **The tests:** #1903 adds and removes no test or suite: the kit's test folder holds 2,892 `@Test` and 274 `@Suite` attributes at both commits. No test gains a skip or calls `Test.cancel`, so CI's allow-list stands.
+- **The own-text fixtures:** `OwnTextAPIParityTests` reads the own-text suites' `volumeXML` from `IndexingPipelineTests.swift`, one of #1903's two files. `SectionOwnTextTests`' and `IndexVersion70Tests`' literals and volume ids are byte for byte as at `39859a51`, one line lower, so `fixtures/own-text` stands, and the suite passes. The other parity tests that read the kit's test folder read files #1903 leaves alone: `ResearchDataFixtures.swift` and `SummaryProvenanceExportTests.swift`.
+
+**The golden files stand,** not remade. Their source digest, `UpstreamDigest.directories`, covers FRUSCoreKit, FRUSExplorer, FTS5Store, SemanticVectorsKit, SourceNoteKit, TEIHeaderKit and WordCloudKit, and no test folder, so it is unchanged. `frus-parity check-golden` passes at `6b6932aa`: "golden files: 5 present and valid, 0 pending". Their provenance's upstream commit still names `39859a51`, where S24e's move made them. That field is information for people, and nothing compares it. No export was asked for or used.
+
+**Results**
+- **Linux, `swift:6.4-noble`, arm64:** CI's swift job replayed with its PostgreSQL (`scripts/swift --postgres --exec`), under the heavy lock, at the final tree. This package's own targets were built clean, over a build folder cloned from one made at `39859a51`.
+  - 4,164 tests in 531 suites, all passing. The only skip is the named one, `FTS5StoreTests`' `backupExclusion()`, in Swift Testing's results file and in the log, with no cancellation. No target calls `Test.cancel`, and the build gave no warning outside `.build`.
+  - Every target runs as many tests as `main`'s CI runs at `39859a51` (run 43532105211, at `0fd99b5`): CrossRefKitTests 10, FRUSCoreKitTests 2,509 in 307 suites, FRUSLightCoreTests 274, FRUSLightServerTests 360, FRUSParityTests 261, FRUSRichTextTests 42, FTS5CheckTests 3, FTS5StoreTests 219, GeneratorKitTests 7, ManifestGeneratorTests 60, SemanticVectorsKitTests 40, SourceExplorerExportGeneratorTests 22, SourceNoteKitTests 327 and WordCloudKitTests 30.
+  - The four tests #1903 moved onto stores of their own pass, among them the one the watch failed, "needsDateReindex — returns true before markDateReindexComplete is called".
+  - The checks print as at S24e's move: check 2's 36 digests and 7 checks, the Mac's; check 3's 482 queries, identical; check 4's 410 of 410 rows, on the page, on the reader's path and from one full parse per volume; check 6's 2,581 highlights; and check 7's lookups.
+- **The browser app and the image** are CI's to test. Nothing changes under `web/`, under `docker/` or in the server, and the compose job builds the image at the new pin.
+
+**Records,** each a clause where earlier moves wrote one, by the orchestrating session's word:
+- `COORDINATION.md`: the pin's history; §5's list of app changes, with #1903; and §6's exports, saying this move needed none.
+- `README.md`: Status, the pin and this project's pull requests in it.
+- `DEVLOG.md`: this entry, and a "Since merged" note in #1903's entry below, after its header, which still calls it open.
+- `PLAN.md`:
+  - a "Since merged" paragraph after the sentence on #1903, which still calls it open;
+  - where the plan stands;
+  - S12d's row, from `6b6932aa`;
+  - the golden files' checkpoint, which this move needed no export for;
+  - the owner checkpoints' Mac check 28, done, which makes forty-seven steps, nineteen of them phase 3's.
+- `SPEC.md`: the compatibility contract's index version at `6b6932aa`, and `setupDatabase(_:)`'s lines there, the same as at `39859a51`.
+- `docs/prep/README.md`: the pin, and this move among those that changed a file its claims cite.
+
+**Notes**
+- **The build folder:** this worktree's own `.build/linux`, from S23e's session, was set aside. The orchestrating session's, S24e's build at `39859a51`, was cloned in its place. As in CI, this package's own targets were then rebuilt clean.
+- **Until this merges,** the race can still turn `main`'s swift job red at `39859a51`, in about 1 run in 20 of the kit's suite alone on Linux. A rerun clears it.
+
+**Next:** unchanged by this move. On the features track, S22d (Source Explorer and check 8), then S22e, and S24f to S24i. On the server track, S21g. And S24e's follow-up: the server's uses of #1902's three calls, and Related Documents' lexical axis.
+
 ## Session 24e, follow-up, upstream: the kit's stamp tests, each over a store of its own
 
 13 November 2026 · branch `claude/kit-test-race-records-1efabb` · [#135](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/135) · upstream `39859a51`, unchanged; [FRUS-Explorer#1903](https://github.com/joshbotts/FRUS-Explorer/pull/1903), open
+
+**Since merged** (the pin move to `6b6932aa` records it): the owner merged FRUS-Explorer#1903 on 14 November (02:01 UTC) as `6b6932aa`, after Mac check 28. Its tree is its head's, `ffc3fc32`, and it went onto `v2` at `39859a51`, the branch's base. A pin move of its own took it, to `6b6932aa`, with nothing to follow, as this entry predicted: `FRUSCoreKitTests` runs its 2,509 tests there with no skip, and the golden files stand (the entry above, "Session 24e, second follow-up").
 
 A race in the kit's tests, which the daily watch met at the pin, fixed upstream by the owner's word of 13 November; no PLAN row names it. The watch's run that day ([43444877747](https://github.com/joshbotts/FRUS-Explorer-Web-App/actions/runs/43444877747), at `39859a51`, reported in [#106](https://github.com/joshbotts/FRUS-Explorer-Web-App/issues/106)) failed `FRUSCoreKitTests` on one test, `DateIndexingAccuracyTests`' "needsDateReindex — returns true before markDateReindexComplete is called", which this repository's CI had passed at the same commit (run 43439295815). The CI runs the kit's suites at the pin, so the race could turn `main` red too. The pull request is `claude/kit-test-race-date-reindex`, cut from `v2` at `39859a51`, which `v2` still is. It is labelled `Mac`, asks for Mac verification as Mac check 28, and is not merged. Under rule 4 it changes shared files, the kit's test folder alone, and this repository changes only its records.
 
