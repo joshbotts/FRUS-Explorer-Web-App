@@ -1,9 +1,13 @@
 // The People screen and the curators' corrections (PLAN's S21g), held to the app's source at the pin. The rules
-// the app's views apply over the kit's rollup, `PersonIndexRow.subtitle`, `PersonIndexSection.makeSections`,
-// `PersonLifespan.text(born:died:)`, the sheet's register role and Mentions, mirrored in `PeopleRules` (People.swift),
-// each where the app writes it; the corrections' sequence, the kit's calls the app's stores make; and the words the
-// browser app takes, each where the app's source writes it under its key and in copy.ts's block, "syncs across your
-// devices" the web's "for everyone on this server". A pin move that changes one fails here until the web follows it.
+// the app's views apply over the kit's rollup, `PersonIndexRow.subtitle`, `PersonIndexSection.makeSections`, the
+// sheet's register role, Mentions, the gates of its Career and Subjects and a chip's pivot
+// (`VolumeSubjectVolumesSheet.coveringVolumes(excluding:)`), mirrored in `PeopleRules` and `SubjectPivot` (People.swift),
+// each where the app writes it; the kit's rules the sheet calls, the lifespan line's `PersonLifespan`, the subjects'
+// `PersonSubjectAffinity` and a post's words, called by the server and never copied, and over the fixture index every
+// sheet's lifespan line, Career, Subjects and each chip's pivot the app's sheet's over the same kit calls (S21g's
+// follow-up); the corrections' sequence, the kit's calls the app's stores make; and the words the browser app takes,
+// each where the app's source writes it under its key and in copy.ts's block, "syncs across your devices" the web's
+// "for everyone on this server". A pin move that changes one fails here until the web follows it.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -40,15 +44,41 @@ import Testing
             "let mine = try? await store.representativeMember(forRollupId: myRollup)",
             "let theirs = try? await store.representativeMember(forRollupId: otherRollupId)",
             "if members.count > 1 {",
+            // The lifespan line: the kit's rule over the authority's entry and the register's career for its slug.
+            "guard let slug = authorityEntry?.s, !slug.isEmpty else { return nil }",
+            "return POCOMIndexStore.shared?.career(forSlug: slug)",
+            "let lifespan = PersonLifespan.text(authority: authorityEntry, career: career)",
+            // Career: drawn for a career with a post, the posts in order, each its title, its dates and a note it has.
+            "if let career, !career.a.isEmpty { careerSection(career) }",
+            "ForEach(career.a) { assignment in",
+            "Text(assignment.titleText)",
+            "if let range = assignment.dateRangeText {",
+            "if let note = assignment.nt, !note.isEmpty {",
+            // Subjects: the kit's ranking of the person's mentions over the profiles, eight at most, shown when it has one.
+            "let profiles = VolumeSubjectProfilesStore.shared,",
+            "let counts = try? await store.volumeMentionCounts(forRollupId: rollupId),",
+            "!counts.isEmpty else { return }",
+            "subjectAffinities = PersonSubjectAffinity.rank(mentionCounts: counts, topSubjectsByVolume: profiles.topSubjects(forVolumeId:), limit: 8)",
+            "if !subjectAffinities.isEmpty {",
+            // A chip opens the shared pivot sheet, excluding no volume.
+            #"VolumeSubjectVolumesSheet(subject: subject, currentVolumeId: "","#,
         ], file: "PersonIndexView.swift")
-        // PersonLifespan.text(born:died:), each year never grouped: the kit's since FRUS-Explorer#1906, which moved it
-        // unchanged from the view's file into Models/POCOMIndex.swift.
-        NoteViewParityTests.expect(try Self.kit("FRUSCoreKit/Models/POCOMIndex.swift"), holds: [
-            #"defaultValue: "\(born, format: plain)–\(died, format: plain)")"#,
-            #"defaultValue: "Born \(born, format: plain)")"#,
-            #"defaultValue: "Died \(died, format: plain)")"#,
-            "(authority?.b ?? career?.b, authority?.d ?? career?.d)",
-        ], file: "POCOMIndex.swift")
+        // The server's: the kit's rules called, the view's gates mirrored, and no copy of the lifespan rule, which is the
+        // kit's since FRUS-Explorer#1906; the subjects ranked over the profiles, the producer the ranking's sum needs.
+        let people = try Self.server("Sources/FRUSLightAPI/People.swift")
+        NoteViewParityTests.expect(people, holds: [
+            "lifespan: PersonLifespan.text(authority: authority, career: career),",
+            "guard let slug = authority?.s, !slug.isEmpty else { return nil }",
+            "return register?.career(forSlug: slug)",
+            "guard let career, !career.a.isEmpty else { return [] }",
+            "title = assignment.titleText",
+            "dates = assignment.dateRangeText",
+            "note = assignment.nt.flatMap { $0.isEmpty ? nil : $0 }",
+            "static let subjectLimit = 8",
+            "return PersonSubjectAffinity.rank(mentionCounts: counts, topSubjectsByVolume: profiles.topSubjects(forVolumeId:), limit: subjectLimit)",
+        ], file: "People.swift")
+        #expect(!people.contains(#""Born \("#) && !people.contains(#""Died \("#), "the lifespan line is the kit's call, not a copy")
+        #expect(!people.contains("subjectsByVolume"), "the subjects are ranked over the profiles, never the document index")
 
         func entry(_ name: String, role: String? = nil, start: Int? = nil, end: Int? = nil, volumes: Int = 1) -> PersonIndexEntry {
             PersonIndexEntry(entry: PersonEntry(ref: "p_X", name: name, description: role, role: role, startYear: start, endYear: end),
@@ -61,15 +91,119 @@ import Testing
         #expect(PeopleRules.letter(of: "adenauer") == "A" && PeopleRules.letter(of: "") == "#")
         #expect(PeopleRules.sections([entry("Bundy"), entry("Acheson"), entry("Ball"), entry("")]).map(\.letter) == ["#", "A", "B"])
         #expect(PeopleRules.sections([entry("Bundy"), entry("Ball")]).first?.entries.map(\.entry.name) == ["Bundy", "Ball"], "the store's order")
-        #expect(PeopleRules.lifespan(born: 1893, died: 1971) == "1893–1971")
-        #expect(PeopleRules.lifespan(born: 1893, died: nil) == "Born 1893" && PeopleRules.lifespan(born: nil, died: 1971) == "Died 1971")
-        #expect(PeopleRules.lifespan(born: nil, died: nil) == nil)
-        // And as the kit's rule answers, public since FRUS-Explorer#1906.
-        for (born, died) in [(1893, 1971), (1893, nil), (nil, 1971), (nil, nil)] as [(Int?, Int?)] {
-            #expect(PeopleRules.lifespan(born: born, died: died) == PersonLifespan.text(born: born, died: died))
-        }
         #expect(PeopleRules.registerRole("Ambassador", description: "ambassador") == nil && PeopleRules.registerRole("Ambassador", description: nil) == "Ambassador")
         #expect(PeopleRules.mentions(1) == "1 document" && PeopleRules.mentions(12) == "12 documents")
+    }
+
+    /// A chip's pivot, the app's `VolumeSubjectVolumesSheet.coveringVolumes(excluding:)`: the server's two branches are
+    /// the app's, in the app's order, the bundled document index first and the profiles only without it, with the
+    /// stores passed in; and over the bundled files each branch answers the kit's call, sorted by volume id.
+    @Test func theChipsPivotIsTheAppSheetsTwoBranchesInItsOrder() throws {
+        let sheet = try Self.app("Browser/VolumeSubjectsView.swift")
+        let app = """
+            func coveringVolumes(excluding excluded: String) -> [String] { if let index = DocumentSubjectStore.shared { \
+            return index.volumeIds(forSubjectRef: subject.ref) .filter { $0 != excluded } .sorted() } \
+            guard let profiles = VolumeSubjectProfilesStore.shared else { return [] } \
+            return profiles.otherVolumes(forSubjectRef: subject.ref, excluding: excluded).sorted() }
+            """
+        #expect(sheet.contains(app), "VolumeSubjectsView.swift holds coveringVolumes(excluding:) whole")
+        NoteViewParityTests.expect(sheet, holds: [
+            // The rows: the volumes but the one in hand, which the person sheet's pivot leaves as none, by their titles.
+            "var otherVolumeIds: [String] { coveringVolumes(excluding: currentVolumeId) }",
+            "Text(appState.manifestStore.entry(forVolumeId: volumeId)?.title ?? volumeId)",
+        ], file: "VolumeSubjectsView.swift")
+        // The server's body is the app's, the two stores its parameters.
+        let mirrored = app
+            .replacingOccurrences(of: "func coveringVolumes(excluding excluded: String) -> [String] {", with: "-> [String] {")
+            .replacingOccurrences(of: "if let index = DocumentSubjectStore.shared {", with: "if let index = documents {")
+            .replacingOccurrences(of: "subject.ref", with: "ref")
+            .replacingOccurrences(of: "guard let profiles = VolumeSubjectProfilesStore.shared else", with: "guard let profiles else")
+        #expect(try Self.server("Sources/FRUSLightAPI/People.swift").contains(mirrored), "SubjectPivot.coveringVolumes is the app's body")
+
+        let resources = ServedFixture.resources
+        let documents = try JSONDecoder().decode(DocumentSubjectIndex.self,
+                                                 from: Data(contentsOf: resources.appendingPathComponent("document-subject-index.json")))
+        let profiles = try JSONDecoder().decode(VolumeSubjectProfiles.self,
+                                                from: Data(contentsOf: resources.appendingPathComponent("volume-subject-profiles-index.json")))
+        var widened = 0
+        for subject in profiles.allSubjects {
+            let complete = SubjectPivot.coveringVolumes(ref: subject.ref, excluding: "", documents: documents, profiles: profiles)
+            #expect(complete == documents.volumeIds(forSubjectRef: subject.ref).sorted(), "\(subject.ref): the document index's")
+            let ranked = SubjectPivot.coveringVolumes(ref: subject.ref, excluding: "", documents: nil, profiles: profiles)
+            #expect(ranked == profiles.otherVolumes(forSubjectRef: subject.ref, excluding: "").sorted(), "\(subject.ref): the profiles'")
+            if complete.count > ranked.count { widened += 1 }
+            if let first = complete.first {
+                #expect(SubjectPivot.coveringVolumes(ref: subject.ref, excluding: first, documents: documents, profiles: profiles)
+                    == Array(complete.dropFirst()), "\(subject.ref): the volume in hand left out")
+            }
+        }
+        #expect(widened > 0, "the document index reaches volumes the profiles' top fifteen do not")
+        #expect(SubjectPivot.coveringVolumes(ref: profiles.allSubjects[0].ref, excluding: "", documents: nil, profiles: nil).isEmpty)
+    }
+
+    /// The done-when, in Swift: over the fixture index served as the Mac's export, every identity's sheet has the
+    /// lifespan line, Career and Subjects the app's sheet computes with the kit's calls over the same index and the
+    /// bundled files, each read here apart from the server, and each chip's pivot lists the volumes the app's pivot
+    /// sheet lists, in its order, by the catalogue's titles.
+    @Test func eachSheetsLifespanCareerSubjectsAndPivotAreTheAppSheetsOverTheFixtures() async throws {
+        let resources = ServedFixture.resources
+        func file<T: Decodable>(_ type: T.Type, _ name: String) throws -> T {
+            try JSONDecoder().decode(type, from: Data(contentsOf: resources.appendingPathComponent(name)))
+        }
+        let authorities = try file(PersonAuthorityIndex.self, "person-authority-index.json")
+        let register = try POCOMIndex(contentsOf: resources.appendingPathComponent("pocom-index.json"))
+        let profiles = try file(VolumeSubjectProfiles.self, "volume-subject-profiles-index.json")
+        let documents = try file(DocumentSubjectIndex.self, "document-subject-index.json")
+        let catalogue = try FixedVolumeCatalogue(contentsOf: resources.appendingPathComponent("manifest.json")).citableEntries
+        let titles = Dictionary(catalogue.map { ($0.volumeId, $0.title) }, uniquingKeysWith: { first, _ in first })
+        let persons = try PersonMentionStore(readingDatabaseAt: try await FixtureIndex.value().copy)
+
+        let (sheets, pivots) = try await ServedFixture.run { client, _ in
+            let list = try ServedFixture.decode(PeopleList.self, try await client.execute(uri: "/api/v1/people", method: .get))
+            var sheets: [PersonSheet] = []
+            for row in list.sections.flatMap(\.people) {
+                sheets.append(try ServedFixture.decode(PersonSheet.self,
+                                                       try await client.execute(uri: "/api/v1/people/\(row.rollupId)", method: .get)))
+            }
+            var pivots: [String: SubjectVolumes] = [:]
+            for ref in Set(sheets.flatMap { $0.subjects.map(\.ref) }) {
+                pivots[ref] = try ServedFixture.decode(SubjectVolumes.self,
+                                                       try await client.execute(uri: "/api/v1/subjects/\(ref)/volumes", method: .get))
+            }
+            return (sheets, pivots)
+        }
+        #expect(sheets.count > 50, "the fixture volumes' people")
+
+        for sheet in sheets {
+            // `authorityEntry` and `career`, as the app's sheet reads them, then its header's lifespan line.
+            let authority = sheet.authorityId.flatMap { authorities.entry(for: $0) }
+            let career = authority?.s.flatMap { $0.isEmpty ? nil : register.career(forSlug: $0) }
+            #expect(sheet.lifespan == PersonLifespan.text(authority: authority, career: career), "\(sheet.name)'s lifespan line")
+            // `careerSection`, drawn for a career with a post: each post's title, its dates and its note where it has one.
+            let posts = (career.map { $0.a.isEmpty ? [] : $0.a } ?? []).map {
+                [$0.id, $0.titleText, $0.dateRangeText ?? "-", $0.nt.flatMap { $0.isEmpty ? nil : $0 } ?? "-"]
+            }
+            #expect(sheet.career.map { [$0.id, $0.title, $0.dates ?? "-", $0.note ?? "-"] } == posts, "\(sheet.name)'s Career")
+            // `loadSubjectAffinities`: the kit's ranking of the person's mentions in each volume over the profiles.
+            let counts = try await persons.volumeMentionCounts(forRollupId: sheet.rollupId)
+            let ranked = counts.isEmpty ? [] : PersonSubjectAffinity.rank(mentionCounts: counts,
+                                                                          topSubjectsByVolume: profiles.topSubjects(forVolumeId:), limit: 8)
+            #expect(sheet.subjects.map { [$0.ref, $0.name, $0.category, String($0.volumeCount)] }
+                == ranked.map { [$0.subject.ref, $0.subject.name, $0.subject.category, String($0.volumeCount)] }, "\(sheet.name)'s Subjects")
+        }
+        // Each chip's pivot: `coveringVolumes(excluding: "")`, the bundled document index's volumes, by volume id.
+        for (ref, pivot) in pivots {
+            let covering = documents.volumeIds(forSubjectRef: ref).sorted()
+            #expect(pivot.ref == ref && pivot.volumes.map(\.volumeId) == covering, "\(ref)'s volumes")
+            #expect(pivot.volumes.map(\.title) == covering.map { titles[$0] }, "\(ref)'s titles")
+        }
+
+        // Not vacuous: careers, a lifespan line, subjects and a pivot of many volumes, over the fixtures.
+        let careers = sheets.filter { !$0.career.isEmpty }
+        #expect(careers.count > 0 && sheets.contains { $0.lifespan != nil } && pivots.values.contains { $0.volumes.count > 1 })
+        #expect(sheets.filter { !$0.subjects.isEmpty }.count > sheets.count / 2, "most people have subjects")
+        print("PeopleParityTests: \(sheets.count) sheets, \(careers.count) with Career (\(careers.prefix(6).map(\.name).joined(separator: "; "))), "
+              + "\(sheets.filter { !$0.subjects.isEmpty }.count) with Subjects, \(pivots.count) pivots")
     }
 
     /// The corrections' calls, the app's stores' over the kit's, and the server's over the same calls.
@@ -132,7 +266,28 @@ import Testing
         let corrections = try Self.app("Browser/PersonCorrectionsView.swift")
         let rail = try Self.app("DocumentView/ResearchRailView.swift")
         let tagging = try Self.app("Browser/AnnotationsAxisViews.swift")
+        let pivot = try Self.app("Browser/VolumeSubjectsView.swift")
         let words: [(source: String, key: String, value: String, block: String, web: String)] = [
+            // S21g's follow-up: Subjects, Career and a chip's pivot from a person, which excludes no volume.
+            (view, "people.detail.subjects.header", "Subjects", people, "subjectsHeader: 'Subjects'"),
+            (view, "people.detail.subjects.note",
+             "Volume-level: subjects characteristic of the volumes where this person is mentioned — not per-document tags.", people,
+             "subjectsNote: 'Volume-level: subjects characteristic of the volumes where this person is mentioned — not per-document tags.'"),
+            (view, "browser.volume.subjectChip.hint", "Shows other volumes covering this subject", people,
+             "subjectChipHint: 'Shows other volumes covering this subject'"),
+            (view, "people.detail.subjectChip.help", "Subject of volumes where this person is mentioned — click to see all volumes covering it",
+             people, "subjectChipHelp: 'Subject of volumes where this person is mentioned — click to see all volumes covering it'"),
+            (view, "people.detail.career", "Career", people, "careerHeader: 'Career'"),
+            (view, "people.detail.career.source", "From the Department’s Principal Officers and Chiefs of Mission register.", people,
+             "careerSource: 'From the Department’s Principal Officers and Chiefs of Mission register.'"),
+            (pivot, "browser.volume.subjectVolumes.header.all.one", "1 volume covers this subject", people,
+             "subjectVolumesOne: (count: string) => `${count} volume covers this subject`"),
+            (pivot, "browser.volume.subjectVolumes.row.hint", "Opens this volume in the browser", people,
+             "subjectVolumeHint: 'Opens this volume in the browser'"),
+            (pivot, "browser.volume.subjectVolumes.empty.title.none", "No volumes", people, "subjectVolumesEmptyTitle: 'No volumes'"),
+            (pivot, "browser.volume.subjectVolumes.empty.message.none", "No volume in the series carries documents on this subject.", people,
+             "subjectVolumesEmptyDetail: 'No volume in the series carries documents on this subject.'"),
+            (pivot, "common.done", "Done", people, "done: 'Done'"),
             (view, "people.title", "People", people, "title: 'People'"),
             (view, "people.loading", "Loading people\\u{2026}", people, "loading: 'Loading people…'"),
             (view, "people.empty.title", "No People Indexed", people, "emptyTitle: 'No People Indexed'"),
@@ -209,6 +364,13 @@ import Testing
             (corrections, #"defaultValue: "Undo: %@"), row.title))"#, people, "undoSpoken: (title: string) => `Undo: ${title}`"),
             (view, #"defaultValue: "People are tagged in %@, and only those volumes' people appear here. In the others, search for the names.")"#,
              people, "`People are tagged in ${volumes}, and only those volumes' people appear here. In the others, search for the names.`"),
+            // A chip's value, its count's word the one form at exactly one; and the pivot's count, its many form.
+            (view, #"defaultValue: "\(affinity.subject.category), in \(affinity.volumeCount) volume\(affinity.volumeCount == 1 ? "" : "s") mentioning this person"))"#,
+             people, "subjectChipValue: (category: string, volumes: string) => `${category}, in ${volumes} mentioning this person`"),
+            (view, #"volume\(affinity.volumeCount == 1 ? "" : "s")"#, people, "subjectChipVolumeOne: (count: string) => `${count} volume`"),
+            (view, #"volume\(affinity.volumeCount == 1 ? "" : "s")"#, people, "subjectChipVolumeMany: (count: string) => `${count} volumes`"),
+            (pivot, #"defaultValue: "%lld volumes cover this subject"), Int64(otherVolumeIds.count))"#, people,
+             "subjectVolumesMany: (count: string) => `${count} volumes cover this subject`"),
         ]
         for format in formats {
             let source = format.app.contains("People are tagged") ? tagging : format.source

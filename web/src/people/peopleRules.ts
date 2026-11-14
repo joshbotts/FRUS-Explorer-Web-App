@@ -1,7 +1,10 @@
 // The People screen's rules, the app's (`Browser/PersonIndexView.swift`, `Browser/PersonCorrectionsView.swift`,
-// app code), mirrored: the list's filter, a row's spoken line, the merge picker's filter, and the merge's question
-// with its warning when the two records match different entries of the name authority.
-import type { PeopleList, PersonRow } from '../api/people';
+// `Browser/VolumeSubjectsView.swift`, app code), mirrored: the list's filter, a row's spoken line, the merge picker's
+// filter, the merge's question with its warning when the two records match different entries of the name authority,
+// a subject chip's spoken value and its pivot's count, each count in the one form at exactly one, grouped, as the
+// kit's `CountCopy` has it. The sheet's sections and their order are the server's, from the kit (People.swift).
+import type { PeopleList, PersonRow, PersonSubject } from '../api/people';
+import { counted } from '../browse/annotationRules';
 import { copy } from '../copy';
 
 /** `PersonIndexView.displaySections`: the rows whose name holds the query, case aside, by letter, empty letters left out. */
@@ -54,6 +57,21 @@ export function mergeQuestion(target: { name: string; authorityId?: number | nul
     message += `\n\n${copy.people.mergeAuthorityWarning}`;
   }
   return message;
+}
+
+/** `affinityChip`'s value: "Warfare, in 2 volumes mentioning this person". */
+export function subjectChipValue(subject: PersonSubject): string {
+  const words = copy.people;
+  return words.subjectChipValue(subject.category, counted(subject.volumeCount, words.subjectChipVolumeOne, words.subjectChipVolumeMany));
+}
+
+/**
+ * `VolumeSubjectVolumesSheet.countHeader` from a person, where no volume is excluded: "1 volume covers this subject",
+ * "69 volumes cover this subject". The app's `%lld` writes a count ungrouped, as `counted` writes one below 1,000,
+ * and the series has 553 volumes.
+ */
+export function subjectVolumesHeader(count: number): string {
+  return counted(count, copy.people.subjectVolumesOne, copy.people.subjectVolumesMany);
 }
 
 /** A correction's row, as the app's Corrections sheet titles it. */
