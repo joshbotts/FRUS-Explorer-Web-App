@@ -32,6 +32,9 @@ import { SearchScreen } from './search/SearchScreen';
 // ─── The reader ─────────────────────────────────────────────────────────────
 import { ReaderScreen } from './reader/ReaderScreen';
 import { GraphScreen, type GraphSearch } from './graph/GraphScreen';
+import { SourcesScreen } from './sources/SourcesScreen';
+import { NeighboursScreen, type NeighboursSearch } from './sources/NeighboursScreen';
+import { CollectionScreen, type CollectionSearch } from './sources/CollectionScreen';
 import { RelatedScreen, type RelatedSearch } from './related/RelatedScreen';
 // ─── Research ───────────────────────────────────────────────────────────────
 import { AllNotesScreen, type NotesSearch, validateNotesSearch } from './research/AllNotesScreen';
@@ -216,6 +219,54 @@ function finite(raw: unknown): number | undefined {
   const value = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : Number.NaN;
   return Number.isFinite(value) ? value : undefined;
 }
+
+// Source Explorer (S22d), which the reader's Sources opens.
+const sourcesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/sources/$volumeId/$documentId',
+  component: SourcesScreen,
+});
+
+/** A string from the address, trimmed, or none. */
+function text(raw: unknown): string | undefined {
+  const value = typeof raw === 'number' ? String(raw) : typeof raw === 'string' ? raw.trim() : '';
+  return value === '' ? undefined : value;
+}
+
+// An archival source's neighbours (S22d): a document's, a Sources row's, a collection's or a class's, with the scope in the address.
+const neighboursRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/archival-neighbors',
+  validateSearch: (raw: Record<string, unknown>): NeighboursSearch => {
+    const year = finite(raw.year);
+    const names = (Array.isArray(raw.aliasName) ? raw.aliasName : [raw.aliasName]).map(text).filter((name): name is string => !!name);
+    return {
+      volumeId: text(raw.volumeId),
+      documentId: text(raw.documentId),
+      year: year !== undefined && Number.isInteger(year) ? year : undefined,
+      collection: text(raw.collection),
+      lotFile: text(raw.lotFile),
+      recordGroup: text(raw.recordGroup),
+      series: text(raw.series),
+      repository: text(raw.repository),
+      decimalClass: text(raw.decimalClass),
+      jobNumber: text(raw.jobNumber),
+      aliasLot: text(raw.aliasLot),
+      aliasName: names.length > 0 ? names : undefined,
+      anchor: text(raw.anchor),
+      scope: raw.scope === 'volume' || raw.scope === 'subseries' || raw.scope === 'all' ? raw.scope : undefined,
+    };
+  },
+  component: NeighboursScreen,
+});
+
+// An archival collection's record (S22d), by its id in the collection authority.
+const collectionRecordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/archival-collection',
+  validateSearch: (raw: Record<string, unknown>): CollectionSearch => ({ id: text(raw.id) ?? '' }),
+  component: CollectionScreen,
+});
 
 // The cross-reference graph (S23e), which the reader's Graph opens, with its degree, layout and expanded clusters in the address.
 const graphRoute = createRoute({
@@ -413,6 +464,9 @@ export const routeTree = rootRoute.addChildren([
   searchRoute,
   // ─── The reader ───────────────────────────────────────────────────────────
   documentRoute,
+  sourcesRoute,
+  neighboursRoute,
+  collectionRecordRoute,
   graphRoute,
   relatedRoute,
   // ─── Research ─────────────────────────────────────────────────────────────

@@ -426,6 +426,10 @@ export function ReaderScreen() {
             >
               {copy.reader.cite}
             </button>
+            {/* The rail's Sources tile (S22d): the document's Source Explorer, a page of its own. */}
+            <Link to="/sources/$volumeId/$documentId" params={{ volumeId, documentId }} title={copy.sources.tileHelp}>
+              {copy.sources.tile}
+            </Link>
             {/* The rail's Graph tile (S23e): the document's cross-reference graph, a page of its own. */}
             <Link to="/graph/$volumeId/$documentId" params={{ volumeId, documentId }} title={copy.graph.tileHelp}>
               {copy.graph.tile}

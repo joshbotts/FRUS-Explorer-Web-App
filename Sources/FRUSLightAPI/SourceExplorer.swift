@@ -137,6 +137,10 @@ public struct SourceExplorerAnswer: Codable, Equatable, Sendable, ResponseEncoda
         public var catalogQuery: CatalogQuery?
         /// A curated finding aid's rationale, a named series' evidence.
         public var rationale: String?
+        /// A previously published citation the grammar recognizes (`PublishedCitationGrammar`): its publication's
+        /// case and what to look for in it.
+        public var publication: String?
+        public var publicationDesignation: String?
 
         init(kind: String) { self.kind = kind }
     }
@@ -388,6 +392,16 @@ enum SourceExplorerRoutes {
             guard let entry = try await served.pipeline.document(forDocumentId: documentId, inVolume: volumeId) else {
                 throw APIProblem(.notFound, code: "DOCUMENT_NOT_FOUND", detail: "The index holds no document \(documentId) in \(volumeId).")
             }
+            // The large files are decoded once each, off the cooperative pool, before the resolution reads them: the
+            // authority (2 MB) and the central files (3.6 MB) for any note, and the presidential-library catalogue
+            // (3.3 MB) only for a library citation, as the app's views read it.
+            let readsLibraries: Bool
+            if case .presidentialLibrary = SourceNoteParser().parse(entry.sourceNote ?? "") { readsLibraries = true } else { readsLibraries = false }
+            try await Blocking.run {
+                _ = resources.collectionAuthority
+                _ = resources.archivalIndexes
+                if readsLibraries { _ = resources.sourceExplorer(\.presidentialLibraries) }
+            }
             // The stack is held until the answer is built, so that a job waits for it before it writes (PLAN's S21d).
             let answer = await answer(for: entry, pipeline: served.pipeline, resources: resources,
                                       documents: ReaderDocuments(reader: reader))
@@ -590,6 +604,10 @@ extension SourceExplorerRoutes {
             case .previouslyPublished(let citation):
                 var panel = Panel(kind: "previouslyPublished")
                 panel.citation = citation
+                if let published = PublishedCitationGrammar.parse(citation) {
+                    panel.publication = published.publication.rawValue
+                    panel.publicationDesignation = published.designation
+                }
                 return [panel]
             case .unrecognized:
                 return [Panel(kind: "unrecognized")]
