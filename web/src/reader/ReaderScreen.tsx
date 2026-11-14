@@ -184,6 +184,7 @@ export function ReaderScreen() {
     volumeId,
     documentId,
     enabled: keepsUserData,
+    userDataKnown: me.data !== undefined,
     frame,
     frameURL,
     pageVersion: page.data?.renderingVersion,

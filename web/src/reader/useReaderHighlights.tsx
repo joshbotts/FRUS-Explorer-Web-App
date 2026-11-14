@@ -59,6 +59,7 @@ export function useReaderHighlights({
   volumeId,
   documentId,
   enabled,
+  userDataKnown = true,
   frame,
   frameURL,
   pageVersion,
@@ -72,6 +73,8 @@ export function useReaderHighlights({
   documentId: string;
   /** Whether the server keeps user data: with FRUS_USER_DATA=off there are no highlights. */
   enabled: boolean;
+  /** Whether the server has said whether it keeps user data, which `enabled` reads as false until it has. */
+  userDataKnown?: boolean;
   frame: RefObject<HTMLIFrameElement | null>;
   /** The page the frame shows; a new one is a new frame. */
   frameURL: string;
@@ -145,10 +148,11 @@ export function useReaderHighlights({
 
   // Whether the frame takes the highlight chord, on every load and whenever it changes: only on a server that
   // keeps user data, so that elsewhere it stays the browser's in the frame as it does around it (S22e's follow-up).
+  // Nothing is said until the server has said whether it keeps any, so the frame keeps the chord meanwhile, as it did.
   useEffect(() => {
-    if (loaded?.url !== frameURL) return;
+    if (loaded?.url !== frameURL || !userDataKnown) return;
     frame.current?.contentWindow?.postMessage({ source: 'frus-app', kind: 'highlightKey', on: enabled }, '*');
-  }, [enabled, loaded, frameURL, frame]);
+  }, [enabled, userDataKnown, loaded, frameURL, frame]);
 
   /** A colour chosen: a highlight over the selection's offsets, in the page's version of the text. */
   async function make(color: HighlightColor, over: Selected | null = selected) {

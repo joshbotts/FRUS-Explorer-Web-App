@@ -142,6 +142,8 @@ test('leaves the highlight chord to the browser in the frame on a server that ke
     });
   });
   const taken = () => frame.locator('body').evaluate(() => (window as unknown as { chordTaken: boolean | null }).chordTaken);
+  // The page tells the frame once it has loaded, its images too, which the text's being shown does not wait for.
+  await expect.poll(() => frame.locator('body').evaluate(() => document.readyState)).toBe('complete');
 
   await tabTo(page, frame.locator('p.body').getByRole('link', { name: 'Kennedy' }));
   await page.keyboard.press('ArrowRight');

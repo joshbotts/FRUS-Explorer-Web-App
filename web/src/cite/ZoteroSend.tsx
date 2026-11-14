@@ -56,6 +56,16 @@ export function ZoteroSendRow({
   const [sent, setSent] = useState<ZoteroSent | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [recoverable, setRecoverable] = useState(false);
+  // Held, as the export sheet holds it while Export runs: a failed send's error and its way on go, as the app's Export
+  // clears them as it starts (`runExport()`), so that the file is never saved beside Export's (S22e's follow-up).
+  const [held, setHeld] = useState(disabled);
+  if (held !== disabled) {
+    setHeld(disabled);
+    if (disabled) {
+      setFailure(null);
+      setRecoverable(false);
+    }
+  }
 
   async function run() {
     if (sending || disabled) return;
@@ -74,7 +84,7 @@ export function ZoteroSendRow({
   }
 
   async function recover() {
-    if (!recovery || sending) return;
+    if (!recovery || sending || disabled) return;
     setRecoverable(false);
     setFailure(null);
     setSending(true);

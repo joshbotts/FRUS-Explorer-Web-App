@@ -8,7 +8,8 @@
 // before it shows the grid; without it the grid has no PDF and opens on HTML. The saved file's line and
 // the word cloud's note are the web's own. From PLAN's S22e, Send to Zotero Library, the app's row under
 // the grid: with the user's Zotero key it sends the collection's documents, else it saves the RIS file. Export
-// and the row hold each other while either works, as the app's one `isExporting` holds both.
+// and the row hold each other while either works, as the app's one `isExporting` holds both, and Export takes
+// away a failed send's error and its Save a Zotero file instead as it starts, as the app's `runExport()` does.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { ApiError, errorMessage } from '../api/client';

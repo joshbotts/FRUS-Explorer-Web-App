@@ -320,13 +320,30 @@ describe('the reader’s highlights', () => {
     highlighting({ [highlightsPath]: documentHighlights([]) });
     renderAt('/doc/frus1961-63v06/d1');
     const { frame, posted } = await loadedFrame();
-    // What the frame was told last: off while the server's answer is not yet known, then on.
     const told = () => posted().filter((message) => message.kind === 'highlightKey');
-    await waitFor(() => expect(told().at(-1)).toEqual({ source: 'frus-app', kind: 'highlightKey', on: true }));
-    const before = told().length;
+    await waitFor(() => expect(told()).toEqual([{ source: 'frus-app', kind: 'highlightKey', on: true }]));
     fireEvent.load(frame);
-    await waitFor(() => expect(told()).toHaveLength(before + 1), { timeout: 200 });
-    expect(told().at(-1)).toEqual({ source: 'frus-app', kind: 'highlightKey', on: true });
+    await waitFor(() => expect(told()).toHaveLength(2), { timeout: 200 });
+    expect(told()[1]).toEqual({ source: 'frus-app', kind: 'highlightKey', on: true });
+  });
+
+  it('tells the frame nothing of the chord until the server has said whether it keeps user data', async () => {
+    let answer: (me: unknown) => void = () => {};
+    highlighting({
+      [highlightsPath]: documentHighlights([]),
+      '/api/v1/me': () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    });
+    renderAt('/doc/frus1961-63v06/d1');
+    const { posted } = await loadedFrame();
+    const told = () => posted().filter((message) => message.kind === 'highlightKey');
+    await pause(20);
+    // Not off while it is not known, which would leave ⇧⌘H to the browser on a server that keeps user data.
+    expect(told()).toEqual([]);
+    answer(me);
+    await waitFor(() => expect(told()).toEqual([{ source: 'frus-app', kind: 'highlightKey', on: true }]));
   });
 
   it('asks before it removes a tapped highlight, Cancel first, and removes the one the kit’s listener took', async () => {

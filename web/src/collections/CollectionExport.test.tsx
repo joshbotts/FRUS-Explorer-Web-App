@@ -358,6 +358,38 @@ describe('the export sheet', () => {
     click.mockRestore();
   });
 
+  it('takes away a failed send’s error and its file when Export starts, as the app’s Export does, so the two never run together', async () => {
+    let finish: (file: Response) => void = () => {};
+    const fetch = server({
+      [path]: detail(),
+      [`${path}/excerpt-check`]: { summary: '', hasFailures: false, verified: 0 },
+      '/api/v1/me/secrets': { secrets: [{ name: 'nara', set: false }, { name: 'zotero', set: true }], instance: [] },
+      [`POST ${path}/zotero`]: new ProblemAnswer(409, 'ZOTERO_KEY_REJECTED', 'Zotero rejected the API key. Check it in Settings ▸ Keys.'),
+      [`POST ${path}/export`]: () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        }),
+    });
+    URL.createObjectURL = vi.fn(() => 'blob:export');
+    URL.revokeObjectURL = vi.fn();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    renderAt(`/collections/${berlinId}`);
+    await userEvent.click(await screen.findByRole('button', { name: 'Export…' }));
+    const sheet = screen.getByRole('dialog', { name: 'Export collection' });
+    await within(sheet).findAllByRole('radio');
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Send to Zotero Library' }));
+    expect(await within(sheet).findByRole('button', { name: 'Save a Zotero file instead' })).toBeTruthy();
+    expect(within(sheet).getByText(/^Zotero rejected the API key/)).toBeTruthy();
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Export HTML' }));
+    await waitFor(() => expect(within(sheet).queryByRole('button', { name: 'Save a Zotero file instead' })).toBeNull());
+    expect(within(sheet).queryByText(/^Zotero rejected the API key/)).toBeNull();
+    finish(new Response('<html></html>', { headers: { 'content-type': 'text/html', 'content-disposition': 'attachment; filename="Berlin.html"' } }));
+    await waitFor(() => expect(within(sheet).getByText('Export Complete: Berlin.html')).toBeTruthy());
+    const exports = fetch.mock.calls.filter(([url, init]) => String(url).endsWith(`${path}/export`) && init?.method === 'POST');
+    expect(exports.map(([, init]) => sent(init).body.format)).toEqual(['html']);
+    click.mockRestore();
+  });
+
   it('says why the server refused an export, and offers none for a collection with nothing in it', async () => {
     server({
       [path]: detail(),
