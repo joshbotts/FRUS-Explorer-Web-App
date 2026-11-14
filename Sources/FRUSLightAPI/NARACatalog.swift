@@ -4,12 +4,15 @@
 // `LookupStrategy`s over the reader's text. The key is the user's own, else the instance's, the one an admin
 // stored or else `FRUS_NARA_API_KEY`, as PLAN's risks have it ("a user's own key ... taking precedence"); it
 // goes to the kit's client for the one request, and is never put in an answer, a problem, the log or the
-// cache. An answer that found records is kept by its query for a day, so once it is answered the same search
-// costs NARA nothing more, whoever asks it; one that found none is not kept, since the kit's client answers
-// none for some refusals too. A search with the instance's key is counted against the user,
-// `NARAQuota.callsPerDay` calls a day, each search holding the most calls it can make until it ends.
-// The group passes /api/v1/me's guard, on a server that keeps no user data too, where the instance's key
-// serves: a search is a POST, so it comes from the server's own pages, with the user's token.
+// cache. An answer that found records is kept by the user who asked and its query for a day, so once it is
+// answered the same search costs that user and NARA nothing more, and the same search asked while it runs
+// waits for it; one that found none is not kept, since the kit's client answers none for some refusals too.
+// Each user's answers are their own: one kept for another user, how soon it came or the calls it left
+// uncounted would tell them what was searched. A search with the instance's key is counted against the user,
+// `NARAQuota.callsPerDay` calls a day, each call as it is made, whatever NARA answers, each search holding
+// the most calls it can make until it ends. The group passes /api/v1/me's guard, on a server that keeps no
+// user data too, where the instance's key serves: a search is a POST, so it comes from the server's own
+// pages, with the user's token.
 //
 // Look Up's candidates (`POST /api/v1/volumes/{v}/documents/{d}/lookup`) need no key and no network: the kit's
 // `NARALookupAnalyzer` over the selection and the passage around it, the footnote's text for a footnote's
@@ -120,14 +123,18 @@ struct NARAKey: Sendable {
     let owner: Owner
 }
 
-/// The kit's key provider for one request: the key resolved for it, and each call NARA answered counted
-/// against the user when it was the instance's key.
+/// The kit's key provider for one search: the key resolved for it, and each call told of as it is made, when the
+/// kit's client asks for the key, which it does before each call (`NARACatalogKeyProvider`), so that a call NARA
+/// refuses or never answers is counted too. The kit's `recordNARACatalogAPICall()`, after a 2xx alone, counts
+/// nothing here.
 private struct RequestNARAKey: NARACatalogKeyProvider {
     let key: String
-    let answered: @Sendable () async -> Void
+    let calling: @Sendable () async -> Void
 
-    func naraCatalogAPIKey() async throws -> String? { key }
-    func recordNARACatalogAPICall() async { await answered() }
+    func naraCatalogAPIKey() async throws -> String? {
+        await calling()
+        return key
+    }
 }
 
 enum NARARoutes {
@@ -163,65 +170,65 @@ enum NARARoutes {
             guard let key = try await key(for: user, services: services) else {
                 throw problem(NARACatalogError.missingAPIKey, keepsUserData: services.enabled)
             }
-            if let kept = await outside.answers.answer(to: call.cacheKey, at: now()) {
-                return EditedResponse(headers: [.cacheControl: "no-store"], response: NARASearchAnswer(results: kept, cached: true))
-            }
+            // The user's own answer kept, or their same search under way, or this one: the quota is asked only by a
+            // search that will call NARA.
             let quota = outside.quota
             let userId = user.id
-            let counted = key.owner == .instance
-            let cost = call.mostCalls
-            if counted, await !quota.admit(userId, cost: cost, at: now()) {
-                let own = services.enabled ? ", or add your own NARA Catalog API key in \(OutsideServices.keysPlace)" : ""
+            let keepsUserData = services.enabled
+            let session = outside.naraSession
+            let answer = try await outside.answers.answer(to: call.cacheKey(for: userId), now: now) {
+                try await run(call, key: key, for: userId, quota: quota, keepsUserData: keepsUserData, session: session, now: now)
+            }
+            return EditedResponse(headers: [.cacheControl: "no-store"],
+                                  response: NARASearchAnswer(results: answer.records, cached: !answer.asked))
+        }
+    }
+
+    /// The kit's call for `call`, with `key`, for `user`: with the instance's key, admitted against the user's quota
+    /// first, holding the most calls it can make, each call counted as it is made; NARA's refusals as problems.
+    static func run(_ call: Call, key: NARAKey, for user: String, quota: NARAQuota, keepsUserData: Bool, session: URLSession,
+                    now: @escaping @Sendable () -> Date) async throws -> [NARACatalogRecord] {
+        let hold: NARAQuota.Hold?
+        if key.owner == .instance {
+            guard let admitted = await quota.admit(user, cost: call.mostCalls, at: now()) else {
+                let own = keepsUserData ? ", or add your own NARA Catalog API key in \(OutsideServices.keysPlace)" : ""
                 throw APIProblem(.tooManyRequests, code: "NARA_QUOTA_REACHED",
                                  detail: "This search could take you past the \(quota.limit) requests to the NARA Catalog that this server’s key makes for each person in a day. Try again later\(own).")
             }
-            let provider = RequestNARAKey(key: key.value) {
-                if counted { await quota.record(userId, at: now()) }
-            }
-            let client = NARACatalogClient(keyProvider: provider, urlSession: outside.naraSession)
-            let records: [NARACatalogRecord]
-            do {
-                records = try await call.run(client).map(NARACatalogRecord.init)
-                if counted { await quota.end(userId, cost: cost) }
-            } catch {
-                if counted { await quota.end(userId, cost: cost) }
-                switch error {
-                case let error as NARACatalogError: throw problem(error, owner: key.owner, keepsUserData: services.enabled)
-                case is CancellationError: throw CancellationError()
-                // Nothing of the error is said or logged: a transport's can name the address it asked.
-                default: throw problem(NARACatalogError.networkError(underlying: error))
-                }
-            }
-            // None found is not kept: the kit's client answers none for a refusal it passes over, which a day's
-            // keeping would give everyone who asks.
-            if !records.isEmpty { await outside.answers.keep(records, for: call.cacheKey, at: now()) }
-            return EditedResponse(headers: [.cacheControl: "no-store"], response: NARASearchAnswer(results: records, cached: false))
+            hold = admitted
+        } else {
+            hold = nil
+        }
+        let provider = RequestNARAKey(key: key.value) {
+            if let hold { await quota.spend(hold, at: now()) }
+        }
+        let client = NARACatalogClient(keyProvider: provider, urlSession: session)
+        do {
+            let records = try await call.run(client).map(NARACatalogRecord.init)
+            if let hold { await quota.end(hold) }
+            return records
+        } catch {
+            if let hold { await quota.end(hold) }
+            // The kit's client gives every failure of a call as `networkError`, a cancelled one too. Nothing here is
+            // cancelled by a client's going, which only `whileClientConnected` watches for: the search is the
+            // cache's own task, and runs to its end, its answer kept and its calls counted.
+            if let error = error as? NARACatalogError { throw problem(error, owner: key.owner, keepsUserData: keepsUserData) }
+            // Nothing of the error is said or logged: a transport's can name the address it asked.
+            throw problem(NARACatalogError.networkError(underlying: error))
         }
     }
 
     /// The key a search of `user`'s uses: their own, on a server that keeps user data, else the instance's,
     /// stored by an admin or else given in `FRUS_NARA_API_KEY`; nil for none.
     static func key(for user: RequestUser, services: UserDataServices) async throws -> NARAKey? {
-        let vault = services.secrets
-        // Not a `SecretError`'s own words, which name the key file and the secret, not the key, but say nothing a
-        // reader acts on: whose key it is, and who can store it again.
-        if services.enabled {
-            let own: String?
-            do {
-                own = try await Blocking.run { try vault.value(named: .nara, for: .user(user.id)) }
-            } catch is SecretError {
-                throw APIProblem(.internalServerError, code: "KEY_UNREADABLE",
-                                 detail: "Your stored NARA Catalog API key cannot be opened with this server’s key file. Add it again in \(OutsideServices.keysPlace).")
-            }
-            if let own { return NARAKey(value: own, owner: .user) }
+        if services.enabled, let own = try await OutsideServices.storedKey(
+            .nara, of: .user(user.id), in: services.secrets,
+            unreadable: "Your stored NARA Catalog API key cannot be opened with this server’s key file. Add it again in \(OutsideServices.keysPlace).") {
+            return NARAKey(value: own, owner: .user)
         }
-        let stored: String?
-        do {
-            stored = try await Blocking.run { try vault.value(named: .nara, for: .instance) }
-        } catch is SecretError {
-            throw APIProblem(.internalServerError, code: "KEY_UNREADABLE",
-                             detail: "This server’s stored NARA Catalog API key cannot be opened with its key file. An admin can store it again in \(adminPlace).")
-        }
+        let stored = try await OutsideServices.storedKey(
+            .nara, of: .instance, in: services.secrets,
+            unreadable: "This server’s stored NARA Catalog API key cannot be opened with its key file. An admin can store it again in \(adminPlace).")
         return (stored ?? services.outside.naraEnvironmentKey).map { NARAKey(value: $0, owner: .instance) }
     }
 
@@ -335,8 +342,9 @@ enum NARARoutes {
             }
         }
 
-        /// What the answer is kept under: the kind and its fields, each as the search gave it, trimmed. No key.
-        var cacheKey: String {
+        /// What `user`'s answer is kept under: their id, then the kind and its fields, each as the search gave it,
+        /// trimmed, each after its length, so that no two searches share a key whatever their fields hold. No NARA key.
+        func cacheKey(for user: String) -> String {
             let parts: [String]
             switch kind {
             case .strategy(let strategy, let query): parts = ["strategy", strategy.rawValue, query]
@@ -344,7 +352,7 @@ enum NARARoutes {
             case .recordGroup(let recordGroup, let keywords): parts = ["recordGroup", recordGroup, keywords]
             case .presidentialMaterials(let library, let collection): parts = ["presidentialMaterials", library, collection]
             }
-            return parts.joined(separator: "\u{1F}")
+            return ([user] + parts).map { "\($0.utf8.count):\($0)" }.joined()
         }
     }
 
@@ -371,6 +379,13 @@ enum LookUpRoutes {
     /// The longest footnote's text, in characters: the reader's bridge sends 5,000 at most (`enclosingBlockText`).
     static let longestBlock = 5_000
 
+    /// The route answers whoever reaches the server, with no session, origin or token, as Citation Lookup does: it
+    /// reads the corpus, the bundled indexes and the request's own text, keeps nothing, asks nothing outside and
+    /// acts for no user, so a session would guard nothing the corpus does not give anyone. Its body must be JSON,
+    /// which a page elsewhere cannot send without the browser asking first. Its work is bounded by the request, as
+    /// a search's is: a selection of `longest` characters at most, whose offsets are read over as long a span at
+    /// most with the app's passage around it, or a footnote's text of `longestBlock` (the log's entry, Session 22e,
+    /// follow-up, has the measures).
     static func add(to router: Router<APIRequestContext>, provider: ServedIndexProvider, resources: ServerResources,
                     reader: ReaderService) {
         router.post("/api/v1/volumes/:volumeId/documents/:documentId/lookup") { request, context -> LookUpAnswer in
@@ -397,7 +412,8 @@ enum LookUpRoutes {
 
     /// `lookupContext(vm:)`: a footnote's text, when the selection is in one and it has any; else the flat text
     /// from `contextBefore` before the selection to `contextAfter` after it, as the kit's offsets count them;
-    /// nil when there is neither.
+    /// nil when there is neither. The selection's span is read as `longest` at most, the selection's own limit, so
+    /// that offsets far apart cannot make the passage a whole document's text.
     static func passage(of selection: Selection, in document: DocumentKey, reader: ReaderService, provider: ServedIndexProvider,
                         resources: ServerResources) async throws -> String? {
         if let block = selection.blockText, !block.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -409,11 +425,13 @@ enum LookUpRoutes {
             return nil
         }
         let page = try await HighlightRoutes.page(of: document, reader: reader, provider: provider, resources: resources)
+        // `end - start` cannot overflow, both being at least 0, nor can `start + longest`, which is then below `end`.
+        let last = end - start > longest ? start + longest : end
         // The excerpt stops at the text's end, so an end no addition can take reads to it.
         let after = NARALookupAnalyzer.contextAfter
         return flatTextExcerpt(from: page.model,
                                start: max(0, start - NARALookupAnalyzer.contextBefore),
-                               end: end > Int.max - after ? Int.max : end + after)
+                               end: last > Int.max - after ? Int.max : last + after)
     }
 
     /// The sheet's answer from the analyzer's candidates: each in its order, the strategy the sheet opens on, the
