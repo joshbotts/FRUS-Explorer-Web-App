@@ -222,6 +222,19 @@ describe('Archival Neighbors', () => {
     expect(screen.getByText(/^No documents in this scope cite this archival source/)).toBeTruthy();
   });
 
+  it('opens the default scope for a scope these neighbours are not offered, so the picker comes back', async () => {
+    stubServer({
+      '/readyz': ready,
+      [path]: (url: URL) =>
+        url.searchParams.get('scope') === 'subseries'
+          ? new ProblemAnswer(400, 'SCOPE_NOT_OFFERED', 'These neighbours have no subseries scope.')
+          : { ...neighbours, scopes: ['volume', 'all'] },
+    });
+    const { router } = renderAt('/archival-neighbors?volumeId=frus1961-63v06&documentId=d3&scope=subseries');
+    await waitFor(() => expect(router.state.location.search).not.toHaveProperty('scope'));
+    expect(((await screen.findByRole('radio', { name: 'All volumes' })) as HTMLInputElement).checked).toBe(true);
+  });
+
   it('shows no picker for a collection’s neighbours, which are all volumes’', async () => {
     stubServer({ '/readyz': ready, [path]: { ...neighbours, scopes: [], scope: 'all', anchorVolumeId: undefined } });
     renderAt('/archival-neighbors?collection=lot%3A66D204');
@@ -253,6 +266,19 @@ describe('An archival collection’s record', () => {
     await user.click(within(cited).getByRole('button', { name: `Show all ${collection.volumes.length} volumes` }));
     expect(within(cited).getAllByRole('link')).toHaveLength(collection.volumes.length);
     expect(within(cited).getByRole('button', { name: 'Show fewer' })).toBeTruthy();
+  });
+
+  it('says a record is unavailable for an address that names none, asking the server nothing, and that the index is starting', async () => {
+    const fetch = stubServer({ '/readyz': ready, [path]: collection });
+    renderAt('/archival-collection');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Collection Unavailable' })).toBeTruthy();
+    expect(fetch.mock.calls.some(([url]) => String(url).includes(path))).toBe(false);
+    cleanup();
+    vi.unstubAllGlobals();
+    stubServer({ '/readyz': ready, [path]: new ProblemAnswer(503, 'INDEX_NOT_READY', 'The index is starting.') });
+    renderAt('/archival-collection?id=lot%3A66D204');
+    expect(await screen.findByText('Preparing your index…')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('says a record the authority does not hold is unavailable', async () => {

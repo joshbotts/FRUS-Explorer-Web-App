@@ -271,6 +271,26 @@ import Testing
         }
     }
 
+    /// The neighbours' scopes over the fixture index, where frus1961-63v06's d3 has neighbours: All volumes and This
+    /// volume list some, This volume's all of its volume, and neither the document itself; a Sources row's lot,
+    /// anchored on the volume, lists only the volume's.
+    @Test func theNeighboursScopesOverTheFixtures() async throws {
+        let (all, volume, row) = try await ServedFixture.run { client, _ in
+            func neighbours(_ query: String) async throws -> ArchivalNeighborsAnswer {
+                try ServedFixture.decode(ArchivalNeighborsAnswer.self, try await client.execute(uri: "/api/v1/archival-neighbors?\(query)", method: .get))
+            }
+            return (try await neighbours("volumeId=frus1961-63v06&documentId=d3"),
+                    try await neighbours("volumeId=frus1961-63v06&documentId=d3&scope=volume"),
+                    try await neighbours("lotFile=66%20D%20204&anchor=frus1961-63v06"))
+        }
+        #expect(all.scope == "all" && !all.documents.isEmpty && all.totalCount >= all.documents.count)
+        #expect(volume.scope == "volume" && !volume.documents.isEmpty && volume.documents.allSatisfy { $0.volumeId == "frus1961-63v06" })
+        for list in [all, volume] {
+            #expect(!list.documents.contains { $0.volumeId == "frus1961-63v06" && $0.documentId == "d3" })
+        }
+        #expect(row.scope == "volume" && !row.documents.isEmpty && row.documents.allSatisfy { $0.volumeId == "frus1961-63v06" })
+    }
+
     /// A volume's Sources outline over the fixture index and the bundled files: the TEI's rows in its order, and the
     /// catalogue records the kit resolves them to, a lot's from the central files and a library's collection's from
     /// the library catalogue; and none for a volume without a Sources section.
@@ -438,11 +458,30 @@ import Testing
             "} else if let seriesEntries = entry.seriesHmsMlrEntryNumbers, !seriesEntries.isEmpty {",
             "let showsPartLabels = homes.contains { $0.part.isEnclosure }",
             #"case ..<1906: section.predictedSeries = "diplomatic" case 1906...1910: section.predictedSeries = "numerical""#,
-            "provenance: hasSourceNote ? panels.provenance(parsed) : [],",
+            "let provenance = hasSourceNote ? panels.provenance(parsed) : []",
             "? IndexingPipeline.classificationMarking(sourceNote: note, stored: resolution.storedClassification) : nil,",
             "let row = DocumentHeaderDisplay.numberedRow(header: document.header, number: document.documentNumber)",
             "title: row.title.isEmpty ? document.documentId : row.title,",
         ], file: "SourceExplorer.swift")
+        // The catalogue query each citation names, which PLAN's S22e runs: `load()`'s choice in the app, and the
+        // route the server's NARA Catalog panel names for it.
+        NoteViewParityTests.expect(view, holds: [
+            "if CollectionKeying.isSubjectNumericCitation(parsed: note, note: rawSourceNote) { return }",
+            #"let rgToUse = (rg ?? "RG-59").replacingOccurrences(of: "RG-", with: "") await fetchResults { try await client.resolveLotFileVariants(lotNumber: lotNumber, recordGroup: rgToUse) }"#,
+            "if let lot { let rgToUse = rg.replacingOccurrences(of: \"RG-\", with: \"\") await fetchResults { try await client.resolveLotFileVariants(lotNumber: lot, recordGroup: rgToUse) }",
+            "await fetchResults { try await client.searchByRecordGroup(rg, keywords: keywords, maxResults: 5) }",
+            "guard NARACustody.mayQueryCatalog(forRepository: library) else { return }",
+            "guard !libraryOutcome.suppressesLiveQuery else { return }",
+        ], file: "SourceExplorerView.swift")
+        NoteViewParityTests.expect(try sources.app("FRUSCoreKit/SourceExplorer/PresidentialLibraryOutcome.swift"), holds: [
+            "public var suppressesLiveQuery: Bool { isHit }",
+        ], file: "PresidentialLibraryOutcome.swift")
+        NoteViewParityTests.expect(server, holds: [
+            #"+ [catalogPanel(route: "lotVariants", fallback: fallback)]"#,
+            #"+ [catalogPanel(route: lotFile != nil ? "lotVariants" : "recordGroup", fallback: fallback)]"#,
+            #"panels.append(catalogPanel(route: "presidentialMaterials", fallback: client.libraryFallbackURL(libraryName: library)))"#,
+        ], file: "SourceExplorer.swift")
+
         // The web's halves: a bundled lot's rows, the handbook rule and the access row.
         let page = try sources.web("sources/SourcesScreen.tsx")
         NoteViewParityTests.expect(page, holds: [

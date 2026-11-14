@@ -115,6 +115,8 @@ public struct SourceExplorerAnswer: Codable, Equatable, Sendable, ResponseEncoda
         public var periods: [FilingPeriodRow]?
         /// The Numerical File's rolls for a file number, or none: the gap's two links.
         public var scans: [Scan]?
+        /// The Numerical File's rolls the scans present, each its catalog identity, which check 8 reads.
+        public var rolls: [Resolution]?
         public var scanState: String?
         public var rangeCount: Int?
         public var caveat: String?
@@ -344,10 +346,12 @@ public struct SourceExplorerAnswer: Codable, Equatable, Sendable, ResponseEncoda
     /// What check 8 reads: the resolutions the export generator records for the note, each through the kit.
     public struct Offline: Codable, Equatable, Sendable {
         /// The lot the bundled central files resolve, the #321 and #351 guards applied
-        /// (`ArchivalResolver.documentResolution` with the central files alone).
+        /// (`ArchivalResolver.documentResolution` with the central files alone), as the export generator records
+        /// it: it skips #1205's refusal of a lot NARA divides across several series, and so names one of them for
+        /// such a lot, where the page's lot cards list every claimant. It is check 8's, not a lot's NARA record.
         public var lotBundle: Resolution?
         /// The Numerical File's rolls that hold the file, when the section shows them, and whether it
-        /// showed none (the coverage gap).
+        /// showed none (the coverage gap): the section's own, read from its panel.
         public var numericalFileRolls: [Resolution]?
         public var numericalFileCoverageGap: Bool?
         /// The authority's record (`SourceExplorerResolution.authorityRecord`).
@@ -388,19 +392,17 @@ enum SourceExplorerRoutes {
             guard documentId.utf8.count <= 256, FRUSURLScheme.isSafeComponent(documentId) else {
                 throw APIProblem.invalidParameter("documentId", "\(documentId) is not a document's id.")
             }
+            // The files any note may read are decoded once each, off the cooperative pool and before the index is
+            // held, so that a job waits on none of it: the authority (2 MB), the central files (3.6 MB) with the
+            // volume sources and the claimants, and the smaller files the panels and the classifier read.
+            try await Blocking.run { warm(resources) }
             let served = try await provider.served()
             guard let entry = try await served.pipeline.document(forDocumentId: documentId, inVolume: volumeId) else {
                 throw APIProblem(.notFound, code: "DOCUMENT_NOT_FOUND", detail: "The index holds no document \(documentId) in \(volumeId).")
             }
-            // The large files are decoded once each, off the cooperative pool, before the resolution reads them: the
-            // authority (2 MB) and the central files (3.6 MB) for any note, and the presidential-library catalogue
-            // (3.3 MB) only for a library citation, as the app's views read it.
-            let readsLibraries: Bool
-            if case .presidentialLibrary = SourceNoteParser().parse(entry.sourceNote ?? "") { readsLibraries = true } else { readsLibraries = false }
-            try await Blocking.run {
-                _ = resources.collectionAuthority
-                _ = resources.archivalIndexes
-                if readsLibraries { _ = resources.sourceExplorer(\.presidentialLibraries) }
+            // The presidential-library catalogue (3.3 MB) only for a library citation, as the app's views read it.
+            if case .presidentialLibrary = SourceNoteParser().parse(entry.sourceNote ?? "") {
+                try await Blocking.run { _ = resources.sourceExplorer(\.presidentialLibraries) }
             }
             // The stack is held until the answer is built, so that a job waits for it before it writes (PLAN's S21d).
             let answer = await answer(for: entry, pipeline: served.pipeline, resources: resources,
@@ -408,6 +410,19 @@ enum SourceExplorerRoutes {
             withExtendedLifetime(served) {}
             return answer
         }
+    }
+
+    /// Decodes the files any note may read, once each: the authority, the archival indexes, the chiefs-of-mission
+    /// register, the curated lots and libraries, the series facts, the digitized ranges and the roll scans.
+    static func warm(_ resources: ServerResources) {
+        _ = resources.collectionAuthority
+        _ = resources.archivalIndexes
+        _ = resources.sourceExplorer(\.chiefsOfMission)
+        _ = resources.sourceExplorer(\.curatedLots)
+        _ = resources.sourceExplorer(\.curatedLibraries)
+        _ = resources.sourceExplorer(\.seriesFacts)
+        _ = resources.sourceExplorer(\.digitizedRanges)
+        _ = resources.sourceExplorer(\.rollScans)
     }
 
     /// The NARA client, for the addresses it builds without a key, which need no network; it never searches here,
@@ -473,6 +488,7 @@ enum SourceExplorerRoutes {
         }
 
         let isEditorialNote = entry.isEditorialNote
+        let provenance = hasSourceNote ? panels.provenance(parsed) : []
         return SourceExplorerAnswer(
             volumeId: entry.volumeId, documentId: entry.documentId,
             documentTitle: displayTitle(header: entry.header, documentNumber: entry.documentNumber,
@@ -488,14 +504,14 @@ enum SourceExplorerRoutes {
                 lotFileNorm: Self.rawLot(of: parsed).map { SourceNoteParser.lotFileNorm($0) },
                 decimalClass: CollectionKeying.centralFilesClass(parsed: parsed, note: note),
                 noteMarking: SourceNoteParser.classificationMarking(fromSourceNote: note)),
-            provenance: hasSourceNote ? panels.provenance(parsed) : [],
+            provenance: provenance,
             countrySeries: countrySeries, noSourceNote: noSourceNote,
             neighbours: panels.neighbours(resolution.relatedDocuments),
             collection: resolution.authorityRecord.map(Self.row),
             unprinted: resolution.unprintedPointers.isEmpty ? nil : SourceExplorerAnswer.Unprinted(
                 rows: resolution.unprintedPointers.map(Self.row),
                 footer: SourceExplorerResolution.UnprintedPointer.sectionFooter),
-            offline: panels.offline(parsed))
+            offline: panels.offline(parsed, provenance: provenance))
     }
 
     /// A parse, as its case and its values by their labels, absent ones left out.
@@ -652,6 +668,9 @@ extension SourceExplorerRoutes {
             let rolls = resources.archivalIndexes.centralFiles?.numericalFile.rolls(forFileNumber: fileIdentifier) ?? []
             var panel = Panel(kind: "numericalFile")
             panel.fileIdentifier = fileIdentifier
+            panel.rolls = rolls.isEmpty ? nil : rolls.map {
+                SourceExplorerAnswer.Resolution(naId: $0.naId, catalogURL: $0.catalogURL, title: $0.title)
+            }
             if rolls.isEmpty {
                 panel.links = [Link(url: NumericalFileIndex.cardIndexURL.absoluteString),
                                Link(url: NumericalFileIndex.numericalFileSeriesURL.absoluteString)]
@@ -1010,27 +1029,17 @@ extension SourceExplorerRoutes {
         // MARK: Check 8
 
         /// The resolutions the export generator records for the note, each through the kit: the lot the central files
-        /// resolve with their guards and no other index, the Numerical File section's rolls, and the authority's record.
-        func offline(_ parsed: ParsedSourceNote) -> SourceExplorerAnswer.Offline {
+        /// resolve with their guards and no other index, the Numerical File section's rolls, read from its panel among
+        /// `provenance`, so that the section's gate is the one gate, and the authority's record.
+        func offline(_ parsed: ParsedSourceNote, provenance: [Panel]) -> SourceExplorerAnswer.Offline {
             var offline = SourceExplorerAnswer.Offline()
             if let lot = SourceExplorerRoutes.rawLot(of: parsed) {
                 offline.lotBundle = ArchivalResolver.documentResolution(
                     lotFile: lot, centralFiles: resources.archivalIndexes.centralFiles, volumeSources: nil, claimants: nil)
                     .map(Self.resolution)
             }
-            // The Numerical File section's gate, `centralFilesPanel`'s: a central-files citation with a file number,
-            // of 1906–1910. A Subject-Numeric citation takes its own panel, which has no such section.
-            if resolution.hasSourceNote, case .centralFiles(_, let fileIdentifier?) = parsed,
-               SourceExplorerPanels.subjectNumericCitation(parsed: parsed, note: note, documentDay: resolution.documentDay) == nil,
-               let year, (1906...1910).contains(year) {
-                let rolls = resources.archivalIndexes.centralFiles?.numericalFile.rolls(forFileNumber: fileIdentifier) ?? []
-                if rolls.isEmpty {
-                    offline.numericalFileCoverageGap = true
-                } else {
-                    offline.numericalFileRolls = rolls.map {
-                        SourceExplorerAnswer.Resolution(naId: $0.naId, catalogURL: $0.catalogURL, title: $0.title)
-                    }
-                }
+            if let numerical = provenance.first(where: { $0.kind == "numericalFile" }) {
+                if let rolls = numerical.rolls { offline.numericalFileRolls = rolls } else { offline.numericalFileCoverageGap = true }
             }
             offline.collectionAuthority = resolution.authorityRecord.map {
                 SourceExplorerAnswer.AuthorityRecord(id: $0.id, name: $0.name, naId: $0.naId, catalogURL: $0.catalogURL)

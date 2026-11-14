@@ -48,6 +48,8 @@ enum ArchivalNeighborsRoutes {
             let query = try FormQuery(request.uri.query)
             try query.refuseUnknown(["volumeId", "documentId", "year", "collection", "lotFile", "recordGroup", "series",
                                      "repository", "decimalClass", "jobNumber", "aliasLot", "aliasName", "anchor", "scope"])
+            // A collection's record is read from the authority, 2 MB of JSON, decoded once, off the cooperative pool.
+            if !query.values("collection").isEmpty { try await Blocking.run { _ = resources.collectionAuthority } }
             let asked = try neighborsRequest(query, resources: resources)
             let offered = asked.anchorVolumeId.map { RelatedDocumentsRoutes.scopes(for: $0, resources: resources) } ?? [.all]
             let scope = try query.choice("scope", among: RelatedScope.allCases) ?? asked.defaultScope
@@ -56,6 +58,11 @@ enum ArchivalNeighborsRoutes {
                                  detail: "These neighbours have no \(scope.rawValue) scope: the picker offers \(offered.map(\.rawValue).joined(separator: ", ")).")
             }
             let served = try await provider.served()
+            // A document's neighbours are its own source's, so the index must hold it, as `…/sources` asks.
+            if case .document(let volumeId, let documentId, _) = asked,
+               try await served.pipeline.document(forDocumentId: documentId, inVolume: volumeId) == nil {
+                throw APIProblem(.notFound, code: "DOCUMENT_NOT_FOUND", detail: "The index holds no document \(documentId) in \(volumeId).")
+            }
             let scopeVolumeIds = asked.anchorVolumeId.flatMap {
                 RelatedDocumentsRoutes.volumeIds(of: scope, anchorVolumeId: $0, resources: resources)
             }
@@ -115,14 +122,26 @@ enum ArchivalNeighborsRoutes {
             guard trimmed.utf8.count <= 1_024 else { throw APIProblem.invalidParameter(name, "is longer than 1,024 bytes") }
             return trimmed.isEmpty ? nil : trimmed
         }
+        // The keys of the other requests, which a document's or a collection's request may not mix with its own.
+        let sourceKeys = ["lotFile", "recordGroup", "series", "repository", "decimalClass", "jobNumber", "aliasLot", "aliasName", "anchor"]
+        func refuseMixing(_ names: [String], in request: String) throws {
+            if let mixed = names.first(where: { !query.values($0).isEmpty }) {
+                throw APIProblem.invalidParameter(mixed, "a \(request)'s neighbours take no \(mixed)")
+            }
+        }
         if let volumeId = try value("volumeId") {
+            try refuseMixing(["collection"] + sourceKeys, in: "document")
             guard resources.volume(volumeId) != nil else { throw APIProblem.volumeNotFound(volumeId) }
             guard let documentId = try value("documentId"), documentId.utf8.count <= 256, FRUSURLScheme.isSafeComponent(documentId) else {
                 throw APIProblem.invalidParameter("documentId", "a document's neighbours need its id")
             }
             return .document(volumeId: volumeId, documentId: documentId, documentYear: try query.optionalInteger("year", in: 1_000...3_000))
         }
+        if try value("documentId") != nil || !query.values("year").isEmpty {
+            throw APIProblem.invalidParameter("volumeId", "a document's neighbours need its volume")
+        }
         if let id = try value("collection") {
+            try refuseMixing(sourceKeys, in: "collection")
             guard let record = try resources.collectionAuthorityRecord(id) else {
                 throw APIProblem(.notFound, code: "COLLECTION_NOT_FOUND", detail: "The collection authority has no record \(id).")
             }
@@ -135,6 +154,9 @@ enum ArchivalNeighborsRoutes {
         let aliasNames = (try query.list("aliasName") ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         guard aliasNames.count <= maximumAliases else {
             throw APIProblem.invalidParameter("aliasName", "names \(aliasNames.count) aliases, more than \(maximumAliases)")
+        }
+        guard aliasNames.allSatisfy({ $0.utf8.count <= 1_024 }) else {
+            throw APIProblem.invalidParameter("aliasName", "is longer than 1,024 bytes")
         }
         var anchor: String?
         if let named = try value("anchor") {
@@ -180,8 +202,8 @@ enum ArchivalNeighborsRoutes {
 }
 
 extension ServerResources {
-    /// The collection authority's record `id`, decoding the authority off the cooperative pool on first use; nil for
-    /// an id it does not hold, and for an authority missing or malformed.
+    /// The collection authority's record `id`, the authority decoded on first use, which a route does first off the
+    /// cooperative pool (`Blocking.run`); nil for an id it does not hold, and for an authority missing or malformed.
     func collectionAuthorityRecord(_ id: String) throws -> AuthorityCollectionRecord? {
         guard id.utf8.count <= 1_024 else { throw APIProblem.invalidParameter("collection", "is longer than 1,024 bytes") }
         return collectionAuthority?.record(id: id)

@@ -8,7 +8,7 @@
 // server searches the catalogue (PLAN's S22e), and a link to the neighbours in their three scopes.
 import { useQuery } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
-import { type ReactNode, useId } from 'react';
+import { Children, type ReactNode, useId } from 'react';
 import { ApiError, errorMessage } from '../api/client';
 import { documentQuery } from '../api/endpoints';
 import { type SourceExplorer, sourceExplorerQuery, type SourcePanel, type SourceRecord, type SourceScan } from '../api/sources';
@@ -140,6 +140,11 @@ function Out({ href, children, className }: { href: string; children: ReactNode;
   );
 }
 
+/** A list of links, left out when none of its items is there, so that no list of nothing is announced. */
+function Links({ children }: { children: ReactNode }) {
+  return Children.toArray(children).length > 0 ? <ul className="se-links">{children}</ul> : null;
+}
+
 function Caption({ children }: { children: ReactNode }) {
   return <p className="se-caption">{children}</p>;
 }
@@ -173,7 +178,7 @@ function Panel({ panel }: { panel: SourcePanel }) {
             <Caption>{words.cfpfCite}</Caption>
           </Section>
           <Section title={words.cfpfResources}>
-            <ul className="se-links">
+            <Links>
               {panel.links?.[0] && (
                 <li>
                   <Out href={panel.links[0].url}>{words.cfpfGuide}</Out>
@@ -184,7 +189,7 @@ function Panel({ panel }: { panel: SourcePanel }) {
                   <Out href={panel.links[1].url}>{words.cfpfAAD}</Out>
                 </li>
               )}
-            </ul>
+            </Links>
             <Caption>{words.cfpfNote}</Caption>
           </Section>
         </>
@@ -362,7 +367,7 @@ function SubjectNumeric({ panel }: { panel: SourcePanel }) {
       </Section>
       <Section title={words.periodHeader}>
         <Rows rows={[[words.filingPeriod, words.subjectNumericPeriod]]} />
-        <ul className="se-links">
+        <Links>
           {panel.period && (
             <li>
               <Out href={panel.period.url}>{words.periodLink}</Out>
@@ -379,7 +384,7 @@ function SubjectNumeric({ panel }: { panel: SourcePanel }) {
               </li>
             ))
           )}
-        </ul>
+        </Links>
         <Caption>{words.subjectNumericHint}</Caption>
       </Section>
     </>
@@ -394,7 +399,7 @@ function NumericalFile({ panel }: { panel: SourcePanel }) {
       {scans.length === 0 ? (
         <>
           <Caption>{words.numericalGap}</Caption>
-          <ul className="se-links">
+          <Links>
             {panel.links?.[0] && (
               <li>
                 <Out href={panel.links[0].url}>{words.cardIndex}</Out>
@@ -405,7 +410,7 @@ function NumericalFile({ panel }: { panel: SourcePanel }) {
                 <Out href={panel.links[1].url}>{words.numericalSeries}</Out>
               </li>
             )}
-          </ul>
+          </Links>
         </>
       ) : (
         <>
@@ -524,7 +529,7 @@ function Scan({ scan }: { scan: SourceScan }) {
         {scan.title} {scan.candidate && <ConfidenceChip />}
       </p>
       {scan.imageCountLabel && <p className="se-dates">{scan.imageCountLabel}</p>}
-      <ul className="se-links">
+      <Links>
         {scan.pdf && (
           <li>
             <Out href={scan.pdf.url}>{scan.pdf.label}</Out>
@@ -535,7 +540,7 @@ function Scan({ scan }: { scan: SourceScan }) {
             <Out href={scan.catalogURL}>{words.viewRecord}</Out>
           </li>
         )}
-      </ul>
+      </Links>
     </div>
   );
 }
@@ -727,7 +732,7 @@ function Neighbours({ sources }: { sources: SourceExplorer }) {
     <section className="se-section" aria-labelledby={id}>
       <div className="se-section-heading">
         <h2 id={id}>{words.neighbours}</h2>
-        {shown.length > 0 && <span className="se-count">{neighbours.totalCount}</span>}
+        {shown.length > 0 && <span className="se-count">{neighbours.totalCount.toLocaleString('en-US')}</span>}
       </div>
       <div className="se-body">
         {shown.length > 0 ? (

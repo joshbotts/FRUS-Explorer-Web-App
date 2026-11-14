@@ -29,12 +29,16 @@ export interface CollectionSearch {
 
 export function CollectionScreen() {
   const { id } = route.useSearch();
-  const collection = useQuery(archivalCollectionQuery(id));
+  // An address that names no record asks the server nothing: the record is unavailable.
+  const named = id !== '';
+  const collection = useQuery({ ...archivalCollectionQuery(id), enabled: named });
   const router = useRouter();
   const canGoBack = useCanGoBack();
   useDocumentTitle(collection.data?.name ?? words.title);
-  useHeadingReady(!collection.isPending);
-  const missing = collection.isError && collection.error instanceof ApiError && collection.error.code === 'COLLECTION_NOT_FOUND';
+  useHeadingReady(!named || !collection.isPending);
+  const code = collection.error instanceof ApiError ? collection.error.code : undefined;
+  const missing = !named || code === 'COLLECTION_NOT_FOUND';
+  const preparing = code === 'INDEX_NOT_READY';
 
   return (
     <div className="collection-record">
@@ -47,11 +51,15 @@ export function CollectionScreen() {
           </button>
         </p>
       )}
-      <h1 tabIndex={-1} data-loading={collection.isPending ? 'true' : undefined}>
+      <h1 tabIndex={-1} data-loading={named && collection.isPending ? 'true' : undefined}>
         {missing ? words.unavailable : words.title}
       </h1>
       {missing && <p>{words.unavailableDetail}</p>}
-      {collection.isError && !missing && (
+      {/* The record and its counts come in one answer, so the line for the counts is the page's while it comes. */}
+      <p className="note" role="status">
+        {preparing ? copy.archivalNeighbors.preparing : named && collection.isFetching ? words.localLoading : ''}
+      </p>
+      {collection.isError && !missing && !preparing && (
         <p className="error" role="alert">
           {errorMessage(collection.error)}
         </p>

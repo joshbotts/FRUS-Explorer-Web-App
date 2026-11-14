@@ -24,7 +24,6 @@ import Testing
             let base = "/api/v1/volumes/\(Self.volume)/documents/d1/sources"
             let answer = try decode(SourceExplorerAnswer.self, try await client.execute(uri: base, method: .get))
             #expect(answer.volumeId == Self.volume && answer.documentId == "d1")
-            #expect(answer.hasSourceNote == !answer.rawSourceNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             // A note's sections, or a note-less document's: the provenance panels for one, never both.
             #expect(answer.hasSourceNote || (answer.provenance.isEmpty && answer.classificationMarking == nil))
             #expect(problemCode(try await client.execute(uri: "\(base)?scope=all", method: .get)) == "UNKNOWN_PARAMETER")
@@ -56,13 +55,14 @@ import Testing
             let base = "/api/v1/archival-neighbors"
             let document = try decode(ArchivalNeighborsAnswer.self,
                                       try await client.execute(uri: "\(base)?volumeId=\(Self.volume)&documentId=d1", method: .get))
-            // A document's list opens on All volumes, anchored on its volume, with the sheet's scopes.
+            // A document's list opens on All volumes, anchored on its volume, with the sheet's scopes. The synthetic
+            // export writes no source notes, so its lists are empty: the rows each scope gives are held over the
+            // fixture index, in `SourceExplorerParityTests`.
             #expect(document.scope == "all" && document.anchorVolumeId == Self.volume)
             #expect(document.scopes.first == "volume" && document.scopes.last == "all")
-            #expect(document.documents.allSatisfy { !($0.volumeId == Self.volume && $0.documentId == "d1") })
             let volume = try decode(ArchivalNeighborsAnswer.self,
                                     try await client.execute(uri: "\(base)?volumeId=\(Self.volume)&documentId=d1&scope=volume", method: .get))
-            #expect(volume.scope == "volume" && volume.documents.allSatisfy { $0.volumeId == Self.volume })
+            #expect(volume.scope == "volume")
             // A Sources row's opens on This volume; a class alone has no picker.
             let row = try decode(ArchivalNeighborsAnswer.self,
                                  try await client.execute(uri: "\(base)?lotFile=66%20D%20204&anchor=\(Self.volume)", method: .get))
@@ -77,6 +77,11 @@ import Testing
                 ("collection=nowhere", "COLLECTION_NOT_FOUND"), ("decimalClass=611.61&scope=volume", "SCOPE_NOT_OFFERED"),
                 ("volumeId=\(Self.volume)&documentId=d1&scope=everywhere", "INVALID_PARAMETER"),
                 ("volumeId=\(Self.volume)&documentId=d1&year=12", "INVALID_PARAMETER"), ("degree=1", "UNKNOWN_PARAMETER"),
+                // A document the index lacks; a request mixing another's keys; a document named without its volume.
+                ("volumeId=\(Self.volume)&documentId=d999", "DOCUMENT_NOT_FOUND"),
+                ("volumeId=\(Self.volume)&documentId=d1&lotFile=1", "INVALID_PARAMETER"),
+                ("collection=nowhere&lotFile=1", "INVALID_PARAMETER"), ("documentId=d1", "INVALID_PARAMETER"),
+                ("lotFile=1&aliasName=\(String(repeating: "n", count: 1_025))", "INVALID_PARAMETER"),
             ] {
                 #expect(problemCode(try await client.execute(uri: "\(base)?\(query)", method: .get)) == code, "\(query)")
             }

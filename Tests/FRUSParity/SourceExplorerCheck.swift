@@ -14,12 +14,17 @@
 // own, each named where it is applied:
 // - a lot the bundle resolves is recorded as matched by the bundled lot-file index (`matchType` "lot", which
 //   the generator's `BundledLotResolver` writes for every one), where the kit's resolution keeps the bundle
-//   entry's own record of how NARA's harvest matched it; every other field of the series is compared;
+//   entry's own record of how NARA's harvest matched it: the API's must be that entry's, and every other field
+//   of the series is compared;
 // - the year: the API's is the one both of the app's views read, the dateline's
 //   (`CentralFilesClassifier.documentYear(fromDateline:)`, the reader's `extractYear(from:)`), where the export
-//   reads `frus:doc-dateTime-min`. They differ only where a dateline gives no year ("Moscow, undated"), for
-//   which the API gives none: such a record takes the export's year when that year resolves nothing, outside
-//   the Numerical File's 1906–1910, and the check counts it; inside them it keeps none, and the record differs.
+//   reads `frus:doc-dateTime-min`. Over the fixtures they differ only where a dateline is there and gives no year
+//   ("Moscow, undated"), for which the API gives none: such a record takes the export's year when that year
+//   resolves nothing, outside the Numerical File's 1906–1910, and the check counts it, which a caller may pin;
+//   inside them it keeps none, and the record differs. A document with no dateline gets no year this way.
+//   Across the corpus the two can differ otherwise, a dateline with a year and no attribute, or an attribute's
+//   instant at −05:00 that falls in the year before (FRUS-Explorer#1326), and such a record differs: the full
+//   corpus's run settles that rule.
 //
 // The generator's cores declare eight public names FRUSCoreKit declares too, CentralFilesIndex,
 // CollectionAuthorityIndex, CountryRoll, LotFileEntry, NumericalFileIndex, NumericalFileRoll,
@@ -41,6 +46,13 @@ public enum SourceExplorerCheck {
         public let documentId: String
         public let note: String
         public let year: Int?
+
+        public init(volumeId: String, documentId: String, note: String, year: Int?) {
+            self.volumeId = volumeId
+            self.documentId = documentId
+            self.note = note
+            self.year = year
+        }
     }
 
     /// Every document's source note in `volumes`, read from their TEI in `directory` as the generator's run reads
@@ -143,28 +155,34 @@ public enum SourceExplorerCheck {
         /// export's, for a dateline that gives none (the file's second rule). `exportYear` is the generator's year for
         /// the document, from its TEI.
         public func record(from answer: Answer, exportYear: Int?) -> (record: SourceExplorerExportRecord, undated: Bool) {
-            // The year rule: the export's year, only where the dateline gives none and the year resolves nothing.
+            // The year rule: the export's year, only where a dateline is there and gives none, and the year resolves
+            // nothing.
             var year = answer.year
             var undated = false
-            if year == nil, let exportYear, !(1906...1910).contains(exportYear), !Self.namesYear(answer.dateline) {
+            if year == nil, let exportYear, !(1906...1910).contains(exportYear), let dateline = answer.dateline,
+               !Self.namesYear(dateline) {
                 year = exportYear
                 undated = true
             }
             let base = record(volumeId: answer.volumeId, documentId: answer.documentId, note: answer.rawSourceNote,
                               year: year)
-            // The lot rule: the bundle's series, matched by the bundled lot-file index, as the export records it.
+            // The bundle's entry for the lot the note cites, as the generator's cores read it.
+            let rawLot = ExportClassification.rawLot(of: parser.parse(answer.rawSourceNote))
+            let bundled = rawLot.flatMap { centralFiles.lotFile(normalized: BundledLotResolver.normalizeLot($0)) }
+            // The lot rule: the bundle's series, matched by the bundled lot-file index, as the export records it, where
+            // the API's record of the match is the bundle entry's own; any other stands, and the record differs.
             let lotBundle = answer.offline.lotBundle.map {
                 ResolvedNAID(naId: $0.naId, catalogURL: $0.catalogURL, title: $0.title, recordGroup: $0.recordGroup,
-                             matchType: "lot", hmsMlrEntryNumbers: $0.hmsMlrEntryNumbers,
+                             matchType: $0.matchType != nil && $0.matchType == bundled?.matchType ? "lot" : $0.matchType ?? "",
+                             hmsMlrEntryNumbers: $0.hmsMlrEntryNumbers,
                              levelOfDescription: $0.levelOfDescription, seriesNaId: $0.seriesNaId,
                              seriesTitle: $0.seriesTitle, seriesHmsMlrEntryNumbers: $0.seriesHmsMlrEntryNumbers)
             }
             // Why a lot the note cites missed the bundle, the generator's rule over the API's answer: a lot the bundle
             // holds but flags, or one it does not hold.
             var lotBundleMiss: String?
-            if lotBundle == nil, let rawLot = ExportClassification.rawLot(of: parser.parse(answer.rawSourceNote)) {
-                lotBundleMiss = centralFiles.lotFile(normalized: BundledLotResolver.normalizeLot(rawLot))?.ancestryLacksRecordGroup == true
-                    ? "flaggedAncestryLacksRecordGroup" : "notInBundle"
+            if lotBundle == nil, rawLot != nil {
+                lotBundleMiss = bundled?.ancestryLacksRecordGroup == true ? "flaggedAncestryLacksRecordGroup" : "notInBundle"
             }
             let rolls = answer.offline.numericalFileRolls.map {
                 $0.map { NumericalRollRef(naId: $0.naId, title: $0.title, catalogURL: $0.catalogURL) }
@@ -191,9 +209,8 @@ public enum SourceExplorerCheck {
 
         /// Whether a dateline names a year, by the pattern the app's rule falls back to, so that the year rule
         /// applies only to a dateline that gives none.
-        static func namesYear(_ dateline: String?) -> Bool {
-            guard let dateline else { return false }
-            return dateline.range(of: #"\b(1[89][0-9]{2}|20[0-2][0-9])\b"#, options: .regularExpression) != nil
+        static func namesYear(_ dateline: String) -> Bool {
+            dateline.range(of: #"\b(1[89][0-9]{2}|20[0-2][0-9])\b"#, options: .regularExpression) != nil
         }
 
         /// The record's outcome, the generator's precedence (`exportRecord`'s, which it keeps private): the strongest
@@ -290,6 +307,7 @@ public enum SourceExplorerCheck {
         func compare<T: Encodable & Equatable>(_ name: String, _ a: T, _ b: T) {
             if a != b { fields.append("\(name) is \(json(a)) through the API, \(json(b)) in the export") }
         }
+        compare("id", actual.id, expected.id)
         compare("rawNote", actual.rawNote, expected.rawNote)
         compare("documentYear", actual.documentYear, expected.documentYear)
         compare("parsed", actual.parsed, expected.parsed)
@@ -301,8 +319,11 @@ public enum SourceExplorerCheck {
         compare("numericalFileRolls", actual.resolution.numericalFileRolls, expected.resolution.numericalFileRolls)
         compare("numericalFileCoverageGap", actual.resolution.numericalFileCoverageGap, expected.resolution.numericalFileCoverageGap)
         compare("volumeSources", actual.resolution.volumeSources, expected.resolution.volumeSources)
+        compare("volumeSourcesKey", actual.resolution.volumeSourcesKey, expected.resolution.volumeSourcesKey)
         compare("collectionAuthority", actual.resolution.collectionAuthority, expected.resolution.collectionAuthority)
         compare("offlineOutcome", actual.offlineOutcome, expected.offlineOutcome)
+        // A field the list does not name: both records, whole.
+        if fields.isEmpty { return "the records differ: \(json(actual)) through the API, \(json(expected)) in the export" }
         return fields.joined(separator: "; ")
     }
 

@@ -8,7 +8,7 @@
 // way back.
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { getRouteApi, Link, useCanGoBack, useRouter } from '@tanstack/react-router';
-import { useId } from 'react';
+import { useEffect, useId } from 'react';
 import { ApiError, errorMessage } from '../api/client';
 import { archivalNeighboursQuery, type NeighbourScope, type NeighboursRequest } from '../api/sources';
 import { copy } from '../copy';
@@ -30,7 +30,15 @@ export function NeighboursScreen() {
   const neighbours = useQuery({ ...archivalNeighboursQuery(request), placeholderData: keepPreviousData });
   useDocumentTitle(words.title);
   useHeadingReady(!neighbours.isPending);
-  const preparing = neighbours.isError && neighbours.error instanceof ApiError && neighbours.error.code === 'INDEX_NOT_READY';
+  const code = neighbours.error instanceof ApiError ? neighbours.error.code : undefined;
+  const preparing = code === 'INDEX_NOT_READY';
+  // A scope these neighbours are not offered, such as an address kept from another time, goes to their default, so
+  // the picker comes back rather than leaving the page with no way to choose.
+  useEffect(() => {
+    if (code === 'SCOPE_NOT_OFFERED') {
+      void navigate({ search: (previous: NeighboursSearch) => ({ ...previous, scope: undefined }), replace: true });
+    }
+  }, [code, navigate]);
   const data = neighbours.data;
   const scope: NeighbourScope = request.scope ?? data?.scope ?? 'all';
 

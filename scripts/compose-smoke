@@ -662,7 +662,8 @@ echo "== the reader: Source Explorer over the Standalone server's index of the t
 # frus1961-63v06's d3, a lot file the bundled central files resolve: the kit's resolution through the API, with the
 # panels the app's view draws from it. Check 8, frus-parity check-source-explorer from the image of the Dockerfile's
 # parity stage that summarized the index above, resolves every source note of the three volumes through the API and
-# holds each record to the export generator's. With --e2e, the sources spec follows the note to its collection's
+# holds each record to the export generator's, with exactly the seven whose datelines read "undated" dated by the
+# export alone, as in process. With --e2e, the sources spec follows the note to its collection's
 # record and their neighbours by keyboard, on Chromium with no axe violations. Answers are read from files, which
 # an answer of any size fits (Linux caps an argument).
 sourced=$(curl -s --max-time 30 -o "$work/sources.json" -w '%{http_code}' \
@@ -679,7 +680,7 @@ print(f"   d3's lot file: panels {kinds}, {answer['neighbours']['totalCount']} a
 PY
 if [ -n "${FRUS_PARITY_IMAGE:-}" ]; then
   docker run --rm --user "$(id -u):$(id -g)" --network "container:$(library_compose ps -q frus)" -v "$PWD:/repo:ro" "$FRUS_PARITY_IMAGE" \
-    frus-parity check-source-explorer --api http://localhost:8080/ --repo /repo > "$work/check8.log" 2>&1 \
+    frus-parity check-source-explorer --api http://localhost:8080/ --undated 7 --repo /repo > "$work/check8.log" 2>&1 \
     || fail "check 8 fails over the Standalone server's index: $(tail -12 "$work/check8.log")"
   grep -q '^check 8 passes' "$work/check8.log" || fail "check 8's run said nothing: $(tail -5 "$work/check8.log")"
   echo "   $(grep '^check 8 passes' "$work/check8.log" | cut -c1-160)…"

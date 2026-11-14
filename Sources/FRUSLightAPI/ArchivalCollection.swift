@@ -48,7 +48,7 @@ enum ArchivalCollectionRoutes {
         router.get("/api/v1/archival-collection") { request, _ -> ArchivalCollectionAnswer in
             let query = try FormQuery(request.uri.query)
             try query.refuseUnknown(["id"])
-            guard let id = try query.single("id"), !id.isEmpty else {
+            guard let id = try query.single("id")?.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty else {
                 throw APIProblem.invalidParameter("id", "name a record of the collection authority")
             }
             // The authority is 2 MB of JSON, decoded once, off the cooperative pool.

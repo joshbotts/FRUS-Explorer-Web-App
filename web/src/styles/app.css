@@ -1470,6 +1470,8 @@ dialog.review-sheet {
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text-secondary);
+  /* A marking is a sentence, which wraps at a phone's width. */
+  white-space: normal;
 }
 
 .se-confidence-high {
@@ -1503,11 +1505,14 @@ dialog.review-sheet {
 }
 
 :root[data-theme='dark'] .se-provenance-frusOnly {
-  --tint: #e8798a;
+  /* Lighter than the app's #E8798A, which is 6.1:1 on its own background and 4.2:1 here, over its wash on a
+     section's surface: this is 5.3:1. */
+  --tint: #f59aa7;
 }
 
 :root[data-theme='dark'] .se-provenance-joined {
-  --tint: #8fa5de;
+  /* 5.2:1 over its wash on a section's surface, where the app's #8FA5DE is 4.6:1. */
+  --tint: #9db1e6;
 }
 
 .neighbours-basis {

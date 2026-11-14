@@ -17,7 +17,7 @@
 //   frus-parity import-check <export.json> [--keep <dir>]
 //   frus-parity export-check <export.json> [--out <export.json>]
 //   frus-parity check-highlights <export.json> --tei <dir> [--samples <out.json>] [--repo <root>]
-//   frus-parity check-source-explorer --api <url> [<volume>...] [--tei <dir>] [--resources <dir>] [--repo <root>]
+//   frus-parity check-source-explorer --api <url> [<volume>...] [--tei <dir>] [--resources <dir>] [--undated <n>] [--repo <root>]
 //
 // The repository is found from the current directory unless --repo names it. Exit status: 0 when
 // the check passes, 1 on a refusal, a difference or a problem, 2 on a usage error.
@@ -48,7 +48,7 @@ let usage = """
            frus-parity import-check <export.json> [--keep <dir>]
            frus-parity export-check <export.json> [--out <export.json>]
            frus-parity check-highlights <export.json> --tei <dir> [--samples <out.json>] [--repo <root>]
-           frus-parity check-source-explorer --api <url> [<volume>...] [--tei <dir>] [--resources <dir>] [--repo <root>]
+           frus-parity check-source-explorer --api <url> [<volume>...] [--tei <dir>] [--resources <dir>] [--undated <n>] [--repo <root>]
     """
 
 /// A command's positional arguments, flags and options.
@@ -614,12 +614,21 @@ func checkSourceExplorer(_ arguments: Arguments) async throws {
         ?? layout.upstream.appendingPathComponent(ParityIndex.resourcesPath)
     let volumes = arguments.positional.isEmpty ? ParityFixtures.volumes : arguments.positional
     guard Set(volumes).count == volumes.count else { throw UsageError("a volume is named twice") }
+    // How many records the export alone may date, their datelines giving no year: pinned when named.
+    let undated = try arguments.options["--undated"].map { value -> Int in
+        guard let count = Int(value), count >= 0 else { throw UsageError("--undated takes a count") }
+        return count
+    }
     let notes = try SourceExplorerCheck.notes(teiDirectory: tei, volumes: volumes)
     let comparator = try SourceExplorerCheck.Comparator(resources: resources)
     let get = httpGet(base)
     let result = await SourceExplorerCheck.run(notes: notes, comparator: comparator) { path in try await get(path) }
     for difference in result.differences.prefix(50) { print("differs  \(difference)") }
     guard result.passes else { fail(result.summary(volumes: volumes.count)) }
+    if let undated, result.undatedByDateline.count != undated {
+        fail("check 8 fails: \(result.undatedByDateline.count) records dated by the export alone, not \(undated): "
+             + result.undatedByDateline.joined(separator: ", "))
+    }
     print(result.summary(volumes: volumes.count))
 }
 
@@ -659,7 +668,7 @@ do {
     case "check-highlights":
         try await checkHighlights(Arguments(arguments.dropFirst(), options: ["--tei", "--samples", "--repo"]))
     case "check-source-explorer":
-        try await checkSourceExplorer(Arguments(arguments.dropFirst(), options: ["--api", "--tei", "--resources", "--repo"]))
+        try await checkSourceExplorer(Arguments(arguments.dropFirst(), options: ["--api", "--tei", "--resources", "--undated", "--repo"]))
     case "time-search":
         try await timeSearch(Arguments(arguments.dropFirst(), flags: ["--all", "--retained"],
                                        options: ["--ids", "--out", "--queries", "--resources", "--repo"]))
