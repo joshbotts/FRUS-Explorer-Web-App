@@ -312,52 +312,75 @@ S21f's web follow-up, which [FRUS-Explorer#1904](https://github.com/joshbotts/FR
 - **The hashes.** Each volume of the export whose TEI file is in the folder is parsed as `indexVolume` parses it, with the kit's `FRUSDocumentParser().parseVolumeFull(volumeURL:)`. Every document it gives is hashed with the kit's public functions (`revisionHashes(of:)`):
   - `IndexingPipeline.contentHash(header:dateline:sourceNote:bodyText:)`, over `extractHeader`, `extractDateline`, `extractSourceNote` and `extractBodyText`;
   - `bodyHash(for:)`.
-
-  Where a file repeats an id, the last document is kept, as the indexer's writes keep the last.
-- **The comparison.** The hashes are compared with the export's `document_revisions` rows of the volume (`storedRevisions`, `differences`), by the rules in `kit-access-handover.md`'s plan for this follow-up. Three things count as a difference:
+- **The comparison.** The hashes are compared with the export's `document_revisions` rows of the volume (`storedRevisions`, `differences`), by the rules in `kit-access-handover.md`'s plan for this follow-up, a row with the last document of its id, as the indexer's writes keep the last. Four things count as a difference:
   - a row at the indexer's version, `currentDateIndexVersion` (74), of a document the file no longer gives;
   - a document with no row, or with one that records it as vanished;
-  - a document whose content or body hash is not its row's, at the indexer's version.
+  - a document whose content or body hash is not its row's, at the indexer's version;
+  - an id the file gives to documents that hash differently, which the indexer writes in turn (added after the cold review, below).
 
-  A row another version wrote is compared by neither hash, nor when its document has gone, as the kit's `contentHash` doc says.
-- **The kit's indexer, over a volume that differs only.** A volume with no difference is compared with nothing written. One that differs takes S21f's path as it was: its rows seeded from the export into the scratch index, `indexVolume`, the kit's stamps read, and the volume kept or deleted. So the kit alone says what changed and how; its change-kind statement, `auxUpsertDocumentRevisions`' CASE, is not restated. The log names each volume given to the indexer, and why.
-- **Smaller:** the room check on the data volume runs only before a volume is indexed. A file that does not parse is listed as one whose TEI "could not be read to compare it". A test hook, `volumeIndexedTestHook`, is told each volume given to the indexer.
-- **The fold, found by this session's first run:** the comparison index placed after a comparison that indexed no volume read as malformed through the immutable open, so the review's readers could not open it and a re-check could not copy it. Every comparison had indexed volumes before, so nothing had reached this path.
+  A row another version wrote is compared by neither hash, nor when its document has gone: the plan's rule, from the kit's `contentHash` doc, which a test holds to the kit (below).
+- **The kit's indexer only over a volume that differs.** A volume with no difference is compared with nothing written. One that differs takes S21f's path as it was: its rows seeded from the export into the scratch index, `indexVolume`, the kit's stamps read, and the volume kept or deleted. So the kit alone says what changed and how; its change-kind statement, `auxUpsertDocumentRevisions`' CASE, is not restated. The log names each volume given to the indexer, and why.
+- **Smaller:** the room check on the data volume runs only before a volume is indexed. A file that does not parse is listed as one whose TEI "could not be read to compare it", and an export whose rows of a volume cannot be read as one whose record "could not be read". A test hook, `volumeIndexedTestHook`, is told each volume given to the indexer, and the log names each, with what selected it.
+- **The fold, found by this session's first run:** the comparison index placed after a comparison that indexed no volume read as malformed through the immutable open, so the review's readers could not open it and a re-check could not copy it. Before, only a comparison none of whose volumes had a file in the folder reached this, as an Import server started before its TEI folder is filled (the job review found it).
   - An experiment over a scratch index the kit had only made and packed found the cause. The seeding connection had only read the file before the kit's `VACUUM`, and the log was folded and the journal switched through that connection.
   - Folding through a connection opened after the kit's writer and the seeder are let go gave a sound file in every case tried, S21f's own among them. So `place` now does that.
-- **As S21f built it:** the job's place in the queue and its giving way after each volume, `work.json`, the re-check by inode, length and mtime, `stoppedFor`, the record of the served file and the compared files, `tei-changes.db` and `tei-changes.json`, and the review's readers. The scratch index is still made at each job's start with the kit's tables empty, so that the readers, the re-check's copy and the work folder's rule find it as before; on an unchanged export the kit's indexer never runs in it.
+  - A comparison index placed so before this, which a later re-check would copy and fail over at every start until the next import, is set aside: a re-check checks its copy with `quick_check`, and one that does not read whole has every volume compared afresh.
+- **As S21f built it:** the job's place in the queue and its giving way after each volume, `work.json`, the re-check by inode, length and mtime, `stoppedFor`, the record of the served file and the compared files, `tei-changes.db` and `tei-changes.json`, and the review's readers. The scratch index is still made as before, the kit's tables empty for a first comparison and a copy of the last comparison index for a re-check, so that the readers, the re-check and the work folder's rule find it where they did; on an unchanged export the kit's indexer never runs in it.
 
 **What follows from the rules:**
-- **Results as S21f's, but one.** Over a volume the selection gives it, the kit's stamp is S21f's. Over a volume it skips, S21f's pass stamped nothing, by the kit's own statements: a row at another version is stamped no change, an unchanged document none, and an inserted row none. The exception is a file that repeats an id with documents that differ. The kit writes both in turn (`storeIndexData`), and stamps the row changed even on a first index: `frus-parity index` over frus1894Nicaragua with d3's id made d2's stamped d2 `body`, the only one of its 138 rows. So S21f's pass stamped that row changed at every comparison, though the file was the one the export indexed. The selection compares the last document, as the row keeps it, and finds nothing (`aRepeatedIdIsComparedByItsLastDocument`).
+- **Results as S21f's.** Over a volume the selection gives it, the kit's stamp is S21f's. Over a volume it passes over, S21f's pass stamped nothing, by the kit's own statements: a row at another version or none is stamped no change, a gone document's included, an unchanged document none, and an inserted row none. `theVolumesTheSelectionSkipsAreOnesTheKitStampsNothingIn` runs the kit's indexer over those rows, as the comparison seeds them, and finds nothing stamped.
+- **An id given twice:** the kit writes both documents in turn (`storeIndexData`), and stamps the row changed even on a first index. `frus-parity index` over frus1894Nicaragua with d3's id made d2's stamped d2 `body`, the only one of its 138 rows. So such a volume goes to the kit at every comparison, as it did before, and the kit says d2 changed each time, while the reader opens the first of the two (`anIdGivenTwiceHashedDifferentlySelectsItsVolume`).
 - **The synthetic export** holds a few rows of each fixture volume, so each of its mounted volumes still goes to the kit's indexer, as "a document with no row", as every volume did before, and the smoke test's Import server finds nothing changed, as before.
+- **An export with a Mac's update history:** S21f's seed writes the export's rows with no change kind, so the kit stamps a gone document's `vanished` row at version 74 vanished again. A volume of an export whose Mac took a correction that removed a document is therefore still indexed, and its document reported, at each first comparison, as before. A `vanished` row of a document the file gives again costs its volume's indexing, with nothing reported. Both are the seed's, below.
 
 **How the done-when is shown:**
 - **An unchanged corpus, no scratch index run:** `TEIComparisonTests.anUnchangedExportIsComparedWithNoVolumeIndexed`. Over an export the kit made of the two fixture volumes, both are compared and none is given to the indexer, the hook is never told, and the record and the job's line say nothing changed. The comparison index is in place for the readers, passes `quick_check`, and holds no document or revision row.
 - **A changed volume through the scratch index alone, the kit's change kind as now:** `aChangedVolumeAloneIsIndexedAndTheKitSaysHowItChanged` (frus1894Nicaragua corrected, the one volume indexed, d2's `body` change, nothing kept of the other volume). S21f's `UpdateReviewTests` (6) and `TEIComparisonTests` (4) pass unchanged, the review's banner, sheet and tallies among them.
-- **Each of the three differences selects its volume:**
+- **Each of the differences selects its volume:**
   - a row at version 74 of a document the TEI does not give: the kit stamps it `vanished` (`aRowOfADocumentTheTEIDoesNotGiveSelectsItsVolume`);
-  - a document with no row, and one with a vanished row: both volumes go to the indexer, which records no change of the document with no row (`aDocumentWithNoRowOrAVanishedOneSelectsItsVolume`);
-  - a content hash otherwise: the kit stamps `apparatus` (`aDocumentHashedOtherwiseSelectsItsVolume`).
+  - a document with no row, and one with a vanished row: both volumes go to the indexer, which records no change of either, and each is deleted from the comparison index again (`aDocumentWithNoRowOrAVanishedOneSelectsItsVolume`);
+  - a content hash otherwise: the kit stamps `apparatus` (`aDocumentHashedOtherwiseSelectsItsVolume`);
+  - an id given twice, hashed differently: the kit stamps it (`anIdGivenTwiceHashedDifferentlySelectsItsVolume`).
 
-  The rules alone, the version rule and the order of each list among them, are `theSelectionsRules`.
+  The rules alone, the version rule, ids given twice and the order of each list among them, are `theSelectionsRules`. What the selection passes over is held to the kit: rows at an older version and at none, of a gone document and of one hashed otherwise, go to no indexer, and the kit's indexer over them stamps nothing (`theVolumesTheSelectionSkipsAreOnesTheKitStampsNothingIn`). A comparison index that does not read whole is compared afresh at the next re-check (`aComparisonIndexThatDoesNotReadWholeIsComparedAfresh`). `TEIComparisonTests` has 13 tests, S21f's 4 among them.
 - **The hashes are the kit's stamps:** `UpdateReviewParityTests.theComparisonHashesEachDocumentAsTheKitStampsIt`. Over every document of the four fixture volumes, fixtures/tei's three and own-text's, the comparison's hashes equal the rows the kit's `indexVolume` stamps. Over the synthetic export's rows, which the test before it holds to the kit, they equal the rows. `theRulesAreTheKits` holds the parse and the two hashes in `TEIChanges.swift`, with the two lines it held.
 - **Measured in the release image** (below).
 
-**Measured** in the release image `frus-light:s21fstep5` on the owner's Mac (Docker Desktop, 10 CPUs), with other sessions' jobs beside it (load averages 3 to 6), by `.build/s21f5/measure.sh`, S21f's script with one run added. Each time is from the comparison index's opening to the job's last line, as S21f timed its pass:
+**Measured** in the release image `frus-light:s21fstep5`, built at the final code, on the owner's Mac (Docker Desktop, 10 CPUs), with other sessions' jobs beside it (load averages 3.5 to 4.2 over the runs), by `.build/s21f5/measure.sh`, S21f's script with one run added. Each time is from the comparison index's opening to the job's last line, as S21f timed its pass:
 
 | Run | Volumes given to the kit's indexer | Step 5 | Peak memory |
 |---|---|---|---|
-| The fixtures' synthetic export, `fixtures/tei` mounted (2 of its 3 volumes) | 2, their rows partial | 1.04 s, where S21f's took 0.79 | 87 MiB |
-| `fixtures/sample`'s 24 volumes (165 MB, 13,687 documents), unchanged | 0 | **11.72 s**, where S21f's took 24.98 | 78 MiB |
-| The same, frus1961-63v10's first document changed by one word | 1, its `d1` hashed otherwise; the kit took 1.2 s over it | **12.83 s** | 121 MiB |
+| The fixtures' synthetic export, `fixtures/tei` mounted (2 of its 3 volumes) | 2, their rows partial | 1.05 s, where S21f's took 0.79 | 91 MiB |
+| `fixtures/sample`'s 24 volumes (165 MB, 13,687 documents), unchanged | 0 | **11.68 s**, where S21f's took 24.98 | 76 MiB |
+| The same, frus1961-63v10's first document changed by one word | 1, its `d1` hashed otherwise; the kit took 1.3 s over it | **12.84 s** | 123 MiB |
 
-- **The parse costs about half the scratch index:** the kit's whole pass over the same 24, the export's own making, took 24.30 s here, so the new pass is 48% of it, where the kit-access hand-over put it at about half.
-- **The scratch index** held 340 KB at the end of the unchanged run (the kit's tables, empty), and 5.9 MB with the changed volume kept.
-- **For the 553 volumes** (3,338,778,538 bytes, about 322,000 documents), at the unchanged sample's rate: 4.0 minutes by bytes and 4.6 by documents, so 4 to 5 minutes on this Mac, against S21f's 8 to 10. A small host with slower cores may take 2 to 3 times as long, 8 to 15 minutes. Each volume that differs adds what the kit takes to index it.
+- **The parse costs about half the scratch index:** the kit's whole pass over the same 24, the export's own making, took 24.75 s alongside, so the new pass is 47% of it, where the kit-access hand-over put it at about half.
+- **Each comparison index placed** passed `quick_check`. The unchanged run's held 340 KB, the kit's tables empty; the changed run's held 5.9 MB, the changed volume kept.
+- **A first measurement,** on the image before the fold's fix and the review's changes (the working tree at 18:58Z), gave 1.04, 11.72 and 12.83 s, with the kit's whole pass at 24.30.
+- **For the 553 volumes** (3,338,778,538 bytes, about 322,000 documents), at the unchanged sample's rate: 3.9 minutes by bytes and 4.6 by documents, so 4 to 5 minutes on this Mac, against S21f's 8 to 10. A small host with slower cores may take 2 to 3 times as long, 8 to 15 minutes. Each volume that differs adds what the kit takes to index it.
 
-**The cold review** …
+**Two cold reviews,** subagents given the diff, the plan's rules and the points the orchestrator asked a review to weigh, and none of this session's reasoning: one of the selection against the kit, one of the job, the fold and the records. What held up was fixed before the push, in a second commit:
+- **An id given twice** (both): comparing its row with the last document alone let the selection pass over a volume that the kit, writing both in turn, stamps changed, as S21f's pass did at every comparison. And the reader opens the first of the two, so a change to it is one the reader shows. Such an id now counts as a difference, so the kit says what it is.
+- **The rows passed over rested on a rule the kit's public doc does not give for a gone document** (selection review). Its indexer marks a gone document's row at another version vanished without stamping it, and `contentHash`'s doc speaks of hashes alone. A test now runs the kit's indexer over each kind of row the selection passes over and finds nothing stamped, so a pin move that changes the kit fails there. The doc comment and SPEC say where the rule comes from.
+- **The fold's fault was reachable on `main`** (job review), by a comparison none of whose volumes had a file in the folder. Once files came, its re-check would have failed at every start until the next import. A re-check now checks its copy and compares afresh one that does not read whole.
+- **The measurement predated the fold's fix** (job review): it is taken again above, on the image at the final code, with the load at each run.
+- **Tests** (both): the give-way test's comment named a deletion that no longer happens there, and no test held the deletion of a volume indexed and found unchanged, which `aDocumentWithNoRowOrAVanishedOneSelectsItsVolume` now does.
+- **Smaller** (both):
+  - the export's rows are read apart from the parse, so an SQLite error on the export is no longer listed as the TEI's;
+  - the log's line for a volume given to the indexer no longer calls it changed;
+  - the fold's connection no longer shadows the check's `folder`;
+  - SPEC's line on where the scratch index comes from.
+- **Kept, and said here:** the seed's `vanished` rows (selection review), under "What follows from the rules" above and "Found, for later" below. The seed is S21f's, which the orchestrator's brief keeps; with it, the results are S21f's.
 
-**The runs before the push** …
+**The runs before the push,** on this Mac, in one hold of the heavy lock (`.build/s21f5/final.sh`), at `a1be173`, the code as pushed:
+- the image, `frus-light:s21fstep5`, with its parity stage, and the measurement above, on it;
+- CI's swift job, `scripts/swift --postgres test`, with this package's own targets built clean. The build took 96 s, with no warning outside `.build`.
+  - 4,206 tests in 537 suites, all passing but the one named skip, `FTS5StoreTests`' `backupExclusion()`.
+  - By target: CrossRefKitTests 10, FRUSCoreKitTests 2,509, FRUSLightCoreTests 279, FRUSLightServerTests 386, FRUSParityTests 272, FRUSRichTextTests 42, FTS5CheckTests 3, FTS5StoreTests 219, GeneratorKitTests 7, ManifestGeneratorTests 60, SemanticVectorsKitTests 40, SourceExplorerExportGeneratorTests 22, SourceNoteKitTests 327 and WordCloudKitTests 30.
+  - Each is the count `main`'s CI gives at `8707814`, but for this follow-up's tests: FRUSLightServerTests 377 there, so 9 new, and FRUSParityTests 271, so 1.
+- `scripts/compose-smoke --e2e` with `FRUS_IMAGE=frus-light:s21fstep5 FRUS_HOST_PORT=18300`: PASS. The main browser suite ran twice, 85 passed and 5 skipped each time, and the update review's spec passed before and after the update.
+
+A first hold, at `f94d9b7`, before the reviews, had the swift job pass. Its smoke test failed once, in `related.spec.ts:30` under the path at load averages 7 to 8 (S23d's race, below), which passed in both passes of the second. The web suites were not run: nothing under `web/` changed.
 
 **Records:**
 - SPEC's step 5, in both places: Import procedure and The corrections check and the update review.
@@ -373,10 +396,11 @@ Left for the next pin move or the group's last row (rule 5):
   - A document the export records as vanished that the TEI gives again is stamped by its hashes alone: no change when they match, though the export does not hold it.
   - One still gone is stamped vanished anew.
 
-  The selection gives both volumes to the kit, as the plan says, so the results are S21f's. Whether the seed should keep `'vanished'`, so that the kit's own rule for a returning document decides, is a question for a follow-up.
+  The selection gives both volumes to the kit, as the plan says, so the results are S21f's. So an export with a Mac's update history, as one whose Mac took a correction that removed a document, is not "unchanged" to step 5: its volume is indexed, and its document reported again, at each first comparison. Whether the seed should keep `'vanished'`, so that the kit's own rules for a returning document and for one still gone decide, is a question for a follow-up, with the selection's first rule then looking past a row the export already records as vanished.
 - **The parse runs on Swift's cooperative pool,** as the kit's indexer does in `indexVolume` and as the reader's parse does, not on the server's `Blocking` threads. On a one-CPU host each volume's parse holds that thread for its length, as indexing did before.
+- **A race in Related Documents' tuning,** S23d's `web/src/related/RelatedScreen.tsx`, found by this session's first smoke run. `related.spec.ts:30` failed in the pass under the path at load averages 7 to 8, its URL never taking the weight the slider stepped to; it passed at the root. The tuning bar's effect clears the slider's pending commit whenever `axes` changes, and `axes` is the last list's. So a list ranked for the scope change that arrives after the keyboard's step drops the step.
 
-**Next:** S22e, then S24f to S24i and S25b on the features track, as before. The README's lines above are for the next pin move or group's last row to write.
+**Next:** on the features track, S24f to S24i and then S25b, as the waves have them. The README's and COORDINATION's lines above are for the next pin move or group's last row to write, and the seed's `vanished` rows are a question for the orchestrator.
 
 ## Session 21f: the corrections check and the update review
 
