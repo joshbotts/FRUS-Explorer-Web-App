@@ -120,7 +120,7 @@ export function ChronologyScreen() {
             <span aria-hidden="true">–</span>
             <label htmlFor={toId}>{words.to}</label>
             <input id={toId} type="date" value={to} min={from || undefined} required onChange={(event) => setDraftTo(event.target.value)} />
-            <button type="submit" className="primary" disabled={loaded.isFetching}>
+            <button type="submit" className="primary">
               {words.show}
             </button>
           </form>
@@ -276,7 +276,7 @@ function Loaded({
               />
             </Suspense>
           </div>
-          <div className="analytics-table">
+          <div className="analytics-table" tabIndex={0} role="region" aria-label={words.table}>
             <table>
               <caption>{words.table}</caption>
               <thead>

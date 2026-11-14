@@ -190,7 +190,8 @@ export function CorpusAnalyticsScreen() {
               <strong>{words.exportFailed}</strong> {exportError}
             </div>
           )}
-          {answer && answer.matchedDocumentCount > 0 && (documents.data === undefined || documents.data.count > 0) && (
+          {/* Search's count once taken, and until then the chart's own (`handoffHasDocuments`). */}
+          {answer && (documents.data ? documents.data.count > 0 : answer.matchedDocumentCount > 0) && (
             <p className="analytics-handoff">
               {documents.data ? (
                 <Link to="/search" search={{ ...documents.data.search, includeNotes: false, includeSummaries: false }} title={words.handoffHelp}>
@@ -592,7 +593,8 @@ function Chart({ answer, ask, fitLine, dark, busy }: { answer: CorpusAnswer; ask
             </p>
           )}
         </div>
-        <div className="analytics-table">
+        {/* A region the keyboard reaches, since a long table scrolls within it. */}
+        <div className="analytics-table" tabIndex={0} role="region" aria-label={words.table}>
           <table>
             <caption>{words.table}</caption>
             <thead>
