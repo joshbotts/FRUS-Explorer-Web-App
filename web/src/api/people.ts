@@ -81,9 +81,14 @@ export interface DocumentClassification {
   mode: 'import' | 'standalone';
 }
 
+/**
+ * The served rollup's people, some 18,000 on a full corpus: read once, and again only after a correction, or when a
+ * correction finds the rollup rebuilt since (`PEOPLE_CHANGED`).
+ */
 export const peopleQuery = queryOptions({
   queryKey: ['people'],
   queryFn: ({ signal }) => getJSON<PeopleList>('/api/v1/people', undefined, signal),
+  staleTime: Infinity,
 });
 
 export function personQuery(rollupId: number) {

@@ -27,6 +27,10 @@ const graphing = !!process.env.FRUS_E2E_GRAPH;
 // the three fixture volumes.
 const sources = /sources\.spec\.ts$/;
 const sourcing = !!process.env.FRUS_E2E_SOURCES;
+// The People screen (PLAN's S21g): its spec's second test, a merge by keyboard, on the smoke test's Standalone server,
+// which applies a correction at once.
+const people = /people\.spec\.ts$/;
+const correcting = !!process.env.FRUS_E2E_PEOPLE;
 
 export default defineConfig({
   testDir: './e2e',
@@ -42,7 +46,9 @@ export default defineConfig({
             ? { testMatch: graph }
             : sourcing
               ? { testMatch: sources }
-              : { testIgnore: [signIn, accounts, updateReview] }),
+              : correcting
+                ? { testMatch: people }
+                : { testIgnore: [signIn, accounts, updateReview] }),
   timeout: 30_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,

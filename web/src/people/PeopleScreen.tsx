@@ -7,7 +7,7 @@
 // the next export; and what a correction did is said in the screen's status line, as the app's VoiceOver says it.
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { useId, useRef, useState } from 'react';
+import { useDeferredValue, useId, useRef, useState } from 'react';
 import { annotationLayerQuery } from '../api/annotations';
 import { errorMessage } from '../api/client';
 import { peopleQuery, personCorrectionsQuery, type PersonRow } from '../api/people';
@@ -39,7 +39,9 @@ export function PeopleScreen() {
   const opener = useRef<HTMLButtonElement | null>(null);
   const searchId = useId();
   const list = people.data;
-  const sections = list ? displaySections(list, query.trim()) : [];
+  // The list follows the field a moment behind, so that typing stays quick over a full corpus's people.
+  const shownQuery = useDeferredValue(query).trim();
+  const sections = list ? displaySections(list, shownQuery) : [];
 
   const reach = tagging.data?.reach;
   const caption = reach && reach.total > 0 && (
@@ -98,7 +100,7 @@ export function PeopleScreen() {
           {caption}
           {sections.length === 0 ? (
             <div className="empty">
-              <h2>{copy.people.noResults(query.trim())}</h2>
+              <h2>{copy.people.noResults(shownQuery)}</h2>
               <p>{copy.people.noResultsDetail}</p>
             </div>
           ) : (
