@@ -120,6 +120,12 @@ struct TEIRevisionHashes: Sendable, Equatable {
     var body: String
 }
 
+/// A document of a TEI file, as its parse gives it, in the file's order: its id and its two hashes.
+struct TEIParsedDocument: Sendable, Equatable {
+    var id: String
+    var hashes: TEIRevisionHashes
+}
+
 /// The export's revision row of a document, as the comparison reads it: its two hashes, the index version that wrote
 /// them, and whether it records the document as vanished.
 struct TEIStoredRevision: Sendable, Equatable {
@@ -138,8 +144,11 @@ struct TEIDifferences: Sendable, Equatable, CustomStringConvertible {
     var notInExport: [String] = []
     /// The file's documents whose content or body hash is not their row's, at the indexer's version.
     var hashes: [String] = []
+    /// The ids the file gives to more than one document, hashed differently: the indexer writes each in turn over
+    /// the one before, so the kit is given the volume to say what that is.
+    var repeated: [String] = []
 
-    var isEmpty: Bool { notInTEI.isEmpty && notInExport.isEmpty && hashes.isEmpty }
+    var isEmpty: Bool { notInTEI.isEmpty && notInExport.isEmpty && hashes.isEmpty && repeated.isEmpty }
 
     /// For the server's log.
     var description: String {
@@ -149,7 +158,8 @@ struct TEIDifferences: Sendable, Equatable, CustomStringConvertible {
             return "\(ids.count) \(ids.count == 1 ? "document" : "documents") \(what) (\(named))"
         }
         return [part(hashes, "hashed otherwise"), part(notInExport, "with no row in the export, or a vanished one"),
-                part(notInTEI, "no longer in the file")].compactMap { $0 }.joined(separator: "; ")
+                part(notInTEI, "no longer in the file"), part(repeated, "given more than once, hashed differently")]
+            .compactMap { $0 }.joined(separator: "; ")
     }
 }
 
@@ -428,33 +438,50 @@ public actor TEIChangeCheck {
     }
 
     /// The comparison the job takes up: the one under way for the served index, or one of the volumes whose file
-    /// changed since the last whole comparison, over a copy of it, or one of every volume. Nil when no file has
-    /// changed since the last.
+    /// changed since the last whole comparison, over a copy of it, or one of every volume, as also when the copy does
+    /// not read whole. Nil when no file has changed since the last.
     private func plan(_ index: CorpusIndex, _ served: TEIServedFile) async throws -> TEIComparisonWork? {
         if let work = Self.readWork(workURL), work.served == served, FileManager.default.fileExists(atPath: buildingURL.path) {
             return work
         }
         try? FileManager.default.removeItem(at: workFolder)
-        var work: TEIComparisonWork
+        var work = TEIComparisonWork(served: served, recheck: false, plan: Self.volumes(of: index), done: 0, checked: [],
+                                     changed: [], unchecked: [:], files: [:])
         if let record = phase.record {
             let stale = await staleVolumes(of: index, against: record)
             guard !stale.isEmpty else { return nil }
             try FileManager.default.createDirectory(at: workFolder, withIntermediateDirectories: true)
             let comparison = comparisonURL, building = buildingURL
-            try await Blocking.run { try FileManager.default.copyItem(at: comparison, to: building) }
-            let again = Set(stale)
-            work = TEIComparisonWork(served: served, recheck: true, plan: stale, done: 0,
-                                     checked: record.checked.filter { !again.contains($0) },
-                                     changed: record.changed.filter { !again.contains($0) },
-                                     unchecked: record.unchecked.filter { !again.contains($0.key) },
-                                     files: record.files.filter { !again.contains($0.key) })
+            let whole = try await Blocking.run { () -> Bool in
+                try FileManager.default.copyItem(at: comparison, to: building)
+                return Self.readsWhole(building)
+            }
+            if whole {
+                let again = Set(stale)
+                work = TEIComparisonWork(served: served, recheck: true, plan: stale, done: 0,
+                                         checked: record.checked.filter { !again.contains($0) },
+                                         changed: record.changed.filter { !again.contains($0) },
+                                         unchecked: record.unchecked.filter { !again.contains($0.key) },
+                                         files: record.files.filter { !again.contains($0.key) })
+            } else {
+                // A comparison index that does not read whole, such as one a comparison that indexed no volume placed
+                // before S21f's follow-up folded its log through a connection of its own, cannot be compared again
+                // over: every volume is compared afresh, which places a whole one.
+                log("The last comparison of the index with the TEI folder does not read whole, so every volume is compared again")
+                try FileManager.default.removeItem(at: building)
+            }
         } else {
             try FileManager.default.createDirectory(at: workFolder, withIntermediateDirectories: true)
-            work = TEIComparisonWork(served: served, recheck: false, plan: Self.volumes(of: index), done: 0, checked: [],
-                                     changed: [], unchecked: [:], files: [:])
         }
         try Self.write(work, to: workURL)
         return work
+    }
+
+    /// Whether the SQLite file at `url` reads whole, by its `quick_check`.
+    static func readsWhole(_ url: URL) -> Bool {
+        guard let db = try? SQLiteConnection.immutable(url) else { return false }
+        defer { db.close() }
+        return (try? db.query("PRAGMA quick_check").first?.first?.text) == "ok"
     }
 
     /// Compares the volumes of `work` not yet compared, keeping `work` in its folder after each, and gives way to
@@ -517,10 +544,17 @@ public actor TEIChangeCheck {
             return
         }
         work.files[volumeId] = file
+        let stored: [String: TEIStoredRevision]
+        do {
+            stored = try Self.storedRevisions(volumeId, in: served)
+        } catch {
+            log("The export's record of \(volumeId) could not be read to compare it with its TEI: \(error)")
+            work.unchecked[volumeId] = "The export's record of it could not be read to compare it, which the server's log says why."
+            return
+        }
         let differences: TEIDifferences
         do {
-            let parsed = try await Self.revisionHashes(of: teiFile(volumeId))
-            differences = Self.differences(parsed: parsed, stored: try Self.storedRevisions(volumeId, in: served))
+            differences = Self.differences(parsed: try await Self.revisionHashes(of: teiFile(volumeId)), stored: stored)
         } catch is CancellationError {
             throw CancellationError()
         } catch {
@@ -532,7 +566,7 @@ public actor TEIChangeCheck {
             work.checked.append(volumeId)
             return
         }
-        log("\(volumeId): its TEI differs from the export's record, so the kit's indexer compares it: \(differences)")
+        log("\(volumeId): given to the kit's indexer to compare, for \(differences)")
         // Room for the volume's tables and their log, beside the user store and its backups.
         if let free = VolumeLibrary.freeBytes(at: folder), free < 2 * file.bytes + LibraryIndexer.spareBytes {
             throw TEICheckProblem("the data volume has \(LibraryIndexer.megabytes(free)) free, and comparing \(volumeId) needs about \(LibraryIndexer.megabytes(2 * file.bytes + LibraryIndexer.spareBytes))")
@@ -568,14 +602,14 @@ public actor TEIChangeCheck {
     /// left one that read as malformed when its log was folded through the seeder.
     private func place(_ work: TEIComparisonWork, seeder: SQLiteConnection) throws -> TEIChangeRecord {
         seeder.close()
-        let folder = try SQLiteConnection(buildingURL.path, readOnly: false)
-        defer { folder.close() }
-        let folded = try folder.query("PRAGMA wal_checkpoint(TRUNCATE)").first?.first?.integer ?? 1
-        let journal = try folder.query("PRAGMA journal_mode=DELETE").first?.first?.text ?? ""
+        let last = try SQLiteConnection(buildingURL.path, readOnly: false)
+        defer { last.close() }
+        let folded = try last.query("PRAGMA wal_checkpoint(TRUNCATE)").first?.first?.integer ?? 1
+        let journal = try last.query("PRAGMA journal_mode=DELETE").first?.first?.text ?? ""
         guard folded == 0, journal.lowercased() == "delete" else {
             throw TEICheckProblem("the comparison index's log could not be folded into it (busy \(folded), journal \(journal))")
         }
-        folder.close()
+        last.close()
         // To the second, as the record's file keeps it.
         let checkedAt = Date(timeIntervalSince1970: now().timeIntervalSince1970.rounded(.down))
         let record = TEIChangeRecord(served: work.served, checkedAt: checkedAt, checked: work.checked.sorted(),
@@ -598,16 +632,14 @@ public actor TEIChangeCheck {
 
     // MARK: The selection
 
-    /// Each document of the volume's TEI file at `url`, by id, with its two revision hashes as the kit's indexer
-    /// stamps them: the parse `indexVolume` makes, `parseVolumeFull`, and every document it gives, front matter and
-    /// editorial notes among them, hashed by the kit's public functions over the strings the indexer stores. Where the
-    /// file repeats a document's id, the last is kept, as the indexer's writes keep it. Not isolated to the check, so
-    /// the parse runs off the actor.
-    static func revisionHashes(of url: URL) async throws -> [String: TEIRevisionHashes] {
-        let documents = try await FRUSDocumentParser().parseVolumeFull(volumeURL: url).documents
-        var hashes: [String: TEIRevisionHashes] = [:]
-        for document in documents { hashes[document.documentId] = revisionHashes(of: document) }
-        return hashes
+    /// Each document of the volume's TEI file at `url`, in the file's order, with its two revision hashes as the kit's
+    /// indexer stamps them: the parse `indexVolume` makes, `parseVolumeFull`, and every document it gives, front
+    /// matter and editorial notes among them, hashed by the kit's public functions over the strings the indexer
+    /// stores. Not isolated to the check, so the parse runs off the actor.
+    static func revisionHashes(of url: URL) async throws -> [TEIParsedDocument] {
+        try await FRUSDocumentParser().parseVolumeFull(volumeURL: url).documents.map {
+            TEIParsedDocument(id: $0.documentId, hashes: revisionHashes(of: $0))
+        }
     }
 
     /// A parsed document's two revision hashes: `content_hash` over its head, dateline, source note and text as the
@@ -635,25 +667,35 @@ public actor TEIChangeCheck {
         return rows
     }
 
-    /// Where a volume's documents, `parsed` from its TEI file, differ from `stored`, the export's revision rows of it:
-    /// the volumes the kit's indexer is given in the comparison index, so that it states what changed and how. Three
-    /// things count, as the kit's own stamp settles each of them over the export's rows:
+    /// Where a volume's documents, `parsed` from its TEI file in its order, differ from `stored`, the export's revision
+    /// rows of it: what has the comparison give the volume to the kit's indexer, so that the kit states what changed
+    /// and how. A document's row is compared with the last document of its id, as the indexer's writes keep the last.
+    /// Four things count:
     /// - a row at the indexer's version, `IndexingPipeline.currentDateIndexVersion`, of a document the file no longer
     ///   gives;
     /// - a document of the file with no row, or with a row that records it as vanished, at any version;
-    /// - a document whose content or body hash is not its row's, where the row is at the indexer's version.
+    /// - a document whose content or body hash is not its row's, where the row is at the indexer's version;
+    /// - an id the file gives to more than one document, hashed differently, which the indexer writes in turn.
     ///
-    /// A row another version wrote is compared by neither hash, nor when its document has gone: the kit's
-    /// `contentHash` says a stored row compares only at its version, since a version can move a document's hashes with
-    /// no change to its file, and the indexer stamps no change across one. Which change a difference is, and whether
-    /// it is one, is the kit's to say: nothing here decides it.
-    static func differences(parsed: [String: TEIRevisionHashes], stored: [String: TEIStoredRevision]) -> TEIDifferences {
+    /// The version is the plan's rule for this comparison (PLAN's S21f follow-up): the kit's `contentHash` says a
+    /// stored row compares only at its version, since a version can move a document's hashes with no change to its
+    /// file, and the indexer stamps no change across one, a row of a document that has gone included.
+    /// `TEIComparisonTests.theVolumesTheSelectionSkipsAreOnesTheKitStampsNothingIn` holds the kit to that: it runs the
+    /// kit's indexer over the rows this passes over and finds nothing stamped. Which change a difference is, and
+    /// whether it is one, is the kit's to say.
+    static func differences(parsed: [TEIParsedDocument], stored: [String: TEIStoredRevision]) -> TEIDifferences {
         let version = IndexingPipeline.currentDateIndexVersion
+        var last: [String: TEIRevisionHashes] = [:]
+        var repeated = Set<String>()
+        for document in parsed {
+            if let before = last[document.id], before != document.hashes { repeated.insert(document.id) }
+            last[document.id] = document.hashes
+        }
         var found = TEIDifferences()
-        for (id, row) in stored where parsed[id] == nil && row.indexVersion == version {
+        for (id, row) in stored where last[id] == nil && row.indexVersion == version {
             found.notInTEI.append(id)
         }
-        for (id, hashes) in parsed {
+        for (id, hashes) in last {
             guard let row = stored[id], !row.vanished else {
                 found.notInExport.append(id)
                 continue
@@ -665,6 +707,7 @@ public actor TEIChangeCheck {
         found.notInTEI.sort()
         found.notInExport.sort()
         found.hashes.sort()
+        found.repeated = repeated.sorted()
         return found
     }
 

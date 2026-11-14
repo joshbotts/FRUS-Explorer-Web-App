@@ -322,19 +322,21 @@ import Testing
         var stamped = 0
         for (volume, folder) in volumes {
             let parsed = try await TEIChangeCheck.revisionHashes(of: folder.appendingPathComponent("\(volume).xml"))
+            let byId = Dictionary(parsed.map { ($0.id, $0.hashes) }, uniquingKeysWith: { _, last in last })
+            #expect(byId.count == parsed.count, "\(volume) gives each id once")
             let directory = try TemporaryDirectory()
             let url = directory.url.appendingPathComponent("scratch.db")
             let pipeline = try IndexingPipeline(fts5Store: try FTS5Store(databaseURL: url), databaseURL: url, volumesDirectory: folder,
                                                 resources: resources, defaults: InMemoryIndexingStampStore())
             try await pipeline.indexVolume(volume)
             let rows = try await pipeline.documentRevisions(forVolumeId: volume)
-            #expect(rows.count == parsed.count, "\(volume): a row for each document the comparison hashes")
+            #expect(rows.count == byId.count, "\(volume): a row for each document the comparison hashes")
             for row in rows {
-                #expect(parsed[row.documentId] == TEIRevisionHashes(content: row.contentHash, body: row.bodyHash),
+                #expect(byId[row.documentId] == TEIRevisionHashes(content: row.contentHash, body: row.bodyHash),
                         "\(volume)/\(row.documentId)")
             }
             stamped += rows.count
-            for (id, pair) in parsed { hashes["\(volume)/\(id)"] = pair }
+            for (id, pair) in byId { hashes["\(volume)/\(id)"] = pair }
             withExtendedLifetime(directory) {}
         }
         #expect(stamped > 400, "every document of the four fixture volumes")
@@ -366,7 +368,7 @@ import Testing
             "try await pipeline.indexVolume(volumeId)", "let owed = stamps.reindexOwed()",
         ], file: "LibraryIndexing.swift")
         NoteViewParityTests.expect(try Self.server("Sources/FRUSLightCore/TEIChanges.swift"), holds: [
-            "let documents = try await FRUSDocumentParser().parseVolumeFull(volumeURL: url).documents",
+            "try await FRUSDocumentParser().parseVolumeFull(volumeURL: url).documents.map {",
             "content: IndexingPipeline.contentHash(header: IndexingPipeline.extractHeader(from: nodes), dateline: IndexingPipeline.extractDateline(from: nodes), sourceNote: IndexingPipeline.extractSourceNote(from: nodes), bodyText: IndexingPipeline.extractBodyText(from: nodes)),",
             "body: IndexingPipeline.bodyHash(for: document))",
             "let version = IndexingPipeline.currentDateIndexVersion",

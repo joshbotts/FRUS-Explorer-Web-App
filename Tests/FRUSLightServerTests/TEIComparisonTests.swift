@@ -4,11 +4,13 @@
 // the comparison before; and an admin's cancel holds until a start, which goes on with what the stop left. Since
 // S21f's follow-up it hashes each volume's documents with the kit's public functions first, and gives the kit's
 // indexer only a volume that differs from the export's rows: none of an unchanged export, the changed volume alone,
-// and a volume for each of the three differences that count, a repeated id compared by its last document.
+// and a volume for each of the differences that count, an id given twice among them; the rows it passes over are ones
+// the kit stamps nothing for; and a comparison index that does not read whole is not compared again over.
 
 @testable import FRUSCoreKit
 @testable import FRUSLightCore
 import FRUSLightTestSupport
+import FTS5Store
 import Foundation
 import Testing
 
@@ -56,7 +58,7 @@ import Testing
     }
 
     /// A job queued while the comparison runs waits one volume: the comparison gives way to it, and goes on after it
-    /// from the volume it stopped at, in a job of its own, deleting each volume nothing moved in as it goes.
+    /// from the volume it stopped at, in a job of its own.
     @Test func theComparisonGivesWayToAQueuedJobAndGoesOnWhereItStopped() async throws {
         let fixture = try await Fixture()
         defer { withExtendedLifetime(fixture) {} }
@@ -85,7 +87,7 @@ import Testing
         #expect(record.checked == TEIComparisonTests.volumes && record.changed.isEmpty && record.unchecked.isEmpty)
         #expect(record.files.keys.sorted() == TEIComparisonTests.volumes)
         #expect(!FileManager.default.fileExists(atPath: fixture.files.root.appendingPathComponent("tei-check/.work").path))
-        // Nothing moved, so the comparison index keeps nothing of either volume, its revision rows included.
+        // Nothing moved, so the comparison index holds nothing of either volume, its revision rows included.
         let comparison = try #require(await check.comparison())
         for volume in TEIComparisonTests.volumes {
             let rows = try await comparison.pipeline.documentRevisions(forVolumeId: volume)
@@ -280,8 +282,10 @@ import Testing
     }
 
     /// A document of the TEI with no row in the export, or with a row that records it as vanished, selects its
-    /// volume, and the kit's stamp says whether it changed: of the document with no row, which is new to the
-    /// comparison, it records no change.
+    /// volume, and the kit's stamp says whether it changed. Of the document with no row, which is new to the
+    /// comparison, it records none. The vanished row reaches the kit as S21f's seed writes it, with no change kind,
+    /// so the kit compares its hashes, which are the document's, and records none either. Each volume, the kit having
+    /// stamped nothing in it, is deleted from the comparison index again.
     @Test func aDocumentWithNoRowOrAVanishedOneSelectsItsVolume() async throws {
         let run = try await Self.compare(try await Fixture { db in
             _ = try db.query("DELETE FROM document_revisions WHERE volume_id = 'frus1961-63v06' AND document_id = 'd1'")
@@ -289,7 +293,12 @@ import Testing
         })
         defer { withExtendedLifetime(run.fixture) {} }
         #expect(run.indexed == TEIComparisonTests.volumes)
-        #expect(run.record.checked == TEIComparisonTests.volumes && !run.record.changed.contains("frus1961-63v06"))
+        #expect(run.record.checked == TEIComparisonTests.volumes && run.record.changed.isEmpty)
+        let placed = try SQLiteConnection.immutable(await run.check.comparisonURL)
+        defer { placed.close() }
+        for table in ["document_cache", "document_revisions"] {
+            #expect(try placed.scalar("SELECT count(*) FROM \(table)")?.integer == 0, "\(table): each volume deleted again")
+        }
     }
 
     /// A document whose hash is not its row's, at the indexer's version, selects its volume, and the kit's stamp says
@@ -316,10 +325,11 @@ import Testing
         return Data(xml.utf8)
     }
 
-    /// A volume whose file repeats a document's id is compared by the last document of that id, which the export's
-    /// row records, as the kit's indexer keeps the last: the comparison gives the volume to no indexer, though the first
-    /// document of the id is hashed otherwise.
-    @Test func aRepeatedIdIsComparedByItsLastDocument() async throws {
+    /// A volume whose file gives an id to two documents that differ is given to the kit's indexer, which writes them
+    /// in turn and says what that is, as it said at every comparison before the hashes: the export's row of the id,
+    /// which records the last document, as the kit's indexer keeps the last, is compared with the last and is that
+    /// document's, and the id given twice is what selects the volume.
+    @Test func anIdGivenTwiceHashedDifferentlySelectsItsVolume() async throws {
         let users = try await UserDataFixture(volumes: [UpdateReviewTests.volume])
         defer { withExtendedLifetime(users) {} }
         let files = users.server.files
@@ -329,14 +339,15 @@ import Testing
         try await UpdateReviewTests.buildIndex(of: [UpdateReviewTests.volume], from: files.volumesDirectory, at: files.liveIndex,
                                                resources: users.server.resources)
         await users.server.state.openExistingIndex(files: files)
-        let twice = try await FRUSDocumentParser().parseVolumeFull(volumeURL: file).documents.filter { $0.documentId == "d2" }
-        #expect(twice.count == 2)
+        let parsed = try await TEIChangeCheck.revisionHashes(of: file)
+        let twice = parsed.filter { $0.id == "d2" }
+        #expect(twice.count == 2 && twice[0].hashes != twice[1].hashes)
         let export = try SQLiteConnection.immutable(files.liveIndex)
-        let row = try #require(try TEIChangeCheck.storedRevisions(UpdateReviewTests.volume, in: export)["d2"])
+        let stored = try TEIChangeCheck.storedRevisions(UpdateReviewTests.volume, in: export)
         export.close()
-        let first = TEIChangeCheck.revisionHashes(of: twice[0]), last = TEIChangeCheck.revisionHashes(of: twice[1])
-        #expect(first != last)
-        #expect(TEIRevisionHashes(content: row.content, body: row.body) == last)
+        let row = try #require(stored["d2"])
+        #expect(TEIRevisionHashes(content: row.content, body: row.body) == twice[1].hashes)
+        #expect(TEIChangeCheck.differences(parsed: parsed, stored: stored) == TEIDifferences(repeated: ["d2"]))
 
         let check = TEIChangeCheck(liveIndex: files.liveIndex, volumesDirectory: files.volumesDirectory,
                                    folder: files.root.appendingPathComponent("tei-check"),
@@ -346,14 +357,18 @@ import Testing
         await check.ensureCurrent()
         await users.jobs.waitUntilIdle()
         let given = await indexed.all
-        #expect(given.isEmpty)
+        #expect(given == [UpdateReviewTests.volume])
         let record = try #require(await check.status().record)
-        #expect(record.checked == [UpdateReviewTests.volume] && record.changed.isEmpty)
+        #expect(record.checked == [UpdateReviewTests.volume] && record.changed == [UpdateReviewTests.volume])
+        let comparison = try #require(await check.comparison())
+        let changed = try await comparison.pipeline.unreviewedDocumentRevisions()
+        #expect(changed.map(\.documentId) == ["d2"], "the kit's own word on the id it writes twice")
     }
 
     /// The selection's rules over the export's rows, alone: what gives a volume to the kit's indexer, with a row
     /// another index version wrote compared by neither hash, nor when its document has gone, but counted when it
-    /// records as vanished a document the file gives.
+    /// records as vanished a document the file gives; and an id the file gives twice compared by its last document,
+    /// and counted when its documents differ.
     @Test func theSelectionsRules() {
         let version = IndexingPipeline.currentDateIndexVersion
         let a = TEIRevisionHashes(content: "c1", body: "b1")
@@ -361,7 +376,10 @@ import Testing
             TEIStoredRevision(content: hashes.content, body: hashes.body, indexVersion: indexVersion, vanished: vanished)
         }
         func differences(_ parsed: [String: TEIRevisionHashes], _ stored: [String: TEIStoredRevision]) -> TEIDifferences {
-            TEIChangeCheck.differences(parsed: parsed, stored: stored)
+            TEIChangeCheck.differences(parsed: parsed.map { TEIParsedDocument(id: $0.key, hashes: $0.value) }, stored: stored)
+        }
+        func inOrder(_ parsed: [(String, TEIRevisionHashes)], _ stored: [String: TEIStoredRevision]) -> TEIDifferences {
+            TEIChangeCheck.differences(parsed: parsed.map { TEIParsedDocument(id: $0.0, hashes: $0.1) }, stored: stored)
         }
         #expect(differences(["d1": a, "d2": a], ["d1": row(a), "d2": row(a)]).isEmpty)
         #expect(differences([:], [:]).isEmpty)
@@ -380,5 +398,103 @@ import Testing
         #expect(differences(["d3": a, "d1": a, "d2": a, "d5": a],
                             ["d5": row(body), "d4": row(a), "d2": row(content), "d9": row(a), "d3": row(a, vanished: true)])
                 == TEIDifferences(notInTEI: ["d4", "d9"], notInExport: ["d1", "d3"], hashes: ["d2", "d5"]))
+        // An id given twice: its row compared with the last; the twice-given id counted only when its documents differ,
+        // whatever its row says.
+        #expect(inOrder([("d1", a), ("d1", a)], ["d1": row(a)]).isEmpty)
+        #expect(inOrder([("d1", content), ("d1", a)], ["d1": row(a)]) == TEIDifferences(repeated: ["d1"]))
+        #expect(inOrder([("d1", a), ("d1", content)], ["d1": row(a)]) == TEIDifferences(hashes: ["d1"], repeated: ["d1"]))
+        #expect(inOrder([("d1", content), ("d1", a)], ["d1": row(a, version - 1)]) == TEIDifferences(repeated: ["d1"]))
+        #expect(inOrder([("d1", a), ("d2", a), ("d1", a)], ["d1": row(a), "d2": row(a)]).isEmpty)
+    }
+
+    /// An export stamped as a Mac's export is, so that its rows may be at any version.
+    static func stamp(_ db: SQLiteConnection) throws {
+        let version = IndexCompatibility.supportedIndexVersion, fts = IndexCompatibility.ftsSchemaVersion
+        try db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS research_provenance (key TEXT PRIMARY KEY, value TEXT);
+            INSERT OR REPLACE INTO research_provenance (key, value) VALUES
+              ('exported_at', '2026-11-14T12:00:00Z'), ('my_writing_included', '0'),
+              ('installed_index_version', '\(version)'), ('current_index_version', '\(version)'),
+              ('installed_fts_schema_version', '\(fts)'), ('current_fts_schema_version', '\(fts)');
+            """)
+    }
+
+    /// The rows the selection passes over are ones the kit's indexer stamps nothing for: over an export holding, in
+    /// each fixture volume, a row at an older version and one at none, of a document the TEI does not give and of a
+    /// document hashed otherwise, the comparison gives the kit no volume; and the kit, given each volume anyway over
+    /// the export's rows as the comparison seeds them, stamps no change in either.
+    @Test func theVolumesTheSelectionSkipsAreOnesTheKitStampsNothingIn() async throws {
+        let older = Int64(IndexingPipeline.currentDateIndexVersion - 1)
+        let fixture = try await Fixture { db in
+            try Self.stamp(db)
+            for (volume, version) in [("frus1894Nicaragua", SQLiteValue.integer(older)), ("frus1961-63v06", .null)] {
+                _ = try db.query(
+                    """
+                    INSERT INTO document_revisions (volume_id, document_id, content_hash, body_hash, index_version)
+                    SELECT volume_id, 'd999', content_hash, body_hash, ? FROM document_revisions WHERE volume_id = ? AND document_id = 'd1'
+                    """, [version, .text(volume)])
+                _ = try db.query("UPDATE document_revisions SET content_hash = 'another', body_hash = 'another', index_version = ? WHERE volume_id = ? AND document_id = 'd2'",
+                                 [version, .text(volume)])
+            }
+        }
+        let run = try await Self.compare(fixture)
+        defer { withExtendedLifetime(run.fixture) {} }
+        #expect(run.compared == TEIComparisonTests.volumes)
+        #expect(run.indexed.isEmpty, "the selection gives the kit no volume")
+        #expect(run.record.changed.isEmpty && run.record.unchecked.isEmpty)
+
+        let export = try SQLiteConnection.immutable(fixture.files.liveIndex)
+        defer { export.close() }
+        for volume in TEIComparisonTests.volumes {
+            let directory = try TemporaryDirectory()
+            let url = directory.url.appendingPathComponent("scratch.db")
+            let pipeline = try IndexingPipeline(fts5Store: try FTS5Store(databaseURL: url), databaseURL: url,
+                                                volumesDirectory: fixture.files.volumesDirectory,
+                                                resources: fixture.users.server.resources.indexing, defaults: InMemoryIndexingStampStore())
+            let seeder = try SQLiteConnection(url.path, readOnly: false)
+            try TEIChangeCheck.seed(volume, from: export, into: seeder)
+            seeder.close()
+            try await pipeline.indexVolume(volume)
+            let stamped = try await pipeline.documentRevisions(forVolumeId: volume).filter { $0.changedAt != nil }
+            #expect(stamped.isEmpty, "\(volume): the kit stamps \(stamped.map(\.documentId))")
+            withExtendedLifetime(directory) {}
+        }
+    }
+
+    /// A comparison index that does not read whole, as a comparison that indexed no volume placed before the log was
+    /// folded through a connection of its own, is not compared again over: when a file of the folder changes, every
+    /// volume is compared afresh, the change found, and a whole comparison index placed.
+    @Test func aComparisonIndexThatDoesNotReadWholeIsComparedAfresh() async throws {
+        let fixture = try await Fixture()
+        defer { withExtendedLifetime(fixture) {} }
+        let check = fixture.check()
+        await check.ensureCurrent()
+        await fixture.jobs.waitUntilIdle()
+        let placed = await check.comparisonURL
+        #expect(TEIChangeCheck.readsWhole(placed))
+        // Its pages after the first written over, its schema kept.
+        let handle = try FileHandle(forUpdating: placed)
+        try handle.seek(toOffset: 4096)
+        try handle.write(contentsOf: Data(repeating: 0xA5, count: 8192))
+        try handle.close()
+        #expect(!TEIChangeCheck.readsWhole(placed))
+
+        let file = fixture.files.volumesDirectory.appendingPathComponent("\(UpdateReviewTests.volume).xml")
+        try FileManager.default.removeItem(at: file)
+        try UpdateReviewTests.corrected().write(to: file)
+        await check.ensureCurrent()
+        await fixture.jobs.waitUntilIdle()
+        let status = await check.status()
+        #expect(!status.running && status.problem == nil)
+        let record = try #require(status.record)
+        #expect(record.checked == TEIComparisonTests.volumes && record.changed == [UpdateReviewTests.volume])
+        let comparisons = await fixture.comparisons()
+        #expect(comparisons.map(\.state) == [.succeeded, .succeeded])
+        #expect(comparisons.last?.progress == "Compared 2 of the index's 2 volumes with the TEI folder: 1 with a document whose TEI changed after the export was indexed")
+        #expect(TEIChangeCheck.readsWhole(placed))
+        let comparison = try #require(await check.comparison())
+        let changed = try await comparison.pipeline.unreviewedDocumentRevisions()
+        #expect(changed.map(\.documentId) == ["d2"] && changed.first?.changeKind == "body")
     }
 }
