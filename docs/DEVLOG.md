@@ -365,9 +365,82 @@ Phase 3's row S24c, the third pull request of the third upstream batch: the arch
 
 **Next:** Mac check 23 and the owner's merge of FRUS-Explorer#1901; beside it S24d's FRUS-Explorer#1900, the batch's last, awaiting Mac check 24, which changes four of the same files (`CLAUDE.md`, the project file, `Package.swift` and the plan), so the second of the two to merge has `v2` merged into it; then S24e's pin move past the batch, and S24f, Corpus Analytics and Chronology.
 
+## Session 22d, second follow-up: the pin moves to `b124a59b`
+
+14 November 2026 · branch `claude/hopeful-hodgkin-14bfda`, a follow-up session of the phase-3 orchestrator's · [#140](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/140) · upstream `b124a59b`
+
+The pin moves from `6b6932aa` to `b124a59b`, `v2`'s head, in a pull request of its own under rule 5, with no PLAN row: the move that the entry below, "Session 22d, follow-up, upstream", said would carry [FRUS-Explorer#1904](https://github.com/joshbotts/FRUS-Explorer/pull/1904). `b124a59b` is #1904's merge. The owner merged it after Mac check 29, on 14 November (12:14 UTC), onto `v2` at `6b6932aa`. Its squash's tree is its head's, `3489cc89`, both `5c10f2b9`, which this session compared. It is the only commit between the two pins. The branch was cut from `main` at `48dbc22`, #139's merge. The daily watch's issue, [#106](https://github.com/joshbotts/FRUS-Explorer-Web-App/issues/106), still describes the kits' failure at `39859a51` (run [43444877747](https://github.com/joshbotts/FRUS-Explorer-Web-App/actions/runs/43444877747)), the stamp race #1903 fixed; it should close at the watch's first run after this merges, when it finds `v2` at the pin and the kits passing.
+
+**What the move brought:**
+- Eight kit files, in access and doc comments alone, each with a version line: `FRUSCoreKit/Search/IndexingPipeline.swift`, and `ArchivalResolver.swift`, `CentralFilesIndex.swift`, `CollectionAuthority.swift`, `CollectionRelations.swift`, `ExternalCitationIndex.swift`, `LotClaimantsIndex.swift` and `VolumeSourcesIndex.swift` under `FRUSCoreKit/SourceExplorer/`. What they make public is the list in the entry below.
+- The app's `CLAUDE.md`, two sentences on FRUSCoreKit's line naming what is public; `Docs/EditableContent/06-Archives.md`, six blocks' source ranges re-pointed with no text changed, and its amendment log; and the app's plan.
+
+No behaviour changed, and no file was added or removed.
+
+**Nothing in the build to follow,** as #1904's entry foresaw:
+- **The build:** no folder this package compiles gained or lost a file, so `Package.swift` stands. Build 1812, index version 74, FTS generation 4 and the export's format version 7 are unchanged, so `Compatibility.swift` and the install guide stand.
+- **The tests:** #1904 changes no test file, so `FRUSCoreKitTests` keeps its 2,509 tests in 307 suites, no test gains a skip, and CI's allow-list stands.
+- **Names:** none of the types #1904 makes public (`CollectionRelations`, `RelatedCollection`, `CollectionCoverageEra`, `CollectionEraCount`, `LotClaimant`, `MajorCollectionRecord`) is declared in this repository's `Sources`, `Tests` or `tools/mac-golden`, and none of the changed kit types has an extension here. The server's own `contentHash` properties belong to its own types.
+- **The parity tests that read kit source #1904 changes:** `SourceExplorerParityTests` holds `static let previewRowCap = 5` in `CollectionRelations.swift`, which the new `public static let previewRowCap = 5` contains, and `ReadIndexParityTests` holds three lines of `IndexingPipeline.swift`'s reading sequence, which #1904 leaves alone. Both pass at `b124a59b`, their first Linux run against #1904's tree.
+
+**The indexing path,** compared from `6b6932aa` to `b124a59b` before the golden files were made, over COORDINATION §5's list with the extension in `CollectionAuthority.swift`, as S24e's move read it:
+- `IndexingPipeline.swift`: `contentHash(header:dateline:sourceNote:bodyText:)`, `bodyHash(for:)`, `extractDateline(from:)`, `extractSourceNote(from:)`, `extractBodyText(from:)` and `isLibraryRepository(_:)` made public, their bodies unchanged, with a version line and doc comments. `setupDatabase(_:)` is the same text, at lines 8355–9010 where it was at 8341–8996.
+- `CollectionAuthority.swift`, for its extension of the pipeline's `CollectionAliasFallback`: `init(record:)` made public, which the indexer does not call. Beside it, outside that extension, `CollectionAuthorityIndex.record(forFrontMatterText:repository:lotFileNorm:decimalClass:)` is made public, with a version line.
+- The parser, FTS5Store, SourceNoteKit and the bundled resources: unchanged.
+
+So the golden files come from the export S21b's, S23c's and S24e's moves used, by the owner's choice of 14 November ("Yes, reuse it"), asked through the orchestrator before the remake.
+
+**The golden files,** made by `scripts/make-golden --export /Users/Shared/frus-index-build1812-2026-11-10-golden.sqlite` under the app's heavy lock, on this Mac (macOS 27.2.1, Xcode 27.2), from the owner's ninth three-volume export: TestFlight's 1.0 (1812), index version 74, 393 documents and no writing. `tools/mac-golden` was built at the pin first (216 s), and the run passed every step, `check-golden` among them, in 57 s.
+- **Provenance:** five files moved in their provenance, the render's manifest, the expressions, the results, the golden spans and the index summary: the source digest, `691f8b17…` to `621edf66…`, and the upstream commit. The index summary's timings, which are information and never gated, moved besides; its gating, 36 digests and 7 checks, is as it was. The Mac's system line is unchanged.
+- **Unchanged:** all 410 render rows, byte for byte; `fixtures/rich-text/web`; and `fixtures/highlights/samples.json`, written again by `frus-parity highlight-samples` (410 rows, 2,581 highlights). `PENDING` stays empty, and `make-golden`'s rewrite of `tools/mac-golden/Package.resolved` is left out, as at every move.
+
+**Results**
+- **Linux, `swift:6.4-noble`, arm64:** CI's swift job replayed with its PostgreSQL (`scripts/swift --postgres --exec`), under the heavy lock, at the final code and golden files. This package's own targets were built clean.
+  - 4,178 tests in 534 suites, all passing. The only skip is the named one, `FTS5StoreTests`' `backupExclusion()`, in Swift Testing's results file and in the log, with no cancellation. No target calls `Test.cancel`, and the build gave no warning outside `.build`.
+  - Every target runs as many tests as `main`'s CI runs at `48dbc22` (run 43559279884): CrossRefKitTests 10, FRUSCoreKitTests 2,509 in 307 suites, FRUSLightCoreTests 274, FRUSLightServerTests 367, FRUSParityTests 268, FRUSRichTextTests 42, FTS5CheckTests 3, FTS5StoreTests 219, GeneratorKitTests 7, ManifestGeneratorTests 60, SemanticVectorsKitTests 40, SourceExplorerExportGeneratorTests 22, SourceNoteKitTests 327 and WordCloudKitTests 30.
+  - `SourceExplorerParityTests` and `ReadIndexParityTests`, run alone first over the same build, passed their 12 tests in 2 suites.
+  - The checks print what `main`'s CI at `48dbc22` prints:
+    - check 2's 36 digests and 7 checks, the Mac's, and the same through the server's indexing;
+    - check 3's 482 queries, identical;
+    - check 4's 410 of 410 rows;
+    - check 6's 2,581 highlights;
+    - check 7's lookups;
+    - check 8's 245 source notes, every record the export generator's.
+  - One line differs from CI's, and it is information, never gated: check 3 counts 318 results with other score bits here on arm64, as every local run in this log has, and 332 on CI's x86_64.
+- **The browser app and the image** are CI's to test. Nothing changes under `web/`, under `docker/` or in the server, and the compose job builds the image at the new pin.
+
+**Records,** each a clause where earlier moves wrote one:
+- `COORDINATION.md`:
+  - the pin's history;
+  - §5's list of app changes, #1904 in its item on public access for kit types;
+  - a paragraph after §5's on what a pin move leaves, naming the two follow-ups #1904 unblocks, as S23c's and S24e's moves named theirs;
+  - §6's exports, the ninth reused by the owner's choice.
+- `README.md`: Status, the count of this project's pull requests on the kit, the pin and #1904; and Known gaps, a line for the two follow-ups.
+- `DEVLOG.md`: this entry, and a "Since merged" note in #1904's entry below, after its header, which still calls it open.
+- `PLAN.md`:
+  - a "Since merged" paragraph after the sentence on #1904, which still calls it open;
+  - where the plan stands;
+  - S12d's row, from `b124a59b`;
+  - the golden files' checkpoint, with this move among those that remade them;
+  - the owner checkpoints' Mac check 29, done, which makes forty-eight steps, twenty of them phase 3's.
+- `SPEC.md`: the compatibility contract's index version at `b124a59b`, and `setupDatabase(_:)`'s lines there.
+- `docs/prep/README.md`: the pin, and this move among those that changed a file its claims cite.
+
+**Left for the two follow-ups,** whose rows' lines they are: lines that say what #1904 made public is internal, which is false since this move. Each follow-up rewrites them as it uses the members.
+- **S22d's:** six header comments, in `Sources/FRUSLightAPI/ArchivalCollection.swift`, `VolumeSources.swift` and `SourceExplorerFiles.swift`, and in `web/src/sources/CollectionScreen.tsx`, `VolumeSourcesOutline.tsx` and `copy.ts`'s `volumeSources`. Also SPEC's lines on the collection record, which gives "the sections the kit's public readers give at the pin", and its known gap.
+- **S21f's:** SPEC's step 5 and the header of `Sources/FRUSLightCore/TEIChanges.swift`, which say the kit's two hashes are not public, so the server runs the indexer itself.
+
+**Notes**
+- **The build folder:** this worktree's own `.build/linux`, from 7 November, was set aside. The orchestrating session's, built at `6b6932aa`, was cloned in its place. As in CI, this package's own targets were then rebuilt clean.
+- **#1904's Linux check,** in the entry below, ran at the branch's head before its last amend, `368e435c`. The merged head differs from it only in one doc comment of `contentHash`, the app's `CLAUDE.md` and its plan, so this move's run is the first at the merged tree.
+
+**Next:** S22d's follow-up, the collection record's four sections, Cited Over Time in Vega-Lite, and the Sources outline's four affordances; and S21f's, step 5 by the revision hashes, with a scratch index only over the volumes that differ. Both can start now. Then, as before: on the features track, S22e, and S24f to S24i; on the server track, S21g; and S24e's follow-up, the server's uses of #1902's three calls, and Related Documents' lexical axis.
+
 ## Session 22d, follow-up, upstream: the collection record's and the Sources outline's kit members, and the revision hashes, public
 
 14 November 2026 · branch `claude/musing-khayyam-1d687c` · [#139](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/139) · upstream `6b6932aa`, unchanged; [FRUS-Explorer#1904](https://github.com/joshbotts/FRUS-Explorer/pull/1904), open
+
+**Since merged** (the pin move to `b124a59b` records it): the owner merged FRUS-Explorer#1904 on 14 November (12:14 UTC) as `b124a59b`, after Mac check 29. Its tree is its head's, `3489cc89`, and it went onto `v2` at `6b6932aa`, the branch's base. A pin move of its own took it, to `b124a59b`, with what this entry foresaw: no `Package.swift`, CI allow-list or `Compatibility.swift` change; `FRUSCoreKitTests` at its 2,509 tests, with no new skip; and the golden files remade from the build-1812 export, by the owner's choice, with only their provenance and the index summary's timings moved (the entry above, "Session 22d, second follow-up").
 
 An access-only pull request upstream for what S22d's collection record and Sources outline, and S21f's step 5, read and may not copy (rule 4); no PLAN row names it. S22d shipped without those parts, naming them as a known gap, by the orchestrator's decision. The pull request is `claude/kit-access-collection-record-hashes`, cut from `v2` at `6b6932aa`, which `v2` still is. It is labelled `Mac`, asks for Mac verification as Mac check 29, and is not merged. Under rule 4 it changes shared files, and this repository changes only its records.
 
