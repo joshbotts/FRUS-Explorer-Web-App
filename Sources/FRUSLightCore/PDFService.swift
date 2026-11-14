@@ -41,7 +41,7 @@ public actor PDFService {
     /// asks the service at most this often.
     public static let checkInterval: Duration = .seconds(10)
     /// The longest the server waits for the health check's answer.
-    static let checkTimeout: Duration = .seconds(3)
+    public static let checkTimeout: Duration = .seconds(3)
     /// The longest it waits for a PDF. compose.yaml gives Gotenberg 300 seconds a request, for a long
     /// collection's print, and its own 30 by default answers 503 before this.
     static let printTimeout: Duration = .seconds(320)
@@ -60,6 +60,9 @@ public actor PDFService {
     /// The address, as the configuration gives it.
     public nonisolated let url: String
     nonisolated let endpoint: Endpoint
+    /// The longest this service waits for its health check's answer: the server's `checkTimeout`, or
+    /// longer for a test's stand-in, which answers beside the test target's other work.
+    nonisolated let checkWithin: Duration
     private nonisolated let tls: Result<NIOSSLContext, PDFServiceError>?
     private let log: @Sendable (String) -> Void
     /// The last answer to the health check, and when it came.
@@ -70,11 +73,13 @@ public actor PDFService {
     private var said: Bool?
 
     /// The service at `url`, an http or https URL, which may end in the path Gotenberg's
-    /// `--api-root-path` gives it; nil for another.
-    public init?(url: String, log: @escaping @Sendable (String) -> Void = { _ in }) {
+    /// `--api-root-path` gives it; nil for another. Its health check waits `checkWithin` for an answer.
+    public init?(url: String, checkWithin: Duration = PDFService.checkTimeout,
+                 log: @escaping @Sendable (String) -> Void = { _ in }) {
         guard let endpoint = Endpoint(url) else { return nil }
         self.url = url
         self.endpoint = endpoint
+        self.checkWithin = checkWithin
         if endpoint.tls {
             do {
                 tls = .success(try NIOSSLContext(configuration: .makeClientConfiguration()))
@@ -122,7 +127,7 @@ public actor PDFService {
     /// Gotenberg's `GET /health`, once.
     nonisolated func check() async -> Health {
         do {
-            let answer = try await exchange(request("GET", "health"), limit: 64 * 1_024, timeout: Self.checkTimeout)
+            let answer = try await exchange(request("GET", "health"), limit: 64 * 1_024, timeout: checkWithin)
             return Self.health(of: answer)
         } catch PDFServiceError.unavailable(let reason) {
             return Health(available: false, reason: reason)
