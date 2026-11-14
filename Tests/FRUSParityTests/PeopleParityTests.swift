@@ -64,6 +64,10 @@ import Testing
         #expect(PeopleRules.lifespan(born: 1893, died: 1971) == "1893–1971")
         #expect(PeopleRules.lifespan(born: 1893, died: nil) == "Born 1893" && PeopleRules.lifespan(born: nil, died: 1971) == "Died 1971")
         #expect(PeopleRules.lifespan(born: nil, died: nil) == nil)
+        // And as the kit's rule answers, public since FRUS-Explorer#1906.
+        for (born, died) in [(1893, 1971), (1893, nil), (nil, 1971), (nil, nil)] as [(Int?, Int?)] {
+            #expect(PeopleRules.lifespan(born: born, died: died) == PersonLifespan.text(born: born, died: died))
+        }
         #expect(PeopleRules.registerRole("Ambassador", description: "ambassador") == nil && PeopleRules.registerRole("Ambassador", description: nil) == "Ambassador")
         #expect(PeopleRules.mentions(1) == "1 document" && PeopleRules.mentions(12) == "12 documents")
     }
