@@ -41,9 +41,20 @@ final class ServiceStub: URLProtocol {
     }
 
     private static let asked = Mutex<[String: [Asked]]>([:])
+    /// The keys whose answers wait until a test lets them go, with the answers waiting.
+    private static let held = Mutex<[String: [@Sendable () -> Void]]>([:])
 
     /// What the stand-in was asked with `key`.
     static func requests(with key: String) -> [Asked] { asked.withLock { $0[key] ?? [] } }
+
+    /// From now on, the answers to requests with `key` wait until `release(_:)`.
+    static func hold(_ key: String) { held.withLock { $0[key] = $0[key] ?? [] } }
+
+    /// Gives the answers held for `key`, and answers its later requests at once.
+    static func release(_ key: String) {
+        let waiting = held.withLock { $0.removeValue(forKey: key) } ?? []
+        for answer in waiting { answer() }
+    }
 
     static var session: URLSession {
         let configuration = URLSessionConfiguration.ephemeral
@@ -63,16 +74,35 @@ final class ServiceStub: URLProtocol {
         if let key {
             Self.asked.withLock { $0[key, default: []].append(Asked(method: request.httpMethod ?? "GET", url: url, headers: headers, body: body)) }
         }
-        if key?.contains("-down-") == true {
-            client?.urlProtocol(self, didFailWithError: URLError(.cannotConnectToHost, userInfo: [NSURLErrorFailingURLErrorKey: url]))
-            return
+        let reply = Reply(self)
+        let method = request.httpMethod ?? "GET"
+        let answer: @Sendable () -> Void = {
+            if key?.contains("-down-") == true {
+                reply.fail(URLError(.cannotConnectToHost, userInfo: [NSURLErrorFailingURLErrorKey: url]))
+                return
+            }
+            let (status, text) = Self.answer(url: url, key: key, method: method, body: body)
+            reply.answer(HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1",
+                                         headerFields: ["Content-Type": "application/json"])!, Data(text.utf8))
         }
-        let (status, text) = Self.answer(url: url, key: key, method: request.httpMethod ?? "GET", body: body)
-        let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1",
-                                       headerFields: ["Content-Type": "application/json"])!
-        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Data(text.utf8))
-        client?.urlProtocolDidFinishLoading(self)
+        let waits = key.map { key in Self.held.withLock { held in
+            guard held[key] != nil else { return false }
+            held[key]?.append(answer)
+            return true
+        } } ?? false
+        if !waits { answer() }
+    }
+
+    /// What an answer is handed to: the protocol's client, now or once a test lets a held answer go.
+    private final class Reply: @unchecked Sendable {
+        let owner: ServiceStub
+        init(_ owner: ServiceStub) { self.owner = owner }
+        func fail(_ error: any Error) { owner.client?.urlProtocol(owner, didFailWithError: error) }
+        func answer(_ response: HTTPURLResponse, _ data: Data) {
+            owner.client?.urlProtocol(owner, didReceive: response, cacheStoragePolicy: .notAllowed)
+            owner.client?.urlProtocol(owner, didLoad: data)
+            owner.client?.urlProtocolDidFinishLoading(owner)
+        }
     }
 
     static func key(of url: URL, headers: [String: String]) -> String? {
@@ -170,15 +200,16 @@ final class CapturedLogs: Sendable {
 }
 
 /// A server with user data, or none, whose outside services are the stand-in's, with the instance's key from
-/// the environment, offline or not, and a quota of `limit` calls a day.
+/// the environment, offline or not, and a quota of `limit` calls a day; with `auth`, the users a proxy names.
 struct OutsideFixture {
     let base: UserDataFixture
     let services: UserDataServices
     let logs = CapturedLogs()
 
     init(userData: Bool = true, volumes: [String] = [], indexed: Bool = false, environmentKey: String? = nil, offline: Bool = false,
-         limit: Int = NARAQuota.callsPerDay) async throws {
-        base = try await UserDataFixture(userData: userData, volumes: volumes, indexed: indexed)
+         limit: Int = NARAQuota.callsPerDay, auth: ServerConfiguration.Auth = .none) async throws {
+        base = try await UserDataFixture(userData: userData, volumes: volumes, indexed: indexed, auth: auth,
+                                         trustedProxies: auth == .header ? SignInTests.loopback : [])
         var services = base.services
         services.outside = OutsideServices(naraSession: ServiceStub.session, zoteroSession: ServiceStub.session,
                                            naraEnvironmentKey: environmentKey, offline: offline, quota: NARAQuota(limit: limit))
@@ -368,24 +399,196 @@ private func body(_ response: TestResponse) -> String { String(buffer: response.
         // Each user's own count, and a day's window.
         let quota = NARAQuota(limit: 1)
         let day = Date(timeIntervalSince1970: 1_792_800_000)
-        await quota.record("a", at: day)
+        let one = try #require(await quota.admit("a", cost: 1, at: day))
+        await quota.spend(one, at: day)
+        await quota.end(one)
         #expect(await quota.used(by: "a", at: day) == 1)
         #expect(await quota.used(by: "b", at: day) == 0)
         #expect(await quota.used(by: "a", at: day.addingTimeInterval(NARAQuota.window)) == 0)
         // Searches sent at once each hold the most calls they can make until they end, so none passes on a count
-        // not yet made; at the end, only the calls made stay counted.
+        // not yet made; each call made is counted and held no longer, and at the end what was not made is let go.
         let held = NARAQuota(limit: 5)
-        #expect(await held.admit("a", cost: 4, at: day))
-        #expect(await !held.admit("a", cost: 4, at: day))
-        #expect(await held.admit("a", cost: 1, at: day))
-        #expect(await !held.admit("a", cost: 1, at: day))
-        #expect(await held.admit("b", cost: 4, at: day))
-        await held.record("a", at: day)
-        await held.end("a", cost: 4)
-        #expect(await held.admit("a", cost: 1, at: day))
-        #expect(await held.admit("a", cost: 1, at: day))
-        #expect(await held.admit("a", cost: 1, at: day))
-        #expect(await !held.admit("a", cost: 1, at: day))
+        let lot = try #require(await held.admit("a", cost: 4, at: day))
+        #expect(await held.admit("a", cost: 4, at: day) == nil)
+        let single = try #require(await held.admit("a", cost: 1, at: day))
+        #expect(await held.admit("a", cost: 1, at: day) == nil)
+        #expect(await held.admit("b", cost: 4, at: day) != nil)
+        await held.spend(lot, at: day)
+        #expect(await held.used(by: "a", at: day) == 1, "a call made is counted")
+        #expect(await held.held(by: "a") == 4, "and held no longer: the lot's three left and the single's one")
+        await held.end(lot)
+        #expect(await held.held(by: "a") == 1, "the lot's three calls it did not make are let go")
+        await held.end(single)
+        #expect(await held.admit("a", cost: 4, at: day) != nil)
+        #expect(await held.admit("a", cost: 1, at: day) == nil)
+    }
+
+    /// Finding 2 of S22e's follow-up: a call NARA refuses, or never answers, is counted against the user as one it
+    /// answers is, since the kit's client tells its provider only of a 2xx. Before, a user whose searches failed
+    /// spent the instance's key without end.
+    @Test func aCallNARARefusesOrNeverAnswersIsCountedToo() async throws {
+        for refusing in ["stub-nara-500-quota", "stub-nara-403-quota", "stub-nara-down-quota"] {
+            let fixture = try await OutsideFixture(environmentKey: refusing, limit: 2)
+            defer { withExtendedLifetime(fixture) {} }
+            try await fixture.app.test(.router) { client async throws in
+                let browser = Browser(client: client)
+                func searched(_ query: String) async throws -> TestResponse {
+                    try await browser.send(.post, "/api/v1/nara/search", #"{"strategy": "keywordRG59", "query": "\#(query)"}"#)
+                }
+                #expect(try await searched("one").status != .ok)
+                #expect(try await searched("two").status != .ok)
+                #expect(try decode(NARAStatus.self, try await browser.get("/api/v1/nara")).quota == NARAStatus.Quota(used: 2, limit: 2), "\(refusing)")
+                #expect(try problem(try await searched("three"), .tooManyRequests).code == "NARA_QUOTA_REACHED", "\(refusing)")
+                #expect(ServiceStub.requests(with: refusing).count == 2, "the third asked nothing")
+            }
+            #expect(await fixture.services.outside.quota.held(by: "owner") == 0, "a refused search holds nothing once it has ended")
+        }
+        // A lot's search that NARA refuses at its first spelling makes one call, and is counted one.
+        let lot = try await OutsideFixture(environmentKey: "stub-nara-429-lot", limit: 4)
+        defer { withExtendedLifetime(lot) {} }
+        try await lot.app.test(.router) { client in
+            let browser = Browser(client: client)
+            let refused = try await browser.send(.post, "/api/v1/nara/search", #"{"strategy": "lotFileRG59", "query": "66 D 204"}"#)
+            #expect(try problem(refused, .serviceUnavailable).code == "NARA_RATE_LIMITED")
+            #expect(try decode(NARAStatus.self, try await browser.get("/api/v1/nara")).quota == NARAStatus.Quota(used: 1, limit: 4))
+        }
+    }
+
+    // MARK: S22e's follow-up
+
+    /// Finding 1: an answer is kept for the user who asked alone. Another user's same search asks NARA itself, and is
+    /// not answered as `cached`, nor sooner, nor left uncounted, so nothing tells them what was searched; each user's
+    /// own answer serves them again.
+    @Test func eachUsersAnswersAreTheirOwn() async throws {
+        let shared = "stub-nara-ok-tenancy"
+        let fixture = try await OutsideFixture(environmentKey: shared, auth: .header)
+        defer { withExtendedLifetime(fixture) {} }
+        try await fixture.app.test(.live) { client in
+            let ada = Browser(client: client, user: "ada")
+            let bea = Browser(client: client, user: "bea")
+            let search = #"{"strategy": "keywordRG59", "query": "Berlin contingency planning"}"#
+            func asked(_ browser: Browser) async throws -> NARASearchAnswer {
+                try decode(NARASearchAnswer.self, try await browser.send(.post, "/api/v1/nara/search", search))
+            }
+            let first = try await asked(ada)
+            #expect(!first.cached && !first.results.isEmpty && ServiceStub.requests(with: shared).count == 1)
+            let others = try await asked(bea)
+            #expect(!others.cached, "another user's same search is not told that it was asked")
+            #expect(others.results == first.results && ServiceStub.requests(with: shared).count == 2, "it asks NARA itself")
+            #expect(try decode(NARAStatus.self, try await bea.get("/api/v1/nara")).quota?.used == 1, "and is counted")
+            #expect(try await asked(ada).cached)
+            #expect(try await asked(bea).cached)
+            #expect(ServiceStub.requests(with: shared).count == 2, "each user's own answer served them again")
+        }
+        #expect(await fixture.services.outside.answers.count == 2)
+        // The key holds the user and the search, each part after its length, so that no two share one.
+        let call = try NARARoutes.Call(NARASearch(route: "lotVariants", lot: "1\u{1F}2", recordGroup: "59"))
+        let crafted = try NARARoutes.Call(NARASearch(route: "lotVariants", lot: "2", recordGroup: "59\u{1F}1"))
+        #expect(call.cacheKey(for: "ada") != call.cacheKey(for: "bea"))
+        #expect(call.cacheKey(for: "ada") != crafted.cacheKey(for: "ada"))
+        #expect(!call.cacheKey(for: "ada").contains("stub-nara"))
+    }
+
+    /// Finding 3: the same search asked again while it runs waits for the one under way, which asks NARA once and
+    /// holds the quota once: four sent at once with the instance's key, on a quota of one call, are each answered.
+    @Test func aSearchAskedAgainWhileItRunsWaitsForIt() async throws {
+        let shared = "stub-nara-ok-at-once"
+        let fixture = try await OutsideFixture(environmentKey: shared, limit: 1)
+        defer { withExtendedLifetime(fixture) {} }
+        ServiceStub.hold(shared)
+        defer { ServiceStub.release(shared) }
+        let answers = fixture.services.outside.answers
+        try await fixture.app.test(.router) { client in
+            let token = try await Browser(client: client).me().csrfToken
+            let search = #"{"strategy": "keywordRG84", "query": "Saigon"}"#
+            let found = try await withThrowingTaskGroup(of: NARASearchAnswer.self) { group in
+                for _ in 0..<4 {
+                    group.addTask {
+                        try decode(NARASearchAnswer.self, try await Browser(client: client).send(.post, "/api/v1/nara/search", search, token: token))
+                    }
+                }
+                // The first asks NARA, whose answer the stand-in holds, and the other three wait for it: both seen before
+                // the answer is let go, the search's request reaching the stand-in later than the joins under load.
+                var waited = 0
+                while waited < 1_500, await answers.joined < 3 || ServiceStub.requests(with: shared).isEmpty {
+                    try await Task.sleep(for: .milliseconds(10))
+                    waited += 1
+                }
+                #expect(await answers.joined == 3)
+                #expect(ServiceStub.requests(with: shared).count == 1)
+                ServiceStub.release(shared)
+                return try await group.reduce(into: [NARASearchAnswer]()) { $0.append($1) }
+            }
+            #expect(found.count == 4 && found.allSatisfy { $0.results == found[0].results } && !found[0].results.isEmpty)
+            #expect(found.filter { !$0.cached }.count == 1, "one asked NARA; three were answered by it")
+            #expect(try decode(NARAStatus.self, try await Browser(client: client).get("/api/v1/nara")).quota == NARAStatus.Quota(used: 1, limit: 1))
+        }
+        #expect(ServiceStub.requests(with: shared).count == 1)
+        #expect(await answers.searching == 0)
+        #expect(await answers.count == 1)
+    }
+
+    /// Finding 7: offsets far apart are read over the selection's limit at most, with the app's passage around it,
+    /// where they read the whole of a document's text; a selection's own span reads as before.
+    @Test func lookUpsPassageIsHeldToTheSelectionsLimit() async throws {
+        let fixture = try await OutsideFixture(volumes: ["frus1961-63v06"])
+        defer { withExtendedLifetime(fixture) {} }
+        let server = fixture.base.server
+        let provider = ServedIndexProvider(state: server.state, resources: server.resources, volumesDirectory: await server.reader.volumesDirectory)
+        let document = DocumentKey(volumeId: "frus1961-63v06", documentId: "d93")
+        let page = try await HighlightRoutes.page(of: document, reader: server.reader, provider: provider, resources: server.resources)
+        #expect(page.length > LookUpRoutes.longest + 10_000, "d93's text, 35,309 units, is longer than a selection may be")
+        func passage(_ start: Int, _ end: Int) async throws -> String? {
+            try await LookUpRoutes.passage(of: LookUpRoutes.Selection(text: "x", start: start, end: end, blockText: nil), in: document,
+                                           reader: server.reader, provider: provider, resources: server.resources)
+        }
+        let (before, after, longest) = (NARALookupAnalyzer.contextBefore, NARALookupAnalyzer.contextAfter, LookUpRoutes.longest)
+        #expect(try await passage(1_000, 1_040) == flatTextExcerpt(from: page.model, start: 1_000 - before, end: 1_040 + after))
+        let whole = try #require(try await passage(0, Int.max))
+        #expect(whole == flatTextExcerpt(from: page.model, start: 0, end: longest + after))
+        let text = try #require(flatTextExcerpt(from: page.model, start: 0, end: page.length))
+        #expect(whole.count < text.count - 10_000, "not the document's whole text")
+        #expect(try await passage(2_000, 2_000 + longest + 5_000)
+            == flatTextExcerpt(from: page.model, start: 2_000 - before, end: 2_000 + longest + after))
+        #expect(try await passage(2_000, 2_000 + longest) == flatTextExcerpt(from: page.model, start: 2_000 - before, end: 2_000 + longest + after))
+        // The largest offsets an Int holds trap nothing.
+        #expect(try await passage(Int.max - 10, Int.max) == nil)
+        #expect(try await passage(Int.max - longest - 10, Int.max) == nil)
+    }
+
+    /// Finding 10, the server's half: a stored key this server's key file cannot open is KEY_UNREADABLE in the web's
+    /// sentence of whose it is and who can store it again, never the key, for the NARA key a user keeps, the
+    /// instance's and a user's Zotero key, each read through the one helper.
+    @Test func aStoredKeyTheKeyFileCannotOpenSaysWhose() async throws {
+        let fixture = try await OutsideFixture(volumes: ["frus1961-63v06"])
+        defer { withExtendedLifetime(fixture) {} }
+        // Keys sealed under another key file, as a store restored beside the wrong one holds them.
+        let elsewhere = SecretVault(key: try #require(SecretKey(Array(repeating: 7, count: SecretKey.byteCount))),
+                                    keyFile: fixture.base.server.files.secretKey, store: fixture.base.store)
+        let keys = ["stub-nara-ok-sealed-user", "stub-nara-ok-sealed-instance", "stub-zotero-writer-sealed"]
+        _ = try elsewhere.set(keys[0], named: .nara, for: .user("owner"), at: UserDataFixture.now)
+        try await fixture.app.test(.router) { client in
+            let browser = Browser(client: client)
+            func unreadable(_ response: TestResponse) throws -> String {
+                let body = try problem(response, .internalServerError)
+                #expect(body.code == "KEY_UNREADABLE" && !keys.contains { String(buffer: response.body).contains($0) })
+                return body.detail
+            }
+            let search = #"{"strategy": "keyword", "query": "Laos"}"#
+            #expect(try unreadable(try await browser.send(.post, "/api/v1/nara/search", search))
+                == "Your stored NARA Catalog API key cannot be opened with this server’s key file. Add it again in Settings ▸ Keys.")
+            #expect(try unreadable(try await browser.get("/api/v1/nara")).hasPrefix("Your stored NARA Catalog API key"))
+            #expect(try fixture.services.secrets.remove(named: .nara, for: .user("owner")))
+            _ = try elsewhere.set(keys[1], named: .nara, for: .instance, at: UserDataFixture.now)
+            #expect(try unreadable(try await browser.send(.post, "/api/v1/nara/search", search))
+                == "This server’s stored NARA Catalog API key cannot be opened with its key file. An admin can store it again in Administration ▸ Keys.")
+            _ = try elsewhere.set(keys[2], named: .zotero, for: .user("owner"), at: UserDataFixture.now)
+            #expect(try unreadable(try await browser.send(.post, "/api/v1/me/volumes/frus1961-63v06/documents/d3/zotero"))
+                == "Your stored Zotero key cannot be opened with this server’s key file. Add it again in Settings ▸ Keys.")
+        }
+        for key in keys {
+            #expect(ServiceStub.requests(with: key).isEmpty && !fixture.logs.contains(key))
+        }
     }
 
     // MARK: Refusals

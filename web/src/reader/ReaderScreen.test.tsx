@@ -311,8 +311,39 @@ describe('the reader’s highlights', () => {
     await pause(20);
     // Look Up keeps nothing of the user's (PLAN's S22e): its bar is there, with nothing else in it.
     expect(within(bar()!).getAllByRole('button').map((button) => button.textContent)).toEqual(['Look Up in NARA']);
-    expect(posted()).toEqual([]);
+    // The frame is told that the highlight chord is not the app's here, and given nothing to draw (S22e's follow-up).
+    expect(posted()).toEqual([{ source: 'frus-app', kind: 'highlightKey', on: false }]);
     expect(fetch.mock.calls.some(([url]) => String(url).includes('/highlights'))).toBe(false);
+  });
+
+  it('tells the frame on each load that the highlight chord is the app’s on a server that keeps user data (S22e’s follow-up)', async () => {
+    highlighting({ [highlightsPath]: documentHighlights([]) });
+    renderAt('/doc/frus1961-63v06/d1');
+    const { frame, posted } = await loadedFrame();
+    const told = () => posted().filter((message) => message.kind === 'highlightKey');
+    await waitFor(() => expect(told()).toEqual([{ source: 'frus-app', kind: 'highlightKey', on: true }]));
+    fireEvent.load(frame);
+    await waitFor(() => expect(told()).toHaveLength(2), { timeout: 200 });
+    expect(told()[1]).toEqual({ source: 'frus-app', kind: 'highlightKey', on: true });
+  });
+
+  it('tells the frame nothing of the chord until the server has said whether it keeps user data', async () => {
+    let answer: (me: unknown) => void = () => {};
+    highlighting({
+      [highlightsPath]: documentHighlights([]),
+      '/api/v1/me': () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    });
+    renderAt('/doc/frus1961-63v06/d1');
+    const { posted } = await loadedFrame();
+    const told = () => posted().filter((message) => message.kind === 'highlightKey');
+    await pause(20);
+    // Not off while it is not known, which would leave ⇧⌘H to the browser on a server that keeps user data.
+    expect(told()).toEqual([]);
+    answer(me);
+    await waitFor(() => expect(told()).toEqual([{ source: 'frus-app', kind: 'highlightKey', on: true }]));
   });
 
   it('asks before it removes a tapped highlight, Cancel first, and removes the one the kit’s listener took', async () => {

@@ -8,11 +8,16 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { errorMessage } from '../api/client';
 import { sendDocumentToZotero, type ZoteroSent } from '../api/nara';
-import { secretsQuery } from '../api/secrets';
+import { secretsQuery, type SecretList } from '../api/secrets';
 import { meQuery } from '../api/userData';
 import { copy } from '../copy';
 
 const words = copy.zotero;
+
+/** Whether the user's keys, as the server lists them, hold a Zotero key: Cite's question, and the export sheet's. */
+export function holdsZoteroKey(keys: SecretList): boolean {
+  return keys.secrets.some((secret) => secret.name === 'zotero' && secret.set);
+}
 
 /** Whether the user has a Zotero key stored, on a server that keeps user data; undefined until it is known. */
 export function useZoteroKey(): boolean | undefined {
@@ -21,7 +26,7 @@ export function useZoteroKey(): boolean | undefined {
   const secrets = useQuery({ ...secretsQuery, enabled: keeps });
   if (me.data && !keeps) return false;
   if (!secrets.data) return secrets.isError ? false : undefined;
-  return secrets.data.secrets.some((secret) => secret.name === 'zotero' && secret.set);
+  return holdsZoteroKey(secrets.data);
 }
 
 /**
@@ -51,6 +56,16 @@ export function ZoteroSendRow({
   const [sent, setSent] = useState<ZoteroSent | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [recoverable, setRecoverable] = useState(false);
+  // Held, as the export sheet holds it while Export runs: a failed send's error and its way on go, as the app's Export
+  // clears them as it starts (`runExport()`), so that the file is never saved beside Export's (S22e's follow-up).
+  const [held, setHeld] = useState(disabled);
+  if (held !== disabled) {
+    setHeld(disabled);
+    if (disabled) {
+      setFailure(null);
+      setRecoverable(false);
+    }
+  }
 
   async function run() {
     if (sending || disabled) return;
@@ -69,7 +84,7 @@ export function ZoteroSendRow({
   }
 
   async function recover() {
-    if (!recovery || sending) return;
+    if (!recovery || sending || disabled) return;
     setRecoverable(false);
     setFailure(null);
     setSending(true);

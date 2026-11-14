@@ -149,7 +149,8 @@ import Testing
             "<Section title={evidence?.sectionTitle ?? words.naraHeader}>",
             ") : !keyed ? (",
             "{evidence?.caveat && <Caption>{evidence.caveat}</Caption>}",
-            "{search.data.results.slice(0, 5).map((result) => (",
+            // The records of a search that ran (S22e's follow-up: with a key and no query, the line for none, as the app's).
+            "{found.slice(0, 5).map((result) => (",
             "{result.title} {evidence && !evidence.isVerified && <ConfidenceChip />}",
         ], file: "SourcesScreen.tsx")
 
@@ -190,8 +191,10 @@ import Testing
         ], file: "DocumentView.swift")
         NoteViewParityTests.expect(proxy, holds: [
             "if let block = selection.blockText, !block.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return block }",
-            // The app's end, with the web's guard for an end no addition can take, which a request can send.
-            "return flatTextExcerpt(from: page.model, start: max(0, start - NARALookupAnalyzer.contextBefore), end: end > Int.max - after ? Int.max : end + after)",
+            // The app's end, with the web's guards, since a request can send any offsets: a span held to the selection's
+            // limit (S22e's follow-up), and an end no addition can take.
+            "let last = end - start > longest ? start + longest : end",
+            "return flatTextExcerpt(from: page.model, start: max(0, start - NARALookupAnalyzer.contextBefore), end: last > Int.max - after ? Int.max : last + after)",
         ], file: "NARACatalog.swift")
 
         // The Zotero sends: the document's tags and notes, its send with no collection; the collection's items in

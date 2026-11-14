@@ -29,7 +29,10 @@ import FRUSCoreKit
 /// in the frame. From PLAN's S22e, Alt+F10 over a footnote's selection, which the kit's bridge cannot
 /// place in the text, is posted too, with offsets of -1, the selection's text and the footnote's, as the
 /// bridge reports such a selection, so that its bar, Look Up in NARA and Note, has a key; and the
-/// selection's text comes with one in the text, for Look Up.
+/// selection's text comes with one in the text, for Look Up. From S22e's follow-up the parent says, as each
+/// page loads, whether the highlight chord is the app's (`{kind: 'highlightKey', on}`): on a server that keeps
+/// no user data it highlights nothing, so the frame leaves it to the browser, as the parent page does, where
+/// it took the key and posted a shortcut the parent dropped.
 /// A tap the kit reports is passed on unless it came from the keyboard, whose click has no point
 /// for the kit's hit test to read, or from a reader link, which is followed instead: a link inside
 /// a highlight would otherwise open its card and the question to remove the highlight at once.
@@ -65,6 +68,9 @@ enum ReaderHostScript {
           // Whether the click being dispatched may report a tap on a highlight: set before the kit's
           // listener reads it, in the capture phase.
           var tapAllowed = true;
+          // Whether the highlight chord is the app's, as the parent says once the page has loaded: not on a
+          // server that keeps no user data, where it highlights nothing and stays the browser's.
+          var highlightKey = true;
           if (!window.webkit) {
             var handlers = {};
             ['selectionChanged', 'selectionScrolled', 'highlightTapped'].forEach(function (name) {
@@ -146,7 +152,7 @@ enum ReaderHostScript {
             if (readerLink(event)) { event.preventDefault(); }
           });
           document.addEventListener('keydown', function (event) {
-            var highlight = event.shiftKey && (event.metaKey || event.ctrlKey) && !event.altKey && (event.key === 'h' || event.key === 'H');
+            var highlight = highlightKey && event.shiftKey && (event.metaKey || event.ctrlKey) && !event.altKey && (event.key === 'h' || event.key === 'H');
             var bar = event.altKey && !event.metaKey && !event.ctrlKey && event.key === 'F10';
             if (highlight || bar) {
               var inText = selectionInText();
@@ -180,6 +186,9 @@ enum ReaderHostScript {
             }
             if (data.kind === 'highlights' && Array.isArray(data.highlights)) {
               drawHighlights(data.highlights);
+            }
+            if (data.kind === 'highlightKey' && typeof data.on === 'boolean') {
+              highlightKey = data.on;
             }
             // Alt+F10 pressed in the app around the frame: the bar, where the selection is now.
             if (data.kind === 'selectionBarRequest') {

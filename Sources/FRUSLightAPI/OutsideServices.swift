@@ -7,9 +7,11 @@
 // their stubs, each service's paths under its host's name (`ServicesMirrorProtocol`). `FRUS_OFFLINE`
 // refuses both, as it refuses the library's downloads.
 //
-// NARA's answers are kept by the query they answer, for a day, so a second user asking the same thing
-// costs no call (`NARAAnswerCache`); and the calls made with the instance's key are counted against each
-// user, so that one user cannot spend the instance's key for everyone (`NARAQuota`).
+// NARA's answers are kept by the user who asked and the query they answer, for a day, so asking the same
+// thing again costs no call, and a search asked again while it runs is answered by the one under way
+// (`NARAAnswerCache`): each user's own, so that no answer, its speed or the count it leaves tells one user
+// what another searched. Every call made with the instance's key is counted against the user it was made
+// for, whatever NARA answered, so that one user cannot spend the instance's key for everyone (`NARAQuota`).
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -87,6 +89,18 @@ struct OutsideServices: Sendable {
     static func offlineProblem(_ service: String) -> APIProblem {
         APIProblem(.conflict, code: "OFFLINE",
                    detail: "This server is offline (FRUS_OFFLINE=true), so it asks \(service) nothing.")
+    }
+
+    /// The key `owner` keeps as `name`, read off the cooperative pool for the one request; nil for none. A row this
+    /// server's key file cannot open is `KEY_UNREADABLE` in `unreadable`, the web's sentence of whose key it is
+    /// and who can store it again, not a `SecretError`'s own words, which name the key file and the secret, never
+    /// the key, but say nothing a reader acts on.
+    static func storedKey(_ name: SecretName, of owner: SecretOwner, in vault: SecretVault, unreadable: String) async throws -> String? {
+        do {
+            return try await Blocking.run { try vault.value(named: name, for: owner) }
+        } catch is SecretError {
+            throw APIProblem(.internalServerError, code: "KEY_UNREADABLE", detail: unreadable)
+        }
     }
 }
 
@@ -253,10 +267,13 @@ public struct NARACatalogRecord: Codable, Equatable, Sendable {
     }
 }
 
-/// NARA's answers, by the query each answers, for a day, the most recently used 1,000 at most. The query is
-/// the route and its fields as the request named them, never the key it was asked with, so one user's answer
-/// serves the next, whatever key either has; an answer kept is public catalogue data alone. Kept in memory,
-/// so a restart empties it.
+/// NARA's answers, each by the user who asked and the query it answers (`NARARoutes.Call.cacheKey(for:)`), for a
+/// day, the most recently used 1,000 at most; and the searches under way, by the same key, so that the same
+/// search asked again while it runs waits for its answer and asks NARA nothing more. The key holds the user's id,
+/// the route and its fields as the request named them, and never the NARA key it was asked with: a user's answer
+/// serves that user again, whatever key either search had, and never another user, since an answer, how soon it
+/// came and the calls it left uncounted would tell them what was searched. An answer kept is public catalogue
+/// data alone. Kept in memory, so a restart empties it.
 actor NARAAnswerCache {
     static let lifetime: TimeInterval = 24 * 60 * 60
     static let capacity = 1_000
@@ -264,12 +281,39 @@ actor NARAAnswerCache {
     private var kept: [String: (records: [NARACatalogRecord], at: Date)] = [:]
     /// The queries, least recently used first.
     private var order: [String] = []
+    /// The searches under way, by their keys.
+    private var running: [String: Task<[NARACatalogRecord], any Error>] = [:]
+    /// How many asks have waited for a search under way, for the tests.
+    private(set) var joined = 0
     let capacity: Int
     let lifetime: TimeInterval
 
     init(capacity: Int = NARAAnswerCache.capacity, lifetime: TimeInterval = NARAAnswerCache.lifetime) {
         self.capacity = capacity
         self.lifetime = lifetime
+    }
+
+    /// The answer to `query`: the one kept, if it is younger than a day; else the answer of the search under way
+    /// for it; else `search`'s, begun here, which is kept if it found records. `asked` is true only for the answer
+    /// of the search this call began. A search's refusal is not kept: the next ask begins another.
+    func answer(to query: String, now: @escaping @Sendable () -> Date,
+                search: @escaping @Sendable () async throws -> [NARACatalogRecord]) async throws -> (records: [NARACatalogRecord], asked: Bool) {
+        if let records = answer(to: query, at: now()) { return (records, false) }
+        if let running = running[query] {
+            joined += 1
+            return (try await running.value, false)
+        }
+        // A task of its own, not the request's: the search the others wait for goes on if the request that began it
+        // is cancelled.
+        let task = Task { try await search() }
+        running[query] = task
+        let result = await task.result
+        running[query] = nil
+        let records = try result.get()
+        // None found is not kept: the kit's client answers none for a refusal it passes over, which a day's
+        // keeping would give the next ask.
+        if !records.isEmpty { keep(records, for: query, at: now()) }
+        return (records, true)
     }
 
     /// The answer kept for `query`, if it is younger than a day.
@@ -293,23 +337,36 @@ actor NARAAnswerCache {
     }
 
     var count: Int { kept.count }
+
+    /// How many searches are under way.
+    var searching: Int { running.count }
 }
 
 /// The calls each user has made to NARA with the instance's key in the last day, of `limit` at most: a user's
-/// own key is theirs, and NARA limits it, so none of its calls are counted. A call is one NARA answered (the
-/// kit's client tells its key provider of each), and a lot's lookup may make up to four. A search is admitted
-/// only while the user's calls, the calls held for their searches still running and its own most come to the
-/// limit at most, so that searches sent at once cannot pass it together. A user is who the server says: with
+/// own key is theirs, and NARA limits it, so none of its calls are counted. A call is counted as it is made, as
+/// the kit's client asks for the key before each one, whatever NARA answers, a refusal or nothing at all: the
+/// client tells its provider only of a call answered with a 2xx, so a user whose searches NARA refused or never
+/// answered would be counted nothing however many calls they made; and a lot's lookup may make up to four. A search is admitted
+/// only while the user's calls, the calls still held for their searches running and its own most come to the
+/// limit at most, so that searches sent at once cannot pass it together; each call it makes is counted and held
+/// no longer, and what it held and did not make is let go when it ends. A user is who the server says: with
 /// `FRUS_AUTH=none` every visitor is the one user, and shares one count. Kept in memory, so a restart empties
 /// it, and each server sharing a store counts its own.
 actor NARAQuota {
     static let callsPerDay = 100
     static let window: TimeInterval = 24 * 60 * 60
 
+    /// A search admitted: whose it is, and which.
+    struct Hold: Hashable, Sendable {
+        let user: String
+        fileprivate let number: UInt64
+    }
+
     let limit: Int
     private var calls: [String: [Date]] = [:]
-    /// The calls held for each user's searches admitted and not yet ended.
-    private var held: [String: Int] = [:]
+    /// The calls each search admitted and not yet ended may still make.
+    private var holds: [Hold: Int] = [:]
+    private var lastNumber: UInt64 = 0
 
     init(limit: Int = NARAQuota.callsPerDay) {
         self.limit = limit
@@ -322,20 +379,29 @@ actor NARAQuota {
         return recent.count
     }
 
-    /// Whether `user` may make a search that can make `cost` calls, holding them for it until `end(_:cost:)`.
-    func admit(_ user: String, cost: Int, at now: Date) -> Bool {
-        guard used(by: user, at: now) + held[user, default: 0] + cost <= limit else { return false }
-        held[user, default: 0] += cost
-        return true
+    /// The calls `user`'s searches under way may still make.
+    func held(by user: String) -> Int {
+        holds.reduce(0) { $1.key.user == user ? $0 + $1.value : $0 }
     }
 
-    /// A search `admit(_:cost:at:)` let through has ended, however it ended: its calls are counted as made.
-    func end(_ user: String, cost: Int) {
-        let left = held[user, default: 0] - cost
-        held[user] = left > 0 ? left : nil
+    /// A search of `user`'s that can make `cost` calls, holding them for it until `end(_:)`; nil when they could
+    /// take the user past the limit.
+    func admit(_ user: String, cost: Int, at now: Date) -> Hold? {
+        guard used(by: user, at: now) + held(by: user) + cost <= limit else { return nil }
+        lastNumber += 1
+        let hold = Hold(user: user, number: lastNumber)
+        holds[hold] = cost
+        return hold
     }
 
-    func record(_ user: String, at now: Date) {
-        calls[user, default: []].append(now)
+    /// A call the search makes: counted now, and held for it no longer.
+    func spend(_ hold: Hold, at now: Date) {
+        calls[hold.user, default: []].append(now)
+        if let left = holds[hold] { holds[hold] = max(0, left - 1) }
+    }
+
+    /// The search has ended, however it ended: the calls it held and did not make are let go.
+    func end(_ hold: Hold) {
+        holds[hold] = nil
     }
 }

@@ -91,15 +91,10 @@ enum ZoteroRoutes {
     /// words, for none. Refused first under `FRUS_OFFLINE`.
     static func zoteroKey(of user: RequestUser, services: UserDataServices) async throws -> String {
         if services.outside.offline { throw OutsideServices.offlineProblem("Zotero") }
-        let vault = services.secrets
-        let key: String?
-        do {
-            key = try await Blocking.run { try vault.value(named: .zotero, for: .user(user.id)) }
-        } catch is SecretError {
-            throw APIProblem(.internalServerError, code: "KEY_UNREADABLE",
-                             detail: "Your stored Zotero key cannot be opened with this server’s key file. Add it again in \(OutsideServices.keysPlace).")
-        }
-        guard let key else { throw problem(.missingCredentials) }
+        guard let key = try await OutsideServices.storedKey(
+            .zotero, of: .user(user.id), in: services.secrets,
+            unreadable: "Your stored Zotero key cannot be opened with this server’s key file. Add it again in \(OutsideServices.keysPlace).")
+        else { throw problem(.missingCredentials) }
         return key
     }
 
@@ -129,6 +124,8 @@ enum ZoteroRoutes {
         } catch let error as ZoteroAPIError {
             throw problem(error)
         } catch is CancellationError {
+            // The kit's send throws it between its batches and from its back-off's wait; a call cancelled in flight is
+            // its `network` error. A client's going cancels nothing here: only `whileClientConnected` watches for it.
             throw CancellationError()
         } catch {
             // Nothing of the error is said or logged: the key is in the address a transport's error can name.

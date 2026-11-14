@@ -506,7 +506,9 @@ function RecordRow({ record, candidate }: { record: SourceRecord; candidate?: bo
  * `naraResultSection(requiresKey:fallbackURL:)`: the query `load()` runs, through the server, once a key is there; the
  * app's prompt without one; then its line while it searches, its error, its first five records, each a candidate's
  * chip when the query is not tied to the citation, under the evidence's caveat, or its line for none; and the manual
- * search, after an error or none. Titled by the evidence once there is a key, as the app titles it then.
+ * search, after an error or none. Titled by the evidence once there is a key, as the app titles it then. With a key
+ * and no query to run, the app's section has no results, no search and no error, and so says its line for none, with
+ * the manual search, as this one does.
  */
 function NARACatalog({ panel }: { panel: SourcePanel }) {
   const client = useQueryClient();
@@ -514,22 +516,21 @@ function NARACatalog({ panel }: { panel: SourcePanel }) {
   const status = useQuery(naraStatusQuery);
   const me = useQuery(meQuery);
   const keyed = canSearch(status.data);
+  // A query that never runs stays pending: whether it runs is asked, never `isPending` alone.
+  const searched = keyed && !!query?.search;
   const search = useQuery({
     queryKey: ['naraSearch', query?.search],
     queryFn: () => searchNARA(client, query!.search!),
-    enabled: keyed && !!query?.search,
+    enabled: searched,
     staleTime: Infinity,
     retry: false,
   });
   const evidence = keyed ? query?.evidence : undefined;
   const manual = query?.manualSearchURL && <Out href={query.manualSearchURL}>{words.searchManually}</Out>;
+  const found = searched && search.isSuccess ? search.data.results : [];
   // What a screen reader hears once the search has answered, in a region that was there while it searched.
   const outcome =
-    !keyed || !query?.search || search.isPending || search.isError
-      ? ''
-      : search.data.results.length > 0
-        ? words.naraFound(Math.min(5, search.data.results.length))
-        : words.naraNoResult;
+    !keyed || (searched && !search.isSuccess) ? '' : found.length > 0 ? words.naraFound(Math.min(5, found.length)) : words.naraNoResult;
   if (status.isPending) return <Section title={words.naraHeader}>{null}</Section>;
   return (
     <Section title={evidence?.sectionTitle ?? words.naraHeader}>
@@ -552,19 +553,19 @@ function NARACatalog({ panel }: { panel: SourcePanel }) {
           <p className="se-label">{words.noKeyLabel}</p>
           <Caption>{words.noKeyExplanation}</Caption>
         </div>
-      ) : !query?.search ? null : search.isPending ? (
+      ) : searched && search.isPending ? (
         <p className="se-text">{words.naraLoading}</p>
-      ) : search.isError ? (
+      ) : searched && search.isError ? (
         <>
           <p className="se-warning" role="alert">
             {errorMessage(search.error)}
           </p>
           {manual}
         </>
-      ) : search.data.results.length > 0 ? (
+      ) : found.length > 0 ? (
         <>
           {evidence?.caveat && <Caption>{evidence.caveat}</Caption>}
-          {search.data.results.slice(0, 5).map((result) => (
+          {found.slice(0, 5).map((result) => (
             <div key={result.naId} className="se-record">
               <p className="se-record-title">
                 {result.title} {evidence && !evidence.isVerified && <ConfidenceChip />}
