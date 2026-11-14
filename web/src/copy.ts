@@ -930,9 +930,9 @@ export const copy = {
       `These digitized rolls hold File No. ${fileIdentifier}. Open one and review the images page by page — documents are filed in numeric order by case.`,
     scans: 'Digitized Scans',
     scansMultiple: (count: number, fileIdentifier: string) =>
-      `${count} scanned file ranges contain ${fileIdentifier}. They are listed narrowest first. NARA digitized this file in overlapping sets, so the widest range is not wrong. The narrowest is simply the most specific.`,
+      `${count.toLocaleString('en-US')} scanned file ranges contain ${fileIdentifier}. They are listed narrowest first. NARA digitized this file in overlapping sets, so the widest range is not wrong. The narrowest is simply the most specific.`,
     scansClassOnly: (count: number, decimalClass: string, fileIdentifier: string) =>
-      `NARA has scanned ${count} file ranges in decimal class ${decimalClass}, but none of them covers ${fileIdentifier}. The scans for this file are partial.`,
+      `NARA has scanned ${count.toLocaleString('en-US')} file ranges in decimal class ${decimalClass}, but none of them covers ${fileIdentifier}. The scans for this file are partial.`,
     lotType: 'State Dept. Lot File',
     lotTypePost: 'State Dept. Post Records Lot File (RG 84)',
     lotNumber: 'Lot Number',
@@ -1025,7 +1025,7 @@ export const copy = {
         'Not checked — this volume’s chapters are not in the search index on this server, and the chapter is what names the country.',
     } as Record<string, string>,
     neighbours: 'Archival Neighbors',
-    neighboursMore: (count: number) => `${count} more documents not shown`,
+    neighboursMore: (count: number) => `${count.toLocaleString('en-US')} more documents not shown`,
     neighboursEmpty: {
       noNeighbors:
         'No other indexed documents cite this archival source. Index more volumes to surface related documents.',
@@ -1041,6 +1041,7 @@ export const copy = {
     collectionHeader: 'Archival Collection',
     collectionCited: (count: number) => `Cited in ${count} volumes across the series`,
     collectionFooter: 'Matched against the bundled cross-volume collection authority.',
+    openCollection: 'View Collection',
     unprinted: 'Unprinted Material',
     inherited: 'Carried from the previous note',
     /** The chips' words (`CentralFilesConfidence`, `ProvenanceSource`) and what a screen reader hears. */

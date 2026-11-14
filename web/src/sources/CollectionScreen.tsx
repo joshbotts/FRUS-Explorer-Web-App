@@ -6,7 +6,7 @@
 // Related Collections, Cited Over Time, Divided at NARA, Pointed At, Not Printed and the NARA Catalog link read
 // kit members still internal at this pin, and follow when an upstream pull request makes them public.
 import { useQuery } from '@tanstack/react-query';
-import { getRouteApi, Link } from '@tanstack/react-router';
+import { getRouteApi, Link, useCanGoBack, useRouter } from '@tanstack/react-router';
 import { type ReactNode, useId, useState } from 'react';
 import { ApiError, errorMessage } from '../api/client';
 import { type ArchivalCollection, archivalCollectionQuery } from '../api/sources';
@@ -30,18 +30,23 @@ export interface CollectionSearch {
 export function CollectionScreen() {
   const { id } = route.useSearch();
   const collection = useQuery(archivalCollectionQuery(id));
+  const router = useRouter();
+  const canGoBack = useCanGoBack();
   useDocumentTitle(collection.data?.name ?? words.title);
   useHeadingReady(!collection.isPending);
   const missing = collection.isError && collection.error instanceof ApiError && collection.error.code === 'COLLECTION_NOT_FOUND';
 
   return (
     <div className="collection-record">
-      <p className="back">
-        <button type="button" className="link-button" onClick={() => window.history.back()}>
-          <span aria-hidden="true">← </span>
-          {words.back}
-        </button>
-      </p>
+      {/* The way back, where there is one: the record is opened from several pages. */}
+      {canGoBack && (
+        <p className="back">
+          <button type="button" className="link-button" onClick={() => router.history.back()}>
+            <span aria-hidden="true">← </span>
+            {words.back}
+          </button>
+        </p>
+      )}
       <h1 tabIndex={-1} data-loading={collection.isPending ? 'true' : undefined}>
         {missing ? words.unavailable : words.title}
       </h1>

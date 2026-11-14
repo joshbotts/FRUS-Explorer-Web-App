@@ -7,7 +7,7 @@
 // order, the cut and the line are the kit's, on the server. The web's own: the scope is in the address, and the
 // way back.
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { getRouteApi, Link, useRouter } from '@tanstack/react-router';
+import { getRouteApi, Link, useCanGoBack, useRouter } from '@tanstack/react-router';
 import { useId } from 'react';
 import { ApiError, errorMessage } from '../api/client';
 import { archivalNeighboursQuery, type NeighbourScope, type NeighboursRequest } from '../api/sources';
@@ -24,6 +24,7 @@ export function NeighboursScreen() {
   const request = route.useSearch();
   const navigate = route.useNavigate();
   const router = useRouter();
+  const canGoBack = useCanGoBack();
   const scopeName = useId();
   // The list on show stays while another scope's is asked for, so the picker keeps its place and its focus.
   const neighbours = useQuery({ ...archivalNeighboursQuery(request), placeholderData: keepPreviousData });
@@ -46,12 +47,12 @@ export function NeighboursScreen() {
             <span aria-hidden="true">← </span>
             {words.backToCollection}
           </Link>
-        ) : (
+        ) : canGoBack ? (
           <button type="button" className="link-button" onClick={() => router.history.back()}>
             <span aria-hidden="true">← </span>
             {words.back}
           </button>
-        )}
+        ) : null}
       </p>
       <h1 tabIndex={-1} data-loading={neighbours.isPending ? 'true' : undefined}>
         {words.title}

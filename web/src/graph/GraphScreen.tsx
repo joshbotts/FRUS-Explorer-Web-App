@@ -698,6 +698,14 @@ function Details({
       {node.dateline && <p className="graph-dateline">{node.dateline}</p>}
       {node.header !== undefined && node.volumeId && <p className="graph-volume">{node.volumeId}</p>}
       {terminatesWalk(node) && <p className="graph-dateline">{node.kind === 'unit' ? copy.graph.unprinted : copy.graph.centralFile}</p>}
+      {/* An archival unit opens its collection's record (PLAN's S22d), as the app's tap opens its sheet. */}
+      {node.kind === 'unit' && node.collectionId && (
+        <div className="graph-actions">
+          <Link to="/archival-collection" search={{ id: node.collectionId }} className="button-link primary">
+            {copy.sources.openCollection}
+          </Link>
+        </div>
+      )}
       {context && <EdgeContext context={context} direction={directionLabel(node.kind)} />}
       {!node.isDownloaded && node.kind !== 'central' && node.kind !== 'dateCluster' && (
         <p className="graph-not-served">{copy.graph.notServed}</p>
