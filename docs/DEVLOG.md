@@ -24,9 +24,9 @@ Not started: `PLAN.md`'s row S24f. The session that does it replaces this line, 
 
 ## Session 21g: corrections on the web, and the People screen
 
-14 November 2026 · branch `claude/heuristic-pascal-dd9ccc` · upstream `6b6932aa`, unchanged
+14 November 2026 · branch `claude/heuristic-pascal-dd9ccc` · upstream `6b6932aa`, then `b124a59b` with `main` (#140)
 
-Phase 3's round 7 on the server track, the S21 group's fifth and last row on the web and the server track's last, after S21f, beside S24f's features row, the timing flakes' follow-up and the pin move to `b124a59b`, on PLAN's defaults, migration 8. A curator corrects the index everyone shares in its two ways, rule 7's two writes: a document's classification in the Research rail, and the person rollup's identities on the People screen, which phase 1 left; each is kept and logged, applied at once on a Standalone server and at the next export an Import server installs. SPEC's new section, Operating modes ▸ Corrections on the web and the People screen, is the whole account; this entry says what was built where, the decisions, how the done-when is shown, what the reviews changed, and the group's shared records. The branch was cut from `main` at `48dbc22`, #139's merge, and the work was kept in local commits until the push; no file of the app changed and the pin did not move.
+Phase 3's round 7 on the server track, the S21 group's fifth and last row on the web and the server track's last, after S21f, beside S24f's features row, the timing flakes' follow-up and the pin move to `b124a59b`, on PLAN's defaults, migration 8. A curator corrects the index everyone shares in its two ways, rule 7's two writes: a document's classification in the Research rail, and the person rollup's identities on the People screen, which phase 1 left; each is kept and logged, applied at once on a Standalone server and at the next export an Import server installs. SPEC's new section, Operating modes ▸ Corrections on the web and the People screen, is the whole account; this entry says what was built where, the decisions, how the done-when is shown, what the reviews changed, and the group's shared records. The branch was cut from `main` at `48dbc22`, #139's merge, and the work was kept in local commits until the push; `main` was merged once, at `84666ee`, since #140 changed README's Status line too, which brought #140's pin move to `b124a59b` (#1904, access alone) and #141's fixes of two timing flakes into the final runs. No file of the app changed.
 
 **The kit, surveyed first.** Everything the row's done-when calls is public at `6b6932aa`: `applyClassificationOverrides(_:volumeId:)`, `consolidatePersonRollup(overrides:forceReload:)` (S21a's #1870), `consolidatePersonRollupIfNeeded` and `runPostIndexPasses(overrides:)`, `PersonClusterOverrideData` and `DocumentClassificationOverrideData`, `PersonMentionStore`'s list, members, candidates and `representativeMember(forRollupId:)`, `PersonEntry`'s `eraText` and `roleEraSubtitle`, `FRUSDocumentAST.isShapedAsEditorialNote` and `applyingClassificationOverride`, and `PersonAuthorityIndex` with its entries' role, years and links. Two sections of the app's person sheet read members internal at the pin, which the orchestrator was told before anything was written around them: the register's career, `POCOMIndex.career(forSlug:)` with `POCOMCareer` and `POCOMAssignment`'s `titleText`, `dateRangeText` and `nt`, which also fill a life year the name authority lacks (`PersonLifespan.years(authority:career:)`); and the subjects, `VolumeSubjectProfiles.topSubjects(forVolumeId:)` and `ResolvedSubject`, which the app's `PersonSubjectAffinity` ranks over. They wait, below.
 
@@ -435,9 +435,82 @@ Phase 3's row S24c, the third pull request of the third upstream batch: the arch
 
 **Next:** Mac check 23 and the owner's merge of FRUS-Explorer#1901; beside it S24d's FRUS-Explorer#1900, the batch's last, awaiting Mac check 24, which changes four of the same files (`CLAUDE.md`, the project file, `Package.swift` and the plan), so the second of the two to merge has `v2` merged into it; then S24e's pin move past the batch, and S24f, Corpus Analytics and Chronology.
 
+## Session 22d, second follow-up: the pin moves to `b124a59b`
+
+14 November 2026 · branch `claude/hopeful-hodgkin-14bfda`, a follow-up session of the phase-3 orchestrator's · [#140](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/140) · upstream `b124a59b`
+
+The pin moves from `6b6932aa` to `b124a59b`, `v2`'s head, in a pull request of its own under rule 5, with no PLAN row: the move that the entry below, "Session 22d, follow-up, upstream", said would carry [FRUS-Explorer#1904](https://github.com/joshbotts/FRUS-Explorer/pull/1904). `b124a59b` is #1904's merge. The owner merged it after Mac check 29, on 14 November (12:14 UTC), onto `v2` at `6b6932aa`. Its squash's tree is its head's, `3489cc89`, both `5c10f2b9`, which this session compared. It is the only commit between the two pins. The branch was cut from `main` at `48dbc22`, #139's merge. The daily watch's issue, [#106](https://github.com/joshbotts/FRUS-Explorer-Web-App/issues/106), still describes the kits' failure at `39859a51` (run [43444877747](https://github.com/joshbotts/FRUS-Explorer-Web-App/actions/runs/43444877747)), the stamp race #1903 fixed; it should close at the watch's first run after this merges, when it finds `v2` at the pin and the kits passing.
+
+**What the move brought:**
+- Eight kit files, in access and doc comments alone, each with a version line: `FRUSCoreKit/Search/IndexingPipeline.swift`, and `ArchivalResolver.swift`, `CentralFilesIndex.swift`, `CollectionAuthority.swift`, `CollectionRelations.swift`, `ExternalCitationIndex.swift`, `LotClaimantsIndex.swift` and `VolumeSourcesIndex.swift` under `FRUSCoreKit/SourceExplorer/`. What they make public is the list in the entry below.
+- The app's `CLAUDE.md`, two sentences on FRUSCoreKit's line naming what is public; `Docs/EditableContent/06-Archives.md`, six blocks' source ranges re-pointed with no text changed, and its amendment log; and the app's plan.
+
+No behaviour changed, and no file was added or removed.
+
+**Nothing in the build to follow,** as #1904's entry foresaw:
+- **The build:** no folder this package compiles gained or lost a file, so `Package.swift` stands. Build 1812, index version 74, FTS generation 4 and the export's format version 7 are unchanged, so `Compatibility.swift` and the install guide stand.
+- **The tests:** #1904 changes no test file, so `FRUSCoreKitTests` keeps its 2,509 tests in 307 suites, no test gains a skip, and CI's allow-list stands.
+- **Names:** none of the types #1904 makes public (`CollectionRelations`, `RelatedCollection`, `CollectionCoverageEra`, `CollectionEraCount`, `LotClaimant`, `MajorCollectionRecord`) is declared in this repository's `Sources`, `Tests` or `tools/mac-golden`, and none of the changed kit types has an extension here. The server's own `contentHash` properties belong to its own types.
+- **The parity tests that read kit source #1904 changes:** `SourceExplorerParityTests` holds `static let previewRowCap = 5` in `CollectionRelations.swift`, which the new `public static let previewRowCap = 5` contains, and `ReadIndexParityTests` holds three lines of `IndexingPipeline.swift`'s reading sequence, which #1904 leaves alone. Both pass at `b124a59b`, their first Linux run against #1904's tree.
+
+**The indexing path,** compared from `6b6932aa` to `b124a59b` before the golden files were made, over COORDINATION §5's list with the extension in `CollectionAuthority.swift`, as S24e's move read it:
+- `IndexingPipeline.swift`: `contentHash(header:dateline:sourceNote:bodyText:)`, `bodyHash(for:)`, `extractDateline(from:)`, `extractSourceNote(from:)`, `extractBodyText(from:)` and `isLibraryRepository(_:)` made public, their bodies unchanged, with a version line and doc comments. `setupDatabase(_:)` is the same text, at lines 8355–9010 where it was at 8341–8996.
+- `CollectionAuthority.swift`, for its extension of the pipeline's `CollectionAliasFallback`: `init(record:)` made public, which the indexer does not call. Beside it, outside that extension, `CollectionAuthorityIndex.record(forFrontMatterText:repository:lotFileNorm:decimalClass:)` is made public, with a version line.
+- The parser, FTS5Store, SourceNoteKit and the bundled resources: unchanged.
+
+So the golden files come from the export S21b's, S23c's and S24e's moves used, by the owner's choice of 14 November ("Yes, reuse it"), asked through the orchestrator before the remake.
+
+**The golden files,** made by `scripts/make-golden --export /Users/Shared/frus-index-build1812-2026-11-10-golden.sqlite` under the app's heavy lock, on this Mac (macOS 27.2.1, Xcode 27.2), from the owner's ninth three-volume export: TestFlight's 1.0 (1812), index version 74, 393 documents and no writing. `tools/mac-golden` was built at the pin first (216 s), and the run passed every step, `check-golden` among them, in 57 s.
+- **Provenance:** five files moved in their provenance, the render's manifest, the expressions, the results, the golden spans and the index summary: the source digest, `691f8b17…` to `621edf66…`, and the upstream commit. The index summary's timings, which are information and never gated, moved besides; its gating, 36 digests and 7 checks, is as it was. The Mac's system line is unchanged.
+- **Unchanged:** all 410 render rows, byte for byte; `fixtures/rich-text/web`; and `fixtures/highlights/samples.json`, written again by `frus-parity highlight-samples` (410 rows, 2,581 highlights). `PENDING` stays empty, and `make-golden`'s rewrite of `tools/mac-golden/Package.resolved` is left out, as at every move.
+
+**Results**
+- **Linux, `swift:6.4-noble`, arm64:** CI's swift job replayed with its PostgreSQL (`scripts/swift --postgres --exec`), under the heavy lock, at the final code and golden files. This package's own targets were built clean.
+  - 4,178 tests in 534 suites, all passing. The only skip is the named one, `FTS5StoreTests`' `backupExclusion()`, in Swift Testing's results file and in the log, with no cancellation. No target calls `Test.cancel`, and the build gave no warning outside `.build`.
+  - Every target runs as many tests as `main`'s CI runs at `48dbc22` (run 43559279884): CrossRefKitTests 10, FRUSCoreKitTests 2,509 in 307 suites, FRUSLightCoreTests 274, FRUSLightServerTests 367, FRUSParityTests 268, FRUSRichTextTests 42, FTS5CheckTests 3, FTS5StoreTests 219, GeneratorKitTests 7, ManifestGeneratorTests 60, SemanticVectorsKitTests 40, SourceExplorerExportGeneratorTests 22, SourceNoteKitTests 327 and WordCloudKitTests 30.
+  - `SourceExplorerParityTests` and `ReadIndexParityTests`, run alone first over the same build, passed their 12 tests in 2 suites.
+  - The checks print what `main`'s CI at `48dbc22` prints:
+    - check 2's 36 digests and 7 checks, the Mac's, and the same through the server's indexing;
+    - check 3's 482 queries, identical;
+    - check 4's 410 of 410 rows;
+    - check 6's 2,581 highlights;
+    - check 7's lookups;
+    - check 8's 245 source notes, every record the export generator's.
+  - One line differs from CI's, and it is information, never gated: check 3 counts 318 results with other score bits here on arm64, as every local run in this log has, and 332 on CI's x86_64.
+- **The browser app and the image** are CI's to test. Nothing changes under `web/`, under `docker/` or in the server, and the compose job builds the image at the new pin.
+
+**Records,** each a clause where earlier moves wrote one:
+- `COORDINATION.md`:
+  - the pin's history;
+  - §5's list of app changes, #1904 in its item on public access for kit types;
+  - a paragraph after §5's on what a pin move leaves, naming the two follow-ups #1904 unblocks, as S23c's and S24e's moves named theirs;
+  - §6's exports, the ninth reused by the owner's choice.
+- `README.md`: Status, the count of this project's pull requests on the kit, the pin and #1904; and Known gaps, a line for the two follow-ups.
+- `DEVLOG.md`: this entry, and a "Since merged" note in #1904's entry below, after its header, which still calls it open.
+- `PLAN.md`:
+  - a "Since merged" paragraph after the sentence on #1904, which still calls it open;
+  - where the plan stands;
+  - S12d's row, from `b124a59b`;
+  - the golden files' checkpoint, with this move among those that remade them;
+  - the owner checkpoints' Mac check 29, done, which makes forty-eight steps, twenty of them phase 3's.
+- `SPEC.md`: the compatibility contract's index version at `b124a59b`, and `setupDatabase(_:)`'s lines there.
+- `docs/prep/README.md`: the pin, and this move among those that changed a file its claims cite.
+
+**Left for the two follow-ups,** whose rows' lines they are: lines that say what #1904 made public is internal, which is false since this move. Each follow-up rewrites them as it uses the members.
+- **S22d's:** six header comments, in `Sources/FRUSLightAPI/ArchivalCollection.swift`, `VolumeSources.swift` and `SourceExplorerFiles.swift`, and in `web/src/sources/CollectionScreen.tsx`, `VolumeSourcesOutline.tsx` and `copy.ts`'s `volumeSources`. Also SPEC's lines on the collection record, which gives "the sections the kit's public readers give at the pin", and its known gap.
+- **S21f's:** SPEC's step 5 and the header of `Sources/FRUSLightCore/TEIChanges.swift`, which say the kit's two hashes are not public, so the server runs the indexer itself.
+
+**Notes**
+- **The build folder:** this worktree's own `.build/linux`, from 7 November, was set aside. The orchestrating session's, built at `6b6932aa`, was cloned in its place. As in CI, this package's own targets were then rebuilt clean.
+- **#1904's Linux check,** in the entry below, ran at the branch's head before its last amend, `368e435c`. The merged head differs from it only in one doc comment of `contentHash`, the app's `CLAUDE.md` and its plan, so this move's run is the first at the merged tree.
+
+**Next:** S22d's follow-up, the collection record's four sections, Cited Over Time in Vega-Lite, and the Sources outline's four affordances; and S21f's, step 5 by the revision hashes, with a scratch index only over the volumes that differ. Both can start now. Then, as before: on the features track, S22e, and S24f to S24i; on the server track, S21g; and S24e's follow-up, the server's uses of #1902's three calls, and Related Documents' lexical axis.
+
 ## Session 22d, follow-up, upstream: the collection record's and the Sources outline's kit members, and the revision hashes, public
 
 14 November 2026 · branch `claude/musing-khayyam-1d687c` · [#139](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/139) · upstream `6b6932aa`, unchanged; [FRUS-Explorer#1904](https://github.com/joshbotts/FRUS-Explorer/pull/1904), open
+
+**Since merged** (the pin move to `b124a59b` records it): the owner merged FRUS-Explorer#1904 on 14 November (12:14 UTC) as `b124a59b`, after Mac check 29. Its tree is its head's, `3489cc89`, and it went onto `v2` at `6b6932aa`, the branch's base. A pin move of its own took it, to `b124a59b`, with what this entry foresaw: no `Package.swift`, CI allow-list or `Compatibility.swift` change; `FRUSCoreKitTests` at its 2,509 tests, with no new skip; and the golden files remade from the build-1812 export, by the owner's choice, with only their provenance and the index summary's timings moved (the entry above, "Session 22d, second follow-up").
 
 An access-only pull request upstream for what S22d's collection record and Sources outline, and S21f's step 5, read and may not copy (rule 4); no PLAN row names it. S22d shipped without those parts, naming them as a known gap, by the orchestrator's decision. The pull request is `claude/kit-access-collection-record-hashes`, cut from `v2` at `6b6932aa`, which `v2` still is. It is labelled `Mac`, asks for Mac verification as Mac check 29, and is not merged. Under rule 4 it changes shared files, and this repository changes only its records.
 
@@ -1776,6 +1849,123 @@ Phase 3's row S21a, in wave 1. The library's rules move into FRUSCoreKit, Founda
 - Mac check 15, the owner's, for FRUS-Explorer#1870, from a clone at a real path, with the commands and counts its body lists; then its merge.
 - Then S22a's session merges `v2` into its branch and re-runs what the merge touches, before Mac check 16.
 - S21b's pin move follows the batch.
+
+## Session 25a, follow-up: the PDF tests' servers wait a minute for the stand-in's health check, and the smoke test reads the refusal's whole log
+
+14 November 2026 · branch `claude/timing-flakes-1e4438`, a follow-up session of the phase-3 orchestrator's · [#141](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/141) · upstream `6b6932aa`, unchanged
+
+Two checks failed on 14 November on timing alone. The owner asked for both to be fixed in one pull request, by the session whose pull request merged last (PLAN's rule 3): the pin move's, since the first failure showed at #137's merge. The two are S25a's `PDFExportTests` and S21c's refusal check in `scripts/compose-smoke`, which came with S21c's review fixes (`736a9d1`, 11 November). This is a pull request of its own, outside the plan's table, branched from `main` at `48dbc22`. Line numbers below are `48dbc22`'s, as CI's runs and the brief gave them.
+
+**The PDF tests: what failed.** `main`'s `ci` on `6dc82ff`, #137's merge: run 43548678478, attempt 1, in the swift job. Attempt 2 passed.
+- **`aCollectionsPDFIsItsHTMLExportPrintedByTheService`, 8 issues.** It found no PDF offered at :152 and :153. The export it then asked for was refused (:159–:162), so the stand-in printed nothing (:168, :169).
+- **`noPDFIsOfferedWhileTheServiceDoesNotAnswer`, 1 issue.** It found no PDF offered at :202, though the stand-in's Chromium was up.
+- **The same moment.** Both expectations were recorded at 03:16:53.38Z, 28.5 s into the suite, under the whole target's load. The suite's other two tests took 32 and 45 s.
+- **`:154` passed.** The stand-in had been asked once, so the check reached it and its answer did not count.
+- **The log's `error` line is expected.** "The PDF service at http://localhost:36347 made no PDF of a collection: it answered 503: Service Unavailable" is the first case of `aPDFTheServiceCannotMakeIsTheSheetsRefusal`. Its stand-in's port, 36347, is the one that test's 400 and no-PDF answers name.
+- **Rare.** The suite has failed this once in CI, in about 100 runs since S25a on 8 November.
+
+**The PDF tests: the cause.** `PDFService`'s health check gives up after three seconds (`checkTimeout`) and keeps its answer for ten.
+- In the test process, every step of the exchange waits for a thread of Swift's cooperative pool: the connection's continuation, the stand-in's handler and its actor, and the client's read.
+- The target's other tests share that pool, and their work holds it for seconds at a time.
+- So a stalled exchange's answer came after the three seconds. The server offered no PDF, and the export met the answer it had kept.
+
+**The PDF tests: how it was found.** A trace, never committed and gated on an environment variable, logged each check's start, connection, first bytes and end, and when the stand-in handled the check. It could also hold the stand-in's answer, and set the real tests' servers' bound.
+- **CI's failure, forced.** With the stand-in's answer held 3.5 s and the server's three seconds, the two tests failed 2 runs of 2 with CI's nine issues, at the expectations CI named, and `:154` passed. Every check of the stand-in ended at 3,002 to 3,005 ms with "no answer within 3 seconds". With the fix's minute, 2 of 2 passed.
+- **The load.** CI's swift job runs each target's runner in turn, so the server target's own tests are its load. `taskset` pins a runner to 4 CPUs and gives the pool and NIO 4 threads, as on CI's 4 vCPUs.
+  - One runner on 4 of this Mac's CPUs runs the target in 38 s, where CI's took 108.
+  - Three at once on the same 4 CPUs take 62 to 84 s each, and the PDF suite 31 to 40 s, against CI's 44.7 (`main`'s 30 runs below).
+- **`main`'s code under that load:** 30 runs, ten rounds of three. The PDF suite passed in all 30.
+- **An A/B under the same load:** 18 runs in six rounds, with the trace on. The rounds alternated the real tests' servers between the server's three seconds and the fix's minute. Beside the tests ran six sample copies, never committed, and a heartbeat:
+  - each copy asked a fresh service, of a stand-in of its own, every second for 50 s, three copies within three seconds and three within a minute;
+  - the heartbeat was a task that asked to wake every 100 ms.
+- **What the A/B showed:**
+  - CI's four tests passed in all 18 runs, in both arms. The new test failed by construction in the nine runs on three seconds, whose switch also shortened its patient service's minute.
+  - Within three seconds, 3 of 1,852 sample checks found the healthy stand-in not answering. Within a minute, none of 1,850 did, and the slowest healthy exchange took 9.8 s.
+  - The heartbeat woke more than a second late 145 times, and more than three seconds late 16 times. The worst in a run ranged from 2.0 to 8.6 s.
+- **The three misses** came at one moment, in one runner, as its run began.
+  - They connected 1.5 to 3.9 s after they began. The stand-in's handler ran 4.6 s in, and the first bytes came 5.1 s in. Meanwhile the heartbeat was 1.4 to 3.2 s late.
+  - The three copies within a minute, at the same moment, took the stand-in's answer after 7.9 s.
+  - So a missed answer is rare here, as in CI: CI's four tests met none in the 39 runs on the server's three seconds.
+- **Production is not measured here.** A production server's pool runs only its own requests, and Gotenberg answers from a container of its own.
+
+**The PDF tests: the fix.**
+- **The bound is a parameter.** `PDFService(url:checkWithin:log:)` and `ServerState(configuration:pdfCheckWithin:log:)` take the health check's bound, as `RecentComputations` takes its grace. The default is the server's three seconds, `PDFService.checkTimeout`, now public.
+- **Production is unchanged.** The server still waits three seconds and keeps an answer for ten.
+- **`PDFExportTests`' servers wait a minute** (`checkWithin`), six times the slowest exchange seen.
+- **The stand-in can hold its health answer** (`delayHealth`).
+- **A bound below a second keeps its fraction,** for the connection's cap and the log's words. This was the cold review's finding, below: the cap was the bound's whole seconds, so half a second would have left the connection none.
+- **A new test, `aHealthCheckAnsweredAfterItsBoundOffersNoPDF`.** It holds the stand-in's answer 3.5 s and asks it three times at once.
+  - Within the server's three seconds, that answer counts for nothing, and the log says "no answer within 3 seconds".
+  - Within half a second, it counts for nothing too, and the log says "no answer within 500 ms": the service connected, then gave up.
+  - Within the tests' minute, it counts.
+- **`:154`'s ten seconds are left as they are.** The test's two calls came within them in every run here and in CI's.
+
+**The refusal check: what failed.** The image workflow on `ccba2d2`, #138's merge: run 43558647619.
+- Its `verify (arm64)` job failed at 05:03:42Z with "FAIL: the refusal does not give the remedy". So `verify (amd64)` was cancelled, and edge was not promoted.
+- The Standalone server's log, printed just below, holds the remedy line twice: the server refused to start, started again and refused again.
+- `48dbc22`'s image run passed and promoted edge.
+- The check, S21c's from `736a9d1`, has failed this once since it landed, in 39 image runs and about 50 of `ci`.
+
+**The refusal check: the cause.** Line 388 runs `library_compose logs --no-color frus 2>&1 | grep -q -- '<remedy>' || fail …` under the script's `set -euo pipefail`.
+- `grep -q` exits at its first match, the first of the two remedy lines.
+- `docker compose logs` writes a line at a time, so it meets a closed pipe for the lines after that one, and fails.
+- `pipefail` then fails the pipeline, though grep found the remedy.
+
+Lines 196–198 and the writing's check at 1163–1166 already avoid this: they read the whole log first, then match it with `case`.
+- That was S14e's fix (`3ba14dd`, 27 October), for the same race in S14b's backup check (`bff7e47`). The writing's check (`d481563`, S16e) was written that way after it.
+- S21c's refusal check brought the old form back.
+
+**The refusal check: shown.**
+- **On Linux,** as CI's runner runs the script: bash 5.2 in the swift container, with a writer of the run's six lines, one write a line.
+  - Written back to back, `grep -q` under `pipefail` failed 0 times in 200.
+  - Written 1 ms or 10 ms apart, it failed 200 of 200. Each time the writer was killed by SIGPIPE (141), and grep exited 0.
+  - Without `pipefail` it failed none, and the whole log first, then `case`, failed none.
+- **On the Mac, with Docker's own CLI:** `docker compose logs` of a container whose log is the six lines, through line 388's pipeline, failed 9 times in 300. `docker compose` exited 255 and grep 0. The fix's form failed 0 of 300.
+
+**The refusal check: the fix.** Line 388 reads the whole log first, then `case`, as lines 196–198 do.
+
+**The rest of the smoke test's script.** Every other pipeline into `grep -q` or `head` was checked for the same race. Only line 388 changes.
+- **The `printf '%s' "$var" | grep -q` lines** (234, 246, 833, 1012) match the server's JSON, which is one line with no break. `grep` cannot match within a line until it has the line's end.
+  - With the match first, such a value of 1 KiB to 256 KiB failed 0 times in 1,800.
+  - The same value broken into lines of 100 bytes failed none at 4 and 8 KiB, which the pipe holds whole, and 298 of 300 at 64 KiB.
+  - In this branch's smoke test, the catalogue's, the status's and the search's values were 920, 581 and 1,344 bytes, each a single line, so neither limit is near.
+- **Line 507's `curl -w '%{http_code}'`** writes its three digits once, at its end.
+- **The `head`s at 218, 900, 1008 and 1056** read `sed`'s single match.
+- **Lines 580, 952, 1055 and 1270** pipe into fail messages.
+- **Every other pipe's reader** reads its input to the end.
+
+**How it was checked:**
+- **The bound's test over the old connection cap,** a variant never committed, failed at its half-second line: the service said "no connection to localhost:57381: Connect timeout (0 s)". At the head it passes.
+- **The server target under the load, at the head:** 21 runs, seven rounds of three on 4 CPUs, as above.
+  - The PDF suite passed in all 21, in 39 to 50 s, with each run taking 74 to 88 s.
+  - Before the review's fix, at `b56a3ef`, 21 more runs passed too. So the fix has passed 42 runs under the load in which three seconds missed a healthy answer.
+- **Linux, `swift:6.4-noble`, arm64:** CI's swift job (`scripts/swift --postgres test`), under the heavy lock.
+  - 4,179 tests in 534 suites in fourteen runners, all passing, the server's 368 in 55 suites among them.
+  - The one skip is the named one, `FTS5StoreTests`' `backupExclusion()`, and the build gives no warning.
+  - Two earlier runs at `b56a3ef` lost three and five of `FRUSLightCoreTests`' PostgreSQL tests to "too many clients already", the shared container's 100 connections. Every other target passed in them, and no CI run since 8 November has met that refusal.
+- **The image and the smoke test, at `b56a3ef`:** `scripts/compose-smoke` with this branch's image as `frus-light:flakes`, on 18310 with the library's step on 18311.
+  - It passed every step, among them the refusal check's and the collection's PDF through the `pdf` profile's Gotenberg.
+  - The review's fix after it changes only bounds below a second, which the server never uses.
+  - The browser app is unchanged, so neither `--e2e` nor the npm suites ran.
+
+**A cold review,** by a subagent given the diff and none of this session's reasoning, found no correctness bug in the change as it is used today. What held up is fixed:
+- **A bound below a second** would have given the connection a cap of none, now that the bound is a parameter. It keeps its fraction, and the bound's test asks within half a second (the PDF tests' fix, above).
+- **This log:**
+  - It said the 18 runs were green, where the new test failed by construction in nine of them.
+  - It named S14b's `bff7e47`, which brought the race into the backup's check, where S14e's `3ba14dd` fixed it.
+  - It gave the runs' times too narrowly, said "every check" of the stand-in's alone, quoted the 503 line short, and listed some of the script's other readers as if they were all of them.
+- **Two things were not yet true when it read them:** this pull request's number, checked when it opened, and the notes folder's `timing-flakes/`, made before the push.
+
+It set aside three more of its candidates, on NIO's code and the trace:
+- whether the connection's own cap could fire under the stall: NIO schedules it on the event loop, and no traced check of 3,828 met it;
+- whether the half second between the stand-in's 3.5 s and the server's three could be crossed: the timeout's wake is queued before the request is written;
+- whether a slow first check eats into `:154`'s ten seconds: the answer's time is taken when the check ends.
+
+**Seen in passing, not changed:** `HTTPTests.healthCheckAsksTheServersOwnPort` failed in 24 of the 93 runs under the three-runner load, on `main`'s code and the branch's alike, though never in CI's history. `HealthCheck.isHealthy`, `frus-light --check-health`, probes a live test server within three seconds from one of the pool's threads, so the same stalls can hold its answer. It is left for the owner.
+
+**Delivered:** the two fixes, the health check's bound as a parameter and its test, and this log. The trace, the samples, the heartbeat, the harness, the demos and the runs' logs are in the shared notes folder, under `timing-flakes/`.
+
+**Next:** nothing of its own; the plan's rows go on as they stand.
 
 ## Session 25a: PDF through Gotenberg
 

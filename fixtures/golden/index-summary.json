@@ -666,7 +666,7 @@
       "document_revisions.sequence" : 0.001,
       "document_sources" : 0.001,
       "document_sources.sequence" : 0,
-      "document_subject_refs" : 0.002,
+      "document_subject_refs" : 0.003,
       "document_subject_volumes" : 0,
       "document_subjects" : 0.002,
       "external_citations" : 0,
@@ -674,9 +674,9 @@
       "frus_documents.averages" : 0,
       "frus_documents.config" : 0,
       "frus_documents.docsize" : 0.001,
-      "frus_documents.vocab_col" : 0.022,
-      "frus_documents.vocab_instance" : 1.08,
-      "frus_documents.vocab_row" : 0.029,
+      "frus_documents.vocab_col" : 0.021,
+      "frus_documents.vocab_instance" : 1.185,
+      "frus_documents.vocab_row" : 0.03,
       "integrity" : 0.028,
       "page_ranges" : 0.003,
       "page_ranges.sequence" : 0.003,
@@ -692,7 +692,7 @@
       "schema.export_only" : 0,
       "terms" : 0,
       "terms.sequence" : 0,
-      "total" : 1.214,
+      "total" : 1.319,
       "user_content.averages" : 0,
       "user_content.config" : 0,
       "user_content.docsize" : 0.001,
@@ -737,8 +737,8 @@
       "sqlite" : "3.45.1",
       "timeZone" : "Etc/UTC"
     },
-    "sourceDigest" : "691f8b175057a3e95603f23cd6ce697b81955d3f177537cc52fc51d3ce281e31",
+    "sourceDigest" : "621edf669a6eba8a63a6527ddedb4706b6fbc4fcfbf0d8a5c28ad70cdb4a8d1f",
     "tool" : "frus-parity summarize",
-    "upstreamCommit" : "39859a51b07863d7391c6e92aa70b0a14a0c066f"
+    "upstreamCommit" : "b124a59b1b43c0b662754a060e0727ce3989ad1f"
   }
 }
