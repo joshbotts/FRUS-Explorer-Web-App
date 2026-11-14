@@ -357,6 +357,19 @@ private func body(_ response: TestResponse) -> String { String(buffer: response.
         #expect(await quota.used(by: "a", at: day) == 1)
         #expect(await quota.used(by: "b", at: day) == 0)
         #expect(await quota.used(by: "a", at: day.addingTimeInterval(NARAQuota.window)) == 0)
+        // Searches sent at once each hold a place until they end, so none passes on a count not yet made.
+        let held = NARAQuota(limit: 2)
+        #expect(await held.admit("a", at: day))
+        #expect(await held.admit("a", at: day))
+        #expect(await !held.admit("a", at: day))
+        #expect(await held.admit("b", at: day))
+        await held.end("a")
+        #expect(await held.admit("a", at: day))
+        await held.record("a", at: day)
+        await held.end("a")
+        await held.end("a")
+        #expect(await held.admit("a", at: day))
+        #expect(await !held.admit("a", at: day))
     }
 
     // MARK: Refusals

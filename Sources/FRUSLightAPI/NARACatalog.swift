@@ -163,25 +163,28 @@ enum NARARoutes {
                 return EditedResponse(headers: [.cacheControl: "no-store"], response: NARASearchAnswer(results: kept, cached: true))
             }
             let quota = outside.quota
-            if key.owner == .instance, await quota.used(by: user.id, at: now()) >= quota.limit {
+            let userId = user.id
+            let counted = key.owner == .instance
+            if counted, await !quota.admit(userId, at: now()) {
                 throw APIProblem(.tooManyRequests, code: "NARA_QUOTA_REACHED",
                                  detail: "You have made \(quota.limit) searches of the NARA Catalog with this server’s key in the last day, as many as it allows each person. Try again later, or add your own NARA Catalog API key in \(OutsideServices.keysPlace).")
             }
-            let userId = user.id
             let provider = RequestNARAKey(key: key.value) {
-                if key.owner == .instance { await quota.record(userId, at: now()) }
+                if counted { await quota.record(userId, at: now()) }
             }
             let client = NARACatalogClient(keyProvider: provider, urlSession: outside.naraSession)
             let records: [NARACatalogRecord]
             do {
                 records = try await call.run(client).map(NARACatalogRecord.init)
-            } catch let error as NARACatalogError {
-                throw problem(error)
-            } catch is CancellationError {
-                throw CancellationError()
+                if counted { await quota.end(userId) }
             } catch {
+                if counted { await quota.end(userId) }
+                switch error {
+                case let error as NARACatalogError: throw problem(error)
+                case is CancellationError: throw CancellationError()
                 // Nothing of the error is said or logged: a transport's can name the address it asked.
-                throw problem(NARACatalogError.networkError(underlying: error))
+                default: throw problem(NARACatalogError.networkError(underlying: error))
+                }
             }
             await outside.answers.keep(records, for: call.cacheKey, at: now())
             return EditedResponse(headers: [.cacheControl: "no-store"], response: NARASearchAnswer(results: records, cached: false))

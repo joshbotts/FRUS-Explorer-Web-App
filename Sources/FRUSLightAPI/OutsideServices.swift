@@ -60,7 +60,8 @@ struct OutsideServices: Sendable {
         configuration.httpCookieAcceptPolicy = .never
         configuration.httpShouldSetCookies = false
         configuration.urlCache = nil
-        if mirrored { configuration.protocolClasses = [ServicesMirrorProtocol.self] }
+        // In front of the session's own, which answer whatever the mirror's does not take.
+        if mirrored { configuration.protocolClasses = [ServicesMirrorProtocol.self] + (configuration.protocolClasses ?? []) }
         return URLSession(configuration: configuration)
     }
 
@@ -249,14 +250,18 @@ actor NARAAnswerCache {
 
 /// The calls each user has made to NARA with the instance's key in the last day, of `limit` at most: a user's
 /// own key is theirs, and NARA limits it, so none of its calls are counted. A call is one NARA answered (the
-/// kit's client tells its key provider of each), and a lot's lookup may make up to four. Kept in memory, so a
-/// restart empties it, and each server sharing a store counts its own.
+/// kit's client tells its key provider of each), and a lot's lookup may make up to four. A search is admitted
+/// while the user's calls and their searches still running are fewer than the limit, so that searches sent at
+/// once cannot each pass before any is counted. Kept in memory, so a restart empties it, and each server
+/// sharing a store counts its own.
 actor NARAQuota {
     static let callsPerDay = 100
     static let window: TimeInterval = 24 * 60 * 60
 
     let limit: Int
     private var calls: [String: [Date]] = [:]
+    /// Each user's searches admitted and not yet ended.
+    private var running: [String: Int] = [:]
 
     init(limit: Int = NARAQuota.callsPerDay) {
         self.limit = limit
@@ -267,6 +272,19 @@ actor NARAQuota {
         let recent = (calls[user] ?? []).filter { now.timeIntervalSince($0) < Self.window }
         calls[user] = recent.isEmpty ? nil : recent
         return recent.count
+    }
+
+    /// Whether `user` may search now, holding a place for the search until `end(_:)`.
+    func admit(_ user: String, at now: Date) -> Bool {
+        guard used(by: user, at: now) + running[user, default: 0] < limit else { return false }
+        running[user, default: 0] += 1
+        return true
+    }
+
+    /// A search `admit(_:at:)` let through has ended, however it ended.
+    func end(_ user: String) {
+        let left = running[user, default: 0] - 1
+        running[user] = left > 0 ? left : nil
     }
 
     func record(_ user: String, at now: Date) {

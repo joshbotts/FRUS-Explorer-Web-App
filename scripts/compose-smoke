@@ -733,8 +733,11 @@ case "$refused" in *'"code":"NARA_KEY_REQUIRED"'*'Add your key in Settings ▸ K
 unsent=$(library_api POST /api/v1/me/volumes/frus1961-63v06/documents/d3/zotero)
 case "$unsent" in *'"code":"ZOTERO_KEY_REQUIRED"'*'Connect a Zotero account in Settings ▸ Keys first.'*' 409') ;; *) fail "a send with no key answered $unsent" ;; esac
 [ "$(services_asked)" = 0 ] || fail "with no key the stand-in was asked: $(docker logs "$library_services" 2>&1 | tail -3)"
-library_api PUT /api/v1/me/secrets/nara "{\"value\":\"$nara_key\"}" | grep -q ' 200$' || fail "the NARA key was not stored"
-library_api PUT /api/v1/me/secrets/zotero "{\"value\":\"$zotero_key\"}" | grep -q ' 200$' || fail "the Zotero key was not stored"
+# Each answer kept whole and then matched: grep -q would stop reading at its match.
+stored=$(library_api PUT /api/v1/me/secrets/nara "{\"value\":\"$nara_key\"}")
+case "$stored" in *' 200') ;; *) fail "the NARA key was not stored: $stored" ;; esac
+stored=$(library_api PUT /api/v1/me/secrets/zotero "{\"value\":\"$zotero_key\"}")
+case "$stored" in *' 200') ;; *) fail "the Zotero key was not stored: $stored" ;; esac
 note='Source: Department of State, Presidential Correspondence: Lot 66 D 204. No classification marking.'
 library_api POST /api/v1/volumes/frus1961-63v06/documents/d3/lookup "{\"text\":\"Correspondence. This message\",\"blockText\":\"$note\"}" \
   > "$work/lookup.txt" || fail "Look Up did not answer"
@@ -765,15 +768,18 @@ assert sent == {"addedItems": 1, "failedItems": 0, "addedNotes": 0, "webURL": "h
 asked = [line.strip() for line in open(os.path.join(work, "services.log"), encoding="utf-8") if line.startswith(("GET ", "POST "))]
 naras = [line for line in asked if line.split()[1].startswith("/catalog.archives.gov/")]
 zoteros = [line for line in asked if line.split()[1].startswith("/api.zotero.org/")]
-assert len(naras) == 1 and naras[0].endswith(f"key={nara} auth="), naras
-assert zoteros[0] == f"GET /api.zotero.org/keys/{zotero} key= auth=" and zoteros[1] == f"POST /api.zotero.org/users/4210/items key= auth=Bearer {zotero}", zoteros
+# nginx logs a header a request did not send as "-".
+assert len(naras) == 1 and naras[0].endswith(f"key={nara} auth=-"), naras
+assert zoteros[0] == f"GET /api.zotero.org/keys/{zotero} key=- auth=-" and zoteros[1] == f"POST /api.zotero.org/users/4210/items key=- auth=Bearer {zotero}", zoteros
 log = open(os.path.join(work, "library-server.log"), encoding="utf-8").read()
 assert nara not in log and zotero not in log, "the server's log holds a key"
 print(f"   Look Up: {len(lookup['candidates'])} readings of d3's note, {first['label']} first, the bundled {first['resolution']['naId']}; "
       f"the search asked the stand-in once with the key and was kept, the second from the cache; d3 sent to Zotero's")
 PY
-library_api DELETE /api/v1/me/secrets/nara | grep -q ' 204$' || fail "the NARA key was not cleared"
-library_api DELETE /api/v1/me/secrets/zotero | grep -q ' 204$' || fail "the Zotero key was not cleared"
+for name in nara zotero; do
+  cleared=$(library_api DELETE "/api/v1/me/secrets/$name")
+  case "$cleared" in *' 204') ;; *) fail "the $name key was not cleared: $cleared" ;; esac
+done
 if [ -n "$e2e" ]; then
   echo "   the look-up spec in Playwright on Chromium: a passage looked up and a citation sent to Zotero's stand-in, by keyboard"
   FRUS_E2E_LOOK_UP=1 FRUS_E2E_NETWORK="container:$(library_compose ps -q frus)" FRUS_E2E_BASE_URL=http://localhost:8080/ scripts/npm --playwright \
