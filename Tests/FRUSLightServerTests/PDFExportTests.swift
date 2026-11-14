@@ -7,7 +7,7 @@
 // wrong is the sheet's refusal, kept nowhere: a service that does not answer or is too busy a 503 the
 // sheet can try again, any other failure a 502 with the service's words. The servers here wait longer than
 // the server's three seconds for the stand-in's health check, which answers beside the target's other
-// tests; one test holds the three seconds themselves.
+// tests; one test holds the bound itself.
 
 import FRUSLightCore
 import Foundation
@@ -234,9 +234,10 @@ struct FormPart: Equatable {
         }
     }
 
-    /// The health check's bound: an answer after the server's three seconds is none, so no PDF is offered,
-    /// what CI's two tests met; a server given longer, as these tests' servers are, takes it.
-    @Test func aHealthCheckAnsweredAfterThreeSecondsOffersNoPDF() async throws {
+    /// The health check's bound: an answer after it is none, so no PDF is offered. The server's three seconds
+    /// are what CI's two tests met; a bound below a second keeps its fraction, for the connection as for the
+    /// log; and a server given longer, as these tests' servers are, takes the answer.
+    @Test func aHealthCheckAnsweredAfterItsBoundOffersNoPDF() async throws {
         let service = StandInPDFService()
         try await service.app.test(.live) { standIn in
             let address = "http://localhost:\(try #require(standIn.port))"
@@ -244,15 +245,21 @@ struct FormPart: Equatable {
             let said = Mutex<[String]>([])
             let saying = PDFService(url: address, log: { line in said.withLock { $0.append(line) } })
             let server = try #require(saying)
+            let saidBriefly = Mutex<[String]>([])
+            let sayingBriefly = PDFService(url: address, checkWithin: .milliseconds(500),
+                                           log: { line in saidBriefly.withLock { $0.append(line) } })
+            let brief = try #require(sayingBriefly)
             let patient = try #require(PDFService(url: address, checkWithin: Self.checkWithin))
             async let late = server.isAvailable()
+            async let briefly = brief.isAvailable()
             async let waited = patient.isAvailable()
-            let (lateAnswer, waitedAnswer) = await (late, waited)
+            let (lateAnswer, briefAnswer, waitedAnswer) = await (late, briefly, waited)
             #expect(!lateAnswer, "within the server's three seconds")
+            #expect(!briefAnswer, "within half a second")
             #expect(waitedAnswer, "within \(Self.checkWithin)")
-            #expect(said.withLock { $0 } == [
-                "The PDF service at \(address) does not answer, so no PDF is offered until it does: no answer within 3 seconds",
-            ])
+            let refusal = "The PDF service at \(address) does not answer, so no PDF is offered until it does: no answer within"
+            #expect(said.withLock { $0 } == ["\(refusal) 3 seconds"])
+            #expect(saidBriefly.withLock { $0 } == ["\(refusal) 500 ms"], "connected, then given up on, not refused a connection")
         }
     }
 

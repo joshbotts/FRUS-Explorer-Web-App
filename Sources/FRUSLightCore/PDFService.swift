@@ -234,7 +234,7 @@ public actor PDFService {
             group.addTask { try await self.send(request, limit: limit, connectWithin: timeout) }
             group.addTask {
                 try await Task.sleep(for: timeout)
-                throw PDFServiceError.unavailable("no answer within \(timeout.components.seconds) seconds")
+                throw PDFServiceError.unavailable("no answer within \(Self.spoken(timeout))")
             }
             defer { group.cancelAll() }
             guard let answer = try await group.next() else { throw CancellationError() }
@@ -255,7 +255,7 @@ public actor PDFService {
         let channel: NIOAsyncChannel<ByteBuffer, ByteBuffer>
         do {
             channel = try await ClientBootstrap(group: MultiThreadedEventLoopGroup.singleton)
-                .connectTimeout(.milliseconds(min(5_000, Int64(timeout.components.seconds) * 1_000)))
+                .connectTimeout(.milliseconds(min(5_000, Self.milliseconds(timeout))))
                 .connect(host: endpoint.host, port: endpoint.port) { channel in
                     channel.eventLoop.makeCompletedFuture {
                         if let context {
@@ -296,6 +296,16 @@ public actor PDFService {
         } onCancel: {
             underlying.close(promise: nil)
         }
+    }
+
+    /// A bound in whole milliseconds, a fraction of a second kept, as a bound below a second needs.
+    static func milliseconds(_ duration: Duration) -> Int64 {
+        duration.components.seconds * 1_000 + duration.components.attoseconds / 1_000_000_000_000_000
+    }
+
+    /// A bound as the log says it: whole seconds in seconds, any other in milliseconds.
+    static func spoken(_ duration: Duration) -> String {
+        duration.components.attoseconds == 0 ? "\(duration.components.seconds) seconds" : "\(milliseconds(duration)) ms"
     }
 
     /// An error in a line, for the log.
