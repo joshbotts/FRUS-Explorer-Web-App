@@ -39,7 +39,9 @@ public struct SourceExplorerAnswer: Codable, Equatable, Sendable, ResponseEncoda
     /// The chip beside the note: the marking it prints, else the one the index stores
     /// (`IndexingPipeline.classificationMarking(sourceNote:stored:)`).
     public var classificationMarking: String?
-    /// The year every year-dependent section reads: the index-hydrated one (`effectiveYear`).
+    /// The dateline the panels read, the reader's or the index's (`SourceExplorerDocumentContext`), and the year
+    /// every year-dependent section reads, which comes from it (`effectiveYear`).
+    public var dateline: String?
     public var year: Int?
     /// The keys the parse gives, which the archival neighbours and the lot rows are matched on.
     public var keys: Keys
@@ -465,7 +467,7 @@ enum SourceExplorerRoutes {
             parsed: Self.describe(parsed),
             classificationMarking: hasSourceNote
                 ? IndexingPipeline.classificationMarking(sourceNote: note, stored: resolution.storedClassification) : nil,
-            year: year,
+            dateline: resolution.documentContext?.dateline, year: year,
             keys: SourceExplorerAnswer.Keys(
                 supportsArchivalNeighbors: parsed.supportsArchivalNeighbors,
                 archivalNeighborKey: parsed.archivalNeighborKey,
