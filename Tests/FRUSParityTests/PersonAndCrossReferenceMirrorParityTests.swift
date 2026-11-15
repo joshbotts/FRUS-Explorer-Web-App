@@ -385,7 +385,7 @@ import Testing
             (person, "let idx = selectedPeople.firstIndex { $0.rollupId == rollupId } ?? 0 return ChartSeriesPalette.color(at: idx)",
              rules, "const index = Math.max(0, people.findIndex((person) => person.rollupId === rollupId));"),
             (references, "let opacity = 0.15 + 0.80 * ratio", rules, "return 0.15 + 0.8 * (count / maxCount);"),
-            (references, "guard count > 0, matrixMaxCount > 0 else { return Color.secondary.opacity(0.06) }", rules, "value: 0.06 },"),
+            (references, "guard count > 0, matrixMaxCount > 0 else { return Color.secondary.opacity(0.06) }", rules, "shade: shaded ? heatOpacity(count, matrix.maxCount) : diagonal ? 0.18 : 0.06,"),
             (references, "ForEach([0.15, 0.35, 0.55, 0.75, 0.95], id: \\.self)", rules, "export const heatLegendSteps = [0.15, 0.35, 0.55, 0.75, 0.95];"),
             (references, "private static let matrixCellSize: CGFloat = 34", rules, "const size = 34;"),
         ]

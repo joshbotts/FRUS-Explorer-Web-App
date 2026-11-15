@@ -184,7 +184,7 @@ export function trajectorySpec(answer: PersonAnswer, labels: { person: string; d
         field: 'plotted',
         type: 'quantitative',
         title: comparison.valueAxisLabel,
-        axis: percent ? { labelExpr: "format(datum.value, '.3~') + '%'" } : { format: ',d' },
+        axis: percent ? { labelExpr: "datum.label + '%'" } : { format: ',d' },
       },
       color: {
         field: 'name',
@@ -303,12 +303,17 @@ export function matrixSpec(answer: CrossReferenceAnswer, labels: { citing: strin
     matrix.volumes.map((target, column) => {
       const cell = matrix.rows[row]?.[column];
       const count = cell?.count ?? 0;
+      const diagonal = source.id === target.id;
+      // A cell with references in the accent at its shade; one without in the secondary grey at 6%, the diagonal's
+      // greyed further, as the app's overlay greys it.
+      const shaded = count > 0 && !diagonal && matrix.maxCount > 0;
       return {
         source: rowLabel(source),
         target: target.code,
         count,
-        shade: source.id === target.id ? 0 : heatOpacity(count, matrix.maxCount),
-        diagonal: source.id === target.id,
+        fill: shaded ? ink(dark) : faint(dark),
+        shade: shaded ? heatOpacity(count, matrix.maxCount) : diagonal ? 0.18 : 0.06,
+        diagonal,
         help: cell?.help ?? '',
       };
     }),
@@ -329,8 +334,8 @@ export function matrixSpec(answer: CrossReferenceAnswer, labels: { citing: strin
       {
         mark: { type: 'rect', cornerRadius: 2, tooltip: { content: 'data' }, stroke: dark ? '#1c1c1e' : '#ffffff', strokeWidth: 1 },
         encoding: {
-          color: { condition: { test: 'datum.diagonal', value: dark ? '#3a3a3c' : '#e5e5ea' }, value: ink(dark) },
-          opacity: { condition: { test: 'datum.diagonal || datum.count > 0', field: 'shade', type: 'quantitative', scale: null }, value: 0.06 },
+          color: { field: 'fill', type: 'nominal', scale: null, legend: null },
+          opacity: { field: 'shade', type: 'quantitative', scale: null, legend: null },
           tooltip: [{ field: 'help', type: 'nominal', title: labels.references }],
         },
       },
