@@ -152,8 +152,8 @@ test('shows a range in Chronology, filters its list by the legend by keyboard, a
     await expect(page.getByRole('heading', { level: 1, name: 'Chronology' })).toBeFocused();
     await expect(page.getByRole('heading', { level: 2, name: 'Choose a Date Range' })).toBeVisible();
     // The range opens on the corpus's last year; one of November 1960 is shown by keyboard.
-    await page.getByLabel('From').fill('1960-11-01');
-    await page.getByLabel('To').fill('1960-11-30');
+    await page.getByLabel('From', { exact: true }).fill('1960-11-01');
+    await page.getByLabel('To', { exact: true }).fill('1960-11-30');
     await tabTo(page, page.getByRole('button', { name: 'Show', exact: true }));
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/from=1960-11-01&to=1960-11-30/);
@@ -171,8 +171,8 @@ test('shows a range in Chronology, filters its list by the legend by keyboard, a
     await axeCheck(page);
 
     // A range of both volumes: 1890 to 1965, a year a section, one document of 1894 and two of 1960.
-    await page.getByLabel('From').fill('1890-01-01');
-    await page.getByLabel('To').fill('1965-12-31');
+    await page.getByLabel('From', { exact: true }).fill('1890-01-01');
+    await page.getByLabel('To', { exact: true }).fill('1965-12-31');
     await tabTo(page, page.getByRole('button', { name: 'Show', exact: true }));
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/from=1890-01-01&to=1965-12-31/);
