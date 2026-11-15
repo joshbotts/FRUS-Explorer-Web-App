@@ -1580,6 +1580,47 @@ Phase 3's row S22c, the last pull request of the second upstream batch, after S2
 
 **Next:** Mac check 19 and the owner's merge of FRUS-Explorer#1895, the batch's last; then S23c's pin move past the second batch, with libcurl in the image unless S21c added it; then S22d, Source Explorer over the API and check 8, and S22e, NARA, Look Up and Zotero.
 
+## Session 23d, second follow-up: a list that comes while a weight's step rests no longer cancels the step's ranking
+
+14 November 2026 · branch `claude/musing-perlman-2745af`, a follow-up session of the phase-3 orchestrator's · [#153](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/153) · upstream `f011ab04`, unchanged
+
+S21f's follow-up found it (the log's entry, "Session 21f, follow-up"). Its first local `scripts/compose-smoke --e2e`, at load averages 7 to 8, failed `related.spec.ts:30` in the pass under the path: after ArrowRight on Corpus proximity, the URL never took `weights=subseries%3A0.4`. The spec passed at the root and in both passes of a second run. It had not failed in CI, where it would have looked like load. This is a pull request of its own, outside the plan's table, branched from `main` at `6acee4b`.
+
+**What was wrong: the browser app.** Related Documents' tuning bar, `Tuning` in `web/src/related/RelatedScreen.tsx` (S23d), keeps a step not yet ranked for the next list when the page goes, in an effect's cleanup. The effect named the list's axes as its dependency, so its cleanup also ran whenever a list came with axes of its own.
+- **A list comes after the scope changes.** Changing the scope asks for a new list, and the one on show stays, busy, until it comes.
+- **A keyboard step rests before it is ranked:** 500 ms, so that a run of steps is ranked once.
+- **So a scope's list that came during that rest cleared the step's timer.** The cleanup wrote the step to this browser's storage, but the step never reached the address, and the list was not ranked with it. The slider went on showing the step.
+- **A drag was spared,** since it commits when it is let go, not on a timer.
+
+**The fix.** The cleanup runs only when the page goes: `useEffect(() => () => keepUnranked(), [])`, where `keepUnranked` is an effect event (`useEffectEvent`) that reads the last list's axes. That is the brief's "axes in a ref": an effect event keeps its newest closure in one. It is how `useSaver` and Project Home's research question already flush what waits when they go.
+
+**Whether a late list should rank the step at once: no.**
+- A list that comes is not the user's doing, and it leaves the step meaning what it meant. A tuning's stored form names each axis away from its default, and every list gives the same axes with the same defaults.
+- Ranking at once would rank a run of keyboard steps midway whenever a list landed, and a drag before it is let go, at the network's pace rather than the keys'.
+- So the keyboard's settle and the drag's commit on release are as they were, and a step's ranking no longer depends on when a list comes.
+
+**The tests.**
+- **`RelatedScreen.test.tsx`** gains two.
+  - "ranks a step once it settles, though a list asked for before it comes while it rests" holds This volume's list until a slider has stepped, then lets it come. It checks that the address has no weights yet, then expects the step in the address, a list asked for with it, and the step in storage. On `main`'s code it fails, the address staying `{ scope: 'volume' }`; with the fix it passes.
+  - "keeps a step not yet ranked for the next list when the page goes" holds the cleanup's own job, and passes either way.
+- **`related.spec.ts`** holds This volume's list with `page.route` (`route.fetch`, a gate, then `route.fulfill`, for one request) until the weight has stepped, and lets it come while the step rests. Its `finally` opens the gate too, so that no held answer outlives the test.
+
+**The repro, before and after.** One server, `frus-light:related` on port 18352 with the synthetic export and the fixture TEI, served each web app in turn: `main`'s, built at `6acee4b` and mounted over the image's, then the branch's. `related.spec.ts` ran three times with each, at load averages near 4:
+- **`main`'s web app: 3 of 3 failed,** each at `related.spec.ts:86`, the URL never taking `weights=subseries%3A0.4`: the failure S21f's follow-up saw.
+- **The branch's: 3 of 3 passed.**
+
+**How it was checked:**
+- **The web job's five steps:** typecheck, lint, 663 unit tests in 73 files, and the build.
+- **The image and the smoke test:** `scripts/compose-smoke --e2e` with `frus-light:related` on port 18350, under the heavy lock, passed every step. It ran with no parity image, so checks 2 and 8 over the Standalone index were skipped.
+  - The browser suite passed 88 tests at the root and 88 under the path, skipping 8 in each, `related.spec.ts` with its hold among them.
+  - The Standalone server's specs passed, and so did the accounts and sign-in specs.
+  - The image was built at the fix's first commit, which differs from the branch's only in three comments.
+- **The Swift suites were not run here:** nothing outside `web/` and the records changed.
+
+**Delivered:** the fix, the two unit tests, the browser test's hold, this entry, and PLAN's paragraph.
+
+**Next:** nothing of its own; the plan's rows go on as they stand.
+
 ## Session 23d, follow-up: Project Home gives a computation as ended only beside the leads it kept
 
 13 November 2026 · branch `claude/leads-flake-91bba9`, a follow-up session of the phase-3 orchestrator's · [#136](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/136) · upstream `39859a51`, unchanged

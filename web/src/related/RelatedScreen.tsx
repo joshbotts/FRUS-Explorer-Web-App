@@ -13,7 +13,7 @@
 // its axis in words, where the app draws the axis's symbol.
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
 import { ApiError, errorMessage } from '../api/client';
 import { documentQuery } from '../api/endpoints';
 import { type RelatedAxis, type RelatedDocuments, relatedQuery, type RelatedScope, storedWeights, storeWeights } from '../api/related';
@@ -138,14 +138,14 @@ function Tuning({
   const shown = draft ?? decodedWeights(weights, shape.axes);
   const axes = shape.axes;
 
-  // A tuning moved and not yet ranked when the page goes is kept for the next list, as a settled one is.
-  useEffect(
-    () => () => {
-      clearTimeout(timer.current);
-      if (pending.current) storeWeights(encodedWeights(pending.current, axes) || undefined);
-    },
-    [axes],
-  );
+  // A tuning moved and not yet ranked when the page goes is kept for the next list, as a settled one is. Only
+  // when the page goes: a list that comes while a step rests, as one ranked for a scope just chosen may under
+  // load, leaves the step to settle and be ranked as it would have been (S23d's second follow-up).
+  const keepUnranked = useEffectEvent(() => {
+    clearTimeout(timer.current);
+    if (pending.current) storeWeights(encodedWeights(pending.current, axes) || undefined);
+  });
+  useEffect(() => () => keepUnranked(), []);
 
   function commit() {
     clearTimeout(timer.current);
