@@ -2559,6 +2559,11 @@ dialog.cross-volume {
   margin-top: 1rem;
 }
 
+.person-focus h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
 .person-focus {
   display: flex;
   flex-wrap: wrap;
@@ -2643,7 +2648,12 @@ dialog.cross-volume {
   width: 18px;
   height: 12px;
   border-radius: 2px;
-  background: var(--accent);
+  background: #007aff;
+}
+
+/* The matrix's ink, the charts' system blue. */
+:root[data-theme='dark'] .heat-step {
+  background: #64a8ff;
 }
 
 .heat-15 {
@@ -2674,6 +2684,12 @@ dialog.cross-volume {
   padding: 0;
   list-style: none;
   font-size: 0.8125rem;
+}
+
+.cross-reference-volumes a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
 }
 
 .cross-reference-volumes .code {

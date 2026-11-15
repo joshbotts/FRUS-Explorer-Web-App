@@ -597,7 +597,8 @@ export function figureSpec(chart: ChartSpec, plate: AnalyticsPlate, legend: { ti
       ],
     });
   }
-  parts.push({ ...body, width });
+  // A chart of a fixed width, as the heat matrix's square cells, keeps it.
+  parts.push({ ...body, width: typeof chart.width === 'number' ? chart.width : width });
   parts.push({
     width,
     height: Math.max(y, 1),

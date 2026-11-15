@@ -9,7 +9,7 @@
 // canvas one keyboard stop, a list box over it, as the cross-reference graph's is.
 import { useQuery } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
-import { type KeyboardEvent, lazy, type ReactNode, Suspense, useId, useMemo, useState } from 'react';
+import { type KeyboardEvent, lazy, type ReactNode, type RefObject, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { analyticsContextQuery, type AnalyticsContext, type AnalyticsScope } from '../api/analytics';
 import { ApiError, errorMessage } from '../api/client';
 import {
@@ -71,6 +71,19 @@ export function PersonAnalyticsScreen() {
   const network = search.mode === 'network';
   useDocumentTitle(words.title);
   useHeadingReady(!context.isPending);
+  // People the index no longer holds, as after a correction renumbers the rollup, leave the address in place of it.
+  const missing = (people.data?.comparison.missing ?? []).join(',');
+  useEffect(() => {
+    if (missing === '') return;
+    const gone = new Set(missing.split(',').map(Number));
+    void navigate({
+      search: (previous) => {
+        const kept = (previous.people ?? []).filter((id) => !gone.has(id));
+        return { ...previous, people: kept.length > 0 ? kept : undefined };
+      },
+      replace: true,
+    });
+  }, [missing, navigate]);
 
   /** A change of the page's state, as a new entry of the address. */
   function change(fields: Partial<PeopleSearch>) {
@@ -115,7 +128,7 @@ export function PersonAnalyticsScreen() {
               {corpus.loading}
             </p>
           ) : network ? (
-            <NetworkMode search={search} scope={scope} answer={people.data} onChange={change} />
+            <NetworkMode search={search} scope={scope} answer={people.data} busy={people.isPlaceholderData} onChange={change} />
           ) : (
             <Trends ask={ask} answer={people.data} busy={people.isPlaceholderData} onChange={change} />
           )}
@@ -222,9 +235,17 @@ function Trends({ ask, answer, busy, onChange }: { ask: PersonAsk; answer: Perso
     else if (ask.people.length < maxComparisonPeople) onChange({ people: [...ask.people, rollupId] });
   }
 
+  const addField = useRef<HTMLInputElement>(null);
+  const compared = ask.people.join(',');
   const rankingSpec = useMemo(
-    () => personRankingSpec(answer, { person: words.person, mentions: words.mentions, description: words.chartDescription(answer.ranking.heading) }, dark),
-    [answer, dark],
+    () =>
+      personRankingSpec(
+        answer,
+        { person: words.person, mentions: words.mentions, description: words.chartDescription(answer.ranking.heading) },
+        dark,
+        compared === '' ? [] : compared.split(',').map(Number),
+      ),
+    [answer, dark, compared],
   );
   const lines = useMemo(() => trajectorySpec(answer, { person: words.person, description: words.chartDescription(answer.comparison.heading) }, dark), [answer, dark]);
   const together = useMemo(
@@ -296,7 +317,8 @@ function Trends({ ask, answer, busy, onChange }: { ask: PersonAsk; answer: Perso
         </div>
         <AddPerson
           placeholder={words.addPlaceholder}
-          disabled={answer.comparison.atCap}
+          inputRef={addField}
+          disabled={ask.people.length >= maxComparisonPeople}
           isChosen={isSelected}
           onPick={(rollupId) => toggle(rollupId)}
         />
@@ -313,7 +335,11 @@ function Trends({ ask, answer, busy, onChange }: { ask: PersonAsk; answer: Perso
                   type="button"
                   className="person-chip-remove"
                   aria-label={words.removeFromComparison(person.name)}
-                  onClick={() => onChange({ people: ask.people.filter((id) => id !== person.rollupId) })}
+                  onClick={() => {
+                    onChange({ people: ask.people.filter((id) => id !== person.rollupId) });
+                    // The chip goes with the next answer, so the keyboard goes back to the add field.
+                    addField.current?.focus();
+                  }}
                 >
                   <span aria-hidden="true">✕</span>
                 </button>
@@ -460,20 +486,25 @@ export function DataTable({
  *  the first six, most mentioned first. */
 function AddPerson({
   placeholder,
+  inputRef,
   disabled,
   isChosen,
   onPick,
 }: {
   placeholder: string;
+  inputRef?: RefObject<HTMLInputElement | null>;
   disabled: boolean;
   isChosen: (rollupId: number) => boolean;
   onPick: (rollupId: number) => void;
 }) {
   const [text, setText] = useState('');
   const matches = useQuery(personMatchesQuery(disabled ? '' : text));
+  const own = useRef<HTMLInputElement>(null);
+  const field = inputRef ?? own;
   const fieldId = useId();
   const listId = useId();
-  const shown = text.trim() === '' ? [] : (matches.data?.people ?? []).slice(0, shownMatches);
+  const asked = !disabled && text.trim() !== '';
+  const shown = asked ? (matches.data?.people ?? []).slice(0, shownMatches) : [];
   return (
     <div className="person-add">
       <label htmlFor={fieldId} className="visually-hidden">
@@ -483,11 +514,17 @@ function AddPerson({
         id={fieldId}
         type="search"
         value={text}
+        ref={field}
         placeholder={placeholder}
-        disabled={disabled}
+        // Read-only at the cap rather than disabled, so the field keeps the focus a pick or a chip gave it.
+        readOnly={disabled}
+        aria-disabled={disabled || undefined}
         aria-controls={listId}
         onChange={(event) => setText(event.target.value)}
       />
+      <p className="visually-hidden" role="status">
+        {asked && matches.data ? words.matchCount(shown.length) : ''}
+      </p>
       <ul id={listId} className="person-matches" aria-label={words.matches} hidden={shown.length === 0}>
         {shown.map((match) => (
           <li key={match.rollupId}>
@@ -497,6 +534,8 @@ function AddPerson({
               onClick={() => {
                 onPick(match.rollupId);
                 setText('');
+                // The list goes with the pick, so the keyboard goes back to the field.
+                field.current?.focus();
               }}
             >
               <span>{match.name}</span> <span className="count">{match.mentions.toLocaleString('en-US')}</span>
@@ -513,35 +552,43 @@ function NetworkMode({
   search,
   scope,
   answer,
+  busy,
   onChange,
 }: {
   search: PeopleSearch;
   scope: AnalyticsScope | undefined;
   answer: PersonAnswer;
+  /** Whether the ranking on show is the last scope's, while this one's is computed. */
+  busy: boolean;
   onChange: (fields: Partial<PeopleSearch>) => void;
 }) {
-  const focus = search.focus ?? answer.ranking.rows[0]?.rollupId;
+  // The person picked, else the ranking's first once it is this scope's (`PersonNetworkFocus`).
+  const waiting = search.focus === undefined && busy;
+  const focus = search.focus ?? (busy ? undefined : answer.ranking.rows[0]?.rollupId);
   const network = useQuery(networkQuery(focus, scope));
-  // Explore connections' trail, which Back walks (`history`): the people the network was centred on before.
-  const [history, setHistory] = useState<number[]>([]);
+  // Explore connections' trail, which Back walks (`history`), is the address's, so the browser's Back and Forward keep it.
+  const trail = search.trail ?? [];
+  // Explore and Back replace the graph, the focused control with it: the new graph's list box takes the focus.
+  const refocusRef = useRef(false);
   const graph = network.data && network.data.focus.rollupId === focus ? network.data : undefined;
   return (
     <section className="analytics-result person-network" aria-label={words.network}>
       <div className="person-focus">
-        <p>
-          <strong>{words.focusLabel}</strong> {graph?.focus.name ?? (focus === undefined ? words.focusNone : '')}
-        </p>
+        <h2>
+          {words.focusLabel} {graph?.focus.name ?? (focus === undefined && !waiting ? words.focusNone : '')}
+        </h2>
         <AddPerson
           placeholder={words.focusPlaceholder}
           disabled={false}
           isChosen={() => false}
-          onPick={(rollupId) => {
-            setHistory([]);
-            onChange({ focus: rollupId });
-          }}
+          onPick={(rollupId) => onChange({ focus: rollupId, trail: undefined })}
         />
       </div>
-      {focus === undefined ? (
+      {waiting ? (
+        <p className="analytics-loading" role="status">
+          {words.loadingNetwork}
+        </p>
+      ) : focus === undefined ? (
         <Empty title={words.noFocusTitle} detail={words.noFocusDetail} />
       ) : network.error ? (
         <Empty title={words.graphError} detail={errorMessage(network.error)} />
@@ -554,15 +601,17 @@ function NetworkMode({
       ) : (
         <Network
           answer={graph}
-          canGoBack={history.length > 0}
+          canGoBack={trail.length > 0}
+          takeFocusRef={refocusRef}
           onBack={() => {
-            const previous = history.at(-1);
-            setHistory(history.slice(0, -1));
-            if (previous !== undefined) onChange({ focus: previous });
+            const previous = trail.at(-1);
+            if (previous === undefined) return;
+            refocusRef.current = true;
+            onChange({ focus: previous, trail: trail.length > 1 ? trail.slice(0, -1) : undefined });
           }}
           onExplore={(rollupId) => {
-            setHistory([...history, graph.focus.rollupId]);
-            onChange({ focus: rollupId });
+            refocusRef.current = true;
+            onChange({ focus: rollupId, trail: [...trail, graph.focus.rollupId] });
           }}
         />
       )}
@@ -574,11 +623,14 @@ function NetworkMode({
 function Network({
   answer,
   canGoBack,
+  takeFocusRef,
   onBack,
   onExplore,
 }: {
   answer: NetworkAnswer;
   canGoBack: boolean;
+  /** Set when Explore or Back replaced the graph: its list box then takes the focus as it is drawn. */
+  takeFocusRef: RefObject<boolean>;
   onBack: () => void;
   onExplore: (rollupId: number) => void;
 }) {
@@ -616,6 +668,7 @@ function Network({
           </Suspense>
           <PartnerList
             focus={answer.focus}
+            takeFocusRef={takeFocusRef}
             partners={partners}
             active={active}
             shown={shown}
@@ -666,6 +719,7 @@ function Network({
  *  name and its shared documents with the focus, as the app's hit areas are. */
 function PartnerList({
   focus,
+  takeFocusRef,
   partners,
   active,
   shown,
@@ -674,6 +728,7 @@ function PartnerList({
   onClear,
 }: {
   focus: NetworkNode;
+  takeFocusRef: RefObject<boolean>;
   partners: NetworkNode[];
   active?: number;
   shown?: number;
@@ -683,10 +738,16 @@ function PartnerList({
 }) {
   const help = useId();
   const prefix = useId();
+  const list = useRef<HTMLDivElement>(null);
   const index = Math.max(
     0,
     partners.findIndex((node) => node.rollupId === active),
   );
+  useEffect(() => {
+    if (!takeFocusRef.current) return;
+    takeFocusRef.current = false;
+    list.current?.focus();
+  }, [focus.rollupId, takeFocusRef]);
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     let next: number | undefined;
@@ -732,6 +793,7 @@ function PartnerList({
   return (
     <>
       <div
+        ref={list}
         role="listbox"
         tabIndex={0}
         className="graph-keys"

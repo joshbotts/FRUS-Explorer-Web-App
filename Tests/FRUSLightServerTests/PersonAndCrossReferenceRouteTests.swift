@@ -47,10 +47,14 @@ import Testing
                     method: .get))
                 #expect(matches.people.count <= 20)
             }
+            // A person the index no longer holds, as after a correction renumbers the rollup, is left out and named.
+            let gone = try decode(PersonAnalyticsAnswer.self, try await client.execute(uri: "/api/v1/analytics/people?people=999999999", method: .get))
+            #expect(gone.comparison.people.isEmpty && gone.comparison.missing == [999999999] && gone.relationship == nil)
+            #expect(problemCode(try await client.execute(uri: "/api/v1/analytics/people/export?chart=trajectories&people=999999999", method: .get)) == "NOTHING_TO_EXPORT")
             let blank = try decode(PersonAnalyticsMatches.self, try await client.execute(uri: "/api/v1/analytics/people/search?q=%20", method: .get))
             #expect(blank.people.isEmpty)
             for (path, code) in [
-                ("people?people=abc", "INVALID_PARAMETER"), ("people?people=999999999", "PERSON_NOT_FOUND"),
+                ("people?people=abc", "INVALID_PARAMETER"), ("people?people=999999999&people=0999999999", "INVALID_PARAMETER"),
                 ("people?people=1&people=1", "INVALID_PARAMETER"), ("people?people=1&people=01", "INVALID_PARAMETER"),
                 ("people/export?chart=ranking&people=1&people=01", "INVALID_PARAMETER"), ("people/network?focus=01", "INVALID_PARAMETER"),
                 ("people?people=1&people=2&people=3&people=4&people=5&people=6", "INVALID_PARAMETER"),

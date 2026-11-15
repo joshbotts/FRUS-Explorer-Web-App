@@ -6,13 +6,13 @@
 // which the export's three documents give no reference to chart, says so. With FRUS_E2E_GRAPH, on the smoke test's
 // Standalone server, whose index holds the three fixture volumes, the out-degree overlay is turned on by keyboard and
 // read from the distribution's table, and the co-mention network is walked by keyboard: a partner shown in the dock,
-// closed, and explored. The file's name ends as the graph spec's does, so the smoke test's graph step, which runs that
+// closed, explored, and Back. The file's name ends as the graph spec's does, so the smoke test's graph step, which runs that
 // spec on that server, runs this one's second test beside it.
 import { readFile } from 'node:fs/promises';
 import type { Locator, Page } from '@playwright/test';
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
-import { tabTo } from './keyboard';
+import { backTabTo, tabTo } from './keyboard';
 
 const standalone = !!process.env.FRUS_E2E_GRAPH;
 
@@ -157,14 +157,18 @@ test('turns on the out-degree overlay and walks the co-mention network by keyboa
   await page.keyboard.press('Escape');
   await expect(page.getByText('Select a person to see their shared documents and connections.')).toBeVisible();
 
-  // Explore connections re-centres the network on the partner shown, and Back returns.
+  // Explore connections re-centres the network on the partner shown, its list box taking the focus, and Back returns.
   await page.keyboard.press('Enter');
-  const before = page.url();
   await tabTo(page, page.getByRole('button', { name: 'Explore connections' }));
   await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/focus=\d+/);
-  await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeVisible();
-  await expect(page.getByRole('listbox', { name: /^Co-mention network of / })).toBeAttached();
+  await expect(page).toHaveURL(/focus=\d+.*trail=\d+/);
+  await expect(page.getByRole('listbox', { name: /^Co-mention network of / })).toBeFocused();
+  const back = page.getByRole('button', { name: 'Back', exact: true });
+  await expect(back).toBeVisible();
   await axeCheck(page);
-  expect(page.url()).not.toBe(before);
+  await backTabTo(page, back);
+  await page.keyboard.press('Enter');
+  await expect(page).not.toHaveURL(/trail=/);
+  await expect(page.getByRole('listbox', { name: /^Co-mention network of / })).toBeFocused();
+  await expect(back).toHaveCount(0);
 });

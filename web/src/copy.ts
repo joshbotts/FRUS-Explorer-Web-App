@@ -2382,6 +2382,7 @@ export const copy = {
     chartDescription: (heading: string) => `${heading}. The table beside the chart lists its numbers.`,
     table: 'Chart data',
     matches: 'Matching people',
+    matchCount: (count: number) => (count === 1 ? '1 matching person' : `${count} matching people`),
   },
   /**
    * Cross-Reference Analytics (S24g), in the app's words: its title, the out-degree overlay, the axes, the matrix's

@@ -111,7 +111,7 @@ export function CrossReferenceAnalyticsScreen() {
               {corpus.loading}
             </p>
           ) : (
-            <Sections answer={answer} busy={references.isPlaceholderData} onChange={change} onCSV={(chart) => void csv(chart)}
+            <Sections answer={answer} outDegree={ask.outDegree} busy={references.isPlaceholderData} onChange={change} onCSV={(chart) => void csv(chart)}
                       onFigure={(chart, spec, format) => void figure(chart, spec, format)} />
           )}
         </>
@@ -215,12 +215,15 @@ function matrixLabels(answer: CrossReferenceAnswer) {
 
 function Sections({
   answer,
+  outDegree,
   busy,
   onChange,
   onCSV,
   onFigure,
 }: {
   answer: CrossReferenceAnswer;
+  /** The overlay the address asks for, which its box shows while the answer with it is computed. */
+  outDegree: boolean;
   busy: boolean;
   onChange: (fields: Partial<CrossReferenceSearch>) => void;
   onCSV: (chart: CrossReferenceChart) => void;
@@ -294,7 +297,7 @@ function Sections({
           <label className="analytics-check" title={words.outDegreeHelp}>
             <input
               type="checkbox"
-              checked={answer.distribution.showsOutDegree}
+              checked={outDegree}
               disabled={answer.distribution.inDegree.length === 0}
               onChange={(event) => onChange({ outDegree: event.target.checked ? 'on' : undefined })}
             />

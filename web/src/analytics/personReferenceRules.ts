@@ -30,6 +30,8 @@ export interface PeopleSearch extends ScopeSearch {
   decade?: 'on';
   values?: 'percentOfDocuments';
   focus?: number;
+  /** The people the network was centred on before, which its Back walks, the last the most recent. */
+  trail?: number[];
 }
 
 /** Cross-Reference Analytics' address: the years, the scope and the out-degree overlay. */
@@ -84,6 +86,10 @@ export function validatePeopleSearch(raw: Record<string, unknown>): PeopleSearch
     decade: text(raw.decade) === 'on' ? 'on' : undefined,
     values: text(raw.values) === 'percentOfDocuments' ? 'percentOfDocuments' : undefined,
     focus: rollupId(raw.focus),
+    trail: (() => {
+      const trail = list(raw.trail).map(rollupId).filter((id): id is number => id !== undefined).slice(-50);
+      return trail.length > 0 ? trail : undefined;
+    })(),
   };
 }
 
@@ -121,7 +127,7 @@ function faint(dark: boolean) {
 
 /** A ranking as horizontal bars, the first at the top, each labelled with its count (`rankingChartBody`, `CrossReferenceRankingChart`). */
 function rankingBars(
-  rows: { key: string; label: string; count: number; index: number }[],
+  rows: { key: string; label: string; count: number; index: number; dimmed?: boolean }[],
   titles: { y: string; x: string },
   description: string,
   dark: boolean,
@@ -140,16 +146,32 @@ function rankingBars(
       x: { field: 'count', type: 'quantitative', title: titles.x },
     },
     layer: [
-      { mark: { type: 'bar', color: ink(dark), cursor: clickable ? 'pointer' : 'default', tooltip: true } },
+      {
+        mark: { type: 'bar', color: ink(dark), cursor: clickable ? 'pointer' : 'default', tooltip: true },
+        // A bar of someone not compared dims while anyone is, as the app's do.
+        encoding: { opacity: { condition: { test: 'datum.dimmed', value: 0.5 }, value: 1 } },
+      },
       { mark: { type: 'text', align: 'left', dx: 4, color: faint(dark) }, encoding: { text: { field: 'count', type: 'quantitative', format: ',d' } } },
     ],
   };
 }
 
-/** Most-Mentioned People: each person's mentions in dated documents, keyed by the chart's own label for them. */
-export function personRankingSpec(answer: PersonAnswer, labels: { person: string; mentions: string; description: string }, dark: boolean): ChartSpec {
+/** Most-Mentioned People: each person's mentions in dated documents, keyed by the chart's own label for them, the bars of
+ *  people not compared dimmed while anyone is (`rankingChartBody(showsSelection:)`; a figure passes none). */
+export function personRankingSpec(
+  answer: PersonAnswer,
+  labels: { person: string; mentions: string; description: string },
+  dark: boolean,
+  compared: number[] = [],
+): ChartSpec {
   return rankingBars(
-    answer.ranking.rows.map((row, index) => ({ key: String(row.rollupId), label: row.axisLabel, count: row.mentions, index })),
+    answer.ranking.rows.map((row, index) => ({
+      key: String(row.rollupId),
+      label: row.axisLabel,
+      count: row.mentions,
+      index,
+      dimmed: compared.length > 0 && !compared.includes(row.rollupId),
+    })),
     { y: labels.person, x: labels.mentions },
     labels.description,
     dark,
@@ -318,7 +340,8 @@ export function matrixSpec(answer: CrossReferenceAnswer, labels: { citing: strin
       };
     }),
   );
-  const size = 34;
+  // On screen a cell of 34 points, and in the figure of 44, each with its point of spacing (`matrixCellSize`, the figure's).
+  const size = counts ? 44 : 34;
   return {
     $schema: schema,
     description: labels.description,

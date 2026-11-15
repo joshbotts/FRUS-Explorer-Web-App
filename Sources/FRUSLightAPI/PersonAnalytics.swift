@@ -69,6 +69,10 @@ public struct PersonAnalyticsAnswer: Codable, Equatable, Sendable, ResponseEncod
     public struct Comparison: Codable, Equatable, Sendable {
         public var heading: String
         public var people: [Person]
+        /// The rollup ids the request named that the index no longer holds, left out of the comparison: a correction
+        /// that renumbers the rollup, or an old address, leaves them, and the page drops them, where a refusal would
+        /// leave it nothing to show.
+        public var missing: [Int]
         /// Whether the comparison holds its five, and the sentence the add field says then.
         public var atCap: Bool
         public var capNote: String
@@ -174,6 +178,8 @@ struct PersonAnalyticsAsk: Sendable, Equatable {
     var end: Int
     var scope: CorpusAnalyticsAsk.ResolvedScope
     var people: [PersonAnalyticsAnswer.Comparison.Person]
+    /// The ids named that the index no longer holds.
+    var missing: [Int] = []
     var byDecade: Bool
     var normalization: PersonTrajectoryNormalization
 }
@@ -287,31 +293,44 @@ enum PersonAnalyticsRoutes {
         guard raw.count <= PersonAnalyticsView.maxComparisonPeople else {
             throw APIProblem.invalidParameter("people", "compares at most \(PersonAnalyticsView.maxComparisonPeople) people, not \(raw.count)")
         }
+        let ids = try raw.map { try rollupId($0, parameter: "people") }
+        // Once each by rollup id: the view's names are keyed by it (`selectedNames`).
+        guard Set(ids).count == ids.count else { throw APIProblem.invalidParameter("people", "names a person twice") }
         var people: [PersonAnalyticsAnswer.Comparison.Person] = []
-        for value in raw { people.append(try await person(value, parameter: "people", served: served)) }
-        // Once each by rollup id, however it is spelt: the view's names are keyed by it (`selectedNames`).
-        guard Set(people.map(\.rollupId)).count == people.count else {
-            throw APIProblem.invalidParameter("people", "names a person twice")
+        var missing: [Int] = []
+        for id in ids {
+            if let person = try await named(id, served: served) { people.append(person) } else { missing.append(id) }
         }
         return PersonAnalyticsAsk(
             start: start, end: end,
             scope: try CorpusAnalyticsRoutes.scope(query, served: served, resources: resources),
             people: people,
+            missing: missing,
             byDecade: try query.bool("decade") ?? false,
             normalization: try query.choice("values", among: PersonTrajectoryNormalization.allCases) ?? .raw)
     }
 
-    /// A person of the served index's rollup, by their rollup id, with their canonical name, which the app's ranking and
-    /// search rows carry (`PersonMentionRanking.canonicalName`).
-    static func person(_ raw: String, parameter: String, served: ServedIndex) async throws -> PersonAnalyticsAnswer.Comparison.Person {
-        // A rollup id as the server writes it, so that one person is never two requests' keys.
+    /// A rollup id as the server writes it, so that one person is never two requests' keys.
+    static func rollupId(_ raw: String, parameter: String) throws -> Int {
         guard !raw.isEmpty, raw.allSatisfy(\.isASCIIDigitCharacter), raw.count <= 18, let id = Int(raw), String(id) == raw else {
             throw APIProblem.invalidParameter(parameter, "names a person by their rollup id, not \(raw)")
         }
-        guard let entry = try await served.people.list(served.persons).byRollup[id] else {
+        return id
+    }
+
+    /// A person of the served index's rollup, with their canonical name, which the app's ranking and search rows carry
+    /// (`PersonMentionRanking.canonicalName`), or nil when the index holds no such rollup.
+    static func named(_ id: Int, served: ServedIndex) async throws -> PersonAnalyticsAnswer.Comparison.Person? {
+        try await served.people.list(served.persons).byRollup[id].map { .init(rollupId: id, name: $0.entry.name) }
+    }
+
+    /// The person a network is centred on, refused when the index holds no such rollup.
+    static func person(_ raw: String, parameter: String, served: ServedIndex) async throws -> PersonAnalyticsAnswer.Comparison.Person {
+        let id = try rollupId(raw, parameter: parameter)
+        guard let person = try await named(id, served: served) else {
             throw APIProblem(.notFound, code: "PERSON_NOT_FOUND", detail: "No person of the served index has the rollup id \(id).")
         }
-        return .init(rollupId: id, name: entry.entry.name)
+        return person
     }
 
     // MARK: The kept series
@@ -625,6 +644,7 @@ struct PersonAnalyticsView {
             comparison: .init(
                 heading: comparisonHeading,
                 people: selectedPeople,
+                missing: ask.missing,
                 atCap: atComparisonCap,
                 capNote: appWords("personAnalytics.search.cap", "Comparison is limited to \(maxComparisonPeople) people. Remove one to add another."),
                 prompt: appWords("personAnalytics.comparison.empty", "Add up to \(maxComparisonPeople) people — from the ranking above or the search field — to compare how often each is tagged over time."),

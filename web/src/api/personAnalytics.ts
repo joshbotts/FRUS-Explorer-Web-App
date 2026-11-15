@@ -38,6 +38,8 @@ export interface PersonAnswer {
   comparison: {
     heading: string;
     people: { rollupId: number; name: string }[];
+    /** The ids asked for that the index no longer holds, which the page drops. */
+    missing: number[];
     atCap: boolean;
     capNote: string;
     prompt: string;
