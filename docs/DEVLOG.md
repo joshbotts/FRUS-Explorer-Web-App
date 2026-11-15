@@ -2212,6 +2212,70 @@ Phase 3's row S21a, in wave 1. The library's rules move into FRUSCoreKit, Founda
 - Then S22a's session merges `v2` into its branch and re-runs what the merge touches, before Mac check 16.
 - S21b's pin move follows the batch.
 
+## Session 25a, second follow-up: the health check's test probes its live server off the pool, within a minute
+
+14 November 2026 · branch `claude/blissful-neumann-2b1bd8`, a follow-up session of the phase-3 orchestrator's · [#152](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/152) · upstream `f011ab04`, unchanged
+
+`HTTPTests.healthCheckAsksTheServersOwnPort` failed on timing alone in web #147's CI. #141's session had seen it fail under load and left it for the owner (the log's entry below). The orchestrator asked for a fix in the test alone, shown with #141's forced repro. This is a pull request of its own, outside the plan's table, branched from `main` at `db0cba7`.
+
+**What failed.** Web #147's `ci`, run 43646835672, attempt 1, swift job 132606447099. Attempt 2 passed.
+- **The issue:** `HTTPTests.swift:205:13: Expectation failed: HealthCheck.isHealthy(port: port)`. The expectation's message comes from a second probe made just after it, and it read `HTTP/1.1 200 OK`.
+- **The timing:** the test began with the server target's run, at 22:34:20.5Z. The issue came 29.2 s in, and the test ended after 51.7 s; attempt 2's took 31.3 s. The target's run took 94.7 s.
+- **Rare in CI:** it was the test's first failure there. #141's session saw it fail in 24 of 93 runs under its three-runner load.
+
+**The cause.** `HealthCheck.probe` is a blocking socket exchange. Its connection and each read give up after three seconds, Docker's HEALTHCHECK's bound. The test made it from an async test, on a thread of Swift's cooperative pool.
+- **The server answers on the same pool.** Hummingbird 2.27's `Server.run` reads each accepted connection in a task and handles it in a child task, with no executor of its own.
+- **The target's other tests hold that pool for seconds at a time.** So under their load the server's answer can come after three seconds.
+- **The probe's own thread is lost to the pool while it waits,** until the pool gains another, about a second later on Linux.
+
+**How it was found.** Every run here is the server target's runner, as CI's swift job runs it.
+- **The load:** three runners at once on the same 4 CPUs (`taskset -c 0-3`), the first with `FRUS_TEST_POSTGRES_URL` and the others without, as #141 did. A run took 82.6 to 101.6 s, and the test 40.1 to 53.5 s, at CI's pace.
+- **`main`'s code under that load:** the test failed in 2 of 30 runs, ten rounds of three. Both failed at `:205` with the message `HTTP/1.1 200 OK`, CI's signature. No other test failed.
+- **One CPU, so that the pool has one thread:** the test alone passed, in 1.0 s where it takes 0.09 s on four.
+  - A trace, never committed, showed why: the router saw the probe's request 898 to 919 ms after the probe began, and 3 ms after when the probe ran off the pool.
+  - So the probe held the pool's only thread until the pool gained another. That matches libdispatch on Linux, which adds a worker when its workers are blocked and looks about once a second.
+- **A trace under the load,** gated on environment variables. It logged each probe's start, end and answer, and when the router saw each request. Beside the tests ran:
+  - a heartbeat, a task that asked to wake every 50 ms;
+  - six sample copies, each probing a live server of its own every second for 50 s, three copies within three seconds and three within a minute.
+- **The trace's twelve rounds of three:**
+  - eight alternated the probes between the pool and `Blocking`, off it;
+  - four kept them on the pool, with the samples within three seconds using a copy of the probe that tried IPv4 alone (What a miss says, below).
+- **What the trace showed:**
+  - **On the pool, within three seconds,** the test's first probe missed in 9 of 24 runs. Where it did not, the answer took 1.3 to 2.9 s. In the misses, the router saw the request 3.0 to 5.1 s after the probe began, and the heartbeat woke up to 3.3 s late.
+  - **Off the pool, within three seconds,** it missed in none of 12 runs, but its answers took 1.4 to 3.0 s. Off the pool, the probe adds no delay of its own, but the target's remains.
+  - **The samples within three seconds** (the first eight rounds) missed 76 times of 915 on the pool, and 24 of 1,035 off it.
+  - **Within a minute,** none of 1,923 missed, and the slowest healthy answer took 9.1 s.
+  - The samples and the heartbeat added load of their own, so these rates are higher than `main`'s.
+- **What a miss says.** Every miss read `connect to 127.0.0.1:<port>: Connection refused`, after three seconds.
+  - HummingbirdTesting binds every live server to `localhost` (its `TestApplication.configuration`), whatever address the test gives. In `swift:6.4-noble`, as in CI's job, `localhost` is `::1` first, so the test's `127.0.0.1` has no effect.
+  - The probe's IPv4 connection is therefore refused at once, and the exchange is its IPv6 fallback's. The copy of the probe that tried IPv4 alone was refused at once in all 1,336 of its tries.
+  - When the fallback's read runs out, `HealthCheck.probe` reports IPv4's refusal rather than the fallback's timeout.
+- **`/readyz`'s check passed by default.** On the pool, its probe missed within three seconds in 6 of the 24 runs. The check passed each time, since it asks only that the answer is not 200.
+
+**The fix,** in the test alone (`Tests/FRUSLightServerTests/HTTPTests.swift`):
+- **Its two live probes run through `Blocking.run`,** the server's way of keeping blocking work off the pool, and wait a minute, against the slowest answer seen, 9.1 s.
+- **Each check's message gives its probe's own answer.** `/healthz`'s had probed a second time, which is why CI's message read `200 OK`.
+- **The checks are as they were:** `/healthz` answers 200, and `/readyz` does not. With a minute, `/readyz`'s check waits for its answer as `/healthz`'s does.
+- **The probe of port 1 stays as it was,** refused at once on both addresses.
+- **Production keeps three seconds,** and so does the image's HEALTHCHECK. `HealthCheck.swift` is unchanged, so the image and `scripts/compose-smoke` are too.
+
+**How it was checked:**
+- **The fix under the load:** the test passed in all 36 runs, twelve rounds of three, in 41.3 to 52.3 s, each run taking 82.4 to 95.3 s. No other test failed.
+- **One CPU:** the test alone passed in 3 runs of 3, in 0.09 s.
+- **Linux, `swift:6.4-noble`, arm64:** CI's swift job (`scripts/swift --postgres test`), under the heavy lock.
+  - 4,238 tests in 541 suites in fourteen runners, the server's 403 in 57 suites among them. The build gives no warning, and the one skip is the named one, `FTS5StoreTests`' `backupExclusion()`.
+  - Three of `FRUSLightCoreTests`' PostgreSQL tests were refused with "too many clients already", the shared local container's 100 connections, as #141's runs were. That target alone, run again against the same container, passed its 279 tests in 41 suites.
+- **Not run:** `scripts/compose-smoke` and the npm suites, since neither the server, the image nor the browser app changes.
+
+**Seen in passing, not changed:**
+- **The test covers only `HealthCheck`'s IPv6 fallback,** since its `127.0.0.1` has no effect (above). The image binds `0.0.0.0`, so its own probe takes the IPv4 path. Only the Compose smoke test reaches that path, through the container's health. A test that binds the server itself could cover both.
+- **`HealthCheck.probe`'s message** names IPv4's refusal when the IPv6 fallback connects and then fails. Only a server bound to an IPv6 address alone would meet that, and the image's `FRUS_HOST` does not.
+- **`ClientConnectionTests.aSearchWhoseClientLeavesStopsItsStatement`** failed in 2 of the trace's first 24 runs, under the samples' added load, at `ClientConnectionTests.swift:191` and `:197`. It failed in none of the trace's other 12 runs, nor in the 66 before the fix and after.
+
+**Delivered:** the test's fix and this log. The trace, the harness and the runs' logs are in the shared notes folder, under `health-check-flake/`.
+
+**Next:** nothing of its own; the plan's rows go on as they stand.
+
 ## Session 25a, follow-up: the PDF tests' servers wait a minute for the stand-in's health check, and the smoke test reads the refusal's whole log
 
 14 November 2026 · branch `claude/timing-flakes-1e4438`, a follow-up session of the phase-3 orchestrator's · [#141](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/141) · upstream `6b6932aa`, unchanged
