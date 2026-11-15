@@ -1,11 +1,11 @@
-// Source Explorer's bundled files (PLAN's S22d): the indexes its panels and its classifier read beyond the four
-// the server read already (the central files, the volume sources and the lot claimants, for a collection's
-// Sources & Archives block, and the collection authority, for the graph), each the app's `Bundle.main` store's
-// file read through the kit's own loader, once, on the first request that needs it, as the app's stores decode on
-// first use: nothing is read at start. A file missing or malformed gives nothing, as the app's store gives `nil`,
-// and the panel that reads it shows what the app shows without it. The collection record's sections that read
-// the usage, external-citation and lot-claimant indexes through kit members still internal at the pin add their
-// files here when those members are public.
+// Source Explorer's bundled files (PLAN's S22d): the indexes its panels, its classifier and a collection's record
+// read beyond the four the server read already (the central files, the volume sources and the lot claimants, for a
+// collection's Sources & Archives block, and the collection authority, for the graph), each the app's `Bundle.main`
+// store's file read through the kit's own loader, once, on the first request that needs it, as the app's stores
+// decode on first use: nothing is read at start. A file missing or malformed gives nothing, as the app's store
+// gives `nil`, and the panel that reads it shows what the app shows without it. A collection's record reads the
+// external citations here, for Pointed At, Not Printed (S22d's follow-up), and its Divided at NARA the lot claimants
+// the server read already; the app's record reads no usage index.
 
 import FRUSCoreKit
 import Foundation
@@ -51,4 +51,7 @@ final class SourceExplorerFiles: Sendable {
     /// `ChiefsOfMissionRoster.bundled`: the register the pre-1906 addressee rule reads, from `pocom-index.json`;
     /// the app's roster is empty without the file, and so is this.
     let chiefsOfMission = DecodedFile("pocom-index.json") { ChiefsOfMissionRoster(index: try POCOMIndex(contentsOf: $0)) }
+    /// `ExternalCitationIndexStore`: the editors' footnotes that point at unprinted material in each collection,
+    /// which a collection's record counts under Pointed At, Not Printed.
+    let externalCitations = DecodedFile("external-citation-index.json") { try ExternalCitationIndex(contentsOf: $0) }
 }

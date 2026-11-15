@@ -271,6 +271,8 @@ export interface NeighboursRequest {
   jobNumber?: string;
   aliasLot?: string;
   aliasName?: string[];
+  /** The authority's record whose lot and names the matcher tries when a Sources row's keys match nothing. */
+  aliasCollection?: string;
   anchor?: string;
   scope?: NeighbourScope;
 }
@@ -320,6 +322,55 @@ export interface ArchivalCollection {
   /** The volumes across the series that cite it, each with the catalogue's title. */
   volumes: { volumeId: string; title?: string }[];
   children: { name: string; decimalClass?: string; volumeCount: number }[];
+  /** How many rows each capped list shows before Show all, the kit's `CollectionRelations.previewRowCap`. */
+  previewRowCap: number;
+  /** The NARA Catalog link, where the central files do not mark the record's NAID as a mis-resolution. */
+  catalog?: { url: string; naId?: string };
+  /** Related Collections, best first; absent where the page shows no such section, empty where none is related. */
+  related?: RelatedCollection[];
+  /** Cited Over Time, where the citing volumes reach two or more coverage eras. */
+  timeline?: { eras: CoverageEra[]; narrative: string };
+  /** Divided at NARA, where NARA divided the record's lot across several series. */
+  divided?: {
+    claimants: LotClaimant[];
+    /** Whether the record's own NAID, the catalogue link's, is one of them. */
+    includesRecordsNAID: boolean;
+    /** How many lots the bundled index lists, each claimed by more than one series. */
+    dividedLots: number;
+  };
+  /** Pointed At, Not Printed, where editors' footnotes point at unprinted material in the record. */
+  pointers?: { total: number; volumes: { volumeId: string; title?: string; count: number }[] };
+}
+
+/** A collection cited alongside another in the same volumes' source lists (`RelatedCollection`). */
+export interface RelatedCollection {
+  id: string;
+  name: string;
+  repository?: string;
+  recordGroup?: string;
+  /** The volumes that cite both. */
+  sharedVolumeCount: number;
+  /** The overlap coefficient the list is ranked by, in 0 to 1. */
+  overlap: number;
+}
+
+/** A coverage era's count of citing volumes (`CollectionEraCount`), with the era's two labels. */
+export interface CoverageEra {
+  /** The axis's form, ’61–63. */
+  shortLabel: string;
+  /** The prose and the table's form, 1961–1963. */
+  fullLabel: string;
+  volumeCount: number;
+}
+
+/** A NARA series that claims a lot NARA divided (`LotClaimant`). */
+export interface LotClaimant {
+  naId: string;
+  title: string;
+  recordGroup?: string;
+  entryNumbers?: string[];
+  dateRange?: string;
+  catalogURL?: string;
 }
 
 export function archivalCollectionQuery(id: string) {
@@ -349,6 +400,28 @@ export interface OutlineRow {
   /** The resolved record's HMS/MLR entry numbers, or, where it carries none, its series'. */
   entryNumbers?: string[];
   seriesEntryNumbers?: string[];
+  /** The Archival Neighbors button, for a row with a key the neighbour queries match on. */
+  neighbours?: OutlineNeighbours;
+  /** The collection authority's record the row resolves to, which its Collection link opens. */
+  collection?: { id: string; volumeCount: number };
+  /** The volumes citing a heading the authority has no record for, where more than one does. */
+  crossVolume?: { volumeId: string; title?: string }[];
+  /** How many series NARA divides the row's lot across, where the row resolves to no catalogue record. */
+  dividedSeriesCount?: number;
+}
+
+/** A Sources row's Archival Neighbors button (`VolumeSourceNeighborsTarget`): its keys and its count. */
+export interface OutlineNeighbours {
+  lotFile?: string;
+  recordGroup?: string;
+  series?: string;
+  repository?: string;
+  decimalClass?: string;
+  jobNumber?: string;
+  /** The record whose lot and names the neighbours' matcher tries when the row's own keys match nothing. */
+  aliasCollection?: string;
+  /** The indexed documents the row's keys match; absent while unknown, when the button is drawn plain. */
+  count?: number;
 }
 
 /** A volume's Sources section, as the app's `VolumeSourcesView` lists it: its rows in the volume's order. */

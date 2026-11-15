@@ -119,7 +119,7 @@ export function TimelineReading({
  * The width an element is drawn at, measured before it is first painted and followed as it changes;
  * `fallback` where nothing measures it.
  */
-function useWidth(fallback: number) {
+export function useWidth(fallback: number) {
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(fallback);
   useLayoutEffect(() => {
@@ -147,7 +147,7 @@ export function niceStep(span: number, count: number): number {
 }
 
 /** A column with a 4px round end, square at the baseline, as a chart's data end is drawn. */
-function columnPath(x: number, y: number, width: number, height: number): string {
+export function columnPath(x: number, y: number, width: number, height: number): string {
   const radius = Math.min(4, width / 2, height);
   return [
     `M${x},${y + height}`,

@@ -71,6 +71,10 @@ import Testing
             #expect(cls.scopes.isEmpty && cls.scope == "all" && cls.anchorVolumeId == nil)
             let collection = try decode(ArchivalNeighborsAnswer.self, try await client.execute(uri: "\(base)?collection=lot:66D204", method: .get))
             #expect(collection.scopes.isEmpty && collection.scope == "all")
+            // A Sources row naming its record for the fallback, which the route reads from the authority off the pool.
+            let fallback = try decode(ArchivalNeighborsAnswer.self, try await client.execute(
+                uri: "\(base)?lotFile=66%20D%20204&aliasCollection=lot:66D204&anchor=\(Self.volume)", method: .get))
+            #expect(fallback.scope == "volume" && fallback.anchorVolumeId == Self.volume)
             for (query, code) in [
                 ("", "INVALID_PARAMETER"), ("volumeId=\(Self.volume)", "INVALID_PARAMETER"),
                 ("volumeId=frus1800nowhere&documentId=d1", "VOLUME_NOT_FOUND"), ("lotFile=1&anchor=frus1800nowhere", "VOLUME_NOT_FOUND"),
@@ -111,6 +115,31 @@ import Testing
         }
         let record = try #require(resources.collectionAuthority?.record(id: "lot:66D204"))
         #expect(lot == record.lotFileNorm && names == [record.name] + record.aliases)
+        // A Sources row names the record whose names its fallback reads, and the route takes them from the kit's
+        // `CollectionAliasFallback(record:)` (S22d's follow-up): a record whose names run past what a query may carry
+        // is named by its id alone.
+        let named = try request("lotFile=66%20D%20204&aliasCollection=lot:66D204&anchor=\(Self.volume)")
+        #expect(named.aliasFallback == IndexingPipeline.CollectionAliasFallback(record: record) && named.defaultScope == .volume)
+        // The record whose names are longest, some past what `aliasName` may carry.
+        let records = try #require(resources.collectionAuthority?.collections)
+        let long = try #require(records.max { ([$0.name] + $0.aliases).joined().utf8.count < ([$1.name] + $1.aliases).joined().utf8.count })
+        #expect(([long.name] + long.aliases).contains { $0.utf8.count > 1_024 })
+        var query = URLComponents()
+        query.queryItems = [URLQueryItem(name: "recordGroup", value: "59"), URLQueryItem(name: "series", value: "Central Files"),
+                            URLQueryItem(name: "aliasCollection", value: long.id)]
+        let wide = try request(query.percentEncodedQuery ?? "")
+        #expect(wide.aliasFallback == IndexingPipeline.CollectionAliasFallback(record: long))
+        func refusal(_ query: String) -> APIProblem? {
+            do { _ = try request(query); return nil } catch { return error as? APIProblem }
+        }
+        for (query, name) in [("lotFile=1&aliasCollection=lot:66D204&aliasLot=66D204", "aliasCollection"),
+                              ("lotFile=1&aliasCollection=lot:66D204&aliasName=a", "aliasCollection"),
+                              ("collection=lot:66D204&aliasCollection=lot:66D204", "aliasCollection"),
+                              ("volumeId=\(Self.volume)&documentId=d1&aliasCollection=lot:66D204", "aliasCollection")] {
+            let problem = refusal(query)
+            #expect(problem?.code == "INVALID_PARAMETER" && problem?.description.contains(name) == true, "\(query): \(String(describing: problem))")
+        }
+        #expect(refusal("lotFile=1&aliasCollection=nowhere")?.code == "COLLECTION_NOT_FOUND")
     }
 
     @Test func aCollectionsRecordAndItsRefusals() async throws {
@@ -124,6 +153,10 @@ import Testing
             #expect(answer.lotFileNorm == record.lotFileNorm && answer.volumes.map(\.volumeId) == record.volumeIds)
             #expect(answer.volumes.allSatisfy { $0.title != nil })
             #expect(answer.children.map(\.name) == record.children.map(\.name))
+            // The sections from the bundled files (S22d's follow-up), each held to the view in `SourceExplorerRecordParityTests`.
+            #expect(answer.previewRowCap == CollectionRelations.previewRowCap)
+            #expect(answer.catalog?.url == record.catalogURL && answer.catalog?.naId == record.naId)
+            #expect(answer.related?.isEmpty == false && answer.timeline?.eras.count ?? 0 >= 2)
             for (query, code) in [("", "INVALID_PARAMETER"), ("id=", "INVALID_PARAMETER"), ("id=nowhere", "COLLECTION_NOT_FOUND"),
                                   ("id=a&id=b", "INVALID_PARAMETER"), ("scope=all", "UNKNOWN_PARAMETER")] {
                 #expect(problemCode(try await client.execute(uri: "/api/v1/archival-collection?\(query)", method: .get)) == code, "\(query)")
@@ -147,10 +180,13 @@ import Testing
 
     /// The outline's rows as the app's view draws them, from rows of the kinds a volume's Sources section holds,
     /// with the server's bundled files: a lot's record and entry numbers, a record group the row names and not one
-    /// it inherits, nothing for a lot NARA divides, and plain prose and published works.
+    /// it inherits, nothing for a lot NARA divides but the line that says so, and plain prose and published works;
+    /// and each row's Archival Neighbors button, by its keys as `makeNeighborsTarget` builds them, a library's
+    /// collection by its own text and the library's heading with none, with its count of the batch's, or none
+    /// where the batch failed, and the record its fallback reads, the Collection link's.
     @Test func theOutlinesRows() throws {
         let resources = try TestResources.value()
-        let rows = VolumeSourcesRoutes.outline(volumeId: Self.volume, entries: [
+        let entries = [
             VolumeSourceEntry(kind: .prose, rawText: "Unpublished Sources", note: "A note no prose row shows."),
             VolumeSourceEntry(kind: .item, depth: 0, isHeading: true, rawText: "National Archives and Records Administration"),
             VolumeSourceEntry(kind: .item, depth: 1, recordGroup: "59", rawText: "RG 59, Records of the Department of State"),
@@ -159,19 +195,91 @@ import Testing
                               rawText: "Presidential Correspondence: Lot 66 D 204", note: "Correspondence of the President."),
             VolumeSourceEntry(kind: .item, depth: 2, recordGroup: "59", lotFile: "62 D 430", lotFileNorm: "62D430",
                               rawText: "Executive Secretariat Files: Lot 62 D 430"),
+            VolumeSourceEntry(kind: .item, depth: 0, isHeading: true, repository: "Kennedy Library",
+                              rawText: "John F. Kennedy Library, Boston, Massachusetts"),
+            VolumeSourceEntry(kind: .item, depth: 1, repository: "Kennedy Library", rawText: "National Security Files"),
+            VolumeSourceEntry(kind: .item, depth: 0, jobNumber: "80-B01676R", rawText: "Job 80-B01676R"),
             VolumeSourceEntry(kind: .bibliography, lotFile: "66 D 204", rawText: "A book that names Lot 66 D 204."),
-        ], resources: resources).rows
-        #expect(rows.map(\.kind) == ["prose", "item", "item", "item", "item", "item", "bibliography"])
-        #expect(rows[0].note == nil && rows[0].catalogURL == nil)
-        #expect(rows[1].isHeading && rows[1].catalogURL == nil)
+            VolumeSourceEntry(kind: .item, depth: 0, isHeading: true, rawText: "Documentary Collections"),
+        ]
+        let lotKey = try #require(IndexingPipeline.neighborCountKey(forLotFile: "66 D 204", recordGroup: "59", series: nil))
+        let rows = VolumeSourcesRoutes.outline(volumeId: Self.volume, entries: entries, counts: [lotKey: 7], resources: resources).rows
+        #expect(rows.map(\.kind) == ["prose", "item", "item", "item", "item", "item", "item", "item", "item", "bibliography", "item"])
+        #expect(rows[0].note == nil && rows[0].catalogURL == nil && rows[0].neighbours == nil)
+        #expect(rows[1].isHeading && rows[1].catalogURL == nil && rows[1].neighbours == nil)
         #expect(rows[2].catalogURL == "https://catalog.archives.gov/id/388")
-        // A row beneath the record group that does not name it borrows no link.
-        #expect(rows[3].catalogURL == nil)
+        // A row beneath the record group that does not name it borrows no link, and a record group with no series is
+        // no key.
+        #expect(rows[3].catalogURL == nil && rows[2].neighbours == nil && rows[3].neighbours == nil)
         #expect(rows[4].catalogURL == "https://catalog.archives.gov/id/2538452" && rows[4].entryNumbers == ["A1 1590"])
         #expect(rows[4].note == "Correspondence of the President." && rows[4].seriesEntryNumbers == nil)
-        // NARA divides 62 D 430 across several series, so it resolves to none of them.
-        #expect(rows[5].catalogURL == nil && rows[5].entryNumbers == nil)
-        #expect(rows[6].catalogURL == nil && rows[6].entryNumbers == nil)
+        // The lot's button, counted by the batch, with its record's names for the fallback; its Collection link.
+        let lotRecord = try #require(resources.collectionAuthority?.record(id: "lot:66D204"))
+        #expect(rows[4].neighbours == .init(lotFile: "66 D 204", recordGroup: "59", aliasCollection: "lot:66D204", count: 7))
+        #expect(rows[4].collection == .init(id: "lot:66D204", volumeCount: lotRecord.volumeIds.count) && rows[4].dividedSeriesCount == nil)
+        // NARA divides 62 D 430 across several series, so it resolves to none of them, and the row says across how many.
+        let divided = try #require(resources.archivalIndexes.claimants?.claimants(forRawLot: "62D430"))
+        #expect(rows[5].catalogURL == nil && rows[5].entryNumbers == nil && rows[5].dividedSeriesCount == divided.count && divided.count > 1)
+        #expect(rows[5].neighbours?.lotFile == "62 D 430" && rows[5].neighbours?.count == 0)
+        // A library's heading names the library, so it has no key; its collection's own text is the key.
+        #expect(rows[6].neighbours == nil)
+        #expect(rows[7].neighbours?.series == "National Security Files" && rows[7].neighbours?.repository == "Kennedy Library")
+        #expect(rows[8].neighbours == .init(jobNumber: "80-B01676R", count: 0))
+        #expect(rows[9].catalogURL == nil && rows[9].entryNumbers == nil && rows[9].neighbours == nil && rows[9].collection == nil)
+        // A heading the authority has no record for, which the volume sources say more than one volume cites: its
+        // volumes, each with the catalogue's title.
+        let cited = try #require(resources.archivalIndexes.volumeSources?.authority(recordGroup: nil, lotFile: nil, text: "Documentary Collections"))
+        #expect(resources.collectionAuthority?.record(forFrontMatterText: "Documentary Collections", repository: nil, lotFileNorm: nil, decimalClass: nil) == nil)
+        #expect(cited.volumeIds.count > 1 && rows[10].collection == nil && rows[10].crossVolume?.map(\.volumeId) == cited.volumeIds)
+        #expect(rows[10].crossVolume?.allSatisfy { $0.title == resources.volume($0.volumeId)?.title } == true)
+        // A batch that failed counts none, and each button is drawn plain.
+        let unknown = VolumeSourcesRoutes.outline(volumeId: Self.volume, entries: entries, counts: nil, resources: resources).rows
+        #expect(unknown.compactMap(\.neighbours).allSatisfy { $0.count == nil })
+        #expect(unknown[4].neighbours?.lotFile == "66 D 204")
+    }
+
+    /// The record's NARA Catalog link, withheld where the central files trace the record's NAID to a mis-resolution
+    /// (#351), as the view's `showsCatalogLink` withholds it: no shipped lot is so flagged at this pin, so the test
+    /// flags 66 D 204's in a copy of the server's files.
+    @Test func aRecordsCatalogLinkPastTheGuard() throws {
+        let folder = try TemporaryDirectory()
+        defer { withExtendedLifetime(folder) {} }
+        let source = RepositoryFiles.resources
+        for name in try FileManager.default.contentsOfDirectory(atPath: source.path) where name != "central-files-index.json" {
+            try FileManager.default.createSymbolicLink(at: folder.url.appendingPathComponent(name),
+                                                       withDestinationURL: source.appendingPathComponent(name))
+        }
+        let record = try #require(try TestResources.value().collectionAuthority?.record(id: "lot:66D204"))
+        let naId = try #require(record.naId)
+        var central = try #require(try JSONSerialization.jsonObject(
+            with: Data(contentsOf: source.appendingPathComponent("central-files-index.json"))) as? [String: Any])
+        var lots = try #require(central["lotFiles"] as? [[String: Any]])
+        let flagged = try #require(lots.firstIndex { $0["naId"] as? String == naId })
+        lots[flagged]["levelOfDescription"] = "fileUnit"
+        central["lotFiles"] = lots
+        try JSONSerialization.data(withJSONObject: central).write(to: folder.url.appendingPathComponent("central-files-index.json"))
+        let guarded = try ServerResources.load(from: folder.url)
+        let stats = IndexingPipeline.CollectionLocalStats(documentCount: 0, volumeCount: 0)
+        #expect(ArchivalCollectionRoutes.answer(record: record, stats: stats, resources: guarded).catalog == nil)
+        #expect(ArchivalCollectionRoutes.answer(record: record, stats: stats, resources: try TestResources.value()).catalog?.naId == naId)
+    }
+
+    /// Divided at NARA's sentence that the catalogue link names one of the series, said only where the record's own
+    /// NAID is one of them: every divided record's is at this pin, so the test decodes one whose is not.
+    @Test func aDividedLotsRecordNamesItsOwnSeriesOnlyWhereItIsOne() throws {
+        let resources = try TestResources.value()
+        let stats = IndexingPipeline.CollectionLocalStats(documentCount: 0, volumeCount: 0)
+        let claimants = try #require(resources.archivalIndexes.claimants?.claimants(forRawLot: "64D563"))
+        func record(naId: String?) throws -> AuthorityCollectionRecord {
+            var fields: [String: Any] = ["id": "lot:64D563", "name": "S/P Files: Lot 64 D 563", "lotFileNorm": "64D563",
+                                         "volumeIds": ["frus1961-63v06"]]
+            if let naId { fields["naId"] = naId }
+            return try JSONDecoder().decode(AuthorityCollectionRecord.self, from: JSONSerialization.data(withJSONObject: fields))
+        }
+        for (naId, includes) in [(claimants[0].naId, true), ("0", false), (nil, false)] {
+            let divided = ArchivalCollectionRoutes.answer(record: try record(naId: naId), stats: stats, resources: resources).divided
+            #expect(divided?.claimants.count == claimants.count && divided?.includesRecordsNAID == includes, "\(naId ?? "none")")
+        }
     }
 
     @Test func thePanelsTheFixturesLack() async throws {

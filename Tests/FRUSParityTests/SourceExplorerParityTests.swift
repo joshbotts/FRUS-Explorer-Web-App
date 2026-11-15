@@ -261,6 +261,52 @@ import Testing
             ("Browser/VolumeSourcesView.swift", "browser.sources.catalog", "View in National Archives Catalog", "volumeSources", "catalog"),
             ("Browser/VolumeSourcesView.swift", "browser.sources.catalog.help", "View this collection in the National Archives Catalog",
              "volumeSources", "catalogHelp"),
+            // S22d's follow-up: the record's NARA Catalog link and its four sections, and the outline's affordances.
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.catalog.header", "NARA Catalog", "archivalCollection", "catalog"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.catalog.open", "View in National Archives Catalog",
+             "archivalCollection", "catalogOpen"),
+            ("SourceExplorer/CollectionDetailView.swift", "browser.sources.catalog.help", "View this collection in the National Archives Catalog",
+             "archivalCollection", "catalogHelp"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.related.header", "Related Collections", "archivalCollection", "related"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.related.empty",
+             "No other collection is cited alongside this one in two or more volumes.", "archivalCollection", "relatedEmpty"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.related.showFewer", "Show fewer", "archivalCollection", "showFewer"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.related.footer",
+             "These collections appear alongside this one in the same volumes’ source lists. Ranking uses the overlap coefficient, so a broad umbrella record does not dominate. The link is at volume level: both collections fed the same compilation. It does not mean the same documents cite both.",
+             "archivalCollection", "relatedFooter"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.timeline.header", "Cited Over Time", "archivalCollection", "timeline"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.timeline.x", "Coverage era", "archivalCollection", "timelineEra"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.timeline.y", "Citing volumes", "archivalCollection", "timelineVolumes"),
+            ("SourceExplorer/CollectionDetailView.swift", "series.inspector.viewTable", "View as table", "archivalCollection", "viewTable"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.divided.header", "Divided at NARA", "archivalCollection", "divided"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.divided.oneOfThem",
+             "The NARA Catalog link above points to one of them; the citation alone does not say which holds a given document.",
+             "archivalCollection", "dividedOneOfThem"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.divided.view", "View", "archivalCollection", "dividedView"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.unprinted.header", "Pointed At, Not Printed", "archivalCollection", "unprinted"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.unprinted.footer",
+             "Counted from editors’ footnotes naming material FRUS did not print. A separate body of evidence from the counts above, which record where printed documents were drawn from — the two are never added together.",
+             "archivalCollection", "unprintedFooter"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.unprinted.showFewer", "Show fewer", "archivalCollection", "showFewer"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.unprinted.row.hint", "Opens this volume in the browser",
+             "archivalCollection", "volumeHint"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.archivalNeighbors", "Archival Neighbors", "volumeSources", "neighbours"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.archivalNeighbors.help",
+             "Show indexed documents drawn from this archival source", "volumeSources", "neighboursHelp"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.archivalNeighbors.zero.help",
+             "No documents in your indexed volumes cite this collection — indexing more volumes may surface some", "volumeSources", "neighboursZeroHelp"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.archivalNeighbors.zero.accessibility",
+             "Archival Neighbors — no documents in your indexed volumes cite this collection; indexing more volumes may surface some",
+             "volumeSources", "neighboursZero"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.collection.hint", "Opens the collection’s cross-volume detail",
+             "volumeSources", "collectionHint"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.crossVolume.hint", "Lists the other volumes that cite this collection",
+             "volumeSources", "crossVolumeHint"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.crossVolume.sheet.title", "Cross-Volume Provenance", "volumeSources", "crossVolumeTitle"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.crossVolume.sheet.header", "Volumes Citing This Collection",
+             "volumeSources", "crossVolumeHeader"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.crossVolume.row.hint", "Opens this volume in the browser", "volumeSources", "volumeHint"),
+            ("Browser/VolumeSourcesView.swift", "common.done", "Done", "volumeSources", "done"),
         ]
         let copy = try NoteViewParityTests.read(NoteViewParityTests.web, "copy.ts")
         let sources = NoteViewParityTests.Sources()
@@ -355,6 +401,47 @@ import Testing
              "entryNumbers: (numbers: string) => `HMS/MLR Entry: ${numbers}`,"),
             ("Browser/VolumeSourcesView.swift", "browser.sources.lotFile.hmsMlr.series %@", "HMS/MLR Entry (series): %@", "volumeSources",
              "seriesEntryNumbers: (numbers: string) => `HMS/MLR Entry (series): ${numbers}`,"),
+            // S22d's follow-up: the record's NARA Catalog link and its four sections, and the outline's affordances.
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.catalog.naid %@",
+             "NAID %@ — resolved offline from the bundled index; no API key required.", "archivalCollection",
+             "catalogNAID: (naId: string) => `NAID ${naId} — resolved offline from the bundled index; no API key required.`,"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.related.shared %lld", "%lld shared vols", "archivalCollection",
+             "relatedShared: (count: number) => `${count} shared vols`,"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.related.overlap.value %@", "Overlap %@", "archivalCollection",
+             "relatedOverlap: (percent: string) => `Overlap ${percent}`,"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.related.showAll %lld", "Show all %lld related collections",
+             "archivalCollection", "relatedShowAll: (count: number) => `Show all ${count} related collections`,"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.timeline.caption %@",
+             "Citing volumes by coverage era (the citing-volume list × the manifest’s date ranges). %@", "archivalCollection",
+             "timelineCaption: (narrative: string) => `Citing volumes by coverage era (the citing-volume list × the manifest’s date ranges). ${narrative}`,"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.timeline.exportTitle %@", "%@ — cited over time", "archivalCollection",
+             "timelineTitle: (name: string) => `${name} — cited over time`,"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.divided.intro %lld",
+             "NARA later distributed material cited as this lot across %lld catalog series.", "archivalCollection",
+             "dividedIntro: (count: number) => `NARA later distributed material cited as this lot across ${count} catalog series.`,"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.divided.naid %@", "NAID %@", "archivalCollection",
+             "dividedNAID: (naId: string) => `NAID ${naId}`,"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.divided.entries %@", "Entry %@", "archivalCollection",
+             "dividedEntries: (entries: string) => `Entry ${entries}`,"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.divided.footer %lld",
+             "From the bundled lot-claimants index — %lld lots series-wide are claimed by more than one NARA series. Offline; no API key required.",
+             "archivalCollection",
+             "dividedFooter: (count: number) => `From the bundled lot-claimants index — ${count} lots series-wide are claimed by more than one NARA series. Offline; no API key required.`,"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.unprinted.counts %lld %lld",
+             "FRUS editors point at unprinted material here %lld times, across %lld volumes.", "archivalCollection",
+             "unprintedCounts: (total: number, volumes: number) => `FRUS editors point at unprinted material here ${total} times, across ${volumes} volumes.`,"),
+            ("SourceExplorer/CollectionDetailView.swift", "collection.detail.unprinted.showAll %lld", "Show all %lld volumes", "archivalCollection",
+             "showAllVolumes: (count: number) => `Show all ${count} volumes`,"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.lotFile.divided %lld",
+             "NARA divides this lot across %lld series — open Collection to see them.", "volumeSources",
+             "divided: (count: number) => `NARA divides this lot across ${count} series — open Collection to see them.`,"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.archivalNeighbors.count.accessibility %lld",
+             "Archival Neighbors — %lld indexed documents", "volumeSources",
+             "neighboursCount: (count: number) => `Archival Neighbors — ${count} indexed documents`,"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.collection", #"Collection · cited in \(authority.volumeIds.count) volumes"#,
+             "volumeSources", "collection: (count: number) => `Collection · cited in ${count.toLocaleString('en-US')} volumes`,"),
+            ("Browser/VolumeSourcesView.swift", "browser.sources.crossVolume", #"Cited in \(crossVolume.volumeIds.count) volumes"#,
+             "volumeSources", "crossVolume: (count: number) => `Cited in ${count.toLocaleString('en-US')} volumes`,"),
         ]
         let copy = try NoteViewParityTests.read(NoteViewParityTests.web, "copy.ts")
         let sources = NoteViewParityTests.Sources()
@@ -528,13 +615,78 @@ import Testing
             "lotFileNorm: record.lotFileNorm, repository: record.repository, recordGroup: record.recordGroup, names: [record.name] + record.aliases",
             #"value: "RG \(rg)""#,
         ], file: "CollectionDetailView.swift")
-        NoteViewParityTests.expect(try sources.app("FRUSCoreKit/SourceExplorer/CollectionRelations.swift"), holds: ["static let previewRowCap = 5"],
-                                   file: "CollectionRelations.swift")
         let record = try sources.web("sources/CollectionScreen.tsx")
         NoteViewParityTests.expect(record, holds: [
-            "export const aliasDisplayCap = 6;", "export const previewRowCap = 5;",
-            "collection.aliases.slice(0, aliasDisplayCap)", "collection.volumes.slice(0, previewRowCap)",
+            "export const aliasDisplayCap = 6;", "collection.aliases.slice(0, aliasDisplayCap)",
         ], file: "CollectionScreen.tsx")
+
+        // S22d's follow-up: the record's sections, their order and conditions, and what each row shows, in the app's
+        // view, the server and the browser. The capped lists' cap is the kit's own, `CollectionRelations.previewRowCap`,
+        // which the server sends.
+        NoteViewParityTests.expect(detail, holds: [
+            "overviewSection if showsCatalogLink { catalogSection } localSection if record.volumeIds.count >= CollectionRelations.minimumSharedVolumes { relatedCollectionsSection } if !timeline.isEmpty { citedOverTimeSection } if let claimants = dividedLotClaimants { dividedAtNARASection(claimants) } if unprintedPointers.total > 0 { unprintedPointersSection } citingVolumesSection if !record.children.isEmpty { subSeriesSection }",
+            "record.url != nil && CentralFilesIndexStore.shared?.isUntrustworthyNAID(record.naId) != true",
+            "if let url = record.url {", "if let naId = record.naId { Text(String(format: String(localized: \"collection.detail.catalog.naid %@\",",
+            "guard let index = CollectionAuthorityStore.shared else { return [RelatedCollection]() } return CollectionRelations.related(to: focus, in: index.collections)",
+            "if related.isEmpty {", "Array(related.prefix(CollectionRelations.previewRowCap))", "if related.count > CollectionRelations.previewRowCap {",
+            #"let parts = [record.repository, record.recordGroup.map { "RG \($0)" }].compactMap { $0 } return parts.isEmpty ? nil : parts.joined(separator: " · ")"#,
+            "let fraction = min(max(overlap, 0), 1)", ".frame(width: max(2, 56 * fraction), height: 4)",
+            "item.overlap.formatted(.percent.precision(.fractionLength(0)))",
+            "guard let entry = appState.manifestStore.entry(forVolumeId: volumeId) else { return nil } return CollectionRelations.midpointYear(earliest: entry.dateRange.earliest, latest: entry.dateRange.latest)",
+            "detail.record(timeline: CollectionRelations.citedOverTime(volumeMidpoints: midpoints),",
+            "CollectionRelations.timelineNarrative(for: timeline)))",
+            "bucket.era.shortLabel),", #"rowCells: timeline.map { [$0.era.fullLabel, "\($0.volumeCount)"] })"#,
+            "guard let lot = record.lotFileNorm else { return nil } return LotClaimantsIndexStore.shared?.claimants(forRawLot: lot)",
+            "Int64(claimants.count)))", "if let naId = record.naId, claimants.contains(where: { $0.naId == naId }) {",
+            #"var parts = [String(format: String(localized: "collection.detail.divided.naid %@", defaultValue: "NAID %@"), claimant.naId)] if let rg = claimant.recordGroup { parts.append("RG \(rg)") } if let dates = claimant.dateRange { parts.append(dates) } return parts.joined(separator: " · ")"#,
+            "if let entries = claimant.hmsMlrEntryNumbers, !entries.isEmpty {", #"entries.joined(separator: ", ")))"#,
+            "if let url = URL(string: claimant.catalogURL) {", "Int64(LotClaimantsIndexStore.shared?.lots.count ?? 0)))",
+            "return (index.referenceCount(forCollectionId: record.id), index.volumeCounts(forCollectionId: record.id))",
+            "Int64(pointers.total), Int64(pointers.volumes.count)))",
+            "Array(pointers.volumes.prefix(CollectionRelations.previewRowCap)),", "if pointers.volumes.count > CollectionRelations.previewRowCap {",
+            "Text(appState.manifestStore.entry(forVolumeId: entry.volumeId)?.title ?? entry.volumeId)", "Text(verbatim: entry.count.formatted(.number))",
+            "Array(record.volumeIds.prefix(CollectionRelations.previewRowCap))", "if record.volumeIds.count > CollectionRelations.previewRowCap {",
+        ], file: "CollectionDetailView.swift")
+        NoteViewParityTests.expect(try ProjectHistoryParityTests.server("Sources/FRUSLightAPI/ArchivalCollection.swift"), holds: [
+            "previewRowCap: CollectionRelations.previewRowCap)",
+            "let showsCatalogLink = record.url != nil && archival.centralFiles?.isUntrustworthyNAID(record.naId) != true",
+            "if showsCatalogLink, let url = record.url { answer.catalog = .init(url: url.absoluteString, naId: record.naId) }",
+            "if record.volumeIds.count >= CollectionRelations.minimumSharedVolumes {",
+            "resources.collectionAuthority.map { CollectionRelations.related(to: record, in: $0.collections) } ?? []",
+            "guard let entry = resources.volume(volumeId) else { return nil } return CollectionRelations.midpointYear(earliest: entry.dateRange.earliest, latest: entry.dateRange.latest)",
+            "let timeline = CollectionRelations.citedOverTime(volumeMidpoints: midpoints) if !timeline.isEmpty {",
+            "narrative: CollectionRelations.timelineNarrative(for: timeline))",
+            "if let lot = record.lotFileNorm, let claimants = archival.claimants?.claimants(forRawLot: lot) {",
+            "catalogURL: URL(string: $0.catalogURL) == nil ? nil : $0.catalogURL)",
+            "includesRecordsNAID: record.naId.map { naId in claimants.contains(where: { $0.naId == naId }) } ?? false,",
+            "dividedLots: archival.claimants?.lots.count ?? 0)",
+            "let total = index.referenceCount(forCollectionId: record.id) if total > 0 {",
+            "index.volumeCounts(forCollectionId: record.id).map {",
+        ], file: "ArchivalCollection.swift")
+        NoteViewParityTests.expect(record, holds: [
+            "const cap = collection.previewRowCap;",
+            "{collection.catalog.naId && <p className=\"se-caption\">{words.catalogNAID(collection.catalog.naId)}</p>}",
+            "{collection.related.length === 0 ? (", "collection.related.slice(0, cap)", "{collection.related.length > cap && (",
+            "<span className=\"se-meter\" aria-hidden=\"true\">", "{words.relatedOverlap(overlapPercent(item.overlap))}",
+            "{collection.divided.includesRecordsNAID && <p className=\"se-caption\">{words.dividedOneOfThem}</p>}",
+            "{claimant.entryNumbers && claimant.entryNumbers.length > 0 && (", "words.dividedEntries(claimant.entryNumbers.join(', '))",
+            "collection.pointers.volumes.slice(0, cap)", "{collection.pointers.volumes.length > cap && (",
+            "<span className=\"se-count\">{volume.count.toLocaleString('en-US')}</span>",
+            "collection.volumes.slice(0, cap)", "{collection.volumes.length > cap && (",
+            "{era.shortLabel}", "<th scope=\"row\">{era.fullLabel}</th>", "<td>{era.volumeCount}</td>",
+        ], file: "CollectionScreen.tsx")
+        // The sections in the view's order on the page.
+        let order = ["title={words.overview}", "title={words.catalog}", "title={words.local}", "title={words.related}",
+                     "title={words.timeline}", "title={words.divided}", "title={words.unprinted}", "title={words.volumes(", "title={words.children}"]
+        let places = order.map { record.range(of: $0)?.lowerBound }
+        #expect(places.allSatisfy { $0 != nil } && zip(places, places.dropFirst()).allSatisfy { $0! < $1! }, "CollectionScreen.tsx draws the sections in the view's order")
+        NoteViewParityTests.expect(try sources.web("sources/sourcesRules.ts"), holds: [
+            "const parts = [record.repository, record.recordGroup && `RG ${record.recordGroup}`].filter((part): part is string => !!part); return parts.length > 0 ? parts.join(' · ') : undefined;",
+            "return overlap.toLocaleString('en-US', { style: 'percent', minimumFractionDigits: 0, maximumFractionDigits: 0, roundingMode: 'halfEven' });",
+            "const fraction = Math.min(Math.max(overlap, 0), 1); return Math.max(2, 56 * fraction);",
+            "const parts = [copy.archivalCollection.dividedNAID(claimant.naId)]; if (claimant.recordGroup) parts.push(`RG ${claimant.recordGroup}`); if (claimant.dateRange) parts.push(claimant.dateRange); return parts.join(' · ');",
+            "if (count === 0) return words.neighboursZero; if (count !== undefined) return words.neighboursCount(count); return words.neighbours;",
+        ], file: "sourcesRules.ts")
 
         // The published-source guidance: its links, the day they were confirmed, and how long they stay fresh.
         let table = try sources.app("SourceExplorer/PublishedSourceLinkTable.swift")
@@ -595,6 +747,64 @@ import Testing
             "onClick={() => setExpanded(allExpanded ? new Set() : new Set(expandable))}",
             "words.entryNumbers(row.entryNumbers.join(', '))",
             "words.seriesEntryNumbers(row.seriesEntryNumbers.join(', '))",
+        ], file: "VolumeSourcesOutline.tsx")
+
+        // S22d's follow-up: a row's four affordances. The neighbours' target, `makeNeighborsTarget`, line for line in the
+        // app and the server, with the kit's library route and count key; the batched counts; the fallback's record;
+        // the Collection link, the heading's volumes and the divided lot's line.
+        let target = [
+            "guard entry.kind == .item else { return nil }",
+            "guard let t = s?.trimmingCharacters(in: .whitespaces), !t.isEmpty else { return nil } return t",
+            "let lot = trimmed(entry.lotFile)", "let cls = trimmed(entry.decimalClass)", "let job = trimmed(entry.jobNumber)",
+            "let rg = trimmed(entry.recordGroup)", "let repo = trimmed(entry.repository)", "var series = trimmed(entry.seriesName)",
+            "var libraryRepo: String? = nil if let repo, IndexingPipeline.isLibraryRepository(repo) { if series == nil, !entry.rawText.localizedCaseInsensitiveContains(repo), entry.rawText.count >= 4 { series = entry.rawText } if series != nil { libraryRepo = repo } }",
+            "let hasKey = lot != nil || cls != nil || libraryRepo != nil || job != nil || (rg != nil && series != nil) guard hasKey else { return nil }",
+            "IndexingPipeline.neighborCountKey( forLotFile: target.lotFile, recordGroup: target.recordGroup, series: target.series, repository: target.repository, decimalClass: target.decimalClass, jobNumber: target.jobNumber)",
+            "record( forFrontMatterText: entry.rawText, repository: entry.repository, lotFileNorm: entry.lotFileNorm, decimalClass: entry.decimalClass)",
+            "let crossVolume: MajorCollectionRecord? = (entry.isHeading && authority == nil)",
+            "authority( recordGroup: entry.recordGroup, lotFile: entry.lotFile, text: entry.rawText)",
+            "} else if let crossVolume, crossVolume.volumeIds.count > 1 {",
+        ]
+        NoteViewParityTests.expect(outline, holds: target + [
+            "lotFile: lot, recordGroup: rg, series: series, repository: libraryRepo, decimalClass: cls, jobNumber: job,",
+            "neighborCounts = keys.isEmpty ? [:] : try? await pipeline.archivalNeighborCounts(forKeys: keys)",
+            "return counts[key] ?? 0",
+            "if let authority { presented.aliasFallback = .init(record: authority) }",
+            "if resolution == nil, let claimants = ArchivalResolver.dividedLotClaimants(lotFile: lotFile) {", "claimants.count))",
+            "defaultValue: \"Collection · cited in \\(authority.volumeIds.count) volumes\"",
+            "defaultValue: \"Cited in \\(crossVolume.volumeIds.count) volumes\"",
+            "if let count { Text(count, format: .number)",
+            ".foregroundStyle(count == 0 ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.tint)) .help(count == 0",
+            "case .some(0): return String(localized: \"browser.sources.archivalNeighbors.zero.accessibility\",",
+            "case .some(let n): return String(format: String(localized: \"browser.sources.archivalNeighbors.count.accessibility %lld\",",
+            "case nil: return String(localized: \"browser.sources.archivalNeighbors\",",
+        ], file: "VolumeSourcesView.swift")
+        // The app's one-argument `dividedLotClaimants(lotFile:)` passes the claimants' store, as the server passes its file.
+        NoteViewParityTests.expect(try sources.app("SourceExplorer/ArchivalResolver+App.swift"), holds: [
+            "dividedLotClaimants(lotFile: lotFile, claimants: LotClaimantsIndexStore.shared)",
+        ], file: "ArchivalResolver+App.swift")
+        let outlineServer = try ProjectHistoryParityTests.server("Sources/FRUSLightAPI/VolumeSources.swift")
+        NoteViewParityTests.expect(outlineServer, holds: target + [
+            "return .init(lotFile: lot, recordGroup: rg, series: series, repository: libraryRepo, decimalClass: cls, jobNumber: job)",
+            "let counts = keys.isEmpty ? [:] : try? await served.pipeline.archivalNeighborCounts(forKeys: keys)",
+            "row.neighbours?.count = counts.flatMap { counts in countKey(target).map { counts[$0] ?? 0 } }",
+            "if let authority { row.neighbours?.aliasCollection = authority.id }",
+            "if resolution == nil, let claimants = ArchivalResolver.dividedLotClaimants(lotFile: entry.lotFile, claimants: archival.claimants) { row.dividedSeriesCount = claimants.count }",
+            "if let authority { row.collection = .init(id: authority.id, volumeCount: authority.volumeIds.count) }",
+            "row.crossVolume = crossVolume.volumeIds.map { .init(volumeId: $0, title: resources.volume($0)?.title) }",
+        ], file: "VolumeSources.swift")
+        // The route builds the fallback from the record a row names with the kit's own initialiser.
+        NoteViewParityTests.expect(neighbours, holds: [
+            "let fallback = IndexingPipeline.CollectionAliasFallback(record: record) aliasLot = fallback.lotFileNorm aliasNames = fallback.names",
+        ], file: "ArchivalNeighbors.swift")
+        NoteViewParityTests.expect(try sources.web("sources/VolumeSourcesOutline.tsx"), holds: [
+            "className={count === 0 ? 'se-link vs-neighbours vs-none' : 'se-link vs-neighbours'}",
+            "aria-label={neighboursLabel(count)}", "title={count === 0 ? words.neighboursZeroHelp : words.neighboursHelp}",
+            "{count !== undefined && <span className=\"vs-count\">{count.toLocaleString('en-US')}</span>}",
+            "aliasCollection: neighbours.aliasCollection, anchor: volumeId,",
+            "{row.dividedSeriesCount !== undefined && <p className=\"se-caption\">{words.divided(row.dividedSeriesCount)}</p>}",
+            "{row.collection ? (", ") : row.crossVolume ? (",
+            "{words.collection(row.collection.volumeCount)}", "{words.crossVolume(row.crossVolume.length)}",
         ], file: "VolumeSourcesOutline.tsx")
 
         // The provenance chip's glyphs by tier, drawn here as shapes.

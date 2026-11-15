@@ -1265,8 +1265,8 @@ export const copy = {
     back: 'Back',
   },
   /**
-   * An archival collection's record (PLAN's S22d), in the words of the app's `CollectionDetailView`: the
-   * sections the kit's public readers give at this pin. The way back is the web's own.
+   * An archival collection's record (PLAN's S22d and its follow-up), in the words of the app's
+   * `CollectionDetailView`, every section of it. The way back is the web's own.
    */
   archivalCollection: {
     title: 'Collection',
@@ -1276,6 +1276,10 @@ export const copy = {
     lot: 'Lot File',
     aliases: 'Also cited as',
     aliasesMore: (count: number) => `${count} more variant forms`,
+    catalog: 'NARA Catalog',
+    catalogOpen: 'View in National Archives Catalog',
+    catalogHelp: 'View this collection in the National Archives Catalog',
+    catalogNAID: (naId: string) => `NAID ${naId} — resolved offline from the bundled index; no API key required.`,
     local: 'In Your Library',
     localLoading: 'Counting your indexed documents…',
     localCounts: (documents: number, volumes: number) =>
@@ -1284,6 +1288,39 @@ export const copy = {
     localFooter: 'Counted from your own indexed volumes — the series-wide list below is independent of what you have downloaded.',
     neighbours: 'Show Archival Neighbors',
     neighboursHint: 'Lists your indexed documents drawn from this collection',
+    related: 'Related Collections',
+    relatedEmpty: 'No other collection is cited alongside this one in two or more volumes.',
+    relatedShared: (count: number) => `${count} shared vols`,
+    /** A row's overlap, said to a screen reader where the row's meter shows it. */
+    relatedOverlap: (percent: string) => `Overlap ${percent}`,
+    relatedShowAll: (count: number) => `Show all ${count} related collections`,
+    relatedFooter:
+      'These collections appear alongside this one in the same volumes’ source lists. Ranking uses the overlap coefficient, so a broad umbrella record does not dominate. The link is at volume level: both collections fed the same compilation. It does not mean the same documents cite both.',
+    timeline: 'Cited Over Time',
+    timelineEra: 'Coverage era',
+    timelineVolumes: 'Citing volumes',
+    timelineCaption: (narrative: string) =>
+      `Citing volumes by coverage era (the citing-volume list × the manifest’s date ranges). ${narrative}`,
+    /** The chart's title wherever it is named apart from the section: its name for assistive technology, and the table's. */
+    timelineTitle: (name: string) => `${name} — cited over time`,
+    /** What the chart says of the era under the pointer: the web's own, as the search timeline's readout is. */
+    timelineReadout: (era: string, count: number) =>
+      `${era}: ${count.toLocaleString('en-US')} ${count === 1 ? 'citing volume' : 'citing volumes'}`,
+    viewTable: 'View as table',
+    divided: 'Divided at NARA',
+    dividedIntro: (count: number) => `NARA later distributed material cited as this lot across ${count} catalog series.`,
+    dividedOneOfThem:
+      'The NARA Catalog link above points to one of them; the citation alone does not say which holds a given document.',
+    dividedNAID: (naId: string) => `NAID ${naId}`,
+    dividedEntries: (entries: string) => `Entry ${entries}`,
+    dividedView: 'View',
+    dividedFooter: (count: number) =>
+      `From the bundled lot-claimants index — ${count} lots series-wide are claimed by more than one NARA series. Offline; no API key required.`,
+    unprinted: 'Pointed At, Not Printed',
+    unprintedCounts: (total: number, volumes: number) =>
+      `FRUS editors point at unprinted material here ${total} times, across ${volumes} volumes.`,
+    unprintedFooter:
+      'Counted from editors’ footnotes naming material FRUS did not print. A separate body of evidence from the counts above, which record where printed documents were drawn from — the two are never added together.',
     volumes: (count: number) => `Cited Across the Series (${count} volumes)`,
     showAllVolumes: (count: number) => `Show all ${count} volumes`,
     showFewer: 'Show fewer',
@@ -1297,9 +1334,10 @@ export const copy = {
     back: 'Back',
   },
   /**
-   * A volume's Sources outline (PLAN's S22d), in the words of the app's `VolumeSourcesView`, which Browse
-   * opens for a Sources section. Its rows' Archival Neighbors button, collection and cross-volume links
-   * and line for a lot NARA divides read kit members still internal at this pin.
+   * A volume's Sources outline (PLAN's S22d and its follow-up), in the words of the app's `VolumeSourcesView`,
+   * which Browse opens for a Sources section, with its rows' Archival Neighbors button, Collection and
+   * cross-volume links and line for a lot NARA divides, and the Cross-Volume Provenance sheet the second opens.
+   * The neighbours' name is the app's spoken one, since the web draws no glyph for the button.
    */
   volumeSources: {
     loading: 'Loading sources…',
@@ -1315,6 +1353,22 @@ export const copy = {
     fileSeries: (title: string) => `File Series: ${title}`,
     entryNumbers: (numbers: string) => `HMS/MLR Entry: ${numbers}`,
     seriesEntryNumbers: (numbers: string) => `HMS/MLR Entry (series): ${numbers}`,
+    divided: (count: number) => `NARA divides this lot across ${count} series — open Collection to see them.`,
+    neighbours: 'Archival Neighbors',
+    neighboursHelp: 'Show indexed documents drawn from this archival source',
+    neighboursZeroHelp: 'No documents in your indexed volumes cite this collection — indexing more volumes may surface some',
+    /** The button's name for a screen reader in its three states: a count of none, a count, and none known. */
+    neighboursZero:
+      'Archival Neighbors — no documents in your indexed volumes cite this collection; indexing more volumes may surface some',
+    neighboursCount: (count: number) => `Archival Neighbors — ${count} indexed documents`,
+    collection: (count: number) => `Collection · cited in ${count.toLocaleString('en-US')} volumes`,
+    collectionHint: 'Opens the collection’s cross-volume detail',
+    crossVolume: (count: number) => `Cited in ${count.toLocaleString('en-US')} volumes`,
+    crossVolumeHint: 'Lists the other volumes that cite this collection',
+    crossVolumeTitle: 'Cross-Volume Provenance',
+    crossVolumeHeader: 'Volumes Citing This Collection',
+    volumeHint: 'Opens this volume in the browser',
+    done: 'Done',
   },
   /**
    * Related Documents (PLAN's S23d), in the words of the app's `RelatedDocumentsContent`, its weights' row

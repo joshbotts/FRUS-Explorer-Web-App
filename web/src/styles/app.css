@@ -1688,6 +1688,99 @@ dialog.subject-volumes {
   border-bottom: 0;
 }
 
+/* A collection record's Related Collections (S22d's follow-up): each row one link, its identity at the start and
+   its shared volumes over the overlap's meter at the end; a claiming series with its View at the end; and a
+   pointed-at volume with its count. */
+.se-related,
+.se-claimants {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.se-related > li,
+.se-claimants > li {
+  padding: 0.375rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.se-related > li:last-child,
+.se-claimants > li:last-child {
+  border-bottom: 0;
+}
+
+.se-related a {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+}
+
+.se-related-identity,
+.se-claimant,
+.se-pointer-volume {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.se-related-figures {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+  margin-inline-start: auto;
+}
+
+.se-related-shared {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The 56-point overlap meter: its track a hairline at 3:1 or more on a section's surface, so its scale shows, and
+   the coefficient's share of it filled in the chart's mark colour, at 3:1 or more on the same surface. */
+.se-meter {
+  display: block;
+  box-sizing: content-box;
+  width: 56px;
+  height: 4px;
+  border: 1px solid var(--control-border);
+  border-radius: 3px;
+}
+
+.se-meter > span {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--chart-mark);
+}
+
+@media (forced-colors: active) {
+  .se-meter {
+    border-color: GrayText;
+  }
+
+  .se-meter > span {
+    background: CanvasText;
+  }
+}
+
+.se-claimants > li,
+.se-pointers > li {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.era-chart figcaption {
+  margin-top: 0.25rem;
+}
+
 .se-number {
   display: inline-block;
   min-width: 2rem;
@@ -1867,6 +1960,48 @@ dialog.subject-volumes {
 
 .vs-catalog {
   font-size: 0.8125rem;
+}
+
+/* A row's catalogue link and Archival Neighbors button, at the line's end (S22d's follow-up): the button's count a
+   badge beside its name, quiet where no indexed document cites the row's source. Each of the row's links is a
+   target 24 px high, so two that stack at a phone's width, or the Collection link beneath them, stay apart
+   (WCAG 2.5.8). */
+.vs-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+}
+
+.vs-actions > a,
+.vs-collection {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+}
+
+.vs-neighbours {
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.vs-count {
+  margin-inline-start: 0.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.vs-neighbours.vs-none {
+  color: var(--text-secondary);
+}
+
+.vs-collection {
+  font-size: 0.8125rem;
+}
+
+dialog.cross-volume {
+  width: min(32rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 4rem);
+  overflow: auto;
 }
 
 .vs-note {
