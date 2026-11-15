@@ -196,14 +196,21 @@ func decode<T: Decodable>(_ type: T.Type, _ response: TestResponse) throws -> T 
         }
     }
 
-    /// `frus-light --check-health`, the image's HEALTHCHECK, against a server on a real port.
+    /// `frus-light --check-health`, the image's HEALTHCHECK, against a server on a real port. The server answers on
+    /// Swift's cooperative pool, which the target's other tests can hold for seconds at a time, and a probe blocks
+    /// the thread it runs on, so the probes of it run off the pool, through `Blocking`, and wait a minute where the
+    /// image waits three seconds: on the pool, within three seconds, a probe missed its answer in CI (run
+    /// 43646835672, 14 November). HummingbirdTesting binds a live server to localhost, ::1 in the build image, so
+    /// a probe reaches it through HealthCheck's IPv6 fallback, and a miss reads as 127.0.0.1's refusal.
     @Test func healthCheckAsksTheServersOwnPort() async throws {
         let fixture = try await ServerFixture()
         let app = Application(router: fixture.router, configuration: .init(address: .hostname("127.0.0.1", port: 0)))
         try await app.test(.live) { client in
             let port = try #require(client.port)
-            #expect(HealthCheck.isHealthy(port: port), "\(HealthCheck.probe(port: port))")
-            #expect(!HealthCheck.isHealthy(port: port, path: "/readyz"), "/readyz is 503 before an import")
+            let healthz = try await Blocking.run { HealthCheck.probe(port: port, timeout: 60) }
+            #expect(healthz.hasPrefix("HTTP/1.1 200"), "\(healthz)")
+            let readyz = try await Blocking.run { HealthCheck.probe(port: port, path: "/readyz", timeout: 60) }
+            #expect(!readyz.hasPrefix("HTTP/1.1 200"), "/readyz is 503 before an import: \(readyz)")
         }
         #expect(!HealthCheck.isHealthy(port: 1, timeout: 1), "nothing listens on port 1")
     }
