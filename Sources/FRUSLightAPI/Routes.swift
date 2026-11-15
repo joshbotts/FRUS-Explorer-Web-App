@@ -57,6 +57,9 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     // Corpus Analytics and Chronology (PLAN's S24f).
     CorpusAnalyticsRoutes.add(to: router, provider: provider, resources: resources)
     ChronologyRoutes.add(to: router, provider: provider, resources: resources)
+    // Person and Cross-Reference Analytics (PLAN's S24g).
+    PersonAnalyticsRoutes.add(to: router, provider: provider, resources: resources)
+    CrossReferenceAnalyticsRoutes.add(to: router, provider: provider, resources: resources)
     CitationLookupRoutes.add(to: router, provider: provider, resources: resources)
     PDFRoutes.add(to: router, service: state.pdf)
     ReaderLinkRoutes.add(to: router, state: state, provider: provider, reader: reader, resources: resources)
