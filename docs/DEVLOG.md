@@ -704,6 +704,112 @@ Phase 3's row S24c, the third pull request of the third upstream batch: the arch
 
 **Next:** Mac check 23 and the owner's merge of FRUS-Explorer#1901; beside it S24d's FRUS-Explorer#1900, the batch's last, awaiting Mac check 24, which changes four of the same files (`CLAUDE.md`, the project file, `Package.swift` and the plan), so the second of the two to merge has `v2` merged into it; then S24e's pin move past the batch, and S24f, Corpus Analytics and Chronology.
 
+## Session 22d, third follow-up: the collection record's four sections and the Sources outline's four affordances
+
+14 November 2026 · branch `claude/vigorous-ramanujan-c8783a`, a follow-up session of the phase-3 orchestrator's · [#151](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/151) · upstream `f011ab04`, unchanged
+
+S22d's web follow-up, with no PLAN row: the parts of a collection's record and of a volume's Sources outline that S22d left out because the kit members they read were internal at its pin (the entry below, "Session 22d", and SPEC's known gap). FRUS-Explorer#1904 made them public, and the pin move to `b124a59b` carried it. The branch was cut from `main` at `13ee15d`, #145's merge, where the pin had moved on to `f011ab04` (#146), so the kit's `CountCopy` is public as well; neither of the app's two views uses it. No upstream pull request, no pin move, no migration.
+
+**The kit's calls,** compiled from the submodule, none copied:
+- **The record** (`GET /api/v1/archival-collection?id=`, `ArchivalCollection.swift`):
+  - `CentralFilesIndex.isUntrustworthyNAID(_:)` for the NARA Catalog link. It withholds none at this pin: no shipped lot is file-unit level or flagged.
+  - `CollectionRelations.related(to:in:)` over the authority's records, gated on `minimumSharedVolumes`.
+  - For Cited Over Time, `midpointYear(earliest:latest:)` over each citing volume's catalogue date range, then `citedOverTime(volumeMidpoints:)`, the eras' `shortLabel` and `fullLabel`, and `timelineNarrative(for:)`.
+  - `LotClaimantsIndex.claimants(forRawLot:)` with `LotClaimant`, and the footer's `lots.count`.
+  - `ExternalCitationIndex.referenceCount(forCollectionId:)` and `volumeCounts(forCollectionId:)`.
+  - `previewRowCap`, which the answer carries, so the browser's lists are capped by the kit's own value and no parity test reads the kit's source for it any more.
+- **The outline** (`GET /api/v1/volumes/{v}/sources`, `VolumeSources.swift`):
+  - `IndexingPipeline.isLibraryRepository(_:)` in the neighbours' target.
+  - One batched `archivalNeighborCounts(forKeys:)`, keyed by `neighborCountKey`.
+  - `CollectionAuthorityIndex.record(forFrontMatterText:repository:lotFileNorm:decimalClass:)` for the Collection link.
+  - `VolumeSourcesIndex.authority(recordGroup:lotFile:text:)` and `MajorCollectionRecord` for a heading the authority does not track.
+  - `ArchivalResolver.dividedLotClaimants(lotFile:claimants:)` where the row resolves to no record.
+  - `IndexingPipeline.CollectionAliasFallback(record:)`, which the neighbours' route now calls (below).
+- **The bundled files:** `external-citation-index.json` is read once, on first use (`SourceExplorerFiles.swift`). Divided at NARA reads the claimants the server read already. The app's record reads no usage index.
+
+**App code mirrored,** each held to the app's source by `SourceExplorerParityTests.theMirrorsAreTheApps`:
+- the record's section order and each section's condition (`showsCatalogLink`, the related gate, `!timeline.isEmpty`, `dividedLotClaimants`, `unprintedPointers.total > 0`);
+- the related row's caption, meter and spoken overlap, `formatted(.percent.precision(.fractionLength(0)))`, which the browser writes with `roundingMode: 'halfEven'`. Measured in `swift:6.4-noble`'s Foundation and in Node 22 on nine values, both round a half to the even from the shortest decimal (0.625 → 62%, 0.835 → 84%);
+- a claiming series' caption, the timeline's midpoints and the table's cells as the app writes them;
+- `makeNeighborsTarget`, line for line;
+- the three-state button and its spoken names;
+- the divided lot's line, and the choice between the Collection link and the cross-volume link.
+
+**The neighbours' alias fallback: a deviation from the brief, measured.**
+- **The brief** was to give S22d's neighbours route the fallback's two values, `aliasLot` and `aliasName`, in the query.
+- **Why not:** three of the authority's records have a name longer than the 1,024 bytes the route allows one `aliasName`: 2,154, 2,472 and 2,650 bytes, among them Indexed Central Files (`txt:department of state|indexed central file`, 23 volumes). The widest record's names run to 5,585 bytes, a query of about 7.5 KB, at nginx's default 8 KB request-line buffer, which INSTALL's recipes sit behind. A row resolving to one of them would have opened a neighbours page that the route refused.
+- **Instead:** a row's link names the record, `aliasCollection=<id>`, and the route builds the two values with the kit's `CollectionAliasFallback(record:)` from it. `aliasLot` and `aliasName` stay as S22d made them.
+- **Mixing:** naming `aliasCollection` with either of the two is `INVALID_PARAMETER`, and an id the authority lacks is `COLLECTION_NOT_FOUND`.
+
+**The browser app** (`CollectionScreen.tsx`, `VolumeSourcesOutline.tsx`, `sourcesRules.ts`, `api/sources.ts`; lines in `copy.ts`'s two blocks, `router.tsx`'s two routes and `app.css`'s Source Explorer block; `useWidth` and `columnPath` exported from `search/Readings.tsx`, another area's file, for the chart):
+- **The record**, in the app's order:
+  - NARA Catalog, with the FRUS + NARA catalog chip and the NAID line;
+  - Related Collections, each row its own record's link, with the shared volumes and the overlap's meter, the overlap said to a screen reader in the app's words;
+  - Cited Over Time;
+  - Divided at NARA, each series' View told which series it opens;
+  - Pointed At, Not Printed;
+  - then S22d's sections.
+- **Cited Over Time** is drawn as the search timeline draws its chart, the web's chart idiom at the start, with no screen on `main` drawing with Vega-Lite (the brief): one colour, 4 px data ends, a readout of the era under the pointer, the eras' short labels thinned at a phone's width, the kit's reading as the figure's caption, and the table after it, one disclosure away, with the app's columns and full labels.
+- **The lists shown whole are in the address** (`all=related|volumes|pointers`), as the app's Browse keeps its `Expansions` for its host (#1363), so Back from a citing volume returns them as the reader left them.
+- **Each record is a page of its own,** keyed by its id, though the page's path is the same. A related record opens with each list at its cap, and the heading takes the focus as a new page's does, on the way back too.
+- **The outline's rows:**
+  - the Archival Neighbors link, named by the app's spoken words in its three states, with its count, quiet for none; it opens the row's neighbours on This volume, naming its record for the fallback;
+  - Collection · cited in N volumes, the record's page;
+  - a heading's Cited in N volumes, which opens the app's Cross-Volume Provenance sheet as a dialog, Done returning focus to it;
+  - the divided lot's line.
+  Each link is a 24 px target, so two that stack at a phone's width stay apart.
+
+**Tests**
+- **FRUSParityTests:** `SourceExplorerParityTests`, its three tables with 28 new words, 16 new formats and the mirrors above. And a new suite, `SourceExplorerRecordParityTests`, the done-when's first part. It computes each section and affordance as the app's views do, with the kit's calls over the pinned bundled files, and holds the API's answers to them field for field:
+  - the record: 203 records, every twentieth of the authority's, those the fixtures and the access proof name, the one with the longest names and the first with no related collection;
+  - the outline: every row of the fixture volumes, each neighbours count equal to the total the neighbours' page lists for the row on All volumes. Check 8, `checkEightPassesThroughTheAPI`, still passes.
+- **FRUSLightServerTests:** `SourceExplorerRouteTests`:
+  - the record's new fields;
+  - the outline's rows from rows of each kind: a lot's button counted by the batch with its record, a divided lot's line, a library's collection by its own text and none for its heading, a job number, a heading's cross-volume list, and every count unknown when the batch fails;
+  - `aliasCollection`'s reading and refusals, through the route as well;
+  - the catalogue link withheld past the guard, over a copy of the files with 66 D 204's lot flagged file-unit level;
+  - Divided at NARA's sentence naming the record's own series only where it is one of them.
+- **The web unit suite:** from 629 tests in 71 files to 641 in 72.
+  - `CollectionScreen.test.tsx` (new) covers the record's sections over the server's own answers for lot 66 D 204 and lot 64 D 563, the lists in the address, the focus on a related record, and a timeline with a gap.
+  - `VolumeSourcesOutline.test.tsx` covers the rows' buttons, links and dialog.
+  - `sourcesFixtures.ts` was taken again from the server.
+- **The browser suite**, `sources.spec.ts` on the smoke test's Standalone server:
+  - The record test now checks the NARA Catalog link, Related Collections and Cited Over Time, opens the table by keyboard, follows a related record and comes back by the record's way back, the heading focused each time.
+  - A new test opens frus1961-63v06's outline, follows lot 66 D 204's Collection link by keyboard and comes back, then follows its Archival Neighbors to This volume and, by the arrow keys, All volumes, whose list holds the button's count, thirty rows at most. Axe runs at each step: the done-when's second part.
+
+**Results**
+- **Linux, `swift:6.4-noble`, arm64:** CI's swift job replayed with its PostgreSQL (`scripts/swift --postgres test`), under the heavy lock. This package's own targets were built clean over a build folder cloned from the pin move's at `f011ab04`.
+  - 4,234 tests, the four this follow-up adds among them, all passing but seven of the PostgreSQL store's in FRUSLightCoreTests. The shared `frus-light-postgres` container refused those seven ("53300: too many clients already") while other sessions' runs held it.
+  - In the next hold, run again on PostgreSQL, FRUSLightCoreTests' 279 passed, with `SourceExplorerParityTests` and `SourceExplorerRecordParityTests`.
+  - The only skip is the named one, `FTS5StoreTests`' `backupExclusion()`, and the build gave no warning.
+  - Per target: CrossRefKitTests 10, FRUSCoreKitTests 2,518, FRUSLightCoreTests 279, FRUSLightServerTests 400, FRUSParityTests 277, FRUSRichTextTests 42, FTS5CheckTests 3, FTS5StoreTests 219, GeneratorKitTests 7, ManifestGeneratorTests 60, SemanticVectorsKitTests 40, SourceExplorerExportGeneratorTests 22, SourceNoteKitTests 327 and WordCloudKitTests 30. That is four more than `13ee15d`'s 4,230 (run 43638750474): two in FRUSParityTests, two in FRUSLightServerTests.
+- **The browser app:** typecheck, lint and the build pass. The build's one warning is Vite's 500 kB, as on `main`, with the main chunk at 958 kB. The unit suite runs 641 tests in 72 files.
+- **The image and the smoke test:** `scripts/compose-smoke --e2e` with this branch's images as `frus-light:s22dfu` and `frus-light:s22dfu-parity`, on ports 18310 and 18311, under the heavy lock.
+  - The first run, before the record's last fix, passed every step up to the library's sources spec. There the record test's way back left the focus on the Back button, since the page stayed mounted when only its query changed. Each record is now a page of its own, keyed by its id.
+  - The second run, with the images built again, passed every step: check 8's 245 source notes, every record the export generator's; the sources spec's three Standalone tests; the browser suite's 85 tests at the root and 85 under the path, each skipping seven; then the accounts and sign-in specs.
+
+**Notes**
+- **Two cold reviews,** subagents given the diff and the app's source and none of this session's reasoning, one of the server and the Swift tests, one of the browser app and its suites. Before any run, they found:
+  - a sample that never reached an empty Related Collections;
+  - overlaps compared exactly after JSON on Linux;
+  - figures and ids fixed to this pin;
+  - a mirror hold a comment also satisfied;
+  - refusals checked only by type;
+  - focus lost on a related record, since the path does not change;
+  - targets under 24 px apart at a phone's width;
+  - lists that Back collapsed;
+  - a caption read three times;
+  - a meter whose track did not show;
+  - a test that claimed more than it checked.
+  Each is fixed. Left: the zero-count button's spoken name omits the visible 0, in the app's words; and the record answers 503 while no index is served, though every new section is bundled (S22d's choice, kept).
+- **Found by the outline's parity test, for FRUS-Explorer:** the kit's `volumeSources(forVolumeId:)` selects no `job_number`, though the index stores it (index version 39), so the entries it gives carry none. A CIA job's Sources row therefore gets no Archival Neighbors button in the app, whose view reads its rows through the same call, though its `makeNeighborsTarget` keys on a job number (#808). The server does as the app does, and the test holds it so. A one-line fix to the kit's read would give such rows their button in both.
+- **Not drawn,** as SPEC says: the app's Add to an Archives Visit, until Archives Visits (phase 4), and the chart's CSV export.
+- **The heavy lock** was held for most of the evening by other sessions' Mac checks and final runs, so this session's runs came in few holds.
+
+**Records:** this entry; PLAN's sentence after #1904's "Since merged"; SPEC's lines on the record and the outline, its known gap, closed, and the three routes' conventions. The README, COORDINATION and the shared tables are left to the next pin move or group row (rule 5). The README's Known gaps line "Two follow-ups wait to use what FRUS-Explorer#1904 made public", and COORDINATION's "The move to `b124a59b` leaves two", are stale for this one once it merges. The hand-over is `s22d-followup-handover.md` in the shared notes folder.
+
+**Next:** on the features track, S24f's #150, then S24g to S24i. For FRUS-Explorer, the kit's `volumeSources(forVolumeId:)` reading a row's job number (above), as the orchestrator places it.
+
 ## Session 22d, second follow-up: the pin moves to `b124a59b`
 
 14 November 2026 · branch `claude/hopeful-hodgkin-14bfda`, a follow-up session of the phase-3 orchestrator's · [#140](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/140) · upstream `b124a59b`
