@@ -10,7 +10,7 @@
 // direction labels, a section's aggregate line (`ChronologyAggregateText`), the series' titles and the words. The
 // kit writes a section's and a bar's label in the process's locale, which on Linux is World English, "3 February
 // 1969"; the browser app's dates are US English, so the label is written again here from its bucket, by the kit's
-// three formats in `SearchItem.locale` (`ChronologyLabels`), until the kit takes a locale.
+// three formats in `SearchItem.locale` (`ChronologyLabels`), until the kit takes a locale (FRUS-Explorer#1912).
 //
 // The hover magnifier is the Mac's alone, and the word cloud for the range waits for the Word Cloud (PLAN's S24i).
 // The chart's table and its CSV with the kit's method block, and its figure, are the web's own: the app's

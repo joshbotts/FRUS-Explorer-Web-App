@@ -493,7 +493,7 @@ enum CorpusAnalyticsRoutes {
         var occurrenceYears: [YearFrequency]?
         if ask.unit == .occurrences, availability.isAvailable {
             // The occurrence series come from a service of their own: the kit keys their cache as "occ:" and the
-            // term, which a document term so spelt would meet in a shared one.
+            // term, which a document term so spelt would meet in a shared one (FRUS-Explorer#1913).
             occurrenceYearVolumes = try await served.occurrences.termOccurrencesByYearAndVolume(term: term, volumeIds: scope)
             occurrenceYears = try await served.occurrences.termOccurrencesByYear(term: term, volumeIds: scope)
         }
