@@ -334,8 +334,9 @@ function Sections({
         ) : (
           <div className="analytics-pane">
             <div className="analytics-figure">
-              {/* A region the keyboard reaches, since a matrix wider than the page scrolls sideways within it. */}
-              <div className="cross-reference-matrix" tabIndex={0} role="region" aria-label={answer.matrix.heading}>
+              {/* A region the keyboard reaches, since a matrix wider than the page scrolls sideways within it, named apart from its
+                  section, as axe's landmark-unique asks. */}
+              <div className="cross-reference-matrix" tabIndex={0} role="region" aria-label={words.matrixFrame(answer.matrix.heading)}>
                 <Suspense fallback={<div className="analytics-chart" aria-hidden="true" />}>
                   <VegaChart spec={matrix} label={words.chartDescription(answer.matrix.heading)} />
                 </Suspense>

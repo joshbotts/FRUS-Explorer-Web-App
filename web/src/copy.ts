@@ -2410,6 +2410,7 @@ export const copy = {
     references: 'References',
     chartDescription: (heading: string) => `${heading}. The table beside the chart lists its numbers.`,
     table: 'Chart data',
+    matrixFrame: (heading: string) => `${heading}: its cells`,
   },
   /**
    * Corpus Analytics (S24f), in the app's words: its field and Search, its scope, year and Group by chips, the
