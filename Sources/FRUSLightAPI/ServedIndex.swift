@@ -58,6 +58,10 @@ public final class ServedIndex: Sendable {
     public let recent = RecentSearches()
     /// The People screen's list of this index's person rollup, read once (People.swift, PLAN's S21g).
     public let people = ServedPeople()
+    /// Person Analytics' and Cross-Reference Analytics' series over this index (PLAN's S24g), each computed once for its
+    /// years, scope and people and kept while the index is served, as the app's views keep what they loaded until it changes.
+    let personAnalytics = KeptSeries<PersonSeriesKey, PersonSeries>()
+    let crossReferenceAnalytics = KeptSeries<CrossReferenceSeriesKey, CrossReferenceSeries>()
     /// The volumes the index holds documents of: what a working corpus and a volume scope resolve
     /// against (PLAN's S17e), as the app resolves them against the volumes its device has indexed.
     public let indexedVolumeIds: Set<String>

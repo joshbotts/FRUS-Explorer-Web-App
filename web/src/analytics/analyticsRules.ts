@@ -300,7 +300,7 @@ export type ChartSpec = Record<string, unknown>;
 const font = 'system-ui, -apple-system, "Segoe UI", sans-serif';
 
 /** The look every chart shares: the page's font, no frame, the axes' grid faint. */
-function config(dark: boolean): ChartSpec {
+export function config(dark: boolean): ChartSpec {
   const ink = dark ? '#e6e6e6' : '#1d1d1f';
   const faint = dark ? '#5a5a5e' : '#d2d2d7';
   return {
@@ -597,7 +597,8 @@ export function figureSpec(chart: ChartSpec, plate: AnalyticsPlate, legend: { ti
       ],
     });
   }
-  parts.push({ ...body, width });
+  // A chart of a fixed width, as the heat matrix's square cells, keeps it.
+  parts.push({ ...body, width: typeof chart.width === 'number' ? chart.width : width });
   parts.push({
     width,
     height: Math.max(y, 1),

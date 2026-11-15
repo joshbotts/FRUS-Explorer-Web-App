@@ -47,6 +47,9 @@ import { CollectionEditorScreen } from './collections/CollectionEditorScreen';
 import { CollectionsScreen } from './collections/CollectionsScreen';
 // ─── Tools ──────────────────────────────────────────────────────────────────
 import { type ChronologySearch, type CorpusSearch, validateChronologySearch, validateCorpusSearch } from './analytics/analyticsRules';
+import { CrossReferenceAnalyticsScreen } from './analytics/CrossReferenceAnalyticsScreen';
+import { PersonAnalyticsScreen } from './analytics/PersonAnalyticsScreen';
+import { type CrossReferenceSearch, type PeopleSearch, validateCrossReferenceSearch, validatePeopleSearch } from './analytics/personReferenceRules';
 import { ChronologyScreen } from './analytics/ChronologyScreen';
 import { CorpusAnalyticsScreen } from './analytics/CorpusAnalyticsScreen';
 import { LookupScreen } from './lookup/LookupScreen';
@@ -352,6 +355,21 @@ const collectionRoute = createRoute({
 });
 
 // ─── Tools ──────────────────────────────────────────────────────────────────
+// Person and Cross-Reference Analytics (S24g), which the app opens from its Analytics menu, each with its state in the address.
+const personAnalyticsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/analytics/people',
+  validateSearch: (raw: Record<string, unknown>): PeopleSearch => validatePeopleSearch(raw),
+  component: PersonAnalyticsScreen,
+});
+
+const crossReferenceAnalyticsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/analytics/cross-references',
+  validateSearch: (raw: Record<string, unknown>): CrossReferenceSearch => validateCrossReferenceSearch(raw),
+  component: CrossReferenceAnalyticsScreen,
+});
+
 // Corpus Analytics and Chronology (S24f), which the app opens from its Analytics menu, each with its state in the address.
 const corpusAnalyticsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -517,6 +535,8 @@ export const routeTree = rootRoute.addChildren([
   collectionsRoute,
   collectionRoute,
   // ─── Tools ────────────────────────────────────────────────────────────────
+  personAnalyticsRoute,
+  crossReferenceAnalyticsRoute,
   corpusAnalyticsRoute,
   chronologyRoute,
   lookupRoute,

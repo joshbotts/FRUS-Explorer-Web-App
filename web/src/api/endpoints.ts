@@ -336,7 +336,7 @@ export function citationBatchQuery(text: string | undefined) {
  * The queries that read what the server indexes, asked again when its index changes (the shell's readiness banner)
  * and after a curator's correction of it (PLAN's S21g): the people and the classifications with them.
  */
-export const corpusQueryKeys = ['search', 'facets', 'inspect', 'timeline', 'concordance', 'citation', 'related', 'citationLookup', 'citationBatch', 'document', 'volumes', 'volume', 'section', 'readingOrder', 'sources', 'archivalNeighbours', 'archivalCollection', 'volumeSources', 'people', 'classification', 'analyticsContext', 'corpusChart', 'corpusDocuments', 'chronology'];
+export const corpusQueryKeys = ['search', 'facets', 'inspect', 'timeline', 'concordance', 'citation', 'related', 'citationLookup', 'citationBatch', 'document', 'volumes', 'volume', 'section', 'readingOrder', 'sources', 'archivalNeighbours', 'archivalCollection', 'volumeSources', 'people', 'classification', 'analyticsContext', 'corpusChart', 'corpusDocuments', 'chronology', 'crossReferenceAnalytics'];
 
 /** Retries a network failure or a server fault twice; never a refusal, nor a 503 while importing. */
 export function retryServerFaults(failures: number, error: unknown): boolean {
