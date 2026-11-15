@@ -35,7 +35,7 @@ import { ReaderScreen } from './reader/ReaderScreen';
 import { GraphScreen, type GraphSearch } from './graph/GraphScreen';
 import { SourcesScreen } from './sources/SourcesScreen';
 import { NeighboursScreen, type NeighboursSearch } from './sources/NeighboursScreen';
-import { CollectionScreen, type CollectionSearch } from './sources/CollectionScreen';
+import { CollectionScreen, type CollectionSearch, collectionLists } from './sources/CollectionScreen';
 import { RelatedScreen, type RelatedSearch } from './related/RelatedScreen';
 // ─── Research ───────────────────────────────────────────────────────────────
 import { AllNotesScreen, type NotesSearch, validateNotesSearch } from './research/AllNotesScreen';
@@ -262,6 +262,7 @@ const neighboursRoute = createRoute({
       jobNumber: text(raw.jobNumber),
       aliasLot: text(raw.aliasLot),
       aliasName: names.length > 0 ? names : undefined,
+      aliasCollection: text(raw.aliasCollection),
       anchor: text(raw.anchor),
       scope: raw.scope === 'volume' || raw.scope === 'subseries' || raw.scope === 'all' ? raw.scope : undefined,
     };
@@ -273,7 +274,10 @@ const neighboursRoute = createRoute({
 const collectionRecordRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/archival-collection',
-  validateSearch: (raw: Record<string, unknown>): CollectionSearch => ({ id: text(raw.id) ?? '' }),
+  validateSearch: (raw: Record<string, unknown>): CollectionSearch => {
+    const all = collectionLists.filter((list) => (Array.isArray(raw.all) ? raw.all : [raw.all]).includes(list));
+    return { id: text(raw.id) ?? '', all: all.length > 0 ? all : undefined };
+  },
   component: CollectionScreen,
 });
 

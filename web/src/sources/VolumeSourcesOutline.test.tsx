@@ -1,9 +1,11 @@
-// A volume's Sources outline (PLAN's S22d) on Browse's page for its Sources section, over a stubbed server
-// answering with the server's own outline for frus1961-63v06 (sourcesFixtures.ts): the app's three groups in its
-// order and words, the outline rebuilt from the rows' depths as the app rebuilds it, every branch open at first,
-// Expand All and Collapse All, each disclosure by keyboard, the catalogue links and the entry numbers; and the
-// empty state, a flat outline and the lines the fixture's rows do not reach.
-import { cleanup, screen, within } from '@testing-library/react';
+// A volume's Sources outline (PLAN's S22d and its follow-up) on Browse's page for its Sources section, over a
+// stubbed server answering with the server's own outline for frus1961-63v06 (sourcesFixtures.ts): the app's three
+// groups in its order and words, the outline rebuilt from the rows' depths as the app rebuilds it, every branch
+// open at first, Expand All and Collapse All, each disclosure by keyboard, the catalogue links and the entry
+// numbers; each row's Archival Neighbors button and Collection link; and the empty state, a flat outline and the
+// lines the fixture's rows do not reach: the button's other two states, the line for a lot NARA divides, and a
+// heading's volumes in the Cross-Volume Provenance dialog.
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { OutlineRow, VolumeSourcesOutline } from '../api/sources';
@@ -157,6 +159,72 @@ describe('a volume’s Sources outline', () => {
     expect(within(collections).getByText('HMS/MLR Entry (series): UD 1, UD 2')).toBeTruthy();
     expect(screen.queryByRole('region', { name: 'About These Sources' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Published Sources' })).toBeNull();
+  });
+
+  it('gives an outline row its Archival Neighbors button, counted, with the row’s keys, and its Collection link', async () => {
+    await open(outline);
+    const collections = await screen.findByRole('region', { name: 'Archival Collections' });
+    const row = outline.rows.find((each) => each.text === 'Presidential Correspondence: Lot 66 D 204')!;
+    const entry = within(collections).getByText(row.text).closest('.vs-entry') as HTMLElement;
+    const count = row.neighbours!.count!;
+    expect(count).toBeGreaterThan(0);
+    const button = within(entry).getByRole('link', { name: `Archival Neighbors — ${count} indexed documents` });
+    expect(button.textContent).toBe(`Archival Neighbors${count.toLocaleString('en-US')}`);
+    expect(button.getAttribute('title')).toBe('Show indexed documents drawn from this archival source');
+    const query = new URL(button.getAttribute('href')!, 'http://localhost').searchParams;
+    expect(query.get('lotFile')).toBe(row.neighbours!.lotFile!);
+    expect(query.get('aliasCollection')).toBe(row.collection!.id);
+    expect(query.get('anchor')).toBe(v06);
+    const record = within(entry).getByRole('link', { name: `Collection · cited in ${row.collection!.volumeCount} volumes` });
+    const target = new URL(record.getAttribute('href')!, 'http://localhost');
+    expect(target.pathname).toBe('/archival-collection');
+    expect(target.searchParams.get('id')).toBe(row.collection!.id);
+    expect(record.getAttribute('title')).toBe('Opens the collection’s cross-volume detail');
+    // Every row the server gives a button or a record has it, and only those.
+    expect(within(collections).getAllByRole('link', { name: /^Archival Neighbors/ })).toHaveLength(outline.rows.filter((each) => each.neighbours).length);
+    expect(within(collections).getAllByRole('link', { name: /^Collection · cited in/ })).toHaveLength(outline.rows.filter((each) => each.collection).length);
+  });
+
+  it('draws the button’s other two states, a divided lot’s line, and a heading’s volumes in a dialog', async () => {
+    const user = userEvent.setup();
+    await open({
+      volumeId: v06,
+      rows: [
+        item(0, 'Executive Secretariat Files: Lot 62 D 430', { neighbours: { lotFile: '62 D 430', count: 0 }, dividedSeriesCount: 4 }),
+        item(0, 'Bundy Files', { neighbours: { series: 'Bundy Files', repository: 'Johnson Library' } }),
+        item(0, 'White House Central Files', {
+          isHeading: true,
+          crossVolume: [{ volumeId: 'frus1961-63v05', title: 'Foreign Relations of the United States, 1961–1963, Volume V' }, { volumeId: 'frus1961-63v07' }],
+        }),
+      ],
+    });
+    const collections = await screen.findByRole('region', { name: 'Archival Collections' });
+    // None cite it: quiet, and said so.
+    const none = within(collections).getByRole('link', {
+      name: 'Archival Neighbors — no documents in your indexed volumes cite this collection; indexing more volumes may surface some',
+    });
+    expect(none.className).toContain('vs-none');
+    expect(none.textContent).toBe('Archival Neighbors0');
+    expect(none.getAttribute('title')).toBe('No documents in your indexed volumes cite this collection — indexing more volumes may surface some');
+    expect(within(collections).getByText('NARA divides this lot across 4 series — open Collection to see them.')).toBeTruthy();
+    // No count known: the button drawn plain.
+    const plain = within(collections).getByRole('link', { name: 'Archival Neighbors' });
+    expect(plain.querySelector('.vs-count')).toBeNull();
+    expect(new URL(plain.getAttribute('href')!, 'http://localhost').searchParams.get('repository')).toBe('Johnson Library');
+    // A heading the authority has no record for: its volumes, in the Cross-Volume Provenance sheet.
+    const cited = within(collections).getByRole('button', { name: 'Cited in 2 volumes' });
+    expect(cited.getAttribute('title')).toBe('Lists the other volumes that cite this collection');
+    await user.click(cited);
+    const dialog = screen.getByRole('dialog', { name: 'Cross-Volume Provenance' });
+    const list = within(dialog).getByRole('region', { name: 'Volumes Citing This Collection' });
+    const links = within(list).getAllByRole('link');
+    expect(links.map((link) => link.textContent)).toEqual(['Foreign Relations of the United States, 1961–1963, Volume V', 'frus1961-63v07']);
+    expect(links[0]!.getAttribute('href')).toBe('/browse/frus1961-63v05');
+    expect(links[0]!.getAttribute('title')).toBe('Opens this volume in the browser');
+    expect(within(dialog).getByText('White House Central Files')).toBeTruthy();
+    await user.click(within(dialog).getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(cited));
   });
 
   it('says so when the index lists no sources for the volume', async () => {
