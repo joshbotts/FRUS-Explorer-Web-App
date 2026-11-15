@@ -42,6 +42,8 @@ public final class ServerResources: Sendable {
     private let sourceExplorerFiles = SourceExplorerFiles()
     /// The People screen's bundled name authority, decoded on first use (People.swift, PLAN's S21g).
     let people = PeopleFiles()
+    /// The administrations' profiles, `administration-profiles-index.json`, decoded on first use (CorpusAnalytics.swift).
+    private let administrations = AdministrationProfilesFile()
     /// The catalogue overlay (PLAN's S21e): the volumes a Standalone server's library holds that the published
     /// catalogue does not list, side-loaded, each described by the kit's `LocalVolumeCatalog` from its own header.
     private let local = LocalVolumes()
@@ -147,6 +149,11 @@ public final class ServerResources: Sendable {
     /// nil for a file missing or malformed, and the axis then contributes nothing, as the app's does.
     var documentSubjectIndex: DocumentSubjectIndex? { documentSubjects.index(in: directory) }
 
+    /// `AdministrationProfilesStore`'s index, app code: the administrations' terms, which Corpus Analytics' presets
+    /// read (PLAN's S24f), decoded once by the kit's `AdministrationProfilesIndex(contentsOf:)`; nil for a file
+    /// missing or malformed, and the presets are then absent, as the app's chip is until its index loads.
+    var administrationProfiles: AdministrationProfilesIndex? { administrations.index(in: directory) }
+
     /// `ResolvedEdgeIndexStore.shared`, app code: the bundled corpus-wide citation index, which the
     /// cross-reference store reads where a graph is built, decoded once by the kit's
     /// `ResolvedEdgeIndex(contentsOf:)`; nil for a file missing or malformed, and a graph's inbound half
@@ -215,6 +222,21 @@ private final class ResolvedEdgeIndexFile: @unchecked Sendable {
         defer { lock.unlock() }
         if let held { return held }
         let index = try? ResolvedEdgeIndex(contentsOf: directory.appendingPathComponent("resolved-edge-index.json"))
+        held = .some(index)
+        return index
+    }
+}
+
+/// The administrations' profiles, decoded the first time an analytics screen asks for its presets.
+private final class AdministrationProfilesFile: @unchecked Sendable {
+    private let lock = NSLock()
+    private var held: AdministrationProfilesIndex??
+
+    func index(in directory: URL) -> AdministrationProfilesIndex? {
+        lock.lock()
+        defer { lock.unlock() }
+        if let held { return held }
+        let index = try? AdministrationProfilesIndex(contentsOf: directory.appendingPathComponent("administration-profiles-index.json"))
         held = .some(index)
         return index
     }

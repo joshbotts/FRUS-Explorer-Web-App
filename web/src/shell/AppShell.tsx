@@ -15,6 +15,7 @@ import { meQuery } from '../api/userData';
 import { copy } from '../copy';
 import { type Appearance, useAppearance, useResolvedScheme } from '../settings/preferences';
 import { requestHeadingFocus } from './headingFocus';
+import { MenuButton } from './MenuButton';
 import { ProjectPicker, WorkingOn } from './ProjectPicker';
 import { SignInScreen } from './SignInScreen';
 
@@ -86,6 +87,17 @@ export function AppShell() {
     [router],
   );
 
+  /**
+   * Opens a tool from the header's Analytics menu. The menu hands the focus back to its button as it closes, and a new
+   * screen takes the focus at its heading only from the page itself, so the button lets it go first.
+   */
+  function openTool(to: '/analytics/corpus' | '/chronology') {
+    // On the tool's own page no new screen comes, so the button keeps the focus.
+    const leaving = !router.state.location.pathname.endsWith(to);
+    if (leaving && document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    void router.navigate({ to });
+  }
+
   return (
     <SchemeContext.Provider value={scheme}>
       {/* Against the page's <base>, #main names the app's first page, so the link moves focus itself. */}
@@ -120,6 +132,19 @@ export function AppShell() {
             </Link>
           )}
           {/* ─── Tools ─────────────────────────────────────────────────── */}
+          {/* From S24f, the Mac's Analytics menu: its items in the app's order, Chronology after a divider. */}
+          <MenuButton
+            label={copy.app.analytics}
+            accessibleLabel={copy.app.analytics}
+            className="nav-menu"
+            entries={[
+              { kind: 'item', label: copy.app.corpusAnalytics, onSelect: () => openTool('/analytics/corpus') },
+              { kind: 'separator' },
+              { kind: 'item', label: copy.app.chronology, onSelect: () => openTool('/chronology') },
+            ]}
+          >
+            {copy.app.analytics} <span aria-hidden="true">▾</span>
+          </MenuButton>
           {/* ─── Settings ──────────────────────────────────────────────── */}
           <Link to="/settings" activeProps={{ 'aria-current': 'page' }}>
             {copy.app.settings}
