@@ -424,6 +424,58 @@ Nothing the indexer stores or reads changes, and the build is 1812. So, under S2
 
 **Next:** S24f, Corpus Analytics and Chronology, over the kit this move brings, then S24g to S24i on the features track; beside it, S23e, the cross-reference graph, and S22d, Source Explorer and check 8, then S22e; on the server track, S21f. And one follow-up, a pull request of its own: the server's uses of #1902's three calls, each a small change with its file and function in the hand-over note (`upstream-followups-handover.md`): History's title of a document opened from its TEI, numbered by `IndexingPipeline.extractDocumentNumber(from:)` where it has no `@n`, in `parsedTitle(of:)`; a Suggested Next lead's line from its reader's own summary, `documentSnippets(forKeys:maxLength:userSource:)` with `.attachedStore(userId:)` in `ProjectHomeRoutes.withLines`, with `ProjectHistoryParityTests`' line for it changed in the same commit, and SPEC's gap closed; and the subject index decoded once, `ServerResources.documentSubjectIndex` reading `IndexingResources.documentSubjects`, `DocumentSubjectIndexFile` gone. In the same files, Related Documents' lexical axis, which the server sets aside, can take what it ranks with now that WordCloudKit compiles here: the kit's stopwords, `WordCloudStopwordSet(contentsOf:)` over the bundled `word-cloud-stopwords.json` with `active(includeDiplomatic: true)`, as the app's engine dependencies pass the word cloud's, and the served search service, with `FRUSLightAPI` given the kit; its slider then stops being set aside.
 
+## Session 22e, follow-up, upstream: the Zotero client's waits on Zotero's word, bounded
+
+14 November 2026 · branch `claude/wizardly-sutherland-287ad1` · [#149](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/149) · upstream `f011ab04`, unchanged; [FRUS-Explorer#1916](https://github.com/joshbotts/FRUS-Explorer/pull/1916), open
+
+This fixes a finding of S22e's cold reviews, upstream, at the orchestrator's word of 14 November. No PLAN row names it.
+- The kit's `ZoteroAPIClient`, which the server's Send to Zotero Library calls (`ZoteroSend.swift`), made `UInt64(seconds * 1_000_000_000)` of a 429's `Retry-After` and of an advisory `Backoff`.
+- `UInt64(_:)` traps on a negative, NaN, infinite or huge value. On a server a trap ends the process, and every request in flight with it. A well-formed but long value held the request for as long as it said.
+- The pull request is `claude/zotero-retry-wait-bound`, cut from `v2` at `f011ab04`, which `v2` still is. It is labelled `Mac`, asks for Mac verification as Mac check 31, and is not merged.
+- Under rule 4 it changes shared files, the kit's Zotero client and its suite, and this repository changes only its records.
+
+**The waits.** In every kit, only the Zotero client's two waits read a value from outside: the `Backoff` after a successful write, and a 429's `Retry-After` before each of up to three retries. The NARA client throws `rateLimited` at once on a 429 and never waits. The generator cores' waits and the app's are their own constants.
+
+**The bound.** It was proposed to the orchestrator before it was written, and approved with three additions: the trade-off below in the pull request, the lower edge pinned, and the web's held request named here.
+- **Reading:** a header counts only when its seconds are finite and not negative. "nan", "inf", "-1" and the like count as absent, as an HTTP date already did, so a 429 waits the 30 s default. "-0" reads as 0, a choice that the tests pin.
+- **The cap:** 60 s for any one wait. A `Retry-After` past it reaches the caller at once as `rateLimited`, carrying Zotero's seconds, with no retry: Zotero's rule is to wait at least that long. A `Backoff` past it is waited for 60 s and the send goes on, a bounded departure from Zotero's advice, since the write it came with succeeded.
+- **Unchanged:** values up to a minute, the three retries, the 30 s default, and the public API. The waits go through a sleep that a test can replace, an internal initialiser.
+- **The trade-off,** for the owner to weigh at the check: a 429 past a minute on a write after a send's first now stops the send there, as an exhausted retry already does. The writes before it stay in Zotero with no history row, so a second send duplicates them. A send that records how far it got, or resumes, is named as a possible follow-up.
+
+**Measured** (the pull request has the figures, each against `v2` run the same way):
+- **Linux,** over `main` in `swift:6.4-noble`:
+  - At `13ee15d`, `v2` ran 4,230 tests and the branch 4,243. Every test passed but, at the branch, the golden files' 22 freshness issues, which come from the source digest.
+  - Over `db0cba7`, with the golden files' recorded digest set to the branch's, all 4,251 passed, so the branch changes nothing those files hold.
+  - The kit's Zotero suites alone passed 20 runs.
+- **Xcode,** on an iPhone 17 (iOS 27.2):
+  - both builds had `v2`'s warning lines;
+  - the unit target ran 8,012 tests (`v2` 7,999), with `v2`'s one failure and the same skips;
+  - `swift test` ran 4,512 (`v2` 4,499);
+  - the Mac app lost 4 symbols and gained 22, each the change's own.
+- **On `v2`'s client,** a suite never committed, through the public API, trapped on a `Backoff` of "nan", "-1" or "inf" and on a `Retry-After` of "1e300", on Linux and in the simulator. It slept on "3600" until the one-minute limit. At the branch each passed at once.
+
+**One cold review** found no correctness bug, and ran mutations that the suite catches. It did find gaps, now fixed:
+- The public client's real sleep was untested, so a no-op sleep passed. A test now holds it to two waits of 0.1 s.
+- The `Backoff` doc comment claimed Zotero's "consistency" allowance for the send's remaining writes. It now calls them a bounded departure.
+- A public doc comment named an internal member.
+- `pause` relied on its callers, and now clamps.
+
+**For the next pin move, which carries it:** nothing to follow in the code.
+- No public API changes, so nothing in `Sources/` does. `ZoteroSend.swift` maps `.rateLimited` to its 503 without reading the seconds.
+- No `Package.swift`, CI allow-list or `Compatibility.swift` change, no new skip, and the index version is unchanged.
+- `FRUSCoreKitTests` gains the suite's 13 tests.
+- FRUSCoreKit is in the golden files' source digest, so `make-golden` remakes them: a run over `main` with their recorded digest set to the branch's passed whole, so only their provenance, and the index summary's timings, should move. Nothing on the indexing path changes, so the build-1812 export serves if the owner chooses it.
+
+`zotero-retry-handover.md`, in the orchestrator's notes folder, has the rest.
+
+**A possible web follow-up, not opened:** the send runs inside its HTTP request, so it can outlast a reverse proxy's read timeout. nginx's default is 60 s, which INSTALL's recipes keep.
+- This is true at the pin too: three 30 s waits for a 429 with no `Retry-After` take 90 s.
+- After the bound, one write waits at most 3 × 60 + 60 = 240 s.
+- When the proxy gives up, the browser sees a 504 while the send goes on, and a second send duplicates the items.
+- Running the send as a job the browser polls, or stopping it when the client disconnects, would close this.
+
+**Next:** the owner's Mac check 31 and merge of FRUS-Explorer#1916; the next pin move carries it.
+
 ## Session 22e, follow-up: the cold review's ten findings on S22e's code, verified
 
 14 November 2026 · branch `claude/busy-neumann-dfd31a` · [#148](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/148) · upstream `f011ab04`
