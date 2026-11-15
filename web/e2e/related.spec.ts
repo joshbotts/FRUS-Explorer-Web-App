@@ -1,10 +1,10 @@
 // S23d's done-when (docs/PLAN.md): Playwright opens Related and refreshes the leads by keyboard on
 // Chromium with no axe violations. Against the image, with the synthetic export imported. From the
 // reader, Related opens the document's list; the scope and a weight change by keyboard, the weight kept
-// for the next list as the app keeps its device's; a row opens its document, and Back returns to the
-// list as it was. Then a project with a note on a document has its leads found again by keyboard, Project
-// Home saying so while the server finds them. The test removes its project, its note and the trail, and
-// forgets the tuning.
+// for the next list as the app keeps its device's, and ranked though the scope's list comes while the
+// weight's step rests; a row opens its document, and Back returns to the list as it was. Then a project
+// with a note on a document has its leads found again by keyboard, Project Home saying so while the
+// server finds them. The test removes its project, its note and the trail, and forgets the tuning.
 import type { Page } from '@playwright/test';
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
@@ -30,6 +30,10 @@ async function reset(page: Page): Promise<void> {
 test('opens Related from the reader by keyboard, changes its scope and a weight, and refreshes the leads', async ({ page }) => {
   await page.goto('research');
   await reset(page);
+  let deliver = () => {};
+  const held = new Promise<void>((resolve) => {
+    deliver = resolve;
+  });
   try {
     await page.goto('doc/frus1961-63v06/d1');
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
@@ -46,7 +50,19 @@ test('opens Related from the reader by keyboard, changes its scope and a weight,
     await expect(page.getByText('Ranking the related documents…')).toHaveCount(0);
     await axeCheck(page);
 
-    // The scope, by keyboard: the picker is a group of radios, as the app's segmented control.
+    // The scope, by keyboard: the picker is a group of radios, as the app's segmented control. This volume's
+    // list is held until the weight below has stepped, as a list ranked for a scope chosen just before may
+    // come under load: one that comes while a step rests leaves the step to settle and be ranked (S23d's
+    // second follow-up, after this test failed so under load).
+    await page.route(
+      /\/api\/v1\/volumes\/frus1961-63v06\/documents\/d1\/related\?scope=volume$/,
+      async (route) => {
+        const response = await route.fetch();
+        await held;
+        await route.fulfill({ response }).catch(() => {});
+      },
+      { times: 1 },
+    );
     const thisVolume = page.getByRole('radio', { name: 'This volume' });
     await tabTo(page, page.getByRole('radio', { checked: true }));
     await expect(page.getByRole('radio', { name: 'All volumes' })).toBeChecked();
@@ -64,6 +80,8 @@ test('opens Related from the reader by keyboard, changes its scope and a weight,
     const proximity = page.getByRole('slider', { name: 'Corpus proximity' });
     await tabTo(page, proximity);
     await page.keyboard.press('ArrowRight');
+    // This volume's list comes while the step rests.
+    deliver();
     await expect(proximity).toHaveValue('0.4');
     await expect(page).toHaveURL(/weights=subseries%3A0\.4/);
     await expect.poll(() => page.evaluate(() => localStorage.getItem('frus.related.weights'))).toBe('subseries:0.4');
@@ -117,6 +135,8 @@ test('opens Related from the reader by keyboard, changes its scope and a weight,
     for (const lead of home.leads) expect(`${lead.volumeId}/${lead.documentId}`).not.toBe('frus1961-63v06/d1');
     await axeCheck(page);
   } finally {
+    deliver();
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
     // Off Project Home first, so that no read of it meets the project deleted under it.
     await page.goto('research');
     await reset(page);

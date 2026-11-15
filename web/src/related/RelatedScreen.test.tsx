@@ -166,6 +166,50 @@ describe('Related Documents', () => {
     // Where the focus goes after Reset, a <summary>, which jsdom does not focus, the browser suite holds.
   });
 
+  it('ranks a step once it settles, though a list asked for before it comes while it rests', async () => {
+    // This volume's list is held until a slider has stepped, as a list ranked for a scope chosen just before may
+    // come under load. It comes with axes of its own, and the step still settles into the address (S23d's
+    // second follow-up: a list that came while a step rested cancelled the step's ranking).
+    let deliver = () => {};
+    const held = new Promise<void>((resolve) => {
+      deliver = resolve;
+    });
+    const fetch = stubServer({
+      '/readyz': ready,
+      [anchor]: document,
+      [path]: (url: URL) => {
+        const scope = (url.searchParams.get('scope') ?? 'all') as RelatedDocuments['scope'];
+        const weights = url.searchParams.get('weights') ?? '';
+        const list = answer({ scope, weights });
+        return scope === 'volume' && weights === '' ? held.then(() => list) : list;
+      },
+    });
+    const user = userEvent.setup();
+    const { router } = renderAt('/related/frus1961-63v06/d1');
+    await screen.findByRole('link', { name: 'Memorandum From the President' });
+    await user.click(screen.getByRole('radio', { name: 'This volume' }));
+    await waitFor(() => expect(router.state.location.search).toEqual({ scope: 'volume' }));
+    // A step by the keyboard, which rests before the list is ranked with it; then This volume's list comes.
+    fireEvent.change(screen.getByRole('slider', { name: 'Shared people' }), { target: { value: '0.2' } });
+    deliver();
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe(''));
+    expect(router.state.location.search).toEqual({ scope: 'volume' });
+    // The step settles, and the list is ranked with it.
+    await waitFor(() => expect(router.state.location.search).toEqual({ scope: 'volume', weights: 'sharedPersons:0.2' }));
+    await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).includes('scope=volume&weights=sharedPersons%3A0.2'))).toBe(true));
+    expect(localStorage.getItem('frus.related.weights')).toBe('sharedPersons:0.2');
+    expect((screen.getByRole('slider', { name: 'Shared people' }) as HTMLInputElement).value).toBe('0.2');
+  });
+
+  it('keeps a step not yet ranked for the next list when the page goes', async () => {
+    stubServer({ '/readyz': ready, [anchor]: document, [path]: answer() });
+    const { unmount } = renderAt('/related/frus1961-63v06/d1');
+    await screen.findByRole('link', { name: 'Memorandum From the President' });
+    fireEvent.change(screen.getByRole('slider', { name: 'Shared people' }), { target: { value: '0.2' } });
+    unmount();
+    expect(localStorage.getItem('frus.related.weights')).toBe('sharedPersons:0.2');
+  });
+
   it('opens with the tuning this browser keeps', async () => {
     localStorage.setItem('frus.related.weights', 'sharedPersons:0.2');
     const fetch = stubServer({ '/readyz': ready, [anchor]: document, [path]: answer({ weights: 'sharedPersons:0.2' }) });
