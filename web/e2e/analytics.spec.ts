@@ -141,11 +141,11 @@ test('shows a range in Chronology, filters its list by the legend by keyboard, a
   await page.goto('search');
   await forget(page);
   try {
-    // The header's Analytics menu, its second item past the divider, by keyboard.
+    // The header's Analytics menu, its last item past the divider, by keyboard.
     const menu = page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Analytics' });
     await tabTo(page, menu);
     await page.keyboard.press('Enter');
-    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('End');
     await expect(page.getByRole('menuitem', { name: 'Chronology' })).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/chronology$/);

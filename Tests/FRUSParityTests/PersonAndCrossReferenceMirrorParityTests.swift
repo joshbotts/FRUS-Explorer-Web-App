@@ -11,6 +11,8 @@ import Testing
 @Suite struct PersonAndCrossReferenceMirrorParityTests {
     static func app(_ path: String) throws -> String { try SearchSetParityTests.app(path) }
     static func server(_ path: String) throws -> String { try SearchSetParityTests.server(path) }
+    static func kit(_ path: String) throws -> String { try SearchSetParityTests.kit(path) }
+    static func web(_ path: String) throws -> String { try SearchSetParityTests.web(path) }
 
     static let person = "Analytics/PersonAnalyticsView.swift"
     static let graph = "Analytics/PersonCoMentionGraphView.swift"
@@ -348,5 +350,124 @@ import Testing
         let keys = Set(words.map(\.key))
         let written = servers.components(separatedBy: "appWords(\"").dropFirst().compactMap { $0.split(separator: "\"", maxSplits: 1).first.map(String.init) }
         #expect(!written.isEmpty && written.allSatisfy(keys.contains), "\(written.filter { !keys.contains($0) })")
+    }
+
+    /// What the browser app mirrors of the app's canvases, line beside line: the co-mention network's layout, discs and
+    /// edges, the comparison's cap and matches, Values' key, and the heat matrix's shading and legend.
+    @Test func theBrowsersRulesAreTheApps() throws {
+        let rules = try Self.web("analytics/personReferenceRules.ts")
+        let screen = try Self.web("analytics/PersonAnalyticsScreen.tsx")
+        let graph = try Self.app(Self.graph)
+        let person = try Self.app(Self.person)
+        let references = try Self.app(Self.references)
+        let pairs: [(app: String, appLine: String, web: String, webLine: String)] = [
+            (graph, "let k_s: CGFloat = 0.008 let L0: CGFloat = 150 let k_r: CGFloat = 6_000 let damping: CGFloat = 0.82 let pad: CGFloat = 48",
+             rules, "const kS = 0.008; const restLength = 150; const kR = 6_000; const damping = 0.82; const pad = 48;"),
+            (graph, "let f = k_s * (d - L0)", rules, "const f = kS * (d - restLength);"),
+            (graph, "let f = k_r / (d * d)", rules, "const f = kR / (d * d);"),
+            (graph, "v.dx = (v.dx + f.dx) * damping v.dy = (v.dy + f.dy) * damping p.x = max(pad, min(size.width - pad, p.x + v.dx)) p.y = max(pad, min(size.height - pad, p.y + v.dy))",
+             rules, "v.dx = (v.dx + f.dx) * damping; v.dy = (v.dy + f.dy) * damping; p.x = Math.max(pad, Math.min(size.width - pad, p.x + v.dx)); p.y = Math.max(pad, Math.min(size.height - pad, p.y + v.dy));"),
+            (graph, "let r = min(size.width, size.height) * 0.35", rules, "const r = Math.min(size.width, size.height) * 0.35;"),
+            (graph, "let angle = 2 * Double.pi * Double(i) / Double(partnerIds.count)", rules, "const angle = (2 * Math.PI * i) / partners.length;"),
+            (graph, "if reduceMotion || ids.count <= 3 {", rules, "if (reducedMotion || ids.length <= 3) return runPhysics(ids, focus, answer.edges, current, size, 300);"),
+            (graph, "positions: initial, size: size, iterations: 300)", rules, "current, size, 300)"),
+            (graph, "static let layoutSteps = 15", rules, "export const layoutSteps = 15;"),
+            (graph, "positions: current, size: size, iterations: 20)", rules, "current = runPhysics(ids, focus, answer.edges, current, size, 20);"),
+            (graph, "static let focusRadius: CGFloat = 26", rules, "export const focusRadius = 26;"),
+            (graph, "let base = 12 + 10 * (CGFloat(sharedWithFocus(for: rollupId)) / CGFloat(maxSharedWithFocus)) return displayedPartnerId == rollupId ? base + 3 : base",
+             rules, "const base = 12 + 10 * (shared / maxShared); return displayed === rollupId ? base + 3 : base;"),
+            (graph, "var maxSharedWithFocus: Int { max(1, partners.map(\\.sharedWithFocus).max() ?? 1) }",
+             rules, "const maxShared = Math.max(1, ...partners.map((node) => node.sharedWithFocus));"),
+            (graph, "with: .color(color.opacity(0.2 + weight * 0.5)), lineWidth: 0.5 + weight * 3.5)", rules, "return { width: 0.5 + weight * 3.5, opacity: 0.2 + weight * 0.5 };"),
+            (graph, "weight: CGFloat(edge.sharedDocuments) / maxWeight)", rules, "const weight = sharedDocuments / maxWeight;"),
+            (person, "private static let maxComparisonPeople = 5", rules, "export const maxComparisonPeople = 5;"),
+            (person, "ForEach(searchResults.prefix(6))", rules, "export const shownMatches = 6;"),
+            (person, "let idx = selectedPeople.firstIndex { $0.rollupId == rollupId } ?? 0 return ChartSeriesPalette.color(at: idx)",
+             rules, "const index = Math.max(0, people.findIndex((person) => person.rollupId === rollupId));"),
+            (references, "let opacity = 0.15 + 0.80 * ratio", rules, "return 0.15 + 0.8 * (count / maxCount);"),
+            (references, "guard count > 0, matrixMaxCount > 0 else { return Color.secondary.opacity(0.06) }", rules, "value: 0.06 },"),
+            (references, "ForEach([0.15, 0.35, 0.55, 0.75, 0.95], id: \\.self)", rules, "export const heatLegendSteps = [0.15, 0.35, 0.55, 0.75, 0.95];"),
+            (references, "private static let matrixCellSize: CGFloat = 34", rules, "const size = 34;"),
+        ]
+        for pair in pairs {
+            #expect(pair.app.contains(NoteViewParityTests.flattened(pair.appLine)), "the app holds \(pair.appLine)")
+            #expect(pair.web.contains(NoteViewParityTests.flattened(pair.webLine)), "the web holds \(pair.webLine)")
+        }
+        #expect(try Self.kit("FRUSCoreKit/Analytics/PersonAnalyticsMath.swift").contains("public static let storageKey = \"frus.personAnalytics.normalizationMode\""))
+        #expect(screen.contains("const valuesKey = 'frus.personAnalytics.normalizationMode';"))
+    }
+
+    /// The app's words the browser app takes, each where the app's source writes it, and in copy.ts's block.
+    @Test func theAppsWordsAreTheWebs() throws {
+        let copy = try NoteViewParityTests.read(NoteViewParityTests.web, "copy.ts")
+        let (p, g, x) = (Self.person, Self.graph, Self.references)
+        let math = "../FRUSCoreKit/Analytics/PersonAnalyticsMath.swift"
+        let tables = "../FRUSCoreKit/Analytics/Export/AnalyticsChartTables.swift"
+        let words: [(file: String, key: String, value: String, block: String, web: String)] = [
+            (p, "personAnalytics.title", "Person Analytics", "personAnalytics", "title"),
+            (p, "personAnalytics.unavailable.title", "Person Analytics Unavailable", "personAnalytics", "unavailableTitle"),
+            (p, "personAnalytics.unavailable.detail", "The search index is not available. Index at least one volume to enable person analytics.", "personAnalytics", "unavailableDetail"),
+            (p, "personAnalytics.mode.picker", "Mode", "personAnalytics", "mode"),
+            (p, "personAnalytics.mode.help", "Switch between the trends dashboard (rankings, trajectories, relationship dynamics) and the co-mention network graph.", "personAnalytics", "modeHelp"),
+            (p, "personAnalytics.mode.trends", "Trends", "personAnalytics", "trends"),
+            (p, "personAnalytics.mode.network", "Network", "personAnalytics", "network"),
+            (p, "personAnalytics.axis.person", "Person", "personAnalytics", "person"),
+            (p, "personAnalytics.axis.mentions", "Mentions", "personAnalytics", "mentions"),
+            (p, "personAnalytics.row.findMentions", "Find all mentions", "personAnalytics", "findMentions"),
+            (p, "personAnalytics.search.placeholder", "Add a person to compare…", "personAnalytics", "addPlaceholder"),
+            (p, "personAnalytics.decade.toggle", "By decade", "personAnalytics", "byDecade"),
+            (p, "personAnalytics.decade.help", "Bucket the trajectory chart by decade instead of by year", "personAnalytics", "byDecadeHelp"),
+            (p, "personAnalytics.normalize.picker", "Values", "personAnalytics", "values"),
+            (p, "personAnalytics.normalize.help", "Plot raw tagged mention counts, or each person’s share of all dated documents in that period — so a growing corpus doesn’t masquerade as a rising person.", "personAnalytics", "valuesHelp"),
+            (math, "personAnalytics.normalize.raw", "Raw count", "personAnalytics", "raw"),
+            (math, "personAnalytics.normalize.percent", "% of documents", "personAnalytics", "percent"),
+            (p, "personAnalytics.export.relationship", "Export relationship CSV", "personAnalytics", "exportRelationship"),
+            (p, "personAnalytics.export.relationship.help", "Export the two-person co-mention series with its method and caveats", "personAnalytics", "exportRelationshipHelp"),
+            (p, "personAnalytics.network.focusLabel", "Focus:", "personAnalytics", "focusLabel"),
+            (p, "personAnalytics.network.focusNone", "None", "personAnalytics", "focusNone"),
+            (p, "personAnalytics.network.searchPlaceholder", "Set focus person…", "personAnalytics", "focusPlaceholder"),
+            (p, "personAnalytics.network.noFocus.title", "Pick a Focus Person", "personAnalytics", "noFocusTitle"),
+            (p, "personAnalytics.network.noFocus.detail", "Search for a person above to center the co-mention network on them. No people are indexed in this range yet.", "personAnalytics", "noFocusDetail"),
+            (p, "personAnalytics.axis.coMentions", "Shared documents", "personAnalytics", "sharedDocuments"),
+            (g, "personCoMention.loading", "Loading co-mention network…", "personAnalytics", "loadingNetwork"),
+            (g, "personCoMention.error.title", "Graph Error", "personAnalytics", "graphError"),
+            (g, "personCoMention.resetView", "Reset View", "personAnalytics", "resetView"),
+            (g, "personCoMention.back", "Back", "personAnalytics", "back"),
+            (g, "personCoMention.info.explore", "Explore connections", "personAnalytics", "explore"),
+            (g, "personCoMention.info.openSearch", "Open in Search", "personAnalytics", "openInSearch"),
+            (g, "personCoMention.dock.empty", "Select a person to see their shared documents and connections.", "personAnalytics", "dockEmpty"),
+            (g, "personCoMention.legend.focus", "Focus person", "personAnalytics", "legendFocus"),
+            (g, "personCoMention.legend.partner", "Co-mentioned (size = shared documents)", "personAnalytics", "legendPartner"),
+            (g, "personCoMention.node.help", "Co-mention count with the focus person — click for details, right-click for actions", "personAnalytics", "nodeHelp"),
+            (x, "crossRefAnalytics.title", "Cross-Reference Analytics", "crossReferenceAnalytics", "title"),
+            (x, "crossRefAnalytics.unavailable.title", "Cross-Reference Analytics Unavailable", "crossReferenceAnalytics", "unavailableTitle"),
+            (x, "crossRefAnalytics.unavailable.detail", "The search index is not available. Index at least one volume to build the citation network.", "crossReferenceAnalytics", "unavailableDetail"),
+            (x, "crossRefAnalytics.outDegree.toggle", "Out-degree", "crossReferenceAnalytics", "outDegree"),
+            (x, "crossRefAnalytics.outDegree.help", "Overlay the out-degree distribution (how many citations documents make) on the in-degree histogram.", "crossReferenceAnalytics", "outDegreeHelp"),
+            (x, "crossRefAnalytics.axis.degree", "Degree", "crossReferenceAnalytics", "degree"),
+            (x, "crossRefAnalytics.axis.documentCount", "Documents", "crossReferenceAnalytics", "documents"),
+            (x, "crossRefAnalytics.axis.series", "Direction", "crossReferenceAnalytics", "direction"),
+            (x, "crossRefAnalytics.series.inDegree", "In-degree", "crossReferenceAnalytics", "inDegreeSeries"),
+            (x, "crossRefAnalytics.series.outDegree", "Out-degree", "crossReferenceAnalytics", "outDegreeSeries"),
+            (x, "crossRefAnalytics.axis.document", "Document", "crossReferenceAnalytics", "document"),
+            (x, "crossRefAnalytics.axis.inDegree", "Inbound citations", "crossReferenceAnalytics", "inboundCitations"),
+            (x, "crossRefAnalytics.matrix.table", "View as table", "crossReferenceAnalytics", "viewAsTable"),
+            (tables, "analytics.export.column.citingVolume", "Citing volume", "crossReferenceAnalytics", "citing"),
+            (tables, "analytics.export.column.citedVolume", "Cited volume", "crossReferenceAnalytics", "cited"),
+            (tables, "analytics.export.column.references", "References", "crossReferenceAnalytics", "references"),
+            ("App/MainWindowView.swift", "mainwindow.tools.personAnalytics", "Person Analytics", "app", "personAnalytics"),
+            ("App/MainWindowView.swift", "mainwindow.tools.crossRefAnalytics", "Cross-Reference Analytics", "app", "crossReferenceAnalytics"),
+        ]
+        var read: [String: String] = [:]
+        for word in words {
+            let app = try read[word.file] ?? Self.app(word.file)
+            read[word.file] = app
+            #expect(NoteViewParityTests.writes(app, word.key, word.value), "\(word.file) writes \(word.key) as \(word.value)")
+            let block = try NoteViewParityTests.block(word.block, of: copy)
+            #expect(block.contains("\(word.web): '\(word.value)'"), "copy.ts's \(word.block) block has \(word.web): \(word.value)")
+        }
+        // The chip's remove button, whose words name the person.
+        #expect(NoteViewParityTests.writes(try Self.app(p), "personAnalytics.chip.remove.a11y", "Remove \\(person.canonicalName) from comparison"))
+        #expect(try NoteViewParityTests.block("personAnalytics", of: copy).contains("removeFromComparison: (name: string) => `Remove ${name} from comparison`"))
     }
 }
