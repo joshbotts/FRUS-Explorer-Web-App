@@ -300,7 +300,7 @@ export type ChartSpec = Record<string, unknown>;
 const font = 'system-ui, -apple-system, "Segoe UI", sans-serif';
 
 /** The look every chart shares: the page's font, no frame, the axes' grid faint. */
-function config(dark: boolean): ChartSpec {
+export function config(dark: boolean): ChartSpec {
   const ink = dark ? '#e6e6e6' : '#1d1d1f';
   const faint = dark ? '#5a5a5e' : '#d2d2d7';
   return {

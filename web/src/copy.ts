@@ -64,6 +64,9 @@ export const copy = {
     collections: 'Collections',
     /** From S24f, the Mac's Analytics menu, its items in the app's order. */
     analytics: 'Analytics',
+    /** From S24g, the menu's second and third. */
+    personAnalytics: 'Person Analytics',
+    crossReferenceAnalytics: 'Cross-Reference Analytics',
     corpusAnalytics: 'Corpus Analytics',
     chronology: 'Chronology',
     settings: 'Settings',
@@ -2328,6 +2331,85 @@ export const copy = {
   },
 
   // ─── Tools ────────────────────────────────────────────────────────────────
+  /**
+   * Person Analytics (S24g), in the app's words: its title and Mode, the add field, the chips, By decade and Values,
+   * Export, the network's Focus bar, dock, legend and states. The headings, subtitles, captions, empty states, axis
+   * titles and tables are the kit's or the view's, from the server. Figure (SVG)…, the charts' and the network's
+   * descriptions, the tables' titles, the keyboard's help and a volume this server does not serve are the web's own.
+   */
+  personAnalytics: {
+    title: 'Person Analytics',
+    unavailableTitle: 'Person Analytics Unavailable',
+    unavailableDetail: 'The search index is not available. Index at least one volume to enable person analytics.',
+    mode: 'Mode',
+    modeHelp: 'Switch between the trends dashboard (rankings, trajectories, relationship dynamics) and the co-mention network graph.',
+    trends: 'Trends',
+    network: 'Network',
+    person: 'Person',
+    mentions: 'Mentions',
+    findMentions: 'Find all mentions',
+    compare: (name: string) => `Compare ${name}`,
+    addPlaceholder: 'Add a person to compare…',
+    removeFromComparison: (name: string) => `Remove ${name} from comparison`,
+    byDecade: 'By decade',
+    byDecadeHelp: 'Bucket the trajectory chart by decade instead of by year',
+    values: 'Values',
+    valuesHelp:
+      'Plot raw tagged mention counts, or each person’s share of all dated documents in that period — so a growing corpus doesn’t masquerade as a rising person.',
+    raw: 'Raw count',
+    percent: '% of documents',
+    exportRelationship: 'Export relationship CSV',
+    exportRelationshipHelp: 'Export the two-person co-mention series with its method and caveats',
+    focusLabel: 'Focus:',
+    focusNone: 'None',
+    focusPlaceholder: 'Set focus person…',
+    noFocusTitle: 'Pick a Focus Person',
+    noFocusDetail: 'Search for a person above to center the co-mention network on them. No people are indexed in this range yet.',
+    loadingNetwork: 'Loading co-mention network…',
+    graphError: 'Graph Error',
+    resetView: 'Reset View',
+    back: 'Back',
+    explore: 'Explore connections',
+    openInSearch: 'Open in Search',
+    dockEmpty: 'Select a person to see their shared documents and connections.',
+    legendFocus: 'Focus person',
+    legendPartner: 'Co-mentioned (size = shared documents)',
+    nodeHelp: 'Co-mention count with the focus person — click for details, right-click for actions',
+    canvas: (focus: string) => `Co-mention network of ${focus}`,
+    canvasHelp: 'Use the arrow keys to move between the people, Home and End to reach the first and the last, Enter or Space to show the one reached, and Escape to close it.',
+    partnersTable: 'Co-mentioned people',
+    sharedDocuments: 'Shared documents',
+    chartDescription: (heading: string) => `${heading}. The table beside the chart lists its numbers.`,
+    table: 'Chart data',
+    matches: 'Matching people',
+  },
+  /**
+   * Cross-Reference Analytics (S24g), in the app's words: its title, the out-degree overlay, the axes, the matrix's
+   * table and the row of a volume not held. The captions, subtitles, empty states, the matrix's labels and legend and
+   * the tables are the kit's or the view's, from the server. Figure (SVG)…, the charts' descriptions, the tables'
+   * titles and a volume this server does not serve are the web's own.
+   */
+  crossReferenceAnalytics: {
+    title: 'Cross-Reference Analytics',
+    unavailableTitle: 'Cross-Reference Analytics Unavailable',
+    unavailableDetail: 'The search index is not available. Index at least one volume to build the citation network.',
+    outDegree: 'Out-degree',
+    outDegreeHelp: 'Overlay the out-degree distribution (how many citations documents make) on the in-degree histogram.',
+    degree: 'Degree',
+    documents: 'Documents',
+    direction: 'Direction',
+    inDegreeSeries: 'In-degree',
+    outDegreeSeries: 'Out-degree',
+    document: 'Document',
+    inboundCitations: 'Inbound citations',
+    viewAsTable: 'View as table',
+    notServed: 'In a volume this server does not serve',
+    citing: 'Citing volume',
+    cited: 'Cited volume',
+    references: 'References',
+    chartDescription: (heading: string) => `${heading}. The table beside the chart lists its numbers.`,
+    table: 'Chart data',
+  },
   /**
    * Corpus Analytics (S24f), in the app's words: its field and Search, its scope, year and Group by chips, the
    * administration presets, Measure and Values, the fit line and the colours, Export, the hand-off link, the

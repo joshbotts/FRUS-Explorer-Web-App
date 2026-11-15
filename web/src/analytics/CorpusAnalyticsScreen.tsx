@@ -222,7 +222,7 @@ export function CorpusAnalyticsScreen() {
 }
 
 /** An empty state's title and words, as the app's `ContentUnavailableView`. */
-function Empty({ title, detail }: { title: string; detail: string }) {
+export function Empty({ title, detail }: { title: string; detail: string }) {
   return (
     <div className="analytics-empty">
       <h2>{title}</h2>
@@ -316,7 +316,7 @@ function Filters({
   );
 }
 
-function ScopeOptions({ group }: { group: ScopeGroup }): ReactNode {
+export function ScopeOptions({ group }: { group: ScopeGroup }): ReactNode {
   const options = group.options.map((option) => (
     <option key={option.value} value={option.value} disabled={option.disabled}>
       {option.label}
@@ -326,7 +326,7 @@ function ScopeOptions({ group }: { group: ScopeGroup }): ReactNode {
 }
 
 /** The year range (`AnalyticsYearRangeBar`): two fields, each clamped as the app's are, kept when left. */
-function YearRange({
+export function YearRange({
   start,
   end,
   context,
@@ -522,7 +522,7 @@ function Options({
 }
 
 /** A segmented control, a group of radios, as the app's segmented pickers are to a screen reader. */
-function Segmented({
+export function Segmented({
   legend,
   help,
   name,
