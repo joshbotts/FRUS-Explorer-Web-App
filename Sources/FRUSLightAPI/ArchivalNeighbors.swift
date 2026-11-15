@@ -47,9 +47,13 @@ enum ArchivalNeighborsRoutes {
         router.get("/api/v1/archival-neighbors") { request, _ -> ArchivalNeighborsAnswer in
             let query = try FormQuery(request.uri.query)
             try query.refuseUnknown(["volumeId", "documentId", "year", "collection", "lotFile", "recordGroup", "series",
-                                     "repository", "decimalClass", "jobNumber", "aliasLot", "aliasName", "anchor", "scope"])
-            // A collection's record is read from the authority, 2 MB of JSON, decoded once, off the cooperative pool.
-            if !query.values("collection").isEmpty { try await Blocking.run { _ = resources.collectionAuthority } }
+                                     "repository", "decimalClass", "jobNumber", "aliasLot", "aliasName", "aliasCollection",
+                                     "anchor", "scope"])
+            // A collection's record is read from the authority, 2 MB of JSON, decoded once, off the cooperative pool:
+            // a collection's own, or the one whose names a Sources row's fallback reads.
+            if !query.values("collection").isEmpty || !query.values("aliasCollection").isEmpty {
+                try await Blocking.run { _ = resources.collectionAuthority }
+            }
             let asked = try neighborsRequest(query, resources: resources)
             let offered = asked.anchorVolumeId.map { RelatedDocumentsRoutes.scopes(for: $0, resources: resources) } ?? [.all]
             let scope = try query.choice("scope", among: RelatedScope.allCases) ?? asked.defaultScope
@@ -114,7 +118,10 @@ enum ArchivalNeighborsRoutes {
     }
 
     /// The request a query names: a document by its volume and id, with the year it was opened with; a collection
-    /// of the authority by its id; or an archival source by its keys, anchored on a volume or not, a class alone.
+    /// of the authority by its id; or an archival source by its keys, anchored on a volume or not, a class alone. A
+    /// source's alias fallback is its two values, or the authority's record whose values they are (`aliasCollection`),
+    /// as a volume's Sources outline names a row's record: the kit's `CollectionAliasFallback(record:)` gives them, and
+    /// a record's names can run past what a query should carry (S22d's follow-up).
     static func neighborsRequest(_ query: FormQuery, resources: ServerResources) throws -> NeighborsRequest {
         func value(_ name: String) throws -> String? {
             guard let raw = try query.single(name) else { return nil }
@@ -123,7 +130,8 @@ enum ArchivalNeighborsRoutes {
             return trimmed.isEmpty ? nil : trimmed
         }
         // The keys of the other requests, which a document's or a collection's request may not mix with its own.
-        let sourceKeys = ["lotFile", "recordGroup", "series", "repository", "decimalClass", "jobNumber", "aliasLot", "aliasName", "anchor"]
+        let sourceKeys = ["lotFile", "recordGroup", "series", "repository", "decimalClass", "jobNumber", "aliasLot", "aliasName",
+                          "aliasCollection", "anchor"]
         func refuseMixing(_ names: [String], in request: String) throws {
             if let mixed = names.first(where: { !query.values($0).isEmpty }) {
                 throw APIProblem.invalidParameter(mixed, "a \(request)'s neighbours take no \(mixed)")
@@ -150,13 +158,24 @@ enum ArchivalNeighborsRoutes {
         }
         let lotFile = try value("lotFile"), recordGroup = try value("recordGroup"), series = try value("series")
         let repository = try value("repository"), decimalClass = try value("decimalClass"), jobNumber = try value("jobNumber")
-        let aliasLot = try value("aliasLot")
-        let aliasNames = (try query.list("aliasName") ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        var aliasLot = try value("aliasLot")
+        var aliasNames = (try query.list("aliasName") ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         guard aliasNames.count <= maximumAliases else {
             throw APIProblem.invalidParameter("aliasName", "names \(aliasNames.count) aliases, more than \(maximumAliases)")
         }
         guard aliasNames.allSatisfy({ $0.utf8.count <= 1_024 }) else {
             throw APIProblem.invalidParameter("aliasName", "is longer than 1,024 bytes")
+        }
+        if let id = try value("aliasCollection") {
+            guard aliasLot == nil, aliasNames.isEmpty else {
+                throw APIProblem.invalidParameter("aliasCollection", "names the fallback's record, so the query names no aliasLot or aliasName")
+            }
+            guard let record = try resources.collectionAuthorityRecord(id) else {
+                throw APIProblem(.notFound, code: "COLLECTION_NOT_FOUND", detail: "The collection authority has no record \(id).")
+            }
+            let fallback = IndexingPipeline.CollectionAliasFallback(record: record)
+            aliasLot = fallback.lotFileNorm
+            aliasNames = fallback.names
         }
         var anchor: String?
         if let named = try value("anchor") {
