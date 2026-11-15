@@ -416,10 +416,18 @@ import Testing
         let decadeCaveat = "Decade shares: the share plotted for a decade is the average of the yearly shares for the years this person was tagged. Years with no tags are dropped from that average rather than counted as zero. The “Dated documents in period” column, by contrast, sums every year of the decade. So dividing this file’s columns gives the decade’s own share, which can be far lower than the plotted value. Someone tagged in one year of a decade plots that single year’s share for the whole decade. Use the columns for the decade’s share and the plotted value for the average across the tagged years. They answer different questions."
         let sameVolume = "Attribution: the document-level figures count same-volume references, including resolved page references, toward the document’s own volume. The volume heat matrix counts only citations between different volumes, so it leaves same-volume references out."
         // Each export: its route and request, and the statement the app's view writes for it.
+        /// A figure's statement: the CSV's, none (a chart the app exports as a CSV alone), or the CSV's less a caveat the
+        /// app leaves to the CSV.
+        enum Figure: Sendable {
+            case same
+            case none
+            case without(String)
+        }
         struct Export: Sendable {
             var path: String
             var query: String
             var statement: @Sendable (_ excluded: Int, _ date: Date) -> AnalyticsProvenance
+            var figure: Figure = .same
         }
         func person(_ title: String, axis: String, value: String?, extra: [String] = [], scope: String? = nil, years: ClosedRange<Int>)
             -> @Sendable (Int, Date) -> AnalyticsProvenance {
@@ -448,8 +456,10 @@ import Testing
                    statement: person("Most-Mentioned People", axis: "Ranked by mentions", value: nil, scope: host.title("frus1961-63v06"), years: 1960...1963)),
             Export(path: "people", query: "chart=trajectories\(two)", statement: person("Mention Trajectories", axis: "Year", value: "Raw count", years: 1861...maxYear)),
             Export(path: "people", query: "chart=trajectories\(two)&decade=true&values=percentOfDocuments",
-                   statement: person("Mention Trajectories", axis: "Decade", value: "% of documents", extra: [decadeCaveat], years: 1861...maxYear)),
-            Export(path: "people", query: "chart=relationship\(two)&decade=true", statement: person("Relationship Dynamics", axis: "Decade", value: nil, years: 1861...maxYear)),
+                   statement: person("Mention Trajectories", axis: "Decade", value: "% of documents", extra: [decadeCaveat], years: 1861...maxYear),
+                   figure: .without(decadeCaveat)),
+            Export(path: "people", query: "chart=relationship\(two)&decade=true", statement: person("Relationship Dynamics", axis: "Decade", value: nil, years: 1861...maxYear),
+                   figure: .none),
             Export(path: "cross-references", query: "chart=ranking",
                    statement: crossReference("Most-Referenced Documents", axis: "Ranked by inbound references", years: 1861...maxYear)),
             Export(path: "cross-references", query: "chart=distribution&outDegree=true&from=1955&to=1970",
@@ -464,10 +474,12 @@ import Testing
             Export(path: "cross-references", query: "chart=landmarks&volumes=frus1961-63v06&scopeLabel=Mine",
                    statement: crossReference("Landmark Documents (Influence)", axis: "Ranked by PageRank influence score",
                                              extra: ["Score: an offline PageRank over the resolved citation graph — a structural measure of how often a document is cited by other well-cited documents. It is a measure of editorial handling, not a claim of historical importance."],
-                                             scope: "Mine", years: 1861...maxYear)),
+                                             scope: "Mine", years: 1861...maxYear),
+                   figure: .none),
         ]
         let read = try await ServedFixture.run { client, _ in
-            var read: [(csv: String, excluded: Int, moments: ClosedRange<Date>, disposition: String?, table: CorpusAnalyticsAnswer.Table)] = []
+            var read: [(csv: String, excluded: Int, moments: ClosedRange<Date>, disposition: String?, table: CorpusAnalyticsAnswer.Table,
+                        plate: (lines: [AnalyticsPlate.Line], moments: ClosedRange<Date>)?)] = []
             for export in exports {
                 // The chart's own answer, whose table the CSV writes.
                 let answer = try await client.execute(uri: "/api/v1/analytics/\(export.path)?\(export.query.replacingOccurrences(of: #"chart=[a-z]+&?"#, with: "", options: .regularExpression))", method: .get)
@@ -489,13 +501,32 @@ import Testing
                 let response = try await client.execute(uri: "/api/v1/analytics/\(export.path)/export?\(export.query)&timeZone=\(zone)", method: .get)
                 let after = Date()
                 #expect(response.status == .ok && response.headers[.contentType] == "text/csv; charset=utf-8", "\(export.query)")
-                read.append((String(buffer: response.body), excluded, before...after, response.headers[.contentDisposition], table))
+                // The figure's caption band, or the refusal of a chart the app exports as a CSV alone.
+                let figureBefore = Date()
+                let plated = try await client.execute(uri: "/api/v1/analytics/\(export.path)/plate?\(export.query)&timeZone=\(zone)", method: .get)
+                let figureAfter = Date()
+                var plate: (lines: [AnalyticsPlate.Line], moments: ClosedRange<Date>)?
+                if case .none = export.figure {
+                    #expect(plated.status == .notFound, "\(export.query) has no figure")
+                } else {
+                    plate = (try ServedFixture.decode(AnalyticsPlate.self, plated).lines, figureBefore...figureAfter)
+                }
+                read.append((String(buffer: response.body), excluded, before...after, response.headers[.contentDisposition], table, plate))
             }
             return read
         }
         let english = AnalyticsProvenance.Host(appVersion: "Light \(FRUSLightVersion.string)", locale: Locale(identifier: "en_US"),
                                                calendar: Calendar(identifier: .gregorian), timeZone: timeZone)
-        for (export, (csv, excluded, moments, disposition, table)) in zip(exports, read) {
+        for (export, (csv, excluded, moments, disposition, table, plate)) in zip(exports, read) {
+            // The figure's band is the kit's for the statement the app's figure writes.
+            if let plate {
+                let expected = [plate.moments.lowerBound, plate.moments.upperBound].map { date -> [String] in
+                    var statement = export.statement(excluded, date)
+                    if case .without(let caveat) = export.figure { statement.extraCaveats.removeAll { $0 == caveat } }
+                    return statement.plateLines(for: english).map(\.text)
+                }
+                #expect(expected.contains(plate.lines.map(\.text)), "\(export.query): \(plate.lines.map(\.text))")
+            }
             let lines = csv.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
             let written = Array(lines.prefix { $0.hasPrefix("#") })
             // The moment is the export's, between the request's start and end: either minute's rendering.

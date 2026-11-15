@@ -287,9 +287,12 @@ enum PersonAnalyticsRoutes {
         guard raw.count <= PersonAnalyticsView.maxComparisonPeople else {
             throw APIProblem.invalidParameter("people", "compares at most \(PersonAnalyticsView.maxComparisonPeople) people, not \(raw.count)")
         }
-        guard Set(raw).count == raw.count else { throw APIProblem.invalidParameter("people", "names a person twice") }
         var people: [PersonAnalyticsAnswer.Comparison.Person] = []
         for value in raw { people.append(try await person(value, parameter: "people", served: served)) }
+        // Once each by rollup id, however it is spelt: the view's names are keyed by it (`selectedNames`).
+        guard Set(people.map(\.rollupId)).count == people.count else {
+            throw APIProblem.invalidParameter("people", "names a person twice")
+        }
         return PersonAnalyticsAsk(
             start: start, end: end,
             scope: try CorpusAnalyticsRoutes.scope(query, served: served, resources: resources),
@@ -301,7 +304,8 @@ enum PersonAnalyticsRoutes {
     /// A person of the served index's rollup, by their rollup id, with their canonical name, which the app's ranking and
     /// search rows carry (`PersonMentionRanking.canonicalName`).
     static func person(_ raw: String, parameter: String, served: ServedIndex) async throws -> PersonAnalyticsAnswer.Comparison.Person {
-        guard !raw.isEmpty, raw.allSatisfy(\.isASCIIDigitCharacter), raw.count <= 18, let id = Int(raw) else {
+        // A rollup id as the server writes it, so that one person is never two requests' keys.
+        guard !raw.isEmpty, raw.allSatisfy(\.isASCIIDigitCharacter), raw.count <= 18, let id = Int(raw), String(id) == raw else {
             throw APIProblem.invalidParameter(parameter, "names a person by their rollup id, not \(raw)")
         }
         guard let entry = try await served.people.list(served.persons).byRollup[id] else {

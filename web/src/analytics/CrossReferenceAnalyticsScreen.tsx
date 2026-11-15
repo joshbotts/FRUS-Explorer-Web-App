@@ -331,7 +331,8 @@ function Sections({
         ) : (
           <div className="analytics-pane">
             <div className="analytics-figure">
-              <div className="cross-reference-matrix">
+              {/* A region the keyboard reaches, since a matrix wider than the page scrolls sideways within it. */}
+              <div className="cross-reference-matrix" tabIndex={0} role="region" aria-label={answer.matrix.heading}>
                 <Suspense fallback={<div className="analytics-chart" aria-hidden="true" />}>
                   <VegaChart spec={matrix} label={words.chartDescription(answer.matrix.heading)} />
                 </Suspense>

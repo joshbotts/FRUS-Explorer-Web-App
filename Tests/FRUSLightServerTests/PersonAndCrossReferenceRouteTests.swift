@@ -36,6 +36,12 @@ import Testing
                 #expect(csv.status == .ok && String(buffer: csv.body).hasPrefix("# "))
                 let plate = try decode(AnalyticsPlate.self, try await client.execute(uri: "/api/v1/analytics/people/plate?chart=ranking", method: .get))
                 #expect(plate.lines.first?.role == "title" && plate.lines.first?.text == "Most-Mentioned People")
+                // A decade of shares: its CSV carries the decade caveat, and its figure leaves it to the CSV, as the app's do.
+                let shares = "people=\(first.rollupId)&decade=true&values=percentOfDocuments&timeZone=UTC"
+                let sharesCSV = String(buffer: try await client.execute(uri: "/api/v1/analytics/people/export?chart=trajectories&\(shares)", method: .get).body)
+                let sharesPlate = try decode(AnalyticsPlate.self, try await client.execute(uri: "/api/v1/analytics/people/plate?chart=trajectories&\(shares)", method: .get))
+                #expect(sharesCSV.contains("Decade shares:") && sharesPlate.lines.first?.text == "Mention Trajectories")
+                #expect(!sharesPlate.lines.contains { $0.text.contains("Decade shares:") }, "\(sharesPlate.lines)")
                 let matches = try decode(PersonAnalyticsMatches.self, try await client.execute(
                     uri: "/api/v1/analytics/people/search?q=\(String(first.name.prefix(3)).addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")",
                     method: .get))
@@ -45,7 +51,8 @@ import Testing
             #expect(blank.people.isEmpty)
             for (path, code) in [
                 ("people?people=abc", "INVALID_PARAMETER"), ("people?people=999999999", "PERSON_NOT_FOUND"),
-                ("people?people=1&people=1", "INVALID_PARAMETER"),
+                ("people?people=1&people=1", "INVALID_PARAMETER"), ("people?people=1&people=01", "INVALID_PARAMETER"),
+                ("people/export?chart=ranking&people=1&people=01", "INVALID_PARAMETER"), ("people/network?focus=01", "INVALID_PARAMETER"),
                 ("people?people=1&people=2&people=3&people=4&people=5&people=6", "INVALID_PARAMETER"),
                 ("people?values=percent", "INVALID_PARAMETER"), ("people?decade=yes", "INVALID_PARAMETER"),
                 ("people?from=1950&to=1900", "INVALID_PARAMETER"), ("people?to=2999", "INVALID_PARAMETER"),
@@ -102,12 +109,15 @@ import Testing
         #expect(answer(1_234).excludedBrokenCaption == "1,234 unresolvable references are excluded from this analysis — cross-references in the printed volumes that point to a document, page, or volume not present in the corpus.")
         let empty = answer(0)
         #expect(empty.ranking.empty != nil && empty.distribution.empty != nil && empty.matrix.empty != nil && empty.landmarks.empty != nil)
-        for excluded in [0, 1, 1_234] {
+        for (excluded, sentence) in [
+            (0, "Unresolvable references: 0 cross-references are excluded from this analysis — references in the printed volumes that point to a document, page, or volume not present in this corpus."),
+            (1, "Unresolvable references: 1 cross-reference is excluded from this analysis — a reference in the printed volumes that points to a document, page, or volume not present in this corpus."),
+            (1_234, "Unresolvable references: 1,234 cross-references are excluded from this analysis — references in the printed volumes that point to a document, page, or volume not present in this corpus."),
+        ] {
             let statement = CrossReferenceAnalyticsView.crossRefProvenance(
                 figureTitle: "Most-Referenced Documents", axisLabel: "Ranked by inbound references", extra: [], excludedBrokenCount: excluded,
                 scopeLabel: nil, indexedVolumeCount: 3, start: 1861, end: 1992, date: Date())
-            let said = statement.extraCaveats.first ?? ""
-            #expect(said.hasPrefix("Unresolvable references: \(excluded.formatted(.number.locale(Locale(identifier: "en_US")))) cross-reference"), "\(said)")
+            #expect(statement.extraCaveats.first == sentence, "\(statement.extraCaveats.first ?? "")")
         }
     }
 
