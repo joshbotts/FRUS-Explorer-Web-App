@@ -14,6 +14,61 @@ Not started: `PLAN.md`'s row S24i. The session that does it replaces this line, 
 
 Not started: `PLAN.md`'s row S24h. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
 
+## Session 12d: the pin moves to `1.0-release`, FRUS Explorer 1.0 (1861)
+
+22 November 2026 · branch `claude/quirky-tharp-470c63`, a session of the phase-3 orchestrator's · [#PRNUM](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/PRNUM) · upstream `08e8bac8` (tag `1.0-release`)
+
+PLAN's row S12d, from phase 1's plan: the pin moves from `f011ab04` to the tag `1.0-release`, `08e8bac8`, FRUS Explorer 1.0 (1861), the build the app submitted on 20 November and released on the App Store, at index version 75, so the server serves 1861's exports and refuses 1812's. The pin is the tag, not `v2`'s head, `21c77370`, whose six commits past it change the app's website, documents and two dates in its own tables alone (`PublishedSourceLinkTable.confirmed`, `RepositoryFactTable.confirmed`): the golden files come from the build the owner exports from. The branch was cut from `main` at `b31da01`, #154's merge, and merged no `main`.
+
+**What the move brought,** 31 commits, the watch's 34 to `v2`'s head of 21 November, `3e2718b3`, less its three past the tag ([#106](https://github.com/joshbotts/FRUS-Explorer-Web-App/issues/106)):
+- **Index version 75** ([FRUS-Explorer#1948](https://github.com/joshbotts/FRUS-Explorer/pull/1948), for this project's #1909): `volume_structures` gains `file_blob_sha1 TEXT` and `file_size_bytes INTEGER`, the file each volume was indexed from (`IndexedVolumeFile`, `indexedVolumeFiles()`), and the indexer reads a volume's bytes once, hashes and parses them (`FRUSDocumentParser.parseVolumeFull(volumeData:named:)`). The FTS generation (4), the JSON export's format version (7) and `IndexingResources.indexResourceNames` are unchanged; `cited-page-map.json` and `volume-annotations-index.json` changed.
+- **The app's fixes to eight issues this project filed,** each with its hand-over, filed in `docs/prep/` (below): the graph's undownloaded citers at every depth, its timeline at any width and its eligibility asked of a graph's built nodes ([#1934](https://github.com/joshbotts/FRUS-Explorer/pull/1934), `61cdeaeb`, for #1892, #1893, #1914); NARA's record group read from its ancestor, and an answer that is not JSON an error ([#1942](https://github.com/joshbotts/FRUS-Explorer/pull/1942), `a9abec6d`, #1908); the file record, the index version beside the Mac's Export Research Database… and a CIA job's Sources row ([#1948](https://github.com/joshbotts/FRUS-Explorer/pull/1948), `9e582653`, #1909, #1910, #1929); and Import from JSON on every platform, its rules in the kit, `Export/ResearchImportPlan.swift` ([#1950](https://github.com/joshbotts/FRUS-Explorer/pull/1950), `b1f98323`, with the screen's [#1951](https://github.com/joshbotts/FRUS-Explorer/pull/1951), `fa9ae409`, #1915).
+- **S22e's follow-up's** bound on the Zotero client's waits ([#1916](https://github.com/joshbotts/FRUS-Explorer/pull/1916), `4a269a35`, Mac check 31).
+- **The app's own rows toward 1.0:** L15's subject data named Subjects everywhere with one caption (#1930), L17 to L21's review of the app against Apple's guidelines (#1939 to #1947), L25's six collection templates (#1952), and R5 to R7's device passes and fixes, with the owner's word review (#1959).
+
+**What the web owed, taken:**
+- **L25's six templates** (`CollectionPreset`, decision 139), in place of the four the server, the browser app and the tests named: Full text as printed, Full text with your annotations, Summaries with overview, Citations with your notes, Citations with archival sources and Everything included. The server offers Summaries with overview only where a summary is stored, as it offered Briefing packet, and its refusal names the template by the kit's word. `CollectionParityTests` holds the twelve words and the summary-only rule; the server's and the browser's tests and the collections spec apply the templates.
+- **L15's subjects:** the subject data's one caption, `SubjectDataCaption.text`, kept once in `copy.ts` and shown as the app shows it, alone in the facet panel and after the person sheet's note; the facet panel's coverage line; Related's line for a server without the subject index; the analytics scope bar's By Subject and Subjects — experimental; Related's chips and axis, the kit's words. `PeopleParityTests` holds the caption and its joins.
+- **The graph's two workarounds dropped:** the route reads the loaded graph's `undownloadedCitingVolumeIds` at any degree and lays the timeline out at the width asked; `theTwoUpstreamFixesHoldAtThisPin`, in place of the test that held the issues, holds each document's volumes at two and three hops to its one-hop graph's and the API's timeline at 50 points to the kit's. `CrossReferenceGraphParityTests` holds the app's new eligibility line (#1914), which the route already asked as the fixed app does.
+- **NARA:** the stand-ins in the server's tests and the smoke test answer in the live shape, the record under `body.hits.hits[]._source` with its record group on its `recordGroup` ancestor alone, and a lot resolves through the proxy; a stand-in that answers 200 with HTML gets `NARA_UNEXPECTED_ANSWER` (502) in the kit's sentence, as the proxy already mapped `decodingError`, kept nowhere and counted as the call it was. The README's line says where the live answer puts the record group.
+- **A CIA job's Sources row:** the outline needed nothing, since `VolumeSources.swift` mirrors the app's key on a job; `SourceExplorerRecordParityTests`, which held that no row carried a job, holds frus1969-76ve09p1's four job rows to their jobs.
+- **The install guide** names index version 75 and FRUS Explorer 1.0 (1861), and where the Mac shows an export's version, under Export Research Database… in Settings ▸ System ▸ Data & Recovery (#1910).
+- **The index summary:** `IndexSchema.swift`'s `volume_structures` lists the two columns, whose values each of its rows carries into the set hash, and the gating schema digest reads each statement's text with its layout set aside. A library the app upgrades from 74 gains the columns by `ALTER TABLE`, which appends them to the stored `CREATE TABLE` text, where an index made at 75 has them on lines of their own: the owner's golden library, which Erase Everything… keeps, and the fixture index made here would otherwise differ in the schema's digest alone. Measured with sqlite3 on both shapes: the normalized texts are one.
+- **The export's schema:** `export-v75-schema.sql`, from the owner's 1861 export, replaces `export-v74-schema.sql` (SCHEMA_NOTE).
+
+**The app's 1.0 review, where the web mirrors it.** The parity tests that read the app found its lines changed in five places, each followed here:
+- **The owner's word review** (#1959): the editors' annotations' eight sentences, Source Explorer's note on a subject-numeric citation, and the people register's partner line in the provenance chips.
+- **The Research rows' numbers** (L21, #1947): a row prints the document's number above its title, which drops a leading number the line prints, as the app's `ResearchDocumentRowText` does over the kit's calls; the API gives each row `numberLabel` and `rowTitle` beside `title`, which the review sheet keeps.
+- **Collections** (L19, #1941): a row's remove named for its kind (Remove document, Delete note block, Remove excerpt, Remove block), and the Add to Collection picker's Already here, with what it says aloud, Added to “…” or Already in “…”. The deletion itself is as before: the entry and the headnote draft it owns.
+- **Import from JSON's refactor** (L24, #1951), each the same behaviour: the exporter's mappings are initialisers that the import reads too, its records unchanged; a saved search's columns are written by `storeParameters(_:)`, which clears a date range the search does not have, as the web's import writes none; the launch's summary pass is `GeneratedSummary.reconcileSummaryText`; and the headnote draft's prompt id is the kit's `GeneratedSummaryExport.headnoteDraftPromptId`, which the server now takes in place of its two copies (rule 4).
+- **The note editor** reads a note's formatting in `init` (L19), where `load` read it, the same rule.
+
+**Left for pull requests of their own:**
+- **The web's import over the kit's `ResearchImportPlan`** (#1915), with its rule that a field describing a text does not outlive the text: `docs/prep/upstream-json-import.md`.
+- **Import mode's step 5 hashing each mounted file first** (#1909), so that only a volume whose file is not the one the export indexed is compared: `docs/prep/upstream-volume-blob-sha.md`.
+- **The app's questions before work is lost** (L19): the note editor's Discard Changes? and Delete Note?, and a collection row's question before it deletes a row holding the reader's work. The web's editors ask none; `web/src/research/NoteEditor.tsx`'s header, S15d's, says the app's asks none, which is false since this move.
+- **Upstream:** NARA's live record carries its scope note on the record, `scopeAndContentNote`, where the kit's `buildResult` reads `scopeContent` or `description.scopeAndContentNote`, so a live result shows none, on the Mac too.
+
+**The golden files,** GOLDEN_NOTE
+
+**Results**
+RESULTS
+
+**Records**
+- `docs/prep/`: the eight hand-overs, each as its issue's last comment gave it, with what this move took: `upstream-graph-undownloaded-citers.md` (#1892), `upstream-graph-timeline-width.md` (#1893), `upstream-graph-timeline-eligibility.md` (#1914), `upstream-nara-record-group.md` (#1908), `upstream-volume-blob-sha.md` (#1909), `upstream-export-index-version.md` (#1910), `upstream-volume-sources-job-number.md` (#1929) and `upstream-json-import.md` (#1915); and the prep notes' pinning paragraph, phase 3's account of the moves and a row of their table of files.
+- `PLAN.md`: where the plan stands; S12d done, in the session plan; the bullet of phase 2's left past its sign-off; #1916's merge; the owner checkpoints' golden files, 1861 export, Mac check 31 and the full corpus indexed, and fifty steps, twenty-two of them phase 3's.
+- `COORDINATION.md`: the pin's history; §1's count of the kit's tests; §5's four items closed, the index version beside the export, the JSON importer, the blob SHA, and what the web works around; what this move leaves; and §6's exports, the tenth.
+- `SPEC.md`: the compatibility contract, `setupDatabase(_:)`'s lines at the tag, the graph's lines, NARA's refusal, the templates, the subjects and the Research rows.
+- `docs/INSTALL.md`: index version 75, FRUS Explorer 1.0 (1861) from the App Store, the Mac's line for an export's version, the templates and the releases' examples.
+- `README.md`: Status, FRUS Explorer 1.0 (1861) released, the pin and index version 75; Known gaps, the pin, the graph, NARA, Import mode's comparison, the editors' questions, the first release, and the two lines of S22d's, S21f's and S21g's follow-ups, merged since; and Next.
+
+**For the owner, once `main` is green:**
+- Publish the `:1.0-1861` release, as PLAN's revision of 22 October plans one for each of 1.0's two builds: Actions → release → Run workflow on `main`, first with dry run on, then off. It tags `1.0-1861.1`, moves `:1.0-1861` to the build `edge` names, and publishes the release with its notes.
+- Move your own install to the new image, with your full 1861 export: `docker compose pull && docker compose up -d`, then copy the export into `/data/import` as `docs/INSTALL.md` says. Until then it refuses 1861's exports, and once it runs the new image it refuses 1812's.
+- Point `~/frus-light-standalone` at the new build (`FRUS_IMAGE` in its `.env`, a `sha-` tag of `main` at this merge or `edge`), so its server re-indexes its 553 volumes at 75 at its first start, for S25b's check 2 against the 1861 full export.
+
+**Next:** S24h, then S24i and S25b, phase 3's sign-off, over the full corpus indexed again at 75; and the three follow-ups above.
+
 ## Session 24g: Person and Cross-Reference Analytics
 
 15 November 2026 · branch `claude/serene-engelbart-167489` · [#154](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/154) · upstream `f011ab04`, unchanged
