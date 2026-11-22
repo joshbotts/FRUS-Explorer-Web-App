@@ -26,6 +26,6 @@ FRUS-Explorer#1948, merged as `9e582653e0fac9a8778e2dbfee170ed4b0067223` on 2026
 By S12d's pin move to the tag `1.0-release` (`08e8bac8`), which holds `9e582653` (the log's entry, Session 12d), step 1:
 - `Compatibility.swift` and the install guide name index version 75.
 - `IndexSchema.swift`'s `volume_structures` lists the two columns, and its set hash carries each volume's file record. The summary's schema digest reads each statement's text with its layout set aside, since the owner's golden library gains the columns by `ALTER TABLE`, which appends them to the stored statement, and a fixture index made at 75 by `CREATE TABLE`.
-- The schema fixture and the golden files come from the owner's 1861 exports.
+- The schema fixture and the golden files come from the owner's 1861 three-volume export of 22 November, whose `volume_structures` holds a 40-digit `file_blob_sha1` and a `file_size_bytes` for each of its three volumes. The full export of that day is not the fixture's source: its library's upgrades give two tables' columns another order (the log's entry).
 
 Steps 2 to 4, Import mode's step 5 hashing each mounted file first, its measure and their records, are a follow-up of their own.
