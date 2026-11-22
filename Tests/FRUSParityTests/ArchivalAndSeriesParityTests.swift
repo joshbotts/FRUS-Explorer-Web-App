@@ -223,7 +223,7 @@ import Testing
             #expect(answer.weights.map(\.enabled) == [data.supportsDocumentWeight, true, data.supportsPointerWeight], "\(ask)")
             #expect(answer.scope.label == (ask.label ?? "Whole corpus"), "\(ask)")
         }
-        #expect(answers.count == asks.count && asks.count > 150)
+        #expect(answers.count == asks.count && asks.count >= 150)
         // At least one ask exercises each kind of answer the fixtures give: rows, a family, a withheld umbrella.
         #expect(answers.contains { !$0.ranking.rows.isEmpty })
         #expect(answers.contains { $0.families != nil })

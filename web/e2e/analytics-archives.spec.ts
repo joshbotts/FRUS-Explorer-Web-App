@@ -81,9 +81,10 @@ test('changes the era and the unit by keyboard and reads the ranking, then walks
     const saving = page.waitForEvent('download');
     await page.keyboard.press('Enter');
     const csv = await saving;
-    expect(csv.suggestedFilename()).toMatch(/^FRUS-Analytics-Top-central-file-classes-by-era-\d{4}-\d{2}-\d{2}\.csv$/);
+    // Named by the kit's title for the export, the lens and the era.
+    expect(csv.suggestedFilename()).toMatch(/^FRUS-Analytics-Central-file-classes-by-era-1961-1968-\d{4}-\d{2}-\d{2}\.csv$/);
     const text = await readFile(await csv.path(), 'utf8');
-    expect(text).toContain('# Figure: Top central-file classes by era\n');
+    expect(text).toContain('# Figure: Central-file classes by era — 1961–1968\n');
     expect(text).toContain('\nArchival unit,Custodian,Documents\n');
     await expect(page.getByRole('alert')).toHaveCount(0);
 

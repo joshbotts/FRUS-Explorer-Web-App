@@ -76,7 +76,8 @@ import Testing
                 #expect(csv.headers[.contentDisposition]?.hasPrefix("attachment; filename=\"FRUS-Analytics-") == true, "\(chart)")
             }
             let plate = try decode(AnalyticsPlate.self, try await client.execute(uri: "/api/v1/analytics/archives/plate?chart=ranking", method: .get))
-            #expect(plate.lines.first?.role == "title" && plate.lines.first?.text == "Top collections by era")
+            // The kit's title for the ranking's export: the lens and the era.
+            #expect(plate.lines.first?.role == "title" && plate.lines.first?.text == "Named collections by era — 1948–1960", "\(plate.lines.first?.text ?? "")")
 
             let about = try decode(SeriesContext.self, try await client.execute(uri: "/api/v1/about/context", method: .get))
             #expect(about.pages.map(\.title) == ["Production & Timeliness", "Geographic Emphasis", "Archival Sourcing", "Administration Profiles"])
