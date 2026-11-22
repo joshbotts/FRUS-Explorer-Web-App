@@ -270,7 +270,7 @@ enum HistoryRoutes {
             if let anchor = body.anchor, isSameQuery(anchor.queryText, queryText), let anchoredId = UUID(uuidString: anchor.entryId) {
                 var anchored = entry
                 anchored.id = anchoredId
-                let values = MacImport.search(anchored, version: ResearchDataEnvelope.currentFormatVersion).values
+                let values = MacImport.search(anchored).values
                     .filter { $0.key != "id" }
                 let refreshed = try await Blocking.run {
                     try store.updateResearchRow(table, id: anchor.entryId, values, for: user.id, outsideSearch: true)
@@ -281,7 +281,7 @@ enum HistoryRoutes {
                 }
             }
             if outcome == "inserted" {
-                let values = MacImport.search(entry, version: ResearchDataEnvelope.currentFormatVersion).values
+                let values = MacImport.search(entry).values
                 try await Blocking.run { try store.addResearchRow(table, values, for: user.id, outsideSearch: true) }
             }
             let names = try corpusNames(try await Blocking.run { try store.researchRows(for: user.id, tables: ["working_corpora"]) })

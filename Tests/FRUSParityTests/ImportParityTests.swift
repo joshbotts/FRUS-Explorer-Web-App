@@ -1,12 +1,13 @@
-// The import's done-when in tests (PLAN's S16c): envelopes the kit writes with every type, at format
-// version 6 and at 7, import through the server's route field for field, as the store read back by
-// its own SQL shows them; so does each of the kit's own files of versions 1 to 7; a copy the store
-// holds is replaced only by a newer one, and then only in what the file's version carries; and the
-// browser suite's export is the kit's, as `frus-parity import-fixture` writes it. Then the few lines
-// of the app's model code the mapping mirrors, held to the app's source: the headnote prompt every
-// draft carries, the kind an inert entry is read as, the defaults a field an older file cannot carry
-// takes, the saved search's columns and watermark, a plan's two blobs, and the synced settings the
-// app reads.
+// The import's done-when in tests (PLAN's S16c, on the kit's plan since #1915's follow-up): envelopes the kit writes
+// with every type, at format version 6 and at 7, import through the server's route field for field, as the store read
+// back by its own SQL shows them; so does each of the kit's own files of versions 1 to 7; a copy the store holds is
+// replaced only by a newer one, and then only in what the file's version carries, but for a note's formatting and a
+// summary's author, which go with a text an older file replaces, counted as the app's done line counts them; the web's
+// export of a user, planned by the kit into an empty library, gives back every record; and the browser suite's export
+// is the kit's, as `frus-parity import-fixture` writes it. Then the lines of the app's code the import mirrors, held to
+// the app's source: the headnote prompt every draft carries, the kind an inert entry is read as, the defaults the
+// kit's plan gives a field an older file cannot carry, the cases of the text rule the app's done line counts, the saved
+// search's columns and watermark, a plan's two blobs, and the synced settings the app reads.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -118,6 +119,7 @@ enum ImportServer {
             #expect(report.headnoteDrafts == 1, "by its flag at 7, and by its prompt before")
             #expect(report.summariesWithoutAuthorship == 0)
             #expect(report.formattedNotes == (version >= 7 ? 2 : 0) && report.formattingKept == (version >= 7 ? 1 : 0))
+            #expect(report.notesMadePlain == 0 && report.summariesMadeAIGenerated == 0, "no text replaced in an empty store")
             #expect(report.inertEntries == (version >= 7 ? 0 : 1))
             let unlinked = version >= 7 ? [ImportFixtures.id(57)] : [ImportFixtures.id(56), ImportFixtures.id(57)]
             #expect(report.unlinkedCollections.map(\.id) == unlinked.map(\.uuidString))
@@ -133,7 +135,7 @@ enum ImportServer {
             let rows = try UserStoreRows(files.userStore)
             let inert = try rows.firstRow("SELECT kind, level, selected_highlight_ids FROM collection_entries WHERE id = ?",
                                           [ImportFixtures.id(52).uuidString])
-            #expect(inert == (version >= 7 ? ["heading", "2", "[]"] : [MacImport.inertKind, "1", "[]"]))
+            #expect(inert == (version >= 7 ? ["heading", "2", "[]"] : [CollectionEntryKind.unrecognized.rawValue, "1", "[]"]))
             let draft = try #require(try rows.storedSummary(ImportFixtures.id(73).uuidString))
             #expect(draft["is_headnote_draft"] == "1")
             let summaries = try JSONDecoder().decode(DocumentSummaries.self, from: Data(try await client.execute(
@@ -164,13 +166,18 @@ enum ImportServer {
             #expect(outcome.comparison.isWhole, "version \(version): \(outcome.comparison.types.filter { !$0.isWhole })")
             #expect(outcome.report.summariesWithoutAuthorship == (version < 5 ? decoded.summaries.count : 0))
             #expect(outcome.report.inertEntries == (version == 6 ? 1 : 0), "version 6's entry with no document")
+            // The kit's reading of a summary that names no author: added as AI-generated, where the import wrote none
+            // before it took the kit's plan; every reader read the two alike.
+            let authorships = try UserStoreRows(outcome.store).column("SELECT authorship FROM summaries")
+            #expect(!authorships.isEmpty && authorships.allSatisfy { !$0.isEmpty }, "version \(version)")
+            if version < 5 { #expect(authorships.allSatisfy { $0 == SummaryAuthorship.aiGenerated.rawValue }, "version \(version)") }
             withExtendedLifetime(directory) {}
         }
     }
 
-    /// A file imported again keeps every record; a newer copy replaces only its own row, and in a
-    /// file of version 6 only the fields 6 carries, the rest kept as the store has them; an older one
-    /// is kept.
+    /// A file imported again keeps every record; a newer copy replaces only its own row, and in a file of version 6
+    /// only the fields 6 carries, the rest kept as the store has them, but for a note's formatting, which goes with a
+    /// text the file replaces, by the kit's text rule, and stays with one it leaves as it was; an older one is kept.
     @Test func aRecordTheStoreHoldsIsReplacedOnlyByANewerCopy() async throws {
         let v7 = ImportFixtures.everyType(formatVersion: 7)
         try await ImportServer.run { client, files in
@@ -187,6 +194,7 @@ enum ImportServer {
             v6.collections[0].lastModified = ImportFixtures.date("2026-07-01T00:00:00Z")
             v6.notes[1].bodyText = "A bold note, edited."
             v6.notes[1].lastModified = ImportFixtures.date("2026-07-01T00:00:00Z")
+            v6.notes[2].lastModified = ImportFixtures.date("2026-07-01T00:00:00Z")
             v6.tags[1].name = "Primary sources"
             v6.tags[1].lastModified = ImportFixtures.date("2026-07-01T00:00:00Z")
             v6.tags[0].name = "An older name"
@@ -195,7 +203,9 @@ enum ImportServer {
             let report = try #require(try await ImportServer.importing(try ImportFixtures.file(v6), with: client).report)
             let counts = Dictionary(uniqueKeysWithValues: report.types.map { ($0.type, $0) })
             #expect(counts["Collection"]?.replaced == 1 && counts["Collection"]?.kept == 2)
-            #expect(counts["ResearchNote"]?.replaced == 1 && counts["UserTag"]?.replaced == 1 && counts["UserTag"]?.kept == 1)
+            #expect(counts["ResearchNote"]?.replaced == 2 && counts["UserTag"]?.replaced == 1 && counts["UserTag"]?.kept == 1)
+            #expect(report.notesMadePlain == 1, "the bold note, its text replaced by a file that cannot carry its formatting")
+            #expect(report.formattedNotes == 1 && report.formattingKept == 1, "the third note's RTF, kept with its text")
             #expect(counts["DocumentHighlight"]?.replaced == 0, "a highlight's time is when it was made")
             #expect(counts["SavedSearch"]?.carried == false && counts["SavedSearch"]?.inFile == 0)
 
@@ -205,13 +215,128 @@ enum ImportServer {
             expected.collections[0].lastModified = v6.collections[0].lastModified
             expected.notes[1].bodyText = "A bold note, edited."
             expected.notes[1].lastModified = v6.notes[1].lastModified
+            expected.notes[1].richText = nil
+            expected.notes[2].lastModified = v6.notes[2].lastModified
             expected.tags[1].name = "Primary sources"
             expected.tags[1].lastModified = v6.tags[1].lastModified
             let comparison = ResearchComparison.compare(file: expected, stored: stored)
             #expect(comparison.isWhole, "the newer copies written, and what 6 does not carry kept: \(comparison.types.filter { !$0.isWhole })")
-            #expect(stored.notes.first { $0.id == ImportFixtures.id(2) }?.richText == v7.notes[1].richText,
-                    "its RTF, which 6 does not carry, kept")
+            #expect(stored.notes.first { $0.id == ImportFixtures.id(2) }?.richText == nil,
+                    "its RTF, the formatting of a text the file replaced, gone with it")
+            #expect(stored.notes.first { $0.id == ImportFixtures.id(3) }?.richText == v7.notes[2].richText,
+                    "its RTF, which 6 does not carry, kept with the text the file left as it was")
         }
+    }
+
+    /// A file before version 5 cannot say who wrote a summary: a newer copy that replaces a summary's text leaves it
+    /// AI-generated, and one that leaves the text as it was keeps the author the store holds, by the kit's text rule.
+    /// The summaries made AI-generated are counted as the app's done line counts them, one that was not AI-generated
+    /// before, as are the notes made plain, from a file that cannot carry formatting either.
+    @Test func aNewTextFromAFileBefore5LeavesTheSummaryAIGenerated() async throws {
+        let v7 = ImportFixtures.everyType(formatVersion: 7)
+        try await ImportServer.run { client, files in
+            #expect(try await ImportServer.importing(try ImportFixtures.file(v7), with: client).state == .succeeded)
+            var v4 = ImportFixtures.everyType(formatVersion: 6)
+            v4.formatVersion = 4
+            v4.archiveVisits = []
+            let later = ImportFixtures.date("2026-07-01T00:00:00Z")
+            v4.summaries[0].responseText = "An AI summary of d3, made again."
+            v4.summaries[0].lastModified = later
+            v4.summaries[1].responseText = "An AI summary, edited again."
+            v4.summaries[1].lastModified = later
+            v4.summaries[2].lastModified = later
+            v4.notes[1].bodyText = "A bold note, edited."
+            v4.notes[1].lastModified = later
+            let report = try #require(try await ImportServer.importing(try ImportFixtures.file(v4), with: client).report)
+            let counts = Dictionary(uniqueKeysWithValues: report.types.map { ($0.type, $0) })
+            #expect(counts["GeneratedSummary"]?.replaced == 3 && counts["ResearchNote"]?.replaced == 1)
+            #expect(report.summariesMadeAIGenerated == 1, "the edited one: the first was AI-generated already")
+            #expect(report.notesMadePlain == 1 && report.summariesWithoutAuthorship == v4.summaries.count)
+
+            let rows = try UserStoreRows(files.userStore)
+            func authorship(_ number: Int) throws -> String? {
+                try rows.storedSummary(ImportFixtures.id(number).uuidString)?["authorship"] ?? nil
+            }
+            #expect(try authorship(70) == "aiGenerated" && authorship(71) == "aiGenerated", "their text replaced")
+            #expect(try authorship(72) == "userWritten", "its text as it was, its author kept")
+            #expect(try authorship(73) == "userWritten", "the headnote draft, kept")
+            #expect(try rows.storedNote(ImportFixtures.id(2).uuidString)?.richText == nil)
+        }
+    }
+
+    /// The web's export of a user, read by the kit as the app's Import from JSON… reads it and planned into an empty
+    /// library, gives back every record: each of the export's records planned as an addition, as the export has it, a
+    /// collection's entries and a plan's documents and targets each under its parent, and the one set of synced
+    /// preferences; the report counting each as added and nothing else; and the web's key read beside it.
+    /// ExportParityTests holds the plan written: the export imported into another store exports the same file.
+    @Test func theWebsExportPlannedByTheKitIntoAnEmptyLibraryGivesBackEveryRecord() async throws {
+        let directory = try TemporaryDirectory()
+        defer { withExtendedLifetime(directory) {} }
+        let (store, url) = try await ExportParityTests.imported(try ImportFixtures.file(ImportFixtures.everyType(formatVersion: 7)),
+                                                                directory, "user")
+        let file = try ResearchImportFile(data: try ResearchExport.file(from: store, for: "owner", ExportParityTests.options))
+        #expect(file.webKey == ResearchImportFile.WebKey(formatVersion: 1, includesGeneratedSummaries: true, includesCorrections: true))
+        let export = file.envelope
+        let plan = ResearchImportPlan(file: file, library: ResearchLibrarySnapshot())
+
+        func added<Record: ResearchImportRecord>(_ items: [ResearchImportPlan.Item<Record>], _ records: [Record],
+                                                 parents: [UUID]? = nil, _ name: String) -> Int {
+            #expect(items.allSatisfy { $0.action == .add }, "\(name)")
+            #expect(items.map(\.record) == records, "\(name): each record as the export has it")
+            let named: [UUID?] = parents.map { $0.map(Optional.some) } ?? records.map { _ in nil }
+            #expect(items.map(\.parentId) == named, "\(name)")
+            return items.count
+        }
+        let bare = export.collections.map { collection in
+            var collection = collection
+            collection.entries = []
+            return collection
+        }
+        let plans = export.archiveVisits.map { visit in
+            var visit = visit
+            visit.documents = []
+            visit.targets = []
+            return visit
+        }
+        let entries = export.collections.flatMap { collection in collection.entries.map { (collection.id, $0) } }
+        let documents = export.archiveVisits.flatMap { visit in visit.documents.map { (visit.id, $0) } }
+        let targets = export.archiveVisits.flatMap { visit in visit.targets.map { (visit.id, $0) } }
+        var records = 0
+        records += added(plan.notes, export.notes, "notes")
+        records += added(plan.tags, export.tags, "tags")
+        records += added(plan.tagAssignments, export.tagAssignments, "tag assignments")
+        records += added(plan.highlights, export.highlights, "highlights")
+        records += added(plan.collections, bare, "collections")
+        records += added(plan.collectionEntries, entries.map(\.1), parents: entries.map(\.0), "collection entries")
+        records += added(plan.prompts, export.prompts, "prompts")
+        records += added(plan.projects, export.projects, "projects")
+        records += added(plan.summaries, export.summaries, "summaries")
+        records += added(plan.readingHistory, export.readingHistory, "reading history")
+        records += added(plan.searchHistory, export.searchHistory, "search history")
+        records += added(plan.exportHistory, export.exportHistory, "export history")
+        records += added(plan.archiveVisits, plans, "archive visits")
+        records += added(plan.archiveVisitDocuments, documents.map(\.1), parents: documents.map(\.0), "visit documents")
+        records += added(plan.archiveVisitTargets, targets.map(\.1), parents: targets.map(\.0), "visit targets")
+        records += added(plan.savedSearches, export.savedSearches, "saved searches")
+        records += added(plan.workingCorpora, export.workingCorpora, "working corpora")
+        records += added(plan.customVolumeScopes, export.customVolumeScopes, "volume scopes")
+        records += added(plan.classificationOverrides, export.classificationOverrides, "classification corrections")
+        records += added(plan.personClusterOverrides, export.personClusterOverrides, "person corrections")
+        records += added(plan.annotationReviews, export.annotationReviews, "reviews")
+        records += added(plan.projectLeads, export.projectLeads, "leads")
+        #expect(plan.syncedPreferences?.action == .add && plan.syncedPreferences?.record == export.syncedPreferences.first)
+        #expect(export.syncedPreferences.count == 1)
+        records += 1
+
+        // Every row the user's store holds, each type's, came back.
+        let rows = try UserStoreRows(url)
+        let held = try UserStoreSchema.tables.reduce(0) { $0 + (try rows.rows(of: $1.name).count) }
+        #expect(records == held && held > 40)
+        let report = plan.report
+        #expect(report.added == records && report.replaced == 0 && report.kept == 0)
+        #expect(report.types.allSatisfy { $0.inFile == $0.added && $0.setAside == 0 && $0.repeated == 0 }, "\(report.types)")
+        #expect(report.inertEntries == 0 && report.summariesWithoutAuthorship == 0 && report.webKey == file.webKey)
+        #expect(report.unlinkedCollections.map(\.id) == [ImportFixtures.id(57)], "the one whose search neither holds")
     }
 
     /// A record the file gives twice, as the owner's export of build 50 did, is written once: the
@@ -358,9 +483,6 @@ enum ImportServer {
         let inspector = try Self.read("Collections/CollectionEntryInspector.swift")
         // The id is the kit's since FRUS-Explorer#1951, which the inspector forwards to and the server takes.
         #expect(inspector.contains("private static let headnoteDraftPromptId = GeneratedSummaryExport.headnoteDraftPromptId"))
-        let plan = try String(contentsOf: Repository.layout.upstream.appendingPathComponent("FRUSCoreKit/Export/ResearchImportPlan.swift"),
-                              encoding: .utf8)
-        #expect(plan.contains(#"public static let headnoteDraftPromptId = UUID(uuidString: "\#(MacImport.headnoteDraftPromptId)")!"#))
         #expect(inspector.contains("promptId: Self.headnoteDraftPromptId, responseText: text,"))
         let summary = try Self.read("Models/GeneratedSummary.swift")
         #expect(summary.contains("promptId: draft.promptId,"), "a duplicate's draft keeps the prompt of the draft it copies")
@@ -369,22 +491,23 @@ enum ImportServer {
             sites += try Self.read(file).components(separatedBy: "isHeadnoteDraft: true").count - 1
         }
         #expect(sites == 2, "a third place that makes a draft would need its prompt checked")
-        #expect(OwnSummary.promptId != MacImport.headnoteDraftPromptId)
+        #expect(OwnSummary.promptId != GeneratedSummaryExport.headnoteDraftPromptId.uuidString)
     }
 
     /// An entry of a kind the app does not know reads as `.unrecognized`, an inert row that resolve
     /// and export skip, and so does the raw value `unrecognized` itself, the kit's `CollectionEntryKind`
-    /// since S17b's FRUS-Explorer#1805, which the import names.
+    /// since S17b's FRUS-Explorer#1805, which the kit's plan gives an older file's entry with no document.
     @Test func anInertEntryReadsAsTheAppsUnrecognizedKind() throws {
         let collection = try Self.read("Models/Collection.swift")
         #expect(collection.contains("get { CollectionEntryKind(rawValue: kind) ?? .unrecognized }"))
-        #expect(MacImport.inertKind == "unrecognized" && CollectionEntryKind(rawValue: MacImport.inertKind) == .unrecognized,
-                "its raw value is its name")
+        let inert = CollectionEntryKind.unrecognized.rawValue
+        #expect(inert == "unrecognized" && CollectionEntryKind(rawValue: inert) == .unrecognized, "its raw value is its name")
         #expect(!CollectionEntryKind.allCases.contains(.unrecognized), "a kind the app never writes")
     }
 
-    /// A field a file before version 7 cannot carry takes, in a new row, the initial value the app's
-    /// model gives the property.
+    /// A field a file before version 7 cannot carry takes, in a new row, the initial value the app's model gives the
+    /// property: the kit's plan gives it (`resolvedForImport`), and the server's row writes it, held here to the app's
+    /// model source, as the kit's own `ResearchImportDefaultsTests` holds it to fresh models in Xcode.
     @Test func whatAnOlderFileCannotCarryTakesTheModelsDefault() throws {
         let collection = try Self.read("Models/Collection.swift")
         let project = try Self.read("Models/Project.swift")
@@ -401,19 +524,66 @@ enum ImportServer {
             default: "?"
             }
         }
-        for (column, value) in MacImport.collectionSettings(nil) {
+        // A record of each type as a file of version 6 gives it, resolved by the kit and written by the server.
+        let bare = CollectionExport(id: UUID(), name: "A collection", projectIds: [], entries: [])
+            .resolvedForImport(fromFormatVersion: 6)
+        let settings = MacImport.collection(bare).values.filter {
+            !["id", "name", "note", "project_ids", "saved_search_id", "created_at", "last_modified"].contains($0.key)
+        }
+        #expect(settings.count == 17, "the front matter, composition and settings, which version 7 added")
+        for (column, value) in settings {
             let property = try #require(UserStoreSchema.table(for: "Collection")?.columns.first { $0.name == column }?.property)
             #expect(initial(property, in: collection) == expected(value), "Collection.\(property)")
         }
         let entryClass = try #require(collection.range(of: "@Model final class CollectionEntry {")).upperBound
         let entry = String(collection[entryClass...])
-        for (column, value) in MacImport.entryFields(nil) {
+        let bareEntry = CollectionEntryExport(id: UUID(), documentId: "d1", volumeId: "frus1961-63v06", sortOrder: 0, selectedNoteIds: [])
+            .resolvedForImport(fromFormatVersion: 6)
+        let content = MacImport.entry(bareEntry, of: UUID()).values.filter {
+            !["id", "collection_id", "document_id", "volume_id", "sort_order", "research_note_id", "selected_note_ids", "created_at",
+              "last_modified"].contains($0.key)
+        }
+        #expect(content.count == 20, "the kind, level, text, excerpt, block type and overrides, which version 7 added")
+        for (column, value) in content {
             let property = try #require(UserStoreSchema.table(for: "CollectionEntry")?.columns.first { $0.name == column }?.property)
             // `level` is an integer, written as one.
             let want = column == "level" ? "1" : expected(value)
             #expect(initial(property, in: entry) == want, "CollectionEntry.\(property)")
         }
+        let bareProject = ProjectExport(id: UUID(), name: "A project", defaultSubjectTagIds: [], defaultCountryTagIds: [])
+            .resolvedForImport(fromFormatVersion: 6)
+        let focus = MacImport.project(bareProject).values
+        #expect(focus["default_user_tag_ids"] == .text("[]") && focus["lead_axis_weights"] == .null)
         #expect(initial("defaultUserTagIds", in: project) == "[]" && initial("leadAxisWeights", in: project) == "nil")
+    }
+
+    /// The notes made plain and the summaries made AI-generated, which the report counts beside the kit's, are the
+    /// cases the app's writer counts for its done line, as only a write sees them (`countTextChange`, app code): a note
+    /// whose copy had formatting written with none, from a file before version 7; a summary that was not AI-generated
+    /// written as AI-generated, from a file before version 5. The server counts them so over each replacement it writes.
+    @Test func theTextRulesCasesAreCountedAsTheAppsDoneLineCountsThem() throws {
+        let importer = try Self.read("Export/ResearchDataImporter.swift")
+        #expect(try NotesAndSummariesParityTests.body(
+            of: "private func countTextChange<Record: IdentifiedImportRecord>(from before: Record, to written: Record) {", in: importer) == [
+            "if let before = before as? ResearchNoteExport, let written = written as? ResearchNoteExport,",
+            "formatVersion < ResearchImportPlan.Fields.noteFormatting.since,",
+            "before.richText != nil, written.richText == nil {",
+            "outcome.notesMadePlain += 1",
+            "}",
+            "if let before = before as? GeneratedSummaryExport,",
+            "let written = written as? GeneratedSummaryExport,",
+            "formatVersion < ResearchImportPlan.Fields.summaryAuthorship.since,",
+            "(before.authorship ?? .aiGenerated) != .aiGenerated, written.authorship == .aiGenerated {",
+            "outcome.summariesMadeAIGenerated += 1",
+            "}",
+        ])
+        #expect(importer.contains("countTextChange(from: before, to: written)"), "once a replacement is written")
+        let server = NotesAndSummariesParityTests.flattened(try String(
+            contentsOf: Self.layout.root.appendingPathComponent("Sources/FRUSLightAPI/MacImport.swift"), encoding: .utf8))
+        #expect(server.contains(
+            "if let before, version < ResearchImportPlan.Fields.noteFormatting.since, before.richText != nil, note.richText == nil { notesMadePlain += 1 }"))
+        #expect(server.contains(
+            "if let before, version < ResearchImportPlan.Fields.summaryAuthorship.since, (before.authorship ?? .aiGenerated) != .aiGenerated, summary.authorship == .aiGenerated { summariesMadeAIGenerated += 1 }"))
     }
 
     /// The saved search's scalar columns are what `SavedSearch.storeParameters(_:)` writes from the

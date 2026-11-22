@@ -132,7 +132,7 @@ enum ProjectRoutes {
                                         defaultSubjectTagIds: [], defaultCountryTagIds: [],
                                         createdAt: time, lastModified: time, defaultUserTagIds: [])
             try await Blocking.run {
-                try store.addResearchRow(table, MacImport.project(project, version: ResearchDataEnvelope.currentFormatVersion).values,
+                try store.addResearchRow(table, MacImport.project(project).values,
                                          for: user.id, outsideSearch: true)
                 try store.setActiveProject(project.id.uuidString, for: user.id)
             }
@@ -182,7 +182,7 @@ enum ProjectRoutes {
             guard !columns.isEmpty else { return Project(held) }
             project.lastModified = UserStoreDate.rounded(now())
             columns.insert("last_modified")
-            let values = MacImport.project(project, version: ResearchDataEnvelope.currentFormatVersion).values
+            let values = MacImport.project(project).values
                 .filter { columns.contains($0.key) }
             guard let row = try await Blocking.run({
                 try store.updateResearchRow(table, id: id, values, for: user.id, outsideSearch: true)

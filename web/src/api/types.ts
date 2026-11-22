@@ -831,12 +831,17 @@ export interface ResearchImportReport {
   exportedAt: string;
   /** Each of the 23 model types, in the store's order. */
   types: ImportTypeCount[];
+  /** Notes the import wrote with formatting. */
   formattedNotes: number;
-  /** Notes whose RTF this server cannot show, kept as it came: they open plain until edited here. */
+  /** Of those, notes whose RTF this server cannot show, kept as it is: they open plain until edited here. */
   formattingKept: number;
+  /** Notes whose text an export before version 7 replaced, which leaves them plain, as the kit's import does. */
+  notesMadePlain: number;
+  /** Summaries whose text an export before version 5 replaced, which reads as an AI summary since. */
+  summariesMadeAIGenerated: number;
   headnoteDrafts: number;
   summariesWithoutAuthorship: number;
-  /** A version-6 file's collection entries with no document, kept as the app keeps an unknown kind. */
+  /** Entries the import added with no document from a version-6 file, kept as the app keeps an unknown kind. */
   inertEntries: number;
   unlinkedCollections: UnlinkedCollection[];
   searchableDocuments: number;

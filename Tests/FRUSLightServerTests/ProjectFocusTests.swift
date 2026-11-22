@@ -117,7 +117,6 @@ import Testing
 
             // A collection under Grain, with a document's entry and a heading's, and one under no project;
             // and a highlight that names Grain's note, on a document of a volume nothing else engages.
-            let version = ResearchDataEnvelope.currentFormatVersion
             let filedUnder = try #require(UUID(uuidString: grain.id))
             let collected = CollectionExport(
                 id: UUID(uuidString: Self.entry(1))!, name: "Grain", projectIds: [filedUnder],
@@ -132,10 +131,10 @@ import Testing
             let collections = try #require(UserStoreSchema.table(for: "Collection"))
             let entries = try #require(UserStoreSchema.table(for: "CollectionEntry"))
             for collection in [collected, unfiled] {
-                try fixture.store.addResearchRow(collections, MacImport.collection(collection, version: version).values, for: "owner",
+                try fixture.store.addResearchRow(collections, MacImport.collection(collection).values, for: "owner",
                                                  outsideSearch: true)
                 for entry in collection.entries {
-                    try fixture.store.addResearchRow(entries, MacImport.entry(entry, of: collection, version: version).values,
+                    try fixture.store.addResearchRow(entries, MacImport.entry(entry, of: collection).values,
                                                      for: "owner", outsideSearch: true)
                 }
             }
