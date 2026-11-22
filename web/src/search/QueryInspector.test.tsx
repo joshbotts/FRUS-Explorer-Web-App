@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { InspectedTerm, QueryInspection, SearchInspection, SearchItem, SearchOperand, SearchResultList } from '../api/types';
 import { coverage, ProblemAnswer, ready, renderAt, sortChoices, stubServer } from '../test/renderRoute';
+import { copy } from '../copy';
 import { countLine } from './QueryInspector';
 
 afterEach(() => {
@@ -117,6 +118,9 @@ describe('the Query Inspector', () => {
     );
     expect(second?.textContent).toBe('canal EXCLUDED excluded — documents containing this are removed wherever the expression above applies it');
     expect(strip.textContent).toContain('Counts are over the 2 volumes indexed on this server — not the whole published series.');
+    // One volume is counted as the kit's `CountCopy.volumes` counts it (FRUS-Explorer#1918, L18).
+    expect(copy.inspector.denominator(1)).toBe('Counts are over the 1 volume indexed on this server — not the whole published series.');
+    expect(copy.zeroResult.denominator(1)).toBe('0 here means 0 in what this server has indexed — 1 volume.');
 
     // Each term counted within the filters: the offer goes, and focus stays in the strip.
     await userEvent.click(within(strip).getByRole('button', { name: 'Count each term in scope…' }));

@@ -214,12 +214,11 @@ enum IndexSchema {
         "sqlite_autoindex_research_provenance_1",
     ]
 
-    /// The app's schema: every object but the exporter's and SQLite's statistics, ordered by type
-    /// and name, without root pages.
-    /// Every schema object but the exporter's, its statement's text read as SQLite reads it (`normalizedSQL`):
-    /// a column an upgrade adds, `ALTER TABLE … ADD COLUMN`, is written into the stored `CREATE TABLE` text after the
-    /// last column's line, where a database the version creates has it on a line of its own, so a library the app
-    /// upgraded and an index made fresh hold the same table in two layouts. Index version 75 is the first to add
+    /// The app's schema: every object but the exporter's and SQLite's statistics, ordered by type and name, without
+    /// root pages, each statement's text with its layout set aside (`normalizedSQL`). A column an upgrade adds,
+    /// `ALTER TABLE … ADD COLUMN`, is written into the stored `CREATE TABLE` text after the last column's line, where
+    /// a database the version creates has it on a line of its own, so a library the app upgraded and an index made
+    /// fresh hold the same table in two layouts. Index version 75 is the first to add
     /// columns that the kit's `CREATE TABLE` names too (`volume_structures`' two, FRUS-Explorer#1909): the owner's
     /// golden library, which Erase Everything… keeps, gains them by `ALTER`, and the fixture index made here by
     /// `CREATE`. The words, their order and every column's place still count.

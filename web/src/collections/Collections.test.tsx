@@ -353,6 +353,25 @@ describe('a collection’s editor', () => {
     expect(rows.map((row) => row.className.match(/indent-\d/)?.[0])).toEqual(['indent-0', 'indent-1', 'indent-1', 'indent-1', 'indent-1']);
   });
 
+  it('names each row’s remove for its kind, with the app’s help as its tip (FRUS-Explorer#1941)', async () => {
+    server({ [`/api/v1/me/collections/${berlinId}`]: detail({ entries: outline, documentCount: 1 }) });
+    renderAt(`/collections/${berlinId}`);
+    await screen.findByRole('list', { name: 'Contents' });
+    const removes: (string | null)[][] = [];
+    for (const row of contentRows().slice(1)) {
+      await userEvent.click(within(row).getByRole('button', { name: /^Actions: / }));
+      const last = within(screen.getByRole('menu')).getAllByRole('menuitem').at(-1)!;
+      removes.push([last.textContent, last.getAttribute('title')]);
+      await userEvent.keyboard('{Escape}');
+    }
+    expect(removes).toEqual([
+      ['Remove document', 'Remove this document from the collection'],
+      ['Delete note block', 'Delete this note block and its text'],
+      ['Remove excerpt', 'Remove this excerpt from the collection'],
+      ['Remove block', 'Remove this block from the collection'],
+    ]);
+  });
+
   it('collapses a section, saying how many it hides', async () => {
     server({ [`/api/v1/me/collections/${berlinId}`]: detail({ entries: outline }) });
     renderAt(`/collections/${berlinId}`);

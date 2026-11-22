@@ -152,7 +152,9 @@ export function CollectionPicker({
           <p className="error">{failure}</p>
         </div>
       )}
-      <p role="status" className="visually-hidden">
+      {/* Said at once, as the app posts it at high priority (`TransientToast.announcement`), which the sheet's
+          closing does not cut off: a polite region, gone with the picker 0.6 s later, could leave the tap unsaid. */}
+      <p role="alert" className="visually-hidden">
         {added ? (added.held ? words.pickerAnnounceAlreadyIn : words.pickerAnnounceAdded)(announcedName(added.id)) : ''}
       </p>
       <div className="dialog-actions">

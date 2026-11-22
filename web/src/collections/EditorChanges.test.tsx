@@ -222,7 +222,20 @@ describe('the Add to Collection picker', () => {
     await userEvent.click(row);
     adds.waiting[0]?.({ added: true, collection: { id: berlinId, name: 'Berlin', listName: 'Berlin', documentCount: 1, isSmart: false, projectIds: [] } });
     expect(await screen.findByText('Added')).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toBe('Added to “Berlin”');
     expect(fetch.mock.calls.filter(([url]) => String(url).endsWith('/document'))).toHaveLength(1);
+  });
+
+  it('marks a collection that held the document already Already here, and says so at once (FRUS-Explorer#1941)', async () => {
+    const berlin = { id: berlinId, name: 'Berlin', listName: 'Berlin', documentCount: 1, isSmart: false, projectIds: [] };
+    server({ '/api/v1/me/collections': { total: 1, items: [berlin] }, [`POST ${path}/document`]: { added: false, collection: berlin } });
+    renderWithClient(<CollectionPicker document={{ volumeId: 'frus1961-63v06', documentId: 'd1' }} onClose={() => {}} />);
+    await userEvent.click(await screen.findByRole('button', { name: /^Berlin/ }));
+    const mark = await screen.findByText('Already here');
+    expect(mark.closest('.added')?.classList.contains('held')).toBe(true);
+    expect(screen.getByRole('button', { name: /^Berlin/ }).textContent).toContain('Already in this collection');
+    expect(screen.getByRole('alert').textContent).toBe('Already in “Berlin”');
+    expect(screen.queryByText('Added')).toBeNull();
   });
 
   it('leaves its New Collection sheet opened since alone when a create is answered after its Cancel', async () => {

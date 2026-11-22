@@ -1,8 +1,8 @@
 // Collections and their editor through the API (PLAN's S18d): a collection is made, listed, changed
 // and deleted as the app's editor and Collections list do; its sections nest three deep by the kit's
 // outline, moved, indented, outdented and deleted as the editors do; documents, note blocks, apparatus
-// and frozen excerpts are added as the app adds them; the presets are the kit's recipes, Briefing
-// packet offered only where a summary is stored; Sort by Date orders by the index's days; the inspector
+// and frozen excerpts are added as the app adds them; the presets are the kit's six recipes, Summaries
+// with overview offered only where a summary is stored; Sort by Date orders by the index's days; the inspector
 // shows and writes what the app's does; a rename is the list's Rename alert; a duplicate is the app's
 // copy; the Research rail lists the collections holding a document; and each user's collections are
 // theirs alone.

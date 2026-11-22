@@ -5825,6 +5825,12 @@ button.picker-row:hover {
   font-size: 0.875rem;
 }
 
+/* A collection that held the document already: its mark in the secondary colour, so that it differs from an add's
+   in colour as in words, as the app's hollow check does (FRUS-Explorer#1941, L19). */
+.picker-row .added.held {
+  color: var(--text-secondary);
+}
+
 .error-title {
   margin: 0.5rem 0 0;
   font-weight: 600;

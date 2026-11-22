@@ -28,8 +28,8 @@ export interface RowActions {
 
 /**
  * The row's menu: what the row offers, then Move Up and Move Down, then its removes, the app's trash button's
- * words for the row's kind (Remove document, Delete note block, Remove excerpt, Remove block) for any row but a
- * heading, whose two deletes the app's section menu gives.
+ * words for the row's kind (Remove document, Delete note block, Remove excerpt, Remove block), its help the item's
+ * tip, for any row but a heading, whose two deletes the app's section menu gives.
  */
 function RowMenu({
   label,
@@ -44,14 +44,19 @@ function RowMenu({
   before?: MenuEntry[];
   removes?: MenuEntry[];
 }) {
-  const remove = copy.collectionEditor.remove[kind] ?? copy.collectionEditor.remove.document!;
+  // The app names a kind it does not know as a document (`.document, .unrecognized`); a heading's deletes are its
+  // section menu's.
+  const removing = kind === 'prose' || kind === 'excerpt' || kind === 'generated' ? kind : 'document';
+  const remove = copy.collectionEditor.remove[removing];
+  const removeHint = copy.collectionEditor.removeHelp[removing];
   const entries: MenuEntry[] = [...before];
   if (actions.onMoveUp || actions.onMoveDown) {
     if (entries.length > 0) entries.push({ kind: 'separator' });
     if (actions.onMoveUp) entries.push({ kind: 'item', label: copy.collectionEditor.moveUp, onSelect: actions.onMoveUp });
     if (actions.onMoveDown) entries.push({ kind: 'item', label: copy.collectionEditor.moveDown, onSelect: actions.onMoveDown });
   }
-  const last = removes ?? (actions.onRemove ? [{ kind: 'item' as const, label: remove, onSelect: actions.onRemove, destructive: true }] : []);
+  const last =
+    removes ?? (actions.onRemove ? [{ kind: 'item' as const, label: remove, hint: removeHint, onSelect: actions.onRemove, destructive: true }] : []);
   if (last.length > 0) {
     if (entries.length > 0) entries.push({ kind: 'separator' });
     entries.push(...last);

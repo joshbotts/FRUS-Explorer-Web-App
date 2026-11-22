@@ -567,8 +567,9 @@ export const copy = {
     occurrences: (count: number, perDocument: number) =>
       `${count.toLocaleString('en-US')} occurrences, ${perDocument.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1, roundingMode: 'halfEven' })} per document`,
     noCount: 'no corpus count — this term has no single index form',
+    /** The count as the kit's `CountCopy.volumes` writes it, since FRUS-Explorer#1918 (L18): "the 1 volume". */
     denominator: (volumes: number) =>
-      `Counts are over the ${volumes.toLocaleString('en-US')} volumes indexed on this server — not the whole published series.`,
+      `Counts are over the ${volumes.toLocaleString('en-US')} ${volumes === 1 ? 'volume' : 'volumes'} indexed on this server — not the whole published series.`,
   },
   /** The search window's view of a search that found nothing, which names the term responsible. */
   zeroResult: {
@@ -577,7 +578,8 @@ export const copy = {
     detail: 'Try different keywords or adjust your filters.',
     oneEmpty: (term: string) => `${term} matches no document in your current scope. The rest of your query is not the problem.`,
     severalEmpty: (terms: readonly string[]) => `${terms.join(', ')} match no document in your current scope.`,
-    denominator: (volumes: number) => `0 here means 0 in what this server has indexed — ${volumes.toLocaleString('en-US')} volumes.`,
+    denominator: (volumes: number) =>
+      `0 here means 0 in what this server has indexed — ${volumes.toLocaleString('en-US')} ${volumes === 1 ? 'volume' : 'volumes'}.`,
   },
   facets: {
     toggle: 'Facets',
@@ -2024,13 +2026,13 @@ export const copy = {
       excerpt: 'Remove excerpt',
       generated: 'Remove block',
       document: 'Remove document',
-    } as Record<string, string>,
+    },
     removeHelp: {
       prose: 'Delete this note block and its text',
       excerpt: 'Remove this excerpt from the collection',
       generated: 'Remove this block from the collection',
       document: 'Remove this document from the collection',
-    } as Record<string, string>,
+    },
     configure: 'Configure',
     configureHint: 'Opens this document’s settings',
     moveUp: 'Move Up',

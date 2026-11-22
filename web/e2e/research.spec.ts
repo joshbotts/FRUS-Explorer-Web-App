@@ -14,9 +14,10 @@ import { getJSON, send } from './notes';
 const volume = 'frus1961-63v06';
 const d1Header = '1. Telegram From the Embassy in the Soviet Union';
 const d2Header = '2. Memorandum of Conversation';
-// A row's title, beneath its number line, drops the number the line prints (FRUS-Explorer#1947, L21).
-const d1Row = 'Telegram From the Embassy in the Soviet Union';
-const d2Row = 'Memorandum of Conversation';
+// A row's title, beneath its number line, drops the number the line prints (FRUS-Explorer#1947, L21); its link
+// says the number first, the line being for the eye.
+const d1Row = 'Document 1, Telegram From the Embassy in the Soviet Union';
+const d2Row = 'Document 2, Memorandum of Conversation';
 const documentPath = (document: string) => `api/v1/me/volumes/${volume}/documents/${document}`;
 
 interface Made {
