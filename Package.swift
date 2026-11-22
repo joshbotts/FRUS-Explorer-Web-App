@@ -8,7 +8,7 @@
 // ManifestGeneratorCore, whose tests hold TEIHeaderKit's; FRUSCoreKit, part 1 since session 3
 // and part 2 since session 6's pin move; and WordCloudKit since S24e's pin move, whose suites that
 // tag compile on Apple platforms alone. The server links FRUSCoreKit and FTS5Store since session 8,
-// through FRUSLightAPI.
+// through FRUSLightAPI, and WordCloudKit since S24i, for the bundled clouds.
 // Build and test through scripts/swift, which runs this package in swift:6.4-noble.
 
 import PackageDescription
@@ -243,10 +243,11 @@ let package = Package(
         // The HTTP application (session 8): the routes, problem details, the app's data files, the
         // catalogue, the reader and the search request, over FRUSLightCore and the shared kits. Since
         // S12c it watches each connection for its client closing it, through HummingbirdCore and NIOCore.
+        // Since S24i it reads the bundled clouds and filters them by a reader's settings with WordCloudKit.
         .target(
             name: "FRUSLightAPI",
             dependencies: [
-                "FRUSLightCore", "FRUSCoreKit", "FTS5Store", "FRUSRichText",
+                "FRUSLightCore", "FRUSCoreKit", "FTS5Store", "FRUSRichText", "WordCloudKit",
                 .product(name: "Hummingbird", package: "hummingbird"),
                 .product(name: "HummingbirdCore", package: "hummingbird"),
                 .product(name: "NIOCore", package: "swift-nio"),
@@ -400,6 +401,8 @@ let package = Package(
                 "FRUSParity", "ParityFormat", "FTS5Store", "FRUSCoreKit", "FRUSLightTestSupport", "FRUSLightCore", "CSQLite",
                 "FRUSLightAPI", "FRUSRichText", .product(name: "HummingbirdTesting", package: "hummingbird"),
                 "SourceNoteKit", "SourceExplorerExportGeneratorCore", "CentralFilesIndexGeneratorCore", "VolumeSourcesIndexGeneratorCore",
+                // The bundled clouds, decoded and filtered by the kit apart from the server (S24i).
+                "WordCloudKit",
             ],
             path: "Tests/FRUSParityTests",
             swiftSettings: swift6

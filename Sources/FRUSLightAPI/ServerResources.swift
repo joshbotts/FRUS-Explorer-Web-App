@@ -44,6 +44,9 @@ public final class ServerResources: Sendable {
     let people = PeopleFiles()
     /// The administrations' profiles, `administration-profiles-index.json`, decoded on first use (CorpusAnalytics.swift).
     private let administrations = AdministrationProfilesFile()
+    /// The Word Cloud's bundled clouds and the word lists that filter them, each decoded on first use (WordCloud.swift,
+    /// PLAN's S24i).
+    let bundledClouds = BundledClouds()
     /// Archival Analytics' and About the Series' other bundled files, each decoded on first use, and the series kept
     /// from them (BundledAnalytics.swift, PLAN's S24h).
     let bundledAnalytics = BundledAnalytics()
