@@ -50,6 +50,8 @@ public struct ArchivalNetworkAnswer: Codable, Equatable, Sendable, ResponseEncod
     public struct Node: Codable, Equatable, Sendable {
         public var id: String
         public var label: String
+        /// The unit's own name: a class's key, which "Show Documents in This Class" asks its neighbours by.
+        public var name: String
         public var drawnLabel: String?
         public var kind: String
         public var category: String
@@ -537,7 +539,7 @@ struct ArchivalNetworkView {
         }
         let nodes = drawn.nodes.map { node in
             ArchivalNetworkAnswer.Node(
-                id: node.id, label: node.label, drawnLabel: texts[node.id], kind: node.kind == .collection ? "collection" : "centralFileClass",
+                id: node.id, label: node.label, name: node.name, drawnLabel: texts[node.id], kind: node.kind == .collection ? "collection" : "centralFileClass",
                 category: node.category.rawValue, categoryName: node.category.displayName,
                 sharedVolumes: node.sharedVolumeCount, sharedDocuments: node.sharedDocumentCount,
                 relativeStrength: node.relativeStrength,

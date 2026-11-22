@@ -91,7 +91,7 @@ export function AppShell() {
    * Opens a tool from the header's Analytics menu. The menu hands the focus back to its button as it closes, and a new
    * screen takes the focus at its heading only from the page itself, so the button lets it go first.
    */
-  function openTool(to: '/analytics/corpus' | '/analytics/people' | '/analytics/cross-references' | '/chronology') {
+  function openTool(to: '/analytics/corpus' | '/analytics/people' | '/analytics/cross-references' | '/analytics/archives' | '/about' | '/chronology') {
     // On the tool's own page no new screen comes, so the button keeps the focus.
     const leaving = !router.state.location.pathname.endsWith(to);
     if (leaving && document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -141,8 +141,12 @@ export function AppShell() {
               { kind: 'item', label: copy.app.corpusAnalytics, onSelect: () => openTool('/analytics/corpus') },
               { kind: 'item', label: copy.app.personAnalytics, onSelect: () => openTool('/analytics/people') },
               { kind: 'item', label: copy.app.crossReferenceAnalytics, onSelect: () => openTool('/analytics/cross-references') },
+              { kind: 'item', label: copy.app.archivalAnalytics, onSelect: () => openTool('/analytics/archives') },
               { kind: 'separator' },
               { kind: 'item', label: copy.app.chronology, onSelect: () => openTool('/chronology') },
+              // From S24h, About the Series, which the app reaches from its Research Guide, which the web has not.
+              { kind: 'separator' },
+              { kind: 'item', label: copy.app.aboutSeries, onSelect: () => openTool('/about') },
             ]}
           >
             {copy.app.analytics} <span aria-hidden="true">▾</span>

@@ -333,6 +333,7 @@ export function YearRange({
   disabled,
   isCustom,
   onChange,
+  onReset,
 }: {
   start: number;
   end: number;
@@ -340,6 +341,8 @@ export function YearRange({
   disabled: boolean;
   isCustom: boolean;
   onChange: (from: number, to: number) => void;
+  /** What Reset does, where it does more than restore the years (S24h's About the Series resets the scope too). */
+  onReset?: () => void;
 }) {
   const [draftStart, setDraftStart] = useState(String(start));
   const [draftEnd, setDraftEnd] = useState(String(end));
@@ -409,7 +412,7 @@ export function YearRange({
         }}
       />
       {isCustom && (
-        <button type="button" className="link" title={words.resetHelp} onClick={() => onChange(context.floorYear, context.corpusMaxYear)}>
+        <button type="button" className="link" title={words.resetHelp} onClick={() => (onReset ? onReset() : onChange(context.floorYear, context.corpusMaxYear))}>
           {words.reset}
         </button>
       )}
