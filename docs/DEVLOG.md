@@ -217,6 +217,60 @@ Phase 3's row S24g, the features track's wave 8, beside S24h: Person and Cross-R
 
 **Next:** on the features track, S24i, the Word Cloud, the S24 group's last row, once S24h has merged; then S25b, phase 3's sign-off.
 
+## Session 24f, second follow-up: the pin moves to `4556c4d5`
+
+22 November 2026 · branch `claude/heuristic-napier-a00da4`, a session of the phase-3 orchestrator's · [#PRNUMBER](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/PRNUMBER) · upstream `4556c4d5`
+
+The pin moves from the tag `1.0-release`, `08e8bac8`, to `v2`'s head, `4556c4d5`, nine commits on, at the same build and index version. It carries the three pull requests S24f's upstream follow-up wrote for six issues this project filed, which the owner merged after Mac checks 32 to 34, in a pull request of its own (rule 5), and it takes each issue's web steps from its hand-over. So this entry is S24f's second follow-up, for #1912, #1913, #1927 and #1928, and stands for #1907's too, a follow-up of S23d's that its hand-over placed above Session 23d's entry. The branch was cut from `main` at `e0d0e38`, #157's merge, and merged no `main`.
+
+**What the move brought:**
+- [FRUS-Explorer#1969](https://github.com/joshbotts/FRUS-Explorer/pull/1969), `5f0a07f3`, Mac check 34, for #1911: `SharedKitsBoundaryTests`, which holds the other eight shared kits to rules 1 and 2 in the app's unit target alone. It changes no folder the golden files' digest covers, and the web never compiles it.
+- [#1968](https://github.com/joshbotts/FRUS-Explorer/pull/1968), `91842c0b`, Mac check 33, for #1912, #1913 and #1928:
+  - `ChronologyGrouping.group(_:viewBucket:ascending:locale:)` and `makeChart(fromCounts:viewBucket:maxSeries:locale:)` write their labels in the locale given, the reader's own by default;
+  - `CorpusAnalyticsService`'s occurrence series by year and volume has a cache of its own, `yearVolumeOccurrenceCache`, where it shared the documents series' under an `occ:` prefix;
+  - `DecadeFrequency` has a public `init(decadeStart:count:)`.
+- [#1967](https://github.com/joshbotts/FRUS-Explorer/pull/1967), `4556c4d5`, Mac check 32, for #1907 and #1927: `RelatedDocumentsEngine.rank(…includeSnippets:userSource:…)` and `IndexingPipeline.documentsInDateRange(_:scopeVolumeIds:ascending:limit:userSource:)` take `userSource: SearchUserSource = .index`. From the index, the default and the app's call, each runs the statement it ran before.
+- Six commits of the app's records, website and tour (#1961 to #1966). One of them, #1962, moved the day two of the app's tables were last confirmed, `PublishedSourceLinkTable.confirmed` and `RepositoryFactTable.confirmed`, from 28 August to 20 November 2026.
+- Unchanged: the index version (75), the FTS generation (4), the JSON export's format version (7), `IndexingResources.indexResourceNames`, the schema statements and the bundled resources. `IndexingPipeline.swift` changed on a read path alone, `documentsInDateRange`'s user source, whose statement from the index is the one it ran, by text and binds (version line 4.64: nothing the indexer stores or reads changes).
+
+**The web's steps,** each from its issue's hand-over, filed in `docs/prep/` with what this move took:
+- **#1907, Related Documents' rows** (`upstream-related-user-source.md`): the route passes the kit's `rank` the source `SearchUsers.summarySource(for:context:served:)` names, `.attachedStore(userId:)` for the user the request searches as, on the search's terms, where the served index attaches the user store, and `.index` for a request that acts for no one or a server that keeps no user data. A related row the reader summarised shows their summary, as on the Mac. The leads' computation passes `includeSnippets: false`, unchanged.
+- **#1902's call, Suggested Next's lines,** the first of the README's "Three calls": Project Home passes `documentSnippets(forKeys:maxLength:userSource:)` the same source for the user under /me (`SearchUsers.summarySource(of:served:)`).
+- **#1927, Chronology's rows** (`upstream-chronology-user-source.md`): `/api/v1/chronology` passes `documentsInDateRange` the same source. The export and the plate pass `.index`, since the chart's table and figure read no row's summary and the attached store's statement scans every user's rows of `user_search`.
+- **#1912, Chronology's labels** (`upstream-chronology-locale.md`): `assemble` passes `SearchItem.locale` to `group` and `makeChart(fromCounts:…)` and takes their labels. `ChronologyLabels`, its mirror of the kit's `sortDate(forBucketKey:)` and the `granularities` map are gone; `firstDay(ofBucketKey:)` stays, on `ChronologyRoutes`.
+- **#1913, one analytics service** (`upstream-analytics-cache-keys.md`): `ServedIndex`'s `occurrences` is gone, and `analytics` gives both series.
+- **#1928, the decades** (`upstream-decade-frequency-init.md`): `CorpusAnalyticsView.decadeData` builds the kit's `DecadeFrequency`, as the app's `decadeSeries(for:)` does, and the web's `Decade` is gone.
+- **#1911, the boundary tests** (`upstream-kit-boundary-tests.md`): nothing to run. COORDINATION's division of labour and §4 name every kit, and §3 names the new suite.
+- **The app's date the web mirrors:** Source Explorer's guidance counts its links' six months from `PublishedSourceLinkTable.confirmed` (`web/src/sources/sourcesRules.ts`), now 20 November 2026; `SourceExplorerParityTests` holds both lines, and the unit test the new day and its edges. `RepositoryFactTable.confirmed` has no mirror here.
+
+**Tests:**
+- `SummaryLinesTests.eachReadersSummaryIsTheirLineAlone`, new, on a real socket behind a proxy that signs two users in. One user's summary of d2 is its line for her in d1's Related list, in Chronology and on a Suggested Next lead; for the other user, and for a request that names no one, the line is d2's text or, in Chronology, its head. The synthetic export gets a citation from d1 to d2 for it (`UserDataFixture`'s new `edits`), since its documents have no archival container or cross-reference, the two sources of the engine's candidates here.
+- `CorpusAnalyticsParityTests.aTermSpeltOccAndAWordGetsItsOwnSeries`, new, over the fixture index through the API. It asks for a documents chart of `occ:treaty` after the occurrences of "treaty" over the whole corpus, and before them in a scope. Each chart is the kit's from a host's own service that has cached nothing, and the two series differ.
+- `ChronologyParityTests.theLabelsAreTheKitsInUSEnglish`, in place of the test that held the server's copy of the kit's formats. Through the server's assembly on Linux, a day's section, its bucket and its table row read "February 15, 1969", a month's "February 1969" and a year's "1969".
+- Held lines that moved with the code: `AnalyticsMirrorParityTests` (the occurrence fetch from the one service, the decades' sum to the app's, `group`'s locale), `ProjectHistoryParityTests` (Project Home's snippet call), and `ChronologyParityTests`' kit side, which now takes the kit's labels in `en_US`.
+- `RelatedDocumentsParityTests` and `ChronologyParityTests` hold every fixture list through the API, now read through the single user's attached store, to the kit's from the index.
+
+**Another row's file:** `Sources/FRUSLightAPI/Routes.swift`, whose two existing lines for Related Documents and Chronology now pass the router's `SearchUsers` (PLAN rule 4). S24h adds lines to the same file, so the later of the two may meet a conflict and merge `main` once.
+
+**Corrected beside the move:** COORDINATION §1's line on the index version served still said 74; S12d's move took it to 75.
+
+**Left for the session that edits `docs/INSTALL.md` next** (the import follow-ups'): its Releases section's last sentence, "Until it is cut, follow `edge`.", is stale since the owner published `1.0-1861.1`.
+
+GOLDENPLACEHOLDER
+
+RESULTSPLACEHOLDER
+
+**Records**
+- `docs/prep/`: the six hand-overs, each as its issue's last comment gave it, with what this move took; and the prep notes' pinning paragraph, phase 3's account of the moves and the hand-overs' row of their table of files.
+- `PLAN.md`: where the plan stands, with the first release; the batch's carriage after its sentence; the owner checkpoints' golden files, the first release (done 22 November, before phase 5: release run 45058281066 at `e0d0e38`, 19:01 UTC) and Mac checks 32 to 34, with fifty-three steps, twenty-five of them phase 3's; and the owner's answer of 29 October on the first release, which the owner has since overtaken, with a sentence saying so.
+- `COORDINATION.md`: the pin's history; §1's index version; #1911's two sentences and §3's boundary test; §5's item for the six issues in place of the boundary tests', the three workarounds gone, and what this move leaves; and §6's exports.
+- `SPEC.md`: `setupDatabase(_:)`'s lines at `4556c4d5`, the compatibility contract, Related Documents' and Suggested Next's lines, Corpus Analytics' one service, Chronology's summaries and labels, the related answer's `snippet`, and the delivery plan's first release.
+- `README.md`: Status, the pin and the first release; What works today, Related's lines and the releases; Known gaps, the pin, the issues none of which waits, the "Three calls" bullet down to two with #1907's sentence gone, and `:1.0-1776` in place of "No release yet"; Next; and phase 5's row.
+
+**For the owner:** nothing to publish for the index, which is unchanged. Installs that follow `:1.0-1861`, the owner's own among them, see these changes only with a later release of that build, such as `1.0-1861.2`, the owner's to cut when they choose; `edge` has them once `image.yml` has smoke-tested this merge.
+
+**Next:** S24h, then S24i and S25b, phase 3's sign-off, over the full corpus indexed at 75; S24e's follow-up, the server's uses of #1902's other two calls and the lexical axis; and S12d's three follow-ups.
+
 ## Session 24f, follow-up, upstream: the six kit issues, in three pull requests
 
 22 November 2026 · branch `claude/interesting-bardeen-a9dd63` · [#155](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/155) · upstream `f011ab04`, unchanged; [FRUS-Explorer#1967](https://github.com/joshbotts/FRUS-Explorer/pull/1967), [#1968](https://github.com/joshbotts/FRUS-Explorer/pull/1968) and [#1969](https://github.com/joshbotts/FRUS-Explorer/pull/1969), open
