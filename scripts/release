@@ -22,7 +22,10 @@
 #                                  checks only a build of main can pass.
 #   scripts/release selftest       runs cut against stubs of docker and gh, in a repository that
 #                                  borrows this one's objects and holds release tags of its own, and
-#                                  checks what each case prints, refuses and writes.
+#                                  checks what each case prints, refuses and writes. Just after a
+#                                  pin move that changes the index version, when no commit before
+#                                  HEAD has HEAD's, that repository merges three pull requests of
+#                                  its own on HEAD, with HEAD's tree, and the cases cut the last.
 # FRUS_RELEASE_IMAGE names another image repository, such as a registry the job runs itself, and
 # FRUS_RELEASE_REPO another GitHub repository. Needs git, docker with buildx, jq and gh, with GH_TOKEN
 # in Actions. Works with macOS's bash 3.2.
@@ -329,7 +332,8 @@ cmd_selftest() {
   digest=sha256:5e1f7e575e1f7e575e1f7e575e1f7e575e1f7e575e1f7e575e1f7e575e1f7e57
 
   # Two commits on HEAD's first-parent line: p1, at least three back, at HEAD's index version, and
-  # p0, the newest at another.
+  # p0, the newest at another. Just after a pin move that changes the index version, HEAD is the
+  # only commit at its version, and p1 is made below.
   i=0
   for c in $(git -C "$root" rev-list --first-parent "$head"); do
     old=$(index_version "$c")
@@ -337,18 +341,42 @@ cmd_selftest() {
     if [ -n "$old" ] && [ "$old" != "$index" ]; then p0=$c; break; fi
     i=$((i + 1))
   done
-  [ -n "$p1" ] && [ -n "$p0" ] || die "the selftest needs HEAD's first-parent line to reach another index version"
-  local old_index pr1_line
+  [ -n "$p0" ] || die "the selftest needs HEAD's first-parent line to reach another index version"
+  local old_index made=""
   old_index=$(index_version "$p0")
-  # The pull request p1 merged, which the release after it leaves out, and the next, which it lists.
-  pr1=$(git -C "$root" log -1 --format=%s "$p1" | sed -nE 's/^Merge pull request #([0-9]+) from .*/\1/p')
-  next1=$(git -C "$root" log --first-parent --merges --reverse --format=%s "$p1..$head" \
-    | sed -nE 's/^Merge pull request #([0-9]+) from .*/\1/p' | head -n 1 || true)
 
   # A repository that borrows this one's objects, with main at HEAD and no tags.
   git init -q "$tmp/repo"
   echo "$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)/objects" > "$tmp/repo/.git/objects/info/alternates"
+  # A commit there, of tree $1 and the arguments after it, by a name of its own: a runner has none.
+  selftest_commit() {
+    local tree=$1
+    shift
+    GIT_AUTHOR_NAME=selftest GIT_AUTHOR_EMAIL=selftest@example.invalid \
+      GIT_COMMITTER_NAME=selftest GIT_COMMITTER_EMAIL=selftest@example.invalid \
+      git -C "$tmp/repo" commit-tree "$@" "$tree"
+  }
+  # Without p1, three pull requests are merged there on HEAD, each with HEAD's tree and numbered
+  # past the newest on HEAD's line: HEAD is then p1, and the cases cut the last of them.
+  if [ -z "$p1" ]; then
+    local tree tip side n newest
+    tree=$(git -C "$tmp/repo" rev-parse "$head^{tree}")
+    newest=$(git -C "$tmp/repo" log --first-parent --merges --format=%s "$head" \
+      | sed -nE 's/^Merge pull request #([0-9]+) from .*/\1/p' | sort -n | tail -n 1)
+    tip=$head
+    for n in $((newest + 1)) $((newest + 2)) $((newest + 3)); do
+      side=$(selftest_commit "$tree" -p "$tip" -m "The change of pull request #$n")
+      tip=$(selftest_commit "$tree" -p "$tip" -p "$side" -m "Merge pull request #$n from owner/selftest-$n")
+    done
+    p1=$head
+    head=$tip
+    made=", three pull requests merged here on HEAD ${p1:0:7}, whose index version is new on main"
+  fi
   git -C "$tmp/repo" update-ref refs/remotes/origin/main "$head"
+  # The pull request p1 merged, which the release after it leaves out, and the next, which it lists.
+  pr1=$(git -C "$tmp/repo" log -1 --format=%s "$p1" | sed -nE 's/^Merge pull request #([0-9]+) from .*/\1/p')
+  next1=$(git -C "$tmp/repo" log --first-parent --merges --reverse --format=%s "$p1..$head" \
+    | sed -nE 's/^Merge pull request #([0-9]+) from .*/\1/p' | head -n 1 || true)
 
   # Stubs of docker and gh: reads answer from STUB_*, and writes are logged to STUB_LOG.
   mkdir "$tmp/bin"
@@ -433,7 +461,7 @@ STUB
     fi
   }
 
-  echo "selftest at ${head:0:7}: $base, index version $index; p1 ${p1:0:7}, p0 ${p0:0:7} at index version $old_index"
+  echo "selftest at ${head:0:7}${made}: $base, index version $index; p1 ${p1:0:7}, p0 ${p0:0:7} at index version $old_index"
   writes=""
 
   reset
