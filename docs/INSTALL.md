@@ -318,7 +318,7 @@ Choose what to follow with `FRUS_IMAGE` in `.env`:
 | `ghcr.io/joshbotts/frus-explorer-light:<version>-<build>.<n>`, such as `:1.0-1861.1`, or the digest a release names, `ghcr.io/joshbotts/frus-explorer-light@sha256:…` | One release, which never moves |
 | `ghcr.io/joshbotts/frus-explorer-light:sha-<commit>`, where `<commit>` is the first 7 characters of a commit on the main branch | One build of the main branch |
 
-Before releases began, `:1.0-1776` moved with `edge`. It stopped on 23 October 2026, at a build from before the research layer, and stays there, since the server has moved on to FRUS Explorer 1.0 (1861): the first release for that build, `1.0-1861.1`, moves `:1.0-1861`. Until it is cut, follow `edge`.
+Before releases began, `:1.0-1776` moved with `edge`. It stopped on 23 October 2026, at a build from before the research layer, and stays there, since the server has moved on to FRUS Explorer 1.0 (1861): the first release for that build, `1.0-1861.1`, published on 22 November 2026, moved `:1.0-1861`.
 
 To hear of each release, watch the repository on GitHub for releases only (Watch, then Custom, then Releases), or follow its feed, `https://github.com/joshbotts/FRUS-Explorer-Web-App/releases.atom`. When a release's notes say the index version changed, export again from the FRUS Explorer build they name, upgrade, and copy the new export in as in [5. Import it](#5-import-it); until then `/readyz` answers `index_version_mismatch`.
 
