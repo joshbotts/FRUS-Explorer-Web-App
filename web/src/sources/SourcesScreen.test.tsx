@@ -391,8 +391,9 @@ describe('Source Explorer’s rules', () => {
     expect(statusValue('Unrestricted', [])).toBe('Unrestricted');
     expect(curatedSubtitle({ entryNumber: 'A1 1590', dateRange: '1953–1961' })).toBe('A1 1590 · 1953–1961');
     expect(curatedSubtitle({})).toBeUndefined();
-    expect(confirmedDay()).toBe('Aug 28, 2026');
-    expect(publishedLinkStale(Date.UTC(2026, 10, 14))).toBe(false);
-    expect(publishedLinkStale(Date.UTC(2027, 1, 25))).toBe(true);
+    expect(confirmedDay()).toBe('Nov 20, 2026');
+    // Fresh for 180 days from 20 November 2026, to 19 May 2027.
+    expect(publishedLinkStale(Date.UTC(2027, 4, 19))).toBe(false);
+    expect(publishedLinkStale(Date.UTC(2027, 4, 20))).toBe(true);
   });
 });

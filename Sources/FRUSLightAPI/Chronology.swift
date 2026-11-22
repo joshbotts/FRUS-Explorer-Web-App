@@ -8,9 +8,10 @@
 // The view's own rules are mirrored here and held to the app's source by `ChronologyParityTests`: the default
 // range, the legend's filter of the list (`rowMatchesFilter`, `displayedGroups`), the summary line, the span and
 // direction labels, a section's aggregate line (`ChronologyAggregateText`), the series' titles and the words. The
-// kit writes a section's and a bar's label in the process's locale, which on Linux is World English, "3 February
-// 1969"; the browser app's dates are US English, so the label is written again here from its bucket, by the kit's
-// three formats in `SearchItem.locale` (`ChronologyLabels`), until the kit takes a locale (FRUS-Explorer#1912).
+// kit writes a section's and a bar's label in the locale it is given (FRUS-Explorer#1912), `SearchItem.locale`,
+// US English as the browser app's dates are, where it wrote the process's, World English on Linux. A row's
+// summary is its reader's, read from the rows of the user the request searches as in the store the served index
+// attaches, or the index's own for no one (FRUS-Explorer#1927), as the app reads its reader's from its index.
 //
 // The hover magnifier is the Mac's alone, and the word cloud for the range waits for the Word Cloud (PLAN's S24i).
 // The chart's table and its CSV with the kit's method block, and its figure, are the web's own: the app's
@@ -133,23 +134,26 @@ enum ChronologyRoutes {
     static let denseThreshold = 25
     static let parameters: Set<String> = ["from", "to", "order", "colors", "series"]
 
-    static func add(to router: Router<APIRequestContext>, provider: ServedIndexProvider, resources: ServerResources) {
-        router.get("/api/v1/chronology") { request, _ -> ChronologyAnswer in
+    static func add(to router: Router<APIRequestContext>, provider: ServedIndexProvider, resources: ServerResources,
+                    users: SearchUsers) {
+        router.get("/api/v1/chronology") { request, context -> ChronologyAnswer in
             let query = try FormQuery(request.uri.query)
             try query.refuseUnknown(parameters)
             let ask = try ask(query, resources: resources)
             let served = try await provider.served()
-            let answer = try await load(ask, pipeline: served.pipeline, resources: resources)
+            let summaries = try await users.summarySource(for: request, context: context, served: served)
+            let answer = try await load(ask, pipeline: served.pipeline, summaries: summaries, resources: resources)
             withExtendedLifetime(served) {}
             return answer
         }
+        // The chart's table and figure read no row's summary, so the export and the plate read the index's.
         router.get("/api/v1/chronology/export") { request, _ -> Response in
             let query = try FormQuery(request.uri.query)
             try query.refuseUnknown(parameters.union(["timeZone"]))
             let timeZone = try AnalyticsFigures.timeZone(query)
             let ask = try ask(query, resources: resources)
             let served = try await provider.served()
-            let answer = try await load(ask, pipeline: served.pipeline, resources: resources)
+            let answer = try await load(ask, pipeline: served.pipeline, summaries: .index, resources: resources)
             let now = Date()
             let provenance = provenance(answer, indexedVolumeCount: served.indexedVolumeIds.count, exportDate: now)
             withExtendedLifetime(served) {}
@@ -166,7 +170,7 @@ enum ChronologyRoutes {
             let timeZone = try AnalyticsFigures.timeZone(query)
             let ask = try ask(query, resources: resources)
             let served = try await provider.served()
-            let answer = try await load(ask, pipeline: served.pipeline, resources: resources)
+            let answer = try await load(ask, pipeline: served.pipeline, summaries: .index, resources: resources)
             let now = Date()
             let provenance = provenance(answer, indexedVolumeCount: served.indexedVolumeIds.count, exportDate: now)
             withExtendedLifetime(served) {}
@@ -243,8 +247,10 @@ enum ChronologyRoutes {
 
     // MARK: Loading
 
-    /// The range's documents and chart, as `reload()` loads them, with the legend's filter applied to the list.
-    static func load(_ ask: ChronologyAsk, pipeline: IndexingPipeline, resources: ServerResources) async throws -> ChronologyAnswer {
+    /// The range's documents and chart, as `reload()` loads them, with the legend's filter applied to the list, and
+    /// each row's summary read from `summaries`.
+    static func load(_ ask: ChronologyAsk, pipeline: IndexingPipeline, summaries: SearchUserSource,
+                     resources: ServerResources) async throws -> ChronologyAnswer {
         let cal = Calendar(identifier: .gregorian)
         // Normalize the bounds to whole days so the inclusive end day is captured.
         let startDay = cal.startOfDay(for: min(ask.start, ask.end))
@@ -254,7 +260,7 @@ enum ChronologyRoutes {
         let range = DateRange(earliest: startISO, latest: endISO)
 
         let rows = try await pipeline.documentsInDateRange(range, scopeVolumeIds: nil, ascending: ask.ascending,
-                                                           limit: ChronologyGrouping.loadLimit)
+                                                           limit: ChronologyGrouping.loadLimit, userSource: summaries)
         let isCapped = rows.count >= ChronologyGrouping.loadLimit
         let viewBucket = ChronologyGrouping.bucket(forDaysBetween: startDay, and: endDay, calendar: cal)
         // The list is truncated to `loadLimit`, but the distribution chart reflects the whole range: from an aggregate
@@ -281,18 +287,19 @@ enum ChronologyRoutes {
         let viewBucket = ChronologyGrouping.bucket(forDaysBetween: startDay, and: endDay, calendar: cal)
         let domainStart = ChronologyGrouping.startOfBucket(startDay, bucket: viewBucket, calendar: cal)
         let domainEnd = ChronologyGrouping.endOfBucket(endDay, bucket: viewBucket, calendar: cal)
-        let groups = ChronologyGrouping.group(inRange, viewBucket: viewBucket, ascending: ask.ascending)
+        // Each section labelled at its own granularity, in the reader's locale, and each bucket of a chart from the
+        // sections with its section's label.
+        let groups = ChronologyGrouping.group(inRange, viewBucket: viewBucket, ascending: ask.ascending, locale: SearchItem.locale)
 
         var chart: (buckets: [ChronologyChartBucket], series: [ChronologyChartSeries])
         var full = false
-        var granularities: [String: DateBucket] = Dictionary(groups.map { ($0.bucketKey, $0.granularity) },
-                                                             uniquingKeysWith: { first, _ in first })
         if isCapped {
             if !counts.isEmpty {
-                chart = ChronologyGrouping.makeChart(fromCounts: counts, viewBucket: viewBucket, maxSeries: ask.colors)
+                // Each bucket of the counts labelled at the view's granularity, at which they are keyed.
+                chart = ChronologyGrouping.makeChart(fromCounts: counts, viewBucket: viewBucket, maxSeries: ask.colors,
+                                                     locale: SearchItem.locale)
                 totalShown = counts.reduce(0) { $0 + $1.count }
                 full = true
-                granularities = Dictionary(counts.map { ($0.bucketKey, viewBucket) }, uniquingKeysWith: { first, _ in first })
             } else {
                 // Defensive fallback: keep the row-derived chart if the aggregate query returned nothing.
                 chart = ChronologyGrouping.makeChart(from: groups, maxSeries: ask.colors)
@@ -315,9 +322,8 @@ enum ChronologyRoutes {
             buckets: chart.buckets.map { bucket in
                 ChronologyAnswer.Bucket(
                     key: bucket.bucketKey,
-                    label: ChronologyLabels.label(forBucketKey: bucket.bucketKey,
-                                                  granularity: granularities[bucket.bucketKey] ?? viewBucket),
-                    date: ChronologyLabels.firstDay(ofBucketKey: bucket.bucketKey),
+                    label: bucket.label,
+                    date: firstDay(ofBucketKey: bucket.bucketKey),
                     segments: bucket.segments.map { .init(seriesKey: $0.seriesKey, count: $0.count) },
                     total: bucket.total)
             },
@@ -331,7 +337,7 @@ enum ChronologyRoutes {
             groups: displayedGroups.map { group in
                 ChronologyAnswer.Group(
                     key: group.bucketKey,
-                    label: ChronologyLabels.label(forBucketKey: group.bucketKey, granularity: group.granularity),
+                    label: group.displayLabel,
                     count: group.count,
                     aggregate: ChronologyViewRules.aggregateLine(volumes: group.volumeCount, subseries: group.subseriesCount,
                                                                  editorialNotes: group.editorialNoteCount),
@@ -360,6 +366,15 @@ enum ChronologyRoutes {
         }
         answer.table = table(answer)
         return answer
+    }
+
+    /// A bucket's first day as an ISO day, the answer's own: `1969` → `1969-01-01`, `1969-02` → `1969-02-01`.
+    static func firstDay(ofBucketKey key: String) -> String {
+        switch key.count {
+        case 4: return key + "-01-01"
+        case 7: return key + "-01"
+        default: return key
+        }
     }
 
     // MARK: The chart's table and statement, the web's own
@@ -553,44 +568,4 @@ struct ChronologyViewRules {
     static let capDetail = appWords(
         "chronology.info.cap.detail",
         "The document list is capped at 5,000, but the chart still reflects the whole range; the summary line reports the true total so you can narrow the range.")
-}
-
-// MARK: - The labels, in US English
-
-/// The kit's labels for a section and a chart bucket (`ChronologyGrouping`'s private `label(forBucketKey:granularity:)`,
-/// and `sortDate(forBucketKey:)` before it), written in `SearchItem.locale` where the kit reads the process's: a
-/// year as `yyyy`, a month from the template `MMMM yyyy`, a day in the long style, of the bucket's first day in
-/// the Gregorian calendar and the process's zone, as the kit dates it.
-enum ChronologyLabels {
-    static func label(forBucketKey key: String, granularity: DateBucket) -> String {
-        guard let date = sortDate(forBucketKey: key) else { return key }
-        let f = DateFormatter()
-        f.locale = SearchItem.locale
-        switch granularity {
-        case .year:  f.dateFormat = "yyyy"
-        case .month: f.setLocalizedDateFormatFromTemplate("MMMM yyyy")
-        case .day:   f.dateStyle = .long
-        }
-        return f.string(from: date)
-    }
-
-    /// The kit's `sortDate(forBucketKey:)`: the bucket's first day, at its start.
-    static func sortDate(forBucketKey key: String) -> Date? {
-        let parts = key.split(separator: "-").map { Int($0) }
-        guard let year = parts.first ?? nil else { return nil }
-        var comps = DateComponents()
-        comps.year = year
-        comps.month = parts.count > 1 ? parts[1] : 1
-        comps.day = parts.count > 2 ? parts[2] : 1
-        return Calendar(identifier: .gregorian).date(from: comps)
-    }
-
-    /// The bucket's first day as an ISO day: `1969` → `1969-01-01`, `1969-02` → `1969-02-01`.
-    static func firstDay(ofBucketKey key: String) -> String {
-        switch key.count {
-        case 4: return key + "-01-01"
-        case 7: return key + "-01"
-        default: return key
-        }
-    }
 }

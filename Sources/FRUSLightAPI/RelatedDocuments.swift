@@ -6,7 +6,9 @@
 // `RelatedDocumentsParityTests`: the anchor's year read from the index
 // (`RelatedDocumentsRequest.resolvedAnchorYear(pipeline:)`), the scopes the picker offers and the volumes
 // each stands for (`RelatedDocumentsContent.availableScopes`, `NeighborScope.resolveVolumeIds(appState:)`),
-// and the subjects named on the rows shown (`RelatedDocumentsContent.attachSubjectEvidence()`).
+// and the subjects named on the rows shown (`RelatedDocumentsContent.attachSubjectEvidence()`). A row's line
+// prefers its reader's summary, as the app's does: the engine reads it from the rows of the user the request
+// searches as in the store the served index attaches, or from the index's own for no one (FRUS-Explorer#1907).
 //
 // The cross-reference axis ranks by the kit's `CrossReferenceStore` (FRUS-Explorer#1891) over the served
 // index, since S23c's pin move, as the app's ranks by its `appState.crossReferenceStore`. Two of the app's
@@ -66,7 +68,8 @@ public struct RelatedDocuments: Codable, Equatable, Sendable, ResponseEncodable 
         public var isEditorialNote: Bool
         /// Its total proximity, the weighted sum of its axes' scores.
         public var score: Double
-        /// The opening of its text in the served index, as the kit reads it for the rows shown.
+        /// The opening of the reader's summary of it, else of its text in the served index, as the kit reads
+        /// it for the rows shown.
         public var snippet: String?
         /// The "why related" chips, strongest first (`RelatedDocumentRow.whyRelatedChips`).
         public var chips: [Chip]
@@ -96,7 +99,8 @@ enum RelatedDocumentsRoutes {
     /// The locale the chips' words and their counts are written in, as the server's other words are.
     static let locale = Locale(identifier: "en_US")
 
-    static func add(to router: Router<APIRequestContext>, provider: ServedIndexProvider, resources: ServerResources) {
+    static func add(to router: Router<APIRequestContext>, provider: ServedIndexProvider, resources: ServerResources,
+                    users: SearchUsers) {
         router.get("/api/v1/volumes/:volumeId/documents/:documentId/related") { request, context -> RelatedDocuments in
             let query = try FormQuery(request.uri.query)
             try query.refuseUnknown(["scope", "weights", "limit"])
@@ -115,11 +119,12 @@ enum RelatedDocumentsRoutes {
                                  detail: "\(volumeId) is in no subseries with another volume of the catalogue, so its related documents have no subseries scope.")
             }
             let served = try await provider.served()
+            let summaries = try await users.summarySource(for: request, context: context, served: served)
             // The subject index is 6 MB of JSON, decoded once, off the cooperative pool.
             let subjects = try await Blocking.run { resources.documentSubjectIndex }
             let anchor = DocumentKey(volumeId: volumeId, documentId: documentId)
-            let rows = await ranked(anchor, scope: scope, weights: weights, limit: limit, served: served, resources: resources,
-                                    subjects: subjects)
+            let rows = await ranked(anchor, scope: scope, weights: weights, limit: limit, summaries: summaries, served: served,
+                                    resources: resources, subjects: subjects)
             return answer(anchor, scope: scope, offered: offered, weights: weights, result: rows, subjects: subjects)
         }
     }
@@ -200,16 +205,17 @@ enum RelatedDocumentsRoutes {
     }
 
     /// The anchor's related documents, as the app's list loads them: the anchor's year from the index, the
-    /// scope's volumes and the kit's ranking, with the shared subjects of the rows shown named.
+    /// scope's volumes and the kit's ranking, each row's line read from `summaries` where the reader has
+    /// summarised its document, with the shared subjects of the rows shown named.
     @MainActor
-    static func ranked(_ anchor: DocumentKey, scope: RelatedScope, weights: AxisWeights, limit: Int, served: ServedIndex,
-                       resources: ServerResources, subjects: DocumentSubjectIndex?) async -> RelatedDocumentsResult {
+    static func ranked(_ anchor: DocumentKey, scope: RelatedScope, weights: AxisWeights, limit: Int, summaries: SearchUserSource,
+                       served: ServedIndex, resources: ServerResources, subjects: DocumentSubjectIndex?) async -> RelatedDocumentsResult {
         let dates = (try? await served.pipeline.documentDates(for: [(volumeId: anchor.volumeId, documentId: anchor.documentId)])) ?? [:]
         let year = anchorYear(indexDate: dates[anchor.compositeString], doorYear: nil)
         let result = await RelatedDocumentsEngine.rank(
             anchor: anchor, anchorYear: year, weights: weights,
             scopeVolumeIds: volumeIds(of: scope, anchorVolumeId: anchor.volumeId, resources: resources),
-            limit: limit, dependencies: dependencies(served: served, resources: resources, subjects: subjects))
+            limit: limit, userSource: summaries, dependencies: dependencies(served: served, resources: resources, subjects: subjects))
         return RelatedDocumentsResult(rows: namingSharedSubjects(result.rows, anchor: anchor, subjects: subjects),
                                       totalBeforeLimit: result.totalBeforeLimit, poolCutFrom: result.poolCutFrom,
                                       offIndexLeads: result.offIndexLeads)

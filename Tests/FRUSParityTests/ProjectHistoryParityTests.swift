@@ -407,7 +407,9 @@ import Testing
         ], file: "ProjectFocus.swift")
         NoteViewParityTests.expect(try Self.server("Sources/FRUSLightAPI/ProjectHome.swift"), holds: [
             "if let profiles = resources.subjectProfiles.profiles {",
-            "let lines = (try? await served.pipeline.documentSnippets(forKeys: keys)) ?? [:]",
+            // The app's call, its index holding its reader's summaries; the server's names where its reader's are.
+            "let source = SearchUsers.summarySource(of: user, served: served)",
+            "let lines = (try? await served.pipeline.documentSnippets(forKeys: keys, userSource: source)) ?? [:]",
             "if let line = lines[ProjectFocusRoutes.key(lead.volumeId, lead.documentId)], !line.isEmpty { lead.snippet = line }",
         ], file: "ProjectHome.swift")
         NoteViewParityTests.expect(try Self.web("research/ProjectHomeScreen.tsx"), holds: [

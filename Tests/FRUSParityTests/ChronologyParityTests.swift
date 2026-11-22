@@ -1,7 +1,8 @@
 // Chronology (PLAN's S24f), over the kit's fixture index imported as an export. Every range's sections, rows, chart,
 // chips and summary through the API are the kit's `ChronologyGrouping` over the pipeline's rows, as the app's view
 // model's `reload()` loads them, computed here with a host's own pipeline apart from the server: at each
-// granularity, in either order, with the colours at their fewest, and with the legend's filter on.
+// granularity, in either order, with the colours at their fewest, and with the legend's filter on. The labels are
+// the kit's, in US English (FRUS-Explorer#1912), on Linux too.
 
 import FRUSLightCore
 import FRUSLightTestSupport
@@ -69,7 +70,8 @@ import Testing
         let (placed, spanning) = ChronologyGrouping.partition(rows)
         let (inRange, overflow) = ChronologyGrouping.splitOverflow(placed, startISO: startISO, endISO: endISO)
         let viewBucket = ChronologyGrouping.bucket(forDaysBetween: startDay, and: endDay, calendar: cal)
-        let groups = ChronologyGrouping.group(inRange, viewBucket: viewBucket, ascending: !ask.newest)
+        // Each section labelled by the kit in US English, at its own granularity, and each bucket with its section's label.
+        let groups = ChronologyGrouping.group(inRange, viewBucket: viewBucket, ascending: !ask.newest, locale: Locale(identifier: "en_US"))
         let chart = ChronologyGrouping.makeChart(from: groups, maxSeries: ask.colors)
         let top = Set(chart.series.map(\.key).filter { $0 != chronologyOtherSeriesKey })
         func shown(_ row: ChronologyRow) -> Bool {
@@ -80,11 +82,8 @@ import Testing
                      "domain \(ChronologyGrouping.isoDay(ChronologyGrouping.startOfBucket(startDay, bucket: viewBucket, calendar: cal))) "
                         + ChronologyGrouping.isoDay(ChronologyGrouping.endOfBucket(endDay, bucket: viewBucket, calendar: cal)),
                      "summary \(CountCopy.documents(inRange.count, locale: Locale(identifier: "en_US")))"]
-        // Each label in US English by the kit's three formats, at the granularity the kit gave its section.
-        let granularities = Dictionary(groups.map { ($0.bucketKey, $0.granularity) }, uniquingKeysWith: { first, _ in first })
         for bucket in chart.buckets {
-            let label = ChronologyLabels.label(forBucketKey: bucket.bucketKey, granularity: granularities[bucket.bucketKey] ?? viewBucket)
-            lines.append("bucket \(bucket.bucketKey) \(label) " + bucket.segments.map { "\($0.seriesKey)=\($0.count)" }.joined(separator: " "))
+            lines.append("bucket \(bucket.bucketKey) \(bucket.label) " + bucket.segments.map { "\($0.seriesKey)=\($0.count)" }.joined(separator: " "))
         }
         for series in chart.series { lines.append("series \(series.key) \(series.total)") }
         for group in groups {
@@ -93,8 +92,7 @@ import Testing
             let volumes = Set(kept.map(\.volumeId)).count
             let subseries = Set(kept.compactMap { CorpusAnalyticsService.subseries(fromVolumeId: $0.volumeId) }).count
             let notes = kept.filter(\.isEditorialNote).count
-            lines.append("group \(group.bucketKey) \(group.granularity) \(kept.count) \(volumes) \(notes) "
-                         + "\(ChronologyLabels.label(forBucketKey: group.bucketKey, granularity: group.granularity)) | "
+            lines.append("group \(group.bucketKey) \(group.granularity) \(kept.count) \(volumes) \(notes) \(group.displayLabel) | "
                          + ChronologyViewRules.aggregateLine(volumes: volumes, subseries: subseries, editorialNotes: notes))
             lines += kept.map { Self.rowLine($0, span: nil) }
         }
@@ -209,20 +207,29 @@ import Testing
         #expect(tally.filtered > 0 && tally.empty > 0 && tally.approximate > 0, "\(tally)")
     }
 
-    /// The labels the server writes in US English are the kit's formats, and its first day is the kit's sort date.
-    @Test func theLabelsAreTheKitsFormatsInUSEnglish() throws {
-        #expect(ChronologyLabels.label(forBucketKey: "1969", granularity: .year) == "1969")
-        #expect(ChronologyLabels.label(forBucketKey: "1969-02", granularity: .month) == "February 1969")
-        #expect(ChronologyLabels.label(forBucketKey: "1969-02-03", granularity: .day) == "February 3, 1969")
-        #expect(ChronologyLabels.label(forBucketKey: "1969-02-03", granularity: .year) == "1969")
-        #expect(ChronologyLabels.firstDay(ofBucketKey: "1969") == "1969-01-01" && ChronologyLabels.firstDay(ofBucketKey: "1969-02") == "1969-02-01")
-        NoteViewParityTests.expect(try ProjectHistoryParityTests.kit("FRUSCoreKit/Chronology/ChronologyGrouping.swift"), holds: [
-            "guard let date = sortDate(forBucketKey: key) else { return key } let f = DateFormatter() f.locale = .autoupdatingCurrent switch granularity { case .year: f.dateFormat = \"yyyy\" case .month: f.setLocalizedDateFormatFromTemplate(\"MMMM yyyy\") case .day: f.dateStyle = .long } return f.string(from: date)",
-            "let parts = key.split(separator: \"-\").map { Int($0) } guard let year = parts.first ?? nil else { return nil } var comps = DateComponents() comps.year = year comps.month = parts.count > 1 ? parts[1] : 1 comps.day = parts.count > 2 ? parts[2] : 1 return Calendar(identifier: .gregorian).date(from: comps)",
-        ], file: "ChronologyGrouping.swift")
-        NoteViewParityTests.expect(try ProjectHistoryParityTests.server("Sources/FRUSLightAPI/Chronology.swift"), holds: [
-            "guard let date = sortDate(forBucketKey: key) else { return key } let f = DateFormatter() f.locale = SearchItem.locale switch granularity { case .year: f.dateFormat = \"yyyy\" case .month: f.setLocalizedDateFormatFromTemplate(\"MMMM yyyy\") case .day: f.dateStyle = .long } return f.string(from: date)",
-            "let parts = key.split(separator: \"-\").map { Int($0) } guard let year = parts.first ?? nil else { return nil } var comps = DateComponents() comps.year = year comps.month = parts.count > 1 ? parts[1] : 1 comps.day = parts.count > 2 ? parts[2] : 1 return Calendar(identifier: .gregorian).date(from: comps)",
-        ], file: "Chronology.swift")
+    /// The labels are the kit's, written in US English (FRUS-Explorer#1912) on Linux too, where the process's locale is
+    /// World English and the kit wrote "15 February 1969" until it took one: through the server's own assembly, a day's
+    /// section, its bucket and its table row "February 15, 1969", a month's "February 1969" and a year's "1969". Each
+    /// bucket's first day is the answer's own.
+    @Test func theLabelsAreTheKitsInUSEnglish() throws {
+        let resources = try ServerResources.load(from: ServedFixture.resources)
+        let calendar = Calendar(identifier: .gregorian)
+        let row = ChronologyRow(volumeId: "frus1969-76v01", documentId: "d1", header: "1. Minutes", dateline: nil, summary: nil,
+                                dateISO: "1969-02-15", dateISOMax: nil, precision: .day, certainty: .exact, isEditorialNote: false,
+                                isFrontMatter: false, documentNumber: "1")
+        // A day's range is a year at most, a month's eight years at most (`dayGroupingMaxDays`, `monthGroupingMaxDays`).
+        let ranges = [("1969-02-01", "1969-02-28", "day", "1969-02-15", "February 15, 1969", "1969-02-15"),
+                      ("1968-01-01", "1970-12-31", "month", "1969-02", "February 1969", "1969-02-01"),
+                      ("1960-01-01", "1979-12-31", "year", "1969", "1969", "1969-01-01")]
+        for (from, to, granularity, key, label, firstDay) in ranges {
+            let start = try #require(ChronologyRoutes.isoDayDate(from))
+            let end = try #require(ChronologyRoutes.isoDayDate(to))
+            let answer = ChronologyRoutes.assemble(ChronologyAsk(start: start, end: end), rows: [row], counts: [],
+                                                   startDay: calendar.startOfDay(for: start), endDay: calendar.startOfDay(for: end),
+                                                   resources: resources)
+            #expect(answer.granularity == granularity && answer.groups.map(\.key) == [key], "\(from) to \(to)")
+            #expect(answer.groups.map(\.label) == [label] && answer.buckets.map(\.label) == [label], "\(from) to \(to)")
+            #expect(answer.table.rows.map { $0.first ?? "" } == [label] && answer.buckets.map(\.date) == [firstDay], "\(from) to \(to)")
+        }
     }
 }

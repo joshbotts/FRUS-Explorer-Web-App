@@ -6,8 +6,9 @@
 // kit's vocabulary it chose, with those their editor suggests (ProjectFocus.swift, PLAN's S25c); its
 // focus tags are the user's tags it chose; and Suggested Next is the leads the Mac computed, which
 // Dismiss keeps from surfacing again, until phase 3's Related Documents computes them here, each with
-// the line the kit reads for it from the served index (`documentSnippets(forKeys:maxLength:userSource:)`
-// with its default source, the index, S25c).
+// the line the kit reads for it (`documentSnippets(forKeys:maxLength:userSource:)`, S25c): the reader's own
+// summary from the user store the served index attaches, else the document's text (FRUS-Explorer#1902's
+// source, taken with #1907's).
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -154,7 +155,7 @@ enum ProjectHomeRoutes {
             } catch let error as ResearchExportError {
                 throw APIProblem(.internalServerError, code: "STORE_DAMAGED", detail: "Project Home could not be read: \(error.description)")
             }
-            answer.leads = await withLines(answer.leads, provider: provider)
+            answer.leads = await withLines(answer.leads, for: user.id, provider: provider)
             answer.leadsRefresh = refresh
             return answer
         }
@@ -185,12 +186,14 @@ enum ProjectHomeRoutes {
     /// `leads` with the line under each (`ProjectHomeView.loadLeadSnippets()`): the kit's snippets of
     /// the served index for the leads shown, read at once by their keys. None while no index is
     /// served; and none when the read fails, as the app's rows then draw as they did without a line.
-    /// The kit prefers the summary the index's own `summary_text` holds, which the served copy never
-    /// holds, so each line is its document's text.
-    static func withLines(_ leads: [ProjectHome.Lead], provider: ServedIndexProvider) async -> [ProjectHome.Lead] {
+    /// The kit prefers the document's summary, which `user`'s rows of the store the served index
+    /// attaches hold, as the app's index holds its reader's (FRUS-Explorer#1902): a lead they have
+    /// summarised shows the summary, and any other its document's text.
+    static func withLines(_ leads: [ProjectHome.Lead], for user: String, provider: ServedIndexProvider) async -> [ProjectHome.Lead] {
         guard !leads.isEmpty, let served = try? await provider.servedIfReady() else { return leads }
         let keys = leads.map { (volumeId: $0.volumeId, documentId: $0.documentId) }
-        let lines = (try? await served.pipeline.documentSnippets(forKeys: keys)) ?? [:]
+        let source = SearchUsers.summarySource(of: user, served: served)
+        let lines = (try? await served.pipeline.documentSnippets(forKeys: keys, userSource: source)) ?? [:]
         return leads.map { lead in
             var lead = lead
             // The row draws a line only when it has one (`if let snippet = leadSnippets[lead.documentKey], !snippet.isEmpty`).
