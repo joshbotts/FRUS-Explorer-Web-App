@@ -54,6 +54,9 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     VolumeSourcesRoutes.add(to: router, provider: provider, resources: resources)
     RelatedDocumentsRoutes.add(to: router, provider: provider, resources: resources)
     CrossReferenceGraphRoutes.add(to: router, provider: provider, resources: resources)
+    // Archival Analytics and About the Series (PLAN's S24h).
+    ArchivalAnalyticsRoutes.add(to: router, provider: provider, resources: resources)
+    AboutSeriesRoutes.add(to: router, provider: provider, resources: resources)
     // Person and Cross-Reference Analytics (PLAN's S24g).
     PersonAnalyticsRoutes.add(to: router, provider: provider, resources: resources)
     CrossReferenceAnalyticsRoutes.add(to: router, provider: provider, resources: resources)
