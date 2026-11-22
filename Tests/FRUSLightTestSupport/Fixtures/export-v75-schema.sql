@@ -1,6 +1,19 @@
--- PROVISIONAL, until the owner's 1861 export: export-v74-schema.sql's statements with volume_structures
--- as SQLite stores it after index version 75's two ALTER TABLE ... ADD COLUMN statements, which a library
--- the app upgrades from 74 runs (FRUSCoreKit/Search/IndexingPipeline.swift, setupDatabase(_:)).
+-- Schema of a FRUS Explorer research export: index version 75, FTS schema 4, app 1.0 build 1861, the
+-- App Store build, from FRUS-Explorer's tag 1.0-release (08e8bac8). Taken from the owner's three-volume
+-- export of 22 November 2026 (sqlite_master, in creation order).
+-- Its library was emptied with Erase Everything…, which keeps the database file, so the partial index
+-- idx_document_cache_user_tag_ids comes last among the indexes, where a new database makes it earlier,
+-- and volume_structures has index version 75's two columns where the upgrade's ALTER TABLE ... ADD COLUMN
+-- statements put them (FRUSCoreKit/Search/IndexingPipeline.swift, setupDatabase(_:)), after the line
+-- that closed the table, where a new database names them on lines of their own.
+-- Schema only: no rows. SQLite internals and FTS5 shadow tables are left out; FTS5 creates those.
+-- Index version 74 (builds 1787 and 1812) had the same statements in the same order but volume_structures,
+-- without file_blob_sha1 and file_size_bytes (FRUS-Explorer#1948).
+-- The owner's full export of the same day is not the source: its library, upgraded in place from an
+-- earlier index version, holds the same objects in another order, with cross_references' is_broken and
+-- external_citations' note_label appended last, and person_mentions without its UNIQUE constraint, as the
+-- full export from 1.0 (1812) did. That is the library's history, not the version's schema.
+
 CREATE TABLE cross_references (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     source_volume_id TEXT NOT NULL,

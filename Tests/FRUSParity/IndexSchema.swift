@@ -1,10 +1,11 @@
-// What the index summary hashes in an index-69 database, table by table, and how it classifies
+// What the index summary hashes in an index-75 database, table by table, and how it classifies
 // every other object, so that nothing in the file goes unhashed or unexplained.
 //
-// Verified against Tests/FRUSLightTestSupport/Fixtures/export-v74-schema.sql, the schema of the
-// owner's three-volume export from a build of FRUS-Explorer fe9325b2 (index version 74, build 1787),
-// whose tables index versions 69 and 71 held unchanged, and which the owner's three-volume export
-// from TestFlight's 1.0 (1812) holds byte for byte (S21b's pin move). A pin move that changes a table
+// Verified against Tests/FRUSLightTestSupport/Fixtures/export-v75-schema.sql, the schema of the
+// owner's three-volume export from FRUS Explorer 1.0 (1861), the tag 1.0-release (index version 75),
+// whose tables index version 74 held but volume_structures' two columns (S12d's pin move). The owner's
+// full export from the same build has two tables' columns in another order, where its library's
+// upgrades appended them, so the column check refuses it. A pin move that changes a table
 // fails the column check in `IndexSummarizer`, rather than leaving a new column out of every hash.
 
 /// One table of the corpus index and how its rows are hashed.
