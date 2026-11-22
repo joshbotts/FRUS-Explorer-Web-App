@@ -897,7 +897,7 @@ S21f's second web follow-up, with no PLAN row of its own: steps 2 to 4 of `docs/
 - **An id given twice** in a file the export indexed is passed over too, where the kit stamped it changed at every comparison; the export's own stamp of it, from the Mac's indexing, is the one the reader shows.
 - **The synthetic export** records no file (`scripts/synthetic-export` and `SyntheticExport.swift` leave the two columns NULL), so the smoke test's Import server compares its mounted volumes by their documents, as before: CI runs the path an export without the record takes.
 
-**How the done-when is shown,** in `TEIComparisonTests`, 15 tests where S21f's follow-up left 13:
+**How the done-when is shown,** in `TEIComparisonTests`, where S21f's follow-up left 13 tests:
 - **Unchanged:** `anUnchangedExportIsComparedWithNoVolumeIndexed` now parses no volume.
 - **Changed:** `aChangedVolumeAloneIsIndexedAndTheKitSaysHowItChanged` parses only the volume whose file changed.
 - **The record decides alone** (`theFileTheExportIndexedDecidesWhetherAVolumesDocumentsAreCompared`, new). The export's record of frus1894Nicaragua is the mounted file's blob SHA-1 and length, by the server's hash, and its volume is passed over though its rows say otherwise. A record naming another file has frus1961-63v06's documents compared, found as the export records them, and nothing indexed.
@@ -917,7 +917,18 @@ S21f's second web follow-up, with no PLAN row of its own: steps 2 to 4 of `docs/
 - **The comparison indexes placed** each passed `quick_check`: the unchanged run's held 332 KB, the changed run's 5.6 MB.
 - **The 553 volumes** (3,338,778,538 bytes) would take about 4 seconds at the unchanged sample's rate. The sample's files were in the page cache, just read by the export's making, so a first comparison that reads the corpus cold after a start may take longer. Each volume whose file is another adds its parse, about half a second at the sample's rate, and each whose documents differ adds what the kit takes to index it.
 
-STEP5REVIEW
+**The cold review** of step 5, the second subagent's, found no important defect. It found:
+- the record read and held as the kit writes it, a changed file never passed over;
+- the job's giving way, re-check, cancel and placing as before;
+- each file read whole once, 13.1 MB at the most, and the kit's second open closed with its closure;
+- that passing over a volume whose file the export indexed changes what a reader is shown only for the better.
+
+What held up was fixed before the push:
+- **A comparison the released build made would have stayed.** Over an export with a Mac's update history, 1.0-1861.1's comparison found fresh changes in volumes whose file the export indexed: a document the Mac's own update removed, or an id given twice. Nothing marked its record as an earlier rule's, so their banners would have stayed until the next import. The record and the work under way now carry the rule's `format`, 2, and one of an earlier rule is read as none, so an upgraded server compares its export afresh once (`aComparisonAnEarlierRulePlacedIsMadeAgain`).
+- **The test of an export from before 75** could not fail on what its comment claimed, since a record that does not read counts as none too. It now asks the kit's read-only open itself, which answers no record and throws none.
+- **A file of another length** is another file, so the job no longer reads it to hash it.
+
+TEIComparisonTests has 16 tests with the review's.
 
 RESULTS1909
 
@@ -5376,8 +5387,15 @@ The plan written is the export's identity test, as before: imported into another
 **Tests** (in the runs below):
 - FRUSLightCoreTests: `UserResearchImportTests`, on both stores: the plan given the user's rows and the instance's, every column, ids as the store spells them; what it returns written, a replacement only in its columns; each user's rows and the instance's; the preferences by the user; user_search made again; writes that do not fit, a database refusal and a plan that throws writing nothing; S16e's batch by the newer-copy rule; `ImportStamp`'s columns.
 - FRUSParityTests: `ImportParityTests`, a newer version-6 copy with the bold note's text made plain and the third note's formatting kept with its text (`aRecordTheStoreHoldsIsReplacedOnlyByANewerCopy`); a version-4 file leaving the edited summary AI-generated and the unchanged one its author (`aNewTextFromAFileBefore5LeavesTheSummaryAIGenerated`); the round trip; the defaults the kit's plan gives an older file's records, through the server's row mappers, held to the app's models (`whatAnOlderFileCannotCarryTakesTheModelsDefault`); the text rule's cases held to the app's source.
-- FRUSLightServerTests: `ImportRouteTests`, the report's two counts.
+- FRUSLightServerTests: `ImportRouteTests`, the report's two counts, and for a user who is no curator every copy of a correction set aside and the instance's rows unread.
 - The web unit suite: `ImportSection.test.tsx`, the two lines beside the formatting kept and the summaries without authorship.
+
+**The cold reviews:** two subagents, given the range `origin/main...HEAD` and the points the brief asks a review to weigh, and none of this session's reasoning, each ran the `code-review` skill at `high`, one over the import and one over step 5. Neither found an important defect in what it reviewed. The import's review found that every decision is the kit's, that the text rule's counts are the app's done line's, that the store's half is one transaction on both stores with S16e's batch as before, and that the round trip holds what its name says. What held up was fixed before the push:
+- **A user who is no curator read the instance's corrections** (both reviews; the skill marked it important): every import read every correction row as the kit's record, though only a curator's import writes one, so one row that did not read would have refused every user's import. The import now reads the instance's tables only for a curator, as a user's export reads them, and `anInstancesCorrectionsAreSetAsideForAUserWhoIsNoCurator` holds that such a row refuses a curator's import alone.
+- **A correction the file repeats, for a user who is no curator:** the report counted the repeat as kept once and the rest as set aside. Every copy is now counted as set aside and none as repeated, as before the kit's plan.
+- **The store's lock:** the import reads every row of the user's tables in its transaction, as an export reads them, where it read each record's id and times, since the kit's snapshot takes each stamp from the record and a replacement is written over the record. That is kept, and SPEC says so. What is the web's own now runs outside the lock: the codec reads the written notes' formatting after the transaction.
+- **Smaller:** the envelope's `run` now maps the kit's refusal of a version, as the file's does.
+- **Left to their owners:** the stale lines the review found in the README, COORDINATION and SPEC's Delivery plan are named for S24i below, and `docs/prep`'s "Taken" is the pin moves'.
 
 RESULTS1915
 
@@ -5390,6 +5408,7 @@ RESULTS1915
 - The README's What works today, its line on the Mac's JSON export: imported by the kit's rules, the app's Import from JSON…'s, with a note's formatting and a summary's author going with a text an older export replaces; and the way back, the web's export imported into the app with Settings ▸ System ▸ Data & Recovery ▸ Import from JSON… on Mac, iPhone or iPad. Its Next, item 2: the import's follow-up is done.
 - COORDINATION §5's JSON-importer item: "the web's own import taking the kit's plan is a follow-up of its own" is done, so the item closes.
 - SPEC's Settings and administration, a shared part, whose Settings ▸ Data bullet says the pane imports "the web's own, since the app imports none": the app imports one since 1.0 (1823), and the pane's report has the two lines of the text rule.
+- SPEC's Delivery plan, another, whose Changes requested in the Mac app keep item 4, "Optionally, add a JSON importer, so web data can return to the Mac": done since 1.0 (1823).
 
 **Next:** S24i, the Word Cloud, the S24 group's last row, which writes the lines above; then S25b, phase 3's sign-off.
 

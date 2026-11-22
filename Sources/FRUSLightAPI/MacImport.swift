@@ -158,13 +158,19 @@ public enum MacImport {
             file = try ResearchImportFile(data: data)
         } catch let error as DecodingError {
             throw MacImportError.undecodable(describe(error))
-        } catch ResearchImportFile.FormatError.newerFormatVersion(let version) {
-            throw MacImportError.unsupportedVersion(version)
-        } catch ResearchImportFile.FormatError.unknownFormatVersion(let version) {
-            throw MacImportError.notAnExport("its formatVersion, \(version), is none the app writes.")
+        } catch let error as ResearchImportFile.FormatError {
+            throw refusal(error)
         }
         precondition(file.envelope.formatVersion == version)
         return file
+    }
+
+    /// The kit's refusal of a format version, in the import's own words.
+    static func refusal(_ error: ResearchImportFile.FormatError) -> MacImportError {
+        switch error {
+        case .newerFormatVersion(let version): .unsupportedVersion(version)
+        case .unknownFormatVersion(let version): .notAnExport("its formatVersion, \(version), is none the app writes.")
+        }
     }
 
     /// The file's envelope, as `file(of:)` reads it.
@@ -207,7 +213,13 @@ public enum MacImport {
     /// The same, of an envelope already decoded, which carries no web key.
     public static func run(_ envelope: ResearchDataEnvelope, into store: any ResearchImportStore, for user: String,
                            includingInstanceWide: Bool) throws -> ResearchImportReport {
-        try run(try ResearchImportFile(envelope: envelope), into: store, for: user, includingInstanceWide: includingInstanceWide)
+        let file: ResearchImportFile
+        do {
+            file = try ResearchImportFile(envelope: envelope)
+        } catch let error as ResearchImportFile.FormatError {
+            throw refusal(error)
+        }
+        return try run(file, into: store, for: user, includingInstanceWide: includingInstanceWide)
     }
 
     /// What the store holds, read as the kit's records by the export's own reading of the rows: the snapshot the
@@ -227,8 +239,10 @@ public enum MacImport {
         }
 
         /// Every row of the 23 tables `rows` holds, each read as the export reads it: a row that does not read as the
-        /// kit's record, which only a damaged store holds, refuses the import, as it refuses the export.
-        init(_ rows: ResearchRows) throws {
+        /// kit's record, which only a damaged store holds, refuses the import, as it refuses the export. The instance's
+        /// two tables are read only `includingInstanceWide`, for a curator: anyone else's import writes no correction,
+        /// and so neither reads one, as their export does not.
+        init(_ rows: ResearchRows, includingInstanceWide: Bool) throws {
             try hold(rows, "notes", \ResearchNoteExport.id) { try ResearchExport.note($0, links: [:]) }
             try hold(rows, "highlights", \DocumentHighlightExport.id, ResearchExport.highlight)
             try hold(rows, "tags", \UserTagExport.id, ResearchExport.tag)
@@ -249,8 +263,11 @@ public enum MacImport {
             try hold(rows, "summaries", \GeneratedSummaryExport.id, ResearchExport.summary)
             try hold(rows, "prompts", \SummarizationPromptExport.id, ResearchExport.prompt)
             try hold(rows, "annotation_reviews", \AnnotationReviewExport.id, ResearchExport.review)
-            try hold(rows, "person_overrides", \PersonClusterOverrideExport.id, ResearchExport.personCorrection)
-            try hold(rows, "classification_overrides", \DocumentClassificationOverrideExport.id, ResearchExport.classificationCorrection)
+            if includingInstanceWide {
+                try hold(rows, "person_overrides", \PersonClusterOverrideExport.id, ResearchExport.personCorrection)
+                try hold(rows, "classification_overrides", \DocumentClassificationOverrideExport.id,
+                         ResearchExport.classificationCorrection)
+            }
             // One set a user, the store's key.
             for row in rows["preferences"] {
                 let set = try ResearchExport.preferences(ResearchExport.Fields("preferences", row))
@@ -297,20 +314,20 @@ public enum MacImport {
         let plan: ResearchImportPlan
         let includingInstanceWide: Bool
         private(set) var writes: [ImportWrite] = []
-        /// The web's own lines, counted over what the import writes.
-        private(set) var formattedNotes = 0, formattingKept = 0, notesMadePlain = 0, summariesMadeAIGenerated = 0
+        /// The text and formatting of each note the import writes, whose formatting the report counts once the
+        /// transaction is over, the codec's reading of it no part of the writes.
+        private(set) var writtenNotes: [(text: String, rtf: Data?)] = []
+        /// The cases of the text rule, counted over what the import writes.
+        private(set) var notesMadePlain = 0, summariesMadeAIGenerated = 0
 
         init(file: ResearchImportFile, held rows: ResearchRows, includingInstanceWide: Bool) throws {
-            let held = try HeldLibrary(rows)
+            let held = try HeldLibrary(rows, includingInstanceWide: includingInstanceWide)
             plan = ResearchImportPlan(file: file, library: held.snapshot)
             self.includingInstanceWide = includingInstanceWide
             let version = plan.formatVersion
 
             for (before, note) in try write(plan.notes, to: "notes", held, \.id, { note, _ in MacImport.note(note) }) {
-                if note.richText != nil {
-                    formattedNotes += 1
-                    if NoteFormatting.runs(of: note.richText.map(Array.init), text: note.bodyText).kept { formattingKept += 1 }
-                }
+                writtenNotes.append((note.bodyText, note.richText))
                 // As the app's writer counts them (`ResearchImportWriter.countTextChange`).
                 if let before, version < ResearchImportPlan.Fields.noteFormatting.since, before.richText != nil, note.richText == nil {
                     notesMadePlain += 1
@@ -402,25 +419,30 @@ public enum MacImport {
         }
 
         /// The report: the kit's counts, each type in the user store's order, with the web's own lines beside them.
+        /// The notes' formatting is read here, after the transaction.
         func report(searchableDocuments: Int) -> ResearchImportReport {
             let kit = plan.report
+            let formatted = writtenNotes.filter { $0.rtf != nil }
+            let formattingKept = formatted.filter { NoteFormatting.runs(of: $0.rtf.map(Array.init), text: $0.text).kept }.count
             let types = MacImport.types.compactMap { type -> ImportTypeCount? in
                 guard let count = kit.types.first(where: { $0.model.rawValue == type.model }) else { return nil }
                 var web = ImportTypeCount(type: type.model, carried: count.carried, inFile: count.inFile, added: count.added,
                                           replaced: count.replaced, kept: count.kept, setAside: count.setAside,
                                           repeated: count.repeated)
                 if !includingInstanceWide, MacImport.instanceTables.contains(type.table) {
-                    // Planned, as the kit plans every correction, and set aside, as only a curator imports one here.
-                    web.setAside += web.added + web.replaced + web.kept
+                    // Planned, as the kit plans every correction, and set aside, every copy, as only a curator
+                    // imports one here: none is kept once, as a repeat's count would say.
+                    web.setAside += web.added + web.replaced + web.kept + web.repeated
                     web.added = 0
                     web.replaced = 0
                     web.kept = 0
+                    web.repeated = 0
                 }
                 return web
             }
             return ResearchImportReport(
                 formatVersion: kit.formatVersion, exportedAt: UserStoreDate.text(kit.exportedAt), types: types,
-                formattedNotes: formattedNotes, formattingKept: formattingKept, notesMadePlain: notesMadePlain,
+                formattedNotes: formatted.count, formattingKept: formattingKept, notesMadePlain: notesMadePlain,
                 summariesMadeAIGenerated: summariesMadeAIGenerated, headnoteDrafts: kit.headnoteDrafts,
                 summariesWithoutAuthorship: kit.summariesWithoutAuthorship, inertEntries: kit.inertEntries,
                 unlinkedCollections: kit.unlinkedCollections.map { UnlinkedCollection(id: $0.id.uuidString, name: $0.name) },

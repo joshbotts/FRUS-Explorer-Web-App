@@ -220,15 +220,27 @@ import Testing
         }
     }
 
-    /// An instance's corrections are a curator's to import: for anyone else they are set aside, and
-    /// counted so.
+    /// An instance's corrections are a curator's to import: for anyone else they are set aside, every copy of each,
+    /// and counted so, none kept once as a repeat; and such an import reads none of the instance's corrections, so a
+    /// row of them that does not read, which only a damaged store holds, refuses a curator's import alone.
     @Test func anInstancesCorrectionsAreSetAsideForAUserWhoIsNoCurator() async throws {
         let fixture = try await UserDataFixture()
         defer { withExtendedLifetime(fixture) {} }
-        let envelope = try MacImport.envelope(of: Data(try Self.export().utf8))
+        var envelope = try MacImport.envelope(of: Data(try Self.export().utf8))
+        envelope.classificationOverrides += envelope.classificationOverrides
         let report = try MacImport.run(envelope, into: fixture.store, for: "owner", includingInstanceWide: false)
         let correction = try #require(report.types.first { $0.type == "DocumentClassificationOverride" })
-        #expect(correction.inFile == 1 && correction.setAside == 1 && correction.added == 0)
+        #expect(correction.inFile == 2 && correction.setAside == 2 && correction.added == 0 && correction.repeated == 0)
         #expect(try fixture.store.classificationOverrides().isEmpty)
+
+        try fixture.rows.run("""
+            INSERT INTO classification_overrides (id, volume_id, document_id, is_editorial_note, parsed_is_editorial_note, created_at)
+                VALUES ('5E16C000-0000-4000-8000-0000000000F1', 'frus1961-63v06', 'd5', 1, 0, 'not a time')
+            """)
+        let again = try MacImport.run(envelope, into: fixture.store, for: "owner", includingInstanceWide: false)
+        #expect(again.types.first { $0.type == "ResearchNote" }?.kept == 1, "imported, the unreadable row not read")
+        #expect(throws: ResearchExportError.self, "a curator's import reads it") {
+            try MacImport.run(envelope, into: fixture.store, for: "owner", includingInstanceWide: true)
+        }
     }
 }

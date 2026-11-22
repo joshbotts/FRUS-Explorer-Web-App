@@ -73,7 +73,12 @@ public struct TEIServedFile: Codable, Sendable, Equatable {
 /// What the check found of the served index, kept beside it in `tei-changes.json`, written whole and renamed into
 /// place once the comparison index it describes is whole.
 public struct TEIChangeRecord: Codable, Sendable, Equatable {
-    public var format = 1
+    /// The rule the comparison was made by: 2 since S21f's second follow-up, which passes over a volume whose file is
+    /// the one the export indexed. A record of an earlier rule is read as none, so its served index is compared afresh:
+    /// that rule found in such a volume, as changes in the TEI, what the export itself records, a document the Mac's own
+    /// update removed or an id given twice, which the reader reads from the export.
+    public var format = TEIChangeRecord.currentFormat
+    public static let currentFormat = 2
     /// The served index's file the check compared.
     public var served: TEIServedFile
     public var checkedAt: Date
@@ -97,7 +102,9 @@ public struct TEIChangeRecord: Codable, Sendable, Equatable {
 /// A comparison under way, kept in its work folder as each volume is compared, so that a job that gave way to
 /// another, or a start after a stop, goes on from where it stopped.
 struct TEIComparisonWork: Codable, Sendable, Equatable {
-    var format = 1
+    /// The rule the comparison under way is made by, as the record's: work of an earlier rule is set aside, and the
+    /// comparison begun afresh.
+    var format = TEIChangeRecord.currentFormat
     var served: TEIServedFile
     /// Whether it compares only the volumes whose file changed since the last whole comparison, over a copy of it.
     var recheck: Bool
@@ -565,11 +572,14 @@ public actor TEIChangeCheck {
         // it, and nothing is parsed.
         if let indexed {
             do {
-                let url = teiFile(volumeId)
-                let mounted = try await Blocking.run { try Self.blobSHA1(of: url) }
-                if mounted.sha == indexed.blobSHA1, mounted.bytes == indexed.sizeBytes {
-                    work.checked.append(volumeId)
-                    return
+                // A file of another length is another file, which needs no reading to say so.
+                if file.bytes == Int64(indexed.sizeBytes) {
+                    let url = teiFile(volumeId)
+                    let mounted = try await Blocking.run { try Self.blobSHA1(of: url) }
+                    if mounted.sha == indexed.blobSHA1, mounted.bytes == indexed.sizeBytes {
+                        work.checked.append(volumeId)
+                        return
+                    }
                 }
                 log("\(volumeId): its TEI file is not the one the export indexed, so its documents are compared")
             } catch is CancellationError {
@@ -815,8 +825,15 @@ public actor TEIChangeCheck {
 
     // MARK: Files
 
-    static func read(_ url: URL) -> TEIChangeRecord? { decode(url) }
-    static func readWork(_ url: URL) -> TEIComparisonWork? { decode(url) }
+    /// The record at `url`, none where there is none, it does not read, or an earlier rule made it.
+    static func read(_ url: URL) -> TEIChangeRecord? {
+        (decode(url) as TEIChangeRecord?).flatMap { $0.format == TEIChangeRecord.currentFormat ? $0 : nil }
+    }
+
+    /// The work at `url`, none where there is none, it does not read, or an earlier rule began it.
+    static func readWork(_ url: URL) -> TEIComparisonWork? {
+        (decode(url) as TEIComparisonWork?).flatMap { $0.format == TEIChangeRecord.currentFormat ? $0 : nil }
+    }
 
     private static func decode<T: Decodable>(_ url: URL) -> T? {
         guard let data = FileManager.default.contents(atPath: url.path) else { return nil }

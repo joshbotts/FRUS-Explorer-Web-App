@@ -314,9 +314,43 @@ import Testing
             }
         })
         defer { withExtendedLifetime(run.fixture) {} }
+        let url = run.fixture.files.liveIndex
+        let pipeline = try IndexingPipeline(readingIndexAt: url, fts5Store: try FTS5Store(readingDatabaseAt: url),
+                                            resources: run.fixture.users.server.resources.indexing,
+                                            volumesDirectory: run.fixture.files.volumesDirectory)
+        #expect(try pipeline.indexedVolumeFiles().isEmpty, "the kit's read-only open answers no record, and throws none")
         #expect(run.compared == TEIComparisonTests.volumes && run.parsed == TEIComparisonTests.volumes)
         #expect(run.indexed.isEmpty, "their documents are as the export records them")
         #expect(run.record.checked == TEIComparisonTests.volumes && run.record.changed.isEmpty)
+    }
+
+    /// A comparison an earlier rule placed, its record's format 1, before a volume whose file the export indexed was
+    /// passed over, is made again whole at the first look of a start: that rule found in such a volume, as a change in
+    /// the TEI, what the export itself records, which the reader reads from the export.
+    @Test func aComparisonAnEarlierRulePlacedIsMadeAgain() async throws {
+        let fixture = try await Fixture()
+        defer { withExtendedLifetime(fixture) {} }
+        let check = fixture.check()
+        await check.ensureCurrent()
+        await fixture.jobs.waitUntilIdle()
+        let url = await check.recordURL
+        var object = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        #expect(object["format"] as? Int == TEIChangeRecord.currentFormat)
+        object["format"] = 1
+        try JSONSerialization.data(withJSONObject: object).write(to: url)
+
+        let next = fixture.check()
+        let compared = Events()
+        await next.setVolumeComparedTestHook { await compared.add($0) }
+        await next.ensureCurrent()
+        let queued = await next.status()
+        #expect(queued.running && !queued.recheck && queued.total == TEIComparisonTests.volumes.count)
+        await fixture.jobs.waitUntilIdle()
+        let again = await compared.all
+        #expect(again == TEIComparisonTests.volumes, "every volume compared afresh")
+        let record = try #require(await next.status().record)
+        #expect(record.format == TEIChangeRecord.currentFormat && record.checked == TEIComparisonTests.volumes)
+        #expect(await fixture.comparisons().count == 2)
     }
 
     /// A row the export holds, at the indexer's version, of a document the volume's TEI does not give selects the
