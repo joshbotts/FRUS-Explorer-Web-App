@@ -44,6 +44,9 @@ public final class ServerResources: Sendable {
     let people = PeopleFiles()
     /// The administrations' profiles, `administration-profiles-index.json`, decoded on first use (CorpusAnalytics.swift).
     private let administrations = AdministrationProfilesFile()
+    /// Archival Analytics' and About the Series' other bundled files, each decoded on first use, and the series kept
+    /// from them (BundledAnalytics.swift, PLAN's S24h).
+    let bundledAnalytics = BundledAnalytics()
     /// The catalogue overlay (PLAN's S21e): the volumes a Standalone server's library holds that the published
     /// catalogue does not list, side-loaded, each described by the kit's `LocalVolumeCatalog` from its own header.
     private let local = LocalVolumes()

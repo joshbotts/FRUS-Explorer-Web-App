@@ -47,6 +47,9 @@ import { CollectionEditorScreen } from './collections/CollectionEditorScreen';
 import { CollectionsScreen } from './collections/CollectionsScreen';
 // ─── Tools ──────────────────────────────────────────────────────────────────
 import { type ChronologySearch, type CorpusSearch, validateChronologySearch, validateCorpusSearch } from './analytics/analyticsRules';
+import { AboutSeriesScreen } from './analytics/AboutSeriesScreen';
+import { ArchivalAnalyticsScreen } from './analytics/ArchivalAnalyticsScreen';
+import { type ArchivalSearch, type SeriesSearch, validateArchivalSearch, validateSeriesSearch } from './analytics/archivalRules';
 import { CrossReferenceAnalyticsScreen } from './analytics/CrossReferenceAnalyticsScreen';
 import { PersonAnalyticsScreen } from './analytics/PersonAnalyticsScreen';
 import { type CrossReferenceSearch, type PeopleSearch, validateCrossReferenceSearch, validatePeopleSearch } from './analytics/personReferenceRules';
@@ -355,6 +358,22 @@ const collectionRoute = createRoute({
 });
 
 // ─── Tools ──────────────────────────────────────────────────────────────────
+// Archival Analytics (S24h), which the app opens from its Analytics menu, and About the Series, its Research Guide's four
+// dashboards, each with its state in the address.
+const archivalAnalyticsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/analytics/archives',
+  validateSearch: (raw: Record<string, unknown>): ArchivalSearch => validateArchivalSearch(raw),
+  component: ArchivalAnalyticsScreen,
+});
+
+const aboutSeriesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/about',
+  validateSearch: (raw: Record<string, unknown>): SeriesSearch => validateSeriesSearch(raw),
+  component: AboutSeriesScreen,
+});
+
 // Person and Cross-Reference Analytics (S24g), which the app opens from its Analytics menu, each with its state in the address.
 const personAnalyticsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -535,6 +554,8 @@ export const routeTree = rootRoute.addChildren([
   collectionsRoute,
   collectionRoute,
   // ─── Tools ────────────────────────────────────────────────────────────────
+  archivalAnalyticsRoute,
+  aboutSeriesRoute,
   personAnalyticsRoute,
   crossReferenceAnalyticsRoute,
   corpusAnalyticsRoute,

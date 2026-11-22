@@ -75,6 +75,9 @@ export const copy = {
     /** From S24g, the menu's second and third. */
     personAnalytics: 'Person Analytics',
     crossReferenceAnalytics: 'Cross-Reference Analytics',
+    /** From S24h, the menu's fourth, and About the Series after Chronology, as the web has no Research Guide. */
+    archivalAnalytics: 'Archival Analytics',
+    aboutSeries: 'About the Series',
     corpusAnalytics: 'Corpus Analytics',
     chronology: 'Chronology',
     settings: 'Settings',
@@ -2370,6 +2373,86 @@ export const copy = {
   },
 
   // ─── Tools ────────────────────────────────────────────────────────────────
+  /**
+   * Archival Analytics (S24h), in the app's words: its title, Mode, the filter row's captions, the network's controls,
+   * dock actions and picker, the flows' controls, and the loading and empty states. The rankings, sentences, captions,
+   * cards, caveats and tables are the kit's or the views', from the server. The charts' descriptions, the canvas's name
+   * and help, a picker's count and the every-unit list's region are the web's own.
+   */
+  archivalAnalytics: {
+    title: 'Archival Analytics',
+    mode: 'Mode',
+    modeHelp:
+      'Switch between the era rankings, the co-citation network, the reference hand-off diagram, and the archival profile of your own indexed volumes.',
+    collections: 'Collections',
+    network: 'Network',
+    flows: 'Flows',
+    yourLibrary: 'Your Library',
+    era: 'Era',
+    show: 'Show',
+    countBy: 'Count by',
+    administration: 'Administration',
+    custodians: {
+      stateDepartment: 'Department of State',
+      lotFile: 'State lot files',
+      presidentialLibrary: 'Presidential libraries',
+      otherInstitution: 'Other institutions',
+    },
+    loadingCollections: 'Reading the archival authority…',
+    loadingLibrary: 'Counting your indexed source notes…',
+    unavailableTitle: 'Data Unavailable',
+    libraryEmptyTitle: 'No Source Notes Yet',
+    libraryEmptyDetail:
+      'Download and index a volume and this page will show where its documents came from. The Collections mode works without any downloads.',
+    everyUnit: 'Every Unit',
+    everyUnitList: (header: string) => `Every unit: ${header}`,
+    done: 'Done',
+    focus: 'Focus',
+    focusNone: 'Choose…',
+    measure: 'Link strength',
+    umbrella: 'Central Files',
+    group: 'Group',
+    back: 'Back',
+    threshold: 'Show links above',
+    thresholdA11y: 'Minimum link strength, as a share of the strongest link',
+    resetView: 'Reset View',
+    sectorHint: 'Select to inspect this custodian’s partners as a group',
+    recentre: 'Explore This Collection',
+    neighbors: 'Show Archival Neighbors',
+    openCollection: 'Open Collection',
+    classNeighbors: 'Show Documents in This Class',
+    cancel: 'Cancel',
+    pickerTitle: 'Focus Collection',
+    pickerPrompt: 'Set focus collection…',
+    candidateCount: (count: number) => (count === 1 ? '1 collection' : `${count.toLocaleString('en-US')} collections`),
+    canvas: (focus: string) => `Collections co-cited with ${focus}`,
+    canvasHelp:
+      'Use the arrow keys to move between the collections, Home and End to reach the first and the last, Enter or Space to show the one reached, and Escape to close it.',
+    layer: 'References',
+    direction: 'Direction',
+    chartDescription: (heading: string) => `${heading}. The table beside the chart lists its numbers.`,
+  },
+  /**
+   * About the Series (S24h), in the app's words: its title, the scope bar's menu and reset, and the category filter's
+   * Other. The pages' titles, the dashboards' intros, charts, captions, cards and caveats are the kit's or the
+   * dashboards', from the server. The pages' navigation, the menu's group labels and the charts' descriptions are the
+   * web's own.
+   */
+  aboutSeries: {
+    title: 'About the Series',
+    pages: 'About the Series pages',
+    scopeA11y: 'Analysis scope',
+    wholeSeries: 'Whole series',
+    resetA11y: 'Reset scope to the whole series',
+    bySubseriesIn: (decade: string) => `By Subseries: ${decade}`,
+    customScopes: 'My Volume Scopes',
+    customScope: (name: string, count: number) => `${name} (${count} volumes)`,
+    customScopeNone: (name: string) => `${name} — no volumes in this series`,
+    subjectGroup: (category: string) => `Subjects — experimental: ${category}`,
+    hideOther: 'Hide Other / Unclassified',
+    showOther: 'Show Other / Unclassified',
+    chartDescription: (heading: string) => `${heading}. The table beside the chart lists its numbers.`,
+  },
   /**
    * Person Analytics (S24g), in the app's words: its title and Mode, the add field, the chips, By decade and Values,
    * Export, the network's Focus bar, dock, legend and states. The headings, subtitles, captions, empty states, axis

@@ -61,6 +61,9 @@ public final class ServedIndex: Sendable {
     /// years, scope and people and kept while the index is served, as the app's views keep what they loaded until it changes.
     let personAnalytics = KeptSeries<PersonSeriesKey, PersonSeries>()
     let crossReferenceAnalytics = KeptSeries<CrossReferenceSeriesKey, CrossReferenceSeries>()
+    /// Archival Analytics' Your Library over this index (PLAN's S24h): the archival profile of the volumes it holds,
+    /// computed once and kept while the index is served, as the app's view loads it once.
+    let archivalLibrary = KeptSeries<Int, ArchivalLibraryProfile>(capacity: 1)
     /// The volumes the index holds documents of: what a working corpus and a volume scope resolve
     /// against (PLAN's S17e), as the app resolves them against the volumes its device has indexed.
     public let indexedVolumeIds: Set<String>
