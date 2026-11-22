@@ -880,7 +880,7 @@ Phase 3's row S22e, on the features track after S22d, with no upstream pull requ
 
 ## Session 21f, second follow-up: step 5 holds each mounted file to the export's record of it, and parses only a volume whose file is another
 
-22 November 2026 · branch `claude/optimistic-cray-c16081`, a follow-up session of the phase-3 orchestrator's · [#PRNUM](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/PRNUM), with S16c's follow-up · upstream `08e8bac8` (tag `1.0-release`), unchanged
+22 November 2026 · branch `claude/optimistic-cray-c16081`, a follow-up session of the phase-3 orchestrator's · [#158](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/158), with S16c's follow-up · upstream `08e8bac8` (tag `1.0-release`), unchanged
 
 S21f's second web follow-up, with no PLAN row of its own: steps 2 to 4 of `docs/prep/upstream-volume-blob-sha.md`, the hand-over of [FRUS-Explorer#1909](https://github.com/joshbotts/FRUS-Explorer/issues/1909). [#1948](https://github.com/joshbotts/FRUS-Explorer/pull/1948) (`9e582653`) gave index version 75 a record of the file each volume was indexed from, and S12d's pin move to `1.0-release` brought it to the server, its step 1. It is the first of the two upstream changes PLAN's paragraph on S21f named; S21f's follow-up used the second. No file of the app changed, no migration was added and the pin did not move.
 
@@ -904,17 +904,18 @@ S21f's second web follow-up, with no PLAN row of its own: steps 2 to 4 of `docs/
 - **No record** (`anExportWithoutTheRecordComparesEveryVolumeByItsDocuments`, new, two cases): with the record NULL, and with its two columns dropped, every volume is parsed and compared as before.
 - **The selection's tests:** the rows of a document the TEI does not give, a document with no row or a vanished one, one hashed otherwise, an id given twice and what the selection passes over now give their export no record, as a volume indexed before 75 has none, so they still run the revision-hash comparison.
 
-**Measured** in the release image `frus-light:importfu`, built at `96e500e`, on the owner's Mac (Docker Desktop, 10 CPUs), with other sessions' jobs beside it (load averages 3.0 to 4.2 over the runs). The script is `.build/importfu/measure.sh`, S21f's follow-up's with a run added, and each time runs from the comparison index's opening to the job's last line, as before:
+**Measured** in the release image `frus-light:importfu`, built at `763f91b`, the final code, on the owner's Mac (Docker Desktop, 10 CPUs), with other sessions' jobs beside it (load averages 3.9 to 6.3 over the runs). The script is `.build/importfu/measure.sh`, S21f's follow-up's with a run added, and each time runs from the comparison index's opening to the job's last line, as before:
 
 | Run | Volumes parsed | Volumes given to the kit's indexer | Step 5 | Peak memory sampled |
 |---|---|---|---|---|
-| The fixtures' synthetic export, `fixtures/tei` mounted (2 of its 3 volumes), no record | 2 | 2, their rows partial | 1.01 s, where S21f's follow-up took 1.05 | 117 MiB |
-| `fixtures/sample`'s 24 volumes (165 MB, 13,687 documents), unchanged, the export recording each file | 0 | 0 | **0.18 s**, where it took 11.68 | 26 MiB |
-| The same, frus1961-63v10's first document changed by one word | 1 | 1; the kit took 1.2 s over it | **1.94 s**, where it took 12.84 | 103 MiB |
-| The same unchanged, with the export's record taken away | 24 | 0 | 11.86 s, as before | 78 MiB |
+| The fixtures' synthetic export, `fixtures/tei` mounted (2 of its 3 volumes), no record | 2 | 2, their rows partial | 1.05 s, as S21f's follow-up took | 92 MiB |
+| `fixtures/sample`'s 24 volumes (165 MB, 13,687 documents), unchanged, the export recording each file | 0 | 0 | **0.17 s**, where it took 11.68 | 26 MiB |
+| The same, frus1961-63v10's first document changed by one word | 1 | 1; the kit took 1.2 s over it | **1.91 s**, where it took 12.84 | 110 MiB |
+| The same unchanged, with the export's record taken away | 24 | 0 | 11.46 s, as before | 79 MiB |
 
-- **Alongside:** the kit's whole pass over the 24, the export's own making, took 24.39 s, and recorded the file of each of the 24 volumes.
+- **Alongside:** the kit's whole pass over the 24, the export's own making, took 24.77 s, and recorded the file of each of the 24 volumes.
 - **The comparison indexes placed** each passed `quick_check`: the unchanged run's held 332 KB, the changed run's 5.6 MB.
+- **A first measurement,** at `96e500e`, before the review's changes, gave 1.01, 0.18, 1.94 and 11.86 s, with the kit's whole pass at 24.39.
 - **The 553 volumes** (3,338,778,538 bytes) would take about 4 seconds at the unchanged sample's rate. The sample's files were in the page cache, just read by the export's making, so a first comparison that reads the corpus cold after a start may take longer. Each volume whose file is another adds its parse, about half a second at the sample's rate, and each whose documents differ adds what the kit takes to index it.
 
 **The cold review** of step 5, the second subagent's, found no important defect. It found:
@@ -930,7 +931,7 @@ What held up was fixed before the push:
 
 TEIComparisonTests has 16 tests with the review's.
 
-RESULTS1909
+**The runs before the push** are the entry "Session 16c, follow-up"'s, one hold of the heavy lock for both.
 
 **Records:**
 - SPEC's step 5, in both places: Import procedure, and The corrections check and the update review, whose indexer's version now reads 75.
@@ -938,7 +939,7 @@ RESULTS1909
 - PLAN: a sentence after the paragraph on S21f's follow-up.
 
 **For S24i,** the group's last row (rule 5), from `docs/prep/upstream-volume-blob-sha.md`:
-- **The README's Known gaps,** its line on Import mode's first comparison with its TEI folder: it parses each mounted volume, 4 to 5 minutes for the full corpus, and an export at index version 75 names each file, "a follow-up of S12d's move". That follow-up is done: an unchanged export costs a read of each file (0.18 s for the sample's 24), and only an export that records no file is compared as before. The line can go, or keep only that case.
+- **The README's Known gaps,** its line on Import mode's first comparison with its TEI folder: it parses each mounted volume, 4 to 5 minutes for the full corpus, and an export at index version 75 names each file, "a follow-up of S12d's move". That follow-up is done: an unchanged export costs a read of each file (0.17 s for the sample's 24), and only an export that records no file is compared as before. The line can go, or keep only that case.
 - **The README's Next,** item 2: step 5's follow-up is done.
 - **COORDINATION §5's "What the library's rows leave upstream",** its first item: "Import mode's step 5 reading it is a follow-up of its own" is done.
 
@@ -5346,7 +5347,7 @@ Phase 2's row S16d. The user's research leaves the server as the Mac's own Expor
 
 ## Session 16c, follow-up: the JSON import on the kit's plan, with its text rule
 
-22 November 2026 · branch `claude/optimistic-cray-c16081`, a follow-up session of the phase-3 orchestrator's · [#PRNUM](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/PRNUM), with S21f's second follow-up · upstream `08e8bac8` (tag `1.0-release`), unchanged
+22 November 2026 · branch `claude/optimistic-cray-c16081`, a follow-up session of the phase-3 orchestrator's · [#158](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/158), with S21f's second follow-up · upstream `08e8bac8` (tag `1.0-release`), unchanged
 
 S16c's web follow-up, with no PLAN row of its own: steps 2 to 5 of `docs/prep/upstream-json-import.md`, the hand-over of [FRUS-Explorer#1915](https://github.com/joshbotts/FRUS-Explorer/issues/1915). [#1950](https://github.com/joshbotts/FRUS-Explorer/pull/1950) (`b1f98323`) moved the import's rules into the kit, and [#1951](https://github.com/joshbotts/FRUS-Explorer/pull/1951) (`fa9ae409`) gave the app its Import from JSON…; S12d's pin move to `1.0-release` brought both to the server, its step 1. The branch was cut from `main` at `e0d0e38`, #157's merge. No file of the app changed, no migration was added and the pin did not move.
 
@@ -5397,7 +5398,15 @@ The plan written is the export's identity test, as before: imported into another
 - **Smaller:** the envelope's `run` now maps the kit's refusal of a version, as the file's does.
 - **Left to their owners:** the stale lines the review found in the README, COORDINATION and SPEC's Delivery plan are named for S24i below, and `docs/prep`'s "Taken" is the pin moves'.
 
-RESULTS1915
+**The runs before the push,** on this Mac, in one hold of the heavy lock (`.build/importfu/final.sh --measure`), at `763f91b`, the code as pushed, with the records' text after it:
+- **The image,** `frus-light:importfu`, with its parity stage, and step 5's measurement on it (the entry "Session 21f, second follow-up").
+- **CI's swift job,** `scripts/swift --postgres test`, with this package's own targets built clean, in 102 s, with no warning.
+  - 4,325 tests, all passing but the one named skip, `FTS5StoreTests`' `backupExclusion()`. The store's tests ran on PostgreSQL too.
+  - By target: CrossRefKitTests 10, FRUSCoreKitTests 2,569, FRUSLightCoreTests 277, FRUSLightServerTests 418, FRUSParityTests 301, FRUSRichTextTests 42, FTS5CheckTests 3, FTS5StoreTests 219, GeneratorKitTests 7, ManifestGeneratorTests 60, SemanticVectorsKitTests 40, SourceExplorerExportGeneratorTests 22, SourceNoteKitTests 327 and WordCloudKitTests 30.
+  - Each is the count S12d's run gave, but for these follow-ups': FRUSLightCoreTests 279 there, `UserResearchImportTests` 8 to 6; FRUSLightServerTests 415, `TEIComparisonTests`' 3 more; FRUSParityTests 298, `ImportParityTests`' 3 more.
+- **`scripts/compose-smoke --e2e`** with `FRUS_IMAGE=frus-light:importfu FRUS_HOST_PORT=18410`: PASS. The browser suite passed 89 and skipped 9 at the root and under the path, as `main`'s CI does, `import.spec.ts` among them, and the update review's spec passed before and after the update. Checks 2 and 8, which need the parity stage's image named (`FRUS_PARITY_IMAGE`), were left to CI's compose job, since nothing here touches the index's summary or Source Explorer.
+- **CI's web job** (`scripts/npm ci`, `run typecheck`, `run lint`, `test`, `run build`) ran at `96e500e`, after which nothing under `web/` changed: 671 tests in 74 files, where S12d's run had 670.
+- **Before the reviews:** the touched suites at each commit, and the smoke test with `--e2e` on the image built at `96e500e`, which passed with the same counts.
 
 **Records:**
 - SPEC's Import and export paths: the web export's row, the second limit lifted by 1.0 (1823), how the web imports on the kit's plan with its text rule and report, and the export's way back to the app; the HTTP API's report.
