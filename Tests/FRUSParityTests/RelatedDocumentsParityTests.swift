@@ -1,7 +1,7 @@
 // Related Documents and Suggested Next (PLAN's S23d), over the kit's fixture index imported as an export.
 // Every fixture document's related list through the API is the kit's `RelatedDocumentsEngine.rank` over
 // the same index, with the dependencies a host has at this pin, built here apart from the server's: the
-// rows, their scores, their chips' words with the shared topics named as the app's view names them, the
+// rows, their scores, their chips' words with the shared subjects named as the app's view names them, the
 // count before the limit and the pool's line; and in each scope the app's picker offers, and under a
 // tuning of the app's stored form. A project seeded through the API, by its notes and a focus tag, has
 // the leads the kit's `ProjectLeadsAggregator` makes of the kit's rankings of its seed, as the app's
@@ -68,7 +68,7 @@ import Testing
         }
 
         /// The kit's ranking for `anchor`, as the app's list loads it: the year of the index's date, and
-        /// the shared topics named on the rows the shared-topics axis scored.
+        /// the shared subjects named on the rows the shared-subjects axis scored.
         @MainActor
         func ranked(_ anchor: DocumentKey, weights: AxisWeights, scope: Set<String>?, limit: Int = 30) async throws -> RelatedDocumentsResult {
             let dates = try await pipeline.documentDates(for: [(volumeId: anchor.volumeId, documentId: anchor.documentId)])
@@ -159,7 +159,8 @@ import Testing
                 ? RelatedDocumentsCounts.poolCut(ranked: kit.totalBeforeLimit, of: $0, locale: Self.locale) : nil })
             #expect(all.scope == "all" && all.weights == "")
             rows += all.rows.count
-            chipsNamed += all.rows.filter { $0.chips.contains { $0.axis == "sharedSubjects" && $0.text.hasPrefix("topics: ") } }.count
+            // The kit's words since FRUS-Explorer#1930 (L15): "subjects: …", where they were "topics: …".
+            chipsNamed += all.rows.filter { $0.chips.contains { $0.axis == "sharedSubjects" && $0.text.hasPrefix("subjects: ") } }.count
             cited += all.rows.filter { $0.chips.contains { $0.axis == "crossReference" } }.count
             guard index.isMultiple(of: 7) else { continue }
             let subseries = host.manifest[document.volumeId]?.subseries ?? ""
@@ -179,7 +180,7 @@ import Testing
             #expect(tuned.rows.map(Self.row) == (try await host.ranked(document, weights: weights, scope: nil, limit: 12)).rows.map(Self.row))
         }
         #expect(rows > 1_000, "the lists hold rows to compare: \(rows)")
-        #expect(chipsNamed > 0, "a shared-topics chip names its topics")
+        #expect(chipsNamed > 0, "a shared-subjects chip names its subjects")
         #expect(cited > 0, "the cross-reference axis ranks: a row cites the anchor or is cited by it, and says so")
         let axes = try #require(read.values.first?.axes)
         #expect(axes.map(\.id) == SimilarityAxis.allCases.map(\.rawValue))
@@ -347,8 +348,9 @@ import Testing
         #expect(related.contains("tileHelp: 'Find related documents by archival provenance, cross-references, date, and shared people'"))
         #expect(view.contains(#"defaultValue: "%lld more related — raise a weight or narrow the scope to refine.")"#))
         #expect(related.contains("overflow: (count: number) => `${count} more related — raise a weight or narrow the scope to refine.`"))
-        // The slider's word for a missing subject index, said of the server where the app says the device.
-        #expect(row.contains(#"defaultValue: "Detected-topic data is unavailable on this device.")"#))
-        #expect(related.contains("subjectsUnavailable: 'Detected-topic data is unavailable on this server.'"))
+        // The slider's word for a missing subject index, said of the server where the app says the device, in the words
+        // the app's subject data has had since FRUS-Explorer#1930.
+        #expect(row.contains(#"defaultValue: "Subject data is unavailable on this device.")"#))
+        #expect(related.contains("subjectsUnavailable: 'Subject data is unavailable on this server.'"))
     }
 }

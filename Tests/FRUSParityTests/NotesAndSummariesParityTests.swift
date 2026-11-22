@@ -128,8 +128,14 @@ import Testing
         }
         #expect(Self.flattened(try Self.read("Search/IndexingPipeline+App.swift")).contains("responseText: summary.indexedText"))
         let launch = Self.flattened(try Self.read("App/FRUSExplorerApp.swift"))
-        #expect(launch.components(separatedBy: "let text = summary.indexedText try? await pipeline.updateSummaryText(volumeId: vid, documentId: did, responseText: text)").count == 3,
-                "the launch's sync and the summaries' re-push both write the summary's indexedText")
+        #expect(launch.components(separatedBy: "let text = summary.indexedText try? await pipeline.updateSummaryText(volumeId: vid, documentId: did, responseText: text)").count == 2,
+                "the summaries' re-push writes the summary's indexedText")
+        // The launch's sync, since FRUS-Explorer#1951 (L24) the model's `reconcileSummaryText`, which the import runs too.
+        #expect(launch.contains("GeneratedSummary.reconcileSummaryText( container: container, pipeline: pipeline)"))
+        let reconcile = Self.flattened(try Self.read("Models/GeneratedSummary.swift"))
+        #expect(reconcile.contains("(volumeId: $0.volumeId, documentId: $0.documentId, text: $0.indexedText)")
+                && reconcile.contains("try? await pipeline.updateSummaryText(volumeId: row.volumeId, documentId: row.documentId, responseText: row.text)"),
+                "the launch's sync writes the summary's indexedText")
         #expect(Self.flattened(try Self.read("Summarization/SummarizationService.swift")).contains("let text = summary.indexedText"))
         let schema = String(decoding: try JSONEncoder().encode(ResponseFormat.structured(schema: StructuredSummarySchema(
             fields: [.init(name: "KeyParticipants", description: "Who"), .init(name: "Background", description: "What")]))), as: UTF8.self)
@@ -184,7 +190,11 @@ import Testing
     /// than format 7. Their authorship and format are the kit's types, as the app writes them.
     @Test func theWebsOwnSummariesAreNotTheAppsHeadnoteDrafts() throws {
         let inspector = try Self.read("Collections/CollectionEntryInspector.swift")
-        let reserved = try #require(inspector.firstMatch(of: /static let headnoteDraftPromptId = UUID\(uuidString: "([0-9A-F-]+)"\)!/)?.1)
+        // The id is the kit's since FRUS-Explorer#1951, which the inspector forwards to.
+        #expect(inspector.contains("private static let headnoteDraftPromptId = GeneratedSummaryExport.headnoteDraftPromptId"))
+        let plan = try String(contentsOf: RepositoryFiles.root.appendingPathComponent(
+            "upstream/FRUS-Explorer/FRUSCoreKit/Export/ResearchImportPlan.swift"), encoding: .utf8)
+        let reserved = try #require(plan.firstMatch(of: /static let headnoteDraftPromptId = UUID\(uuidString: "([0-9A-F-]+)"\)!/)?.1)
         #expect(reserved == "0EAD0000-0000-4000-8000-000000000001")
         #expect(OwnSummary.promptId != String(reserved) && UUID(uuidString: OwnSummary.promptId)?.uuidString == OwnSummary.promptId)
         #expect(Self.flattened(inspector).contains(
@@ -205,15 +215,17 @@ import Testing
         #expect(model.contains("authorship: draft.authorship ?? .aiGenerated"))
     }
 
-    /// The editor's rules for the store: the note's RTF is the editor's from `load` until its view
-    /// reports an edit, and Save writes it back, so a save that leaves the body keeps it byte for
+    /// The editor's rules for the store: the note's RTF is the editor's from its opening, read in `init`
+    /// since FRUS-Explorer#1941 (L19) where `load` read it, until its view reports an edit, and Save writes it back, so a save that leaves the body keeps it byte for
     /// byte; a plain-mode edit, and a summary's insertion, drop it; Save links the highlight, if it
     /// is still there, by its `noteId`; and Delete deletes the note alone, the highlight's plain id
     /// left dangling. Since #1792 a save and a delete reach every copy of a note stored as several
     /// under one id, and the store keeps one row for each id, which the web's save and delete reach.
     @Test func theEditorsRulesForTheBodyAndTheHighlightAreTheApps() throws {
         let model = try Self.read("ResearchNoteEditor/ResearchNoteEditorViewModel.swift")
-        #expect(try Self.body(of: "func load(context: ModelContext) {", in: model).first == "richText = noteToEdit?.richText")
+        let opening = try Self.body(of: "init(", in: model)
+        #expect(opening.last == "richText = note?.richText" && opening.contains("self.noteToEdit = note"))
+        #expect(try !Self.body(of: "func load(context: ModelContext) {", in: model).contains { $0.hasPrefix("richText") })
         let save = try Self.body(of: "func save(context: ModelContext) -> UUID? {", in: model)
         #expect(save.contains("for copy in [note] + otherCopies {") && save.filter { $0 == "copy.richText = richText" }.count == 1,
                 "an existing note, in every copy")

@@ -24,7 +24,7 @@ const axes: RelatedDocuments['axes'] = [
   { id: 'dateProximity', name: 'Close in date', weight: 0.5, defaultWeight: 0.5, available: true },
   { id: 'subseries', name: 'Corpus proximity', weight: 0.3, defaultWeight: 0.3, available: true },
   { id: 'sharedPersons', name: 'Shared people', weight: 0.7, defaultWeight: 0.7, available: true },
-  { id: 'sharedSubjects', name: 'Shared topics', weight: 0.5, defaultWeight: 0.5, available: true },
+  { id: 'sharedSubjects', name: 'Shared subjects', weight: 0.5, defaultWeight: 0.5, available: true },
   { id: 'semanticSimilarity', name: 'Semantically similar (experimental)', weight: 0.5, defaultWeight: 0.5, available: false },
   { id: 'lexicalSimilarity', name: 'Similar wording (experimental)', weight: 0, defaultWeight: 0, available: false },
 ];

@@ -455,7 +455,9 @@ import Testing
         }
         let exporter = try source("Export/ResearchDataExporter.swift")
         let start = try #require(exporter.firstRange(of: "static func makeEnvelope("))
-        let end = try #require(exporter.firstRange(of: "private static func savedSearchExport"))
+        // The body ends at the next of the exporter's functions; since L24 (FRUS-Explorer#1951) each record's mapping is an
+        // initialiser after it, which the app's import reads its own copies through too, the records unchanged.
+        let end = try #require(exporter.firstRange(of: "static func trailCounts(modelContext:"))
         let makeEnvelope = String(exporter[start.lowerBound..<end.lowerBound])
         var fetches: [String: String] = [:]
         for match in makeEnvelope.matches(of: /FetchDescriptor<(\w+)>\((.*?)\)\)/) {
@@ -484,13 +486,13 @@ import Testing
             #"let highlightsByNoteId = Dictionary(grouping: highlights, by: \.noteId)"#,
             "let activeProject = activeProjectId.flatMap { id in projects.first { $0.id == id } }",
             "exportedForProjectName: activeProject?.name, exportedForProjectResearchQuestion: activeProject?.researchQuestion,",
-            #"linkedHighlightIds: (highlightsByNoteId[note.id] ?? []).map(\.id),"#,
+            #"ResearchNoteExport(note, linkedHighlightIds: (highlightsByNoteId[note.id] ?? []).map(\.id))"#,
             "entries: (entriesByCollection[collection.id] ?? []) .sorted { $0.sortOrder < $1.sortOrder }",
-            "prompts: prompts.filter { !$0.isStandard }.map { prompt in",
+            "prompts: prompts.filter { !$0.isStandard }.map(SummarizationPromptExport.init),",
             "authorship: summary.authorship ?? .aiGenerated,",
             "documents: (documentsByVisit[plan.id] ?? []) .sorted { $0.documentKey < $1.documentKey }",
             "targets: (targetsByVisit[plan.id] ?? []) .sorted { $0.targetKey < $1.targetKey }",
-            "savedSearches: savedSearches.map(savedSearchExport),",
+            "savedSearches: savedSearches.map(SavedSearchExport.init),",
             "aggregateScore: lead.aggregateScore.isFinite ? lead.aggregateScore : 0,",
             "parameters: search.searchParameters,",
             "let freshness = search.freshness",

@@ -198,7 +198,7 @@ public struct AnalyticsContext: Codable, Equatable, Sendable, ResponseEncodable 
     public var indexedVolumeCount: Int
     /// By Subseries and By Volume: the indexed subseries, each with its indexed volumes and their titles.
     public var subseries: [Subseries]
-    /// By Detected Topic: the categories that narrow, each with its sub-categories, or none without the files.
+    /// By Subject: the categories that narrow, each with its sub-categories, or none without the files.
     public var topics: [TopicCategory]
 
     public struct Preset: Codable, Equatable, Sendable {
@@ -415,7 +415,7 @@ enum CorpusAnalyticsRoutes {
     }
 
     /// The scope a request names, resolved to its volumes as the scope menu's item seeds them: a subseries's
-    /// indexed volumes, an indexed volume, a detected topic's indexed volumes, or the volumes a scope of the user's
+    /// indexed volumes, an indexed volume, a subject's indexed volumes, or the volumes a scope of the user's
     /// holds, with the label each gives; the whole corpus for none. A subseries, a volume or a topic that holds no
     /// indexed volume is refused, as the menu disables it, rather than read as the whole corpus (`setScope`'s
     /// empty→nil), and so is a topic the menu does not offer; a scope of volumes is taken as given, as the app's
@@ -449,13 +449,13 @@ enum CorpusAnalyticsRoutes {
                 throw APIProblem.invalidParameter("subtopic", "a topic is scoped by one of its sub-categories")
             }
             guard let resolved = detectedTopics(resources), !resolved.isEmpty else {
-                throw APIProblem.invalidParameter("topic", "this server has no detected topics")
+                throw APIProblem.invalidParameter("topic", "this server has no subject data")
             }
             // The menu's own items: a category that narrows, and one of its sub-categories.
             guard ScopeFacets.narrowingCategories(resolvedByVolume: resolved).contains(where: { $0.label == category }),
                   ScopeFacets.subCategoryCatalog(forCategory: category, resolvedByVolume: resolved)
                     .contains(where: { $0.subcategory == subcategory }) else {
-                throw APIProblem.invalidParameter("topic", "\(category) · \(subcategory) is not a detected topic the scope menu offers")
+                throw APIProblem.invalidParameter("topic", "\(category) · \(subcategory) is not a subject the scope menu offers")
             }
             let ids = ScopeFacets.volumeIds(forCategory: category, subcategory: subcategory, resolvedByVolume: resolved)
                 .intersection(indexed)
@@ -584,7 +584,7 @@ enum CorpusAnalyticsRoutes {
 
     // MARK: The app's other rules
 
-    /// The detected topics by volume the scope bars read: the document index's complete map, else the profiles'
+    /// The subjects by volume the scope bars read: the document index's complete map, else the profiles'
     /// (`DocumentSubjectStore.shared?.subjectsByVolume ?? VolumeSubjectProfilesStore.shared?.resolvedByVolume`).
     static func detectedTopics(_ resources: ServerResources) -> [String: [VolumeSubjectProfiles.ResolvedSubject]]? {
         resources.documentSubjectIndex?.subjectsByVolume ?? resources.subjectProfiles.profiles?.resolvedByVolume
@@ -976,7 +976,7 @@ struct CorpusAnalyticsView {
         return volumes + " · " + concentration
     }
 
-    /// A detected topic's menu item (`subjectFacetItem`): "%@ (%lld of %lld indexed)", or "%@ — none indexed yet".
+    /// A subject's menu item (`subjectFacetItem`): "%@ (%lld of %lld indexed)", or "%@ — none indexed yet".
     static func subjectFacetLabel(_ baseLabel: String, indexed: Int, total: Int) -> String {
         indexed == 0
             ? String(format: appWords("analytics.scope.subject.none %@", "%@ — none indexed yet"), baseLabel)

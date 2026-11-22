@@ -209,7 +209,9 @@ import Testing
             "let lhsDate = [lhs.latestNote?.lastModified, lhs.highlights.first?.createdAt].compactMap { $0 }.max() ?? .distantPast",
             "if lhsDate != rhsDate { return lhsDate > rhsDate }", "return lhs.id < rhs.id",
             // A row: its title, volume and date, its note, its highlights, and its tags' and collections' order.
-            "Text(DocumentDisplayTitle.text(facts, documentId: entry.documentId))", "Text(volumeTitle ?? entry.volumeId)",
+            // Its number above its title since FRUS-Explorer#1947 (L21), `ResearchDocumentRowText`, held below.
+            "let naming = ResearchDocumentRowText.parts(facts: facts, documentId: entry.documentId)", "Text(naming.label)",
+            "Text(naming.title)", "Text(volumeTitle ?? entry.volumeId)",
             "let annotationDate = [ entry.latestNote?.lastModified, entry.highlights.first?.createdAt ].compactMap { $0 }.max()",
             "if let note = entry.latestNote, !note.bodyText.isEmpty {", "ForEach(entry.highlights.prefix(3)) { hl in",
             "let names = $0.name.localizedCaseInsensitiveCompare($1.name)",
@@ -219,6 +221,18 @@ import Testing
             #"return allTags.first(where: { $0.id == id })?.name ?? String(localized: "research.list.unknownTag", defaultValue: "Tag")"#,
             #"let name = allCollections.first(where: { $0.id == id })?.name ?? """#, "return CollectionEditorNaming.listName(savedName: name)",
         ], file: "ResearchView.swift")
+        // `ResearchDocumentRowText.parts(facts:documentId:)`, the row's number line and title, line for line in the app and the server.
+        let rowText = [
+            "let label = CitableDocumentNumber.rowLabel(printed: facts?.documentNumber, documentId: documentId)",
+            "let title = DocumentDisplayTitle.text(facts, documentId: documentId)",
+            "let number = CitableDocumentNumber.resolve(printed: facts?.documentNumber, documentId: documentId)",
+            "return (label, DocumentHeaderDisplay.numberedRow(header: title, number: number).title)",
+        ]
+        NoteViewParityTests.expect(try Self.app("Research/ResearchView.swift"), holds: rowText, file: "ResearchView.swift")
+        NoteViewParityTests.expect(try ProjectHistoryParityTests.server("Sources/FRUSLightAPI/Research.swift"), holds: rowText + [
+            "let naming = ResearchDocumentRowText.parts(facts: facts[entry.id], documentId: entry.documentId)",
+            "numberLabel: naming.label, rowTitle: naming.title,",
+        ], file: "Research.swift")
         // `DocumentHighlight.color`, the reading of a colour the server takes.
         NoteViewParityTests.expect(try Self.app("Models/DocumentHighlight.swift"), holds: [
             "var color: Color { Color(rawValue: colorTag) ?? .yellow }",

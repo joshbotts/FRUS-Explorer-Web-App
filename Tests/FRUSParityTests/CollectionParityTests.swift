@@ -90,6 +90,11 @@ import Testing
              "pickerEmptyHint: 'Use the button above to create one.'"),
             (picker, "CollectionPickerSheet", "collection.picker.cancel", "Cancel", "collections", "pickerCancel: 'Cancel'"),
             (picker, "CollectionPickerSheet", "collection.picker.added.a11y", "Added", "collections", "pickerAdded: 'Added'"),
+            // A document the collection held, since FRUS-Explorer#1941 (L19): its mark, and the mark's spoken name.
+            (picker, "CollectionPickerSheet", "collection.picker.alreadyIn.mark", "Already here", "collections",
+             "pickerAlreadyIn: 'Already here'"),
+            (picker, "CollectionPickerSheet", "collection.picker.alreadyIn.a11y", "Already in this collection", "collections",
+             "pickerAlreadyInLabel: 'Already in this collection'"),
             (picker, "CollectionPickerSheet", "collection.picker.addFailed.title", "Not Added", "collections", "addFailedTitle: 'Not Added'"),
             (rail, "ResearchRailView", "panel.collections.title", "Collections", "collections", "railTitle: 'Collections'"),
             (rail, "ResearchRailView", "panel.collections.empty", "Not in any collection yet.", "collections",
@@ -146,9 +151,24 @@ import Testing
             (rows, "CollectionEntryRows", "collection.section.deleteHeadingOnly", "Delete Heading Only", "collectionEditor",
              "deleteHeadingOnly: 'Delete Heading Only'"),
             (rows, "CollectionEntryRows", "collection.section.deleteSection", "Delete Section", "collectionEditor", "deleteSection: 'Delete Section'"),
-            (rows, "CollectionEntryRows", "collection.entry.delete.a11y", "Remove entry", "collectionEditor", "remove: 'Remove entry'"),
+            // A row's remove, by its kind, as the trash button names it since FRUS-Explorer#1941 (L19); a heading's are the
+            // section menu's. The web's `remove` and `removeHelp` records each hold the four.
+            (rows, "CollectionEntryRows", "collection.entry.delete.a11y.prose", "Delete note block", "collectionEditor",
+             "prose: 'Delete note block'"),
+            (rows, "CollectionEntryRows", "collection.entry.delete.a11y.excerpt", "Remove excerpt", "collectionEditor",
+             "excerpt: 'Remove excerpt'"),
+            (rows, "CollectionEntryRows", "collection.entry.delete.a11y.generated", "Remove block", "collectionEditor",
+             "generated: 'Remove block'"),
+            (rows, "CollectionEntryRows", "collection.entry.delete.a11y.document", "Remove document", "collectionEditor",
+             "document: 'Remove document'"),
+            (rows, "CollectionEntryRows", "collection.entry.delete.help.prose", "Delete this note block and its text", "collectionEditor",
+             "prose: 'Delete this note block and its text'"),
+            (rows, "CollectionEntryRows", "collection.entry.delete.help.excerpt", "Remove this excerpt from the collection",
+             "collectionEditor", "excerpt: 'Remove this excerpt from the collection'"),
+            (rows, "CollectionEntryRows", "collection.entry.delete.help.generated", "Remove this block from the collection",
+             "collectionEditor", "generated: 'Remove this block from the collection'"),
             (rows, "CollectionEntryRows", "collection.entry.delete.help", "Remove this document from the collection", "collectionEditor",
-             "removeHelp: 'Remove this document from the collection'"),
+             "document: 'Remove this document from the collection'"),
             (rows, "CollectionEntryRows", "collection.entry.configure", "Configure", "collectionEditor", "configure: 'Configure'"),
             (rows, "CollectionEntryRows", "collection.entry.configure.hint", "Opens this document’s settings", "collectionEditor",
              "configureHint: 'Opens this document’s settings'"),
@@ -232,19 +252,34 @@ import Testing
             (composition, "CollectionCompositionRows", "composition.presets.applyHint",
              "Applies this composition. Everything stays editable afterward.", "collectionSettings",
              "presetHint: 'Applies this composition. Everything stays editable afterward.'"),
-            (exporter, "CollectionExporter", "collection.preset.teachingReader", "Teaching reader", "collectionSettings", "name: 'Teaching reader'"),
-            (exporter, "CollectionExporter", "collection.preset.teachingReader.subtitle", "Full text · notes · chronology", "collectionSettings",
-             "subtitle: 'Full text · notes · chronology'"),
-            (exporter, "CollectionExporter", "collection.preset.briefingPacket", "Briefing packet", "collectionSettings", "name: 'Briefing packet'"),
-            (exporter, "CollectionExporter", "collection.preset.briefingPacket.subtitle", "Summaries · headnotes · word cloud",
-             "collectionSettings", "subtitle: 'Summaries · headnotes · word cloud'"),
-            (exporter, "CollectionExporter", "collection.preset.sourceDossier", "Source dossier", "collectionSettings", "name: 'Source dossier'"),
-            (exporter, "CollectionExporter", "collection.preset.sourceDossier.subtitle", "Outline · source notes · sources", "collectionSettings",
-             "subtitle: 'Outline · source notes · sources'"),
-            (exporter, "CollectionExporter", "collection.preset.scholarlyEdition", "Scholarly edition", "collectionSettings",
-             "name: 'Scholarly edition'"),
-            (exporter, "CollectionExporter", "collection.preset.scholarlyEdition.subtitle", "Everything · full apparatus", "collectionSettings",
-             "subtitle: 'Everything · full apparatus'"),
+            // The six templates, named for what they do since FRUS-Explorer#1952 (L25, the app's decision 139).
+            (exporter, "CollectionExporter", "collection.preset.fullTextAsPrinted", "Full text as printed", "collectionSettings",
+             "name: 'Full text as printed'"),
+            (exporter, "CollectionExporter", "collection.preset.fullTextAsPrinted.subtitle", "Footnotes · source notes · bibliography · archives",
+             "collectionSettings", "subtitle: 'Footnotes · source notes · bibliography · archives'"),
+            (exporter, "CollectionExporter", "collection.preset.fullTextWithAnnotations", "Full text with your annotations", "collectionSettings",
+             "name: 'Full text with your annotations'"),
+            (exporter, "CollectionExporter", "collection.preset.fullTextWithAnnotations.subtitle",
+             "Notes · highlights · headnotes · chronology · persons", "collectionSettings",
+             "subtitle: 'Notes · highlights · headnotes · chronology · persons'"),
+            (exporter, "CollectionExporter", "collection.preset.summariesWithOverview", "Summaries with overview", "collectionSettings",
+             "name: 'Summaries with overview'"),
+            (exporter, "CollectionExporter", "collection.preset.summariesWithOverview.subtitle",
+             "AI summaries · notes · word cloud · chronology · themes", "collectionSettings",
+             "subtitle: 'AI summaries · notes · word cloud · chronology · themes'"),
+            (exporter, "CollectionExporter", "collection.preset.citationsWithNotes", "Citations with your notes", "collectionSettings",
+             "name: 'Citations with your notes'"),
+            (exporter, "CollectionExporter", "collection.preset.citationsWithNotes.subtitle", "Citation list · notes · bibliography · themes",
+             "collectionSettings", "subtitle: 'Citation list · notes · bibliography · themes'"),
+            (exporter, "CollectionExporter", "collection.preset.citationsWithArchivalSources", "Citations with archival sources",
+             "collectionSettings", "name: 'Citations with archival sources'"),
+            (exporter, "CollectionExporter", "collection.preset.citationsWithArchivalSources.subtitle",
+             "Citation list · source notes · archives · persons", "collectionSettings",
+             "subtitle: 'Citation list · source notes · archives · persons'"),
+            (exporter, "CollectionExporter", "collection.preset.everythingIncluded", "Everything included", "collectionSettings",
+             "name: 'Everything included'"),
+            (exporter, "CollectionExporter", "collection.preset.everythingIncluded.subtitle", "Full text · all options · all five sections",
+             "collectionSettings", "subtitle: 'Full text · all options · all five sections'"),
             (composition, "CollectionCompositionRows", "composition.group.documentContent", "Document content", "collectionSettings",
              "documentContent: 'Document content'"),
             (composition, "CollectionCompositionRows", "composition.group.documentContent.help", "How much of each source to include.",
@@ -426,6 +461,11 @@ import Testing
         // The words with a count or a name in them, as the app formats them and copy.ts's functions say them.
         let mac = try Self.app("Collections/MacCollectionManagerView.swift")
         let formats: [(source: String, file: String, line: String, block: String, web: String)] = [
+            // What the picker says aloud of a choice (L19).
+            (picker, "CollectionPickerSheet", #"String(localized: "collection.picker.announce.added", defaultValue: "Added to “\(collectionName)”")"#,
+             "collections", "pickerAnnounceAdded: (name: string) => `Added to “${name}”`"),
+            (picker, "CollectionPickerSheet", #"String(localized: "collection.picker.announce.alreadyIn", defaultValue: "Already in “\(collectionName)”")"#,
+             "collections", "pickerAnnounceAlreadyIn: (name: string) => `Already in “${name}”`"),
             (list, "CollectionListView", #"String(localized: "collections.row.count", defaultValue: "\(count) document\(count == 1 ? "" : "s")")"#,
              "collections", "documentCount: (count: number) => `${count} document${count === 1 ? '' : 's'}`"),
             (picker, "CollectionPickerSheet", #"String(localized: "collection.picker.docCount", defaultValue: "\(documentCount) document\(documentCount == 1 ? "" : "s")")"#,
@@ -545,7 +585,10 @@ import Testing
             "private func finishOutlineMutation() { reindexEntries() CollectionOutline.normalize(sortedEntries) try? modelContext.save() }",
             // the deletes
             "let range = CollectionOutline.sectionRange(of: index, in: items) guard range.upperBound <= sortedEntries.count else { return }",
-            "GeneratedSummary.deleteHeadnoteDraft(for: sortedEntries[index], in: modelContext) modelContext.delete(sortedEntries[index]) sortedEntries.remove(at: index) finishOutlineMutation()",
+            // A row's delete since FRUS-Explorer#1941 (L19): the entry and the headnote draft it owns, as before, at once or after
+            // the row's question when it holds the reader's work, which the web's row does not ask yet (a follow-up's).
+            "GeneratedSummary.deleteHeadnoteDraft(for: sortedEntries[index], in: modelContext) modelContext.delete(sortedEntries[index]) sortedEntries.remove(at: index)",
+            "removeEntry(at: index) finishOutlineMutation()",
             // the move
             "let to = newOffset >= visible.count ? sortedEntries.count : visible[newOffset]",
             "guard let reordered = CollectionOutline.applyingMove( sortedEntries, fromIndex: from, toOffset: to) else { return } sortedEntries = reordered finishOutlineMutation()",
@@ -661,9 +704,10 @@ import Testing
         NoteViewParityTests.expect(kit, holds: [
             "summariesAvailable ? allCases : allCases.filter { $0 != .summaryOnly }",
         ], file: "CollectionExporter.swift")
-        #expect(CollectionPreset.allCases.filter { $0.recipe.bodyDepth == .summaryOnly } == [.briefingPacket],
-                "Briefing packet is the one preset that composes summaries, which the server offers only where some are stored")
-        #expect(CollectionRoutes.offeredPresets(summariesAvailable: false) == [.teachingReader, .sourceDossier, .scholarlyEdition])
+        #expect(CollectionPreset.allCases.filter { $0.recipe.bodyDepth == .summaryOnly } == [.summariesWithOverview],
+                "Summaries with overview is the one template that composes summaries, which the server offers only where some are stored")
+        #expect(CollectionRoutes.offeredPresets(summariesAvailable: false)
+                == [.fullTextAsPrinted, .fullTextWithAnnotations, .citationsWithNotes, .citationsWithArchivalSources, .everythingIncluded])
         #expect(CollectionRoutes.offeredPresets(summariesAvailable: true) == CollectionPreset.allCases)
     }
 
@@ -734,7 +778,10 @@ import Testing
         NoteViewParityTests.expect(try Self.app("Collections/CollectionPickerSheet.swift"), holds: [
             "if let at = place[id(item)] { known.append((at, item)) } else { new.append(item) }",
             "return new + known.sorted { $0.place < $1.place }.map(\\.item)", "takesEntries = !isSmart",
-            "let pause = outcome.insertedCount == 0 ? 0.8 : 0.6", "DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { dismiss() }",
+            // Its outcome since FRUS-Explorer#1941 (L19): Added, or Already here for a document the collection held, each said
+            // aloud, and its pause before the picker closes.
+            "self = insertedCount == 0 ? .alreadyIn : .added", "var pause: Double { self == .alreadyIn ? 0.8 : 0.6 }",
+            "DispatchQueue.main.asyncAfter(deadline: .now() + result.pause) { dismiss() }",
         ], file: "CollectionPickerSheet.swift")
         NoteViewParityTests.expect(try Self.kit("FRUSCoreKit/Collections/CollectionEditorNaming.swift"), holds: [
             "listName(savedName: savedName).localizedCaseInsensitiveContains(searchText)",

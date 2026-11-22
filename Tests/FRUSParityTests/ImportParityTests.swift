@@ -356,7 +356,11 @@ enum ImportServer {
     /// source draft's.
     @Test func everyHeadnoteDraftCarriesTheHeadnotePrompt() throws {
         let inspector = try Self.read("Collections/CollectionEntryInspector.swift")
-        #expect(inspector.contains(#"private static let headnoteDraftPromptId = UUID(uuidString: "\#(MacImport.headnoteDraftPromptId)")!"#))
+        // The id is the kit's since FRUS-Explorer#1951, which the inspector forwards to and the server takes.
+        #expect(inspector.contains("private static let headnoteDraftPromptId = GeneratedSummaryExport.headnoteDraftPromptId"))
+        let plan = try String(contentsOf: Repository.layout.upstream.appendingPathComponent("FRUSCoreKit/Export/ResearchImportPlan.swift"),
+                              encoding: .utf8)
+        #expect(plan.contains(#"public static let headnoteDraftPromptId = UUID(uuidString: "\#(MacImport.headnoteDraftPromptId)")!"#))
         #expect(inspector.contains("promptId: Self.headnoteDraftPromptId, responseText: text,"))
         let summary = try Self.read("Models/GeneratedSummary.swift")
         #expect(summary.contains("promptId: draft.promptId,"), "a duplicate's draft keeps the prompt of the draft it copies")
@@ -412,14 +416,19 @@ enum ImportServer {
         #expect(initial("defaultUserTagIds", in: project) == "[]" && initial("leadAxisWeights", in: project) == "nil")
     }
 
-    /// The saved search's scalar columns are what `SavedSearch.init(name:parameters:)` writes from the
-    /// parameters, and its watermark is the kit's `SavedSearchFreshness`, encoded as `recordRun`
-    /// encodes it, with the kit's `encoded`.
+    /// The saved search's scalar columns are what `SavedSearch.storeParameters(_:)` writes from the
+    /// parameters, the one writer of them since FRUS-Explorer#1951 (L24), which `init(name:parameters:)`
+    /// calls and which clears a date range the search does not have, as the import writes none; and its
+    /// watermark is the kit's `SavedSearchFreshness`, encoded as `recordRun` encodes it, with the kit's
+    /// `encoded`.
     @Test func aSavedSearchsColumnsAreWhatTheAppWritesFromItsParameters() throws {
         let source = try Self.read("Models/SavedSearch.swift")
-        let initializer = try NotesAndSummariesParityTests.body(of: "init(name: String, parameters: SearchParameters) {", in: source)
+        #expect(try NotesAndSummariesParityTests.body(of: "init(name: String, parameters: SearchParameters) {", in: source) == [
+            "self.id = UUID()", "self.name = name", "storeParameters(parameters)", "self.createdAt = .now", "self.lastModified = .now",
+        ])
+        let initializer = try NotesAndSummariesParityTests.body(of: "func storeParameters(_ parameters: SearchParameters) {", in: source)
         #expect(initializer == [
-            "self.id = UUID()", "self.name = name", "self.queryText = parameters.keywords ?? \"\"",
+            "self.queryText = parameters.keywords ?? \"\"",
             "self.phraseText = parameters.phrase ?? \"\"", "self.prefixWildcard = parameters.prefixWildcard ?? \"\"",
             "self.booleanModeRaw = parameters.booleanMode == .or ? \"or\" : \"and\"",
             "self.excludedTermsCSV = parameters.excludedTerms.joined(separator: \",\")", "var flags = 0",
@@ -427,12 +436,13 @@ enum ImportServer {
             "if parameters.includeNotes { flags |= 4 }", "self.scopeFlags = flags", "if let range = parameters.dateRange {",
             "let fmt = ISO8601DateFormatter()", "fmt.formatOptions = [.withFullDate]",
             "self.dateRangeStart = range.earliest.flatMap { fmt.date(from: $0) }",
-            "self.dateRangeEnd = range.latest.flatMap { fmt.date(from: $0) }", "}",
+            "self.dateRangeEnd = range.latest.flatMap { fmt.date(from: $0) }", "} else {", "self.dateRangeStart = nil",
+            "self.dateRangeEnd = nil", "}",
             "self.subjectTagIdsCSV = parameters.subjectTagIds.joined(separator: \",\")", "switch parameters.documentTypeFilter {",
             "case .documentsOnly: self.documentTypeFilterRaw = \"documentsOnly\"",
             "case .editorialNotesOnly: self.documentTypeFilterRaw = \"editorialNotesOnly\"",
             "case .all: self.documentTypeFilterRaw = \"all\"", "}", "self.personRef = parameters.personRef ?? \"\"",
-            "self.sortOrder = \"relevance\"", "self.createdAt = .now", "self.lastModified = .now",
+            "self.sortOrder = \"relevance\"",
             "self.parametersData = try? JSONEncoder().encode(parameters)",
         ])
         let scalars = SavedSearchColumns.scalars(of: SearchParameters(

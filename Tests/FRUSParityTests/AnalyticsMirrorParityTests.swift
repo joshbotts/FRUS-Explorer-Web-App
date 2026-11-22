@@ -413,7 +413,7 @@ import Testing
             ("Analytics/AnalyticsChartChrome.swift", "analytics.scope.wholeCorpus", "Whole corpus", "corpusAnalytics", "wholeCorpus"),
             ("Analytics/AnalyticsChartChrome.swift", "analytics.scope.bySubseries", "By Subseries", "corpusAnalytics", "bySubseries"),
             ("Analytics/AnalyticsChartChrome.swift", "analytics.scope.customScopes", "My Volume Scopes", "corpusAnalytics", "customScopes"),
-            ("Analytics/AnalyticsChartChrome.swift", "analytics.scope.subject.experimental", "Detected topics — experimental", "corpusAnalytics", "topicsNote"),
+            ("Analytics/AnalyticsChartChrome.swift", "analytics.scope.subject.experimental", "Subjects — experimental", "corpusAnalytics", "topicsNote"),
             ("Analytics/AnalyticsChartChrome.swift", "analytics.yearRange.chip.a11y", "Year range", "corpusAnalytics", "yearRange"),
             ("Analytics/AnalyticsChartChrome.swift", "analytics.yearRange.start.a11y", "Start year", "corpusAnalytics", "startYear"),
             ("Analytics/AnalyticsChartChrome.swift", "analytics.yearRange.end.a11y", "End year", "corpusAnalytics", "endYear"),

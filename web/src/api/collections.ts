@@ -45,8 +45,14 @@ export type GeneratedBlockType = (typeof generatedBlockTypes)[number];
 export const bodyDepths = ['full', 'summaryOnly', 'index'] as const;
 export type BodyDepth = (typeof bodyDepths)[number];
 
-/** The four presets, in the kit's order (`CollectionPreset.allCases`). */
-export type PresetId = 'teachingReader' | 'briefingPacket' | 'sourceDossier' | 'scholarlyEdition';
+/** The six templates, in the kit's order (`CollectionPreset.allCases`), named for what they do since FRUS-Explorer#1952. */
+export type PresetId =
+  | 'fullTextAsPrinted'
+  | 'fullTextWithAnnotations'
+  | 'summariesWithOverview'
+  | 'citationsWithNotes'
+  | 'citationsWithArchivalSources'
+  | 'everythingIncluded';
 
 /** The contents list's two styles (`CollectionToCStyle.allCases`). */
 export const tocStyles = ['citation', 'headerAndDateline'] as const;
@@ -127,7 +133,7 @@ export interface CollectionDetail {
   includeWordCloud: boolean;
   defaultIncludeHeadnote: boolean;
   summaryPromptId?: string;
-  /** Whether a document of it has a stored summary: only then are Summary only and Briefing packet offered. */
+  /** Whether a document of it has a stored summary: only then are Summary only and Summaries with overview offered. */
   summariesAvailable: boolean;
   /** The body depths a picker offers. */
   bodyDepths: string[];

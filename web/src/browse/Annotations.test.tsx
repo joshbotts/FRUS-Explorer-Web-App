@@ -229,7 +229,7 @@ describe('Browse’s Editors’ Annotations', () => {
     ]);
     expect(screen.getByText('Standard in the volumes covering 1955 on.')).toBeTruthy();
     expect(screen.getByText('1955–1968: 114 of 114 volumes')).toBeTruthy();
-    expect(screen.getByText('The reader opens a linked person’s entry. Where a volume does not link its names, search for them instead.')).toBeTruthy();
+    expect(screen.getByText('The reader opens a linked person’s entry. Where a volume does not link its names, rely on keyword search instead.')).toBeTruthy();
     const withIt = screen.getByRole('link', { name: 'Volumes with it: 288 volumes' });
     expect(withIt.getAttribute('href')).toBe('/browse/annotations/people/with?from=frus1977-80v27');
     expect(screen.getByRole('link', { name: 'Volumes without it: 265 volumes' })).toBeTruthy();

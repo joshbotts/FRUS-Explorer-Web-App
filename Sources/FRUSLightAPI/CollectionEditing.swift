@@ -614,8 +614,9 @@ enum CollectionEditing {
 
     // MARK: - The headnote card (`CollectionEntryInspector`, PLAN's S18f)
 
-    /// `headnoteDraftPromptId`: the prompt every headnote draft carries, which no prompt holds.
-    static let headnoteDraftPromptId = UUID(uuidString: "0EAD0000-0000-4000-8000-000000000001")!
+    /// `headnoteDraftPromptId`: the prompt every headnote draft carries, which no prompt holds, the kit's since
+    /// FRUS-Explorer#1951, which the app's inspector forwards to.
+    static let headnoteDraftPromptId = GeneratedSummaryExport.headnoteDraftPromptId
 
     /// `currentHeadnoteSummary`: the entry's own pick, a draft among them, when it holds text; else the
     /// document's stored summaries but drafts and those with no text, the one under the entry's prompt,

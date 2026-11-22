@@ -342,22 +342,34 @@ function DocumentList({
 }
 
 /**
- * A row, as the app's: the title, which opens the document; its volume and the time since its newest
+ * A row, as the app's: the document's number, and beneath it the title, which opens the document, since
+ * FRUS-Explorer#1947 (L21), so same-headed telegrams no longer read alike; its volume and the time since its newest
  * annotation; its summaries and visit plan; its three newest highlights, each beside a bar of its colour,
  * and how many more; its newest note; and its tags, its notes past one and its collections.
  */
 function DocumentRow({ row, now, onReview }: { row: ResearchDocument; now: number; onReview: () => void }) {
   const more = moreHighlights(row.highlightCount);
+  const named = row.numberLabel ? `${row.numberLabel}, ${row.rowTitle}` : undefined;
   return (
     <li className="research-document">
+      {/* The number line is drawn for the eye; the title's link or button is named by the number and the title, so
+          that rows with one head keep apart in a list of links and at each Tab, as the app's row is read whole. */}
+      <p className="research-document-number" aria-hidden="true">
+        {row.numberLabel}
+      </p>
       {/* A document an update removed opens its review, the only way to it, as the app's row does (PLAN's S21f). */}
       {row.opens === 'review' ? (
-        <button type="button" className="research-document-title" onClick={onReview}>
-          {row.title}
+        <button type="button" className="research-document-title" aria-label={named} onClick={onReview}>
+          {row.rowTitle}
         </button>
       ) : (
-        <Link className="research-document-title" to="/doc/$volumeId/$documentId" params={{ volumeId: row.volumeId, documentId: row.documentId }}>
-          {row.title}
+        <Link
+          className="research-document-title"
+          aria-label={named}
+          to="/doc/$volumeId/$documentId"
+          params={{ volumeId: row.volumeId, documentId: row.documentId }}
+        >
+          {row.rowTitle}
         </Link>
       )}
       <p className="research-document-volume">

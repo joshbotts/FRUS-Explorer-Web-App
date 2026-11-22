@@ -73,6 +73,11 @@ public struct ResearchDocument: Codable, Equatable, Sendable {
     /// What the list calls the document: the kit's display title of what the served index holds of
     /// it, or its id.
     public var title: String
+    /// The line a row prints above its title since FRUS-Explorer#1947 (L21, MAC-5), the document's number as
+    /// the Mac collection manager's rows print it ("Document 475"; "Unnumbered (d710a-1)"; else the id).
+    public var numberLabel: String = ""
+    /// The title the row prints beneath that line: `title` without a leading number the line prints.
+    public var rowTitle: String = ""
     /// The volume's title in the catalogue, or its id.
     public var volumeTitle: String
     /// The later of the times its newest note changed and its newest highlight was made, as the store
@@ -539,6 +544,19 @@ struct ResearchGroups {
     }
 }
 
+/// `ResearchDocumentRowText`, app code in `ResearchView.swift` (FRUS-Explorer#1947, L21), mirrored over the kit's calls,
+/// which `ResearchPageParityTests` holds to the app's source: what a Research row prints to name its document, a line
+/// with its number, and its title beneath, without a leading number that line already prints.
+enum ResearchDocumentRowText {
+    /// The number line and the title of one row.
+    static func parts(facts: DocumentDisplayTitle.Facts?, documentId: String) -> (label: String, title: String) {
+        let label = CitableDocumentNumber.rowLabel(printed: facts?.documentNumber, documentId: documentId)
+        let title = DocumentDisplayTitle.text(facts, documentId: documentId)
+        let number = CitableDocumentNumber.resolve(printed: facts?.documentNumber, documentId: documentId)
+        return (label, DocumentHeaderDisplay.numberedRow(header: title, number: number).title)
+    }
+}
+
 enum ResearchRoutes {
     /// How many of a row's highlights it shows, newest first; "and N more" says the rest.
     static let shownHighlights = 3
@@ -582,9 +600,11 @@ enum ResearchRoutes {
             let entries = groups.documents(for: item)
             let facts = await titleFacts(entries.map { (volumeId: $0.volumeId, documentId: $0.documentId) }, provider: provider)
             let items = entries.map { entry in
-                ResearchDocument(
+                let naming = ResearchDocumentRowText.parts(facts: facts[entry.id], documentId: entry.documentId)
+                return ResearchDocument(
                     volumeId: entry.volumeId, documentId: entry.documentId,
                     title: DocumentDisplayTitle.text(facts[entry.id], documentId: entry.documentId),
+                    numberLabel: naming.label, rowTitle: naming.title,
                     volumeTitle: resources.volume(entry.volumeId)?.title ?? entry.volumeId,
                     annotatedAt: entry.annotationDate.map(UserStoreDate.text),
                     latestNote: entry.latestNote.flatMap { $0.bodyText.isEmpty ? nil : $0.bodyText },

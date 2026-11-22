@@ -200,7 +200,7 @@ describe('the facet panel', () => {
     await waitFor(() => expect(document.body.textContent).toContain('3 documents match'));
     expect(document.body.textContent).not.toContain('narrowed from');
     await userEvent.click(within(panel).getByRole('button', { name: 'Subjects' }));
-    expect(panel.textContent).toContain('Subjects detected for 2 of 3 matches.');
+    expect(panel.textContent).toContain('Subject data covers 2 of 3 matches.');
     await userEvent.click(await within(panel).findByRole('button', { name: 'Berlin 2' }));
     await waitFor(() =>
       expect(searchOf(router)).toMatchObject({ subjectBucket: '40', subjectBucketKey: 'Germany/Berlin', subjectLabel: 'Berlin' }),

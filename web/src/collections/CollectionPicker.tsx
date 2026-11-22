@@ -3,8 +3,9 @@
 // the reader's selection, frozen from the page the frame holds. Its collections are listed in the
 // order it opened with, the most recently changed first, any made since ahead of them; its search
 // finds a collection by the name its row prints; a smart collection is listed, saying what it is, and
-// takes nothing; New Collection makes one, which the list then offers; and a choice shows Added, and
-// the picker closes a moment after, as the app's does.
+// takes nothing; New Collection makes one, which the list then offers; and a choice shows Added, or
+// Already here for a document the collection held, says which aloud, and the picker closes a moment
+// after, as the app's does since FRUS-Explorer#1941 (L19).
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
@@ -47,7 +48,8 @@ export function CollectionPicker({
   const collections = useQuery(collectionsQuery);
   const [order, setOrder] = useState<string[] | null>(null);
   const [search, setSearch] = useState('');
-  const [added, setAdded] = useState<string | null>(null);
+  /** The collection chosen, and whether it already held the document (`CollectionPickerOutcome`). */
+  const [added, setAdded] = useState<{ id: string; held: boolean } | null>(null);
   const [making, setMaking] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const words = copy.collections;
@@ -60,20 +62,25 @@ export function CollectionPicker({
   // Set at the press, as the app sets its added collection at once, so a second press adds nothing.
   const choosing = useRef(false);
 
+  /** The name a choice is announced by, its row's (`CollectionEditorNaming.listName`). */
+  function announcedName(id: string): string {
+    return collections.data?.items.find((item) => item.id === id)?.listName ?? '';
+  }
+
   async function choose(id: string) {
     // One add to a presentation: the picker closes a moment after it.
     if (choosing.current) return;
     choosing.current = true;
     setFailure(null);
     try {
-      let pause = addedPause;
+      let held = false;
       if (excerpt) await addExcerpts(client, id, excerpt);
-      else if (!(await addDocumentToCollection(client, id, document)).added) pause = heldPause;
+      else held = !(await addDocumentToCollection(client, id, document)).added;
       // An add answered after Cancel or Escape stands, and leaves the screen alone: a close set once the
       // picker had gone would never be cleared, and would close a picker opened since.
       if (!stillOpen.current) return;
-      setAdded(id);
-      closing.current = setTimeout(() => closeAtOnce(onClose), pause);
+      setAdded({ id, held });
+      closing.current = setTimeout(() => closeAtOnce(onClose), held ? heldPause : addedPause);
     } catch (error) {
       if (!stillOpen.current) return;
       choosing.current = false;
@@ -123,7 +130,15 @@ export function CollectionPicker({
                   >
                     <span className="picker-name">{item.listName}</span>
                     <span className="meta">{item.isSmart ? words.smartSentence : words.documentCount(item.documentCount)}</span>
-                    {added === item.id && <span className="added">{words.pickerAdded}</span>}
+                    {added?.id === item.id &&
+                      (added.held ? (
+                        <span className="added held">
+                          <span aria-hidden="true">{words.pickerAlreadyIn}</span>
+                          <span className="visually-hidden">{words.pickerAlreadyInLabel}</span>
+                        </span>
+                      ) : (
+                        <span className="added">{words.pickerAdded}</span>
+                      ))}
                   </button>
                 </li>
               ))}
@@ -137,6 +152,11 @@ export function CollectionPicker({
           <p className="error">{failure}</p>
         </div>
       )}
+      {/* Said at once, as the app posts it at high priority (`TransientToast.announcement`), which the sheet's
+          closing does not cut off: a polite region, gone with the picker 0.6 s later, could leave the tap unsaid. */}
+      <p role="alert" className="visually-hidden">
+        {added ? (added.held ? words.pickerAnnounceAlreadyIn : words.pickerAnnounceAdded)(announcedName(added.id)) : ''}
+      </p>
       <div className="dialog-actions">
         <button ref={cancel} type="button" onClick={onClose}>
           {words.pickerCancel}

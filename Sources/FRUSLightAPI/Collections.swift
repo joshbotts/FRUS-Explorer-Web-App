@@ -85,7 +85,7 @@ public struct CollectionDetail: Codable, Equatable, Sendable, ResponseEncodable 
     public var defaultIncludeHeadnote: Bool
     public var summaryPromptId: String?
     /// Whether summaries can be had for it: whether one of its documents has a summary stored, since
-    /// the server writes none. Summary only, and Briefing packet, are offered only then.
+    /// the server writes none. Summary only, and Summaries with overview, are offered only then.
     public var summariesAvailable: Bool
     /// The body depths a picker offers, `CollectionBodyDepth.available(summariesAvailable:)`.
     public var bodyDepths: [String]
@@ -382,7 +382,7 @@ enum CollectionRoutes {
                     guard CollectionBodyDepth(rawValue: depth) != nil else {
                         throw invalidField("defaultBodyDepth", "\(depth) is no body depth: full, summaryOnly or index.")
                     }
-                    // Offered by the kit's rule, as Briefing packet is; a depth the collection holds stands.
+                    // Offered by the kit's rule, as Summaries with overview is; a depth the collection holds stands.
                     guard depth != summaryOnly || summaryOnlyOffered || collection.defaultBodyDepth == depth else {
                     throw depthNotOffered(smart: collection.savedSearchId != nil)
                 }
@@ -463,7 +463,8 @@ enum CollectionRoutes {
             let summaries = try await summarizedDocuments(of: user.id, in: store)
             guard offeredPresets(summariesAvailable: summariesAvailable(held, summarized: summaries)).contains(preset) else {
                 let none = held.savedSearchId != nil ? "you have no summary stored" : "none of this collection's documents has one stored"
-                throw APIProblem(.conflict, code: "PRESET_NOT_OFFERED", detail: "Briefing packet composes a summary of each document, and \(none).")
+                throw APIProblem(.conflict, code: "PRESET_NOT_OFFERED",
+                                 detail: "\(preset.displayName) composes a summary of each document, and \(none).")
             }
             let time = UserStoreDate.rounded(now())
             let rows = try await changed(id, for: user.id, in: store, at: time) { collection in
@@ -690,8 +691,8 @@ enum CollectionRoutes {
             createdAt: collection.createdAt.map(UserStoreDate.text), lastModified: collection.lastModified.map(UserStoreDate.text))
     }
 
-    /// The presets a collection is offered, in the kit's order: Briefing packet, which composes a
-    /// summary of each document, only where summaries can be had.
+    /// The presets a collection is offered, the app's templates, in the kit's order: Summaries with
+    /// overview, which composes a summary of each document, only where summaries can be had.
     static func offeredPresets(summariesAvailable: Bool) -> [CollectionPreset] {
         CollectionPreset.allCases.filter { summariesAvailable || $0.recipe.bodyDepth != .summaryOnly }
     }
@@ -796,7 +797,7 @@ enum CollectionRoutes {
         return text
     }
 
-    /// Summary only, set where the kit's rule does not offer it, as Briefing packet's card is refused, with the
+    /// Summary only, set where the kit's rule does not offer it, as Summaries with overview's card is refused, with the
     /// app's reason a summary must be had (PLAN's S18f).
     static func depthNotOffered(smart: Bool = false) -> APIProblem {
         let none = smart ? "you have no summary stored" : "none of this collection's documents has one stored"

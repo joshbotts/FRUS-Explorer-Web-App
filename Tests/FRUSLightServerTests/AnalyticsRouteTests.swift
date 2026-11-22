@@ -58,9 +58,9 @@ import Testing
             ] {
                 #expect(problemCode(try await client.execute(uri: "/api/v1/analytics/corpus?\(query)", method: .get)) == code, "\(query)")
             }
-            // By Detected Topic: an item with indexed volumes scopes the chart to them, under the menu's label; one with
+            // By Subject: an item with indexed volumes scopes the chart to them, under the menu's label; one with
             // none, a sub-category the menu does not offer, and a category alone are refused.
-            let topic = try #require(context.topics.first { $0.items.contains { $0.indexed > 0 } }, "the synthetic export's volumes have detected topics")
+            let topic = try #require(context.topics.first { $0.items.contains { $0.indexed > 0 } }, "the synthetic export's volumes have subjects")
             let item = try #require(topic.items.first { $0.indexed > 0 })
             let query = "term=the&topic=\(Self.encoded(topic.label))&subtopic=\(Self.encoded(item.subcategory))"
             let byTopic = try decode(CorpusAnalyticsAnswer.self, try await client.execute(uri: "/api/v1/analytics/corpus?\(query)", method: .get))

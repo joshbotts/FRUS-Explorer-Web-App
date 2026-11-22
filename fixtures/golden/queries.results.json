@@ -1,22 +1,22 @@
 {
   "format" : 1,
   "provenance" : {
-    "appBuild" : 1812,
-    "indexVersion" : 74,
+    "appBuild" : 1861,
+    "indexVersion" : 75,
     "inputs" : {
       "fixtures/parity/queries.jsonl#records" : "f75bc7b9e75cf052af539d4c10a9fabef152f0d7f3ff750a4816d18ae0e04189",
       "fixtures/tei/SHA256SUMS" : "41609437167f6e54228471ac8f6638d3fe3db6d55045dbcd242b006c7301ae87",
       "fixtures/tei/frus1894Nicaragua.xml" : "c36aa079477928672a8f9cb98b37757a428452824ce15500db62e0636dd2c4cc",
       "fixtures/tei/frus1961-63v06.xml" : "48d571c05cad26e51d645c7a5fe7d5ea8b1d42e3f9a2c78ae97bf59a0e5c6f3f",
       "fixtures/tei/frus1969-76ve09p1.xml" : "6f88c7c3078d374797db1cbf2ec2999e92c489170d4ce5df0cdcc5c22a612df8",
-      "research_provenance.app_build" : "1812",
+      "research_provenance.app_build" : "1861",
       "research_provenance.app_version" : "1.0",
       "research_provenance.current_fts_schema_version" : "4",
-      "research_provenance.current_index_version" : "74",
+      "research_provenance.current_index_version" : "75",
       "research_provenance.documentation" : "https://github.com/joshbotts/FRUS-Explorer/blob/v2/Docs/Agentic-Analysis-Guide.md",
-      "research_provenance.exported_at" : "2026-11-10T16:12:56Z",
+      "research_provenance.exported_at" : "2026-11-22T15:52:28Z",
       "research_provenance.installed_fts_schema_version" : "4",
-      "research_provenance.installed_index_version" : "74",
+      "research_provenance.installed_index_version" : "75",
       "research_provenance.my_writing_included" : "0",
       "research_provenance.semantic_provenance_digest" : "89481b1869da1880c599a6923df9a90bef19fc402c3db5a370ead2809b7e6101"
     },
@@ -27,9 +27,9 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "eae28e773c944fe917d9d386b437bcad02f77eee11ca593641a9716127a6903d",
+    "sourceDigest" : "5ab6086f5935c2e20f4f9c62d2d5255379a9aa1e027f0f61dd7bc90dd02c7fc9",
     "tool" : "tools/mac-golden results",
-    "upstreamCommit" : "f011ab041fb903decd9eb60d0b94a7b04252061f"
+    "upstreamCommit" : "08e8bac814419a600f18938add9a56ef0cdfbb69"
   },
   "queries" : [
     {

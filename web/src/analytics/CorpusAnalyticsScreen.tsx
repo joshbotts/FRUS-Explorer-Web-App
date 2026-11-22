@@ -1,5 +1,5 @@
 // Corpus Analytics (PLAN's S24f), at /analytics/corpus: the app's `AnalyticsView` as a page, for one committed term.
-// Its field and Search; its filter row's chips, the scope (`AnalyticsScopeBar`, By Detected Topic among them), the
+// Its field and Search; its filter row's chips, the scope (`AnalyticsScopeBar`, By Subject among them), the
 // year range with its Reset, Group by with its two sections, and the administration presets; its toolbar's
 // Measure, Values, fit line, colours and Export; the hand-off link with Search's count and the dispersion line;
 // the occurrence notice; and the chart, drawn by Vega-Lite from the server's series, with its legend, caption and

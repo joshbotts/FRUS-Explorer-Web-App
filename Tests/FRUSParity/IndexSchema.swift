@@ -1,10 +1,11 @@
-// What the index summary hashes in an index-69 database, table by table, and how it classifies
+// What the index summary hashes in an index-75 database, table by table, and how it classifies
 // every other object, so that nothing in the file goes unhashed or unexplained.
 //
-// Verified against Tests/FRUSLightTestSupport/Fixtures/export-v74-schema.sql, the schema of the
-// owner's three-volume export from a build of FRUS-Explorer fe9325b2 (index version 74, build 1787),
-// whose tables index versions 69 and 71 held unchanged, and which the owner's three-volume export
-// from TestFlight's 1.0 (1812) holds byte for byte (S21b's pin move). A pin move that changes a table
+// Verified against Tests/FRUSLightTestSupport/Fixtures/export-v75-schema.sql, the schema of the
+// owner's three-volume export from FRUS Explorer 1.0 (1861), the tag 1.0-release (index version 75),
+// whose tables index version 74 held but volume_structures' two columns (S12d's pin move). The owner's
+// full export from the same build has two tables' columns in another order, where its library's
+// upgrades appended them, so the column check refuses it. A pin move that changes a table
 // fails the column check in `IndexSummarizer`, rather than leaving a new column out of every hash.
 
 /// One table of the corpus index and how its rows are hashed.
@@ -188,13 +189,16 @@ enum IndexSchema {
             key: ["volume_id", "sort_order"],
             sequence: .information(["volume_id", "sort_order"])),
         // The app writes the JSON with a JSONEncoder that does not sort keys, so its text is not
-        // stable: hash it as json_tree's (path, type, value) rows instead.
+        // stable: hash it as json_tree's (path, type, value) rows instead. Since index version 75
+        // (FRUS-Explorer#1909) the row also records the file its volume was indexed from, the git blob
+        // SHA-1 and the length of the bytes the store pass parsed, which each of its rows carries: the
+        // fixture volumes' files are fixtures/tei's on both platforms, so the two agree.
         CorpusTable(
             name: "volume_structures",
-            columns: ["volume_id", "structure_json"],
+            columns: ["volume_id", "structure_json", "file_blob_sha1", "file_size_bytes"],
             custom: """
-                SELECT v.volume_id, j.fullkey, j.type, j.atom FROM volume_structures v, json_tree(v.structure_json) j \
-                ORDER BY v.volume_id, j.fullkey
+                SELECT v.volume_id, v.file_blob_sha1, v.file_size_bytes, j.fullkey, j.type, j.atom \
+                FROM volume_structures v, json_tree(v.structure_json) j ORDER BY v.volume_id, j.fullkey
                 """),
     ]
 
@@ -211,12 +215,30 @@ enum IndexSchema {
         "sqlite_autoindex_research_provenance_1",
     ]
 
-    /// The app's schema: every object but the exporter's and SQLite's statistics, ordered by type
-    /// and name, without root pages.
+    /// The app's schema: every object but the exporter's and SQLite's statistics, ordered by type and name, without
+    /// root pages, each statement's text with its layout set aside (`normalizedSQL`). A column an upgrade adds,
+    /// `ALTER TABLE … ADD COLUMN`, is written into the stored `CREATE TABLE` text after the last column's line, where
+    /// a database the version creates has it on a line of its own, so a library the app upgraded and an index made
+    /// fresh hold the same table in two layouts. Index version 75 is the first to add
+    /// columns that the kit's `CREATE TABLE` names too (`volume_structures`' two, FRUS-Explorer#1909): the owner's
+    /// golden library, which Erase Everything… keeps, gains them by `ALTER`, and the fixture index made here by
+    /// `CREATE`. The words, their order and every column's place still count.
     static let schemaSQL = """
-        SELECT type, name, tbl_name, sql FROM sqlite_schema WHERE name NOT GLOB 'research_*' \
+        SELECT type, name, tbl_name, \(normalizedSQL("sql")) FROM sqlite_schema WHERE name NOT GLOB 'research_*' \
         AND name NOT GLOB 'sqlite_autoindex_research_*' AND name NOT GLOB 'sqlite_stat*' ORDER BY type, name
         """
+
+    /// SQL for `column`'s statement text with its layout set aside: each run of white space one space, and no space
+    /// beside a parenthesis or a comma.
+    static func normalizedSQL(_ column: String) -> String {
+        var text = "replace(replace(replace(\(column), char(13), ' '), char(10), ' '), char(9), ' ')"
+        // Seven halvings bring a run of up to 128 spaces to one; the kit's statements indent by a few dozen at most.
+        for _ in 0..<7 { text = "replace(\(text), '  ', ' ')" }
+        for (from, to) in [(" ,", ","), (", ", ","), (" (", "("), ("( ", "("), (" )", ")"), (") ", ")")] {
+            text = "replace(\(text), '\(from)', '\(to)')"
+        }
+        return "trim(\(text))"
+    }
 
     static let exportOnlySchemaSQL = """
         SELECT type, name, tbl_name, sql FROM sqlite_schema WHERE name GLOB 'research_*' \

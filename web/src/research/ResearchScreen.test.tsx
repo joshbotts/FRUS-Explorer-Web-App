@@ -26,6 +26,8 @@ const kennedy: ResearchDocument = {
   volumeId: 'frus1961-63v06',
   documentId: 'd1',
   title: '1. Telegram From the Embassy in the Soviet Union',
+  numberLabel: 'Document 1',
+  rowTitle: 'Telegram From the Embassy in the Soviet Union',
   volumeTitle: 'Kennedy-Khrushchev Exchanges',
   annotatedAt: '2026-10-24T10:00:00.000Z',
   latestNote: 'Kennedy writes warmly.',
@@ -46,6 +48,8 @@ const bare: ResearchDocument = {
   volumeId: 'frus1969-76v01',
   documentId: 'd42',
   title: 'd42',
+  numberLabel: 'Document 42',
+  rowTitle: 'd42',
   volumeTitle: 'frus1969-76v01',
   noteCount: 0,
   summaryCount: 0,
@@ -55,6 +59,9 @@ const bare: ResearchDocument = {
   tags: [],
   collections: [],
 };
+
+// A row's link: the document's number, said first, then its title (FRUS-Explorer#1947, L21).
+const kennedyLink = `${kennedy.numberLabel}, ${kennedy.rowTitle}`;
 
 /** The server: the page, and each category's documents by its key. */
 function server(lists: Record<string, Partial<ResearchDocumentList>> = {}, updated = 0) {
@@ -126,9 +133,13 @@ describe('the Research page', () => {
 
     // The rows, as the app's draws them.
     const list = await screen.findByRole('region', { name: 'All Research Documents' });
-    await within(list).findByRole('link', { name: kennedy.title });
+    await within(list).findByRole('link', { name: kennedyLink });
     const [first, second] = [...list.querySelectorAll<HTMLElement>('li.research-document')];
-    expect(within(first!).getByRole('link', { name: kennedy.title }).getAttribute('href')).toBe('/doc/frus1961-63v06/d1');
+    // The number above the title, which drops the number the line prints (FRUS-Explorer#1947, L21); the link says the
+    // number first, the line being for the eye.
+    expect(first!.querySelector('.research-document-number')?.textContent).toBe('Document 1');
+    expect(first!.querySelector('.research-document-number')?.getAttribute('aria-hidden')).toBe('true');
+    expect(within(first!).getByRole('link', { name: kennedyLink }).getAttribute('href')).toBe('/doc/frus1961-63v06/d1');
     expect(first!.querySelector('.research-document-volume')?.textContent).toBe('Kennedy-Khrushchev Exchanges2 hours, 23 minutes');
     expect(first!.querySelector('.research-document-counts')?.textContent).toBe('1 summariesIn a visit plan');
     expect([...first!.querySelectorAll('.research-highlight')].map((item) => item.textContent)).toEqual([
@@ -141,7 +152,7 @@ describe('the Research page', () => {
     expect(first!.querySelector('.research-note')?.textContent).toBe('Kennedy writes warmly.');
     expect(first!.querySelector('.research-footer')?.textContent).toBe('◆ Tag: Berlin2 notesCollection: Briefing book');
     // A document only collected or tagged has no date, counts, highlights, note or footer.
-    expect(within(second!).getByRole('link', { name: 'd42' })).toBeTruthy();
+    expect(within(second!).getByRole('link', { name: 'Document 42, d42' })).toBeTruthy();
     expect(second!.querySelector('.research-document-volume')?.textContent).toBe('frus1969-76v01');
     for (const part of ['.research-document-counts', '.research-highlights', '.research-more', '.research-note', '.research-footer']) {
       expect(second!.querySelector(part), part).toBeNull();
@@ -158,7 +169,7 @@ describe('the Research page', () => {
     await waitFor(() => expect(document.activeElement).toBe(heading));
     expect(within(categories).getByRole('link', { name: /^Berlin/ }).getAttribute('aria-current')).toBe('page');
     expect(within(categories).getByRole('link', { name: /^All Research Documents/ }).getAttribute('aria-current')).toBeNull();
-    await screen.findByRole('link', { name: kennedy.title });
+    await screen.findByRole('link', { name: kennedyLink });
     expect(asked(fetch)).toEqual(['allAnnotated', `tag.${berlin}`]);
 
     // The one shown, chosen again, sends focus to its title at once.

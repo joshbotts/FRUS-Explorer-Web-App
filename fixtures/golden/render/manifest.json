@@ -2,8 +2,8 @@
   "configuration" : "The Mac reader's own path, without an index. For each row, DocumentViewModel(entry:volumeEntry:parser:) with an entry naming only the volume and the document (its other fields do not reach the HTML; mac-golden checks that on every 25th row), no volume entry, a new FRUSDocumentParser, no person-mention store, no AST cache and no classification override. load(volumeURL:) on the main actor then parses the document alone and takes persons and glossary terms from the volume's TEI. broken-refs-index.json lists no reference in the fixture volumes, so no cross-reference is degraded. Then HTMLTemplate.build(model:colorScheme: .light), keeping the body: the fragment FRUSRenderNodeHTMLSerializer.reader writes (annotateSourceClassification: true, figureImages: .reader, listsNamedReferences: true). Rows are every document a full parse of each volume yields, in parse order, then each section with an id of its own (VolumeSection.hasExplicitSectionId) that the full parse yields no document for, in the structure's order, which the app's reader opens by its id: from Browse's Read, a back-of-volume index and a table of contents; by Previous and Next, which turn through the kit's reading order, the lists of names and of sources and a subseries' list of volumes; by a link, such as a table of contents', a compilation or a chapter that prints only its heading. Volumes sorted. A release build of the app module, with testing enabled, compiled from the submodule unmodified.",
   "format" : 1,
   "provenance" : {
-    "appBuild" : 1812,
-    "indexVersion" : 74,
+    "appBuild" : 1861,
+    "indexVersion" : 75,
     "inputs" : {
       "fixtures/tei/SHA256SUMS" : "41609437167f6e54228471ac8f6638d3fe3db6d55045dbcd242b006c7301ae87",
       "fixtures/tei/frus1894Nicaragua.xml" : "c36aa079477928672a8f9cb98b37757a428452824ce15500db62e0636dd2c4cc",
@@ -17,9 +17,9 @@
       "sqlite" : "3.54.0",
       "timeZone" : "America/New_York"
     },
-    "sourceDigest" : "eae28e773c944fe917d9d386b437bcad02f77eee11ca593641a9716127a6903d",
+    "sourceDigest" : "5ab6086f5935c2e20f4f9c62d2d5255379a9aa1e027f0f61dd7bc90dd02c7fc9",
     "tool" : "tools/mac-golden render",
-    "upstreamCommit" : "f011ab041fb903decd9eb60d0b94a7b04252061f"
+    "upstreamCommit" : "08e8bac814419a600f18938add9a56ef0cdfbb69"
   },
   "rows" : [
     {

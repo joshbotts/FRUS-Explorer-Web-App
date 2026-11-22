@@ -299,9 +299,10 @@ import Testing
         let words: [(source: String, key: String, value: String, block: String, web: String)] = [
             // S21g's follow-up: Subjects, Career and a chip's pivot from a person, which excludes no volume.
             (view, "people.detail.subjects.header", "Subjects", people, "subjectsHeader: 'Subjects'"),
+            // The note, then the subject data's caption (FRUS-Explorer#1930), held below.
             (view, "people.detail.subjects.note",
              "Volume-level: subjects characteristic of the volumes where this person is mentioned — not per-document tags.", people,
-             "subjectsNote: 'Volume-level: subjects characteristic of the volumes where this person is mentioned — not per-document tags.'"),
+             "subjectsNote: `Volume-level: subjects characteristic of the volumes where this person is mentioned — not per-document tags. ${subjectDataCaption}`"),
             (view, "browser.volume.subjectChip.hint", "Shows other volumes covering this subject", people,
              "subjectChipHint: 'Shows other volumes covering this subject'"),
             (view, "people.detail.subjectChip.help", "Subject of volumes where this person is mentioned — click to see all volumes covering it",
@@ -376,6 +377,20 @@ import Testing
             #expect(NoteViewParityTests.writes(word.source, word.key, word.value), "the app writes \(word.key) as \(word.value)")
             #expect(word.block.contains(NoteViewParityTests.flattened(word.web)), "copy.ts holds \(word.web)")
         }
+        // The subject data's one caption (FRUS-Explorer#1930, the app's `SubjectDataCaption`), after the sheet's note as the
+        // app joins it, and kept once in copy.ts as the app keeps it once; the facet panel shows it alone.
+        let caption = "Experimental subject data from the Office of the Historian, not published on history.state.gov. Subjects are matched to documents by name in the text; they are not editorial headings from the FRUS publication process, so some are wrong."
+        let store = try Self.app("Browser/VolumeSubjectProfilesStore.swift")
+        #expect(NoteViewParityTests.writes(store, "subjects.caption", caption), "VolumeSubjectProfilesStore.swift writes the caption")
+        #expect(store.contains(#"static func trailing(_ sentence: String) -> String { "\(sentence) \(text)" }"#))
+        #expect(view.contains(#"Text(SubjectDataCaption.trailing(String(localized: "people.detail.subjects.note","#))
+        #expect(NoteViewParityTests.flattened(raw).contains("const subjectDataCaption = '\(caption)';"), "copy.ts keeps the caption once")
+        #expect(try Self.app("Search/FacetPanelView.swift").contains("Text(SubjectDataCaption.text)"))
+        let facets = try NoteViewParityTests.block("facets", of: raw)
+        #expect(facets.contains("subjectsSource: subjectDataCaption,"), "the facet panel's caption alone")
+        #expect(try Self.app("Search/FacetPanelView.swift").contains(
+            #"defaultValue: "Subject data covers \(facets.subjectCoverage.formatted()) of \(facets.matchCount.formatted()) matches.")"#))
+        #expect(facets.contains("`Subject data covers ${detected.toLocaleString('en-US')} of ${matches.toLocaleString('en-US')} matches.`"))
         // The app's sentences with a value, as copy.ts's functions say them.
         let formats: [(source: String, app: String, block: String, web: String)] = [
             (view, #"defaultValue: "%lld mentions"), Int64(indexEntry.mentionCount))"#, people, "mentionCountSpoken: (count: number) => `${count} mentions`"),

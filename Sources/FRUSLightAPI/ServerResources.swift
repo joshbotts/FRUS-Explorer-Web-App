@@ -145,7 +145,7 @@ public final class ServerResources: Sendable {
     var subjectProfiles: SubjectProfilesFile.Read { subjects.read(in: directory) }
 
     /// `DocumentSubjectStore.shared`, app code: the detected subjects of each document, which Related
-    /// Documents' shared-topics axis scores and names, decoded once by the kit's `DocumentSubjectIndex`;
+    /// Documents' shared-subjects axis scores and names, decoded once by the kit's `DocumentSubjectIndex`;
     /// nil for a file missing or malformed, and the axis then contributes nothing, as the app's does.
     var documentSubjectIndex: DocumentSubjectIndex? { documentSubjects.index(in: directory) }
 

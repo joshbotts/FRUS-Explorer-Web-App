@@ -262,8 +262,8 @@ import Testing
         ], file: "CollectionExporter+App.swift")
         let inspector = try CollectionParityTests.app("Collections/CollectionEntryInspector.swift")
         NoteViewParityTests.expect(inspector, holds: [
-            // headnoteDraftPromptId
-            #"private static let headnoteDraftPromptId = UUID(uuidString: "0EAD0000-0000-4000-8000-000000000001")!"#,
+            // headnoteDraftPromptId, the kit's since FRUS-Explorer#1951 (held below)
+            "private static let headnoteDraftPromptId = GeneratedSummaryExport.headnoteDraftPromptId",
             // currentHeadnoteSummary
             "if let sid = entry.headnoteSummaryId, let chosen = try? modelContext.fetch( FetchDescriptor<GeneratedSummary>(predicate: #Predicate { $0.id == sid })).first, !chosen.responseText.isEmpty { return chosen }",
             "predicate: #Predicate { $0.volumeId == vid && $0.documentId == did && !$0.isHeadnoteDraft }))) ?? []) .filter { !$0.responseText.isEmpty }",
@@ -330,7 +330,7 @@ import Testing
             "guard !collection.entries.isEmpty || collection.savedSearchId != nil else {",
         ], file: "CollectionExports.swift")
         NoteViewParityTests.expect(try CollectionParityTests.server("Sources/FRUSLightAPI/CollectionEditing.swift"), holds: [
-            #"static let headnoteDraftPromptId = UUID(uuidString: "0EAD0000-0000-4000-8000-000000000001")!"#,
+            "static let headnoteDraftPromptId = GeneratedSummaryExport.headnoteDraftPromptId",
             "if let chosen, !chosen.responseText.isEmpty { return chosen }",
             "let candidates = stored.filter { !$0.isHeadnoteDraft && !$0.responseText.isEmpty } return promptId.flatMap { pid in candidates.first { UUID(uuidString: $0.promptId) == pid } } ?? candidates.first",
             #"seed.map { SummaryDisplay.plainText($0) } ?? """#,

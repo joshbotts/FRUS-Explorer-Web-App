@@ -1,6 +1,6 @@
 // The cross-reference graph's route (PLAN's S23e), over the synthetic export: what a request may ask and
-// what is refused, the canvas a timeline is laid out on, FRUS-Explorer#1893's narrowest width among it, and
-// the answer while no index is served. The graph itself is held to the kit's over the fixture index in
+// what is refused, the canvas a timeline is laid out on, at any width since the kit lays one out at any
+// (FRUS-Explorer#1893, fixed by #1934), and the answer while no index is served. The graph itself is held to the kit's over the fixture index in
 // `CrossReferenceGraphParityTests`.
 
 import FRUSCoreKit
@@ -68,13 +68,12 @@ import Testing
         #expect(asked.chosenDegree == 2 && asked.chosenLayout == .timeline && asked.width == 50 && asked.height == 300)
         #expect(asked.expandedClusters == ["cluster/outbound/frus1952-54v02p1"] && asked.expandedDateClusters == ["datecluster/frus1961-63v06/d4"])
         #expect(asked.domain == -1.5...2_000)
-        // FRUS-Explorer#1893: the width asked is kept as asked; the timeline is laid out at 116 or more.
-        #expect(CrossReferenceGraphRoutes.narrowestTimeline == 116)
     }
 
-    /// A timeline asked narrower than 116 pt is laid out at 116 (FRUS-Explorer#1893), where the kit's layout
-    /// would trap; at 116 or wider, at the width asked.
-    @Test func aNarrowTimelineIsLaidOutAt116() throws {
+    /// A timeline is laid out at the width asked, a canvas narrower than 116 pt too, where the kit's layout trapped
+    /// until FRUS-Explorer#1934 kept its tick range's ends in order (#1893): every node placed, and from 116 pt
+    /// every node within the canvas.
+    @Test func aTimelineIsLaidOutAtTheWidthAsked() throws {
         let nodes = [
             DisplayNode(id: "v/d1", kind: .central, metadata: nil, isDownloaded: true, degree: 0),
             DisplayNode(id: "v/d2", kind: .inbound, metadata: nil, isDownloaded: true),
@@ -83,13 +82,15 @@ import Testing
         let edges = [DisplayEdge(source: "v/d2", target: "v/d1", referenceType: .footnote, context: nil),
                      DisplayEdge(source: "v/d1", target: "v/d3", referenceType: .footnote, context: nil)]
         let dates: [String: TimeInterval] = ["v/d1": 0, "v/d2": 86_400, "v/d3": -86_400]
-        for (asked, laid) in [(1.0, 116.0), (50, 116), (115, 116), (116, 116), (117, 117), (900, 900)] {
+        for asked in [1.0, 50, 115, 116, 117, 900] {
             var request = GraphRequest()
             request.width = asked
             let timeline = CrossReferenceGraphRoutes.laidOutTimeline(nodes: nodes, edges: edges, dateValues: dates, centralKey: "v/d1",
                                                                      request: request, counts: [:], metadata: [:])
-            #expect(timeline.width == laid && timeline.positions.count == 3, "\(asked)")
-            #expect(timeline.positions.values.allSatisfy { $0.x >= 0 && $0.x <= laid }, "\(asked): \(timeline.positions)")
+            #expect(timeline.width == asked && timeline.positions.count == 3, "\(asked)")
+            if asked >= 116 {
+                #expect(timeline.positions.values.allSatisfy { $0.x >= 0 && $0.x <= asked }, "\(asked): \(timeline.positions)")
+            }
         }
     }
 

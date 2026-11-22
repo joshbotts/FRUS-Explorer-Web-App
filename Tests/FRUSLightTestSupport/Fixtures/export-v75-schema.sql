@@ -1,12 +1,18 @@
--- Schema of a FRUS Explorer research export: index version 74, FTS schema 4, app 1.0 build 1787, from
--- a build of FRUS-Explorer fe9325b2. Taken from the owner's three-volume export of 7 November 2026
--- (sqlite_master, in creation order), and the same in the owner's two full exports of that day.
+-- Schema of a FRUS Explorer research export: index version 75, FTS schema 4, app 1.0 build 1861, the
+-- App Store build, from FRUS-Explorer's tag 1.0-release (08e8bac8). Taken from the owner's three-volume
+-- export of 22 November 2026 (sqlite_master, in creation order).
 -- Its library was emptied with Erase Everything…, which keeps the database file, so the partial index
--- idx_document_cache_user_tag_ids comes last among the indexes; a new database makes it earlier.
+-- idx_document_cache_user_tag_ids comes last among the indexes, where a new database makes it earlier,
+-- and volume_structures has index version 75's two columns where the upgrade's ALTER TABLE ... ADD COLUMN
+-- statements put them (FRUSCoreKit/Search/IndexingPipeline.swift, setupDatabase(_:)), after the line
+-- that closed the table, where a new database names them on lines of their own.
 -- Schema only: no rows. SQLite internals and FTS5 shadow tables are left out; FTS5 creates those.
--- Index versions 69 (build 50) and 71 (1.0, build 1776) had the same statements in the same order but
--- one: research_suppressed_volumes, which since FRUS-Explorer#1845 suppresses the first edition of a
--- pair whose second the export holds, where it suppressed the second.
+-- Index version 74 (builds 1787 and 1812) had the same statements in the same order but volume_structures,
+-- without file_blob_sha1 and file_size_bytes (FRUS-Explorer#1948).
+-- The owner's full export of the same day is not the source: its library, upgraded in place from an
+-- earlier index version, holds the same objects in another order, with cross_references' is_broken and
+-- external_citations' note_label appended last, and person_mentions without its UNIQUE constraint, as the
+-- full export from 1.0 (1812) did. That is the library's history, not the version's schema.
 
 CREATE TABLE cross_references (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -200,7 +206,7 @@ CREATE TABLE volume_sources (
 CREATE TABLE volume_structures (
     volume_id      TEXT PRIMARY KEY,
     structure_json TEXT NOT NULL
-);
+, file_blob_sha1 TEXT, file_size_bytes INTEGER);
 
 CREATE INDEX idx_crossref_source ON cross_references(source_volume_id, source_document_id);
 

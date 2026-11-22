@@ -34,6 +34,10 @@ export interface ResearchDocument {
   documentId: string;
   /** The kit's display title of the served index's head, or the document's id. */
   title: string;
+  /** The line the row prints above its title: the document's number (the app's `ResearchDocumentRowText`, L21). */
+  numberLabel: string;
+  /** The title the row prints beneath that line, without a leading number the line prints. */
+  rowTitle: string;
   volumeTitle: string;
   /** Its newest note's change or its newest highlight, the later; absent for neither. */
   annotatedAt?: string;
