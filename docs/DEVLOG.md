@@ -14,6 +14,39 @@ Not started: `PLAN.md`'s row S24i. The session that does it replaces this line, 
 
 Not started: `PLAN.md`'s row S24h. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
 
+## Session 12d, follow-up: the release's selftest just after a pin move that changes the index version
+
+22 November 2026 · branch `claude/s12d-release-selftest`, in S12d's session at the owner's word · [#157](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/157) · upstream `08e8bac8` (tag `1.0-release`), unchanged
+
+The owner's first run of the release workflow failed in 26 seconds at its selftest, before the cut. It ran on `main` at `5668422`, #156's merge, to publish `:1.0-1861` ([run 45048774061](https://github.com/joshbotts/FRUS-Explorer-Web-App/actions/runs/45048774061)), and stopped with "the selftest needs HEAD's first-parent line to reach another index version".
+
+The selftest cuts against stubs over two commits of `main`'s first-parent line:
+- p1, at least three back and at HEAD's index version, where it tags an app build's last release;
+- p0, the newest commit at another index version.
+
+Just after a pin move that changes the index version, HEAD is the only commit at its version, so no p1 exists. The release of the build the move brings was therefore refused until three more pull requests merged. The message named p0 alone, since the selftest had only run over a long history at one version.
+
+**The fix,** in `scripts/release` alone: where no p1 exists, the selftest's own repository, which borrows this one's objects, merges three pull requests on HEAD.
+- Each merge has HEAD's tree and is numbered past the newest pull request on HEAD's line.
+- The commits carry a name of their own, since a runner has none.
+- HEAD is then p1, and the sixteen cases cut the last of the three.
+
+Where `main` holds three commits at HEAD's version, nothing changes, and `cut` itself is unchanged.
+
+**Results,** on this Mac, with macOS's bash 3.2:
+- `scripts/release selftest` passed every case:
+  - at `main`'s `5668422` and at this branch's commit, by the new path;
+  - at `ab5a051`, at index version 74, with this script, by the old path, with p1 `6acee4b` and p0 `2ea3f36` at 71.
+- `scripts/release cut --dry-run --commit 5668422`, over the registry's and GitHub's answers, wrote nothing and refused nothing. It would publish the first release, `1.0-1861.1`:
+  - the image `sha256:9ae7afd5…`, which `image.yml`'s run 45047338671 built and smoke-tested;
+  - index version 75;
+  - notes naming the 151 pull requests since the start.
+- The release workflow's own selftest runs on Linux on this pull request.
+
+**For the owner, once this merges:** run the release workflow on `main` again, first with dry run on, then off. It releases the build `edge` names once `image.yml` has smoke-tested this merge; to release #156's build itself, give `5668422` as its commit.
+
+**Next:** as Session 12d's entry says.
+
 ## Session 12d: the pin moves to `1.0-release`, FRUS Explorer 1.0 (1861)
 
 22 November 2026 · branch `claude/quirky-tharp-470c63`, a session of the phase-3 orchestrator's · [#156](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/156) · upstream `08e8bac8` (tag `1.0-release`)
