@@ -256,9 +256,29 @@ The pin moves from the tag `1.0-release`, `08e8bac8`, to `v2`'s head, `4556c4d5`
 
 **Left for the session that edits `docs/INSTALL.md` next** (the import follow-ups'): its Releases section's last sentence, "Until it is cut, follow `edge`.", is stale since the owner published `1.0-1861.1`.
 
-GOLDENPLACEHOLDER
+**The golden files** were made by `scripts/make-golden` under the heavy lock, on this Mac (macOS 27.2.1, Xcode 27.2). The first run used the app's source alone, while the owner's choice of export was asked; it took five minutes from an empty `tools/mac-golden/.build`. The second added EXPORTCHOICE.
+- **From the source:** the 410 render rows, the 482 queries' expressions and the rich-text spans are byte for byte as they were. Only their provenance moved: the source digest from `5ab6086f…` to `f54dff2c…`, and the upstream commit from `08e8bac8` to `4556c4d5`. `fixtures/rich-text/web` is unchanged.
+- **From the export:** EXPORTRESULT
+- `make-golden`'s rewrite of `tools/mac-golden/Package.resolved` is left out, as at every move.
 
-RESULTSPLACEHOLDER
+**Results**
+- **Linux, `swift:6.4-noble`, arm64:** `scripts/swift --postgres test`, CI's swift job with its PostgreSQL, under the heavy lock, at `82c53e9`, the code before the review's fixes, over the warm build cloned at `08e8bac8` with this package's own targets built clean.
+  - 4,340 tests in 14 targets. The only skip is the named one, `FTS5StoreTests`' `backupExclusion()`.
+  - Per target: CrossRefKitTests 10, FRUSCoreKitTests 2,586 in 315 suites, FRUSLightCoreTests 279, FRUSLightServerTests 416, FRUSParityTests 299, FRUSRichTextTests 42, FTS5CheckTests 3, FTS5StoreTests 219, GeneratorKitTests 7, ManifestGeneratorTests 60, SemanticVectorsKitTests 40, SourceExplorerExportGeneratorTests 22, SourceNoteKitTests 327 and WordCloudKitTests 30.
+  - Against S12d's run at the tag: FRUSCoreKitTests runs #1967's and #1968's 17 more, where it ran 2,569 in 313 suites; the server's target one more, `SummaryLinesTests`; and the parity target one more, the `occ:` test, the labels' test taking its predecessor's place.
+  - Two kinds of failure, neither the code's. The parity target's five checks of the golden files failed on the stale digest until the remake: `GoldenTests`, `IndexParityTests`, `SearchRunTests`, `ServedAPIParityTests`' check 3 and `StandaloneIndexParityTests`. FRUSLightCoreTests' PostgreSQL tests were refused "too many clients already": the shared container, `frus-light-postgres`, had been made again with PostgreSQL's default of 100 connections, and once without its IPv4 listener. Restarted with `max_connections` at 200 (`ALTER SYSTEM`), as S21d's hand-over suggests, the target passed whole, 279 tests in 41 suites.
+- PARITYAFTER
+- **After the review's fixes:** `AnalyticsMirrorParityTests`, 5 tests, and the browser app's `typecheck`, `lint`, `test` (672 tests in 75 files, where 670 in 74 ran before them, all passing) and `build`. `npm ci` ran at the start.
+- **The image** `frus-light:pin4556` was built with the release's build arguments (1.0, 1861, index version 75), with its parity stage, at the reviewed code. `scripts/compose-smoke --e2e` on ports 18400 and 18401 passed:
+  - check 2 over the Standalone index the server's own indexing wrote: 36 digests and 7 checks identical (its comparison reads the gating statements, which the remake leaves as they were, not the files' provenance);
+  - check 8: 245 source notes; check 5: none of the owner's writing in a stripped export;
+  - the browser suite passes 89 and skips 9, at the root and under the path, as `main`'s CI does. The nine are the specs the smoke's own steps run, and each passed there.
+
+**The cold review,** by a fresh subagent given the range `e0d0e38..82c53e9` and none of this session's reasoning, with the `code-review` skill at `high`, found no wrong number, no line given to another user and no parity test that no longer holds. What held up is fixed in `ad5d246`:
+- **Chronology's row drew a reader's whole summary,** where the app's `ChronologyRowView` draws three lines (`lineLimit(3)`); before the move a row's line was its head. It draws three lines now, and `AnalyticsMirrorParityTests` holds the app's line, the span and its rule.
+- **The browser kept the lines it held** after a summary was written, edited or deleted, or research imported or erased, for up to five minutes in Related Documents. `summaryLinesChanged` now reads Related Documents, Chronology and Project Home again, and `userData.test.ts` holds it.
+- **The records:** the README said no issue of this project's waits for the app, where four on the Zotero client's sends do (#1923 to #1926); its line on S25c's and S25d's screens, done since 11 November, was stale; it credited Suggested Next's line to the three pull requests, where #1902's call gives it; and COORDINATION's pin cadence did not name a merged change the web needs.
+- **Left, and said:** `docs/INSTALL.md`'s stale sentence, above, in the import follow-ups' file, by the brief.
 
 **Records**
 - `docs/prep/`: the six hand-overs, each as its issue's last comment gave it, with what this move took; and the prep notes' pinning paragraph, phase 3's account of the moves and the hand-overs' row of their table of files.
