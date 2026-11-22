@@ -174,8 +174,7 @@ function Dashboard({
       </p>
     );
   }
-  if (answer.empty) return <Empty title={answer.empty.title} detail={answer.empty.lines.join(' ')} />;
-  const sourcing = dashboard === 'sourcing' ? (answer as SourcingAnswer) : undefined;
+  const sourcing = dashboard === 'sourcing' && !answer.empty ? (answer as SourcingAnswer) : undefined;
   const administrations = dashboard === 'administrations' ? (answer as AdministrationsAnswer) : undefined;
   // The years' bar resets the scope too, but on Archival Sourcing (`yearRangeBar`'s `onReset`).
   const resetYears = () => onChange({ from: undefined, to: undefined, ...(dashboard === 'sourcing' ? {} : clearedScope) });
@@ -184,7 +183,8 @@ function Dashboard({
       <p className="analytics-caption about-intro">{answer.intro}</p>
       <div className="analytics-filters">
         {(!sourcing || sourcing.supportsScope) && (
-          <ScopeBar context={context} scope={scope} label={answer.frame.scopeLabel} isNarrowed={answer.frame.isNarrowed}
+          <ScopeBar context={context} scope={scope} label={answer.frame.scopeLabel} name={answer.frame.scopeName}
+                    isNarrowed={answer.frame.isNarrowed}
                     onScope={(fields) => onChange({ ...clearedScope, ...fields })}
                     onReset={() => onChange({ ...clearedScope, from: undefined, to: undefined })} />
         )}
@@ -204,14 +204,17 @@ function Dashboard({
           <strong>{corpus.exportFailed}</strong> {failure}
         </div>
       )}
-      {administrations?.narrowedEmpty ? (
+      {answer.empty ? (
+        // The scope or years drew nothing: the empty state under the controls, which the reader changes from here.
+        <Empty title={answer.empty.title} detail={answer.empty.lines.join(' ')} />
+      ) : administrations?.narrowedEmpty ? (
         <Empty title={administrations.narrowedEmpty.title} detail={administrations.narrowedEmpty.lines.join(' ')} />
       ) : (
         <>
           {administrations && (
             <div className="about-toggle">
               <label>
-                <input type="checkbox" checked={administrations.toggle.isOn} onChange={(event) => onChange({ notes: event.target.checked ? 'on' : undefined })} />{' '}
+                <input type="checkbox" checked={ask.editorialNotes} onChange={(event) => onChange({ notes: event.target.checked ? 'on' : undefined })} />{' '}
                 {administrations.toggle.title}
               </label>
               <p className="analytics-caption">{administrations.toggle.subtitle}</p>
@@ -228,7 +231,13 @@ function Dashboard({
               <p className="analytics-caption">{sourcing.archivalLinkDetail}</p>
             </div>
           )}
-          {administrations?.detail && <AdministrationDetail detail={administrations.detail} onPick={(id) => onChange({ administration: id })} />}
+          {administrations?.detail && (
+            <AdministrationDetail
+              detail={administrations.detail}
+              selected={series.isPlaceholderData ? (search.administration ?? administrations.detail.focus) : administrations.detail.focus}
+              onPick={(id) => onChange({ administration: id })}
+            />
+          )}
           <div className="archival-caveats">
             <h3>{answer.caveats.title}</h3>
             {answer.caveats.lines.map((line) => (
@@ -290,6 +299,7 @@ function ScopeBar({
   context,
   scope,
   label,
+  name,
   isNarrowed,
   onScope,
   onReset,
@@ -297,6 +307,8 @@ function ScopeBar({
   context: SeriesContext;
   scope: SeriesScope | undefined;
   label: string;
+  /** The scope's own name, for a scope the menu does not list. */
+  name: string;
   isNarrowed: boolean;
   onScope: (fields: Partial<SeriesSearch>) => void;
   onReset: () => void;
@@ -304,6 +316,7 @@ function ScopeBar({
   const me = useQuery(meQuery);
   const scopes = useQuery({ ...volumeScopesQuery, enabled: me.data?.userData === true });
   const fieldId = useId();
+  const menu = useRef<HTMLSelectElement>(null);
   const series = useMemo(() => new Set(context.seriesVolumeIds), [context.seriesVolumeIds]);
   const custom = useMemo(
     () =>
@@ -332,8 +345,12 @@ function ScopeBar({
   return (
     <div className="analytics-field about-scope">
       <label htmlFor={fieldId}>{label}</label>
-      <select id={fieldId} aria-label={words.scopeA11y} value={value} onChange={(event) => choose(event.target.value)}>
+      <select ref={menu} id={fieldId} aria-label={words.scopeA11y} value={value} onChange={(event) => choose(event.target.value)}>
         <option value="whole">{words.wholeSeries}</option>
+        {/* Volumes from a shared address, or a scope not listed yet: named as itself, never as the whole series. */}
+        {value.startsWith('volumes:') && !custom.some((each) => `volumes:${each.ids.join(',')}` === value) && (
+          <option value={value}>{name}</option>
+        )}
         {context.decades.map((decade) => (
           <optgroup key={decade.label} label={words.bySubseriesIn(decade.label)}>
             {decade.subseries.map((name) => (
@@ -369,7 +386,16 @@ function ScopeBar({
         ))}
       </select>
       {isNarrowed && (
-        <button type="button" className="link" aria-label={words.resetA11y} onClick={onReset}>
+        <button
+          type="button"
+          className="link"
+          aria-label={words.resetA11y}
+          onClick={() => {
+            // The button goes with the scope: the keyboard stays on the menu it reset.
+            menu.current?.focus();
+            onReset();
+          }}
+        >
           {words.wholeSeries}
         </button>
       )}
@@ -381,24 +407,33 @@ function ScopeBar({
 function CategoryFilter({ answer, hidden, onHidden }: { answer: SourcingAnswer; hidden: string[]; onHidden: (hidden: string[]) => void }) {
   const filter = answer.filter;
   const other = filter.categories.find((category) => category.value === 'unrecognized');
+  // Each box as asked while its answer comes: shown unless hidden, and the last one shown kept (`toggle`).
+  const shown = (value: string) => !hidden.includes(value);
+  const enabled = (value: string) => hidden.includes(value) || hidden.length < filter.categories.length - 1;
   function toggle(value: string) {
     if (hidden.includes(value)) onHidden(hidden.filter((each) => each !== value));
     else if (hidden.length < filter.categories.length - 1) onHidden([...hidden, value]);
   }
   return (
     <details className="about-categories">
-      <summary aria-label={`${filter.accessibilityLabel}: ${filter.accessibilityValue}`}>{filter.label}</summary>
+      <summary>
+        {filter.label}
+        <span className="visually-hidden">
+          , {filter.accessibilityLabel}: {filter.accessibilityValue}
+        </span>
+      </summary>
       <div className="about-categories-menu">
         {other && (
-          <button type="button" disabled={!other.enabled} onClick={() => toggle(other.value)}>
-            {other.shown ? words.hideOther : words.showOther}
+          <button type="button" disabled={!enabled(other.value)} onClick={() => toggle(other.value)}>
+            {shown(other.value) ? words.hideOther : words.showOther}
           </button>
         )}
         <fieldset>
           <legend className="visually-hidden">{filter.accessibilityLabel}</legend>
           {filter.categories.map((category) => (
             <label key={category.value}>
-              <input type="checkbox" checked={category.shown} disabled={!category.enabled} onChange={() => toggle(category.value)} /> {category.name}
+              <input type="checkbox" checked={shown(category.value)} disabled={!enabled(category.value)} onChange={() => toggle(category.value)} />{' '}
+              {category.name}
             </label>
           ))}
         </fieldset>
@@ -463,14 +498,23 @@ function TopCollections({ answer }: { answer: SourcingAnswer }) {
 }
 
 /** Administration Profiles' detail (`administrationDetail`): the picker, the profile card and its volumes. */
-function AdministrationDetail({ detail, onPick }: { detail: NonNullable<AdministrationsAnswer['detail']>; onPick: (id: string) => void }) {
+function AdministrationDetail({
+  detail,
+  selected,
+  onPick,
+}: {
+  detail: NonNullable<AdministrationsAnswer['detail']>;
+  /** The administration the picker shows: the one asked for while its answer comes. */
+  selected: string;
+  onPick: (id: string) => void;
+}) {
   const pickerId = useId();
   return (
     <section className="analytics-result about-administration" aria-label={detail.title}>
       <h3>{detail.title}</h3>
       <div className="analytics-field">
         <label htmlFor={pickerId}>{detail.pickerLabel}</label>
-        <select id={pickerId} value={detail.focus} onChange={(event) => onPick(event.target.value)}>
+        <select id={pickerId} value={selected} onChange={(event) => onPick(event.target.value)}>
           {detail.choices.map((choice) => (
             <option key={choice.id} value={choice.id}>
               {choice.label}

@@ -69,7 +69,8 @@ export interface CollectionsAnswer {
   weight: string;
   weights: { value: string; title: string; enabled: boolean }[];
   hidesUmbrella: boolean;
-  umbrella?: { caption: string; value: string; accessibilityLabel: string };
+  /** The Central Files chip: its caption, the value in force and its two words, the record's spoken name. */
+  umbrella?: { caption: string; value: string; accessibilityLabel: string; hidden: string; shown: string };
   denominator?: { sentence: string; pointer?: string };
   ranking: { title: string; caption: string; empty?: string; axisLabel: string; rows: CollectionsRow[]; table?: AnalyticsTable };
   drillInHint?: string;
@@ -161,6 +162,8 @@ export interface NetworkAnswer {
       clearLabel: string;
     };
   };
+  /** The toolbar's chip for the group selected, whenever one is, a partner in the dock or not. */
+  groupChip?: { category: string; name: string; clearLabel: string };
   empty?: { title: string; detail: string };
   table?: AnalyticsTable;
 }
@@ -337,11 +340,12 @@ export function networkCandidatesQuery(text: string, enabled: boolean) {
   });
 }
 
-export function flowsQuery(ask: FlowsAsk) {
+export function flowsQuery(ask: FlowsAsk, enabled = true) {
   const params = flowsParams(ask);
   return queryOptions({
     queryKey: ['archivalFlows', params.toString()],
     queryFn: ({ signal }) => getJSON<FlowsAnswer>('/api/v1/analytics/archives/flows', params, signal),
+    enabled,
     staleTime: 5 * 60_000,
     retry: false,
     placeholderData: keepPreviousData,

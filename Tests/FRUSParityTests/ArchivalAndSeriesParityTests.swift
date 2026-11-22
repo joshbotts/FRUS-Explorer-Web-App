@@ -507,7 +507,12 @@ import Testing
             #expect(api == kit, "\(ask): \(Self.difference(api, kit))")
         }
         #expect(answers.contains { $0.diagram.map { !$0.remainder.isEmpty } ?? false }, "a focus folds a remainder")
-        #expect(answers.contains { $0.none != nil } || answers.allSatisfy { $0.focus == nil || $0.diagram != nil })
+        // A focus draws its diagram or says it has none, never both; the series' pairs stand alone.
+        for (ask, answer) in zip(asks, answers) {
+            #expect(ask.focus == nil ? answer.diagram == nil && answer.none == nil && answer.corpusWide != nil
+                    : (answer.diagram == nil) != (answer.none == nil), "\(ask)")
+        }
+        #expect(answers.contains { $0.focus != nil && $0.diagram != nil }, "a focus draws its diagram")
     }
 
     // MARK: - Your Library
@@ -702,12 +707,33 @@ import Testing
 
     // MARK: - The exports
 
-    /// One export: its path and query, and the statement the app's view writes for it, at a moment.
+    /// One export: its path and query, the statement the app's view writes for it at a moment, and its table, the
+    /// kit's rows under the app's columns.
     struct Export: Sendable {
         var path: String
         var query: String
         var statement: @Sendable (Date) -> AnalyticsProvenance
+        var table: ChartInspectorData
         var figure: Bool
+    }
+
+    /// A table under its columns, which a CSV writes after its method block (`ChartInspectorData.csv`).
+    static func table(_ columns: [String], _ rows: [[String]]) -> ChartInspectorData {
+        ChartInspectorData(id: "export", title: "", columns: columns, rowCells: rows)
+    }
+
+    /// The ranking's table as `rankingInspector` writes it: each unit, its custodian and its value.
+    static func rankingTable(_ ranking: ArchivalRanking, weight: ArchivalWeight) -> ChartInspectorData {
+        table(["Archival unit", "Custodian", weight.title], ranking.rows.map { [$0.label, $0.category.displayName, "\($0.value)"] })
+    }
+
+    /// The ranking's statement as `rankingProvenance` writes it, over a scope or the series.
+    static func rankingStatement(_ ranking: ArchivalRanking, band: ArchivalEraBand, weight: ArchivalWeight, indexed: Int,
+                                 scopeLabel: String?) -> AnalyticsProvenance {
+        ArchivalAnalyticsExport.ranking(
+            band: band, lens: .namedCollections, weight: weight, hiddenUmbrella: ranking.hiddenUmbrellaValue,
+            unitsReached: ranking.unitsReached, bandVolumeCount: ranking.bandVolumeCount, indexedVolumeCount: indexed,
+            noteCount: ranking.bandNoteCount, shownValue: ranking.shownValue, scopeLabel: scopeLabel)
     }
 
     @Test func everyCSVsPreambleIsTheKits() async throws {
@@ -725,10 +751,22 @@ import Testing
         let band = ArchivalEraBand.all[1]
         let ranking = data.ranking(band: band, lens: .namedCollections, weight: .documents, hidingUmbrella: true)
         let classes = data.ranking(band: ArchivalEraBand.all[0], lens: .centralFileClasses, weight: .volumes, hidingUmbrella: true, limit: .max)
+        // Two scopes of volumes, one named and one not: the statement names the first, and the second by the chip's
+        // words, never as the whole series.
+        let sixties = ArchivalEraBand.all[2]
+        let mineData = host.collections(["frus1961-63v06", "frus1969-76ve09p1"])
+        let mineWeight = Self.weight(.documents, lens: .namedCollections, data: mineData)
+        let mine = mineData.ranking(band: sixties, lens: .namedCollections, weight: mineWeight, hidingUmbrella: true)
+        let selectedData = host.collections(["frus1961-63v06"])
+        let selectedWeight = Self.weight(.documents, lens: .namedCollections, data: selectedData)
+        let selected = selectedData.ranking(band: sixties, lens: .namedCollections, weight: selectedWeight, hidingUmbrella: true)
+        #expect(!mine.rows.isEmpty && !selected.rows.isEmpty, "the scopes' rankings have rows to export")
         let seed = try #require(ArchivalNetworkView.seedFocus(host.authority.collections))
         let graph = ArchivalNetworkBuilder.graph(focus: seed, in: host.authority.collections, usage: host.usage, measure: .sharedVolumes,
                                                  minimumRelativeStrength: 0.25, expansion: .collapsed)
         let flows = ArchivalFlowsData.corpusWide(index: host.flows, authority: host.authority)
+        let focus = try #require(ArchivalFlowsData.focusCandidates(index: host.flows, authority: host.authority).first?.record)
+        let focused = ArchivalFlowsData.focused(on: focus, direction: .outgoing, index: host.flows, authority: host.authority)
         let built = try await FixtureIndex.value()
         let resources = try IndexingResources.loading(fromDirectory: ServedFixture.resources)
         let pipeline = try IndexingPipeline(readingIndexAt: built.copy, fts5Store: try FTS5Store(readingDatabaseAt: built.copy),
@@ -740,75 +778,131 @@ import Testing
             dated(ArchivalAnalyticsExport.library(title: title, axisLabel: axis, profile: profile, indexedVolumeCount: indexed,
                                                   corpusVolumeCount: host.catalogue.count))
         }
-        let administrations = AdministrationProfilesData(index: host.administrations, includeEditorialNotes: true, scopeVolumeIds: nil)
         let catalogue = host.catalogue.count
+        let production = { (scope: Set<String>?) in SeriesProductionData(entries: host.entries(scope)) }
+        let geography = SeriesGeographyData(entries: host.entries(nil), placeRegions: host.placeRegions)
+        let provenance = SourceProvenanceData(index: host.sourceProvenance)
+        let administrations = AdministrationProfilesData(index: host.administrations, includeEditorialNotes: true, scopeVolumeIds: nil)
+        // The administrations whose terms the dashboard's years overlap, an open term running to the production ceiling.
+        let visible = administrations.profiles.filter { profile in
+            guard let termStart = Int(profile.start.prefix(4)) else { return true }
+            return termStart <= 2026 && (profile.end.flatMap { Int($0.prefix(4)) } ?? 2026) >= 1861
+        }
         let exports: [Export] = [
             Export(path: "analytics/archives", query: "chart=ranking&band=1",
-                   statement: dated(ArchivalAnalyticsExport.ranking(
-                       band: band, lens: .namedCollections, weight: .documents, hiddenUmbrella: ranking.hiddenUmbrellaValue,
-                       unitsReached: ranking.unitsReached, bandVolumeCount: ranking.bandVolumeCount, indexedVolumeCount: indexed,
-                       noteCount: ranking.bandNoteCount, shownValue: ranking.shownValue, scopeLabel: nil)), figure: true),
+                   statement: dated(Self.rankingStatement(ranking, band: band, weight: .documents, indexed: indexed, scopeLabel: nil)),
+                   table: Self.rankingTable(ranking, weight: .documents), figure: true),
+            Export(path: "analytics/archives",
+                   query: "chart=ranking&band=2&volumes=frus1961-63v06&volumes=frus1969-76ve09p1&scopeLabel=Mine",
+                   statement: dated(Self.rankingStatement(mine, band: sixties, weight: mineWeight, indexed: indexed, scopeLabel: "Mine")),
+                   table: Self.rankingTable(mine, weight: mineWeight), figure: true),
+            Export(path: "analytics/archives", query: "chart=ranking&band=2&volumes=frus1961-63v06",
+                   statement: dated(Self.rankingStatement(selected, band: sixties, weight: selectedWeight, indexed: indexed,
+                                                          scopeLabel: "Selected volumes")),
+                   table: Self.rankingTable(selected, weight: selectedWeight), figure: true),
             Export(path: "analytics/archives", query: "chart=units&band=0&lens=centralFileClasses&weight=volumes",
                    statement: dated(ArchivalAnalyticsExport.ranking(
                        band: ArchivalEraBand.all[0], lens: .centralFileClasses, weight: .volumes, hiddenUmbrella: classes.hiddenUmbrellaValue,
                        unitsReached: classes.unitsReached, bandVolumeCount: classes.bandVolumeCount, indexedVolumeCount: indexed,
                        noteCount: classes.bandNoteCount, shownValue: classes.shownValue, rowCapApplied: false, scopeLabel: nil,
-                       glossesWritten: classes.rows.contains { $0.gloss != nil })), figure: false),
+                       glossesWritten: classes.rows.contains { $0.gloss != nil })),
+                   // Each class with its gloss as the export reads it, "and N others" where it has more than one.
+                   table: Self.table(["Archival unit", "Custodian", ArchivalWeight.volumes.title], classes.rows.map { row in
+                       [[row.label, row.gloss.map { ArchivalCounts.exportReading(gloss: $0, alternates: row.glossAlternates.count) }]
+                           .compactMap { $0 }.joined(separator: " — "), row.category.displayName, "\(row.value)"]
+                   }), figure: false),
             Export(path: "analytics/archives", query: "chart=network",
                    statement: dated(ArchivalAnalyticsExport.network(
                        focusName: graph.focusLabel, measure: .sharedVolumes, drawn: graph.nodes.count,
-                       aboveThreshold: graph.nodesAboveThreshold, partnersTotal: graph.partnersTotal, indexedVolumeCount: indexed)), figure: false),
+                       aboveThreshold: graph.nodesAboveThreshold, partnersTotal: graph.partnersTotal, indexedVolumeCount: indexed)),
+                   table: Self.table(["Archival unit", "Kind", "Custodian", "Shared volumes", "Jointly supplied documents", "Share of strongest link"],
+                                     graph.nodes.map(ArchivalNetworkBuilder.exportCells(for:))), figure: false),
             Export(path: "analytics/archives", query: "chart=flows",
                    statement: dated(ArchivalAnalyticsExport.flows(
                        title: "The heaviest hand-offs in the series", axisLabel: "Ranked by references between the pair",
-                       data: flows, indexedVolumeCount: indexed)), figure: false),
+                       data: flows, indexedVolumeCount: indexed)),
+                   table: Self.table(["From", "To", "References"], flows.topPairs.map { [$0.source.label, $0.target.label, "\($0.source.count)"] }),
+                   figure: false),
+            Export(path: "analytics/archives", query: "chart=flows&layer=betweenPrinted&direction=outgoing&focus=\(Self.encode(focus.id))",
+                   statement: dated(ArchivalAnalyticsExport.flows(
+                       title: "\(focus.name) — Outgoing", axisLabel: "References out of this collection",
+                       data: focused, indexedVolumeCount: indexed)),
+                   // Every endpoint, the ten the diagram draws and those it folds into its remainder.
+                   table: Self.table(["Archival unit", "Custodian", "References"],
+                                     focused.allEndpoints.map { [$0.label, $0.category.displayName, "\($0.count)"] }),
+                   figure: false),
             Export(path: "analytics/archives", query: "chart=composition",
-                   statement: library("Where your documents come from", "Divided by kind of archival collection"), figure: false),
+                   statement: library("Where your documents come from", "Divided by kind of archival collection"),
+                   table: Self.table(["Provenance", "Documents", "Share"], profile.composition.map {
+                       [$0.category.displayName, "\($0.documentCount)", ArchivalLibraryView.percentString($0.documentCount, of: profile.noteCount)]
+                   }), figure: false),
             Export(path: "analytics/archives", query: "chart=bands",
-                   statement: library("Citation forms across your volumes", "Divided by coverage era and kind of collection"), figure: false),
+                   statement: library("Citation forms across your volumes", "Divided by coverage era and kind of collection"),
+                   table: Self.table(["Era", "Provenance", "Documents"], profile.bands.flatMap { band in
+                       band.categories.map { [band.band.title, $0.category.displayName, "\($0.documentCount)"] }
+                   }), figure: false),
             Export(path: "analytics/archives", query: "chart=collections",
-                   statement: library("Your most-cited collections", "Ranked by documents drawn from the collection"), figure: false),
+                   statement: library("Your most-cited collections", "Ranked by documents drawn from the collection"),
+                   table: Self.table(["Archival unit", "Custodian", "Documents"], profile.collections.map {
+                       [$0.record.name, $0.record.repository ?? ArchivalRepositoryCategory.from($0.record).displayName, "\($0.documentCount)"]
+                   }), figure: false),
             Export(path: "about", query: "dashboard=production&chart=lag&from=1945&to=2026&subseries=1969-76",
                    statement: dated(SeriesAnalyticsExport.production(
                        figureTitle: "Publication lag over time", axisLabel: "By print year, lag in years",
-                       scopeLabel: "1969-76", yearRange: 1945...2026, volumeCount: catalogue)), figure: true),
+                       scopeLabel: "1969-76", yearRange: 1945...2026, volumeCount: catalogue)),
+                   table: ChartInspectorAdapters.lagTable(production(Set(host.catalogue.filter { $0.subseries == "1969-76" }.map(\.volumeId)))
+                       .lagPoints(in: effectiveDomain(userStart: 1945, userEnd: 2026, kind: .production))), figure: true),
             Export(path: "about", query: "dashboard=production&chart=cumulative",
                    statement: dated(SeriesAnalyticsExport.production(
                        figureTitle: "Cumulative volumes published", axisLabel: "By print year, running total",
-                       scopeLabel: nil, yearRange: 1861...2026, volumeCount: catalogue)), figure: true),
+                       scopeLabel: nil, yearRange: 1861...2026, volumeCount: catalogue)),
+                   table: ChartInspectorAdapters.cumulativeTable(production(nil)
+                       .cumulativeByPrintYear(in: effectiveDomain(userStart: 1861, userEnd: 2026, kind: .production))), figure: true),
+            Export(path: "about", query: "dashboard=production&chart=perYear&volumes=frus1961-63v06&volumes=frus1894Nicaragua",
+                   statement: dated(SeriesAnalyticsExport.production(
+                       figureTitle: "Volumes published per year", axisLabel: "By print year",
+                       scopeLabel: "Selected volumes", yearRange: 1861...2026, volumeCount: catalogue)),
+                   table: ChartInspectorAdapters.perYearTable(production(["frus1961-63v06", "frus1894Nicaragua"])
+                       .volumesPerPrintYearByEra(in: effectiveDomain(userStart: 1861, userEnd: 2026, kind: .production))), figure: true),
             Export(path: "about", query: "dashboard=geography&chart=trend&from=1900&to=1960",
                    statement: dated(SeriesAnalyticsExport.geography(
                        figureTitle: "Regional emphasis over time", axisLabel: "By coverage decade, share of volumes",
-                       scopeLabel: nil, yearRange: 1900...1960, volumeCount: catalogue)), figure: true),
+                       scopeLabel: nil, yearRange: 1900...1960, volumeCount: catalogue)),
+                   table: ChartInspectorAdapters.regionTrendTable(
+                       geography.regionShareByDecade(in: effectiveDomain(userStart: 1900, userEnd: 1960, kind: .coverage))), figure: true),
             Export(path: "about", query: "dashboard=geography&chart=countries",
                    statement: dated(SeriesAnalyticsExport.geography(
                        figureTitle: "Most-covered countries", axisLabel: "By country, volumes tagged",
-                       scopeLabel: nil, yearRange: nil, volumeCount: catalogue)), figure: true),
+                       scopeLabel: nil, yearRange: nil, volumeCount: catalogue)),
+                   table: ChartInspectorAdapters.topCountriesTable(geography.topCountries, displayName: host.tagName), figure: true),
             Export(path: "about", query: "dashboard=sourcing&chart=mix&from=1900&to=1990&hidden=lotFile",
                    statement: dated(SeriesAnalyticsExport.provenance(
                        figureTitle: "Archival provenance over time", axisLabel: "By coverage decade, share of source notes",
                        scopeLabel: nil, yearRange: 1900...1990,
-                       volumeCount: SourceProvenanceData(index: host.sourceProvenance).volumesCovered,
-                       noteCount: SourceProvenanceData(index: host.sourceProvenance).totalSourceNotes,
-                       hiddenCategories: [SourceProvenanceCategory.lotFile.displayName],
-                       generated: SourceProvenanceData(index: host.sourceProvenance).generated)), figure: true),
+                       volumeCount: provenance.volumesCovered, noteCount: provenance.totalSourceNotes,
+                       hiddenCategories: [SourceProvenanceCategory.lotFile.displayName], generated: provenance.generated)),
+                   table: ChartInspectorAdapters.provenanceMixTable(
+                       provenance.shareByDecade(in: effectiveDomain(userStart: 1900, userEnd: 1990, kind: .coverage), excluding: [.lotFile])),
+                   figure: true),
             Export(path: "about", query: "dashboard=sourcing&chart=composition",
                    statement: dated(SeriesAnalyticsExport.provenance(
                        figureTitle: "Overall provenance composition", axisLabel: "By provenance, across the whole span",
                        scopeLabel: nil, yearRange: nil,
-                       volumeCount: SourceProvenanceData(index: host.sourceProvenance).volumesCovered,
-                       noteCount: SourceProvenanceData(index: host.sourceProvenance).totalSourceNotes,
-                       hiddenCategories: [], generated: SourceProvenanceData(index: host.sourceProvenance).generated)), figure: true),
+                       volumeCount: provenance.volumesCovered, noteCount: provenance.totalSourceNotes,
+                       hiddenCategories: [], generated: provenance.generated)),
+                   table: ChartInspectorAdapters.compositionTable(provenance.overallComposition(excluding: [])), figure: true),
             Export(path: "about", query: "dashboard=administrations&chart=documents&editorialNotes=true",
                    statement: dated(SeriesAnalyticsExport.administration(
                        figureTitle: "Documents per administration", axisLabel: "By administration, documents",
                        scopeLabel: nil, yearRange: 1861...2026, volumeCount: administrations.volumesCovered,
-                       includesEditorialNotes: true)), figure: true),
+                       includesEditorialNotes: true)),
+                   table: ChartInspectorAdapters.administrationDocumentsTable(visible), figure: true),
             Export(path: "about", query: "dashboard=administrations&chart=perYear&editorialNotes=true",
                    statement: dated(SeriesAnalyticsExport.administration(
                        figureTitle: "Volumes per administration-year", axisLabel: "By administration, volumes per term-year",
                        scopeLabel: nil, yearRange: 1861...2026, volumeCount: administrations.volumesCovered,
-                       includesEditorialNotes: true)), figure: true),
+                       includesEditorialNotes: true)),
+                   table: ChartInspectorAdapters.administrationVolumesPerYearTable(visible.filter { $0.termYears > 0 }), figure: true),
         ]
         let read = try await ServedFixture.run { client, _ in
             var read: [(csv: String, moments: ClosedRange<Date>, disposition: String?,
@@ -843,7 +937,9 @@ import Testing
             let written = Array(lines.prefix { $0.hasPrefix("#") })
             let expected = [moments.lowerBound, moments.upperBound].map { export.statement($0).csvPreambleLines(for: english) }
             #expect(expected.contains(written), "\(export.query): \(written)")
-            #expect(lines.count > written.count + 2, "\(export.query) exports a table with rows")
+            // The table after it, the kit's rows under the app's columns, as `provenancedCSV` writes them.
+            #expect(!export.table.rows.isEmpty, "\(export.query) exports a table with rows")
+            #expect(Array(lines.dropFirst(written.count)).joined(separator: "\n") == export.table.csv + "\n", "\(export.query)")
             #expect(disposition?.hasPrefix("attachment; filename=\"FRUS-Analytics-") == true, "\(export.query): \(disposition ?? "")")
         }
     }

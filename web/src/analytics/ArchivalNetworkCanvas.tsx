@@ -130,6 +130,9 @@ export function ArchivalNetworkCanvas({ answer, shown, active, group, resetToken
     };
   }, []);
 
+  // The focus and canvas size the view was last put back for.
+  const laidOut = useRef<string | undefined>(undefined);
+
   // The network drawn afresh at the kit's places whenever it changes.
   useEffect(() => {
     const instance = cy.current;
@@ -167,7 +170,13 @@ export function ArchivalNetworkCanvas({ answer, shown, active, group, resetToken
       instance.add(elements);
     });
     instance.resize();
-    instance.viewport({ zoom: 1, pan: { x: 0, y: 0 } });
+    // The view goes back where the network was laid out for a new focus or a new canvas size alone (`recentre(on:)`):
+    // a partner shown, a group chosen or a link strength changed keeps the reader's pan and zoom.
+    const frame = `${answer.focus?.id ?? ''} ${layout?.width ?? 0}x${layout?.height ?? 0}`;
+    if (laidOut.current !== frame) {
+      laidOut.current = frame;
+      instance.viewport({ zoom: 1, pan: { x: 0, y: 0 } });
+    }
   }, [answer]);
 
   // The partner shown, larger and ringed (`drawnRadius(for:isSelected:)`), and the keyboard's.

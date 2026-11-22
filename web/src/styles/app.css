@@ -2484,8 +2484,15 @@ dialog.cross-volume {
   forced-color-adjust: none;
 }
 
-.swatch.square {
+.swatch.square,
+.graph-legend .swatch.square {
   border-radius: 2px;
+}
+
+/* The Network's and the Flows' Focus bar: the mode's heading, drawn as the button it holds. */
+.archival-focus-heading {
+  margin: 0;
+  font: inherit;
 }
 
 .archival-title {

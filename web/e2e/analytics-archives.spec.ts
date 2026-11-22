@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises';
 import type { Locator, Page } from '@playwright/test';
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
-import { tabTo } from './keyboard';
+import { backTabTo, tabTo } from './keyboard';
 
 /** Leaves the unit, the weight and the link strength as this browser kept them. */
 async function forget(page: Page): Promise<void> {
@@ -88,9 +88,10 @@ test('changes the era and the unit by keyboard and reads the ranking, then walks
     expect(text).toContain('\nArchival unit,Custodian,Documents\n');
     await expect(page.getByRole('alert')).toHaveCount(0);
 
-    // The Network, by keyboard: the mode's radio, then the canvas's list box, a partner shown in the dock and closed.
+    // The Network, by keyboard: back from the Export menu to the mode's radio, then the canvas's list box, a partner shown
+    // in the dock and closed.
     const collections = page.getByRole('radio', { name: 'Collections', exact: true });
-    await tabTo(page, collections);
+    await backTabTo(page, collections);
     await page.keyboard.press('ArrowRight');
     await expect(page.getByRole('radio', { name: 'Network', exact: true })).toBeChecked();
     await expect(page).toHaveURL(/mode=network/);

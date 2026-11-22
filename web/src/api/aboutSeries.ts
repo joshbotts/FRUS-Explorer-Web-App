@@ -55,6 +55,8 @@ export interface SeriesChart {
 
 export interface SeriesFrame {
   scopeLabel: string;
+  /** The scope's own name, which the menu shows for a scope it does not list. */
+  scopeName: string;
   isNarrowed: boolean;
   start: number;
   end: number;

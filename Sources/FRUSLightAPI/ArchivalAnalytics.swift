@@ -110,6 +110,9 @@ public struct ArchivalCollectionsAnswer: Codable, Equatable, Sendable, ResponseE
         public var caption: String
         public var value: String
         public var accessibilityLabel: String
+        /// The value's two words, which the chip shows for the state asked while its answer comes.
+        public var hidden: String
+        public var shown: String
     }
 
     public struct Denominator: Codable, Equatable, Sendable {
@@ -218,7 +221,8 @@ enum ArchivalAnalyticsRoutes {
     static func add(to router: Router<APIRequestContext>, provider: ServedIndexProvider, resources: ServerResources) {
         router.get("/api/v1/analytics/archives/context") { request, _ -> ArchivalContext in
             try FormQuery(request.uri.query).refuseUnknown([])
-            let indexed = try await provider.servedIfReady()?.indexedVolumeIds.count ?? 0
+            // The count the app reads as `appState?.indexedVolumeIds.count ?? 0`: an index that cannot be had leaves none.
+            let indexed = (try? await provider.servedIfReady())?.indexedVolumeIds.count ?? 0
             return try await Blocking.run { context(resources: resources, indexedVolumeCount: indexed) }
         }
         router.get("/api/v1/analytics/archives") { request, _ -> ArchivalCollectionsAnswer in
@@ -379,8 +383,11 @@ enum ArchivalAnalyticsRoutes {
                 throw APIProblem.invalidParameter("volumes", "names \(ids.count) volumes, more than \(CorpusAnalyticsRoutes.maximumScopeVolumes)")
             }
             for id in ids where !scopable.contains(id) { throw APIProblem.volumeNotFound(id) }
-            let label = try query.single("scopeLabel")
-            return ArchivalScope(volumeIds: Array(Set(ids)).sorted(), label: label?.isEmpty == true ? nil : label)
+            // A scope's name, or the chip's when an address gives none (`AnalyticsChartChrome`'s Selected volumes): a
+            // nameless scope would read, and export, as the whole series.
+            let label = try query.single("scopeLabel").flatMap { $0.isEmpty ? nil : $0 }
+            return ArchivalScope(volumeIds: Array(Set(ids)).sorted(),
+                                 label: label ?? appWords("analytics.scope.custom", "Selected volumes"))
         }
         if let id = try query.single("administration") {
             // `administrationMenu`: the presidency's volumes the series holds, sorted, under the president's name.
@@ -446,7 +453,8 @@ enum ArchivalAnalyticsRoutes {
         func nothing(_ what: String) -> APIProblem {
             APIProblem(.notFound, code: "NOTHING_TO_EXPORT", detail: "\(what) holds nothing to export.")
         }
-        let indexedVolumeCount = try await provider.servedIfReady()?.indexedVolumeIds.count ?? 0
+        // A statement's indexed count, which no bundled chart's export waits on an index for.
+        let indexedVolumeCount = (try? await provider.servedIfReady())?.indexedVolumeIds.count ?? 0
         switch chart {
         case .ranking, .units:
             let ask = try collectionsAsk(query, resources: resources)
@@ -685,9 +693,9 @@ struct ArchivalAnalyticsView {
                 accessibilityLabel: accessibilityLabel(for: row), accessibilityValue: accessibilityValue(for: row),
                 opens: canOpen(row))
         }
-        let umbrellaValue = hidesUmbrella
-            ? appWords("archival.filter.umbrella.hidden", "Hidden")
-            : appWords("archival.filter.umbrella.shown", "Shown")
+        let hiddenWord = appWords("archival.filter.umbrella.hidden", "Hidden")
+        let shownWord = appWords("archival.filter.umbrella.shown", "Shown")
+        let umbrellaValue = hidesUmbrella ? hiddenWord : shownWord
         return ArchivalCollectionsAnswer(
             scope: .init(label: scopeLabel ?? (ask.scope.volumeIds == nil
                                                ? appWords("analytics.scope.wholeCorpus", "Whole corpus")
@@ -698,7 +706,8 @@ struct ArchivalAnalyticsView {
             hidesUmbrella: hidesUmbrella,
             umbrella: unitLens == .namedCollections
                 ? .init(caption: appWords("archival.filter.umbrella", "Central Files"), value: umbrellaValue,
-                        accessibilityLabel: appWords("archival.filter.umbrella.a11y", "Central Files umbrella record"))
+                        accessibilityLabel: appWords("archival.filter.umbrella.a11y", "Central Files umbrella record"),
+                        hidden: hiddenWord, shown: shownWord)
                 : nil,
             denominator: data.noteCount(band: band).map {
                 .init(sentence: denominatorSentence(ranking, notes: $0), pointer: denominatorPointer())

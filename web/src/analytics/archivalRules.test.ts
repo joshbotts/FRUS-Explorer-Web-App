@@ -1,8 +1,11 @@
+import { compile, type TopLevelSpec } from 'vega-lite';
 import { describe, expect, it } from 'vitest';
-import type { FlowEndpoint } from '../api/archivalAnalytics';
-import type { SeriesChart } from '../api/aboutSeries';
+import type { CollectionsAnswer, FlowEndpoint, LibraryAnswer } from '../api/archivalAnalytics';
+import type { SeriesChart, SeriesDashboard } from '../api/aboutSeries';
 import {
+  bandsSpec,
   blockFrames,
+  compositionSpec,
   custodianColors,
   defaultCycle,
   destinationWidth,
@@ -13,6 +16,7 @@ import {
   partyColors,
   provenanceColors,
   provenanceOrder,
+  rankingSpec,
   ribbonOpacity,
   ribbonPath,
   sectorOpacity,
@@ -103,6 +107,77 @@ describe('the dashboards’ charts', () => {
       layer: { mark: { interpolate?: string } }[];
     };
     expect(lag.layer[1]?.mark.interpolate).toBe('step-after');
+  });
+});
+
+/** Compiles a spec as vega-embed does, and gives back what Vega-Lite said of it: a spec it cannot read draws nothing. */
+function compiled(spec: unknown) {
+  const said: string[] = [];
+  const logger = {
+    level: () => logger,
+    error: (...args: unknown[]) => (said.push(args.join(' ')), logger),
+    warn: (...args: unknown[]) => (said.push(args.join(' ')), logger),
+    info: () => logger,
+    debug: () => logger,
+  };
+  return { vega: compile(spec as TopLevelSpec, { logger: logger as never }).spec, said };
+}
+
+describe('every chart’s spec', () => {
+  it('compiles without a warning, the ranking’s, Your Library’s and each dashboard’s', () => {
+    const ranking = {
+      lens: 'namedCollections',
+      ranking: {
+        axisLabel: 'Documents',
+        rows: [
+          { id: 'a', label: 'Whitman File', value: 1640, category: 'presidentialLibrary', categoryName: 'Presidential libraries' },
+          { id: 'b', label: 'S/S – NSC Files: Lot 63 D 351', value: 598, category: 'lotFile', categoryName: 'State lot files' },
+        ],
+      },
+    } as unknown as CollectionsAnswer;
+    const names = { stateDepartment: 'Department of State', lotFile: 'State lot files', presidentialLibrary: 'Presidential libraries', otherInstitution: 'Other institutions' };
+    const composition = {
+      axisLabel: 'Source notes',
+      legendTitle: 'Kind of collection',
+      items: [{ category: 'lotFile', categoryName: 'State lot files', documents: 12, share: '60%', accessibilityValue: '' }],
+    } as LibraryAnswer['composition'];
+    const bands = {
+      xLabel: 'Era',
+      yLabel: 'Source notes',
+      legendTitle: 'Kind of collection',
+      items: [{ band: '1948–1960', category: 'lotFile', categoryName: 'State lot files', documents: 12 }],
+    } as LibraryAnswer['bands'];
+    const charts: [SeriesDashboard, SeriesChart][] = [
+      ['production', { ...chart('lag', [{ x: '1990', y: 30, series: '1945–1990' }], ['1945–1990']), steps: [{ x: '1961', y: 15 }, { x: '2026', y: 30 }] }],
+      ['production', chart('perYear', [{ x: '1990', y: 2, series: '1945–1990' }], ['1945–1990'])],
+      ['production', chart('cumulative', [{ x: '1990', y: 2 }])],
+      ['geography', chart('trend', [{ x: '1950', y: 0.5, series: 'Europe' }], ['Europe'])],
+      ['geography', { ...chart('totals', [{ x: 'Europe', y: 40, series: 'Europe' }], ['Europe']), domain: undefined }],
+      ['geography', { ...chart('countries', [{ x: 'France', y: 12 }]), domain: undefined }],
+      ['sourcing', chart('mix', [{ x: '1950', y: 0.5, series: 'State lot files' }], ['State lot files'])],
+      ['sourcing', chart('density', [{ x: '1950', y: 9 }])],
+      ['sourcing', { ...chart('composition', [{ x: 'State lot files', y: 9, series: 'State lot files' }], ['State lot files']), domain: undefined }],
+      ['administrations', { ...chart('documents', [{ x: 'Truman', y: 9, series: 'Democratic' }], ['Democratic']), domain: undefined }],
+      ['administrations', { ...chart('perYear', [{ x: 'Truman', y: 9, series: 'Democratic' }], ['Democratic']), domain: undefined }],
+    ];
+    const specs = [
+      rankingSpec(ranking, false, names),
+      compositionSpec(composition, true),
+      bandsSpec(bands, false),
+      ...charts.map(([dashboard, each]) => seriesSpec(dashboard, each, false)),
+    ];
+    for (const spec of specs) expect(compiled(spec).said).toEqual([]);
+  });
+
+  it('keeps a dashboard’s years as they are, its step line on the same scale, and the custodians’ key in two columns', () => {
+    const lag = { ...chart('lag', [{ x: '1990', y: 30, series: '1945–1990' }], ['1945–1990']), steps: [{ x: '1961', y: 15 }, { x: '2026', y: 30 }] };
+    const scales = compiled(seriesSpec('production', lag, false)).vega.scales ?? [];
+    expect(scales.find((scale) => scale.name === 'x')).toMatchObject({ domain: [1861, 2026], nice: false, zero: false });
+    const ranking = {
+      ranking: { axisLabel: 'Documents', rows: [{ id: 'a', label: 'A', value: 1, category: 'lotFile', categoryName: 'State lot files' }] },
+    } as unknown as CollectionsAnswer;
+    const legends = compiled(rankingSpec(ranking, false, {})).vega.legends ?? [];
+    expect(legends[0]).toMatchObject({ orient: 'bottom', direction: 'horizontal', columns: 2 });
   });
 });
 

@@ -96,21 +96,25 @@ enum ArchivalLibraryRoutes {
     }
 
     /// The view's `loadLibraryIfNeeded()`, once for the served index and kept: the pipeline's two grouped queries over
-    /// the series' coverage and the authority, or the empty profile when a query fails.
+    /// the series' coverage and the authority, or the empty profile when a query fails. A failure is not kept, so the
+    /// next visit asks again, as the app's view does.
     static func profile(served: ServedIndex, resources: ServerResources) async throws -> ArchivalLibraryProfile {
-        try await served.archivalLibrary.value(for: 0) {
-            let pipeline = served.pipeline
-            let coverage = ArchivalVolumeCoverage.map(from: resources.manifest, limitedTo: nil)
-            let authority = resources.collectionAuthority
-            do {
+        do {
+            return try await served.archivalLibrary.value(for: 0) {
+                let pipeline = served.pipeline
+                let (coverage, authority) = try await Blocking.run {
+                    let coverage = ArchivalVolumeCoverage.map(from: resources.manifest, limitedTo: nil)
+                    let authority = resources.collectionAuthority
+                    return (coverage, authority)
+                }
                 let groups = try await pipeline.archivalLibraryGroups()
                 let collectionGroups = try await pipeline.archivalLibraryCollectionGroups()
                 return ArchivalLibraryProfile.make(
                     groups: groups, collectionGroups: collectionGroups,
                     coverage: coverage, authority: authority)
-            } catch {
-                return .empty
             }
+        } catch {
+            return .empty
         }
     }
 }

@@ -110,7 +110,7 @@ enum ArchivalFlowsRoutes {
         router.get("/api/v1/analytics/archives/flows") { request, _ -> ArchivalFlowsAnswer in
             let query = try FormQuery(request.uri.query)
             try query.refuseUnknown(parameters)
-            let (index, authority) = try files(resources)
+            let (index, authority) = try await files(resources)
             let ask = try ask(query, authority: authority, resources: resources)
             let data = try await flows(ask, index: index, authority: authority, resources: resources)
             return ArchivalFlowsView(ask: ask, data: data, authority: authority).answer()
@@ -118,7 +118,7 @@ enum ArchivalFlowsRoutes {
         router.get("/api/v1/analytics/archives/flows/candidates") { request, _ -> ArchivalFocusCandidates in
             let query = try FormQuery(request.uri.query)
             try query.refuseUnknown(["layer", "q"])
-            let (index, authority) = try files(resources)
+            let (index, authority) = try await files(resources)
             let layer = try layer(query, resources: resources)
             let text = try query.single("q") ?? ""
             let candidates = try await Blocking.run {
@@ -132,10 +132,14 @@ enum ArchivalFlowsRoutes {
         }
     }
 
-    /// The flow index and the authority, or a 404 in the app's words where the bundle lacks either.
-    static func files(_ resources: ServerResources) throws -> (ProvenanceFlowIndex, CollectionAuthorityIndex) {
-        guard let index = resources.bundledAnalytics.flows.value(in: resources.directory),
-              let authority = resources.collectionAuthority else {
+    /// The flow index and the authority, or a 404 in the app's words where the bundle lacks either. Each is decoded
+    /// once, on its first read, off the cooperative pool, with the external citations the unprinted layer reads.
+    static func files(_ resources: ServerResources) async throws -> (ProvenanceFlowIndex, CollectionAuthorityIndex) {
+        let (flows, authority) = try await Blocking.run {
+            _ = resources.sourceExplorer(\.externalCitations)
+            return (resources.bundledAnalytics.flows.value(in: resources.directory), resources.collectionAuthority)
+        }
+        guard let index = flows, let authority else {
             throw APIProblem(.notFound, code: "NO_FLOWS",
                              detail: appWords("archival.flows.unavailable", "The bundled reference-flow index is unavailable in this build, so hand-offs cannot be shown. This is not the same as the series having none."))
         }
@@ -199,7 +203,7 @@ enum ArchivalFlowsRoutes {
 
     /// The flows' table and statement (`export(_:)`).
     static func export(query: FormQuery, resources: ServerResources, indexedVolumeCount: Int) async throws -> (ChartInspectorData, AnalyticsProvenance) {
-        let (index, authority) = try files(resources)
+        let (index, authority) = try await files(resources)
         let ask = try ask(query, authority: authority, resources: resources)
         let data = try await flows(ask, index: index, authority: authority, resources: resources)
         let view = ArchivalFlowsView(ask: ask, data: data, authority: authority)

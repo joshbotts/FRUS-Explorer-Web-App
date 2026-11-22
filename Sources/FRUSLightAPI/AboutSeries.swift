@@ -79,6 +79,8 @@ public struct SeriesChart: Codable, Equatable, Sendable {
 public struct SeriesFrame: Codable, Equatable, Sendable {
     /// "Scope: Whole series", or the scope's label.
     public var scopeLabel: String
+    /// The scope's own name, the chip's without its "Scope:", which a menu shows for a scope it does not list.
+    public var scopeName: String
     public var isNarrowed: Bool
     public var start: Int
     public var end: Int
@@ -443,8 +445,10 @@ enum AboutSeriesRoutes {
             // `CustomScopeResolver.manifestVolumeIds`: the scope's members the series holds.
             let resolved = CustomScopeResolver.manifestVolumeIds(memberVolumeIds: ids, manifestIds: manifestIds)
             guard !resolved.isEmpty else { throw APIProblem.invalidParameter("volumes", "no volume of the series is in this scope") }
-            let label = try query.single("scopeLabel")
-            return SeriesScopeAsk(volumeIds: resolved, label: label?.isEmpty == true ? nil : label)
+            // A scope's name, or the chip's when an address gives none (`AnalyticsChartChrome`'s Selected volumes): a
+            // nameless scope would read, and export, as the whole series.
+            let label = try query.single("scopeLabel").flatMap { $0.isEmpty ? nil : $0 }
+            return SeriesScopeAsk(volumeIds: resolved, label: label ?? appWords("analytics.scope.custom", "Selected volumes"))
         }
         return .whole
     }
@@ -583,6 +587,7 @@ enum SeriesScopeBar {
         let end = ask.dashboard.defaultEnd
         return SeriesFrame(
             scopeLabel: String(format: appWords("series.scope.label %@", "Scope: %@"), currentLabel(ask.scope)),
+            scopeName: currentLabel(ask.scope),
             isNarrowed: ask.scope.volumeIds != nil,
             start: ask.start, end: ask.end, defaultEnd: end,
             isCustomRange: ask.start != SeriesChartKind.floorYear || ask.end != end)

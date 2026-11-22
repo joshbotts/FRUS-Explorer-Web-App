@@ -98,7 +98,7 @@ export function rankingSpec(answer: CollectionsAnswer, dark: boolean, custodianN
           color: {
             field: 'custodian', type: 'nominal', title: null,
             scale: { domain, range: custodianOrder.map((key) => custodianColors[key]) },
-            legend: { orient: 'bottom', direction: 'horizontal' },
+            legend: { orient: 'bottom', direction: 'horizontal', columns: 2 },
           },
         },
       },
@@ -171,6 +171,8 @@ export function seriesSpec(dashboard: SeriesDashboard, chart: SeriesChart, dark:
   });
   const numeric = chart.marks.map((mark, index) => ({ ...mark, year: Number(mark.x), index }));
   const domain = chart.domain && chart.domain.length === 2 ? chart.domain : undefined;
+  // The dashboard's years as they are, which Swift Charts' `chartXScale(domain:)` never rounds out to a nicer end.
+  const yearScale = { domain, zero: false, nice: false };
   const base = { $schema: schema, width: 'container', autosize: { type: 'fit-x', contains: 'padding' }, config: config(dark) };
   const key = `${dashboard}.${chart.id}`;
   switch (key) {
@@ -184,7 +186,7 @@ export function seriesSpec(dashboard: SeriesDashboard, chart: SeriesChart, dark:
             data: { values: numeric },
             mark: { type: 'point', filled: true, size: 20 },
             encoding: {
-              x: { field: 'year', type: 'quantitative', scale: { domain, zero: false }, axis: yearAxis(chart.xLabel) },
+              x: { field: 'year', type: 'quantitative', scale: yearScale, axis: yearAxis(chart.xLabel) },
               y: { field: 'y', type: 'quantitative', title: chart.yLabel },
               color: color(true),
             },
@@ -192,7 +194,7 @@ export function seriesSpec(dashboard: SeriesDashboard, chart: SeriesChart, dark:
           {
             data: { values: (chart.steps ?? []).map((step) => ({ year: Number(step.x), y: step.y })) },
             mark: { type: 'line', interpolate: 'step-after', strokeDash: [4, 4], strokeWidth: 1.5, color: dark ? '#bbbbbb' : '#6e6e73' },
-            encoding: { x: { field: 'year', type: 'quantitative' }, y: { field: 'y', type: 'quantitative' } },
+            encoding: { x: { field: 'year', type: 'quantitative', scale: yearScale }, y: { field: 'y', type: 'quantitative' } },
           },
         ],
       };
@@ -205,7 +207,7 @@ export function seriesSpec(dashboard: SeriesDashboard, chart: SeriesChart, dark:
         data: { values: numeric.map((mark) => ({ ...mark, end: mark.year + (key === 'sourcing.density' ? 10 : 1) })) },
         mark: { type: 'bar', ...(key === 'sourcing.density' ? { color: accent(dark) } : {}) },
         encoding: {
-          x: { field: 'year', type: 'quantitative', scale: { domain, zero: false }, axis: yearAxis(chart.xLabel) },
+          x: { field: 'year', type: 'quantitative', scale: yearScale, axis: yearAxis(chart.xLabel) },
           x2: { field: 'end' },
           y: { field: 'y', type: 'quantitative', stack: 'zero', title: chart.yLabel },
           ...(key === 'production.perYear' ? { color: color(true) } : {}),
@@ -217,7 +219,7 @@ export function seriesSpec(dashboard: SeriesDashboard, chart: SeriesChart, dark:
         height: 240,
         data: { values: numeric },
         encoding: {
-          x: { field: 'year', type: 'quantitative', scale: { domain, zero: false }, axis: yearAxis(chart.xLabel) },
+          x: { field: 'year', type: 'quantitative', scale: yearScale, axis: yearAxis(chart.xLabel) },
           y: { field: 'y', type: 'quantitative', title: chart.yLabel },
         },
         layer: [
@@ -234,7 +236,7 @@ export function seriesSpec(dashboard: SeriesDashboard, chart: SeriesChart, dark:
         data: { values: numeric.map((mark) => ({ ...mark, order: chart.series.indexOf(mark.series ?? '') })) },
         mark: { type: 'area' },
         encoding: {
-          x: { field: 'year', type: 'quantitative', scale: { domain, zero: false }, axis: yearAxis(chart.xLabel) },
+          x: { field: 'year', type: 'quantitative', scale: yearScale, axis: yearAxis(chart.xLabel) },
           y: { field: 'y', type: 'quantitative', stack: 'zero', scale: { domain: [0, 1] }, axis: { format: '.0%', title: chart.yLabel } },
           color: color(true),
           order: { field: 'order', type: 'quantitative' },

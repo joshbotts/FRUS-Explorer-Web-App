@@ -34,6 +34,9 @@ public struct ArchivalNetworkAnswer: Codable, Equatable, Sendable, ResponseEncod
     public var sectors: [Sector]
     /// The dock: a partner's card, a group's, or the placeholder's summary and legend.
     public var dock: Dock
+    /// The toolbar's chip for the group selected, shown whenever one is, a partner in the dock or not
+    /// (`selectedSector`'s chip).
+    public var groupChip: GroupChip?
     /// The empty state, when no partner is drawn.
     public var empty: Empty?
     /// The neighbourhood's table, as its CSV lists it.
@@ -127,6 +130,13 @@ public struct ArchivalNetworkAnswer: Codable, Equatable, Sendable, ResponseEncod
         public var isCollection: Bool
     }
 
+    public struct GroupChip: Codable, Equatable, Sendable {
+        public var category: String
+        public var name: String
+        /// "Clear the … group", the chip's spoken name.
+        public var clearLabel: String
+    }
+
     public struct GroupCard: Codable, Equatable, Sendable {
         public var category: String
         public var name: String
@@ -205,7 +215,11 @@ enum ArchivalNetworkRoutes {
     /// The authority's collections, the network's population, or a 404 where the bundle has none, as the app draws
     /// its unavailable state.
     static func authority(_ resources: ServerResources) async throws -> [AuthorityCollectionRecord] {
-        let collections = try await Blocking.run { resources.collectionAuthority?.collections ?? [] }
+        // The usage index the network reads beside it is decoded here too, once, off the cooperative pool.
+        let collections = try await Blocking.run {
+            _ = resources.bundledAnalytics.usage.value(in: resources.directory)
+            return resources.collectionAuthority?.collections ?? []
+        }
         guard !collections.isEmpty else {
             throw APIProblem(.notFound, code: "NO_AUTHORITY",
                              detail: appWords("archival.network.unavailable", "The bundled collection authority is unavailable in this build, so the network cannot be drawn."))
@@ -471,7 +485,7 @@ struct ArchivalNetworkView {
             focus: nil, measure: ArchivalEdgeMeasure.sharedVolumes.rawValue, usageAvailable: usageAvailable,
             expansion: ArchivalUmbrellaExpansion.collapsed.rawValue, threshold: defaultThreshold,
             thresholdText: thresholdText(defaultThreshold), nodes: [], layout: nil, labels: [], plate: nil, sectors: [],
-            dock: .init(title: "", summary: "", legend: [], node: nil, group: nil),
+            dock: .init(title: "", summary: "", legend: [], node: nil, group: nil), groupChip: nil,
             empty: .init(title: appWords("archival.network.empty.title", "Choose a Collection"),
                          detail: appWords("archival.network.empty.detail", "Pick a collection to see which other bodies of records the same volumes drew on.")),
             table: nil)
@@ -580,6 +594,10 @@ struct ArchivalNetworkView {
             plate: graph.nodes.isEmpty ? nil : plate.map(Self.rect),
             sectors: Self.sectorStarts.map { .init(category: $0.0.rawValue, name: $0.0.displayName, start: $0.1) },
             dock: dock,
+            groupChip: selectedSector.map {
+                .init(category: $0.rawValue, name: $0.displayName,
+                      clearLabel: String(format: appWords("archival.network.group.clear %@", "Clear the %@ group"), $0.displayName))
+            },
             empty: graph.nodes.isEmpty ? emptyState : nil,
             table: graph.nodes.isEmpty ? nil : ArchivalTables.table(neighbourhoodTable))
     }

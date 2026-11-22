@@ -8,7 +8,7 @@
 // focus and trail in the address; the uncapped list shown below the ranking rather than in a sheet; and a collection or
 // a class opening the server's own record and neighbours pages.
 import { useQuery } from '@tanstack/react-query';
-import { getRouteApi, Link } from '@tanstack/react-router';
+import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
 import { type KeyboardEvent, lazy, type ReactNode, type RefObject, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ApiError, errorMessage } from '../api/client';
 import {
@@ -219,12 +219,14 @@ function CollectionsMode({
   onCSV: (chart: ArchivalChart, asks: Parameters<typeof archivalCSV>[1]) => void;
 }) {
   const scheme = useScheme();
+  const go = useNavigate();
   const scope = archivalScope(search);
   const lens = search.lens ?? stored(archivalKeys.lens) ?? 'namedCollections';
   const weight = search.weight ?? stored(archivalKeys.weight) ?? 'documents';
   const ask: CollectionsAsk = { band: search.band ?? context.defaultBand, lens, weight, umbrella: search.umbrella === 'shown', scope };
   const collections = useQuery(collectionsQuery(ask));
   const [allUnits, setAllUnits] = useState(false);
+  const showAll = useRef<HTMLButtonElement>(null);
   const groups = useArchivalScopes(context);
   const chosen = scopeKey(scope);
   const options = groups.flatMap((group) => group.options);
@@ -249,7 +251,9 @@ function CollectionsMode({
     onFailure(undefined);
     try {
       const [{ renderFigure }, plate] = await Promise.all([import('./VegaChart'), archivalPlate(ask)]);
-      saveFile(await renderFigure(figureSpec(spec as ChartSpec, plate, []), format), `${plate.fileName}.${format}`);
+      // A figure is drawn on white, whatever the page's appearance, as every other page's is.
+      const light = rankingSpec(answer, false, customNames(answer)) as ChartSpec;
+      saveFile(await renderFigure(figureSpec(light, plate, []), format), `${plate.fileName}.${format}`);
     } catch (error) {
       onFailure(error instanceof ApiError ? errorMessage(error) : corpus.renderError);
     }
@@ -298,7 +302,9 @@ function CollectionsMode({
           <label htmlFor={ids.weight}>{words.countBy}</label>
           <select
             id={ids.weight}
-            value={answer?.weight ?? weight}
+            // The weight asked while its answer comes, then the one the answer draws in (a weight the scope cannot
+            // draw falls back to volumes).
+            value={answer && !collections.isPlaceholderData ? answer.weight : weight}
             onChange={(event) => {
               store(archivalKeys.weight, event.target.value);
               onChange({ weight: event.target.value });
@@ -312,14 +318,14 @@ function CollectionsMode({
           </select>
         </div>
         {answer?.umbrella && (
+          // Named by what it shows, the record's spoken name its description; pressed, and worded, as asked.
           <button
             type="button"
-            aria-pressed={!answer.hidesUmbrella}
-            aria-label={answer.umbrella.accessibilityLabel}
-            title={`${answer.umbrella.caption}: ${answer.umbrella.value}`}
-            onClick={() => onChange({ umbrella: answer.hidesUmbrella ? 'shown' : undefined })}
+            aria-pressed={ask.umbrella}
+            title={answer.umbrella.accessibilityLabel}
+            onClick={() => onChange({ umbrella: ask.umbrella ? undefined : 'shown' })}
           >
-            {answer.umbrella.caption}: {answer.umbrella.value}
+            {answer.umbrella.caption}: {ask.umbrella ? answer.umbrella.shown : answer.umbrella.hidden}
           </button>
         )}
       </div>
@@ -353,21 +359,41 @@ function CollectionsMode({
             <div className="analytics-pane">
               <div className="analytics-figure">
                 <Suspense fallback={<div className="analytics-chart" aria-hidden="true" />}>
-                  {spec && <VegaChart spec={spec} label={words.chartDescription(answer.ranking.title)} />}
+                  {spec && (
+                    <VegaChart
+                      spec={spec}
+                      label={words.chartDescription(answer.ranking.title)}
+                      onChoose={(datum) => {
+                        // A bar opens what it stands for, as its row in the list below does (`open(_:data:)`).
+                        const row = answer.ranking.rows.find((each) => each.id === datum.id);
+                        if (!row?.opens) return;
+                        if (answer.lens === 'centralFileClasses') void go({ to: '/archival-neighbors', search: { decimalClass: row.id } });
+                        else void go({ to: '/archival-collection', search: { id: row.id } });
+                      }}
+                    />
+                  )}
                 </Suspense>
+                {answer.drillInHint && <p className="analytics-caption">{answer.drillInHint}</p>}
                 <RankingRows answer={answer} />
               </div>
               {answer.ranking.table && <DataTable table={answer.ranking.table} />}
             </div>
           )}
-          {answer.drillInHint && <p className="analytics-caption">{answer.drillInHint}</p>}
           {answer.showAllUnits && (
-            <button type="button" aria-expanded={allUnits} onClick={() => setAllUnits((open) => !open)}>
+            <button ref={showAll} type="button" aria-expanded={allUnits} onClick={() => setAllUnits((open) => !open)}>
               {answer.showAllUnits}
             </button>
           )}
           {allUnits && answer.showAllUnits && (
-            <EveryUnit ask={ask} lens={lens} onClose={() => setAllUnits(false)} onCSV={() => onCSV('units', { ...emptyAsks, collections: ask })} />
+            <EveryUnit
+              ask={ask}
+              lens={lens}
+              onClose={() => {
+                setAllUnits(false);
+                showAll.current?.focus();
+              }}
+              onCSV={() => onCSV('units', { ...emptyAsks, collections: ask })}
+            />
           )}
           {answer.families && (
             <div className="archival-families">
@@ -486,11 +512,12 @@ function EveryUnit({ ask, lens, onClose, onCSV }: { ask: CollectionsAsk; lens: s
 
 // ─── Network ────────────────────────────────────────────────────────────────
 
-/** The canvas's size, measured, settled a moment after it last changed, in whole points. */
-function useCanvasSize(frame: RefObject<HTMLDivElement | null>) {
+/** The canvas's size, measured, settled a moment after it last changed, in whole points, on whichever frame the callback
+ *  ref is given: a frame mounted again after an error is measured too. */
+function useCanvasSize() {
+  const [element, setElement] = useState<HTMLDivElement | null>(null);
   const [size, setSize] = useState<{ width: number; height: number } | undefined>(undefined);
   useEffect(() => {
-    const element = frame.current;
     if (!element) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const observer = new ResizeObserver(([entry]) => {
@@ -505,9 +532,12 @@ function useCanvasSize(frame: RefObject<HTMLDivElement | null>) {
       clearTimeout(timer);
       observer.disconnect();
     };
-  }, [frame]);
-  return size;
+  }, [element]);
+  return [size, setElement] as const;
 }
+
+/** A link strength as the app writes it, in whole percent (`formatted(.percent.precision(.fractionLength(0)))`). */
+const wholePercent = new Intl.NumberFormat('en-US', { style: 'percent', maximumFractionDigits: 0 });
 
 function NetworkMode({
   search,
@@ -520,56 +550,78 @@ function NetworkMode({
   onChange: (fields: Partial<ArchivalSearch>, replace?: boolean) => void;
   onCSV: (asks: Parameters<typeof archivalCSV>[1]) => void;
 }) {
-  const frame = useRef<HTMLDivElement>(null);
-  const size = useCanvasSize(frame);
+  const [size, frame] = useCanvasSize();
   const [shown, setShown] = useState<string | undefined>(undefined);
   const [active, setActive] = useState<string | undefined>(undefined);
   const [resetToken, setResetToken] = useState(0);
   const [picking, setPicking] = useState(false);
-  const takeFocus = useRef(false);
+  const focusButton = useRef<HTMLButtonElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  // The focus whose graph's list box takes the keyboard once it comes, after Explore, Back or a pick.
+  const takeFocus = useRef<string | undefined>(undefined);
+  // A new focus is a new graph, whose selection starts empty (`recentre(on:)`): let go as the address's focus changes, the
+  // browser's Back and Forward included, so the new focus is asked for with no partner of the last.
+  const [lastFocus, setLastFocus] = useState(search.focus);
+  const focusChanged = lastFocus !== search.focus;
+  if (focusChanged) {
+    setLastFocus(search.focus);
+    setShown(undefined);
+    setActive(undefined);
+  }
   const measure = search.measure ?? stored(archivalKeys.measure) ?? undefined;
-  const threshold = search.threshold !== undefined ? Number(search.threshold) : context.defaultThreshold;
+  const asked = search.threshold !== undefined ? Number(search.threshold) : context.defaultThreshold;
+  const threshold = Number.isFinite(asked) ? asked : context.defaultThreshold;
   const ask: NetworkAsk = {
     focus: search.focus,
     measure,
     expansion: search.expansion,
-    threshold: Number.isFinite(threshold) ? threshold : context.defaultThreshold,
+    threshold,
     width: size?.width ?? 720,
     height: size?.height ?? 420,
-    selected: shown,
+    selected: focusChanged ? undefined : shown,
     group: search.group,
     only: search.only === 'on',
   };
   const network = useQuery(networkQuery(ask, size !== undefined && !context.networkUnavailable));
   const answer = network.data;
+  const settled = answer !== undefined && !network.isPlaceholderData;
   const trail = search.trail ? search.trail.split('\u001f') : [];
-  const ids = { measure: useId(), expansion: useId(), threshold: useId() };
-  // A new focus is a new graph, whose selection starts empty (`recentre(on:)`).
-  const [lastFocus, setLastFocus] = useState(answer?.focus?.id);
-  if (answer?.focus?.id !== undefined && lastFocus !== answer.focus.id) {
-    setLastFocus(answer.focus.id);
-    setShown(undefined);
-    setActive(undefined);
-  }
+  const ids = { measure: useId(), expansion: useId(), threshold: useId(), thresholdHelp: useId() };
   // A partner the rebuilt graph no longer holds is let go (`rebuild()`).
   if (answer && shown !== undefined && !answer.nodes.some((node) => node.id === shown) && !network.isPlaceholderData) {
     setShown(undefined);
   }
+  // The new graph's list box takes the keyboard once its focus's answer comes, or the Focus button where it is empty.
+  useEffect(() => {
+    const wanted = takeFocus.current;
+    if (wanted === undefined || !answer || network.isPlaceholderData || answer.focus?.id !== wanted) return;
+    takeFocus.current = undefined;
+    (answer.empty || !list.current ? focusButton.current : list.current)?.focus();
+  }, [answer, network.isPlaceholderData]);
 
   if (context.networkUnavailable) return <Empty title={words.unavailableTitle} detail={context.networkUnavailable} />;
 
   /** Explores a collection: the focus moves to it, the last one onto the trail (`recentre(on:)`). */
   function recentre(id: string) {
     const current = answer?.focus?.id;
-    takeFocus.current = true;
     setResetToken((token) => token + 1);
+    if (current === id) {
+      // The focus already: its view goes back, its selection empties, and its list box takes the keyboard.
+      setShown(undefined);
+      setActive(undefined);
+      (list.current ?? focusButton.current)?.focus();
+      return;
+    }
+    takeFocus.current = id;
     onChange({ focus: id, trail: current && current !== id ? [...trail, current].join('\u001f') : search.trail });
   }
 
   function back() {
     const previous = trail[trail.length - 1];
     if (previous === undefined) return;
-    takeFocus.current = true;
+    takeFocus.current = previous;
+    // The last step back takes the Back button away: the Focus button holds the keyboard until the graph comes.
+    if (trail.length === 1) focusButton.current?.focus();
     onChange({ focus: previous, trail: trail.slice(0, -1).join('\u001f') || undefined });
   }
 
@@ -581,17 +633,24 @@ function NetworkMode({
 
   const node = answer?.dock.node;
   const group = answer?.dock.group;
+  // The chip follows the address's group, the answer's words for it once they come (`selectedSector`'s chip).
+  const chip = answer?.groupChip?.category === search.group ? answer?.groupChip : undefined;
+  const chipName = chip?.name ?? answer?.sectors.find((sector) => sector.category === search.group)?.name ?? search.group;
   return (
     <section aria-label={words.network} className="archival-mode">
       <div className="analytics-filters">
-        <button type="button" onClick={() => setPicking(true)} aria-haspopup="dialog">
-          {words.focus}: {answer?.focus?.name ?? words.focusNone}
-        </button>
+        {/* The Focus bar is the mode's heading, which the dock's and the picker's follow. */}
+        <h2 className="archival-focus-heading">
+          <button ref={focusButton} type="button" onClick={() => setPicking(true)} aria-haspopup="dialog" aria-expanded={picking}>
+            {words.focus}: {answer?.focus?.name ?? words.focusNone}
+          </button>
+        </h2>
         <div className="analytics-field">
           <label htmlFor={ids.measure}>{words.measure}</label>
           <select
             id={ids.measure}
-            value={answer?.measure ?? measure ?? 'sharedVolumes'}
+            // The measure asked while its answer comes, then the one in force (shared volumes without the usage index).
+            value={settled ? answer.measure : (measure ?? answer?.measure ?? 'sharedVolumes')}
             disabled={answer ? !answer.usageAvailable : false}
             onChange={(event) => {
               store(archivalKeys.measure, event.target.value);
@@ -609,7 +668,7 @@ function NetworkMode({
           <label htmlFor={ids.expansion}>{words.umbrella}</label>
           <select
             id={ids.expansion}
-            value={answer?.expansion ?? search.expansion ?? 'collapsed'}
+            value={settled ? answer.expansion : (search.expansion ?? 'collapsed')}
             disabled={answer ? !answer.usageAvailable : false}
             onChange={(event) => onChange({ expansion: event.target.value === 'collapsed' ? undefined : event.target.value })}
           >
@@ -620,9 +679,13 @@ function NetworkMode({
             ))}
           </select>
         </div>
-        {group && (
-          <button type="button" aria-label={group.clearLabel} onClick={() => onChange({ group: undefined, only: undefined })}>
-            {words.group}: {group.name} ✕
+        {search.group && (
+          // Named by what it shows, "Clear the … group" its description.
+          <button type="button" title={chip?.clearLabel} onClick={() => {
+            focusButton.current?.focus();
+            onChange({ group: undefined, only: undefined });
+          }}>
+            {words.group}: {chipName} <span aria-hidden="true">✕</span>
           </button>
         )}
         {answer && answer.nodes.length > 0 && (
@@ -636,27 +699,37 @@ function NetworkMode({
       </div>
       <div className="archival-threshold">
         <label htmlFor={ids.threshold}>{words.threshold}</label>
+        {/* Named by its label, the app's spoken name its description, and its value the step asked, in the app's
+            whole percent, while the graph for it comes. */}
         <input
           id={ids.threshold}
           type="range"
           min={context.thresholds[0]}
           max={context.thresholds[context.thresholds.length - 1]}
           step={0.05}
-          value={ask.threshold}
-          aria-label={words.thresholdA11y}
-          aria-valuetext={answer?.thresholdText}
+          value={threshold}
+          aria-describedby={ids.thresholdHelp}
+          aria-valuetext={wholePercent.format(threshold)}
           onChange={(event) => onChange({ threshold: Number(event.target.value).toFixed(2) }, true)}
         />
-        <span className="count">{answer?.thresholdText}</span>
+        <span className="count">{wholePercent.format(threshold)}</span>
+        <span id={ids.thresholdHelp} className="visually-hidden">
+          {words.thresholdA11y}
+        </span>
       </div>
       {picking && (
         <FocusPicker
           query={(text) => networkCandidatesQuery(text, true)}
+          // The keyboard goes back to the Focus button, and on to the new graph's list box once it comes.
           onPick={(id) => {
             setPicking(false);
+            focusButton.current?.focus();
             recentre(id);
           }}
-          onCancel={() => setPicking(false)}
+          onCancel={() => {
+            setPicking(false);
+            focusButton.current?.focus();
+          }}
         />
       )}
       {network.error ? (
@@ -687,7 +760,7 @@ function NetworkMode({
                   </Suspense>
                   <NodeList
                     answer={answer}
-                    takeFocusRef={takeFocus}
+                    listRef={list}
                     active={active}
                     shown={shown}
                     onActive={setActive}
@@ -774,7 +847,7 @@ function NetworkMode({
  *  the graph's order, each said by its name and its link, and whose Enter or Space shows the one reached in the dock. */
 function NodeList({
   answer,
-  takeFocusRef,
+  listRef,
   active,
   shown,
   onActive,
@@ -782,7 +855,8 @@ function NodeList({
   onClear,
 }: {
   answer: NetworkAnswer;
-  takeFocusRef: RefObject<boolean>;
+  /** The page's hold on the list box, which it gives the keyboard after Explore, Back or a pick. */
+  listRef: RefObject<HTMLDivElement | null>;
   active?: string;
   shown?: string;
   onActive: (id: string) => void;
@@ -791,14 +865,8 @@ function NodeList({
 }) {
   const help = useId();
   const prefix = useId();
-  const list = useRef<HTMLDivElement>(null);
   const nodes = answer.nodes;
   const index = Math.max(0, nodes.findIndex((node) => node.id === active));
-  useEffect(() => {
-    if (!takeFocusRef.current) return;
-    takeFocusRef.current = false;
-    list.current?.focus();
-  }, [answer.focus?.id, takeFocusRef]);
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     let next: number | undefined;
@@ -844,7 +912,7 @@ function NodeList({
   return (
     <>
       <div
-        ref={list}
+        ref={listRef}
         role="listbox"
         tabIndex={0}
         className="graph-keys"
@@ -946,9 +1014,11 @@ function FlowsMode({
   const [selected, setSelected] = useState<string | undefined>(undefined);
   const [expanded, setExpanded] = useState(false);
   const [picking, setPicking] = useState(false);
+  const focusButton = useRef<HTMLButtonElement>(null);
   const ask: FlowsAsk = { layer: search.layer, focus: search.flowFocus, direction: search.direction, selected };
-  const flows = useQuery(flowsQuery(ask));
+  const flows = useQuery(flowsQuery(ask, !context.flowsUnavailable));
   const answer = flows.data;
+  const settled = answer !== undefined && !flows.isPlaceholderData;
   const [shownFor, setShownFor] = useState(`${ask.layer}|${ask.focus}|${ask.direction}`);
   // A new layer, focus or direction starts with nothing selected and the remainder folded, as the view's do.
   if (shownFor !== `${ask.layer}|${ask.focus}|${ask.direction}`) {
@@ -968,26 +1038,32 @@ function FlowsMode({
             legend={words.layer}
             help={words.layer}
             name="archival-layer"
-            value={answer?.layer ?? search.layer ?? 'betweenPrinted'}
+            value={settled ? answer.layer : (search.layer ?? 'betweenPrinted')}
             disabled={false}
             choices={context.layers.map((option) => ({ value: option.value, label: option.title }))}
             // A new layer clears the focus (`onChange(of: layer)`).
             onChange={(value) => onChange({ layer: value === 'betweenPrinted' ? undefined : value, flowFocus: undefined })}
           />
         )}
-        <button type="button" onClick={() => setPicking(true)} aria-haspopup="dialog">
-          {answer?.focusCaption ?? words.focus}: {answer?.focusValue}
-        </button>
+        {/* The Focus bar is the mode's heading, which the picker's, the diagram's and the card's follow. */}
+        <h2 className="archival-focus-heading">
+          <button ref={focusButton} type="button" onClick={() => setPicking(true)} aria-haspopup="dialog" aria-expanded={picking}>
+            {answer?.focusCaption ?? words.focus}: {answer?.focusValue}
+          </button>
+        </h2>
         {answer?.focus && (
           <>
-            <button type="button" aria-label={answer.clearFocus} title={answer.clearFocus} onClick={() => onChange({ flowFocus: undefined })}>
+            <button type="button" aria-label={answer.clearFocus} title={answer.clearFocus} onClick={() => {
+              focusButton.current?.focus();
+              onChange({ flowFocus: undefined });
+            }}>
               ✕
             </button>
             <Segmented
               legend={words.direction}
               help={words.direction}
               name="archival-direction"
-              value={answer.direction}
+              value={settled ? answer.direction : (search.direction ?? 'outgoing')}
               disabled={false}
               choices={context.directions.map((option) => ({ value: option.value, label: option.title }))}
               onChange={(value) => onChange({ direction: value === 'outgoing' ? undefined : value })}
@@ -1001,9 +1077,13 @@ function FlowsMode({
           query={(text) => flowsCandidatesQuery(search.layer, text, true)}
           onPick={(id) => {
             setPicking(false);
+            focusButton.current?.focus();
             onChange({ flowFocus: id });
           }}
-          onCancel={() => setPicking(false)}
+          onCancel={() => {
+            setPicking(false);
+            focusButton.current?.focus();
+          }}
         />
       )}
       {flows.error ? (
@@ -1237,6 +1317,7 @@ function LibraryMode({ onCSV }: { onCSV: (chart: ArchivalChart) => void }) {
             ))}
           </ul>
         )}
+        {!answer.collections.empty && <DataTable table={answer.collections.table} />}
       </div>
       <div className="archival-caveats">
         <h3>{answer.footer.title}</h3>

@@ -87,6 +87,11 @@ import Testing
             #expect(!production.frame.isCustomRange && production.charts[0].steps?.isEmpty == false)
             let narrowed = try decode(SeriesProductionAnswer.self, try await client.execute(uri: "/api/v1/about/production?from=1950&subseries=1961-63", method: .get))
             #expect(narrowed.frame.isCustomRange && narrowed.frame.scopeLabel == "Scope: 1961-63" && narrowed.caveats.lines.first?.hasPrefix("Scoped to the 1961-63 subseries") == true)
+            // Volumes an address names without a scope's name are the chip's Selected volumes, never the whole series.
+            let nameless = try decode(SeriesProductionAnswer.self, try await client.execute(uri: "/api/v1/about/production?volumes=frus1961-63v06&volumes=frus1894Nicaragua", method: .get))
+            #expect(nameless.frame.scopeLabel == "Scope: Selected volumes" && nameless.frame.isNarrowed)
+            let selected = try decode(ArchivalCollectionsAnswer.self, try await client.execute(uri: "/api/v1/analytics/archives?band=2&volumes=frus1961-63v06", method: .get))
+            #expect(selected.denominator?.sentence.contains(" in Selected volumes, 1961–1968.") == true, "\(selected.denominator?.sentence ?? "")")
             let geography = try decode(SeriesGeographyAnswer.self, try await client.execute(uri: "/api/v1/about/geography", method: .get))
             #expect(geography.charts.map(\.id) == ["trend", "totals", "countries"] && geography.empty == nil)
             let sourcing = try decode(SeriesSourcingAnswer.self, try await client.execute(uri: "/api/v1/about/sourcing?hidden=unrecognized", method: .get))
