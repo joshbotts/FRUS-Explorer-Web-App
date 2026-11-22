@@ -338,6 +338,36 @@ import Testing
         #expect(tally.folded == 0 && tally.notices > 0 && tally.topics > 0 && tally.totals > 0, "\(tally)")
     }
 
+    /// A documents term spelt "occ:" and a word gets its own series from the one service the server keeps for a served
+    /// index, which caches the word's occurrences apart since FRUS-Explorer#1913, where they shared a cache under that
+    /// spelling: asked after the word's occurrences over the whole corpus, and before them in a scope. Each chart is the
+    /// kit's from a host's own service that has cached nothing, and the two series differ, so a crossing would show.
+    @Test func aTermSpeltOccAndAWordGetsItsOwnSeries() async throws {
+        let corpusMaxYear = CorpusAnalyticsRoutes.corpusMaxYear(try await Host.open().catalogue)
+        let scope = ["frus1961-63v06", "frus1894Nicaragua"]
+        let asks = [Ask(term: "treaty", axis: .byYear, unit: .occurrences, end: corpusMaxYear),
+                    Ask(term: "occ:treaty", axis: .byYear, end: corpusMaxYear),
+                    Ask(term: "occ:treaty", axis: .byYear, end: corpusMaxYear, volumes: scope),
+                    Ask(term: "treaty", axis: .byYear, unit: .occurrences, end: corpusMaxYear, volumes: scope)]
+        let read = try await ServedFixture.run { client, _ in
+            var read: [CorpusAnalyticsAnswer] = []
+            for ask in asks {
+                let response = try await client.execute(uri: "/api/v1/analytics/corpus?\(ask.query)", method: .get)
+                guard response.status == .ok else { throw APIParityError("\(ask): \(response.status.code) \(String(buffer: response.body))") }
+                read.append(try ServedFixture.decode(CorpusAnalyticsAnswer.self, response))
+            }
+            return read
+        }
+        for (ask, answer) in zip(asks, read) {
+            let kit = try await Self.kit(try await Host.open(), ask, corpusMaxYear: corpusMaxYear)
+            let api = Self.api(answer)
+            #expect(api == kit, "\(ask): \(Self.difference(api, kit))")
+        }
+        #expect(read.map(\.measure.effective) == ["occurrences", "documents", "documents", "occurrences"])
+        #expect(!read[0].segments.isEmpty && !read[3].segments.isEmpty, "the word's occurrences, whole and scoped")
+        #expect(read[0].segments != read[1].segments && read[3].segments != read[2].segments, "the two series differ")
+    }
+
     /// Each CSV's method block is the kit's, for the statement the app's view writes (`exportProvenance`), and its
     /// table the kit's `ChartInspectorData.csv`.
     @Test func everyCSVsPreambleIsTheKits() async throws {

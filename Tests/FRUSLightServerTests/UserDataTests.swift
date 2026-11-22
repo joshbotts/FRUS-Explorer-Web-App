@@ -24,19 +24,19 @@ struct UserDataFixture {
     static let now = Date(timeIntervalSince1970: 1_792_800_000)  // 2026-10-24T00:00:00Z
 
     /// `volumes` from fixtures/tei are in the server's TEI folder, for the routes that read a page;
-    /// `indexed`, the server serves the synthetic export, for the routes that read the index;
-    /// `importLimit`, an import's largest file; `resolver`, who a request acts for, the store's single
+    /// `indexed`, the server serves the synthetic export, for the routes that read the index, with
+    /// `edits`' statements run on it first; `importLimit`, an import's largest file; `resolver`, who a request acts for, the store's single
     /// user by default, or with `auth`, `trustedProxies` and `adminUsers`, the one a proxy names (S14e)
     /// or a local account's session (S20b), whose passwords `passwords` hashes, the cheapest by
     /// default, by the clock `now`; `userStore`, the store the configuration names, whichever the
     /// fixture holds.
     init(publicURL: String = "http://localhost:8080", userData: Bool = true, volumes: [String] = [],
-         indexed: Bool = false, importLimit: Int = UserDataServices.importBodyLimit,
+         indexed: Bool = false, edits: String? = nil, importLimit: Int = UserDataServices.importBodyLimit,
          resolver: (any UserResolver)? = nil, auth: ServerConfiguration.Auth = .none,
          trustedProxies: [AddressRange] = [], adminUsers: Set<String> = [],
          userStore: ServerConfiguration.UserStoreChoice = .sqlite, passwords: PasswordHasher = PasswordHasher(.leastCost),
          now: @escaping @Sendable () -> Date = { UserDataFixture.now }) async throws {
-        server = try await indexed ? servingSyntheticExport(volumes: volumes) : ServerFixture(volumes: volumes)
+        server = try await indexed ? servingSyntheticExport(volumes: volumes, edits: edits) : ServerFixture(volumes: volumes)
         let url = server.files.userStore
         store = try await SQLiteUserStore(url: url, backupsDirectory: server.files.backupsDirectory)
         rows = try UserStoreRows(url)

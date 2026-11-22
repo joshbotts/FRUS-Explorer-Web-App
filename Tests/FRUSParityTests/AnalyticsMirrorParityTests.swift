@@ -35,8 +35,13 @@ import Testing
              "guard isNormalized else { return Double(count) } guard let total = totals[period], total > 0 else { return nil } return Double(count) / Double(total) * 100.0"),
             ("valueUnit == .occurrences ? (occurrenceYearDataByTerm[term] ?? []) : (yearDataByTerm[term] ?? [])",
              "valueUnit == .occurrences ? (loaded.occurrenceYears ?? []) : loaded.years"),
+            ("guard valueUnit == .occurrences else { return decadeDataByTerm[term] ?? [] }",
+             "guard valueUnit == .occurrences else { return loaded.decades }"),
             ("for entry in occurrenceYearDataByTerm[term] ?? [] { byDecade[(entry.year / 10) * 10, default: 0] += entry.count }",
              "for entry in loaded.occurrenceYears ?? [] { byDecade[(entry.year / 10) * 10, default: 0] += entry.count }"),
+            // The kit's type, whose initialiser is public since FRUS-Explorer#1928.
+            ("return byDecade .map { DecadeFrequency(decadeStart: $0.key, count: $0.value) } .sorted { $0.decadeStart < $1.decadeStart }",
+             "return byDecade .map { DecadeFrequency(decadeStart: $0.key, count: $0.value) } .sorted { $0.decadeStart < $1.decadeStart }"),
             ("return yearData.filter { $0.year >= yearRangeStart && $0.year <= yearRangeEnd }",
              "return yearData.filter { $0.year >= yearRangeStart && $0.year <= yearRangeEnd }"),
             ("let bucketEnd = d.decadeStart + 9 return bucketEnd >= yearRangeStart && d.decadeStart <= yearRangeEnd",
@@ -104,8 +109,9 @@ import Testing
             "let yearVolumes = try await service.termFrequencyByYearAndVolume(term: term, volumeIds: scope)",
             "let availability = await service.occurrenceAvailability(for: term)",
             "if ask.unit == .occurrences, availability.isAvailable {",
-            "occurrenceYearVolumes = try await served.occurrences.termOccurrencesByYearAndVolume(term: term, volumeIds: scope)",
-            "occurrenceYears = try await served.occurrences.termOccurrencesByYear(term: term, volumeIds: scope)",
+            // From the one service, whose occurrence series have a cache of their own (FRUS-Explorer#1913).
+            "occurrenceYearVolumes = try await service.termOccurrencesByYearAndVolume(term: term, volumeIds: scope)",
+            "occurrenceYears = try await service.termOccurrencesByYear(term: term, volumeIds: scope)",
             "async let years = service.termFrequencyByYear(term: term, volumeIds: scope)",
             "async let volumes = service.termFrequencyByVolume(term: term, volumeIds: scope)",
         ], file: "CorpusAnalytics.swift")
@@ -262,7 +268,8 @@ import Testing
             "let (inRange, overflow) = ChronologyGrouping.splitOverflow(placed, startISO: startISO, endISO: endISO)",
             "let viewBucket = ChronologyGrouping.bucket(forDaysBetween: startDay, and: endDay, calendar: cal)",
             "let domainStart = ChronologyGrouping.startOfBucket(startDay, bucket: viewBucket, calendar: cal)",
-            "let groups = ChronologyGrouping.group(inRange, viewBucket: viewBucket, ascending: ask.ascending)",
+            // The app's labels are in the reader's locale, the server's in its readers' (FRUS-Explorer#1912).
+            "let groups = ChronologyGrouping.group(inRange, viewBucket: viewBucket, ascending: ask.ascending, locale: SearchItem.locale)",
             "let counts = isCapped ? ((try? await pipeline.dateBucketVolumeCounts(range, bucket: viewBucket, scopeVolumeIds: nil)) ?? []) : []",
             "totalShown = counts.reduce(0) { $0 + $1.count }",
             "chart = ChronologyGrouping.makeChart(from: groups, maxSeries: ask.colors)",
