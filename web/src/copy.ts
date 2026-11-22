@@ -48,6 +48,14 @@
 // chiefly what only a server has (what it indexes, which TEI it holds), are the web's own until
 // check 10 settles them.
 
+/**
+ * The one account of where the subject data comes from, the app's `SubjectDataCaption.text` (FRUS-Explorer#1930, the
+ * app's decision 135), which each surface that explains the data carries, kept once here as the app keeps it: the
+ * facet panel's alone, and after the person sheet's note.
+ */
+const subjectDataCaption =
+  'Experimental subject data from the Office of the Historian, not published on history.state.gov. Subjects are matched to documents by name in the text; they are not editorial headings from the FRUS publication process, so some are wrong.';
+
 // One block a screen, grouped by area under a line each (PLAN's S20a): a new screen's block goes beside its
 // area's kin, never at the end.
 export const copy = {
@@ -405,7 +413,8 @@ export const copy = {
     mentions: 'Mentions',
     active: 'Active',
     subjectsHeader: 'Subjects',
-    subjectsNote: 'Volume-level: subjects characteristic of the volumes where this person is mentioned — not per-document tags.',
+    /** The app's note, then the subject data's caption (`SubjectDataCaption.trailing`). */
+    subjectsNote: `Volume-level: subjects characteristic of the volumes where this person is mentioned — not per-document tags. ${subjectDataCaption}`,
     /** A chip's spoken value, its category and how many of the person's volumes carry it. */
     subjectChipValue: (category: string, volumes: string) => `${category}, in ${volumes} mentioning this person`,
     subjectChipVolumeOne: (count: string) => `${count} volume`,
@@ -620,9 +629,10 @@ export const copy = {
       `Source notes parsed for ${parsed.toLocaleString('en-US')} of ${matches.toLocaleString('en-US')} matches; ${withRecordGroup.toLocaleString('en-US')} name a record group.`,
     provenanceDescriptive: 'Descriptive only — the search has no provenance filter to narrow to.',
     subjectsCoverage: (detected: number, matches: number) =>
-      `Subjects detected for ${detected.toLocaleString('en-US')} of ${matches.toLocaleString('en-US')} matches.`,
+      `Subject data covers ${detected.toLocaleString('en-US')} of ${matches.toLocaleString('en-US')} matches.`,
     subjectsPreparing: 'Subjects are still being prepared for this server — this breakdown is not complete yet.',
-    subjectsSource: 'Detected topics from the Office of the Historian, matched by name — not the volumes’ own markup.',
+    /** The subject data's caption alone, as the app's panel shows it (`SubjectDataCaption.text`). */
+    subjectsSource: subjectDataCaption,
   },
   browse: {
     title: 'All Volumes',
@@ -764,7 +774,7 @@ export const copy = {
     bandSpoken: (era: string, volumes: string) => `${era}: ${volumes}`,
     cellSpoken: (label: string, band: string) => `${label}, ${band}`,
     indexCaption: (volumes: string) =>
-      `What the editors of ${volumes} annotated, layer by layer. A layer that runs through a volume, such as people tagged, counts when it reaches at least half the volume's documents; one found here and there, such as an editorial note, when one document carries it. Each strip shades the eras, earliest first and the late retrospectives last, by the share of their volumes that carry the layer.`,
+      `What the editors of ${volumes} annotated, layer by layer. A layer that runs through a volume, such as people tagged, counts when it reaches at least half the volume's documents. Annotation types found here and there, such as an editorial note, count when one document carries them. Each strip shades the eras, earliest first and the late retrospectives last, by the share of their volumes that carry the layer.`,
     rowHelp: 'What the editors did, when it became standard, and the volumes that carry it',
     // A layer's page.
     practiceHeader: 'What the editors did',
@@ -793,17 +803,17 @@ export const copy = {
       aid: 'A volume counts when it prints this section.',
     },
     practices: {
-      people: "The editors linked each person a document names to the volume's List of Persons, where the person is identified.",
-      abbreviations: "The editors linked each abbreviation in a document to the volume's List of Abbreviations, where it is spelled out.",
+      people: "The editors identified the key people in the volume and included a List of Persons with short summary descriptions of their official roles. These people are tagged as they appear in each document in the volume.",
+      abbreviations: "The editors identified common abbreviations in the volume and included a List of Abbreviations that explains what they mean.",
       correspondents: 'The editors marked who sent each document, and to whom, in its heading.',
       subjects: 'Where a memorandum carried a Subject line, the editors printed it with the memorandum.',
       participants: 'Where a memorandum of conversation lists who took part, the editors marked the list.',
       sourceNotes:
-        "A source note says where the editors found a document. It was printed first as a file number above the heading, and later as a note that begins “Source:” with the full archival citation. The earliest volumes print none: a despatch there carries the post's own number instead.",
+        "A source note says where the editors found a document. It was printed first as a file number above the heading, and later as a note that begins “Source:” with the full archival citation. The earliest volumes print none: a despatch there carries its assigned serial number instead.",
       classification:
         "The editors printed each document's security classification, first above the dateline and later in the source note.",
       excisions:
-        'The editors mark what declassification review redacted: a gap in the printed text, “[… not declassified]”, or a whole document withheld, listed in its place with its heading, its source note and the number of pages not declassified. From Secretary Kellogg’s 1925 order until the 1991 statute, volumes marked an omission with an ellipsis, whether the editors left the text out or it was not cleared for publication, so their redactions cannot be told from the editors’ omissions and are not counted here. Volumes published before the 1925 order marked an omission with a row of asterisks, under no written rule and without saying whose cut it was; those are not counted here either.',
+        'The editors mark what declassification review redacted: a gap in the printed text, “[… not declassified]”, or a whole document withheld, listed in its place with its heading, its source note and the number of pages not declassified. From Secretary Kellogg’s 1925 order until the 1991 statute, volumes marked an omission with an ellipsis, whether the editors left the text out or it was not cleared for publication, so declassification redactions cannot be distinguished from editorial omissions. They are not counted here. Volumes published before the 1925 order marked an omission with a row of asterisks, under no written rule and without saying whose cut it was; those are not counted here either.',
       editorialOmissions:
         'Since Secretary Kellogg’s 1925 order, where the editors left out part of a document as not relevant to the volume, they could say so in brackets and describe what was omitted. Until the 1991 statute an ellipsis could also mark an omission, the editors’ or a redaction, and those are not counted here. Volumes published before the order marked an omission with a row of asterisks, not a bracketed note, and are not counted here.',
       despatch:
@@ -812,8 +822,8 @@ export const copy = {
       crossReferences:
         "The editors' notes point to other documents in the volume, to other volumes and to printed pages: “See Document 12”, “see p. 123”.",
       editorialNotes: 'Where no single document tells the story, the editors wrote a note of their own, set between the documents.',
-      footnotes: "The editors' footnotes explain a document: who it names, what it answered, what became of it.",
-      marginalNotes: "A few volumes print the notes written in a document's margin, set off from its text.",
+      footnotes: "The editors' footnotes usually explain context or reference other documents.",
+      marginalNotes: "A few volumes print notes written in a document's margin, set off from its text.",
       printedAids:
         'Besides its documents, a volume prints front and back matter to help readers use it: a preface, lists of sources, abbreviations and persons, an index.',
     },
@@ -824,7 +834,7 @@ export const copy = {
      * a layer nothing else reads.
      */
     appUse: {
-      people: 'The reader opens a linked person’s entry. Where a volume does not link its names, search for them instead.',
+      people: 'The reader opens a linked person’s entry. Where a volume does not link its names, rely on keyword search instead.',
       abbreviations: "The reader opens a linked abbreviation's meaning.",
       sourceNotes: 'The reader shows each document’s source note.',
       classification: 'The reader shows a document’s marking as the volume prints it.',
@@ -1077,7 +1087,7 @@ export const copy = {
     designation: 'File Designation',
     block: 'File Years',
     subjectNumericCite:
-      'To request the original record from NARA, give them the file designation above and the block of years it was filed in (1963, 1964–66, 1967–69 or 1970–73). Add any telegram or airgram number, the from/to information, and the document’s date from the source note. NARA asks that a central-file citation name the file designation, not a folder or a box.',
+      'To request the original record from NARA, you will need the file designation above and the block of years it was filed in (1963, 1964–66, 1967–69 or 1970–73). Add any telegram or airgram number, the from/to information, and the document’s date from the source note. NARA asks that a central-file citation name the file designation, not a folder or a box.',
     periodHeader: 'NARA Finding Aids by Period',
     filingPeriod: 'Filing Period',
     subjectNumericPeriod: 'February 1963–1973 (Subject-Numeric File)',
@@ -1240,7 +1250,7 @@ export const copy = {
         label: 'FRUS + OH people data',
         tier: 'joined',
         spoken:
-          "Source: FRUS joined to the Office of the Historian's working data on people (its HistoryAtState/people repository) and its Principal Officers and Chiefs of Mission.",
+          "Source: FRUS joined to the Office of the Historian's working data for people (its HistoryAtState/people repository) and its Principal Officers and Chiefs of Mission.",
       },
       stateDeptSchedule: {
         label: 'FRUS + State Dept. schedule',
@@ -1392,7 +1402,7 @@ export const copy = {
       'No indexed documents share this document’s archival provenance or cross-references — indexing more volumes may surface some.',
     emptyDetailScoped: 'No related documents in this scope — switch to All volumes to search the whole index.',
     overflow: (count: number) => `${count} more related — raise a weight or narrow the scope to refine.`,
-    subjectsUnavailable: 'Detected-topic data is unavailable on this server.',
+    subjectsUnavailable: 'Subject data is unavailable on this server.',
     notRanked: {
       lexicalSimilarity: 'This server does not rank by wording yet.',
       semanticSimilarity: 'This server does not rank by meaning yet.',
@@ -1929,6 +1939,12 @@ export const copy = {
     pickerNoResults: (text: string) => `No collections match “${text}”.`,
     pickerCancel: 'Cancel',
     pickerAdded: 'Added',
+    /** The mark for a document the collection held, and its spoken name, since FRUS-Explorer#1941 (L19). */
+    pickerAlreadyIn: 'Already here',
+    pickerAlreadyInLabel: 'Already in this collection',
+    /** What the picker says aloud of a choice (`CollectionPickerCopy.announcement`). */
+    pickerAnnounceAdded: (name: string) => `Added to “${name}”`,
+    pickerAnnounceAlreadyIn: (name: string) => `Already in “${name}”`,
     smartSentence: 'Smart collection. Its documents come from its saved search.',
     addFailedTitle: 'Not Added',
     /** The rail's Collections section. */
@@ -1999,9 +2015,22 @@ export const copy = {
     deleteSection: 'Delete Section',
     /** The menu of a row's actions, the web's own name for the app's context menu. */
     actions: 'Actions',
-    /** Each row. */
-    remove: 'Remove entry',
-    removeHelp: 'Remove this document from the collection',
+    /**
+     * Each row's remove, by the kind of row it deletes, as the app's trash button names it since FRUS-Explorer#1941
+     * (L19, `CollectionEntryDeletion.trashLabel(for:)` and `trashHelp(for:)`); a heading's are the section menu's.
+     */
+    remove: {
+      prose: 'Delete note block',
+      excerpt: 'Remove excerpt',
+      generated: 'Remove block',
+      document: 'Remove document',
+    } as Record<string, string>,
+    removeHelp: {
+      prose: 'Delete this note block and its text',
+      excerpt: 'Remove this excerpt from the collection',
+      generated: 'Remove this block from the collection',
+      document: 'Remove this document from the collection',
+    } as Record<string, string>,
     configure: 'Configure',
     configureHint: 'Opens this document’s settings',
     moveUp: 'Move Up',
@@ -2162,10 +2191,18 @@ export const copy = {
     presetActive: 'Active',
     presetHint: 'Applies this composition. Everything stays editable afterward.',
     presets: {
-      teachingReader: { name: 'Teaching reader', subtitle: 'Full text · notes · chronology' },
-      briefingPacket: { name: 'Briefing packet', subtitle: 'Summaries · headnotes · word cloud' },
-      sourceDossier: { name: 'Source dossier', subtitle: 'Outline · source notes · sources' },
-      scholarlyEdition: { name: 'Scholarly edition', subtitle: 'Everything · full apparatus' },
+      fullTextAsPrinted: { name: 'Full text as printed', subtitle: 'Footnotes · source notes · bibliography · archives' },
+      fullTextWithAnnotations: {
+        name: 'Full text with your annotations',
+        subtitle: 'Notes · highlights · headnotes · chronology · persons',
+      },
+      summariesWithOverview: { name: 'Summaries with overview', subtitle: 'AI summaries · notes · word cloud · chronology · themes' },
+      citationsWithNotes: { name: 'Citations with your notes', subtitle: 'Citation list · notes · bibliography · themes' },
+      citationsWithArchivalSources: {
+        name: 'Citations with archival sources',
+        subtitle: 'Citation list · source notes · archives · persons',
+      },
+      everythingIncluded: { name: 'Everything included', subtitle: 'Full text · all options · all five sections' },
     },
     documentContent: 'Document content',
     documentContentHelp: 'How much of each source to include.',
@@ -2417,7 +2454,7 @@ export const copy = {
    * administration presets, Measure and Values, the fit line and the colours, Export, the hand-off link, the
    * empty states and the notes. The headings, the axis titles, the footnotes, the occurrence notice, the
    * dispersion line and the table's words are the kit's or the view's, from the server. Figure (SVG)… beside the
-   * app's PNG, a volume group's label, a detected topic's group label, the chart's description and the table's
+   * app's PNG, a volume group's label, a subject's group label, the chart's description and the table's
    * title are the web's own.
    */
   corpusAnalytics: {
@@ -2439,8 +2476,8 @@ export const copy = {
     customScopes: 'My Volume Scopes',
     customScope: (name: string, indexed: number, total: number) => `${name} (${indexed} of ${total} indexed)`,
     customScopeNone: (name: string) => `${name} — none indexed yet`,
-    topicGroup: (category: string) => `By Detected Topic — ${category}`,
-    topicsNote: 'Detected topics — experimental',
+    topicGroup: (category: string) => `By Subject — ${category}`,
+    topicsNote: 'Subjects — experimental',
     yearRange: 'Year range',
     startYear: 'Start year',
     endYear: 'End year',

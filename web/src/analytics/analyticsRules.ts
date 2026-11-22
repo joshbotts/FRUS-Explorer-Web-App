@@ -102,7 +102,7 @@ export function scopeValue(scope: AnalyticsScope | undefined): string {
 /**
  * The scope menu's choices, as `AnalyticsScopeBar.scopeMenuItems` offers them: Whole corpus; By Subseries, each
  * indexed subseries; By Volume, each subseries's indexed volumes; My Volume Scopes, the user's, sorted by name,
- * each with its indexed count or disabled when none is indexed; and By Detected Topic, each category's
+ * each with its indexed count or disabled when none is indexed; and By Subject, each category's
  * sub-categories with their counts, a sub-category none of whose volumes is indexed disabled.
  */
 export function scopeGroups(context: AnalyticsContext, scopes: VolumeScope[] | undefined): ScopeGroup[] {

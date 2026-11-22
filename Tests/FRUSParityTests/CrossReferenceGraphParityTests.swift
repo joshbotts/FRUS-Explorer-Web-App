@@ -5,9 +5,9 @@
 // the display build with its volume clusters, expanded and not; the unprinted units and central-file
 // classes; the date labels and values; the reference list's order; the connection counts; and the
 // timeline's date clusters, expanded and not, and its layout, at several canvas sizes and over a brushed
-// window. The two upstream issues the server works around are held as they stand at this pin, so a
-// failure here says when a fix has merged and its workaround can go. And the server's and the browser
-// app's mirrors of the app's view and words, held to the app's source.
+// window. The two upstream fixes that ended S23e's workarounds (FRUS-Explorer#1934, for #1892 and #1893) are
+// held as the kit gives them at this pin. And the server's and the browser app's mirrors of the app's view
+// and words, held to the app's source.
 
 import FRUSLightCore
 import FRUSLightTestSupport
@@ -45,8 +45,8 @@ import Testing
         }
 
         /// The graph the app's view model shows for `key` with the reader's `degree`, or none chosen
-        /// (`loadGraph`), and the degree-1 graph beside it.
-        func loaded(_ key: DocumentKey, degree chosen: Int?) async throws -> (graph: CrossReferenceGraph, widened: Bool, oneHop: CrossReferenceGraph) {
+        /// (`loadGraph`).
+        func loaded(_ key: DocumentKey, degree chosen: Int?) async throws -> (graph: CrossReferenceGraph, widened: Bool) {
             let degree = chosen ?? 1
             var graph = try await store.expandedGraph(forDocumentId: key.documentId, volumeId: key.volumeId, degree: degree,
                                                       downloadedVolumeIds: downloaded)
@@ -59,8 +59,7 @@ import Testing
                     widened = true
                 }
             }
-            let oneHop = try await store.graph(forDocumentId: key.documentId, volumeId: key.volumeId, downloadedVolumeIds: downloaded)
-            return (graph, widened, oneHop)
+            return (graph, widened)
         }
 
         /// The display the view model builds for a loaded graph (`loadUnprintedUnits`, `rebuildDisplay`).
@@ -117,17 +116,17 @@ import Testing
     /// The kit's answer for one request, as lines: what the app's view model holds once it has loaded,
     /// built and laid out the graph.
     static func kit(_ host: Host, _ key: DocumentKey, _ ask: Ask) async throws -> [String] {
-        let (graph, widened, oneHop) = try await host.loaded(key, degree: ask.degree)
+        let (graph, widened) = try await host.loaded(key, degree: ask.degree)
         let (nodes, edges, counts) = try await host.display(key, graph: graph, expanded: Set(ask.expanded))
         let labels = CrossReferenceGraphDisplay.buildDateLabels(for: nodes)
         let values = CrossReferenceGraphDisplay.buildDateValues(for: nodes)
         let central = key.compositeString
         let eligible = CrossReferenceGraphDisplay.isTimelineEligible(centralKey: central, dateValues: values, nodes: nodes)
         let layout = ask.layout ?? (eligible ? .timeline : .network)
-        let missing = Set(oneHop.undownloadedCitingVolumeIds)
+        let missing = Set(graph.undownloadedCitingVolumeIds)
         var lines = [
             "degree \(graph.fetchedDegree) widened \(widened) eligible \(eligible) drawn \(layout == .timeline && eligible ? "timeline" : "network")",
-            "undownloaded \(graph.hasUndownloadedSources) \(oneHop.undownloadedCitingVolumeIds) \(graph.inboundEdges.count { missing.contains($0.sourceVolumeId) })",
+            "undownloaded \(graph.hasUndownloadedSources) \(graph.undownloadedCitingVolumeIds) \(graph.inboundEdges.count { missing.contains($0.sourceVolumeId) })",
         ]
         lines += nodes.map { node in
             nodeLine(node, label: labels[node.id], value: values[node.id], count: counts[node.id],
@@ -142,8 +141,7 @@ import Testing
         lines.append("outbound " + section { if case .outbound = $0.kind { true } else if case .clusterOutbound = $0.kind { true } else { false } })
         lines.append("extended " + section { if case .extended = $0.kind { true } else { false } })
         if layout == .timeline && eligible {
-            // FRUS-Explorer#1893: the server keeps the width at 116 or more; asked narrower, the kit is called at 116.
-            let width = max(ask.width, 116)
+            let width = ask.width
             let clustered = CrossReferenceGraphDisplay.dateClusteredDisplay(
                 nodes: nodes, edges: edges, dateValues: values, canvasWidth: width, expandedKeys: Set(ask.expandedDates),
                 domain: ask.domain)
@@ -331,7 +329,7 @@ import Testing
         var foundCluster = false, foundDateCluster = false, foundRange = false
         for document in documents where !(foundCluster && foundDateCluster && foundRange) {
             for degree in [1, 3] {
-                let (graph, _, _) = try await host.loaded(document, degree: degree)
+                let (graph, _) = try await host.loaded(document, degree: degree)
                 let (nodes, edges, _) = try await host.display(document, graph: graph, expanded: [])
                 if !foundCluster, let cluster = nodes.first(where: \.isCluster) {
                     asks.append((document, Ask(degree: degree, expanded: [cluster.id])))
@@ -364,41 +362,53 @@ import Testing
         return "line \(index): API \(index < api.count ? api[index] : "(none)") — kit \(index < kit.count ? kit[index] : "(none)")"
     }
 
-    /// The two upstream issues, as they stand at this pin. When either fails, its fix has merged: drop the
-    /// workaround its comment names in `CrossReferenceGraph.swift`, and this test's half for it.
-    @Test func theTwoUpstreamIssuesStandAtThisPin() async throws {
+    /// The two upstream fixes that ended S23e's workarounds, as the kit gives them at this pin (FRUS-Explorer#1934):
+    /// a graph at two or three hops names the undownloaded volumes that cite the document, as at one hop (#1892), and
+    /// the API lays a timeline out at the width asked, 50 pt among them, as the kit does at that width (#1893).
+    @Test func theTwoUpstreamFixesHoldAtThisPin() async throws {
         let host = try await Host.open()
         let documents = try await Self.documents()
-        // FRUS-Explorer#1892: a document whose citers include volumes not served keeps them at one hop and
-        // loses them at two, though its inbound edges are the degree-1 graph's.
-        var dropped = 0
+        // FRUS-Explorer#1892: the degree-1 graph's volumes, at two and three hops too.
+        var citedFromElsewhere = 0
         for document in documents {
             let one = try await host.store.graph(forDocumentId: document.documentId, volumeId: document.volumeId,
                                                  downloadedVolumeIds: host.downloaded)
             guard !one.undownloadedCitingVolumeIds.isEmpty else { continue }
-            let two = try await host.store.expandedGraph(forDocumentId: document.documentId, volumeId: document.volumeId,
-                                                         degree: 2, downloadedVolumeIds: host.downloaded)
-            #expect(two.hasUndownloadedSources && two.inboundEdges.count == one.inboundEdges.count)
-            if two.undownloadedCitingVolumeIds.isEmpty { dropped += 1 }
-        }
-        #expect(dropped > 0, "FRUS-Explorer#1892 still drops the volumes at two hops; once it does not, the workaround can go")
-        // FRUS-Explorer#1893: the API lays a timeline asked at 50 pt out at 116, where the kit's would trap.
-        let read = try await ServedFixture.run { client, _ in
-            var widths: [Double] = []
-            for document in documents.prefix(60) {
-                let response = try await client.execute(
-                    uri: "/api/v1/volumes/\(document.volumeId)/documents/\(document.documentId)/graph?degree=3&width=50", method: .get)
-                if let timeline = try ServedFixture.decode(DocumentGraph.self, response).timeline { widths.append(timeline.width) }
+            citedFromElsewhere += 1
+            for degree in 2...3 {
+                let wider = try await host.store.expandedGraph(forDocumentId: document.documentId, volumeId: document.volumeId,
+                                                               degree: degree, downloadedVolumeIds: host.downloaded)
+                #expect(wider.hasUndownloadedSources && wider.inboundEdges.count == one.inboundEdges.count)
+                #expect(wider.undownloadedCitingVolumeIds == one.undownloadedCitingVolumeIds, "\(document.compositeString) at \(degree)")
             }
-            return widths
         }
-        #expect(!read.isEmpty && read.allSatisfy { $0 == 116 }, "\(read)")
-        let kitFile = try ProjectHistoryParityTests.kit("FRUSCoreKit/CrossReference/CrossReferenceGraphDisplay.swift")
-        #expect(kitFile.contains("visibleRange: (padLeading - 8)...(canvasWidth - padTrailing + 28)"),
-                "FRUS-Explorer#1893's range is as it was; once it keeps its ends in order, the clamp can go")
-        let storeFile = try ProjectHistoryParityTests.kit("FRUSCoreKit/CrossReference/CrossReferenceStore.swift")
-        #expect(!storeFile.contains("undownloadedCitingVolumeIds: base.undownloadedCitingVolumeIds"),
-                "FRUS-Explorer#1892's return is as it was; once it passes the volumes on, the degree-1 graph need not be read")
+        #expect(citedFromElsewhere > 0, "the fixtures have documents cited from volumes not served")
+        // FRUS-Explorer#1893: a timeline asked at 50 pt is laid out at 50, the kit's at that width.
+        let narrow = Ask(degree: 3, layout: .timeline, width: 50, height: 300)
+        let asked = Array(documents.prefix(60))
+        let read = try await ServedFixture.run { client, _ in
+            var read: [DocumentGraph] = []
+            for document in asked {
+                let response = try await client.execute(
+                    uri: "/api/v1/volumes/\(document.volumeId)/documents/\(document.documentId)/graph?\(narrow.query)", method: .get)
+                guard response.status == .ok else {
+                    throw APIParityError("\(document.compositeString) \(narrow): \(response.status.code) \(String(buffer: response.body))")
+                }
+                read.append(try ServedFixture.decode(DocumentGraph.self, response))
+            }
+            return read
+        }
+        var timelines = 0
+        for (document, graph) in zip(asked, read) {
+            let api = Self.api(graph)
+            let kit = try await Self.kit(host, document, narrow)
+            #expect(api == kit, "\(document.compositeString) \(narrow): \(Self.difference(api, kit))")
+            if let timeline = graph.timeline {
+                timelines += 1
+                #expect(timeline.width == 50)
+            }
+        }
+        #expect(timelines > 0, "some of the first 60 documents draw a timeline")
     }
 
     /// The server's mirror of the app's view model, the order it calls the kit in and the view's few rules
@@ -423,7 +433,8 @@ import Testing
             "let clustered = CrossReferenceGraphDisplay.dateClusteredDisplay( nodes: sourceNodes, edges: sourceEdges, dateValues: nodeDateValues, canvasWidth: Double(canvasSize.width), expandedKeys: expandedDateClusterKeys, domain: timelineBrushRange )",
             "nodes: displayNodes, dateValues: layoutDates, centralKey: centralKey, canvasWidth: Double(canvasSize.width), canvasHeight: Double(canvasSize.height), domain: timelineBrushRange )",
             "let values = nodeDateValues.values guard let lower = values.min(), let upper = values.max(), upper > lower else { return nil }",
-            "CrossReferenceGraphDisplay.isTimelineEligible(centralKey: centralKey, dateValues: nodeDateValues, nodes: displayNodes)",
+            // FRUS-Explorer#1914: asked of the nodes the graph is built of, as the server asks it of `nodes`.
+            "CrossReferenceGraphDisplay.isTimelineEligible(centralKey: centralKey, dateValues: nodeDateValues, nodes: baseDisplayNodes.isEmpty ? displayNodes : baseDisplayNodes)",
             "guard let meta = graph?.nodeMetadata[nodeKey], meta.citedPage == nil, let header = meta.header else { return nil }",
         ], file: "CrossReferenceGraphViewModel.swift")
         // The reference list's sections, a row's title and whether its document opens, the panel's and the server's.

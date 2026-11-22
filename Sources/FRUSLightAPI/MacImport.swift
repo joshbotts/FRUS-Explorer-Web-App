@@ -100,9 +100,10 @@ public enum MacImport {
     /// The format versions the kit's decoder reads.
     static let formatVersions = 1...ResearchDataEnvelope.currentFormatVersion
 
-    /// The prompt id every headnote draft carries: the app's `headnoteDraftPromptId`, in
-    /// `CollectionEntryInspector`, which `GeneratedSummary.duplicateHeadnoteDraft` copies.
-    static let headnoteDraftPromptId = "0EAD0000-0000-4000-8000-000000000001"
+    /// The prompt id every headnote draft carries: the kit's `GeneratedSummaryExport.headnoteDraftPromptId` since
+    /// FRUS-Explorer#1951, which the app's `CollectionEntryInspector` forwards to and `GeneratedSummary.duplicateHeadnoteDraft`
+    /// copies.
+    static let headnoteDraftPromptId = GeneratedSummaryExport.headnoteDraftPromptId.uuidString
 
     /// The kind a version-6 entry with no document is kept as: the kit's `CollectionEntryKind`
     /// `.unrecognized`, the app's reading of a kind it does not know (`CollectionEntry.entryKind`), an
@@ -593,12 +594,13 @@ extension ImportRow {
     }
 }
 
-/// The columns the app's `SavedSearch` keeps beside its search's snapshot: its `init(name:parameters:)`
-/// writes the scalar columns from the parameters, app code mirrored, which ImportParityTests holds to
-/// the app's source; and `recordRun` writes the watermark, the kit's `SavedSearchFreshness`, as its
-/// `encoded` blob, which the import writes with the kit's own call.
+/// The columns the app's `SavedSearch` keeps beside its search's snapshot: its `storeParameters(_:)`, which
+/// `init(name:parameters:)` calls, writes the scalar columns from the parameters, app code mirrored, which
+/// ImportParityTests holds to the app's source; and `recordRun` writes the watermark, the kit's
+/// `SavedSearchFreshness`, as its `encoded` blob, which the import writes with the kit's own call.
 enum SavedSearchColumns {
-    /// `SavedSearch.init(name:parameters:)`'s scalar columns, as it writes them from `parameters`.
+    /// `SavedSearch.storeParameters(_:)`'s scalar columns, as it writes them from `parameters`: a date range the
+    /// search does not have as none, which the app clears since FRUS-Explorer#1951.
     static func scalars(of parameters: SearchParameters) -> [String: SQLiteValue] {
         var flags = 0
         if parameters.includeDocumentText { flags |= 1 }

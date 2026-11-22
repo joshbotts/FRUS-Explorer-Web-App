@@ -7,7 +7,7 @@
 import { useNavigate } from '@tanstack/react-router';
 import { Component, lazy, type ReactNode, Suspense, useEffect, useId, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
-import type { CollectionDetail, CollectionEntry, EntryChanges } from '../api/collections';
+import type { CollectionDetail, CollectionEntry, CollectionEntryKind, EntryChanges } from '../api/collections';
 import type { NoteRun } from '../api/types';
 import { copy } from '../copy';
 import { runsText } from '../editor/runs';
@@ -27,17 +27,31 @@ export interface RowActions {
 }
 
 /**
- * The row's menu: what the row offers, then Move Up and Move Down, then its removes, Remove entry for
- * any row but a heading, whose two deletes the app's section menu gives.
+ * The row's menu: what the row offers, then Move Up and Move Down, then its removes, the app's trash button's
+ * words for the row's kind (Remove document, Delete note block, Remove excerpt, Remove block) for any row but a
+ * heading, whose two deletes the app's section menu gives.
  */
-function RowMenu({ label, actions, before = [], removes }: { label: string; actions: RowActions; before?: MenuEntry[]; removes?: MenuEntry[] }) {
+function RowMenu({
+  label,
+  kind,
+  actions,
+  before = [],
+  removes,
+}: {
+  label: string;
+  kind: CollectionEntryKind;
+  actions: RowActions;
+  before?: MenuEntry[];
+  removes?: MenuEntry[];
+}) {
+  const remove = copy.collectionEditor.remove[kind] ?? copy.collectionEditor.remove.document!;
   const entries: MenuEntry[] = [...before];
   if (actions.onMoveUp || actions.onMoveDown) {
     if (entries.length > 0) entries.push({ kind: 'separator' });
     if (actions.onMoveUp) entries.push({ kind: 'item', label: copy.collectionEditor.moveUp, onSelect: actions.onMoveUp });
     if (actions.onMoveDown) entries.push({ kind: 'item', label: copy.collectionEditor.moveDown, onSelect: actions.onMoveDown });
   }
-  const last = removes ?? (actions.onRemove ? [{ kind: 'item' as const, label: copy.collectionEditor.remove, onSelect: actions.onRemove, destructive: true }] : []);
+  const last = removes ?? (actions.onRemove ? [{ kind: 'item' as const, label: remove, onSelect: actions.onRemove, destructive: true }] : []);
   if (last.length > 0) {
     if (entries.length > 0) entries.push({ kind: 'separator' });
     entries.push(...last);
@@ -106,6 +120,7 @@ export function DocumentRow({
         </button>
         <RowMenu
           label={title}
+          kind="document"
           actions={actions}
           before={[
             {
@@ -204,6 +219,7 @@ export function HeadingRow({
         </button>
         <RowMenu
           label={title}
+          kind="heading"
           actions={actions}
           before={[
             { kind: 'item', label: copy.collectionEditor.rename, onSelect: rename },
@@ -355,7 +371,7 @@ export function ProseRow({ entry, actions, autoFocus }: { entry: CollectionEntry
             {copy.collectionEditor.proseEdit}
           </button>
         )}
-        <RowMenu label={copy.collectionEditor.proseLabel} actions={actions} />
+        <RowMenu label={copy.collectionEditor.proseLabel} kind="prose" actions={actions} />
       </div>
       {saver.failure && (
         <p className="error" role="alert">
@@ -381,7 +397,7 @@ export function ExcerptRow({ entry, actions }: { entry: CollectionEntry; actions
         </p>
       </div>
       <div className="entry-actions">
-        <RowMenu label={copy.collectionEditor.excerptLabel(entry.documentId, text.slice(0, 40))} actions={actions} />
+        <RowMenu label={copy.collectionEditor.excerptLabel(entry.documentId, text.slice(0, 40))} kind="excerpt" actions={actions} />
       </div>
     </div>
   );
@@ -403,7 +419,7 @@ export function GeneratedRow({ entry, collection, actions }: { entry: Collection
         <p className="meta">{caption}</p>
       </div>
       <div className="entry-actions">
-        <RowMenu label={title} actions={actions} />
+        <RowMenu label={title} kind="generated" actions={actions} />
       </div>
     </div>
   );

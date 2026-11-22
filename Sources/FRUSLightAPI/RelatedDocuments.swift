@@ -6,7 +6,7 @@
 // `RelatedDocumentsParityTests`: the anchor's year read from the index
 // (`RelatedDocumentsRequest.resolvedAnchorYear(pipeline:)`), the scopes the picker offers and the volumes
 // each stands for (`RelatedDocumentsContent.availableScopes`, `NeighborScope.resolveVolumeIds(appState:)`),
-// and the topics named on the rows shown (`RelatedDocumentsContent.attachSubjectEvidence()`).
+// and the subjects named on the rows shown (`RelatedDocumentsContent.attachSubjectEvidence()`).
 //
 // The cross-reference axis ranks by the kit's `CrossReferenceStore` (FRUS-Explorer#1891) over the served
 // index, since S23c's pin move, as the app's ranks by its `appState.crossReferenceStore`. Two of the app's
@@ -51,7 +51,7 @@ public struct RelatedDocuments: Codable, Equatable, Sendable, ResponseEncodable 
         public var weight: Double
         public var defaultWeight: Double
         /// Whether it can contribute on this server: never the lexical axis until S24e's follow-up, or the
-        /// semantic axis until phase 4; nor shared topics on a server whose data files hold no document
+        /// semantic axis until phase 4; nor shared subjects on a server whose data files hold no document
         /// subject index, as the app's slider says on a device without one.
         public var available: Bool
     }
@@ -200,7 +200,7 @@ enum RelatedDocumentsRoutes {
     }
 
     /// The anchor's related documents, as the app's list loads them: the anchor's year from the index, the
-    /// scope's volumes and the kit's ranking, with the shared topics of the rows shown named.
+    /// scope's volumes and the kit's ranking, with the shared subjects of the rows shown named.
     @MainActor
     static func ranked(_ anchor: DocumentKey, scope: RelatedScope, weights: AxisWeights, limit: Int, served: ServedIndex,
                        resources: ServerResources, subjects: DocumentSubjectIndex?) async -> RelatedDocumentsResult {
@@ -215,7 +215,7 @@ enum RelatedDocumentsRoutes {
                                       offIndexLeads: result.offIndexLeads)
     }
 
-    /// `rows` with the topics each shares with the anchor named, for its shared-topics chip, on the rows
+    /// `rows` with the subjects each shares with the anchor named, for its shared-subjects chip, on the rows
     /// that axis scored (`attachSubjectEvidence()`): the subject index's names, most distinctive first,
     /// joined as the kit's chip splits them.
     static func namingSharedSubjects(_ rows: [RelatedDocumentRow], anchor: DocumentKey,
@@ -280,7 +280,7 @@ struct ServedManifest: VolumeManifestLookup {
 
 /// The document subject index, `document-subject-index.json`, decoded the first time Related Documents or
 /// Suggested Next ranks, as the app's `DocumentSubjectStore.shared` decodes it on first use: none for a file
-/// missing or malformed, and the shared-topics axis then contributes nothing, as the app's does.
+/// missing or malformed, and the shared-subjects axis then contributes nothing, as the app's does.
 final class DocumentSubjectIndexFile: @unchecked Sendable {
     /// The file's name among the app's data files.
     static let name = "document-subject-index.json"

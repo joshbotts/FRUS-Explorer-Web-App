@@ -5114,6 +5114,12 @@ a.research-category[aria-current='page'] {
   margin: 0;
 }
 
+.research-document-number {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
 .research-document-title {
   font-weight: 600;
 }

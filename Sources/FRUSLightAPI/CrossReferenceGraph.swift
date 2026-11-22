@@ -16,10 +16,9 @@
 // source by `CrossReferenceGraphParityTests`. The network layout is the browser's, as it is the app's
 // view's, and the reference list's sections are in the kit's order (`precedesInReferenceList`).
 //
-// Two of the kit's behaviours are worked around until upstream fixes them, each where it is met:
-// FRUS-Explorer#1892, a graph loaded at two or three hops drops `undownloadedCitingVolumeIds`, so the
-// volumes are taken from the degree-1 graph; and FRUS-Explorer#1893, `timelineLayout` traps on a canvas
-// narrower than 116 pt, so the width is kept at 116 or more before the timeline is laid out.
+// Since S12d's pin move, to `1.0-release`, the kit's own graph serves where S23e worked around two of its
+// behaviours (FRUS-Explorer#1934): a graph at two or three hops names the undownloaded volumes that cite the
+// document (#1892), and the timeline lays out at any width the request asks (#1893).
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -46,7 +45,7 @@ public struct DocumentGraph: Codable, Equatable, Sendable, ResponseEncodable {
     public var timelineEligible: Bool
     /// Whether a volume this server does not serve cites the document.
     public var hasUndownloadedSources: Bool
-    /// Those volumes, sorted, from the degree-1 graph (FRUS-Explorer#1892).
+    /// Those volumes, sorted: the loaded graph's, as the app's banner reads them, at any degree.
     public var undownloadedCitingVolumeIds: [String]
     /// How many of the document's citing documents are in those volumes: the app's banner's first figure.
     public var undownloadedCitingCount: Int
@@ -141,7 +140,7 @@ public struct DocumentGraph: Codable, Equatable, Sendable, ResponseEncodable {
 
     /// The timeline the kit lays out (`dateClusteredDisplay`, `timelineLayout`).
     public struct Timeline: Codable, Equatable, Sendable {
-        /// The canvas it was laid out on, in points: the width at least 116 (FRUS-Explorer#1893).
+        /// The canvas it was laid out on, in points, as asked.
         public var width: Double
         public var height: Double
         /// The nodes drawn, in the clustered display's order: the nodes of `nodes` no date cluster holds,
@@ -202,9 +201,6 @@ enum CrossReferenceGraphRoutes {
     static let defaultHeight = 560
     /// The widest and tallest canvas laid out: the timeline's lanes grow with the height.
     static let maximumSide = 4_096
-    /// FRUS-Explorer#1893: `timelineLayout` builds its axis's tick range as `48...(width - 68)`, which traps
-    /// below 116 pt. Until upstream keeps the range's ends in order, the width is kept at this or more.
-    static let narrowestTimeline = 116.0
     /// The most expanded clusters, of either kind, a request names, and the longest key.
     static let maximumExpanded = 512
     static let maximumKeyLength = 1_024
@@ -288,9 +284,6 @@ enum CrossReferenceGraphRoutes {
         let degree = request.chosenDegree ?? 1
         var loaded = try await store.expandedGraph(forDocumentId: documentId, volumeId: volumeId, degree: degree,
                                                    downloadedVolumeIds: downloaded)
-        // FRUS-Explorer#1892: at two or three hops the store leaves `undownloadedCitingVolumeIds` empty, so the
-        // degree-1 graph names them. Until the fix merges upstream, it is kept here before any widening.
-        var oneHop: CrossReferenceGraph? = degree == 1 ? loaded : nil
         var widened = false
         if request.chosenDegree == nil,
            CrossReferenceGraphDisplay.widensSparseGraph(loadedAtDegree: degree, edgeCount: loaded.edgeCount) {
@@ -301,10 +294,8 @@ enum CrossReferenceGraphRoutes {
                 widened = true
             }
         }
-        if oneHop == nil {
-            oneHop = try await store.graph(forDocumentId: documentId, volumeId: volumeId, downloadedVolumeIds: downloaded)
-        }
-        let undownloaded = oneHop?.undownloadedCitingVolumeIds ?? []
+        // The banner's volumes, the loaded graph's at any degree (the app's `undownloadedCitingVolumeIds`).
+        let undownloaded = loaded.undownloadedCitingVolumeIds
         let missing = Set(undownloaded)
 
         // Then the connection counts and the unprinted units, over every node the graph holds metadata for.
@@ -319,9 +310,8 @@ enum CrossReferenceGraphRoutes {
         let (nodes, edges) = CrossReferenceGraphDisplay.attachingUnits(units, to: built.nodes, edges: built.edges)
         let dateLabels = CrossReferenceGraphDisplay.buildDateLabels(for: nodes)
         let dateValues = CrossReferenceGraphDisplay.buildDateValues(for: nodes)
-        // Over the display build's nodes, as the app's `rebuildDisplay` asks it when a graph is loaded; the app's later
-        // layouts (a resize, a date cluster expanded, a brush) ask it over the clustered nodes they drew last, which
-        // this server, holding no state between requests, does not.
+        // Over the display build's nodes, before the timeline folds any into date clusters, as the app's view model asks
+        // it since FRUS-Explorer#1914 (`baseDisplayNodes`), for a graph loaded and for each later layout alike.
         let eligible = CrossReferenceGraphDisplay.isTimelineEligible(centralKey: centralKey, dateValues: dateValues,
                                                                      nodes: nodes)
         let layout = request.chosenLayout ?? (eligible ? .timeline : .network)
@@ -375,13 +365,12 @@ enum CrossReferenceGraphRoutes {
         return CrossReferenceGraphDisplay.unitNodes(rowsByDocument: rowsByDocument, authority: authority)
     }
 
-    /// The timeline at the request's canvas, its width at least 116 (FRUS-Explorer#1893): the kit's date
+    /// The timeline at the request's canvas, at any width the request asks: the kit's date
     /// clusters, then its layout over the clustered display with the clusters' dates merged.
     static func laidOutTimeline(nodes: [DisplayNode], edges: [DisplayEdge], dateValues: [String: TimeInterval],
                                 centralKey: String, request: GraphRequest, counts: [String: Int],
                                 metadata: [String: CrossReferenceNodeMetadata]) -> DocumentGraph.Timeline {
-        // FRUS-Explorer#1893: kept at 116 or more until upstream keeps the tick range's ends in order.
-        let width = max(request.width, narrowestTimeline)
+        let width = request.width
         let clustered = CrossReferenceGraphDisplay.dateClusteredDisplay(
             nodes: nodes, edges: edges, dateValues: dateValues, canvasWidth: width,
             expandedKeys: Set(request.expandedDateClusters), domain: request.domain)

@@ -342,7 +342,8 @@ function DocumentList({
 }
 
 /**
- * A row, as the app's: the title, which opens the document; its volume and the time since its newest
+ * A row, as the app's: the document's number, and beneath it the title, which opens the document, since
+ * FRUS-Explorer#1947 (L21), so same-headed telegrams no longer read alike; its volume and the time since its newest
  * annotation; its summaries and visit plan; its three newest highlights, each beside a bar of its colour,
  * and how many more; its newest note; and its tags, its notes past one and its collections.
  */
@@ -350,14 +351,15 @@ function DocumentRow({ row, now, onReview }: { row: ResearchDocument; now: numbe
   const more = moreHighlights(row.highlightCount);
   return (
     <li className="research-document">
+      <p className="research-document-number">{row.numberLabel}</p>
       {/* A document an update removed opens its review, the only way to it, as the app's row does (PLAN's S21f). */}
       {row.opens === 'review' ? (
         <button type="button" className="research-document-title" onClick={onReview}>
-          {row.title}
+          {row.rowTitle}
         </button>
       ) : (
         <Link className="research-document-title" to="/doc/$volumeId/$documentId" params={{ volumeId: row.volumeId, documentId: row.documentId }}>
-          {row.title}
+          {row.rowTitle}
         </Link>
       )}
       <p className="research-document-volume">

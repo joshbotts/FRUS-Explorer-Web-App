@@ -1,13 +1,6 @@
--- Schema of a FRUS Explorer research export: index version 74, FTS schema 4, app 1.0 build 1787, from
--- a build of FRUS-Explorer fe9325b2. Taken from the owner's three-volume export of 7 November 2026
--- (sqlite_master, in creation order), and the same in the owner's two full exports of that day.
--- Its library was emptied with Erase Everything…, which keeps the database file, so the partial index
--- idx_document_cache_user_tag_ids comes last among the indexes; a new database makes it earlier.
--- Schema only: no rows. SQLite internals and FTS5 shadow tables are left out; FTS5 creates those.
--- Index versions 69 (build 50) and 71 (1.0, build 1776) had the same statements in the same order but
--- one: research_suppressed_volumes, which since FRUS-Explorer#1845 suppresses the first edition of a
--- pair whose second the export holds, where it suppressed the second.
-
+-- PROVISIONAL, until the owner's 1861 export: export-v74-schema.sql's statements with volume_structures
+-- as SQLite stores it after index version 75's two ALTER TABLE ... ADD COLUMN statements, which a library
+-- the app upgrades from 74 runs (FRUSCoreKit/Search/IndexingPipeline.swift, setupDatabase(_:)).
 CREATE TABLE cross_references (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     source_volume_id TEXT NOT NULL,
@@ -200,7 +193,7 @@ CREATE TABLE volume_sources (
 CREATE TABLE volume_structures (
     volume_id      TEXT PRIMARY KEY,
     structure_json TEXT NOT NULL
-);
+, file_blob_sha1 TEXT, file_size_bytes INTEGER);
 
 CREATE INDEX idx_crossref_source ON cross_references(source_volume_id, source_document_id);
 

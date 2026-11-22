@@ -66,7 +66,7 @@ import Testing
             (view, "source.explorer.subjectNumeric.designation", "File Designation", "sources", "designation"),
             (view, "source.explorer.subjectNumeric.block", "File Years", "sources", "block"),
             (view, "source.explorer.subjectNumeric.cite.note",
-             "To request the original record from NARA, give them the file designation above and the block of years it was filed in (1963, 1964–66, 1967–69 or 1970–73). Add any telegram or airgram number, the from/to information, and the document’s date from the source note. NARA asks that a central-file citation name the file designation, not a folder or a box.",
+             "To request the original record from NARA, you will need the file designation above and the block of years it was filed in (1963, 1964–66, 1967–69 or 1970–73). Add any telegram or airgram number, the from/to information, and the document’s date from the source note. NARA asks that a central-file citation name the file designation, not a folder or a box.",
              "sources", "subjectNumericCite"),
             (view, "source.explorer.decimalPeriod.header", "NARA Finding Aids by Period", "sources", "periodHeader"),
             (view, "source.explorer.decimalPeriod.matched", "Filing Period", "sources", "filingPeriod"),
@@ -472,7 +472,7 @@ import Testing
         #expect(NoteViewParityTests.writes(chip, "provenance.chip.a11y.joined %@", "Source: FRUS joined to %@."))
         let kit = try sources.app("FRUSCoreKit/Provenance/ProvenanceSource.swift")
         for (key, partner) in [("provenance.partner.nara", "the National Archives catalog"),
-                               ("provenance.partner.ohPeople", "the Office of the Historian's working data on people (its HistoryAtState/people repository) and its Principal Officers and Chiefs of Mission"),
+                               ("provenance.partner.ohPeople", "the Office of the Historian's working data for people (its HistoryAtState/people repository) and its Principal Officers and Chiefs of Mission"),
                                ("provenance.partner.stateSchedule", "the State Department's decimal classification schedule")] {
             #expect(NoteViewParityTests.writes(kit, key, partner), "the kit writes \(key)")
             #expect(block.contains(NoteViewParityTests.flattened("Source: FRUS joined to \(partner).")), "copy.sources speaks \(key)")

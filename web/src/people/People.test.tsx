@@ -164,7 +164,7 @@ describe('the People screen', () => {
     expect(await within(sheet).findByText('1904–1972')).toBeTruthy();
     expect(within(sheet).getByText('Foreign Service officer')).toBeTruthy();
     expect(within(sheet).getAllByRole('img', { name: 'Source: the FRUS volumes only.' })).toHaveLength(1);
-    expect(within(sheet).getAllByRole('img', { name: /^Source: FRUS joined to the Office of the Historian's working data on people/ })).toHaveLength(2);
+    expect(within(sheet).getAllByRole('img', { name: /^Source: FRUS joined to the Office of the Historian's working data for people/ })).toHaveLength(2);
     // The app's order: Mentions and Active, Subjects, the links, Career.
     const headings = within(sheet).getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent);
     expect(headings).toEqual(['Subjects', 'Career']);

@@ -64,7 +64,7 @@ import Testing
         var end: Int
         var volumes: [String]?
         var colors = 8
-        /// A detected topic the request names, whose indexed volumes `volumes` holds, resolved here by the kit.
+        /// A subject the request names, whose indexed volumes `volumes` holds, resolved here by the kit.
         var topic: (category: String, subcategory: String)?
 
         var query: String {
@@ -91,7 +91,7 @@ import Testing
     /// not, scoped and not, and with the colours at their fewest.
     static func asks(corpusMaxYear: Int, topic: (category: String, subcategory: String, volumes: [String])? = nil) -> [Ask] {
         var asks: [Ask] = []
-        // By Detected Topic: the scope menu's first item with indexed volumes, on the time views and a breakdown.
+        // By Subject: the scope menu's first item with indexed volumes, on the time views and a breakdown.
         if let topic {
             for term in ["Soviet", "treaty", "president -Nicaragua"] {
                 for axis in [AnalyticsChartAxis.byYear, .byDecade, .byVolume] {
@@ -266,7 +266,7 @@ import Testing
     @Test func everySeriesIsTheKits() async throws {
         let host = try await Host.open()
         let corpusMaxYear = CorpusAnalyticsRoutes.corpusMaxYear(host.catalogue)
-        // The scope menu's first detected topic with a fixture volume, resolved by the kit's `ScopeFacets` over a host's
+        // The scope menu's first subject with a fixture volume, resolved by the kit's `ScopeFacets` over a host's
         // own copy of the document subject index, apart from the server's.
         let subjects = try #require(try IndexingResources.loading(fromDirectory: ServedFixture.resources).documentSubjects())
         let resolved = subjects.subjectsByVolume
@@ -281,7 +281,7 @@ import Testing
                 }
             }
         }
-        let found = try #require(topic, "no detected topic holds a fixture volume")
+        let found = try #require(topic, "no subject holds a fixture volume")
         let asks = Self.asks(corpusMaxYear: corpusMaxYear, topic: found)
         let read = try await ServedFixture.run { client, _ in
             var read: [(CorpusAnalyticsAnswer, CorpusAnalyticsDocuments?)] = []

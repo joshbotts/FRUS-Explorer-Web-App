@@ -707,7 +707,9 @@ echo "== the reader: Look Up, the NARA proxy and Send to Zotero Library over the
 # search and a send say so in the app's words and ask nothing. With placeholder keys, which no service would take:
 # Look Up's readings of d3's source note, the bundled answer for its lot first; a search through the proxy, the
 # stand-in's record, the key in x-api-key; the same search again from the cache, the stand-in asked nothing more;
-# and d3 sent to Zotero's stand-in with the Zotero key. Neither key in an answer or the server's log. With --e2e, the
+# and d3 sent to Zotero's stand-in with the Zotero key. The stand-in answers in the shape NARA's live answers take, the
+# record under body.hits.hits[]._source with its record group on its record group's ancestor alone, which the kit
+# reads there since FRUS-Explorer#1908. Neither key in an answer or the server's log. With --e2e, the
 # look-up spec looks a passage up and sends a citation by keyboard on Chromium with no axe violations, its search
 # one the cache does not hold, so that it asks the stand-in. Answers are read from files (Linux caps an argument),
 # and the stand-in's log is read until it holds what was asked, since Docker writes it on its own time.
@@ -718,7 +720,7 @@ server {
     access_log /dev/stdout services;
     default_type application/json;
     location /catalog.archives.gov/api/ {
-        return 200 '{"opaResponse": {"results": {"result": [{"naId": "596518", "title": "Presidential Correspondence (stand-in)", "recordGroupNumber": 59, "levelOfDescription": "series", "scopeContent": "The stand-in of the NARA Catalog.", "inclusiveStartDate": {"year": 1953}, "inclusiveEndDate": {"year": 1964}, "variantControlNumbers": [{"number": "66D204"}, {"number": "66 D 204"}]}]}}}';
+        return 200 '{"body": {"hits": {"total": {"value": 1, "relation": "eq"}, "max_score": null, "hits": [{"_index": "nac-records4", "_id": "596518", "_score": 3, "_source": {"record": {"naId": 596518, "title": "Presidential Correspondence (stand-in)", "levelOfDescription": "series", "recordType": "description", "scopeAndContentNote": "The stand-in of the NARA Catalog.", "inclusiveStartDate": {"year": 1953, "logicalDate": "1953-01-01"}, "inclusiveEndDate": {"year": 1964, "logicalDate": "1964-12-31"}, "variantControlNumbers": [{"note": "This is a Department of State LOT file number.", "number": "66D204", "type": "Agency-Assigned Identifier"}, {"number": "66 D 204"}], "ancestors": [{"distance": 1, "levelOfDescription": "recordGroup", "recordGroupNumber": 59, "title": "General Records of the Department of State", "naId": 388}]}}}]}}}';
     }
     location /api.zotero.org/keys/ {
         return 200 '{"userID": 4210, "username": "frus-stub", "access": {"user": {"library": true, "write": true, "notes": true}}}';

@@ -128,7 +128,7 @@ describe('the scope menu', () => {
       'By Volume — 1894',
       'By Volume — 1961-63',
       'My Volume Scopes',
-      'By Detected Topic — Arms Control',
+      'By Subject — Arms Control',
     ]);
     // The user's scopes by name, one with indexed members chosen by them, one with none disabled.
     const custom = groups[4]?.options ?? [];

@@ -26,6 +26,8 @@ const kennedy: ResearchDocument = {
   volumeId: 'frus1961-63v06',
   documentId: 'd1',
   title: '1. Telegram From the Embassy in the Soviet Union',
+  numberLabel: 'Document 1',
+  rowTitle: 'Telegram From the Embassy in the Soviet Union',
   volumeTitle: 'Kennedy-Khrushchev Exchanges',
   annotatedAt: '2026-10-24T10:00:00.000Z',
   latestNote: 'Kennedy writes warmly.',
@@ -46,6 +48,8 @@ const bare: ResearchDocument = {
   volumeId: 'frus1969-76v01',
   documentId: 'd42',
   title: 'd42',
+  numberLabel: 'Document 42',
+  rowTitle: 'd42',
   volumeTitle: 'frus1969-76v01',
   noteCount: 0,
   summaryCount: 0,
@@ -126,9 +130,11 @@ describe('the Research page', () => {
 
     // The rows, as the app's draws them.
     const list = await screen.findByRole('region', { name: 'All Research Documents' });
-    await within(list).findByRole('link', { name: kennedy.title });
+    await within(list).findByRole('link', { name: kennedy.rowTitle });
     const [first, second] = [...list.querySelectorAll<HTMLElement>('li.research-document')];
-    expect(within(first!).getByRole('link', { name: kennedy.title }).getAttribute('href')).toBe('/doc/frus1961-63v06/d1');
+    // The number above the title, which drops the number the line prints (FRUS-Explorer#1947, L21).
+    expect(first!.querySelector('.research-document-number')?.textContent).toBe('Document 1');
+    expect(within(first!).getByRole('link', { name: kennedy.rowTitle }).getAttribute('href')).toBe('/doc/frus1961-63v06/d1');
     expect(first!.querySelector('.research-document-volume')?.textContent).toBe('Kennedy-Khrushchev Exchanges2 hours, 23 minutes');
     expect(first!.querySelector('.research-document-counts')?.textContent).toBe('1 summariesIn a visit plan');
     expect([...first!.querySelectorAll('.research-highlight')].map((item) => item.textContent)).toEqual([
@@ -158,7 +164,7 @@ describe('the Research page', () => {
     await waitFor(() => expect(document.activeElement).toBe(heading));
     expect(within(categories).getByRole('link', { name: /^Berlin/ }).getAttribute('aria-current')).toBe('page');
     expect(within(categories).getByRole('link', { name: /^All Research Documents/ }).getAttribute('aria-current')).toBeNull();
-    await screen.findByRole('link', { name: kennedy.title });
+    await screen.findByRole('link', { name: kennedy.rowTitle });
     expect(asked(fetch)).toEqual(['allAnnotated', `tag.${berlin}`]);
 
     // The one shown, chosen again, sends focus to its title at once.

@@ -82,8 +82,9 @@ final class ServiceStub: URLProtocol {
                 return
             }
             let (status, text) = Self.answer(url: url, key: key, method: method, body: body)
+            let type = text.hasPrefix("<") ? "text/html" : "application/json"
             reply.answer(HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1",
-                                         headerFields: ["Content-Type": "application/json"])!, Data(text.utf8))
+                                         headerFields: ["Content-Type": type])!, Data(text.utf8))
         }
         let waits = key.map { key in Self.held.withLock { held in
             guard held[key] != nil else { return false }
@@ -105,6 +106,19 @@ final class ServiceStub: URLProtocol {
         }
     }
 
+    /// A NARA Catalog answer with one series, in the shape NARA's live answers take (FRUS-Explorer#1908): the record
+    /// under `body.hits.hits[]._source`, with no record group of its own, its record group a number on the member of
+    /// its `ancestors` at `recordGroup` level. `fields` are the record's further fields, as JSON members.
+    static func liveAnswer(naId: Int, title: String, recordGroup: String, years: (Int, Int), fields: String?) -> String {
+        """
+        {"body": {"hits": {"total": {"value": 1, "relation": "eq"}, "max_score": null, "hits": [{"_index": "nac-records4",
+         "_id": "\(naId)", "_score": 3, "_source": {"record": {"naId": \(naId), "title": "\(title)", "levelOfDescription": "series",
+         "recordType": "description", "inclusiveStartDate": {"year": \(years.0), "logicalDate": "\(years.0)-01-01"},
+         "inclusiveEndDate": {"year": \(years.1), "logicalDate": "\(years.1)-12-31"},\(fields.map { " \($0)," } ?? "")
+         "ancestors": [{"distance": 1, "levelOfDescription": "recordGroup", "recordGroupNumber": \(recordGroup), "naId": 388}]}}}]}}}
+        """
+    }
+
     static func key(of url: URL, headers: [String: String]) -> String? {
         func header(_ name: String) -> String? { headers.first { $0.key.lowercased() == name }?.value }
         if let nara = header("x-api-key") { return nara }
@@ -118,23 +132,22 @@ final class ServiceStub: URLProtocol {
             if key.contains("-403-") { return (403, "{}") }
             if key.contains("-429-") { return (429, "{}") }
             if key.contains("-500-") { return (500, "{}") }
-            if key.contains("-empty-") { return (200, #"{"opaResponse": {"results": {"result": []}}}"#) }
+            if key.contains("-empty-") { return (200, #"{"body": {"hits": {"total": {"value": 0, "relation": "eq"}, "hits": []}}}"#) }
+            // The Catalog website's page, which NARA's CDN served for every API request on 2026-11-16 (FRUS-Explorer#1908).
+            if key.contains("-html-") {
+                return (200, #"<!doctype html><html lang="en"><head><title>National Archives Catalog</title></head><body></body></html>"#)
+            }
             let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
             func item(_ name: String) -> String? { query.first { $0.name == name }?.value }
             if let lot = item("variantControlNumber_is") {
-                // A series that carries the lot it was asked for, in the record group asked: the acceptance test's.
+                // A series that carries the lot it was asked for, in the record group asked: the acceptance test's. In the
+                // live answer's shape (FRUS-Explorer#1908's fixture, `NARALiveRecordGroupTests.liveAnswer`): the record
+                // under `body.hits.hits[]._source`, its record group on its `recordGroup` ancestor alone.
                 let group = item("description.recordGroupNumber") ?? "59"
-                return (200, """
-                    {"opaResponse": {"results": {"result": [{"naId": "4567", "title": "Records Relating to Lot \(lot)",
-                     "recordGroupNumber": \(group), "levelOfDescription": "series", "scopeContent": "Subject files.",
-                     "inclusiveStartDate": {"year": 1961}, "inclusiveEndDate": {"year": 1963},
-                     "variantControlNumbers": [{"number": "\(lot)", "type": "Lot Number"}]}]}}}
-                    """)
+                return (200, Self.liveAnswer(naId: 4567, title: "Records Relating to Lot \(lot)", recordGroup: group, years: (1961, 1963),
+                                             fields: #""scopeAndContentNote": "Subject files.", "variantControlNumbers": [{"note": "This is a Department of State LOT file number.", "number": "\#(lot)", "type": "Agency-Assigned Identifier"}]"#))
             }
-            return (200, """
-                {"opaResponse": {"results": {"result": [{"naId": "1240", "title": "Central Decimal Files",
-                 "recordGroupNumber": 59, "levelOfDescription": "series"}]}}}
-                """)
+            return (200, Self.liveAnswer(naId: 1240, title: "Central Decimal Files", recordGroup: "59", years: (1910, 1963), fields: nil))
         }
         if url.host == OutsideServices.zoteroHost {
             if url.path.hasPrefix("/keys/") {
@@ -454,6 +467,34 @@ private func body(_ response: TestResponse) -> String { String(buffer: response.
         }
     }
 
+    /// A NARA answer of 200 whose body is not JSON, the page NARA's CDN served for every API request on 2026-11-16, is an
+    /// error and not "no records" since the kit's FRUS-Explorer#1908: the proxy answers 502 in the kit's sentence and
+    /// keeps nothing, so a second search asks NARA again; each call is counted against the user as it is made, as every
+    /// call the server makes with its key is, NARA's answer or not. A lot's lookup over the live shape, its record group
+    /// on the record group's ancestor alone, resolves.
+    @Test func aPageThatIsNotJSONIsAnErrorNotAnEmptyAnswer() async throws {
+        let fixture = try await OutsideFixture(environmentKey: "stub-nara-html-quota", limit: 4)
+        defer { withExtendedLifetime(fixture) {} }
+        try await fixture.app.test(.router) { client in
+            let browser = Browser(client: client)
+            let search = #"{"strategy": "keywordRG59", "query": "Laos"}"#
+            for round in 1...2 {
+                let refused = try problem(try await browser.send(.post, "/api/v1/nara/search", search), .badGateway)
+                #expect(refused.code == "NARA_UNEXPECTED_ANSWER" && refused.detail == "Could not interpret the NARA Catalog response.")
+                #expect(ServiceStub.requests(with: "stub-nara-html-quota").count == round, "each search asks NARA")
+            }
+            #expect(try decode(NARAStatus.self, try await browser.get("/api/v1/nara")).quota == NARAStatus.Quota(used: 2, limit: 4),
+                    "each call made is counted")
+            #expect(await fixture.services.outside.answers.count == 0)
+            // The live shape: the lot resolves through its record group's ancestor, in one call, which is counted.
+            try fixture.store("stub-nara-ok-live", as: .nara, for: .user("owner"))
+            let lot = try decode(NARASearchAnswer.self, try await browser.send(
+                .post, "/api/v1/nara/search", #"{"route": "lotVariants", "lot": "63 D 351", "recordGroup": "59"}"#))
+            #expect(lot.results.map(\.naId) == ["4567"] && lot.results.first?.recordGroupNumber == "59", "\(lot)")
+            #expect(ServiceStub.requests(with: "stub-nara-ok-live").count == 1)
+        }
+    }
+
     // MARK: S22e's follow-up
 
     /// Finding 1: an answer is kept for the user who asked alone. Another user's same search asks NARA itself, and is
@@ -603,11 +644,15 @@ private func body(_ response: TestResponse) -> String { String(buffer: response.
             for (key, status, code) in [("stub-nara-403-x", HTTPResponse.Status.conflict, "NARA_KEY_REJECTED"),
                                         ("stub-nara-429-x", .serviceUnavailable, "NARA_RATE_LIMITED"),
                                         ("stub-nara-500-x", .badGateway, "NARA_UNEXPECTED_ANSWER"),
+                                        // A 200 whose body is not JSON, the CDN's page (FRUS-Explorer#1908): the kit's
+                                        // `decodingError` since the pin move to `1.0-release`, where it read as no records.
+                                        ("stub-nara-html-x", .badGateway, "NARA_UNEXPECTED_ANSWER"),
                                         ("stub-nara-down-x", .badGateway, "NARA_UNREACHABLE")] {
                 try fixture.store(key, as: .nara, for: .user("owner"))
                 let refused = try await browser.send(.post, "/api/v1/nara/search", #"{"route": "recordGroup", "recordGroup": "59", "keywords": "Laos"}"#)
                 let body = try problem(refused, status)
                 #expect(body.code == code, "\(key)")
+                if key.contains("-html-") { #expect(body.detail == "Could not interpret the NARA Catalog response.") }
                 #expect(!String(buffer: refused.body).contains(key) && !String(buffer: refused.body).contains("catalog.archives.gov"))
             }
             #expect(await fixture.services.outside.answers.count == 0, "a refusal is never kept")
@@ -825,9 +870,8 @@ private func body(_ response: TestResponse) -> String { String(buffer: response.
         let router = Router()
         router.get("/catalog.archives.gov/api/v2/records/search") { request, _ -> Response in
             seen.withLock { $0.append("GET \(request.uri.query ?? "") \(request.headers[HTTPField.Name("x-api-key")!] ?? "")") }
-            return Response(status: .ok, headers: [.contentType: "application/json"], body: .init(byteBuffer: ByteBuffer(string: """
-                {"opaResponse": {"results": {"result": [{"naId": "77", "title": "Mirrored", "recordGroupNumber": 59, "levelOfDescription": "series"}]}}}
-                """)))
+            return Response(status: .ok, headers: [.contentType: "application/json"], body: .init(byteBuffer: ByteBuffer(
+                string: ServiceStub.liveAnswer(naId: 77, title: "Mirrored", recordGroup: "59", years: (1950, 1960), fields: nil))))
         }
         router.get("/catalog.archives.gov/api/v2/held") { _, _ -> Response in
             try? await Task.sleep(for: .seconds(2))

@@ -16,6 +16,8 @@ const row: ResearchDocument = {
   volumeId: 'frus1894Nicaragua',
   documentId: 'd2',
   title: 'No. 2. Mr. Gresham to Mr. Baker',
+  numberLabel: 'Document 2',
+  rowTitle: 'No. 2. Mr. Gresham to Mr. Baker',
   volumeTitle: 'Nicaragua',
   noteCount: 1,
   summaryCount: 0,

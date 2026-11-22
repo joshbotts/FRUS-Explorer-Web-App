@@ -211,15 +211,22 @@ import Testing
                 #expect(row.crossVolume?.map(\.volumeId) == volumesCiting, "\(entry.rawText)")
                 #expect((row.crossVolume ?? []).allSatisfy { $0.title == stores.manifest[$0.volumeId]?.title })
                 #expect(row.dividedSeriesCount == divided, "\(entry.rawText)")
-                // The button: a row with a lot or a class has one; the record its fallback reads is the row's authority
-                // record; and a count above none is the neighbours' total for the row. A job number is no key here:
-                // the kit's `volumeSources(forVolumeId:)`, which the app's view and the server both read the rows
-                // through, selects no `job_number`, so a CIA job's row has no button in either, though the TEI gives
-                // it one and `makeNeighborsTarget` would key on it.
+                // The button: a row with a lot, a class or a CIA job has one; the record its fallback reads is the row's
+                // authority record; and a count above none is the neighbours' total for the row. A job number is a key
+                // since the kit's `volumeSources(forVolumeId:)`, which the app's view and the server both read the rows
+                // through, selects `job_number` (FRUS-Explorer#1948, for #1929), so a CIA job's row has its button,
+                // keyed on its job as `makeNeighborsTarget` keys it.
                 func given(_ value: String?) -> Bool { !(value?.trimmingCharacters(in: .whitespaces).isEmpty ?? true) }
-                if given(entry.lotFile) || given(entry.decimalClass) { #expect(row.neighbours != nil, "\(entry.rawText) has a key") }
-                if given(entry.jobNumber) { figures.jobs += 1 }
-                #expect(row.neighbours?.jobNumber == nil, "\(entry.rawText): the index's rows carry no job number")
+                if given(entry.lotFile) || given(entry.decimalClass) || given(entry.jobNumber) {
+                    #expect(row.neighbours != nil, "\(entry.rawText) has a key")
+                }
+                if given(entry.jobNumber) {
+                    figures.jobs += 1
+                    #expect(row.neighbours?.jobNumber == entry.jobNumber?.trimmingCharacters(in: .whitespaces),
+                            "\(entry.rawText): the index's rows carry the job number")
+                } else {
+                    #expect(row.neighbours?.jobNumber == nil, "\(entry.rawText)")
+                }
                 if let neighbours = row.neighbours {
                     figures.neighbours += 1
                     #expect(neighbours.aliasCollection == authority?.id, "\(entry.rawText)")

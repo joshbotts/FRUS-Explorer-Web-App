@@ -14,6 +14,9 @@ import { getJSON, send } from './notes';
 const volume = 'frus1961-63v06';
 const d1Header = '1. Telegram From the Embassy in the Soviet Union';
 const d2Header = '2. Memorandum of Conversation';
+// A row's title, beneath its number line, drops the number the line prints (FRUS-Explorer#1947, L21).
+const d1Row = 'Telegram From the Embassy in the Soviet Union';
+const d2Row = 'Memorandum of Conversation';
 const documentPath = (document: string) => `api/v1/me/volumes/${volume}/documents/${document}`;
 
 interface Made {
@@ -85,10 +88,11 @@ test('lists the annotated documents by category, by keyboard and pointer, each r
     // All Research Documents, shown until another is chosen: d1's row, the note and the highlight just made.
     const all = page.getByRole('region', { name: 'All Research Documents' });
     await expect(categories.getByRole('link', { name: /^All Research Documents/ })).toHaveAttribute('aria-current', 'page');
-    const d1 = all.getByRole('listitem').filter({ has: page.getByRole('link', { name: d1Header, exact: true }) });
+    const d1 = all.getByRole('listitem').filter({ has: page.getByRole('link', { name: d1Row, exact: true }) });
+    await expect(d1.locator('.research-document-number')).toHaveText('Document 1');
     await expect(d1.locator('.research-note')).toHaveText('Research page note.');
     await expect(d1.locator('.research-highlight').first()).toHaveText(`Green highlight: ${research.highlight.selectedText}`);
-    await expect(all.getByRole('link', { name: d2Header, exact: true })).toBeVisible();
+    await expect(all.getByRole('link', { name: d2Row, exact: true })).toBeVisible();
     await axeCheck(page);
 
     // The tag's list, by keyboard: its title takes focus, and the address names it.
@@ -99,13 +103,13 @@ test('lists the annotated documents by category, by keyboard and pointer, each r
     await expect(page).toHaveURL(new RegExp(`/research\\?group=tag\\.${research.tag}$`, 'i'));
     await expect(tagged.locator('li.research-document')).toHaveCount(1);
     const d2 = tagged.locator('li.research-document').first();
-    await expect(d2.getByRole('link', { name: d2Header, exact: true })).toBeVisible();
+    await expect(d2.getByRole('link', { name: d2Row, exact: true })).toBeVisible();
     await expect(d2.locator('.research-footer')).toContainText('Tag: Research page tag');
     await expect(d2.locator('.research-footer')).toContainText('Collection: Research page collection');
     await axeCheck(page);
 
     // Its row opens the document, by keyboard, and Back returns to the list.
-    await tabTo(page, d2.getByRole('link', { name: d2Header, exact: true }));
+    await tabTo(page, d2.getByRole('link', { name: d2Row, exact: true }));
     await page.keyboard.press('Enter');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(d2Header);
     await page.goBack();
@@ -116,17 +120,17 @@ test('lists the annotated documents by category, by keyboard and pointer, each r
     const collected = page.getByRole('region', { name: 'Research page collection' });
     await expect(collected.getByRole('heading', { level: 2 })).toBeFocused();
     await expect(collected.locator('li.research-document')).toHaveCount(1);
-    await expect(collected.getByRole('link', { name: d2Header, exact: true })).toBeVisible();
+    await expect(collected.getByRole('link', { name: d2Row, exact: true })).toBeVisible();
     await categories.getByRole('link', { name: /^Green/ }).click();
     const green = page.getByRole('region', { name: 'Green Highlights' });
     await expect(green.getByRole('heading', { level: 2 })).toBeFocused();
-    await expect(green.getByRole('link', { name: d1Header, exact: true })).toBeVisible();
+    await expect(green.getByRole('link', { name: d1Row, exact: true })).toBeVisible();
     await categories.getByRole('link', { name: /^Contains Notes/ }).click();
     const noted = page.getByRole('region', { name: 'Contains Notes' });
     await expect(noted.getByRole('heading', { level: 2 })).toBeFocused();
-    await expect(noted.getByRole('link', { name: d1Header, exact: true })).toBeVisible();
+    await expect(noted.getByRole('link', { name: d1Row, exact: true })).toBeVisible();
     await axeCheck(page);
-    await noted.getByRole('link', { name: d1Header, exact: true }).click();
+    await noted.getByRole('link', { name: d1Row, exact: true }).click();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(d1Header);
 
     // All Notes and History from their rows, and the page again from Research's screens.
@@ -165,7 +169,7 @@ test('stacks the categories and a list in a narrow window, with the way back', a
     await expect(tagged.getByRole('heading', { level: 2 })).toBeFocused();
     await expect(page.locator('nav.research-categories')).toHaveCount(1);
     await expect(categories).toBeHidden();
-    await expect(tagged.getByRole('link', { name: d2Header, exact: true })).toBeVisible();
+    await expect(tagged.getByRole('link', { name: d2Row, exact: true })).toBeVisible();
     await expect(tagged.getByRole('link', { name: 'Categories', exact: true })).not.toHaveAttribute('aria-current', 'page');
     await axeCheck(page);
 

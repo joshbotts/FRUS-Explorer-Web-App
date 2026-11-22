@@ -176,7 +176,9 @@ import Testing
             let volumeTitle = try #require(fixture.server.resources.volume(Self.v06)?.title)
             let d1 = try #require(all.items.first { $0.volumeId == Self.v06 && $0.documentId == "d1" })
             #expect(d1 == ResearchDocument(
-                volumeId: Self.v06, documentId: "d1", title: "1. Telegram From the Embassy in the Soviet Union", volumeTitle: volumeTitle,
+                volumeId: Self.v06, documentId: "d1", title: "1. Telegram From the Embassy in the Soviet Union",
+                // The row's number line, and its title without the number the line prints (FRUS-Explorer#1947, L21).
+                numberLabel: "Document 1", rowTitle: "Telegram From the Embassy in the Soviet Union", volumeTitle: volumeTitle,
                 annotatedAt: UserStoreDate.text(Self.day(6)), latestNote: nil, noteCount: 2, summaryCount: 2, isInVisitPlan: false,
                 highlights: [.init(id: Self.id(22).uuidString, color: "yellow", selectedText: "Purple text"),
                              .init(id: Self.id(20).uuidString, color: "yellow", selectedText: "Allow me"),
@@ -193,10 +195,12 @@ import Testing
             #expect(d2.collections.map(\.name) == ["atlas", "Untitled Collection"], "by the name each prints")
             let managua = try #require(all.items.first { $0.volumeId == Self.nicaragua })
             #expect(managua.title == "No. 1. Mr. Baker to Mr. Gresham" && managua.annotatedAt == nil && managua.latestNote == "Managua")
+            #expect(managua.numberLabel == "Document 1" && managua.rowTitle == managua.title, "a head that opens otherwise keeps its title")
             #expect(managua.tags.map(\.name) == ["Berlin", "revisit"])
             // A document the index does not hold is named by its id; one only in a smart collection is
             // in it; one with only a summary, a plan or a tag the user lacks has its one fact.
             let d9 = try #require(all.items.first { $0.documentId == "d9" })
+            #expect(d9.numberLabel == "Document 9" && d9.rowTitle == "d9", "the number its id spells, as the app's row prints one it has not read")
             #expect(d9.title == "d9" && d9.highlights.map(\.selectedText) == ["Blue text", "Blue again"] && d9.highlightCount == 2,
                     "two made at one time, by id")
             #expect(all.items.first { $0.documentId == "d10" }?.collections.map(\.name) == ["Smart"])

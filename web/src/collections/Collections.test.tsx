@@ -65,9 +65,11 @@ function detail(fields: Partial<CollectionDetail> = {}): CollectionDetail {
     summariesAvailable: false,
     bodyDepths: ['full', 'index'],
     presets: [
-      { id: 'teachingReader', active: false },
-      { id: 'sourceDossier', active: false },
-      { id: 'scholarlyEdition', active: false },
+      { id: 'fullTextAsPrinted', active: false },
+      { id: 'fullTextWithAnnotations', active: false },
+      { id: 'citationsWithNotes', active: false },
+      { id: 'citationsWithArchivalSources', active: false },
+      { id: 'everythingIncluded', active: false },
     ],
     prompts: [],
     documentCount: 0,
@@ -432,27 +434,36 @@ describe('a collection’s editor', () => {
     expect(sent(patches[0]![1]).body).toEqual({ text: 'Europe 1961' });
   });
 
-  it('applies a preset from Collection settings, Briefing packet offered only where the server offers it', async () => {
+  it('applies a template from Collection settings, Summaries with overview offered only where the server offers it', async () => {
     const fetch = server({
       [`/api/v1/me/collections/${berlinId}`]: detail({ entries: outline }),
       [`POST /api/v1/me/collections/${berlinId}/preset`]: detail({
         entries: outline,
         presets: [
-          { id: 'teachingReader', active: true },
-          { id: 'sourceDossier', active: false },
-          { id: 'scholarlyEdition', active: false },
+          { id: 'fullTextAsPrinted', active: false },
+          { id: 'fullTextWithAnnotations', active: true },
+          { id: 'citationsWithNotes', active: false },
+          { id: 'citationsWithArchivalSources', active: false },
+          { id: 'everythingIncluded', active: false },
         ],
       }),
     });
     renderAt(`/collections/${berlinId}`);
     await userEvent.click(await screen.findByRole('button', { name: 'Collection settings' }));
     const settings = screen.getByRole('dialog', { name: 'Collection settings' });
-    expect(within(settings).queryByRole('button', { name: /Briefing packet/ })).toBeNull();
-    const teaching = within(settings).getByRole('button', { name: /Teaching reader/ });
-    expect(teaching.getAttribute('aria-pressed')).toBe('false');
-    await userEvent.click(teaching);
-    await waitFor(() => expect(within(screen.getByRole('dialog', { name: 'Collection settings' })).getByRole('button', { name: /Teaching reader/ }).getAttribute('aria-pressed')).toBe('true'));
-    expect(sent(fetch.mock.calls.find(([url]) => String(url).endsWith('/preset'))?.[1]).body).toEqual({ preset: 'teachingReader' });
+    expect(within(settings).queryByRole('button', { name: /Summaries with overview/ })).toBeNull();
+    expect(within(settings).getAllByRole('button', { name: /^(Full text|Citations|Everything)/ })).toHaveLength(5);
+    const annotated = within(settings).getByRole('button', { name: /Full text with your annotations/ });
+    expect(annotated.getAttribute('aria-pressed')).toBe('false');
+    await userEvent.click(annotated);
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('dialog', { name: 'Collection settings' }))
+          .getByRole('button', { name: /Full text with your annotations/ })
+          .getAttribute('aria-pressed'),
+      ).toBe('true'),
+    );
+    expect(sent(fetch.mock.calls.find(([url]) => String(url).endsWith('/preset'))?.[1]).body).toEqual({ preset: 'fullTextWithAnnotations' });
     // Highlights in body only for a full body.
     expect((within(settings).getByRole('switch', { name: 'Highlights in body' }) as HTMLInputElement).disabled).toBe(false);
   });

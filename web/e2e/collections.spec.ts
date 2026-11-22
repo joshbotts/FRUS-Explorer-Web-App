@@ -3,8 +3,8 @@
 // three deep by Indent, the third offering no more; Add Documents' search, its documents in the order
 // chosen; Sort by Date within each section; a note block with bold; an apparatus block, which goes
 // where the kit puts it; and from the list Rename, the app's alert, where a name left empty keeps the
-// old one, and Delete…, which asks the app's question (FRUS-Explorer#1831). The presets, Briefing packet
-// offered once a document of the collection has a summary. By pointer: Excerpt from the selection bar
+// old one, and Delete…, which asks the app's question (FRUS-Explorer#1831). The templates, Summaries with
+// overview offered once a document of the collection has a summary. By pointer: Excerpt from the selection bar
 // into a collection the picker makes; the Research rail's Collections section and its Add to
 // Collection; Add Documents' Browse; Move Up; Sort by Date across the whole collection; the document
 // inspector's overrides, each with what Default resolves to, and a section's defaults, which its
@@ -41,6 +41,7 @@ interface Detail {
   presets: { id: string; active: boolean }[];
   defaultBodyDepth: string;
   defaultIncludeHeadnote: boolean;
+  includeWordCloud: boolean;
 }
 
 const collection = (page: Page, id: string) => getJSON<Detail>(page, `api/v1/me/collections/${id}`);
@@ -316,7 +317,7 @@ test('makes a collection three sections deep, with documents, a note block and a
   expect((await listed(page)).some((item) => item.id === id)).toBe(false);
 });
 
-test('offers the app’s presets, Briefing packet once a document of the collection has a summary, by pointer', async ({ page }) => {
+test('offers the app’s templates, Summaries with overview once a document of the collection has a summary, by pointer', async ({ page }) => {
   await page.goto('collections');
   const id = await made(page, 'Berlin briefing');
   await page.goto(`collections/${id}`);
@@ -331,38 +332,55 @@ test('offers the app’s presets, Briefing packet once a document of the collect
     return { settings, presets: settings.getByRole('region', { name: 'Start from a template — optional' }).getByRole('button') };
   }
 
-  // No document has a summary: no Briefing packet.
+  // No document has a summary: no Summaries with overview. The six templates are the app's since FRUS-Explorer#1952.
   let { settings, presets } = await openSettings();
-  await expect(presets).toHaveText([/^Teaching reader/, /^Source dossier/, /^Scholarly edition/]);
+  await expect(presets).toHaveText([
+    /^Full text as printed/,
+    /^Full text with your annotations/,
+    /^Citations with your notes/,
+    /^Citations with archival sources/,
+    /^Everything included/,
+  ]);
   await axeCheck(page);
-  // Teaching reader: its composition, and the chronology it brings.
-  await presets.filter({ hasText: 'Teaching reader' }).click();
-  await expect(presets.filter({ hasText: 'Teaching reader' })).toHaveAttribute('aria-pressed', 'true');
+  // Full text with your annotations: its composition, its headnotes on each document, and the chronology it brings.
+  await presets.filter({ hasText: 'Full text with your annotations' }).click();
+  await expect(presets.filter({ hasText: 'Full text with your annotations' })).toHaveAttribute('aria-pressed', 'true');
   await expect(settings.getByRole('combobox', { name: 'Body depth' })).toHaveValue('full');
+  await expect(settings.getByRole('switch', { name: 'Headnotes' })).toBeChecked();
   await settings.getByRole('button', { name: 'Done' }).click();
   await expect(settings).toHaveCount(0);
   await expect(contents.getByRole('group', { name: 'Generated block: Chronology' })).toBeVisible();
-  expect((await collection(page, id)).presets.filter((preset) => preset.active).map((preset) => preset.id)).toEqual(['teachingReader']);
+  await expect(contents.getByRole('group', { name: `Document ${d1Header}` }).getByRole('listitem')).toHaveText(['Headnote']);
+  expect((await collection(page, id)).presets.filter((preset) => preset.active).map((preset) => preset.id)).toEqual([
+    'fullTextWithAnnotations',
+  ]);
 
-  // A summary of d1's, and the editor read again: Briefing packet is offered, and makes the documents
-  // summaries with headnotes.
+  // A summary of d1's, and the editor read again: Summaries with overview is offered, and makes the documents
+  // summaries with a word cloud, the headnotes off.
   await send(page, 'POST', summariesPath, { responseText: 'A cordial opening, and an offer of talks.' });
   await page.reload();
   await expect(contents.getByRole('group', { name: /^Document / })).toHaveCount(2);
   ({ settings, presets } = await openSettings());
-  await expect(presets).toHaveText([/^Teaching reader/, /^Briefing packet/, /^Source dossier/, /^Scholarly edition/]);
-  await presets.filter({ hasText: 'Briefing packet' }).click();
-  await expect(presets.filter({ hasText: 'Briefing packet' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(presets.filter({ hasText: 'Teaching reader' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(presets).toHaveText([
+    /^Full text as printed/,
+    /^Full text with your annotations/,
+    /^Summaries with overview/,
+    /^Citations with your notes/,
+    /^Citations with archival sources/,
+    /^Everything included/,
+  ]);
+  await presets.filter({ hasText: 'Summaries with overview' }).click();
+  await expect(presets.filter({ hasText: 'Summaries with overview' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(presets.filter({ hasText: 'Full text with your annotations' })).toHaveAttribute('aria-pressed', 'false');
   await expect(settings.getByRole('combobox', { name: 'Body depth' })).toHaveValue('summaryOnly');
-  await expect(settings.getByRole('switch', { name: 'Headnotes' })).toBeChecked();
+  await expect(settings.getByRole('switch', { name: 'Headnotes' })).not.toBeChecked();
   await expect(settings.getByRole('switch', { name: 'Word-cloud overview' })).toBeChecked();
   await axeCheck(page);
   await settings.getByRole('button', { name: 'Done' }).click();
-  await expect(contents.getByRole('group', { name: `Document ${d1Header}` }).getByRole('listitem')).toHaveText(['Headnote']);
-  const briefing = await collection(page, id);
-  expect([briefing.defaultBodyDepth, briefing.defaultIncludeHeadnote]).toEqual(['summaryOnly', true]);
-  expect(briefing.presets.filter((preset) => preset.active).map((preset) => preset.id)).toEqual(['briefingPacket']);
+  await expect(contents.getByRole('group', { name: `Document ${d1Header}` }).getByRole('listitem')).toHaveCount(0);
+  const overview = await collection(page, id);
+  expect([overview.defaultBodyDepth, overview.defaultIncludeHeadnote, overview.includeWordCloud]).toEqual(['summaryOnly', false, true]);
+  expect(overview.presets.filter((preset) => preset.active).map((preset) => preset.id)).toEqual(['summariesWithOverview']);
 });
 
 test('freezes an excerpt from the selection bar, adds the document from the rail, and configures it and its section, by pointer', async ({ page }) => {

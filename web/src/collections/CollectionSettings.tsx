@@ -1,5 +1,5 @@
 // Collection settings (PLAN's S18d), the iPad editor's ⚙ sheet: the name and note, the title page and
-// introduction, the presets, Briefing packet only where a summary is stored, and the composition's
+// introduction, the templates, Summaries with overview only where a summary is stored, and the composition's
 // three groups, in the app's order and words. Each field saves as it is typed and each switch as it is
 // turned, as the app's commits each field from its binding.
 import { useQuery, useQueryClient } from '@tanstack/react-query';

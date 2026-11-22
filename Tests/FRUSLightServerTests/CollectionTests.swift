@@ -79,7 +79,8 @@ import Testing
             #expect(berlin.tocStyle == "citation" && !berlin.applyHighlights && !berlin.includeWordCloud && !berlin.defaultIncludeHeadnote)
             #expect(berlin.createdAt == UserStoreDate.text(UserDataFixture.now) && berlin.lastModified == berlin.createdAt)
             #expect(!berlin.summariesAvailable && berlin.bodyDepths == ["full", "index"])
-            #expect(berlin.presets.map(\.id) == ["teachingReader", "sourceDossier", "scholarlyEdition"], "Briefing packet only with summaries")
+            #expect(berlin.presets.map(\.id) == ["fullTextAsPrinted", "fullTextWithAnnotations", "citationsWithNotes", "citationsWithArchivalSources",
+                                                 "everythingIncluded"], "Summaries with overview only with summaries")
 
             // In the project the user works in, from creation and from an edit of its own fields.
             let project = try decode(Project.self, try await owner.send(.post, "/api/v1/me/projects", #"{"name": "Cold War"}"#))
@@ -301,7 +302,7 @@ import Testing
     }
 
     /// A preset writes its recipe's fields and adds the apparatus it calls for that the collection does
-    /// not carry, at each type's place; Briefing packet, and Summary only, are offered once a document of
+    /// not carry, at each type's place; Summaries with overview, and Summary only, are offered once a document of
     /// the collection has a summary stored; and Sort by Date orders the documents by the index's days,
     /// across the collection or within each section, every other entry staying put.
     @Test func presetsAndSortByDateAreTheAppsOverTheIndex() async throws {
@@ -312,26 +313,33 @@ import Testing
             let made = try await Self.made(owner, "Reader")
             let path = "\(Self.base)/\(made.id)"
             _ = try await Self.edit(owner, "\(path)/documents", try Self.documents(["d2", "d1"]))
-            let teaching = try await Self.detail(owner, .post, "\(path)/preset", #"{"preset": "teachingReader"}"#)
-            #expect(teaching.defaultBodyDepth == "full" && !teaching.includeFootnotes && teaching.includeSourceNote)
-            #expect(teaching.includeNotes && teaching.tocStyle == "headerAndDateline")
-            #expect(teaching.presets.first { $0.id == "teachingReader" }?.active == true)
-            #expect(Self.outline(teaching) == ["generated:chronology@0", "document:d2@0", "document:d1@0", "generated:personsIndex@0"])
-            let again = try await Self.detail(owner, .post, "\(path)/preset", #"{"preset": "scholarlyEdition"}"#)
+            let annotated = try await Self.detail(owner, .post, "\(path)/preset", #"{"preset": "fullTextWithAnnotations"}"#)
+            #expect(annotated.defaultBodyDepth == "full" && !annotated.includeFootnotes && annotated.includeSourceNote)
+            #expect(annotated.includeNotes && annotated.applyHighlights && annotated.defaultIncludeHeadnote && !annotated.includeWordCloud)
+            #expect(annotated.tocStyle == "headerAndDateline")
+            #expect(annotated.presets.filter(\.active).map(\.id) == ["fullTextWithAnnotations"], "no two templates write the same fields")
+            #expect(Self.outline(annotated) == ["generated:chronology@0", "document:d2@0", "document:d1@0", "generated:personsIndex@0"])
+            let again = try await Self.detail(owner, .post, "\(path)/preset", #"{"preset": "everythingIncluded"}"#)
             #expect(Self.outline(again) == ["generated:chronology@0", "document:d2@0", "document:d1@0", "generated:personsIndex@0",
                                             "generated:bibliography@0", "generated:archivalSources@0", "generated:thematicIndex@0"],
                     "only the blocks it does not carry")
-            #expect(again.presets.first { $0.id == "teachingReader" }?.active == false)
-            let briefing = try await owner.send(.post, "\(path)/preset", #"{"preset": "briefingPacket"}"#)
-            #expect(briefing.status == .conflict && problemCode(briefing) == "PRESET_NOT_OFFERED")
+            #expect(again.presets.filter(\.active).map(\.id) == ["everythingIncluded"])
+            let summaries = try await owner.send(.post, "\(path)/preset", #"{"preset": "summariesWithOverview"}"#)
+            #expect(summaries.status == .conflict && problemCode(summaries) == "PRESET_NOT_OFFERED")
+            #expect(try problem(summaries, .conflict).detail
+                    == "Summaries with overview composes a summary of each document, and none of this collection's documents has one stored.")
+            let retired = try await owner.send(.post, "\(path)/preset", #"{"preset": "briefingPacket"}"#)
+            #expect(retired.status == .badRequest && problemCode(retired) == "INVALID_FIELD", "the four templates before L25 are gone")
 
             // A summary of one of its documents offers both.
             try fixture.rows.addSummary("5A000000-0000-4000-8000-000000000001", documentId: "d1", responseText: "A summary.")
             let summarized = try decode(CollectionDetail.self, try await owner.get(path))
             #expect(summarized.summariesAvailable && summarized.bodyDepths == ["full", "summaryOnly", "index"])
-            #expect(summarized.presets.map(\.id) == ["teachingReader", "briefingPacket", "sourceDossier", "scholarlyEdition"])
-            let packet = try await Self.detail(owner, .post, "\(path)/preset", #"{"preset": "briefingPacket"}"#)
-            #expect(packet.defaultBodyDepth == "summaryOnly" && packet.defaultIncludeHeadnote && !packet.includeNotes)
+            #expect(summarized.presets.map(\.id) == ["fullTextAsPrinted", "fullTextWithAnnotations", "summariesWithOverview", "citationsWithNotes",
+                                                     "citationsWithArchivalSources", "everythingIncluded"])
+            let overview = try await Self.detail(owner, .post, "\(path)/preset", #"{"preset": "summariesWithOverview"}"#)
+            #expect(overview.defaultBodyDepth == "summaryOnly" && overview.includeNotes && overview.includeWordCloud)
+            #expect(!overview.defaultIncludeHeadnote && !overview.applyHighlights, "a summary-only template leaves highlights off (L25)")
 
             // Sort by Date: d1 (9 November 1960) before d2 (10 November), the apparatus where it was.
             let sorted = try await Self.detail(owner, .post, "\(path)/sort", #"{"scope": "wholeCollection"}"#)
@@ -511,7 +519,7 @@ import Testing
     /// What the server's own code adds around the app's rules: a text a collection or an entry keeps is
     /// refused with U+0000, where SQLite's text ends, or past a note's limit; null clears a note, a
     /// subtitle, an author line or a title override, and is refused for a field that cannot be none;
-    /// Summary only, set field by field, is refused where Briefing packet's card is, and a depth held
+    /// Summary only, set field by field, is refused where Summaries with overview's card is, and a depth held
     /// stands; an entry a newer build wrote does not move; an add after the highest position an edited
     /// import can leave renumbers the entries first, where the app's arithmetic would trap; and a
     /// duplicate leaves out a draft the server cannot read rather than share it.
@@ -553,7 +561,7 @@ import Testing
                 #expect(refused.status == .badRequest && problemCode(refused) == "INVALID_FIELD", "\(body)")
             }
 
-            // Summary only, field by field, where Briefing packet's card is offered; a depth held stands.
+            // Summary only, field by field, where Summaries with overview's card is offered; a depth held stands.
             for (target, body) in [(path, #"{"defaultBodyDepth": "summaryOnly"}"#),
                                    ("\(path)/entries/\(d1)", #"{"bodyDepthOverride": "summaryOnly"}"#)] {
                 let refused = try await owner.send(.patch, target, body)
