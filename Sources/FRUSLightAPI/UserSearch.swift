@@ -60,6 +60,21 @@ struct SearchUsers: Sendable {
         return SearchUser(id: id, mark: mark)
     }
 
+    /// Where a row's line reads its reader's summaries for `request`: the rows of the user it searches as,
+    /// on the same terms, in the store `served` attaches; or the index's own, which an import leaves empty,
+    /// for a request that acts for no one. Related Documents' rows (FRUS-Explorer#1907) and Chronology's
+    /// (#1927) read them so, as the app's read its reader's from its own index.
+    func summarySource(for request: Request, context: APIRequestContext, served: ServedIndex) async throws -> SearchUserSource {
+        guard let services, let user = try await requestUser(request, context: context, services: services) else { return .index }
+        return Self.summarySource(of: user.id, served: served)
+    }
+
+    /// `id`'s summaries: their rows of the store `served` attaches, or the index's own where it attaches
+    /// none, of which the kit would refuse an attached store.
+    static func summarySource(of id: String, served: ServedIndex) -> SearchUserSource {
+        served.attachesUserStore ? .attachedStore(userId: id) : .index
+    }
+
     /// The user `request` acts for under /me's guard's first two steps, or nil: none while the server
     /// keeps no user data, for a request sent to another address, or for one that, behind a proxy, names
     /// no one signed in.

@@ -266,6 +266,81 @@ Phase 3's row S24g, the features track's wave 8, beside S24h: Person and Cross-R
 
 **Next:** on the features track, S24i, the Word Cloud, the S24 group's last row, once S24h has merged; then S25b, phase 3's sign-off.
 
+## Session 24f, second follow-up: the pin moves to `4556c4d5`
+
+22 November 2026 · branch `claude/heuristic-napier-a00da4`, a session of the phase-3 orchestrator's · [#160](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/160) · upstream `4556c4d5`
+
+The pin moves from the tag `1.0-release`, `08e8bac8`, to `v2`'s head, `4556c4d5`, nine commits on, at the same build and index version. It carries the three pull requests S24f's upstream follow-up wrote for six issues this project filed, which the owner merged after Mac checks 32 to 34, in a pull request of its own (rule 5), and it takes each issue's web steps from its hand-over. So this entry is S24f's second follow-up, for #1912, #1913, #1927 and #1928, and stands for #1907's too, a follow-up of S23d's that its hand-over placed above Session 23d's entry. The branch was cut from `main` at `e0d0e38`, #157's merge.
+
+**What the move brought:**
+- [FRUS-Explorer#1969](https://github.com/joshbotts/FRUS-Explorer/pull/1969), `5f0a07f3`, Mac check 34, for #1911: `SharedKitsBoundaryTests`, which holds the other eight shared kits to rules 1 and 2 in the app's unit target alone. It changes no folder the golden files' digest covers, and the web never compiles it.
+- [#1968](https://github.com/joshbotts/FRUS-Explorer/pull/1968), `91842c0b`, Mac check 33, for #1912, #1913 and #1928:
+  - `ChronologyGrouping.group(_:viewBucket:ascending:locale:)` and `makeChart(fromCounts:viewBucket:maxSeries:locale:)` write their labels in the locale given, the reader's own by default;
+  - `CorpusAnalyticsService`'s occurrence series by year and volume has a cache of its own, `yearVolumeOccurrenceCache`, where it shared the documents series' under an `occ:` prefix;
+  - `DecadeFrequency` has a public `init(decadeStart:count:)`.
+- [#1967](https://github.com/joshbotts/FRUS-Explorer/pull/1967), `4556c4d5`, Mac check 32, for #1907 and #1927: `RelatedDocumentsEngine.rank(…includeSnippets:userSource:…)` and `IndexingPipeline.documentsInDateRange(_:scopeVolumeIds:ascending:limit:userSource:)` take `userSource: SearchUserSource = .index`. From the index, the default and the app's call, each runs the statement it ran before.
+- Six commits of the app's records, website and tour (#1961 to #1966). One of them, #1962, moved the day two of the app's tables were last confirmed, `PublishedSourceLinkTable.confirmed` and `RepositoryFactTable.confirmed`, from 28 August to 20 November 2026.
+- Unchanged: the index version (75), the FTS generation (4), the JSON export's format version (7), `IndexingResources.indexResourceNames`, the schema statements and the bundled resources. `IndexingPipeline.swift` changed on a read path alone, `documentsInDateRange`'s user source, whose statement from the index is the one it ran, by text and binds (version line 4.64: nothing the indexer stores or reads changes).
+
+**The web's steps,** each from its issue's hand-over, filed in `docs/prep/` with what this move took:
+- **#1907, Related Documents' rows** (`upstream-related-user-source.md`): the route passes the kit's `rank` the source `SearchUsers.summarySource(for:context:served:)` names, `.attachedStore(userId:)` for the user the request searches as, on the search's terms, where the served index attaches the user store, and `.index` for a request that acts for no one or a server that keeps no user data. A related row the reader summarised shows their summary, as on the Mac. The leads' computation passes `includeSnippets: false`, unchanged.
+- **#1902's call, Suggested Next's lines,** the first of the README's "Three calls": Project Home passes `documentSnippets(forKeys:maxLength:userSource:)` the same source for the user under /me (`SearchUsers.summarySource(of:served:)`).
+- **#1927, Chronology's rows** (`upstream-chronology-user-source.md`): `/api/v1/chronology` passes `documentsInDateRange` the same source. The export and the plate pass `.index`, since the chart's table and figure read no row's summary and the attached store's statement scans every user's rows of `user_search`.
+- **#1912, Chronology's labels** (`upstream-chronology-locale.md`): `assemble` passes `SearchItem.locale` to `group` and `makeChart(fromCounts:…)` and takes their labels. `ChronologyLabels`, its mirror of the kit's `sortDate(forBucketKey:)` and the `granularities` map are gone; `firstDay(ofBucketKey:)` stays, on `ChronologyRoutes`.
+- **#1913, one analytics service** (`upstream-analytics-cache-keys.md`): `ServedIndex`'s `occurrences` is gone, and `analytics` gives both series.
+- **#1928, the decades** (`upstream-decade-frequency-init.md`): `CorpusAnalyticsView.decadeData` builds the kit's `DecadeFrequency`, as the app's `decadeSeries(for:)` does, and the web's `Decade` is gone.
+- **#1911, the boundary tests** (`upstream-kit-boundary-tests.md`): nothing to run. COORDINATION's division of labour and §4 name every kit, and §3 names the new suite.
+- **The app's date the web mirrors:** Source Explorer's guidance counts its links' six months from `PublishedSourceLinkTable.confirmed` (`web/src/sources/sourcesRules.ts`), now 20 November 2026; `SourceExplorerParityTests` holds both lines, and the unit test the new day and its edges. `RepositoryFactTable.confirmed` has no mirror here.
+
+**Tests:**
+- `SummaryLinesTests.eachReadersSummaryIsTheirLineAlone`, new, on a real socket behind a proxy that signs two users in. One user's summary of d2 is its line for her in d1's Related list, in Chronology and on a Suggested Next lead; for the other user, and for a request that names no one, the line is d2's text or, in Chronology, its head. The synthetic export gets a citation from d1 to d2 for it (`UserDataFixture`'s new `edits`), since its documents have no archival container or cross-reference, the two sources of the engine's candidates here.
+- `CorpusAnalyticsParityTests.aTermSpeltOccAndAWordGetsItsOwnSeries`, new, over the fixture index through the API. It asks for a documents chart of `occ:treaty` after the occurrences of "treaty" over the whole corpus, and before them in a scope. Each chart is the kit's from a host's own service that has cached nothing, and the two series differ.
+- `ChronologyParityTests.theLabelsAreTheKitsInUSEnglish`, in place of the test that held the server's copy of the kit's formats. Through the server's assembly on Linux, a day's section, its bucket and its table row read "February 15, 1969", a month's "February 1969" and a year's "1969".
+- Held lines that moved with the code: `AnalyticsMirrorParityTests` (the occurrence fetch from the one service, the decades' sum to the app's, `group`'s locale), `ProjectHistoryParityTests` (Project Home's snippet call), and `ChronologyParityTests`' kit side, which now takes the kit's labels in `en_US`.
+- `RelatedDocumentsParityTests` and `ChronologyParityTests` hold every fixture list through the API, now read through the single user's attached store, to the kit's from the index.
+
+**Another row's file:** `Sources/FRUSLightAPI/Routes.swift`, whose two existing lines for Related Documents and Chronology now pass the router's `SearchUsers` (PLAN rule 4). S24h adds lines to the same file, and `git merge-tree` against its branch, #159, at the push merges `Routes.swift` and `ServedIndex.swift` clean; it conflicts in SPEC alone, where S24h rewrote the two bullets either side of Chronology's, which this move rewrote. The later of the two merges `main` once. Against `main` at `bd45804`, past the import follow-ups' #158, the branch merges clean, so it merged no `main`.
+
+**Corrected beside the move:** COORDINATION §1's line on the index version served still said 74; S12d's move took it to 75.
+
+**And the install guide's Releases section,** whose last sentence still said "Until it is cut, follow `edge`.": it says `1.0-1861.1` was published on 22 November and moved `:1.0-1861`. The import follow-ups' #158, whose file it was, had merged by the push.
+
+**The golden files** were made by `scripts/make-golden` under the heavy lock, on this Mac (macOS 27.2.1, Xcode 27.2). The first run used the app's source alone, while the owner's choice of export was asked; it took five minutes from an empty `tools/mac-golden/.build`. The second added `--export /Users/Shared/frus-index-2026-11-22-1861-golden.sqlite`, the owner's tenth three-volume export, which FRUS Explorer 1.0 (1861) made in the golden library on 22 November and S12d's move made its files from. It was reused by the owner's choice, "Yes, reuse it", at about 20:10 UTC, asked through the orchestrator before the remake: the build is the same, and on the indexing path only a read changed, `documentsInDateRange`'s user source, whose statement from the index is the one it ran.
+- **From the source:** the 410 render rows, the 482 queries' expressions and the rich-text spans are byte for byte as they were. Only their provenance moved: the source digest from `5ab6086f…` to `f54dff2c…`, and the upstream commit from `08e8bac8` to `4556c4d5`. `fixtures/rich-text/web` is unchanged.
+- **From the export:** the index summary's gating digests and checks are the tenth's at `08e8bac8`, identical; only its provenance, the source digest and the upstream commit, and its timings, which are information, moved. The query results are as they were but for their provenance: 482 queries, 43 refused, 7 with ties past the 50th. `PENDING` stays empty, and the run's `check-golden` passed.
+- `make-golden`'s rewrite of `tools/mac-golden/Package.resolved` is left out, as at every move.
+
+**Results**
+- **Linux, `swift:6.4-noble`, arm64:** `scripts/swift --postgres test`, CI's swift job with its PostgreSQL, under the heavy lock, at `82c53e9`, the code before the review's fixes, over the warm build cloned at `08e8bac8` with this package's own targets built clean.
+  - 4,340 tests in 14 targets. The only skip is the named one, `FTS5StoreTests`' `backupExclusion()`.
+  - Per target: CrossRefKitTests 10, FRUSCoreKitTests 2,586 in 315 suites, FRUSLightCoreTests 279, FRUSLightServerTests 416, FRUSParityTests 299, FRUSRichTextTests 42, FTS5CheckTests 3, FTS5StoreTests 219, GeneratorKitTests 7, ManifestGeneratorTests 60, SemanticVectorsKitTests 40, SourceExplorerExportGeneratorTests 22, SourceNoteKitTests 327 and WordCloudKitTests 30.
+  - Against S12d's run at the tag: FRUSCoreKitTests runs #1967's and #1968's 17 more, where it ran 2,569 in 313 suites; the server's target one more, `SummaryLinesTests`; and the parity target one more, the `occ:` test, the labels' test taking its predecessor's place.
+  - Two kinds of failure, neither the code's. The parity target's five checks of the golden files failed on the stale digest until the remake: `GoldenTests`, `IndexParityTests`, `SearchRunTests`, `ServedAPIParityTests`' check 3 and `StandaloneIndexParityTests`. FRUSLightCoreTests' PostgreSQL tests were refused "too many clients already": the shared container, `frus-light-postgres`, had been made again with PostgreSQL's default of 100 connections, and once without its IPv4 listener. Restarted with `max_connections` at 200 (`ALTER SYSTEM`), as S21d's hand-over suggests, the target passed whole, 279 tests in 41 suites.
+- **After the remake:** the parity target over the final golden files, 299 tests in 63 suites, all passing, and `check-golden`: the five golden files present and valid, none pending, and 482 of 482 queries parsing as the golden file says. The checks print what S12d's run at the tag printed: check 2's 36 digests and 7 checks, the Mac's, and the same through the server's indexing; check 3's 482 queries, identical; check 4's 410 of 410 rows; check 6's 2,581 highlights; check 7's 3,011 lookups; and check 8's 245 source notes. Check 3's 318 queries with other score bits are information, never gated, as on arm64 before; CI's x86_64 counts 332.
+- **After the review's fixes:** `AnalyticsMirrorParityTests`, 5 tests, and the browser app's `typecheck`, `lint`, `test` (672 tests in 75 files, where 670 in 74 ran before them, all passing) and `build`. `npm ci` ran at the start.
+- **The image** `frus-light:pin4556` was built with the release's build arguments (1.0, 1861, index version 75), with its parity stage, at the reviewed code. `scripts/compose-smoke --e2e` on ports 18400 and 18401 passed:
+  - check 2 over the Standalone index the server's own indexing wrote: 36 digests and 7 checks identical (its comparison reads the gating statements, which the remake leaves as they were, not the files' provenance);
+  - check 8: 245 source notes; check 5: none of the owner's writing in a stripped export;
+  - the browser suite passes 89 and skips 9, at the root and under the path, as `main`'s CI does. The nine are the specs the smoke's own steps run, and each passed there.
+
+**The cold review,** by a fresh subagent given the range `e0d0e38..82c53e9` and none of this session's reasoning, with the `code-review` skill at `high`, found no wrong number, no line given to another user and no parity test that no longer holds. What held up is fixed in `ad5d246`:
+- **Chronology's row drew a reader's whole summary,** where the app's `ChronologyRowView` draws three lines (`lineLimit(3)`); before the move a row's line was its head. It draws three lines now, and `AnalyticsMirrorParityTests` holds the app's line, the span and its rule.
+- **The browser kept the lines it held** after a summary was written, edited or deleted, or research imported or erased, for up to five minutes in Related Documents. `summaryLinesChanged` now reads Related Documents, Chronology and Project Home again, and `userData.test.ts` holds it.
+- **The records:** the README said no issue of this project's waits for the app, where four on the Zotero client's sends do (#1923 to #1926); its line on S25c's and S25d's screens, done since 11 November, was stale; it credited Suggested Next's line to the three pull requests, where #1902's call gives it; and COORDINATION's pin cadence did not name a merged change the web needs.
+- **The install guide's stale sentence,** which the review also found, is fixed, once the import follow-ups' #158, whose file it was, had merged.
+
+**Records**
+- `docs/prep/`: the six hand-overs, each as its issue's last comment gave it, with what this move took; and the prep notes' pinning paragraph, phase 3's account of the moves and the hand-overs' row of their table of files.
+- `PLAN.md`: where the plan stands, with the first release; the batch's carriage after its sentence; the owner checkpoints' golden files, the first release (done 22 November, before phase 5: release run 45058281066 at `e0d0e38`, 19:01 UTC) and Mac checks 32 to 34, with fifty-three steps, twenty-five of them phase 3's; and the owner's answer of 29 October on the first release, which the owner has since overtaken, with a sentence saying so.
+- `COORDINATION.md`: the pin's history; §1's index version and count of the kit's tests; #1911's two sentences and §3's boundary test; §5's item for the six issues in place of the boundary tests', the three workarounds gone, the pin's cadence, and what this move leaves; and §6's exports.
+- `docs/INSTALL.md`: the Releases section's first release.
+- `SPEC.md`: `setupDatabase(_:)`'s lines at `4556c4d5`, the compatibility contract, Related Documents' and Suggested Next's lines, Corpus Analytics' one service, Chronology's summaries and labels, the related answer's `snippet`, and the delivery plan's first release.
+- `README.md`: Status, the pin and the first release; What works today, Related's lines and the releases; Known gaps, the pin, the six issues in it and the four on the Zotero client's sends (#1923 to #1926) that wait for the app, the "Three calls" bullet down to two with #1907's sentence gone, `:1.0-1776` in place of "No release yet", and S25c's and S25d's line gone, both done since 11 November; Next; and phase 5's row.
+
+**For the owner:** nothing to publish for the index, which is unchanged. Installs that follow `:1.0-1861`, the owner's own among them, see these changes only with a later release of that build, such as `1.0-1861.2`, the owner's to cut when they choose; `edge` has them once `image.yml` has smoke-tested this merge.
+
+**Next:** S24h, then S24i and S25b, phase 3's sign-off, over the full corpus indexed at 75; S24e's follow-up, the server's uses of #1902's other two calls and the lexical axis; and S12d's three follow-ups.
+
 ## Session 24f, follow-up, upstream: the six kit issues, in three pull requests
 
 22 November 2026 · branch `claude/interesting-bardeen-a9dd63` · [#155](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/155) · upstream `f011ab04`, unchanged; [FRUS-Explorer#1967](https://github.com/joshbotts/FRUS-Explorer/pull/1967), [#1968](https://github.com/joshbotts/FRUS-Explorer/pull/1968) and [#1969](https://github.com/joshbotts/FRUS-Explorer/pull/1969), open
@@ -926,6 +1001,73 @@ Phase 3's row S22e, on the features track after S22d, with no upstream pull requ
 **The S22 group's records** (PLAN, How sessions run beside each other, rule 5): the README's Status (Source Explorer, Look Up, the NARA Catalog's search and Send to Zotero Library), Known gaps (Browse's list of persons, its Sources outline S22d's; the graph's archival node, done; the stored keys' gap closed; NARA and Zotero asked through stand-ins alone, new; beside `main`'s bullet for #1904's two follow-ups, which replaced this branch's on the eight kit members) and Next; COORDINATION §1; SPEC's selection bar, Citation, Source Explorer and Archives Visits, Settings and Stored keys, the API's table and conventions, the configuration table and the Compose file; the install guide's reader, Cite, Sources, collections, key file and settings. Check 8's row in the verification table needs no change: the export generator records the live route and never runs it. Besides: PLAN's S22e paragraph, the owner checkpoint Keys done, and the open question on the keys answered. The hand-over note is `s22e-handover.md` in the shared notes folder.
 
 **Next:** S24f, Corpus Analytics and Chronology, on the features track; S22d's web follow-up, which the pin move to `b124a59b` unblocked.
+
+## Session 21f, second follow-up: step 5 holds each mounted file to the export's record of it, and parses only a volume whose file is another
+
+22 November 2026 · branch `claude/optimistic-cray-c16081`, a follow-up session of the phase-3 orchestrator's · [#158](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/158), with S16c's follow-up · upstream `08e8bac8` (tag `1.0-release`), unchanged
+
+S21f's second web follow-up, with no PLAN row of its own: steps 2 to 4 of `docs/prep/upstream-volume-blob-sha.md`, the hand-over of [FRUS-Explorer#1909](https://github.com/joshbotts/FRUS-Explorer/issues/1909). [#1948](https://github.com/joshbotts/FRUS-Explorer/pull/1948) (`9e582653`) gave index version 75 a record of the file each volume was indexed from, and S12d's pin move to `1.0-release` brought it to the server, its step 1. It is the first of the two upstream changes PLAN's paragraph on S21f named; S21f's follow-up used the second. No file of the app changed, no migration was added and the pin did not move.
+
+**What changed** (`Sources/FRUSLightCore/TEIChanges.swift`):
+- **The file first.** A volume at a time, once its file's stamp is taken, the job hashes the mounted file with the kit's `VolumeUpdateChecker.gitBlobSHA1(for:)`, the corrections check's git blob SHA-1 of the file's bytes. It holds the hash and the file's length to the export's record of the file the volume was indexed from, which the job reads once through the kit's immutable read-only open of the served export (`IndexingPipeline.indexedVolumeFiles()`). A volume whose file is that file is compared, with nothing parsed and nothing written.
+- **Otherwise as before.** A volume whose file is another, or of which the export records none, takes S21f's follow-up's path: its documents hashed with the kit's revision hashes and compared with the export's rows, and the kit's indexer over a volume that differs. The log names each volume whose file is not the one the export indexed, and says once a job how many of its volumes the export records no file for.
+- **No record:** a volume indexed before index version 75 has NULL in both columns, and an export from before 75 has neither column, which the kit's read-only open answers with no record. A record that cannot be read counts as none, and the log says why.
+- **Unchanged:** the queue, giving way after each volume and going on (`work.json`), the re-check by inode, length and modification time, the record, the comparison index and its placing, and the review's readers. A re-check of a file changed and then put back as the export indexed it passes the volume over, once the volume is taken out of the comparison index as before.
+- A test hook, `volumeParsedTestHook`, is told each volume whose documents are compared.
+
+**What follows from it:**
+- **An unchanged export** costs a read of each file, where it cost a parse of each volume.
+- **An export with a Mac's update history**, S21f's follow-up's "Found, for later": a volume whose mounted file is the one the Mac indexed is now passed over, so a document the Mac's own update removed is no longer indexed and reported again at each first comparison; the served export's own stamp shows that change, as before. A volume whose file is another still meets the seed's rows as that entry describes.
+- **An id given twice** in a file the export indexed is passed over too, where the kit stamped it changed at every comparison; the export's own stamp of it, from the Mac's indexing, is the one the reader shows.
+- **The synthetic export** records no file (`scripts/synthetic-export` and `SyntheticExport.swift` leave the two columns NULL), so the smoke test's Import server compares its mounted volumes by their documents, as before: CI runs the path an export without the record takes.
+
+**How the done-when is shown,** in `TEIComparisonTests`, where S21f's follow-up left 13 tests:
+- **Unchanged:** `anUnchangedExportIsComparedWithNoVolumeIndexed` now parses no volume.
+- **Changed:** `aChangedVolumeAloneIsIndexedAndTheKitSaysHowItChanged` parses only the volume whose file changed.
+- **The record decides alone** (`theFileTheExportIndexedDecidesWhetherAVolumesDocumentsAreCompared`, new). The export's record of frus1894Nicaragua is the mounted file's blob SHA-1 and length, by the server's hash, and its volume is passed over though its rows say otherwise. A record naming another file has frus1961-63v06's documents compared, found as the export records them, and nothing indexed.
+- **No record** (`anExportWithoutTheRecordComparesEveryVolumeByItsDocuments`, new, two cases): with the record NULL, and with its two columns dropped, every volume is parsed and compared as before.
+- **The selection's tests:** the rows of a document the TEI does not give, a document with no row or a vanished one, one hashed otherwise, an id given twice and what the selection passes over now give their export no record, as a volume indexed before 75 has none, so they still run the revision-hash comparison.
+
+**Measured** in the release image `frus-light:importfu`, built at `763f91b`, the final code, on the owner's Mac (Docker Desktop, 10 CPUs), with other sessions' jobs beside it (load averages 3.9 to 6.3 over the runs). The script is `.build/importfu/measure.sh`, S21f's follow-up's with a run added, and each time runs from the comparison index's opening to the job's last line, as before:
+
+| Run | Volumes parsed | Volumes given to the kit's indexer | Step 5 | Peak memory sampled |
+|---|---|---|---|---|
+| The fixtures' synthetic export, `fixtures/tei` mounted (2 of its 3 volumes), no record | 2 | 2, their rows partial | 1.05 s, as S21f's follow-up took | 92 MiB |
+| `fixtures/sample`'s 24 volumes (165 MB, 13,687 documents), unchanged, the export recording each file | 0 | 0 | **0.17 s**, where it took 11.68 | 26 MiB |
+| The same, frus1961-63v10's first document changed by one word | 1 | 1; the kit took 1.2 s over it | **1.91 s**, where it took 12.84 | 110 MiB |
+| The same unchanged, with the export's record taken away | 24 | 0 | 11.46 s, as before | 79 MiB |
+
+- **Alongside:** the kit's whole pass over the 24, the export's own making, took 24.77 s, and recorded the file of each of the 24 volumes.
+- **The comparison indexes placed** each passed `quick_check`: the unchanged run's held 332 KB, the changed run's 5.6 MB.
+- **A first measurement,** at `96e500e`, before the review's changes, gave 1.01, 0.18, 1.94 and 11.86 s, with the kit's whole pass at 24.39.
+- **The 553 volumes** (3,338,778,538 bytes) would take about 4 seconds at the unchanged sample's rate. The sample's files were in the page cache, just read by the export's making, so a first comparison that reads the corpus cold after a start may take longer. Each volume whose file is another adds its parse, about half a second at the sample's rate, and each whose documents differ adds what the kit takes to index it.
+
+**The cold review** of step 5, the second subagent's, found no important defect. It found:
+- the record read and held as the kit writes it, a changed file never passed over;
+- the job's giving way, re-check, cancel and placing as before;
+- each file read whole once, 13.1 MB at the most, and the kit's second open closed with its closure;
+- that passing over a volume whose file the export indexed changes what a reader is shown only for the better.
+
+What held up was fixed before the push:
+- **A comparison the released build made would have stayed.** Over an export with a Mac's update history, 1.0-1861.1's comparison found fresh changes in volumes whose file the export indexed: a document the Mac's own update removed, or an id given twice. Nothing marked its record as an earlier rule's, so their banners would have stayed until the next import. The record and the work under way now carry the rule's `format`, 2, and one of an earlier rule is read as none, so an upgraded server compares its export afresh once (`aComparisonAnEarlierRulePlacedIsMadeAgain`).
+- **The test of an export from before 75** could not fail on what its comment claimed, since a record that does not read counts as none too. It now asks the kit's read-only open itself, which answers no record and throws none.
+- **A file of another length** is another file, so the job no longer reads it to hash it.
+
+TEIComparisonTests has 16 tests with the review's.
+
+**The runs before the push** are the entry "Session 16c, follow-up"'s, one hold of the heavy lock for both.
+
+**Records:**
+- SPEC's step 5, in both places: Import procedure, and The corrections check and the update review, whose indexer's version now reads 75.
+- INSTALL's paragraph on the comparison, the import section's.
+- PLAN: a sentence after the paragraph on S21f's follow-up.
+
+**For S24i,** the group's last row (rule 5), from `docs/prep/upstream-volume-blob-sha.md`:
+- **The README's Known gaps,** its line on Import mode's first comparison with its TEI folder: it parses each mounted volume, 4 to 5 minutes for the full corpus, and an export at index version 75 names each file, "a follow-up of S12d's move". That follow-up is done: an unchanged export costs a read of each file (0.17 s for the sample's 24), and only an export that records no file is compared as before. The line can go, or keep only that case.
+- **The README's Next,** item 2: step 5's follow-up is done.
+- **COORDINATION §5's "What the library's rows leave upstream",** its first item: "Import mode's step 5 reading it is a follow-up of its own" is done.
+
+**Next:** S24i, the Word Cloud, the S24 group's last row, which writes the lines above; then S25b, phase 3's sign-off.
 
 ## Session 21f, follow-up: step 5 compares the kit's revision hashes, and indexes only the volumes that differ
 
@@ -5326,6 +5468,82 @@ Phase 2's row S16d. The user's research leaves the server as the Mac's own Expor
 - README's status; and this log.
 
 **Next: S16e,** the import of a research database exported with the owner's writing, SPEC's last resort, which Import mode refuses in phase 1: the writing moved into the user store and the copy stripped with the kit's own sequence before it is installed; and **S17d** once S17c's pin move brings S17a's search of user text and S17b's rules, both in their own sessions now; with S14e, S14d and S14b on the server's track. The export's header waits on S17f's active project, and the sheet's method appendix on S17f.
+
+## Session 16c, follow-up: the JSON import on the kit's plan, with its text rule
+
+22 November 2026 · branch `claude/optimistic-cray-c16081`, a follow-up session of the phase-3 orchestrator's · [#158](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/158), with S21f's second follow-up · upstream `08e8bac8` (tag `1.0-release`), unchanged
+
+S16c's web follow-up, with no PLAN row of its own: steps 2 to 5 of `docs/prep/upstream-json-import.md`, the hand-over of [FRUS-Explorer#1915](https://github.com/joshbotts/FRUS-Explorer/issues/1915). [#1950](https://github.com/joshbotts/FRUS-Explorer/pull/1950) (`b1f98323`) moved the import's rules into the kit, and [#1951](https://github.com/joshbotts/FRUS-Explorer/pull/1951) (`fa9ae409`) gave the app its Import from JSON…; S12d's pin move to `1.0-release` brought both to the server, its step 1. The branch was cut from `main` at `e0d0e38`, #157's merge. No file of the app changed, no migration was added and the pin did not move.
+
+**Every decision the kit's** (CLAUDE.md rule 4), in `Sources/FRUSLightCore/UserResearchImport.swift` and `Sources/FRUSLightAPI/MacImport.swift`:
+- **The store's half.** In the import's one transaction the store reads every column of the user's rows of each table and of every row of the instance's, gives them to the plan, and writes what the plan returns (`ResearchImportStore.importResearch(for:_:)`). Its SQL is its own: an INSERT of every column for an addition, and for a replacement an UPDATE of the columns the written record maps to, by the id as the store spells it. The columns the export does not carry, a summary's source hash and a visit document's and target's state, are never written over.
+- **The plan.** `MacImport` reads the held rows as the kit's records, by the export's own reading of each row (`ResearchExport`), into the kit's `ResearchLibrarySnapshot`, each stamp the kit's `importStamp`. It reads the file with the kit's `ResearchImportFile(data:)`, the web's key beside the envelope, and plans it with `ResearchImportPlan(file:library:)`. Each item maps to its table's row: an addition's `Item.record` as a new row, a replacement's `Item.written(over:)` of the store's copy over each row that holds it, and a record kept not at all. A row that does not read as the kit's record, which only a damaged store holds, refuses the import, as it refuses the export, since a replacement is written over that copy.
+- **What the web no longer decides:** the newer copy (`ImportStamp` stays for S16e's research database, whose rules are its own), the version gates and defaults (`ImportRow.carry`, `collectionSettings(nil)`, `entryFields(nil)`), a repeat's collapsing, and an older file's headnote drafts, inert entries and unlinked collections. The row mappers write a whole record. The four types whose records may leave out a column the model keeps without an optional, a collection, an entry, a project and a summary, are read as the kit reads a record of the current version (`resolvedForImport`), so no default is the web's own, for the web's editors' records too. Their call sites lose the version they passed (`Collections.swift`, `Projects.swift`, `History.swift`, `ProjectFocusTests`).
+- **The route** reads the file through `MacImport.file(of:formatVersion:)`, the kit's reading, its versions the kit's `ResearchImportFile.supportedFormatVersions`; its refusals and their words are as before.
+
+**The text rule,** which comes with `Item.written(over:)` and which the owner kept on 17 November: a file before version 7 that replaces a note's text leaves the note plain; one before version 5 that replaces a summary's text leaves it AI-generated; where the file's text is the store's, the store's formatting and authorship stay.
+- **Counted as the app's done line counts them,** as only a write sees them (`ResearchImportWriter.countTextChange`, app code): `notesMadePlain`, a note whose copy had formatting written with none, and `summariesMadeAIGenerated`, a summary that was not AI-generated written so. Each is counted once a record, however many rows hold it, beside the kit's report. `theTextRulesCasesAreCountedAsTheAppsDoneLineCountsThem` holds the app's lines to its source and the server's conditions to them.
+- **Shown** in the web's report as a line each under its table, in the web's words, where the app shows them as two rows of its done section, Notes now in plain text and Summaries now AI-generated, with its footer's sentence:
+  - "2 notes are now plain text: an export before version 7 cannot carry a note's formatting, and this one replaced their text."
+  - "One summary is now shown as an AI summary: an export before version 5 cannot say who wrote a summary, and this one replaced the summary's text."
+
+  The API's report gains the two counts (`notesMadePlain`, `summariesMadeAIGenerated`).
+
+**The report:** its counts are the kit's `Report`, each type in the store's order as before, with the kit's `headnoteDrafts`, `summariesWithoutAuthorship`, `inertEntries` and `unlinkedCollections`. Beside them, the web's own lines:
+- `formattedNotes` and `formattingKept`, now over the notes the import writes, so a note kept, whose file copy is not written, is no longer counted; with an older file, the store's formatting kept with an unchanged text is;
+- the two counts of the text rule;
+- the corrections set aside for a user who is no curator;
+- `searchableDocuments`.
+
+**Where the kit's plan differs from the web's importer, followed:** the hand-over's three, then what this session found.
+1. A summary from a file before version 5, or one that names no author, is added as `aiGenerated`, where the web wrote none; every reader read the two alike. `theKitsOwnFileOfEachVersionImportsWhole` holds it over the kit's files of versions 1 to 4, and the export's identity test now finds no summary without authorship at any version.
+2. The report counts as inert only the entries the import adds, and names as unlinked only the collections it writes, where the web counted the file's. So an import that keeps a file's collections names none: `web/e2e/import.spec.ts` expects A deleted search's line only where the collections came in, since under the path the run before's are kept.
+3. The corrections are always planned, and the curator rule stays the web's own: for a user who is no curator the two types' planned records are counted as set aside, and none is written.
+4. A version-7 entry with no document and no kind, which no file of the app's has, is added inert, where the web wrote `document`.
+5. A record held in several copies under ids that differ only in case is held at the latest of their stamps, the kit's snapshot's rule, where the web compared the first by id, and each copy is written over, as the app writes each stored copy. No path here makes such copies.
+6. The headnote drafts and the summaries without authorship are counted once a record, each repeat planned once, where the web counted every copy.
+
+**The round trip:** `ImportParityTests.theWebsExportPlannedByTheKitIntoAnEmptyLibraryGivesBackEveryRecord`. The web's export of a fixture user, every type at version 7, is read by the kit's `ResearchImportFile(data:)` and planned by `ResearchImportPlan` into an empty snapshot:
+- every record is planned as an addition, as the export has it, each child under its parent: 47 records, as many as the store's rows;
+- the report counts each as added and nothing else, with the web's key read beside it.
+
+The plan written is the export's identity test, as before: imported into another store, it exports the same file.
+
+**Tests** (in the runs below):
+- FRUSLightCoreTests: `UserResearchImportTests`, on both stores: the plan given the user's rows and the instance's, every column, ids as the store spells them; what it returns written, a replacement only in its columns; each user's rows and the instance's; the preferences by the user; user_search made again; writes that do not fit, a database refusal and a plan that throws writing nothing; S16e's batch by the newer-copy rule; `ImportStamp`'s columns.
+- FRUSParityTests: `ImportParityTests`, a newer version-6 copy with the bold note's text made plain and the third note's formatting kept with its text (`aRecordTheStoreHoldsIsReplacedOnlyByANewerCopy`); a version-4 file leaving the edited summary AI-generated and the unchanged one its author (`aNewTextFromAFileBefore5LeavesTheSummaryAIGenerated`); the round trip; the defaults the kit's plan gives an older file's records, through the server's row mappers, held to the app's models (`whatAnOlderFileCannotCarryTakesTheModelsDefault`); the text rule's cases held to the app's source.
+- FRUSLightServerTests: `ImportRouteTests`, the report's two counts, and for a user who is no curator every copy of a correction set aside and the instance's rows unread.
+- The web unit suite: `ImportSection.test.tsx`, the two lines beside the formatting kept and the summaries without authorship.
+
+**The cold reviews:** two subagents, given the range `origin/main...HEAD` and the points the brief asks a review to weigh, and none of this session's reasoning, each ran the `code-review` skill at `high`, one over the import and one over step 5. Neither found an important defect in what it reviewed. The import's review found that every decision is the kit's, that the text rule's counts are the app's done line's, that the store's half is one transaction on both stores with S16e's batch as before, and that the round trip holds what its name says. What held up was fixed before the push:
+- **A user who is no curator read the instance's corrections** (both reviews; the skill marked it important): every import read every correction row as the kit's record, though only a curator's import writes one, so one row that did not read would have refused every user's import. The import now reads the instance's tables only for a curator, as a user's export reads them, and `anInstancesCorrectionsAreSetAsideForAUserWhoIsNoCurator` holds that such a row refuses a curator's import alone.
+- **A correction the file repeats, for a user who is no curator:** the report counted the repeat as kept once and the rest as set aside. Every copy is now counted as set aside and none as repeated, as before the kit's plan.
+- **The store's lock:** the import reads every row of the user's tables in its transaction, as an export reads them, where it read each record's id and times, since the kit's snapshot takes each stamp from the record and a replacement is written over the record. That is kept, and SPEC says so. What is the web's own now runs outside the lock: the codec reads the written notes' formatting after the transaction.
+- **Smaller:** the envelope's `run` now maps the kit's refusal of a version, as the file's does.
+- **Left to their owners:** the stale lines the review found in the README, COORDINATION and SPEC's Delivery plan are named for S24i below, and `docs/prep`'s "Taken" is the pin moves'.
+
+**The runs before the push,** on this Mac, in one hold of the heavy lock (`.build/importfu/final.sh --measure`), at `763f91b`, the code as pushed, with the records' text after it:
+- **The image,** `frus-light:importfu`, with its parity stage, and step 5's measurement on it (the entry "Session 21f, second follow-up").
+- **CI's swift job,** `scripts/swift --postgres test`, with this package's own targets built clean, in 102 s, with no warning.
+  - 4,325 tests, all passing but the one named skip, `FTS5StoreTests`' `backupExclusion()`. The store's tests ran on PostgreSQL too.
+  - By target: CrossRefKitTests 10, FRUSCoreKitTests 2,569, FRUSLightCoreTests 277, FRUSLightServerTests 418, FRUSParityTests 301, FRUSRichTextTests 42, FTS5CheckTests 3, FTS5StoreTests 219, GeneratorKitTests 7, ManifestGeneratorTests 60, SemanticVectorsKitTests 40, SourceExplorerExportGeneratorTests 22, SourceNoteKitTests 327 and WordCloudKitTests 30.
+  - Each is the count S12d's run gave, but for these follow-ups': FRUSLightCoreTests 279 there, `UserResearchImportTests` 8 to 6; FRUSLightServerTests 415, `TEIComparisonTests`' 3 more; FRUSParityTests 298, `ImportParityTests`' 3 more.
+- **`scripts/compose-smoke --e2e`** with `FRUS_IMAGE=frus-light:importfu FRUS_HOST_PORT=18410`: PASS. The browser suite passed 89 and skipped 9 at the root and under the path, as `main`'s CI does, `import.spec.ts` among them, and the update review's spec passed before and after the update. Checks 2 and 8, which need the parity stage's image named (`FRUS_PARITY_IMAGE`), were left to CI's compose job, since nothing here touches the index's summary or Source Explorer.
+- **CI's web job** (`scripts/npm ci`, `run typecheck`, `run lint`, `test`, `run build`) ran at `96e500e`, after which nothing under `web/` changed: 671 tests in 74 files, where S12d's run had 670.
+- **Before the reviews:** the touched suites at each commit, and the smoke test with `--e2e` on the image built at `96e500e`, which passed with the same counts.
+
+**Records:**
+- SPEC's Import and export paths: the web export's row, the second limit lifted by 1.0 (1823), how the web imports on the kit's plan with its text rule and report, and the export's way back to the app; the HTTP API's report.
+- INSTALL's Bring your research from the Mac (the rules and the text rule) and Take your research with you (Export here, then Import from JSON… in the app on a Mac, iPhone or iPad).
+- PLAN: a paragraph after S16c's.
+
+**For S24i,** the group's last row (rule 5), from `docs/prep/upstream-json-import.md`:
+- The README's What works today, its line on the Mac's JSON export: imported by the kit's rules, the app's Import from JSON…'s, with a note's formatting and a summary's author going with a text an older export replaces; and the way back, the web's export imported into the app with Settings ▸ System ▸ Data & Recovery ▸ Import from JSON… on Mac, iPhone or iPad. Its Next, item 2: the import's follow-up is done.
+- COORDINATION §5's JSON-importer item: "the web's own import taking the kit's plan is a follow-up of its own" is done, so the item closes.
+- SPEC's Settings and administration, a shared part, whose Settings ▸ Data bullet says the pane imports "the web's own, since the app imports none": the app imports one since 1.0 (1823), and the pane's report has the two lines of the text rule.
+- SPEC's Delivery plan, another, whose Changes requested in the Mac app keep item 4, "Optionally, add a JSON importer, so web data can return to the Mac": done since 1.0 (1823).
+
+**Next:** S24i, the Word Cloud, the S24 group's last row, which writes the lines above; then S25b, phase 3's sign-off.
 
 ## Session 16c: the import of a Mac JSON export
 

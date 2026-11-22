@@ -1,7 +1,8 @@
 // POST /api/v1/me/import and GET /api/v1/me/import/{id} (PLAN's S16c): a Mac JSON export, sent as the
 // request's body, imported into the user's store as a job, and its report. The file's format version
 // is read at once, so a file that is not an export, or of a version the server does not read, is
-// refused before it waits; the rest, its decoding with the kit's envelope and its rows, is the job's.
+// refused before it waits; the rest, its reading by the kit as an import reads it and the kit's plan of
+// it against what the user holds (`MacImport`, since #1915's follow-up), is the job's.
 // A user has one import at a time. What each job did is kept while the server runs, under an id of
 // its own, so that after a restart an old id names no import rather than another. Since S20d the job
 // is a row of the server's queue too, under the same id, in two steps, the file's reading and its
@@ -135,12 +136,12 @@ enum ImportRoutes {
                     await imports.run(status.id)
                     do {
                         try await job.step("Reading the export")
-                        let envelope = try await Blocking.run { try MacImport.envelope(of: data, formatVersion: version) }
+                        let file = try await Blocking.run { try MacImport.file(of: data, formatVersion: version) }
                         // One transaction writes it all, so from here it runs to its end.
                         try await job.commit()
                         await job.progress("Writing its records into \(user.id)'s research")
                         let report = try await Blocking.run {
-                            try MacImport.run(envelope, into: store, for: user.id, includingInstanceWide: curator)
+                            try MacImport.run(file, into: store, for: user.id, includingInstanceWide: curator)
                         }
                         await imports.succeed(status.id, with: report)
                         // Suggested Next from what came in (PLAN's S23d): each project's, queued behind this job.

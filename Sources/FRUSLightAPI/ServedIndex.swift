@@ -46,10 +46,9 @@ public final class ServedIndex: Sendable {
     public let citations: CitationMatchingEngine
     /// Corpus Analytics' series over this index (PLAN's S24f): the kit's `CorpusAnalyticsService`, whose caches
     /// answer every reader of the index and end with it, as the app's `invalidateCache()` empties them when its
-    /// index changes; and a second for the occurrence series alone, which the kit caches under "occ:" and the
-    /// term, a key a document term so spelt would meet in one shared service (upstream #1913).
+    /// index changes. Its occurrence series have a cache of their own since upstream #1913, which no documents
+    /// query can be keyed into, so the one service gives both.
     public let analytics: CorpusAnalyticsService
-    public let occurrences: CorpusAnalyticsService
     /// The facet sections computed lately over this index; a new index starts with none.
     public let facets = FacetCache()
     /// The results the app keeps of each search run lately over this index, for its date order.
@@ -100,7 +99,6 @@ public final class ServedIndex: Sendable {
         }
         service = SearchService(fts5Store: fts5, pipeline: pipeline)
         analytics = CorpusAnalyticsService(fts5Store: fts5, pipeline: pipeline)
-        occurrences = CorpusAnalyticsService(fts5Store: fts5, pipeline: pipeline)
         attachesUserStore = userStore != nil
         indexedVolumeIds = Set(corpus.documentsByVolume.filter { $0.value > 0 }.keys)
         citations = CitationMatchingEngine(manifestStore: FixedVolumeCatalogue(entries: resources.manifest),

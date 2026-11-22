@@ -492,10 +492,10 @@ enum CorpusAnalyticsRoutes {
         var occurrenceYearVolumes: [YearVolumeFrequency] = []
         var occurrenceYears: [YearFrequency]?
         if ask.unit == .occurrences, availability.isAvailable {
-            // The occurrence series come from a service of their own: the kit keys their cache as "occ:" and the
-            // term, which a document term so spelt would meet in a shared one (FRUS-Explorer#1913).
-            occurrenceYearVolumes = try await served.occurrences.termOccurrencesByYearAndVolume(term: term, volumeIds: scope)
-            occurrenceYears = try await served.occurrences.termOccurrencesByYear(term: term, volumeIds: scope)
+            // From the same service: the kit caches the occurrence series apart from every documents series since
+            // FRUS-Explorer#1913, so a documents term spelt "occ:" and a term meets nothing of them.
+            occurrenceYearVolumes = try await service.termOccurrencesByYearAndVolume(term: term, volumeIds: scope)
+            occurrenceYears = try await service.termOccurrencesByYear(term: term, volumeIds: scope)
         }
         async let years = service.termFrequencyByYear(term: term, volumeIds: scope)
         async let decades = service.termFrequencyByDecade(term: term, volumeIds: scope)
@@ -785,24 +785,17 @@ struct CorpusAnalyticsView {
         valueUnit == .occurrences ? (loaded.occurrenceYears ?? []) : loaded.years
     }
 
-    /// The By-Decade series in the active unit: occurrences bucketed from the year series (`decadeSeries`). The
-    /// kit's `DecadeFrequency` keeps its initialiser internal (FRUS-Explorer#1906 left it so), so the view's sum is
-    /// carried in a value of the server's own, with the same two fields.
-    var decadeData: [Decade] {
-        guard valueUnit == .occurrences else { return loaded.decades.map { Decade(decadeStart: $0.decadeStart, count: $0.count) } }
+    /// The By-Decade series in the active unit: occurrences bucketed from the year series (`decadeSeries`), each
+    /// the kit's `DecadeFrequency`, whose initialiser is public since FRUS-Explorer#1928.
+    var decadeData: [DecadeFrequency] {
+        guard valueUnit == .occurrences else { return loaded.decades }
         var byDecade: [Int: Int] = [:]
         for entry in loaded.occurrenceYears ?? [] {
             byDecade[(entry.year / 10) * 10, default: 0] += entry.count
         }
         return byDecade
-            .map { Decade(decadeStart: $0.key, count: $0.value) }
+            .map { DecadeFrequency(decadeStart: $0.key, count: $0.value) }
             .sorted { $0.decadeStart < $1.decadeStart }
-    }
-
-    /// A decade's count: a `DecadeFrequency`'s two fields.
-    struct Decade: Equatable {
-        let decadeStart: Int
-        let count: Int
     }
 
     var filteredYearData: [YearFrequency] {
@@ -810,7 +803,7 @@ struct CorpusAnalyticsView {
         return yearData.filter { $0.year >= yearRangeStart && $0.year <= yearRangeEnd }
     }
 
-    var filteredDecadeData: [Decade] {
+    var filteredDecadeData: [DecadeFrequency] {
         guard !decadeData.isEmpty else { return [] }
         return decadeData.filter { d in
             let bucketEnd = d.decadeStart + 9

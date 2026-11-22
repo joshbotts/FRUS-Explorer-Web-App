@@ -15,8 +15,8 @@ export const publishedLinks: Record<string, string> = {
   publicPapers: 'https://www.govinfo.gov/app/collection/PPP',
 };
 
-/** When the links were last confirmed (`PublishedSourceLinkTable.confirmed`): 28 August 2026, UTC. */
-export const publishedLinksConfirmed = Date.UTC(2026, 7, 28);
+/** When the links were last confirmed (`PublishedSourceLinkTable.confirmed`): 20 November 2026, UTC. */
+export const publishedLinksConfirmed = Date.UTC(2026, 10, 20);
 
 /** How long a confirmed link stays fresh (`RepositoryLink.freshnessWindow`): about six months. */
 const freshnessWindow = 180 * 24 * 60 * 60 * 1000;

@@ -1,8 +1,9 @@
-// Settings ▸ Data's import of a Mac JSON export (PLAN's S16c), the web's own, since the app imports
-// none: the file chosen is sent as it is to POST /api/v1/me/import, whose job the pane follows until
-// it is done. Its report says, for each kind of record, how many the file held and how many came in,
-// replaced an older copy or left a copy as new or newer as it was, in the order and the words of the
-// app's export sheet; then what the import made of what an older file does not say.
+// Settings ▸ Data's import of a Mac JSON export (PLAN's S16c), the web's own pane over the kit's rules,
+// which the app's Import from JSON… takes too: the file chosen is sent as it is to POST
+// /api/v1/me/import, whose job the pane follows until it is done. Its report says, for each kind of
+// record, how many the file held and how many came in, replaced an older copy or left a copy as new or
+// newer as it was, in the order and the words of the app's export sheet; then what the import made of
+// what an older file does not say, the notes and summaries whose text it replaced among them.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useState } from 'react';
 import { errorMessage } from '../api/client';
@@ -170,6 +171,8 @@ function Report({ report }: { report: ResearchImportReport }) {
         {settingsSetAside > 0 && <li>{words.setAsideSettings(settingsSetAside)}</li>}
         {correctionsSetAside > 0 && <li>{words.setAsideCorrections(correctionsSetAside)}</li>}
         {report.formattingKept > 0 && <li>{words.formattingKept(report.formattingKept)}</li>}
+        {report.notesMadePlain > 0 && <li>{words.madePlain(report.notesMadePlain)}</li>}
+        {report.summariesMadeAIGenerated > 0 && <li>{words.madeAIGenerated(report.summariesMadeAIGenerated)}</li>}
         {report.headnoteDrafts > 0 && <li>{words.headnoteDrafts(report.headnoteDrafts)}</li>}
         {report.summariesWithoutAuthorship > 0 && <li>{words.withoutAuthorship(report.summariesWithoutAuthorship)}</li>}
         {report.inertEntries > 0 && <li>{words.inertEntries(report.inertEntries)}</li>}

@@ -52,7 +52,7 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     ArchivalNeighborsRoutes.add(to: router, provider: provider, resources: resources)
     ArchivalCollectionRoutes.add(to: router, provider: provider, resources: resources)
     VolumeSourcesRoutes.add(to: router, provider: provider, resources: resources)
-    RelatedDocumentsRoutes.add(to: router, provider: provider, resources: resources)
+    RelatedDocumentsRoutes.add(to: router, provider: provider, resources: resources, users: users)
     CrossReferenceGraphRoutes.add(to: router, provider: provider, resources: resources)
     // Archival Analytics and About the Series (PLAN's S24h).
     ArchivalAnalyticsRoutes.add(to: router, provider: provider, resources: resources)
@@ -62,7 +62,7 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     CrossReferenceAnalyticsRoutes.add(to: router, provider: provider, resources: resources)
     // Corpus Analytics and Chronology (PLAN's S24f).
     CorpusAnalyticsRoutes.add(to: router, provider: provider, resources: resources)
-    ChronologyRoutes.add(to: router, provider: provider, resources: resources)
+    ChronologyRoutes.add(to: router, provider: provider, resources: resources, users: users)
     CitationLookupRoutes.add(to: router, provider: provider, resources: resources)
     PDFRoutes.add(to: router, service: state.pdf)
     ReaderLinkRoutes.add(to: router, state: state, provider: provider, reader: reader, resources: resources)

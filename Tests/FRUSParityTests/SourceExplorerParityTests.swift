@@ -695,7 +695,7 @@ import Testing
             #"url: "https://guides.loc.gov/researching-treaties-and-international-agreements","#,
             #"url: "https://archive.org/details/pub_department-of-state-bulletin","#,
             #"url: "https://www.govinfo.gov/app/collection/PPP","#,
-            "year: 2026, month: 8, day: 28).date",
+            "year: 2026, month: 11, day: 20).date",
             "if link.isStale(), let checked = link.verifiedDate {",
         ], file: "PublishedSourceLinkTable.swift")
         NoteViewParityTests.expect(facts, holds: ["static let freshnessWindow: TimeInterval = 180 * 24 * 60 * 60"], file: "RepositoryFactTable.swift")
@@ -703,7 +703,7 @@ import Testing
             "treatySeries: 'https://guides.loc.gov/researching-treaties-and-international-agreements',",
             "stateBulletin: 'https://archive.org/details/pub_department-of-state-bulletin',",
             "publicPapers: 'https://www.govinfo.gov/app/collection/PPP',",
-            "export const publishedLinksConfirmed = Date.UTC(2026, 7, 28);",
+            "export const publishedLinksConfirmed = Date.UTC(2026, 10, 20);",
             "const freshnessWindow = 180 * 24 * 60 * 60 * 1000;",
             "return restrictions && restrictions.length > 0 ? `${status} — ${restrictions.join(', ')}` : status;",
             "const parts = [series.entryNumber, series.dateRange].filter((part): part is string => !!part);",

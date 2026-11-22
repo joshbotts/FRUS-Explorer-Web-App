@@ -1,19 +1,23 @@
-// The import of a Mac JSON export (PLAN's S16c), the store's half: the rows an import brings to each
-// of the 23 tables, written under the importing user with the Mac's ids, in one transaction. A row the
-// store holds is replaced only by a newer copy, and then only in the columns the file's format version
-// carries, so what an older file cannot say is never written over; a new row takes the app's default
-// for those. An import adds and replaces and never deletes, since the export carries no deletions.
-// Last, the user's rows of `user_search` are made again from their notes and summaries, and in the
-// PostgreSQL store's local copy their tag assignments too.
+// The import of a Mac JSON export (PLAN's S16c), the store's half: in one transaction, what the importing user holds
+// of the 23 tables is read, given to the import's plan, and what the plan decides is written, each addition a new row
+// under the user with the Mac's id and each replacement the columns it names of the row the store holds. Since #1915's
+// follow-up the plan is the kit's, `ResearchImportPlan`, which the API's `MacImport` makes from these rows: which
+// record is added, replaced or kept, and what a replacement writes, are the kit's to say, and the SQL that writes them
+// is the store's own. An import adds and replaces and never deletes, since the export carries no deletions. Last, the
+// user's rows of `user_search` are made again from their notes and summaries, and in the PostgreSQL store's local copy
+// their tag assignments too.
+//
+// The batch below, written by `ImportStamp`'s newer-copy rule, is S16e's: the import of a research database exported
+// with the owner's writing, whose rules are the web's own (`ResearchDatabaseWriting`).
 
 import Foundation
 
 /// One record an import brings, as a row of its table.
 public struct ImportRow: Sendable, Equatable {
-    /// What the file says of the row, by column: every column its format version carries.
+    /// What the record says of the row, by column: every column it carries.
     public var values: [String: SQLiteValue]
-    /// What a new row takes for each other column: the app's default for the property, which the
-    /// file's format version cannot carry. A row the store holds keeps its own.
+    /// What a new row takes for each other column: a column the record does not carry, such as a summary's
+    /// `source_content_hash`, which no path here writes. A row the store holds keeps its own.
     public var defaults: [String: SQLiteValue]
 
     public init(values: [String: SQLiteValue], defaults: [String: SQLiteValue] = [:]) {
@@ -22,7 +26,28 @@ public struct ImportRow: Sendable, Equatable {
     }
 }
 
-/// What an import brings: by table, each table's rows in the file's order.
+/// One write of an import, as its plan decided: a new row, or the columns of a row the store holds.
+public struct ImportWrite: Sendable, Equatable {
+    public enum Action: String, Sendable, Equatable { case add, replace }
+
+    public var table: String
+    public var action: Action
+    /// For a replacement, the row's id as the store spells it, as the rows the plan was given hold it; nil for an
+    /// addition, whose id is its row's, and for a replacement of the preferences, which a user has one set of.
+    public var id: String?
+    /// For an addition, every column of the row, its `values` and its `defaults`; for a replacement, the columns its
+    /// `values` name but the id, written over the row the store holds, which keeps the rest, its `defaults` among them.
+    public var row: ImportRow
+
+    public init(_ table: String, _ action: Action, id: String? = nil, row: ImportRow) {
+        self.table = table
+        self.action = action
+        self.id = id
+        self.row = row
+    }
+}
+
+/// What an import brings by the newer-copy rule (S16e's): by table, each table's rows in the file's order.
 public struct ResearchImportBatch: Sendable, Equatable {
     public var rows: [String: [ImportRow]]
 
@@ -61,31 +86,27 @@ public struct UnlinkedCollection: Sendable, Equatable, Codable {
     }
 }
 
-/// What an import did.
+/// What an import wrote.
 public struct ResearchImportResult: Sendable, Equatable {
-    /// By table, for each table the batch named.
+    /// By table, the rows added and the rows replaced, each replacement counted once for each row it wrote over.
     public var counts: [String: ImportCount]
-    /// The batch's collections that, once it is written, name a saved search the user does not hold,
-    /// in the batch's order: kept with the link as the Mac keeps one whose search was deleted, which
-    /// the app reads as "The linked saved search could not be found."
-    public var unlinkedCollections: [UnlinkedCollection]
     /// How many documents the user's rows of `user_search` hold text for, once made again.
     public var searchableDocuments: Int
 
-    public init(counts: [String: ImportCount], unlinkedCollections: [UnlinkedCollection], searchableDocuments: Int) {
+    public init(counts: [String: ImportCount], searchableDocuments: Int) {
         self.counts = counts
-        self.unlinkedCollections = unlinkedCollections
         self.searchableDocuments = searchableDocuments
     }
 }
 
-/// A batch that does not fit the store's tables: a mapping's mistake, so nothing is written.
+/// Writes that do not fit the store's tables: a mapping's mistake, so nothing is written.
 public enum ResearchImportError: Error, Equatable, CustomStringConvertible {
     case unknownTable(String)
     case unknownColumn(table: String, column: String)
-    /// A column a new row must have that neither the file nor a default gives.
+    /// A column a new row must have that neither its values nor its defaults give.
     case missingColumn(table: String, column: String)
-    /// A row with no id, in a table keyed by one.
+    /// A row with no id, in a table keyed by one; or a replacement that names no row, or names one in the
+    /// preferences, which a user has one set of.
     case missingId(table: String)
 
     public var description: String {
@@ -98,9 +119,10 @@ public enum ResearchImportError: Error, Equatable, CustomStringConvertible {
     }
 }
 
-/// How new a row's copy is: the first of its table's columns that holds a time, by table. A row with
-/// none is older than any that has one. A type with no time of change, a highlight or a correction,
-/// compares the time it was made, so the store's copy of one is kept.
+/// How new a row's copy is, by S16e's newer-copy rule: the first of its table's columns that holds a time, by
+/// table. A row with none is older than any that has one. A type with no time of change, a highlight or a
+/// correction, compares the time it was made, so the store's copy of one is kept. The dates are the ones the kit's
+/// `ResearchImportRecord.importStamp` reads, which decides a JSON import's newer copy since #1915's follow-up.
 public enum ImportStamp {
     public static let columns: [String: [String]] = [
         "notes": ["last_modified", "created_at"],
@@ -139,29 +161,135 @@ public enum ImportStamp {
 
 /// Where an import's rows are written.
 public protocol ResearchImportStore: Sendable {
-    /// Writes `batch` under `user` in one transaction, as the file names each row: one the store
-    /// holds by its key is replaced, in the columns the row's `values` give, only when its copy is
-    /// newer by `ImportStamp`; any other is added, with its `defaults` for the rest. An instance-wide
-    /// table's rows are the instance's, keyed by id alone. Then the user's rows of `user_search` are
-    /// made again from all their notes and summaries. Throws `ResearchImportError`, writing nothing,
-    /// for a batch that does not fit the tables.
-    func importResearch(_ batch: ResearchImportBatch, for user: String) throws -> ResearchImportResult
+    /// Imports in one transaction: reads what the import may write over, every column of `user`'s rows of each user
+    /// table and of every row of an instance-wide one, each table's in the order the store took them; gives them to
+    /// `plan`, which says what to write; writes it, each addition a new row under the user and each replacement the
+    /// columns it names of the row it names; then makes the user's rows of `user_search` again from all their notes
+    /// and summaries. Throws what `plan` throws, and `ResearchImportError` for writes that do not fit the tables,
+    /// writing nothing.
+    func importResearch(for user: String, _ plan: (ResearchRows) throws -> [ImportWrite]) throws -> ResearchImportResult
 }
 
 extension RelationalUserStore: ResearchImportStore {
+    public func importResearch(for user: String, _ plan: (ResearchRows) throws -> [ImportWrite]) throws -> ResearchImportResult {
+        try writing { db in
+            let writes = try plan(try Self.held(by: user, in: db))
+            let tables = try Self.check(writes)
+            var byTable: [String: [ImportWrite]] = [:]
+            for write in writes { byTable[write.table, default: []].append(write) }
+            var counts: [String: ImportCount] = [:]
+            for table in tables {
+                var count = ImportCount()
+                for write in byTable[table.name] ?? [] {
+                    switch write.action {
+                    case .add:
+                        try Self.add(write.row, to: table, for: user, in: db)
+                        count.added += 1
+                    case .replace:
+                        try Self.replace(write.id, in: table, with: write.row.values, for: user, in: db)
+                        count.replaced += 1
+                    }
+                }
+                counts[table.name] = count
+            }
+            return ResearchImportResult(counts: counts, searchableDocuments: try Self.rebuildSearch(for: user, in: db))
+        }
+    }
+
+    /// Every column of `user`'s rows of each user table and of every row of an instance-wide one, inside the caller's
+    /// transaction, each table's in the order the store took them: what an import plans against.
+    static func held(by user: String, in db: UserStoreTransaction) throws -> ResearchRows {
+        var rows: [String: [ExportRow]] = [:]
+        for table in UserStoreSchema.tables {
+            rows[table.name] = table.scope == .user
+                ? try Self.rows(of: table, where: "user_id = ?", [.text(user)], in: db)
+                : try Self.rows(of: table, where: "1 = 1", [], in: db)
+        }
+        return ResearchRows(rows: rows)
+    }
+
+    /// The tables `writes` name, in the schema's order, once every write is found to fit its table: each column one
+    /// of its table's; an addition naming every column, and an id in a table keyed by one; a replacement naming the
+    /// row it writes over in a table keyed by id, and none in the preferences.
+    static func check(_ writes: [ImportWrite]) throws -> [UserStoreSchema.Table] {
+        let named = Set(writes.map(\.table))
+        for name in named.sorted() where UserStoreSchema.tables.first(where: { $0.name == name }) == nil {
+            throw ResearchImportError.unknownTable(name)
+        }
+        let tables = UserStoreSchema.tables.filter { named.contains($0.name) }
+        let byName = Dictionary(uniqueKeysWithValues: tables.map { ($0.name, $0) })
+        for write in writes {
+            guard let table = byName[write.table] else { continue }
+            let columns = Set(table.columns.map(\.name))
+            for column in (Array(write.row.values.keys) + Array(write.row.defaults.keys)).sorted() where !columns.contains(column) {
+                throw ResearchImportError.unknownColumn(table: table.name, column: column)
+            }
+            let keyed = table.primaryKey.contains("id")
+            switch write.action {
+            case .add:
+                for column in table.columns where write.row.values[column.name] == nil && write.row.defaults[column.name] == nil {
+                    throw ResearchImportError.missingColumn(table: table.name, column: column.name)
+                }
+                if keyed, write.row.values["id"]?.text == nil { throw ResearchImportError.missingId(table: table.name) }
+            case .replace:
+                if keyed != (write.id != nil) { throw ResearchImportError.missingId(table: table.name) }
+            }
+        }
+        return tables
+    }
+
+    /// Adds `row` to `table`, under `user` in a user table: every column, as `row` gives it, NULL where it gives none.
+    static func add(_ row: ImportRow, to table: UserStoreSchema.Table, for user: String, in db: UserStoreTransaction) throws {
+        let columns = table.columns.map(\.name)
+        let names = (table.scope == .user ? ["user_id"] : []) + columns
+        let values = (table.scope == .user ? [SQLiteValue.text(user)] : []) + columns.map { row.values[$0] ?? row.defaults[$0] ?? .null }
+        _ = try db.query(
+            "INSERT INTO \(table.name) (\(names.joined(separator: ", "))) VALUES (\(names.map { _ in "?" }.joined(separator: ", ")))",
+            values)
+    }
+
+    /// Sets the columns `values` names, never the id, on the row of `table` the store holds by `id`, as it spells it,
+    /// the user's in a user table; with no id, the user's one row of a table keyed by user alone.
+    static func replace(_ id: String?, in table: UserStoreSchema.Table, with values: [String: SQLiteValue], for user: String,
+                        in db: UserStoreTransaction) throws {
+        // A row keyed by id is named by it, or the write would reach every row the other conditions hold.
+        guard table.primaryKey.contains("id") == (id != nil) else { throw ResearchImportError.missingId(table: table.name) }
+        var conditions: [String] = []
+        var keys: [SQLiteValue] = []
+        if table.scope == .user {
+            conditions.append("user_id = ?")
+            keys.append(.text(user))
+        }
+        if let id {
+            conditions.append("id = ?")
+            keys.append(.text(id))
+        }
+        let columns = table.columns.map(\.name).filter { $0 != "id" && values[$0] != nil }
+        guard !columns.isEmpty else { return }
+        _ = try db.query(
+            "UPDATE \(table.name) SET \(columns.map { "\($0) = ?" }.joined(separator: ", ")) WHERE \(conditions.joined(separator: " AND "))",
+            columns.map { values[$0] ?? .null } + keys)
+    }
+
+    // MARK: S16e's batch, by the newer-copy rule
+
+    /// Writes `batch` under `user` in a transaction of its own by the newer-copy rule (`write(_:tables:for:in:)`), then
+    /// makes the user's rows of `user_search` again, as a research database's writing does: the tests seed a store so.
+    /// Throws `ResearchImportError`, writing nothing, for a batch that does not fit the tables.
+    @discardableResult
     public func importResearch(_ batch: ResearchImportBatch, for user: String) throws -> ResearchImportResult {
         let tables = try Self.check(batch)
         return try writing { db in
             let counts = try Self.write(batch, tables: tables, for: user, in: db)
-            let unlinked = try Self.unlinkedCollections(among: batch.rows["collections"] ?? [], for: user, in: db)
-            return ResearchImportResult(counts: counts, unlinkedCollections: unlinked,
-                                        searchableDocuments: try Self.rebuildSearch(for: user, in: db))
+            return ResearchImportResult(counts: counts, searchableDocuments: try Self.rebuildSearch(for: user, in: db))
         }
     }
 
-    /// Writes the rows of `batch` into `tables`, `check(_:)`'s, inside the caller's transaction, as
-    /// `importResearch` describes, and counts what became of each table's: the import of an export
-    /// made with the owner's writing writes its rows so too (S16e).
+    /// Writes the rows of `batch` into `tables`, `check(_:)`'s, inside the caller's transaction, and counts what became
+    /// of each table's: a row the store holds by its key is replaced, in the columns the row's `values` give, only when
+    /// its copy is newer by `ImportStamp`; any other is added, with its `defaults` for the rest; an instance-wide
+    /// table's rows are the instance's, keyed by id alone. The import of an export made with the owner's writing
+    /// writes its rows so (S16e).
     static func write(_ batch: ResearchImportBatch, tables: [UserStoreSchema.Table], for user: String,
                       in db: UserStoreTransaction) throws -> [String: ImportCount] {
         var counts: [String: ImportCount] = [:]
@@ -182,8 +310,8 @@ extension RelationalUserStore: ResearchImportStore {
 
     private enum Outcome { case added, replaced, kept }
 
-    /// A row the store holds: its id as the store spells it, nil for a table keyed by user alone, and
-    /// its time by `ImportStamp`.
+    /// A row the store holds: its id as the store spells it, nil for a table keyed by user alone, and its time by
+    /// `ImportStamp`.
     private struct Held {
         var id: String?
         var time: Date?
@@ -212,10 +340,10 @@ extension RelationalUserStore: ResearchImportStore {
         return tables
     }
 
-    /// The rows of `table` the store holds, the user's or an instance-wide table's every row, by id as
-    /// the store finds one, in any case, or by "" for a table keyed by user alone: read once, so that a
-    /// row's lookup does not read the table again however many rows it holds. In the order of their
-    /// ids, so that where two ids differ only in case both stores find the same one.
+    /// The rows of `table` the store holds, the user's or an instance-wide table's every row, by id as the store
+    /// finds one, in any case, or by "" for a table keyed by user alone: read once, so that a row's lookup does not
+    /// read the table again however many rows it holds. In the order of their ids, so that where two ids differ only
+    /// in case both stores find the same one.
     private static func held(in table: UserStoreSchema.Table, for user: String, in db: UserStoreTransaction) throws -> [String: Held] {
         let stamps = ImportStamp.columns[table.name] ?? []
         let keyed = table.primaryKey.contains("id")
@@ -241,55 +369,14 @@ extension RelationalUserStore: ResearchImportStore {
         let key = keyed ? UserSearchText.uuidString(row.values["id"]?.text ?? "") : ""
         let givenTime = ImportStamp.time(of: { row.values[$0] }, in: table.name)
         guard let stored = held[key] else {
-            let columns = table.columns.map(\.name)
-            let names = (table.scope == .user ? ["user_id"] : []) + columns
-            let values = (table.scope == .user ? [SQLiteValue.text(user)] : [])
-                + columns.map { row.values[$0] ?? row.defaults[$0] ?? .null }
-            _ = try db.query(
-                "INSERT INTO \(table.name) (\(names.joined(separator: ", "))) VALUES (\(names.map { _ in "?" }.joined(separator: ", ")))",
-                values)
+            try Self.add(row, to: table, for: user, in: db)
             held[key] = Held(id: row.values["id"]?.text, time: givenTime)
             return .added
         }
         guard let givenTime, givenTime > (stored.time ?? .distantPast) else { return .kept }
-        // Only what the file carries, in the row the store holds, by its key as the store spells it.
-        var conditions: [String] = []
-        var keys: [SQLiteValue] = []
-        if table.scope == .user {
-            conditions.append("user_id = ?")
-            keys.append(.text(user))
-        }
-        if keyed, let id = stored.id {
-            conditions.append("id = ?")
-            keys.append(.text(id))
-        }
-        let columns = table.columns.map(\.name).filter { $0 != "id" && row.values[$0] != nil }
-        _ = try db.query(
-            "UPDATE \(table.name) SET \(columns.map { "\($0) = ?" }.joined(separator: ", ")) WHERE \(conditions.joined(separator: " AND "))",
-            columns.map { row.values[$0] ?? .null } + keys)
+        // Only what the row carries, in the row the store holds, by its key as the store spells it.
+        try Self.replace(keyed ? stored.id : nil, in: table, with: row.values, for: user, in: db)
         held[key]?.time = givenTime
         return .replaced
-    }
-
-    /// The collections among `rows` that name a saved search the user does not hold, in their order.
-    private static func unlinkedCollections(among rows: [ImportRow], for user: String,
-                                            in db: UserStoreTransaction) throws -> [UnlinkedCollection] {
-        var unlinked: [String: UnlinkedCollection] = [:]
-        for row in try db.query(
-            """
-            SELECT c.id, c.name FROM collections c
-                WHERE c.user_id = ? AND c.saved_search_id IS NOT NULL
-                  AND NOT EXISTS (SELECT 1 FROM saved_searches s
-                                      WHERE s.user_id = c.user_id AND upper(s.id) = upper(c.saved_search_id))
-                ORDER BY c.id
-            """, [.text(user)]) {
-            let id = row[0].text ?? ""
-            unlinked[UserSearchText.uuidString(id)] = UnlinkedCollection(id: id, name: row[1].text ?? "")
-        }
-        var seen: Set<String> = []
-        return rows.compactMap { row in
-            let id = UserSearchText.uuidString(row.values["id"]?.text ?? "")
-            return seen.insert(id).inserted ? unlinked[id] : nil
-        }
     }
 }

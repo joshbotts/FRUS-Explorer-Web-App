@@ -346,8 +346,18 @@ export function documentSummariesQuery(volumeId: string, documentId: string) {
 /** Whether the server has no such summary: deleted elsewhere. */
 const summaryGone = (error: unknown) => error instanceof ApiError && error.code === 'SUMMARY_NOT_FOUND';
 
+/**
+ * After a change to the user's summaries, the lines that read them are read again: Related Documents' rows
+ * (FRUS-Explorer#1907), Chronology's rows (#1927) and Project Home's Suggested Next leads (#1902), each of which
+ * shows a document's summary where its reader wrote one.
+ */
+export function summaryLinesChanged(client: QueryClient) {
+  for (const key of ['related', 'chronology', 'projectHome']) void client.invalidateQueries({ queryKey: [key] });
+}
+
 function summariesChanged(client: QueryClient, volumeId: string, documentId: string) {
   searchesChanged(client);
+  summaryLinesChanged(client);
   return client.invalidateQueries({ queryKey: documentSummariesQuery(volumeId, documentId).queryKey });
 }
 
@@ -462,4 +472,6 @@ export function researchImported(client: QueryClient) {
     void client.invalidateQueries({ queryKey: [key] });
   }
   searchesChanged(client);
+  // And the lines that read the summaries it brought or erased.
+  summaryLinesChanged(client);
 }
