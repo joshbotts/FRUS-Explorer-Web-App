@@ -393,12 +393,15 @@ function ApartSection({ id, part }: { id: string; part: ChronologyApart }) {
   );
 }
 
-/** A document's row (`ChronologyRowView`): its summary or head, its volume, its dateline or span, its badges. */
+/**
+ * A document's row (`ChronologyRowView`): its summary or head, to three lines as the app's `lineLimit(3)` draws it, since a
+ * reader's own summary can be long, its volume, its dateline or span, its badges.
+ */
 function Row({ row }: { row: ChronologyRow }) {
   return (
     <li className="chronology-row">
       <Link to="/doc/$volumeId/$documentId" params={{ volumeId: row.volumeId, documentId: row.documentId }}>
-        {row.snippet}
+        <span className="chronology-snippet">{row.snippet}</span>
       </Link>
       <span className="volume">{row.volumeTitle}</span>
       <span className="details">

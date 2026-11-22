@@ -3069,6 +3069,15 @@ dialog.cross-volume {
   border-bottom: 1px solid var(--border);
 }
 
+/* A row's summary or head, to three lines, as the app's row shows it: a reader's own summary can be long. */
+.chronology-snippet {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
 .chronology-row .volume,
 .chronology-row .details {
   color: var(--text-secondary);

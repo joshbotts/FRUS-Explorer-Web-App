@@ -293,7 +293,15 @@ import Testing
             "Set(vm.chartSeries.map(\\.key).filter { $0 != chronologyOtherSeriesKey })",
             "volumeId: volumeId, subseries: entry?.subseries ?? \"\", title: entry?.title ?? volumeId",
             "let base = CountCopy.documents(vm.totalShown)",
+            // A row's line to three lines, which a reader's own summary can pass since FRUS-Explorer#1927.
+            "Text(snippet) .font(.body) .foregroundStyle(.primary) .lineLimit(3)",
         ], file: "ChronologyView.swift")
+        NoteViewParityTests.expect(try Self.web("analytics/ChronologyScreen.tsx"), holds: [
+            "<span className=\"chronology-snippet\">{row.snippet}</span>",
+        ], file: "ChronologyScreen.tsx")
+        NoteViewParityTests.expect(try Self.web("styles/app.css"), holds: [
+            ".chronology-snippet { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; }",
+        ], file: "app.css")
         NoteViewParityTests.expect(server, holds: [
             "guard let selected else { return true } if selected == chronologyOtherSeriesKey { return !topSeriesKeys.contains(row.volumeId) } return row.volumeId == selected",
             "let rows = group.rows.filter(rowMatchesFilter) guard !rows.isEmpty else { return nil }",
