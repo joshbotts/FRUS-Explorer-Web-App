@@ -355,20 +355,22 @@ public enum ResearchExport {
             id: try row.uuid("id"), name: try row.text("name"), inquiryText: row.optionalText("inquiry_text"),
             projectIds: try row.uuids("project_ids"), tiers: row.appJSON([ArchiveVisitTier].self, "tiers_data") ?? [],
             deliverables: row.appJSON(ArchiveVisitDeliverables.self, "deliverable_toggles_data") ?? ArchiveVisitDeliverables(),
-            documents: try documents.map { document in
-                let document = Fields("visit_documents", document)
-                return ArchiveVisitDocumentExport(
-                    id: try document.uuid("id"), documentKey: try document.text("document_key"),
-                    includeSource: try document.bool("include_source"), includeExternalRefs: try document.bool("include_external_refs"),
-                    createdAt: try document.optionalDate("created_at"), lastModified: try document.optionalDate("last_modified"))
-            },
-            targets: try targets.map { target in
-                let target = Fields("visit_targets", target)
-                return ArchiveVisitTargetExport(
-                    id: try target.uuid("id"), targetKey: try target.text("target_key"), tierId: try target.optionalUUID("tier_id"),
-                    included: try target.bool("included"), userNote: target.optionalText("user_note"),
-                    createdAt: try target.optionalDate("created_at"), lastModified: try target.optionalDate("last_modified"))
-            },
+            documents: try documents.map { try visitDocument(Fields("visit_documents", $0)) },
+            targets: try targets.map { try visitTarget(Fields("visit_targets", $0)) },
+            createdAt: try row.optionalDate("created_at"), lastModified: try row.optionalDate("last_modified"))
+    }
+
+    static func visitDocument(_ row: Fields) throws -> ArchiveVisitDocumentExport {
+        ArchiveVisitDocumentExport(
+            id: try row.uuid("id"), documentKey: try row.text("document_key"), includeSource: try row.bool("include_source"),
+            includeExternalRefs: try row.bool("include_external_refs"), createdAt: try row.optionalDate("created_at"),
+            lastModified: try row.optionalDate("last_modified"))
+    }
+
+    static func visitTarget(_ row: Fields) throws -> ArchiveVisitTargetExport {
+        ArchiveVisitTargetExport(
+            id: try row.uuid("id"), targetKey: try row.text("target_key"), tierId: try row.optionalUUID("tier_id"),
+            included: try row.bool("included"), userNote: row.optionalText("user_note"),
             createdAt: try row.optionalDate("created_at"), lastModified: try row.optionalDate("last_modified"))
     }
 

@@ -41,6 +41,8 @@ function report(changes: Partial<Record<ResearchType, Partial<ImportTypeCount>>>
     types,
     formattedNotes: 0,
     formattingKept: 0,
+    notesMadePlain: 0,
+    summariesMadeAIGenerated: 0,
     headnoteDrafts: 0,
     summariesWithoutAuthorship: 0,
     inertEntries: 0,
@@ -141,6 +143,38 @@ describe('Settings ▸ Data’s import', () => {
     // What it brought is read again: what an export carries, the count of notes among it.
     await waitFor(() => expect(contentsRead).toBeGreaterThan(1));
     expect(button.hasAttribute('disabled')).toBe(false);
+  });
+
+  it('says which notes an older export left plain, and which summaries it left as AI summaries, beside the formatting kept', async () => {
+    const done = report(
+      { ResearchNote: { inFile: 4, replaced: 3, kept: 1 }, GeneratedSummary: { inFile: 3, replaced: 2, kept: 1 } },
+      { formatVersion: 4, formattedNotes: 1, formattingKept: 1, notesMadePlain: 2, summariesMadeAIGenerated: 1, summariesWithoutAuthorship: 3 },
+    );
+    stubServer({
+      '/readyz': ready,
+      '/api/v1/me': me,
+      '/api/v1/me/export/contents': exportContents(),
+      '/api/v1/me/notes': { total: 0, items: [] },
+      'POST /api/v1/me/import': status('running'),
+      [`/api/v1/me/import/${importId}`]: status('succeeded', { formatVersion: 4, report: done }),
+    });
+    const user = userEvent.setup();
+    renderAt('/settings/data');
+    const section = await screen.findByRole('region', { name: 'Import a JSON Export' });
+    await user.upload(within(section).getByLabelText('Export file'), file());
+    await user.click(within(section).getByRole('button', { name: 'Import' }));
+    await within(section).findByText('Imported frus-research-export.json', undefined, { timeout: 3_000 });
+    const items = within(section)
+      .getAllByRole('listitem')
+      .map((item) => item.textContent);
+    expect(items).toContain('One note keeps formatting this server cannot show: it opens as plain text until you edit it here.');
+    expect(items).toContain(
+      '2 notes are now plain text: an export before version 7 cannot carry a note’s formatting, and this one replaced their text.',
+    );
+    expect(items).toContain(
+      'One summary is now shown as an AI summary: an export before version 5 cannot say who wrote a summary, and this one replaced the summary’s text.',
+    );
+    expect(items).toContain('3 summaries say nothing of who wrote them, as exports before version 5 do, and are shown as AI summaries.');
   });
 
   it('says why a file was refused, keeps nothing of it, and lets another be chosen', async () => {

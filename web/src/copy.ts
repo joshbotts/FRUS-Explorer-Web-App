@@ -2684,8 +2684,9 @@ export const copy = {
     empty: 'No research notes to export.',
     footer:
       'One Markdown file per research note, with a citation and link back to the source document. Compatible with Obsidian and similar note-taking tools.',
-    // The import (PLAN's S16c), the web's own words, since the app imports no JSON export, but for
-    // the records' names, which are its export sheet's Contents, and the missing search's sentence.
+    // The import (PLAN's S16c), the web's own words, as the web's pane is its own, but for the records'
+    // names, which are the app's export sheet's Contents, and the missing search's sentence. The rules are
+    // the kit's, which the app's Import from JSON… takes too, since FRUS Explorer 1.0 (1823).
     importTitle: 'Import a JSON Export',
     importLead:
       'Import the file FRUS Explorer writes on the Mac with Settings ▸ Data & Recovery ▸ Export as JSON; turn on Include AI-Generated Summaries there to bring your summaries. Each record keeps its id from the Mac, and a record you already have here is replaced only by a newer copy. Nothing here is deleted.',
@@ -2718,6 +2719,15 @@ export const copy = {
       count === 1
         ? 'One note keeps formatting this server cannot show: it opens as plain text until you edit it here.'
         : `${count.toLocaleString('en-US')} notes keep formatting this server cannot show: they open as plain text until you edit them here.`,
+    // The app's done line counts these two as Notes now in plain text and Summaries now AI-generated.
+    madePlain: (count: number) =>
+      count === 1
+        ? 'One note is now plain text: an export before version 7 cannot carry a note’s formatting, and this one replaced the note’s text.'
+        : `${count.toLocaleString('en-US')} notes are now plain text: an export before version 7 cannot carry a note’s formatting, and this one replaced their text.`,
+    madeAIGenerated: (count: number) =>
+      count === 1
+        ? 'One summary is now shown as an AI summary: an export before version 5 cannot say who wrote a summary, and this one replaced the summary’s text.'
+        : `${count.toLocaleString('en-US')} summaries are now shown as AI summaries: an export before version 5 cannot say who wrote a summary, and this one replaced their text.`,
     headnoteDrafts: (count: number) =>
       count === 1
         ? 'One summary is a collection’s headnote draft, which no list of a document’s summaries shows.'

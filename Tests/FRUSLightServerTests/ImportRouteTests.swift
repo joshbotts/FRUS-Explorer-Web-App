@@ -45,7 +45,7 @@ import Testing
                                        responseText: "An AI summary.", responseFormat: .general, wasChunked: false,
                                        createdAt: date("2026-05-01T00:00:00Z"), authorship: .aiGenerated, isHeadnoteDraft: false),
                 GeneratedSummaryExport(id: id(71), documentId: "d3", volumeId: "frus1961-63v06",
-                                       promptId: UUID(uuidString: MacImport.headnoteDraftPromptId)!, responseText: "A headnote.",
+                                       promptId: GeneratedSummaryExport.headnoteDraftPromptId, responseText: "A headnote.",
                                        responseFormat: .general, wasChunked: false, createdAt: date("2026-05-02T00:00:00Z"),
                                        authorship: .userWritten, isHeadnoteDraft: true),
             ],
@@ -101,6 +101,7 @@ import Testing
             #expect(counts["DocumentClassificationOverride"]! == (1, 1), "the single user is a curator")
             #expect(counts["SavedSearch"]! == (0, 0))
             #expect(report.headnoteDrafts == 1 && report.searchableDocuments == 1 && report.unlinkedCollections.isEmpty)
+            #expect(report.notesMadePlain == 0 && report.summariesMadeAIGenerated == 0)
 
             // What came in, as the user's routes read it.
             let note = try decode(Note.self, try await browser.get("/api/v1/me/notes/\(Self.id(1).uuidString)"))

@@ -1,5 +1,5 @@
 // The import of a Mac JSON export, checked (PLAN's S16c): an export imported into a store of its own
-// through the server's own mapping, as the import route's job imports one, then read back from the
+// through the server's own import, the kit's plan, as the import route's job imports one, then read back from the
 // store's tables as the kit's records and held to the file, type by type, by id. For the tests, the
 // kit's fixtures and the browser suite's export; and `frus-parity import-check`, which a session runs
 // on the owner's export, printing counts and ids, never what the records say.
@@ -25,8 +25,9 @@ public enum ImportCheck {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent("app.db")
         let store = try await SQLiteUserStore(url: url, backupsDirectory: directory.appendingPathComponent("backups"))
-        let envelope = try MacImport.envelope(of: data)
-        let report = try MacImport.run(envelope, into: store, for: user, includingInstanceWide: true)
+        let file = try MacImport.file(of: data)
+        let report = try MacImport.run(file, into: store, for: user, includingInstanceWide: true)
+        let envelope = file.envelope
         let stored = try StoredResearch.envelope(at: url, user: user, formatVersion: envelope.formatVersion, header: envelope)
         return Outcome(report: report, comparison: .compare(file: envelope, stored: stored), store: url)
     }
@@ -46,7 +47,8 @@ public enum ImportCheck {
             for difference in compared.different { lines.append("  differs: \(difference.id) in \(difference.fields.joined(separator: ", "))") }
         }
         let report = outcome.report
-        lines.append("notes with formatting \(report.formattedNotes), of which kept as they came \(report.formattingKept); "
+        lines.append("notes written with formatting \(report.formattedNotes), of which kept as they are \(report.formattingKept); "
+                     + "notes made plain \(report.notesMadePlain); summaries made AI-generated \(report.summariesMadeAIGenerated); "
                      + "headnote drafts \(report.headnoteDrafts); summaries without authorship \(report.summariesWithoutAuthorship); "
                      + "inert entries \(report.inertEntries); smart collections whose saved search is not held "
                      + "\(report.unlinkedCollections.count); documents findable through user_search \(report.searchableDocuments)")

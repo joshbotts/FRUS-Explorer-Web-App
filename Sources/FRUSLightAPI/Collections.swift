@@ -530,15 +530,14 @@ enum CollectionRoutes {
         }
     }
 
-    /// The rows the store keeps for `collection`, as the import writes a Mac's record at the export's version,
+    /// The rows the store keeps for `collection`, as the import writes a Mac's record of the export's version,
     /// with the headnote drafts the write adds and deletes, and the notes a new collection's file brings.
     static func change(_ collection: CollectionExport, addedSummaries: [GeneratedSummaryExport] = [],
                        deletedSummaries: [UUID] = [], notes: [NoteRecord] = []) -> CollectionChange {
-        let version = ResearchDataEnvelope.currentFormatVersion
-        return CollectionChange(collection: MacImport.collection(collection, version: version).values,
-                                entries: collection.entries.map { MacImport.entry($0, of: collection, version: version).values },
-                                addedSummaries: addedSummaries.map { MacImport.summary($0, version: version).values },
-                                deletedSummaries: deletedSummaries.map(\.uuidString), addedNotes: notes)
+        CollectionChange(collection: MacImport.collection(collection).values,
+                         entries: collection.entries.map { MacImport.entry($0, of: collection).values },
+                         addedSummaries: addedSummaries.map { MacImport.summary($0).values },
+                         deletedSummaries: deletedSummaries.map(\.uuidString), addedNotes: notes)
     }
 
     /// Changes the user's collection in one write: `edit` makes what it becomes from the values as the

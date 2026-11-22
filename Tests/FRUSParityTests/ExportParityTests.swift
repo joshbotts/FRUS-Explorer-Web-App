@@ -118,10 +118,10 @@ import Testing
     /// store leaves the two stores holding the same, every row of the 23 tables column by column; the
     /// export imported into the first store again keeps every record as it is; and the second store's
     /// export is the first's, byte for byte. A summary with no authorship, from a file before version
-    /// 5, the app's exporter writes as an AI summary, as every reader takes it: the one value that
-    /// changes, from none to `aiGenerated`.
+    /// 5, the kit's plan adds as an AI summary, as every reader takes it and as the app's exporter
+    /// writes one, so the store holds no summary without authorship.
     @Test func importExportAndImportAgainIsTheIdentityOverEveryType() async throws {
-        for (name, version, file) in try Self.files() {
+        for (name, _, file) in try Self.files() {
             let directory = try TemporaryDirectory()
             let (first, firstURL) = try await Self.imported(file, directory, "first")
             let before = try Self.held(firstURL)
@@ -129,7 +129,7 @@ import Testing
             let export = try ResearchExport.file(from: first, for: "owner", Self.options)
             let (second, secondURL) = try await Self.imported(export, directory, "second")
             #expect(try Self.held(secondURL) == Self.asExported(before), "\(name)")
-            #expect(try version < 5 || !Self.withoutAuthorship(firstURL), "\(name): a summary without authorship only before 5")
+            #expect(try !Self.withoutAuthorship(firstURL), "\(name): a summary that names no author added as AI-generated")
             #expect(try ResearchExport.file(from: second, for: "owner", Self.options) == export, "\(name)")
 
             let again = try MacImport.run(try MacImport.envelope(of: export), into: first, for: "owner", includingInstanceWide: true)
