@@ -2,10 +2,13 @@
 // owner's choice of 13 November): it gives way after a volume to a job queued behind it and goes on from where it
 // stopped, in a job of its own; a file of the folder changed since it was compared is compared again alone, over
 // the comparison before; and an admin's cancel holds until a start, which goes on with what the stop left. Since
-// S21f's follow-up it hashes each volume's documents with the kit's public functions first, and gives the kit's
-// indexer only a volume that differs from the export's rows: none of an unchanged export, the changed volume alone,
-// and a volume for each of the differences that count, an id given twice among them; the rows it passes over are ones
-// the kit stamps nothing for; and a comparison index that does not read whole is not compared again over.
+// S21f's second follow-up it holds each mounted file to the export's record of the file its volume was indexed from,
+// by the kit's blob SHA-1, and parses only a volume whose file is another or of which the export records none, an
+// export from before index version 75 or a volume indexed before it. Since S21f's follow-up it hashes such a volume's
+// documents with the kit's public functions, and gives the kit's indexer only a volume that differs from the export's
+// rows: none of an unchanged export, the changed volume alone, and a volume for each of the differences that count, an
+// id given twice among them; the rows it passes over are ones the kit stamps nothing for; and a comparison index that
+// does not read whole is not compared again over.
 
 @testable import FRUSCoreKit
 @testable import FRUSLightCore
@@ -55,6 +58,12 @@ import Testing
         func comparisons() async -> [Job] {
             await jobs.jobs().filter { $0.kind == .teiComparison }.reversed()
         }
+    }
+
+    /// The export with no record of the file each volume was indexed from, as a volume indexed before index version
+    /// 75 has none: its volumes are compared by their documents' hashes, as every volume was before the record.
+    static func withoutFileRecord(_ db: SQLiteConnection) throws {
+        _ = try db.query("UPDATE volume_structures SET file_blob_sha1 = NULL, file_size_bytes = NULL")
     }
 
     /// A job queued while the comparison runs waits one volume: the comparison gives way to it, and goes on after it
@@ -206,6 +215,8 @@ import Testing
         let fixture: Fixture
         let check: TEIChangeCheck
         let compared: [String]
+        /// The volumes whose TEI was parsed to compare their documents: none whose file is the one the export indexed.
+        let parsed: [String]
         let indexed: [String]
         let record: TEIChangeRecord
     }
@@ -213,23 +224,26 @@ import Testing
     /// The comparison of the two fixture volumes over the export `fixture` serves.
     static func compare(_ fixture: Fixture) async throws -> Run {
         let check = fixture.check()
-        let compared = Events(), indexed = Events()
+        let compared = Events(), parsed = Events(), indexed = Events()
         await check.setVolumeComparedTestHook { await compared.add($0) }
+        await check.setVolumeParsedTestHook { await parsed.add($0) }
         await check.setVolumeIndexedTestHook { await indexed.add($0) }
         await check.ensureCurrent()
         await fixture.jobs.waitUntilIdle()
         let status = await check.status()
         #expect(!status.running && status.problem == nil)
         let record = try #require(status.record)
-        return Run(fixture: fixture, check: check, compared: await compared.all, indexed: await indexed.all, record: record)
+        return Run(fixture: fixture, check: check, compared: await compared.all, parsed: await parsed.all,
+                   indexed: await indexed.all, record: record)
     }
 
-    /// An export of the TEI the folder holds: each volume compared by its hashes, none given to the kit's indexer, and
-    /// nothing written to the comparison index but the kit's empty tables.
+    /// An export of the TEI the folder holds: each volume compared by its file, which is the one the export indexed,
+    /// none parsed or given to the kit's indexer, and nothing written to the comparison index but the kit's empty tables.
     @Test func anUnchangedExportIsComparedWithNoVolumeIndexed() async throws {
         let run = try await Self.compare(try await Fixture())
         defer { withExtendedLifetime(run.fixture) {} }
         #expect(run.compared == TEIComparisonTests.volumes)
+        #expect(run.parsed.isEmpty, "each file is the one the export indexed")
         #expect(run.indexed.isEmpty, "no volume is indexed to compare it")
         #expect(run.record.checked == TEIComparisonTests.volumes && run.record.changed.isEmpty && run.record.unchecked.isEmpty)
         let comparisons = await run.fixture.comparisons()
@@ -253,6 +267,7 @@ import Testing
         let run = try await Self.compare(fixture)
         defer { withExtendedLifetime(run.fixture) {} }
         #expect(run.compared == TEIComparisonTests.volumes)
+        #expect(run.parsed == [UpdateReviewTests.volume], "the one whose file is not the one the export indexed")
         #expect(run.indexed == [UpdateReviewTests.volume])
         #expect(run.record.checked == TEIComparisonTests.volumes && run.record.changed == [UpdateReviewTests.volume])
         let comparison = try #require(await run.check.comparison())
@@ -261,11 +276,55 @@ import Testing
         #expect(try await comparison.pipeline.documentRevisions(forVolumeId: "frus1961-63v06").isEmpty)
     }
 
+    /// The export's record of the file each volume was indexed from decides whether its documents are compared: a
+    /// volume whose mounted file is that file, by the kit's blob SHA-1 and its length, is compared with nothing parsed,
+    /// though the export's rows of it say otherwise, since the file is the one they describe; one whose record names
+    /// another file has its documents compared, and found as the export records them, so nothing is indexed.
+    @Test func theFileTheExportIndexedDecidesWhetherAVolumesDocumentsAreCompared() async throws {
+        let other = String(repeating: "0", count: 40)
+        let fixture = try await Fixture { db in
+            _ = try db.query("UPDATE document_revisions SET content_hash = 'another' WHERE volume_id = 'frus1894Nicaragua' AND document_id = 'd1'")
+            _ = try db.query("UPDATE volume_structures SET file_blob_sha1 = ? WHERE volume_id = 'frus1961-63v06'", [.text(other)])
+        }
+        let export = try SQLiteConnection.immutable(fixture.files.liveIndex)
+        let recorded = try export.query("SELECT volume_id, file_blob_sha1, file_size_bytes FROM volume_structures ORDER BY volume_id")
+        export.close()
+        let mounted = try TEIChangeCheck.blobSHA1(of: fixture.files.volumesDirectory.appendingPathComponent("frus1894Nicaragua.xml"))
+        #expect(recorded.map { $0[0].text } == TEIComparisonTests.volumes)
+        #expect(recorded.first?[1].text == mounted.sha && recorded.first?[2].integer == Int64(mounted.bytes),
+                "the kit's record of the file it indexed is the mounted file's blob SHA-1 and length")
+        let run = try await Self.compare(fixture)
+        defer { withExtendedLifetime(run.fixture) {} }
+        #expect(run.compared == TEIComparisonTests.volumes)
+        #expect(run.parsed == ["frus1961-63v06"], "the one whose record names another file")
+        #expect(run.indexed.isEmpty, "its documents are the export's, and frus1894Nicaragua's rows are not read")
+        #expect(run.record.checked == TEIComparisonTests.volumes && run.record.changed.isEmpty && run.record.unchecked.isEmpty)
+    }
+
+    /// An export without the record compares every volume by its documents, as every volume was compared before it:
+    /// one whose volumes were indexed before index version 75, which left the record NULL, and one from before 75, with
+    /// no such columns, of which the kit's read-only open answers none.
+    @Test(arguments: [false, true]) func anExportWithoutTheRecordComparesEveryVolumeByItsDocuments(fromBefore75: Bool) async throws {
+        let run = try await Self.compare(try await Fixture { db in
+            if fromBefore75 {
+                _ = try db.query("ALTER TABLE volume_structures DROP COLUMN file_blob_sha1")
+                _ = try db.query("ALTER TABLE volume_structures DROP COLUMN file_size_bytes")
+            } else {
+                try Self.withoutFileRecord(db)
+            }
+        })
+        defer { withExtendedLifetime(run.fixture) {} }
+        #expect(run.compared == TEIComparisonTests.volumes && run.parsed == TEIComparisonTests.volumes)
+        #expect(run.indexed.isEmpty, "their documents are as the export records them")
+        #expect(run.record.checked == TEIComparisonTests.volumes && run.record.changed.isEmpty)
+    }
+
     /// A row the export holds, at the indexer's version, of a document the volume's TEI does not give selects the
     /// volume, and the kit's stamp says the document vanished.
     @Test func aRowOfADocumentTheTEIDoesNotGiveSelectsItsVolume() async throws {
         let volume = "frus1961-63v06"
         let run = try await Self.compare(try await Fixture { db in
+            try Self.withoutFileRecord(db)
             _ = try db.query(
                 """
                 INSERT INTO document_revisions (volume_id, document_id, content_hash, body_hash, index_version)
@@ -274,6 +333,7 @@ import Testing
                 """, [.text(volume)])
         })
         defer { withExtendedLifetime(run.fixture) {} }
+        #expect(run.parsed == TEIComparisonTests.volumes, "no record of the files")
         #expect(run.indexed == [volume])
         #expect(run.record.changed == [volume])
         let comparison = try #require(await run.check.comparison())
@@ -288,6 +348,7 @@ import Testing
     /// stamped nothing in it, is deleted from the comparison index again.
     @Test func aDocumentWithNoRowOrAVanishedOneSelectsItsVolume() async throws {
         let run = try await Self.compare(try await Fixture { db in
+            try Self.withoutFileRecord(db)
             _ = try db.query("DELETE FROM document_revisions WHERE volume_id = 'frus1961-63v06' AND document_id = 'd1'")
             _ = try db.query("UPDATE document_revisions SET change_kind = 'vanished' WHERE volume_id = 'frus1894Nicaragua' AND document_id = 'd1'")
         })
@@ -306,6 +367,7 @@ import Testing
     @Test func aDocumentHashedOtherwiseSelectsItsVolume() async throws {
         let volume = UpdateReviewTests.volume
         let run = try await Self.compare(try await Fixture { db in
+            try Self.withoutFileRecord(db)
             _ = try db.query("UPDATE document_revisions SET content_hash = 'another' WHERE volume_id = ? AND document_id = 'd1'",
                              [.text(volume)])
         })
@@ -338,6 +400,11 @@ import Testing
         try Self.repeatingAnId().write(to: file)
         try await UpdateReviewTests.buildIndex(of: [UpdateReviewTests.volume], from: files.volumesDirectory, at: files.liveIndex,
                                                resources: users.server.resources)
+        // The file the volume was indexed from is the one mounted, which would pass the volume over unparsed: with no
+        // record of it, as a volume indexed before index version 75, its documents are compared.
+        let db = try SQLiteConnection(files.liveIndex.path, readOnly: false)
+        try Self.withoutFileRecord(db)
+        db.close()
         await users.server.state.openExistingIndex(files: files)
         let parsed = try await TEIChangeCheck.revisionHashes(of: file)
         let twice = parsed.filter { $0.id == "d2" }
@@ -428,6 +495,7 @@ import Testing
         let older = Int64(IndexingPipeline.currentDateIndexVersion - 1)
         let fixture = try await Fixture { db in
             try Self.stamp(db)
+            try Self.withoutFileRecord(db)
             for (volume, version) in [("frus1894Nicaragua", SQLiteValue.integer(older)), ("frus1961-63v06", .null)] {
                 _ = try db.query(
                     """
@@ -440,7 +508,7 @@ import Testing
         }
         let run = try await Self.compare(fixture)
         defer { withExtendedLifetime(run.fixture) {} }
-        #expect(run.compared == TEIComparisonTests.volumes)
+        #expect(run.compared == TEIComparisonTests.volumes && run.parsed == TEIComparisonTests.volumes)
         #expect(run.indexed.isEmpty, "the selection gives the kit no volume")
         #expect(run.record.changed.isEmpty && run.record.unchecked.isEmpty)
 

@@ -115,7 +115,11 @@ test('imports the kit’s export of every type, imports it again and keeps it, t
   await expect(section.getByText('A version-7 export, written on October 24, 2026.')).toBeVisible();
   await expect(section.getByText(/^The file held a second set of synced settings/)).toBeVisible();
   await expect(section.getByText('One note keeps formatting this server cannot show: it opens as plain text until you edit it here.')).toBeVisible();
-  await expect(section.getByText("A deleted search's: The linked saved search could not be found. It may have been deleted.")).toBeVisible();
+  // The kit names a smart collection whose saved search is not held only where the import writes it: under the path
+  // the collections are the run before's, kept.
+  const unlinked = section.getByText("A deleted search's: The linked saved search could not be found. It may have been deleted.");
+  if (first.find((type) => type.type === 'Collection')!.added > 0) await expect(unlinked).toBeVisible();
+  else await expect(unlinked).toHaveCount(0);
   await axeCheck(page);
 
   // Again: every record kept, as the store's copy is as new.

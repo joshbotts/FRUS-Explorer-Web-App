@@ -1,10 +1,15 @@
 // Import mode's step 5 (SPEC's Import procedure; PLAN's S21f, the hash comparison S2 deferred): each document of
 // the served export recomputed from the mounted TEI as the kit's indexer computes it, and compared with the
 // export's `document_revisions`, so that a document whose TEI changed after the Mac indexed it is listed for the
-// review of what changed, as the Mac's After an Update lists one a volume update changed. Since S21f's follow-up the
-// comparison computes the two hashes itself, with the kit's functions that FRUS-Explorer#1904 made public, over the
-// parse `indexVolume` makes, and compares them with the export's rows (`differences`). A volume whose TEI gives every
-// document as the export records it is compared with nothing written. A volume that differs is indexed with
+// review of what changed, as the Mac's After an Update lists one a volume update changed. Since S21f's second
+// follow-up each mounted volume's file is hashed first, by the kit's `VolumeUpdateChecker.gitBlobSHA1(for:)`, and
+// held to the export's record of the file the volume was indexed from (FRUS-Explorer#1948, index version 75, the kit's
+// `IndexingPipeline.indexedVolumeFiles()`): a volume whose mounted file is that file is compared with nothing parsed,
+// and only a volume whose file is another, or of which the export records none, as an export from before 75 or a
+// volume indexed before it, has its documents compared. Since S21f's follow-up that comparison computes the two
+// hashes itself, with the kit's functions that FRUS-Explorer#1904 made public, over the parse `indexVolume` makes,
+// and compares them with the export's rows (`differences`). A volume whose TEI gives every document as the export
+// records it is compared with nothing written. A volume that differs is indexed with
 // `indexVolume`, the volume-update path, into a comparison index of the server's own, whose revision rows are first
 // the export's, so that the kit stamps what moved, `body`, `apparatus` or `vanished`, by its own rules, as it stamps
 // an update: the hashes choose which volumes the kit sees, and the kit alone says what changed and how. A volume
@@ -17,10 +22,10 @@
 // It is a job of the queue (`teiComparison`), by the owner's choice of 13 November: after each import it compares
 // every volume of the export, and later each volume whose file in the TEI folder has changed since it was compared,
 // by the file's inode, length and modification time, which the record keeps. Over the full corpus the first
-// comparison still reads and parses every volume, so the job gives way after each volume to any job queued behind it
-// and goes on after them from where it stopped, its progress kept in its work folder, where a start after a stop
-// finds it too. The folder's files are read and copied, and each volume parsed, off the actor, which every reader of
-// the comparison waits for.
+// comparison still reads every volume's file, and parses each the export did not index, so the job gives way after
+// each volume to any job queued behind it and goes on after them from where it stopped, its progress kept in its work
+// folder, where a start after a stop finds it too. The folder's files are read, hashed and copied, and each volume
+// parsed, off the actor, which every reader of the comparison waits for.
 
 import FRUSCoreKit
 import FTS5Store
@@ -217,6 +222,9 @@ public actor TEIChangeCheck {
     var volumeComparedTestHook: (@Sendable (String) async -> Void)?
     /// Test hook: told each volume the kit's indexer is given in the comparison index, before it indexes it.
     var volumeIndexedTestHook: (@Sendable (String) async -> Void)?
+    /// Test hook: told each volume whose TEI is parsed to compare its documents' hashes, before the parse: one whose
+    /// file is not the one the export indexed, or of which the export records none.
+    var volumeParsedTestHook: (@Sendable (String) async -> Void)?
 
     public init(liveIndex: URL, volumesDirectory: URL, folder: URL, resources: IndexingResources, state: ServerState,
                 jobs: any JobQueue, now: @escaping @Sendable () -> Date = Date.init,
@@ -240,6 +248,7 @@ public actor TEIChangeCheck {
 
     func setVolumeComparedTestHook(_ hook: (@Sendable (String) async -> Void)?) { volumeComparedTestHook = hook }
     func setVolumeIndexedTestHook(_ hook: (@Sendable (String) async -> Void)?) { volumeIndexedTestHook = hook }
+    func setVolumeParsedTestHook(_ hook: (@Sendable (String) async -> Void)?) { volumeParsedTestHook = hook }
 
     /// Where the check stands.
     public func status() -> TEICheckStatus { phase }
@@ -406,7 +415,12 @@ public actor TEIChangeCheck {
             phase.waiting = false
             let export = try SQLiteConnection.immutable(index.url)
             defer { export.close() }
-            let (finished, seeder) = try await compare(&work, from: export, context: context)
+            let indexed = await indexedFiles(of: index.url)
+            let unrecorded = work.plan[work.done...].filter { indexed[$0] == nil }.count
+            if unrecorded > 0 {
+                log("The export records no file for \(unrecorded) of the \(work.plan.count - work.done) volumes to compare with the TEI folder, so each is compared by its documents' hashes")
+            }
+            let (finished, seeder) = try await compare(&work, from: export, files: indexed, context: context)
             defer { seeder.close() }
             guard finished else {
                 // It gives way to the jobs queued behind it, and goes on after them.
@@ -489,7 +503,7 @@ public actor TEIChangeCheck {
     /// index then packed, and the connection of the check's own that seeds each volume and deletes what is not
     /// kept, which `place` closes, once the kit's writer is let go, as it is when this returns, before it folds the
     /// file's log through a connection of its own.
-    private func compare(_ work: inout TEIComparisonWork, from served: SQLiteConnection,
+    private func compare(_ work: inout TEIComparisonWork, from served: SQLiteConnection, files indexed: [String: IndexedVolumeFile],
                          context: JobContext) async throws -> (finished: Bool, seeder: SQLiteConnection) {
         let building = buildingURL
         let pipeline = try await Blocking.run { [volumesDirectory, resources] in
@@ -503,7 +517,8 @@ public actor TEIChangeCheck {
                 try await context.step("Comparing \(volumeId) with its TEI file: \(work.done + 1) of \(work.plan.count)",
                                        fraction: Double(work.done) / Double(work.plan.count))
                 show(work, volume: volumeId)
-                try await compareVolume(volumeId, in: &work, pipeline: pipeline, from: served, seeder: seeder)
+                try await compareVolume(volumeId, in: &work, pipeline: pipeline, from: served, indexed: indexed[volumeId],
+                                        seeder: seeder)
                 work.done += 1
                 let kept = work, url = workURL
                 try await Blocking.run { try Self.write(kept, to: url) }
@@ -525,13 +540,14 @@ public actor TEIChangeCheck {
         }
     }
 
-    /// One volume: each document of its TEI hashed as the kit's indexer stamps it, and compared with the export's
-    /// revision rows. A volume the TEI gives as the export records it is compared, with nothing written. One that
-    /// differs has its revision rows the export's in the comparison index and its TEI indexed over them with the kit's
-    /// `indexVolume`, which stamps what moved, and its tables kept when the kit stamped a change, or deleted with its
-    /// revision rows when it stamped none.
+    /// One volume: its mounted file held to the export's record of the file it was indexed from, `indexed`, and when
+    /// it is that file, compared, with nothing parsed or written. Otherwise each document of its TEI hashed as the
+    /// kit's indexer stamps it, and compared with the export's revision rows. A volume the TEI gives as the export
+    /// records it is compared, with nothing written. One that differs has its revision rows the export's in the
+    /// comparison index and its TEI indexed over them with the kit's `indexVolume`, which stamps what moved, and its
+    /// tables kept when the kit stamped a change, or deleted with its revision rows when it stamped none.
     private func compareVolume(_ volumeId: String, in work: inout TEIComparisonWork, pipeline: IndexingPipeline,
-                               from served: SQLiteConnection, seeder: SQLiteConnection) async throws {
+                               from served: SQLiteConnection, indexed: IndexedVolumeFile?, seeder: SQLiteConnection) async throws {
         // A volume compared before, as a re-check's, or one a stop left half compared, leaves the comparison first.
         if try Self.holds(volumeId, seeder) { try await Self.delete(volumeId, pipeline: pipeline, seeder: seeder) }
         work.checked.removeAll { $0 == volumeId }
@@ -544,6 +560,24 @@ public actor TEIChangeCheck {
             return
         }
         work.files[volumeId] = file
+        // The file the export indexed the volume from, by its git blob SHA-1 and length: a mounted file that is that
+        // file is the one the export's revision rows were made from, so no document of it changed after the Mac indexed
+        // it, and nothing is parsed.
+        if let indexed {
+            do {
+                let url = teiFile(volumeId)
+                let mounted = try await Blocking.run { try Self.blobSHA1(of: url) }
+                if mounted.sha == indexed.blobSHA1, mounted.bytes == indexed.sizeBytes {
+                    work.checked.append(volumeId)
+                    return
+                }
+                log("\(volumeId): its TEI file is not the one the export indexed, so its documents are compared")
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                log("\(volumeId)'s TEI file could not be hashed to hold it to the export's record, so its documents are compared: \(error)")
+            }
+        }
         let stored: [String: TEIStoredRevision]
         do {
             stored = try Self.storedRevisions(volumeId, in: served)
@@ -552,6 +586,7 @@ public actor TEIChangeCheck {
             work.unchecked[volumeId] = "The export's record of it could not be read to compare it, which the server's log says why."
             return
         }
+        if let hook = volumeParsedTestHook { await hook(volumeId) }
         let differences: TEIDifferences
         do {
             differences = Self.differences(parsed: try await Self.revisionHashes(of: teiFile(volumeId)), stored: stored)
@@ -631,6 +666,31 @@ public actor TEIChangeCheck {
     }
 
     // MARK: The selection
+
+    /// The file each volume of the export was indexed from, by volume (FRUS-Explorer#1948, index version 75): the
+    /// export's record as the kit reads it, `indexedVolumeFiles()`, through its immutable read-only open, off the actor.
+    /// None of a volume indexed before 75, whose record is NULL, nor of any volume of an export from before 75; and none
+    /// at all when the record cannot be read, which the log says, so that every volume is compared by its documents,
+    /// as before the record.
+    private func indexedFiles(of url: URL) async -> [String: IndexedVolumeFile] {
+        do {
+            return try await Blocking.run { [resources, volumesDirectory] in
+                let pipeline = try IndexingPipeline(readingIndexAt: url, fts5Store: try FTS5Store(readingDatabaseAt: url),
+                                                    resources: resources, volumesDirectory: volumesDirectory)
+                return Dictionary(try pipeline.indexedVolumeFiles().map { ($0.volumeId, $0) }) { first, _ in first }
+            }
+        } catch {
+            log("The export's record of the file each volume was indexed from could not be read, so every volume is compared by its documents: \(error)")
+            return [:]
+        }
+    }
+
+    /// The file at `url` as the export's record names a file: its git blob SHA-1, by the kit's own function, the
+    /// corrections check's, `VolumeUpdateChecker.gitBlobSHA1(for:)`, and its length.
+    static func blobSHA1(of url: URL) throws -> (sha: String, bytes: Int) {
+        let data = try Data(contentsOf: url, options: .mappedIfSafe)
+        return (VolumeUpdateChecker.gitBlobSHA1(for: data), data.count)
+    }
 
     /// Each document of the volume's TEI file at `url`, in the file's order, with its two revision hashes as the kit's
     /// indexer stamps them: the parse `indexVolume` makes, `parseVolumeFull`, and every document it gives, front
