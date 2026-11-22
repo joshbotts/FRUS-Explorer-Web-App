@@ -62,6 +62,60 @@ Phase 3's row S24g, the features track's wave 8, beside S24h: Person and Cross-R
 
 **Next:** on the features track, S24i, the Word Cloud, the S24 group's last row, once S24h has merged; then S25b, phase 3's sign-off.
 
+## Session 24f, follow-up, upstream: the six kit issues, in three pull requests
+
+22 November 2026 · branch `claude/interesting-bardeen-a9dd63` · [#155](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/155) · upstream `f011ab04`, unchanged; [FRUS-Explorer#1967](https://github.com/joshbotts/FRUS-Explorer/pull/1967), [#1968](https://github.com/joshbotts/FRUS-Explorer/pull/1968) and [#1969](https://github.com/joshbotts/FRUS-Explorer/pull/1969), open
+
+This entry covers the six issues this repository filed upstream on 14 and 15 November: #1907, #1911 to #1913, #1927 and #1928.
+- The app's plan of record (decision 138) makes them web-authored pull requests, merging after 1.0 (1861)'s upload, which is done.
+- This session ran at the orchestrator's word of 21 November. No PLAN row names it.
+- Three of the six follow S24f's workarounds.
+
+Each pull request is cut from `v2` at `21c77370`, is labelled `Mac`, asks for Mac verification as its own Mac check, and is not merged. Under rule 4 they change shared files, and this repository changes only its records.
+
+**FRUS-Explorer#1967, Mac check 32 (#1907, #1927): Related Documents' and Chronology's rows read a reader's summaries from the store a host names.**
+- `RelatedDocumentsEngine.rank(…)` and `IndexingPipeline.documentsInDateRange(…)` each take `userSource: SearchUserSource = .index`, as #1902's `documentSnippets(forKeys:maxLength:userSource:)` does.
+- From the index, the default and the app's call, each runs the statement it ran before, by text and binds. Two pins, taken with the statement trace on `v2`'s code, hold them.
+- With a store, Chronology's statement gathers the user's summaries in one scan of `user_search` and joins them after the index's two tables, so the rows and their order are the index's.
+
+**FRUS-Explorer#1968, Mac check 33 (#1912, #1913, #1928): three of S24f's workarounds can go once a pin move carries it.**
+- `ChronologyGrouping.group(…)` and `makeChart(fromCounts:…)` take the locale their labels are written in. The server can pass `SearchItem.locale` and drop `ChronologyLabels`.
+- `CorpusAnalyticsService`'s occurrence series has a cache of its own. `ServedIndex` can drop its second service, `occurrences`.
+- `DecadeFrequency` has a public initialiser. `CorpusAnalytics.swift` can drop its own decade type.
+
+**FRUS-Explorer#1969, Mac check 34 (#1911): a boundary test for the other eight shared kits,** in the app's unit target.
+- It checks imports, app state (the Keychain included) and app names, with each kit's allowances and their reasons, reusing `FRUSCoreKitBoundaryTests`' scanner. That scanner now reads an access-level import and a `bundle: .main` argument for FRUSCoreKit too.
+- It is not a package suite, so the web's CI does not run it.
+
+**One plan entry for the three.** Each pull request carries the same entry in the app's `Planning/DEVELOPMENT-PLAN.md`, so the owner can merge them in any order: `git merge-tree` merged the three onto `v2` cleanly in all six orders, to one tree.
+
+**Measured** (each pull request has its figures and the owner's commands), with Xcode 27.2 on an iPhone 17e (iOS 27.2), each against `v2` run the same way:
+- **`v2`:**
+  - `swift test` ran 4,550 tests;
+  - the unit target ran 8,160, all passing, with 17 tests and 2 suites skipped.
+- **The three branches:**
+  - `swift test` ran 4,561, 4,556 and 4,550;
+  - the unit target ran 8,171, 8,166 and 8,166, every test passing, with `v2`'s skips by name and its warning lines.
+- **The Mac app's symbols:**
+  - #1967 removes 25 and adds 30, and #1968 removes 32 and adds 43, each the changed functions' renamed names, their default-argument generators, and the new code's;
+  - #1969 changes none.
+- **Each cold review's findings were fixed before the runs:** tests that could not fail, a plan test that could not tell a per-row scan, docs that claimed too much, and two import and bundle forms the boundary scanner did not read.
+- **On Linux,** in `swift:6.4-noble` over `main` at `b31da01`:
+  - every kit's test targets pass at `v2` (3,262 test cases) and at #1967 and #1968 (3,273 and 3,268), with the one named Linux skip;
+  - a server file that imports the kit without `@testable` and makes the new calls fails to compile against `v2` and compiles against each branch.
+
+**`main` needs one scratch patch over `v2`.** L25 (`v2` `82d3a403`) renamed the collection templates, so `main`'s `CollectionParityTests` names four presets that `v2` no longer has. The scratch commented out its three expectations. The kits' runs never run that suite, and the pin move to `1.0-release` (S12d) follows L25 for real.
+
+**For the pin move that carries them:**
+- The golden files' source digest covers FRUSCoreKit, so #1967 and #1968 stale them, but nothing on the indexing path changes.
+- #1969 changes a test file and `CLAUDE.md`, which the web never compiles.
+- `upstream-batch-handover.md`, in the orchestrator's notes folder, has the rest.
+- Each issue's hand-over is completed on the issue when its pull request merges.
+
+**Found upstream, not fixed:** the Mac's Chronology hover magnifier probably labels its months "M01" to "M12". `Calendar(identifier: .gregorian)` has the root locale under Xcode 27.2's Foundation, so a probe printed "M10" where the code's comment says "Oct". This was not seen in the app, and the web does not call it. #1968's body has the detail.
+
+**Next:** the owner's Mac checks 32, 33 and 34 and the merges. Then the pin move that carries them, and the web's follow-ups the issues' hand-overs name: the user sources in `RelatedDocuments.swift`, `Chronology.swift` and, with #1902's call, `ProjectHome.swift`; `ChronologyLabels`, the second analytics service and the decade type dropped; and COORDINATION's sentence on the boundary test naming every kit.
+
 ## Session 24f: Corpus Analytics and Chronology
 
 14 November 2026 · branch `claude/epic-taussig-98f970` · [#150](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/150) · upstream `f011ab04`, unchanged
