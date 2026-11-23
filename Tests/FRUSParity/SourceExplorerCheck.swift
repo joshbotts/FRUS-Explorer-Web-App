@@ -23,6 +23,9 @@
 //   resolves nothing, outside the Numerical File's 1906–1910, and the check counts it, which a caller may pin
 //   (`--undated`). A document with no dateline gets no year this way.
 //
+// The API's year is held first to the kit's own reading of the dateline the API returns (`KitViewsYear`), the year
+// both of the app's views read: any other year is the server's difference, before any rule below applies.
+//
 // The full corpus's run settled the rest (PLAN's S25b): across the corpus the two years also differ where a
 // dateline gives a year and the document has no attribute, where it has no dateline, or where the attribute's
 // instant at −05:00 falls in another year (FRUS-Explorer#1326). Wherever the years differ and the first rule
@@ -38,7 +41,7 @@
 // took no such rule, reads the digits before the point as a case and records that case's rolls. Such a record is
 // held to the generator's with the kit's reading of the file number, asked of the kit itself (`KitNumericalFile`):
 // no rolls, the gap, and the outcome by the generator's precedence; it is counted and listed, a question of the
-// app's (its export lags its views), never a difference of the server's.
+// app's (its export lags its views, FRUS-Explorer#1974), never a difference of the server's.
 //
 // The generator's cores declare eight public names FRUSCoreKit declares too, CentralFilesIndex,
 // CollectionAuthorityIndex, CountryRoll, LotFileEntry, NumericalFileIndex, NumericalFileRoll,
@@ -147,6 +150,8 @@ public enum SourceExplorerCheck {
         let authority: AuthorityLookup
         /// The kit's Numerical File, for the third rule: what both of the app's views read from a file number.
         let kit: KitNumericalFile
+        /// The kit's reading of a dateline's year, which the API's year is held to first.
+        let viewsYear = KitViewsYear()
 
         public init(resources: URL) throws {
             let central = resources.appendingPathComponent("central-files-index.json")
@@ -247,21 +252,6 @@ public enum SourceExplorerCheck {
             dateline.range(of: #"\b(1[89][0-9]{2}|20[0-2][0-9])\b"#, options: .regularExpression) != nil
         }
 
-        /// Why a year cannot be the one the kit's rule reads from `dateline`, or nil when it can be. The rule
-        /// (`CentralFilesClassifier.documentYear(fromDateline:)`, internal to the kit, which both of the app's views
-        /// read) takes the year of the first `Month D, YYYY` in the dateline, or else its first year from 1800 to 2029,
-        /// and none from a blank dateline: so a year it gives is written with four of the dateline's digits, in a row,
-        /// and a dateline naming a year of that range always gives one. What the rule can give is checked, not which: a
-        /// dateline naming two years passes with either.
-        static func viewsYearProblem(year: Int?, dateline: String?) -> String? {
-            let text = dateline?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard let year else {
-                return namesYear(text) ? "the API gives no year for the dateline \"\(text)\", which names one the views' rule reads" : nil
-            }
-            return text.contains(String(year)) ? nil
-                : "the API gives the year \(year) for the dateline \"\(text)\", which the views' rule cannot read from it"
-        }
-
         /// The record's outcome, the generator's precedence (`exportRecord`'s, which it keeps private): the strongest
         /// offline resolution the record holds.
         static func outcome(_ resolution: ResolutionResults) -> OfflineOutcome {
@@ -275,7 +265,7 @@ public enum SourceExplorerCheck {
 
         /// What one note's answer gives against the generator's record: the export's own record, or the
         /// generator's for the views' year where the two years differ, or a difference.
-        func compare(note: Note, response: Swift.Result<(status: Int, body: Data), any Error>) -> Finding {
+        func compare(note: Note, response: Swift.Result<(status: Int, body: Data), any Error>) async -> Finding {
             let key = "\(note.volumeId)/\(note.documentId)"
             let (expected, decimalForm) = readByTheKit(record(volumeId: note.volumeId, documentId: note.documentId, note: note.note, year: note.year))
             let answer: Answer
@@ -290,10 +280,13 @@ public enum SourceExplorerCheck {
                     return .differs("\(key): \(error)")
                 }
             }
-            // The views' year is the API's own word, so it is held first to what the kit's rule can give from the
-            // dateline the API returned (`viewsYearProblem`): a year the rule cannot give is the server's difference.
-            if let problem = Self.viewsYearProblem(year: answer.year, dateline: answer.dateline) {
-                return .differs("\(key): \(problem)")
+            // The views' year is the API's own word, so it is held first to the kit's own reading of the dateline the
+            // API returned (`KitViewsYear`): any other year is the server's difference, whatever the export reads.
+            let kitYear = await viewsYear.year(dateline: answer.dateline)
+            guard kitYear == answer.year else {
+                let dateline = answer.dateline.map { "\"\($0)\"" } ?? "none"
+                return .differs("\(key): the API gives the year \(answer.year.map(String.init) ?? "none") for the dateline \(dateline), "
+                                + "where the views' rule, the kit's, reads \(kitYear.map(String.init) ?? "none")")
             }
             let (actual, undated) = record(from: answer, exportYear: note.year)
             if actual == expected { return .identical(actual, undated: undated, decimalForm: decimalForm) }
@@ -454,7 +447,7 @@ public enum SourceExplorerCheck {
             } catch {
                 response = .failure(error)
             }
-            result.take(comparator.compare(note: note, response: response))
+            result.take(await comparator.compare(note: note, response: response))
         }
         return result
     }
@@ -494,7 +487,7 @@ public enum SourceExplorerCheck {
                 }
             }
             for (index, note) in notes.enumerated() {
-                result.take(comparator.compare(note: note, response: responses[index]!))
+                result.take(await comparator.compare(note: note, response: responses[index]!))
             }
             start += notes.count
             progress(start, result)

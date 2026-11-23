@@ -3,8 +3,9 @@
 // Numerical File roll for a decimal-era citation"), the kit reads no Numerical File case from a file number in the
 // Decimal File's form, a point followed by a digit or a letter before its slash ("723.2515/110"), where the Source
 // Explorer export generator's own core, which took no such rule, reads the digits before the point as a case and finds
-// that case's rolls. This file imports FRUSCoreKit, which shares names with the generator's cores, so that
-// `SourceExplorerCheck`, which imports the cores, asks the kit through it alone.
+// that case's rolls (FRUS-Explorer#1974, filed for the export to take the kit's rule). This file imports FRUSCoreKit,
+// which shares names with the generator's cores, so that `SourceExplorerCheck`, which imports the cores, asks the kit
+// through it alone.
 
 import FRUSCoreKit
 import Foundation

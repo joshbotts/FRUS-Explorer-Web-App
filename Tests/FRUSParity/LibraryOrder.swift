@@ -67,8 +67,12 @@ public enum LibraryOrder {
         for volume in Set(theirs.keys).union(ours.keys).sorted() {
             result.volumes += 1
             let (held, made) = (theirs[volume] ?? [], ours[volume] ?? [])
-            guard held.count == made.count, Set(held.map(\.document)) == Set(made.map(\.document)) else {
+            let (heldSet, madeSet) = (Set(held.map(\.document)), Set(made.map(\.document)))
+            guard held.count == made.count, heldSet == madeSet else {
+                let onlyHeld = heldSet.subtracting(madeSet).sorted().prefix(3).joined(separator: ", ")
+                let onlyMade = madeSet.subtracting(heldSet).sorted().prefix(3).joined(separator: ", ")
                 result.differentDocuments[volume] = "\(held.count) documents in the library, \(made.count) in the index"
+                    + (onlyHeld.isEmpty ? "" : "; the library's alone: \(onlyHeld)") + (onlyMade.isEmpty ? "" : "; the index's alone: \(onlyMade)")
                 continue
             }
             if held.map(\.document) == made.map(\.document) {

@@ -76,10 +76,11 @@ import Testing
         }
     }
 
-    /// The views' year is the API's own word, so it is held to what the kit's rule can give from the dateline the API
-    /// returned: no year for a dateline that names one, or a year the dateline does not hold, is the server's
-    /// difference, whatever the export's year; a dateline naming two years passes with either.
-    @Test func aYearTheViewsRuleCannotReadIsTheServersDifference() async throws {
+    /// The views' year is the API's own word, so it is held first to the kit's own reading of the dateline the API
+    /// returned (`KitViewsYear`): no year for a dateline that names one, a year the dateline does not hold, a year of
+    /// the dateline other than the kit's, as a received date's or a telegram number's, is the server's difference,
+    /// whatever the export's year, even the same.
+    @Test func aYearOtherThanTheKitsReadingIsTheServersDifference() async throws {
         let resources = try ServerResources.load(from: ServedFixture.resources)
         let comparator = try SourceExplorerCheck.Comparator(resources: ServedFixture.resources)
         let body = try await Self.answer(Self.lot, dateline: "Washington, March 4, 1953.", resources: resources)
@@ -89,20 +90,31 @@ import Testing
             if let dateline { json["dateline"] = dateline }
             return try JSONSerialization.data(withJSONObject: json)
         }
-        for (year, dateline, exportYear) in [(nil, nil, 1953), (1952, nil, 1952), (1957, nil, 1957)] as [(Int?, String?, Int?)] {
-            let answer = try tampered(year: year, dateline: dateline)
+        let cases: [(year: Int?, dateline: String?, exportYear: Int?)] = [
+            (nil, nil, 1953),
+            (1952, nil, 1952),
+            (1957, nil, 1957),
+            (1952, "Telegram 1952 from Washington, March 4, 1953.", 1952),
+            (1911, "Washington, December 31, 1910. [Received January 2, 1911.]", 1910),
+        ]
+        for item in cases {
+            let answer = try tampered(year: item.year, dateline: item.dateline)
             let result = await SourceExplorerCheck.run(
+                notes: [SourceExplorerCheck.Note(volumeId: "frus1953", documentId: "d1", note: Self.lot, year: item.exportYear)],
+                comparator: comparator) { _ in (200, answer) }
+            #expect(!result.passes && result.yearDisagreements.isEmpty, "\(String(describing: item.year))")
+            #expect(result.differences.first?.contains("where the views' rule, the kit's, reads") == true, "\(result.differences)")
+        }
+        // The kit's own reading of each passes: the sent date's year, where a telegram number or a received date names
+        // another.
+        for (year, dateline, exportYear) in [(1953, "Telegram 1952 from Washington, March 4, 1953.", 1953),
+                                             (1910, "Washington, December 31, 1910. [Received January 2, 1911.]", 1910)] {
+            let answer = try tampered(year: year, dateline: dateline)
+            let held = await SourceExplorerCheck.run(
                 notes: [SourceExplorerCheck.Note(volumeId: "frus1953", documentId: "d1", note: Self.lot, year: exportYear)],
                 comparator: comparator) { _ in (200, answer) }
-            #expect(!result.passes && result.yearDisagreements.isEmpty, "\(String(describing: year))")
-            #expect(result.differences.first?.contains("views' rule") == true, "\(result.differences)")
+            #expect(held.passes && held.identical == 1, "\(dateline): \(held.differences)")
         }
-        // A dateline naming two years: either is one the rule can give.
-        let two = try tampered(year: 1952, dateline: "Telegram 1952 from Washington, March 4, 1953.")
-        let held = await SourceExplorerCheck.run(
-            notes: [SourceExplorerCheck.Note(volumeId: "frus1953", documentId: "d1", note: Self.lot, year: 1952)],
-            comparator: comparator) { _ in (200, two) }
-        #expect(held.passes && held.identical == 1, "\(held.differences)")
     }
 
     /// Asking several answers at once holds each record as asking one at a time does, in the notes' order.

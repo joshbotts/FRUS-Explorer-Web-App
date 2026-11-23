@@ -674,9 +674,25 @@ func checkSourceExplorer(_ arguments: Arguments) async throws {
         let seconds = (clock.now - started).components.seconds
         FileHandle.standardError.write(Data("check 8: \(done) asked in \(seconds) s, \(sofar.differences.count) differ, \(sofar.yearDisagreements.count) for the views' year\n".utf8))
     }) { path in try await get(path) }
-    // Every finding, for the record: the full corpus's differ by the thousand where a rule is wrong.
+    // Without --app-questions a record the export reads otherwise than the app's views fails the check, as over the
+    // fixtures, which hold none: the rules that hold such records are the full corpus's (S25b).
+    var verdict = result.summary(volumes: volumes.count)
+    var failed = !result.passes
+    if result.passes, !arguments.flags.contains("--app-questions"), !result.yearDisagreements.isEmpty || !result.decimalFormFiles.isEmpty {
+        verdict = "check 8 fails: \(result.yearDisagreements.count) records for the year the app's views read where the export reads another, "
+            + "and \(result.decimalFormFiles.count) for a Decimal File-form number the export's core reads as a case, which only "
+            + "--app-questions holds: " + (result.yearDisagreements.map(\.key) + result.decimalFormFiles).prefix(20).joined(separator: ", ")
+        failed = true
+    }
+    if !failed, let undated, result.undatedByDateline.count != undated {
+        verdict = "check 8 fails: \(result.undatedByDateline.count) records dated by the export alone, not \(undated): "
+            + result.undatedByDateline.joined(separator: ", ")
+        failed = true
+    }
+    // Every finding, for the record, under the verdict the run gives: the full corpus's differ by the thousand where a rule
+    // is wrong.
     if let out = arguments.options["--out"] {
-        let report = SourceExplorerReport(summary: result.summary(volumes: volumes.count), volumes: volumes.count, result: result)
+        let report = SourceExplorerReport(summary: verdict, volumes: volumes.count, result: result)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         try encoder.encode(report).write(to: URL(fileURLWithPath: out))
@@ -690,19 +706,8 @@ func checkSourceExplorer(_ arguments: Arguments) async throws {
     for key in result.decimalFormFiles.prefix(20) {
         print("app question  \(key): a 1906–1910 file number in the Decimal File's form, which the export's core reads as a Numerical File case")
     }
-    guard result.passes else { fail(result.summary(volumes: volumes.count)) }
-    // Without --app-questions a record the export reads otherwise than the app's views fails the check, as over the
-    // fixtures, which hold none: the rules that hold such records are the full corpus's (S25b).
-    if !arguments.flags.contains("--app-questions"), !result.yearDisagreements.isEmpty || !result.decimalFormFiles.isEmpty {
-        fail("check 8 fails: \(result.yearDisagreements.count) records for the year the app's views read where the export reads another, "
-             + "and \(result.decimalFormFiles.count) for a Decimal File-form number the export's core reads as a case, which only "
-             + "--app-questions holds: " + (result.yearDisagreements.map(\.key) + result.decimalFormFiles).prefix(20).joined(separator: ", "))
-    }
-    if let undated, result.undatedByDateline.count != undated {
-        fail("check 8 fails: \(result.undatedByDateline.count) records dated by the export alone, not \(undated): "
-             + result.undatedByDateline.joined(separator: ", "))
-    }
-    print(result.summary(volumes: volumes.count))
+    if failed { fail(verdict) }
+    print(verdict)
 }
 
 /// Check 2 at full scale (PLAN's S25b): corrections made in the app, which an export carries, given to another
@@ -797,6 +802,7 @@ func checkCitations(_ arguments: Arguments) async throws {
         print("the kit's own answer: \(form): \(volumes.count) volumes first as themselves by a best guess: \(volumes.prefix(12).joined(separator: ", "))")
     }
     for miss in result.citationsNotFindingTheirDocument.prefix(20) { print("the kit's own answer: a citation not finding its document: \(miss)") }
+    for split in result.ownCitationBatchesSplit { print("the kit's own answer: own citations not split one a row: \(split)") }
     guard result.passes else { fail(result.summary()) }
     print(result.summary())
 }

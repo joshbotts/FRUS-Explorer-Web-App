@@ -169,6 +169,9 @@ public enum CitationCheck {
         public var ownCitationsFirst: [String: Int] = [:]
         public var ownCitationsNotFirst: [String: [String]] = [:]
         public var ownCitationsGuessed: [String: [String]] = [:]
+        /// The Batch chunks of own citations the kit's splitter did not split one row a citation, which the server's
+        /// rows followed: the kit's own answer, reported, those volumes left out of the tallies above.
+        public var ownCitationBatchesSplit: [String] = []
         /// The numbered documents whose own citation, in each style, does not come back first as that document found
         /// by its number: the kit's answers, reported.
         public var citationsNotFindingTheirDocument: [String] = []
@@ -215,13 +218,18 @@ public enum CitationCheck {
                     let block = citations[start..<end].joined(separator: "\n")
                     do {
                         let answer = try await ask(CitationBatch.self, "/api/v1/citation-lookup/batch", form: query([("text", block)]))
-                        result.differences += differences(answer, await kit.batch(block)).map { "\(name), from volume \(start + 1): \($0)" }
+                        let found = differences(answer, await kit.batch(block))
+                        result.differences += found.map { "\(name), from volume \(start + 1): \($0)" }
                         result.batchRows += answer.items.count
                         result.lookups += answer.items.count
                         for row in answer.items { tally(row.matches) }
-                        // Each row is its volume's only when the splitter kept one citation a line, as it must.
+                        // Each row is its volume's only when the splitter kept one citation a line. Where it did not and
+                        // the server's rows are the kit's, that is the kit's own answer, reported, and the chunk's volumes
+                        // go untallied; a server whose rows are not the kit's has differed above.
                         guard answer.items.count == end - start else {
-                            result.differences.append("\(name), from volume \(start + 1): \(answer.items.count) rows for \(end - start) citations")
+                            if found.isEmpty {
+                                result.ownCitationBatchesSplit.append("\(name), from volume \(start + 1): \(answer.items.count) rows for \(end - start) citations")
+                            }
                             continue
                         }
                         for (entry, row) in zip(kit.catalogue[start..<end], answer.items) {

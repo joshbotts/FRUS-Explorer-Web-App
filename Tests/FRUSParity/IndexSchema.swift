@@ -291,15 +291,20 @@ enum IndexSchema {
         AND c.document_id = document_revisions.document_id)
         """
 
-    /// The objects a library summary's schema statements read: the app's, as `schemaSQL` reads them.
+    /// The objects a library summary's schema statements read: the app's, leaving out the exporter's and every object
+    /// SQLite names itself (`sqlite_sequence`, its statistics, the indexes it keeps for a constraint), where `schemaSQL`
+    /// keeps `sqlite_sequence`'s and the constraints' rows; the constraints are `constraintsSQL`'s, and AUTOINCREMENT
+    /// is each primary key's in `columnsSQL`.
     static let appObjects = """
         m.name NOT GLOB 'research_*' AND m.name NOT GLOB 'sqlite_*'
         """
 
     /// Every table's columns by name, each with its declared type, NOT NULL, default, place in the primary
-    /// key and whether a virtual table hides it, whatever place the table gives it.
+    /// key, whether a virtual table hides it, and, for a primary key, whether the table declares AUTOINCREMENT, which
+    /// only an INTEGER PRIMARY KEY can carry, whatever place the table gives it.
     static let columnsSQL = """
-        SELECT m.name, p.name, p.type, p."notnull", p.dflt_value, p.pk, p.hidden \
+        SELECT m.name, p.name, p.type, p."notnull", p.dflt_value, p.pk, p.hidden, \
+        p.pk > 0 AND instr(upper(m.sql), 'AUTOINCREMENT') > 0 \
         FROM sqlite_schema m, pragma_table_xinfo(m.name) p WHERE m.type = 'table' AND \(appObjects) \
         ORDER BY m.name, p.name
         """
