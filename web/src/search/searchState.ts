@@ -58,7 +58,8 @@ export interface SearchState {
 
 /**
  * The ways the results can be read, in the order of the Mac's Reading picker (`ResultReading`): the
- * list, the timeline, and the concordance. Collocates, the Mac's fourth, arrive in phase 4.
+ * list, the timeline, and the concordance. Collocates, the Mac's fourth, arrive in phase 4; until then the picker offers
+ * them refused, with the reason (S24i).
  */
 export const readings = ['list', 'timeline', 'concordance'] as const;
 export type Reading = (typeof readings)[number];

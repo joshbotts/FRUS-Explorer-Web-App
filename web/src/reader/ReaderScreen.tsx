@@ -437,6 +437,10 @@ export function ReaderScreen() {
             >
               {copy.reader.cite}
             </button>
+            {/* The rail's Word Cloud tile (S24i), after Cite as the app's: the document's volume's bundled cloud, a page of its own. */}
+            <Link to="/cloud" search={{ scope: `doc:${volumeId}/${documentId}` }} title={copy.wordCloud.tileHelp}>
+              {copy.wordCloud.tile}
+            </Link>
             {/* The rail's Sources tile (S22d): the document's Source Explorer, a page of its own. */}
             <Link to="/sources/$volumeId/$documentId" params={{ volumeId, documentId }} title={copy.sources.tileHelp}>
               {copy.sources.tile}

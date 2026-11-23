@@ -209,6 +209,8 @@ export interface Preferences {
     excludeBoilerplate: boolean;
     globalStopwords: string[];
     lensStopwordsJSON: string;
+    /** Each lens's own hidden words, by the lens's raw value, as the Mac's settings read them (S24i). */
+    lensStopwords: Record<string, string[]>;
   };
   createdAt?: string;
   updatedAt?: string;

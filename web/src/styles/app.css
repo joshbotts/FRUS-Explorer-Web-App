@@ -2461,6 +2461,202 @@ dialog.cross-volume {
   font-size: 1.125rem;
 }
 
+/* ─── The Word Cloud (PLAN's S24i) ────────────────────────────────────────── */
+/* The app's ten system colours, which a word takes by rank (`WordCloudView.palette`), and the sentiment lens's two, each
+   at 4.5:1 or more on the page and on surfaces, light and dark. */
+.word-cloud,
+.cloud-sample {
+  --cloud-blue: #0a58b8;
+  --cloud-teal: #0a6563;
+  --cloud-indigo: #3f37a8;
+  --cloud-purple: #6a3d9a;
+  --cloud-pink: #a8245a;
+  --cloud-orange: #8a4b00;
+  --cloud-green: #1d6b30;
+  --cloud-red: #b3261e;
+  --cloud-cyan: #00677a;
+  --cloud-mint: #00695c;
+}
+
+:root[data-theme='dark'] .word-cloud,
+:root[data-theme='dark'] .cloud-sample {
+  --cloud-blue: #7cbcff;
+  --cloud-teal: #67d3cf;
+  --cloud-indigo: #aba6ff;
+  --cloud-purple: #cfaef7;
+  --cloud-pink: #ff8fbf;
+  --cloud-orange: #ffb45c;
+  --cloud-green: #7fd894;
+  --cloud-red: #ff8a80;
+  --cloud-cyan: #6ad4e8;
+  --cloud-mint: #6fdcc8;
+}
+
+.word-cloud [data-color='blue'] { fill: var(--cloud-blue); color: var(--cloud-blue); }
+.word-cloud [data-color='teal'] { fill: var(--cloud-teal); color: var(--cloud-teal); }
+.word-cloud [data-color='indigo'] { fill: var(--cloud-indigo); color: var(--cloud-indigo); }
+.word-cloud [data-color='purple'] { fill: var(--cloud-purple); color: var(--cloud-purple); }
+.word-cloud [data-color='pink'] { fill: var(--cloud-pink); color: var(--cloud-pink); }
+.word-cloud [data-color='orange'] { fill: var(--cloud-orange); color: var(--cloud-orange); }
+.word-cloud [data-color='green'],
+.word-cloud [data-color='positive'] { fill: var(--cloud-green); color: var(--cloud-green); }
+.word-cloud [data-color='red'],
+.word-cloud [data-color='negative'] { fill: var(--cloud-red); color: var(--cloud-red); }
+.word-cloud [data-color='cyan'] { fill: var(--cloud-cyan); color: var(--cloud-cyan); }
+.word-cloud [data-color='mint'] { fill: var(--cloud-mint); color: var(--cloud-mint); }
+.word-cloud [data-color='none'] { fill: var(--text-secondary); color: var(--text-secondary); }
+
+/* The typefaces a reader picks (`WordCloudFontDesign`), from the system's own, so nothing loads from elsewhere. */
+.cloud-font-rounded { font-family: ui-rounded, 'SF Pro Rounded', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+.cloud-font-standard { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
+.cloud-font-serif { font-family: ui-serif, 'New York', Georgia, 'Times New Roman', serif; }
+.cloud-font-monospaced { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+.cloud-document-notice a {
+  margin-left: 0.25rem;
+}
+
+.cloud-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin: 0.5rem 0;
+}
+
+.cloud-header h2 {
+  margin-bottom: 0.125rem;
+}
+
+.cloud-header p {
+  margin: 0.125rem 0;
+}
+
+/* The lens chip (`LensChip`): the lens's name, and the era's when an era stands in for a volume. */
+.cloud-chip {
+  display: inline-block;
+  padding: 0.125rem 0.625rem;
+  border-radius: 999px;
+  background: var(--tag);
+  color: var(--text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.cloud-legend {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.8125rem;
+}
+
+.cloud-legend span::before {
+  content: '';
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.3rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.cloud-canvas {
+  width: 100%;
+  margin: 0.75rem 0;
+}
+
+.cloud-canvas svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.cloud-canvas text {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cloud-list table {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 40rem;
+}
+
+.cloud-list th,
+.cloud-list td {
+  padding: 0.25rem 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.cloud-rank,
+.cloud-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.cloud-count {
+  white-space: nowrap;
+}
+
+/* The bar against the first word's count (`weightBar`): sixty points at the most. */
+.cloud-bar {
+  display: inline-block;
+  height: 6px;
+  margin-right: 0.5rem;
+  border-radius: 2px;
+  background: var(--chart-mark);
+  vertical-align: middle;
+}
+
+.cloud-made {
+  margin-top: 1rem;
+}
+
+/* Settings ▸ Word Cloud's sample (`SampleTermsRow`): the kept words, sized by rank, the first three in the accent. */
+.cloud-sample {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0.25rem 0;
+}
+
+.cloud-sample span {
+  color: var(--text-secondary);
+}
+
+.cloud-sample span[data-rank='top'] {
+  color: var(--accent);
+}
+
+.cloud-effect [data-empty='true'] {
+  color: var(--error);
+}
+
+.cloud-add-word {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.cloud-hidden-words {
+  list-style: none;
+  padding: 0;
+}
+
+.cloud-hidden-words li {
+  display: flex;
+  justify-content: space-between;
+  max-width: 24rem;
+  padding: 0.25rem 0;
+}
+
+/* Search's Collocates, offered and refused (S24i): drawn as a control that does not answer, its text still at 4.5:1. */
+.reading-picker .reading-unavailable {
+  color: var(--text-secondary);
+  border-style: dashed;
+  cursor: not-allowed;
+}
+
 /* ─── Archival Analytics and About the Series (PLAN's S24h) ────────────────── */
 /* The custodians' tints (`ArchivalRepositoryCategory.color`), on a swatch, a bar or a flow's block. */
 [data-custodian='stateDepartment'] {

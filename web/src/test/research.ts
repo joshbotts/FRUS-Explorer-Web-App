@@ -7,5 +7,5 @@ export const preferences: Preferences = {
   researchLoggingEnabled: true,
   tagOrder: [],
   projectOrder: [],
-  wordCloud: { minLength: 3, minCount: 1, foldPlurals: true, filterMarkings: true, excludeBoilerplate: true, globalStopwords: [], lensStopwordsJSON: '' },
+  wordCloud: { minLength: 3, minCount: 1, foldPlurals: true, filterMarkings: true, excludeBoilerplate: true, globalStopwords: [], lensStopwordsJSON: '', lensStopwords: {} },
 };

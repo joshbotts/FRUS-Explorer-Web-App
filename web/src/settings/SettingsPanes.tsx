@@ -1,7 +1,8 @@
 // Settings' panes (SPEC, Settings and administration), listed beside each one: Tags, from S14c; from
 // S17f Projects and Research Sessions, the app's, and Reading, the web's own pane for two of the app's
-// synced settings; Data, from S15d, the web's own pane for the app's Markdown export; and Keys, from
-// S20c, the web's own pane for the app's Connections, the user's stored NARA and Zotero keys. They are
+// synced settings; Word Cloud, from S24i, the app's; Data, from S15d, the web's own pane for the app's
+// Markdown export; and Keys, from S20c, the web's own pane for the app's Connections, the user's stored
+// NARA and Zotero keys. They are
 // grouped by the area each pane serves, under a line each and in the order they are listed (PLAN's
 // S20a): a new pane goes beside its area's kin, never at the end.
 import { Link } from '@tanstack/react-router';
@@ -34,6 +35,11 @@ export function SettingsPanes() {
           </Link>
         </li>
         {/* ─── Tools ───────────────────────────────────────────────────── */}
+        <li>
+          <Link to="/settings/word-cloud" activeProps={{ 'aria-current': 'page' }}>
+            {copy.wordCloudSettings.title}
+          </Link>
+        </li>
         {/* ─── Settings ────────────────────────────────────────────────── */}
         <li>
           <Link to="/settings/data" activeProps={{ 'aria-current': 'page' }}>

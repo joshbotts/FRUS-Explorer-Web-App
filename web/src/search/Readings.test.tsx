@@ -97,7 +97,7 @@ function concordance(fields: Partial<SearchConcordance> = {}): SearchConcordance
 const volumes = { total: 0, limit: 1000, offset: 0, items: [], coverage };
 
 describe('the readings', () => {
-  it('offer the list, the timeline and the concordance, in the Mac’s words, and show the one chosen in the results’ place', async () => {
+  it('offer the list, the timeline and the concordance, in the Mac’s words, and show the one chosen in the results’ place, with Collocates refused', async () => {
     const fetch = stubServer({
       '/readyz': ready,
       '/api/v1/volumes': volumes,
@@ -108,7 +108,15 @@ describe('the readings', () => {
     const user = userEvent.setup();
     const { router } = renderAt('/search?keywords=negotiating');
     const picker = await screen.findByRole('group', { name: 'Reading' });
-    expect(within(picker).getAllByRole('button').map((button) => button.textContent)).toEqual(['List', 'Timeline', 'Concordance']);
+    expect(within(picker).getAllByRole('button').map((button) => button.textContent)).toEqual(['List', 'Timeline', 'Concordance', 'Collocates']);
+    // The Mac's fourth, offered and refused until the server's language analysis (S24i), its reason read with it.
+    const collocates = within(picker).getByRole('button', { name: 'Collocates' });
+    expect(collocates.getAttribute('aria-disabled')).toBe('true');
+    expect(collocates.getAttribute('aria-describedby') && document.getElementById(collocates.getAttribute('aria-describedby')!)?.textContent).toBe(
+      'Collocates, the words near your matches, are counted in their dictionary forms, which this server’s language analysis cannot do yet.',
+    );
+    await user.click(collocates);
+    expect(router.state.location.search).not.toHaveProperty('reading');
     expect(within(picker).getByRole('button', { name: 'List' }).getAttribute('aria-pressed')).toBe('true');
     expect(picker.getAttribute('title')).toBe('How to read these results. The concordance covers this page; the others cover the whole retained set.');
     expect(screen.getByRole('navigation', { name: 'Pages' })).toBeTruthy();
@@ -145,7 +153,7 @@ describe('the readings', () => {
     });
     renderAt('/search?keywords=formosa&reading=timeline');
     const picker = await screen.findByRole('group', { name: 'Reading' });
-    for (const button of within(picker).getAllByRole('button')) expect((button as HTMLButtonElement).disabled).toBe(true);
+    for (const name of ['List', 'Timeline', 'Concordance']) expect((within(picker).getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
     expect(await screen.findByRole('heading', { name: 'No Results' })).toBeTruthy();
     expect(screen.queryByRole('img')).toBeNull();
   });
