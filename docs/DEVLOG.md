@@ -4,7 +4,7 @@ One entry per session, newest first. Phase 3's rows have their entries' places r
 
 ## Session 25b: phase 3's sign-off
 
-23 November 2026 · branch `claude/elegant-swirles-8c6626` · ⟪PR⟫ · upstream `4556c4d5`, unchanged
+23 November 2026 · branch `claude/elegant-swirles-8c6626` · [#163](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/163) · upstream `4556c4d5`, unchanged
 
 Phase 3's row S25b, the phase's last: checks 2, 7 and 8 on the full corpus, and the owner's sign-off, having used the Standalone install with an account of their own. The branch was cut from `main` at `b138633`, #162's merge, and kept in local commits until the push. No upstream pull request, no pin move, no migration, and nothing under `Sources/` or `web/`: the parity harness alone (`Tests/FRUSParity`, the `frus-parity` command and their tests), and the records.
 
@@ -53,7 +53,7 @@ A second cold review, by another subagent given the three commits then, the thir
 - **The year guard was too loose** (important): it held only that the year's digits were written in the dateline, which a received date's year or a telegram number's passes, so a server reading one would have had its record filed as the app's question. The API's year is now held to the kit's own reading of the dateline the API returns, asked through the kit's public resolution with no index and no bundled files, which applies its internal rule (`KitViewsYear`).
 - A Batch chunk of own citations the kit's splitter did not split one row a citation is the kit's own answer, reported, and no difference when the server's rows are the kit's; the order report names the documents one side alone holds; `check-source-explorer --out` writes the verdict the run gives, the strictness gate and `--undated` included, where it wrote the summary before them; and a library summary's columns carry AUTOINCREMENT, with the objects its statements read said as they are.
 
-⟪SIGNOFF⟫
+**The owner's sign-off.** Once the three checks had passed, the owner was given the steps: local accounts on the Standalone install (`FRUS_AUTH=local`, `docker compose up -d`, then `frus-light user add <name> --role admin`, whose password the owner types alone), a copy of its key file kept apart from its backups, and the pages to try, among them Find by Citation and the reader's Sources, the routes of checks 7 and 8. The owner signed in to the Standalone with an account of their own and signed phase 3 off in this row's session, at about 06:45Z on 23 November: "i sign off on phase 3".
 
 **Records** (PLAN's rule 5, the S25 group's last row, and the phase's):
 - `README.md`: Status, phase 3 signed off, with what its sign-off held; What works today's parity line, the full corpus's three checks; Known gaps, L19's line replaced by the two gaps it named, the note editor's ways out through the browser and a new note's project, and FRUS-Explorer#1970 and #1972 named where their gaps are; Next, phase 4, the web's follow-ups, the owner's issues of 23 November and the full corpus's four findings; the phase table's Phase 3 row.
