@@ -59,13 +59,24 @@ public struct IndexSummarizer: Sendable {
     /// Summarizes any set of volumes, not only the three fixtures. Such a summary is for
     /// diagnosis: it can never stand as the golden file, so it records no fixtures.
     public var anyVolumes: Bool
+    /// Summarizes the index a library holds, which the app may have upgraded in place since its first
+    /// index (`IndexSchema`, A library summary): each table's columns are checked by name, the schema is
+    /// gated by each table's columns and every other statement's text, and the revisions of the documents
+    /// the index holds are gated, where the stored text of the tables, their constraints, the dropped
+    /// documents' rows, the revision history and the order of a volume's documents, which the kit's upserts
+    /// leave in the order of the library's indexing passes (`LibraryOrder`), are information. Every row and
+    /// hash still gates, and the order of every table the kit writes again a volume at a time. It reads
+    /// any set of volumes, and is never a golden file: two library summaries compare, as check 2 at full
+    /// scale compares a server's index with the owner's full export (PLAN's S25b).
+    public var library: Bool
     public var upstreamCommit: String?
     public var fullCheckLimit: Int64
 
     public init(layout: RepositoryLayout, anyVolumes: Bool = false, upstreamCommit: String? = nil,
-                fullCheckLimit: Int64 = IndexSummarizer.defaultFullCheckLimit) {
+                fullCheckLimit: Int64 = IndexSummarizer.defaultFullCheckLimit, library: Bool = false) {
         self.layout = layout
-        self.anyVolumes = anyVolumes
+        self.anyVolumes = anyVolumes || library
+        self.library = library
         self.upstreamCommit = upstreamCommit
         self.fullCheckLimit = fullCheckLimit
     }
@@ -85,9 +96,9 @@ public struct IndexSummarizer: Sendable {
         } catch let error as ParityDatabaseError {
             throw SummaryRefusal(.notADatabase, "\(url.lastPathComponent) could not be read as a SQLite database: \(error.message).")
         }
-        try Self.checkSchema(db)
+        let layoutNotes = try Self.checkSchema(db, library: library)
         let stamp = try Self.exportStamp(db)
-        try Self.checkVersions(db, stamp: stamp)
+        try Self.checkVersions(db, stamp: stamp, library: library)
         let volumes = try checkVolumes(db)
         try Self.checkWriting(db, stamp: stamp)
         try Self.checkRollup(db)
@@ -107,6 +118,10 @@ public struct IndexSummarizer: Sendable {
             notes.append("The file is above \(limit), so the instance-mode vocabularies and the integrity checks were left out.")
         }
         if stamp == nil { notes.append("No research_provenance: the exporter did not stamp this index.") }
+        if library {
+            notes.append("A library summary: each table's columns read by name, the schema gated by each table's columns and every index, trigger and virtual table's text, and the revisions of the documents the index holds; the tables' stored text, their constraints, the revisions of documents the index no longer holds, the revision history and the order of the documents within each volume, which the kit's upserts leave as the library's indexing passes stored them (frus-parity compare-order reports it), are information. It is never a golden file.")
+            notes += layoutNotes
+        }
 
         var setup: [String] = []
         for table in IndexSchema.fullTextTables {
@@ -119,7 +134,7 @@ public struct IndexSummarizer: Sendable {
         var gating: [String: StatementDigest] = [:]
         var information: [String: StatementDigest] = [:]
         var timings: [String: Double] = [:]
-        for statement in Self.statements(full: full) {
+        for statement in Self.statements(full: full, library: library) {
             let start = clock.now
             let digest = try db.digest(statement.sql, volumeColumn: statement.volumeColumn)
             timings[statement.name] = Self.seconds(clock.now - start)
@@ -130,10 +145,14 @@ public struct IndexSummarizer: Sendable {
         checks["user_version"] = try db.scalar("PRAGMA user_version")?.text
         checks["application_id"] = try db.scalar("PRAGMA application_id")?.text
         checks["encoding"] = try db.scalar("PRAGMA encoding")?.text
-        checks["document_revisions.history"] = try db.scalar("""
-            SELECT count(*) FROM document_revisions
-            WHERE changed_at IS NOT NULL OR change_kind IS NOT NULL OR reviewed_at IS NOT NULL
-            """)?.text
+        // A library keeps the history of the corrections it saw, which a library summary hashes for
+        // information (`document_revisions.history`).
+        if !library {
+            checks["document_revisions.history"] = try db.scalar("""
+                SELECT count(*) FROM document_revisions
+                WHERE changed_at IS NOT NULL OR change_kind IS NOT NULL OR reviewed_at IS NOT NULL
+                """)?.text
+        }
         for table in IndexSchema.fullTextTables {
             checks["\(table).docsize_orphans"] = try db.scalar("""
                 SELECT count(*) FROM \(table)_docsize ds WHERE NOT EXISTS (SELECT 1 FROM document_cache dc WHERE dc.rowid = ds.id)
@@ -175,7 +194,7 @@ public struct IndexSummarizer: Sendable {
             inputs: inputs, platform: .current(sqlite: sqlite))
         return IndexSummaryGolden(
             provenance: provenance,
-            gating: IndexGating(volumes: volumes, checks: checks, digests: gating),
+            gating: IndexGating(volumes: volumes, checks: checks, digests: gating, library: library ? true : nil),
             information: info)
     }
 
@@ -188,14 +207,23 @@ public struct IndexSummarizer: Sendable {
         let gating: Bool
     }
 
-    /// Every hashed statement. `full` adds the instance-mode vocabularies.
-    static func statements(full: Bool) -> [Statement] {
+    /// Every hashed statement. `full` adds the instance-mode vocabularies; `library` reads the index a
+    /// library holds (`library`), each statement a golden summary hashes but the schema's text as it does.
+    static func statements(full: Bool, library: Bool = false) -> [Statement] {
         var statements: [Statement] = []
         for table in IndexSchema.corpusTables {
-            statements.append(Statement(name: table.name, sql: table.setSQL, volumeColumn: table.volumeIndex, gating: true))
+            if library, let held = table.heldRows, let dropped = table.droppedSQL {
+                statements.append(Statement(name: table.name, sql: table.setSQL(where: held), volumeColumn: table.volumeIndex, gating: true))
+                statements.append(Statement(name: "\(table.name).dropped", sql: dropped,
+                                            volumeColumn: table.volumeColumn.flatMap { table.columns.firstIndex(of: $0) }.map(Int32.init),
+                                            gating: false))
+            } else {
+                statements.append(Statement(name: table.name, sql: table.setSQL, volumeColumn: table.volumeIndex, gating: true))
+            }
             if let sql = table.sequenceSQL {
                 var gating = false
-                if case .gating = table.sequence { gating = true }
+                // A library's order of a table the kit upserts is its history of indexing passes (`upserted`).
+                if case .gating = table.sequence { gating = !(library && table.upserted) }
                 statements.append(Statement(name: "\(table.name).sequence", sql: sql, volumeColumn: 0, gating: gating))
             }
         }
@@ -221,13 +249,21 @@ public struct IndexSummarizer: Sendable {
             }
         }
         statements += [
-            Statement(name: "schema", sql: IndexSchema.schemaSQL, volumeColumn: nil, gating: true),
+            Statement(name: "schema", sql: IndexSchema.schemaSQL, volumeColumn: nil, gating: !library),
             Statement(name: "schema.export_only", sql: IndexSchema.exportOnlySchemaSQL, volumeColumn: nil, gating: false),
             Statement(name: "volume_structures.json", sql: "SELECT volume_id, structure_json FROM volume_structures ORDER BY volume_id",
                       volumeColumn: 0, gating: false),
             Statement(name: "person_rollup.ids", sql: "SELECT rollup_id, namekey FROM person_rollup ORDER BY rollup_id",
                       volumeColumn: nil, gating: false),
         ]
+        if library {
+            statements += [
+                Statement(name: "schema.columns", sql: IndexSchema.columnsSQL, volumeColumn: nil, gating: true),
+                Statement(name: "schema.statements", sql: IndexSchema.statementsSQL, volumeColumn: nil, gating: true),
+                Statement(name: "schema.constraints", sql: IndexSchema.constraintsSQL, volumeColumn: nil, gating: false),
+                Statement(name: "document_revisions.history", sql: IndexSchema.revisionHistorySQL, volumeColumn: 0, gating: false),
+            ]
+        }
         return statements
     }
 
@@ -278,8 +314,11 @@ public struct IndexSummarizer: Sendable {
     }
 
     /// Refuses an object the summary does not know, a missing table, or a table whose columns differ
-    /// from the pin's index version's: any of them would leave rows out of every hash.
-    static func checkSchema(_ db: ParityDatabase) throws {
+    /// from the pin's index version's: any of them would leave rows out of every hash. A library summary
+    /// takes a table's columns in any order, as an upgrade's `ALTER TABLE … ADD COLUMN` appends them, since
+    /// every hash selects them by name, and names each table that holds them in another order.
+    @discardableResult
+    static func checkSchema(_ db: ParityDatabase, library: Bool = false) throws -> [String] {
         var unknown: [String] = []
         var tables: Set<String> = []
         for row in try db.rows("SELECT type, name, tbl_name FROM sqlite_schema ORDER BY type, name") {
@@ -294,12 +333,18 @@ public struct IndexSummarizer: Sendable {
         guard missing.isEmpty else {
             throw SummaryRefusal(.schema, "This is not an index-\(IndexCompatibility.supportedIndexVersion) database: it has no \(missing.joined(separator: ", ")).")
         }
+        var reordered: [String] = []
         for table in IndexSchema.corpusTables {
             let columns = try db.strings("SELECT name FROM pragma_table_info('\(table.name)')")
+            if library, columns != table.columns, columns.count == table.columns.count, Set(columns) == Set(table.columns) {
+                reordered.append("\(table.name) holds its columns in the order \(columns.joined(separator: ", ")), where the version's is \(table.columns.joined(separator: ", ")), as a library's upgrades append a column; the summary reads them by name.")
+                continue
+            }
             guard columns == table.columns else {
                 throw SummaryRefusal(.schema, "\(table.name) has the columns \(columns.joined(separator: ", ")); the summary knows \(table.columns.joined(separator: ", ")). Update IndexSchema for the new index version.")
             }
         }
+        return reordered
     }
 
     /// The exporter's `research_provenance`, or nil when there is none or it is empty.
@@ -314,18 +359,22 @@ public struct IndexSummarizer: Sendable {
         return stamp.isEmpty ? nil : stamp
     }
 
-    /// Refuses another FTS schema generation or index version, in the file or in the stamp.
-    static func checkVersions(_ db: ParityDatabase, stamp: [String: String]?) throws {
+    /// Refuses another FTS schema generation or index version, in the file or in the stamp. A library
+    /// summary holds only the revisions of the documents the index holds to the version, since a library
+    /// keeps the rows of documents the corpus dropped at the version that last indexed them.
+    static func checkVersions(_ db: ParityDatabase, stamp: [String: String]?, library: Bool = false) throws {
         let supported = IndexCompatibility.supportedIndexVersion
         let generation = try db.scalar("PRAGMA user_version")?.integer ?? -1
         guard generation == Int64(ftsSchemaVersion) else {
             throw SummaryRefusal(.versions, "PRAGMA user_version is \(generation); index \(supported) uses FTS schema generation \(ftsSchemaVersion).")
         }
-        let row = try db.rows("SELECT count(*), count(index_version), min(index_version), max(index_version) FROM document_revisions").first ?? []
+        let held = library ? " WHERE \(IndexSchema.heldRevision)" : ""
+        let row = try db.rows("SELECT count(*), count(index_version), min(index_version), max(index_version) FROM document_revisions\(held)").first ?? []
         let total = row.first?.integer ?? 0
         guard total > 0, row[1].integer == total, row[2].integer == Int64(supported), row[3].integer == Int64(supported) else {
             let range = [row[2].text, row[3].text].compactMap { $0 }.joined(separator: " to ")
-            throw SummaryRefusal(.versions, "document_revisions holds \(total) rows at index version \(range.isEmpty ? "none" : range), \(total - (row[1].integer ?? 0)) of them without one; every row must be at \(supported).")
+            let rows = library ? "rows of documents the index holds" : "rows"
+            throw SummaryRefusal(.versions, "document_revisions holds \(total) \(rows) at index version \(range.isEmpty ? "none" : range), \(total - (row[1].integer ?? 0)) of them without one; every row must be at \(supported).")
         }
         guard let stamp else { return }
         let expected = [
@@ -349,6 +398,9 @@ public struct IndexSummarizer: Sendable {
         let held = Set(volumes)
         for table in IndexSchema.corpusTables {
             guard let column = table.volumeColumn else { continue }
+            // A library's rows of documents the corpus dropped may name a volume dropped whole: they are
+            // information (`heldRows`), never hashed with the index's.
+            if library, table.heldRows != nil { continue }
             let outside = try db.strings("SELECT DISTINCT \(column) FROM \(table.name) ORDER BY \(column)").filter { !held.contains($0) }
             guard outside.isEmpty else {
                 throw SummaryRefusal(.volumes, "\(table.name).\(column) names \(outside.count) volume(s) that document_cache does not hold: \(outside.prefix(5).joined(separator: ", ")).")

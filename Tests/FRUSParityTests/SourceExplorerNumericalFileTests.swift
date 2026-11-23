@@ -45,11 +45,20 @@ import Testing
                 comparator: comparator) { _ in (200, body) }
             #expect(result.passes, "\(note): \(result.differences.joined(separator: "; "))")
         }
-        // A year the export reads differently from the dateline's inside 1906–1910 is a difference, not the rule.
+        // A year the export reads inside 1906–1910 where the dateline gives none: the API, as both of the app's
+        // views, shows no Numerical File, and the record is the generator's for the views' year; the export's own
+        // year would resolve the rolls, the app's question, listed (S25b's settlement of the year rule).
         let (_, body) = try await Self.answer("File No. 551/79", dateline: "Washington, undated.", resources: resources)
         let result = await SourceExplorerCheck.run(
             notes: [SourceExplorerCheck.Note(volumeId: "frus1908", documentId: "d1", note: "File No. 551/79", year: 1908)],
             comparator: comparator) { _ in (200, body) }
-        #expect(!result.passes && result.differences.first?.contains("documentYear") == true)
+        #expect(result.passes, "\(result.differences)")
+        #expect(result.identical == 0 && result.undatedByDateline.isEmpty)
+        let disagreement = try #require(result.yearDisagreements.first)
+        #expect(result.yearDisagreements.count == 1 && disagreement.kind == .datelineGivesNoYear)
+        #expect(disagreement.viewsYear == nil && disagreement.exportYear == 1908)
+        #expect(disagreement.resolvesOtherwise.contains("numericalFileRolls") && disagreement.resolvesOtherwise.contains("offlineOutcome"),
+                "\(disagreement.resolvesOtherwise)")
+        #expect(result.exportYearQuestions == [disagreement])
     }
 }

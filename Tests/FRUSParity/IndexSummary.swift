@@ -32,6 +32,9 @@ public struct IndexGating: Codable, Equatable, Sendable {
     /// One digest per hashed statement, by name: `document_cache` for a table's rows in natural-key
     /// order, `document_cache.sequence` for their order within each volume, and so on.
     public var digests: [String: StatementDigest]
+    /// True for a library summary (`IndexSummarizer.library`), which compares only with another; absent
+    /// from a golden summary, whose file it leaves as it was.
+    public var library: Bool?
 
     /// The right value of each check.
     public static let expectedChecks: [String: String] = [
@@ -44,11 +47,15 @@ public struct IndexGating: Codable, Equatable, Sendable {
         "user_version": String(IndexSummarizer.ftsSchemaVersion),
     ]
 
-    public init(volumes: [String], checks: [String: String], digests: [String: StatementDigest]) {
+    public init(volumes: [String], checks: [String: String], digests: [String: StatementDigest], library: Bool? = nil) {
         self.volumes = volumes
         self.checks = checks
         self.digests = digests
+        self.library = library
     }
+
+    /// Whether this is a library summary.
+    public var isLibrary: Bool { library == true }
 }
 
 /// What may differ between platforms or runs, reported for people to read and never compared.
@@ -144,6 +151,8 @@ public enum IndexSummaryComparison {
     /// Every gating difference between a golden summary and a candidate, by item and volume, and
     /// every check either one holds at the wrong value. Empty when check 2 passes.
     public static func differences(golden: IndexSummaryGolden, candidate: IndexSummaryGolden) -> [SummaryDifference] {
+        // A library summary reads a library's history apart, so it compares only with another.
+        if let mixed = mixedReading(golden, candidate) { return [mixed] }
         var differences: [SummaryDifference] = []
         if golden.format != candidate.format {
             differences.append(SummaryDifference(item: "format", detail: "golden \(golden.format), candidate \(candidate.format)"))
@@ -170,6 +179,32 @@ public enum IndexSummaryComparison {
             differences += self.differences(name, golden: a, candidate: b)
         }
         return differences
+    }
+
+    /// The refusal to compare a library summary with a golden one, or nil when both read the same way.
+    public static func mixedReading(_ golden: IndexSummaryGolden, _ candidate: IndexSummaryGolden) -> SummaryDifference? {
+        guard golden.gating.isLibrary != candidate.gating.isLibrary else { return nil }
+        let library = golden.gating.isLibrary ? "the first" : "the second"
+        return SummaryDifference(
+            item: "library",
+            detail: "\(library) is a library summary (summarize --library) and the other is not; a library summary reads a library's history apart, so summarize both with --library")
+    }
+
+    /// Each information digest two summaries hold differently, which no comparison gates: for a pair of
+    /// library summaries, what a library's history and layout hold apart from the index, such as the
+    /// tables' stored text, their constraints, the dropped documents' revisions and the revision history.
+    public static func informationDifferences(golden: IndexSummaryGolden, candidate: IndexSummaryGolden) -> [SummaryDifference] {
+        let (a, b) = (golden.information.digests, candidate.information.digests)
+        return Set(a.keys).union(b.keys).sorted().compactMap { name in
+            switch (a[name], b[name]) {
+            case (let x?, let y?):
+                guard x.sha256 != y.sha256 || x.rows != y.rows else { return nil }
+                return SummaryDifference(item: name, detail: x.rows == y.rows ? "\(x.rows) rows each, content differs" : "\(x.rows) rows and \(y.rows)")
+            case (let x?, nil): return SummaryDifference(item: name, detail: "only the first, \(x.rows) rows")
+            case (nil, let y?): return SummaryDifference(item: name, detail: "only the second, \(y.rows) rows")
+            case (nil, nil): return nil
+            }
+        }
     }
 
     /// The checks a summary holds at a value other than the right one.
@@ -224,6 +259,7 @@ extension IndexSummaryGolden {
                 }
             }
         }
+        if gating.isLibrary { lines.append("a library summary (summarize --library), which compares only with another and is never a golden file") }
         lines.append("volumes (\(gating.volumes.count)): \(gating.volumes.prefix(volumeLimit).joined(separator: ", "))\(gating.volumes.count > volumeLimit ? ", …" : "")")
         lines.append("checks:")
         for name in gating.checks.keys.sorted() {

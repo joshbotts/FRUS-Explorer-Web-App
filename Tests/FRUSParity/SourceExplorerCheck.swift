@@ -20,11 +20,17 @@
 //   (`CentralFilesClassifier.documentYear(fromDateline:)`, the reader's `extractYear(from:)`), where the export
 //   reads `frus:doc-dateTime-min`. Over the fixtures they differ only where a dateline is there and gives no year
 //   ("Moscow, undated"), for which the API gives none: such a record takes the export's year when that year
-//   resolves nothing, outside the Numerical File's 1906–1910, and the check counts it, which a caller may pin;
-//   inside them it keeps none, and the record differs. A document with no dateline gets no year this way.
-//   Across the corpus the two can differ otherwise, a dateline with a year and no attribute, or an attribute's
-//   instant at −05:00 that falls in the year before (FRUS-Explorer#1326), and such a record differs: the full
-//   corpus's run settles that rule.
+//   resolves nothing, outside the Numerical File's 1906–1910, and the check counts it, which a caller may pin
+//   (`--undated`). A document with no dateline gets no year this way.
+//
+// The full corpus's run settled the rest (PLAN's S25b): across the corpus the two years also differ where a
+// dateline gives a year and the document has no attribute, where it has no dateline, or where the attribute's
+// instant at −05:00 falls in another year (FRUS-Explorer#1326). Wherever the years differ and the first rule
+// does not make the records equal, the API's record is held to the generator's record for the year both of the
+// app's views read, the API's: the server shows what the app shows. Each such record is counted by how the
+// years differ (`YearDisagreement`), and one whose note the export's own year would resolve otherwise than the
+// views' year does is listed, a question of the app's (its export reads another year than its views), never a
+// difference of the server's.
 //
 // The generator's cores declare eight public names FRUSCoreKit declares too, CentralFilesIndex,
 // CollectionAuthorityIndex, CountryRoll, LotFileEntry, NumericalFileIndex, NumericalFileRoll,
@@ -160,7 +166,7 @@ public enum SourceExplorerCheck {
             var year = answer.year
             var undated = false
             if year == nil, let exportYear, !(1906...1910).contains(exportYear), let dateline = answer.dateline,
-               !Self.namesYear(dateline) {
+               !dateline.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !Self.namesYear(dateline) {
                 year = exportYear
                 undated = true
             }
@@ -223,41 +229,160 @@ public enum SourceExplorerCheck {
             if resolution.liveLookupRoute != "noCatalogRoute" { return .liveRouteOnly }
             return .noResolution
         }
+
+        /// What one note's answer gives against the generator's record: the export's own record, or the
+        /// generator's for the views' year where the two years differ, or a difference.
+        func compare(note: Note, response: Swift.Result<(status: Int, body: Data), any Error>) -> Finding {
+            let key = "\(note.volumeId)/\(note.documentId)"
+            let expected = record(volumeId: note.volumeId, documentId: note.documentId, note: note.note, year: note.year)
+            let answer: Answer
+            switch response {
+            case .failure(let error):
+                return .differs("\(key): \(error)")
+            case .success(let (status, body)):
+                guard status == 200 else { return .differs("\(key): \(status) \(String(decoding: body.prefix(300), as: UTF8.self))") }
+                do {
+                    answer = try JSONDecoder().decode(Answer.self, from: body)
+                } catch {
+                    return .differs("\(key): \(error)")
+                }
+            }
+            let (actual, undated) = record(from: answer, exportYear: note.year)
+            if actual == expected { return .identical(actual, undated: undated) }
+            guard answer.year != note.year else { return .differs("\(key): " + SourceExplorerCheck.difference(actual, expected)) }
+            // The years differ: the API's record for the views' year, against the generator's for it.
+            let (atViewsYear, _) = record(from: answer, exportYear: nil)
+            let generated = record(volumeId: note.volumeId, documentId: note.documentId, note: note.note, year: answer.year)
+            guard atViewsYear == generated else { return .differs("\(key): " + SourceExplorerCheck.difference(atViewsYear, generated)) }
+            let kind: YearDisagreement.Kind
+            switch (answer.year, note.year) {
+            case (nil, _):
+                let dateline = answer.dateline?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                kind = dateline.isEmpty ? .noDateline : .datelineGivesNoYear
+            case (_, nil): kind = .noExportYear
+            default: kind = .anotherYear
+            }
+            // What the export's own year resolves otherwise than the views' year, the year itself apart.
+            let otherwise = SourceExplorerCheck.differingFields(expected, generated.withYear(note.year)).map(\.name)
+            return .identicalAtViewsYear(atViewsYear, YearDisagreement(key: key, kind: kind, viewsYear: answer.year,
+                                                                       exportYear: note.year, resolvesOtherwise: otherwise))
+        }
+    }
+
+    /// What one note's comparison found.
+    public enum Finding: Sendable, Equatable {
+        /// The generator's own record, with whether the first year rule dated it.
+        case identical(SourceExplorerExportRecord, undated: Bool)
+        /// The generator's record for the views' year, where the export reads another.
+        case identicalAtViewsYear(SourceExplorerExportRecord, YearDisagreement)
+        /// What differs, or why the answer could not be read.
+        case differs(String)
+    }
+
+    /// A record whose year the API, as both of the app's views, reads otherwise than the export, held to the
+    /// generator's record for the views' year.
+    public struct YearDisagreement: Codable, Sendable, Equatable {
+        public enum Kind: String, Codable, Sendable, CaseIterable {
+            /// The document has a dateline that names no year ("undated"), and an attribute.
+            case datelineGivesNoYear
+            /// The document has no dateline, and an attribute.
+            case noDateline
+            /// The dateline names a year, and the document has no attribute.
+            case noExportYear
+            /// The dateline's year and the attribute's differ.
+            case anotherYear
+        }
+
+        public let key: String
+        public let kind: Kind
+        public let viewsYear: Int?
+        public let exportYear: Int?
+        /// The fields of the export's own record that its year makes other than the views' year makes them, the
+        /// year apart: empty where the year resolves nothing.
+        public let resolvesOtherwise: [String]
+
+        public init(key: String, kind: Kind, viewsYear: Int?, exportYear: Int?, resolvesOtherwise: [String]) {
+            self.key = key
+            self.kind = kind
+            self.viewsYear = viewsYear
+            self.exportYear = exportYear
+            self.resolvesOtherwise = resolvesOtherwise
+        }
     }
 
     /// What the check found.
-    public struct Result: Sendable {
+    public struct Result: Sendable, Codable, Equatable {
         /// The notes the generator read, and those of documents with no `xml:id`, which no address names.
         public var notes = 0
         public var withoutId = 0
-        /// The notes whose records are equal.
+        /// The notes whose records are the export's own.
         public var identical = 0
         /// Of those, the documents whose datelines give no year, which the export dates from their TEI, by key.
         public var undatedByDateline: [String] = []
+        /// The notes whose records are the generator's for the year both of the app's views read, where the
+        /// export reads another, each with how the years differ and what the export's year resolves otherwise.
+        public var yearDisagreements: [YearDisagreement] = []
         /// Each note whose records differ, or whose answer the API refused, with what differs.
         public var differences: [String] = []
         /// The records by strategy and by outcome, for the summary line.
         public var byStrategy: [String: Int] = [:]
         public var byOutcome: [String: Int] = [:]
 
-        public var passes: Bool { differences.isEmpty && identical == notes - withoutId && identical > 0 }
+        public init() {}
+
+        public var passes: Bool {
+            let held = identical + yearDisagreements.count
+            return differences.isEmpty && held == notes - withoutId && held > 0
+        }
+
+        /// The year disagreements whose note the export's own year resolves otherwise: the app's question.
+        public var exportYearQuestions: [YearDisagreement] { yearDisagreements.filter { !$0.resolvesOtherwise.isEmpty } }
+
+        /// Takes one note's finding.
+        mutating func take(_ finding: Finding) {
+            switch finding {
+            case .identical(let record, let undated):
+                identical += 1
+                if undated { undatedByDateline.append(record.id) }
+                byStrategy[record.strategy, default: 0] += 1
+                byOutcome[record.offlineOutcome, default: 0] += 1
+            case .identicalAtViewsYear(let record, let disagreement):
+                yearDisagreements.append(disagreement)
+                byStrategy[record.strategy, default: 0] += 1
+                byOutcome[record.offlineOutcome, default: 0] += 1
+            case .differs(let difference):
+                differences.append(difference)
+            }
+        }
 
         /// The summary: how many notes of how many volumes, and the strategies and outcomes they took.
         public func summary(volumes: Int) -> String {
             let strategies = byStrategy.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: ", ")
             let outcomes = byOutcome.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: ", ")
             if passes {
-                return "check 8 passes: \(identical) source notes of \(volumes) volumes, every record the export generator's; "
+                var kinds: [String: Int] = [:]
+                for disagreement in yearDisagreements { kinds[disagreement.kind.rawValue, default: 0] += 1 }
+                let years = yearDisagreements.isEmpty ? "" :
+                    "; \(yearDisagreements.count) of them for the year both of the app's views read, where the export reads another ("
+                    + kinds.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: ", ")
+                    + "), \(exportYearQuestions.count) of which the export's own year resolves otherwise, a question of the app's"
+                return "check 8 passes: \(identical + yearDisagreements.count) source notes of \(volumes) volumes, every record the export generator's; "
                     + "strategies: \(strategies); outcomes: \(outcomes)"
                     + (undatedByDateline.isEmpty ? "" : "; \(undatedByDateline.count) of them dated by the export from frus:doc-dateTime-min, their datelines giving no year")
+                    + years
                     + (withoutId > 0 ? "; \(withoutId) notes of documents with no id, which no address names" : "")
             }
-            return "check 8 fails: \(identical) of \(notes - withoutId) source notes identical, \(differences.count) differ"
+            return "check 8 fails: \(identical + yearDisagreements.count) of \(notes - withoutId) source notes held, \(differences.count) differ"
         }
     }
 
-    /// Resolves each note through the API with `get`, which fetches a path from the server, and holds each record to
-    /// the generator's.
+    /// The API's path for a note's document.
+    static func path(_ note: Note) -> String {
+        "/api/v1/volumes/\(segment(note.volumeId))/documents/\(segment(note.documentId))/sources"
+    }
+
+    /// Resolves each note through the API with `get`, which fetches a path from the server, one at a time, and holds
+    /// each record to the generator's.
     public static func run(notes: [Note], comparator: Comparator,
                            get: (String) async throws -> (status: Int, body: Data)) async -> Result {
         var result = Result()
@@ -267,45 +392,71 @@ public enum SourceExplorerCheck {
                 result.withoutId += 1
                 continue
             }
-            let expected = comparator.record(volumeId: note.volumeId, documentId: note.documentId, note: note.note,
-                                             year: note.year)
-            let key = "\(note.volumeId)/\(note.documentId)"
-            let answer: Answer
+            let response: Swift.Result<(status: Int, body: Data), any Error>
             do {
-                let path = "/api/v1/volumes/\(segment(note.volumeId))/documents/\(segment(note.documentId))/sources"
-                let response = try await get(path)
-                guard response.status == 200 else {
-                    result.differences.append("\(key): \(response.status) \(String(decoding: response.body.prefix(300), as: UTF8.self))")
-                    continue
-                }
-                answer = try JSONDecoder().decode(Answer.self, from: response.body)
+                response = .success(try await get(path(note)))
             } catch {
-                result.differences.append("\(key): \(error)")
-                continue
+                response = .failure(error)
             }
-            let (actual, undated) = comparator.record(from: answer, exportYear: note.year)
-            if actual == expected {
-                result.identical += 1
-                if undated { result.undatedByDateline.append(key) }
-                result.byStrategy[actual.strategy, default: 0] += 1
-                result.byOutcome[actual.offlineOutcome, default: 0] += 1
-            } else {
-                result.differences.append("\(key): " + difference(actual, expected))
-            }
+            result.take(comparator.compare(note: note, response: response))
         }
         return result
     }
 
-    /// Each field of two records that differs, the API's value then the generator's, as JSON.
-    public static func difference(_ actual: SourceExplorerExportRecord, _ expected: SourceExplorerExportRecord) -> String {
+    /// The same, with up to `parallel` answers asked at once, and each held to the generator's in the notes' order on
+    /// the calling task, which alone uses the comparator. `progress` hears how many notes are done after each batch.
+    public static func run(notes: [Note], comparator: Comparator, parallel: Int,
+                           progress: (Int, Result) -> Void = { _, _ in },
+                           get: @escaping @Sendable (String) async throws -> (status: Int, body: Data)) async -> Result {
+        let width = max(1, parallel)
+        var result = Result()
+        result.notes = notes.count
+        let addressed = notes.filter { !$0.documentId.isEmpty }
+        result.withoutId = notes.count - addressed.count
+        let batch = width * 64
+        var start = 0
+        while start < addressed.count {
+            let notes = Array(addressed[start..<min(start + batch, addressed.count)])
+            var responses: [Int: Swift.Result<(status: Int, body: Data), any Error>] = [:]
+            await withTaskGroup(of: (Int, Swift.Result<(status: Int, body: Data), any Error>).self) { group in
+                var next = 0
+                func ask() {
+                    let (index, path) = (next, path(notes[next]))
+                    next += 1
+                    group.addTask {
+                        do {
+                            return (index, .success(try await get(path)))
+                        } catch {
+                            return (index, .failure(error))
+                        }
+                    }
+                }
+                while next < min(width, notes.count) { ask() }
+                for await (index, response) in group {
+                    responses[index] = response
+                    if next < notes.count { ask() }
+                }
+            }
+            for (index, note) in notes.enumerated() {
+                result.take(comparator.compare(note: note, response: responses[index]!))
+            }
+            start += notes.count
+            progress(start, result)
+        }
+        return result
+    }
+
+    /// Each field of two records that differs, by name, with its value in each as JSON.
+    public static func differingFields(_ actual: SourceExplorerExportRecord, _ expected: SourceExplorerExportRecord)
+        -> [(name: String, actual: String, expected: String)] {
         func json<T: Encodable>(_ value: T) -> String {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
             return (try? encoder.encode(value)).map { String(decoding: $0, as: UTF8.self) } ?? "?"
         }
-        var fields: [String] = []
+        var fields: [(name: String, actual: String, expected: String)] = []
         func compare<T: Encodable & Equatable>(_ name: String, _ a: T, _ b: T) {
-            if a != b { fields.append("\(name) is \(json(a)) through the API, \(json(b)) in the export") }
+            if a != b { fields.append((name, json(a), json(b))) }
         }
         compare("id", actual.id, expected.id)
         compare("rawNote", actual.rawNote, expected.rawNote)
@@ -323,12 +474,29 @@ public enum SourceExplorerCheck {
         compare("collectionAuthority", actual.resolution.collectionAuthority, expected.resolution.collectionAuthority)
         compare("offlineOutcome", actual.offlineOutcome, expected.offlineOutcome)
         // A field the list does not name: both records, whole.
-        if fields.isEmpty { return "the records differ: \(json(actual)) through the API, \(json(expected)) in the export" }
-        return fields.joined(separator: "; ")
+        if fields.isEmpty, actual != expected { fields.append(("record", json(actual), json(expected))) }
+        return fields
+    }
+
+    /// Each field of two records that differs, the API's value then the generator's, as JSON.
+    public static func difference(_ actual: SourceExplorerExportRecord, _ expected: SourceExplorerExportRecord) -> String {
+        let fields = differingFields(actual, expected)
+        if fields.count == 1, fields[0].name == "record" {
+            return "the records differ: \(fields[0].actual) through the API, \(fields[0].expected) in the export"
+        }
+        return fields.map { "\($0.name) is \($0.actual) through the API, \($0.expected) in the export" }.joined(separator: "; ")
     }
 
     /// A path segment, its reserved characters escaped.
     static func segment(_ value: String) -> String {
         value.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) ?? value
+    }
+}
+
+extension SourceExplorerExportRecord {
+    /// The record with another year, every other field as it is: for asking what a year changes.
+    func withYear(_ year: Int?) -> SourceExplorerExportRecord {
+        SourceExplorerExportRecord(id: id, rawNote: rawNote, documentYear: year, parsed: parsed, strategy: strategy,
+                                   derived: derived, resolution: resolution, offlineOutcome: offlineOutcome)
     }
 }
