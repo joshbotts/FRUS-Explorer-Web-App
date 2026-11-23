@@ -75,7 +75,11 @@ Phases 0 to 3 are done. Phase 1, a Docker Compose install that serves a FRUS Exp
 
 1. **Phase 4, semantic and language** ([`docs/PLAN.md`](docs/PLAN.md)), once it is planned: search by meaning with EmbeddingGemma, the semantic Related signal and the map, a Linux lemmatizer with live word clouds, Distinctive and collocates, and Archives Visits packets; check 9 is its exit.
 2. **Beside it, the web's own follow-ups:** S24e's, the server's uses of #1902's other two calls (a document's number from its head, one decode of the subject index) and Related Documents' ranking by wording; and the two gaps L19 named, the note editor's browser exits and a new note's project, above.
-3. **Upstream, the owner's issues** of 23 November ([FRUS-Explorer#1970](https://github.com/joshbotts/FRUS-Explorer/issues/1970) to [#1974](https://github.com/joshbotts/FRUS-Explorer/issues/1974)): each web hand-over is taken at the pin move after its fix merges; #1974's, the Source Explorer export's Decimal File numbers, asks check 8 to run again and find its third rule's count at 0. The full corpus's checks found four more things of the app's own, the owner's to file or not ([`docs/COORDINATION.md`](docs/COORDINATION.md) §5): the export's year against its views', three readings of the views' dateline rule, Citation Lookup's lettered documents, and a long-kept library's order of documents.
+3. **Upstream, the owner's issues** of 23 November ([FRUS-Explorer#1970](https://github.com/joshbotts/FRUS-Explorer/issues/1970) to [#1978](https://github.com/joshbotts/FRUS-Explorer/issues/1978)): each web hand-over is taken at the pin move after its fix merges; #1974's, the Source Explorer export's Decimal File numbers, asks check 8 to run again and find its third rule's count at 0. [#1975](https://github.com/joshbotts/FRUS-Explorer/issues/1975) to #1978 are what else the full corpus's checks found of the app's own ([`docs/COORDINATION.md`](docs/COORDINATION.md) §5):
+   - #1975: three readings of the views' dateline rule;
+   - #1976: the export's year against its views';
+   - #1977: Citation Lookup and printed numbers that are not whole numbers;
+   - #1978: a long-kept library's order of documents.
 
 ## Development plan
 
