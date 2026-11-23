@@ -106,6 +106,38 @@ Not started: `PLAN.md`'s row S29c. The session that does it replaces this line, 
 
 Not started: `PLAN.md`'s row S27b. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
 
+## Phase 4's decisions: the owner's answers
+
+23 November 2026 · branch `claude/phase-4-decisions-f837c3` · [#165](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/165) · upstream `4556c4d5`, unchanged
+
+The owner started phase 4 by asking for each decision it waited on, with a recommendation, the other feasible options and a choice that told more of each, and answered them here in three rounds. This session changes records only: nothing under `web/`, `Sources/`, `Tests/`, `fixtures/`, `scripts/`, `docker/` or `.github/`. Ten decisions were open: the plan's nine and phase 3's Gotenberg checkpoint, which S30d's packet now leans on.
+
+**The answers** (`PLAN.md`, Answered on 23 November, for phase 4):
+
+- **Three sessions at once,** not four, for the usage limit: in phase 3 three Opus sessions at the highest effort already spent a five-hour window. The waves are drawn again for three, ten where four took eight, with the upstream rows and the pin moves first.
+- **The Manually Annotated Sub-Corpus** for the tagger, from the American National Corpus's own site; the owner reads its licence there before S29c commits a model.
+- **The model in the image,** where SPEC and S27b's default had an admin download it, the owner's choice over the session's recommendation; and with the model there, **the encoder on by default,** as recommended.
+- **Every vector in the image too,** for every server. The owner first chose every volume's vectors fetched at a server's first start, then asked whether they could be in the image and still take volumes published or much corrected later. The session read the app's generator, its shard store and the vectors' host, and found that a re-pack is one set: the bundled tier, its index and the shard manifest change with the shards, and no shard is usable ahead of the bundled files that name it, since the Hamming stage scans the bundled sign bits, a document's identity is the bundled index's alone and each shard is held to the bundled manifest's digest. So updates come at pin moves, and the image keeps the generation's shards in a base layer and a re-pack's in a small layer beside it. The owner chose that, and filed for after phase 4 a server that embeds a new or corrected volume itself with the model in its image.
+- **The rest as recommended:** a reader's request fetches nothing, which the vectors' answer settled, since there is nothing to fetch; check 9 in two halves; the golden files made by the row's session on the owner's Mac; the Word Cloud's Compare with…, its exports, a collection's cloud and the map's PDF after phase 4; and Gotenberg acceptable. **Against the recommendation, no web visit in the Mac:** tests suffice, and the checkpoint is dropped.
+
+**Checked on 23 November:**
+
+- **The vectors' host,** `joshbotts/frus-semantic-vectors`: `generations/89481b18/shards-manifest.json` at `9be645e9`, the folder's only commit, is the app's bundled manifest at the pin byte for byte (SHA-256 `a8ed3e80…`), so the image can fetch the shards at that commit. Within a family the host has been updated twice, `dd8295fe` (a volume added, 10 September) and `08e4817b` (two corrected volumes' shards replaced in place, 10 October), and it holds no index, binary or map.
+- **MASC's terms:** the ANC distributes it with no restriction on redistribution or use, where LDC's catalogue copies (LDC2010T22, LDC2013T12) carry LDC's user agreement.
+
+**Records**
+
+- **`docs/PLAN.md`:** the summary's line; phase 4's introduction; rows S26a (the store's move optional), S26c (the vectors in the image), S27b (the model in the image and the encoder on), S27d (no offer to download), S29c (the training text), S30d (a test of a plan's round trip in place of the Mac checkpoint) and S31; rules 1 and 3 of How phase 4's sessions run beside each other, and the waves for three; the owner checkpoints, now sixty-six steps: Settings, phase 4, done, the tagger's text narrowed to its licence, the golden files by a session, every vector and the model with nothing to download, the web visit dropped and Gotenberg in part; the risks: the runtime's mitigation, the child process, a larger image (new), counts on a shared server and the usage limit; phase 3's Gotenberg answer; the planned lines the answers change; and the answers.
+- **`docs/SPEC.md`:** search by meaning's row; the architecture's diagram; the job runner; the external data's two rows; Related Documents' semantic line; the image's stages, a vectors stage among them, and its sizes; `FRUS_ENCODER`'s default, in the Compose file and the table; the disk layout; the seed and snapshot modes, which carry no shards or model now; the licence's paragraph; and the Gotenberg question.
+- **`README.md`:** Next's phase-4 line and the licence's sentence on the model.
+- **`docs/prep/README.md`:** two claims for S26c, the vectors' host and a re-pack as a set.
+
+**Results**
+
+- No code changed. The pull request is records only, so CI's `swift`, `web` and `compose` jobs are skipped.
+
+**Next: wave 1, three sessions:** S26a and S29a upstream, and S27b, the encoder with its model in the image. S29c, the web's tagger, starts when a slot frees, and commits its model once the owner has read MASC's licence.
+
 ## Phase 4's plan: semantic and language, on four tracks
 
 23 November 2026 · branch `claude/vigilant-galileo-eylx4k` · [#164](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/164) · upstream `4556c4d5`, unchanged
