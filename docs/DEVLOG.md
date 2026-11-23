@@ -108,7 +108,7 @@ Not started: `PLAN.md`'s row S27b. The session that does it replaces this line, 
 
 ## Phase 4's plan: semantic and language, on four tracks
 
-23 November 2026 · branch `claude/vigilant-galileo-eylx4k` · PULL_REQUEST_LINK · upstream `4556c4d5`, unchanged
+23 November 2026 · branch `claude/vigilant-galileo-eylx4k` · [#164](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/164) · upstream `4556c4d5`, unchanged
 
 The owner asked for a development plan for phase 4, which the plan had named next "once it is planned" when phase 3 was signed off that morning (Session 25b). This session changes records only: nothing under `web/`, `Sources/`, `Tests/`, `fixtures/`, `scripts/`, `docker/` or `.github/`. It planned the phase in rows of one pull request each, as phases 2 and 3 were, from the app's code at the pin, and it measured the phase's two largest unknowns on Linux before writing a row that rested on them.
 
