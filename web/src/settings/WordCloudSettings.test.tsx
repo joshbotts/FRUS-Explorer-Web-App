@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CloudSample } from '../api/cloud';
@@ -88,6 +88,42 @@ describe('Settings ▸ Word Cloud', () => {
     expect(patches).toEqual([{ wordCloud: { foldPlurals: false } }, { wordCloud: { minLength: 5 } }]);
     await user.tab();
     expect((length as HTMLInputElement).value).toBe('5');
+  });
+
+  it('shows a change at once, asks the sample again only once the server has kept it, and an older answer undoes nothing', async () => {
+    let held = preferences;
+    const answers: (() => void)[] = [];
+    const fetch = stubServer({
+      '/readyz': ready,
+      '/api/v1/me': me,
+      '/api/v1/me/preferences': () => held,
+      'PATCH /api/v1/me/preferences': (_url: URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as { wordCloud: Partial<Preferences['wordCloud']> };
+        held = { ...held, wordCloud: { ...held.wordCloud, ...body.wordCloud } };
+        const kept = held;
+        return new Promise<Preferences>((resolve) => answers.push(() => resolve(kept)));
+      },
+      '/api/v1/me/preferences/word-cloud-sample': sample,
+    });
+    const samples = () => fetch.mock.calls.filter(([url]) => new URL(url, 'http://localhost').pathname === '/api/v1/me/preferences/word-cloud-sample').length;
+    const user = userEvent.setup();
+    renderAt('/settings/word-cloud');
+    expect(await screen.findByText('Keeps 5 of 23 terms in this sample')).toBeTruthy();
+    const asked = samples();
+    const count = screen.getByRole('spinbutton', { name: 'Minimum occurrences' }) as HTMLInputElement;
+    await user.clear(count);
+    await user.type(count, '20');
+    await waitFor(() => expect(answers).toHaveLength(2));
+    expect(count.value).toBe('20');
+    expect(samples()).toBe(asked);
+    // The answer to 2 comes after 20 was sent: neither the field nor the sample takes it.
+    await act(async () => answers[0]!());
+    expect(count.value).toBe('20');
+    expect(samples()).toBe(asked);
+    await act(async () => answers[1]!());
+    await waitFor(() => expect(samples()).toBe(asked + 1));
+    expect(count.value).toBe('20');
+    expect(held.wordCloud.minCount).toBe(20);
   });
 
   it('hides and shows words in the list Applies to names, every cloud’s or a lens’s', async () => {

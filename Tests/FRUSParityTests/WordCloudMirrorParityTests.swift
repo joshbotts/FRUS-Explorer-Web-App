@@ -133,6 +133,14 @@ import Testing
              Self.server, #"case .corpus: return nil"#),
             (Self.models, #"case "doc": guard let slash = value.firstIndex(of: "/") else { return nil }"#,
              Self.server, #"static let liveSignatures: Set<String> = ["doc", "col", "tag", "search", "scope", "subject", "daterange"]"#),
+            (Self.models, #"case "doc": guard let slash = value.firstIndex(of: "/") else { return nil }"#,
+             Self.server, #"case "doc": guard value.firstIndex(of: "/") != nil else { return false } return true"#),
+            (Self.models, #"case "col": guard let uuid = UUID(uuidString: value) else { return nil } self = .collection(id: uuid) case "tag": guard let uuid = UUID(uuidString: value) else { return nil } self = .userTag(id: uuid) case "search": guard let uuid = UUID(uuidString: value) else { return nil } self = .savedSearch(id: uuid) case "scope": guard let uuid = UUID(uuidString: value) else { return nil }"#,
+             Self.server, #"case "col", "tag", "search", "scope": return UUID(uuidString: value) != nil"#),
+            (Self.models, #"let parts = value.components(separatedBy: "\u{1f}") guard let category = parts.first, !category.isEmpty else { return nil }"#,
+             Self.server, #"let parts = value.components(separatedBy: "\u{1f}") guard let category = parts.first, !category.isEmpty else { return false }"#),
+            (Self.models, #"let bounds = value.components(separatedBy: "..") guard bounds.count == 2, !bounds[0].isEmpty, !bounds[1].isEmpty else { return nil }"#,
+             Self.server, #"let bounds = value.components(separatedBy: "..") guard bounds.count == 2, !bounds[0].isEmpty, !bounds[1].isEmpty else { return false }"#),
             (Self.lexicons, #"switch shared.polarity(of: term.lowercased()) {"#,
              Self.server, #"polarity: lens.colorsBySentiment ? lexicons.polarity(of: $0.term.lowercased()) : nil)"#),
         ])
@@ -200,6 +208,8 @@ import Testing
              Self.settingsPane, #"fontWeight: index < 2 ? 600 : 400"#),
             (Self.pane, #".foregroundStyle(index < 3 ? Color.accentColor : Color.primary.opacity(0.75))"#,
              Self.settingsPane, #"data-rank={index < 3 ? 'top' : undefined}"#),
+            (Self.pane, #".accessibilityElement(children: .ignore) .accessibilityLabel(sampleAccessibilityLabel)"#,
+             Self.settingsPane, #"role="img" aria-label={words.sampleA11y(shown.map((term) => term.term).join(', '))}> {shown.map((term, index) => ( <span key={term.term} aria-hidden="true""#),
             (Self.pane, #"Form { sampleSection filteringSection thresholdsSection appearanceSection stopListSection }"#,
              Self.settingsPane, #"</section> {appearance} <HiddenWords"#),
             (Self.pane, #"Text(bench.summary) .foregroundStyle(bench.kept.isEmpty ? Color.red : Color.secondary)"#,
@@ -209,7 +219,9 @@ import Testing
             (Self.pane, #"ForEach(WordCloudLens.allCases) { lens in Text(lens.label).tag(StopListScope.lens(lens)) }"#,
              Self.settingsPane, #"const lenses = ['allTerms', 'people', 'places', 'organizations', 'topics', 'actions', 'descriptors', 'concepts', 'sentiment'] as const;"#),
             (Self.view, #"sessionHiddenWords.insert(term.lowercased())"#,
-             Self.screen, #"setSession({ scope, words: [...sessionWords, term.toLowerCase()] });"#),
+             Self.screen, #"setSession({ scope: drawnScope, words: [...sessionWords, term.toLowerCase()] });"#),
+            (Self.view, #"WordCloudMainArea(state: displayState) { if measure == .keyness, case .unavailable(let reason) = keyness ?? .pending {"#,
+             Self.screen, #"detail={answer.message?.detail ?? ''} /> ) : measure === 'keyness' ? ( <Empty title={words.keynessTitle} detail={words.keynessReason} /> )"#),
             (Self.models, #"guard !hidden.isEmpty else { return terms } return terms.filter { !hidden.contains($0.term.lowercased()) }"#,
              Self.screen, #"return (answer?.terms ?? []).filter((term) => !hidden.has(term.term.toLowerCase()));"#),
             (Self.view, #"if !hiddenWords.isEmpty || !sessionHiddenWords.isEmpty {"#,
@@ -325,6 +337,24 @@ import Testing
                 && settings.contains("remove: (word: string) => `Remove ${word}`"))
         #expect(NoteViewParityTests.writes(view, "wordcloud.count.terms.one", "%@ term") && NoteViewParityTests.writes(view, "wordcloud.count.terms.many", "%@ terms")
                 && cloud.contains("countLine: (count: number) => `${count.toLocaleString('en-US')} ${count === 1 ? 'term' : 'terms'}`"))
+    }
+
+    /// The settings bench's stand-in sample, every term and count, in its order, as the app's `WordCloudBench` lists it.
+    @Test func theBenchsSampleIsTheApps() throws {
+        let pattern = try NSRegularExpression(pattern: #"TermCount\(term: "([^"]+)", count: (\d+)\)"#)
+        func sample(_ path: String) throws -> [String] {
+            let source = try ArchivalAndSeriesMirrorParityTests.source(path)
+            let start = try #require(source.range(of: "static let canonicalSample: [TermCount] = ["), "\(path) lists the sample")
+            let end = try #require(source.range(of: "]", range: start.upperBound..<source.endIndex))
+            let block = String(source[start.upperBound..<end.lowerBound])
+            return pattern.matches(in: block, range: NSRange(block.startIndex..., in: block)).map { match in
+                "\(block[Range(match.range(at: 1), in: block)!]) \(block[Range(match.range(at: 2), in: block)!])"
+            }
+        }
+        let app = try sample(Self.bench)
+        let server = try sample(Self.server)
+        #expect(app.count == 23 && app.first == "negotiation 84" && app.last == "rapprochement 1")
+        #expect(server == app)
     }
 
     /// Every word the server writes through `appWords`, each where the app's source writes it under its key.

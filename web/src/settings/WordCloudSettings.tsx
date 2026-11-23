@@ -6,8 +6,17 @@
 // in an export, written as the app's settings write them; on a server that keeps no reader's settings the pane offers
 // Appearance alone. The web's own: number fields where the app has steppers, and the line for a server that keeps none.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { type ReactNode, useId, useState } from 'react';
-import { cloudSampleQuery, hideWord, settingsToken, showWord, updateWordCloud, type WordCloudCriteria } from '../api/cloud';
+import { type ReactNode, useId, useState, useSyncExternalStore } from 'react';
+import {
+  cloudSampleQuery,
+  hideWord,
+  pendingCriteriaChanges,
+  settingsToken,
+  showWord,
+  subscribePendingCriteria,
+  updateWordCloud,
+  type WordCloudCriteria,
+} from '../api/cloud';
 import { errorMessage } from '../api/client';
 import { meQuery } from '../api/userData';
 import { copy } from '../copy';
@@ -35,6 +44,7 @@ const lenses = ['allTerms', 'people', 'places', 'organizations', 'topics', 'acti
 export function WordCloudSettingsScreen() {
   const me = useQuery(meQuery);
   const { keepsUserData, preferences } = useSyncedPreferences();
+  const pending = useSyncExternalStore(subscribePendingCriteria, pendingCriteriaChanges);
   const [design, setDesign] = useState<FontDesign>(storedFontDesign);
   const [density, setDensity] = useState<Density>(storedDensity);
   const appearanceId = useId();
@@ -94,7 +104,7 @@ export function WordCloudSettingsScreen() {
           {words.title}
         </h1>
         {keepsUserData && preferences ? (
-          <Criteria criteria={preferences.wordCloud} token={settingsToken(preferences)} design={design} appearance={appearance} />
+          <Criteria criteria={{ ...preferences.wordCloud, ...pending }} token={settingsToken(preferences)} design={design} appearance={appearance} />
         ) : (
           <>
             {!me.isPending && <p className="note">{words.noSettings}</p>}
@@ -130,9 +140,9 @@ function Criteria({ criteria, token, design, appearance }: { criteria: Criteria;
         {sample.data && kept.length === 0 ? (
           <p className="note">{words.sampleNone}</p>
         ) : (
-          <p className={`cloud-sample cloud-font-${design}`} aria-label={words.sampleA11y(shown.map((term) => term.term).join(', '))}>
+          <p className={`cloud-sample cloud-font-${design}`} role="img" aria-label={words.sampleA11y(shown.map((term) => term.term).join(', '))}>
             {shown.map((term, index) => (
-              <span key={term.term} data-rank={index < 3 ? 'top' : undefined} style={{ fontSize: `${sampleFontSize(index, shown.length)}px`, fontWeight: index < 2 ? 600 : 400 }}>
+              <span key={term.term} aria-hidden="true" data-rank={index < 3 ? 'top' : undefined} style={{ fontSize: `${sampleFontSize(index, shown.length)}px`, fontWeight: index < 2 ? 600 : 400 }}>
                 {term.term}
               </span>
             ))}

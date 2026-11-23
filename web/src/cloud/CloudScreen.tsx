@@ -10,9 +10,21 @@
 // the reader's settings took out.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { type CloudAnswer, cloudContextQuery, type CloudContext, cloudQuery, type CloudTerm, hideWord, settingsToken, updateWordCloud } from '../api/cloud';
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  type CloudAnswer,
+  cloudContextQuery,
+  type CloudContext,
+  cloudQuery,
+  type CloudTerm,
+  hideWord,
+  pendingCriteriaChanges,
+  settingsToken,
+  subscribePendingCriteria,
+  updateWordCloud,
+} from '../api/cloud';
 import { errorMessage } from '../api/client';
+import { preferencesQuery } from '../api/research';
 import { meQuery } from '../api/userData';
 import { copy } from '../copy';
 import { Empty, Segmented } from '../analytics/CorpusAnalyticsScreen';
@@ -44,32 +56,42 @@ export function CloudScreen() {
   const context = useQuery(cloudContextQuery);
   const me = useQuery(meQuery);
   const { keepsUserData, preferences } = useSyncedPreferences();
-  // The cloud is asked once the reader's settings are known, theirs or the app's own, so it is not drawn twice.
-  const settingsKnown = (me.isSuccess || me.isError) && (!keepsUserData || preferences !== undefined);
+  const pending = useSyncExternalStore(subscribePendingCriteria, pendingCriteriaChanges);
+  const held = useQuery({ ...preferencesQuery, enabled: keepsUserData });
+  // The cloud is asked once the reader's settings are known, theirs or the app's own, so it is not drawn twice; a
+  // server that cannot give them has the cloud asked all the same, read at whatever settings it holds.
+  const settingsKnown = (me.isSuccess || me.isError) && (!keepsUserData || preferences !== undefined || held.isError);
   const fromDocument = documentScope(search.scope);
   const scope = fromDocument ? `vol:${fromDocument.volumeId}` : (search.scope ?? 'corpus');
   const lenses = context.data?.lenses ?? [];
   const lens = lenses.some((each) => each.id === search.lens) ? search.lens! : (lenses[0]?.id ?? 'topics');
   const cloud = useQuery({ ...cloudQuery(scope, lens, settingsToken(keepsUserData ? preferences : undefined)), enabled: context.isSuccess && settingsKnown });
+  const answer = cloud.data;
+  // While another scope's or lens's cloud comes, the controls show what was asked (S24h), and the cloud still drawn is
+  // the one asked before: a word hidden from it is hidden from that cloud, under that lens.
+  const asked = cloud.isPlaceholderData;
+  const drawnScope = answer?.scope.signature ?? scope;
+  const drawnLens = answer?.lens.id ?? lens;
   const [measure, setMeasure] = useState<Measure>(storedMeasure);
-  // The words hidden from this open cloud alone (#233), which go when its scope changes, as the app's view is made again.
+  // The words hidden from this open cloud alone (#233), which go when another scope's cloud is drawn, as the app's view
+  // is made again.
   const [session, setSession] = useState<{ scope: string; words: string[] }>({ scope, words: [] });
-  const sessionWords = session.scope === scope ? session.words : [];
+  if (session.scope !== drawnScope) setSession({ scope: drawnScope, words: [] });
+  const sessionWords = session.words;
   // A word hidden in a list of the reader's leaves the cloud at once, before the cloud is asked again.
   const [leaving, setLeaving] = useState<{ answer: CloudAnswer | undefined; words: string[] }>({ answer: undefined, words: [] });
-  const leavingWords = leaving.answer === cloud.data ? leaving.words : [];
+  const leavingWords = leaving.answer === answer ? leaving.words : [];
   const [announcement, setAnnouncement] = useState('');
   const [failure, setFailure] = useState<string | undefined>(undefined);
+  const title = useRef<HTMLHeadingElement>(null);
+  const listHeading = useId();
   useDocumentTitle(words.title);
   useHeadingReady(!context.isPending);
 
-  const answer = cloud.data;
   const shown = useMemo(() => {
-    const hidden = new Set([...(session.scope === scope ? session.words : []), ...(leaving.answer === answer ? leaving.words : [])]);
+    const hidden = new Set([...session.words, ...(leaving.answer === answer ? leaving.words : [])]);
     return (answer?.terms ?? []).filter((term) => !hidden.has(term.term.toLowerCase()));
-  }, [answer, session, leaving, scope]);
-  // While another scope's or lens's cloud comes, the controls show what was asked (S24h), not the cloud still drawn.
-  const asked = cloud.isPlaceholderData;
+  }, [answer, session, leaving]);
 
   function change(fields: { scope?: string; lens?: string }) {
     setFailure(undefined);
@@ -77,15 +99,21 @@ export function CloudScreen() {
   }
 
   function hideInThisCloud(term: string) {
-    setSession({ scope, words: [...sessionWords, term.toLowerCase()] });
+    setSession({ scope: drawnScope, words: [...sessionWords, term.toLowerCase()] });
     setAnnouncement(words.hiddenAnnouncement(term));
+  }
+
+  /** Shows this cloud's hidden words again, the keyboard going to the list's heading, since the button goes. */
+  function showSessionWords() {
+    setSession({ scope: drawnScope, words: [] });
+    (document.getElementById(listHeading) ?? title.current)?.focus();
   }
 
   async function hideInList(term: string, inLens: boolean) {
     setFailure(undefined);
     setLeaving({ answer, words: [...leavingWords, term.toLowerCase()] });
     try {
-      await hideWord(client, term, inLens ? lens : undefined);
+      await hideWord(client, term, inLens ? drawnLens : undefined);
       setAnnouncement(inLens ? words.hiddenInLens(term) : words.hiddenEverywhere(term));
     } catch (error) {
       setLeaving({ answer, words: leavingWords });
@@ -95,7 +123,7 @@ export function CloudScreen() {
 
   return (
     <div className="analytics-page word-cloud">
-      <h1 tabIndex={-1} data-loading={context.isPending ? 'true' : undefined}>
+      <h1 ref={title} tabIndex={-1} data-loading={context.isPending ? 'true' : undefined}>
         {words.title}
       </h1>
       {context.error ? (
@@ -141,7 +169,7 @@ export function CloudScreen() {
               <label>
                 <input
                   type="checkbox"
-                  checked={preferences.wordCloud.excludeBoilerplate}
+                  checked={pending.excludeBoilerplate ?? preferences.wordCloud.excludeBoilerplate}
                   onChange={(event) => {
                     setFailure(undefined);
                     void updateWordCloud(client, { excludeBoilerplate: event.target.checked }).catch((error: unknown) => setFailure(errorMessage(error)));
@@ -150,7 +178,7 @@ export function CloudScreen() {
                 {words.boilerplate}
               </label>
               {sessionWords.length > 0 && (
-                <button type="button" onClick={() => setSession({ scope, words: [] })}>
+                <button type="button" onClick={showSessionWords}>
                   {words.showHidden(sessionWords.length)}
                 </button>
               )}
@@ -159,7 +187,7 @@ export function CloudScreen() {
           )}
           {!keepsUserData && sessionWords.length > 0 && (
             <div className="cloud-options">
-              <button type="button" onClick={() => setSession({ scope, words: [] })}>
+              <button type="button" onClick={showSessionWords}>
                 {words.showHidden(sessionWords.length)}
               </button>
             </div>
@@ -186,16 +214,17 @@ export function CloudScreen() {
                   <span data-color="positive">{words.positive}</span> <span data-color="negative">{words.negative}</span>
                 </p>
               )}
-              {measure === 'keyness' ? (
-                <Empty title={words.keynessTitle} detail={words.keynessReason} />
-              ) : answer.state !== 'terms' ? (
+              {answer.state !== 'terms' ? (
                 <Empty title={answer.message?.title ?? words.errorTitle} detail={answer.message?.detail ?? ''} />
+              ) : measure === 'keyness' ? (
+                <Empty title={words.keynessTitle} detail={words.keynessReason} />
               ) : (
                 <>
                   <Canvas answer={answer} terms={shown} />
                   <TermList
                     answer={answer}
                     terms={shown}
+                    headingId={listHeading}
                     keepsUserData={keepsUserData}
                     onHideHere={hideInThisCloud}
                     onHideInLens={(term) => void hideInList(term, true)}
@@ -321,6 +350,7 @@ function Canvas({ answer, terms }: { answer: CloudAnswer; terms: CloudTerm[] }) 
 function TermList({
   answer,
   terms,
+  headingId,
   keepsUserData,
   onHideHere,
   onHideInLens,
@@ -328,13 +358,13 @@ function TermList({
 }: {
   answer: CloudAnswer;
   terms: CloudTerm[];
+  headingId: string;
   keepsUserData: boolean;
   onHideHere: (term: string) => void;
   onHideInLens: (term: string) => void;
   onHideEverywhere: (term: string) => void;
 }) {
   const navigate = useNavigate();
-  const headingId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
   const body = useRef<HTMLTableSectionElement>(null);
   const maxCount = terms[0]?.count ?? 1;

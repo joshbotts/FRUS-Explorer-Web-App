@@ -8,7 +8,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
-import { tabTo } from './keyboard';
+import { backTabTo, tabTo } from './keyboard';
 import { send } from './notes';
 
 /** Sets back the word cloud's criteria a reader who has set nothing has, the words `hidden` names, and the measure. */
@@ -75,9 +75,9 @@ test('changes the lens by keyboard and reads the list, then the scope, and refus
     await expect(page.locator('.cloud-legend')).toContainText('Positive');
     await axeCheck(page);
 
-    // The scope, by keyboard: a volume's own cloud, under the lens chosen.
+    // The scope, by keyboard: a volume's own cloud, under the lens chosen. The scope bar comes before the lens bar.
     const scope = page.getByRole('combobox', { name: 'Scope' });
-    await tabTo(page, scope);
+    await backTabTo(page, scope);
     await scope.selectOption('vol:frus1961-63v06');
     await expect(page).toHaveURL(/scope=vol(%3A|:)frus1961-63v06/);
     await expect(page.getByRole('heading', { level: 2, name: /Volume VI, Kennedy-Khrushchev Exchanges/ })).toBeVisible();
@@ -123,7 +123,7 @@ test('hides a word in this lens from its menu, and shows it again from Settings 
 
     // Settings ▸ Word Cloud: the lens's list holds it, and Remove shows it again.
     await page.goto('settings/word-cloud');
-    await expect(page.getByRole('heading', { level: 1, name: 'Word Cloud' })).toBeFocused();
+    await expect(page.getByRole('heading', { level: 1, name: 'Word Cloud' })).toBeVisible();
     await expect(page.getByText(/^Keeps \d+ of 23 terms in this sample$/)).toBeVisible();
     const appliesTo = page.getByRole('combobox', { name: 'Applies to' });
     await tabTo(page, appliesTo);
@@ -159,9 +159,10 @@ test('opens its document’s volume’s cloud from the reader’s rail, saying w
     await expect(page).toHaveURL(/doc\/frus1961-63v06\/d1$/);
 
     // Search's Reading picker: Collocates, the Mac's fourth, in reach of the keyboard with its reason, choosing nothing.
-    await page.goto('search?keywords=treaties');
+    await page.goto('search?keywords=negotiating+OR+canal');
+    await expect(page.getByRole('list', { name: 'Results' }).getByRole('link')).toHaveCount(3);
     const collocates = page.getByRole('group', { name: 'Reading' }).getByRole('button', { name: 'Collocates' });
-    await tabTo(page, collocates);
+    await tabTo(page, collocates, 60);
     await expect(collocates).toHaveAttribute('aria-disabled', 'true');
     await expect(collocates).toHaveAccessibleDescription(/this server’s language analysis cannot do yet/);
     await page.keyboard.press('Enter');

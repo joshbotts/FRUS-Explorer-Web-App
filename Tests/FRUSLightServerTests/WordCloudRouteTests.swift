@@ -40,7 +40,12 @@ import Testing
                 ("/api/v1/cloud?scope=doc:frus1961-63v06/d1", .unprocessableContent, "LIVE_SCOPE"),
                 ("/api/v1/cloud?scope=col:5E17F000-0000-4000-8000-0000000000A1", .unprocessableContent, "LIVE_SCOPE"),
                 ("/api/v1/cloud?scope=daterange:1962-10-01..1962-10-31", .unprocessableContent, "LIVE_SCOPE"),
-                ("/api/v1/cloud?scope=sub:1800", .notFound, "SUBSERIES_NOT_FOUND"),
+                ("/api/v1/cloud?scope=sub:1800", .badRequest, "INVALID_PARAMETER"),
+                ("/api/v1/cloud?scope=doc:frus1961-63v06", .badRequest, "INVALID_PARAMETER"),
+                ("/api/v1/cloud?scope=col:not-a-uuid", .badRequest, "INVALID_PARAMETER"),
+                ("/api/v1/cloud?scope=subject:", .badRequest, "INVALID_PARAMETER"),
+                ("/api/v1/cloud?scope=daterange:1962-10-01", .badRequest, "INVALID_PARAMETER"),
+                ("/api/v1/cloud?scope=subject:Economics%1FTrade", .unprocessableContent, "LIVE_SCOPE"),
                 ("/api/v1/cloud?scope=vol:frus1800v01", .notFound, "VOLUME_NOT_FOUND"),
                 ("/api/v1/cloud?scope=everything", .badRequest, "INVALID_PARAMETER"),
                 ("/api/v1/cloud?scope=era:1969-76", .badRequest, "INVALID_PARAMETER"),
@@ -95,8 +100,22 @@ import Testing
 
     /// The hidden words, each written as the app's settings write it and stored as the app syncs it: a word trimmed and
     /// lowercased into a sorted set, a lens's list gone once emptied, a change that alters nothing writing nothing.
+    /// A clock that moves a second each time it is read, so a write that should not happen would stamp another time.
+    final class MovingClock: @unchecked Sendable {
+        private let lock = NSLock()
+        private var reads = 0
+
+        func now() -> Date {
+            lock.lock()
+            defer { lock.unlock() }
+            reads += 1
+            return UserDataFixture.now.addingTimeInterval(TimeInterval(reads))
+        }
+    }
+
     @Test func theHiddenWordsAreKeptAsTheAppKeepsThem() async throws {
-        let fixture = try await UserDataFixture()
+        let clock = MovingClock()
+        let fixture = try await UserDataFixture(now: { clock.now() })
         defer { withExtendedLifetime(fixture) {} }
         try await fixture.app.test(.router) { client in
             let owner = Browser(client: client)
@@ -111,6 +130,11 @@ import Testing
             let again = try decode(Preferences.self, try await owner.send(.post, "/api/v1/me/preferences/hidden-words", #"{"word": "\#(first)"}"#))
             let restamped = try fixture.rows.column("SELECT updated_at FROM preferences")
             #expect(again.wordCloud.globalStopwords == ["aardvark", first] && restamped == stamp, "a word hidden already writes nothing")
+            _ = try await owner.send(.delete, "/api/v1/me/preferences/hidden-words?word=never-hidden")
+            #expect(try fixture.rows.column("SELECT updated_at FROM preferences") == stamp, "nor does a word never hidden, shown again")
+            _ = try await owner.send(.post, "/api/v1/me/preferences/hidden-words", #"{"word": "zebra"}"#)
+            #expect(try fixture.rows.column("SELECT updated_at FROM preferences") != stamp, "a change is stamped, by the clock that moves")
+            _ = try await owner.send(.delete, "/api/v1/me/preferences/hidden-words?word=zebra")
 
             let lens = try decode(Preferences.self, try await owner.send(.post, "/api/v1/me/preferences/hidden-words", #"{"word": "\#(second)", "lens": "topics"}"#))
             _ = try await owner.send(.post, "/api/v1/me/preferences/hidden-words", #"{"word": "zeal", "lens": "sentiment"}"#)
@@ -167,10 +191,13 @@ import Testing
             _ = try await owner.send(.patch, "/api/v1/me/preferences", #"{"wordCloud": {"minLength": 4, "minCount": 3}}"#)
             let thresholds = try await sample()
             #expect(!thresholds.kept.contains { $0.term == "war" || $0.term == "aid" || $0.term == "détente" || $0.term == "rapprochement" })
-            _ = try await owner.send(.post, "/api/v1/me/preferences/hidden-words", #"{"word": "ambassador", "lens": "concepts"}"#)
-            #expect(try await sample().kept.contains { $0.term == "ambassador" }, "a lens's word is hidden under that lens alone")
             let concepts = try await sample("?lens=concepts")
-            #expect(!concepts.kept.contains { $0.term == "ambassador" } && concepts.kept.count < thresholds.kept.count, "the lens's lexicon and its own list")
+            #expect(concepts.kept.contains { $0.term == "sovereignty" } && !concepts.kept.contains { $0.term == "ambassador" },
+                    "the lens's lexicon: a concept kept, a word outside it not")
+            _ = try await owner.send(.post, "/api/v1/me/preferences/hidden-words", #"{"word": "sovereignty", "lens": "concepts"}"#)
+            #expect(try await sample().kept.contains { $0.term == "sovereignty" }, "a lens's word is hidden under that lens alone")
+            let hidden = try await sample("?lens=concepts")
+            #expect(!hidden.kept.contains { $0.term == "sovereignty" } && hidden.kept.count == concepts.kept.count - 1, "and under that lens")
             let refused = try await owner.get("/api/v1/me/preferences/word-cloud-sample?lens=nouns")
             #expect(problemCode(refused) == "INVALID_PARAMETER")
         }

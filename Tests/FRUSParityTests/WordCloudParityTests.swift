@@ -42,6 +42,16 @@ import WordCloudKit
             (file.scopes[scope]?.lists[lens.rawValue]?.entries ?? []).map { "\(file.vocabulary[$0.term]) \($0.count)" }
         }
 
+        /// The stored lists as the app's settings read them (`SettingsSyncCoordinator.decodeStringArray`,
+        /// `WordCloudSettings.lensStopwordMap`), decoded here apart from the server's own readers.
+        static func global(_ json: String) -> [String] {
+            json.isEmpty ? [] : (try? JSONDecoder().decode([String].self, from: Data(json.utf8))) ?? []
+        }
+
+        static func lenses(_ json: String) -> [String: [String]] {
+            (try? JSONDecoder().decode([String: [String]].self, from: Data(json.utf8))) ?? [:]
+        }
+
         /// What a reader's settings keep of a list, as the app's settings bench keeps it: the tokenizer the app
         /// assembles (`WordCloudTokenizer.configured`) over the bundled lists, and the minimum count.
         func kept(_ terms: [String], lens: WordCloudLens, tuning: WordCloudTuning, includeDiplomatic: Bool,
@@ -150,8 +160,8 @@ import WordCloudKit
         var removedSomewhere = false
         for variant in variants {
             let cloud = CloudSettings(variant.preferences)
-            let global = CloudSettings.decodeStringArray(variant.preferences.wcGlobalStopwordsJSON)
-            let lensMap = CloudSettings.lensStopwordMap(variant.preferences.wcLensStopwordsJSON)
+            let global = Host.global(variant.preferences.wcGlobalStopwordsJSON)
+            let lensMap = Host.lenses(variant.preferences.wcLensStopwordsJSON)
             for scope in scopes {
                 for lens in Self.lenses {
                     let answer = WordCloudRoutes.answer(scope, lens: lens, settings: cloud, resources: resources)
@@ -175,6 +185,27 @@ import WordCloudKit
             }
         }
         #expect(removedSomewhere, "the settings take words out somewhere")
+        // The settings bench's stand-in sample, which holds diplomatic words, markings and short and rare words, so the
+        // layers the bundled lists already left out are read here: every variant, under every lens of the app's nine.
+        let sample = CloudRules.canonicalSample.map { "\($0.term) \($0.count)" }
+        var benchKept: Set<Int> = []
+        for variant in variants {
+            let cloud = CloudSettings(variant.preferences)
+            let tuning = WordCloudTuning(settingsMinimumLength: variant.preferences.wcMinLength, minimumCount: variant.preferences.wcMinCount,
+                                         foldPlurals: variant.preferences.wcFoldPlurals, filterMarkings: variant.preferences.wcFilterMarkings)
+            for lens in WordCloudLens.allCases {
+                let server = cloud.kept(CloudRules.canonicalSample, lens: lens, stopwords: host.stopwords, lexicons: host.lexicons)
+                let kept = host.kept(sample, lens: lens, tuning: tuning, includeDiplomatic: variant.preferences.wcExcludeBoilerplate,
+                                     global: Host.global(variant.preferences.wcGlobalStopwordsJSON),
+                                     lensWords: Host.lenses(variant.preferences.wcLensStopwordsJSON)[lens.rawValue] ?? [])
+                #expect(server.map { "\($0.term) \($0.count)" } == kept, "the bench, \(variant.name): \(lens)")
+                if lens == .allTerms { benchKept.insert(kept.count) }
+            }
+        }
+        #expect(benchKept.count > 2, "the variants keep different parts of the sample: \(benchKept.sorted())")
+        let allTerms = CloudSettings(initial).kept(CloudRules.canonicalSample, lens: .allTerms, stopwords: host.stopwords, lexicons: host.lexicons).map(\.term)
+        #expect(!allTerms.contains("telegram") && !allTerms.contains("confidential") && allTerms.contains("war"),
+                "the app's own settings leave the diplomatic word and the marking out, and keep a short word")
         // The kit's rule names what each setting would let in, and the generator's own configuration nothing.
         let file = host.core
         #expect(CloudSettings(initial).notShown(byCloudsOf: file).isEmpty)

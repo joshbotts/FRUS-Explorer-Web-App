@@ -601,7 +601,8 @@ enum WordCloudRoutes {
     // MARK: The cloud
 
     /// The scope an address names by the app's signature: the corpus, a subseries or a volume of the catalogue's. A
-    /// signature of the app's other clouds is refused: each is counted live, which this server cannot do.
+    /// signature of the app's other clouds is refused (`LIVE_SCOPE`): each is counted live, which this server cannot do;
+    /// one the app would not read as a scope at all is a bad parameter, as the analytics routes refuse a subseries.
     static func scope(_ raw: String?, resources: ServerResources) throws -> CloudScope {
         guard let raw, raw != "corpus" else { return .corpus }
         guard let colon = raw.firstIndex(of: ":") else {
@@ -612,17 +613,40 @@ enum WordCloudRoutes {
         switch prefix {
         case "sub":
             guard CloudRules.subseriesList(resources.manifest).contains(value) else {
-                throw APIProblem(.notFound, code: "SUBSERIES_NOT_FOUND", detail: "The published catalogue has no subseries \(value).")
+                throw APIProblem.invalidParameter("scope", "names no subseries of the published catalogue, \(value)")
             }
             return .subseries(value)
         case "vol":
             guard let entry = resources.volume(value) else { throw APIProblem.volumeNotFound(value) }
             return .volume(volumeId: entry.volumeId, subseries: entry.subseries)
-        case let live where liveSignatures.contains(live):
+        case let live where liveSignatures.contains(live) && isLiveScope(live, value):
             throw APIProblem(.unprocessableContent, code: "LIVE_SCOPE",
                              detail: "A cloud of this scope is counted from its documents' text, in their dictionary forms, which this server's language analysis cannot do yet. It reads the clouds bundled with the app, of the corpus, each subseries and each volume.")
         default:
             throw APIProblem.invalidParameter("scope", "must be corpus, sub:<subseries> or vol:<volume>, not \(raw)")
+        }
+    }
+
+    /// Whether `value` makes a scope of the app's under the live signature `prefix`, as `WordCloudScope.init?(signature:)`
+    /// reads it: a document by its volume and id, a record of the reader's by its id, a subject by its category, and a
+    /// range by its two days.
+    static func isLiveScope(_ prefix: String, _ value: String) -> Bool {
+        switch prefix {
+        case "doc":
+            guard value.firstIndex(of: "/") != nil else { return false }
+            return true
+        case "col", "tag", "search", "scope":
+            return UUID(uuidString: value) != nil
+        case "subject":
+            let parts = value.components(separatedBy: "\u{1f}")
+            guard let category = parts.first, !category.isEmpty else { return false }
+            return true
+        case "daterange":
+            let bounds = value.components(separatedBy: "..")
+            guard bounds.count == 2, !bounds[0].isEmpty, !bounds[1].isEmpty else { return false }
+            return true
+        default:
+            return false
         }
     }
 

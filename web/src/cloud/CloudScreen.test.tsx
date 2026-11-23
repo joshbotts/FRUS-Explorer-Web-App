@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CloudAnswer, CloudContext } from '../api/cloud';
@@ -150,11 +150,11 @@ describe('the Word Cloud', () => {
     await user.click(screen.getByRole('menuitem', { name: 'Hide in this word cloud' }));
     expect(screen.queryByRole('button', { name: 'meeting-topics' })).toBeNull();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'question-topics' }));
-    expect(screen.getByRole('status', { hidden: false, name: '' }).textContent ?? '').toBeDefined();
     expect(screen.getByText('meeting-topics hidden from this word cloud')).toBeTruthy();
     expect(screen.getByText('4 terms')).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Show 1 hidden words' }));
     expect(screen.getByRole('button', { name: 'meeting-topics' })).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 3, name: 'Terms by count' }));
     expect(fetch.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
   });
 
@@ -179,6 +179,44 @@ describe('the Word Cloud', () => {
     await waitFor(() =>
       expect(fetch.mock.calls.filter(([url]) => new URL(url, 'http://localhost').pathname === '/api/v1/cloud').length).toBe(2),
     );
+  });
+
+  it('asks the cloud again under a criterion only once the server has kept it, the box showing it at once', async () => {
+    let held: Preferences = preferences;
+    const answers: (() => void)[] = [];
+    const fetch = server({
+      '/api/v1/me/preferences': () => held,
+      'PATCH /api/v1/me/preferences': (_url: URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as { wordCloud: Partial<Preferences['wordCloud']> };
+        held = { ...held, wordCloud: { ...held.wordCloud, ...body.wordCloud } };
+        const kept = held;
+        return new Promise<Preferences>((resolve) => answers.push(() => resolve(kept)));
+      },
+    });
+    const clouds = () => fetch.mock.calls.filter(([url]) => new URL(url, 'http://localhost').pathname === '/api/v1/cloud').length;
+    const user = userEvent.setup();
+    renderAt('/cloud');
+    expect(await screen.findByRole('button', { name: 'More for government-topics' })).toBeTruthy();
+    const box = screen.getByRole('checkbox', { name: 'Hide common diplomatic words' }) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    expect(clouds()).toBe(1);
+    await user.click(box);
+    expect(box.checked).toBe(false);
+    await waitFor(() => expect(answers).toHaveLength(1));
+    expect(clouds()).toBe(1);
+    await act(async () => answers[0]!());
+    await waitFor(() => expect(clouds()).toBe(2));
+    expect(box.checked).toBe(false);
+  });
+
+  it('draws the state a lens gives before asking whether it can be ranked by distinctiveness', async () => {
+    server({
+      '/api/v1/cloud': (url: URL) => ({ ...cloud(url), state: 'insufficientSignal', terms: [], message: { title: 'Not Enough Signal', detail: 'Too few concepts.' } }),
+    });
+    window.localStorage.setItem('frus.wordcloud.measure', 'keyness');
+    renderAt('/cloud');
+    expect(await screen.findByRole('heading', { name: 'Not Enough Signal' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'No Distinctiveness Ranking' })).toBeNull();
   });
 
   it('offers no list of the reader’s on a server that keeps none, and draws the states the server gives', async () => {

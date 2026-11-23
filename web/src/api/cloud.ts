@@ -93,24 +93,54 @@ export function cloudSampleQuery(lens: string | undefined, settings: string) {
   });
 }
 
-/** A token of the reader's word cloud settings, which the clouds and the bench are asked under. */
+/** A token of the reader's word cloud settings as the server has kept them, which the clouds and the bench are asked under. */
 export function settingsToken(preferences: Preferences | undefined): string {
   return preferences ? JSON.stringify(preferences.wordCloud) : 'standard';
 }
 
 /**
- * Sets the criteria named, shown at once: the preferences held take the change before the server answers it, and the
- * server's answer, or on a failure the server's preferences again, after.
+ * The criteria changes sent and not yet answered, held as `updatePreferences` holds the preferences': each shows at once
+ * over the server's copy, as a control's own choice does, until the newest is answered; then the server's copy stands,
+ * or, when the server refuses it, its copy as it was. The clouds and the bench are asked under the server's copy alone,
+ * so none is asked before the change it is asked under has been kept; and an older answer arriving after a newer change
+ * is sent is not the copy, since it lacks the newer change.
  */
+let pendingCriteria: Partial<WordCloudCriteria> = {};
+let criteriaChangesSent = 0;
+const criteriaListeners = new Set<() => void>();
+
+function setPendingCriteria(next: Partial<WordCloudCriteria>) {
+  pendingCriteria = next;
+  for (const listener of criteriaListeners) listener();
+}
+
+export function subscribePendingCriteria(listener: () => void): () => void {
+  criteriaListeners.add(listener);
+  return () => {
+    criteriaListeners.delete(listener);
+  };
+}
+
+export function pendingCriteriaChanges(): Partial<WordCloudCriteria> {
+  return pendingCriteria;
+}
+
+/** Sets the criteria named, shown at once over the server's copy until the newest change is answered. */
 export async function updateWordCloud(client: QueryClient, changed: Partial<WordCloudCriteria>): Promise<Preferences> {
-  const held = client.getQueryData(preferencesQuery.queryKey);
-  if (held) client.setQueryData(preferencesQuery.queryKey, { ...held, wordCloud: { ...held.wordCloud, ...changed } });
+  const sent = ++criteriaChangesSent;
+  setPendingCriteria({ ...pendingCriteria, ...changed });
   try {
     const preferences = (await change<Preferences>(client, 'PATCH', '/api/v1/me/preferences', { wordCloud: changed }))!;
-    client.setQueryData(preferencesQuery.queryKey, preferences);
+    if (sent === criteriaChangesSent) {
+      client.setQueryData(preferencesQuery.queryKey, preferences);
+      setPendingCriteria({});
+    }
     return preferences;
   } catch (error) {
-    void client.invalidateQueries({ queryKey: preferencesQuery.queryKey });
+    if (sent === criteriaChangesSent) {
+      setPendingCriteria({});
+      void client.invalidateQueries({ queryKey: preferencesQuery.queryKey });
+    }
     throw error;
   }
 }

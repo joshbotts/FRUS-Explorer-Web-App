@@ -3063,10 +3063,6 @@ export const copy = {
     loading: 'Loading the sessions…',
   },
   /**
-   * Settings ▸ Reading, the web's own pane for the app's Display ▸ Reading and Citations sections, in
-   * their words.
-   */
-  /**
    * Settings ▸ Word Cloud (S24i), the app's pane in its words: Sample, Filtering, Thresholds, Appearance and Hidden Words,
    * the lenses as its picker names them, the typefaces and densities. The web's own: the thresholds' fields' names, which
    * the app's steppers write with their value, the add and remove buttons' text, and the line for a server that keeps
@@ -3122,6 +3118,10 @@ export const copy = {
       'Words hidden only when the selected lens is active — useful for trimming a recurring false positive (for example, a place the recognizer keeps mistaking) without affecting other lenses.',
     noSettings: 'This server keeps no reader’s settings, so its word clouds are drawn at the app’s own settings.',
   },
+  /**
+   * Settings ▸ Reading, the web's own pane for the app's Display ▸ Reading and Citations sections, in
+   * their words.
+   */
   reading: {
     title: 'Reading',
     openIn: 'Open Documents In',
