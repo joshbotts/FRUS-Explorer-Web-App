@@ -38,8 +38,13 @@ export function DeleteNote({ note, onClose }: { note: Pick<NoteSummary, 'id' | '
       labelledBy={headingId}
       describedBy={messageId}
       initial={cancel}
-      // While the deletion is sent, Cancel and Escape wait for it: it cannot be called back.
+      // While the deletion is sent, Cancel and Escape wait for it: it cannot be called back. Escape is taken at the key,
+      // so a second one cannot have the browser close the question while it waits, nor, over the note editor, close the
+      // editor with it.
       onCancel={() => {
+        if (!busy) onClose(false);
+      }}
+      onEscape={() => {
         if (!busy) onClose(false);
       }}
       onClose={() => {}}

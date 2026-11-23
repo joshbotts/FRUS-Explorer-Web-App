@@ -220,8 +220,14 @@ function Editor({ detail }: { detail: CollectionDetail }) {
     const entry = latest?.entries.find((each) => each.id === entryId);
     if (!entry) return;
     const holding = deletionHolding(entry, typed);
-    if (holding) setDeleting({ entryId, holding });
-    else await remove(entryId);
+    if (!holding) {
+      await remove(entryId);
+      return;
+    }
+    // One question at a time, as the app's asks one, and none over a dialog opened while the answers came, whose
+    // page would be inert under it: a second row that holds work stays, as the app's Edit leaves one, to be chosen again.
+    if (document.querySelector('dialog[open]')) return;
+    setDeleting((current) => current ?? { entryId, holding });
   }
 
   function actions(row: ContentsRow, pos: number): RowActions {

@@ -140,6 +140,17 @@ test('writes, formats, links and saves a note from the bar’s Note, discards an
   await expect(discard).toHaveCount(0);
   await expect(editBody).toBeFocused();
   await expect(editBody).toHaveText('Keyboard note discarded');
+  // Asked and kept by Escape alone, round after round, the question never takes the editor with it, as
+  // Chrome would close both once its allowance of separate closes ran out.
+  for (let round = 0; round < 3; round++) {
+    await settle(page);
+    await page.keyboard.press('Escape');
+    await expect(discard.getByRole('button', { name: 'Keep Editing' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(discard).toHaveCount(0);
+    await expect(editBody).toBeFocused();
+  }
+  await expect(editBody).toHaveText('Keyboard note discarded');
   await settle(page);
   await page.keyboard.press('Escape');
   await expect(discard.getByRole('button', { name: 'Keep Editing' })).toBeFocused();

@@ -864,6 +864,8 @@ import Testing
         NoteViewParityTests.expect(try Self.app("Collections/CollectionEditorView.swift"), holds: [
             "private func requestDelete(at index: Int) { guard sortedEntries.indices.contains(index) else { return } let entry = sortedEntries[index] if let holding = CollectionEntryDeletion.holding(entry, in: modelContext) { pendingEntryDeletion = PendingEntryDeletion(entryId: entry.id, holding: holding) } else { removeEntry(at: index) finishOutlineMutation() } }",
             "private func deleteConfirmed(_ entryId: UUID) { guard let index = sortedEntries.firstIndex(where: { $0.id == entryId }) else { return } removeEntry(at: index) finishOutlineMutation() }",
+            // One dialog at a time: a second row that holds work, which only Edit could pass, is neither asked of nor deleted.
+            "if pendingEntryDeletion == nil { pendingEntryDeletion = PendingEntryDeletion(entryId: sortedEntries[i].id, holding: holding) }",
             "CollectionHeadingRow( entry: $sortedEntries[row.index], onDelete: { requestDelete(at: row.index) },",
             "Button { requestDelete(at: row.index) } label: {",
         ], file: "CollectionEditorView.swift")
@@ -928,7 +930,9 @@ import Testing
         let screen = try Self.web("collections/CollectionEditorScreen.tsx")
         NoteViewParityTests.expect(screen, holds: [
             "await whenAnswered(detail.id); const latest = client.getQueryData<CollectionDetail>(collectionQuery(detail.id).queryKey);",
-            "const holding = deletionHolding(entry, typed); if (holding) setDeleting({ entryId, holding }); else await remove(entryId);",
+            "const holding = deletionHolding(entry, typed); if (!holding) { await remove(entryId); return; }",
+            // One question at a time, the first asked, and none over a dialog opened while the answers came.
+            "if (document.querySelector('dialog[open]')) return; setDeleting((current) => current ?? { entryId, holding });",
             "onRemove: unrecognized ? undefined : (typed) => void requestRemove(id, typed),",
             "if (!confirmed) requestAnimationFrame(() => focusRowMenu(entryId)); else await remove(entryId);",
             "{copy.collectionEditor.entryDeleteTitle[holding]}",

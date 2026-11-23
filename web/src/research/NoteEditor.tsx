@@ -1,17 +1,18 @@
 // The research note editor (PLAN's S15d), as the app's sheet: New Research Note or Edit Note, and
 // in it the note's text with the Formatting switch, its tags with a field that makes one at once,
-// its projects, and the document's summaries to insert into it; Delete for a note being edited, which
-// asks All Notes' Delete Note? first; Discard, which Escape is, and which asks Discard Changes? while
-// the editor holds something Save would write that it did not open with, and leaves at once otherwise,
-// both as the app's editor asks since FRUS-Explorer#1941 (L19, noteEditorRules.ts); and Save, which asks
-// nothing. Escape is taken at the key, so that Chrome, which refuses a page a second refused Escape,
-// cannot close the editor while it holds changes; a close the browser makes anyway opens it again and
-// asks. A save is the
-// edit's, as the app's: the text and its formatting go only when the text was changed here, as runs
-// when it was changed with formatting on and as plain text, which drops the formatting, when it was
-// typed with it off; otherwise the store keeps both as they are. Ids a list does not show, a tag or
-// project gone since or one the Mac's data names, are kept as the note has them, and the tags and
-// projects are boxes to tick, in name order, the web's own, where the app's picker waits for S17b.
+// its projects, and the document's summaries to insert into it; Delete for a note being edited,
+// which asks All Notes' Delete Note? first; Discard, which Escape is, and which asks Discard
+// Changes? while the editor holds something Save would write that it did not open with, and leaves
+// at once otherwise, both as the app's editor asks since FRUS-Explorer#1941 (L19,
+// noteEditorRules.ts); and Save, which asks nothing. Escape is taken at the key, in the editor and
+// in both questions, so that Chrome, which lets a page refuse a dialog's close only once between
+// two of the reader's other inputs, cannot close the editor while it holds changes; a close the
+// browser makes anyway opens it again and asks. A save is the edit's, as the app's: the text and
+// its formatting go only when the text was changed here, as runs when it was changed with
+// formatting on and as plain text, which drops the formatting, when it was typed with it off;
+// otherwise the store keeps both as they are. Ids a list does not show, a tag or project gone since
+// or one the Mac's data names, are kept as the note has them, and the tags and projects are boxes
+// to tick, in name order, the web's own, where the app's picker waits for S17b.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Component, lazy, type ReactNode, Suspense, useEffect, useId, useRef, useState } from 'react';
 import { ApiError, errorMessage } from '../api/client';
@@ -188,8 +189,9 @@ export function NoteEditor({
   /** Whether leaving now would lose something done here, the app's `hasChanges`; a note not yet read holds nothing. */
   const changed = draft !== null && opening !== null && holdsChanges(opening, snapshot(draft));
 
-  /** Leaves on purpose: saved, deleted or discarded. */
+  /** Leaves on purpose, once: saved, deleted or discarded. */
   function leave(outcome: NoteEditorOutcome) {
+    if (left.current) return;
     left.current = true;
     onClose(outcome);
   }
@@ -222,17 +224,22 @@ export function NoteEditor({
 
   /**
    * The editor's dialog closed by the browser rather than by the editor, as Chrome closes one on a second close request
-   * between two of the reader's other inputs whatever the page says. With nothing to lose the editor has gone; else it
-   * opens again and asks, as the app's guard keeps a sheet that would lose changes.
+   * between two of the reader's other inputs whatever the page says. A save on its way decides: the editor opens again
+   * and waits for it. Otherwise, with nothing to lose the editor has gone; else it opens again and asks, as the app's
+   * guard keeps a sheet that would lose changes, focus coming back to its heading.
    */
   function closedByTheBrowser() {
     if (left.current) return;
+    if (busy) {
+      dialogElement()?.showModal();
+      return;
+    }
     if (!changed) {
       leave('discarded');
       return;
     }
     dialogElement()?.showModal();
-    setQuestion((asked) => ({ kind: 'discard', key: (asked?.key ?? 0) + 1 }));
+    ask('discard');
   }
 
   async function addTag() {
@@ -513,7 +520,9 @@ export function NoteEditor({
 
 /**
  * Discard Changes?, the app's (`DiscardChangesConfirmation`): what has not been saved, a new note's or an edit's, then Keep
- * Editing, which takes focus and which Escape is, and Discard Changes, which leaves the note as it was.
+ * Editing, which takes focus and which Escape is, and Discard Changes, which leaves the note as it was. Escape is taken at
+ * the key, as the editor's is: a question asked and kept by Escape alone, again and again, would otherwise run down
+ * Chrome's allowance of separate closes, until one Escape closed the editor with the question.
  */
 function DiscardChanges({ isNewNote, onClose }: { isNewNote: boolean; onClose: (discarded: boolean) => void }) {
   const headingId = useId();
@@ -527,6 +536,7 @@ function DiscardChanges({ isNewNote, onClose }: { isNewNote: boolean; onClose: (
       describedBy={messageId}
       initial={keepEditing}
       onCancel={() => onClose(false)}
+      onEscape={() => onClose(false)}
       onClose={() => {}}
     >
       <h2 id={headingId} tabIndex={-1}>

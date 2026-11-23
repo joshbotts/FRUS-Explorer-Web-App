@@ -234,6 +234,34 @@ describe('the collection editor', () => {
     await userEvent.click(within(question).getByRole('button', { name: 'Cancel' }));
     expect(fetch.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
   });
+
+  it('asks one question at a time, the first chosen, of two deletes waiting on the same answers', async () => {
+    const heading = entry({ id: 'E1', kind: 'heading', text: 'Europe', depth: 1, sectionEnd: 2, holds: 'sectionDefaults', bodyDepthOverride: 'index' });
+    const prose = entry({ id: 'E2', kind: 'prose', depth: 1, text: 'Read these together.', holds: 'noteBlockText' });
+    const changes = held();
+    const fetch = server({
+      [path]: detail({ entries: [heading, prose] }),
+      [`PATCH ${path}/entries/E1`]: changes.answer,
+      [`DELETE ${path}/entries/E1`]: detail({ entries: [prose] }),
+      [`DELETE ${path}/entries/E2`]: detail({ entries: [heading] }),
+    });
+    renderAt(`/collections/${berlinId}`);
+    // A change on its way, which both deletes wait for.
+    await userEvent.selectOptions(await screen.findByRole('combobox', { name: 'Section body' }), 'full');
+    await waitFor(() => expect(changes.waiting).toHaveLength(1));
+    await userEvent.click(screen.getByRole('button', { name: 'Actions: Note block' }));
+    await userEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Delete note block' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Actions: Europe' }));
+    await userEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Delete Heading Only' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    changes.waiting[0]!(detail({ entries: [{ ...heading, bodyDepthOverride: 'full' }, prose] }));
+    const question = await screen.findByRole('alertdialog', { name: 'Delete Note Block?' });
+    expect(screen.getAllByRole('alertdialog')).toHaveLength(1);
+    // Its answer is the note block's: the heading, chosen second, stays, to be chosen again.
+    await userEvent.click(within(question).getByRole('button', { name: 'Delete Note Block' }));
+    await waitFor(() => expect(fetch.mock.calls.filter(([, init]) => init?.method === 'DELETE').map(([url]) => String(url))).toEqual([`${path}/entries/E2`]));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
 });
 
 describe('the Add to Collection picker', () => {

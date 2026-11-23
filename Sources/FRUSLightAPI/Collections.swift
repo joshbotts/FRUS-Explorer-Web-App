@@ -615,8 +615,10 @@ enum CollectionRoutes {
     /// What the editor shows of a collection.
     static func detail(_ collection: CollectionExport, for user: String, in store: any UserDataStore,
                        resources: ServerResources, provider: ServedIndexProvider) async throws -> CollectionDetail {
+        // The headnote drafts only where a document entry names a headnote, which only then can be one.
+        let namesHeadnote = collection.entries.contains { $0.entryKind == .document && $0.headnoteSummaryId != nil }
         let (prompts, noteCounts, drafts) = try await Blocking.run {
-            (try store.prompts(for: user), try store.noteCounts(of: user), try store.headnoteDraftIds(of: user))
+            (try store.prompts(for: user), try store.noteCounts(of: user), namesHeadnote ? try store.headnoteDraftIds(of: user) : [])
         }
         var savedSearchName: String?
         if let id = collection.savedSearchId,

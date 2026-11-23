@@ -513,6 +513,13 @@ describe('the note editor', () => {
     expect(screen.queryByRole('alertdialog')).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(body));
     expect(onClose).not.toHaveBeenCalled();
+    // The question takes its Escape at the key too, so no close of the browser's comes of it.
+    expect(fireEvent.keyDown(body, { key: 'Escape' })).toBe(false);
+    question = await screen.findByRole('alertdialog', { name: 'Discard Changes?' });
+    expect(fireEvent.keyDown(within(question).getByRole('button', { name: 'Keep Editing' }), { key: 'Escape' })).toBe(false);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(body));
+    expect(onClose).not.toHaveBeenCalled();
     // Discard Changes leaves the note as it was.
     await userEvent.click(discardButton);
     await userEvent.click(within(await screen.findByRole('alertdialog', { name: 'Discard Changes?' })).getByRole('button', { name: 'Discard Changes' }));
@@ -580,6 +587,38 @@ describe('the note editor', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Escape in the text' }));
     expect(await screen.findByRole('alertdialog', { name: 'Discard Changes?' })).toBeTruthy();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('keeps Delete Note? up while its delete is on its way, Escape at the key changing nothing', async () => {
+    server({ [notePath]: note({ id: noteId }), [`DELETE ${notePath}`]: () => new Promise(() => {}) });
+    const onClose = editNote();
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Note' });
+    await userEvent.click(await within(dialog).findByRole('button', { name: 'Delete' }));
+    const question = await screen.findByRole('alertdialog', { name: 'Delete Note?' });
+    await userEvent.click(within(question).getByRole('button', { name: 'Delete' }));
+    expect(fireEvent.keyDown(within(question).getByRole('button', { name: 'Cancel' }), { key: 'Escape' })).toBe(false);
+    expect(screen.getByRole('alertdialog', { name: 'Delete Note?' })).toBe(question);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('waits for a save on its way when the browser closes the editor, asking nothing, and leaves once', async () => {
+    plainMode();
+    const saving: { answer?: (value: unknown) => void } = {};
+    server({
+      [notePath]: note({ id: noteId, bodyText: 'Kennedy writes warmly.' }),
+      [`PUT ${notePath}`]: () => new Promise((resolve) => (saving.answer = resolve)),
+    });
+    const onClose = editNote();
+    const dialog = await screen.findByRole<HTMLDialogElement>('dialog', { name: 'Edit Note' });
+    await userEvent.type(await within(dialog).findByRole('textbox', { name: 'Research note body' }), ' More.');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    act(() => dialog.close());
+    expect(dialog.open).toBe(true);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+    await act(async () => saving.answer?.(note({ id: noteId, bodyText: 'Kennedy writes warmly. More.' })));
+    await waitFor(() => expect(onClose).toHaveBeenCalledWith('saved'));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('opens again and asks when the browser closes it holding changes, and lets it go holding none', async () => {
