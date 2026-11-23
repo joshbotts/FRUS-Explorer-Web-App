@@ -2,11 +2,13 @@
 // Note with bold, a colour and a link, saves it, finds it in the Research rail's Notes and edits it
 // there, then filters for it and deletes it in All Notes; writes one with italic, underline and a
 // link, removes the link, edits it plain with the Formatting switch off, which drops its formatting,
-// and deletes it from the editor's own Delete; makes a highlight and a note for it from the rail's
-// Add Note to Highlight, which the highlight takes as its note; opens Note from a footnote's bar,
-// which offers it alone; puts a new note's text in focus when the editor's code comes late; and
-// pastes styled HTML into the editor, with the formatting its styles give and its line breaks, with
-// no policy violation; on Chromium with no axe violations. By keyboard, it is notes-keyboard.spec.ts.
+// and deletes it from the editor's own Delete, after its Delete Note? (FRUS-Explorer#1941); makes a
+// highlight and a note for it from the rail's Add Note to Highlight, which the highlight takes as its
+// note; opens Note from a footnote's bar, which offers it alone, and Discard, with nothing typed,
+// asks nothing; puts a new note's text in focus when the editor's code comes late; and pastes styled
+// HTML into the editor, with the formatting its styles give and its line breaks, with no policy
+// violation, then Escape, which asks Discard Changes?; on Chromium with no axe violations. By
+// keyboard, it is notes-keyboard.spec.ts.
 // Against the image, whose user store starts with no notes, and which each test leaves with none.
 import type { Locator, Page } from '@playwright/test';
 import { axeCheck } from './axe';
@@ -257,7 +259,8 @@ test('writes italic, underline and a link, removes the link, edits plain with Fo
   expect([plainNote.bodyText, plainNote.runs, plainNote.formattingKept]).toEqual(['Italic, underlined and linked. Plain now.', null, false]);
 
   // The switch on again, the note opens formatted, with nothing to format; the editor's Delete
-  // deletes it at once, as the app's editor does.
+  // asks All Notes' Delete Note? first, as the app's editor has since FRUS-Explorer#1941: Cancel
+  // keeps it, focus back on Delete, and Delete deletes it.
   await row.click();
   await expect(plain).toBeVisible();
   await switchControl.click();
@@ -265,7 +268,18 @@ test('writes italic, underline and a link, removes the link, edits plain with Fo
   await expect(editBody).toHaveText('Italic, underlined and linked. Plain now.');
   await expect(editBody.locator('em, u, strong, a')).toHaveCount(0);
   await axeCheck(page);
-  await edit.getByRole('button', { name: 'Delete', exact: true }).click();
+  const remove = edit.getByRole('button', { name: 'Delete', exact: true });
+  await remove.click();
+  const question = page.getByRole('alertdialog', { name: 'Delete Note?' });
+  await expect(question).toContainText('This note will be permanently deleted.');
+  await expect(question.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await axeCheck(page);
+  await question.getByRole('button', { name: 'Cancel' }).click();
+  await expect(question).toHaveCount(0);
+  await expect(remove).toBeFocused();
+  expect(await notes(page)).toHaveLength(1);
+  await remove.click();
+  await question.getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(edit).toHaveCount(0);
   expect(await notes(page)).toEqual([]);
   await expect(rail.locator('#research-notes').getByRole('button', { name: /^Italic, underlined/ })).toHaveCount(0);
@@ -365,8 +379,14 @@ test('pastes HTML from elsewhere with its bold, italic, underline, links and lin
   await expect(body.locator('a[href="https://history.state.gov/"]')).toHaveText('link');
   await expect(body.locator('[data-color], [data-pasted-style], [style]:not(span[data-color])')).toHaveCount(0);
   await axeCheck(page);
-  // Escape in the text is the editor's Discard, as the app's sheet takes it.
+  // Escape in the text is the editor's Discard, as the app's sheet takes it, which asks Discard Changes?
+  // of a new note's text since FRUS-Explorer#1941; Discard Changes leaves no note.
   await body.press('Escape');
+  const question = page.getByRole('alertdialog', { name: 'Discard Changes?' });
+  await expect(question).toContainText('This note has not been saved.');
+  await expect(question.getByRole('button', { name: 'Keep Editing' })).toBeFocused();
+  await axeCheck(page);
+  await question.getByRole('button', { name: 'Discard Changes' }).click();
   await expect(editor).toHaveCount(0);
   await expect(page.getByRole('complementary', { name: 'Research' })).toBeVisible();
   expect(await notes(page)).toEqual([]);

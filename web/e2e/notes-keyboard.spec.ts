@@ -2,9 +2,11 @@
 // caret browsing, as highlights-keyboard.spec.ts does, reaches the selection bar's Note by Alt+F10
 // and End, writes a note, bolds a word with ⌘B, or Ctrl+B here, reaches the formatting bar by
 // Shift+Tab and its Link by the arrow keys, links the word from the link dialog, has ⌘K refuse an
-// address the page cannot follow, saves, discards an edit with Escape from the rail, and deletes the
-// note in All Notes; on Chromium with no axe violations. Against the image, whose user store starts
-// with no notes, and which the test leaves with none.
+// address the page cannot follow, saves, discards an edit with Escape from the rail after Discard
+// Changes?, which Escape keeps it from, has the editor's Delete ask Delete Note?, whose Escape keeps
+// the note (FRUS-Explorer#1941), and deletes the note in All Notes; on Chromium with no axe
+// violations. Against the image, whose user store starts with no notes, and which the test leaves
+// with none.
 import { axeCheck } from './axe';
 import { d1Text } from './expected';
 import { expect, test } from './fixtures';
@@ -107,8 +109,9 @@ test('writes, formats, links and saves a note from the bar’s Note, discards an
   expect(made.bodyText).toBe('Keyboard note');
   expect((await noteWithRuns(page, made.id)).runs).toEqual([run('Keyboard '), run('note', { bold: true, linkURL: 'mailto:researcher@example.com' })]);
 
-  // The rail, from the toolbar: the note's row opens it, and Escape in its text discards the edit
-  // and leaves the rail open.
+  // The rail, from the toolbar: the note's row opens it. Escape in its text, with an edit, asks
+  // Discard Changes? (FRUS-Explorer#1941), Keep Editing focused; Escape keeps the edit, focus back in
+  // the text; Escape again, then Discard Changes, leaves the note as it was and the rail open.
   const toggle = page.getByRole('button', { name: 'Research' });
   await backTabTo(page, toggle);
   await page.keyboard.press('Enter');
@@ -129,10 +132,43 @@ test('writes, formats, links and saves a note from the bar’s Note, discards an
   await page.keyboard.type(' discarded');
   await axeCheck(page);
   await page.keyboard.press('Escape');
+  const discard = page.getByRole('alertdialog', { name: 'Discard Changes?' });
+  await expect(discard).toContainText('Your changes to this note have not been saved.');
+  await expect(discard.getByRole('button', { name: 'Keep Editing' })).toBeFocused();
+  await axeCheck(page);
+  await page.keyboard.press('Escape');
+  await expect(discard).toHaveCount(0);
+  await expect(editBody).toBeFocused();
+  await expect(editBody).toHaveText('Keyboard note discarded');
+  await settle(page);
+  await page.keyboard.press('Escape');
+  await expect(discard.getByRole('button', { name: 'Keep Editing' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(discard.getByRole('button', { name: 'Discard Changes' })).toBeFocused();
+  await page.keyboard.press('Enter');
   await expect(edit).toHaveCount(0);
   await expect(rail).toBeVisible();
   await expect(row).toBeFocused();
   expect((await notes(page))[0].bodyText).toBe('Keyboard note');
+
+  // The editor's Delete asks All Notes' Delete Note?, Cancel focused; Escape is its Cancel, focus back
+  // on Delete; and Escape there, with nothing changed, leaves the editor at once, focus back on the row.
+  await page.keyboard.press('Enter');
+  await expect(edit.getByRole('heading', { name: 'Edit Note' })).toBeFocused();
+  const editorDelete = edit.getByRole('button', { name: 'Delete', exact: true });
+  await tabTo(page, editorDelete);
+  await page.keyboard.press('Enter');
+  const deleteNote = page.getByRole('alertdialog', { name: 'Delete Note?' });
+  await expect(deleteNote).toContainText('This note will be permanently deleted.');
+  await expect(deleteNote.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await axeCheck(page);
+  await page.keyboard.press('Escape');
+  await expect(deleteNote).toHaveCount(0);
+  await expect(editorDelete).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(edit).toHaveCount(0);
+  await expect(row).toBeFocused();
+  expect(await notes(page)).toHaveLength(1);
 
   // All Notes, from the header's Research and the Research page's row (S19b): Delete… asks, Cancel
   // first, and Delete deletes.
