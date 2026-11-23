@@ -235,9 +235,10 @@ import Testing
         #expect(try !store.deleteCollection(Self.collection, for: "owner"))
     }
 
-    /// The two reads a collection's answer makes of the user's other rows, each without reading them
-    /// whole: their notes counted by document, and the documents they hold a summary of that has text
-    /// and is no headnote draft; each the user's alone.
+    /// The three reads a collection's answer makes of the user's other rows, each without reading them
+    /// whole: their notes counted by document; the documents they hold a summary of that has text and is
+    /// no headnote draft; and, since FRUS-Explorer#1941, their headnote drafts' ids, in upper case, which
+    /// say which entries own one; each the user's alone.
     @Test(arguments: UserStoreKind.available)
     func notesAreCountedAndSummarizedDocumentsFoundByDocument(_ kind: UserStoreKind) async throws {
         let (store, _, test) = try await UserTagTests.open(kind)
@@ -266,6 +267,13 @@ import Testing
         try store.addResearchRow(try #require(UserStoreSchema.table(for: "GeneratedSummary")), empty, for: "owner", outsideSearch: false)
         #expect(try store.summarizedDocuments(of: "owner") == ["frus1961-63v06/d1"])
         #expect(try store.summarizedDocuments(of: "reader").isEmpty)
+
+        // The drafts alone, never a document's own summary, an id an import wrote in lower case read in upper.
+        var lower = Self.summaryRow("d2af0000-0000-4000-8000-00000000000a", draft: true)
+        lower["document_id"] = .text("d4")
+        try store.addResearchRow(try #require(UserStoreSchema.table(for: "GeneratedSummary")), lower, for: "owner", outsideSearch: false)
+        #expect(try store.headnoteDraftIds(of: "owner") == [Self.draft, "D2AF0000-0000-4000-8000-00000000000A"])
+        #expect(try store.headnoteDraftIds(of: "reader").isEmpty)
     }
 
     /// The Research rail's collections: those holding the document as a document entry, an excerpt of
