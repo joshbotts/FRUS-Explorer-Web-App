@@ -1,6 +1,170 @@
 # Development log
 
-One entry per session, newest first. Phase 3's rows have their entries' places reserved below, in the order the plan expects them to end, and each session fills its own in place (`PLAN.md`, How sessions run beside each other); a session the plan does not name puts its entry directly above the entry it follows.
+One entry per session, newest first. Phase 4's rows have their entries' places reserved below, in the order the plan expects them to end, and each session fills its own in place (`PLAN.md`, How sessions run beside each other); a session the plan does not name puts its entry directly above the entry it follows.
+
+## Session 31: phase 4's sign-off
+
+Not started: `PLAN.md`'s row S31. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 29g: the shares chips on Related Documents
+
+Not started: `PLAN.md`'s row S29g. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 28e: the map's tools
+
+Not started: `PLAN.md`'s row S28e. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 30d: the packet and the ways in
+
+Not started: `PLAN.md`'s row S30d. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 29f: Distinctive and Collocates
+
+Not started: `PLAN.md`'s row S29f. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 28d: Browse's clusters
+
+Not started: `PLAN.md`'s row S28d. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 27e: Search Within These Results
+
+Not started: `PLAN.md`'s row S27e. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 30c: Archives Visits, the list and the editor
+
+Not started: `PLAN.md`'s row S30c. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 29e: live word clouds
+
+Not started: `PLAN.md`'s row S29e. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 28c: the map's reading
+
+Not started: `PLAN.md`'s row S28c. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 27d: search by meaning
+
+Not started: `PLAN.md`'s row S27d. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 27c: pin move past the second batch
+
+Not started: `PLAN.md`'s row S27c. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 26d: Related Documents' semantic axis
+
+Not started: `PLAN.md`'s row S26d. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 30b: a plan's derivation over values, upstream
+
+Not started: `PLAN.md`'s row S30b. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 29b: live counts, keyness and collocates, upstream
+
+Not started: `PLAN.md`'s row S29b. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 29d: the family's clouds and references
+
+Not started: `PLAN.md`'s row S29d. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 26c: the vectors on the server
+
+Not started: `PLAN.md`'s row S26c. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 28a: the map's rules, upstream
+
+Not started: `PLAN.md`'s row S28a. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 27a: search by meaning's engine, upstream
+
+Not started: `PLAN.md`'s row S27a. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 26b: pin move past the first batch
+
+Not started: `PLAN.md`'s row S26b. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 28b: the map's canvas
+
+Not started: `PLAN.md`'s row S28b. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 30a: the packet's builder and exporter, upstream
+
+Not started: `PLAN.md`'s row S30a. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 29a: WordCloudKit takes its tagger from its host, upstream
+
+Not started: `PLAN.md`'s row S29a. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 26a: the vectors' stores and Related's semantic source, upstream
+
+Not started: `PLAN.md`'s row S26a. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 29c: the web's tagger
+
+Not started: `PLAN.md`'s row S29c. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Session 27b: the encoder
+
+Not started: `PLAN.md`'s row S27b. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
+
+## Phase 4's plan: semantic and language, on four tracks
+
+23 November 2026 · branch `claude/vigilant-galileo-eylx4k` · [#164](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/164) · upstream `4556c4d5`, unchanged
+
+The owner asked for a development plan for phase 4, which the plan had named next "once it is planned" when phase 3 was signed off that morning (Session 25b). This session changes records only: nothing under `web/`, `Sources/`, `Tests/`, `fixtures/`, `scripts/`, `docker/` or `.github/`. It planned the phase in rows of one pull request each, as phases 2 and 3 were, from the app's code at the pin, and it measured the phase's two largest unknowns on Linux before writing a row that rested on them.
+
+**What phase 3 cost,** read on 23 November from the repository's history, since the arrangement it ran under is the one phase 4 keeps:
+
+- **69 pull requests,** between #94 and #163, merged between 7 and 23 November.
+- **Nine merges of `main` into an open branch,** where phase 2's forty pull requests had forty-one.
+- **The files most changed,** by commits that are not merges: the log 109, SPEC 70, PLAN 69, `copy.ts` 51, INSTALL 38, `app.css` 36, `compose-smoke` 34, the README 25, `Routes.swift` 22, COORDINATION 21, `router.tsx` 15, `UserData.swift` 12, `Package.swift` and the Dockerfile 6 each, `web/package.json` 1.
+- **CI's runs were not counted.** The agent sent to count them was stopped by the usage limit, and listing them again would have cost more than the number is worth to this plan; the next session that reads GitHub's records can count them against the arrangement's measure, two runs a pull request.
+
+**Checked against the app's code at the pin** (`docs/prep/README.md`, Phase 4), by six read-only surveys, each claim that sizes a row read again here:
+
+- **The semantic half's arithmetic is the kits' already.** SemanticVectorsKit, 2,309 lines, is public, Foundation-only and tested on Linux in CI: it reads the bundled tier, the shards and the map, quantizes a query and runs both stages of the retrieval. Everything on it is app code: the shard store and the fetcher's rules, the three passes of Related Documents' semantic axis (510 lines over `AppState`) and Project Home's reach, the searcher (519) and the backend (592) of search by meaning, the model's store, and the map's rules, in six small files and a 3,492-line view. FRUSCoreKit depends on neither SemanticVectorsKit nor WordCloudKit, and its boundary test permits neither.
+- **Search by meaning.** The app's encoder calls llama.cpp through a vendored framework, pinned at `a0e6dc73` since 15 October, the commit the corpus's vectors were embedded through; SPEC still named `8663224`, which cannot run EmbeddingGemma 2. The model has had no consent step since build 51. The app holds its own encoder to a cosine of 0.999 against the llama.cpp command line over 25 judged queries, whose reference vectors are committed. The "600 corpus-gate queries" of SPEC's check 9 were corpus rows, and their reference lists are not in the app's repository; and the app's own ladder says that a re-embedded query cannot be held to an exact list.
+- **Search Within These Results** (the app's #1577, of 18 October) layers Meaning with Keywords, so the web has neither half, and SPEC, written before it, does not name it.
+- **The map** is 314,616 points in 140 regions, six bytes a point, row for row the vectors' index; SPEC said 314,571 in three places. Its lenses, picking, lasso, axis and export are pure app code, its renderer Metal's. Browse's clusters read the same files, and the web's Browse has left them out since phase 1.
+- **Language.** WordCloudKit counts through `NLTagger` alone and marks every tagging declaration unavailable on Linux. But it already describes a tagger that does less than Apple's, in the three flags of `NaturalLanguageHealth`, and keeps a second reference counted without lemmas, for a launch with no lemmatiser. No file names the tokenizer that counted it, so SPEC's rule that a reference from another tokenizer is never compared is stated by no code. The live count, the keyness ranking, the scopes and the collocates are app code, Foundation-only but for the scopes' resolver.
+- **Archives Visits** is 4,110 lines of Foundation-only app code in eight files over the kit's Source Explorer, with a derivation that reads SwiftData rows; its one composition is a text, and its PDF is that text.
+- **The server:** it starts no process; its library's transport follows no redirect to another host, which the model's address answers with; the swift job may skip nothing, so a test cannot be gated on the model; the image already ships every semantic file and both references, and reads none; migrations stand at 8; the three visit tables have been there since migration 2, with no route.
+
+**Built, to measure,** on the session's host (Ubuntu 24.04, x86-64, 4 vCPUs), nothing of it committed:
+
+- **llama.cpp at the app's commit** builds `llama-server` and `llama-embedding` in 118 s; `llama-server` is 15.9 MB and links `libgomp`, which the runtime image lacks.
+- **The app's 25 queries, embedded on Linux** with the app's own fixture script and the model, whose SHA-256 is the app's: a least cosine of 0.999692 against the app's committed fixture through `llama-embedding`, and 0.999866 through `llama-server`, the same vectors at 1, 2 and 4 threads. The server is ready in 1.2 s, holds 425 MB, and answers a warm query in a median of 38 to 89 ms.
+- **Linux's Foundation splits no words:** `byWords` is marked unavailable in `swift:6.4-noble`. A splitter written by hand counted a fixture volume at about eight million words a second.
+
+**The plan** (`PLAN.md`, Phase 4) has 26 rows in six groups, on four tracks, Semantic, Map, Language and Visits, with Upstream and the pin moves apart:
+
+- **S26, the vectors and Related Documents:** the stores and the semantic source upstream (S26a), the first pin move (S26b), the vectors on the server with check 9's kernel half on the fixtures (S26c), and the semantic axis with Beyond your library, the reach and the feedback, migration 9 (S26d).
+- **S27, the encoder and search by meaning:** the engine upstream (S27a), the encoder (S27b), the second pin move (S27c), search by meaning (S27d), and Search Within These Results with the fallback (S27e).
+- **S28, the map and Browse's clusters:** the rules upstream (S28a), the canvas (S28b), the reading (S28c), Browse's clusters (S28d) and the tools (S28e).
+- **S29, language:** the tagger's seam upstream (S29a), the live counts, the ranking and the collocates upstream (S29b), the web's tagger (S29c), the family's clouds and references (S29d), live word clouds (S29e), Distinctive and Collocates (S29f), and the shares chips (S29g).
+- **S30, Archives Visits:** the packet upstream (S30a), the derivation over values upstream (S30b), the list and the editor (S30c), and the packet with the ways in (S30d).
+- **S31:** the sign-off, check 9 at full scale.
+
+Seven upstream pull requests in two batches, two pin moves, fourteen owner checkpoints, nine risks, thirteen decisions and nine open questions. Phase 3's arrangement stands; what changes is the tracks, and the files each row may touch. Check 9 is read in two halves: a cosine for the encoder, and identical lists for the kernel over the same rows; the agreement of the two encoders' lists is reported.
+
+**What the plan decides that SPEC did not:** the tagger is the web's own code, as the rich-text codec is, behind a seam in the kit; once it has counted the corpus, the web counts in one family and reads the Mac's bundled clouds no more; downloads are an admin's, so a reader's request fetches no vectors, where the app's does; Search Within These Results and Browse's clusters join the phase; and the entity lenses stay phase 5's.
+
+**How the session went.** Six surveys ran at once, and with a dry-run build beside them the session met the owner's usage limit: three agents stopped. When it reset, the map's survey was resumed, the language survey was read by the session itself, and the count of CI's runs was given up. The plan takes the lesson as a risk and a rule: its waves never ask for more than four sessions, and the surveys' findings are kept with file and line so that no row reads the app again.
+
+**Records**
+
+- **`docs/PLAN.md`:** the Phase 4 section, with its flowchart, the rows, check 9's reading, what changes in the arrangement, the waves and a stub for each row's done paragraph; the Summary's line on where the plan stands; the session plan's line on phase 4; nine owner checkpoints, fourteen steps, with the golden-files row and the paragraph on what a Mac check costs; nine risks; and the two answer sections.
+- **`docs/DEVLOG.md`:** the intro's line on the stubs, and a stub for each row above this entry, in the order the plan expects them to end.
+- **`docs/prep/README.md`:** the Phase 4 section: the dry runs' measurements and the surveys' claims, with file and line.
+- **`docs/COORDINATION.md` §5:** phase 4's seven moves into the kits, in the list of app changes.
+- **`docs/SPEC.md`:** corrected where the surveys found it behind the pin: the llama.cpp commit in the image's encoder stage, the encoder's size in two places, the map's points in three, and the consent step in Administration's paragraph; check 9's row, as the plan reads it; the delivery plan's phase-4 row and its progress line; and the semantic features' list, with the rows that bring each.
+- **`README.md`:** the status's Next, the development plan's phase-4 row, and the licence section's sentence on the model, which named terms the app left with build 51.
+
+**Results**
+
+- No code changed. The pull request is records only, so CI's `swift`, `web` and `compose` jobs are skipped, as S20a arranged.
+- The dry runs' outputs are in the session's scratch folder and are not committed; the measurements are in `docs/prep/README.md`.
+
+**Next: wave 1.** S27b, the encoder, and S29c, the web's tagger, here, and S26a and S29a upstream: none of the four needs a pin move. Before S29c commits a model, the owner reads the licence of the text it learns from; and the owner says how many sessions run at once.
 
 ## Session 25b: phase 3's sign-off
 
