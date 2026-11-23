@@ -25,6 +25,9 @@ public enum LibraryOrder {
         public var passes: [String: Int] = [:]
         /// The rows after a volume's first run, in the volumes not in the index's order.
         public var laterRows = 0
+        /// The runs of a single row among those volumes' runs, which are in the index's order whatever their order
+        /// between them: the more there are, the less the classification says.
+        public var singleRowRuns = 0
         /// The volumes out of the index's order within a run, each with its first inversion.
         public var outOfOrder: [String: String] = [:]
         /// The volumes whose documents differ, which check 2's digests refuse.
@@ -36,7 +39,7 @@ public enum LibraryOrder {
         /// The report's lines.
         public func summary() -> String {
             var lines = ["\(volumes) volumes: \(sameOrder) in the index's order; \(passes.count) in runs of consecutive rowids, "
-                         + "one to a pass, each run in the index's order (\(passes.values.reduce(0, +)) runs, \(laterRows) rows after a volume's first run); "
+                         + "one to a pass, each run in the index's order (\(passes.values.reduce(0, +)) runs, \(singleRowRuns) of them a single row, \(laterRows) rows after a volume's first run); "
                          + "\(outOfOrder.count) out of the index's order within a run"]
             for volume in outOfOrder.keys.sorted() { lines.append("  out of order within a run: \(volume): \(outOfOrder[volume]!)") }
             for volume in differentDocuments.keys.sorted() { lines.append("  other documents: \(volume): \(differentDocuments[volume]!)") }
@@ -72,16 +75,29 @@ public enum LibraryOrder {
             var place: [String: Int] = [:]
             for (offset, row) in made.enumerated() { place[row.document] = offset }
             var runs = 1
+            var length = 1
+            var singles = 0
             var inversion: String?
             for (previous, row) in zip(held, held.dropFirst()) {
                 if row.rowid != previous.rowid + 1 {
+                    if length == 1 { singles += 1 }
                     runs += 1
-                } else if inversion == nil, place[row.document]! < place[previous.document]! {
-                    inversion = "\(previous.document) before \(row.document), where the index has them the other way round"
+                    length = 1
+                } else {
+                    length += 1
+                    if inversion == nil, place[row.document]! < place[previous.document]! {
+                        inversion = "\(previous.document) before \(row.document), where the index has them the other way round"
+                    }
                 }
                 if runs > 1 { result.laterRows += 1 }
             }
-            if let inversion { result.outOfOrder[volume] = inversion } else { result.passes[volume] = runs }
+            if length == 1 { singles += 1 }
+            if let inversion {
+                result.outOfOrder[volume] = inversion
+            } else {
+                result.passes[volume] = runs
+                result.singleRowRuns += singles
+            }
         }
         return result
     }

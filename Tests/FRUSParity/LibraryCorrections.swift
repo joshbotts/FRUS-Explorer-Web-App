@@ -102,8 +102,9 @@ public struct LibraryCorrections: Codable, Equatable, Sendable {
     /// log into the file before it returns, as the server's indexing job does, so that the summary reads it.
     public func apply(to database: URL, resources: URL) async throws -> Applied {
         let overrides = try personOverrides()
-        // What the index holds before: each document's classification, the TEI's own as the index stores it,
-        // which the kit keeps as the value a restore puts back; each person's record; the rollup's size.
+        // What the index holds before: each document's classification, which the kit keeps as the value a restore
+        // puts back (the TEI's own on an index no correction has touched, as check 2's is; on one that already holds
+        // a correction, that correction's value, which nothing here restores); each person's record; the rollup's size.
         var classification: [DocumentClassificationOverrideData] = []
         var changed = 0
         let rollupsBefore: Int

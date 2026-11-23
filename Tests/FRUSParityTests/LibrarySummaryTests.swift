@@ -219,6 +219,7 @@ enum UpgradedLibrary {
             appended.edits = [Self.storedAgainLast("frus1894Nicaragua", "d1")]
             let later = try LibraryOrder.compare(library: try written(appended, "appended.sqlite"), index: index)
             #expect(later.sameOrder == 2 && later.passes == ["frus1894Nicaragua": 2] && later.laterRows == 1 && later.outOfOrder.isEmpty)
+            #expect(later.singleRowRuns == 1)
             #expect(later.summary().hasPrefix("3 volumes: 2 in the index's order; 1 in runs of consecutive rowids"))
 
             var reversed = ParityExport()

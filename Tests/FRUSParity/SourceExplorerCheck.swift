@@ -258,7 +258,7 @@ public enum SourceExplorerCheck {
             switch (answer.year, note.year) {
             case (nil, _):
                 let dateline = answer.dateline?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                kind = dateline.isEmpty ? .noDateline : .datelineGivesNoYear
+                kind = dateline.isEmpty ? .noDateline : Self.namesYear(dateline) ? .datelineYearNotRead : .datelineGivesNoYear
             case (_, nil): kind = .noExportYear
             default: kind = .anotherYear
             }
@@ -287,6 +287,8 @@ public enum SourceExplorerCheck {
             case datelineGivesNoYear
             /// The document has no dateline, and an attribute.
             case noDateline
+            /// The dateline holds a year that the views' rule does not read as the document's, and an attribute.
+            case datelineYearNotRead
             /// The dateline names a year, and the document has no attribute.
             case noExportYear
             /// The dateline's year and the attribute's differ.
