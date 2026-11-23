@@ -76,6 +76,35 @@ import Testing
         }
     }
 
+    /// The views' year is the API's own word, so it is held to what the kit's rule can give from the dateline the API
+    /// returned: no year for a dateline that names one, or a year the dateline does not hold, is the server's
+    /// difference, whatever the export's year; a dateline naming two years passes with either.
+    @Test func aYearTheViewsRuleCannotReadIsTheServersDifference() async throws {
+        let resources = try ServerResources.load(from: ServedFixture.resources)
+        let comparator = try SourceExplorerCheck.Comparator(resources: ServedFixture.resources)
+        let body = try await Self.answer(Self.lot, dateline: "Washington, March 4, 1953.", resources: resources)
+        func tampered(year: Int?, dateline: String? = nil) throws -> Data {
+            var json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+            json["year"] = year.map { $0 as Any } ?? NSNull()
+            if let dateline { json["dateline"] = dateline }
+            return try JSONSerialization.data(withJSONObject: json)
+        }
+        for (year, dateline, exportYear) in [(nil, nil, 1953), (1952, nil, 1952), (1957, nil, 1957)] as [(Int?, String?, Int?)] {
+            let answer = try tampered(year: year, dateline: dateline)
+            let result = await SourceExplorerCheck.run(
+                notes: [SourceExplorerCheck.Note(volumeId: "frus1953", documentId: "d1", note: Self.lot, year: exportYear)],
+                comparator: comparator) { _ in (200, answer) }
+            #expect(!result.passes && result.yearDisagreements.isEmpty, "\(String(describing: year))")
+            #expect(result.differences.first?.contains("views' rule") == true, "\(result.differences)")
+        }
+        // A dateline naming two years: either is one the rule can give.
+        let two = try tampered(year: 1952, dateline: "Telegram 1952 from Washington, March 4, 1953.")
+        let held = await SourceExplorerCheck.run(
+            notes: [SourceExplorerCheck.Note(volumeId: "frus1953", documentId: "d1", note: Self.lot, year: 1952)],
+            comparator: comparator) { _ in (200, two) }
+        #expect(held.passes && held.identical == 1, "\(held.differences)")
+    }
+
     /// Asking several answers at once holds each record as asking one at a time does, in the notes' order.
     @Test func askingSeveralAtOnceIsAskingOneAtATime() async throws {
         let resources = try ServerResources.load(from: ServedFixture.resources)

@@ -17,7 +17,7 @@
 //   frus-parity import-check <export.json> [--keep <dir>]
 //   frus-parity export-check <export.json> [--out <export.json>]
 //   frus-parity check-highlights <export.json> --tei <dir> [--samples <out.json>] [--repo <root>]
-//   frus-parity check-source-explorer --api <url> [<volume>...] [--tei <dir>] [--resources <dir>] [--undated <n>] [--parallel <n>] [--out <report.json>] [--repo <root>]
+//   frus-parity check-source-explorer --api <url> [<volume>...] [--tei <dir>] [--resources <dir>] [--undated <n>] [--app-questions] [--parallel <n>] [--out <report.json>] [--repo <root>]
 //   frus-parity apply-corrections <db> --corrections <file.json> [--resources <dir>] [--repo <root>]
 //   frus-parity compare-order <library.db> <index.db>
 //   frus-parity check-citations --api <url> --index <db> [--per-volume <n>] [--resources <dir>] [--out <report.json>] [--repo <root>]
@@ -51,7 +51,7 @@ let usage = """
            frus-parity import-check <export.json> [--keep <dir>]
            frus-parity export-check <export.json> [--out <export.json>]
            frus-parity check-highlights <export.json> --tei <dir> [--samples <out.json>] [--repo <root>]
-           frus-parity check-source-explorer --api <url> [<volume>...] [--tei <dir>] [--resources <dir>] [--undated <n>] [--parallel <n>] [--out <report.json>] [--repo <root>]
+           frus-parity check-source-explorer --api <url> [<volume>...] [--tei <dir>] [--resources <dir>] [--undated <n>] [--app-questions] [--parallel <n>] [--out <report.json>] [--repo <root>]
            frus-parity apply-corrections <db> --corrections <file.json> [--resources <dir>] [--repo <root>]
            frus-parity compare-order <library.db> <index.db>
            frus-parity check-citations --api <url> --index <db> [--per-volume <n>] [--resources <dir>] [--out <report.json>] [--repo <root>]
@@ -384,13 +384,22 @@ func timeSearch(_ arguments: Arguments) async throws {
 /// GET against a server's base URL, for LiveAPI: a path with its query string, answered with the
 /// status and the body. A request may take 15 minutes: over the full corpus an exact-word search
 /// (`=Soviet`) took more than URLSession's default minute on a server that was busy (S10).
+/// A path of the API, with its query, under a server's base URL, the base's own path kept: `http://host/frus-explorer/`
+/// and `/api/v1/…` give `http://host/frus-explorer/api/v1/…`, as a server under a path (FRUS_PUBLIC_URL) answers, where
+/// resolving the path against the base would drop the base's path.
+func apiURL(_ base: URL, _ path: String) -> URL? {
+    var root = base.absoluteString
+    if !root.hasSuffix("/") { root += "/" }
+    return URL(string: root + path.drop { $0 == "/" })
+}
+
 func httpGet(_ base: URL) -> @Sendable (String) async throws -> LiveAPI.Response {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.timeoutIntervalForRequest = 900
     configuration.timeoutIntervalForResource = 3_600
     let session = URLSession(configuration: configuration)
     return { path in
-        guard let url = URL(string: path, relativeTo: base) else { throw LiveAPI.Failure("\(path) is not a path") }
+        guard let url = apiURL(base, path) else { throw LiveAPI.Failure("\(path) is not a path") }
         let (data, response) = try await session.data(from: url)
         guard let http = response as? HTTPURLResponse else { throw LiveAPI.Failure("\(url.absoluteString) gave no HTTP response") }
         return (http.statusCode, data)
@@ -628,9 +637,10 @@ struct SourceExplorerReport: Encodable {
 /// fixture volumes, read from their TEI as the Source Explorer export generator reads it, resolved through the
 /// server's API, and each record held to the generator's over the bundled files in --resources, the pinned
 /// commit's by default (`SourceExplorerCheck`), or to its record for the year both of the app's views read where the
-/// export reads another, each such record counted and the export's year's questions listed (S25b). The server must
-/// index the same volumes and read the same files. `--parallel` asks that many answers at once; `--out` writes
-/// every finding.
+/// export reads another, or with the kit's reading of a Decimal File-form number where the export's core reads a case,
+/// each such record counted and listed as the app's question (S25b), only with `--app-questions`: without it, such a
+/// record fails the check, as over the fixtures, which hold none. The server must index the same volumes and read the
+/// same files. `--parallel` asks that many answers at once; `--out` writes every finding.
 func checkSourceExplorer(_ arguments: Arguments) async throws {
     guard let api = arguments.options["--api"], let base = URL(string: api) else {
         throw UsageError("check-source-explorer takes --api <url>")
@@ -677,7 +687,17 @@ func checkSourceExplorer(_ arguments: Arguments) async throws {
         print("app question  \(question.key): \(question.kind.rawValue), the views' year \(question.viewsYear.map(String.init) ?? "none"), "
               + "the export's \(question.exportYear.map(String.init) ?? "none"), which resolves \(question.resolvesOtherwise.joined(separator: ", ")) otherwise")
     }
+    for key in result.decimalFormFiles.prefix(20) {
+        print("app question  \(key): a 1906–1910 file number in the Decimal File's form, which the export's core reads as a Numerical File case")
+    }
     guard result.passes else { fail(result.summary(volumes: volumes.count)) }
+    // Without --app-questions a record the export reads otherwise than the app's views fails the check, as over the
+    // fixtures, which hold none: the rules that hold such records are the full corpus's (S25b).
+    if !arguments.flags.contains("--app-questions"), !result.yearDisagreements.isEmpty || !result.decimalFormFiles.isEmpty {
+        fail("check 8 fails: \(result.yearDisagreements.count) records for the year the app's views read where the export reads another, "
+             + "and \(result.decimalFormFiles.count) for a Decimal File-form number the export's core reads as a case, which only "
+             + "--app-questions holds: " + (result.yearDisagreements.map(\.key) + result.decimalFormFiles).prefix(20).joined(separator: ", "))
+    }
     if let undated, result.undatedByDateline.count != undated {
         fail("check 8 fails: \(result.undatedByDateline.count) records dated by the export alone, not \(undated): "
              + result.undatedByDateline.joined(separator: ", "))
@@ -724,7 +744,7 @@ func httpFetch(_ base: URL) -> CitationCheck.Fetch {
     configuration.timeoutIntervalForResource = 3_600
     let session = URLSession(configuration: configuration)
     return { path, form in
-        guard let url = URL(string: path, relativeTo: base) else { throw LiveAPI.Failure("\(path) is not a path") }
+        guard let url = apiURL(base, path) else { throw LiveAPI.Failure("\(path) is not a path") }
         var request = URLRequest(url: url)
         if let form {
             request.httpMethod = "POST"
@@ -823,7 +843,7 @@ do {
     case "check-highlights":
         try await checkHighlights(Arguments(arguments.dropFirst(), options: ["--tei", "--samples", "--repo"]))
     case "check-source-explorer":
-        try await checkSourceExplorer(Arguments(arguments.dropFirst(), options: ["--api", "--tei", "--resources", "--undated", "--parallel", "--out", "--repo"]))
+        try await checkSourceExplorer(Arguments(arguments.dropFirst(), flags: ["--app-questions"], options: ["--api", "--tei", "--resources", "--undated", "--parallel", "--out", "--repo"]))
     case "apply-corrections":
         try await applyCorrections(Arguments(arguments.dropFirst(), options: ["--corrections", "--resources", "--repo"]))
     case "compare-order":

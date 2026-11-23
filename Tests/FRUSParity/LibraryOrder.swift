@@ -23,7 +23,7 @@ public enum LibraryOrder {
         /// The volumes whose documents fall in runs of consecutive rowids, each in the index's order, by
         /// volume, with how many runs.
         public var passes: [String: Int] = [:]
-        /// The rows after a volume's first run, in the volumes not in the index's order.
+        /// The rows after a volume's first run, in the volumes whose runs are each in the index's order.
         public var laterRows = 0
         /// The runs of a single row among those volumes' runs, which are in the index's order whatever their order
         /// between them: the more there are, the less the classification says.
@@ -59,6 +59,9 @@ public enum LibraryOrder {
 
     /// Compares the order of each volume's documents in `library` with `index`'s.
     public static func compare(library: URL, index: URL) throws -> Result {
+        // Read with `immutable=1`, which would miss a log's pages: refused, as the summary refuses them.
+        try IndexSummarizerFile.refuseUnfinished(library)
+        try IndexSummarizerFile.refuseUnfinished(index)
         let (theirs, ours) = (try rows(library), try rows(index))
         var result = Result()
         for volume in Set(theirs.keys).union(ours.keys).sorted() {
@@ -77,6 +80,7 @@ public enum LibraryOrder {
             var runs = 1
             var length = 1
             var singles = 0
+            var later = 0
             var inversion: String?
             for (previous, row) in zip(held, held.dropFirst()) {
                 if row.rowid != previous.rowid + 1 {
@@ -89,7 +93,7 @@ public enum LibraryOrder {
                         inversion = "\(previous.document) before \(row.document), where the index has them the other way round"
                     }
                 }
-                if runs > 1 { result.laterRows += 1 }
+                if runs > 1 { later += 1 }
             }
             if length == 1 { singles += 1 }
             if let inversion {
@@ -97,6 +101,7 @@ public enum LibraryOrder {
             } else {
                 result.passes[volume] = runs
                 result.singleRowRuns += singles
+                result.laterRows += later
             }
         }
         return result

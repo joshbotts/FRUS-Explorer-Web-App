@@ -32,6 +32,14 @@
 // views' year does is listed, a question of the app's (its export reads another year than its views), never a
 // difference of the server's.
 //
+// The full corpus's run also found a third rule of the export's own (S25b): a 1906–1910 file number in the Decimal
+// File's form ("File No. 723.2515/110.") names no Numerical File case to the kit, both of the app's views' reading
+// since FRUS-Explorer#722 (for #354), which shows the coverage gap, where the export generator's own core, which
+// took no such rule, reads the digits before the point as a case and records that case's rolls. Such a record is
+// held to the generator's with the kit's reading of the file number, asked of the kit itself (`KitNumericalFile`):
+// no rolls, the gap, and the outcome by the generator's precedence; it is counted and listed, a question of the
+// app's (its export lags its views), never a difference of the server's.
+//
 // The generator's cores declare eight public names FRUSCoreKit declares too, CentralFilesIndex,
 // CollectionAuthorityIndex, CountryRoll, LotFileEntry, NumericalFileIndex, NumericalFileRoll,
 // SourceProvenanceIndex and VolumeSourcesIndex, and two the kit keeps internal: this file imports no FRUSCoreKit,
@@ -137,6 +145,8 @@ public enum SourceExplorerCheck {
         let centralFiles: CentralFilesIndexGeneratorCore.CentralFilesIndex
         let volumeSources: VolumeSourcesIndexGeneratorCore.VolumeSourcesIndex
         let authority: AuthorityLookup
+        /// The kit's Numerical File, for the third rule: what both of the app's views read from a file number.
+        let kit: KitNumericalFile
 
         public init(resources: URL) throws {
             let central = resources.appendingPathComponent("central-files-index.json")
@@ -147,6 +157,7 @@ public enum SourceExplorerCheck {
                 VolumeSourcesIndexGeneratorCore.VolumeSourcesIndex.self,
                 from: Data(contentsOf: resources.appendingPathComponent("volume-sources-index.json")))
             authority = try AuthorityLookup(indexURL: resources.appendingPathComponent("collection-authority.json"))
+            kit = try KitNumericalFile(resources: resources)
         }
 
         /// The generator's record for a note and year.
@@ -154,6 +165,23 @@ public enum SourceExplorerCheck {
             SourceExplorerExportRunner.exportRecord(
                 volumeId: volumeId, documentId: documentId, rawNote: note, documentYear: year, parser: parser,
                 lotResolver: lotResolver, centralFiles: centralFiles, volumeSources: volumeSources, authority: authority)
+        }
+
+        /// The generator's record with the kit's reading of a Decimal File-form file number (the third rule): where the
+        /// export's core found a case's rolls for a file number the kit reads no case from, no rolls, the coverage gap
+        /// the kit shows, and the outcome by the generator's precedence; and whether that changed the record.
+        func readByTheKit(_ record: SourceExplorerExportRecord) -> (record: SourceExplorerExportRecord, changed: Bool) {
+            let resolution = record.resolution
+            guard let rolls = resolution.numericalFileRolls, record.parsed.kind == "centralFiles",
+                  let file = record.parsed.fields["fileIdentifier"],
+                  kit.refusesDecimalForm(file, whereTheCaseFinds: rolls.map(\.naId)) else { return (record, false) }
+            let read = ResolutionResults(
+                liveLookupRoute: resolution.liveLookupRoute, lotBundle: resolution.lotBundle, lotBundleMiss: resolution.lotBundleMiss,
+                numericalFileRolls: nil, numericalFileCoverageGap: true, volumeSources: resolution.volumeSources,
+                volumeSourcesKey: resolution.volumeSourcesKey, collectionAuthority: resolution.collectionAuthority)
+            return (SourceExplorerExportRecord(id: record.id, rawNote: record.rawNote, documentYear: record.documentYear,
+                                               parsed: record.parsed, strategy: record.strategy, derived: record.derived,
+                                               resolution: read, offlineOutcome: Self.outcome(read).rawValue), true)
         }
 
         /// The generator's record for the note the API answered with, each resolution the API made in place of the
@@ -219,6 +247,21 @@ public enum SourceExplorerCheck {
             dateline.range(of: #"\b(1[89][0-9]{2}|20[0-2][0-9])\b"#, options: .regularExpression) != nil
         }
 
+        /// Why a year cannot be the one the kit's rule reads from `dateline`, or nil when it can be. The rule
+        /// (`CentralFilesClassifier.documentYear(fromDateline:)`, internal to the kit, which both of the app's views
+        /// read) takes the year of the first `Month D, YYYY` in the dateline, or else its first year from 1800 to 2029,
+        /// and none from a blank dateline: so a year it gives is written with four of the dateline's digits, in a row,
+        /// and a dateline naming a year of that range always gives one. What the rule can give is checked, not which: a
+        /// dateline naming two years passes with either.
+        static func viewsYearProblem(year: Int?, dateline: String?) -> String? {
+            let text = dateline?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard let year else {
+                return namesYear(text) ? "the API gives no year for the dateline \"\(text)\", which names one the views' rule reads" : nil
+            }
+            return text.contains(String(year)) ? nil
+                : "the API gives the year \(year) for the dateline \"\(text)\", which the views' rule cannot read from it"
+        }
+
         /// The record's outcome, the generator's precedence (`exportRecord`'s, which it keeps private): the strongest
         /// offline resolution the record holds.
         static func outcome(_ resolution: ResolutionResults) -> OfflineOutcome {
@@ -234,7 +277,7 @@ public enum SourceExplorerCheck {
         /// generator's for the views' year where the two years differ, or a difference.
         func compare(note: Note, response: Swift.Result<(status: Int, body: Data), any Error>) -> Finding {
             let key = "\(note.volumeId)/\(note.documentId)"
-            let expected = record(volumeId: note.volumeId, documentId: note.documentId, note: note.note, year: note.year)
+            let (expected, decimalForm) = readByTheKit(record(volumeId: note.volumeId, documentId: note.documentId, note: note.note, year: note.year))
             let answer: Answer
             switch response {
             case .failure(let error):
@@ -247,34 +290,41 @@ public enum SourceExplorerCheck {
                     return .differs("\(key): \(error)")
                 }
             }
+            // The views' year is the API's own word, so it is held first to what the kit's rule can give from the
+            // dateline the API returned (`viewsYearProblem`): a year the rule cannot give is the server's difference.
+            if let problem = Self.viewsYearProblem(year: answer.year, dateline: answer.dateline) {
+                return .differs("\(key): \(problem)")
+            }
             let (actual, undated) = record(from: answer, exportYear: note.year)
-            if actual == expected { return .identical(actual, undated: undated) }
+            if actual == expected { return .identical(actual, undated: undated, decimalForm: decimalForm) }
             guard answer.year != note.year else { return .differs("\(key): " + SourceExplorerCheck.difference(actual, expected)) }
             // The years differ: the API's record for the views' year, against the generator's for it.
             let (atViewsYear, _) = record(from: answer, exportYear: nil)
-            let generated = record(volumeId: note.volumeId, documentId: note.documentId, note: note.note, year: answer.year)
+            let (generated, generatedDecimalForm) = readByTheKit(record(volumeId: note.volumeId, documentId: note.documentId, note: note.note, year: answer.year))
             guard atViewsYear == generated else { return .differs("\(key): " + SourceExplorerCheck.difference(atViewsYear, generated)) }
             let kind: YearDisagreement.Kind
             switch (answer.year, note.year) {
             case (nil, _):
                 let dateline = answer.dateline?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                kind = dateline.isEmpty ? .noDateline : Self.namesYear(dateline) ? .datelineYearNotRead : .datelineGivesNoYear
+                kind = dateline.isEmpty ? .noDateline : .datelineGivesNoYear
             case (_, nil): kind = .noExportYear
             default: kind = .anotherYear
             }
             // What the export's own year resolves otherwise than the views' year, the year itself apart.
             let otherwise = SourceExplorerCheck.differingFields(expected, generated.withYear(note.year)).map(\.name)
             return .identicalAtViewsYear(atViewsYear, YearDisagreement(key: key, kind: kind, viewsYear: answer.year,
-                                                                       exportYear: note.year, resolvesOtherwise: otherwise))
+                                                                       exportYear: note.year, resolvesOtherwise: otherwise),
+                                         decimalForm: decimalForm || generatedDecimalForm)
         }
     }
 
     /// What one note's comparison found.
     public enum Finding: Sendable, Equatable {
-        /// The generator's own record, with whether the first year rule dated it.
-        case identical(SourceExplorerExportRecord, undated: Bool)
-        /// The generator's record for the views' year, where the export reads another.
-        case identicalAtViewsYear(SourceExplorerExportRecord, YearDisagreement)
+        /// The generator's own record, with whether the first year rule dated it and the third rule read its file number.
+        case identical(SourceExplorerExportRecord, undated: Bool, decimalForm: Bool)
+        /// The generator's record for the views' year, where the export reads another, with whether the third rule read
+        /// its file number.
+        case identicalAtViewsYear(SourceExplorerExportRecord, YearDisagreement, decimalForm: Bool)
         /// What differs, or why the answer could not be read.
         case differs(String)
     }
@@ -287,8 +337,6 @@ public enum SourceExplorerCheck {
             case datelineGivesNoYear
             /// The document has no dateline, and an attribute.
             case noDateline
-            /// The dateline holds a year that the views' rule does not read as the document's, and an attribute.
-            case datelineYearNotRead
             /// The dateline names a year, and the document has no attribute.
             case noExportYear
             /// The dateline's year and the attribute's differ.
@@ -324,6 +372,9 @@ public enum SourceExplorerCheck {
         /// The notes whose records are the generator's for the year both of the app's views read, where the
         /// export reads another, each with how the years differ and what the export's year resolves otherwise.
         public var yearDisagreements: [YearDisagreement] = []
+        /// The notes held with the kit's reading of a Decimal File-form file number, where the export's core reads a
+        /// Numerical File case from it (the third rule), by key: the app's question, its export lagging its views.
+        public var decimalFormFiles: [String] = []
         /// Each note whose records differ, or whose answer the API refused, with what differs.
         public var differences: [String] = []
         /// The records by strategy and by outcome, for the summary line.
@@ -343,13 +394,15 @@ public enum SourceExplorerCheck {
         /// Takes one note's finding.
         mutating func take(_ finding: Finding) {
             switch finding {
-            case .identical(let record, let undated):
+            case .identical(let record, let undated, let decimalForm):
                 identical += 1
                 if undated { undatedByDateline.append(record.id) }
+                if decimalForm { decimalFormFiles.append(record.id) }
                 byStrategy[record.strategy, default: 0] += 1
                 byOutcome[record.offlineOutcome, default: 0] += 1
-            case .identicalAtViewsYear(let record, let disagreement):
+            case .identicalAtViewsYear(let record, let disagreement, let decimalForm):
                 yearDisagreements.append(disagreement)
+                if decimalForm { decimalFormFiles.append(record.id) }
                 byStrategy[record.strategy, default: 0] += 1
                 byOutcome[record.offlineOutcome, default: 0] += 1
             case .differs(let difference):
@@ -372,6 +425,7 @@ public enum SourceExplorerCheck {
                     + "strategies: \(strategies); outcomes: \(outcomes)"
                     + (undatedByDateline.isEmpty ? "" : "; \(undatedByDateline.count) of them dated by the export from frus:doc-dateTime-min, their datelines giving no year")
                     + years
+                    + (decimalFormFiles.isEmpty ? "" : "; \(decimalFormFiles.count) of them with the kit's reading of a 1906–1910 file number in the Decimal File's form, which names no Numerical File case to the app's views, where the export's core reads one, a question of the app's")
                     + (withoutId > 0 ? "; \(withoutId) notes of documents with no id, which no address names" : "")
             }
             return "check 8 fails: \(identical + yearDisagreements.count) of \(notes - withoutId) source notes held, \(differences.count) differ"

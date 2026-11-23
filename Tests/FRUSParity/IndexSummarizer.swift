@@ -482,3 +482,11 @@ public struct IndexSummarizer: Sendable {
         return ((Double(seconds) + Double(attoseconds) / 1e18) * 1000).rounded() / 1000
     }
 }
+
+/// The summary's refusal of a database whose `-wal` holds pages or whose `-journal` is hot, for the other commands that
+/// read an index with `immutable=1` (`compare-order`, `check-citations`'s copy) or write one (`apply-corrections`).
+public enum IndexSummarizerFile {
+    public static func refuseUnfinished(_ url: URL) throws {
+        _ = try IndexSummarizer.checkFile(url.resolvingSymlinksInPath())
+    }
+}

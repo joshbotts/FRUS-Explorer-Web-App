@@ -26,6 +26,8 @@ public enum CitationCheck {
         public let volumes: [String]
 
         public init(index: URL, manifest: URL, volumesDirectory: URL) throws {
+            // The kit opens it immutable, which would miss a log's pages: refused, as the summary refuses them.
+            try IndexSummarizerFile.refuseUnfinished(index)
             let store = try FTS5Store(readingDatabaseAt: index)
             pipeline = try IndexingPipeline(readingIndexAt: index, fts5Store: store, resources: .none, volumesDirectory: volumesDirectory)
             pages = try PageRangeStore(readingDatabaseAt: index)
@@ -207,28 +209,32 @@ public enum CitationCheck {
             for plain in [false, true] {
                 let name = format.name + (plain ? " (plain)" : "")
                 let citations = ownCitations(of: kit.catalogue, formatter: format.formatter, plain: plain)
-                var rows: [CitationBatch.Row] = []
+                var first = 0
                 for start in stride(from: 0, to: citations.count, by: 500) {
-                    let block = citations[start..<min(start + 500, citations.count)].joined(separator: "\n")
+                    let end = min(start + 500, citations.count)
+                    let block = citations[start..<end].joined(separator: "\n")
                     do {
                         let answer = try await ask(CitationBatch.self, "/api/v1/citation-lookup/batch", form: query([("text", block)]))
                         result.differences += differences(answer, await kit.batch(block)).map { "\(name), from volume \(start + 1): \($0)" }
-                        rows += answer.items
+                        result.batchRows += answer.items.count
+                        result.lookups += answer.items.count
                         for row in answer.items { tally(row.matches) }
+                        // Each row is its volume's only when the splitter kept one citation a line, as it must.
+                        guard answer.items.count == end - start else {
+                            result.differences.append("\(name), from volume \(start + 1): \(answer.items.count) rows for \(end - start) citations")
+                            continue
+                        }
+                        for (entry, row) in zip(kit.catalogue[start..<end], answer.items) {
+                            guard let match = row.matches.first, match.volumeId == entry.volumeId else {
+                                result.ownCitationsNotFirst[name, default: []].append(entry.volumeId)
+                                continue
+                            }
+                            first += 1
+                            if match.isBestGuess { result.ownCitationsGuessed[name, default: []].append(entry.volumeId) }
+                        }
                     } catch {
                         result.differences.append("\(name), from volume \(start + 1): \(error)")
                     }
-                }
-                result.batchRows += rows.count
-                result.lookups += rows.count
-                var first = 0
-                for (entry, row) in zip(kit.catalogue, rows) {
-                    guard let match = row.matches.first, match.volumeId == entry.volumeId else {
-                        result.ownCitationsNotFirst[name, default: []].append(entry.volumeId)
-                        continue
-                    }
-                    first += 1
-                    if match.isBestGuess { result.ownCitationsGuessed[name, default: []].append(entry.volumeId) }
                 }
                 result.ownCitationsFirst[name] = first
             }
@@ -276,10 +282,20 @@ public enum CitationCheck {
                         result.citationsNotFindingTheirDocument.append("\(volume)/\(id) in \(style): \(answer?.first.map { "\($0.volumeId)/\($0.documentId) \($0.matchStrategy)" } ?? "nothing")")
                     }
                 }
-                // The Parsed Fields as a paste fills them, with the number edited, as the reader may.
+                // The Parsed Fields as a paste fills them, the server's held to the kit's form, then with the number
+                // edited, as the reader may, from the kit's fields.
                 if let text = try? await ask(DocumentCitation.self, "/api/v1/volumes/\(volume)/documents/\(id)/citation").plainText,
                    let derived = try? await ask(CitationLookupForm.self, "/api/v1/citation-lookup/fields?\(query([("text", text)]))") {
-                    let edited = String((Int(derived.documentNumber) ?? 0) + 1)
+                    result.lookups += 1
+                    let parser = CitationParser()
+                    let fields = CitationLookupFields().refreshed(forPaste: text, mode: .paste, parser: parser)
+                    let form = [derived.subseries, derived.volumeNumber, derived.partNumber, derived.documentNumber, derived.pageNumber]
+                    let kitForm = [fields.subseries, fields.volume, fields.part, fields.document, fields.page]
+                    let actionable = fields.isActionable(mode: .paste, pasteText: text, parser: parser)
+                    if form != kitForm || derived.actionable != actionable || derived.mode != "paste" {
+                        result.differences.append("\(volume)/\(id): the Parsed Fields are \(form), \(derived.actionable) through the API, \(kitForm), \(actionable) from the kit")
+                    }
+                    let edited = String((Int(fields.document) ?? 0) + 1)
                     _ = await check("/api/v1/citation-lookup?\(query([("text", text), ("documentNumber", edited)]))",
                                     try await kit.paste(text) { $0.document = edited })
                 } else {

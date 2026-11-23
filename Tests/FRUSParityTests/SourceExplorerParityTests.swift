@@ -35,6 +35,10 @@ import Testing
         // export dates from frus:doc-dateTime-min and both of the app's views do not date. A change to either
         // side's year changes this list.
         #expect(result.undatedByDateline == ["d14", "d30", "d49", "d73", "d75", "d98", "d117"].map { "frus1961-63v06/\($0)" })
+        // The fixtures hold no record the full corpus's rules hold apart (S25b): every year the API gives is the export's
+        // but the seven's, and no note cites a 1906–1910 file, so a server that read another year would differ here.
+        #expect(result.yearDisagreements.isEmpty && result.decimalFormFiles.isEmpty && result.identical == result.notes - result.withoutId,
+                "\(result.yearDisagreements.prefix(5)) \(result.decimalFormFiles.prefix(5))")
         print(result.summary(volumes: ParityFixtures.volumes.count))
     }
 

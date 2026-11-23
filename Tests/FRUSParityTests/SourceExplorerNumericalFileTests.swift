@@ -61,4 +61,42 @@ import Testing
                 "\(disagreement.resolvesOtherwise)")
         #expect(result.exportYearQuestions == [disagreement])
     }
+
+    /// The third rule (S25b): a 1906–1910 file number in the Decimal File's form names no Numerical File case to the
+    /// kit, both of the app's views' reading since FRUS-Explorer#722, where the export generator's core reads the digits
+    /// before the point as one; the record is held with the kit's reading, counted, and no year question is left of it.
+    @Test func aDecimalFormFileNumberIsReadAsTheKitReadsIt() async throws {
+        let resources = try ServerResources.load(from: ServedFixture.resources)
+        let comparator = try SourceExplorerCheck.Comparator(resources: ServedFixture.resources)
+        let note = "File No. 723.2515/110."
+        // The export's own core finds case 723's rolls for it.
+        #expect(comparator.record(volumeId: "frus1908", documentId: "d1", note: note, year: 1910).resolution.numericalFileRolls?.isEmpty == false)
+        let (answer, body) = try await Self.answer(note, dateline: "American Embassy, Petropolis, March 17, 1910.", resources: resources)
+        #expect(answer.year == 1910 && answer.offline.numericalFileRolls == nil && answer.offline.numericalFileCoverageGap == true)
+        let result = await SourceExplorerCheck.run(
+            notes: [SourceExplorerCheck.Note(volumeId: "frus1908", documentId: "d1", note: note, year: 1910)],
+            comparator: comparator) { _ in (200, body) }
+        #expect(result.passes, "\(result.differences)")
+        #expect(result.identical == 1 && result.decimalFormFiles == ["frus1908/d1"])
+        #expect(result.summary(volumes: 1).contains("1 of them with the kit's reading of a 1906–1910 file number in the Decimal File's form"))
+
+        // With no dateline, the export's year resolves nothing the views' does not, read as the kit reads the number.
+        let (_, undated) = try await Self.answer(note, dateline: "", resources: resources)
+        let year = await SourceExplorerCheck.run(
+            notes: [SourceExplorerCheck.Note(volumeId: "frus1908", documentId: "d1", note: note, year: 1910)],
+            comparator: comparator) { _ in (200, undated) }
+        #expect(year.passes, "\(year.differences)")
+        // The export's 1910 still opens the Numerical File's window, whose gap the views' no year does not show: that
+        // question stands; the rolls the export's core would read from the number do not.
+        #expect(year.yearDisagreements.map(\.kind) == [.noDateline])
+        #expect(year.exportYearQuestions.map(\.resolvesOtherwise) == [["numericalFileCoverageGap"]], "\(year.exportYearQuestions)")
+        #expect(year.decimalFormFiles == ["frus1908/d1"])
+
+        // A Numerical File number is no Decimal File form: the rule leaves it, and its rolls, alone.
+        let (_, numbered) = try await Self.answer("File No. 551/79.", dateline: "Washington, March 4, 1908.", resources: resources)
+        let rolls = await SourceExplorerCheck.run(
+            notes: [SourceExplorerCheck.Note(volumeId: "frus1908", documentId: "d1", note: "File No. 551/79.", year: 1908)],
+            comparator: comparator) { _ in (200, numbered) }
+        #expect(rolls.passes && rolls.decimalFormFiles.isEmpty && rolls.byOutcome == ["resolvedNumericalFile": 1], "\(rolls.byOutcome)")
+    }
 }

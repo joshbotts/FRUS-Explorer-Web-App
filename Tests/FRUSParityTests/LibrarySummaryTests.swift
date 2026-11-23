@@ -232,6 +232,14 @@ enum UpgradedLibrary {
             fewer.edits = ["DELETE FROM document_cache WHERE volume_id = 'frus1894Nicaragua' AND document_id = 'd3'"]
             let other = try LibraryOrder.compare(library: try written(fewer, "fewer.sqlite"), index: index)
             #expect(!other.holdsTheSameDocuments && other.differentDocuments.keys.sorted() == ["frus1894Nicaragua"])
+
+            // A file whose log holds pages is refused, as the summary refuses it: `immutable=1` would not read them.
+            var logged = ParityExport()
+            logged.walMode = true
+            let open = try written(logged, "open.sqlite")
+            try Data("an uncheckpointed page".utf8).write(to: URL(fileURLWithPath: open.path + "-wal"))
+            let refusal = #expect(throws: SummaryRefusal.self) { _ = try LibraryOrder.compare(library: open, index: index) }
+            #expect(refusal?.kind == .inUse)
         }
 
         var appended = ParityExport()
@@ -311,6 +319,8 @@ enum UpgradedLibrary {
             LibraryCorrections(people: [.init(kind: "merge", volumeIdA: "frus1894Nicaragua", refA: "nobody", volumeIdB: "frus1961-63v06", refB: "nobody")]),
             LibraryCorrections(people: [.init(kind: "merge", volumeIdA: "frus1894Nicaragua", refA: "p1")]),
             LibraryCorrections(people: [.init(kind: "join", volumeIdA: "frus1894Nicaragua", refA: "p1")]),
+            LibraryCorrections(classifications: [.init(volumeId: "frus1894Nicaragua", documentId: "d1", isEditorialNote: true),
+                                                 .init(volumeId: "frus1894Nicaragua", documentId: "d1", isEditorialNote: false)]),
         ]
         for corrections in cases {
             await #expect(throws: LibraryCorrectionsError.self) { _ = try await corrections.apply(to: url, resources: resources) }

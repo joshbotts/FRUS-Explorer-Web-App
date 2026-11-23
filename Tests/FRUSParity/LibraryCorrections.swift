@@ -102,6 +102,13 @@ public struct LibraryCorrections: Codable, Equatable, Sendable {
     /// log into the file before it returns, as the server's indexing job does, so that the summary reads it.
     public func apply(to database: URL, resources: URL) async throws -> Applied {
         let overrides = try personOverrides()
+        // One correction a document, as the app keeps one override a document: a file naming one twice is refused,
+        // before anything is written, rather than leaving the last to win.
+        var named: Set<String> = []
+        for correction in classifications where !named.insert("\(correction.volumeId)/\(correction.documentId)").inserted {
+            throw LibraryCorrectionsError("\(correction.volumeId)/\(correction.documentId) is corrected twice; the file names one correction a document")
+        }
+        try IndexSummarizerFile.refuseUnfinished(database)
         // What the index holds before: each document's classification, which the kit keeps as the value a restore
         // puts back (the TEI's own on an index no correction has touched, as check 2's is; on one that already holds
         // a correction, that correction's value, which nothing here restores); each person's record; the rollup's size.
