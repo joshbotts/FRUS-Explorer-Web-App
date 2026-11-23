@@ -6,7 +6,7 @@
 // in an export, written as the app's settings write them; on a server that keeps no reader's settings the pane offers
 // Appearance alone. The web's own: number fields where the app has steppers, and the line for a server that keeps none.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useId, useState } from 'react';
+import { type ReactNode, useId, useState } from 'react';
 import { cloudSampleQuery, hideWord, settingsToken, showWord, updateWordCloud, type WordCloudCriteria } from '../api/cloud';
 import { errorMessage } from '../api/client';
 import { meQuery } from '../api/userData';
@@ -42,6 +42,50 @@ export function WordCloudSettingsScreen() {
   useDocumentTitle(words.title);
   useHeadingReady(!me.isPending);
 
+  // Appearance, this browser's: between Thresholds and Hidden Words, as the app's pane orders its sections.
+  const appearance = (
+    <section aria-labelledby={appearanceId}>
+      <h2 id={appearanceId}>{words.appearance}</h2>
+      <label>
+        {words.font}{' '}
+        <select
+          value={design}
+          aria-describedby={appearanceFooter}
+          onChange={(event) => {
+            setDesign(event.target.value as FontDesign);
+            keepFontDesign(event.target.value as FontDesign);
+          }}
+        >
+          {fontDesigns.map((value) => (
+            <option key={value} value={value}>
+              {words.fonts[value]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        {words.density}{' '}
+        <select
+          value={density}
+          aria-describedby={appearanceFooter}
+          onChange={(event) => {
+            setDensity(event.target.value as Density);
+            keepDensity(event.target.value as Density);
+          }}
+        >
+          {densities.map((value) => (
+            <option key={value} value={value}>
+              {words.densities[value]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p id={appearanceFooter} className="note">
+        {words.appearanceFooter}
+      </p>
+    </section>
+  );
+
   return (
     <div className="settings">
       <SettingsPanes />
@@ -49,47 +93,14 @@ export function WordCloudSettingsScreen() {
         <h1 tabIndex={-1} data-loading={me.isPending ? 'true' : undefined}>
           {words.title}
         </h1>
-        {keepsUserData && preferences ? <Criteria criteria={preferences.wordCloud} token={settingsToken(preferences)} design={design} /> : !me.isPending && <p className="note">{words.noSettings}</p>}
-        <section aria-labelledby={appearanceId}>
-          <h2 id={appearanceId}>{words.appearance}</h2>
-          <label>
-            {words.font}{' '}
-            <select
-              value={design}
-              aria-describedby={appearanceFooter}
-              onChange={(event) => {
-                setDesign(event.target.value as FontDesign);
-                keepFontDesign(event.target.value as FontDesign);
-              }}
-            >
-              {fontDesigns.map((value) => (
-                <option key={value} value={value}>
-                  {words.fonts[value]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            {words.density}{' '}
-            <select
-              value={density}
-              aria-describedby={appearanceFooter}
-              onChange={(event) => {
-                setDensity(event.target.value as Density);
-                keepDensity(event.target.value as Density);
-              }}
-            >
-              {densities.map((value) => (
-                <option key={value} value={value}>
-                  {words.densities[value]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <p id={appearanceFooter} className="note">
-            {words.appearanceFooter}
-          </p>
-        </section>
+        {keepsUserData && preferences ? (
+          <Criteria criteria={preferences.wordCloud} token={settingsToken(preferences)} design={design} appearance={appearance} />
+        ) : (
+          <>
+            {!me.isPending && <p className="note">{words.noSettings}</p>}
+            {appearance}
+          </>
+        )}
       </section>
     </div>
   );
@@ -97,8 +108,8 @@ export function WordCloudSettingsScreen() {
 
 type Criteria = WordCloudCriteria & { globalStopwords: string[]; lensStopwords: Record<string, string[]> };
 
-/** The criteria and the hidden words: the reader's own, with the bench above them. */
-function Criteria({ criteria, token, design }: { criteria: Criteria; token: string; design: FontDesign }) {
+/** The criteria and the hidden words: the reader's own, with the bench above them, and Appearance between them. */
+function Criteria({ criteria, token, design, appearance }: { criteria: Criteria; token: string; design: FontDesign; appearance: ReactNode }) {
   const client = useQueryClient();
   const [scope, setScope] = useState<string>('');
   const [failure, setFailure] = useState<string | undefined>(undefined);
@@ -158,6 +169,7 @@ function Criteria({ criteria, token, design }: { criteria: Criteria; token: stri
           {words.thresholdsFooter}
         </p>
       </section>
+      {appearance}
       <HiddenWords
         criteria={criteria}
         scope={scope}

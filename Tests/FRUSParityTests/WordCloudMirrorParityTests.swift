@@ -31,6 +31,11 @@ import Testing
     static let runner = "kit:CloudVectorsGeneratorCore/CloudVectorsRunner.swift"
     static let server = "Sources/FRUSLightAPI/WordCloud.swift"
     static let preferences = "Sources/FRUSLightAPI/Preferences.swift"
+    static let rules = "web:cloud/cloudRules.ts"
+    static let screen = "web:cloud/CloudScreen.tsx"
+    static let settingsPane = "web:settings/WordCloudSettings.tsx"
+    static let shell = "web:shell/AppShell.tsx"
+    static let reader = "web:reader/ReaderScreen.tsx"
 
     @Test func theBundledCloudsAreReadAsTheAppReadsThem() throws {
         try ArchivalAndSeriesMirrorParityTests.expect([
@@ -131,6 +136,195 @@ import Testing
             (Self.lexicons, #"switch shared.polarity(of: term.lowercased()) {"#,
              Self.server, #"polarity: lens.colorsBySentiment ? lexicons.polarity(of: $0.term.lowercased()) : nil)"#),
         ])
+    }
+
+    @Test func theBrowsersLayoutAndChoicesAreTheApps() throws {
+        try ArchivalAndSeriesMirrorParityTests.expect([
+            (Self.layout, #"maxWords: Int = 180, minFontSize: CGFloat = 13, maxFontSize: CGFloat = 64, spacingScale: CGFloat = 1, widthFactor: CGFloat = 0.54,"#,
+             Self.rules, #"{ maxWords = 180, minFontSize = 13, maxFontSize = 64, spacingScale = 1, widthFactor = 0.54 } = {},"#),
+            (Self.layout, #"let words = Array(terms.prefix(maxWords))"#,
+             Self.rules, #"const words = terms.slice(0, maxWords);"#),
+            (Self.layout, #"guard size.width > 0, size.height > 0, let maxCount = words.first?.count, maxCount > 0 else { return [] } let minCount = words.last?.count ?? maxCount"#,
+             Self.rules, #"if (!(width > 0 && height > 0) || maxCount === undefined || !(maxCount > 0)) return []; const minCount = words[words.length - 1]?.count ?? maxCount;"#),
+            (Self.layout, #"let vertical = rank > words.count / 4 && rank % 3 == 1"#,
+             Self.rules, #"const vertical = rank > Math.floor(words.length / 4) && rank % 3 === 1;"#),
+            (Self.layout, #"if vertical { estimate = CGSize(width: estimate.height, height: estimate.width) }"#,
+             Self.rules, #"if (vertical) estimate = { width: estimate.height, height: estimate.width };"#),
+            (Self.layout, #"let angleStep: CGFloat = 0.30 let spiralTightness: CGFloat = max(estimate.height, minFontSize) * 0.22 * spacingScale"#,
+             Self.rules, #"const angleStep = 0.3; const spiralTightness = Math.max(estimate.height, minFontSize) * 0.22 * spacingScale;"#),
+            (Self.layout, #"while angle < 70 {"#,
+             Self.rules, #"while (angle < 70) {"#),
+            (Self.layout, #"let radius = spiralTightness * angle let point = CGPoint(x: center.x + radius * cos(angle) * 1.7, y: center.y + radius * sin(angle) * yCompression)"#,
+             Self.rules, #"const radius = spiralTightness * angle; const point = { x: center.x + radius * Math.cos(angle) * 1.7, y: center.y + radius * Math.sin(angle) * 1 };"#),
+            (Self.layout, #"if bounds.contains(rect), !exclusionZones.contains(where: { $0.intersects(rect) }), !occupied.contains(where: { $0.intersects(rect) }) { slot = rect break } angle += angleStep"#,
+             Self.rules, #"if (contains(bounds, rect) && !occupied.some((taken) => intersects(taken, rect))) { slot = rect; break; } angle += angleStep;"#),
+            (Self.layout, #"colorIndex: rank, rotationDegrees: vertical ? 90 : 0"#,
+             Self.rules, #"colorIndex: rank, rotation: vertical ? 90 : 0,"#),
+            (Self.layout, #"let gap = -1.5 * spacingScale occupied.append(rect.insetBy(dx: gap, dy: gap))"#,
+             Self.rules, #"const gap = -1.5 * spacingScale; occupied.push({ x: slot.x + gap, y: slot.y + gap, width: slot.width - 2 * gap, height: slot.height - 2 * gap });"#),
+            (Self.layout, #"guard maxCount > minCount else { return (minFontSize + maxFontSize) / 2 } let t = max(0, min(1, CGFloat(count - minCount) / CGFloat(maxCount - minCount))) let curve = sizeExponent.map { pow(t, $0) } ?? sqrt(t) return minFontSize + (maxFontSize - minFontSize) * curve"#,
+             Self.rules, #"if (!(maxCount > minCount)) return (minFontSize + maxFontSize) / 2; const t = Math.max(0, Math.min(1, (count - minCount) / (maxCount - minCount))); const curve = Math.sqrt(t); return minFontSize + (maxFontSize - minFontSize) * curve;"#),
+            (Self.layout, #"let width = CGFloat(term.count) * fontSize * widthFactor + fontSize * 0.4 let height = fontSize * 1.25"#,
+             Self.rules, #"const width = characters(term) * size * widthFactor + size * 0.4; const height = size * 1.25;"#),
+            (Self.view, #"private static let palette: [Color] = [ .blue, .teal, .indigo, .purple, .pink, .orange, .green, .red, .cyan, .mint ]"#,
+             Self.rules, #"export const palette = ['blue', 'teal', 'indigo', 'purple', 'pink', 'orange', 'green', 'red', 'cyan', 'mint'] as const;"#),
+            (Self.view, #"case .positive: return .green case .negative: return .red case .none: return .secondary } } return Self.palette[colorIndex % Self.palette.count]"#,
+             Self.rules, #"return palette[rank % palette.length]!;"#),
+            (Self.view, #".font(.system(size: word.fontSize, weight: .semibold, design: fontDesign.swiftUIDesign))"#,
+             "web:styles/app.css", #".cloud-canvas text { font-weight: 600; cursor: pointer; }"#),
+            (Self.view, #"spacingScale: density.spacingScale, widthFactor: fontDesign.widthFactor"#,
+             Self.screen, #"place(terms, width, height, { spacingScale: spacingScales[density], widthFactor: widthFactors[design] }),"#),
+            (Self.view, #".onTapGesture { analyze(for: WordCloudLexicons.bareTerm(word.term)) } .accessibilityHidden(true)"#,
+             Self.screen, #"aria-hidden="true" onClick={() => void navigate({ to: '/analytics/corpus', search: { term: word.term } })}"#),
+            (Self.models, #"case .rounded: return 0.54 case .standard: return 0.54 case .serif: return 0.52 case .monospaced: return 0.62"#,
+             Self.rules, #"export const widthFactors: Record<FontDesign, number> = { rounded: 0.54, standard: 0.54, serif: 0.52, monospaced: 0.62 };"#),
+            (Self.models, #"case .compact: return 0.72 case .balanced: return 1.0 case .airy: return 1.45"#,
+             Self.rules, #"export const spacingScales: Record<Density, number> = { compact: 0.72, balanced: 1.0, airy: 1.45 };"#),
+            (Self.settings, #"static let fontDesign = "frus.wordcloud.fontDesign""#,
+             Self.rules, #"fontDesign: 'frus.wordcloud.fontDesign'"#),
+            (Self.settings, #"static let density = "frus.wordcloud.density""#,
+             Self.rules, #"density: 'frus.wordcloud.density'"#),
+            (Self.settings, #"static let measure = "frus.wordcloud.measure""#,
+             Self.rules, #"const keys = { measure: 'frus.wordcloud.measure',"#),
+            (Self.settings, #"(store.string(forKey: Keys.fontDesign)).flatMap(WordCloudFontDesign.init(rawValue:)) ?? .rounded"#,
+             Self.rules, #"return fontDesigns.includes(value as FontDesign) ? (value as FontDesign) : 'rounded';"#),
+            (Self.settings, #"(store.string(forKey: Keys.density)).flatMap(WordCloudDensity.init(rawValue:)) ?? .balanced"#,
+             Self.rules, #"return densities.includes(value as Density) ? (value as Density) : 'balanced';"#),
+            (Self.view, #"@AppStorage(WordCloudSettings.Keys.measure) private var measureRaw = KeynessCloudMeasure.frequency.rawValue"#,
+             Self.rules, #"return stored(keys.measure) === 'keyness' ? 'keyness' : 'frequency';"#),
+            (Self.pane, #"guard terms.count > 1 else { return 20 } let t = CGFloat(rank) / CGFloat(terms.count - 1) return 20 - (9 * t)"#,
+             Self.rules, #"if (!(count > 1)) return 20; const t = rank / (count - 1); return 20 - 9 * t;"#),
+            (Self.pane, #"SampleTermsRow(terms: Array(bench.kept.prefix(12)),"#,
+             Self.settingsPane, #"const shown = kept.slice(0, 12);"#),
+            (Self.pane, #"weight: index < 2 ? .semibold : .regular,"#,
+             Self.settingsPane, #"fontWeight: index < 2 ? 600 : 400"#),
+            (Self.pane, #".foregroundStyle(index < 3 ? Color.accentColor : Color.primary.opacity(0.75))"#,
+             Self.settingsPane, #"data-rank={index < 3 ? 'top' : undefined}"#),
+            (Self.pane, #"Form { sampleSection filteringSection thresholdsSection appearanceSection stopListSection }"#,
+             Self.settingsPane, #"</section> {appearance} <HiddenWords"#),
+            (Self.pane, #"Text(bench.summary) .foregroundStyle(bench.kept.isEmpty ? Color.red : Color.secondary)"#,
+             Self.settingsPane, #"<span data-empty={sample.data && kept.length === 0 ? 'true' : undefined}>{sample.data?.summary ?? words.measuring}</span>"#),
+            (Self.pane, #"lens: stopListScope.lens ?? .allTerms,"#,
+             Self.settingsPane, #"const sample = useQuery(cloudSampleQuery(scope || undefined, token));"#),
+            (Self.pane, #"ForEach(WordCloudLens.allCases) { lens in Text(lens.label).tag(StopListScope.lens(lens)) }"#,
+             Self.settingsPane, #"const lenses = ['allTerms', 'people', 'places', 'organizations', 'topics', 'actions', 'descriptors', 'concepts', 'sentiment'] as const;"#),
+            (Self.view, #"sessionHiddenWords.insert(term.lowercased())"#,
+             Self.screen, #"setSession({ scope, words: [...sessionWords, term.toLowerCase()] });"#),
+            (Self.models, #"guard !hidden.isEmpty else { return terms } return terms.filter { !hidden.contains($0.term.lowercased()) }"#,
+             Self.screen, #"return (answer?.terms ?? []).filter((term) => !hidden.has(term.term.toLowerCase()));"#),
+            (Self.view, #"if !hiddenWords.isEmpty || !sessionHiddenWords.isEmpty {"#,
+             Self.screen, #"{sessionWords.length > 0 && ("#),
+            (Self.view, #"let maxCount = visibleTerms.first?.count ?? 1"#,
+             Self.screen, #"const maxCount = terms[0]?.count ?? 1;"#),
+            (Self.view, #"let fraction = maxCount > 0 ? CGFloat(count) / CGFloat(maxCount) : 0 return RoundedRectangle(cornerRadius: 2) .fill(Color.accentColor.opacity(0.55)) .frame(width: 60 * fraction, height: 6)"#,
+             Self.screen, #"style={{ width: `${Math.round((60 * term.count) / maxCount)}px` }}"#),
+            (Self.view, #"if let scopedLabel = scopedAnalyzeMenuLabel {"#,
+             Self.screen, #"...(within"#),
+            (Self.view, #"appState.openSearch(SearchParameters(keywords: term), from: target)"#,
+             Self.screen, #"onSelect: () => void navigate({ to: '/search', search: { keywords: term.term } })"#),
+            (Self.view, #"AnalyticsParameters(term: term, scopeVolumeIds: volumeIds, scopeLabel: label),"#,
+             Self.screen, #"search: { term: term.term, volumes: within.volumeIds, scopeLabel: within.scopeLabel }"#),
+            (Self.menu, #"appState.openWordCloud(.corpus, from: nil) // corpus scope, matching the toolbar affordance"#,
+             Self.shell, #"{ kind: 'item', label: copy.app.wordCloud, onSelect: () => openTool('/cloud') },"#),
+            (Self.menu, #"Button(String(localized: "menu.analytics.chronology", defaultValue: "Chronology")) { appState.bindTool(.chronology, to: nil) openWindow.fronting(id: "frus.chronology") } Button(String(localized: "menu.analytics.wordcloud", defaultValue: "Word Cloud")) {"#,
+             Self.shell, #"{ kind: 'item', label: copy.app.chronology, onSelect: () => openTool('/chronology') }, // From S24i, the Word Cloud after Chronology, as the Mac's menu has it, on the whole corpus. { kind: 'item', label: copy.app.wordCloud, onSelect: () => openTool('/cloud') },"#),
+            (Self.rail, #"railTile(WordCloudGlyph.symbol, RailTileCopy.wordCloud, action: openWordCloud) railTile("archivebox", RailTileCopy.sources, action: openSources)"#,
+             Self.reader, #"<Link to="/cloud" search={{ scope: `doc:${volumeId}/${documentId}` }} title={copy.wordCloud.tileHelp}>"#),
+            (Self.rail, #"appState.openWordCloud(.document(volumeId: entry.volumeId, documentId: entry.documentId), from: sceneID)"#,
+             Self.reader, #"search={{ scope: `doc:${volumeId}/${documentId}` }}"#),
+        ])
+    }
+
+    /// The app's words the browser app takes, each where the app's source writes it, and in copy.ts's block.
+    @Test func theAppsWordsAreTheWebs() throws {
+        let copy = try NoteViewParityTests.read(NoteViewParityTests.web, "copy.ts")
+        let (v, p, m, l) = (Self.view, Self.pane, Self.models, Self.lensUI)
+        let words: [(file: String, key: String, value: String, block: String, web: String)] = [
+            (v, "wordcloud.title", "Word Cloud", "wordCloud", "title"),
+            (Self.rail, "researchRail.tile.wordCloud", "Word Cloud", "wordCloud", "tile"),
+            (v, "wordcloud.scopeBar.label", "Scope", "wordCloud", "scope"),
+            (v, "wordcloud.scope.subseries", "Subseries", "wordCloud", "subseries"),
+            (v, "wordcloud.scope.volume", "Volume", "wordCloud", "volume"),
+            (v, "wordcloud.lens.label", "Show", "wordCloud", "show"),
+            (v, "wordcloud.measure.label", "Size words by", "wordCloud", "sizeBy"),
+            (v, "wordcloud.sentiment.positive", "Positive", "wordCloud", "positive"),
+            (v, "wordcloud.sentiment.negative", "Negative", "wordCloud", "negative"),
+            (v, "wordcloud.filter.boilerplate", "Hide common diplomatic words", "wordCloud", "boilerplate"),
+            (v, "wordcloud.word.analyze", "Analyze in Corpus Analytics", "wordCloud", "analyze"),
+            (v, "wordcloud.word.search", "Search for this term", "wordCloud", "searchTerm"),
+            (v, "wordcloud.word.hide.session", "Hide in this word cloud", "wordCloud", "hideSession"),
+            (v, "wordcloud.word.hide.lens", "Hide this word in this lens", "wordCloud", "hideLens"),
+            (v, "wordcloud.word.hide.global", "Hide this word in all word clouds", "wordCloud", "hideGlobal"),
+            (v, "wordcloud.tap.hint", "Charts this term in Corpus Analytics", "wordCloud", "tapHint"),
+            (v, "wordcloud.keyness.unavailable.title", "No Distinctiveness Ranking", "wordCloud", "keynessTitle"),
+            (v, "wordcloud.error.title", "Couldn’t Build Word Cloud", "wordCloud", "errorTitle"),
+            (v, "wordcloud.loading", "Building word cloud…", "wordCloud", "loading"),
+            (p, "settings.wordcloud.title", "Word Cloud", "wordCloudSettings", "title"),
+            (p, "settings.wordcloud.sample.header", "Sample", "wordCloudSettings", "sample"),
+            (p, "settings.wordcloud.sample.none", "These settings keep nothing from the sample. Lower a threshold or turn a filter off.", "wordCloudSettings", "sampleNone"),
+            (p, "settings.wordcloud.filtering.header", "Filtering", "wordCloudSettings", "filtering"),
+            (p, "settings.wordcloud.boilerplate", "Hide common diplomatic words", "wordCloudSettings", "boilerplate"),
+            (p, "settings.wordcloud.markings", "Filter classification markings", "wordCloudSettings", "markings"),
+            (p, "settings.wordcloud.foldPlurals", "Merge plural and singular forms", "wordCloudSettings", "foldPlurals"),
+            (p, "settings.wordcloud.markings.footer", "Classification markings include terms like “Top Secret” and “Confidential”, precedence words like “Priority” and “Immediate”, and month names. These words describe the handling of a document, not its content. Left in, they crowd the cloud, especially the named-entity lenses.", "wordCloudSettings", "markingsFooter"),
+            (p, "settings.wordcloud.thresholds.header", "Thresholds", "wordCloudSettings", "thresholds"),
+            (p, "settings.wordcloud.bench.label", "Effect", "wordCloudSettings", "effect"),
+            (Self.bench, "settings.wordcloud.bench.pending", "Measuring…", "wordCloudSettings", "measuring"),
+            (p, "settings.wordcloud.thresholds.footer", "Drops terms shorter than the minimum length, and terms appearing fewer than the minimum number of times. Raising either option results in a sparser cloud of stronger terms. Occurrences are counted across the whole scope before the top terms are picked, so raising the minimum count may thin a “long tail” you never see rather than the sample above.", "wordCloudSettings", "thresholdsFooter"),
+            (p, "settings.wordcloud.appearance.header", "Appearance", "wordCloudSettings", "appearance"),
+            (p, "settings.wordcloud.font", "Font", "wordCloudSettings", "font"),
+            (p, "settings.wordcloud.density", "Density", "wordCloudSettings", "density"),
+            (p, "settings.wordcloud.appearance.footer", "Choose the typeface the cloud is drawn in and how tightly its words pack together. Compact fits more terms; airy spaces them out for legibility. These settings apply on this device only.", "wordCloudSettings", "appearanceFooter"),
+            (m, "wordcloud.font.rounded", "Rounded", "wordCloudSettings", "rounded"),
+            (m, "wordcloud.font.standard", "Default", "wordCloudSettings", "standard"),
+            (m, "wordcloud.font.serif", "Serif", "wordCloudSettings", "serif"),
+            (m, "wordcloud.font.monospaced", "Monospaced", "wordCloudSettings", "monospaced"),
+            (m, "wordcloud.density.compact", "Compact", "wordCloudSettings", "compact"),
+            (m, "wordcloud.density.balanced", "Balanced", "wordCloudSettings", "balanced"),
+            (m, "wordcloud.density.airy", "Airy", "wordCloudSettings", "airy"),
+            (p, "settings.wordcloud.stoplist.header", "Hidden Words", "wordCloudSettings", "hiddenWords"),
+            (p, "settings.wordcloud.stoplist.scope", "Applies to", "wordCloudSettings", "appliesTo"),
+            (p, "settings.wordcloud.stoplist.allLenses", "Every cloud", "wordCloudSettings", "everyCloud"),
+            (l, "wordcloud.lens.all", "All terms", "wordCloudSettings", "allTerms"),
+            (l, "wordcloud.lens.people", "People", "wordCloudSettings", "people"),
+            (l, "wordcloud.lens.places", "Places", "wordCloudSettings", "places"),
+            (l, "wordcloud.lens.orgs", "Organizations", "wordCloudSettings", "organizations"),
+            (l, "wordcloud.lens.topics", "Topics (nouns)", "wordCloudSettings", "topics"),
+            (l, "wordcloud.lens.actions", "Actions (verbs)", "wordCloudSettings", "actions"),
+            (l, "wordcloud.lens.descriptors", "Descriptors (adjectives)", "wordCloudSettings", "descriptors"),
+            (l, "wordcloud.lens.concepts", "Concepts", "wordCloudSettings", "concepts"),
+            (l, "wordcloud.lens.sentiment", "Sentiment", "wordCloudSettings", "sentiment"),
+            (p, "settings.wordcloud.addWord.prompt", "Add a word…", "wordCloudSettings", "addPrompt"),
+            (p, "settings.wordcloud.add.a11y", "Add hidden word", "wordCloudSettings", "addA11y"),
+            (p, "settings.wordcloud.empty", "No custom words yet.", "wordCloudSettings", "empty"),
+            (p, "settings.wordcloud.global.footer", "Words listed here are removed from every word cloud, on top of the built-in stop lists.", "wordCloudSettings", "globalFooter"),
+            (p, "settings.wordcloud.lens.footer", "Words hidden only when the selected lens is active — useful for trimming a recurring false positive (for example, a place the recognizer keeps mistaking) without affecting other lenses.", "wordCloudSettings", "lensFooter"),
+            ("Search/SearchView.swift", "search.mode.collocates", "Collocates", "readings", "collocates"),
+            (Self.menu, "menu.analytics.wordcloud", "Word Cloud", "app", "wordCloud"),
+        ]
+        var read: [String: String] = [:]
+        for word in words {
+            let app = try read[word.file] ?? ArchivalAndSeriesMirrorParityTests.source(word.file)
+            read[word.file] = app
+            #expect(NoteViewParityTests.writes(app, word.key, word.value), "\(word.file) writes \(word.key) as \(word.value)")
+            let block = try NoteViewParityTests.block(word.block, of: copy)
+            #expect(block.contains("\(word.web): '\(word.value)'"), "copy.ts's \(word.block) block has \(word.web): \(word.value)")
+        }
+        // The words the web composes from the app's: an announcement, the hidden words' count, the sample's name, a removal.
+        let view = try ArchivalAndSeriesMirrorParityTests.source(v)
+        let pane = try ArchivalAndSeriesMirrorParityTests.source(p)
+        let cloud = try NoteViewParityTests.block("wordCloud", of: copy)
+        let settings = try NoteViewParityTests.block("wordCloudSettings", of: copy)
+        #expect(NoteViewParityTests.writes(view, "wordcloud.word.hidden.a11y", "%@ hidden from this word cloud")
+                && cloud.contains("hiddenAnnouncement: (term: string) => `${term} hidden from this word cloud`"))
+        #expect(view.contains(#"String(localized: "wordcloud.filter.showHidden %lld", defaultValue: "Show %lld hidden words")"#)
+                && cloud.contains("showHidden: (count: number) => `Show ${count} hidden words`"))
+        #expect(NoteViewParityTests.writes(pane, "settings.wordcloud.sample.a11y %@", "Sample of kept terms: %@")
+                && settings.contains("sampleA11y: (terms: string) => `Sample of kept terms: ${terms}`"))
+        #expect(NoteViewParityTests.writes(pane, "settings.wordcloud.remove %@", "Remove %@")
+                && settings.contains("remove: (word: string) => `Remove ${word}`"))
+        #expect(NoteViewParityTests.writes(view, "wordcloud.count.terms.one", "%@ term") && NoteViewParityTests.writes(view, "wordcloud.count.terms.many", "%@ terms")
+                && cloud.contains("countLine: (count: number) => `${count.toLocaleString('en-US')} ${count === 1 ? 'term' : 'terms'}`"))
     }
 
     /// Every word the server writes through `appWords`, each where the app's source writes it under its key.

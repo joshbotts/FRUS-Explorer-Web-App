@@ -62,8 +62,8 @@ describe('Settings ▸ Word Cloud', () => {
       'Sample',
       'Filtering',
       'Thresholds',
-      'Hidden Words',
       'Appearance',
+      'Hidden Words',
     ]);
     const kept = await screen.findByLabelText('Sample of kept terms: negotiation, ambassador, settlement, negotiations, sovereignty');
     expect(Array.from(kept.querySelectorAll('span')).map((span) => span.style.fontSize)).toEqual(['20px', '17.75px', '15.5px', '13.25px', '11px']);
