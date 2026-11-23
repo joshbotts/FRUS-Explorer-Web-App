@@ -466,33 +466,61 @@ public enum SourceExplorerCheck {
         var start = 0
         while start < addressed.count {
             let notes = Array(addressed[start..<min(start + batch, addressed.count)])
-            var responses: [Int: Swift.Result<(status: Int, body: Data), any Error>] = [:]
-            await withTaskGroup(of: (Int, Swift.Result<(status: Int, body: Data), any Error>).self) { group in
-                var next = 0
-                func ask() {
-                    let (index, path) = (next, path(notes[next]))
-                    next += 1
-                    group.addTask {
-                        do {
-                            return (index, .success(try await get(path)))
-                        } catch {
-                            return (index, .failure(error))
-                        }
-                    }
-                }
-                while next < min(width, notes.count) { ask() }
-                for await (index, response) in group {
-                    responses[index] = response
-                    if next < notes.count { ask() }
-                }
-            }
-            for (index, note) in notes.enumerated() {
-                result.take(await comparator.compare(note: note, response: responses[index]!))
+            let responses = await answers(paths: notes.map { path($0) }, width: width, get: get)
+            for (note, response) in zip(notes, responses) {
+                result.take(await comparator.compare(note: note, response: response))
             }
             start += notes.count
             progress(start, result)
         }
         return result
+    }
+
+    /// What `get` answered for each path, in the paths' order, with at most `width` asked at once.
+    ///
+    /// Each child of the task group gives its answer as a `Heard`, a struct. The first form (S25b) gave the tuple
+    /// `(Int, Swift.Result<(status: Int, body: Data), any Error>)`, whose index the debug build read back right and the
+    /// release build the parity image runs read back as garbage (7359508660462642541 among indices 0 to 5), so that the
+    /// force-unwrap of an answer trapped with no message (check 8 in CI's Compose smoke test). The same two fields in a
+    /// struct read back right in both builds, as an `(Int, Int)` tuple does, measured in the release build itself. An
+    /// index out of range, or a path whose answer was not kept, is a failure the check reports, never a trap.
+    public static func answers(paths: [String], width: Int,
+                               get: @escaping @Sendable (String) async throws -> (status: Int, body: Data)) async
+        -> [Swift.Result<(status: Int, body: Data), any Error>] {
+        let width = max(1, width)
+        let kept = await withTaskGroup(of: Heard.self, returning: [Swift.Result<(status: Int, body: Data), any Error>?].self) { group in
+            var kept = [Swift.Result<(status: Int, body: Data), any Error>?](repeating: nil, count: paths.count)
+            for (index, path) in paths.enumerated() {
+                // `width` are asked already: the next is asked once one of them is answered.
+                if index >= width, let heard = await group.next(), kept.indices.contains(heard.index) {
+                    kept[heard.index] = heard.response
+                }
+                group.addTask {
+                    do {
+                        return Heard(index: index, response: .success(try await get(path)))
+                    } catch {
+                        return Heard(index: index, response: .failure(error))
+                    }
+                }
+            }
+            while let heard = await group.next() {
+                if kept.indices.contains(heard.index) { kept[heard.index] = heard.response }
+            }
+            return kept
+        }
+        return zip(paths, kept).map { path, answer in answer ?? .failure(Unanswered(path: path)) }
+    }
+
+    /// One path's answer, by the path's place: what a child of `answers`' task group gives.
+    struct Heard: Sendable {
+        let index: Int
+        let response: Swift.Result<(status: Int, body: Data), any Error>
+    }
+
+    /// A path asked whose answer was not kept.
+    struct Unanswered: Error, CustomStringConvertible {
+        let path: String
+        var description: String { "\(path) was asked, and no answer was kept" }
     }
 
     /// Each field of two records that differs, by name, with its value in each as JSON.

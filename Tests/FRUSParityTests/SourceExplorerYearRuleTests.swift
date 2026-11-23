@@ -147,4 +147,47 @@ import Testing
         #expect(one.undatedByDateline == ["frus1953/d5"])
         #expect(heard == [5])
     }
+
+    /// The answers asked at once come back in the paths' order, each the path's own and a refusal its own failure,
+    /// with never more than the width asked at a time; a width under one asks one at a time.
+    @Test func answersKeepThePathsOrderWithinTheWidth() async throws {
+        let paths = (0..<23).map { "/p/\($0)" }
+        for width in [0, 1, 4, 40] {
+            let gauge = InFlight()
+            let answers = await SourceExplorerCheck.answers(paths: paths, width: width) { path in
+                await gauge.enter()
+                try await Task.sleep(nanoseconds: 2_000_000)
+                await gauge.leave()
+                if path == "/p/7" { throw Refused() }
+                return (200, Data(path.utf8))
+            }
+            #expect(answers.count == paths.count)
+            for (path, answer) in zip(paths, answers) {
+                switch answer {
+                case .success(let response):
+                    #expect(path != "/p/7" && response.status == 200 && String(decoding: response.body, as: UTF8.self) == path)
+                case .failure(let error):
+                    #expect(path == "/p/7" && error is Refused)
+                }
+            }
+            let most = await gauge.most
+            #expect(most >= 1 && most <= max(1, min(width, paths.count)), "width \(width): \(most) at once")
+        }
+    }
 }
+
+/// How many answers are being asked at once, and the most at any time.
+private actor InFlight {
+    private var now = 0
+    private(set) var most = 0
+
+    func enter() {
+        now += 1
+        most = max(most, now)
+    }
+
+    func leave() { now -= 1 }
+}
+
+/// A refusal, for an answer that fails.
+private struct Refused: Error {}
