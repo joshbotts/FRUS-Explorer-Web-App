@@ -272,7 +272,7 @@ struct ParityExport {
 /// Writes `export` to a temporary file and summarizes it, or, when `linked`, a symbolic link to
 /// it beside it.
 func summarize(_ export: ParityExport, anyVolumes: Bool = false, fullCheckLimit: Int64 = IndexSummarizer.defaultFullCheckLimit,
-               linked: Bool = false, layout: RepositoryLayout = Repository.layout,
+               linked: Bool = false, layout: RepositoryLayout = Repository.layout, library: Bool = false,
                prepare: (URL) throws -> Void = { _ in }) throws -> IndexSummaryGolden {
     let directory = try TemporaryDirectory()
     return try withExtendedLifetime(directory) {
@@ -284,7 +284,7 @@ func summarize(_ export: ParityExport, anyVolumes: Bool = false, fullCheckLimit:
             summarized = directory.url.appendingPathComponent("link.sqlite")
             try FileManager.default.createSymbolicLink(atPath: summarized.path, withDestinationPath: url.lastPathComponent)
         }
-        return try IndexSummarizer(layout: layout, anyVolumes: anyVolumes, fullCheckLimit: fullCheckLimit)
+        return try IndexSummarizer(layout: layout, anyVolumes: anyVolumes, fullCheckLimit: fullCheckLimit, library: library)
             .summarize(summarized)
     }
 }

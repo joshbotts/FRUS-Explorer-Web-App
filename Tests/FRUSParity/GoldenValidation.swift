@@ -299,11 +299,14 @@ public enum GoldenValidation {
         return problems
     }
 
-    /// Check 2's golden summary: exactly the fixture volumes, every check at its right value, and
-    /// integrity checked.
+    /// Check 2's golden summary: not a library summary, exactly the fixture volumes, every check at its
+    /// right value, and integrity checked.
     public static func indexSummaryProblems(_ golden: IndexSummaryGolden) -> [String] {
         let file = GoldenFile.indexSummary.rawValue
         var problems: [String] = []
+        if golden.gating.isLibrary {
+            problems.append("\(file): it is a library summary (summarize --library), which reads a library's history apart and is never a golden file")
+        }
         if golden.gating.volumes != ParityFixtures.volumes.sorted() {
             problems.append("\(file): it summarizes \(golden.gating.volumes.joined(separator: ", ")), not exactly the fixtures")
         }

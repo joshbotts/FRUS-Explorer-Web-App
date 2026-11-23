@@ -62,65 +62,25 @@ import Testing
         }
     }
 
-    /// The draft's names for the kit's strategies (FRUS-API.openapi.yaml, `CitationMatch.matchStrategy`),
-    /// with the values each carries.
+    /// The draft's names for the kit's strategies, with the values each carries: the parity library's, which
+    /// `frus-parity check-citations` compares by over a whole corpus (S25b).
     static func named(_ strategy: MatchStrategy) -> (name: String, explanation: String?, documents: Int?) {
-        switch strategy {
-        case .exactDocumentNumber: ("exactDocumentNumber", nil, nil)
-        case .pageRange: ("pageRange", nil, nil)
-        case .sharedPage(let documents): ("sharedPage", nil, documents)
-        case .superimposedDocumentNumber: ("superimposedDocumentNumber", nil, nil)
-        case .titleFragmentMatch: ("titleFragmentMatch", nil, nil)
-        case .manifestOnly: ("manifestOnly", nil, nil)
-        case .bestGuess(let explanation): ("bestGuess", explanation, nil)
-        }
+        CitationCheck.named(strategy)
     }
 
     /// How the API's answer differs from the kit's, field by field; empty when it is the kit's.
     static func differences(_ api: [CitationLookupMatch], _ kit: [CitationMatch]) -> [String] {
-        guard api.count == kit.count else {
-            return ["\(api.count) through the API, \(kit.count) from the kit: \(api.map(\.volumeId)) and \(kit.map(\.volumeId))"]
-        }
-        return zip(api, kit).compactMap { api, kit in
-            let strategy = named(kit.matchStrategy)
-            let same = api.documentId == kit.documentId && api.volumeId == kit.volumeId && api.rank == kit.rank
-                && api.matchStrategy == strategy.name && api.bestGuessExplanation == strategy.explanation
-                && api.sharedPageDocuments == strategy.documents && api.confidenceLabel == kit.confidenceLabel
-                && api.correctionNote == kit.correctionNote && api.requiresDownload == kit.requiresDownload
-                && api.awaitingIndex == kit.awaitingIndex && api.volumeManifestEntry == kit.volumeManifestEntry
-                && api.sharedPageTotal == kit.sharedPageTotal && api.volumeIsBestGuess == kit.volumeIsBestGuess
-                && api.isBestGuess == kit.isBestGuess
-            return same ? nil : "rank \(kit.rank): \(api) is not \(kit)"
-        }
+        CitationCheck.differences(api, kit)
     }
 
     /// The outcome's name, count and reason, as the API writes them.
     static func named(_ outcome: BatchCitationOutcome) -> (name: String, count: Int?, reason: String?) {
-        switch outcome {
-        case .resolved: ("resolved", nil, nil)
-        case .bestGuess: ("bestGuess", nil, nil)
-        case .ambiguous(let count): ("ambiguous", count, nil)
-        case .missing: ("missing", nil, nil)
-        case .failed(let reason): ("failed", nil, reason)
-        }
+        CitationCheck.named(outcome)
     }
 
     /// How a batch through the API differs from the kit's rows; empty when it is the kit's.
     static func differences(_ api: CitationBatch, _ kit: [BatchCitationRow]) -> [String] {
-        var found: [String] = []
-        let summary = BatchCitationOutcome.summary(of: kit.map(\.outcome), locale: Locale(identifier: "en_US"))
-        if api.summary != summary { found.append("summary \(api.summary), not \(summary)") }
-        guard api.items.count == kit.count else { return found + ["\(api.items.count) rows, not \(kit.count)"] }
-        for (row, kit) in zip(api.items, kit) {
-            let outcome = named(kit.outcome)
-            if row.index != kit.entry.index || row.marker != kit.entry.marker || row.text != kit.entry.text
-                || row.outcome != outcome.name || row.count != outcome.count || row.reason != outcome.reason
-                || row.triageOrder != kit.outcome.triageOrder || row.loneCandidateLabel != kit.loneCandidateLabel {
-                found.append("row \(kit.entry.index): \(row.index) \(row.marker ?? "-") \(row.outcome) is not \(kit.entry) \(kit.outcome)")
-            }
-            found += differences(row.matches, kit.matches).map { "row \(kit.entry.index), \($0)" }
-        }
-        return found
+        CitationCheck.differences(api, kit)
     }
 
     /// GETs `path` and decodes its JSON, or names the answer.

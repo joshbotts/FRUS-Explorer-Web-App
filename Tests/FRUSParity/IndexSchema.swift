@@ -5,8 +5,9 @@
 // owner's three-volume export from FRUS Explorer 1.0 (1861), the tag 1.0-release (index version 75),
 // whose tables index version 74 held but volume_structures' two columns (S12d's pin move). The owner's
 // full export from the same build has two tables' columns in another order, where its library's
-// upgrades appended them, so the column check refuses it. A pin move that changes a table
-// fails the column check in `IndexSummarizer`, rather than leaving a new column out of every hash.
+// upgrades appended them, so the column check refuses it, and a library summary reads it (S25b, below).
+// A pin move that changes a table fails the column check in `IndexSummarizer`, rather than leaving a new
+// column out of every hash.
 
 /// One table of the corpus index and how its rows are hashed.
 struct CorpusTable: Sendable {
@@ -26,6 +27,18 @@ struct CorpusTable: Sendable {
     var custom: String?
     /// How the rows' order within each volume is hashed.
     var sequence: SequenceRule = .none
+    /// For a library summary (`IndexSummarizer.library`), the condition that keeps the rows of documents
+    /// the index still holds: a library the app has kept for years holds rows for documents the corpus
+    /// dropped since, which an index made today never has. The set hash then takes only those rows, and
+    /// the others are hashed for information as `<name>.dropped`.
+    var heldRows: String?
+    /// Whether the kit writes the table by upsert (`ON CONFLICT … DO UPDATE`), which keeps a row's rowid when
+    /// its volume is indexed again, where it deletes and writes again the other tables a volume's pass
+    /// stores. In a library indexed over many versions and corrections, a row an index version began to hold,
+    /// or a file's later version added, then comes after the rows its volume already had: the rows' order is
+    /// that library's history of indexing passes, which a library summary hashes for information
+    /// (`LibraryOrder` reports it, volume by volume).
+    var upserted = false
 
     enum SequenceRule: Sendable {
         /// No stable order to hash: the rows come from a Swift `Set`, or the table has no rowid.
@@ -37,13 +50,24 @@ struct CorpusTable: Sendable {
     }
 
     /// The set hash: every row, in natural-key order, without surrogate ids.
-    var setSQL: String {
+    var setSQL: String { setSQL(where: nil) }
+
+    /// The set hash over the rows `condition` keeps, or over every row.
+    func setSQL(where condition: String?) -> String {
         if let custom { return custom }
         let selected = columns.filter { leftOut[$0] == nil }.map { column in
             translated[column].map { "\($0.expression) AS \($0.alias)" } ?? column
         }
         let order = key ?? columns.filter { leftOut[$0] == nil }.map { translated[$0]?.alias ?? $0 }
-        return "SELECT \(selected.joined(separator: ", ")) FROM \(name) ORDER BY \(order.joined(separator: ", "))"
+        let filter = condition.map { " WHERE \($0)" } ?? ""
+        return "SELECT \(selected.joined(separator: ", ")) FROM \(name)\(filter) ORDER BY \(order.joined(separator: ", "))"
+    }
+
+    /// For a library summary, the rows `heldRows` leaves out, every column of them, for information.
+    var droppedSQL: String? {
+        guard let heldRows else { return nil }
+        let order = key ?? columns
+        return "SELECT \(columns.joined(separator: ", ")) FROM \(name) WHERE NOT (\(heldRows)) ORDER BY \(order.joined(separator: ", "))"
     }
 
     /// The sequence hash: the rows of each volume in rowid order.
@@ -113,7 +137,8 @@ enum IndexSchema {
                       "subject_tag_ids", "user_tag_ids", "summary_text", "note_text", "is_editorial_note",
                       "is_front_matter", "despatch_serial"],
             key: ["volume_id", "document_id"],
-            sequence: .gating(["volume_id", "document_id"])),
+            sequence: .gating(["volume_id", "document_id"]),
+            upserted: true),
         CorpusTable(
             name: "document_revisions",
             columns: ["volume_id", "document_id", "content_hash", "body_hash", "changed_at", "change_kind",
@@ -124,7 +149,8 @@ enum IndexSchema {
                 "change_kind": "revision history: checked as document_revisions.history",
                 "reviewed_at": "revision history: checked as document_revisions.history",
             ],
-            sequence: .information(["volume_id", "document_id"])),
+            sequence: .information(["volume_id", "document_id"]),
+            heldRows: heldRevision),
         CorpusTable(
             name: "user_tags", columns: ["tag_id", "name"], volumeColumn: nil, key: ["tag_id"]),
         CorpusTable(
@@ -243,6 +269,67 @@ enum IndexSchema {
     static let exportOnlySchemaSQL = """
         SELECT type, name, tbl_name, sql FROM sqlite_schema WHERE name GLOB 'research_*' \
         OR name GLOB 'sqlite_autoindex_research_*' ORDER BY type, name
+        """
+
+    // MARK: - A library summary (`frus-parity summarize --library`)
+    //
+    // A library the app has upgraded in place since its first index differs from an index made today in
+    // what its upgrades left, not in what it indexes: a column an upgrade added comes last in its table
+    // (`cross_references.is_broken` and `external_citations.note_label` in the owner's full exports), a
+    // constraint a later version declares is missing (`person_mentions`' `UNIQUE`), and `document_revisions`
+    // keeps rows for documents the corpus later dropped and the history of corrections it saw; and since the
+    // kit upserts `document_cache`, keeping a row's rowid, a volume's documents come in the order of the
+    // library's indexing passes (`upserted`, `LibraryOrder`). A library summary reads the index such a library
+    // holds: every hash already selects its columns by name, so their places change nothing; the schema is
+    // gated by each table's columns and every other statement's text, and the stored text of the tables,
+    // their constraints, the dropped documents' rows, the history and that order are information. S25b's
+    // check 2 at full scale.
+
+    /// A revision row of a document the index holds.
+    static let heldRevision = """
+        EXISTS (SELECT 1 FROM document_cache c WHERE c.volume_id = document_revisions.volume_id \
+        AND c.document_id = document_revisions.document_id)
+        """
+
+    /// The objects a library summary's schema statements read: the app's, leaving out the exporter's and every object
+    /// SQLite names itself (`sqlite_sequence`, its statistics, the indexes it keeps for a constraint), where `schemaSQL`
+    /// keeps `sqlite_sequence`'s and the constraints' rows; the constraints are `constraintsSQL`'s, and AUTOINCREMENT
+    /// is each primary key's in `columnsSQL`.
+    static let appObjects = """
+        m.name NOT GLOB 'research_*' AND m.name NOT GLOB 'sqlite_*'
+        """
+
+    /// Every table's columns by name, each with its declared type, NOT NULL, default, place in the primary
+    /// key, whether a virtual table hides it, and, for a primary key, whether the table declares AUTOINCREMENT, which
+    /// only an INTEGER PRIMARY KEY can carry, whatever place the table gives it.
+    static let columnsSQL = """
+        SELECT m.name, p.name, p.type, p."notnull", p.dflt_value, p.pk, p.hidden, \
+        p.pk > 0 AND instr(upper(m.sql), 'AUTOINCREMENT') > 0 \
+        FROM sqlite_schema m, pragma_table_xinfo(m.name) p WHERE m.type = 'table' AND \(appObjects) \
+        ORDER BY m.name, p.name
+        """
+
+    /// Every statement but a table's own: each index, trigger and virtual table, whose text holds no column
+    /// an upgrade can append, with its layout set aside as `schemaSQL` sets it aside. An index SQLite makes
+    /// for a constraint has no text, and is read by `constraintsSQL`.
+    static let statementsSQL = """
+        SELECT m.type, m.name, m.tbl_name, \(normalizedSQL("m.sql")) FROM sqlite_schema m \
+        WHERE m.sql IS NOT NULL AND (m.type IN ('index', 'trigger') OR (m.type = 'table' AND m.sql GLOB 'CREATE VIRTUAL TABLE*')) \
+        AND \(appObjects) ORDER BY m.type, m.name
+        """
+
+    /// Each table's UNIQUE and PRIMARY KEY constraints, by the index SQLite keeps for each, with its columns:
+    /// for information in a library summary, since an upgrade does not add a constraint a later version declares.
+    static let constraintsSQL = """
+        SELECT m.name, l.name, l.origin, l."unique", i.seqno, i.name FROM sqlite_schema m, pragma_index_list(m.name) l, \
+        pragma_index_info(l.name) i WHERE m.type = 'table' AND \(appObjects) AND l.origin <> 'c' ORDER BY m.name, l.name, i.seqno
+        """
+
+    /// The revision history a library keeps, which an index made today does not: for information in a library
+    /// summary, where a golden summary checks that there is none (`document_revisions.history`).
+    static let revisionHistorySQL = """
+        SELECT volume_id, document_id, change_kind, changed_at, reviewed_at, index_version FROM document_revisions \
+        WHERE changed_at IS NOT NULL OR change_kind IS NOT NULL OR reviewed_at IS NOT NULL ORDER BY volume_id, document_id
         """
 
     enum Role: String, Sendable {

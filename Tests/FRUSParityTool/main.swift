@@ -1,6 +1,6 @@
 // frus-parity: the parity harness's command line (docs/SPEC.md, Verification, checks 2-4).
 //
-//   frus-parity summarize <db> [--any-volumes] [--golden <out.json>] [--upstream-commit <sha>] [--repo <root>]
+//   frus-parity summarize <db> [--any-volumes | --library] [--golden <out.json>] [--upstream-commit <sha>] [--repo <root>]
 //   frus-parity compare-summary <golden.json> <candidate.json>
 //   frus-parity compare-results <golden.json> <candidate.json>
 //   frus-parity results --api <url> --out <candidate.json> [--queries <jsonl>] [--repo <root>]
@@ -17,7 +17,10 @@
 //   frus-parity import-check <export.json> [--keep <dir>]
 //   frus-parity export-check <export.json> [--out <export.json>]
 //   frus-parity check-highlights <export.json> --tei <dir> [--samples <out.json>] [--repo <root>]
-//   frus-parity check-source-explorer --api <url> [<volume>...] [--tei <dir>] [--resources <dir>] [--undated <n>] [--repo <root>]
+//   frus-parity check-source-explorer --api <url> [<volume>...] [--tei <dir>] [--resources <dir>] [--undated <n>] [--app-questions] [--parallel <n>] [--out <report.json>] [--repo <root>]
+//   frus-parity apply-corrections <db> --corrections <file.json> [--resources <dir>] [--repo <root>]
+//   frus-parity compare-order <library.db> <index.db>
+//   frus-parity check-citations --api <url> --index <db> [--per-volume <n>] [--resources <dir>] [--out <report.json>] [--repo <root>]
 //
 // The repository is found from the current directory unless --repo names it. Exit status: 0 when
 // the check passes, 1 on a refusal, a difference or a problem, 2 on a usage error.
@@ -31,7 +34,7 @@ import FoundationNetworking
 import ParityFormat
 
 let usage = """
-    usage: frus-parity summarize <db> [--any-volumes] [--golden <out.json>] [--upstream-commit <sha>] [--repo <root>]
+    usage: frus-parity summarize <db> [--any-volumes | --library] [--golden <out.json>] [--upstream-commit <sha>] [--repo <root>]
            frus-parity compare-summary <golden.json> <candidate.json>
            frus-parity compare-results <golden.json> <candidate.json>
            frus-parity results --api <url> --out <candidate.json> [--queries <jsonl>] [--repo <root>]
@@ -48,7 +51,10 @@ let usage = """
            frus-parity import-check <export.json> [--keep <dir>]
            frus-parity export-check <export.json> [--out <export.json>]
            frus-parity check-highlights <export.json> --tei <dir> [--samples <out.json>] [--repo <root>]
-           frus-parity check-source-explorer --api <url> [<volume>...] [--tei <dir>] [--resources <dir>] [--undated <n>] [--repo <root>]
+           frus-parity check-source-explorer --api <url> [<volume>...] [--tei <dir>] [--resources <dir>] [--undated <n>] [--app-questions] [--parallel <n>] [--out <report.json>] [--repo <root>]
+           frus-parity apply-corrections <db> --corrections <file.json> [--resources <dir>] [--repo <root>]
+           frus-parity compare-order <library.db> <index.db>
+           frus-parity check-citations --api <url> --index <db> [--per-volume <n>] [--resources <dir>] [--out <report.json>] [--repo <root>]
     """
 
 /// A command's positional arguments, flags and options.
@@ -96,8 +102,10 @@ func summarize(_ arguments: Arguments) throws {
     // A golden summary names the submodule's commit, as tools/mac-golden's files do.
     var commit = arguments.options["--upstream-commit"]
     if commit == nil, arguments.options["--golden"] != nil { commit = layout.upstreamCommit() }
+    // A library summary reads an upgraded library's layout and history (IndexSummarizer.library): it is
+    // written where --golden says, and compares only with another.
     let summarizer = IndexSummarizer(layout: layout, anyVolumes: arguments.flags.contains("--any-volumes"),
-                                     upstreamCommit: commit)
+                                     upstreamCommit: commit, library: arguments.flags.contains("--library"))
     let summary: IndexSummaryGolden
     do {
         summary = try summarizer.summarize(url)
@@ -118,8 +126,17 @@ func compareSummary(_ arguments: Arguments) throws {
     guard arguments.positional.count == 2 else { throw UsageError("compare-summary takes a golden summary and a candidate") }
     let golden = try GoldenJSON.read(IndexSummaryGolden.self, from: URL(fileURLWithPath: arguments.positional[0]))
     let candidate = try GoldenJSON.read(IndexSummaryGolden.self, from: URL(fileURLWithPath: arguments.positional[1]))
+    if let mixed = IndexSummaryComparison.mixedReading(golden, candidate) { fail("check 2 refuses: \(mixed.detail)") }
     let (a, b) = (golden.information, candidate.information)
-    print("information, not compared: SQLite \(a.sqliteVersion) and \(b.sqliteVersion); volume order \(a.volumeOrder.joined(separator: ",")) and \(b.volumeOrder.joined(separator: ","))")
+    if golden.gating.isLibrary {
+        // Two library summaries: what each library's history and layout hold apart from the index.
+        print("library summaries: information, not compared: SQLite \(a.sqliteVersion) and \(b.sqliteVersion); \(a.fileBytes) and \(b.fileBytes) bytes")
+        for difference in IndexSummaryComparison.informationDifferences(golden: golden, candidate: candidate) {
+            print("information, not compared: \(difference)")
+        }
+    } else {
+        print("information, not compared: SQLite \(a.sqliteVersion) and \(b.sqliteVersion); volume order \(a.volumeOrder.joined(separator: ",")) and \(b.volumeOrder.joined(separator: ","))")
+    }
     let differences = IndexSummaryComparison.differences(golden: golden, candidate: candidate)
     guard differences.isEmpty else {
         for difference in differences { print(difference) }
@@ -367,13 +384,22 @@ func timeSearch(_ arguments: Arguments) async throws {
 /// GET against a server's base URL, for LiveAPI: a path with its query string, answered with the
 /// status and the body. A request may take 15 minutes: over the full corpus an exact-word search
 /// (`=Soviet`) took more than URLSession's default minute on a server that was busy (S10).
-func httpGet(_ base: URL) -> (String) async throws -> LiveAPI.Response {
+/// A path of the API, with its query, under a server's base URL, the base's own path kept: `http://host/frus-explorer/`
+/// and `/api/v1/…` give `http://host/frus-explorer/api/v1/…`, as a server under a path (FRUS_PUBLIC_URL) answers, where
+/// resolving the path against the base would drop the base's path.
+func apiURL(_ base: URL, _ path: String) -> URL? {
+    var root = base.absoluteString
+    if !root.hasSuffix("/") { root += "/" }
+    return URL(string: root + path.drop { $0 == "/" })
+}
+
+func httpGet(_ base: URL) -> @Sendable (String) async throws -> LiveAPI.Response {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.timeoutIntervalForRequest = 900
     configuration.timeoutIntervalForResource = 3_600
     let session = URLSession(configuration: configuration)
     return { path in
-        guard let url = URL(string: path, relativeTo: base) else { throw LiveAPI.Failure("\(path) is not a path") }
+        guard let url = apiURL(base, path) else { throw LiveAPI.Failure("\(path) is not a path") }
         let (data, response) = try await session.data(from: url)
         guard let http = response as? HTTPURLResponse else { throw LiveAPI.Failure("\(url.absoluteString) gave no HTTP response") }
         return (http.statusCode, data)
@@ -600,10 +626,21 @@ func checkHighlights(_ arguments: Arguments) async throws {
     guard result.failures.isEmpty else { fail("check 6 fails on \(result.failures.count) highlights") }
 }
 
+/// What `check-source-explorer --out` writes: the summary line and every finding.
+struct SourceExplorerReport: Encodable {
+    let summary: String
+    let volumes: Int
+    let result: SourceExplorerCheck.Result
+}
+
 /// Check 8 against a running server (PLAN's S22d): every source note of the volumes named, or of the three
 /// fixture volumes, read from their TEI as the Source Explorer export generator reads it, resolved through the
 /// server's API, and each record held to the generator's over the bundled files in --resources, the pinned
-/// commit's by default (`SourceExplorerCheck`). The server must index the same volumes and read the same files.
+/// commit's by default (`SourceExplorerCheck`), or to its record for the year both of the app's views read where the
+/// export reads another, or with the kit's reading of a Decimal File-form number where the export's core reads a case,
+/// each such record counted and listed as the app's question (S25b), only with `--app-questions`: without it, such a
+/// record fails the check, as over the fixtures, which hold none. The server must index the same volumes and read the
+/// same files. `--parallel` asks that many answers at once; `--out` writes every finding.
 func checkSourceExplorer(_ arguments: Arguments) async throws {
     guard let api = arguments.options["--api"], let base = URL(string: api) else {
         throw UsageError("check-source-explorer takes --api <url>")
@@ -619,24 +656,168 @@ func checkSourceExplorer(_ arguments: Arguments) async throws {
         guard let count = Int(value), count >= 0 else { throw UsageError("--undated takes a count") }
         return count
     }
+    // How many answers to ask for at once, for the full corpus's quarter of a million notes (S25b).
+    let parallel = try arguments.options["--parallel"].map { value -> Int in
+        guard let count = Int(value), (1...32).contains(count) else { throw UsageError("--parallel takes 1 to 32") }
+        return count
+    } ?? 1
     let notes = try SourceExplorerCheck.notes(teiDirectory: tei, volumes: volumes)
     let comparator = try SourceExplorerCheck.Comparator(resources: resources)
     let get = httpGet(base)
-    let result = await SourceExplorerCheck.run(notes: notes, comparator: comparator) { path in try await get(path) }
-    for difference in result.differences.prefix(50) { print("differs  \(difference)") }
-    guard result.passes else { fail(result.summary(volumes: volumes.count)) }
-    if let undated, result.undatedByDateline.count != undated {
-        fail("check 8 fails: \(result.undatedByDateline.count) records dated by the export alone, not \(undated): "
-             + result.undatedByDateline.joined(separator: ", "))
+    FileHandle.standardError.write(Data("check 8: \(notes.count) source notes of \(volumes.count) volumes, \(parallel) asked at a time\n".utf8))
+    let clock = ContinuousClock()
+    let started = clock.now
+    var reported = 0
+    let result = await SourceExplorerCheck.run(notes: notes, comparator: comparator, parallel: parallel, progress: { done, sofar in
+        guard done - reported >= 10_000 || done == notes.count - sofar.withoutId else { return }
+        reported = done
+        let seconds = (clock.now - started).components.seconds
+        FileHandle.standardError.write(Data("check 8: \(done) asked in \(seconds) s, \(sofar.differences.count) differ, \(sofar.yearDisagreements.count) for the views' year\n".utf8))
+    }) { path in try await get(path) }
+    // Without --app-questions a record the export reads otherwise than the app's views fails the check, as over the
+    // fixtures, which hold none: the rules that hold such records are the full corpus's (S25b).
+    var verdict = result.summary(volumes: volumes.count)
+    var failed = !result.passes
+    if result.passes, !arguments.flags.contains("--app-questions"), !result.yearDisagreements.isEmpty || !result.decimalFormFiles.isEmpty {
+        verdict = "check 8 fails: \(result.yearDisagreements.count) records for the year the app's views read where the export reads another, "
+            + "and \(result.decimalFormFiles.count) for a Decimal File-form number the export's core reads as a case, which only "
+            + "--app-questions holds: " + (result.yearDisagreements.map(\.key) + result.decimalFormFiles).prefix(20).joined(separator: ", ")
+        failed = true
     }
-    print(result.summary(volumes: volumes.count))
+    if !failed, let undated, result.undatedByDateline.count != undated {
+        verdict = "check 8 fails: \(result.undatedByDateline.count) records dated by the export alone, not \(undated): "
+            + result.undatedByDateline.joined(separator: ", ")
+        failed = true
+    }
+    // Every finding, for the record, under the verdict the run gives: the full corpus's differ by the thousand where a rule
+    // is wrong.
+    if let out = arguments.options["--out"] {
+        let report = SourceExplorerReport(summary: verdict, volumes: volumes.count, result: result)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        try encoder.encode(report).write(to: URL(fileURLWithPath: out))
+        print("wrote \(out)")
+    }
+    for difference in result.differences.prefix(50) { print("differs  \(difference)") }
+    for question in result.exportYearQuestions.prefix(50) {
+        print("app question  \(question.key): \(question.kind.rawValue), the views' year \(question.viewsYear.map(String.init) ?? "none"), "
+              + "the export's \(question.exportYear.map(String.init) ?? "none"), which resolves \(question.resolvesOtherwise.joined(separator: ", ")) otherwise")
+    }
+    for key in result.decimalFormFiles.prefix(20) {
+        print("app question  \(key): a 1906–1910 file number in the Decimal File's form, which the export's core reads as a Numerical File case")
+    }
+    if failed { fail(verdict) }
+    print(verdict)
+}
+
+/// Check 2 at full scale (PLAN's S25b): corrections made in the app, which an export carries, given to another
+/// index of the same files through the kit's own calls, as a Standalone server's curator gives them
+/// (`LibraryCorrections`), so that its library summary compares with the export's. It writes the index it names:
+/// give it a copy.
+func applyCorrections(_ arguments: Arguments) async throws {
+    guard arguments.positional.count == 1, let file = arguments.options["--corrections"] else {
+        throw UsageError("apply-corrections takes one database and --corrections <file.json>")
+    }
+    let layout = try repository(arguments)
+    let resources = arguments.options["--resources"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+        ?? layout.upstream.appendingPathComponent(ParityIndex.resourcesPath)
+    let database = URL(fileURLWithPath: arguments.positional[0])
+    let corrections = try LibraryCorrections.read(from: URL(fileURLWithPath: file))
+    let applied = try await corrections.apply(to: database, resources: resources)
+    print("gave \(database.lastPathComponent) \(corrections.classifications.count) classification correction(s), "
+          + "\(applied.classificationsChanged) of them changing a document, and \(applied.personCorrections) person correction(s): "
+          + "\(applied.rollupsBefore) rollups before, \(applied.rollupsAfter) after")
+}
+
+/// Check 2 at full scale (PLAN's S25b): the order of each volume's documents, which the app lists by rowid, in a
+/// library the app kept over many index versions, against an index of the same files made in one pass
+/// (`LibraryOrder`): reported, since a library's order is its history of indexing passes, and refused only where
+/// the two hold other documents.
+func compareOrder(_ arguments: Arguments) throws {
+    guard arguments.positional.count == 2 else { throw UsageError("compare-order takes a library's database and an index's") }
+    let result = try LibraryOrder.compare(library: URL(fileURLWithPath: arguments.positional[0]),
+                                          index: URL(fileURLWithPath: arguments.positional[1]))
+    print(result.summary())
+    guard result.holdsTheSameDocuments else { fail("the two hold other documents in \(result.differentDocuments.count) volumes") }
+}
+
+/// A GET, or a POST of a form body, against a server's base URL, for checks whose routes take a form, as Citation
+/// Lookup's Batch does. A request may take 15 minutes, as `httpGet`'s.
+func httpFetch(_ base: URL) -> CitationCheck.Fetch {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.timeoutIntervalForRequest = 900
+    configuration.timeoutIntervalForResource = 3_600
+    let session = URLSession(configuration: configuration)
+    return { path, form in
+        guard let url = apiURL(base, path) else { throw LiveAPI.Failure("\(path) is not a path") }
+        var request = URLRequest(url: url)
+        if let form {
+            request.httpMethod = "POST"
+            request.setValue("application/x-www-form-urlencoded;charset=UTF-8", forHTTPHeaderField: "Content-Type")
+            request.httpBody = Data(form.utf8)
+        }
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw LiveAPI.Failure("\(url.absoluteString) gave no HTTP response") }
+        return (http.statusCode, data)
+    }
+}
+
+/// Check 7 at full scale (PLAN's S25b): a running server's Citation Lookup held to the kit's engine over a copy of the
+/// index it serves, with the pinned commit's catalogue (`CitationCheck`): the app's own citation of every catalogue
+/// volume through Batch, in each style, marked and plain, row for row, and up to --per-volume documents of each volume
+/// the index holds (its first, middle and last; 3 by default) by every form PLAN's S19a asks.
+func checkCitations(_ arguments: Arguments) async throws {
+    guard let api = arguments.options["--api"], let base = URL(string: api), let index = arguments.options["--index"] else {
+        throw UsageError("check-citations takes --api <url> and --index <db>")
+    }
+    let layout = try repository(arguments)
+    let resources = arguments.options["--resources"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+        ?? layout.upstream.appendingPathComponent(ParityIndex.resourcesPath)
+    let perVolume = try arguments.options["--per-volume"].map { value -> Int in
+        guard let count = Int(value), (0...3).contains(count) else { throw UsageError("--per-volume takes 0 to 3") }
+        return count
+    } ?? 3
+    let indexURL = URL(fileURLWithPath: index)
+    let kit = try CitationCheck.Kit(index: indexURL, manifest: resources.appendingPathComponent("manifest.json"),
+                                    volumesDirectory: indexURL.deletingLastPathComponent())
+    FileHandle.standardError.write(Data("check 7: \(kit.catalogue.count) catalogue volumes by Batch, \(perVolume) documents of each of the index's \(kit.volumes.count)\n".utf8))
+    let clock = ContinuousClock()
+    let started = clock.now
+    let result = await CitationCheck.run(kit: kit, perVolume: perVolume, progress: { done, sofar in
+        guard done % 50 == 0 || done == kit.volumes.count else { return }
+        let seconds = (clock.now - started).components.seconds
+        FileHandle.standardError.write(Data("check 7: \(done) volumes in \(seconds) s, \(sofar.lookups) lookups, \(sofar.differences.count) differ\n".utf8))
+    }, fetch: httpFetch(base))
+    if let out = arguments.options["--out"] {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        try encoder.encode(CitationReport(summary: result.summary(), result: result)).write(to: URL(fileURLWithPath: out))
+        print("wrote \(out)")
+    }
+    for difference in result.differences.prefix(50) { print("differs  \(difference)") }
+    for (form, volumes) in result.ownCitationsNotFirst.sorted(by: { $0.key < $1.key }) {
+        print("the kit's own answer: \(form): \(volumes.count) volumes not first as themselves: \(volumes.prefix(12).joined(separator: ", "))")
+    }
+    for (form, volumes) in result.ownCitationsGuessed.sorted(by: { $0.key < $1.key }) {
+        print("the kit's own answer: \(form): \(volumes.count) volumes first as themselves by a best guess: \(volumes.prefix(12).joined(separator: ", "))")
+    }
+    for miss in result.citationsNotFindingTheirDocument.prefix(20) { print("the kit's own answer: a citation not finding its document: \(miss)") }
+    for split in result.ownCitationBatchesSplit { print("the kit's own answer: own citations not split one a row: \(split)") }
+    guard result.passes else { fail(result.summary()) }
+    print(result.summary())
+}
+
+/// What `check-citations --out` writes: the summary line and every finding.
+struct CitationReport: Encodable {
+    let summary: String
+    let result: CitationCheck.Result
 }
 
 let arguments = CommandLine.arguments.dropFirst()
 do {
     switch arguments.first {
     case "summarize":
-        try summarize(Arguments(arguments.dropFirst(), flags: ["--any-volumes"], options: ["--golden", "--upstream-commit", "--repo"]))
+        try summarize(Arguments(arguments.dropFirst(), flags: ["--any-volumes", "--library"], options: ["--golden", "--upstream-commit", "--repo"]))
     case "compare-summary":
         try compareSummary(Arguments(arguments.dropFirst()))
     case "compare-results":
@@ -668,7 +849,13 @@ do {
     case "check-highlights":
         try await checkHighlights(Arguments(arguments.dropFirst(), options: ["--tei", "--samples", "--repo"]))
     case "check-source-explorer":
-        try await checkSourceExplorer(Arguments(arguments.dropFirst(), options: ["--api", "--tei", "--resources", "--undated", "--repo"]))
+        try await checkSourceExplorer(Arguments(arguments.dropFirst(), flags: ["--app-questions"], options: ["--api", "--tei", "--resources", "--undated", "--parallel", "--out", "--repo"]))
+    case "apply-corrections":
+        try await applyCorrections(Arguments(arguments.dropFirst(), options: ["--corrections", "--resources", "--repo"]))
+    case "compare-order":
+        try compareOrder(Arguments(arguments.dropFirst()))
+    case "check-citations":
+        try await checkCitations(Arguments(arguments.dropFirst(), options: ["--api", "--index", "--per-volume", "--resources", "--out", "--repo"]))
     case "time-search":
         try await timeSearch(Arguments(arguments.dropFirst(), flags: ["--all", "--retained"],
                                        options: ["--ids", "--out", "--queries", "--resources", "--repo"]))
