@@ -234,10 +234,11 @@ describe('All Notes', () => {
     await userEvent.click(deleteOf('A')!);
     await userEvent.click(within(await screen.findByRole('alertdialog', { name: 'Delete Note?' })).getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(document.activeElement).toBe(deleteOf('B')));
-    // The editor's own Delete, which asks nothing: its row gone, focus goes to the heading.
+    // The editor's own Delete, which asks the same question since #1941: its row gone, focus goes to the heading.
     await userEvent.click(screen.getByRole('button', { name: /^Empty note/ }));
     const editor = await screen.findByRole('dialog', { name: 'Edit Note' });
     await userEvent.click(await within(editor).findByRole('button', { name: 'Delete' }));
+    await userEvent.click(within(await screen.findByRole('alertdialog', { name: 'Delete Note?' })).getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: 'All Notes' })));
   });

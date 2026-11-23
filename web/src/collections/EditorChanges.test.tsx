@@ -3,8 +3,8 @@
 // the row; a switch shown as it was turned, before the server answers, and a second press read from
 // it; a refused title kept and sent again; the picker's add made once however fast it is pressed, and
 // an add or a New Collection answered after its Cancel leaving a picker or sheet opened since alone; a
-// collection opened by its id in lower case; and a note block the formatting editor cannot show
-// edited plain.
+// collection opened by its id in lower case; a note block the formatting editor cannot show edited
+// plain; and a note block's delete asked of the text typed, before the server has it (#1941).
 import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useRef, useState } from 'react';
@@ -206,6 +206,33 @@ describe('the collection editor', () => {
         runs: null,
       }),
     );
+  });
+
+  it('asks before a note block goes with text the server has not yet answered for, reading it as typed (FRUS-Explorer#1941)', async () => {
+    fake.unreadable = true;
+    const prose = entry({ id: 'E3', kind: 'prose', text: '' });
+    const patches = held();
+    const fetch = server({
+      [path]: detail({ entries: [prose] }),
+      [`PATCH ${path}/entries/E3`]: patches.answer,
+      [`DELETE ${path}/entries/E3`]: detail(),
+    });
+    renderAt(`/collections/${berlinId}`);
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit: Note block' }));
+    const plain = (await screen.findByRole('textbox', { name: 'Note block' })) as HTMLTextAreaElement;
+    await waitFor(() => expect(document.activeElement).toBe(plain));
+    await userEvent.type(plain, 'Typed');
+    // The delete sends what is typed first, and asks once the collection's changes are answered, of the text as typed,
+    // though the answer, as the server read the block before, says it holds nothing.
+    await userEvent.click(screen.getByRole('button', { name: 'Actions: Note block' }));
+    await userEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Delete note block' }));
+    await waitFor(() => expect(patches.waiting).toHaveLength(1));
+    expect(sent(fetch.mock.calls.find(([, init]) => init?.method === 'PATCH')?.[1]).body).toEqual({ text: 'Typed', runs: null });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    patches.waiting[0]!(detail({ entries: [prose] }));
+    const question = await screen.findByRole('alertdialog', { name: 'Delete Note Block?' });
+    await userEvent.click(within(question).getByRole('button', { name: 'Cancel' }));
+    expect(fetch.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
   });
 });
 

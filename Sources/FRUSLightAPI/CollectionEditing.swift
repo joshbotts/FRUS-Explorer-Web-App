@@ -7,7 +7,9 @@
 // `CollectionOutline+App.swift`'s normalize, indent and outdent; `CollectionEntryData.swift`'s
 // `CollectionEntryOrdering` and `sortedByDate`; the editor's appends, deletes, moves and presets, and
 // the name as its Name commits it and as the Rename alert does (`CollectionEditorCommit`, in
-// `CollectionEditorView.swift`); the document and excerpt appends (`CollectionDocumentDiscovery`,
+// `CollectionEditorView.swift`); what a row holds that its delete would take, which the app asks about
+// first since FRUS-Explorer#1941 (`CollectionEntryDeletion`, in `CollectionEntryRows.swift`); the
+// document and excerpt appends (`CollectionDocumentDiscovery`,
 // `CollectionExcerpts`); `Collection.duplicate(in:)`, the footnote flags, `documentCount` and
 // `SmartCollectionRule` (`Models/Collection.swift`); `CollectionPreset.applyFields(to:)` and
 // `matches(_:)` (`CollectionExporter+App.swift`); and the inspector's selections, resolved defaults
@@ -307,6 +309,60 @@ enum CollectionEditing {
         guard collection.entries.indices.contains(index) else { return }
         collection.entries.remove(at: index)
         finishOutlineMutation(&collection.entries)
+    }
+
+    /// What a row holds of the reader's that its delete takes with it, `CollectionEntryDeletion.Holding`
+    /// (`CollectionEntryRows.swift`, FRUS-Explorer#1941): its raw value is an entry's `holds`, which
+    /// the editor's row asks about before it deletes, in the words the app's dialog has for it.
+    enum DeletionHolding: String, Codable, Sendable {
+        /// A note block's text.
+        case noteBlockText
+        /// A heading's section defaults.
+        case sectionDefaults
+        /// A document's headnote draft, which its delete takes with it.
+        case documentHeadnote
+        /// A document's own settings in the collection.
+        case documentSettings
+    }
+
+    /// `CollectionEntryDeletion.holding(_:hasHeadnoteDraft:)`: what `entry` holds of the reader's, or
+    /// nil for a row that holds nothing and goes at once, as an excerpt, an apparatus block and an
+    /// entry a newer build wrote always do.
+    static func deletionHolding(_ entry: CollectionEntryExport, hasHeadnoteDraft: Bool) -> DeletionHolding? {
+        switch entry.entryKind {
+        case .prose:
+            let plain = entry.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            // A block written before rich text kept a JSON body and no plain projection until it is
+            // migrated, so a body with no `text` counts as text.
+            return !plain.isEmpty || (entry.text == nil && entry.richText != nil) ? .noteBlockText : nil
+        case .heading:
+            return hasSectionDefaults(entry) ? .sectionDefaults : nil
+        case .document:
+            if hasHeadnoteDraft { return .documentHeadnote }
+            return hasDocumentSettings(entry) ? .documentSettings : nil
+        case .excerpt, .generated, .unrecognized:
+            return nil
+        }
+    }
+
+    /// `CollectionEntryDeletion.hasSectionDefaults(_:)`: whether a heading sets any default for the
+    /// documents of its section.
+    static func hasSectionDefaults(_ entry: CollectionEntryExport) -> Bool {
+        entry.bodyDepthOverride != nil || entry.applyHighlightsOverride != nil
+            || entry.includeNotesOverride != nil || entry.includeSourceNoteOverride != nil
+            || entry.includeFootnotesOverride != nil || entry.summaryPromptIdOverride != nil
+            || entry.includeRelatedDocuments != nil
+    }
+
+    /// `CollectionEntryDeletion.hasDocumentSettings(_:)`: whether a document row carries a choice of
+    /// the reader's, a title, a depth, an override, a headnote setting or pick, or a selection of its
+    /// notes or highlights. The export's highlight selection is optional where the model's is a list.
+    static func hasDocumentSettings(_ entry: CollectionEntryExport) -> Bool {
+        let title = entry.titleOverride?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return !title.isEmpty || hasSectionDefaults(entry)
+            || entry.includeHeadnote != nil || entry.headnoteSummaryId != nil
+            || !entry.selectedNoteIds.isEmpty || entry.researchNoteId != nil
+            || !(entry.selectedHighlightIds ?? []).isEmpty
     }
 
     /// The editor's `deleteSection(at:)`: the heading and every entry of its section, then

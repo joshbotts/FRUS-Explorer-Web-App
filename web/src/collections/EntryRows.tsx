@@ -22,7 +22,11 @@ const RichTextEditor = lazy(() => import('../editor/RichTextEditor'));
 export interface RowActions {
   onMoveUp?: () => void;
   onMoveDown?: () => void;
-  onRemove?: () => void;
+  /**
+   * The row's delete, which asks first where the row holds the reader's work: a note block passes the text its
+   * editor holds and has not yet had answered, which the server's reading of the block does not hold yet.
+   */
+  onRemove?: (typed?: string) => void;
   onChange: (changes: EntryChanges) => Promise<unknown>;
 }
 
@@ -55,8 +59,8 @@ function RowMenu({
     if (actions.onMoveUp) entries.push({ kind: 'item', label: copy.collectionEditor.moveUp, onSelect: actions.onMoveUp });
     if (actions.onMoveDown) entries.push({ kind: 'item', label: copy.collectionEditor.moveDown, onSelect: actions.onMoveDown });
   }
-  const last =
-    removes ?? (actions.onRemove ? [{ kind: 'item' as const, label: remove, hint: removeHint, onSelect: actions.onRemove, destructive: true }] : []);
+  const { onRemove } = actions;
+  const last = removes ?? (onRemove ? [{ kind: 'item' as const, label: remove, hint: removeHint, onSelect: () => onRemove(), destructive: true }] : []);
   if (last.length > 0) {
     if (entries.length > 0) entries.push({ kind: 'separator' });
     entries.push(...last);
@@ -302,6 +306,24 @@ export function ProseRow({ entry, actions, autoFocus }: { entry: CollectionEntry
   const editorId = useId();
   const editButton = useRef<HTMLButtonElement>(null);
   const saver = useSaver((body: { text: string; runs: NoteRun[] | null }) => actions.onChange(body));
+  // The text last typed, which the block's delete reads while the saver still holds it.
+  const typed = useRef('');
+  const save = (body: { text: string; runs: NoteRun[] | null }) => {
+    typed.current = body.text;
+    saver.change(body);
+  };
+  const { onRemove } = actions;
+  const rowActions: RowActions = {
+    ...actions,
+    // What is typed goes first, so the delete that may follow comes after it, and the question reads it.
+    onRemove:
+      onRemove &&
+      (() => {
+        const pending = saver.pending;
+        saver.flush();
+        onRemove(pending ? typed.current : undefined);
+      }),
+  };
   const text = entry.text ?? '';
   const isPlain = plain !== null;
   useEffect(() => {
@@ -326,7 +348,7 @@ export function ProseRow({ entry, actions, autoFocus }: { entry: CollectionEntry
                 onChange={(event) => {
                   const value = event.target.value.replace(/\0/g, ' ');
                   setPlain(value);
-                  saver.change({ text: value, runs: null });
+                  save({ text: value, runs: null });
                 }}
               />
             </>
@@ -341,7 +363,7 @@ export function ProseRow({ entry, actions, autoFocus }: { entry: CollectionEntry
                     runs={entry.runs ?? null}
                     text={text}
                     autoFocus
-                    onChange={(runs) => saver.change({ text: runsText(runs), runs })}
+                    onChange={(runs) => save({ text: runsText(runs), runs })}
                     onDiscard={() => {
                       saver.flush();
                       setEditing(false);
@@ -376,7 +398,7 @@ export function ProseRow({ entry, actions, autoFocus }: { entry: CollectionEntry
             {copy.collectionEditor.proseEdit}
           </button>
         )}
-        <RowMenu label={copy.collectionEditor.proseLabel} kind="prose" actions={actions} />
+        <RowMenu label={copy.collectionEditor.proseLabel} kind="prose" actions={rowActions} />
       </div>
       {saver.failure && (
         <p className="error" role="alert">

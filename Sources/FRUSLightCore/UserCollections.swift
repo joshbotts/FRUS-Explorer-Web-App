@@ -89,6 +89,10 @@ public protocol CollectionStore: Sendable {
     /// The documents, by `volumeId/documentId`, the user has a summary of that holds text and is no
     /// headnote draft: where a collection can offer summaries, read without the summaries' text.
     func summarizedDocuments(of user: String) throws -> Set<String>
+    /// The ids of the user's headnote drafts, in upper case: which entries own one, whose row asks
+    /// before it is deleted as the app's does (`GeneratedSummary.headnoteDraftExists(for:in:)`), read
+    /// without the drafts' text.
+    func headnoteDraftIds(of user: String) throws -> Set<String>
 }
 
 extension RelationalUserStore: CollectionStore {
@@ -223,6 +227,14 @@ extension RelationalUserStore: CollectionStore {
                 guard row.count == 2, let volume = row[0].text, let document = row[1].text else { return nil }
                 return "\(volume)/\(document)"
             })
+        }
+    }
+
+    public func headnoteDraftIds(of user: String) throws -> Set<String> {
+        try reading { db in
+            // An id in any case, as an import may write one.
+            let rows = try db.query("SELECT id FROM summaries WHERE user_id = ? AND is_headnote_draft = 1", [.text(user)])
+            return Set(rows.compactMap { $0.first?.text?.uppercased() })
         }
     }
 

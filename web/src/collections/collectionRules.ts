@@ -7,9 +7,10 @@
 // `canMoveVisibleRowDown`, `moveVisibleRowDown`, `movedBlockEnd`); a document row's status chips
 // (`entryStatusChips`); the pickers' body depths (`bodyDepthOptions`); and the Add to Collection
 // picker's rows, order and search (`CollectionPickerRow`, `CollectionPickerOrder.held`, the kit's
-// `listNameMatches`). The outline itself, each entry's depth and each heading's section, is the
-// kit's, which the server sends.
-import type { CollectionDetail, CollectionEntry, CollectionListItem } from '../api/collections';
+// `listNameMatches`); and a row's question before its delete (`CollectionEntryDeletion`), over what
+// the server says the entry holds. The outline itself, each entry's depth and each heading's section,
+// is the kit's, which the server sends.
+import type { CollectionDetail, CollectionEntry, CollectionListItem, EntryHolding } from '../api/collections';
 import { copy } from '../copy';
 
 /** `Collection.managerDefaultShowAllCollections`: the list opens on every project's collections. */
@@ -142,6 +143,20 @@ export function entryChips(entry: CollectionEntry, collection: Pick<CollectionDe
   if (headnoteResolvedOn(entry, collection)) chips.push({ kind: 'headnote' });
   if (entry.includeRelatedDocuments === true) chips.push({ kind: 'seeAlso' });
   return chips;
+}
+
+/** `trimmingCharacters(in: .whitespacesAndNewlines)`. */
+const whitespacesAndNewlines = /^[\t\n\v\f\r\u{0085}\u{2028}\u{2029}\p{Zs}]+|[\t\n\v\f\r\u{0085}\u{2028}\u{2029}\p{Zs}]+$/gu;
+
+/**
+ * What a row's delete would take of the reader's, which the row asks about first, as the app's `requestDelete(at:)`
+ * asks since FRUS-Explorer#1941 (`CollectionEntryDeletion.holding`): the server's reading of the entry as it stands
+ * once every change sent is answered, or, for a note block whose editor holds text it has not yet sent, that text, as
+ * the app's row reads a block's text as it is typed; null for a row that goes at once.
+ */
+export function deletionHolding(entry: CollectionEntry, typed?: string): EntryHolding | null {
+  if (entry.kind === 'prose' && typed !== undefined) return typed.replace(whitespacesAndNewlines, '') !== '' ? 'noteBlockText' : null;
+  return entry.holds ?? null;
 }
 
 /**
