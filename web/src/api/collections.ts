@@ -103,7 +103,12 @@ export interface CollectionEntry {
   dateISO?: string;
   /** For a document: how many notes its document has. */
   noteCount?: number;
+  /** What it holds of the reader's that its delete would take, which its row asks about first; absent for a row that goes at once. */
+  holds?: EntryHolding;
 }
+
+/** What a row holds that its delete would take, the app's `CollectionEntryDeletion.Holding` (FRUS-Explorer#1941). */
+export type EntryHolding = 'noteBlockText' | 'sectionDefaults' | 'documentHeadnote' | 'documentSettings';
 
 /** One collection, as its editor shows it. */
 export interface CollectionDetail {

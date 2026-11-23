@@ -3824,6 +3824,40 @@ Phase 2's row S18e, the second of the collection rows S18c's pin move opened. A 
 
 **Next:** S18f: `.fruscollection` both ways, smart collections resolved at export with Create Static Snapshot, Summary only refused with the app's reason where a document has no summary, and headnotes the researcher writes. The pin move to `fb542514`, another session's, may land first; this branch's byte-for-byte checks run again over it.
 
+## Session 18d, second follow-up: a collection row's question before it deletes the reader's work
+
+23 November 2026 · branch `claude/wizardly-jang-728e7f`, a follow-up session of the phase-3 orchestrator's · [#161](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/161), with S15d's follow-up · upstream `4556c4d5`, unchanged
+
+S18d's web follow-up, with no PLAN row of its own: the collection rows' half of the app's 1.0 review item L19 ([FRUS-Explorer#1941](https://github.com/joshbotts/FRUS-Explorer/pull/1941), `a78a046c`, MAC-2), which S12d's pin move to `1.0-release` found and left for a pull request of its own. The note editor's half, and the pull request's runs, review and records, are the entry "Session 15d, follow-up: the note editor's questions before work is lost". No migration was added and the pin did not move.
+
+**What the app's rows do since #1941,** at `4556c4d5`:
+- **What a row holds** (`CollectionEntryDeletion.holding`, in `CollectionEntryRows.swift`): a note block's text, trimmed, or a body with no plain text from before rich text; a heading's section defaults, any of its seven overrides; a document's headnote draft (`GeneratedSummary.headnoteDraftExists(for:in:)`), or else its own settings in the collection, a title, a depth or another override, a headnote setting or pick, or a choice of its notes or highlights. An excerpt, an apparatus block and an entry a newer build wrote hold nothing.
+- **The routes:** every way a row is deleted, the Mac's trash, a heading's Delete Heading Only, iOS's swipe and Edit's delete, calls `requestDelete(at:)`, which deletes a row that holds nothing at once and holds the deletion of one that holds work by its entry's id while the row's dialog is up. Delete Section asks as it always did.
+- **The dialog,** in the Delete Section dialog's form: Delete Note Block?, Delete Heading? or Remove Document?, a message for what goes and what stays, the matching destructive action, and Cancel. The action deletes the entry with the headnote draft it owns, as every delete did before.
+
+**What the web does now:**
+- **The server says what each entry holds.** `CollectionEditing.deletionHolding(_:hasHeadnoteDraft:)` mirrors `holding` over the export's values; the export's highlight selection is optional where the model's is a list. `GET /me/collections/{id}` gives each entry's `holds` (`noteBlockText`, `sectionDefaults`, `documentHeadnote` or `documentSettings`), absent for one that holds none. A headnote draft is one of the user's summaries marked as one, which the store reads in one query, `headnoteDraftIds(of:)`, written once on `RelationalUserStore` for both stores, beside the two reads the answer already made, and only where a document entry names a headnote.
+- **The browser asks, or deletes at once.** A row's remove and a heading's Delete Heading Only go to `requestRemove`, which waits for the collection's changes sent so far to be answered (`whenAnswered`), so that a switch just turned or a choice just made counts, and then reads the entry's `holds`. A note block reads its text as typed while its saver holds it unanswered (`deletionHolding` in `collectionRules.ts`), and sends what is typed first. One question is asked at a time, the first, as the app's asks one (`deleteVisibleRows`), and none over a dialog opened while the answers came: a second row that holds work stays, to be chosen again.
+- **The question** (`DeleteEntry`, in `CollectionEditorScreen.tsx`): an alert dialog with the app's title, message and action for what the row holds, Cancel first and focused. Cancel and Escape keep the row, focus back on its menu; the action deletes it, focus going on to the next row's menu, else the one before, else Add.
+
+**Decided here, each the web's own:**
+- **The rule on the server,** where the store's facts are: whether a headnote names a draft or a document's own summary, and a note block's body from before rich text, which the browser's answer does not carry. The browser asks once the collection's answers are in, rather than from the copy it shows, whose switches show what was chosen before the server has it.
+- **A note block's text as typed:** the app's row reads the text from its model as it is typed; the web's saver sends it half a second after the typing stops.
+- **Cancel first and focused,** as in the web's other questions, Delete Section's among them, where the app's dialog lists its action first.
+
+**Mirrored, with a parity test.** `CollectionParityTests`:
+- `theAppsWordsAreTheWebs` gains the dialog's three titles, three actions, four messages and its Cancel, each under its key and in copy.ts's `collectionEditor` block under the holding's name.
+- `aRowsDeleteAsksAsTheAppsDoes` holds `CollectionEntryDeletion`'s rule, the dialog's form and `headnoteDraftExists`; `requestDelete(at:)`, `deleteConfirmed` and the routes; the server's mirror and its store's query, with the mirror's answers kind by kind; and the browser's route, its rule, its one question at a time and its dialog, Cancel first.
+- `theServersMirrorsAreTheApps`' note on the delete names the question.
+
+**Tests:**
+- FRUSLightCoreTests: `UserCollectionTests`' reads of the user's other rows count the headnote drafts' ids too, on both stores, an id an import wrote in lower case read in upper.
+- FRUSLightServerTests: `CollectionTests.eachEntrySaysWhatItsDeleteWouldTake`, each kind's `holds` through the API, a headnote draft's and a document's own summary's among them.
+- The web unit suite: `collectionRules.test.ts` (2), `Collections.test.tsx` (2: each holding's question, Cancel first and focused, Escape keeping the row, the action deleting it; and the rows that hold nothing going at once) and `EditorChanges.test.tsx` (2: a note block's text typed and unanswered; and two deletes waiting on the same answers, which ask one question, the first).
+- The browser suite: `collections.spec.ts`, by keyboard, a note block's question kept by Escape and then answered, an apparatus block and a document at its defaults at once, a heading's Delete Heading Only and a document with a title of the reader's each asking, with axe at each question.
+
+**Next:** S24i, the Word Cloud, the S24 group's last row; then S25b, phase 3's sign-off.
+
 ## Session 18d, follow-up: Add Documents' Citations and Tags, upstream
 
 28–29 October 2026 · branch `claude/heuristic-antonelli-1c5617` · [#87](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/87) · upstream `32e295e5`, unchanged; [FRUS-Explorer#1814](https://github.com/joshbotts/FRUS-Explorer/pull/1814), open
@@ -5692,6 +5726,70 @@ Phase 2's row S19a, beside S16c, with which it shares no file but the records. C
 - This log.
 
 **Next: S16c,** the import of a Mac JSON export, which PLAN puts after S15d, with S14e, S14d and S14b beside it.
+
+## Session 15d, follow-up: the note editor's questions before work is lost
+
+23 November 2026 · branch `claude/wizardly-jang-728e7f`, a follow-up session of the phase-3 orchestrator's · [#161](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/161), with S18d's second follow-up · upstream `4556c4d5`, unchanged
+
+S15d's web follow-up, with no PLAN row of its own: the web's side of the app's 1.0 review item L19 ([FRUS-Explorer#1941](https://github.com/joshbotts/FRUS-Explorer/pull/1941), `a78a046c`, IPA-2 and MAC-2), which S12d's pin move to `1.0-release` found and left for a pull request of its own; `NoteEditor.tsx`'s header said the app's editor asks nothing, false since that move. This entry is the note editor's half, with the pull request's runs, review and records; the collection rows' half is the entry "Session 18d, second follow-up: a collection row's question before it deletes the reader's work". Two entries, beside the rows each half follows, as #158's were. The branch was cut from `main` at `85aff64`, #159's merge, and merged no `main`. No file of the app changed, no migration was added and the pin did not move.
+
+**What the app's editor does since #1941,** at `4556c4d5` (`ResearchNoteEditorView.swift`, `ResearchNoteEditorViewModel.swift`):
+- **What it opened with** is recorded once, in `init` (`opening`, a `Snapshot`): the text, its RTF, and the ids of its projects, tags and inserted summaries, as sets. `hasChanges` holds a difference in the text or a set, and, while the text is not empty, in the RTF, which the formatted editor writes afresh at each edit.
+- **Discard,** the Mac's Esc (`.cancelAction`), asks Discard Changes? while `hasChanges` holds (`requestDiscard()`), and dismisses at once otherwise. Discard Changes is the dialog's destructive button and closes the note as it was; Keep Editing is its cancel and goes back. Its message is "This note has not been saved." for a new note and "Your changes to this note have not been saved." for an edit.
+- **The sheet's swipe and the Mac window's close** ask the same (`UnsavedNoteGuard`); a tap beside an iPad's sheet leaves it open and asks nothing.
+- **Delete** asks All Notes' Delete Note?, in its keys and words: "This note will be permanently deleted.", Delete and Cancel. **Save** asks nothing.
+
+**What the web does now:**
+- **The rule** (`web/src/research/noteEditorRules.ts`, `holdsChanges`): the app's `hasChanges` over the web's draft and what the editor opened with, recorded once, from the editor's first read of the note or a new note's empty draft. The text, and the three sets of ids in any letter case; then, while there is text, the formatting Save would write: an edit's runs, in their canonical form, against the note's, or formatting the server keeps as it is, which any edit replaces, or an edit typed with Formatting off, which drops the note's formatting as the app's `setPlainBody` does. A plain note edited with Formatting on counts, since Save would then keep formatting where there was none, as the app's editor's fresh copy counts.
+- **Discard Changes?** (`DiscardChanges`, in `NoteEditor.tsx`): an alert dialog with the app's title and message, Keep Editing, focused, then Discard Changes. Discard asks it, and Escape anywhere in the editor, in the plain or the formatted text or on any control; with nothing to lose they leave at once, as before. Keep Editing, and Escape, close the question and send focus back where it was asked from, else to the editor's heading; Discard Changes leaves the note as it is stored.
+- **Delete Note?:** the editor's Delete opens All Notes' own question, `DeleteNote`, which takes the note's three ids. Cancel and Escape send focus back to Delete; Delete deletes the note and closes the editor, the question staying up while the delete is on its way.
+- **Escape at the key:** `shell/Modal.tsx` gains an opt-in `onEscape`, which takes Escape at the key, keeping it from the browser, while a control in the dialog that took the key, as the formatting editor does, or a composition's end, keeps it. Chrome lets a page refuse a dialog's close only once between two of the reader's other inputs, and closes the dialog on a second Escape whatever the page says, so an editor that stays open while it asks cannot rely on a refused `cancel`. A close the browser makes anyway, by a close request that comes another way, opens the editor again and asks, or waits for a save on its way, or lets the editor go where it holds nothing (`closedByTheBrowser`); the editor leaves once. The editor and its two questions take the option, the questions since the review (below); no other dialog does.
+- **The headers** of `NoteEditor.tsx` and `DeleteNote.tsx` say what the editor asks.
+
+**Decided here, each the web's own:**
+- **Keep Editing first, and focused,** as Cancel is first and focused in the web's other questions (All Notes' and the Collections list's Delete…), where the app's dialog lists Discard Changes first and makes Keep Editing its cancel; Escape is Keep Editing, as Esc is the app's cancel.
+- **The formatting rule over runs,** where the app's compares RTF bytes: the browser holds no bytes, and a rule over bytes would count a Mac note's formatting rewritten in the codec's form, after a letter typed and taken back, as a change the reader did not make.
+- **Not guarded:** the browser's own ways out of the editor, Back and Forward, a reload and the tab's close, which the app's swipe and window close correspond to. The web app has no `beforeunload` handler or router blocker anywhere, and the brief asked for Discard and Escape; a follow-up of its own (below).
+
+**Mirrored, with a parity test.** `NoteViewParityTests`:
+- `theAppsWordsAreTheWebs` gains Discard Changes?'s five words under their keys, and the editor's Delete Note? in All Notes' keys, which the app's editor writes too (`NoteEditorDialogCopy`).
+- `theEditorsQuestionsAreTheApps` holds the view model's `opening`, `Snapshot`, `hasChanges` and `setPlainBody`; the view's `guardsChanges`, `requestDiscard()`, Discard as the Mac's Esc, Delete, both dialogs' buttons, roles and messages, `deleteNote()` and `saveNote()`; against `noteEditorRules.ts`'s rule and `NoteEditor.tsx`'s lines, Keep Editing's place and focus among them, and `DeleteNote.tsx`'s.
+
+**Tests:**
+- The web unit suite: `noteEditorRules.test.ts` (5, new); `NoteEditor.test.tsx`, 7 new (Discard and Escape asking, Keep Editing and its focus, the question's Escape taken at the key, Discard Changes; a new note's words, and its text taken back asking nothing; nothing asked for a tag ticked and unticked, text typed and taken back, Save or a note not yet read; formatting alone asking, from the formatted text's Escape; Delete Note? kept up while its delete is on its way; the browser's close during a save waiting for it, the editor leaving once; and the browser's close opening the editor again) and 2 rewritten (the editor's Delete through its question; a tag made at once, which Discard now asks about); `AllNotesScreen.test.tsx`, the editor's Delete through its question.
+- The browser suite: `notes-keyboard.spec.ts`, by keyboard, Escape asking, Escape keeping the edit with focus back in the text, three rounds more of the same, then Escape, Tab and Enter discarding it; the editor's Delete asking, Escape keeping the note with focus back on Delete, and Escape leaving an untouched editor at once. `notes.spec.ts`, by pointer, the editor's Delete with Cancel, then Delete; Escape after a paste asking of a new note. axe at each question.
+
+**Results,** on this Mac, for both halves:
+- **Linux, `swift:6.4-noble`, arm64:** CI's swift job, `scripts/swift --postgres test`, under the heavy lock at `5364334`, this package's own targets built clean, with no warning outside `.build`.
+  - 4,366 tests, all passing but the one named skip, `FTS5StoreTests`' `backupExclusion()`; the store's tests ran on PostgreSQL too.
+  - By target: CrossRefKitTests 10, FRUSCoreKitTests 2,586, FRUSLightCoreTests 277, FRUSLightServerTests 423, FRUSParityTests 320, FRUSRichTextTests 42, FTS5CheckTests 3, FTS5StoreTests 219, GeneratorKitTests 7, ManifestGeneratorTests 60, SemanticVectorsKitTests 40, SourceExplorerExportGeneratorTests 22, SourceNoteKitTests 327 and WordCloudKitTests 30.
+  - Each is the count of `main`'s CI at `85aff64` (run 45082976407), but FRUSParityTests, 318 there, with `theEditorsQuestionsAreTheApps` and `aRowsDeleteAsksAsTheAppsDoes`, and FRUSLightServerTests, 422 there, with `eachEntrySaysWhatItsDeleteWouldTake`.
+  - After the review's fixes, at `52f8b5a`: FRUSLightServerTests whole, 423, and `CollectionParityTests`, `NoteViewParityTests` and `UserCollectionTests` again, all passing, with no warning.
+- **CI's web job,** through `scripts/npm`: `ci`, `typecheck`, `lint`, `test` and `run build`, at `52f8b5a`: 702 tests in 77 files, where `main`'s CI at `85aff64` ran 684 in 76.
+- **The image** `frus-light:l19`, with the release's build arguments, and `scripts/compose-smoke --e2e` with `FRUS_IMAGE=frus-light:l19 FRUS_HOST_PORT=18430`: PASS at `5364334` and again at `52f8b5a`. The browser suite passed 92 and skipped 9 at the root and under the path each time, where `main`'s CI passes 91, the rows' new spec the 92nd; the changed notes and collections specs passed at the first run each time. Checks 2 and 8 over the Standalone index, which need the parity stage's image named (`FRUS_PARITY_IMAGE`), were left to CI's compose job, as nothing here touches the index.
+
+**The cold review:** two subagents, each given the range `origin/main...HEAD` at `5364334`, the app's files and the points the brief asks a review to weigh, and none of this session's reasoning, ran the `code-review` skill at `high`, one over the note editor and one over the rows. Each found the conditions, the words, the buttons and the answers holding to the app's lines. What held up was fixed in `52f8b5a`, each fix with a test that fails on the code before it:
+- **Discard Changes? kept by Escape alone, round after round** (the notes review's, reproduced in Chrome 157 with the browser's own keys): each Escape that dismissed the question was still the browser's close request, and each spent one of the separate closes Chrome allows a page between the reader's other inputs. At the sixth Escape the question shared the editor's allowance, and one Escape closed both, the editor then opening again and asking. Both questions now take Escape at the key, as the editor does, and the keyboard spec asks and keeps by Escape alone for three rounds more.
+- **Two row deletes chosen while the answers were awaited** (the rows review's): both asked, the second's words over the first's, or one over a dialog opened meanwhile. One question is asked at a time, the first, as the app's asks one, and none over another dialog; the second row stays, to be chosen again.
+- **A close the browser makes during a save** asked over it, and the editor could then report two outcomes. It now waits for the save, leaves once, and sends focus after a question it asks to the heading.
+- **The editor's button row's rule** spread the buttons of a question asked over it to the dialog's edges; it is the editor's own row's now, which its link dialog takes too.
+- **Smaller:** the server reads the headnote drafts only where a document entry names a headnote.
+- **Kept as it is:** a note block's text typed in another tab and not yet read here is not asked of, as the app's device deletes what it holds before another's sync reaches it; a read of the collection for each delete was not worth it. The browser's own ways out of the editor are the follow-up below.
+
+**Records:**
+- SPEC: the note editor's line in Reader and Research rail; a bullet of its own in Collections for the rows' question, two lines from the S18d bullet that names the list menu's Word Cloud, which S24i may change; and the entry's `holds` in the HTTP API.
+- `NoteEditor.tsx`'s and `DeleteNote.tsx`'s headers.
+
+**For S24i,** the group's last row (rule 5), or for S25b where S24i's records have gone before this, lines this changes and does not edit:
+- The README's Known gaps, "The editors ask nothing before work is lost, …": done, so the line goes.
+- The README's Next, item 2, "…and, with no hand-over, the app's questions before work is lost (L19), above": done.
+- COORDINATION §5's paragraph on S12d's move, "The third is the app's questions before work is lost … where the web's editors ask none": done.
+
+**Follow-ups, named and not done:**
+- The browser's own ways out of the note editor, Back and Forward, a reload and the tab's close, ask nothing and lose an edit, where the app's swipe and window close ask.
+- Not L19's, found on the way: the app's new note starts filed under the project the reader works in (`ResearchNoteEditorViewModel.init`, `startingProjects`); the web's starts on none.
+
+**Next:** S24i, the Word Cloud, the S24 group's last row, which writes the lines above, or S25b where it has gone before this; then S25b, phase 3's sign-off.
 
 ## Session 15d: notes and summaries, and the rich-text codec
 

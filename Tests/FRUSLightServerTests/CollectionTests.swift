@@ -516,6 +516,57 @@ import Testing
         }
     }
 
+    /// Each entry says what its delete would take of the reader's, which its row asks about first, as the
+    /// app's `CollectionEntryDeletion.holding` reads it since FRUS-Explorer#1941: a note block's text, never
+    /// spaces alone; a heading's section defaults; a document's headnote draft, or its own settings, a
+    /// headnote that names a document's own summary among them; and nothing for an empty block, a heading
+    /// with no defaults, a document at its defaults or an apparatus block.
+    @Test func eachEntrySaysWhatItsDeleteWouldTake() async throws {
+        let fixture = try await UserDataFixture()
+        defer { withExtendedLifetime(fixture) {} }
+        try await fixture.app.test(.router) { client in
+            let owner = Browser(client: client)
+            let made = try await Self.made(owner, "Held")
+            let path = "\(Self.base)/\(made.id)"
+            _ = try await Self.edit(owner, "\(path)/blocks", #"{"kind": "heading"}"#)
+            _ = try await Self.edit(owner, "\(path)/blocks", #"{"kind": "prose"}"#)
+            _ = try await Self.edit(owner, "\(path)/blocks", #"{"generatedBlockType": "bibliography"}"#)
+            var detail = try await Self.edit(owner, "\(path)/documents", try Self.documents(["d1", "d2", "d3"])).collection
+            /// Each entry, by its kind or its document, and what it holds.
+            func held(_ detail: CollectionDetail) -> [String: String] {
+                Dictionary(uniqueKeysWithValues: detail.entries.map { ($0.kind == "document" ? $0.documentId : $0.kind, $0.holds ?? "nothing") })
+            }
+            func entry(_ key: String) throws -> String {
+                try #require(detail.entries.first { ($0.kind == "document" ? $0.documentId : $0.kind) == key }).id
+            }
+            #expect(held(detail) == ["heading": "nothing", "prose": "nothing", "generated": "nothing", "d1": "nothing", "d2": "nothing", "d3": "nothing"])
+
+            // A note block's text, spaces and line breaks alone being none.
+            detail = try await Self.detail(owner, .patch, "\(path)/entries/\(try entry("prose"))", #"{"text": " \n\t", "runs": null}"#)
+            #expect(held(detail)["prose"] == "nothing")
+            detail = try await Self.detail(owner, .patch, "\(path)/entries/\(try entry("prose"))", #"{"text": "Read these together.", "runs": null}"#)
+            #expect(held(detail)["prose"] == "noteBlockText")
+
+            // A heading's section default, and none once it is Default again.
+            detail = try await Self.detail(owner, .patch, "\(path)/entries/\(try entry("heading"))", #"{"includeRelatedDocuments": true}"#)
+            #expect(held(detail)["heading"] == "sectionDefaults")
+            detail = try await Self.detail(owner, .patch, "\(path)/entries/\(try entry("heading"))", #"{"includeRelatedDocuments": null}"#)
+            #expect(held(detail)["heading"] == "nothing")
+            detail = try await Self.detail(owner, .patch, "\(path)/entries/\(try entry("heading"))", #"{"bodyDepthOverride": "index"}"#)
+            #expect(held(detail)["heading"] == "sectionDefaults")
+
+            // A document's title, its headnote draft, and a headnote that names the document's own summary.
+            detail = try await Self.detail(owner, .patch, "\(path)/entries/\(try entry("d1"))", #"{"titleOverride": "The telegram"}"#)
+            detail = try await Self.detail(owner, .put, "\(path)/entries/\(try entry("d2"))/headnote", #"{"text": "Mine."}"#)
+            let own = "D2AF0000-0000-4000-8000-000000000003"
+            try fixture.rows.addSummary(own, documentId: "d3", responseText: "The document's own.")
+            try fixture.rows.run("UPDATE collection_entries SET headnote_summary_id = '\(own.lowercased())' WHERE id = '\(try entry("d3"))'")
+            detail = try decode(CollectionDetail.self, try await owner.get(path))
+            #expect(held(detail) == ["heading": "sectionDefaults", "prose": "noteBlockText", "generated": "nothing",
+                                     "d1": "documentSettings", "d2": "documentHeadnote", "d3": "documentSettings"])
+        }
+    }
+
     /// What the server's own code adds around the app's rules: a text a collection or an entry keeps is
     /// refused with U+0000, where SQLite's text ends, or past a note's limit; null clears a note, a
     /// subtitle, an author line or a title override, and is refused for a field that cannot be none;

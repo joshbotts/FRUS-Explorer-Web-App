@@ -4182,7 +4182,8 @@ fieldset.note-assignments {
   white-space: pre-wrap;
 }
 
-dialog.note-editor .actions {
+/* The editor's own row, not that of a question asked over it, Discard Changes? or Delete Note?, or of its link dialog. */
+dialog.note-editor > .actions {
   justify-content: space-between;
 }
 

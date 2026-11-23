@@ -169,6 +169,35 @@ import Testing
              "collectionEditor", "generated: 'Remove this block from the collection'"),
             (rows, "CollectionEntryRows", "collection.entry.delete.help", "Remove this document from the collection", "collectionEditor",
              "document: 'Remove this document from the collection'"),
+            // A row's question before its delete takes the reader's work, since FRUS-Explorer#1941 (L19): its title, its action
+            // and its message for what the row holds, each under the holding's name in the web's three records, and its Cancel.
+            (rows, "CollectionEntryRows", "collection.entry.delete.confirm.title.prose", "Delete Note Block?", "collectionEditor",
+             "noteBlockText: 'Delete Note Block?'"),
+            (rows, "CollectionEntryRows", "collection.entry.delete.confirm.title.heading", "Delete Heading?", "collectionEditor",
+             "sectionDefaults: 'Delete Heading?'"),
+            (rows, "CollectionEntryRows", "collection.entry.delete.confirm.title.document", "Remove Document?", "collectionEditor",
+             "documentHeadnote: 'Remove Document?', documentSettings: 'Remove Document?'"),
+            (rows, "CollectionEntryRows", "collection.entry.delete.confirm.action.prose", "Delete Note Block", "collectionEditor",
+             "noteBlockText: 'Delete Note Block',"),
+            (rows, "CollectionEntryRows", "collection.entry.delete.confirm.action.heading", "Delete Heading", "collectionEditor",
+             "sectionDefaults: 'Delete Heading',"),
+            (rows, "CollectionEntryRows", "collection.entry.delete.confirm.action.document", "Remove Document", "collectionEditor",
+             "documentHeadnote: 'Remove Document', documentSettings: 'Remove Document',"),
+            (rows, "CollectionEntryRows", "collection.entry.delete.confirm.message.prose",
+             "Its text goes with it, on your other devices too once they sync.", "collectionEditor",
+             "noteBlockText: 'Its text goes with it, on your other devices too once they sync.'"),
+            (rows, "CollectionEntryRows", "collection.entry.delete.confirm.message.heading",
+             "Its section defaults go with it, on your other devices too once they sync. The entries under it stay.", "collectionEditor",
+             "sectionDefaults: 'Its section defaults go with it, on your other devices too once they sync. The entries under it stay.'"),
+            (rows, "CollectionEntryRows", "collection.entry.delete.confirm.message.headnote",
+             "Its headnote and its settings in this collection go with it, on your other devices too once they sync. The document, and your notes and highlights on it, stay.",
+             "collectionEditor",
+             "documentHeadnote: 'Its headnote and its settings in this collection go with it, on your other devices too once they sync. The document, and your notes and highlights on it, stay.'"),
+            (rows, "CollectionEntryRows", "collection.entry.delete.confirm.message.settings",
+             "Its settings in this collection go with it, on your other devices too once they sync. The document, and your notes and highlights on it, stay.",
+             "collectionEditor",
+             "documentSettings: 'Its settings in this collection go with it, on your other devices too once they sync. The document, and your notes and highlights on it, stay.'"),
+            (rows, "CollectionEntryRows", "common.cancel", "Cancel", "collectionEditor", "entryDeleteCancel: 'Cancel'"),
             (rows, "CollectionEntryRows", "collection.entry.configure", "Configure", "collectionEditor", "configure: 'Configure'"),
             (rows, "CollectionEntryRows", "collection.entry.configure.hint", "Opens this document’s settings", "collectionEditor",
              "configureHint: 'Opens this document’s settings'"),
@@ -586,7 +615,7 @@ import Testing
             // the deletes
             "let range = CollectionOutline.sectionRange(of: index, in: items) guard range.upperBound <= sortedEntries.count else { return }",
             // A row's delete since FRUS-Explorer#1941 (L19): the entry and the headnote draft it owns, as before, at once or after
-            // the row's question when it holds the reader's work, which the web's row does not ask yet (a follow-up's).
+            // the row's question when it holds the reader's work, which `aRowsDeleteAsksAsTheAppsDoes` holds.
             "GeneratedSummary.deleteHeadnoteDraft(for: sortedEntries[index], in: modelContext) modelContext.delete(sortedEntries[index]) sortedEntries.remove(at: index)",
             "removeEntry(at: index) finishOutlineMutation()",
             // the move
@@ -805,6 +834,126 @@ import Testing
         ], file: "collectionRules.ts")
         let picker = try Self.web("collections/CollectionPicker.tsx")
         NoteViewParityTests.expect(picker, holds: ["export const addedPause = 600;", "export const heldPause = 800;"], file: "CollectionPicker.tsx")
+    }
+
+    /// A row's question before its delete takes the reader's work, since FRUS-Explorer#1941 (L19): what a row
+    /// holds (`CollectionEntryDeletion.holding`), the server's mirror over the export's values and its answers
+    /// kind by kind, a headnote draft as the store finds one; every route a row is deleted by asking first,
+    /// a heading's Delete Heading Only among them, and the others at once; and the dialog's form, its words
+    /// by what the row holds, its destructive action and its Cancel; each held by the lines the app's source
+    /// writes it in and the lines of the server and the browser app that mirror it.
+    @Test func aRowsDeleteAsksAsTheAppsDoes() throws {
+        let rows = try Self.app("Collections/CollectionEntryRows.swift")
+        NoteViewParityTests.expect(rows, holds: [
+            #"let plain = entry.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? """#,
+            "return !plain.isEmpty || (entry.text == nil && entry.richText != nil) ? .noteBlockText : nil",
+            "case .heading: return hasSectionDefaults(entry) ? .sectionDefaults : nil",
+            "case .document: if hasHeadnoteDraft { return .documentHeadnote } return hasDocumentSettings(entry) ? .documentSettings : nil",
+            "case .excerpt, .generated, .unrecognized: return nil",
+            "entry.bodyDepthOverride != nil || entry.applyHighlightsOverride != nil || entry.includeNotesOverride != nil || entry.includeSourceNoteOverride != nil || entry.includeFootnotesOverride != nil || entry.summaryPromptIdOverride != nil || entry.includeRelatedDocuments != nil",
+            #"let title = entry.titleOverride?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" return !title.isEmpty || hasSectionDefaults(entry) || entry.includeHeadnote != nil || entry.headnoteSummaryId != nil || !entry.selectedNoteIds.isEmpty || entry.researchNoteId != nil || !entry.selectedHighlightIds.isEmpty"#,
+            "let hasDraft = entry.entryKind == .document && GeneratedSummary.headnoteDraftExists(for: entry, in: context) return holding(entry, hasHeadnoteDraft: hasDraft)",
+            // The dialog: the title by what the row holds, its destructive action, then Cancel, and the message.
+            "content.confirmationDialog(CollectionEntryDeletion.title(for: pending?.holding ?? .noteBlockText), isPresented: isPresented, titleVisibility: .visible, presenting: pending) { deletion in Button(CollectionEntryDeletion.action(for: deletion.holding), role: .destructive) { delete(deletion.entryId) } Button(String(localized: \"common.cancel\", defaultValue: \"Cancel\"), role: .cancel) {} } message: { deletion in Text(CollectionEntryDeletion.message(for: deletion.holding)) }",
+            "case .documentHeadnote, .documentSettings: String(localized: \"collection.entry.delete.confirm.title.document\", defaultValue: \"Remove Document?\")",
+        ], file: "CollectionEntryRows.swift")
+        NoteViewParityTests.expect(try Self.app("Models/GeneratedSummary.swift"), holds: [
+            "guard let sid = entry.headnoteSummaryId else { return false } let count = (try? context.fetchCount(FetchDescriptor<GeneratedSummary>( predicate: #Predicate { $0.id == sid && $0.isHeadnoteDraft }))) ?? 0 return count > 0",
+        ], file: "GeneratedSummary.swift")
+        // Every route a row is deleted by asks first: its trash, a heading's Delete Heading Only, the swipe and Edit's delete.
+        NoteViewParityTests.expect(try Self.app("Collections/CollectionEditorView.swift"), holds: [
+            "private func requestDelete(at index: Int) { guard sortedEntries.indices.contains(index) else { return } let entry = sortedEntries[index] if let holding = CollectionEntryDeletion.holding(entry, in: modelContext) { pendingEntryDeletion = PendingEntryDeletion(entryId: entry.id, holding: holding) } else { removeEntry(at: index) finishOutlineMutation() } }",
+            "private func deleteConfirmed(_ entryId: UUID) { guard let index = sortedEntries.firstIndex(where: { $0.id == entryId }) else { return } removeEntry(at: index) finishOutlineMutation() }",
+            // One dialog at a time: a second row that holds work, which only Edit could pass, is neither asked of nor deleted.
+            "if pendingEntryDeletion == nil { pendingEntryDeletion = PendingEntryDeletion(entryId: sortedEntries[i].id, holding: holding) }",
+            "CollectionHeadingRow( entry: $sortedEntries[row.index], onDelete: { requestDelete(at: row.index) },",
+            "Button { requestDelete(at: row.index) } label: {",
+        ], file: "CollectionEditorView.swift")
+
+        // The server's mirror, its store's drafts, and the entry's `holds`.
+        let editing = try Self.server("Sources/FRUSLightAPI/CollectionEditing.swift")
+        NoteViewParityTests.expect(editing, holds: [
+            #"let plain = entry.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? """#,
+            "return !plain.isEmpty || (entry.text == nil && entry.richText != nil) ? .noteBlockText : nil",
+            "case .heading: return hasSectionDefaults(entry) ? .sectionDefaults : nil",
+            "case .document: if hasHeadnoteDraft { return .documentHeadnote } return hasDocumentSettings(entry) ? .documentSettings : nil",
+            "case .excerpt, .generated, .unrecognized: return nil",
+            "entry.bodyDepthOverride != nil || entry.applyHighlightsOverride != nil || entry.includeNotesOverride != nil || entry.includeSourceNoteOverride != nil || entry.includeFootnotesOverride != nil || entry.summaryPromptIdOverride != nil || entry.includeRelatedDocuments != nil",
+            // The export's highlight selection is optional where the model's is a list.
+            #"let title = entry.titleOverride?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" return !title.isEmpty || hasSectionDefaults(entry) || entry.includeHeadnote != nil || entry.headnoteSummaryId != nil || !entry.selectedNoteIds.isEmpty || entry.researchNoteId != nil || !(entry.selectedHighlightIds ?? []).isEmpty"#,
+        ], file: "CollectionEditing.swift")
+        NoteViewParityTests.expect(try Self.server("Sources/FRUSLightAPI/Collections.swift"), holds: [
+            "holds: CollectionEditing.deletionHolding(entry, hasHeadnoteDraft: kind == .document && entry.headnoteSummaryId.map { drafts.contains($0.uuidString.uppercased()) } == true)?.rawValue)",
+        ], file: "Collections.swift")
+        NoteViewParityTests.expect(try Self.server("Sources/FRUSLightCore/UserCollections.swift"), holds: [
+            #"try db.query("SELECT id FROM summaries WHERE user_id = ? AND is_headnote_draft = 1", [.text(user)])"#,
+        ], file: "UserCollections.swift")
+        /// An entry of `kind`, as the export reads one, set as `configure` sets it.
+        func entry(_ kind: String, _ configure: (inout CollectionEntryExport) -> Void = { _ in }) -> CollectionEntryExport {
+            var made = CollectionEditing.newEntry(documentId: "d1", volumeId: "frus1961-63v06", sortOrder: 0, at: Date(timeIntervalSince1970: 0))
+            made.kind = kind
+            configure(&made)
+            return made
+        }
+        let holding = { (entry: CollectionEntryExport, draft: Bool) in CollectionEditing.deletionHolding(entry, hasHeadnoteDraft: draft) }
+        #expect(holding(entry("prose"), false) == nil && holding(entry("prose") { $0.text = " \n\u{2028}" }, false) == nil)
+        #expect(holding(entry("prose") { $0.text = "Read these together." }, false) == .noteBlockText)
+        #expect(holding(entry("prose") { $0.richText = Data(#"{"spans":[]}"#.utf8) }, false) == .noteBlockText,
+                "a body from before rich text, with no plain text, counts as text")
+        #expect(holding(entry("prose") { $0.text = ""; $0.richText = Data("{}".utf8) }, false) == nil, "an empty text is no text")
+        #expect(holding(entry("heading") { $0.text = "Europe" }, false) == nil)
+        #expect(holding(entry("heading") { $0.includeFootnotesOverride = false }, false) == .sectionDefaults)
+        #expect(holding(entry("heading") { $0.titleOverride = "A title"; $0.selectedNoteIds = [UUID()] }, false) == nil,
+                "a heading's settings are its section defaults alone")
+        #expect(holding(entry("document"), false) == nil && holding(entry("document") { $0.titleOverride = " \t" }, false) == nil)
+        #expect(holding(entry("document"), true) == .documentHeadnote)
+        #expect(holding(entry("document") { $0.titleOverride = "The telegram" }, true) == .documentHeadnote, "the headnote names it first")
+        for (configure, what) in [
+            ({ (made: inout CollectionEntryExport) in made.titleOverride = "The telegram" }, "a title"),
+            ({ (made: inout CollectionEntryExport) in made.bodyDepthOverride = "index" }, "a depth"),
+            ({ (made: inout CollectionEntryExport) in made.includeHeadnote = false }, "a headnote setting"),
+            ({ (made: inout CollectionEntryExport) in made.headnoteSummaryId = UUID() }, "a headnote's pick"),
+            ({ (made: inout CollectionEntryExport) in made.selectedNoteIds = [UUID()] }, "notes chosen"),
+            ({ (made: inout CollectionEntryExport) in made.researchNoteId = UUID() }, "the legacy note"),
+            ({ (made: inout CollectionEntryExport) in made.selectedHighlightIds = [UUID()] }, "highlights chosen"),
+        ] as [((inout CollectionEntryExport) -> Void, String)] {
+            #expect(holding(entry("document", configure), false) == .documentSettings, "\(what) is a document's setting")
+        }
+        for kind in ["excerpt", "generated", "aKindANewerBuildWrote"] {
+            #expect(holding(entry(kind) { $0.text = "Text"; $0.titleOverride = "A title"; $0.bodyDepthOverride = "index" }, true) == nil,
+                    "\(kind) goes at once")
+        }
+
+        // The browser app: the row's delete waits for the collection's changes to be answered, then asks of what the
+        // server says the entry holds, or of a note block's text as typed, and deletes once the question is answered,
+        // else at once; a heading's Delete Heading Only takes the same route; and the dialog, Cancel first.
+        let screen = try Self.web("collections/CollectionEditorScreen.tsx")
+        NoteViewParityTests.expect(screen, holds: [
+            "await whenAnswered(detail.id); const latest = client.getQueryData<CollectionDetail>(collectionQuery(detail.id).queryKey);",
+            "const holding = deletionHolding(entry, typed); if (!holding) { await remove(entryId); return; }",
+            // One question at a time, the first asked, and none over a dialog opened while the answers came.
+            "if (document.querySelector('dialog[open]')) return; setDeleting((current) => current ?? { entryId, holding });",
+            "onRemove: unrecognized ? undefined : (typed) => void requestRemove(id, typed),",
+            "if (!confirmed) requestAnimationFrame(() => focusRowMenu(entryId)); else await remove(entryId);",
+            "{copy.collectionEditor.entryDeleteTitle[holding]}",
+            "<p id={messageId}>{copy.collectionEditor.entryDeleteMessage[holding]}</p>",
+        ], file: "CollectionEditorScreen.tsx")
+        let cancel = try #require(screen.range(of: "{copy.collectionEditor.entryDeleteCancel}"))
+        let action = try #require(screen.range(of: "{copy.collectionEditor.entryDeleteAction[holding]}"))
+        #expect(cancel.lowerBound < action.lowerBound, "Cancel first, as the web's questions have it")
+        NoteViewParityTests.expect(try Self.web("collections/EntryRows.tsx"), holds: [
+            "{ kind: 'item', label: copy.collectionEditor.deleteHeadingOnly, onSelect: () => actions.onRemove?.(), destructive: true },",
+            "const pending = saver.pending; saver.flush(); onRemove(pending ? typed.current : undefined);",
+        ], file: "EntryRows.tsx")
+        NoteViewParityTests.expect(try Self.web("collections/collectionRules.ts"), holds: [
+            "if (entry.kind === 'prose' && typed !== undefined) return typed.replace(whitespacesAndNewlines, '') !== '' ? 'noteBlockText' : null; return entry.holds ?? null;",
+        ], file: "collectionRules.ts")
+        // The web's four holdings are the server's, which name the words copy.ts keeps for each.
+        let holdings = ["noteBlockText", "sectionDefaults", "documentHeadnote", "documentSettings"]
+        #expect(holdings.compactMap(CollectionEditing.DeletionHolding.init(rawValue:)).map(\.rawValue) == holdings)
+        NoteViewParityTests.expect(try Self.web("api/collections.ts"), holds: [
+            "export type EntryHolding = 'noteBlockText' | 'sectionDefaults' | 'documentHeadnote' | 'documentSettings';",
+        ], file: "collections.ts")
     }
 
     /// Add Documents' Citations and Tags (PLAN's S25d): the app's sheet's tabs in their order, what Resolve and a tag

@@ -1655,6 +1655,15 @@ export const copy = {
     delete: 'Delete',
     discard: 'Discard',
     save: 'Save',
+    /**
+     * Discard Changes?, which Discard and Escape ask while the editor holds changes, since FRUS-Explorer#1941 (L19,
+     * `NoteEditorDialogCopy`); its Delete asks All Notes' Delete Note?.
+     */
+    discardTitle: 'Discard Changes?',
+    discardConfirm: 'Discard Changes',
+    keepEditing: 'Keep Editing',
+    discardMessageNew: 'This note has not been saved.',
+    discardMessageEdit: 'Your changes to this note have not been saved.',
     body: 'Note',
     bodyLabel: 'Research note body',
     formatting: 'Formatting',
@@ -2012,6 +2021,31 @@ export const copy = {
     deleteSectionAction: 'Delete Section',
     deleteSectionMessage: (count: number) => `Deletes this heading and the ${count} entries it contains.`,
     deleteSectionCancel: 'Cancel',
+    /**
+     * A row's question before its delete takes the reader's work, in the Delete Section dialog's form, since
+     * FRUS-Explorer#1941 (L19, `CollectionEntryDeletion`): its title, its action and its message for what the row holds.
+     */
+    entryDeleteTitle: {
+      noteBlockText: 'Delete Note Block?',
+      sectionDefaults: 'Delete Heading?',
+      documentHeadnote: 'Remove Document?',
+      documentSettings: 'Remove Document?',
+    },
+    entryDeleteAction: {
+      noteBlockText: 'Delete Note Block',
+      sectionDefaults: 'Delete Heading',
+      documentHeadnote: 'Remove Document',
+      documentSettings: 'Remove Document',
+    },
+    entryDeleteMessage: {
+      noteBlockText: 'Its text goes with it, on your other devices too once they sync.',
+      sectionDefaults: 'Its section defaults go with it, on your other devices too once they sync. The entries under it stay.',
+      documentHeadnote:
+        'Its headnote and its settings in this collection go with it, on your other devices too once they sync. The document, and your notes and highlights on it, stay.',
+      documentSettings:
+        'Its settings in this collection go with it, on your other devices too once they sync. The document, and your notes and highlights on it, stay.',
+    },
+    entryDeleteCancel: 'Cancel',
     rename: 'Rename',
     sectionDefaultsMenu: 'Section Defaults…',
     indent: 'Indent',

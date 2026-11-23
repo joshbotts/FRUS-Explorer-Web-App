@@ -1,6 +1,7 @@
 // A modal dialog, as the app's sheets and alerts are: open while it is drawn, its first focus where
 // it names, Escape its Cancel, and its close after a request committed at once. The tag editor's,
-// Merge Tag's and the reader's Remove Highlight.
+// Merge Tag's and the reader's Remove Highlight. A dialog that may stay open on Escape, as the note
+// editor does while it asks Discard Changes?, takes the key itself (`onEscape`).
 import { type ReactNode, useEffect, useEffectEvent, useRef } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -22,6 +23,7 @@ export function Modal({
   describedBy,
   initial,
   onCancel,
+  onEscape,
   onClose,
   children,
 }: {
@@ -31,6 +33,13 @@ export function Modal({
   describedBy?: string;
   initial?: { current: HTMLElement | null };
   onCancel: () => void;
+  /**
+   * Escape pressed in the dialog, in place of `onCancel`: called at the key, which is kept from the
+   * browser, so that the dialog stays open while this says. Chrome lets a page refuse a close only once
+   * between two of the reader's other inputs, and closes the dialog on a second Escape whatever the
+   * page says; a dialog that asks before it closes cannot rely on a refused `cancel`.
+   */
+  onEscape?: () => void;
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -58,9 +67,16 @@ export function Modal({
         onCancel();
       }}
       // Escape is the dialog's Cancel, not a key for the rail around it, which closes on Escape: the
-      // browser fires cancel after the keydown has gone up through the page.
+      // browser fires cancel after the keydown has gone up through the page. One a control in the
+      // dialog took for itself, as the formatting editor takes it, or one that ends a composition, is
+      // not the dialog's.
       onKeyDown={(event) => {
-        if (event.key === 'Escape') event.stopPropagation();
+        if (event.key !== 'Escape') return;
+        event.stopPropagation();
+        if (onEscape && !event.defaultPrevented && !event.nativeEvent.isComposing) {
+          event.preventDefault();
+          onEscape();
+        }
       }}
     >
       {children}

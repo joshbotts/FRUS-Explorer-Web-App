@@ -242,7 +242,11 @@ describe('the note editor', () => {
     expect(await within(dialog).findByRole('checkbox', { name: 'Primary source' })).toHaveProperty('checked', true);
     expect(within(dialog).getByText('Tag Primary source created and selected')).toBeTruthy();
     expect(changes(fetch, 'POST')).toEqual([['/api/v1/me/tags', { name: 'Primary source' }]]);
+    // The tag ticked is a change, which Discard asks about; Discard Changes leaves the tag made.
     await userEvent.click(within(dialog).getByRole('button', { name: 'Discard' }));
+    const question = await screen.findByRole('alertdialog', { name: 'Discard Changes?' });
+    expect(onClose).not.toHaveBeenCalled();
+    await userEvent.click(within(question).getByRole('button', { name: 'Discard Changes' }));
     expect(onClose).toHaveBeenCalledWith('discarded');
     expect(fetch.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
   });
@@ -438,13 +442,32 @@ describe('the note editor', () => {
     await waitFor(() => expect(other.getQueryData(noteQuery(noteId).queryKey)).toBeUndefined());
   });
 
-  it('deletes a note it edits from Delete, asking nothing, as the app’s editor does', async () => {
+  it('deletes a note it edits from Delete once All Notes’ question is answered, Cancel first, as the app’s editor asks since #1941', async () => {
     const fetch = server({ [notePath]: note({ id: noteId }), [`DELETE ${notePath}`]: null });
     const onClose = editNote();
     const dialog = await screen.findByRole('dialog', { name: 'Edit Note' });
-    await userEvent.click(await within(dialog).findByRole('button', { name: 'Delete' }));
-    await waitFor(() => expect(onClose).toHaveBeenCalledWith('deleted'));
+    const remove = await within(dialog).findByRole('button', { name: 'Delete' });
+    await userEvent.click(remove);
+    let question = await screen.findByRole('alertdialog', { name: 'Delete Note?' });
+    expect(question.textContent).toContain('This note will be permanently deleted.');
+    expect(within(question).getAllByRole('button').map((button) => button.textContent)).toEqual(['Cancel', 'Delete']);
+    expect(document.activeElement).toBe(within(question).getByRole('button', { name: 'Cancel' }));
+    // Cancel: nothing is deleted, the editor stays, and focus goes back to its Delete.
+    await userEvent.click(within(question).getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByRole('alertdialog')).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(remove));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(changes(fetch, 'DELETE')).toEqual([]);
+    // Escape is Cancel too.
+    await userEvent.click(remove);
+    question = await screen.findByRole('alertdialog', { name: 'Delete Note?' });
+    fireEvent(question, new Event('cancel', { cancelable: true }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(changes(fetch, 'DELETE')).toEqual([]);
+    // Delete deletes it, and the editor goes.
+    await userEvent.click(remove);
+    await userEvent.click(within(await screen.findByRole('alertdialog', { name: 'Delete Note?' })).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledWith('deleted'));
     expect(changes(fetch, 'DELETE')).toEqual([[notePath, undefined]]);
   });
 
@@ -461,6 +484,160 @@ describe('the note editor', () => {
     await userEvent.click(await within(dialog).findByRole('button', { name: 'Escape in the text' }));
     expect(onClose).toHaveBeenCalledWith('discarded');
     expect(fetch.mock.calls.some(([, init]) => init?.method && init.method !== 'GET')).toBe(false);
+  });
+
+  it('asks Discard Changes? before Discard or Escape lets an edit go: Keep Editing keeps it, and Discard Changes leaves the note as it was', async () => {
+    plainMode();
+    const fetch = server({ [notePath]: note({ id: noteId, bodyText: 'Kennedy writes warmly.' }) });
+    const onClose = editNote();
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Note' });
+    const body = await within(dialog).findByRole<HTMLTextAreaElement>('textbox', { name: 'Research note body' });
+    await userEvent.type(body, ' More.');
+    // Discard asks, in the app's words for an edit, Keep Editing first and focused.
+    const discardButton = within(dialog).getByRole('button', { name: 'Discard' });
+    await userEvent.click(discardButton);
+    let question = await screen.findByRole('alertdialog', { name: 'Discard Changes?' });
+    expect(question.textContent).toContain('Your changes to this note have not been saved.');
+    expect(within(question).getAllByRole('button').map((button) => button.textContent)).toEqual(['Keep Editing', 'Discard Changes']);
+    expect(document.activeElement).toBe(within(question).getByRole('button', { name: 'Keep Editing' }));
+    await userEvent.click(within(question).getByRole('button', { name: 'Keep Editing' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(body.value).toBe('Kennedy writes warmly. More.');
+    await waitFor(() => expect(document.activeElement).toBe(discardButton));
+    // Escape in the text asks too, taken at the key, so the browser closes nothing; the question's own Escape keeps
+    // the edit, and focus goes back to the text.
+    body.focus();
+    expect(fireEvent.keyDown(body, { key: 'Escape' })).toBe(false);
+    question = await screen.findByRole('alertdialog', { name: 'Discard Changes?' });
+    fireEvent(question, new Event('cancel', { cancelable: true }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(body));
+    expect(onClose).not.toHaveBeenCalled();
+    // The question takes its Escape at the key too, so no close of the browser's comes of it.
+    expect(fireEvent.keyDown(body, { key: 'Escape' })).toBe(false);
+    question = await screen.findByRole('alertdialog', { name: 'Discard Changes?' });
+    expect(fireEvent.keyDown(within(question).getByRole('button', { name: 'Keep Editing' }), { key: 'Escape' })).toBe(false);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(body));
+    expect(onClose).not.toHaveBeenCalled();
+    // Discard Changes leaves the note as it was.
+    await userEvent.click(discardButton);
+    await userEvent.click(within(await screen.findByRole('alertdialog', { name: 'Discard Changes?' })).getByRole('button', { name: 'Discard Changes' }));
+    expect(onClose).toHaveBeenCalledWith('discarded');
+    expect(fetch.mock.calls.some(([, init]) => init?.method && init.method !== 'GET')).toBe(false);
+  });
+
+  it('asks of a new note’s text in the app’s words for a note never saved, and lets it go at once once the text is taken back', async () => {
+    plainMode();
+    server();
+    const onClose = newNote();
+    const dialog = await screen.findByRole('dialog', { name: 'New Research Note' });
+    const body = within(dialog).getByRole<HTMLTextAreaElement>('textbox', { name: 'Research note body' });
+    await userEvent.type(body, 'A');
+    const discardButton = within(dialog).getByRole('button', { name: 'Discard' });
+    await userEvent.click(discardButton);
+    const question = await screen.findByRole('alertdialog', { name: 'Discard Changes?' });
+    expect(question.textContent).toContain('This note has not been saved.');
+    await userEvent.click(within(question).getByRole('button', { name: 'Keep Editing' }));
+    // Focus back on Discard, a frame after the question has gone, before the text is typed in again.
+    await waitFor(() => expect(document.activeElement).toBe(discardButton));
+    await userEvent.type(body, '{Backspace}');
+    expect(body.value).toBe('');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Discard' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(onClose).toHaveBeenCalledWith('discarded');
+  });
+
+  it('asks nothing where nothing would be lost: a tag ticked and unticked, the text typed and taken back, Save, and a note not yet read', async () => {
+    plainMode();
+    const fetch = server({ [notePath]: note({ id: noteId, bodyText: 'Kennedy writes warmly.' }), [`PUT ${notePath}`]: note({ id: noteId }) });
+    let onClose = editNote();
+    let dialog = await screen.findByRole('dialog', { name: 'Edit Note' });
+    const body = await within(dialog).findByRole('textbox', { name: 'Research note body' });
+    const tag = within(dialog).getByRole('checkbox', { name: 'Berlin' });
+    await userEvent.click(tag);
+    await userEvent.click(tag);
+    await userEvent.type(body, 'x{Backspace}');
+    expect(fireEvent.keyDown(body, { key: 'Escape' })).toBe(false);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(onClose).toHaveBeenCalledWith('discarded');
+    // Save asks nothing.
+    cleanup();
+    onClose = editNote();
+    dialog = await screen.findByRole('dialog', { name: 'Edit Note' });
+    await userEvent.type(await within(dialog).findByRole('textbox', { name: 'Research note body' }), ' More.');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledWith('saved'));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(changes(fetch, 'PUT')).toHaveLength(1);
+    // A note whose read has not come holds nothing to lose.
+    cleanup();
+    server({ [notePath]: () => new Promise(() => {}) });
+    onClose = editNote();
+    dialog = await screen.findByRole('dialog', { name: 'Edit Note' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Discard' }));
+    expect(onClose).toHaveBeenCalledWith('discarded');
+  });
+
+  it('asks before a change of formatting alone goes, the formatted text’s own Escape among the ways out', async () => {
+    server({ [notePath]: note({ id: noteId, bodyText: 'Bold words' }) });
+    const onClose = editNote();
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Note' });
+    await userEvent.click(await within(dialog).findByRole('button', { name: 'Format' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Escape in the text' }));
+    expect(await screen.findByRole('alertdialog', { name: 'Discard Changes?' })).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('keeps Delete Note? up while its delete is on its way, Escape at the key changing nothing', async () => {
+    server({ [notePath]: note({ id: noteId }), [`DELETE ${notePath}`]: () => new Promise(() => {}) });
+    const onClose = editNote();
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Note' });
+    await userEvent.click(await within(dialog).findByRole('button', { name: 'Delete' }));
+    const question = await screen.findByRole('alertdialog', { name: 'Delete Note?' });
+    await userEvent.click(within(question).getByRole('button', { name: 'Delete' }));
+    expect(fireEvent.keyDown(within(question).getByRole('button', { name: 'Cancel' }), { key: 'Escape' })).toBe(false);
+    expect(screen.getByRole('alertdialog', { name: 'Delete Note?' })).toBe(question);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('waits for a save on its way when the browser closes the editor, asking nothing, and leaves once', async () => {
+    plainMode();
+    const saving: { answer?: (value: unknown) => void } = {};
+    server({
+      [notePath]: note({ id: noteId, bodyText: 'Kennedy writes warmly.' }),
+      [`PUT ${notePath}`]: () => new Promise((resolve) => (saving.answer = resolve)),
+    });
+    const onClose = editNote();
+    const dialog = await screen.findByRole<HTMLDialogElement>('dialog', { name: 'Edit Note' });
+    await userEvent.type(await within(dialog).findByRole('textbox', { name: 'Research note body' }), ' More.');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    act(() => dialog.close());
+    expect(dialog.open).toBe(true);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+    await act(async () => saving.answer?.(note({ id: noteId, bodyText: 'Kennedy writes warmly. More.' })));
+    await waitFor(() => expect(onClose).toHaveBeenCalledWith('saved'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens again and asks when the browser closes it holding changes, and lets it go holding none', async () => {
+    plainMode();
+    server({ [notePath]: note({ id: noteId, bodyText: 'Kennedy writes warmly.' }) });
+    let onClose = editNote();
+    let dialog = await screen.findByRole<HTMLDialogElement>('dialog', { name: 'Edit Note' });
+    await userEvent.type(await within(dialog).findByRole('textbox', { name: 'Research note body' }), ' More.');
+    // As Chrome closes a dialog on a second close request between two of the reader's other inputs.
+    act(() => dialog.close());
+    expect(dialog.open).toBe(true);
+    expect(await screen.findByRole('alertdialog', { name: 'Discard Changes?' })).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
+    cleanup();
+    onClose = editNote();
+    dialog = await screen.findByRole<HTMLDialogElement>('dialog', { name: 'Edit Note' });
+    await within(dialog).findByRole('textbox', { name: 'Research note body' });
+    act(() => dialog.close());
+    expect(onClose).toHaveBeenCalledWith('discarded');
   });
 
   it('says why a save was refused, and reads the tags and the note again when a tag has gone', async () => {

@@ -8,10 +8,11 @@
 // switch and its JSON row; All Notes' rows, filters and count, which
 // web/src/research/notesRules.ts mirrors, the kit's since S17b's FRUS-Explorer#1805 and read here
 // from the kit's file, since the browser app applies them to the notes it holds; the rail's note rows,
-// its summary preview and history control, and its sections' open states; and the editor's rules
-// for a summary inserted, a tag made, the formatting bar's toggles and its link. A pin move that
-// changes one fails here until the web follows it. The server's mirrors of the app's model code are
-// NotesAndSummariesParityTests'.
+// its summary preview and history control, and its sections' open states; the editor's rules
+// for a summary inserted, a tag made, the formatting bar's toggles and its link; and, since
+// FRUS-Explorer#1941, its questions before work is lost, Discard Changes? and Delete Note?, and when
+// each is asked (web/src/research/noteEditorRules.ts). A pin move that changes one fails here until
+// the web follows it. The server's mirrors of the app's model code are NotesAndSummariesParityTests'.
 
 @testable import FRUSCoreKit
 import FRUSLightTestSupport
@@ -112,6 +113,19 @@ import Testing
             ("ResearchNoteEditor/ResearchNoteEditorView.swift", "note.editor.summaries.header", "Generated Summaries", "noteEditor", "summaries"),
             ("ResearchNoteEditor/ResearchNoteEditorView.swift", "note.editor.summary.insert", "Insert into note", "noteEditor", "insert"),
             ("ResearchNoteEditor/ResearchNoteEditorView.swift", "note.editor.summary.remove", "Remove from note", "noteEditor", "remove"),
+            // Discard Changes?, since FRUS-Explorer#1941 (L19), and the editor's Delete Note? in All Notes' keys and words.
+            ("ResearchNoteEditor/ResearchNoteEditorView.swift", "note.editor.discard.title", "Discard Changes?", "noteEditor", "discardTitle"),
+            ("ResearchNoteEditor/ResearchNoteEditorView.swift", "note.editor.discard.confirm", "Discard Changes", "noteEditor", "discardConfirm"),
+            ("ResearchNoteEditor/ResearchNoteEditorView.swift", "note.editor.discard.keepEditing", "Keep Editing", "noteEditor", "keepEditing"),
+            ("ResearchNoteEditor/ResearchNoteEditorView.swift", "note.editor.discard.message.new", "This note has not been saved.", "noteEditor",
+             "discardMessageNew"),
+            ("ResearchNoteEditor/ResearchNoteEditorView.swift", "note.editor.discard.message.edit", "Your changes to this note have not been saved.",
+             "noteEditor", "discardMessageEdit"),
+            ("ResearchNoteEditor/ResearchNoteEditorView.swift", "settings.notes.delete.title", "Delete Note?", "allNotes", "deleteTitle"),
+            ("ResearchNoteEditor/ResearchNoteEditorView.swift", "settings.notes.delete.message", "This note will be permanently deleted.", "allNotes",
+             "deleteMessage"),
+            ("ResearchNoteEditor/ResearchNoteEditorView.swift", "settings.notes.delete.confirm", "Delete", "allNotes", "deleteConfirm"),
+            ("ResearchNoteEditor/ResearchNoteEditorView.swift", "settings.notes.delete.cancel", "Cancel", "allNotes", "deleteCancel"),
             ("Collections/CollectionRichTextEditor.swift", "collection.richtext.bold.help", "Bold", "richText", "bold"),
             ("Collections/CollectionRichTextEditor.swift", "collection.richtext.italic.help", "Italic", "richText", "italic"),
             ("Collections/CollectionRichTextEditor.swift", "collection.richtext.underline.help", "Underline", "richText", "underline"),
@@ -488,5 +502,62 @@ import Testing
             "forget(); post({ kind: 'collapseSelection' }); onNote?.();",
             "target.closest('dialog[open]') !== null",
         ], file: "useReaderHighlights.tsx")
+    }
+
+    /// The editor's questions before work is lost, since FRUS-Explorer#1941 (L19): what the editor opened
+    /// with, recorded once, and `hasChanges` over it, the text, the three sets of ids and, while there is
+    /// text, the formatting Save would write; Discard, which Escape is, asking Discard Changes? while it
+    /// holds changes and leaving at once otherwise; Delete asking All Notes' Delete Note? always; Save
+    /// asking nothing; and each question's buttons, their roles and what each answer does; each held by
+    /// the lines the app's source writes it in and the lines of the browser app that mirror it.
+    @Test func theEditorsQuestionsAreTheApps() throws {
+        let sources = Sources()
+        Self.expect(try sources.app("ResearchNoteEditor/ResearchNoteEditorViewModel.swift"), holds: [
+            "let opening: Snapshot",
+            "Snapshot(bodyText: bodyText, richText: richText, projectIds: Set(projectIds), userTagIds: Set(userTagIds), selectedSummaryIds: Set(selectedSummaryIds))",
+            "var hasChanges: Bool { let now = current guard now.bodyText == opening.bodyText, now.projectIds == opening.projectIds, now.userTagIds == opening.userTagIds, now.selectedSummaryIds == opening.selectedSummaryIds else { return true } return !now.bodyText.isEmpty && now.richText != opening.richText }",
+            "func setPlainBody(_ text: String) { bodyText = text richText = nil }",
+        ], file: "ResearchNoteEditorViewModel.swift")
+        let view = try sources.app("ResearchNoteEditor/ResearchNoteEditorView.swift")
+        Self.expect(view, holds: [
+            "private var guardsChanges: Bool { vm.hasChanges && !isClosing }",
+            "private func requestDiscard() { if guardsChanges { confirmingDiscard = true } else { dismiss() } }",
+            // Discard is the Mac's Escape.
+            #"Button(String(localized: "note.editor.toolbar.discard", defaultValue: "Discard")) { requestDiscard() } .keyboardShortcut(.cancelAction)"#,
+            #"Button(String(localized: "note.editor.toolbar.delete", defaultValue: "Delete"), role: .destructive) { confirmingDelete = true }"#,
+            ".modifier(DeleteNoteConfirmation(isPresented: $confirmingDelete, delete: deleteNote))",
+            ".modifier(DiscardChangesConfirmation(isPresented: $confirmingDiscard, isNewNote: vm.noteToEdit == nil, discard: close))",
+            "content.confirmationDialog(NoteEditorDialogCopy.discardTitle, isPresented: $isPresented, titleVisibility: .visible) { Button(NoteEditorDialogCopy.discardAction, role: .destructive, action: discard) Button(NoteEditorDialogCopy.keepEditing, role: .cancel) {} } message: { Text(NoteEditorDialogCopy.discardMessage(isNewNote: isNewNote)) }",
+            "content.confirmationDialog(NoteEditorDialogCopy.deleteTitle, isPresented: $isPresented, titleVisibility: .visible) { Button(NoteEditorDialogCopy.deleteAction, role: .destructive, action: delete) Button(NoteEditorDialogCopy.deleteCancel, role: .cancel) {} } message: { Text(NoteEditorDialogCopy.deleteMessage) }",
+            #"isNewNote ? String(localized: "note.editor.discard.message.new", defaultValue: "This note has not been saved.") : String(localized: "note.editor.discard.message.edit", defaultValue: "Your changes to this note have not been saved.")"#,
+            "private func deleteNote() { vm.delete(context: modelContext) try? modelContext.save() pushNoteToFTS5() close() }",
+            // Save asks nothing.
+            "if let noteId = vm.save(context: modelContext) { linkNoteToHighlight(noteId: noteId) } try? modelContext.save() pushNoteToFTS5() close() }",
+        ], file: "ResearchNoteEditorView.swift")
+        Self.expect(try sources.web("research/noteEditorRules.ts"), holds: [
+            "if (current.text !== opening.text || !sameIds(current.projectIds, opening.projectIds) || !sameIds(current.userTagIds, opening.userTagIds) || !sameIds(current.selectedSummaryIds, opening.selectedSummaryIds)) { return true; }",
+            "return current.text !== '' && current.edited && (opening.formattingKept || !sameRuns(current.runs, opening.runs));",
+            "const left = new Set(a.map((id) => id.toUpperCase()));",
+        ], file: "noteEditorRules.ts")
+        let editor = try sources.web("research/NoteEditor.tsx")
+        Self.expect(editor, holds: [
+            // Recorded once, from the editor's first read, as the app's `init` records it.
+            "setDraft(first); setOpening(snapshot(first, formattingKept === true));",
+            "const changed = draft !== null && opening !== null && holdsChanges(opening, snapshot(draft));",
+            "function discard() { if (busy) return; if (changed) ask('discard'); else leave('discarded'); }",
+            #"<Modal className="note-editor" labelledBy={headingId} onCancel={discard} onEscape={discard} onClose={closedByTheBrowser}>"#,
+            "onClick={() => !busy && ask('delete')}",
+            "<DiscardChanges key={question.key} isNewNote={!editing} onClose={(discarded) => (discarded ? leave('discarded') : keep())} />",
+            "<DeleteNote key={question.key} note={note} onClose={(deleted) => (deleted ? leave('deleted') : keep())} />",
+            "<p id={messageId}>{isNewNote ? copy.noteEditor.discardMessageNew : copy.noteEditor.discardMessageEdit}</p>",
+            "closeAtOnce(() => leave('saved'));",
+        ], file: "NoteEditor.tsx")
+        // Keep Editing first, the role the app gives Cancel, and focused; Discard Changes after it.
+        let keep = try #require(editor.range(of: "{copy.noteEditor.keepEditing}"))
+        let discard = try #require(editor.range(of: "{copy.noteEditor.discardConfirm}"))
+        #expect(keep.lowerBound < discard.lowerBound && editor.contains("initial={keepEditing}"))
+        Self.expect(try sources.web("research/DeleteNote.tsx"), holds: [
+            "{copy.allNotes.deleteTitle}", "<p id={messageId}>{copy.allNotes.deleteMessage}</p>", "initial={cancel}",
+        ], file: "DeleteNote.tsx")
     }
 }

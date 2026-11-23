@@ -1,12 +1,13 @@
 // The app's collection view rules S18d mirrors: the list's project scope, the rows Contents lists, Move
-// Up and Move Down, a document row's chips, the pickers' depths and the Add to Collection picker's
-// order and search; CollectionParityTests holds each to the app's source.
+// Up and Move Down, a document row's chips, a row's question before its delete, the pickers' depths and
+// the Add to Collection picker's order and search; CollectionParityTests holds each to the app's source.
 import { describe, expect, it } from 'vitest';
 import type { CollectionEntry, CollectionListItem } from '../api/collections';
 import {
   bodyDepthOptions,
   canMoveDown,
   contentsRows,
+  deletionHolding,
   entryChips,
   heldOrder,
   hiddenCollectionCount,
@@ -142,6 +143,26 @@ describe('a document row’s chips', () => {
   it('shows Headnote wherever it resolves on, the collection’s default among them', () => {
     expect(entryChips(entry('d', 'document', 0), { defaultIncludeHeadnote: true })).toEqual([{ kind: 'headnote' }]);
     expect(entryChips(entry('d', 'document', 0, { includeHeadnote: false }), { defaultIncludeHeadnote: true })).toEqual([]);
+  });
+});
+
+describe('a row’s question before its delete (FRUS-Explorer#1941)', () => {
+  it('asks of what the server says the entry holds, and of nothing where it holds nothing', () => {
+    expect(deletionHolding(entry('h', 'heading', 1, { holds: 'sectionDefaults' }))).toBe('sectionDefaults');
+    expect(deletionHolding(entry('d', 'document', 0, { holds: 'documentHeadnote' }))).toBe('documentHeadnote');
+    expect(deletionHolding(entry('p', 'prose', 0, { text: 'Read these two together', holds: 'noteBlockText' }))).toBe('noteBlockText');
+    expect(deletionHolding(entry('d', 'document', 0))).toBeNull();
+    expect(deletionHolding(entry('e', 'excerpt', 0))).toBeNull();
+  });
+
+  it('reads a note block’s text as typed while its editor holds what it has not sent, as the app reads the text as it is typed', () => {
+    const block = entry('p', 'prose', 0, { text: '' });
+    expect(deletionHolding(block, 'Typed, not yet sent')).toBe('noteBlockText');
+    // Spaces and line breaks alone are no text, by the app's trimming, U+0085 and U+2028 among them.
+    expect(deletionHolding(block, ' \n\u0085\u2028\u00A0\t')).toBeNull();
+    expect(deletionHolding({ ...block, text: 'Saved', holds: 'noteBlockText' }, '')).toBeNull();
+    // Another row's has no typed text to read.
+    expect(deletionHolding(entry('h', 'heading', 1), 'Typed')).toBeNull();
   });
 });
 

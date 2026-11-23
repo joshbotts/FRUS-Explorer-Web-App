@@ -1,5 +1,6 @@
 // The question All Notes asks before a note is deleted, as the app's: Delete Note?, its sentence,
-// and Delete and Cancel, Cancel first. The editor's own Delete asks nothing, as the app's does not.
+// and Delete and Cancel, Cancel first. The note editor's Delete asks it too, in All Notes' words, as
+// the app's has since FRUS-Explorer#1941 (L19).
 import { useQueryClient } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
 import { errorMessage } from '../api/client';
@@ -9,7 +10,7 @@ import { copy } from '../copy';
 import { closeAtOnce, Modal } from '../shell/Modal';
 
 /** Asks, then deletes `note`; `onClose` says whether it was deleted. */
-export function DeleteNote({ note, onClose }: { note: NoteSummary; onClose: (deleted: boolean) => void }) {
+export function DeleteNote({ note, onClose }: { note: Pick<NoteSummary, 'id' | 'volumeId' | 'documentId'>; onClose: (deleted: boolean) => void }) {
   const client = useQueryClient();
   const headingId = useId();
   const messageId = useId();
@@ -37,8 +38,13 @@ export function DeleteNote({ note, onClose }: { note: NoteSummary; onClose: (del
       labelledBy={headingId}
       describedBy={messageId}
       initial={cancel}
-      // While the deletion is sent, Cancel and Escape wait for it: it cannot be called back.
+      // While the deletion is sent, Cancel and Escape wait for it: it cannot be called back. Escape is taken at the key,
+      // so a second one cannot have the browser close the question while it waits, nor, over the note editor, close the
+      // editor with it.
       onCancel={() => {
+        if (!busy) onClose(false);
+      }}
+      onEscape={() => {
         if (!busy) onClose(false);
       }}
       onClose={() => {}}

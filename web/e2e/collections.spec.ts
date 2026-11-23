@@ -317,6 +317,98 @@ test('makes a collection three sections deep, with documents, a note block and a
   expect((await listed(page)).some((item) => item.id === id)).toBe(false);
 });
 
+test('asks before a row’s delete takes the reader’s work, in the app’s words for what it holds, and deletes a row holding none at once, by keyboard alone', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto('collections');
+  // d1 with a title of the reader's, d2 at its defaults, a note block with text, a bibliography and a heading with a section default.
+  const id = await made(page, 'Held rows');
+  const path = `api/v1/me/collections/${id}`;
+  const block = (await send(page, 'POST', `${path}/blocks`, { kind: 'prose' })) as { entryIds: string[] };
+  await send(page, 'PATCH', `${path}/entries/${block.entryIds[0]}`, { text: 'Read these two together', runs: null });
+  await send(page, 'POST', `${path}/blocks`, { generatedBlockType: 'bibliography' });
+  const heading = (await send(page, 'POST', `${path}/blocks`, { kind: 'heading' })) as { entryIds: string[] };
+  await send(page, 'PATCH', `${path}/entries/${heading.entryIds[0]}`, { text: 'Europe', bodyDepthOverride: 'index' });
+  const d1 = (await collection(page, id)).entries.find((entry) => entry.documentId === 'd1')!;
+  await send(page, 'PATCH', `${path}/entries/${d1.id}`, { titleOverride: 'The first telegram' });
+  await page.goto(`collections/${id}`);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Held rows');
+  const contents = page.getByRole('list', { name: 'Contents' });
+  await expect.poll(() => outline(page, id)).toEqual([
+    ['document', 'd1', 0],
+    ['document', 'd2', 0],
+    ['prose', 'Read these two together', 0],
+    ['generated', 'bibliography', 0],
+    ['heading', 'Europe', 1],
+  ]);
+
+  /** Chooses a row's delete from its menu, by keyboard: the menu's last item, or `up` above it. */
+  async function chooseDelete(name: string, up = 0) {
+    const actions = contents.getByRole('button', { name: `Actions: ${name}` });
+    if (!(await actions.evaluate((element) => element === element.ownerDocument.activeElement))) await tabTo(page, actions, 80);
+    await page.keyboard.press('Enter');
+    const menu = page.getByRole('menu', { name: `Actions: ${name}` });
+    await page.keyboard.press('End');
+    for (let step = 0; step < up; step++) await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('Enter');
+    await expect(menu).toHaveCount(0);
+    return actions;
+  }
+
+  // The note block: Delete Note Block?, Cancel focused; Escape is its Cancel, focus back on the row's menu.
+  const blockMenu = await chooseDelete('Note block');
+  const noteBlock = page.getByRole('alertdialog', { name: 'Delete Note Block?' });
+  await expect(noteBlock).toContainText('Its text goes with it, on your other devices too once they sync.');
+  await expect(noteBlock.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await axeCheck(page);
+  await page.keyboard.press('Escape');
+  await expect(noteBlock).toHaveCount(0);
+  await expect(blockMenu).toBeFocused();
+  // Asked again, Delete Note Block deletes it, and focus goes on to the next row's menu, the bibliography's.
+  await chooseDelete('Note block');
+  await page.keyboard.press('Tab');
+  await expect(noteBlock.getByRole('button', { name: 'Delete Note Block' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(noteBlock).toHaveCount(0);
+  await expect(contents.getByRole('button', { name: 'Actions: Bibliography' })).toBeFocused();
+
+  // An apparatus block holds nothing of the reader's, and goes at once.
+  await chooseDelete('Bibliography');
+  await expect(contents.getByRole('button', { name: 'Actions: Europe' })).toBeFocused();
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+
+  // The heading's Delete Heading Only: Delete Heading?, its section defaults going with it.
+  await chooseDelete('Europe', 1);
+  const headingQuestion = page.getByRole('alertdialog', { name: 'Delete Heading?' });
+  await expect(headingQuestion).toContainText(
+    'Its section defaults go with it, on your other devices too once they sync. The entries under it stay.',
+  );
+  await expect(headingQuestion.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await axeCheck(page);
+  await page.keyboard.press('Tab');
+  await expect(headingQuestion.getByRole('button', { name: 'Delete Heading' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(headingQuestion).toHaveCount(0);
+  await expect(contents.getByRole('button', { name: `Actions: ${d2Header}` })).toBeFocused();
+
+  // A document at its defaults goes at once; one with a title of the reader's asks Remove Document?.
+  await chooseDelete(d2Header);
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  await expect(contents.getByRole('button', { name: `Actions: ${d1Header}` })).toBeFocused();
+  await chooseDelete(d1Header);
+  const documentQuestion = page.getByRole('alertdialog', { name: 'Remove Document?' });
+  await expect(documentQuestion).toContainText(
+    'Its settings in this collection go with it, on your other devices too once they sync. The document, and your notes and highlights on it, stay.',
+  );
+  await expect(documentQuestion.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await axeCheck(page);
+  await page.keyboard.press('Tab');
+  await expect(documentQuestion.getByRole('button', { name: 'Remove Document' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(documentQuestion).toHaveCount(0);
+  await expect.poll(() => outline(page, id)).toEqual([]);
+  await expect(page.getByRole('button', { name: addLabel })).toBeFocused();
+});
+
 test('offers the app’s templates, Summaries with overview once a document of the collection has a summary, by pointer', async ({ page }) => {
   await page.goto('collections');
   const id = await made(page, 'Berlin briefing');

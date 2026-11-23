@@ -1,8 +1,9 @@
 // The Collections tab, a collection's editor and the Add to Collection picker (S18d), against a stubbed
 // server: the list's rows, its scope banner, New Collection, Rename, Duplicate and Delete…; the editor's rows
-// by kind, the Add menu, a heading's menu and its Delete Section, Move Down, Collection settings'
-// presets, and the inspector's inclusions; and the picker's add of a document and of an excerpt.
-import { cleanup, screen, waitFor, within } from '@testing-library/react';
+// by kind, the Add menu, a heading's menu and its Delete Section, a row's question before its delete takes
+// the reader's work (FRUS-Explorer#1941), Move Down, Collection settings' presets, and the inspector's
+// inclusions; and the picker's add of a document and of an excerpt.
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CollectionDetail, CollectionEntry, CollectionListItem, EntryInspector } from '../api/collections';
@@ -436,6 +437,90 @@ describe('a collection’s editor', () => {
     expect(within(question).getByText('Deletes this heading and the 4 entries it contains.')).toBeTruthy();
     await userEvent.click(within(question).getByRole('button', { name: 'Delete Section' }));
     await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).endsWith('/delete-section'))).toBe(true));
+  });
+
+  /** A row of each kind, the first three holding the reader's work as the server says. */
+  const holding: CollectionEntry[] = [
+    entry({ id: 'H1', kind: 'heading', text: 'Europe', depth: 1, sectionEnd: 6, holds: 'sectionDefaults', bodyDepthOverride: 'index' }),
+    entry({ id: 'D1', kind: 'document', depth: 1, volumeId: 'frus1961-63v06', documentId: 'd1', header: 'Headnoted', holds: 'documentHeadnote' }),
+    entry({ id: 'P1', kind: 'prose', depth: 1, text: 'Read these together.', holds: 'noteBlockText' }),
+    entry({ id: 'X1', kind: 'excerpt', depth: 1, volumeId: 'frus1961-63v06', documentId: 'd2', text: 'Allow me to congratulate you.' }),
+    entry({ id: 'D2', kind: 'document', depth: 1, volumeId: 'frus1961-63v06', documentId: 'd2', header: 'At its defaults' }),
+    entry({ id: 'G1', kind: 'generated', depth: 1, generatedBlockType: 'chronology' }),
+  ];
+
+  it('asks before a row’s delete takes the reader’s work, in the app’s words for what it holds, Cancel first, as the app’s has since #1941', async () => {
+    const fetch = server({
+      [`/api/v1/me/collections/${berlinId}`]: detail({ entries: holding }),
+      [`DELETE /api/v1/me/collections/${berlinId}/entries/P1`]: detail({ entries: holding.filter((each) => each.id !== 'P1') }),
+    });
+    const deletes = () => fetch.mock.calls.filter(([, init]) => init?.method === 'DELETE').map(([url]) => String(url).split('/').pop());
+    renderAt(`/collections/${berlinId}`);
+    const menuOf = (name: string) => screen.findByRole('button', { name: `Actions: ${name}` });
+
+    async function choose(row: string, item: string) {
+      await userEvent.click(await menuOf(row));
+      await userEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: item }));
+    }
+
+    // A note block with text: Delete Note Block?, Cancel first and focused; Cancel keeps it, focus back on its menu.
+    await choose('Note block', 'Delete note block');
+    let question = await screen.findByRole('alertdialog', { name: 'Delete Note Block?' });
+    expect(within(question).getByText('Its text goes with it, on your other devices too once they sync.')).toBeTruthy();
+    expect(within(question).getAllByRole('button').map((button) => button.textContent)).toEqual(['Cancel', 'Delete Note Block']);
+    expect(document.activeElement).toBe(within(question).getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(within(question).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Actions: Note block' })));
+    expect(deletes()).toEqual([]);
+
+    // A heading's Delete Heading Only, its section defaults going with it; Escape is Cancel.
+    await choose('Europe', 'Delete Heading Only');
+    question = await screen.findByRole('alertdialog', { name: 'Delete Heading?' });
+    expect(
+      within(question).getByText('Its section defaults go with it, on your other devices too once they sync. The entries under it stay.'),
+    ).toBeTruthy();
+    expect(within(question).getByRole('button', { name: 'Delete Heading' })).toBeTruthy();
+    fireEvent(question, new Event('cancel', { cancelable: true }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+
+    // A document with its headnote draft.
+    await choose('Headnoted', 'Remove document');
+    question = await screen.findByRole('alertdialog', { name: 'Remove Document?' });
+    expect(
+      within(question).getByText(
+        'Its headnote and its settings in this collection go with it, on your other devices too once they sync. The document, and your notes and highlights on it, stay.',
+      ),
+    ).toBeTruthy();
+    await userEvent.click(within(question).getByRole('button', { name: 'Cancel' }));
+    expect(deletes()).toEqual([]);
+
+    // Confirmed, the note block goes.
+    await choose('Note block', 'Delete note block');
+    await userEvent.click(within(await screen.findByRole('alertdialog', { name: 'Delete Note Block?' })).getByRole('button', { name: 'Delete Note Block' }));
+    await waitFor(() => expect(deletes()).toEqual(['P1']));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('deletes at once a row that holds none of the reader’s work: an excerpt, a block and a document at its defaults', async () => {
+    const fetch = server({
+      [`/api/v1/me/collections/${berlinId}`]: detail({ entries: holding }),
+      [`DELETE /api/v1/me/collections/${berlinId}/entries/X1`]: detail({ entries: holding }),
+      [`DELETE /api/v1/me/collections/${berlinId}/entries/G1`]: detail({ entries: holding }),
+      [`DELETE /api/v1/me/collections/${berlinId}/entries/D2`]: detail({ entries: holding }),
+    });
+    const deletes = () => fetch.mock.calls.filter(([, init]) => init?.method === 'DELETE').map(([url]) => String(url).split('/').pop());
+    renderAt(`/collections/${berlinId}`);
+    for (const [row, item, id] of [
+      [/^Actions: Excerpt from d2/, 'Remove excerpt', 'X1'],
+      ['Actions: Chronology', 'Remove block', 'G1'],
+      ['Actions: At its defaults', 'Remove document', 'D2'],
+    ] as const) {
+      await userEvent.click(await screen.findByRole('button', { name: row }));
+      await userEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: item }));
+      await waitFor(() => expect(deletes().at(-1)).toBe(id));
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+    }
   });
 
   it('saves a heading’s title as it is typed, once the typing stops', async () => {

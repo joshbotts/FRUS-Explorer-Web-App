@@ -3,7 +3,8 @@
 // deep, each row the app's, a collapsed heading hiding its section, with Add Documents… under it; and,
 // since S18e, the live preview beside it, the collection as its HTML export renders it. Narrower than
 // 900 px the two are the iPhone's Outline | Preview. A smart collection says what it is first and takes
-// nothing by hand but its apparatus.
+// nothing by hand but its apparatus. A row that holds the reader's work asks before its delete, as the
+// app's has since FRUS-Explorer#1941 (`requestDelete(at:)`), and any other goes at once.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi } from '@tanstack/react-router';
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
@@ -21,8 +22,10 @@ import {
   moveEntryBy,
   sortByDate,
   updateEntry,
+  whenAnswered,
   type CollectionDetail,
   type CollectionEntry,
+  type EntryHolding,
 } from '../api/collections';
 import { copy } from '../copy';
 import { useHeadingReady } from '../shell/headingFocus';
@@ -37,6 +40,7 @@ import { CollectionSettings } from './CollectionSettings';
 import {
   canMoveDown,
   contentsRows,
+  deletionHolding,
   earlierCaption,
   earlierTitle,
   entriesFromBeforeLink,
@@ -102,6 +106,8 @@ function Editor({ detail }: { detail: CollectionDetail }) {
   const [pane, setPane] = useState<'outline' | 'preview'>('outline');
   const [inspecting, setInspecting] = useState<string | null>(null);
   const [deletingSection, setDeletingSection] = useState<CollectionEntry | null>(null);
+  // A row's delete waiting on its question, by the entry's id, which a delete elsewhere does not move.
+  const [deleting, setDeleting] = useState<{ entryId: string; holding: EntryHolding } | null>(null);
   const [removingEarlier, setRemovingEarlier] = useState(false);
   const removeEarlier = useRef<HTMLButtonElement>(null);
   const contentsHeading = useRef<HTMLHeadingElement>(null);
@@ -189,9 +195,39 @@ function Editor({ detail }: { detail: CollectionDetail }) {
     });
   }
 
-  async function remove(entry: CollectionEntry, pos: number) {
-    const answer = await run(() => deleteEntry(client, detail.id, entry.id));
-    if (answer) focusAfter([entry.id], pos);
+  /** Where the row's menu sits among the rows' menus now, which focus goes on from once the row goes. */
+  function menuPosition(entryId: string): number {
+    const menus = [...(list.current?.querySelectorAll<HTMLElement>('li[data-id] .row-menu > button') ?? [])];
+    return Math.max(0, menus.findIndex((button) => button.closest('li')?.dataset.id === entryId));
+  }
+
+  /** Deletes a row, with the headnote draft it owns; refused, the row stays, and its menu takes focus back. */
+  async function remove(entryId: string) {
+    const pos = menuPosition(entryId);
+    const answer = await run(() => deleteEntry(client, detail.id, entryId));
+    if (answer) focusAfter([entryId], pos);
+    else requestAnimationFrame(() => focusRowMenu(entryId));
+  }
+
+  /**
+   * A row's delete, a heading's Delete Heading Only among them: at once, or after the row's question when it holds the
+   * reader's work, as the app's `requestDelete(at:)`. Asked of the entry as the server holds it once every change
+   * sent to the collection is answered, which says what it holds, and of the text a note block has not yet sent.
+   */
+  async function requestRemove(entryId: string, typed?: string) {
+    await whenAnswered(detail.id);
+    const latest = client.getQueryData<CollectionDetail>(collectionQuery(detail.id).queryKey);
+    const entry = latest?.entries.find((each) => each.id === entryId);
+    if (!entry) return;
+    const holding = deletionHolding(entry, typed);
+    if (!holding) {
+      await remove(entryId);
+      return;
+    }
+    // One question at a time, as the app's asks one, and none over a dialog opened while the answers came, whose
+    // page would be inert under it: a second row that holds work stays, as the app's Edit leaves one, to be chosen again.
+    if (document.querySelector('dialog[open]')) return;
+    setDeleting((current) => current ?? { entryId, holding });
   }
 
   function actions(row: ContentsRow, pos: number): RowActions {
@@ -200,7 +236,7 @@ function Editor({ detail }: { detail: CollectionDetail }) {
     return {
       onMoveUp: unrecognized || !moveUp(rows, pos, entries.length) ? undefined : () => move(id, 'up'),
       onMoveDown: unrecognized || !canMoveDown(rows, entries, pos) ? undefined : () => move(id, 'down'),
-      onRemove: unrecognized ? undefined : () => void remove(row.entry, pos),
+      onRemove: unrecognized ? undefined : (typed) => void requestRemove(id, typed),
       onChange: (changes) => updateEntry(client, detail.id, row.entry.id, changes),
     };
   }
@@ -457,7 +493,54 @@ function Editor({ detail }: { detail: CollectionDetail }) {
           }}
         />
       )}
+      {deleting && (
+        <DeleteEntry
+          holding={deleting.holding}
+          onClose={async (confirmed) => {
+            const { entryId } = deleting;
+            setDeleting(null);
+            // Kept, the row's menu takes focus back.
+            if (!confirmed) requestAnimationFrame(() => focusRowMenu(entryId));
+            else await remove(entryId);
+          }}
+        />
+      )}
     </>
+  );
+}
+
+/**
+ * A row's question before its delete takes the reader's work, the app's `CollectionEntryDeletion` in the Delete Section
+ * dialog's form: what the row holds names its title, its message and its action; Cancel first, as the web's questions
+ * have it.
+ */
+function DeleteEntry({ holding, onClose }: { holding: EntryHolding; onClose: (confirmed: boolean) => void }) {
+  const headingId = useId();
+  const messageId = useId();
+  const cancel = useRef<HTMLButtonElement>(null);
+  return (
+    <Modal
+      className="confirm"
+      role="alertdialog"
+      labelledBy={headingId}
+      describedBy={messageId}
+      initial={cancel}
+      onCancel={() => onClose(false)}
+      onClose={() => {}}
+    >
+      <h2 id={headingId} tabIndex={-1}>
+        {copy.collectionEditor.entryDeleteTitle[holding]}
+      </h2>
+      <p id={messageId}>{copy.collectionEditor.entryDeleteMessage[holding]}</p>
+      <div className="dialog-actions">
+        <button ref={cancel} type="button" onClick={() => onClose(false)}>
+          {copy.collectionEditor.entryDeleteCancel}
+        </button>
+        <button type="button" className="destructive" onClick={() => closeAtOnce(() => onClose(true))}>
+          {copy.collectionEditor.entryDeleteAction[holding]}
+        </button>
+      </div>
+    </Modal>
   );
 }
 

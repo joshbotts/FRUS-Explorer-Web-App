@@ -164,6 +164,10 @@ public struct CollectionDetail: Codable, Equatable, Sendable, ResponseEncodable 
         public var dateISO: String?
         /// For a document: how many notes its document has, which its row's chip counts by.
         public var noteCount: Int?
+        /// What the entry holds of the reader's that its delete would take, which its row asks about
+        /// first, as the app's has since FRUS-Explorer#1941 (`CollectionEditing.DeletionHolding`'s raw
+        /// value); absent for a row that goes at once.
+        public var holds: String?
     }
 }
 
@@ -611,7 +615,11 @@ enum CollectionRoutes {
     /// What the editor shows of a collection.
     static func detail(_ collection: CollectionExport, for user: String, in store: any UserDataStore,
                        resources: ServerResources, provider: ServedIndexProvider) async throws -> CollectionDetail {
-        let (prompts, noteCounts) = try await Blocking.run { (try store.prompts(for: user), try store.noteCounts(of: user)) }
+        // The headnote drafts only where a document entry names a headnote, which only then can be one.
+        let namesHeadnote = collection.entries.contains { $0.entryKind == .document && $0.headnoteSummaryId != nil }
+        let (prompts, noteCounts, drafts) = try await Blocking.run {
+            (try store.prompts(for: user), try store.noteCounts(of: user), namesHeadnote ? try store.headnoteDraftIds(of: user) : [])
+        }
         var savedSearchName: String?
         if let id = collection.savedSearchId,
            let row = try await Blocking.run({ try store.searchSet(.savedSearches, id: id.uuidString, of: user) }) {
@@ -685,7 +693,9 @@ enum CollectionRoutes {
                     header: carriesDocument ? facts[key]?.header : nil,
                     volumeTitle: carriesDocument ? resources.volume(entry.volumeId)?.title : nil,
                     dateISO: carriesDocument ? facts[key]?.dateISO : nil,
-                    noteCount: kind == .document ? noteCounts[key] ?? 0 : nil)
+                    noteCount: kind == .document ? noteCounts[key] ?? 0 : nil,
+                    holds: CollectionEditing.deletionHolding(entry, hasHeadnoteDraft: kind == .document
+                        && entry.headnoteSummaryId.map { drafts.contains($0.uuidString.uppercased()) } == true)?.rawValue)
             },
             createdAt: collection.createdAt.map(UserStoreDate.text), lastModified: collection.lastModified.map(UserStoreDate.text))
     }
