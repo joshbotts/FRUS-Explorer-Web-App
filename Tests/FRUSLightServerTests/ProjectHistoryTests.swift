@@ -489,7 +489,7 @@ import Testing
             #expect(initial.citationStyle == "" && initial.defaultDocumentMode == "" && initial.researchLoggingEnabled)
             #expect(initial.tagOrder.isEmpty && initial.projectOrder.isEmpty && initial.createdAt == nil)
             #expect(initial.wordCloud == .init(minLength: 3, minCount: 1, foldPlurals: true, filterMarkings: true, excludeBoilerplate: true,
-                                               globalStopwords: [], lensStopwordsJSON: ""))
+                                               globalStopwords: [], lensStopwordsJSON: "", lensStopwords: [:]))
 
             let (a, b, p) = ("5E17F000-0000-4000-8000-0000000000A1", "5E17F000-0000-4000-8000-0000000000A2",
                              "5E17F000-0000-4000-8000-0000000000B1")

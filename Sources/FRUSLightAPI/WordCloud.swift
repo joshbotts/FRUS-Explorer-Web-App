@@ -699,7 +699,7 @@ enum WordCloudSettingsRoutes {
             try FormQuery(request.uri.query).refuseUnknown([])
             let user = try context.requireUser()
             let body = try await JSONBody.decode(HiddenWord.self, from: request, fields: ["word", "lens"])
-            let lens = try settingsLens(body.lens, field: "lens")
+            let lens = try settingsLens(body.lens, inQuery: false)
             guard let word = normalize(body.word) else {
                 throw APIProblem(.badRequest, code: "INVALID_FIELD", detail: "word: a word to hide, not blank.")
             }
@@ -716,7 +716,7 @@ enum WordCloudSettingsRoutes {
             guard let word = try query.single("word") else {
                 throw APIProblem.invalidParameter("word", "required: the word to show again")
             }
-            let lens = try settingsLens(try query.single("lens"), field: "lens")
+            let lens = try settingsLens(try query.single("lens"), inQuery: true)
             return try await change(of: user.id, in: store, at: now()) { removing(word, lens: lens, from: $0) }
         }
         // The settings bench (`WordCloudBench`): the stand-in sample, under the lens the editor shows, or every cloud's.
@@ -724,7 +724,7 @@ enum WordCloudSettingsRoutes {
             let query = try FormQuery(request.uri.query)
             try query.refuseUnknown(["lens"])
             let user = try context.requireUser()
-            let lens = try settingsLens(try query.single("lens"), field: "lens") ?? .allTerms
+            let lens = try settingsLens(try query.single("lens"), inQuery: true) ?? .allTerms
             let settings = try await CloudSettings(PreferenceRoutes.syncedPreferences(of: user.id, in: store))
             return try await Blocking.run {
                 let bundle = resources.bundledClouds
@@ -740,12 +740,13 @@ enum WordCloudSettingsRoutes {
     }
 
     /// A lens a hidden word may be kept under: any of the app's nine, as the settings pane offers each; none for every
-    /// cloud.
-    static func settingsLens(_ raw: String?, field: String) throws -> WordCloudLens? {
+    /// cloud. A body's field and a query's parameter are refused each in its own code.
+    static func settingsLens(_ raw: String?, inQuery: Bool) throws -> WordCloudLens? {
         guard let raw, !raw.isEmpty else { return nil }
         guard let lens = WordCloudLens(rawValue: raw) else {
-            throw APIProblem(.badRequest, code: "INVALID_FIELD",
-                             detail: "\(field): one of \(WordCloudLens.allCases.map(\.rawValue).joined(separator: ", ")), or none for every cloud.")
+            let known = "one of \(WordCloudLens.allCases.map(\.rawValue).joined(separator: ", ")), or none for every cloud"
+            throw inQuery ? APIProblem.invalidParameter("lens", "must be \(known), not \(raw)")
+                : APIProblem(.badRequest, code: "INVALID_FIELD", detail: "lens: \(known).")
         }
         return lens
     }
