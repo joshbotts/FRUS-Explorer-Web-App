@@ -75,6 +75,8 @@ export const copy = {
     /** From S24g, the menu's second and third. */
     personAnalytics: 'Person Analytics',
     crossReferenceAnalytics: 'Cross-Reference Analytics',
+    /** From S24i, the Mac's menu's last, after Chronology, opening on the whole corpus. */
+    wordCloud: 'Word Cloud',
     /** From S24h, the menu's fourth, and About the Series after Chronology, as the web has no Research Guide. */
     archivalAnalytics: 'Archival Analytics',
     aboutSeries: 'About the Series',
@@ -492,6 +494,10 @@ export const copy = {
     label: 'Reading',
     help: 'How to read these results. The concordance covers this page; the others cover the whole retained set.',
     titles: { list: 'List', timeline: 'Timeline', concordance: 'Concordance' },
+    /** From S24i, the Mac's fourth, offered and refused until phase 4: its title, the app's, and the reason, the web's own. */
+    collocates: 'Collocates',
+    collocatesUnavailable:
+      'Collocates, the words near your matches, are counted in their dictionary forms, which this server’s language analysis cannot do yet.',
   },
   timeline: {
     /** The mode picker's name, which the Mac's segmented picker hides. */
@@ -2408,6 +2414,64 @@ export const copy = {
 
   // ─── Tools ────────────────────────────────────────────────────────────────
   /**
+   * The Word Cloud (S24i), in the app's words: its title, Scope, the menu's groups, Show, Size words by, the sentiment
+   * legend, the word's menu, Distinctive's title and the error's and loading's lines. The lenses, measures, chip, count
+   * line, states and caveats are the app's or the kit's, from the server. The web's own: the volumes' groups, the list's
+   * columns and title, the canvas's name, what the settings took out, and the refusals' reasons, Distinctive's and a
+   * document's, each waiting for the server's language analysis.
+   */
+  wordCloud: {
+    title: 'Word Cloud',
+    /** The reader's rail's tile, the app's, and its help, the web's own: the cloud is the document's volume's. */
+    tile: 'Word Cloud',
+    tileHelp: 'Show the bundled word cloud of this document’s volume',
+    scope: 'Scope',
+    subseries: 'Subseries',
+    volume: 'Volume',
+    volumesOf: (subseries: string) => `Volume: ${subseries}`,
+    show: 'Show',
+    lensHelp: 'The lens narrows the cloud to a kind of term. The bundled clouds carry four.',
+    sizeBy: 'Size words by',
+    measureHelp: 'Frequency sizes each word by how often it appears here. Distinctive compares this scope with the whole corpus.',
+    positive: 'Positive',
+    negative: 'Negative',
+    neither: 'Neither',
+    boilerplate: 'Hide common diplomatic words',
+    showHidden: (count: number) => `Show ${count} hidden words`,
+    settingsLink: 'Word Cloud Settings',
+    analyze: 'Analyze in Corpus Analytics',
+    searchTerm: 'Search for this term',
+    hideSession: 'Hide in this word cloud',
+    hideLens: 'Hide this word in this lens',
+    hideGlobal: 'Hide this word in all word clouds',
+    tapHint: 'Charts this term in Corpus Analytics',
+    hiddenAnnouncement: (term: string) => `${term} hidden from this word cloud`,
+    hiddenInLens: (term: string) => `${term} hidden in this lens`,
+    hiddenEverywhere: (term: string) => `${term} hidden in all word clouds`,
+    keynessTitle: 'No Distinctiveness Ranking',
+    keynessReason:
+      'Distinctive ranks a scope’s words against the bundled corpus reference, which counts every word in its dictionary form. This server cannot count a scope’s words itself yet, since its language analysis does not reduce them to their dictionary forms, and the bundled clouds keep only the words each scope uses most, too few to rank. Size words by frequency instead.',
+    documentNotice:
+      'A document’s own word cloud is counted from its text, in dictionary forms, which this server’s language analysis cannot do yet. This is its volume’s cloud, from the clouds bundled with the app.',
+    backToDocument: 'Back to the document',
+    errorTitle: 'Couldn’t Build Word Cloud',
+    loading: 'Building word cloud…',
+    countLine: (count: number) => `${count.toLocaleString('en-US')} ${count === 1 ? 'term' : 'terms'}`,
+    removed: (removed: number, listed: number) =>
+      `Your settings took ${removed === 1 ? 'one word' : `${removed} words`} out of this list of ${listed}.`,
+    canvasLabel: (drawn: number, total: number) =>
+      `Word cloud of ${drawn} of ${total} terms, each sized by its count. The list below names every term with its count.`,
+    wordTitle: (term: string, count: number) => `${term}: ${count.toLocaleString('en-US')}`,
+    listTitle: 'Terms by count',
+    rank: 'Rank',
+    term: 'Term',
+    polarity: 'Polarity',
+    count: 'Count',
+    actions: 'Actions',
+    more: 'More',
+    moreFor: (term: string) => `More for ${term}`,
+  },
+  /**
    * Archival Analytics (S24h), in the app's words: its title, Mode, the filter row's captions, the network's controls,
    * dock actions and picker, the flows' controls, and the loading and empty states. The rankings, sentences, captions,
    * cards, caveats and tables are the kit's or the views', from the server. The charts' descriptions, the canvas's name
@@ -3031,6 +3095,62 @@ export const copy = {
     documents: (count: number) => (count === 1 ? '1 document' : `${count} documents`),
     exportLine: (format: string, documents: string) => `Exported ${format} — ${documents}`,
     loading: 'Loading the sessions…',
+  },
+  /**
+   * Settings ▸ Word Cloud (S24i), the app's pane in its words: Sample, Filtering, Thresholds, Appearance and Hidden Words,
+   * the lenses as its picker names them, the typefaces and densities. The web's own: the thresholds' fields' names, which
+   * the app's steppers write with their value, the add and remove buttons' text, and the line for a server that keeps
+   * no reader's settings.
+   */
+  wordCloudSettings: {
+    title: 'Word Cloud',
+    sample: 'Sample',
+    sampleNone: 'These settings keep nothing from the sample. Lower a threshold or turn a filter off.',
+    sampleA11y: (terms: string) => `Sample of kept terms: ${terms}`,
+    filtering: 'Filtering',
+    boilerplate: 'Hide common diplomatic words',
+    markings: 'Filter classification markings',
+    foldPlurals: 'Merge plural and singular forms',
+    markingsFooter:
+      'Classification markings include terms like “Top Secret” and “Confidential”, precedence words like “Priority” and “Immediate”, and month names. These words describe the handling of a document, not its content. Left in, they crowd the cloud, especially the named-entity lenses.',
+    thresholds: 'Thresholds',
+    minLength: 'Minimum word length',
+    minCount: 'Minimum occurrences',
+    effect: 'Effect',
+    measuring: 'Measuring…',
+    thresholdsFooter:
+      'Drops terms shorter than the minimum length, and terms appearing fewer than the minimum number of times. Raising either option results in a sparser cloud of stronger terms. Occurrences are counted across the whole scope before the top terms are picked, so raising the minimum count may thin a “long tail” you never see rather than the sample above.',
+    appearance: 'Appearance',
+    font: 'Font',
+    density: 'Density',
+    fonts: { rounded: 'Rounded', standard: 'Default', serif: 'Serif', monospaced: 'Monospaced' },
+    densities: { compact: 'Compact', balanced: 'Balanced', airy: 'Airy' },
+    appearanceFooter:
+      'Choose the typeface the cloud is drawn in and how tightly its words pack together. Compact fits more terms; airy spaces them out for legibility. These settings apply on this device only.',
+    hiddenWords: 'Hidden Words',
+    appliesTo: 'Applies to',
+    everyCloud: 'Every cloud',
+    lenses: {
+      allTerms: 'All terms',
+      people: 'People',
+      places: 'Places',
+      organizations: 'Organizations',
+      topics: 'Topics (nouns)',
+      actions: 'Actions (verbs)',
+      descriptors: 'Descriptors (adjectives)',
+      concepts: 'Concepts',
+      sentiment: 'Sentiment',
+    },
+    addPrompt: 'Add a word…',
+    addA11y: 'Add hidden word',
+    add: 'Add',
+    empty: 'No custom words yet.',
+    remove: (word: string) => `Remove ${word}`,
+    removeShort: 'Remove',
+    globalFooter: 'Words listed here are removed from every word cloud, on top of the built-in stop lists.',
+    lensFooter:
+      'Words hidden only when the selected lens is active — useful for trimming a recurring false positive (for example, a place the recognizer keeps mistaking) without affecting other lenses.',
+    noSettings: 'This server keeps no reader’s settings, so its word clouds are drawn at the app’s own settings.',
   },
   /**
    * Settings ▸ Reading, the web's own pane for the app's Display ▸ Reading and Citations sections, in

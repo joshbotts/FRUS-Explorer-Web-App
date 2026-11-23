@@ -1,10 +1,11 @@
 // /api/v1/me/preferences (PLAN's S17f): the user's synced preferences, the Mac's `SyncedPreferences`,
 // one row of them for each user, as a Mac keeps the earliest record. The browser app reads the
 // citation style, the document mode, Log Research Sessions and the reader's own order of the tag and
-// project lists here, which until S17f it kept in its own storage; the word cloud's criteria are kept
-// for phase 3's clouds. A user who has set nothing has the app's initial values, as a Mac with no
-// record reads its own defaults, and the row is made the first time something is set, written as the
-// import writes a Mac's (`MacImport.preferences`) and read as the export reads one.
+// project lists here, which until S17f it kept in its own storage, and since S24i the word cloud's
+// criteria, which Settings ▸ Word Cloud sets and the bundled clouds are filtered by (WordCloud.swift,
+// whose routes under /me keep the hidden words). A user who has set nothing has the app's initial
+// values, as a Mac with no record reads its own defaults, and the row is made the first time something
+// is set, written as the import writes a Mac's (`MacImport.preferences`) and read as the export reads one.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -38,9 +39,10 @@ public struct Preferences: Codable, Equatable, Sendable, ResponseEncodable {
         public var filterMarkings: Bool
         public var excludeBoilerplate: Bool
         /// The hidden words of every lens, as the Mac's settings decode their JSON; and each lens's own,
-        /// as stored.
+        /// as stored, and as the Mac's settings decode it, by the lens's raw value (S24i).
         public var globalStopwords: [String]
         public var lensStopwordsJSON: String
+        public var lensStopwords: [String: [String]]
     }
 
     init(_ preferences: SyncedPreferencesExport, stored: Bool) {
@@ -54,7 +56,8 @@ public struct Preferences: Codable, Equatable, Sendable, ResponseEncodable {
                               foldPlurals: preferences.wcFoldPlurals, filterMarkings: preferences.wcFilterMarkings,
                               excludeBoilerplate: preferences.wcExcludeBoilerplate,
                               globalStopwords: TagReferences.decode(preferences.wcGlobalStopwordsJSON) ?? [],
-                              lensStopwordsJSON: preferences.wcLensStopwordsJSON)
+                              lensStopwordsJSON: preferences.wcLensStopwordsJSON,
+                              lensStopwords: CloudSettings.lensStopwordMap(preferences.wcLensStopwordsJSON))
         createdAt = stored ? UserStoreDate.text(preferences.createdAt) : nil
         updatedAt = stored ? UserStoreDate.text(preferences.updatedAt) : nil
     }
@@ -86,6 +89,70 @@ enum PreferenceRoutes {
         let researchLoggingEnabled: Bool?
         let tagOrder: [String]?
         let projectOrder: [String]?
+        let wordCloud: WordCloudChange?
+    }
+
+    /// A change to the word cloud's criteria (S24i), Settings ▸ Word Cloud's: each a value its control can set, the
+    /// two thresholds within the app's steppers' ranges. Its hidden words are kept by routes of their own
+    /// (`WordCloudSettingsRoutes`), as the app's settings add and remove them one at a time.
+    struct WordCloudChange: Decodable {
+        let minLength: Int?
+        let minCount: Int?
+        let foldPlurals: Bool?
+        let filterMarkings: Bool?
+        let excludeBoilerplate: Bool?
+
+        /// `WordCloudSettingsView`'s steppers: minimum word length 2 to 8, minimum occurrences 1 to 20.
+        static let minLengths = 2...8
+        static let minCounts = 1...20
+
+        private enum Key: String, CodingKey, CaseIterable {
+            case minLength, minCount, foldPlurals, filterMarkings, excludeBoilerplate
+        }
+
+        init(from decoder: any Decoder) throws {
+            let names = try decoder.container(keyedBy: AnyKey.self).allKeys.map(\.stringValue)
+            if let unknown = names.sorted().first(where: { Key(rawValue: $0) == nil }) {
+                throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath,
+                                                        debugDescription: "\(unknown) is not one of \(Key.allCases.map(\.rawValue).joined(separator: ", "))."))
+            }
+            let container = try decoder.container(keyedBy: Key.self)
+            minLength = try container.decodeIfPresent(Int.self, forKey: .minLength)
+            minCount = try container.decodeIfPresent(Int.self, forKey: .minCount)
+            foldPlurals = try container.decodeIfPresent(Bool.self, forKey: .foldPlurals)
+            filterMarkings = try container.decodeIfPresent(Bool.self, forKey: .filterMarkings)
+            excludeBoilerplate = try container.decodeIfPresent(Bool.self, forKey: .excludeBoilerplate)
+        }
+
+        private struct AnyKey: CodingKey {
+            var stringValue: String
+            var intValue: Int? { nil }
+            init(stringValue: String) { self.stringValue = stringValue }
+            init?(intValue: Int) { nil }
+        }
+
+        /// The columns the change sets, each checked.
+        func values() throws -> [String: SQLiteValue] {
+            var values: [String: SQLiteValue] = [:]
+            if let minLength {
+                guard Self.minLengths.contains(minLength) else {
+                    throw APIProblem(.badRequest, code: "INVALID_FIELD",
+                                     detail: "wordCloud.minLength: from \(Self.minLengths.lowerBound) to \(Self.minLengths.upperBound).")
+                }
+                values["wc_min_length"] = .integer(Int64(minLength))
+            }
+            if let minCount {
+                guard Self.minCounts.contains(minCount) else {
+                    throw APIProblem(.badRequest, code: "INVALID_FIELD",
+                                     detail: "wordCloud.minCount: from \(Self.minCounts.lowerBound) to \(Self.minCounts.upperBound).")
+                }
+                values["wc_min_count"] = .integer(Int64(minCount))
+            }
+            if let foldPlurals { values["wc_fold_plurals"] = .integer(foldPlurals ? 1 : 0) }
+            if let filterMarkings { values["wc_filter_markings"] = .integer(filterMarkings ? 1 : 0) }
+            if let excludeBoilerplate { values["wc_exclude_boilerplate"] = .integer(excludeBoilerplate ? 1 : 0) }
+            return values
+        }
     }
 
     /// `DefaultDocumentMode`'s raw values, the app's, in its order.
@@ -107,8 +174,8 @@ enum PreferenceRoutes {
             let user = try context.requireUser()
             let body = try await JSONBody.decode(
                 Change.self, from: request,
-                fields: ["citationStyle", "defaultDocumentMode", "researchLoggingEnabled", "tagOrder", "projectOrder"])
-            var values: [String: SQLiteValue] = [:]
+                fields: ["citationStyle", "defaultDocumentMode", "researchLoggingEnabled", "tagOrder", "projectOrder", "wordCloud"])
+            var values: [String: SQLiteValue] = try body.wordCloud?.values() ?? [:]
             if let style = body.citationStyle {
                 guard style.isEmpty || CitationStyle(rawValue: style) != nil else {
                     throw APIProblem(.badRequest, code: "INVALID_FIELD",
@@ -144,6 +211,12 @@ enum PreferenceRoutes {
             }
             return Preferences(try read(row), stored: true)
         }
+    }
+
+    /// The user's synced preferences as the export reads them: the row's, or the app's initial values while they have
+    /// none (S24i's word cloud reads its criteria so).
+    static func syncedPreferences(of user: String, in store: any UserDataStore) async throws -> SyncedPreferencesExport {
+        try await Blocking.run { try store.preferences(of: user) }.map(read) ?? initial(at: Date(timeIntervalSince1970: 0))
     }
 
     /// The user's preferences: the row's, or the app's initial values while they have none.

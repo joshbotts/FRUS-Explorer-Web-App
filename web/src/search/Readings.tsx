@@ -1,6 +1,7 @@
 // The readings of a search's results beside the list (SPEC, Search), as the Mac's window offers them
 // in its Reading picker: the timeline, which counts by year the results the search keeps, and the
-// concordance, which lines up every occurrence of the search's terms in the page on screen. Each says
+// concordance, which lines up every occurrence of the search's terms in the page on screen; Collocates,
+// the Mac's fourth, is offered and refused with its reason until phase 4 (S24i). Each says
 // which set it read, in the Mac's words. The server computes both with the kit: the timeline's years
 // are its Years facet over what the search keeps, and the concordance its lines for the page, with
 // each of its orders, so the browser sorts nothing and counts nothing itself.
@@ -27,6 +28,7 @@ export function ReadingPicker({
   onChange: (reading: Reading) => void;
 }) {
   const labelId = useId();
+  const collocatesId = useId();
   return (
     <div className="sort-orders reading-picker" role="group" aria-labelledby={labelId} title={copy.readings.help}>
       <span id={labelId}>{copy.readings.label}</span>
@@ -35,6 +37,14 @@ export function ReadingPicker({
           {copy.readings.titles[choice]}
         </button>
       ))}
+      {/* From S24i, the Mac's fourth reading, offered and refused until the server's language analysis (phase 4), with why:
+          it stays in reach of the keyboard, so its reason is read. */}
+      <button type="button" aria-disabled="true" aria-describedby={collocatesId} title={copy.readings.collocatesUnavailable} className="reading-unavailable">
+        {copy.readings.collocates}
+      </button>
+      <span id={collocatesId} className="visually-hidden">
+        {copy.readings.collocatesUnavailable}
+      </span>
     </div>
   );
 }

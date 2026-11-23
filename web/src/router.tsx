@@ -46,6 +46,8 @@ import { ResearchScreen, type ResearchSearch, validateResearchSearch } from './r
 import { CollectionEditorScreen } from './collections/CollectionEditorScreen';
 import { CollectionsScreen } from './collections/CollectionsScreen';
 // ─── Tools ──────────────────────────────────────────────────────────────────
+import { CloudScreen } from './cloud/CloudScreen';
+import { type CloudSearch, validateCloudSearch } from './cloud/cloudRules';
 import { type ChronologySearch, type CorpusSearch, validateChronologySearch, validateCorpusSearch } from './analytics/analyticsRules';
 import { AboutSeriesScreen } from './analytics/AboutSeriesScreen';
 import { ArchivalAnalyticsScreen } from './analytics/ArchivalAnalyticsScreen';
@@ -63,6 +65,7 @@ import { ProjectsSettingsScreen } from './settings/ProjectsSettings';
 import { ReadingSettingsScreen } from './settings/ReadingSettings';
 import { SessionLogScreen, SessionsSettingsScreen } from './settings/SessionsSettings';
 import { TagsSettingsScreen } from './settings/TagsSettings';
+import { WordCloudSettingsScreen } from './settings/WordCloudSettings';
 // ─── Admin ──────────────────────────────────────────────────────────────────
 import { AdminKeysScreen } from './admin/KeysPane';
 import { BackupsScreen } from './admin/BackupsPane';
@@ -358,6 +361,15 @@ const collectionRoute = createRoute({
 });
 
 // ─── Tools ──────────────────────────────────────────────────────────────────
+// The Word Cloud (S24i), which the app opens from its Analytics menu on the corpus and from the reader's rail on a
+// document, with its scope and lens in the address.
+const cloudRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/cloud',
+  validateSearch: (raw: Record<string, unknown>): CloudSearch => validateCloudSearch(raw),
+  component: CloudScreen,
+});
+
 // Archival Analytics (S24h), which the app opens from its Analytics menu, and About the Series, its Research Guide's four
 // dashboards, each with its state in the address.
 const archivalAnalyticsRoute = createRoute({
@@ -466,6 +478,13 @@ const settingsReadingRoute = createRoute({
   component: ReadingSettingsScreen,
 });
 
+// From S24i: Word Cloud, the reader's criteria, hidden words and appearance.
+const settingsWordCloudRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings/word-cloud',
+  component: WordCloudSettingsScreen,
+});
+
 // ─── Admin ──────────────────────────────────────────────────────────────────
 // From S20d: administration, for an admin, opening at Status, its first pane.
 const adminRoute = createRoute({
@@ -554,6 +573,7 @@ export const routeTree = rootRoute.addChildren([
   collectionsRoute,
   collectionRoute,
   // ─── Tools ────────────────────────────────────────────────────────────────
+  cloudRoute,
   archivalAnalyticsRoute,
   aboutSeriesRoute,
   personAnalyticsRoute,
@@ -570,6 +590,7 @@ export const routeTree = rootRoute.addChildren([
   settingsSessionsRoute,
   settingsSessionLogRoute,
   settingsReadingRoute,
+  settingsWordCloudRoute,
   // ─── Admin ────────────────────────────────────────────────────────────────
   adminRoute,
   adminStatusRoute,

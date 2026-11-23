@@ -77,8 +77,8 @@ struct SearchUsers: Sendable {
 
     /// The user `request` acts for under /me's guard's first two steps, or nil: none while the server
     /// keeps no user data, for a request sent to another address, or for one that, behind a proxy, names
-    /// no one signed in.
-    private func requestUser(_ request: Request, context: APIRequestContext, services: UserDataServices) async throws -> RequestUser? {
+    /// no one signed in. The Word Cloud reads its reader's settings by it too (PLAN's S24i).
+    func requestUser(_ request: Request, context: APIRequestContext, services: UserDataServices) async throws -> RequestUser? {
         guard services.enabled, let host = request.head.authority, services.address.allows(host: host) else { return nil }
         do {
             return try await services.resolver.user(for: request, context: context)

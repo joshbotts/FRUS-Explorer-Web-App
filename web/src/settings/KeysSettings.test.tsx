@@ -64,6 +64,7 @@ describe('Settings ▸ Keys', () => {
       ['Projects', null],
       ['Research Sessions', null],
       ['Reading', null],
+      ['Word Cloud', null],
       ['Data', null],
       ['Keys', 'page'],
     ]);

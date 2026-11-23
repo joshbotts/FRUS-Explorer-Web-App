@@ -54,6 +54,8 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     VolumeSourcesRoutes.add(to: router, provider: provider, resources: resources)
     RelatedDocumentsRoutes.add(to: router, provider: provider, resources: resources, users: users)
     CrossReferenceGraphRoutes.add(to: router, provider: provider, resources: resources)
+    // The Word Cloud (PLAN's S24i), from the bundled clouds, with the reader's own settings where a request acts for one.
+    WordCloudRoutes.add(to: router, resources: resources, users: users)
     // Archival Analytics and About the Series (PLAN's S24h).
     ArchivalAnalyticsRoutes.add(to: router, provider: provider, resources: resources)
     AboutSeriesRoutes.add(to: router, provider: provider, resources: resources)

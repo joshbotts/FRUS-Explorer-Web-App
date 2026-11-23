@@ -487,6 +487,8 @@ enum UserDataRoutes {
         ResearchRoutes.add(to: me, services: services, resources: resources, provider: provider,
                            reviews: reviews ?? UpdateReviewSources(indexer: nil, teiCheck: nil))
         PreferenceRoutes.add(to: me, services: services)
+        // The word cloud's hidden words and its settings bench (PLAN's S24i).
+        WordCloudSettingsRoutes.add(to: me, services: services, resources: resources)
         SecretRoutes.add(to: me, services: services)
         ExportRoutes.add(to: me, services: services)
         SearchTagRoutes.add(to: me, services: services, provider: provider, resources: resources)
