@@ -73,7 +73,7 @@ Phases 0 to 3 are done. Phase 1, a Docker Compose install that serves a FRUS Exp
 
 **Next**
 
-1. **Phase 4, semantic and language** ([`docs/PLAN.md`](docs/PLAN.md), Phase 4), planned on 23 November in 26 rows on four tracks: search by meaning with EmbeddingGemma 2 and Search Within These Results, the semantic Related signal, the map and Browse's clusters, a tagger of the web's own with live word clouds, Distinctive and collocates, and Archives Visits with their packet; check 9 is its exit. Its first rows need no pin move: S27b, the encoder, and S29c, the tagger, with S26a and S29a upstream.
+1. **Phase 4, semantic and language** ([`docs/PLAN.md`](docs/PLAN.md), Phase 4), planned on 23 November in 26 rows on four tracks: search by meaning with EmbeddingGemma 2 and Search Within These Results, the semantic Related signal, the map and Browse's clusters, a tagger of the web's own with live word clouds, Distinctive and collocates, and Archives Visits with their packet; check 9 is its exit. Its first rows need no pin move: S27b, the encoder, and S29c, the tagger, with S26a and S29a upstream. The owner's answers of the same day put the model and every vector in the image, with search by meaning on by default, and run three sessions at once.
 2. **Beside it, the web's own follow-ups:** S24e's, the server's uses of #1902's other two calls (a document's number from its head, one decode of the subject index) and Related Documents' ranking by wording, which phase 4's S26d takes with the semantic axis unless it has merged first; and the two gaps L19 named, the note editor's browser exits and a new note's project, above.
 3. **Upstream, the owner's issues** of 23 November ([FRUS-Explorer#1970](https://github.com/joshbotts/FRUS-Explorer/issues/1970) to [#1978](https://github.com/joshbotts/FRUS-Explorer/issues/1978)): each web hand-over is taken at the pin move after its fix merges; #1974's, the Source Explorer export's Decimal File numbers, asks check 8 to run again and find its third rule's count at 0. [#1975](https://github.com/joshbotts/FRUS-Explorer/issues/1975) to #1978 are what else the full corpus's checks found of the app's own ([`docs/COORDINATION.md`](docs/COORDINATION.md) §5):
    - #1975: three readings of the views' dateline rule;
@@ -159,4 +159,4 @@ The diagram shows the Docker Compose install that ships first, with both databas
 
 ## License
 
-Apache License 2.0; see [`LICENSE`](LICENSE). The FRUS text itself is in the public domain. EmbeddingGemma 2, under Apache 2.0, is never bundled with the image: an admin downloads it on request, with no agreement step, as the app's reader has since build 51.
+Apache License 2.0; see [`LICENSE`](LICENSE). The FRUS text itself is in the public domain. EmbeddingGemma 2, under Apache 2.0, comes in the image from phase 4's S27b, by the owner's choice of 23 November, with its licence and notice and no agreement step, as the app's reader has had none since build 51.
