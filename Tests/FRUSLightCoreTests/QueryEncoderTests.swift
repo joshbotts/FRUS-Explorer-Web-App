@@ -19,8 +19,9 @@ import Glibc
     /// The prompt's words before the reader's: "task:", "search", "result", "|" and "query:".
     static let promptWords = SearchModel.queryPrefix.split(whereSeparator: \.isWhitespace).count
 
-    /// Waits up to `seconds` for `condition`, asking every 20 ms.
-    static func eventually(_ seconds: Double = 10, _ condition: () async -> Bool) async -> Bool {
+    /// Waits up to `seconds` for `condition`, asking every 20 ms: long enough for CI's runners under load,
+    /// where one of these tests has taken 34 seconds, and no longer than the condition takes to hold.
+    static func eventually(_ seconds: Double = 30, _ condition: () async -> Bool) async -> Bool {
         let deadline = ContinuousClock.now + .milliseconds(Int64(seconds * 1_000))
         while ContinuousClock.now < deadline {
             if await condition() { return true }
@@ -74,16 +75,27 @@ import Glibc
         await encoder.shutdown()
     }
 
+    /// The processes the encoder's log says it started, in order: read from the log, which the start writes
+    /// before its query returns, since a short idle window may stop the child before a report could name it.
+    static func started(_ lines: LogLines) -> [Int] {
+        lines.all.compactMap { line in line.firstMatch(of: /^The encoder started: .* process (\d+), ready in/).flatMap { Int($0.1) } }
+    }
+
     @Test func itStopsWhenIdleAndStartsAgainAtTheNextQuery() async throws {
         let directory = try TemporaryDirectory()
-        let encoder = QueryEncoder(settings: try StandInEncoder.settings(in: directory.url, idle: .milliseconds(400)))
+        let lines = LogLines()
+        let encoder = QueryEncoder(settings: try StandInEncoder.settings(in: directory.url, idle: .milliseconds(400)), log: lines.add)
         _ = try await encoder.embed("the Marshall Plan")
-        let pid = try #require(await encoder.report().pid)
+        let pid = try #require(Self.started(lines).first)
         #expect(await Self.eventually { await encoder.report().state == "idle" }, "idle after its window")
         #expect(await Self.eventually { !Self.isAlive(pid) }, "its process has ended, giving back its memory")
+        #expect(await Self.eventually { lines.all.contains { $0.hasPrefix("The encoder stopped after 0.4 seconds without a search, giving back its memory") } },
+                "logged once the child has ended")
         let again = try await encoder.embed("the Marshall Plan")
+        let pids = Self.started(lines)
+        #expect(again.started && pids.count == 2 && pids.last != pid)
         let report = await encoder.report()
-        #expect(again.started && report.starts == 2 && report.pid != pid && report.state == "loaded" && report.problem == nil)
+        #expect(report.starts == 2 && report.queries == 2 && report.problem == nil)
         await encoder.shutdown()
     }
 

@@ -392,7 +392,7 @@ public actor QueryEncoder {
                 return child
             } catch {
                 await child.stop(within: settings.stopTimeout)
-                await child.waitForOutput(within: .seconds(1))
+                await child.waitForOutput(within: .seconds(3))
                 if self.child === child { self.child = nil }
                 lastFailure = "\(error)"
                 let output = child.lastLines(12)
