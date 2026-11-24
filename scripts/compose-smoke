@@ -269,7 +269,7 @@ for file in json.load(sys.stdin)["files"]:
 docker compose exec -T frus sh -c 'cd /usr/share/frus-light/language && sha256sum cloud-vectors-core.json cloud-vectors-volumes.json keyness-baseline.json keyness-baseline-printed.json' \
   > "$work/family.image.sha256" || fail "the image holds none of the language family's files"
 diff "$work/family.sha256" "$work/family.image.sha256" > /dev/null || fail "the image's language family's files are not the committed provenance's"
-family=$(curl -s --max-time 30 "$base/api/v1/cloud/context" | python3 -c 'import json, sys; print(json.load(sys.stdin).get("made", {}).get("family", ""))') \
+family=$(curl -s --max-time 30 "$base/api/v1/cloud/context" | python3 -c 'import json, sys; print((json.load(sys.stdin).get("made") or {}).get("family", ""))') \
   || fail "the Word Cloud's context did not answer"
 tagger=$(grep '^  Family' "$work/language.txt" | sed 's/^  Family *//; s/,.*$//')
 [ "$family" = "$tagger" ] || fail "the Word Cloud's clouds were counted by ${family:-nothing}, not by the image's tagger, $tagger"

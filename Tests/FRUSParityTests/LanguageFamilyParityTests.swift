@@ -153,15 +153,15 @@ import WordCloudKit
                                                       (Self.resources.appendingPathComponent("cloud-vectors-volumes.json"), "cloud-vectors-volumes.json")])
         let era = WordCloudRoutes.answer(.volume(volumeId: "frus1961-63v06", subseries: "1961-63"), lens: .topics, settings: .standard,
                                          resources: try ServerResources.load(from: Self.resources, language: appsVolumes))
+        let familyEra = WordCloudParityTests.Host.list(try Self.core(), "1961-63", .topics)
         #expect(era.state == "terms" && era.fallbackSubseries == "1961-63" && era.chip == "Topics · 1961-63 (era)")
-        #expect(era.terms.map { "\($0.term) \($0.count)" } == WordCloudParityTests.Host.list(try Self.core(), "1961-63", .topics),
-                "the family's era, never the app's volume")
+        #expect(era.terms.map { "\($0.term) \($0.count)" } == familyEra, "the family's era, never the app's volume")
         let appsCore = try folder("apps-core", [(Self.resources.appendingPathComponent("cloud-vectors-core.json"), "cloud-vectors-core.json"),
                                                 (Self.folder.appendingPathComponent("cloud-vectors-volumes.json"), "cloud-vectors-volumes.json")])
         let ownVolume = try ServerResources.load(from: Self.resources, language: appsCore)
         let own = WordCloudRoutes.answer(.volume(volumeId: "frus1961-63v06", subseries: "1961-63"), lens: .topics, settings: .standard, resources: ownVolume)
-        #expect(own.state == "terms" && own.fallbackSubseries == nil
-                && own.terms.map { "\($0.term) \($0.count)" } == WordCloudParityTests.Host.list(try Self.volumes(), "frus1961-63v06", .topics))
+        let familyVolume = WordCloudParityTests.Host.list(try Self.volumes(), "frus1961-63v06", .topics)
+        #expect(own.state == "terms" && own.fallbackSubseries == nil && own.terms.map { "\($0.term) \($0.count)" } == familyVolume)
         let corpusOfApps = WordCloudRoutes.answer(.corpus, lens: .topics, settings: .standard, resources: ownVolume)
         #expect(corpusOfApps.state == "noCloud" && corpusOfApps.message?.detail == other.sentence)
 
