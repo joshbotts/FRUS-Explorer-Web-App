@@ -3,9 +3,10 @@ Copyright 2026 The FRUS Explorer Contributors
 
 This product's source code is licensed under the Apache License, Version 2.0
 (see LICENSE). The notices below cover third-party components that are part of
-its image but are not part of, or not licensed with, this repository. The image
-also holds the FRUS Explorer app's data files, from the app's repository at the
-commit this repository pins, under that repository's licence.
+its image but are not part of, or not licensed with, this repository, and the
+data its tagger was made from. The image also holds the FRUS Explorer app's data
+files, from the app's repository at the commit this repository pins, under that
+repository's licence.
 
 --------------------------------------------------------------------------------
 EmbeddingGemma 2 (Google)
@@ -59,3 +60,58 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+--------------------------------------------------------------------------------
+The tagger's model: MASC (American National Corpus)
+--------------------------------------------------------------------------------
+
+The web edition's lexical-class tagger (FRUSLanguage) is an averaged perceptron
+whose weights were trained, by this repository's frus-language tool, from the
+part-of-speech annotations of MASC 3.0.0, the Manually Annotated Sub-Corpus of
+the American National Corpus (https://anc.org/data/masc/), its written genres,
+with MASC's Penn Treebank syntax. MASC is licensed under the Creative Commons
+Attribution 3.0 United States License
+(https://creativecommons.org/licenses/by/3.0/us/). The model, compiled into the
+server's binary and committed as Sources/FRUSLanguage/EmbeddedModel.swift with
+its provenance, is a work derived from those annotations; MASC's texts and
+annotations themselves are not part of the image or of this repository.
+
+--------------------------------------------------------------------------------
+WordNet 3.0 (Princeton University)
+--------------------------------------------------------------------------------
+
+The tagger's lemmatizer reads WordNet 3.0's exception lists and the single
+words of its indexes, compiled into the server's binary and committed as
+Sources/FRUSLanguage/EmbeddedWordNet.swift. Its licence follows.
+
+WordNet Release 3.0
+
+This software and database is being provided to you, the LICENSEE, by
+Princeton University under the following license.  By obtaining, using
+and/or copying this software and database, you agree that you have
+read, understood, and will comply with these terms and conditions.:
+
+Permission to use, copy, modify and distribute this software and
+database and its documentation for any purpose and without fee or
+royalty is hereby granted, provided that you agree to comply with
+the following copyright notice and statements, including the disclaimer,
+and that the same appear on ALL copies of the software, database and
+documentation, including modifications that you make for internal
+use or for distribution.
+
+WordNet 3.0 Copyright 2006 by Princeton University.  All rights reserved.
+
+THIS SOFTWARE AND DATABASE IS PROVIDED "AS IS" AND PRINCETON
+UNIVERSITY MAKES NO REPRESENTATIONS OR WARRANTIES, EXPRESS OR
+IMPLIED.  BY WAY OF EXAMPLE, BUT NOT LIMITATION, PRINCETON
+UNIVERSITY MAKES NO REPRESENTATIONS OR WARRANTIES OF MERCHANT-
+ABILITY OR FITNESS FOR ANY PARTICULAR PURPOSE OR THAT THE USE
+OF THE LICENSED SOFTWARE, DATABASE OR DOCUMENTATION WILL NOT
+INFRINGE ANY THIRD PARTY PATENTS, COPYRIGHTS, TRADEMARKS OR
+OTHER RIGHTS.
+
+The name of Princeton University or Princeton may not be used in
+advertising or publicity pertaining to distribution of the software
+and/or database.  Title to copyright in this software, database and
+any associated documentation shall at all times remain with
+Princeton University and LICENSEE agrees to preserve same.

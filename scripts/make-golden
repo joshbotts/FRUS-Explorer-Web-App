@@ -11,6 +11,9 @@
 #   rich-text/spans.json       the golden spans: the RTF the note editor writes, and the app's reading
 #                              of it, of fixtures/rich-text/read and of the web codec's RTF (check 13);
 #                              frus-parity rich-text-fixtures first writes fixtures/rich-text/web
+#   language/tags.json         NaturalLanguage's words, lexical classes and lemmas for each fixture
+#                              document's body text, which frus-parity language-report compares the
+#                              web's tagger with (S29c); information, not a check
 # From an export, with frus-parity and tools/mac-golden:
 #   index-summary.json         each table's row count and content hash (check 2)
 #   queries.results.json       each query's count and first 50 results (check 3)
@@ -162,6 +165,7 @@ if [ -n "$tool" ]; then
   else
     fix "frus-parity rich-text-fixtures failed (above)"
   fi
+  golden_tool tags tags
 fi
 
 echo "From the export"

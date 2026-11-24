@@ -11,6 +11,7 @@ let usage = """
            mac-golden expressions [--repo <root>] [--queries <jsonl>] [--rules <tsv>] [--out <json>] [--db <file>]
            mac-golden results     --db <export> [--any-volumes] [--repo <root>] [--queries <jsonl>] [--out <json>]
            mac-golden rich-text   [--repo <root>] [--out <json>]
+           mac-golden tags        [--repo <root>] [--out <json>]
 
       render       the reader's HTML of every fixture document    (default out: fixtures/golden/render)
                    it replaces <dir>/html and <dir>/manifest.json, and refuses a <dir> holding either without a render manifest
@@ -24,6 +25,9 @@ let usage = """
       rich-text    the golden spans: the RTF the note editor writes for each formatting it offers, and the
                    app's reading of it, of fixtures/rich-text/read and of the web codec's fixtures/rich-text/web
                    (default out: fixtures/golden/rich-text/spans.json)
+      tags         NaturalLanguage's words, lexical classes and lemmas for each fixture document's body text, as
+                   the word cloud walks a text, which frus-parity language-report compares the web's tagger with
+                   (default out: fixtures/golden/language/tags.json)
 
     --repo defaults to the current directory. Paths are relative to the current directory.
     """
@@ -62,6 +66,10 @@ do {
         let out = arguments.path("--out") ?? repo.url(RichTextPaths.golden)
         try arguments.finish()
         try await MainActor.run { try richTextGolden(repo: repo, out: out) }
+    case "tags":
+        let out = arguments.path("--out") ?? repo.url(TagsPaths.golden)
+        try arguments.finish()
+        try await tagsGolden(repo: repo, out: out)
     default:
         throw ToolError("unknown command \(arguments.command)")
     }

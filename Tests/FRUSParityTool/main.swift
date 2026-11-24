@@ -22,10 +22,12 @@
 //   frus-parity compare-order <library.db> <index.db>
 //   frus-parity check-citations --api <url> --index <db> [--per-volume <n>] [--resources <dir>] [--out <report.json>] [--repo <root>]
 //   frus-parity embed --api <url> [--fixture <json>] [--out <report.json>] [--repo <root>]
+//   frus-parity language-report [--golden <tags.json>] [--model <file>] [--out <report.json>] [--no-speed] [--repo <root>]
 //
 // The repository is found from the current directory unless --repo names it. Exit status: 0 when
 // the check passes, 1 on a refusal, a difference or a problem, 2 on a usage error.
 
+import FRUSLanguage
 import FRUSLightAPI
 import FRUSParity
 import Foundation
@@ -57,6 +59,7 @@ let usage = """
            frus-parity compare-order <library.db> <index.db>
            frus-parity check-citations --api <url> --index <db> [--per-volume <n>] [--resources <dir>] [--out <report.json>] [--repo <root>]
            frus-parity embed --api <url> [--fixture <json>] [--out <report.json>] [--repo <root>]
+           frus-parity language-report [--golden <tags.json>] [--model <file>] [--out <report.json>] [--no-speed] [--repo <root>]
     """
 
 /// A command's positional arguments, flags and options.
@@ -834,6 +837,46 @@ func embed(_ arguments: Arguments) async throws {
     print(result.summary())
 }
 
+/// The web tagger's agreement with the Mac's over the fixtures (PLAN's S29c): the fixture volumes indexed by
+/// the kit, each document's body text held to the one the Mac tagged, and the words, classes and lemmas
+/// compared, with the words tagged a second unless --no-speed; with --model, a model's file frus-language wrote in
+/// place of the one compiled in, to compare a candidate. Information: it fails only when the inputs do.
+func languageReport(_ arguments: Arguments) async throws {
+    guard arguments.positional.isEmpty else { throw UsageError("language-report takes no arguments") }
+    let layout = try repository(arguments)
+    let goldenURL = arguments.options["--golden"].map { URL(fileURLWithPath: $0) }
+        ?? layout.golden.appendingPathComponent(GoldenFile.languageTags.rawValue)
+    let golden = try GoldenJSON.read(LanguageTagsGolden.self, from: goldenURL)
+    let scratch = FileManager.default.temporaryDirectory
+        .appendingPathComponent("frus-parity-language-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: scratch) }
+    let index = try await ParityIndex.build(volumes: ParityFixtures.volumes, tei: layout.tei,
+                                            resources: layout.upstream.appendingPathComponent(ParityIndex.resourcesPath),
+                                            database: scratch.appendingPathComponent("frus.db"))
+    let documents = try await LanguageComparison.documents(golden: golden, pipeline: index.pipeline)
+    var tagger = LanguageTagger.shared
+    if let path = arguments.options["--model"] {
+        let bytes = [UInt8](try Data(contentsOf: URL(fileURLWithPath: path)))
+        let shared = LanguageTagger.shared
+        tagger = LanguageTagger(model: try PerceptronModel(decoding: bytes), lemmatizer: shared.lemmatizer,
+                                identity: LanguageIdentity(name: shared.identity.name, rulesVersion: LanguageTagger.rulesVersion,
+                                                           modelSHA256: LanguageTagger.sha256(bytes), listsSHA256: shared.identity.listsSHA256))
+    }
+    var report = LanguageComparison.report(documents: documents, golden: golden, tagger: tagger)
+    if !arguments.flags.contains("--no-speed") { report.speed = LanguageComparison.speed(documents: documents, tagger: tagger) }
+    print(report.text)
+    #if DEBUG
+    print("a debug build: its speed is not a measurement; build with -c release")
+    #endif
+    if let out = arguments.options["--out"] {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        try encoder.encode(report).write(to: URL(fileURLWithPath: out))
+        print("wrote \(out)")
+    }
+}
+
 /// What `embed --out` writes: the summary line and each query's row.
 struct EmbedReport: Encodable {
     let summary: String
@@ -891,6 +934,8 @@ do {
         try await checkCitations(Arguments(arguments.dropFirst(), options: ["--api", "--index", "--per-volume", "--resources", "--out", "--repo"]))
     case "embed":
         try await embed(Arguments(arguments.dropFirst(), options: ["--api", "--fixture", "--out", "--repo"]))
+    case "language-report":
+        try await languageReport(Arguments(arguments.dropFirst(), flags: ["--no-speed"], options: ["--golden", "--model", "--out", "--repo"]))
     case "time-search":
         try await timeSearch(Arguments(arguments.dropFirst(), flags: ["--all", "--retained"],
                                        options: ["--ids", "--out", "--queries", "--resources", "--repo"]))

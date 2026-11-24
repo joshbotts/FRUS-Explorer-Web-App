@@ -2,7 +2,8 @@
 # FRUS Explorer Light: the Compose smoke test (session 5).
 # Starts compose.yaml's server, checks the browser app, the encoder and its model in the image, whose
 # first query the hardened container embeds through the server's own path, with check 9's encoder half
-# over the app's 25 judged queries where it has an image of the parity stage (PLAN's S27b), and the
+# over the app's 25 judged queries where it has an image of the parity stage (PLAN's S27b), the web's
+# tagger, whose self-test the hardened container runs to the committed digest (S29c), and the
 # catalogue and the reader before any import, imports a synthetic export with docker compose cp, and
 # waits for /readyz to answer 200;
 # then checks the image's labels against the server's status, searches the index, reads a
@@ -246,6 +247,15 @@ model_bytes=$(docker compose exec -T frus stat -c %s "$model")
 docker compose exec -T frus test -r /usr/share/doc/frus-light/NOTICE || fail "the image holds no NOTICE"
 docker compose exec -T frus test -r /usr/share/doc/frus-light/llama.cpp/LICENSE || fail "the image holds no llama.cpp licence"
 echo "   $engine; the model, $model_bytes bytes, at the bundled digest $held"
+
+echo "== install: the web's tagger in the image (PLAN's S29c)"
+# The tagger's model and WordNet's lists are compiled into the binary, so the hardened container tags the fixed
+# text with nothing beside it, and the digest of what it makes is the one fixtures/language/selftest.sha256
+# commits, on each architecture this test runs on.
+expected_tags=$(cut -d' ' -f1 fixtures/language/selftest.sha256)
+docker compose exec -T frus frus-light language-selftest --expect "$expected_tags" > "$work/language.txt" \
+  || fail "the tagger's self-test is not the committed one: $(cat "$work/language.txt")"
+echo "   $(grep '^  Family' "$work/language.txt" | sed 's/^  Family *//'): digest ${expected_tags:0:16}… on $(docker compose exec -T frus uname -m)"
 
 echo "== admin: one query embedded by the image's encoder through the server's own path, and check 9's encoder half (PLAN's S27b)"
 # The hardened container, read-only, as UID 10001 with no capability, starts llama-server as its child at the
