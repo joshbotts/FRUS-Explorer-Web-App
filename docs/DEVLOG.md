@@ -104,7 +104,7 @@ Not started: `PLAN.md`'s row S29c. The session that does it replaces this line, 
 
 ## Session 27b: the encoder
 
-23 November 2026 · branch `claude/s27b-encoder-80d939` · pull request below · upstream `4556c4d5`, unchanged
+23 November 2026 · branch `claude/s27b-encoder-80d939` · [#166](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/166) · upstream `4556c4d5`, unchanged
 
 Phase 4's row S27b, in wave 1 beside S26a and S29a upstream: search by meaning's encoder and its model, in the image, by the owner's answers of 23 November. No upstream pull request, no pin move and no migration. The branch was cut from #165's head, `b3d6f81`, which merged into `main` as `08b2a1c` meanwhile, and kept in local commits until the push.
 
