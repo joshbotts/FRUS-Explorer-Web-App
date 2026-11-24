@@ -264,7 +264,8 @@ public struct LanguageReport: Codable, Equatable, Sendable {
         }
         lines.append("  by NaturalLanguage's class:")
         for row in classes.rows where row.mac > 0 || row.web > 0 {
-            let others = row.webClasses.filter { $0.key != row.macClass }.sorted { $0.value > $1.value }.prefix(3)
+            let others = row.webClasses.filter { $0.key != row.macClass }
+                .sorted { $0.value > $1.value || ($0.value == $1.value && $0.key < $1.key) }.prefix(3)
                 .map { "\($0.key) \($0.value)" }.joined(separator: ", ")
             lines.append("    \(row.macClass.padding(toLength: 13, withPad: " ", startingAt: 0)) Mac \(row.mac), web \(row.web), both \(row.agree): "
                          + "\(percent(row.agree, row.mac)) of the Mac's" + (others.isEmpty ? "" : "; else \(others)"))

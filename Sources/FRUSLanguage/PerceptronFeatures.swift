@@ -187,12 +187,13 @@ struct Shape {
 
     init(_ token: Substring) {
         var count = 0, digits = 0
-        var first = true
+        var first = true, startsWithHyphen = false, hasHyphen = false
         for scalar in token.unicodeScalars {
             count += 1
             let properties = scalar.properties
             if scalar.value == 0x2D || scalar.value == 0x2010 || scalar.value == 0x2011 {
-                if !first { hyphenated = true }
+                if first { startsWithHyphen = true }
+                hasHyphen = true
                 hasOther = true
             } else if scalar.value == 0x2E {
                 hasPeriod = true
@@ -211,6 +212,8 @@ struct Shape {
             first = false
         }
         fourDigits = count == 4 && digits == 4
+        // Honnibal's rule: a hyphen in a word that does not start with one, so `--` is no hyphenated word.
+        hyphenated = hasHyphen && !startsWithHyphen
     }
 
     /// The shape as a feature value: digits, capitals, an initial capital, lowercase or other, with a

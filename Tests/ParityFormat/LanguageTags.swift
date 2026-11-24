@@ -117,7 +117,8 @@ public enum LanguageWordCodec {
         for field in line.split(separator: " ") {
             let parts = field.split(separator: ",", omittingEmptySubsequences: false)
             guard parts.count == 3 || parts.count == 4, let gap = Int(parts[0]), let length = Int(parts[1]),
-                  gap >= 0, length > 0, previousEnd + gap + length <= scalars.count else {
+                  gap >= 0, length > 0, gap <= scalars.count, length <= scalars.count,
+                  previousEnd + gap + length <= scalars.count else {
                 throw GoldenError.malformed(GoldenFile.languageTags.rawValue, "\(field) is not a word of its text")
             }
             let start = previousEnd + gap

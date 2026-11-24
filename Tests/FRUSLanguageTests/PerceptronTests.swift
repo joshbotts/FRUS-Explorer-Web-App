@@ -75,6 +75,13 @@ import Testing
         otherVersion[7] = 2
         #expect(throws: PerceptronModelError.self) { try PerceptronModel(decoding: otherVersion) }
         #expect(throws: PerceptronModelError.self) { try PerceptronModel(decoding: []) }
+        // A tag dictionary whose second key's rise overflows: refused, never a trap.
+        var writer = ByteWriter()
+        writer.bytes(PerceptronModel.magic)
+        writer.varint(1); writer.string("NN"); writer.string("Noun")
+        writer.varint(2); writer.varint(1); writer.byte(0); writer.varint(UInt64.max); writer.byte(0)
+        writer.varint(0)
+        #expect(throws: PerceptronModelError.self) { try PerceptronModel(decoding: writer.data) }
     }
 
     @Test func aTieGoesToTheTagThatComesFirst() {
@@ -111,6 +118,11 @@ import Testing
         mixed.makeDictionary(Array(repeating: TrainingLine(tokens: ["that"], tags: [0]), count: 95)
                              + Array(repeating: TrainingLine(tokens: ["that"], tags: [1]), count: 5))
         #expect(mixed.dictionary.isEmpty, "95 in 100 is under 97")
+        var typographic = PerceptronTrainer(tags: ["NN", "POS"], tagClasses: [.noun, .particle])
+        typographic.makeDictionary(Array(repeating: TrainingLine(tokens: ["'s"], tags: [1]), count: 10)
+                                   + Array(repeating: TrainingLine(tokens: ["\u{2019}s"], tags: [1]), count: 10))
+        #expect(typographic.dictionary[FeatureHash.fold(FeatureHash.fnv("'s"))] == 1, "’s and 's are one entry, counted together")
+        #expect(typographic.model().tag(line: ["\u{2019}s"]) == [1], "and read as the tagger reads them")
     }
 
     @Test func theClassRules() {
@@ -152,6 +164,8 @@ import Testing
         #expect(LineFeatures.normalise("anti-Communist", shape: Shape("anti-Communist")) == "!HYPHEN")
         #expect(LineFeatures.normalise("Treaty", shape: Shape("Treaty")) == "treaty")
         #expect(LineFeatures.normalise("-", shape: Shape("-")) == "-")
+        #expect(LineFeatures.normalise("--", shape: Shape("--")) == "--", "a word that starts with a hyphen is no hyphenated word")
+        #expect(LineFeatures.typewriter("\u{2014}") == "--" && LineFeatures.typewriter("\u{201C}") == "\"")
         #expect(Shape("SECRET").allCapitals && !Shape("Secret").allCapitals)
         #expect(Shape("SECRET").code != Shape("Secret").code)
         #expect(Shape("U.S.").code != Shape("US").code)

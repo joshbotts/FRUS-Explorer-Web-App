@@ -336,7 +336,7 @@ private struct Splitter {
                 headEnd -= 3
                 continue
             }
-            // 's, 're, 've, 'll, 'd, 'm, after a letter or a digit.
+            // 's, 're, 've, 'll, 'd, 'm, after a letter.
             var found = false
             for length in 1...2 {
                 let apostrophe = headEnd - length - 1

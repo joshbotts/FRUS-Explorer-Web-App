@@ -112,6 +112,7 @@ public struct PerceptronTrainer {
                 if rounded != 0, let value = Int32(exactly: rounded) { kept.append((cell.tag, value)) }
             }
             guard !kept.isEmpty else { continue }
+            precondition(weightValues.count < 1 << 24, "a model holds fewer than 2^24 weights, as its file can say")
             features[key] = UInt32(weightValues.count) << 8 | UInt32(kept.count)
             for (tag, value) in kept {
                 weightTags.append(tag)
@@ -122,12 +123,14 @@ public struct PerceptronTrainer {
                                weightTags: weightTags, weightValues: weightValues)
     }
 
-    /// The tag dictionary, from every line's words and tags.
+    /// The tag dictionary, from every line's words and tags, each word keyed as the tagger reads it, by its
+    /// printed form with the typewriter's punctuation (`LineFeatures.typewriter`), so that `’s` and `'s` are
+    /// one entry, counted together.
     mutating func makeDictionary(_ lines: [TrainingLine]) {
         var counts: [UInt32: [UInt8: Int]] = [:]
         for line in lines {
             for (token, tag) in zip(line.tokens, line.tags) {
-                counts[FeatureHash.fold(FeatureHash.fnv(token)), default: [:]][tag, default: 0] += 1
+                counts[FeatureHash.fold(FeatureHash.fnv(LineFeatures.typewriter(token))), default: [:]][tag, default: 0] += 1
             }
         }
         dictionary = [:]

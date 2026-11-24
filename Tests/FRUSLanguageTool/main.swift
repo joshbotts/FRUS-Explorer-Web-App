@@ -91,12 +91,14 @@ func corpus(_ arguments: inout Arguments) throws -> TrainingCorpus {
     }
 }
 
-/// The tagger over a model's file, or the embedded one.
+/// The tagger over a model's file, with that file's identity, or the embedded one.
 func tagger(model path: String?) throws -> LanguageTagger {
     guard let path else { return LanguageTagger.shared }
     let shared = LanguageTagger.shared
-    let model = try PerceptronModel(decoding: [UInt8](try Data(contentsOf: URL(fileURLWithPath: path))))
-    return LanguageTagger(model: model, lemmatizer: shared.lemmatizer, identity: shared.identity)
+    let bytes = [UInt8](try Data(contentsOf: URL(fileURLWithPath: path)))
+    return LanguageTagger(model: try PerceptronModel(decoding: bytes), lemmatizer: shared.lemmatizer,
+                          identity: LanguageIdentity(name: shared.identity.name, rulesVersion: LanguageTagger.rulesVersion,
+                                                     modelSHA256: LanguageTagger.sha256(bytes), listsSHA256: shared.identity.listsSHA256))
 }
 
 do {

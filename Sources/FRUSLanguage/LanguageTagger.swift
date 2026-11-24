@@ -152,7 +152,7 @@ public final class LanguageTagger: Sendable {
         }
         let readsLemmas = reading.contains(.lemmas)
         forEachLine(of: tokens, in: text) { token, printed, tag, lexicalClass in
-            let lemma = readsLemmas ? lemmatizer.lemma(of: printed, as: lexicalClass, tag: model.tags[Int(tag)]) : nil
+            let lemma = readsLemmas ? lemmatizer.lemma(of: printed, as: lexicalClass) : nil
             return body(token.range, lemma, { lexicalClass })
         }
     }
@@ -163,9 +163,8 @@ public final class LanguageTagger: Sendable {
         var words: [TaggedWord] = []
         words.reserveCapacity(tokens.count)
         forEachLine(of: tokens, in: text) { token, printed, tag, lexicalClass in
-            let name = model.tags[Int(tag)]
-            words.append(TaggedWord(range: token.range, tag: name, lexicalClass: lexicalClass,
-                                    lemma: lemmatizer.lemma(of: printed, as: lexicalClass, tag: name)))
+            words.append(TaggedWord(range: token.range, tag: model.tags[Int(tag)], lexicalClass: lexicalClass,
+                                    lemma: lemmatizer.lemma(of: printed, as: lexicalClass)))
             return true
         }
         return words
@@ -180,7 +179,8 @@ public final class LanguageTagger: Sendable {
             var lineEnd = lineStart + 1
             while lineEnd < tokens.count, !tokens[lineEnd].startsLine { lineEnd += 1 }
             let line = tokens[lineStart..<lineEnd]
-            let printed = line.map { text[$0.range] }
+            // Each token's own scalars, from the scalar view, which rounds no index to a grapheme cluster's boundary.
+            let printed = line.map { Substring(text.unicodeScalars[$0.range]) }
             let tags = model.tag(line: printed)
             for (offset, token) in line.enumerated() where token.kind == .word {
                 guard body(token, printed[offset], tags[offset], lexicalClass(at: offset, tags: tags, printed: printed)) else { return }

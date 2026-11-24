@@ -307,11 +307,13 @@ public enum GoldenValidation {
             var previousEnd = 0
             for field in document.words.split(separator: " ") {
                 let parts = field.split(separator: ",", omittingEmptySubsequences: false)
-                guard parts.count >= 3, let gap = Int(parts[0]), let length = Int(parts[1]), gap >= 0, length > 0 else {
+                guard parts.count >= 3, let gap = Int(parts[0]), let length = Int(parts[1]), gap >= 0, length > 0,
+                      gap <= document.scalars, length <= document.scalars else {
                     problems.append("\(file): \(key) has a word that is not in the form, \(field)")
                     break
                 }
                 previousEnd += gap + length
+                if previousEnd > document.scalars { break }
             }
             if previousEnd > document.scalars {
                 problems.append("\(file): \(key)'s words run past its text's \(document.scalars) scalars")

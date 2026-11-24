@@ -27,7 +27,7 @@ public enum LanguageSelftest {
         for word in tagger.tagged(text) {
             let start = scalars.distance(from: scalars.startIndex, to: word.range.lowerBound)
             let end = scalars.distance(from: scalars.startIndex, to: word.range.upperBound)
-            lines.append("\(start)\t\(end)\t\(text[word.range])\t\(word.tag)\t\(word.lexicalClass.rawValue)\t\(word.lemma ?? "-")")
+            lines.append("\(start)\t\(end)\t\(Substring(scalars[word.range]))\t\(word.tag)\t\(word.lexicalClass.rawValue)\t\(word.lemma ?? "-")")
         }
         return lines
     }

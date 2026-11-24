@@ -109,9 +109,8 @@ public struct Lemmatizer: Sendable {
         self.lists = lists
     }
 
-    /// The lemma of `word`, which the tagger gave `lexicalClass` and, when it says, the tag `tag`, lowercased,
-    /// or `nil` for none.
-    public func lemma(of word: Substring, as lexicalClass: LexicalClass, tag: String? = nil) -> String? {
+    /// The lemma of `word`, which the tagger gave `lexicalClass`, lowercased, or `nil` for none.
+    public func lemma(of word: Substring, as lexicalClass: LexicalClass) -> String? {
         let lowered = word.lowercased()
         if lowered.first == "'" || lowered.first == "\u{2019}" || lowered.hasSuffix("n't") || lowered.hasSuffix("n\u{2019}t") {
             let typewriter = lowered.replacingApostrophes()

@@ -121,9 +121,11 @@ import Testing
     }
 
     @Test func rangesAreTheTextsOwn() {
-        let text = "O\u{2019}Brien\u{2019}s caf\u{E9}\u{2014}\u{1F600} U.S."
+        let text = "O\u{2019}Brien\u{2019}s caf\u{E9}\u{2014}\u{1F600} U.S. \u{1F1FA}\u{1F1F8} \u{1F44D}\u{1F3FD}"
         let tokens = WordSplitter.tokens(in: text)
-        #expect(tokens.map { String(text[$0.range]) }.joined() == "O\u{2019}Brien\u{2019}scaf\u{E9}\u{2014}\u{1F600}U.S.")
+        #expect(tokens.map { String(text.unicodeScalars[$0.range]) } ==
+                ["O\u{2019}Brien", "\u{2019}s", "caf\u{E9}", "\u{2014}", "\u{1F600}", "U.S.", "\u{1F1FA}", "\u{1F1F8}", "\u{1F44D}", "\u{1F3FD}"],
+                "a flag's and a skin tone's scalars are symbols of their own")
         for (earlier, later) in zip(tokens, tokens.dropFirst()) { #expect(earlier.range.upperBound <= later.range.lowerBound) }
     }
 

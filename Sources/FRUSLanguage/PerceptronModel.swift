@@ -178,7 +178,9 @@ public struct PerceptronModel: Sendable, Equatable {
         dictionary.reserveCapacity(dictionaryCount)
         var key: UInt64 = 0
         for _ in 0..<dictionaryCount {
-            key += try input.varint()
+            let (sum, overflow) = key.addingReportingOverflow(try input.varint())
+            guard !overflow else { throw PerceptronModelError("a tag dictionary entry out of range") }
+            key = sum
             let tag = try input.byte()
             guard key <= UInt64(UInt32.max), Int(tag) < tagCount, dictionary.updateValue(tag, forKey: UInt32(key)) == nil else {
                 throw PerceptronModelError("a tag dictionary entry out of range or out of order")
@@ -192,7 +194,9 @@ public struct PerceptronModel: Sendable, Equatable {
         for index in 0..<featureCount {
             let rise = try input.varint()
             guard index == 0 || rise > 0 else { throw PerceptronModelError("features out of order") }
-            key += rise
+            let (sum, overflow) = key.addingReportingOverflow(rise)
+            guard !overflow else { throw PerceptronModelError("a feature out of range") }
+            key = sum
             let count = try input.count(limit: tagCount)
             guard key <= UInt64(UInt32.max), count > 0, weightValues.count < 1 << 24 else {
                 throw PerceptronModelError("a feature out of range")

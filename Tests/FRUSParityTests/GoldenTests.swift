@@ -247,7 +247,7 @@ import Testing
     @Test(arguments: GoldenFile.allCases)
     func eachRequiredInputMustBeRecorded(_ file: GoldenFile) throws {
         let repository = try GoldenRepository()
-        try writePending(in: repository.layout.golden, except: .render, .expressions, .results, .indexSummary, .richText)
+        try writePending(in: repository.layout.golden, except: .render, .expressions, .results, .indexSummary, .richText, .languageTags)
         for each in GoldenFile.allCases { try repository.write(each) }
         #expect(GoldenValidation.validate(repository.layout, sourceDigest: "current").problems == [])
 

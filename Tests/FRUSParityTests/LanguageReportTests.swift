@@ -42,6 +42,7 @@ import Testing
         #expect(try LanguageWordCodec.decode(line, text: text) == words)
         #expect(throws: GoldenError.self) { try LanguageWordCodec.decode("0,999,N", text: text) }
         #expect(throws: GoldenError.self) { try LanguageWordCodec.decode("0,3,Q", text: text) }
+        #expect(throws: GoldenError.self) { try LanguageWordCodec.decode("0,1,N 9223372036854775807,1,N", text: text) }
     }
 
     @Test func theCountedForm() {
