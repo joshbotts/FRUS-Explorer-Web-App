@@ -2,7 +2,9 @@
 # FRUS Explorer Light: the Compose smoke test (session 5).
 # Starts compose.yaml's server, checks the browser app, the encoder and its model in the image, whose
 # first query the hardened container embeds through the server's own path, with check 9's encoder half
-# over the app's 25 judged queries where it has an image of the parity stage (PLAN's S27b), the web's
+# over the app's 25 judged queries where it has an image of the parity stage (PLAN's S27b), every semantic
+# vector in the image, each shard held to the bundled manifest and counted by the server, offline as online,
+# with check 9's kernel half on the fixtures in that image (S26c), the web's
 # tagger, whose self-test the hardened container runs to the committed digest (S29c), and the
 # catalogue and the reader before any import, imports a synthetic export with docker compose cp, and
 # waits for /readyz to answer 200;
@@ -32,8 +34,8 @@
 #   FRUS_IMAGE=<image> scripts/compose-smoke    tests an image already built
 #   FRUS_PARITY_IMAGE=<image>                   names an image of the Dockerfile's parity stage, whose
 #                                               frus-parity summarizes the Standalone project's index for
-#                                               check 2 (PLAN's S21d), and runs checks 8 and 9's encoder
-#                                               half; the script builds one beside an image it builds
+#                                               check 2 (PLAN's S21d), and runs checks 8 and both halves
+#                                               of 9; the script builds one beside an image it builds
 #                                               itself, and without either skips them
 #   scripts/compose-smoke --e2e                 also runs web/e2e, Playwright on Chromium, against the
 #                                               imported server at the root, then under the path
@@ -247,6 +249,69 @@ model_bytes=$(docker compose exec -T frus stat -c %s "$model")
 docker compose exec -T frus test -r /usr/share/doc/frus-light/NOTICE || fail "the image holds no NOTICE"
 docker compose exec -T frus test -r /usr/share/doc/frus-light/llama.cpp/LICENSE || fail "the image holds no llama.cpp licence"
 echo "   $engine; the model, $model_bytes bytes, at the bundled digest $held"
+
+echo "== install: every semantic vector in the image, each held to the bundled manifest (PLAN's S26c)"
+# The 553 shards the bundled manifest publishes are in the image's read-only folder, each of the length and the
+# SHA-256 it names, as the image's build held them, at mode 0444. The server checks each again before
+# Administration ▸ Semantic's Vectors, frus-light semantic and the status say what it holds: 553 of 553, none
+# refused. A container of the image with no network at all says the same: the vectors are the image's, and the
+# server downloads none.
+shards_folder=/usr/share/frus-light/semantic/shards
+docker compose exec -T frus cat /usr/share/frus-light/resources/semantic-shards-manifest.json > "$work/shards-manifest.json" \
+  || fail "the image's bundled shard manifest could not be read"
+docker compose exec -T frus sh -c "cd $shards_folder && sha256sum -- *.vec && stat -c '%n %s %a' -- *.vec" > "$work/shards.txt" \
+  || fail "the image's shards could not be read: $(head -c 300 "$work/shards.txt")"
+python3 - "$work/shards-manifest.json" "$work/shards.txt" <<'PY' || fail "the image's shards are not the bundled manifest's"
+import json, sys
+shards = {s["volumeID"] + ".vec": s for s in json.load(open(sys.argv[1], encoding="utf-8"))["shards"]}
+digests, files = {}, {}
+for line in open(sys.argv[2], encoding="utf-8"):
+    fields = line.split()
+    if len(fields) == 2:
+        digests[fields[1]] = fields[0]
+    elif len(fields) == 3:
+        files[fields[0]] = (int(fields[1]), fields[2])
+assert len(shards) == 553 and set(digests) == set(shards) == set(files), (len(shards), len(digests), len(files))
+wrong = [name for name, shard in shards.items() if digests[name] != shard["sha256"] or files[name] != (shard["bytes"], "444")]
+assert not wrong, wrong[:5]
+print(f"   {len(shards)} shards, {sum(s['bytes'] for s in shards.values()):,} bytes, each of its manifest length and SHA-256, mode 0444")
+PY
+vectors_held() {  # $1, frus-light semantic's output: every shard in the image, checked, none refused
+  grep -qx "  In image    553 of 553: 162.4 MB of 162.4 MB on this server, in $shards_folder" "$1" \
+    && grep -qx '  Problems    Nothing has gone wrong. The server checked all 553 files in its image against the bundled manifest.' "$1"
+}
+docker compose exec -T frus frus-light semantic > "$work/vectors.txt" || fail "frus-light semantic failed: $(cat "$work/vectors.txt")"
+vectors_held "$work/vectors.txt" || fail "frus-light semantic does not hold the 553 shards: $(sed -n '/^Semantic Vectors/,$p' "$work/vectors.txt")"
+curl -s --max-time 60 -H "Host: localhost:8080" -o "$work/vectors.json" "$base/api/v1/admin/semantic" || fail "Administration ▸ Semantic did not answer"
+curl -s --max-time 30 -o "$work/status.json" "$base/api/v1/status" || fail "/api/v1/status did not answer"
+python3 - "$work/vectors.json" "$work/status.json" <<'PY' || fail "the pane's Vectors or the status do not count the 553: $(head -c 400 "$work/vectors.json")"
+import json, sys
+vectors = json.load(open(sys.argv[1], encoding="utf-8"))["vectors"]
+shards, generation = vectors["shards"], vectors["generation"]
+assert vectors["state"] == "available" and generation["name"] == "89481b18" and generation["documents"] == 314_616, generation
+assert (shards["held"], shards["published"], shards["checked"], shards["verified"]) == (553, 553, 553, 553), shards
+assert shards["heldBytes"] == shards["publishedBytes"] == 162_377_248 and not shards["refused"] and not shards["missing"], shards
+semantic = json.load(open(sys.argv[2], encoding="utf-8"))["semantic"]
+assert semantic == {"vectors": True, "generation": "89481b18", "shardsHeld": 553, "shardsPublished": 553, "map": True,
+                    "encoder": True, "relatedDocuments": False, "searchByMeaning": False}, semantic
+print("   the pane's Vectors: 553 of 553, each checked, none refused; the status: the vectors, the map and the encoder")
+PY
+docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp "$FRUS_IMAGE" semantic \
+  > "$work/vectors-offline.txt" 2>&1 || fail "frus-light semantic failed with no network: $(tail -5 "$work/vectors-offline.txt")"
+vectors_held "$work/vectors-offline.txt" || fail "with no network, the image does not hold the 553 shards: $(sed -n '/^Semantic Vectors/,$p' "$work/vectors-offline.txt")"
+echo "   frus-light semantic: $(grep '^  In image' "$work/vectors.txt" | sed 's/^  In image *//'), online and with no network"
+# Check 9's kernel half on the fixtures, in frus-parity's release build, with no network: each fixture document's ten
+# nearest by the kit's two stages over the bundled tier and fixtures/semantic's shards, through the server's store,
+# with its Hamming candidates, held to the Mac's lists in rows, order and score bits.
+if [ -n "${FRUS_PARITY_IMAGE:-}" ]; then
+  docker run --rm --user "$(id -u):$(id -g)" --network none -v "$PWD:/repo:ro" "$FRUS_PARITY_IMAGE" \
+    frus-parity neighbours --repo /repo > "$work/check9-kernel.log" 2>&1 \
+    || fail "check 9's kernel half fails: $(tail -20 "$work/check9-kernel.log")"
+  grep -q "^check 9's kernel half passes" "$work/check9-kernel.log" || fail "check 9's kernel half said nothing: $(tail -5 "$work/check9-kernel.log")"
+  echo "   $(grep "^check 9's kernel half passes" "$work/check9-kernel.log" | cut -c1-200)"
+else
+  echo "   check 9's kernel half: skipped, since FRUS_PARITY_IMAGE names no image of the parity stage"
+fi
 
 echo "== install: the web's tagger in the image (PLAN's S29c)"
 # The tagger's model and WordNet's lists are compiled into the binary, so the hardened container tags the fixed
@@ -510,6 +575,11 @@ refused=$(library_api POST /api/v1/admin/library/downloads '{"all":true}')
 case "$refused" in *'"code":"OFFLINE"'*' 409') ;; *) fail "a download under FRUS_OFFLINE answered $refused" ;; esac
 [ -z "$(docker logs "$library_github" 2>&1 | grep 'GET /')" ] || fail "a server under FRUS_OFFLINE asked the mirror: $(docker logs "$library_github" 2>&1 | tail -3)"
 echo "   under FRUS_OFFLINE: the Library says so, a download is refused, and the mirror was asked nothing"
+# Every semantic vector is the image's, so a Standalone server under FRUS_OFFLINE holds the 553 too (PLAN's S26c).
+library_compose exec -T frus frus-light semantic > "$work/vectors-standalone.txt" || fail "frus-light semantic failed: $(cat "$work/vectors-standalone.txt")"
+vectors_held "$work/vectors-standalone.txt" \
+  || fail "a Standalone server under FRUS_OFFLINE does not hold the 553 shards: $(sed -n '/^Semantic Vectors/,$p' "$work/vectors-standalone.txt")"
+echo "   under FRUS_OFFLINE: frus-light semantic holds the 553 shards, each checked"
 
 FRUS_OFFLINE=false library_compose up -d frus
 wait_for_200 "$library_base/healthz" 30 || fail "the Standalone server's /healthz did not answer 200 online"

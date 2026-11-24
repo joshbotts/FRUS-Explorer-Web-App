@@ -1,7 +1,8 @@
 // `frus-light semantic` (PLAN's S27b): Search Model's report for a server whose Administration is refused,
 // the encoder's state read from the process table, since the command is not the server: idle with no
 // encoder running, loaded once the server's child answers its health, off with FRUS_ENCODER=off, and a
-// failure where the model is not the bundled index's.
+// failure where the model is not the bundled index's. Since S26c, Vectors after it, as the pane gives them,
+// over the fixture volumes' shards, and the bundled vectors refused.
 
 import FRUSLightCore
 import FRUSLightTestSupport
@@ -71,5 +72,32 @@ import Testing
         #expect(refused.lines.contains("  Encoder     on (FRUS_ENCODER), and it cannot start"))
         #expect(refused.lines.contains { $0.hasPrefix("  SHA-256") && $0.hasSuffix(", where the bundled index names \(String(repeating: "a", count: 64))") })
         #expect(refused.lines.contains { $0.hasPrefix("  Problem     This server cannot search by meaning: its search model, ") })
+    }
+
+    @Test func vectorsFollowSearchModelAsThePaneGivesThem() async throws {
+        let directory = try TemporaryDirectory()
+        let configuration = ServerConfiguration(dataDirectory: directory.url, resourcesDirectory: RepositoryFiles.resources, encoder: false,
+                                                semanticShards: RepositoryFiles.semanticShards)
+        let run = await Self.run(configuration)
+        #expect(run.status == 0)
+        let vectors = Array(run.lines.drop { $0 != "Semantic Vectors" })
+        #expect(vectors == [
+            "Semantic Vectors",
+            "  Generation  89481b18, made on 2026-10-15: embeddinggemma-2-Q8_0, its 768 dimensions cut to 512",
+            "  Documents   314,616 in 553 volumes; the Hamming stage gives the int8 rerank 800, at a recall@10 of 0.9021",
+            "  In image    3 of 553: 199 KB of 162.4 MB on this server, in \(RepositoryFiles.semanticShards.path)",
+            "  Problems    550 found. The server checked all 3 files in its image against the bundled manifest.",
+            "  Missing     550: frus1861, frus1862, frus1863p1, frus1863p2, frus1864p1 and 545 more. The file is not in the image.",
+        ])
+
+        // With the bundled vectors refused, the section says so, and the status stays the encoder's.
+        let other = try TemporaryDirectory()
+        let refused = await Self.run(try Self.configuration(other, encoder: false))
+        #expect(refused.status == 0)
+        #expect(Array(refused.lines.drop { $0 != "Semantic Vectors" }) == [
+            "Semantic Vectors",
+            "  Vectors     Not available: This server cannot match documents by subject, so that part of Related Documents is unavailable. Nothing is wrong with its library.",
+            "  Problem     The bundled vectors are refused: semantic-vectors-binary.bin is not among this server's data files.",
+        ])
     }
 }

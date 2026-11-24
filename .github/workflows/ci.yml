@@ -12,8 +12,9 @@
 #   a PostgreSQL service, so the user store's conformance suite runs on both of its stores (S14d).
 # - web: the browser app in web/, typechecked, linted, unit-tested and built with Node at
 #   web/.node-version, as scripts/npm runs it.
-# - compose: build the image, its search model from the Actions cache by its digest (PLAN's S27b), then
-#   scripts/compose-smoke --e2e checks the browser app, the encoder and its model, the catalogue
+# - compose: build the image, its search model from the Actions cache by its digest (PLAN's S27b) and its
+#   semantic vectors' shards by the bundled manifest's (S26c), then
+#   scripts/compose-smoke --e2e checks the browser app, the encoder and its model, the shards, the catalogue
 #   and the reader, imports a synthetic export with docker compose cp, waits for /readyz to answer
 #   200, checks the image's labels, and runs web/e2e, Playwright on Chromium, against it; then
 #   again with the server under /frus-explorer/, through nginx and docs/INSTALL.md's recipe for a path.
@@ -283,13 +284,36 @@ jobs:
         if: steps.model-cache.outputs.cache-hit != 'true'
         run: scripts/fetch-model "$RUNNER_TEMP/model"
 
+      # The semantic vectors' 553 shards (PLAN's S26c), from the Actions cache by the bundled manifest's digest,
+      # fetched once a manifest, each held to it, and given to the build as its vectors-source context; and first
+      # the fetch's and the layout's rules, over a host of the script's own with a re-pack among it.
+      - name: The vectors' fetch and layout, against a host of their own
+        run: docker/fetch-vectors selftest
+
+      - name: The bundled shard manifest's digest
+        id: vectors
+        run: echo "sha256=$(sha256sum upstream/FRUS-Explorer/FRUSExplorer/Resources/semantic-shards-manifest.json | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: The semantic vectors, from the Actions cache by the manifest's digest
+        id: vectors-cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/vectors
+          key: semantic-vectors-${{ steps.vectors.outputs.sha256 }}
+
+      - name: Fetch the semantic vectors once
+        if: steps.vectors-cache.outputs.cache-hit != 'true'
+        run: docker/fetch-vectors "$RUNNER_TEMP/vectors"
+
       - name: Build the image
         uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile
           build-args: ${{ steps.args.outputs.list }}
-          build-contexts: model-source=${{ runner.temp }}/model
+          build-contexts: |
+            model-source=${{ runner.temp }}/model
+            vectors-source=${{ runner.temp }}/vectors
           tags: frus-light:ci
           load: true
           # Shared with image.yml's amd64 build.

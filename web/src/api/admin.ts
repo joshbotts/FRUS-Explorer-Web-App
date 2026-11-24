@@ -312,10 +312,52 @@ export interface SearchModelReport {
   problem?: string;
 }
 
+/**
+ * Administration ▸ Semantic's Vectors (PLAN's S26c): the bundled generation, its model and its count, and the shards
+ * in the image of those the bundled manifest publishes, each checked by the server before it answers, with any refused
+ * and why; `unavailable`, with the reason, when the bundled vectors are refused.
+ */
+export interface VectorsReport {
+  state: 'available' | 'unavailable';
+  problem?: string;
+  generation?: {
+    digest: string;
+    /** The digest's first eight hex digits, as the vectors' host names the generation's folder. */
+    name: string;
+    /** The day the bundled tier was made, `yyyy-MM-dd`. */
+    generated: string;
+    model: string;
+    nativeDimensions: number;
+    dimensions: number;
+    documents: number;
+    volumes: number;
+    rerankPool: number;
+    measuredRecallAt10: number;
+  };
+  shards?: {
+    folder: string;
+    held: number;
+    heldBytes: number;
+    published: number;
+    publishedBytes: number;
+    checked: number;
+    verified: number;
+    /** Each file refused, its sentence the app's in a server's words, and what the server found. */
+    refused: { volumeId: string; reason: string; detail: string }[];
+    /** Published shards the image does not hold. */
+    missing: string[];
+  };
+}
+
+/** `GET /api/v1/admin/semantic`: Search Model's report, and since S26c the vectors'. */
+export interface SemanticReport extends SearchModelReport {
+  vectors?: VectorsReport;
+}
+
 /** Search Model, read again every ten seconds while the encoder is loaded or starting, which ends by itself. */
 export const semanticQuery = queryOptions({
   queryKey: ['admin', 'semantic'],
-  queryFn: ({ signal }) => getJSON<SearchModelReport>('/api/v1/admin/semantic', undefined, signal),
+  queryFn: ({ signal }) => getJSON<SemanticReport>('/api/v1/admin/semantic', undefined, signal),
   staleTime: 0,
   retry: false,
   refetchInterval: (query) => (query.state.data?.state === 'loaded' || query.state.data?.state === 'starting' ? 10_000 : false),

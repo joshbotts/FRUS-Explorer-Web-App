@@ -8,7 +8,9 @@
 // The map is read once, on first use, as the app's `BundledSemanticMap` reads it, and refused whole, both answers alike,
 // as the app refuses it: a map whose index or binary names other vectors than the bundled index's provenance, or places
 // another number of documents, is not drawn, since a map from one generation drawn against another puts every document
-// where other vectors put it. Each answer is tagged by its own bytes, so that a browser keeps it until the layout or the
+// where other vectors put it. Since S26c its vectors are the server's `SemanticVectors`, the bundled pair read once for
+// the map and the vectors alike, so that, as the app's map waits on `BundledSemanticVectors`, a pair the kit refuses
+// draws no map. Each answer is tagged by its own bytes, so that a browser keeps it until the layout or the
 // answer's form changes, and the regions are encoded once, their keys sorted, so that their bytes are the same at each start.
 
 import FRUSLightCore
@@ -50,9 +52,8 @@ public struct SemanticMapRegions: Codable, Equatable, Sendable {
 
 /// The bundled map, read once on first use; or why it is refused.
 actor SemanticMapFiles {
-    /// The three files the map is read from, in the server's data files: the vectors' index names the provenance
+    /// The map's two files, in the server's data files, beside the bundled vectors, whose index names the provenance
     /// and the count the map is held to, as the app's map waits on `BundledSemanticVectors`.
-    static let vectorsIndexFile = "semantic-vectors-index.json"
     static let indexFile = "semantic-map-index.json"
     static let binaryFile = "semantic-map.bin"
 
@@ -69,20 +70,28 @@ actor SemanticMapFiles {
         let regionsTag: String
     }
 
-    let directory: URL
+    /// The bundled vectors, whose index names the provenance and the count the map is held to, and the folder of the
+    /// map's own two files, the server's data files.
+    let vectors: SemanticVectors
+    var directory: URL { vectors.resources }
     private var loading: Task<Result<Map, APIProblem>, Never>?
 
-    init(directory: URL) {
-        self.directory = directory
+    init(vectors: SemanticVectors) {
+        self.vectors = vectors
     }
 
     /// The map, read on the first call and kept, refusal and all.
     func map() async -> Result<Map, APIProblem> {
         if let loading { return await loading.value }
-        let directory = directory
+        let (directory, vectors) = (directory, vectors)
         let task = Task<Result<Map, APIProblem>, Never> {
+            let tiers: SemanticBundledTiers
+            switch await vectors.tiers() {
+            case .success(let read): tiers = read
+            case .failure(let refused): return .failure(Self.refusal(refused))
+            }
             do {
-                return try await Blocking.run { Self.read(from: directory) }
+                return try await Blocking.run { Self.read(from: directory, vectors: tiers.index.file) }
             } catch {
                 return .failure(Self.malformed("\(error)"))
             }
@@ -91,20 +100,14 @@ actor SemanticMapFiles {
         return await task.value
     }
 
-    /// Reads the map from `directory`, held as the app's `BundledSemanticMap.prepare()` holds it.
-    static func read(from directory: URL) -> Result<Map, APIProblem> {
-        for name in [vectorsIndexFile, indexFile, binaryFile]
+    /// Reads the map from `directory`, held as the app's `BundledSemanticMap.prepare()` holds it, against the bundled
+    /// vectors' index the server read.
+    static func read(from directory: URL, vectors: SemanticVectorsArtifacts.Index) -> Result<Map, APIProblem> {
+        for name in [indexFile, binaryFile]
         where !FileManager.default.fileExists(atPath: directory.appendingPathComponent(name).path) {
             return .failure(refusal(.noArtifact, file: name))
         }
-        let vectors: SemanticVectorsArtifacts.Index
         let index: SemanticMapArtifacts.MapIndex
-        do {
-            vectors = try JSONDecoder().decode(SemanticVectorsArtifacts.Index.self,
-                                               from: Data(contentsOf: directory.appendingPathComponent(vectorsIndexFile)))
-        } catch {
-            return .failure(malformed("\(vectorsIndexFile) could not be decoded: \(error)"))
-        }
         do {
             index = try JSONDecoder().decode(SemanticMapArtifacts.MapIndex.self,
                                              from: Data(contentsOf: directory.appendingPathComponent(indexFile)))
@@ -161,6 +164,13 @@ actor SemanticMapFiles {
             }
         }
         return "\"\(String(hash, radix: 16))\""
+    }
+
+    /// The map's refusal when the bundled vectors are refused: the app draws no map then. A missing file in the app's
+    /// words for a missing map; anything else in its words for a map it cannot read, with the vectors' refusal after them.
+    static func refusal(_ vectors: SemanticBundleRefusal) -> APIProblem {
+        if case .noArtifact = vectors.reason { return refusal(.noArtifact, file: vectors.file) }
+        return malformed("The bundled vectors are refused: \(vectors)")
     }
 
     /// A refusal in the app's words (`SemanticMapSpikeView.describe`), in a server's where the app's name a build,

@@ -6,7 +6,11 @@ This product's source code is licensed under the Apache License, Version 2.0
 its image but are not part of, or not licensed with, this repository, and the
 data its tagger was made from. The image also holds the FRUS Explorer app's data
 files, from the app's repository at the commit this repository pins, under that
-repository's licence.
+repository's licence; and the app's semantic vectors, a shard a volume, at
+/usr/share/frus-light/semantic/shards, from joshbotts/frus-semantic-vectors at
+the commit docker/Dockerfile names, whose NOTICE says they are model outputs
+derived from the public-domain Foreign Relations of the United States series,
+to which no model-licence conditions attach.
 
 --------------------------------------------------------------------------------
 EmbeddingGemma 2 (Google)

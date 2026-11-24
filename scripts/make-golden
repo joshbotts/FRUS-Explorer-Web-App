@@ -14,6 +14,10 @@
 #   language/tags.json         NaturalLanguage's words, lexical classes and lemmas for each fixture
 #                              document's body text, which frus-parity language-report compares the
 #                              web's tagger with (S29c); information, not a check
+#   semantic/neighbours.json   each vectored fixture document's ten nearest by the kit's two stages, over
+#                              the bundled tier and fixtures/semantic's shards through the app's own store,
+#                              with each score's bits, which frus-parity neighbours holds Linux's to
+#                              (check 9's kernel half, S26c)
 # From an export, with frus-parity and tools/mac-golden:
 #   index-summary.json         each table's row count and content hash (check 2)
 #   queries.results.json       each query's count and first 50 results (check 3)
@@ -166,6 +170,7 @@ if [ -n "$tool" ]; then
     fix "frus-parity rich-text-fixtures failed (above)"
   fi
   golden_tool tags tags
+  golden_tool neighbours neighbours
 fi
 
 echo "From the export"

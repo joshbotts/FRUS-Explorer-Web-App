@@ -247,7 +247,8 @@ import Testing
     @Test(arguments: GoldenFile.allCases)
     func eachRequiredInputMustBeRecorded(_ file: GoldenFile) throws {
         let repository = try GoldenRepository()
-        try writePending(in: repository.layout.golden, except: .render, .expressions, .results, .indexSummary, .richText, .languageTags)
+        try writePending(in: repository.layout.golden, except: .render, .expressions, .results, .indexSummary, .richText, .languageTags,
+                         .semanticNeighbours)
         for each in GoldenFile.allCases { try repository.write(each) }
         #expect(GoldenValidation.validate(repository.layout, sourceDigest: "current").problems == [])
 
@@ -271,6 +272,10 @@ import Testing
         #expect(GoldenValidation.requiredInputs(.indexSummary) == tei + stamp)
         #expect(GoldenValidation.requiredInputs(.richText)
             == ["tools/mac-golden/Sources/mac-golden/RichText.swift", "fixtures/rich-text/web/cases.json"])
+        #expect(GoldenValidation.requiredInputs(.semanticNeighbours) == [
+            "fixtures/semantic/frus1894Nicaragua.vec", "fixtures/semantic/frus1961-63v06.vec",
+            "fixtures/semantic/frus1969-76ve09p1.vec", "fixtures/semantic/SHA256SUMS",
+        ])
     }
 
     /// A file made from an export must come from the pinned build, at the pin's index version.
@@ -350,6 +355,16 @@ struct GoldenRepository {
         try FileManager.default.createDirectory(at: harness.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data("// the harness\n".utf8).write(to: harness)
         try GoldenJSON.write(RichTextWebCases(cases: []), to: root.appendingPathComponent(RichTextWebCases.path))
+        // The fixture volumes' shards, a few bytes each, with their sums, as fixtures/semantic holds them.
+        let shards = root.appendingPathComponent(SemanticNeighboursLoop.shardsPath)
+        try FileManager.default.createDirectory(at: shards, withIntermediateDirectories: true)
+        var sums = ""
+        for volume in ParityFixtures.volumes {
+            let bytes = Data("FRSS \(volume)".utf8)
+            try bytes.write(to: shards.appendingPathComponent("\(volume).vec"))
+            sums += "\(ParityFormat.Digest.sha256(bytes))  \(volume).vec\n"
+        }
+        try Data(sums.utf8).write(to: shards.appendingPathComponent("SHA256SUMS"))
     }
 
     /// What the tools record for `file`: the fixtures, the query list's records and the stamp, as
@@ -368,6 +383,7 @@ struct GoldenRepository {
                 inputs[path] = try ParityFormat.Digest.sha256(contentsOf: layout.root.appendingPathComponent(path))
             }
         case .languageTags: inputs = tei
+        case .semanticNeighbours: inputs = try SemanticNeighboursLoop.verifiedShardInputs(root: layout.root)
         }
         if file.needsExport {
             for (key, value) in Self.stamp { inputs["research_provenance.\(key)"] = value }
@@ -418,6 +434,14 @@ struct GoldenRepository {
             try GoldenJSON.write(LanguageTagsGolden(provenance: provenance, configuration: "tests",
                                                     health: ["lemmatizes": true, "classifiesWords": true, "recognizesNames": true],
                                                     documents: documents), to: url)
+        case .semanticNeighbours:
+            let anchors = ParityFixtures.volumes.enumerated().map { index, volume in
+                SemanticNeighboursAnchor(document: "\(volume)/d1", row: index, fencedCandidates: SemanticNeighboursLoop.record([index + 10]),
+                                         poolCandidates: SemanticNeighboursLoop.record([index + 10, 99]),
+                                         neighbours: ["\(volume)/d2 \(index + 10) 3fe0000000000000"])
+            }
+            try GoldenJSON.write(SemanticNeighboursGolden(provenance: provenance, configuration: "tests", generation: String(repeating: "a", count: 64),
+                                                          rerankPool: 800, neighbourCount: 10, anchors: anchors), to: url)
         }
     }
 }

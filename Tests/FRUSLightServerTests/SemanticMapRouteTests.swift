@@ -2,7 +2,8 @@
 // the kit's, as `SemanticMapVectors` reads it from `semantic-map.bin`, row for row; the regions are the bundled index's,
 // and they count the points; the answers are revalidated by the layout's identity; and the map is refused, both answers
 // alike, in the app's words, when its index or its binary names other vectors or another count than the bundled
-// vectors' index, as the app's `BundledSemanticMap` refuses it.
+// vectors' index, as the app's `BundledSemanticMap` refuses it; and since S26c, whose `SemanticVectors` reads the
+// bundled pair once for the map and the vectors, when the kit refuses the pair, as the app draws no map then.
 
 import FRUSLightCore
 import FRUSLightTestSupport
@@ -33,7 +34,7 @@ import Testing
     static func app(_ directory: URL) -> some ApplicationProtocol {
         let router = Router(context: APIRequestContext.self)
         router.add(middleware: ProblemMiddleware(logger: Logger(label: "semantic-map-tests")))
-        SemanticMapRoutes.add(to: router, map: SemanticMapFiles(directory: directory))
+        SemanticMapRoutes.add(to: router, map: SemanticMapFiles(vectors: SemanticVectors(resources: directory, shards: directory)))
         return Application(router: router)
     }
 
@@ -115,9 +116,11 @@ import Testing
         }
     }
 
-    /// A folder holding the three bundled files, as written, or with one of them changed.
+    /// A folder holding the bundled files the map reads, as written, or with one of them changed: the vectors' binary,
+    /// which the kit reads as a pair with their index, linked from the submodule or with `vectorsBinary` applied.
     static func folder(vectors: (inout [String: Any]) -> Void = { _ in }, index: (inout [String: Any]) -> Void = { _ in },
-                       binary: (inout Data) -> Void = { _ in }, leaving: String? = nil) throws -> TemporaryDirectory {
+                       binary: (inout Data) -> Void = { _ in }, vectorsBinary: ((inout Data) -> Void)? = nil,
+                       leaving: String? = nil) throws -> TemporaryDirectory {
         let folder = try TemporaryDirectory()
         func json(_ name: String, _ change: (inout [String: Any]) -> Void) throws {
             var object = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: resources.appendingPathComponent(name))) as? [String: Any])
@@ -129,6 +132,14 @@ import Testing
         var data = try Data(contentsOf: resources.appendingPathComponent("semantic-map.bin"))
         binary(&data)
         try data.write(to: folder.url.appendingPathComponent("semantic-map.bin"))
+        let pair = folder.url.appendingPathComponent("semantic-vectors-binary.bin")
+        if let vectorsBinary {
+            var bytes = try Data(contentsOf: resources.appendingPathComponent("semantic-vectors-binary.bin"))
+            vectorsBinary(&bytes)
+            try bytes.write(to: pair)
+        } else {
+            try FileManager.default.createSymbolicLink(at: pair, withDestinationURL: resources.appendingPathComponent("semantic-vectors-binary.bin"))
+        }
         if let leaving { try FileManager.default.removeItem(at: folder.url.appendingPathComponent(leaving)) }
         return folder
     }
@@ -157,6 +168,10 @@ import Testing
              "This server does not carry the semantic map. semantic-map.bin is not among its data files."),
             ("the vectors' index is missing", try Self.folder(leaving: "semantic-vectors-index.json"),
              "This server does not carry the semantic map. semantic-vectors-index.json is not among its data files."),
+            ("the vectors' binary is missing", try Self.folder(leaving: "semantic-vectors-binary.bin"),
+             "This server does not carry the semantic map. semantic-vectors-binary.bin is not among its data files."),
+            ("the vectors' binary names other vectors than their index", try Self.folder(vectorsBinary: { $0[20] ^= 0xFF }),
+             "The semantic map could not be read. The bundled vectors are refused: semantic-vectors-binary.bin was made from the vectors 76481b18, where the bundled index names 89481b18."),
         ]
         for (what, folder, detail) in cases {
             try await Self.app(folder.url).test(.router) { client in

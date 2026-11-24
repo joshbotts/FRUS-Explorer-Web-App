@@ -23,6 +23,7 @@
 //   frus-parity check-citations --api <url> --index <db> [--per-volume <n>] [--resources <dir>] [--out <report.json>] [--repo <root>]
 //   frus-parity embed --api <url> [--fixture <json>] [--out <report.json>] [--repo <root>]
 //   frus-parity language-report [--golden <tags.json>] [--model <file>] [--out <report.json>] [--no-speed] [--repo <root>]
+//   frus-parity neighbours [--golden <neighbours.json>] [--out <neighbours.json>] [--repo <root>]
 //
 // The repository is found from the current directory unless --repo names it. Exit status: 0 when
 // the check passes, 1 on a refusal, a difference or a problem, 2 on a usage error.
@@ -60,6 +61,7 @@ let usage = """
            frus-parity check-citations --api <url> --index <db> [--per-volume <n>] [--resources <dir>] [--out <report.json>] [--repo <root>]
            frus-parity embed --api <url> [--fixture <json>] [--out <report.json>] [--repo <root>]
            frus-parity language-report [--golden <tags.json>] [--model <file>] [--out <report.json>] [--no-speed] [--repo <root>]
+           frus-parity neighbours [--golden <neighbours.json>] [--out <neighbours.json>] [--repo <root>]
     """
 
 /// A command's positional arguments, flags and options.
@@ -877,6 +879,29 @@ func languageReport(_ arguments: Arguments) async throws {
     }
 }
 
+/// Check 9's kernel half on the fixtures (PLAN's S26c): each vectored fixture document's ten nearest by the kit's two
+/// stages on Linux, over the server's own store of the fixture volumes' shards, held to the Mac's lists, in rows,
+/// order and score bits; with --out, Linux's lists in the golden file's form.
+func neighbours(_ arguments: Arguments) async throws {
+    guard arguments.positional.isEmpty else { throw UsageError("neighbours takes no arguments") }
+    let layout = try repository(arguments)
+    let linux = try await SemanticNeighbours.golden(layout: layout)
+    if let out = arguments.options["--out"] {
+        try GoldenJSON.write(linux, to: URL(fileURLWithPath: out))
+        print("wrote \(out)")
+    }
+    let goldenURL = arguments.options["--golden"].map { URL(fileURLWithPath: $0) }
+        ?? layout.golden.appendingPathComponent(GoldenFile.semanticNeighbours.rawValue)
+    let mac = try GoldenJSON.read(SemanticNeighboursGolden.self, from: goldenURL)
+    guard mac.generation == linux.generation, mac.rerankPool == linux.rerankPool else {
+        fail("the Mac's lists are of the generation \(mac.generation.prefix(8)) at a pool of \(mac.rerankPool), Linux's of \(linux.generation.prefix(8)) at \(linux.rerankPool)")
+    }
+    let differences = SemanticNeighboursLoop.differences(mac.anchors, linux.anchors)
+    guard differences.isEmpty else { fail("check 9's kernel half fails:\n  " + differences.joined(separator: "\n  ")) }
+    let neighbours = linux.anchors.reduce(0) { $0 + $1.neighbours.count }
+    print("check 9's kernel half passes: \(linux.anchors.count) documents' nearest, \(neighbours) neighbours, the Mac's in rows, order and score bits, at a pool of \(linux.rerankPool) over the generation \(linux.generation.prefix(8))")
+}
+
 /// What `embed --out` writes: the summary line and each query's row.
 struct EmbedReport: Encodable {
     let summary: String
@@ -936,6 +961,8 @@ do {
         try await embed(Arguments(arguments.dropFirst(), options: ["--api", "--fixture", "--out", "--repo"]))
     case "language-report":
         try await languageReport(Arguments(arguments.dropFirst(), flags: ["--no-speed"], options: ["--golden", "--model", "--out", "--repo"]))
+    case "neighbours":
+        try await neighbours(Arguments(arguments.dropFirst(), options: ["--golden", "--out", "--repo"]))
     case "time-search":
         try await timeSearch(Arguments(arguments.dropFirst(), flags: ["--all", "--retained"],
                                        options: ["--ids", "--out", "--queries", "--resources", "--repo"]))

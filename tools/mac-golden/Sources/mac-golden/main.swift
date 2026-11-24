@@ -12,6 +12,7 @@ let usage = """
            mac-golden results     --db <export> [--any-volumes] [--repo <root>] [--queries <jsonl>] [--out <json>]
            mac-golden rich-text   [--repo <root>] [--out <json>]
            mac-golden tags        [--repo <root>] [--out <json>]
+           mac-golden neighbours  [--repo <root>] [--out <json>]
 
       render       the reader's HTML of every fixture document    (default out: fixtures/golden/render)
                    it replaces <dir>/html and <dir>/manifest.json, and refuses a <dir> holding either without a render manifest
@@ -28,6 +29,10 @@ let usage = """
       tags         NaturalLanguage's words, lexical classes and lemmas for each fixture document's body text, as
                    the word cloud walks a text, which frus-parity language-report compares the web's tagger with
                    (default out: fixtures/golden/language/tags.json)
+      neighbours   check 9's kernel half: each vectored fixture document's ten nearest by the kit's two stages, the
+                   Hamming scan over the bundled tier at its rerank pool, fenced to the three volumes, and the int8 rerank
+                   against their shards from fixtures/semantic, through the app's own store, with each score's bits
+                   (default out: fixtures/golden/semantic/neighbours.json)
 
     --repo defaults to the current directory. Paths are relative to the current directory.
     """
@@ -70,6 +75,10 @@ do {
         let out = arguments.path("--out") ?? repo.url(TagsPaths.golden)
         try arguments.finish()
         try await tagsGolden(repo: repo, out: out)
+    case "neighbours":
+        let out = arguments.path("--out") ?? repo.url(NeighboursPaths.golden)
+        try arguments.finish()
+        try await neighboursGolden(repo: repo, out: out)
     default:
         throw ToolError("unknown command \(arguments.command)")
     }

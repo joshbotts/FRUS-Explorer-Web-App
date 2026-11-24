@@ -39,6 +39,8 @@ public struct ServerStatus: Sendable, Equatable, Codable {
     public var index: IndexSummary?
     public var importInProgress: ImportProgress?
     public var lastImport: ImportReport?
+    /// Which of the semantic features the server serves (PLAN's S26c), which the route adds.
+    public var semantic: SemanticFeatures? = nil
 }
 
 public actor ServerState: ImportObserver {

@@ -2,10 +2,13 @@
 // section in a server's words. The model in the image, its file, size and SHA-256 held to the bundled vectors'
 // index, its licence and the engine that runs it; and the encoder's setting and state, off, idle, starting or
 // loaded with the memory it holds and when it stops. The image holds the model, so there is nothing to
-// download or remove. Read again every ten seconds while the encoder is loaded, which ends by itself. S26c
-// adds the vectors.
+// download or remove. Read again every ten seconds while the encoder is loaded, which ends by itself. Then
+// Vectors (S26c), the app's Semantic Vectors section in a server's words: the bundled generation, its model and
+// its count, the shards in the image of those the bundled manifest publishes, which the server checks before it
+// answers, and any refused, with why. They are all in the image, so there is nothing to download or remove here
+// either.
 import { useQuery } from '@tanstack/react-query';
-import { semanticQuery, type SearchModelReport } from '../api/admin';
+import { semanticQuery, type SearchModelReport, type VectorsReport } from '../api/admin';
 import { copy } from '../copy';
 import { AdminFrame, ReadFailure, useAdmin } from './AdminPanes';
 
@@ -24,6 +27,7 @@ export function SemanticScreen() {
       <>
         {report.isError && <ReadFailure error={report.error} stale />}
         <SearchModel report={report.data} />
+        {report.data.vectors && <Vectors report={report.data.vectors} />}
       </>
     );
   }
@@ -105,5 +109,83 @@ function EncoderState({ report }: { report: SearchModelReport }) {
       {words.loaded(report.loadedAt ? clock(report.loadedAt) : '', memory)}
       {report.stopsAt && ` ${words.stops(clock(report.stopsAt), Math.round(report.idleSeconds / 60))}`}
     </>
+  );
+}
+
+/** The day the bundled tier was made, as the app writes a date in English. */
+const day = (text: string) =>
+  new Date(`${text}T00:00:00Z`).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+
+function Vectors({ report }: { report: VectorsReport }) {
+  const vectors = words.vectors;
+  const { generation, shards } = report;
+  if (report.state !== 'available' || !generation || !shards) {
+    return (
+      <section aria-labelledby="semantic-vectors">
+        <h2 id="semantic-vectors">{vectors.header}</h2>
+        <dl className="admin-facts">
+          <dt>{vectors.unavailableLabel}</dt>
+          <dd>{vectors.unavailable}</dd>
+          {report.problem && (
+            <>
+              <dt>{words.problem}</dt>
+              <dd>{report.problem}</dd>
+            </>
+          )}
+        </dl>
+        <p className="note">{vectors.footer}</p>
+      </section>
+    );
+  }
+  const problems = shards.refused.length + shards.missing.length;
+  return (
+    <section aria-labelledby="semantic-vectors">
+      <h2 id="semantic-vectors">{vectors.header}</h2>
+      <dl className="admin-facts">
+        <dt>{vectors.generation}</dt>
+        <dd>
+          {vectors.generationLine(generation.name, day(generation.generated))} <code className="digest">{generation.digest}</code>
+        </dd>
+        <dt>{vectors.model}</dt>
+        <dd>{vectors.modelLine(generation.model, generation.nativeDimensions, generation.dimensions)}</dd>
+        <dt>{vectors.documents}</dt>
+        <dd>{vectors.documentsLine(generation.documents, generation.volumes)}</dd>
+        <dt>{vectors.held}</dt>
+        <dd>{vectors.heldLine(shards.held, shards.published, vectors.fileSize(shards.heldBytes), vectors.fileSize(shards.publishedBytes))}</dd>
+        <dt>{vectors.problems}</dt>
+        <dd>{vectors.problemsCaption(problems, shards.checked)}</dd>
+        {shards.missing.length > 0 && (
+          <>
+            <dt>{vectors.missing}</dt>
+            <dd>{vectors.missingLine(shards.missing.length, shards.missing.slice(0, 5))}</dd>
+          </>
+        )}
+      </dl>
+      {shards.refused.length > 0 && (
+        // A region a keyboard can scroll, where the table is wider than the pane.
+        <div className="admin-table" role="region" aria-label={vectors.refusedCaption} tabIndex={0}>
+          <table>
+            <caption>{vectors.refusedCaption}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{vectors.volume}</th>
+                <th scope="col">{vectors.why}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shards.refused.map((refused) => (
+                <tr key={refused.volumeId}>
+                  <th scope="row">{refused.volumeId}</th>
+                  <td>
+                    {refused.reason} <span className="note">{refused.detail}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="note">{vectors.footer}</p>
+    </section>
   );
 }
