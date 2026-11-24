@@ -291,6 +291,16 @@ docker compose exec frus frus-light semantic
 
 **To turn the encoder off,** for a server it would crowd, set `FRUS_ENCODER=off` in `.env`, then `docker compose up -d`: the encoder never starts, and the server offers no search by meaning. The model stays in the image, which is the same for every install, so turning the encoder off saves its memory, not its disk. The model is in a layer of the image of its own, the same from one build to the next and on either architecture, so an upgrade pulls it only when the app moves to another model.
 
+## Language
+
+A server has no Apple NaturalLanguage, which FRUS Explorer counts its word clouds with, so the server carries a tagger of its own, for the word clouds, the Distinctive rankings and the collocates a later release counts with it: a word splitter, a lexical-class tagger trained from the Manually Annotated Sub-Corpus (MASC) of the American National Corpus, and WordNet 3.0's lemmas, about 3 MB compiled into the server, so there is nothing to download or set. It names no one: the People, Places and Organizations lenses are not offered. The image's `NOTICE` credits MASC and holds WordNet's licence. To check it on a server:
+
+```bash
+docker compose exec frus frus-light language-selftest
+```
+
+It tags a fixed text and prints the tagger's name and version, the digests of its model and lists, and the digest of what it made, which is the same on every architecture the image is built for.
+
 ## If an import is refused
 
 A refused file stays in the drop zone. `/api/v1/status` says why, under `lastImport`; `/readyz` says so too while no index is being served. A refusal about the file itself is not retried until the file changes. A problem on the server's side, such as too little disk space, is retried every minute. `docker compose logs frus` shows the whole story, and `docker compose exec frus rm /data/import/<file>` clears a file from the drop zone.

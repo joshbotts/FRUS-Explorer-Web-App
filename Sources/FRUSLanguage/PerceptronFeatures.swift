@@ -8,7 +8,9 @@
 // its neighbours, with a word's shape added, since the FRUS corpus prints headings in capitals and names
 // a great many people and places. Words are normalised as that tagger normalises them: a hyphenated word
 // is `!HYPHEN`, a four-digit number `!YEAR`, any other that starts with a digit `!DIGITS`, and the rest
-// lowercased.
+// lowercased. Every token is first read with the typewriter's punctuation for the typographer's (`’s` as
+// `'s`, `“` as `"`, `—` as `--`), since the FRUS corpus prints the one and the training text mostly the
+// other, and a clitic or a quotation mark is the same token either way.
 
 /// The hashes the features are made of.
 enum FeatureHash {
@@ -96,7 +98,8 @@ struct LineFeatures {
         prefixes.reserveCapacity(count)
         shapes.reserveCapacity(count)
         printed.reserveCapacity(count)
-        for token in tokens {
+        for printedToken in tokens {
+            let token = Self.typewriter(printedToken)
             let shape = Shape(token)
             let normalised = Self.normalise(token, shape: shape)
             words.append(FeatureHash.fnv(normalised))
@@ -115,6 +118,24 @@ struct LineFeatures {
         self.prefixes = prefixes
         self.shapes = shapes
         self.printed = printed
+    }
+
+    /// `token` with the typewriter's punctuation for the typographer's: U+2018, U+2019 and U+201B as `'`,
+    /// U+201C, U+201D and U+201F as `"`, U+2013 as `-`, U+2014 as `--` and U+2026 as `...`.
+    static func typewriter(_ token: Substring) -> Substring {
+        guard token.unicodeScalars.contains(where: { (0x2013...0x2026).contains($0.value) }) else { return token }
+        var out = String.UnicodeScalarView()
+        for scalar in token.unicodeScalars {
+            switch scalar.value {
+            case 0x2018, 0x2019, 0x201B: out.append("'")
+            case 0x201C, 0x201D, 0x201F: out.append("\"")
+            case 0x2013: out.append("-")
+            case 0x2014: out.append(contentsOf: "--".unicodeScalars)
+            case 0x2026: out.append(contentsOf: "...".unicodeScalars)
+            default: out.append(scalar)
+            }
+        }
+        return Substring(String(out))
     }
 
     /// The last three scalars of `text`, or all of it when it is shorter.

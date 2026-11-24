@@ -94,6 +94,24 @@ import Testing
         #expect(Self.lemma(".", .sentenceTerminator) == nil)
     }
 
+    @Test func naturalLanguagesReadingOfFRUS() {
+        #expect(Self.lemma("could", .verb) == "can", "a modal is its own lemma, but could")
+        #expect(Self.lemma("Might", .verb) == "might")
+        #expect(Self.lemma("would", .verb) == "would")
+        #expect(Self.lemmatizer.lemma(of: "will", as: .noun) == nil, "the noun is no modal")
+        #expect(Self.lemma("people", .noun) == "person")
+        #expect(Self.lemma("STATES", .noun) == nil, "capitals take no detachment")
+        #expect(Self.lemma("STATE", .noun) == "state")
+        #expect(Self.lemma("CHILDREN", .noun) == "child", "but take an exception")
+        #expect(Self.lemmatizer.lemma(of: "Torres", as: .noun, tag: "NNP") == nil, "a name WordNet does not know has none")
+        #expect(Self.lemmatizer.lemma(of: "States", as: .noun, tag: "NNP") == "state")
+        #expect(Self.lemma("O\u{2019}Neil", .noun) == "o'neil", "the typewriter's apostrophe")
+        #expect(Self.lemma("hoped", .adjective) == "hope", "an adjective WordNet does not list, in ed, is the verb's")
+        #expect(Self.lemma("visiting", .adjective) == "visit")
+        #expect(Self.lemma("large", .adjective) == "large")
+        #expect(Self.lemma("REPEATED", .adjective) == nil, "capitals take no detachment")
+    }
+
     @Test func noListsNoLemmas() {
         let empty = Lemmatizer(lists: [:])
         #expect(empty.lemma(of: "treaties", as: .noun) == nil)

@@ -287,11 +287,12 @@ let package = Package(
             path: "Sources/FRUSLightAPI",
             swiftSettings: swift6
         ),
-        // The process: its command line, configuration from the environment, and the health check.
+        // The process: its command line, configuration from the environment, and the health check; since
+        // S29c the web tagger, whose self-test it runs.
         .executableTarget(
             name: "FRUSLightServer",
             dependencies: [
-                "FRUSLightAPI", "FRUSLightCore",
+                "FRUSLightAPI", "FRUSLightCore", "FRUSLanguage",
                 .product(name: "Hummingbird", package: "hummingbird"),
                 .product(name: "Logging", package: "swift-log"),
             ],
@@ -375,11 +376,13 @@ let package = Package(
         // (check 3), the render comparison (check 4), the golden files' validation, and the
         // indexing metrics; since S16c, the import of a Mac JSON export it is given, through the
         // server's own mapping, read back from the store; and since S23c's pin move check 8's
-        // comparator, the export generator's core, for S22d's check.
+        // comparator, the export generator's core, for S22d's check; and since S29c the web tagger, whose
+        // agreement with the Mac's it reports, with WordCloudKit's plural fold.
         .target(
             name: "FRUSParity",
             dependencies: [
                 "ParityFormat", "FTS5Store", "FRUSCoreKit", "CSQLite", "FRUSLightCore", "FRUSRichText", "FRUSLightAPI",
+                "FRUSLanguage", "WordCloudKit",
                 "SourceExplorerExportGeneratorCore", "CentralFilesIndexGeneratorCore", "VolumeSourcesIndexGeneratorCore",
                 .product(name: "Crypto", package: "swift-crypto"),
             ],
@@ -388,7 +391,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "FRUSParityTool",
-            dependencies: ["FRUSParity", "ParityFormat", "FRUSLightAPI"],
+            dependencies: ["FRUSParity", "ParityFormat", "FRUSLightAPI", "FRUSLanguage"],
             path: "Tests/FRUSParityTool",
             swiftSettings: swift6
         ),
@@ -449,6 +452,8 @@ let package = Package(
                 "WordCloudKit",
                 // The encoder's stand-in (S27b), which check 9's encoder half's test starts.
                 "EncoderStandIn",
+                // The web tagger (S29c), whose report over the Mac's tags a test runs.
+                "FRUSLanguage",
             ],
             path: "Tests/FRUSParityTests",
             swiftSettings: swift6

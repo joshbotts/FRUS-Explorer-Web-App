@@ -151,19 +151,9 @@ public final class LanguageTagger: Sendable {
             return
         }
         let readsLemmas = reading.contains(.lemmas)
-        var lineStart = 0
-        while lineStart < tokens.count {
-            var lineEnd = lineStart + 1
-            while lineEnd < tokens.count, !tokens[lineEnd].startsLine { lineEnd += 1 }
-            let line = tokens[lineStart..<lineEnd]
-            let printed = line.map { text[$0.range] }
-            let tags = model.tag(line: printed)
-            for (offset, token) in line.enumerated() where token.kind == .word {
-                let lexicalClass = model.lexicalClass(at: offset, tags: tags, tokens: printed)
-                let lemma = readsLemmas ? lemmatizer.lemma(of: printed[offset], as: lexicalClass) : nil
-                guard body(token.range, lemma, { lexicalClass }) else { return }
-            }
-            lineStart = lineEnd
+        forEachLine(of: tokens, in: text) { token, printed, tag, lexicalClass in
+            let lemma = readsLemmas ? lemmatizer.lemma(of: printed, as: lexicalClass, tag: model.tags[Int(tag)]) : nil
+            return body(token.range, lemma, { lexicalClass })
         }
     }
 
@@ -172,6 +162,19 @@ public final class LanguageTagger: Sendable {
         let tokens = WordSplitter.tokens(in: text)
         var words: [TaggedWord] = []
         words.reserveCapacity(tokens.count)
+        forEachLine(of: tokens, in: text) { token, printed, tag, lexicalClass in
+            let name = model.tags[Int(tag)]
+            words.append(TaggedWord(range: token.range, tag: name, lexicalClass: lexicalClass,
+                                    lemma: lemmatizer.lemma(of: printed, as: lexicalClass, tag: name)))
+            return true
+        }
+        return words
+    }
+
+    /// Tags each line of `tokens` and calls `body` with each word, its printed form, its tag and its class,
+    /// until `body` returns `false`.
+    func forEachLine(of tokens: [LanguageToken], in text: String,
+                     _ body: (_ token: LanguageToken, _ printed: Substring, _ tag: UInt8, _ lexicalClass: LexicalClass) -> Bool) {
         var lineStart = 0
         while lineStart < tokens.count {
             var lineEnd = lineStart + 1
@@ -180,12 +183,22 @@ public final class LanguageTagger: Sendable {
             let printed = line.map { text[$0.range] }
             let tags = model.tag(line: printed)
             for (offset, token) in line.enumerated() where token.kind == .word {
-                let lexicalClass = model.lexicalClass(at: offset, tags: tags, tokens: printed)
-                words.append(TaggedWord(range: token.range, tag: model.tags[Int(tags[offset])], lexicalClass: lexicalClass,
-                                        lemma: lemmatizer.lemma(of: printed[offset], as: lexicalClass)))
+                guard body(token, printed[offset], tags[offset], lexicalClass(at: offset, tags: tags, printed: printed)) else { return }
             }
             lineStart = lineEnd
         }
-        return words
+    }
+
+    /// The class of the word at `index` of a line: the model's (`PerceptronModel.lexicalClass(at:tags:tokens:)`),
+    /// but for a proper noun's tag (`NNP`, `NNPS`) on a word WordNet lists as an adjective and followed by a
+    /// common noun in lowercase, which is an adjective, as NaturalLanguage reads "Libyan government" and
+    /// "Soviet relations", while "Soviet Union" stays a noun.
+    func lexicalClass(at index: Int, tags: [UInt8], printed: [Substring]) -> LexicalClass {
+        let lexicalClass = model.lexicalClass(at: index, tags: tags, tokens: printed)
+        guard lexicalClass == .noun, ["NNP", "NNPS"].contains(model.tags[Int(tags[index])]), index + 1 < tags.count,
+              ["NN", "NNS"].contains(model.tags[Int(tags[index + 1])]),
+              printed[index + 1].unicodeScalars.first?.properties.isLowercase == true,
+              lemmatizer.lists[.adjective]?.lemmas.contains(printed[index].lowercased()) == true else { return lexicalClass }
+        return .adjective
     }
 }

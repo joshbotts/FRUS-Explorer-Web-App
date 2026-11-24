@@ -75,6 +75,10 @@ public enum GoldenValidation {
                     let golden = try GoldenJSON.read(RichTextGolden.self, from: url)
                     provenance = golden.provenance
                     problems = format(golden.format, RichTextGolden.currentFormat, file) + richTextProblems(golden, root: layout.root)
+                case .languageTags:
+                    let golden = try GoldenJSON.read(LanguageTagsGolden.self, from: url)
+                    provenance = golden.provenance
+                    problems = format(golden.format, LanguageTagsGolden.currentFormat, file) + languageTagsProblems(golden)
                 }
                 report.problems += staleness(of: provenance, file: file.rawValue, layout: layout, sourceDigest: digest ?? "")
                 report.problems += inputProblems(of: provenance, file: file)
@@ -148,6 +152,7 @@ public enum GoldenValidation {
         case .results: return [records] + ParityFixtures.teiInputKeys + requiredStampKeys
         case .indexSummary: return ParityFixtures.teiInputKeys + requiredStampKeys
         case .richText: return [RichTextGolden.harnessPath, RichTextWebCases.path]
+        case .languageTags: return ParityFixtures.teiInputKeys
         }
     }
 
@@ -277,6 +282,43 @@ public enum GoldenValidation {
         if golden.codePages.map(\.name) != RichTextCodePages.pages.map(\.name)
             || golden.codePages.contains(where: { $0.sha256.wholeMatch(of: /[0-9a-f]{64}/) == nil }) {
             problems.append("\(file): its code pages are not those of RichTextCodePages, in order, each with a SHA-256")
+        }
+        return problems
+    }
+
+    /// The Mac's tags are whole: made with lemmas and lexical classes, so that no word is counted as
+    /// printed; documents of the fixture volumes alone, volumes in order, none twice; and each document's
+    /// words in order and apart, inside its text's length. The texts themselves are the index's, which
+    /// the language report holds each digest to.
+    public static func languageTagsProblems(_ golden: LanguageTagsGolden) -> [String] {
+        let file = GoldenFile.languageTags.rawValue
+        var problems: [String] = []
+        if golden.health["lemmatizes"] != true || golden.health["classifiesWords"] != true {
+            problems.append("\(file): NaturalLanguage could not lemmatize and classify words on the Mac that made it (\(golden.health)): make it again")
+        }
+        let volumes = golden.documents.map(\.volume)
+        if Set(volumes) != Set(ParityFixtures.volumes) || volumes != volumes.sorted() {
+            problems.append("\(file): its documents are not the fixture volumes', volumes in order")
+        }
+        var keys: Set<String> = []
+        for document in golden.documents {
+            let key = "\(document.volume)/\(document.document)"
+            if !keys.insert(key).inserted { problems.append("\(file): \(key) is listed twice") }
+            var previousEnd = 0
+            for field in document.words.split(separator: " ") {
+                let parts = field.split(separator: ",", omittingEmptySubsequences: false)
+                guard parts.count >= 3, let gap = Int(parts[0]), let length = Int(parts[1]), gap >= 0, length > 0 else {
+                    problems.append("\(file): \(key) has a word that is not in the form, \(field)")
+                    break
+                }
+                previousEnd += gap + length
+            }
+            if previousEnd > document.scalars {
+                problems.append("\(file): \(key)'s words run past its text's \(document.scalars) scalars")
+            }
+            if document.textSHA256.wholeMatch(of: /[0-9a-f]{64}/) == nil {
+                problems.append("\(file): \(key) has no SHA-256 of its text")
+            }
         }
         return problems
     }

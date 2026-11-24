@@ -367,6 +367,7 @@ struct GoldenRepository {
             for path in [RichTextGolden.harnessPath, RichTextWebCases.path] {
                 inputs[path] = try ParityFormat.Digest.sha256(contentsOf: layout.root.appendingPathComponent(path))
             }
+        case .languageTags: inputs = tei
         }
         if file.needsExport {
             for (key, value) in Self.stamp { inputs["research_provenance.\(key)"] = value }
@@ -410,6 +411,13 @@ struct GoldenRepository {
             try GoldenJSON.write(RichTextGolden(provenance: provenance, configuration: "tests", appearance: RichTextGolden.appearance,
                                                 cases: cases, catalogColors: [CatalogColor(name: "textColor", colorHex: nil)],
                                                 codePages: Self.codePages), to: url)
+        case .languageTags:
+            let documents = ParityFixtures.volumes.map { volume in
+                LanguageTagsDocument(volume: volume, document: "d1", textSHA256: ParityFormat.Digest.sha256("Text"), scalars: 4, words: "0,4,N,=")
+            }
+            try GoldenJSON.write(LanguageTagsGolden(provenance: provenance, configuration: "tests",
+                                                    health: ["lemmatizes": true, "classifiesWords": true, "recognizesNames": true],
+                                                    documents: documents), to: url)
         }
     }
 }

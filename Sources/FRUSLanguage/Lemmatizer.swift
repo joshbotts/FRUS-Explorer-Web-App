@@ -20,6 +20,18 @@
 //    otherwise: so a name WordNet does not know has no lemma, as NaturalLanguage gives a name it does
 //    not know none, and the word cloud then counts the word as printed, plural-folded.
 //
+// Before them, three rules of NaturalLanguage's reading of FRUS, as the fixtures measured it (DEVLOG's
+// Session 29c):
+// - a modal is its own lemma, but `could`, whose lemma is `can`;
+// - a noun WordNet treats as a lemma of its own has NaturalLanguage's: `people` → `person`;
+// - a word all in capitals takes an exception's base or its own lemma, never a detachment's ("FMS" has
+//   none, where `s` would make "fm"), as NaturalLanguage lemmatizes a heading's words it knows.
+// After them, an adjective in `ed` or `ing` that WordNet does not list as one takes the verb's lemma, as
+// NaturalLanguage reads "typed" and "pending" as verbs; and a word holding the typographer's apostrophe
+// that has no other lemma is itself with the typewriter's, as NaturalLanguage gives "O’Neil" as "O'Neil",
+// so that the word cloud keeps it. A name WordNet does not know has none, as NaturalLanguage gives none
+// to a name it does not know, and the word cloud then counts it as printed, plural-folded.
+//
 // For the clitics the splitter takes off a word, NaturalLanguage's lemmas: `n't` → `not`, `'re` → `be`,
 // `'ve` → `have`, `'ll` → `will`, `'m` → `be`, `'d` → `have`, and none for `'s`, either apostrophe.
 //
@@ -83,13 +95,23 @@ public struct Lemmatizer: Sendable {
         "n't": "not", "'re": "be", "'ve": "have", "'ll": "will", "'m": "be", "'d": "have", "'s": nil,
     ]
 
+    /// The modals' lemmas: each its own but `could`.
+    public static let modalLemmas: [String: String] = [
+        "can": "can", "could": "can", "may": "may", "might": "might", "must": "must", "shall": "shall",
+        "should": "should", "will": "will", "would": "would", "ought": "ought",
+    ]
+
+    /// The nouns WordNet treats as lemmas of their own whose lemma NaturalLanguage gives otherwise.
+    public static let nounLemmas: [String: String] = ["people": "person"]
+
     /// Creates a lemmatizer over WordNet's lists.
     public init(lists: [WordNetPart: WordNetPartLists]) {
         self.lists = lists
     }
 
-    /// The lemma of `word`, which the tagger gave `lexicalClass`, lowercased, or `nil` for none.
-    public func lemma(of word: Substring, as lexicalClass: LexicalClass) -> String? {
+    /// The lemma of `word`, which the tagger gave `lexicalClass` and, when it says, the tag `tag`, lowercased,
+    /// or `nil` for none.
+    public func lemma(of word: Substring, as lexicalClass: LexicalClass, tag: String? = nil) -> String? {
         let lowered = word.lowercased()
         if lowered.first == "'" || lowered.first == "\u{2019}" || lowered.hasSuffix("n't") || lowered.hasSuffix("n\u{2019}t") {
             let typewriter = lowered.replacingApostrophes()
@@ -104,7 +126,22 @@ public struct Lemmatizer: Sendable {
             }
         }
         if lowered.contains(where: { $0 == "." || $0.isNumber }) { return nil }
-        return morphy(lowered, part)
+        if part == .verb, let modal = Self.modalLemmas[lowered] { return modal }
+        if part == .noun, let lemma = Self.nounLemmas[lowered] { return lemma }
+        let capitals = word.count > 1 && word.unicodeScalars.allSatisfy { !$0.properties.isLowercase }
+        if let lemma = capitals ? exactly(lowered, part) : morphy(lowered, part) { return lemma }
+        if part == .adjective, !capitals, lowered.hasSuffix("ed") || lowered.hasSuffix("ing"), let verb = morphy(lowered, .verb) {
+            return verb
+        }
+        if lowered.unicodeScalars.contains("\u{2019}") { return lowered.replacingApostrophes() }
+        return nil
+    }
+
+    /// An exception's first base or the word itself, as WordNet lists it for `part`, with no detachment.
+    public func exactly(_ word: String, _ part: WordNetPart) -> String? {
+        guard let lists = lists[part] else { return nil }
+        if let bases = lists.exceptions[word], let first = bases.first { return first }
+        return lists.lemmas.contains(word) ? word : nil
     }
 
     /// WordNet's morphy for one word of one part, already lowercased: rules 2 to 6.

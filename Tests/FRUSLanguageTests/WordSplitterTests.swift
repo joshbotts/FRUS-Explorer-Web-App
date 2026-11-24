@@ -26,9 +26,9 @@ import Testing
                 ["cannot", "wo", "n't", "sha", "n't", "we", "'re", "they", "'ve", "I", "'ll", "she", "'d", "I", "'m", "Jones", "book",
                  "the", "Ambassador", "'s"])
         #expect(Self.words("Let's go. Children's toys. Ma'am. o'clock. Gov't.") ==
-                ["Let", "'s", "go", "Children", "'s", "toys", "Ma'am", "o'clock", "Gov't"])
-        #expect(Self.words("shouldn't've DON'T KHRUSHCHEV'S 1960's") ==
-                ["should", "n't", "'ve", "DO", "N'T", "KHRUSHCHEV", "'S", "1960", "'s"])
+                ["Let", "'s", "go", "Children", "'s", "toys", "Ma'am.", "o'clock", "Gov't"], "a period before a lowercase word stays")
+        #expect(Self.words("shouldn't've DON'T KHRUSHCHEV'S 1960's IL-28\u{2019}s") ==
+                ["should", "n't", "'ve", "DO", "N'T", "KHRUSHCHEV", "'S", "1960's", "IL", "28\u{2019}s"], "no clitic after a digit")
     }
 
     @Test func theTypographersApostrophe() {
@@ -38,6 +38,8 @@ import Testing
                 ["Se\u{F1}or", "Zelaya", "\u{2019}s", "government", "the", "Nicaraguan", "r\u{E9}gime", "refused", "O\u{2019}Brien", "\u{2019}s",
                  "na\u{EF}ve", "co\u{F6}peration"])
         #expect(Self.tokens("the Soviets\u{2019} decision") == ["the/w", "Soviets/w", "\u{2019}/p", "decision/w"])
+        #expect(Self.words("charg\u{E9} d\u{2019}affaires, coup d'\u{E9}tat, L\u{2019}Express, O\u{2019}Neil") ==
+                ["charg\u{E9}", "d\u{2019}", "affaires", "coup", "d'", "\u{E9}tat", "L\u{2019}", "Express", "O\u{2019}Neil"], "French's elision")
         #expect(Self.tokens("\u{2018}80s") == ["\u{2018}/p", "80s/w"])
         #expect(Self.tokens("'80s") == ["'/p", "80s/w"])
     }
@@ -45,8 +47,9 @@ import Testing
     @Test func hyphens() {
         #expect(Self.words("non-aligned pre-war co-operation un-American anti-war cease-fire so-called Vice-President") ==
                 ["non-aligned", "pre", "war", "co-operation", "un-American", "anti-war", "cease", "fire", "so", "called", "Vice", "President"])
-        #expect(Self.words("The well-known anti-Communist leader; U.S.-Soviet relations; CO-OPERATION; Anti-Ballistic-Missile") ==
-                ["The", "well", "known", "anti-Communist", "leader", "U.S.", "Soviet", "relations", "CO-OPERATION", "Anti-Ballistic", "Missile"])
+        #expect(Self.words("The well-known anti-Communist leader; U.S.-Soviet relations; CO-OPERATION; Non-Aligned; anti-ballistic-missile") ==
+                ["The", "well", "known", "anti-Communist", "leader", "U.S.", "Soviet", "relations", "CO", "OPERATION", "Non", "Aligned",
+                 "anti-ballistic", "missile"], "a prefix in lowercase alone")
         #expect(Self.tokens("1961-63 anti- war word--word anti-1960") ==
                 ["1961/w", "-/p", "63/w", "anti/w", "-/p", "war/w", "word/w", "--/p", "word/w", "anti/w", "-/p", "1960/w"])
         #expect(Self.words("de-escalation self-determination two-thirds") == ["de", "escalation", "self", "determination", "two", "thirds"])
@@ -71,6 +74,13 @@ import Testing
         #expect(Self.words("at 10:30 a.m.") == ["at", "10", "30", "a.m"], "a text's last period ends it")
         #expect(Self.tokens("etc... Fine") == ["etc/w", ".../p", "Fine/w"], "an ellipsis is punctuation of its own")
         #expect(Self.words("Mar. 4 and mar. 5; MR. X") == ["Mar.", "4", "and", "mar", "5", "MR", "X"], "the list's case matters")
+        #expect(Self.words("influence in Libya. b. Option 2. Withdraw them. \u{2014}In January; I am, etc., W. Q. Gresham, D. C., No. 9.") ==
+                ["influence", "in", "Libya.", "b", "Option", "2", "Withdraw", "them.", "In", "January", "I", "am", "etc.", "W", "Q.",
+                 "Gresham", "D.", "C.", "No", "9"], "a period no sentence follows stays")
+        #expect(Self.words("Moscow, undated N.S. Khrushchev at 3 p.m. Then; U.N. Charter; 5 a.m. Monday") ==
+                ["Moscow", "undated", "N.S.", "Khrushchev", "at", "3", "p.m", "Then", "U.N", "Charter", "5", "a.m.", "Monday"])
+        #expect(Self.words("Mr. H. A. Herbert and Hon. L. Baker; R/Adm. Murphy") ==
+                ["Mr.", "H", "A.", "Herbert", "and", "Hon", "L.", "Baker", "R", "Adm", "Murphy"], "the initials NaturalLanguage keeps")
     }
 
     @Test func numbers() {
@@ -99,7 +109,8 @@ import Testing
         #expect(Self.words("one\u{A0}two\u{200B}three\u{2003}four") == ["one", "two", "three", "four"])
         #expect(Self.words("\u{FEFF}Moscow \u{41C}\u{43E}\u{441}\u{43A}\u{432}\u{430} \u{5317}\u{4EAC}") ==
                 ["Moscow", "\u{41C}\u{43E}\u{441}\u{43A}\u{432}\u{430}", "\u{5317}\u{4EAC}"])
-        #expect(Self.words("\u{2160}\u{2161} \u{BD}") == ["\u{2160}\u{2161}", "\u{BD}"], "letter and other numbers are digits")
+        #expect(Self.words("\u{2160}\u{2161} \u{BD}") == ["\u{2160}\u{2161}", "\u{BD}"], "letter numbers are digits")
+        #expect(Self.words("1\u{BD} cents, 2\u{B2}") == ["1", "\u{BD}", "cents", "2", "\u{B2}"], "a fraction is a word of its own")
     }
 
     @Test func lines() {
@@ -120,6 +131,7 @@ import Testing
         #expect(ScalarClass.of("a") == .letter)
         #expect(ScalarClass.of("\u{3042}") == .letter)
         #expect(ScalarClass.of("7") == .digit)
+        #expect(ScalarClass.of("\u{BD}") == .fraction)
         #expect(ScalarClass.of("\u{301}") == .mark)
         #expect(ScalarClass.of("\u{200D}") == .mark)
         #expect(ScalarClass.of("'") == .apostrophe)

@@ -20,6 +20,11 @@ struct AnnotatedText {
 struct TrainingCorpus {
     var name: String
     var documents: [AnnotatedText]
+    /// Where one unit of training text ends and the next begins: at each line break, as the tagger reads
+    /// a text, or at a blank line, for a text whose lines break inside a paragraph.
+    var unitBreak: UnitBreak = .lineBreak
+
+    enum UnitBreak { case lineBreak, blankLine }
 
     /// Universal Dependencies' CoNLL-U files, each token's tag its XPOS (the English Web Treebank's are the
     /// Penn Treebank's). A document is each `# newdoc`'s sentences, a line each `# newpar`'s, its
@@ -94,8 +99,8 @@ struct TrainingCorpus {
     }
 
     /// The Manually Annotated Sub-Corpus's GrAF files: each text with its Penn Treebank tokens.
-    static func masc(_ folder: URL) throws -> TrainingCorpus {
-        try MASCReader.read(folder)
+    static func masc(_ folder: URL, treebank: URL?, genres: Set<String>? = nil) throws -> TrainingCorpus {
+        try MASCReader.read(folder, treebank: treebank, genres: genres)
     }
 
     /// A file of `word<TAB>tag` lines, a blank line between lines of text: one document.
@@ -143,6 +148,7 @@ struct TrainingCorpus {
         }
         var named: [(tokens: [Substring], tags: [String])] = []
         var dropped = 0, tokenCount = 0, exact = 0
+        var uncovered: [String: Int] = [:]
         for document in documents {
             let text = document.text
             let tokens = WordSplitter.tokens(in: text)
@@ -163,8 +169,16 @@ struct TrainingCorpus {
                 line = ([], [])
                 lineOK = true
             }
+            var previousEnd = text.startIndex
             for token in tokens {
-                if token.startsLine { finishLine() }
+                switch unitBreak {
+                case .lineBreak:
+                    if token.startsLine { finishLine() }
+                case .blankLine:
+                    let between = text[previousEnd..<token.range.lowerBound]
+                    if between.filter({ $0 == "\n" || $0 == "\r\n" || $0 == "\r" }).count >= 2 { finishLine() }
+                }
+                previousEnd = token.range.upperBound
                 let start = scalarOffset(token.range.lowerBound), end = scalarOffset(token.range.upperBound)
                 while spanIndex < document.spans.count, document.spans[spanIndex].end <= start { spanIndex += 1 }
                 var best: Span?, bestOverlap = 0
@@ -180,7 +194,13 @@ struct TrainingCorpus {
                 if let best, best.start == start, best.end == end { exact += 1 }
                 switch token.kind {
                 case .word:
-                    guard let best else { lineOK = false; line.tokens.append(printed); line.tags.append(""); continue }
+                    guard let best else {
+                        lineOK = false
+                        uncovered[String(printed), default: 0] += 1
+                        line.tokens.append(printed)
+                        line.tags.append("")
+                        continue
+                    }
                     line.tokens.append(printed)
                     line.tags.append(best.tag)
                 case .punctuation, .symbol:
@@ -195,6 +215,11 @@ struct TrainingCorpus {
                 }
             }
             finishLine()
+        }
+        if !uncovered.isEmpty {
+            let common = uncovered.sorted { $0.value > $1.value || ($0.value == $1.value && $0.key < $1.key) }.prefix(25)
+            note("align: \(uncovered.values.reduce(0, +)) words overlap no training token, their lines left out; the commonest: "
+                 + common.map { "\($0.key) \($0.value)" }.joined(separator: ", "))
         }
         let tags = Set(named.flatMap(\.tags)).sorted()
         guard tags.count <= 255 else { throw ToolError("\(tags.count) tags, past the model's 255") }
@@ -218,8 +243,8 @@ enum TagClasses {
     /// The class a Penn Treebank tag gives, as close to NaturalLanguage's reading as the tag can say, by
     /// probes of NaturalLanguage on macOS 27.2.1 (DEVLOG's Session 29c): possessive pronouns are its
     /// determiners, wh-adverbs and relative `which` its pronouns, `that` and the subordinating conjunctions
-    /// its prepositions, modals its verbs, the possessive `'s` its particle. `TO` and `CD` have rules
-    /// that read more (`PerceptronModel.lexicalClass(at:tags:tokens:)`).
+    /// its prepositions, modals its verbs, the possessive `'s` its particle, a list's item marker its number
+    /// ("(b)"). `TO` and `CD` have rules that read more (`PerceptronModel.lexicalClass(at:tags:tokens:)`).
     static func penn(_ tag: String) -> LexicalClass? {
         switch tag {
         case "NN", "NNS", "NNP", "NNPS", "NP", "NPS": return .noun
@@ -233,9 +258,10 @@ enum TagClasses {
         case "CC": return .conjunction
         case "CD": return .number
         case "UH": return .interjection
-        case "FW", "SYM", "LS", "ADD", "AFX", "GW", "XX", "$", "#": return .otherWord
+        case "LS": return .number
+        case "FW", "SYM", "ADD", "AFX", "GW", "XX", "$", "#": return .otherWord
         case ".": return .sentenceTerminator
-        case ",", ":", "NFP": return .punctuation
+        case ",", ":", "NFP", "SU": return .punctuation
         case "``": return .openQuote
         case "''": return .closeQuote
         case "-LRB-", "(": return .openParenthesis
@@ -297,7 +323,7 @@ struct Training {
             "lines": aligned.lines.count,
             "linesLeftOut": aligned.dropped,
             "tokens": wordTokens,
-            "tokensMatchingTheText'sOwn": aligned.exact,
+            "tokensSplitAsTheTextSplitsThemPerThousand": aligned.exact * 1000 / max(aligned.tokens, 1),
             "passes": passes,
             "seed": Int(seed),
             "passAccuracyPerThousand": trainer.passAccuracy,

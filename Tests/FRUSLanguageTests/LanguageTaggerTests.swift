@@ -73,6 +73,16 @@ import Testing
         #expect(Array(after) == alone)
     }
 
+    @Test func aDemonymBeforeACommonNounIsAnAdjective() {
+        let place = Dictionary(uniqueKeysWithValues: PerceptronTests.tags.enumerated().map { ($0.element, UInt8($0.offset)) })
+        let lemmatizer = Lemmatizer(lists: [.adjective: WordNetPartLists(exceptions: [:], lemmas: ["libyan", "soviet"])])
+        let tagger = LanguageTagger(model: Self.tagger.model, lemmatizer: lemmatizer, identity: Self.tagger.identity)
+        let printed: [Substring] = ["Libyan", "government", "Soviet", "Union", "Rusk", "minister"]
+        let tags = ["NNP", "NN", "NNP", "NNP", "NNP", "NN"].map { place[$0]! }
+        #expect(printed.indices.map { tagger.lexicalClass(at: $0, tags: tags, printed: printed) } ==
+                [.adjective, .noun, .noun, .noun, .noun, .noun], "Rusk is no adjective WordNet lists")
+    }
+
     @Test func theIdentity() {
         let identity = LanguageIdentity(name: "FRUSLanguage", rulesVersion: 1, modelSHA256: "0123456789abcdef" + String(repeating: "0", count: 48),
                                         listsSHA256: "fedcba9876543210" + String(repeating: "0", count: 48))

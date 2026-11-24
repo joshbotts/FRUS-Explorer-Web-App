@@ -1,8 +1,9 @@
 // FRUS Explorer Light server. Configuration comes from FRUS_* environment variables (docs/SPEC.md).
 // `frus-light backup` and `frus-light restore` back up and restore the user store (StoreCommands), and
 // `frus-light user` makes and changes local accounts (UserCommands, PLAN's S20b), `frus-light secrets
-// forget` removes the stored keys a lost key file leaves unreadable (SecretCommands, S20c), and `frus-light
-// semantic` reports the search model and its encoder (SemanticCommand, S27b).
+// forget` removes the stored keys a lost key file leaves unreadable (SecretCommands, S20c), `frus-light
+// semantic` reports the search model and its encoder (SemanticCommand, S27b), and `frus-light
+// language-selftest` tags a fixed text with the web's tagger and prints its digest (LanguageCommand, S29c).
 
 import FRUSLightAPI
 import FRUSLightCore
@@ -24,6 +25,10 @@ struct FRUSLightServer {
             let status = HealthCheck.probe(port: port)
             print(status)
             exit(status.hasPrefix("HTTP/1.1 200") ? 0 : 1)
+        }
+        // The tagger's self-test reads no configuration, so that it runs as it is wherever the binary does.
+        if CommandLine.arguments.dropFirst().first == "language-selftest" {
+            exit(LanguageCommand.selftest(Array(CommandLine.arguments.dropFirst(2))))
         }
         let configuration: ServerConfiguration
         do {

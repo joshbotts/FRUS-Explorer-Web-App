@@ -41,7 +41,10 @@ enum Generated {
     static func writeWordNet(text: String, source: String, licence: String, lists: [WordNetPart: WordNetPartLists], to url: URL) throws {
         // The licence as WordNet's distribution words it, every line kept, as a comment.
         let licenceComment = licence.split(separator: "\n", omittingEmptySubsequences: false)
-            .map { $0.isEmpty ? "//" : "// " + $0 }
+            .map { line -> String in
+                let trimmed = line.reversed().drop(while: { $0 == " " || $0 == "\t" || $0 == "\r" }).reversed()
+                return trimmed.isEmpty ? "//" : "// " + String(trimmed)
+            }
             .joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let counts = WordNetPart.allCases.map { part in

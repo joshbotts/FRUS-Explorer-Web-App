@@ -15,12 +15,15 @@ public enum GoldenFile: String, CaseIterable, Sendable {
     /// The golden spans (S15d): the RTF the note editor writes and the app's reading of RTF, made
     /// from the app's source by `scripts/make-golden`.
     case richText = "rich-text/spans.json"
+    /// The Mac's words, lexical classes and lemmas for the fixtures' body texts (S29c), made from the
+    /// app's source and NaturalLanguage on the owner's Mac by `scripts/make-golden`.
+    case languageTags = "language/tags.json"
 
     /// True for a file made from the owner's export, which may wait for it. One made from the
     /// app's source alone is made in the session and committed, never left pending.
     public var needsExport: Bool {
         switch self {
-        case .render, .expressions, .richText: false
+        case .render, .expressions, .richText, .languageTags: false
         case .results, .indexSummary: true
         }
     }

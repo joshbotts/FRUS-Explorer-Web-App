@@ -9,11 +9,12 @@ import Foundation
 
 let usage = """
     usage: frus-language wordnet  --dict <WordNet's dict folder> --licence <its LICENSE file> --source <provenance> [--out <swift file>]
-           frus-language train    --conllu <file>[,<file>...] | --masc <folder> | --tsv <file>
+           frus-language train    --conllu <file>[,<file>...] | --masc <folder> [--treebank <folder>] [--genres <a,b>] | --tsv <file>
                                   --source <provenance> [--passes <n>] [--seed <n>] [--hold-out <n>]
                                   [--out <swift file>] [--model <file>]
-           frus-language evaluate --conllu <file>[,<file>...] | --masc <folder> | --tsv <file> [--hold-out <n>] [--model <file>]
+           frus-language evaluate --conllu <file>[,<file>...] | --masc <folder> [--treebank <folder>] | --tsv <file> [--hold-out <n>] [--model <file>]
            frus-language tag      <text file> [--model <file>]
+           frus-language selftest [--write <file>]
 
       wordnet   WordNet's exception lists and single-word lemmas, in the lemmatizer's canonical text
                 (default out: Sources/FRUSLanguage/EmbeddedWordNet.swift)
@@ -24,6 +25,9 @@ let usage = """
       evaluate  the model's tags and classes against a text's, over every nth line with --hold-out n, or
                 every line (the embedded model, or --model's file)
       tag       a text file's words, tags, classes and lemmas, one word a line
+      selftest  the self-test's lines and digest over the embedded model and lists; --write writes the digest and
+                the family's identity to the file the tests and the smoke test hold the binary to
+                (fixtures/language/selftest.sha256)
 
     --source is the provenance the generated file records: the text's name, address, licence and digest.
     """
@@ -77,7 +81,9 @@ func corpus(_ arguments: inout Arguments) throws -> TrainingCorpus {
     case let (files?, nil, nil):
         return try TrainingCorpus.conllu(files.split(separator: ",").map { URL(fileURLWithPath: String($0)) })
     case let (nil, folder?, nil):
-        return try TrainingCorpus.masc(URL(fileURLWithPath: folder))
+        let genres = arguments.take("--genres").map { Set($0.split(separator: ",").map(String.init)) }
+        return try TrainingCorpus.masc(URL(fileURLWithPath: folder), treebank: arguments.take("--treebank").map { URL(fileURLWithPath: $0) },
+                                       genres: genres)
     case let (nil, nil, file?):
         return try TrainingCorpus.tsv(URL(fileURLWithPath: file))
     default:
@@ -144,6 +150,17 @@ do {
         let tagger = try tagger(model: model)
         for word in tagger.tagged(text) {
             print("\(text[word.range])\t\(word.tag)\t\(word.lexicalClass.rawValue)\t\(word.lemma ?? "-")")
+        }
+    case "selftest":
+        let write = arguments.take("--write")
+        try arguments.finish()
+        let tagger = LanguageTagger.shared
+        for line in LanguageSelftest.lines(tagger) { print(line) }
+        let digest = LanguageSelftest.digest(tagger)
+        print("digest \(digest)")
+        if let write {
+            try Data("\(digest)  \(tagger.identity)\n".utf8).write(to: URL(fileURLWithPath: write))
+            note("selftest: \(digest), \(tagger.identity), in \(write)")
         }
     default:
         throw ToolError("unknown command \(arguments.command)")
