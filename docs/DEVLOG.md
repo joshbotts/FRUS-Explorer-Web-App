@@ -149,7 +149,9 @@ Its five nits were taken too: the shaders are deleted once linked; the buffer ke
 
 ## Session 30a: the packet's builder and exporter, upstream
 
-23 November 2026 · branch `claude/s30a-packet-upstream-4bf6f0` · [#169](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/169) · upstream `4556c4d5`, unchanged; [FRUS-Explorer#1981](https://github.com/joshbotts/FRUS-Explorer/pull/1981), open
+23 November 2026 · branch `claude/s30a-packet-upstream-4bf6f0` · [#169](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/169) · upstream `4556c4d5`, unchanged; [FRUS-Explorer#1981](https://github.com/joshbotts/FRUS-Explorer/pull/1981), merged
+
+**Since merged** (S26b's pin move records it): the owner merged FRUS-Explorer#1981 late on 23 November (04:52 UTC on the 24th) as `0b839bde`, whose tree is its head's, `6ddd50f4`, onto `v2` at `2402f600`, the branch's base, so Mac check 37 is done and the Next below with it. S26b's pin move took it, to `0b839bde`, with the parity test re-pointed as below.
 
 Phase 4's row S30a, the last of the first upstream batch, after S26a and S29a: one upstream pull request in which an Archives Visit's packet, its builder, model and exporter with their rules, moves into FRUSCoreKit, so that the Visits track (S30c, S30d) builds and writes the packet through the kit. It is `claude/trip-packet-kit`, cut from `v2` at `2402f600`, which already had #1979 and #1980, in three commits: the change, the cold review's fixes, and the plan of record's entry; labelled `Mac`, its body asks for Mac verification and lists Mac check 37, and it is not merged. Under rule 4 it changes shared files, and this repository changes only its records.
 
@@ -183,7 +185,9 @@ Phase 4's row S30a, the last of the first upstream batch, after S26a and S29a: o
 
 ## Session 29a: WordCloudKit takes its tagger from its host, upstream
 
-23 November 2026 · branch `claude/s29a-tagger-seam-a350c3` · [#167](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/167) · upstream `4556c4d5`, unchanged; [FRUS-Explorer#1979](https://github.com/joshbotts/FRUS-Explorer/pull/1979), open
+23 November 2026 · branch `claude/s29a-tagger-seam-a350c3` · [#167](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/167) · upstream `4556c4d5`, unchanged; [FRUS-Explorer#1979](https://github.com/joshbotts/FRUS-Explorer/pull/1979), merged
+
+**Since merged** (S26b's pin move records it): the owner merged FRUS-Explorer#1979 on the evening of 23 November (01:43 UTC on the 24th) as `070f2fcb`, the batch's first, whose tree is its head's, `b926e18b`, onto `v2` at `4556c4d5`, the branch's base, so Mac check 36 is done. S26b's pin move took it, to `0b839bde`, with `Package.swift` and the server's Word Cloud patched as below, the configuration given the file's tokenizer too (the log's entry, Session 26b).
 
 Phase 4's row S29a, in wave 1 beside S26a and S27b: one upstream pull request in which WordCloudKit's tokenizers take their tagger from their host, so that the web's own tagger (S29c) counts through the kit's rules and the app's generator (S29d). It is `claude/wordcloudkit-host-tagger`, cut from `v2` at `4556c4d5`, which `v2` still is, in three commits: the change, the cold review's fixes, and the plan of record's entry; labelled `Mac`, its body asks for Mac verification and lists Mac check 36, and it is not merged. Under rule 4 it changes shared files, and this repository changes only its records.
 
@@ -218,7 +222,9 @@ Phase 4's row S29a, in wave 1 beside S26a and S27b: one upstream pull request in
 
 ## Session 26a: the vectors' stores and Related's semantic source, upstream
 
-23 November 2026 · branch `claude/s26a-vectors-upstream-d60976` · [#168](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/168) · upstream `4556c4d5`, unchanged; [FRUS-Explorer#1980](https://github.com/joshbotts/FRUS-Explorer/pull/1980), open
+23 November 2026 · branch `claude/s26a-vectors-upstream-d60976` · [#168](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/168) · upstream `4556c4d5`, unchanged; [FRUS-Explorer#1980](https://github.com/joshbotts/FRUS-Explorer/pull/1980), merged
+
+**Since merged** (S26b's pin move records it): S29a's #1979 merged first, and GitHub reported this pull request conflicting in the ends of the plan of record and the amendment log alone, so `v2` was merged into the branch at `a439bb4e`, with no rebase. The owner merged FRUS-Explorer#1980 a quarter of an hour after #1979 (01:57 UTC on the 24th) as `2402f600`, whose tree is its head's, `257c8e62`, so Mac check 35 is done; the re-check of what the merge touched, queued then, passed at that head beside `v2` at `070f2fcb`: the iOS run's 8,197 tests in 992 suites with `v2`'s skips, `swift test`'s 4,663 in 548 against `v2`'s 4,611 in 542, the symbols name for name as below, and the Linux run over `main` `604e444` with the one named skip. S26b's pin move took it, to `0b839bde`.
 
 Phase 4's row S26a, the first of the first upstream batch with S29a and S30a: Related Documents' semantic axis and Project Home's reach run in FRUSCoreKit, over a host value in place of `AppState`. The pull request is `claude/semantic-stores-related-source`, cut from `v2` at `4556c4d5`, which `v2` still is. It is labelled `Mac`, its body asks for Mac verification and lists Mac check 35, and it is not merged. Under rule 4 it changes shared files, and this repository changes only its records.
 

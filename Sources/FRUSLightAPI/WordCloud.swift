@@ -129,12 +129,15 @@ struct CloudSettings: Equatable, Sendable {
     /// The settings of these a bundled cloud cannot show, by the kit's comparability rule between a count and the
     /// generator's: those that would let in a word the generator never counted. The generator counted the clouds at
     /// the file's own tuning, with the diplomatic layer on (`CloudVectorsRunner`), and with the bundled word lists,
-    /// which are the ones read here, so the digests are not compared.
+    /// which are the ones read here, so the digests are not compared. The settings filter the file's own counts, so
+    /// both sides name the tokenizer the file was counted by (S29a's `Mismatch.tokenizer`): a file another tokenizer
+    /// counted is never called another tokenizer's by its own filter.
     func notShown(byCloudsOf file: CloudVectorsFile) -> [KeynessBaselineFile.Configuration.Mismatch] {
         KeynessBaselineFile.Configuration(tuning: file.provenance.tuning,
                                           includeDiplomatic: CloudRules.generatorIncludesDiplomatic,
-                                          lexiconsDigest: "", stopwordsDigest: "")
-            .mismatches(against: tuning, includeDiplomatic: includeDiplomatic, lexiconsDigest: "", stopwordsDigest: "")
+                                          lexiconsDigest: "", stopwordsDigest: "", tokenizer: file.provenance.tokenizer)
+            .mismatches(against: tuning, includeDiplomatic: includeDiplomatic, lexiconsDigest: "", stopwordsDigest: "",
+                        tokenizer: file.provenance.tokenizer)
     }
 }
 
@@ -446,6 +449,9 @@ enum CloudRules {
             case .lexicons, .stopwords:
                 appWords("wordcloud.keyness.mismatch.payload",
                          "the bundled word lists have changed since the reference was built")
+            case .tokenizer:
+                appWords("wordcloud.keyness.mismatch.tokenizer",
+                         "the reference was counted by another tokenizer")
             }
         }
         // Duplicates are possible: `.lexicons` and `.stopwords` share one description.
