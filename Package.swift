@@ -143,8 +143,9 @@ let package = Package(
         // The cloud-vector generator's core, since S26b's pin move (S29a, FRUS-Explorer#1979), with upstream's
         // dependencies: `CloudVectorsRunner.run(tagger:cloudLenses:environment:)` counts with the tagger its host
         // gives, which S29d's run gives the web's, and `run()`, NaturalLanguage's, is unavailable here, saying why.
-        // Its suites leave out CloudVectorsGeneratorTests.swift, whose tests count through NaturalLanguage's
-        // own `accumulate`s, unguarded, so that on Linux the hosted runs' suite runs alone.
+        // Its suites leave out CloudVectorsGeneratorTests.swift: one of its 58 tests calls NaturalLanguage's own
+        // `accumulate`s, unguarded, which are unavailable here, so the file does not build on Linux, and its other
+        // tests, which tag nothing, go with it. On Linux the hosted runs' suite runs alone.
         .target(
             name: "CloudVectorsGeneratorCore",
             dependencies: ["WordCloudKit", "GeneratorKit"],

@@ -11,11 +11,13 @@
 // (`WordCloudDisplayState.resolve`), the count line, the scope menu (`WordCloudScopeBar`) and the scoped hand-off
 // (`scopedAnalyzeMenuLabel`, `analyticsScope()`), with the reader's settings as `WordCloudSettings` reads them.
 //
-// The server counts nothing: the kit's tokenizer counts with NaturalLanguage, which Linux lacks, so a live scope, the
-// Distinctive measure and collocates wait for phase 4's lemmatizer, and a request for a live scope is refused. The
-// reader's settings a bundled list cannot show, those that would let in a word the generator never counted, are named
-// by the kit's own comparability rule (`KeynessBaselineFile.Configuration.mismatches`), since the clouds were counted
-// under the generator's configuration (`CloudVectorsRunner`: the standard tuning, the diplomatic layer on).
+// The server counts nothing: the kit's tokenizers count with a tagger their host gives (FRUS-Explorer#1979, since
+// S26b's pin move), or else with NaturalLanguage, which Linux lacks, and the server has no tagger until phase 4's own
+// (S29c), so a live scope, the Distinctive measure and collocates wait for it, and a request for a live scope is
+// refused. The reader's settings a bundled list cannot show, those that would let in a word the generator never
+// counted, are named by the kit's own comparability rule (`KeynessBaselineFile.Configuration.mismatches`), since the
+// clouds were counted under the generator's configuration (`CloudVectorsRunner`: the standard tuning, the diplomatic
+// layer on).
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -283,8 +285,8 @@ enum CloudRules {
     /// `CloudVectorsAggregatorScopeKeys.corpus`: the corpus's key in the core file.
     static let corpusKey = "corpus"
 
-    /// The diplomatic layer the generator counted the clouds with (`CloudVectorsRunner.run()`: `let includeDiplomatic =
-    /// true`), which the file does not record.
+    /// The diplomatic layer the generator counted the clouds with (`CloudVectorsRunner.run(tagger:cloudLenses:
+    /// environment:)`, which `run()` calls: `let includeDiplomatic = true`), which the file does not record.
     static let generatorIncludesDiplomatic = true
 
     /// The lenses the bundled clouds carry, in the lens bar's order: the app's bar lists `WordCloudLens.allCases`, and
