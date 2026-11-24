@@ -2657,6 +2657,129 @@ dialog.cross-volume {
   cursor: not-allowed;
 }
 
+/* ─── Semantic Analytics (PLAN's S28b) ────────────────────────────────────── */
+/* The map beside its regions' table, the table under it where the page is narrow. */
+.semantic-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(16rem, 2fr);
+  gap: 1rem 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .semantic-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.semantic-map-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin: 0 0 0.5rem;
+}
+
+.semantic-map-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.semantic-map-status,
+.semantic-map-help,
+.semantic-map-caption,
+.semantic-regions-summary {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+/* The map's ground is the app's dark one in either appearance, as the app's map is (`backgroundClearColor`). */
+.semantic-map-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  min-height: 16rem;
+  max-height: 75vh;
+  background: rgb(15, 18, 23);
+  border-radius: 8px;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+
+.semantic-map-frame:active {
+  cursor: grabbing;
+}
+
+.semantic-map-frame:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.semantic-map-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.semantic-map-help {
+  margin-top: 0.5rem;
+}
+
+.semantic-map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 1rem;
+  margin-top: 0.5rem;
+}
+
+.semantic-map-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+}
+
+/* The legend's swatch: a point's colour on the map's ground, as the map draws it. */
+.semantic-map-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 3px;
+  background: rgb(15, 18, 23);
+  forced-color-adjust: none;
+}
+
+.semantic-map-swatch span {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+}
+
+.semantic-map-unavailable {
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.semantic-regions-summary {
+  margin-bottom: 0.5rem;
+}
+
+.semantic-regions .analytics-table {
+  max-height: 75vh;
+}
+
 /* ─── Archival Analytics and About the Series (PLAN's S24h) ────────────────── */
 /* The custodians' tints (`ArchivalRepositoryCategory.color`), on a swatch, a bar or a flow's block. */
 [data-custodian='stateDepartment'] {

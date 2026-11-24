@@ -523,7 +523,7 @@ Each surface below states what the web edition must do. Behaviour matches the Ma
 
 ### Semantic features (phase 4)
 
-- Map (PLAN's S28b to S28e): 314,616 points in 140 regions from `semantic-map.bin` in a deck.gl scatter, colored by region, era, on-server or provenance. Lasso to a working corpus, two-pole axis, nearest in language. Browse's Clusters axis lists the regions and their documents (S28d).
+- Map (PLAN's S28b to S28e): 314,616 points in 140 regions from `semantic-map.bin` in a scatter drawn with WebGL2 alone, as the app's Metal renderer draws it (S28b measured deck.gl first), colored by region, era, on-server or provenance. Lasso to a working corpus, two-pole axis, nearest in language. Browse's Clusters axis lists the regions and their documents (S28d).
 - Related Documents adds the semantic signal and the "Beyond your library" count (PLAN's S26c and S26d). Every shard is in the image, by the owner's choice of 23 November, so that a server holds them all from its first start, offline too, and a reader's request downloads nothing, where the app's fetches a missing shard; a re-pack of the app's vectors, for a volume published or corrected since, arrives with a pin move, and until then the answer says what went unscored. The feedback on a match is kept for each user.
 - Meaning search embeds the query with EmbeddingGemma 2 through `llama-server`, then runs the shared Hamming-800 → int8 funnel in `SemanticVectorsKit` (PLAN's S27b and S27d). Search Within These Results, which the app added in October (FRUS-Explorer#1577), layers it with keyword search (S27e).
 
