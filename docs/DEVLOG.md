@@ -197,7 +197,7 @@ Phase 4's row S29c, in wave 2 beside S28b and S30a: the web's tagger, `Sources/F
 
 **The tool,** `frus-language` (`Tests/FRUSLanguageTool`): `wordnet`, `train` (MASC's GrAF and treebank, CoNLL-U, or a word-tag list), `evaluate`, `tag` and `selftest`; and `frus-parity language-report [--model <file>]` scores a candidate before it is compiled in. Retraining is the commands in the model's provenance and in the notes folder's `s29c-handover.md`.
 
-**How it was checked:** FRUSLanguageTests, 50 tests in 6 suites; the server's `LanguageCommandTests` and the parity target's `LanguageReportTests`, with `GoldenTests` building the new golden file's scratch copy. CHECKS
+**How it was checked:** FRUSLanguageTests, 48 tests in 6 suites; the server's `LanguageCommandTests` and the parity target's `LanguageReportTests`, with `GoldenTests` building the new golden file's scratch copy. CHECKS
 
 **Found, not fixed here:** NaturalLanguage tags a demonym before a capital as an adjective where the treebank's tags make it a proper noun, and adverbs and adjectives such as `more` otherwise than the treebank; a class rule would follow it further at the treebank's expense. `No.` and `p.` before a number, and NaturalLanguage's `d’` in some names, are left as the rules have them.
 

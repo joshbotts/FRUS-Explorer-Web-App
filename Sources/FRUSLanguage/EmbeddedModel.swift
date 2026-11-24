@@ -88,7 +88,7 @@ enum EmbeddedModel {
     "`` OpenQuote"
   ],
   "tokens" : 371655,
-  "tokensMatchingTheText'sOwn" : 463718,
+  "tokensSplitAsTheTextSplitsThemPerThousand" : 925,
   "trainingText" : "MASC 3.0.0, the Manually Annotated Sub-Corpus of the American National Corpus, its written genres, each text's tags the Penn Treebank project's from MASC's Penn Treebank syntax where its leaves are found in the text, and MASC's own -penn.xml tags otherwise: MASC-3.0.0.tgz, 37,616,026 bytes, SHA-256 206d87511fb27cdbf82cc87982e08351ae84fd98e86d518c15a7461573589d0c, and penn-treebank.tgz, 2,965,271 bytes, SHA-256 65ae26e4106cc576ad1291cf86a44048db7ff76fffa052658c45e8b1bb9f6230, fetched on 24 November 2026 from https://github.com/nancyide/anc-website/releases/download/datasets-2026-09-25/, which the ANC's own pages link (https://anc.org/data/masc/, https://www.anc.org/data/masc/downloads/data-download/); under the Creative Commons Attribution 3.0 United States License (https://creativecommons.org/licenses/by/3.0/us/), as https://anc.org/data/masc/ states, the owner confirming the text on 24 November 2026.",
   "weights" : 398957
 }
