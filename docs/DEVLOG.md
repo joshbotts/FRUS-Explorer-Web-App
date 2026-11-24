@@ -64,7 +64,7 @@ Not started: `PLAN.md`'s row S29b. The session that does it replaces this line, 
 
 ## Session 29d: the family's clouds and references
 
-24 November 2026 · branch `claude/s29d-language-family-2176e2` · [#178](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/178) · upstream `0b839bde`, S26b's, unchanged
+24 November 2026 · branch `claude/s29d-language-family-2176e2` · [#179](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/179) · upstream `0b839bde`, S26b's, unchanged
 
 Phase 4's row S29d, in wave 4 beside S26c on the semantic track and S29b upstream: the language family's clouds and references, counted by the app's own generator with the web's tagger over the corpus, and read by the server for every cloud. No upstream pull request, no pin move and no migration. Cut from `main` at `19f0520`, #175's merge.
 
