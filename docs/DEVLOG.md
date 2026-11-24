@@ -78,6 +78,42 @@ Not started: `PLAN.md`'s row S28a. The session that does it replaces this line, 
 
 Not started: `PLAN.md`'s row S27a. The session that does it replaces this line, keeping the heading (PLAN, How sessions run beside each other).
 
+## Session 26b, follow-up, upstream: the generators' cores the web compiles are shared code
+
+24 November 2026 · branch `claude/intelligent-kalam-1b7cf1` · [#173](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/173) · upstream `0b839bde`, unchanged; [FRUS-Explorer#1983](https://github.com/joshbotts/FRUS-Explorer/pull/1983), open
+
+The small follow-up S26b's move left in both repositories (COORDINATION §5, What a pin move leaves), started by S26b's session, with the older one S23c's move left, the six generator cores check 8's comparator compiles, folded in by the owner's word of 24 November ("Add the six too (Recommended)", asked by this session); no PLAN row names either. The pull request is `claude/generator-cores-shared`, cut from `v2` at `0b839bde`, which `v2` still is, in four commits: CloudVectorsGeneratorCore; the Source Explorer export generator's six cores; the app's workflow scripts' lists; and the plan of record's entry. It is labelled `Mac`, asks for Mac verification as Mac check 42, the next number after the second batch's 38 to 41, and is not merged. Under rule 4 it changes shared files, and this repository changes only its records.
+
+**Why.** The web compiles eight generators' cores, but only ManifestGeneratorCore was on the app's Web edition list of shared code and among the kits `SharedKitsBoundaryTests` holds, so app sessions were not asked to keep the other seven free of Apple-only code: CloudVectorsGeneratorCore, compiled since S26b for S29d's run, and SourceExplorerExportGeneratorCore with the five it builds on, compiled since S23c for check 8's comparator. And one of `CloudVectorsGeneratorTests.swift`'s 58 tests counts with NaturalLanguage's own tagger, unguarded, so the file did not build here, and S26b's `Package.swift` left it out with its other 57.
+
+**What it changes upstream:**
+- `CLAUDE.md`: the seven join the Web edition's "Shared code" list with their test folders, fifteen names before `FRUSCoreKit/`, and the boundary test's paragraph names them. The four rules are unchanged.
+- `SharedKitsBoundaryTests`: a row for each, written by a new `core(_:suites:dependencies:guarded:declares:)`, ManifestGeneratorCore's too, its rules unchanged. A core's package dependencies are allowed anywhere, since no app target compiles a file of a core's that imports one (the two of CollectionAuthorityGeneratorCore's extractors that the unit target compiles import none), and FoundationXML or FoundationNetworking behind the `canImport` five of them already have. `suitesGuarded(_:)` gives a dependency's guarded modules only to the suites that hold its own (TEIHeaderKit's, in ManifestGeneratorTests), so the cloud generator's suites may not import WordCloudKit's NaturalLanguage, which rule 1 allows WordCloudKit's tagging code alone. Every rule passed with no change to a core's code.
+- `CloudVectorsGeneratorTests.swift`: `verificationWalksAgreeWithTheOnePass` behind `#if canImport(NaturalLanguage)`, as `WordCloudMultiLensParityTests` is; on Apple platforms the target runs its 69 tests as before.
+- `.claude/workflows/`: the three scripts' restatements of the shared code, from 7 October, lacked WordCloudKit and its NaturalLanguage exception; they name what `CLAUDE.md` lists now.
+
+**One cold review,** by a fresh subagent given the diff and none of this session's reasoning, found no defect in the rows, the guard or the counts, and caught each of seven mutations with the suite. Six of its nine points were taken before the runs below: the suite's notes said the web compiles the cores' suites, which it does for the export generator's and the hosted runs alone until the next pin move; `suitesGuarded` let the cloud generator's suites import WordCloudKit's NaturalLanguage; the two extractors the unit target compiles, now named among what the suite cannot see; the workflow scripts; ManifestGeneratorCore's row through `core(…)`; and wording. The plan of record's entry was due anyway. Left: `verificationProse`, unused on Linux, which Swift does not warn of.
+
+**How it was checked,** each heavy job under the app's lock, from a clone at a real path, Xcode 27.2 (27B52), clean and unsigned, on an iPhone Air simulator (iOS 27.0). `v2`'s figures are S30a's run of #1981's head, `29951a54`, whose tree is `v2`'s at `0b839bde`, on an iPhone 17e:
+- **Mac:** both builds with `v2`'s 2 warning lines each, line for line; the Mac app's symbols `v2`'s count, 264,599 normalized and 266,228 raw, since no file either app target compiles changed.
+- **iOS:** the full unit run at `b3bcb962`, the code, 8,199 tests in 992 suites, all passing, with `v2`'s 17 tests and 2 suites skipped by name; at the head, `9835614b`, the four suites that read the repository's text, the two boundary suites and the two audits, 105 tests in 4 suites, passed with `test-without-building`.
+- **The package:** `swift test` exit 0, 39 runs and 4,822 tests in 558 suites, `v2`'s; `CloudVectorsGeneratorTests` 69 in 5. Off the lock, the boundary file compiled alone with its scanner passed both its suites at the first two commits, and the old `suitesGuarded` fails its two new expectations.
+- **Linux:** over `main` `cb85636` (pin `0b839bde`), the branch's tree over the submodule by `git archive`, the scratch's `Package.swift` patched as the next pin move will patch it (below), with PostgreSQL. It built in 114 s with no warning. 5,072 test cases in 20 targets, no failure, the named skip alone, and no `Test.cancel`:
+  - `CloudVectorsGeneratorTests` 68, all but the guarded test, which compiles out;
+  - the five suites new here, LotClaimantsIndexGeneratorTests 11, CentralFilesIndexGeneratorTests 156, VolumeSourcesIndexGeneratorTests 42, CollectionAuthorityGeneratorTests 88 and SourceProvenanceIndexGeneratorTests 31;
+  - every other target as at the pin, 4,687 in 15.
+  `v2` with the same manifest does not build, at the two calls the guard holds (`CloudVectorsGeneratorTests.swift:744` and `:755`, "is unavailable", with WordCloudKit's reason).
+- **The golden files:** the branch's tree digest is the pin's, `6ad778e0…`, which all five record: no folder `UpstreamDigest` covers changed, so they hold as they are.
+
+**For the pin move that carries it, S27c's if it is in time** (rule 5; this pull request leaves `Package.swift` as it is):
+- `Package.swift`: drop `exclude: ["CloudVectorsGeneratorTests.swift"]`, and add the five suites beside `SourceExplorerExportGeneratorTests`, each with upstream's dependencies: `LotClaimantsIndexGeneratorTests` (its core), `CentralFilesIndexGeneratorTests` (its core and SourceNoteKit), `VolumeSourcesIndexGeneratorTests` (its core and SourceNoteKit), `CollectionAuthorityGeneratorTests` and `SourceProvenanceIndexGeneratorTests` (each its core). The scratch's patch is in this session's hand-over note. CI then counts 385 more test cases, 5,072 in 20 targets at this tree, and no new skip.
+- Golden files: nothing for this pull request alone.
+- `COORDINATION.md`: §1's two rows (the cloud core's "less `CloudVectorsGeneratorTests.swift`", and the export generator's cores' "not yet on section 4's list"); §3's "CrossRefKit, GeneratorKit and ManifestGeneratorCore are SPM targets only"; §4's rule 1 list; §5's What a pin move leaves, whose S23c and S26b follow-ups this closes; and the Appendix's copy of the app's Web edition section.
+
+**Delivered here:** this entry, and its paragraph in PLAN's Where phase 4's rows stand.
+
+**Next:** Mac check 42 and the owner's merge of FRUS-Explorer#1983; whichever of it and #1982 (S27a's) merges second takes `v2` in, for the plan of record's end. Then the next pin move, S27c's if it is in time, drops the `exclude` and adds the five suites.
+
 ## Session 26b: pin move past the first batch
 
 24 November 2026 · branch `claude/s26b-pin-move-794b5d` · [#171](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/171) · upstream `0b839bde`
