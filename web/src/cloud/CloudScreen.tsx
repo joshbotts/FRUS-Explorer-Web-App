@@ -1,11 +1,12 @@
-// The Word Cloud (PLAN's S24i), at /cloud: the app's `WordCloudView` in Frequency mode, over the clouds bundled with the
-// app, for the corpus, each subseries and each volume (`WordCloudScopeBar`'s three), under the four lenses they carry.
+// The Word Cloud (PLAN's S24i), at /cloud: the app's `WordCloudView` in Frequency mode, over the language family's clouds,
+// which the server's own tagger counted from the corpus (S29d), for the corpus, each subseries and each volume
+// (`WordCloudScopeBar`'s three), under the four lenses the app's clouds carry.
 // The server reads each list with the kit and filters it by the reader's own Word Cloud settings; this page draws it, as
 // the app does, in a spiral of words sized by count (`WordCloudLayout`), with the ranked list that is the cloud's
 // accessible reading beside it, and a word's menu: Corpus Analytics over the series or over the cloud's own volumes,
 // Search, and the three hides, this cloud alone, this lens, or every cloud. The header's chip says when a thin volume's
 // era stands in for it. Distinctive is refused with its reason, as is a document's own cloud from the reader's rail,
-// whose volume's cloud is shown instead: each is counted live, which waits for the server's language analysis (phase 4).
+// whose volume's cloud is shown instead: each is counted live, which waits for the server's live counts (S29e, S29f).
 // The web's own: the cloud and its list drawn together, where the app switches between them, and the words saying what
 // the reader's settings took out.
 import { useQuery, useQueryClient } from '@tanstack/react-query';

@@ -127,6 +127,14 @@ RUN --mount=type=bind,from=model-source,target=/given \
     find /out -type d -exec chmod 0755 {} +; \
     find /out -exec touch --no-dereference --date='2026-10-15 00:00:00 UTC' {} +
 
+# Language stage (PLAN's S29d): the language family's clouds and references, which scripts/make-language counts
+# with the web's tagger from the corpus and the repository keeps under resources/language, made readable by the
+# server's user whatever the checkout's umask was, in a stage of their own, so that a new count rebuilds neither
+# the server's stage nor the parity harness's.
+FROM ${RUNTIME_IMAGE} AS language
+COPY resources/language/ /out/language/
+RUN chmod -R a+rX /out/language
+
 # Client stage: Node runs the Vite production build of the browser app (SPEC, Deployment > Image).
 # Its output is the same on every architecture, so it runs on the builder's own, even when the
 # image is built for another.
@@ -168,6 +176,8 @@ COPY --from=encoder /out/licenses/ /usr/share/doc/frus-light/llama.cpp/
 # The manifest, the broken-refs index, the indexing resources and the rest, at the server's
 # default FRUS_RESOURCES_DIR.
 COPY --from=build /out/resources/ /usr/share/frus-light/resources/
+# The language family's files (PLAN's S29d), at the server's default FRUS_LANGUAGE_DIR.
+COPY --from=language /out/language/ /usr/share/frus-light/language/
 # The browser app, at the server's default FRUS_WEB_DIR.
 COPY --from=client /web/dist/ /usr/share/frus-light/web/
 

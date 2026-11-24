@@ -48,6 +48,10 @@ public struct ServerConfiguration: Sendable, Equatable {
     /// (`FRUS_RESOURCES_DIR`). The image copies them to the default; `scripts/swift` points at
     /// the submodule's folder.
     public var resourcesDirectory: URL
+    /// The language family's clouds and references (`FRUS_LANGUAGE_DIR`, PLAN's S29d): what the web's tagger counted
+    /// from the corpus, resources/language in the repository. The image copies them to the default; `scripts/swift`
+    /// points at the repository's folder.
+    public var languageDirectory: URL
     /// The browser app's build, web/dist (`FRUS_WEB_DIR`). The image copies it to the default;
     /// without it the server serves the API alone, unless the variable names it explicitly.
     public var webDirectory: URL
@@ -106,6 +110,8 @@ public struct ServerConfiguration: Sendable, Equatable {
 
     /// Where the image puts the app's data files.
     public static let imageResourcesDirectory = URL(fileURLWithPath: "/usr/share/frus-light/resources", isDirectory: true)
+    /// Where the image puts the language family's files (PLAN's S29d).
+    public static let imageLanguageDirectory = URL(fileURLWithPath: "/usr/share/frus-light/language", isDirectory: true)
     /// Where the image puts the browser app.
     public static let imageWebDirectory = URL(fileURLWithPath: "/usr/share/frus-light/web", isDirectory: true)
     /// Where the image puts the encoder, llama.cpp's `llama-server` (PLAN's S27b).
@@ -119,6 +125,7 @@ public struct ServerConfiguration: Sendable, Equatable {
         libraryMirror: URL? = nil, githubToken: String? = nil,
         host: String = "127.0.0.1", port: Int = 8080, importPollInterval: Duration = .seconds(2),
         resourcesDirectory: URL = ServerConfiguration.imageResourcesDirectory,
+        languageDirectory: URL = ServerConfiguration.imageLanguageDirectory,
         webDirectory: URL = ServerConfiguration.imageWebDirectory, requiresWebDirectory: Bool = false,
         userData: Bool = true, userStore: UserStoreChoice = .sqlite, backupHour: Int = 3,
         backupCopyDirectory: URL? = nil, authHeader: String = "X-Forwarded-User",
@@ -138,6 +145,7 @@ public struct ServerConfiguration: Sendable, Equatable {
         self.port = port
         self.importPollInterval = importPollInterval
         self.resourcesDirectory = resourcesDirectory
+        self.languageDirectory = languageDirectory
         self.webDirectory = webDirectory
         self.requiresWebDirectory = requiresWebDirectory
         self.userData = userData
@@ -356,6 +364,9 @@ public struct ServerConfiguration: Sendable, Equatable {
 
         if let raw = value("FRUS_RESOURCES_DIR") {
             config.resourcesDirectory = URL(fileURLWithPath: raw, isDirectory: true)
+        }
+        if let raw = value("FRUS_LANGUAGE_DIR") {
+            config.languageDirectory = URL(fileURLWithPath: raw, isDirectory: true)
         }
         if let raw = value("FRUS_WEB_DIR") {
             config.webDirectory = URL(fileURLWithPath: raw, isDirectory: true)

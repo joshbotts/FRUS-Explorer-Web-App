@@ -4,22 +4,9 @@
 //
 // Its walk is the one WordCloudKit's `WordCloudTagger` asks of a host's tagger (FRUS-Explorer#1979, S29a):
 // each word of a text in order, with its range, its lemma when the walk reads lemmas and a function that
-// answers its lexical class. This module does not depend on the kit, whose pin predates the protocol; an
-// adapter of a few lines conforms to it once S26b's pin move brings it (S29d):
-//
-//     struct FRUSWordCloudTagger: WordCloudTagger {
-//         let tagger = LanguageTagger.shared
-//         var identity: WordCloudTokenizerIdentity { .init(name: tagger.identity.name, version: tagger.identity.version) }
-//         var health: NaturalLanguageHealth { .init(lemmatizes: true, classifiesWords: true, recognizesNames: false) }
-//         func enumerateWords(in text: String, reading: WordCloudTagReading, using body: ...) {
-//             tagger.enumerateWords(in: text, reading: LanguageReading(rawValue: reading.rawValue)) { range, lemma, lexicalClass in
-//                 body(range, lemma) { lexicalClass().map { WordCloudLexicalClass($0.lensClass) } }
-//             }
-//         }
-//         func enumerateNames(in text: String, using body: ...) {
-//             tagger.enumerateWords(in: text, reading: []) { range, _, _ in body(range, nil) }
-//         }
-//     }
+// answers its lexical class. Since S29d the module conforms it to the kit's protocol, in the pin since S26b's
+// move: `FRUSWordCloudTagger` (FamilyTagger.swift), with which the app's generator counts the family's clouds
+// and references.
 
 #if canImport(CryptoKit)
 import CryptoKit

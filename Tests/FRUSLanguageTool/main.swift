@@ -1,6 +1,7 @@
 // frus-language: the web tagger's tool (PLAN's S29c). It reads WordNet's database files into the lists
 // the lemmatizer reads, trains the lexical-class tagger's model from a tagged text, writes the two files
-// FRUSLanguage compiles them from, and evaluates a model on text it was not trained on. It runs in
+// FRUSLanguage compiles them from, and evaluates a model on text it was not trained on; since S29d it counts
+// the language family's clouds and references with the app's generator (Clouds.swift). It runs in
 // swift:6.4-noble through scripts/swift, on a text kept outside the repository: neither WordNet's files
 // nor the training text are committed, only what is made of them, with their provenance.
 
@@ -15,6 +16,11 @@ let usage = """
            frus-language evaluate --conllu <file>[,<file>...] | --masc <folder> [--treebank <folder>] | --tsv <file> [--hold-out <n>] [--model <file>]
            frus-language tag      <text file> [--model <file>]
            frus-language selftest [--write <file>]
+           frus-language clouds   --volumes <folder> --corpus-commit <sha> --upstream <sha> [--repository <url>]
+                                  [--manifest <file>] [--lexicons <file>] [--stopwords <file>] [--out <folder>]
+                                  [--generated <yyyy-MM-dd>] [--verify-printed 1]
+           frus-language provenance --corpus-commit <sha> --upstream <sha> [--repository <url>] [--out <folder>]
+                                  [--manifest <file>] [--lexicons <file>] [--stopwords <file>]
 
       wordnet   WordNet's exception lists and single-word lemmas, in the lemmatizer's canonical text
                 (default out: Sources/FRUSLanguage/EmbeddedWordNet.swift)
@@ -28,6 +34,10 @@ let usage = """
       selftest  the self-test's lines and digest over the embedded model and lists; --write writes the digest and
                 the family's identity to the file the tests and the smoke test hold the binary to
                 (fixtures/language/selftest.sha256)
+      clouds    the app's cloud-vector generator with this tagger over the corpus's volumes, the cloud files
+                carrying the six lenses the references price, and the family's provenance beside the four
+                (default out: resources/language; the catalogue and word lists default to the pin's)
+      provenance the provenance of the four files a run wrote, written again beside them, counting nothing
 
     --source is the provenance the generated file records: the text's name, address, licence and digest.
     """
@@ -164,6 +174,10 @@ do {
             try Data("\(digest)  \(tagger.identity)\n".utf8).write(to: URL(fileURLWithPath: write))
             note("selftest: \(digest), \(tagger.identity), in \(write)")
         }
+    case "clouds":
+        try Clouds.run(&arguments)
+    case "provenance":
+        try Clouds.provenance(&arguments)
     default:
         throw ToolError("unknown command \(arguments.command)")
     }

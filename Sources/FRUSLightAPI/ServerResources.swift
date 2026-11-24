@@ -11,6 +11,9 @@ import Foundation
 public final class ServerResources: Sendable {
     /// The folder they were read from.
     public let directory: URL
+    /// The language family's folder (PLAN's S29d): the clouds and references the web's tagger counted from the corpus,
+    /// resources/language in the repository, which the image copies to `FRUS_LANGUAGE_DIR`'s default. Read on first use.
+    public let languageDirectory: URL
     /// The published catalogue's 553 volumes, in `manifest.json`'s order, read by the kit's
     /// `FixedVolumeCatalogue`, which decodes it as the app's `ManifestStore` does.
     public let manifest: [VolumeManifestEntry]
@@ -44,9 +47,9 @@ public final class ServerResources: Sendable {
     let people = PeopleFiles()
     /// The administrations' profiles, `administration-profiles-index.json`, decoded on first use (CorpusAnalytics.swift).
     private let administrations = AdministrationProfilesFile()
-    /// The Word Cloud's bundled clouds and the word lists that filter them, each decoded on first use (WordCloud.swift,
-    /// PLAN's S24i).
-    let bundledClouds = BundledClouds()
+    /// The Word Cloud's clouds, the language family's (PLAN's S29d), and the app's word lists that filter them, each
+    /// decoded on first use (WordCloud.swift, PLAN's S24i).
+    let familyClouds = FamilyClouds()
     /// Archival Analytics' and About the Series' other bundled files, each decoded on first use, and the series kept
     /// from them (BundledAnalytics.swift, PLAN's S24h).
     let bundledAnalytics = BundledAnalytics()
@@ -59,9 +62,10 @@ public final class ServerResources: Sendable {
     public static let requiredFiles = ["manifest.json", "broken-refs-index.json"]
         + IndexingResources.indexResourceNames.map { "\($0).json" }.filter { $0 != "broken-refs-index.json" }
 
-    /// Reads the data files in `directory`. Throws `ServerResourcesError` naming every missing
-    /// file, or the one that will not decode.
-    public static func load(from directory: URL) throws -> ServerResources {
+    /// Reads the data files in `directory`, with the language family's folder beside them, which nothing reads until
+    /// a cloud is asked for. Throws `ServerResourcesError` naming every missing file, or the one that will not decode.
+    public static func load(from directory: URL,
+                            language: URL = ServerConfiguration.imageLanguageDirectory) throws -> ServerResources {
         let missing = requiredFiles.filter {
             !FileManager.default.fileExists(atPath: directory.appendingPathComponent($0).path)
         }
@@ -81,13 +85,14 @@ public final class ServerResources: Sendable {
         }
         let brokenRefs = try decode(BrokenRefsIndex.self, "broken-refs-index.json")
         let citedPages = try decode(CitedPageMap.self, "cited-page-map.json")
-        return ServerResources(directory: directory, manifest: manifest, brokenRefs: brokenRefs, citedPages: citedPages,
-                               indexing: try IndexingResources.loading(fromDirectory: directory))
+        return ServerResources(directory: directory, languageDirectory: language, manifest: manifest, brokenRefs: brokenRefs,
+                               citedPages: citedPages, indexing: try IndexingResources.loading(fromDirectory: directory))
     }
 
-    init(directory: URL, manifest: [VolumeManifestEntry], brokenRefs: BrokenRefsIndex, citedPages: CitedPageMap,
-         indexing: IndexingResources) {
+    init(directory: URL, languageDirectory: URL = ServerConfiguration.imageLanguageDirectory, manifest: [VolumeManifestEntry],
+         brokenRefs: BrokenRefsIndex, citedPages: CitedPageMap, indexing: IndexingResources) {
         self.directory = directory
+        self.languageDirectory = languageDirectory
         self.manifest = manifest
         var positions: [String: Int] = [:]
         for (position, entry) in manifest.enumerated() where positions[entry.volumeId] == nil {
@@ -102,7 +107,8 @@ public final class ServerResources: Sendable {
     /// The same data files with a catalogue overlay of its own, empty: for a test whose side-loads no other
     /// test sharing the process's resources should see.
     func withOwnCatalogueOverlay() -> ServerResources {
-        ServerResources(directory: directory, manifest: manifest, brokenRefs: brokenRefs, citedPages: citedPages, indexing: indexing)
+        ServerResources(directory: directory, languageDirectory: languageDirectory, manifest: manifest, brokenRefs: brokenRefs,
+                        citedPages: citedPages, indexing: indexing)
     }
 
     /// The manifest's entry for `volumeId`, or the catalogue overlay's for a volume side-loaded under an id

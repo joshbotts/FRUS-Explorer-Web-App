@@ -1,5 +1,6 @@
-// The Word Cloud (PLAN's S24i): the clouds bundled with the app, for the corpus, each subseries and each volume under
-// the four lenses they carry, read on the server by the kit and filtered there by the reader's own Word Cloud settings,
+// The Word Cloud (PLAN's S24i): the language family's clouds (S29d), which the server's own tagger counted from the
+// corpus, for the corpus, each subseries and each volume under the four lenses the page draws, read on the server by the
+// kit and filtered there by the reader's own Word Cloud settings,
 // which follow them in their synced preferences; and the settings' writes, the criteria through the preferences and the
 // hidden words through routes of their own, as the app's settings write each.
 import { keepPreviousData, type QueryClient, queryOptions } from '@tanstack/react-query';
@@ -23,7 +24,8 @@ export interface CloudContext {
   /** "Entire Corpus". */
   corpus: string;
   subseries: { id: string; volumes: { id: string; title: string }[] }[];
-  made?: { generated: string; volumeCount: number; documentCount: number; topTermsPerList: number; line: string };
+  /** The clouds' own account, and the tagger that counted them, the language family's name and version (S29d). */
+  made?: { generated: string; volumeCount: number; documentCount: number; topTermsPerList: number; family: string; line: string };
 }
 
 export interface CloudTerm {

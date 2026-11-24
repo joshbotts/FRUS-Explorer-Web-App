@@ -13,6 +13,7 @@ import Testing
         #expect(config.dataDirectory.path == "/data")
         #expect(config.host == "127.0.0.1" && config.port == 8080)
         #expect(config.resourcesDirectory.path == "/usr/share/frus-light/resources", "where the image puts them")
+        #expect(config.languageDirectory.path == "/usr/share/frus-light/language", "where the image puts the family's files")
     }
 
     @Test func readsEveryVariable() throws {
@@ -21,6 +22,7 @@ import Testing
             "FRUS_PUBLIC_URL": "https://frus.example.org", "FRUS_PDF_URL": "http://pdf:3000",
             "FRUS_OFFLINE": "true", "FRUS_HOST": "0.0.0.0", "FRUS_PORT": "9090", "FRUS_IMPORT_POLL_SECONDS": "0.5",
             "FRUS_RESOURCES_DIR": "/src/upstream/FRUS-Explorer/FRUSExplorer/Resources",
+            "FRUS_LANGUAGE_DIR": "/src/resources/language",
         ])
         #expect(config.dataDirectory.path == "/srv/frus")
         #expect(config.publicURL == "https://frus.example.org")
@@ -28,6 +30,7 @@ import Testing
         #expect(config.offline && config.host == "0.0.0.0" && config.port == 9090)
         #expect(config.importPollInterval == .milliseconds(500))
         #expect(config.resourcesDirectory.path == "/src/upstream/FRUS-Explorer/FRUSExplorer/Resources")
+        #expect(config.languageDirectory.path == "/src/resources/language")
         #expect(config.basePath == .root)
     }
 
