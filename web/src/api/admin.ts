@@ -277,3 +277,46 @@ export async function removeInstanceSecret(client: QueryClient, name: SecretName
   await client.invalidateQueries({ queryKey: ['admin', 'secrets'] });
   void client.invalidateQueries({ queryKey: ['secrets'] });
 }
+
+/**
+ * `GET /api/v1/admin/semantic` (PLAN's S27b): Administration ▸ Semantic's Search Model. The model in the image,
+ * its size and its SHA-256 held to the bundled index's, the engine that runs it, and the encoder's setting and
+ * state, with nothing to download or remove; the server reads the model's digest the first time it is asked.
+ */
+export interface SearchModelReport {
+  /** `FRUS_ENCODER`. */
+  setting: 'on' | 'off';
+  state: 'off' | 'unavailable' | 'idle' | 'starting' | 'loaded' | 'stopping';
+  model: {
+    name?: string;
+    file: string;
+    path: string;
+    present: boolean;
+    bytes?: number;
+    publishedBytes: number;
+    sha256?: string;
+    bundledSHA256?: string;
+    verified?: boolean;
+    licence: string;
+  };
+  engine: { path: string; present: boolean; version?: string; commit?: string };
+  idleSeconds: number;
+  loadedAt?: string;
+  pid?: number;
+  residentBytes?: number;
+  lastQueryAt?: string;
+  stopsAt?: string;
+  queries: number;
+  starts: number;
+  maxTokens: number;
+  problem?: string;
+}
+
+/** Search Model, read again every ten seconds while the encoder is loaded or starting, which ends by itself. */
+export const semanticQuery = queryOptions({
+  queryKey: ['admin', 'semantic'],
+  queryFn: ({ signal }) => getJSON<SearchModelReport>('/api/v1/admin/semantic', undefined, signal),
+  staleTime: 0,
+  retry: false,
+  refetchInterval: (query) => (query.state.data?.state === 'loaded' || query.state.data?.state === 'starting' ? 10_000 : false),
+});

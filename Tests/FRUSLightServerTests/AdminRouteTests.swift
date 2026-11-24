@@ -46,6 +46,8 @@ import Testing
         (.post, "/api/v1/admin/library/corrections", nil),
         (.get, "/api/v1/admin/library/updates", nil),
         (.get, "/api/v1/admin/corrections", nil),
+        (.get, "/api/v1/admin/semantic", nil),
+        (.get, "/api/v1/admin/semantic/embedding", nil),
         (.post, "/api/v1/admin/library/sideload?file=frusX.xml", nil),
         (.delete, "/api/v1/admin/library/volumes/frus1894Nicaragua", nil),
     ]

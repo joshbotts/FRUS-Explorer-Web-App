@@ -3454,6 +3454,53 @@ export const copy = {
       waitingExport: 'Waits for the next export',
       waitingJob: 'Waiting',
     },
+    /**
+     * Administration ▸ Semantic (PLAN's S27b), opening with Search Model: the app's section (Settings ▸
+     * Natural-Language Search, `SemanticModelSection`) in a server's words, whose model is in its image, with
+     * nothing to download or remove. SemanticMirrorParityTests holds the mirrored lines to the app's.
+     */
+    semantic: {
+      title: 'Semantic',
+      searchModel: 'Search Model',
+      /** The app's `settings.model.present.detail`, "Downloaded and verified — %@ on this device.", in a server's words. */
+      present: (size: string) => `In the image and verified — ${size} on this server.`,
+      notVerified: 'In the image, and not the model the bundled vectors were made with: this server cannot search by meaning with it.',
+      notRead: 'In the image; its digest has not been read.',
+      missing: 'Not in the image: this server cannot search by meaning.',
+      /** The app's `settings.model.unavailable.detail`, in a server's words. */
+      unavailable: 'This server cannot use the search model. Nothing is wrong with its library.',
+      /** The app's `settings.model.path.label`. */
+      modelFile: 'Model File',
+      size: 'Size',
+      /** A size in decimal megabytes, as the app's section and its footer give the model's, 310 MB. */
+      megabytes: (bytes: number) => `${Math.round(bytes / 1_000_000).toLocaleString('en-US')} MB`,
+      bytes: (count: number, published: boolean) =>
+        `${count.toLocaleString('en-US')} bytes${published ? ', the length the app publishes' : ', where the app publishes 309,855,456'}`,
+      digest: 'SHA-256',
+      digestVerified: 'The digest the bundled vectors’ index names.',
+      digestOther: (named: string) => `The bundled vectors’ index names ${named}.`,
+      licence: 'Licence',
+      engine: 'Engine',
+      engineLine: (commit?: string) => `llama.cpp’s llama-server${commit ? `, commit ${commit}` : ''}`,
+      engineMissing: (path: string) => `None at ${path}.`,
+      encoder: 'Encoder',
+      states: {
+        off: 'Off: FRUS_ENCODER is off, so it never starts, and this server offers no search by meaning.',
+        unavailable: 'On, and it cannot start.',
+        idle: 'On, and idle: it starts at the next search by meaning.',
+        starting: 'On, and starting.',
+        stopping: 'On, and stopping.',
+      } as Record<string, string>,
+      loaded: (since: string, memory?: string) => `On, and loaded since ${since}${memory ? `, holding ${memory}` : ''}.`,
+      stops: (at: string, minutes: number) => `It stops at ${at} unless another search comes, ${minutes} minutes after the last, and gives back its memory.`,
+      queries: 'Searches',
+      queryCount: (queries: number, starts: number) =>
+        `${queries.toLocaleString('en-US')} ${queries === 1 ? 'query' : 'queries'} embedded since the server started, in ${starts.toLocaleString('en-US')} ${starts === 1 ? 'start' : 'starts'}`,
+      problem: 'Problem',
+      /** The app's `settings.model.footer`, in a server's words: its model is in the image, never downloaded. */
+      footer:
+        'Lets the server understand searches phrased as questions, using a language model that runs entirely on this server — Google’s EmbeddingGemma 2, 310 MB in the image. The feature is experimental.',
+    },
     users: {
       title: 'Users',
       leads: {

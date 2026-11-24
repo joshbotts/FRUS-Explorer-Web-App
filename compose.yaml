@@ -27,6 +27,9 @@
 #                    FRUS_AUTH_HEADER (X-Forwarded-User by default) and FRUS_ADMIN_USERS
 #   FRUS_NARA_API_KEY the instance's NARA Catalog API key, which serves whoever has no key of their own
 #                    when an admin has stored none, as a server with FRUS_USER_DATA=off can store none
+#   FRUS_ENCODER     off keeps search by meaning's encoder from starting: llama-server, which the server
+#                    starts over the model in the image at the first search by meaning and stops after three
+#                    idle minutes, holding about 450 MB while it runs; on by default
 #   FRUS_IMAGE       image to run, ghcr.io/joshbotts/frus-explorer-light:edge by default
 #   COMPOSE_PROFILES set to pdf to start the pdf service below, Gotenberg's Chromium, which prints a
 #                    collection's PDF; the export sheet offers PDF while it answers
@@ -53,6 +56,7 @@ services:
       TZ: ${TZ:-UTC}
       FRUS_PDF_URL: http://pdf:3000   # the optional pdf service below, offered while it answers
       FRUS_NARA_API_KEY: ${FRUS_NARA_API_KEY:-}
+      FRUS_ENCODER: ${FRUS_ENCODER:-on}  # search by meaning's encoder, a child of the server on 127.0.0.1
     read_only: true          # the server writes only to /data, /backups and /tmp
     tmpfs:
       - /tmp

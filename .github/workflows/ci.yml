@@ -12,7 +12,8 @@
 #   a PostgreSQL service, so the user store's conformance suite runs on both of its stores (S14d).
 # - web: the browser app in web/, typechecked, linted, unit-tested and built with Node at
 #   web/.node-version, as scripts/npm runs it.
-# - compose: build the image, then scripts/compose-smoke --e2e checks the browser app, the catalogue
+# - compose: build the image, its search model from the Actions cache by its digest (PLAN's S27b), then
+#   scripts/compose-smoke --e2e checks the browser app, the encoder and its model, the catalogue
 #   and the reader, imports a synthetic export with docker compose cp, waits for /readyz to answer
 #   200, checks the image's labels, and runs web/e2e, Playwright on Chromium, against it; then
 #   again with the server under /frus-explorer/, through nginx and docs/INSTALL.md's recipe for a path.
@@ -263,12 +264,30 @@ jobs:
           echo "$args"
           { echo 'list<<EOF'; echo "$args"; echo EOF; } >> "$GITHUB_OUTPUT"
 
+      # Search by meaning's model (PLAN's S27b), from the Actions cache by the digest docker/Dockerfile names,
+      # fetched once a model, and given to the build as its model-source context, so that it fetches nothing.
+      - name: The search model's digest
+        id: model
+        run: echo "sha256=$(sed -n 's/^ARG MODEL_SHA256=//p' docker/Dockerfile)" >> "$GITHUB_OUTPUT"
+
+      - name: The search model, from the Actions cache by its digest
+        id: model-cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/model
+          key: search-model-${{ steps.model.outputs.sha256 }}
+
+      - name: Fetch the search model once
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        run: scripts/fetch-model "$RUNNER_TEMP/model"
+
       - name: Build the image
         uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile
           build-args: ${{ steps.args.outputs.list }}
+          build-contexts: model-source=${{ runner.temp }}/model
           tags: frus-light:ci
           load: true
           # Shared with image.yml's amd64 build.

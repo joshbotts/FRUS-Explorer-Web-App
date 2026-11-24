@@ -21,6 +21,7 @@
 //   frus-parity apply-corrections <db> --corrections <file.json> [--resources <dir>] [--repo <root>]
 //   frus-parity compare-order <library.db> <index.db>
 //   frus-parity check-citations --api <url> --index <db> [--per-volume <n>] [--resources <dir>] [--out <report.json>] [--repo <root>]
+//   frus-parity embed --api <url> [--fixture <json>] [--out <report.json>] [--repo <root>]
 //
 // The repository is found from the current directory unless --repo names it. Exit status: 0 when
 // the check passes, 1 on a refusal, a difference or a problem, 2 on a usage error.
@@ -55,6 +56,7 @@ let usage = """
            frus-parity apply-corrections <db> --corrections <file.json> [--resources <dir>] [--repo <root>]
            frus-parity compare-order <library.db> <index.db>
            frus-parity check-citations --api <url> --index <db> [--per-volume <n>] [--resources <dir>] [--out <report.json>] [--repo <root>]
+           frus-parity embed --api <url> [--fixture <json>] [--out <report.json>] [--repo <root>]
     """
 
 /// A command's positional arguments, flags and options.
@@ -807,6 +809,37 @@ func checkCitations(_ arguments: Arguments) async throws {
     print(result.summary())
 }
 
+/// Check 9's encoder half (PLAN's S27b): each query of the app's fixture of its 25 judged queries, or of
+/// --fixture's, embedded through a running server's own path, Administration's embedding route, and held to
+/// the fixture's vector at the app's bar, a cosine of 0.999 or more (`EmbedCheck`). The server's address must
+/// be one its FRUS_PUBLIC_URL names, as from inside its network namespace; it is an admin's route.
+func embed(_ arguments: Arguments) async throws {
+    guard let api = arguments.options["--api"], let base = URL(string: api) else { throw UsageError("embed takes --api <url>") }
+    let fixtureURL = try arguments.options["--fixture"].map { URL(fileURLWithPath: $0) }
+        ?? repository(arguments).upstream.appendingPathComponent(EmbedCheck.fixturePath)
+    let fixture = try EmbedCheck.Fixture(contentsOf: fixtureURL)
+    let fetch = httpFetch(base)
+    let result = await EmbedCheck.run(fixture: fixture, get: { path in try await fetch(path, nil) })
+    for row in result.rows {
+        print(String(format: "%.6f  %3ld signs  %4ld tokens  %6.3f s  ", row.cosine, row.signsDiffering, row.tokens, row.seconds) + row.query)
+    }
+    for failure in result.failures { print("not embedded  \(failure)") }
+    if let out = arguments.options["--out"] {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        try encoder.encode(EmbedReport(summary: result.summary(), result: result)).write(to: URL(fileURLWithPath: out))
+        print("wrote \(out)")
+    }
+    guard result.passes else { fail(result.summary()) }
+    print(result.summary())
+}
+
+/// What `embed --out` writes: the summary line and each query's row.
+struct EmbedReport: Encodable {
+    let summary: String
+    let result: EmbedCheck.Result
+}
+
 /// What `check-citations --out` writes: the summary line and every finding.
 struct CitationReport: Encodable {
     let summary: String
@@ -856,6 +889,8 @@ do {
         try compareOrder(Arguments(arguments.dropFirst()))
     case "check-citations":
         try await checkCitations(Arguments(arguments.dropFirst(), options: ["--api", "--index", "--per-volume", "--resources", "--out", "--repo"]))
+    case "embed":
+        try await embed(Arguments(arguments.dropFirst(), options: ["--api", "--fixture", "--out", "--repo"]))
     case "time-search":
         try await timeSearch(Arguments(arguments.dropFirst(), flags: ["--all", "--retained"],
                                        options: ["--ids", "--out", "--queries", "--resources", "--repo"]))

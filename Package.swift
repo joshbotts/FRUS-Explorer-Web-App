@@ -210,11 +210,13 @@ let package = Package(
         // backups (S14b); since S14d PostgresNIO, for the user store's PostgreSQL implementation, with
         // NIO's event loops and TLS beneath it; and since the pin move to `fe9325b2` the kit, whose
         // `StructuredSummaryDisplay` gives the text a summary is searched by, as the app's index holds
-        // it (FRUS-Explorer#1824); and since S20b Argon2, which hashes local accounts' passwords.
+        // it (FRUS-Explorer#1824); and since S20b Argon2, which hashes local accounts' passwords. Since
+        // S27b SemanticVectorsKit, for the query's prompt and the bundled index's reading, which search by
+        // meaning's encoder embeds under and holds the model to.
         .target(
             name: "FRUSLightCore",
             dependencies: [
-                "CSQLite", "CArgon2", "FRUSCoreKit",
+                "CSQLite", "CArgon2", "FRUSCoreKit", "SemanticVectorsKit",
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "PostgresNIO", package: "postgres-nio"),
                 .product(name: "NIOCore", package: "swift-nio"),
@@ -243,11 +245,12 @@ let package = Package(
         // The HTTP application (session 8): the routes, problem details, the app's data files, the
         // catalogue, the reader and the search request, over FRUSLightCore and the shared kits. Since
         // S12c it watches each connection for its client closing it, through HummingbirdCore and NIOCore.
-        // Since S24i it reads the bundled clouds and filters them by a reader's settings with WordCloudKit.
+        // Since S24i it reads the bundled clouds and filters them by a reader's settings with WordCloudKit, and
+        // since S27b the semantic kit, which search by meaning's routes read the bundled vectors through.
         .target(
             name: "FRUSLightAPI",
             dependencies: [
-                "FRUSLightCore", "FRUSCoreKit", "FTS5Store", "FRUSRichText", "WordCloudKit",
+                "FRUSLightCore", "FRUSCoreKit", "FTS5Store", "FRUSRichText", "WordCloudKit", "SemanticVectorsKit",
                 .product(name: "Hummingbird", package: "hummingbird"),
                 .product(name: "HummingbirdCore", package: "hummingbird"),
                 .product(name: "NIOCore", package: "swift-nio"),
@@ -363,6 +366,18 @@ let package = Package(
             swiftSettings: swift6
         ),
 
+        // A stand-in for llama.cpp's llama-server (PLAN's S27b), which the swift job's tests start as the
+        // server's encoder, since the job has neither CMake nor the model: it takes the command line the
+        // server gives the real one, binds 127.0.0.1 alone, asks for the start's key and answers /health,
+        // /tokenize and /embedding as llama-server does, with vectors of its own. Its "model" is a file of
+        // settings, which a test writes. The tests that start it depend on it, so that it is built for them.
+        .executableTarget(
+            name: "EncoderStandIn",
+            dependencies: [.product(name: "Hummingbird", package: "hummingbird"), .product(name: "NIOCore", package: "swift-nio")],
+            path: "Tests/EncoderStandIn",
+            swiftSettings: swift6
+        ),
+
         // Builds synthetic Mac exports from the schema of a real one, for the tests below.
         .target(
             name: "FRUSLightTestSupport",
@@ -373,7 +388,7 @@ let package = Package(
         ),
         .testTarget(
             name: "FRUSLightCoreTests",
-            dependencies: ["FRUSLightCore", "FRUSLightTestSupport", "FTS5Store"],
+            dependencies: ["FRUSLightCore", "FRUSLightTestSupport", "FTS5Store", "EncoderStandIn"],
             path: "Tests/FRUSLightCoreTests",
             swiftSettings: swift6
         ),
@@ -388,6 +403,8 @@ let package = Package(
                 "FRUSCoreKit",
                 // For a note's runs and RTF (S15d), which the note routes' tests write and read.
                 "FRUSRichText",
+                // The encoder's stand-in (S27b), which the semantic routes' tests start.
+                "EncoderStandIn",
                 .product(name: "HummingbirdTesting", package: "hummingbird"),
                 .product(name: "ServiceLifecycle", package: "swift-service-lifecycle"),
                 .product(name: "Logging", package: "swift-log"),
@@ -403,6 +420,8 @@ let package = Package(
                 "SourceNoteKit", "SourceExplorerExportGeneratorCore", "CentralFilesIndexGeneratorCore", "VolumeSourcesIndexGeneratorCore",
                 // The bundled clouds, decoded and filtered by the kit apart from the server (S24i).
                 "WordCloudKit",
+                // The encoder's stand-in (S27b), which check 9's encoder half's test starts.
+                "EncoderStandIn",
             ],
             path: "Tests/FRUSParityTests",
             swiftSettings: swift6
