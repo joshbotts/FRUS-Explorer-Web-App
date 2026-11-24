@@ -170,7 +170,7 @@ The cost is this repository's: S26c reads the image's folder through a reader of
 
 ## Session 29c: the web's tagger
 
-24 November 2026 · branch `claude/s29c-web-tagger-4d39e8` · PULL_REQUEST · upstream `4556c4d5`, unchanged
+24 November 2026 · branch `claude/s29c-web-tagger-4d39e8` · [#174](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/174) · upstream `4556c4d5`, unchanged
 
 Phase 4's row S29c, in wave 2 beside S28b and S30a: the web's tagger, `Sources/FRUSLanguage`, the web's own as the rich-text codec is, since Linux has no NaturalLanguage and its Foundation splits no text into words. No upstream pull request, no pin move, no migration and no Dockerfile change.
 
