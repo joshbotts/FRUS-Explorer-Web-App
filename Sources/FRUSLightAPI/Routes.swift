@@ -57,6 +57,8 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     CrossReferenceGraphRoutes.add(to: router, provider: provider, resources: resources)
     // The Word Cloud (PLAN's S24i), from the bundled clouds, with the reader's own settings where a request acts for one.
     WordCloudRoutes.add(to: router, resources: resources, users: users)
+    // The semantic map's points and regions (PLAN's S28b), from the bundled map, read on first use.
+    SemanticMapRoutes.add(to: router, map: SemanticMapFiles(directory: resources.directory))
     // Archival Analytics and About the Series (PLAN's S24h).
     ArchivalAnalyticsRoutes.add(to: router, provider: provider, resources: resources)
     AboutSeriesRoutes.add(to: router, provider: provider, resources: resources)

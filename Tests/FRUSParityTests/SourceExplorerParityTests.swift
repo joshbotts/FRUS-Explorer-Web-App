@@ -694,7 +694,8 @@ import Testing
 
         // The published-source guidance: its links, the day they were confirmed, and how long they stay fresh.
         let table = try sources.app("SourceExplorer/PublishedSourceLinkTable.swift")
-        let facts = try sources.app("TripPacket/RepositoryFactTable.swift")
+        // The repository facts are FRUSCoreKit's since S26b's pin move (S30a, FRUS-Explorer#1981), public and unchanged.
+        let facts = try sources.app("FRUSCoreKit/TripPacket/RepositoryFactTable.swift")
         NoteViewParityTests.expect(table, holds: [
             #"url: "https://guides.loc.gov/researching-treaties-and-international-agreements","#,
             #"url: "https://archive.org/details/pub_department-of-state-bulletin","#,

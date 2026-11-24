@@ -80,6 +80,8 @@ export const copy = {
     /** From S24h, the menu's fourth, and About the Series after Chronology, as the web has no Research Guide. */
     archivalAnalytics: 'Archival Analytics',
     aboutSeries: 'About the Series',
+    /** From S28b, the menu's fifth, after Archival Analytics, as the Mac's menu has it. */
+    semanticAnalytics: 'Semantic Analytics',
     corpusAnalytics: 'Corpus Analytics',
     chronology: 'Chronology',
     settings: 'Settings',
@@ -2550,6 +2552,40 @@ export const copy = {
     hideOther: 'Hide Other / Unclassified',
     showOther: 'Show Other / Unclassified',
     chartDescription: (heading: string) => `${heading}. The table beside the chart lists its numbers.`,
+  },
+  /**
+   * Semantic Analytics (S28b), in the app's words: its title, the Mac's Zoom In, Zoom Out and Fit the Map, the map's
+   * loading and its refusals, the legend's one entry under the Regions lens, the regions' table and its columns, and the
+   * summary the app's list of the regions opens with. The lens's caption names the table where the app's names the map,
+   * whose names the web does not draw yet; the map's name, its controls' group, the keyboard's help, the zoom's status
+   * and the sentences for a browser without WebGL2 or whose WebGL2 fails are the web's own.
+   */
+  semanticAnalytics: {
+    title: 'Semantic Analytics',
+    loading: 'Loading the map…',
+    unavailableTitle: 'Map unavailable',
+    unreadable: 'The semantic map could not be read.',
+    noWebGL2: 'This browser cannot draw the map, which needs WebGL2. Its regions are in the table.',
+    failed: 'This browser could not draw the map. Its regions are in the table.',
+    zoomIn: 'Zoom In',
+    zoomOut: 'Zoom Out',
+    zoomFit: 'Fit the Map',
+    controls: 'Map view',
+    map: 'Semantic map',
+    mapHelp:
+      'With the map focused, the arrow keys move across it, + and − zoom in and out, and 0 fits the whole map. With a pointer, drag to move it, and scroll, pinch or double-click to zoom.',
+    zoom: {
+      whole: 'The whole map.',
+      zoomedIn: (times: string) => `Zoomed in ${times} times.`,
+      zoomedOut: (times: string) => `Zoomed out ${times} times.`,
+      moved: 'Moved, at the whole map’s zoom.',
+    },
+    betweenRegions: 'Between regions',
+    caption: 'Color separates neighboring regions rather than naming them; the names are in the table.',
+    summary: (regions: number, documents: number, between: number) =>
+      `Semantic map: ${regions.toLocaleString('en-US')} regions covering ${documents.toLocaleString('en-US')} documents. ${between.toLocaleString('en-US')} more sit between regions and are not listed. Position shows similarity, not time — distances between far-apart regions are not meaningful.`,
+    table: 'Semantic map regions',
+    columns: { region: 'Region', terms: 'Terms', documents: 'Documents' },
   },
   /**
    * Person Analytics (S24g), in the app's words: its title and Mode, the add field, the chips, By decade and Values,

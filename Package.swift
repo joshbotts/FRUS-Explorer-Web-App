@@ -26,7 +26,7 @@ let package = Package(
         .library(name: "FRUSRichText", targets: ["FRUSRichText"]),
         // The parity harness's command line: swift run frus-parity summarize | compare-summary | compare-results | parse | render | index | check-golden.
         .executable(name: "frus-parity", targets: ["FRUSParityTool"]),
-        // The tagger's tool (S29c): swift run frus-language wordnet | train | evaluate | tag.
+        // The tagger's tool (S29c): swift run frus-language wordnet | train | evaluate | tag | selftest.
         .executable(name: "frus-language", targets: ["FRUSLanguageTool"]),
     ],
     dependencies: [
@@ -142,6 +142,25 @@ let package = Package(
             path: "\(upstream)/WordCloudKitTests",
             swiftSettings: swift6
         ),
+        // The cloud-vector generator's core, since S26b's pin move (S29a, FRUS-Explorer#1979), with upstream's
+        // dependencies: `CloudVectorsRunner.run(tagger:cloudLenses:environment:)` counts with the tagger its host
+        // gives, which S29d's run gives the web's, and `run()`, NaturalLanguage's, is unavailable here, saying why.
+        // Its suites leave out CloudVectorsGeneratorTests.swift: one of its 58 tests calls NaturalLanguage's own
+        // `accumulate`s, unguarded, which are unavailable here, so the file does not build on Linux, and its other
+        // tests, which tag nothing, go with it. On Linux the hosted runs' suite runs alone.
+        .target(
+            name: "CloudVectorsGeneratorCore",
+            dependencies: ["WordCloudKit", "GeneratorKit"],
+            path: "\(upstream)/CloudVectorsGeneratorCore",
+            swiftSettings: swift6
+        ),
+        .testTarget(
+            name: "CloudVectorsGeneratorTests",
+            dependencies: ["CloudVectorsGeneratorCore", "WordCloudKit"],
+            path: "\(upstream)/CloudVectorsGeneratorTests",
+            exclude: ["CloudVectorsGeneratorTests.swift"],
+            swiftSettings: swift6
+        ),
         // The whole of FTS5Store. It replaces session 0's FTS5Schema target, which compiled only its
         // pure-Swift files: two targets cannot compile the same files, and upstream's tests import
         // the module as FTS5Store. sqlite3 is linked from one place on each platform: on Linux by
@@ -178,11 +197,13 @@ let package = Package(
         // and links sqlite3, here for macOS only as for FTS5Store; its CryptoKit and SQLite3 guards
         // need swift-crypto's Crypto and CSQLite, declared here for Linux only. Since S21b's pin move
         // (upstream #1870) it has TEIHeaderKit too, as upstream's has: `LocalVolumeCatalog` reads a
-        // side-loaded volume's header with it, behind `canImport`.
+        // side-loaded volume's header with it, behind `canImport`. Since S26b's pin move (upstream #1980)
+        // it has SemanticVectorsKit, as upstream's has, behind `canImport` the same way: Related Documents'
+        // semantic axis and Project Home's reach, which moved in, read the bundled tiers and a host's shards.
         .target(
             name: "FRUSCoreKit",
             dependencies: [
-                "SourceNoteKit", "FTS5Store", "TEIHeaderKit",
+                "SourceNoteKit", "FTS5Store", "TEIHeaderKit", "SemanticVectorsKit",
                 .product(name: "Crypto", package: "swift-crypto", condition: .when(platforms: [.linux])),
                 .target(name: "CSQLite", condition: .when(platforms: [.linux])),
             ],
@@ -194,11 +215,12 @@ let package = Package(
         // FRUSCoreKit, and FTS5Store, SourceNoteKit and SQLite behind `canImport`, never the app;
         // whatever needs the app is inside `#if !SWIFT_PACKAGE`. Since upstream #1575 two of them hash
         // with CryptoKit, swift-crypto's Crypto on Linux. They read the app's data files and manifest
-        // from the submodule's FRUSExplorer/Resources by #filePath.
+        // from the submodule's FRUSExplorer/Resources by #filePath. Since S26b's pin move the semantic
+        // axis's suites import SemanticVectorsKit, behind `canImport`, as upstream's target gives them.
         .testTarget(
             name: "FRUSCoreKitTests",
             dependencies: [
-                "FRUSCoreKit", "FTS5Store", "SourceNoteKit",
+                "FRUSCoreKit", "FTS5Store", "SourceNoteKit", "SemanticVectorsKit",
                 .target(name: "CSQLite", condition: .when(platforms: [.linux])),
                 .product(name: "Crypto", package: "swift-crypto", condition: .when(platforms: [.linux])),
             ],
