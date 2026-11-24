@@ -28,7 +28,13 @@ import WordCloudKit
         let lexicons: WordCloudLexiconSet
         let catalogue: [VolumeManifestEntry]
 
-        static func open() throws -> Host {
+        /// The files decoded once for the suite: the family's two are the largest it reads, and its tests run beside
+        /// CI's slowest, which repeated decodes would crowd.
+        static let shared = Result { try Host.read() }
+
+        static func open() throws -> Host { try shared.get() }
+
+        static func read() throws -> Host {
             let directory = ServedFixture.resources
             func at(_ name: String) -> URL { directory.appendingPathComponent(name) }
             func family(_ name: String) -> URL { RepositoryFiles.language.appendingPathComponent(name) }

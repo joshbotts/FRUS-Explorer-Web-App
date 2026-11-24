@@ -21,10 +21,37 @@ import WordCloudKit
     /// them all, and the references price them.
     static let lenses = ["allTerms", "descriptors", "concepts", "topics", "actions", "sentiment"]
 
-    static func core() throws -> CloudVectorsFile { try CloudVectorsFile(contentsOf: folder.appendingPathComponent("cloud-vectors-core.json")) }
-    static func volumes() throws -> CloudVectorsFile { try CloudVectorsFile(contentsOf: folder.appendingPathComponent("cloud-vectors-volumes.json")) }
+    /// The family's four files, decoded once for the suite, apart from the server, since its other suites run beside
+    /// CI's slowest, which the decodes would crowd: the encoder check's live server answers within 20 seconds or fails.
+    struct Files: Sendable {
+        let core: CloudVectorsFile
+        let volumes: CloudVectorsFile
+        let dictionary: KeynessBaselineFile
+        let printed: KeynessBaselineFile
+    }
+    static let files = Result {
+        Files(core: try CloudVectorsFile(contentsOf: folder.appendingPathComponent("cloud-vectors-core.json")),
+              volumes: try CloudVectorsFile(contentsOf: folder.appendingPathComponent("cloud-vectors-volumes.json")),
+              dictionary: try KeynessBaselineFile(contentsOf: folder.appendingPathComponent("keyness-baseline.json")),
+              printed: try KeynessBaselineFile(contentsOf: folder.appendingPathComponent("keyness-baseline-printed.json")))
+    }
+    static func core() throws -> CloudVectorsFile { try files.get().core }
+    static func volumes() throws -> CloudVectorsFile { try files.get().volumes }
     static func reference(_ name: String, in directory: URL = folder) throws -> KeynessBaselineFile {
-        try KeynessBaselineFile(contentsOf: directory.appendingPathComponent(name))
+        if directory == folder, name == "keyness-baseline.json" { return try files.get().dictionary }
+        if directory == folder, name == "keyness-baseline-printed.json" { return try files.get().printed }
+        return try KeynessBaselineFile(contentsOf: directory.appendingPathComponent(name))
+    }
+
+    /// The app's data files, read once for the suite.
+    static let loaded = Result { try ServerResources.load(from: resources, language: folder) }
+
+    /// The app's data files with the family's folder `language`, each its own reader of the family's files, as a server
+    /// started over that folder has, with the app's files read once.
+    static func serving(_ language: URL) throws -> ServerResources {
+        let base = try loaded.get()
+        return ServerResources(directory: base.directory, languageDirectory: language, manifest: base.manifest,
+                               brokenRefs: base.brokenRefs, citedPages: base.citedPages, indexing: base.indexing)
     }
 
     @Test func eachFileIsTheOneItsProvenanceNames() throws {
@@ -119,7 +146,7 @@ import WordCloudKit
             return url
         }
         let apps4 = try folder("apps", LanguageFamily.fileNames.map { (Self.resources.appendingPathComponent($0), $0) })
-        let refused = try ServerResources.load(from: Self.resources, language: apps4)
+        let refused = try Self.serving(apps4)
         let other = FamilyRefusal.otherTokenizer(.legacyNaturalLanguage)
         for result in [refused.familyClouds.core.value(in: apps4).map { _ in () }, refused.familyClouds.volumes.value(in: apps4).map { _ in () },
                        refused.familyClouds.reference(.dictionary, in: apps4).map { _ in () },
@@ -138,12 +165,12 @@ import WordCloudKit
                                          (Self.folder.appendingPathComponent("cloud-vectors-volumes.json"), "cloud-vectors-volumes.json"),
                                          (Self.resources.appendingPathComponent("keyness-baseline.json"), "keyness-baseline.json"),
                                          (Self.folder.appendingPathComponent("keyness-baseline.json"), "keyness-baseline-printed.json")])
-        let served = try ServerResources.load(from: Self.resources, language: mixed)
+        let served = try Self.serving(mixed)
         #expect(WordCloudRoutes.answer(.corpus, lens: .topics, settings: .standard, resources: served).state == "terms")
         #expect(served.familyClouds.reference(.dictionary, in: mixed).error == other)
         #expect(served.familyClouds.reference(.printed, in: mixed).error == .otherWordForm(.dictionary),
                 "a reference under the other form's name is not read")
-        #expect(try ServerResources.load(from: Self.resources, language: Self.folder).familyClouds.reference(.printed, in: Self.folder).error == nil)
+        #expect(try Self.serving(Self.folder).familyClouds.reference(.printed, in: Self.folder).error == nil)
 
         // A volume's scope reads the volumes file and, for its era, the core: the app's volumes file beside the family's
         // core gives no volume its own list, and the era's stands in, which the chip names, as for a volumes file the app
@@ -152,13 +179,13 @@ import WordCloudKit
         let appsVolumes = try folder("apps-volumes", [(Self.folder.appendingPathComponent("cloud-vectors-core.json"), "cloud-vectors-core.json"),
                                                       (Self.resources.appendingPathComponent("cloud-vectors-volumes.json"), "cloud-vectors-volumes.json")])
         let era = WordCloudRoutes.answer(.volume(volumeId: "frus1961-63v06", subseries: "1961-63"), lens: .topics, settings: .standard,
-                                         resources: try ServerResources.load(from: Self.resources, language: appsVolumes))
+                                         resources: try Self.serving(appsVolumes))
         let familyEra = WordCloudParityTests.Host.list(try Self.core(), "1961-63", .topics)
         #expect(era.state == "terms" && era.fallbackSubseries == "1961-63" && era.chip == "Topics · 1961-63 (era)")
         #expect(era.terms.map { "\($0.term) \($0.count)" } == familyEra, "the family's era, never the app's volume")
         let appsCore = try folder("apps-core", [(Self.resources.appendingPathComponent("cloud-vectors-core.json"), "cloud-vectors-core.json"),
                                                 (Self.folder.appendingPathComponent("cloud-vectors-volumes.json"), "cloud-vectors-volumes.json")])
-        let ownVolume = try ServerResources.load(from: Self.resources, language: appsCore)
+        let ownVolume = try Self.serving(appsCore)
         let own = WordCloudRoutes.answer(.volume(volumeId: "frus1961-63v06", subseries: "1961-63"), lens: .topics, settings: .standard, resources: ownVolume)
         let familyVolume = WordCloudParityTests.Host.list(try Self.volumes(), "frus1961-63v06", .topics)
         #expect(own.state == "terms" && own.fallbackSubseries == nil && own.terms.map { "\($0.term) \($0.count)" } == familyVolume)
@@ -167,7 +194,7 @@ import WordCloudKit
 
         // A folder with none of them.
         let empty = try folder("empty", [])
-        let none = try ServerResources.load(from: Self.resources, language: empty)
+        let none = try Self.serving(empty)
         #expect(WordCloudRoutes.answer(.corpus, lens: .topics, settings: .standard, resources: none).message?.detail == FamilyRefusal.missing.sentence)
         #expect(WordCloudRoutes.context(resources: none).made == nil)
     }
