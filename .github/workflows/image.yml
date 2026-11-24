@@ -2,7 +2,8 @@
 #   ghcr.io/joshbotts/frus-explorer-light:sha-<commit>  each build of main (first 7 characters)
 #   ghcr.io/joshbotts/frus-explorer-light:edge          the newest build that passed its smoke test
 # Each architecture builds natively, amd64 and arm64 side by side, its search model from the Actions
-# cache by its digest (PLAN's S27b), and pushes by digest, with frus-parity's image beside it in the
+# cache by its digest (PLAN's S27b) and its semantic vectors' shards by the bundled manifest's (S26c),
+# and pushes by digest, with frus-parity's image beside it in the
 # build cache. The publish job joins them under the commit's tag; verify runs the Compose smoke test
 # against that tag on both architectures, with frus-parity, so that checks 2, 8 and 9's encoder half
 # run on both, the encoder's over the app's 25 judged queries; only then does promote move edge. The
@@ -103,6 +104,23 @@ jobs:
         if: steps.model-cache.outputs.cache-hit != 'true'
         run: scripts/fetch-model "$RUNNER_TEMP/model"
 
+      # The semantic vectors' 553 shards (PLAN's S26c), from the Actions cache by the bundled manifest's digest,
+      # fetched once a manifest, each held to it, and given to the build as its vectors-source context.
+      - name: The bundled shard manifest's digest
+        id: vectors
+        run: echo "sha256=$(sha256sum upstream/FRUS-Explorer/FRUSExplorer/Resources/semantic-shards-manifest.json | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: The semantic vectors, from the Actions cache by the manifest's digest
+        id: vectors-cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/vectors
+          key: semantic-vectors-${{ steps.vectors.outputs.sha256 }}
+
+      - name: Fetch the semantic vectors once
+        if: steps.vectors-cache.outputs.cache-hit != 'true'
+        run: docker/fetch-vectors "$RUNNER_TEMP/vectors"
+
       - name: Build${{ env.PUSH == 'true' && ' and push by digest' || '' }}
         id: build
         uses: docker/build-push-action@v7
@@ -111,7 +129,9 @@ jobs:
           file: docker/Dockerfile
           platforms: linux/${{ matrix.arch }}
           build-args: ${{ steps.args.outputs.list }}
-          build-contexts: model-source=${{ runner.temp }}/model
+          build-contexts: |
+            model-source=${{ runner.temp }}/model
+            vectors-source=${{ runner.temp }}/vectors
           outputs: ${{ env.PUSH == 'true' && format('type=image,name={0},push-by-digest=true,name-canonical=true,push=true', env.IMAGE) || 'type=cacheonly' }}
           cache-from: type=gha,scope=image-${{ matrix.arch }}
           cache-to: type=gha,scope=image-${{ matrix.arch }},mode=max,ignore-error=true

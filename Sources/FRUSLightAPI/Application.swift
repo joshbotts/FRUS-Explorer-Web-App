@@ -43,6 +43,8 @@ struct ServerComponents: Sendable {
     /// Search by meaning's encoder (PLAN's S27b): llama-server over the model in the image, a child it starts
     /// at the first query and stops when idle, unless `FRUS_ENCODER` is off.
     let encoder: QueryEncoder
+    /// The semantic vectors (PLAN's S26c): the bundled tier, read on its first use, and every shard in the image.
+    let vectors: SemanticVectors
 
     static func make(configuration: ServerConfiguration, logger: Logger) async throws -> ServerComponents {
         // Before anything is written: a server without its data files cannot serve the reader.
@@ -119,7 +121,8 @@ struct ServerComponents: Sendable {
             library: library,
             indexer: indexer,
             teiCheck: teiCheck,
-            encoder: encoder)
+            encoder: encoder,
+            vectors: SemanticVectors(configuration: configuration))
     }
 
     /// The user store `FRUS_USER_STORE` names, migrated to this build's schema: app.db in the data
@@ -267,7 +270,7 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
                                                        secrets: components.secrets, jobs: components.jobs),
                             leads: components.leads,
                             library: components.library, indexer: components.indexer, teiCheck: components.teiCheck,
-                            encoder: components.encoder, base: configuration.basePath, logger: logger),
+                            encoder: components.encoder, vectors: components.vectors, base: configuration.basePath, logger: logger),
         base: configuration.basePath,
         configuration: .init(address: .hostname(configuration.host, port: configuration.port), serverName: "frus-light"),
         logger: logger)

@@ -1,0 +1,230 @@
+#!/usr/bin/env bash
+# FRUS Explorer Light: the semantic vectors' shards for the image (PLAN's S26c), all 553, from the vectors' host,
+# joshbotts/frus-semantic-vectors, at the commit whose generations/<generation>/shards-manifest.json is the pinned
+# app's bundled semantic-shards-manifest.json byte for byte, VECTORS_COMMIT in docker/Dockerfile, and the
+# generation's first publication, VECTORS_BASE_COMMIT, whose shards form the image's base layer.
+#   docker/fetch-vectors <folder>                  fetches and checks the shards in <folder>, as CI fills its cache
+#   docker/fetch-vectors <folder> --layout <out>   then lays them out for the image's two layers, under <out>/base
+#                                                  and <out>/repack, as the image's vectors stage does
+#   docker/fetch-vectors selftest                  runs the script over a host of its own, a re-pack among it
+# <folder> keeps the host's files by commit, <commit>/manifest.json and <commit>/<volume>.vec: every shard the base
+# commit's manifest lists, and at VECTORS_COMMIT those its manifest lists with another length or digest, or adds, the
+# shards a re-pack changed. Each is held to its manifest's length and SHA-256, and VECTORS_COMMIT's manifest to the
+# bundled one, so that a build whose shards and bundled files disagree fails; a file already there that holds is
+# kept, so that CI, which keeps the folder in the Actions cache by the bundled manifest's digest, fetches the shards
+# once a manifest. The layout gives each file mode 0444 and each folder 0755, and each the day its manifest names,
+# so that each layer is byte-identical from build to build and the same on every architecture.
+# Needs bash, curl, jq and sha256sum or shasum. The values come from the environment where it sets them, as the
+# image's stage does, and otherwise from docker/Dockerfile's ARG lines and the submodule's bundled manifest.
+set -euo pipefail
+# One order for sort and comm, whatever the host's locale.
+export LC_ALL=C
+
+usage() {
+  echo "usage: docker/fetch-vectors <folder> [--layout <out>] | docker/fetch-vectors selftest" >&2
+  exit 2
+}
+
+here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+root=$(CDPATH='' cd -- "$here/.." && pwd)
+argument() { sed -n "s/^ARG $1=//p" "$root/docker/Dockerfile"; }
+digest() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
+}
+size() { wc -c < "$1" | tr -d ' '; }
+
+# The manifest's shards, a line each: volume, bytes, SHA-256.
+entries() { jq -r '.shards[] | "\(.volumeID) \(.bytes) \(.sha256)"' "$1"; }
+
+# Whether the file holds to the length and the digest.
+holds() { [ -f "$1" ] && [ "$(size "$1")" = "$2" ] && [ "$(digest "$1")" = "$3" ]; }
+
+# Fetches what `wanted` lists, a line each, URL and file, in one parallel transfer, each to a .partial beside it.
+fetch() {
+  local wanted=$1 config
+  [ -s "$wanted" ] || return 0
+  config=$(mktemp)
+  while read -r url file; do
+    printf 'url = "%s"\noutput = "%s.partial"\n' "$url" "$file" >> "$config"
+  done < "$wanted"
+  curl --fail --silent --show-error --max-redirs 0 --proto "$protocols" --retry 3 --create-dirs \
+    --parallel --parallel-max 8 --config "$config" || true
+  rm -f "$config"
+  while read -r _ file; do
+    if [ -f "$file.partial" ]; then mv "$file.partial" "$file"; fi
+  done < "$wanted"
+}
+
+# Fetches and checks the mirror in $1.
+mirror() {
+  local folder=$1 generation base_manifest current_manifest wanted failed
+  : "${VECTORS_REPOSITORY:=$(argument VECTORS_REPOSITORY)}"
+  : "${VECTORS_COMMIT:=$(argument VECTORS_COMMIT)}"
+  : "${VECTORS_BASE_COMMIT:=$(argument VECTORS_BASE_COMMIT)}"
+  : "${VECTORS_MANIFEST:=$root/upstream/FRUS-Explorer/FRUSExplorer/Resources/semantic-shards-manifest.json}"
+  : "${FRUS_VECTORS_HOST:=https://raw.githubusercontent.com}"
+  [ -n "$VECTORS_REPOSITORY" ] && [ -n "$VECTORS_COMMIT" ] && [ -n "$VECTORS_BASE_COMMIT" ] \
+    || { echo "fetch-vectors: docker/Dockerfile names no vectors' host and commits" >&2; exit 1; }
+  [ -f "$VECTORS_MANIFEST" ] || { echo "fetch-vectors: no bundled manifest at $VECTORS_MANIFEST" >&2; exit 1; }
+  generation=$(jq -r '.provenanceDigest' "$VECTORS_MANIFEST" | cut -c1-8)
+  [ "${#generation}" = 8 ] || { echo "fetch-vectors: the bundled manifest names no generation" >&2; exit 1; }
+  address="$FRUS_VECTORS_HOST/$VECTORS_REPOSITORY"
+  mkdir -p "$folder"
+
+  # The two commits' manifests: VECTORS_COMMIT's is the bundled one, byte for byte, and the base's is of its generation.
+  wanted=$(mktemp)
+  # Each commit once: at the pin the two are one, and two transfers into one file could leave it cut short.
+  for commit in $(printf '%s\n' "$VECTORS_BASE_COMMIT" "$VECTORS_COMMIT" | sort -u); do
+    if [ ! -s "$folder/$commit/manifest.json" ]; then
+      echo "$address/$commit/generations/$generation/shards-manifest.json $folder/$commit/manifest.json" >> "$wanted"
+    fi
+  done
+  fetch "$wanted"
+  rm -f "$wanted"
+  base_manifest="$folder/$VECTORS_BASE_COMMIT/manifest.json"
+  current_manifest="$folder/$VECTORS_COMMIT/manifest.json"
+  [ -s "$current_manifest" ] || { echo "fetch-vectors: no manifest of generation $generation at $VECTORS_COMMIT" >&2; exit 1; }
+  if ! cmp -s "$current_manifest" "$VECTORS_MANIFEST"; then
+    echo "fetch-vectors: generations/$generation/shards-manifest.json at $VECTORS_COMMIT is not the bundled manifest: record the commit whose manifest is (docs/COORDINATION.md, section 5)" >&2
+    exit 1
+  fi
+  [ -s "$base_manifest" ] || { echo "fetch-vectors: no manifest of generation $generation at $VECTORS_BASE_COMMIT" >&2; exit 1; }
+  if [ "$(jq -r '.provenanceDigest' "$base_manifest")" != "$(jq -r '.provenanceDigest' "$VECTORS_MANIFEST")" ]; then
+    echo "fetch-vectors: $VECTORS_BASE_COMMIT's manifest is of another generation than the bundled one" >&2
+    exit 1
+  fi
+
+  # The shards: the base's every one, and at VECTORS_COMMIT those its manifest names otherwise than the base's.
+  entries "$base_manifest" | sort > "$folder/.base"
+  entries "$VECTORS_MANIFEST" | sort > "$folder/.bundled"
+  comm -13 "$folder/.base" "$folder/.bundled" > "$folder/.repack"
+  wanted=$(mktemp)
+  while read -r volume bytes sha256; do
+    holds "$folder/$VECTORS_BASE_COMMIT/$volume.vec" "$bytes" "$sha256" \
+      || echo "$address/$VECTORS_BASE_COMMIT/generations/$generation/shards/$volume.vec $folder/$VECTORS_BASE_COMMIT/$volume.vec" >> "$wanted"
+  done < "$folder/.base"
+  while read -r volume bytes sha256; do
+    holds "$folder/$VECTORS_COMMIT/$volume.vec" "$bytes" "$sha256" \
+      || echo "$address/$VECTORS_COMMIT/generations/$generation/shards/$volume.vec $folder/$VECTORS_COMMIT/$volume.vec" >> "$wanted"
+  done < "$folder/.repack"
+  fetched=$(wc -l < "$wanted" | tr -d ' ')
+  fetch "$wanted"
+  rm -f "$wanted"
+  failed=0
+  while read -r volume bytes sha256; do
+    holds "$folder/$VECTORS_BASE_COMMIT/$volume.vec" "$bytes" "$sha256" \
+      || { echo "fetch-vectors: $volume.vec at $VECTORS_BASE_COMMIT is not the $bytes bytes at SHA-256 $sha256 its manifest names" >&2; failed=1; }
+  done < "$folder/.base"
+  while read -r volume bytes sha256; do
+    holds "$folder/$VECTORS_COMMIT/$volume.vec" "$bytes" "$sha256" \
+      || { echo "fetch-vectors: $volume.vec at $VECTORS_COMMIT is not the $bytes bytes at SHA-256 $sha256 the bundled manifest names" >&2; failed=1; }
+  done < "$folder/.repack"
+  [ "$failed" = 0 ] || exit 1
+  echo "fetch-vectors: generation $generation, $(wc -l < "$folder/.bundled" | tr -d ' ') shards: $(wc -l < "$folder/.base" | tr -d ' ') as first published at ${VECTORS_BASE_COMMIT:0:8}, $(wc -l < "$folder/.repack" | tr -d ' ') re-packed at ${VECTORS_COMMIT:0:8}; $fetched fetched"
+}
+
+# Lays the mirror in $1 out under $2: the base layer's files and the re-pack layer's, each as the image holds them.
+layout() {
+  local folder=$1 out=$2 shards=usr/share/frus-light/semantic/shards stamp
+  rm -rf "$out/base" "$out/repack"
+  mkdir -p "$out/base/$shards" "$out/repack/$shards"
+  while read -r volume _ _; do cp "$folder/$VECTORS_BASE_COMMIT/$volume.vec" "$out/base/$shards/$volume.vec"; done < "$folder/.base"
+  while read -r volume _ _; do cp "$folder/$VECTORS_COMMIT/$volume.vec" "$out/repack/$shards/$volume.vec"; done < "$folder/.repack"
+  # The overlay the image shows, the re-pack's over the base's, is every shard the bundled manifest names, held to it.
+  while read -r volume bytes sha256; do
+    file="$out/repack/$shards/$volume.vec"
+    [ -f "$file" ] || file="$out/base/$shards/$volume.vec"
+    holds "$file" "$bytes" "$sha256" || { echo "fetch-vectors: the image's $volume.vec would not be the bundled manifest's" >&2; exit 1; }
+  done < "$folder/.bundled"
+  for layer in base repack; do
+    manifest="$folder/$VECTORS_BASE_COMMIT/manifest.json"
+    [ "$layer" = base ] || manifest="$folder/$VECTORS_COMMIT/manifest.json"
+    stamp="$(jq -r '.generated' "$manifest")T00:00:00Z"
+    find "$out/$layer" -type f -exec chmod 0444 {} +
+    find "$out/$layer" -type d -exec chmod 0755 {} +
+    find "$out/$layer" -exec touch -d "$stamp" {} +
+  done
+  echo "fetch-vectors: $(find "$out/base" -type f | wc -l | tr -d ' ') shards in the base layer and $(find "$out/repack" -type f | wc -l | tr -d ' ') in the re-pack's, under $out"
+}
+
+# A host of its own: a generation first published at one commit, and re-packed at another, which changed one shard,
+# added one and left one as it was; then a cache with a damaged file, and a bundled manifest the host does not hold.
+selftest() {
+  local work host commit0 commit1 gen cache out
+  work=$(mktemp -d)
+  # shellcheck disable=SC2064 # the folder is named now, while it is in scope
+  trap "rm -rf '$work'" EXIT
+  host="$work/host"
+  commit0=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  commit1=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  gen=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  write() { # commit, the day of its run, then volume=content pairs
+    local commit=$1 day=$2 dir shards="[]" volume content file
+    shift 2
+    dir="$host/owner/vectors/$commit/generations/${gen:0:8}"
+    mkdir -p "$dir/shards"
+    for pair in "$@"; do
+      volume=${pair%%=*}; content=${pair#*=}; file="$dir/shards/$volume.vec"
+      printf '%s' "$content" > "$file"
+      shards=$(jq -c --arg v "$volume" --argjson b "$(size "$file")" --arg s "$(digest "$file")" '. + [{bytes: $b, sha256: $s, volumeID: $v}]' <<<"$shards")
+    done
+    jq -c -n --arg g "$gen" --arg d "$day" --argjson s "$shards" \
+      '{generated: $d, provenanceDigest: $g, schema: 1, shards: $s, shippingDims: 512}' > "$dir/shards-manifest.json"
+  }
+  write "$commit0" 2026-10-15 vol1=first vol2=second vol3=third
+  write "$commit1" 2026-10-16 vol1=first vol2=second-repacked vol3=third vol4=added
+  run() { # bundled manifest, folder, then the rest
+    local bundled=$1 folder=$2
+    shift 2
+    VECTORS_REPOSITORY=owner/vectors VECTORS_COMMIT=$commit1 VECTORS_BASE_COMMIT=$commit0 VECTORS_MANIFEST=$bundled \
+      FRUS_VECTORS_HOST="file://$host" protocols='=file' "$0" "$folder" "$@"
+  }
+  bundled="$host/owner/vectors/$commit1/generations/${gen:0:8}/shards-manifest.json"
+  cache="$work/cache"
+  out="$work/out"
+  run "$bundled" "$cache" --layout "$out" > "$work/log" || { cat "$work/log"; echo "selftest: the re-pack did not lay out" >&2; exit 1; }
+  shards=usr/share/frus-light/semantic/shards
+  [ "$(cd "$out/base/$shards" && ls | tr '\n' ' ')" = "vol1.vec vol2.vec vol3.vec " ] || { echo "selftest: the base layer is not the first publication" >&2; exit 1; }
+  [ "$(cd "$out/repack/$shards" && ls | tr '\n' ' ')" = "vol2.vec vol4.vec " ] || { echo "selftest: the re-pack layer is not the changed and added shards" >&2; exit 1; }
+  [ "$(cat "$out/repack/$shards/vol2.vec")" = second-repacked ] && [ "$(cat "$out/base/$shards/vol2.vec")" = second ] \
+    || { echo "selftest: a re-packed shard is not the re-pack's over the base's" >&2; exit 1; }
+  # Mode and time fixed: the second run lays out the same bytes, modes and times.
+  # The layers' contents alone: the folder that holds them is made again by each run.
+  listing() { (cd "$1" && find . -mindepth 1 -exec stat -c '%n %a %Y %s' {} + 2>/dev/null || find . -mindepth 1 -exec stat -f '%N %Lp %m %z' {} +) | sort; }
+  listing "$out" > "$work/first"
+  run "$bundled" "$cache" --layout "$out" > "$work/log" || { cat "$work/log"; echo "selftest: a second run failed" >&2; exit 1; }
+  grep -q '; 0 fetched$' "$work/log" || { cat "$work/log"; echo "selftest: a second run fetched again" >&2; exit 1; }
+  listing "$out" > "$work/second"
+  cmp -s "$work/first" "$work/second" || { echo "selftest: the layout is not the same from run to run" >&2; diff "$work/first" "$work/second" >&2; exit 1; }
+  grep -q "^./base/$shards/vol1.vec 444 " "$work/first" || { echo "selftest: a shard is not mode 0444" >&2; exit 1; }
+  # A damaged file in the cache is fetched again.
+  printf 'damaged' > "$cache/$commit0/vol3.vec"
+  run "$bundled" "$cache" > "$work/log" && grep -q '; 1 fetched$' "$work/log" \
+    || { cat "$work/log"; echo "selftest: a damaged file was not fetched again" >&2; exit 1; }
+  # A bundled manifest that is not VECTORS_COMMIT's, and a shard the host serves damaged, fail.
+  jq -c '.shards[0].bytes += 1' "$bundled" > "$work/other.json"
+  if run "$work/other.json" "$work/cache2" > "$work/log" 2>&1; then echo "selftest: another bundled manifest was taken" >&2; exit 1; fi
+  grep -q 'is not the bundled manifest' "$work/log" || { cat "$work/log"; echo "selftest: another manifest was refused in other words" >&2; exit 1; }
+  printf 'not the shard' > "$host/owner/vectors/$commit0/generations/${gen:0:8}/shards/vol1.vec"
+  if run "$bundled" "$work/cache3" > "$work/log" 2>&1; then echo "selftest: a damaged shard was taken" >&2; exit 1; fi
+  grep -q 'vol1.vec at aaaaaaaa.* is not the 5 bytes' "$work/log" || { cat "$work/log"; echo "selftest: a damaged shard was refused in other words" >&2; exit 1; }
+  echo "fetch-vectors selftest: the base and re-pack layers, a second run the same, a damaged cache file fetched again, another manifest and a damaged shard refused"
+}
+
+protocols=${protocols:-'=https'}
+case "${1:-}" in
+  selftest) [ $# -eq 1 ] || usage; selftest ;;
+  ''|-*) usage ;;
+  *)
+    folder=$1
+    shift
+    out=""
+    case "${1:-}" in
+      --layout) [ $# -eq 2 ] || usage; out=$2 ;;
+      '') ;;
+      *) usage ;;
+    esac
+    mirror "$folder"
+    if [ -n "$out" ]; then layout "$folder" "$out"; fi
+    ;;
+esac

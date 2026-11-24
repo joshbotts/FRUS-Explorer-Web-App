@@ -13,6 +13,8 @@ public enum RepositoryFiles {
     public static let tei = root.appendingPathComponent("fixtures/tei", isDirectory: true)
     /// The kit's fixture volumes for a section's own text (fixtures/own-text/README.md).
     public static let ownText = root.appendingPathComponent("fixtures/own-text", isDirectory: true)
+    /// The three fixture volumes' semantic shards, as the vectors' host publishes them (fixtures/semantic/README.md).
+    public static let semanticShards = root.appendingPathComponent("fixtures/semantic", isDirectory: true)
 
     /// Copies the fixture volumes named, from `fixtures/tei` or else `fixtures/own-text`, into
     /// `directory`, creating it, as a TEI folder is mounted at `/data/volumes`.

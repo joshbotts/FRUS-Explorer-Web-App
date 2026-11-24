@@ -2,8 +2,9 @@
 // The image's own encoder embeds one query through the server's path first, so that the pane finds the real
 // llama-server loaded over the model in the image: Administration's panes' Semantic link, reached by keyboard
 // from Status, opens on Search Model, with the model in the image, verified, its file, size and digest, the
-// engine at the pinned commit and the encoder loaded. It changes nothing a later spec reads. It runs at the
-// root and again under the path.
+// engine at the pinned commit and the encoder loaded. S26c's: the same pane's Vectors, read by keyboard, the
+// bundled generation and the image's 553 shards, each held to the bundled manifest, none refused. It changes
+// nothing a later spec reads. It runs at the root and again under the path.
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
 import { tabTo } from './keyboard';
@@ -43,5 +44,31 @@ test('reads Search Model by keyboard: the model in the image and its encoder, lo
   await expect(model.getByText(/^On, and loaded since .+, holding \d+ MB\. It stops at .+ unless another search comes, 3 minutes after the last/)).toBeVisible();
   // Nothing to download or remove: the model is the image's.
   await expect(model.getByRole('button')).toHaveCount(0);
+  await axeCheck(page);
+});
+
+test('reads Vectors by keyboard: the bundled generation and the 553 shards in the image, each checked', async ({ page }) => {
+  await page.goto('admin/status');
+  await expect(page.getByRole('heading', { level: 1, name: 'Status', exact: true })).toBeVisible();
+  const panes = page.getByRole('navigation', { name: 'Administration' });
+  const semantic = panes.getByRole('link', { name: 'Semantic', exact: true });
+  await tabTo(page, semantic, 60);
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/admin\/semantic$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Semantic', exact: true })).toBeFocused();
+
+  // The server checks every shard before it answers, so the section comes with its whole count.
+  const vectors = page.getByRole('region', { name: 'Semantic Vectors' });
+  await expect(vectors.getByRole('heading', { level: 2, name: 'Semantic Vectors' })).toBeVisible();
+  await expect(vectors.getByText('89481b1869da1880c599a6923df9a90bef19fc402c3db5a370ead2809b7e6101', { exact: true })).toBeVisible();
+  await expect(vectors.getByText('embeddinggemma-2-Q8_0, its 768 dimensions cut to 512', { exact: true })).toBeVisible();
+  await expect(vectors.getByText('314,616 in 553 volumes', { exact: true })).toBeVisible();
+  await expect(vectors.getByText('553 of 553 — 162.4 MB of 162.4 MB on this server.', { exact: true })).toBeVisible();
+  await expect(
+    vectors.getByText('Nothing has gone wrong. The server checked all 553 files in its image against the bundled manifest.', { exact: true }),
+  ).toBeVisible();
+  // Nothing refused, nothing missing, and nothing to download or remove: every shard is the image's.
+  await expect(vectors.getByRole('table')).toHaveCount(0);
+  await expect(vectors.getByRole('button')).toHaveCount(0);
   await axeCheck(page);
 });

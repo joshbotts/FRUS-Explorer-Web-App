@@ -2,7 +2,9 @@
 // Administration is refused, as one with FRUS_USER_DATA=off: the model in the image, its size and its
 // SHA-256 held to the bundled index's, the engine, and the encoder's setting and state. The command is not
 // the server, so it holds no encoder of its own: it reads the server's from the process table, loaded once
-// its health answers.
+// its health answers. Since S26c, the pane's Vectors too: the bundled generation, its model and its count, and
+// the shards in the image of those the bundled manifest publishes, each checked as the server checks it, with
+// any refused and why.
 //   docker compose exec frus frus-light semantic
 
 import FRUSLightCore
@@ -10,7 +12,7 @@ import Foundation
 
 enum SemanticCommand {
     /// Prints the report, and exits 0 when the server can search by meaning, or does not because
-    /// FRUS_ENCODER is off; 1 when it is on and cannot.
+    /// FRUS_ENCODER is off; 1 when it is on and cannot. The vectors' section reports and leaves the status alone.
     static func run(_ arguments: [String], _ configuration: ServerConfiguration,
                     say: (String) -> Void = { print($0) }) async -> Int32 {
         guard arguments.isEmpty else {
@@ -25,7 +27,30 @@ enum SemanticCommand {
             report.residentBytes = QueryEncoder.residentBytes(of: running.pid)
         }
         for line in lines(report) { say(line) }
+        for line in lines(await SemanticVectors(configuration: configuration).report()) { say(line) }
         return report.state == "unavailable" ? 1 : 0
+    }
+
+    /// The vectors' report in lines, as the pane lays out Vectors.
+    static func lines(_ report: SemanticVectorsReport) -> [String] {
+        var lines = [SemanticStorageWords.header]
+        func row(_ label: String, _ value: String) { lines.append("  \(label.padding(toLength: 10, withPad: " ", startingAt: 0))  \(value)") }
+        guard let generation = report.generation, let shards = report.shards else {
+            row("Vectors", "\(SemanticStorageWords.unavailableLabel): \(SemanticStorageWords.unavailable)")
+            if let problem = report.problem { row("Problem", problem) }
+            return lines
+        }
+        row("Generation", "\(generation.name), made on \(generation.generated): \(generation.model), its \(generation.nativeDimensions) dimensions cut to \(generation.dimensions)")
+        row("Documents", "\(grouped(generation.documents)) in \(grouped(generation.volumes)) volumes; the Hamming stage gives the int8 rerank \(grouped(generation.rerankPool)), at a recall@10 of \(generation.measuredRecallAt10)")
+        row("In image", "\(SemanticStorageWords.heldValue(shards.held, of: shards.published)): \(SemanticStorageWords.heldDetail(shards.heldBytes, of: shards.publishedBytes).dropLast()), in \(shards.folder)")
+        row("Problems", SemanticStorageWords.problemsCaption(shards.refused.count + shards.missing.count, checked: shards.checked))
+        for refused in shards.refused {
+            row("Refused", "\(refused.volumeId): \(refused.reason) \(refused.detail)")
+        }
+        if !shards.missing.isEmpty {
+            row("Missing", SemanticStorageWords.missingLine(shards.missing))
+        }
+        return lines
     }
 
     /// The report in lines, as the pane lays it out.

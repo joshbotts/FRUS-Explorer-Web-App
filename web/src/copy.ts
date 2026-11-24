@@ -3536,6 +3536,76 @@ export const copy = {
       /** The app's `settings.model.footer`, in a server's words: its model is in the image, never downloaded. */
       footer:
         'Lets the server understand searches phrased as questions, using a language model that runs entirely on this server — Google’s EmbeddingGemma 2, 310 MB in the image. The feature is experimental.',
+      /**
+       * Vectors (PLAN's S26c): the app's Semantic Vectors section (`SemanticStorageSection`, with
+       * `SemanticStorageReport`'s sentences) in a server's words, whose shards are all in its image: nothing to
+       * download or remove. The server checks every one before it answers, so its Problems say so, where the
+       * app's list is what it has noticed. SemanticStorageMirrorParityTests holds the mirrored lines to the app's.
+       */
+      vectors: {
+        /** The app's `settings.vectors.header`. */
+        header: 'Semantic Vectors',
+        generation: 'Generation',
+        generationLine: (name: string, made: string) => `${name}, made on ${made}`,
+        model: 'Model',
+        modelLine: (model: string, native: number, dimensions: number) => `${model}, its ${native} dimensions cut to ${dimensions}`,
+        documents: 'Documents',
+        documentsLine: (documents: number, volumes: number) =>
+          `${documents.toLocaleString('en-US')} in ${volumes.toLocaleString('en-US')} volumes`,
+        /** The app's `settings.vectors.downloaded.label`, "Downloaded": the server's shards are in its image. */
+        held: 'In the Image',
+        /** The app's `settings.vectors.downloaded.value`, "%lld of %lld", and `.detail`, "%@ of %@ on this device.". */
+        heldLine: (held: number, published: number, bytes: string, publishedBytes: string) =>
+          `${held.toLocaleString('en-US')} of ${published.toLocaleString('en-US')} — ${bytes} of ${publishedBytes} on this server.`,
+        /**
+         * A size as the app's section writes one, `ByteCountFormatter`'s file style: decimal units, whole bytes and
+         * kilobytes, megabytes to one place and larger units to two, a fraction of zero left out, and Zero KB for none;
+         * the server's `SemanticStorageWords.fileSize`, which the command writes.
+         */
+        fileSize: (bytes: number) => {
+          if (bytes <= 0) return 'Zero KB';
+          if (bytes < 1_000) return `${bytes.toLocaleString('en-US')} ${bytes === 1 ? 'byte' : 'bytes'}`;
+          const units: [string, number, number][] = [
+            ['KB', 1e3, 0],
+            ['MB', 1e6, 1],
+            ['GB', 1e9, 2],
+            ['TB', 1e12, 2],
+          ];
+          let chosen: [string, number, number] = ['KB', 1e3, 0];
+          for (const unit of units) {
+            if (bytes >= unit[1] * 0.9995) chosen = unit;
+          }
+          const text = (bytes / chosen[1]).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: chosen[2] });
+          return `${text} ${chosen[0]}`;
+        },
+        /** The app's `settings.vectors.problems.label`. */
+        problems: 'Problems',
+        /** The app's `settings.vectors.problems.none.v2` and `.some.v2`, whose list is partial; the server's is whole. */
+        problemsCaption: (count: number, checked: number) => {
+          const scope =
+            checked === 0
+              ? 'The image holds none of the files the bundled manifest names.'
+              : `The server checked ${checked === 1 ? 'the one file' : `all ${checked.toLocaleString('en-US')} files`} in its image against the bundled manifest.`;
+          return count === 0 ? `Nothing has gone wrong. ${scope}` : `${count.toLocaleString('en-US')} found. ${scope}`;
+        },
+        refusedCaption: 'The shards this server refused, by volume',
+        volume: 'Volume',
+        why: 'Why',
+        missing: 'Missing',
+        /** The app's `settings.vectors.refused.missing.v2`, "The file is no longer on this device.", for each listed. */
+        missingLine: (count: number, named: string[]) =>
+          `${count.toLocaleString('en-US')}: ${named.join(', ')}${count > named.length ? ` and ${(count - named.length).toLocaleString('en-US')} more` : ''}. The file is not in the image.`,
+        /** The app's `settings.vectors.unavailable.label` and `.detail.v2`, in a server's words. */
+        unavailableLabel: 'Not available',
+        unavailable:
+          'This server cannot match documents by subject, so that part of Related Documents is unavailable. Nothing is wrong with its library.',
+        /**
+         * The app's `settings.vectors.footer.v4`, in a server's words: each volume's file is in the image, and its
+         * sentence on Related Documents' panel waits for the row that ranks by meaning there (S26d).
+         */
+        footer:
+          'The server can find documents on the same subject even when they use none of the same words. Each volume needs a small extra file for this, which the image holds for every volume. The feature is experimental, and how well it works on nineteenth-century material is not yet established.',
+      },
     },
     users: {
       title: 'Users',
