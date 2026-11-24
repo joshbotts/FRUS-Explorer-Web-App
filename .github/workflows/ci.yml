@@ -243,7 +243,9 @@ jobs:
     needs: paths
     if: ${{ !(needs.paths.result == 'success' && needs.paths.outputs.code == 'false') && (needs.paths.result != 'success' || !cancelled()) }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # 23 minutes with the image's layers cached; a build with none, as after a change to Package.swift,
+    # took 13 minutes more for the image and llama.cpp's encoder (PLAN's S27b) and its cache's export.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
         with:
