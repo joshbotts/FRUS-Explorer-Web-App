@@ -68,7 +68,7 @@ Not started: `PLAN.md`'s row S29d. The session that does it replaces this line, 
 
 ## Session 26c: the vectors on the server
 
-24 November 2026 · branch `claude/s26c-vectors-server-8a8ec6` · [#176](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/176) · upstream `0b839bde`, unchanged
+24 November 2026 · branch `claude/s26c-vectors-server-8a8ec6` · [#177](https://github.com/joshbotts/FRUS-Explorer-Web-App/pull/177) · upstream `0b839bde`, unchanged
 
 Phase 4's row S26c, in wave 4 beside S29d on the language track and S29b upstream: the semantic vectors on the server, every one in the image, by the owner's answers of 23 November. No upstream pull request, no pin move and no migration. The branch was cut from `main` at `19f0520`, #175's merge, which `main` still was at the push.
 
