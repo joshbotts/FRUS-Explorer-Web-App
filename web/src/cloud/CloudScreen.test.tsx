@@ -33,7 +33,14 @@ const context: CloudContext = {
     { id: '1961-63', volumes: [{ id: 'frus1961-63v06', title: 'Foreign Relations, 1961–1963,\n      Volume VI' }] },
     { id: '1969-76', volumes: [{ id: 'frus1969-76ve09p1', title: 'Documents on North Africa' }] },
   ],
-  made: { generated: '2026-10-12', volumeCount: 553, documentCount: 314616, topTermsPerList: 50, line: 'These are the clouds bundled with the app.' },
+  made: {
+    generated: '2026-11-24',
+    volumeCount: 553,
+    documentCount: 314616,
+    topTermsPerList: 50,
+    family: 'FRUSLanguage 1+fa42bd87.56708897',
+    line: 'These clouds were counted by this server’s own tagger.',
+  },
 };
 
 /** A cloud of the scope and lens the request names, its words those of the lens. */
@@ -94,7 +101,7 @@ describe('the Word Cloud', () => {
       ['4', 'policy-topics', '600', 'More'],
       ['5', 'agreement-topics', '500', 'More'],
     ]);
-    expect(screen.getByText('These are the clouds bundled with the app.')).toBeTruthy();
+    expect(screen.getByText('These clouds were counted by this server’s own tagger.')).toBeTruthy();
     const scope = screen.getByRole('combobox', { name: 'Scope' }) as HTMLSelectElement;
     expect(scope.value).toBe('corpus');
     expect(Array.from(scope.querySelectorAll('optgroup')).map((group) => group.label)).toEqual(['Subseries', 'Volume: 1961-63', 'Volume: 1969-76']);

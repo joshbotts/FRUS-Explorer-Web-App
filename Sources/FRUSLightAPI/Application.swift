@@ -48,7 +48,9 @@ struct ServerComponents: Sendable {
 
     static func make(configuration: ServerConfiguration, logger: Logger) async throws -> ServerComponents {
         // Before anything is written: a server without its data files cannot serve the reader.
-        let resources = try await Blocking.run { try ServerResources.load(from: configuration.resourcesDirectory) }
+        let resources = try await Blocking.run {
+            try ServerResources.load(from: configuration.resourcesDirectory, language: configuration.languageDirectory)
+        }
         let webClient = try WebClient.load(configuration)
         let files = DataDirectory(root: configuration.dataDirectory)
         do {

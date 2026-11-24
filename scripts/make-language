@@ -1,0 +1,152 @@
+#!/bin/bash
+# FRUS Explorer Light: makes the language family's clouds and references (PLAN's S29d) in resources/language.
+#   scripts/make-language --corpus <folder> [--commit <sha>]   counts the pinned catalogue's volumes there
+# with these too, each optional:
+#   --out <folder>                 writes elsewhere in the repository, such as under .build, for a run to compare
+#   --generated <yyyy-MM-dd>       the day the files are stamped with: today (UTC) by default; the provenance
+#                                  records it, so give it to make the committed files again
+#   --verify-printed               the generator's VERIFY_PRINTED_WALK: every document walked again as a count
+#                                  of printed forms, the run refused if a volume's tallies differ (#1608)
+#   --platform linux/amd64         the run on another architecture, through Docker's emulation on a Mac
+#
+# It runs the app's cloud-vector generator, CloudVectorsRunner.run(tagger:cloudLenses:environment:), with the
+# web's tagger, FRUSLanguage, through `frus-language clouds`, built in release in swift:6.4-noble: four files
+# under the family's identity, cloud-vectors-core.json and cloud-vectors-volumes.json carrying the six lenses
+# the references price, keyness-baseline.json and keyness-baseline-printed.json, with provenance.json beside
+# them, which names the family, the corpus's commit, the pin and each file's digest. Two runs over one commit
+# on one day write the same bytes, on either architecture. It never commits: review and commit them in the
+# session's pull request. COORDINATION §5's pin-move checklist says when to run it again: the catalogue's
+# volumes, the lexicons, the stop words or the tagger changed, which the family's tests find.
+#
+# The corpus is HistoryAtState/frus. A folder that does not exist yet is made a partial, sparse clone of it
+# at --commit, the corpus's master head by default, holding only volumes/<id>.xml for each volume of the
+# pinned catalogue, about 3.3 GB; one that exists must be such a clone, without changes, and at --commit when
+# it is given. Keep it outside the repository, at a real path, and remove it after the run: the provenance
+# keeps its commit, which is all a run needs to make the files again. The TEI is never committed.
+#
+# A run is a heavy job: run it through upstream/FRUS-Explorer/Scripts/heavy.sh, in the background. It took
+# eleven minutes on one core of an M5 under Docker, eighteen with --verify-printed, at a peak of 775 MB, and the
+# build of the tool takes a few more the first time.
+set -euo pipefail
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+usage() {
+  echo "usage: scripts/make-language --corpus <folder> [--commit <sha>] [--out <folder>] [--generated <yyyy-MM-dd>] [--verify-printed] [--platform linux/amd64]" >&2
+  exit 2
+}
+die() { echo "scripts/make-language: $*" >&2; exit 1; }
+
+corpus=""
+commit=""
+out="resources/language"
+generated=""
+verify=""
+platform=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --corpus) [ $# -ge 2 ] || usage; corpus=$2; shift 2 ;;
+    --commit) [ $# -ge 2 ] || usage; commit=$2; shift 2 ;;
+    --out) [ $# -ge 2 ] || usage; out=$2; shift 2 ;;
+    --generated) [ $# -ge 2 ] || usage; generated=$2; shift 2 ;;
+    --verify-printed) verify=1; shift ;;
+    --platform) [ $# -ge 2 ] || usage; platform=$2; shift 2 ;;
+    *) usage ;;
+  esac
+done
+[ -n "$corpus" ] || usage
+case "$generated" in
+  "") generated=$(date -u +%Y-%m-%d) ;;
+  [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
+  *) die "--generated takes a day, yyyy-MM-dd" ;;
+esac
+case "$platform" in
+  "" | linux/amd64 | linux/arm64) ;;
+  *) die "--platform takes linux/amd64 or linux/arm64" ;;
+esac
+
+# Docker Desktop installs its CLI here; a non-interactive shell may not have it on PATH.
+if ! command -v docker >/dev/null 2>&1 && [ -x "$HOME/.docker/bin/docker" ]; then
+  PATH="$HOME/.docker/bin:$PATH"
+fi
+docker info >/dev/null 2>&1 || die "Docker is not running or not installed; scripts/doctor says which"
+
+repository=https://github.com/HistoryAtState/frus
+resources="$root/upstream/FRUS-Explorer/FRUSExplorer/Resources"
+manifest="$resources/manifest.json"
+[ -f "$manifest" ] || die "the submodule is not checked out: git submodule update --init"
+pin=$(git -C "$root/upstream/FRUS-Explorer" rev-parse HEAD)
+
+# The catalogue's volumes, one path a line, as a sparse checkout names them.
+volume_paths() {
+  python3 -I -c '
+import json, sys
+for entry in json.load(open(sys.argv[1])):
+    print("/volumes/" + entry["volumeId"] + ".xml")
+' "$manifest"
+}
+
+if [ ! -e "$corpus" ]; then
+  if [ -z "$commit" ]; then
+    commit=$(git ls-remote "$repository.git" refs/heads/master | cut -f1)
+    [ -n "$commit" ] || die "could not read $repository's master head"
+  fi
+  echo "make-language: cloning the catalogue's volumes of $repository at $commit into $corpus" >&2
+  mkdir -p "$corpus"
+  git -C "$corpus" init -q .
+  git -C "$corpus" remote add origin "$repository.git"
+  git -C "$corpus" config core.sparseCheckout true
+  git -C "$corpus" config extensions.partialClone origin
+  git -C "$corpus" config remote.origin.promisor true
+  git -C "$corpus" config remote.origin.partialclonefilter blob:none
+  volume_paths > "$corpus/.git/info/sparse-checkout"
+  git -C "$corpus" fetch -q --depth 1 --filter=blob:none origin "$commit"
+  git -C "$corpus" checkout -q FETCH_HEAD
+fi
+corpus=$(CDPATH='' cd -- "$corpus" && pwd -P)
+# The folder's own clone, not a repository above it, and of the corpus.
+toplevel=$(git -C "$corpus" rev-parse --show-toplevel 2>/dev/null) || die "$corpus is not a clone of the corpus"
+[ "$(CDPATH='' cd -- "$toplevel" && pwd -P)" = "$corpus" ] || die "$corpus is inside another repository, not a clone of the corpus"
+case "$(git -C "$corpus" config --get remote.origin.url || true)" in
+  "$repository" | "$repository.git") ;;
+  *) die "$corpus is not a clone of $repository" ;;
+esac
+head=$(git -C "$corpus" rev-parse HEAD) || die "$corpus is not a clone of the corpus"
+[ -z "$commit" ] || [ "$head" = "$commit" ] || die "$corpus is at $head, not $commit"
+commit=$head
+[ -z "$(git -C "$corpus" status --porcelain --untracked-files=no)" ] || die "$corpus has changes: count a clean clone"
+missing=$(volume_paths | while read -r path; do [ -f "$corpus$path" ] || echo "${path#/volumes/}"; done)
+[ -z "$missing" ] || die "$corpus lacks volumes of the catalogue: $(echo "$missing" | head -5 | tr '\n' ' ')"
+
+# The folder the tool writes, inside the repository, which the container sees at /src.
+case "$out" in /*) target=$out ;; *) target="$root/$out" ;; esac
+mkdir -p "$target"
+target=$(CDPATH='' cd -- "$target" && pwd)
+case "$target/" in
+  "$root/"*) relative=${target#"$root"/} ;;
+  *) die "--out must be inside the repository, which the container sees" ;;
+esac
+
+# One build folder an architecture, beside scripts/swift's, so that neither's objects are the other's.
+platform_args=()
+scratch=.build/linux
+if [ -n "$platform" ]; then
+  platform_args=(--platform "$platform")
+  scratch=".build/linux-${platform#linux/}"
+fi
+options=(--volumes /corpus --corpus-commit "$commit" --upstream "$pin" --repository "$repository"
+         --out "/src/$relative" --generated "$generated")
+[ -z "$verify" ] || options+=(--verify-printed 1)
+
+echo "make-language: $commit, $(volume_paths | wc -l | tr -d ' ') volumes, pin $pin, stamped $generated, into $relative${platform:+, on $platform}" >&2
+started=$(date +%s)
+docker run --rm --init --network host ${platform_args[@]+"${platform_args[@]}"} \
+  -v "$root:/src" -v "$corpus/volumes:/corpus:ro" -w /src swift:6.4-noble \
+  bash -c 'set -euo pipefail
+    echo "make-language: $(uname -m)$(grep -m1 "model name" /proc/cpuinfo | cut -d: -f2- | sed "s/^ */, /"), $(swift --version 2>&1 | head -1)" >&2
+    swift build -c release --scratch-path "$0" --product frus-language >&2
+    exec "$("swift" build -c release --scratch-path "$0" --show-bin-path)/frus-language" clouds "$@"' \
+  "$scratch" "${options[@]}"
+ended=$(date +%s)
+echo "make-language: done in $((ended - started)) s, the build included" >&2
+(cd "$target" && shasum -a 256 cloud-vectors-core.json cloud-vectors-volumes.json keyness-baseline.json \
+  keyness-baseline-printed.json provenance.json) >&2

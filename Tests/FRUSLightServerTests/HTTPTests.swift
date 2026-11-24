@@ -27,9 +27,9 @@ actor ReadinessProbe: ImportObserver {
     }
 }
 
-/// The submodule's data files, read once per test process.
+/// The submodule's data files, read once per test process, with the language family's folder (PLAN's S29d).
 enum TestResources {
-    static let loaded = Result { try ServerResources.load(from: RepositoryFiles.resources) }
+    static let loaded = Result { try ServerResources.load(from: RepositoryFiles.resources, language: RepositoryFiles.language) }
     static func value() throws -> ServerResources { try loaded.get() }
 }
 

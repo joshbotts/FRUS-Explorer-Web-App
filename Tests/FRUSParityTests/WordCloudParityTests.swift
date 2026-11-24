@@ -1,11 +1,12 @@
-// The Word Cloud (PLAN's S24i): the clouds equal the file's lists. Every cloud the API gives, for the corpus, each
-// subseries and each volume of the catalogue under each of the four lenses the bundled clouds carry, is held to the
-// file's own list, decoded apart from the server by the kit's `CloudVectorsFile(contentsOf:)` and de-indexed as the
-// app's `BundledCloudVectors.list(in:scope:lens:)` does; at the app's own settings the reader's filters keep every
-// word of it, since the generator counted each list under them. A reader's other settings are held to the kit's
-// tokenizer, assembled here apart from the server as the app's settings bench assembles it, with the settings the
-// bundled clouds cannot show named by the kit's own rule; and what the shipped files cannot reach, a thin volume's
-// fall-back to its era, over values.
+// The Word Cloud (PLAN's S24i), over the language family's files since S29d: the clouds equal the file's lists. Every
+// cloud the API gives, for the corpus, each subseries and each volume of the catalogue under each of the four lenses the
+// page draws, is held to the family's file's own list, read from resources/language apart from the server by the kit's
+// `CloudVectorsFile(contentsOf:)` and de-indexed as the app's `BundledCloudVectors.list(in:scope:lens:)` does, a volume
+// whose own list the generator flagged thin answered with its era's, as the app's rule answers it; at the app's own
+// settings the reader's filters keep every word of it, since the generator counted each list under them. A reader's
+// other settings are held to the kit's tokenizer, assembled here apart from the server as the app's settings bench
+// assembles it, with the settings the clouds cannot show named by the kit's own rule; and the fall-back, the de-indexing
+// and the states, over values too. The family's identity, its staleness and its refusals are LanguageFamilyParityTests'.
 
 import FRUSCoreKit
 import FRUSLightCore
@@ -19,7 +20,7 @@ import WordCloudKit
 @testable import FRUSLightAPI
 
 @Suite struct WordCloudParityTests {
-    /// The bundled files as a host decodes them with the kit's loaders, apart from the server's.
+    /// The family's files and the app's lists as a host decodes them with the kit's loaders, apart from the server's.
     struct Host: @unchecked Sendable {
         let core: CloudVectorsFile
         let volumes: CloudVectorsFile
@@ -27,11 +28,18 @@ import WordCloudKit
         let lexicons: WordCloudLexiconSet
         let catalogue: [VolumeManifestEntry]
 
-        static func open() throws -> Host {
+        /// The files decoded once for the suite: the family's two are the largest it reads, and its tests run beside
+        /// CI's slowest, which repeated decodes would crowd.
+        static let shared = Result { try Host.read() }
+
+        static func open() throws -> Host { try shared.get() }
+
+        static func read() throws -> Host {
             let directory = ServedFixture.resources
             func at(_ name: String) -> URL { directory.appendingPathComponent(name) }
-            return Host(core: try CloudVectorsFile(contentsOf: at("cloud-vectors-core.json")),
-                        volumes: try CloudVectorsFile(contentsOf: at("cloud-vectors-volumes.json")),
+            func family(_ name: String) -> URL { RepositoryFiles.language.appendingPathComponent(name) }
+            return Host(core: try CloudVectorsFile(contentsOf: family("cloud-vectors-core.json")),
+                        volumes: try CloudVectorsFile(contentsOf: family("cloud-vectors-volumes.json")),
                         stopwords: try WordCloudStopwordSet(contentsOf: at("word-cloud-stopwords.json")),
                         lexicons: try WordCloudLexiconSet(contentsOf: at("word-cloud-lexicons.json")),
                         catalogue: try FixedVolumeCatalogue(contentsOf: at("manifest.json")).citableEntries)
@@ -40,6 +48,23 @@ import WordCloudKit
         /// The file's own list for a scope under a lens, each entry's index read in the shared vocabulary.
         static func list(_ file: CloudVectorsFile, _ scope: String, _ lens: WordCloudLens) -> [String] {
             (file.scopes[scope]?.lists[lens.rawValue]?.entries ?? []).map { "\(file.vocabulary[$0.term]) \($0.count)" }
+        }
+
+        /// The list the app's rule answers a scope with, read here apart from the server: the corpus's or a subseries'
+        /// own, and a volume's own unless the generator flagged it below its lens's signal threshold or holds none, when
+        /// its subseries' stands in, which the chip names.
+        func answered(_ scope: CloudScope, _ lens: WordCloudLens) -> (list: [String], fallback: String?) {
+            switch scope {
+            case .corpus:
+                return (Host.list(core, "corpus", lens), nil)
+            case .subseries(let id):
+                return (Host.list(core, id, lens), nil)
+            case .volume(let id, let subseries):
+                if let own = volumes.scopes[id]?.lists[lens.rawValue], !own.entries.isEmpty, !own.belowSignalThreshold {
+                    return (Host.list(volumes, id, lens), nil)
+                }
+                return (Host.list(core, subseries, lens), subseries)
+            }
         }
 
         /// The stored lists as the app's settings read them (`SettingsSyncCoordinator.decodeStringArray`,
@@ -67,13 +92,14 @@ import WordCloudKit
         }
     }
 
-    /// A server over the bundled resources that keeps no user data, so every request reads the clouds at the app's own
-    /// settings; the clouds need nothing indexed.
+    /// A server over the app's data files and the family's that keeps no user data, so every request reads the clouds at
+    /// the app's own settings; the clouds need nothing indexed.
     static func run<T: Sendable>(_ body: @escaping @Sendable (any TestClientProtocol) async throws -> T) async throws -> T {
         let directory = try TemporaryDirectory()
         defer { withExtendedLifetime(directory) {} }
         let app = try await buildApplication(configuration: ServerConfiguration(
-            dataDirectory: directory.url.appendingPathComponent("data"), resourcesDirectory: ServedFixture.resources, userData: false))
+            dataDirectory: directory.url.appendingPathComponent("data"), resourcesDirectory: ServedFixture.resources,
+            languageDirectory: RepositoryFiles.language, userData: false))
         return try await app.test(.router) { client in try await body(client) }
     }
 
@@ -97,39 +123,51 @@ import WordCloudKit
                     == subseries.flatMap { id in host.catalogue.filter { $0.subseries == id }.map { $0.title.isEmpty ? $0.volumeId : $0.title } })
             let made = try #require(context.made)
             #expect(made.generated == host.core.generated && made.volumeCount == 553 && made.documentCount == host.core.provenance.documentCount)
-            #expect(made.line.hasPrefix("These are the clouds bundled with the app, counted on October 12, 2026 from 553 volumes and 314,616 documents"),
+            #expect(made.family == FamilyClouds.family.description && made.family.hasPrefix("FRUSLanguage "), "the account names the family")
+            #expect(made.line.hasPrefix("These clouds were counted by this server’s own tagger, \(FamilyClouds.family), on \(CloudRules.day(host.core.generated)) from the corpus’s 553 volumes and \(grouped(host.core.provenance.documentCount)) documents at the standard settings."),
                     "\(made.line)")
 
             var count = 0
+            var fallbacks = 0
             for lens in Self.lenses {
-                var scopes: [(signature: String, file: CloudVectorsFile, key: String, title: String)] = [("corpus", host.core, "corpus", "Entire Corpus")]
-                scopes += subseries.map { ("sub:\($0)", host.core, $0, $0) }
-                scopes += host.catalogue.map { ("vol:\($0.volumeId)", host.volumes, $0.volumeId, $0.title) }
+                var scopes: [(signature: String, scope: CloudScope, title: String)] = [("corpus", .corpus, "Entire Corpus")]
+                scopes += subseries.map { ("sub:\($0)", .subseries($0), $0) }
+                scopes += host.catalogue.map { ("vol:\($0.volumeId)", .volume(volumeId: $0.volumeId, subseries: $0.subseries), $0.title) }
                 for scope in scopes {
                     let path = "/api/v1/cloud?scope=\(scope.signature.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!)&lens=\(lens.rawValue)"
                     let response = try await client.execute(uri: path, method: .get)
                     guard response.status == .ok else { throw APIParityError("\(path): \(response.status.code) \(String(buffer: response.body))") }
                     let answer = try ServedFixture.decode(CloudAnswer.self, response)
-                    let list = Host.list(scope.file, scope.key, lens)
+                    let (list, fallback) = host.answered(scope.scope, lens)
                     #expect(!list.isEmpty, "\(scope.signature) \(lens) has a list")
                     #expect(answer.terms.map { "\($0.term) \($0.count)" } == list, "\(scope.signature) \(lens)")
-                    #expect(answer.state == "terms" && answer.message == nil && answer.fallbackSubseries == nil, "\(scope.signature) \(lens)")
+                    #expect(answer.state == "terms" && answer.message == nil && answer.fallbackSubseries == fallback, "\(scope.signature) \(lens)")
                     #expect(answer.listed == list.count && answer.removed == 0 && answer.settingsNotShown == nil, "\(scope.signature) \(lens)")
-                    #expect(answer.countLine == "\(list.count) terms" && answer.chip == answer.lens.shortLabel, "\(scope.signature) \(lens)")
+                    #expect(answer.countLine == "\(list.count) terms", "\(scope.signature) \(lens)")
+                    #expect(answer.chip == (fallback.map { "\(answer.lens.shortLabel) · \($0) (era)" } ?? answer.lens.shortLabel), "\(scope.signature) \(lens)")
                     #expect(answer.scope == .init(signature: scope.signature, title: scope.title), "\(scope.signature)")
                     count += 1
+                    if answer.fallbackSubseries != nil { fallbacks += 1 }
                 }
             }
-            return count
+            return (count, fallbacks)
         }
-        #expect(checked == 4 * (1 + 107 + 553), "every cloud: \(checked)")
+        #expect(checked.0 == 4 * (1 + 107 + 553), "every cloud: \(checked.0)")
+        let thin = host.catalogue.reduce(0) { sum, volume in
+            sum + Self.lenses.filter { lens in
+                let own = host.volumes.scopes[volume.volumeId]?.lists[lens.rawValue]
+                return own == nil || own!.entries.isEmpty || own!.belowSignalThreshold
+            }.count
+        }
+        #expect(checked.1 == thin, "the server answers each volume's list the generator flagged thin, or holds none of, with its era's: \(checked.1) of \(thin)")
+        #expect(thin == 0, "the family's files flag no volume's list thin in the four lenses, so the fall-back is held over values below")
     }
 
-    /// A reader's settings keep what the kit's tokenizer keeps of each list, and the settings the bundled clouds cannot
+    /// A reader's settings keep what the kit's tokenizer keeps of each list, and the settings the family's clouds cannot
     /// show are the kit's mismatches, in the app's words.
     @Test func aReadersSettingsKeepWhatTheKitsTokenizerKeeps() throws {
         let host = try Host.open()
-        let resources = try ServerResources.load(from: ServedFixture.resources)
+        let resources = try ServerResources.load(from: ServedFixture.resources, language: RepositoryFiles.language)
         let initial = PreferenceRoutes.initial(at: Date(timeIntervalSince1970: 0))
         func settings(minLength: Int = 3, minCount: Int = 1, fold: Bool = true, markings: Bool = true, boilerplate: Bool = true,
                       global: String = "", lens: String = "") -> SyncedPreferencesExport {
@@ -165,12 +203,7 @@ import WordCloudKit
             for scope in scopes {
                 for lens in Self.lenses {
                     let answer = WordCloudRoutes.answer(scope, lens: lens, settings: cloud, resources: resources)
-                    let (file, key): (CloudVectorsFile, String) = switch scope {
-                    case .corpus: (host.core, "corpus")
-                    case .subseries(let id): (host.core, id)
-                    case .volume(let id, _): (host.volumes, id)
-                    }
-                    let list = Host.list(file, key, lens)
+                    let list = host.answered(scope, lens).list
                     let tuning = WordCloudTuning(settingsMinimumLength: variant.preferences.wcMinLength, minimumCount: variant.preferences.wcMinCount,
                                                  foldPlurals: variant.preferences.wcFoldPlurals, filterMarkings: variant.preferences.wcFilterMarkings)
                     let kept = host.kept(list, lens: lens, tuning: tuning, includeDiplomatic: variant.preferences.wcExcludeBoilerplate,
@@ -211,9 +244,9 @@ import WordCloudKit
         #expect(CloudSettings(initial).notShown(byCloudsOf: file).isEmpty)
         #expect(CloudSettings(settings(minLength: 4, minCount: 9)).notShown(byCloudsOf: file).isEmpty, "a setting that only takes words out")
         #expect(CloudSettings(settings(minLength: 2)).notShown(byCloudsOf: file) == [.minimumLength])
-        #expect(file.provenance.tuning == .standard, "the bundled clouds were counted at the standard tuning")
-        #expect(file.provenance.tokenizer == .legacyNaturalLanguage, "the bundled clouds name no tokenizer, so NaturalLanguage's")
-        // A file another tokenizer counted, as S29d's will be, is filtered by the same rule over its own counts.
+        #expect(file.provenance.tuning == .standard, "the family's clouds were counted at the standard tuning")
+        #expect(file.provenance.tokenizer == FamilyClouds.family, "the family's clouds name the server's tagger")
+        // A file another tokenizer counted, such as the app's, is filtered by the same rule over its own counts.
         let hosted = CloudVectorsFile(version: 1, generated: "2026-11-24", provenance: .init(
             volumeCount: 3, documentCount: 393, tuning: .standard, topTermsPerList: 50,
             tokenizer: WordCloudTokenizerIdentity(name: "web", version: "1")), lenses: [], vocabulary: [], scopes: [:])
@@ -225,7 +258,7 @@ import WordCloudKit
     /// The hidden words are lowercased by the settings that keep them, and compared with each term lowercased; a word
     /// kept in another case is not one the cloud hides, as the app's lists compare.
     @Test func theHiddenWordsCompareAsTheAppsLists() throws {
-        let resources = try ServerResources.load(from: ServedFixture.resources)
+        let resources = try ServerResources.load(from: ServedFixture.resources, language: RepositoryFiles.language)
         var preferences = PreferenceRoutes.initial(at: Date(timeIntervalSince1970: 0))
         let first = try #require(WordCloudRoutes.answer(.corpus, lens: .topics, settings: CloudSettings(preferences), resources: resources).terms.first)
         preferences.wcGlobalStopwordsJSON = #"["\#(first.term.uppercased())"]"#
@@ -253,14 +286,14 @@ import WordCloudKit
                 }
             }
         }
-        #expect(read == 661 * 50)
-        let resources = try ServerResources.load(from: ServedFixture.resources)
+        #expect(read == 661 * 50, "every scope's sentiment list holds fifty words")
+        let resources = try ServerResources.load(from: ServedFixture.resources, language: RepositoryFiles.language)
         let answer = WordCloudRoutes.answer(.corpus, lens: .sentiment, settings: .standard, resources: resources)
         #expect(answer.terms.allSatisfy { $0.polarity == host.lexicons.polarity(of: $0.term) } && answer.terms.contains { $0.polarity == -1 })
         #expect(WordCloudRoutes.answer(.corpus, lens: .concepts, settings: .standard, resources: resources).terms.allSatisfy { $0.polarity == nil })
     }
 
-    /// What the shipped files cannot reach, whose every list holds fifty words above the signal threshold: a volume whose
+    /// What the shipped files need not reach, held over values: a volume whose
     /// own list is thin, missing or unread takes its subseries' list, and the chip names the era; an index outside the
     /// vocabulary is dropped; and the states of a list kept too thin or emptied.
     @Test func aThinVolumeTakesItsErasListAndTheChipSaysSo() {

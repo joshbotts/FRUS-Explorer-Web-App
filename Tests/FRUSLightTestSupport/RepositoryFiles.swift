@@ -9,6 +9,8 @@ public enum RepositoryFiles {
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     /// The pinned commit's `FRUSExplorer/Resources`, which the image copies.
     public static let resources = root.appendingPathComponent("upstream/FRUS-Explorer/FRUSExplorer/Resources", isDirectory: true)
+    /// The language family's clouds and references (PLAN's S29d), which the image copies.
+    public static let language = root.appendingPathComponent("resources/language", isDirectory: true)
     /// The three fixture volumes' TEI.
     public static let tei = root.appendingPathComponent("fixtures/tei", isDirectory: true)
     /// The kit's fixture volumes for a section's own text (fixtures/own-text/README.md).

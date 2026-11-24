@@ -1,43 +1,138 @@
-// The Word Cloud (PLAN's S24i), in Frequency mode: the bundled clouds, `cloud-vectors-core.json` (the corpus and each
-// subseries) and `cloud-vectors-volumes.json` (each volume), with the four lenses they carry, read as the app's
-// `BundledCloudVectors` reads them for the clouds it draws before a volume is downloaded, through the kit's
-// `CloudVectorsFile(contentsOf:)` (FRUS-Explorer#1900, S24d). Each list is filtered by the reader's own Word Cloud
-// settings, from their synced preferences, as the app's settings bench filters a list of terms
-// (`WordCloudBench.evaluate`): the kit's `WordCloudTokenizer.accepts(_:)` over the stop lists, lexicon and markings the
-// app assembles (`WordCloudTokenizer.configured`), and the minimum count. What the app's view decides between the kit
-// and the screen is app code, mirrored here under its names and held to the app's source by
-// `WordCloudMirrorParityTests`: a thin volume's fall-back to its subseries and the chip that says so
-// (`BundledCloudVectors.terms(forScope:lens:)`, `LensChip`), the lens bar's order and words, the main area's states
-// (`WordCloudDisplayState.resolve`), the count line, the scope menu (`WordCloudScopeBar`) and the scoped hand-off
-// (`scopedAnalyzeMenuLabel`, `analyticsScope()`), with the reader's settings as `WordCloudSettings` reads them.
+// The Word Cloud (PLAN's S24i), in Frequency mode: the language family's clouds (PLAN's S29d), `cloud-vectors-core.json`
+// (the corpus and each subseries) and `cloud-vectors-volumes.json` (each volume), which the app's generator,
+// `CloudVectorsRunner.run(tagger:cloudLenses:environment:)`, counted with the web's tagger over the corpus
+// (`scripts/make-language`), read from the family's folder (`FRUS_LANGUAGE_DIR`, resources/language in the repository)
+// through the kit's `CloudVectorsFile(contentsOf:)` (FRUS-Explorer#1900, S24d) and held to the server's tagger's identity,
+// so that the web counts in one family; the Mac's bundled clouds are read no more. They are read as the app's
+// `BundledCloudVectors` reads its own for the clouds it draws before a volume is downloaded, with the four lenses the
+// app's bar draws of them. Each list is filtered by the reader's own Word Cloud settings, from their synced
+// preferences, as the app's settings bench filters a list of terms (`WordCloudBench.evaluate`): the kit's
+// `WordCloudTokenizer.accepts(_:)` over the stop lists, lexicon and markings the app assembles
+// (`WordCloudTokenizer.configured`), and the minimum count. What the app's view decides between the kit and the screen
+// is app code, mirrored here under its names and held to the app's source by `WordCloudMirrorParityTests`: a thin
+// volume's fall-back to its subseries and the chip that says so (`BundledCloudVectors.terms(forScope:lens:)`,
+// `LensChip`), the lens bar's order and words, the main area's states (`WordCloudDisplayState.resolve`), the count
+// line, the scope menu (`WordCloudScopeBar`) and the scoped hand-off (`scopedAnalyzeMenuLabel`, `analyticsScope()`),
+// with the reader's settings as `WordCloudSettings` reads them.
 //
-// The server counts nothing: the kit's tokenizers count with a tagger their host gives (FRUS-Explorer#1979, since
-// S26b's pin move), or else with NaturalLanguage, which Linux lacks, and the server has no tagger until phase 4's own
-// (S29c), so a live scope, the Distinctive measure and collocates wait for it, and a request for a live scope is
-// refused. The reader's settings a bundled list cannot show, those that would let in a word the generator never
-// counted, are named by the kit's own comparability rule (`KeynessBaselineFile.Configuration.mismatches`), since the
-// clouds were counted under the generator's configuration (`CloudVectorsRunner`: the standard tuning, the diplomatic
-// layer on).
+// The server counts no scope of its own yet: the kit's tokenizers count with the web's tagger (FRUSLanguage's
+// `FRUSWordCloudTagger`), as the family's run did, and a live scope, the Distinctive measure and collocates wait for the
+// kit's live count (S29e, S29f), so a request for a live scope is refused. The reader's settings a counted list cannot
+// show, those that would let in a word the generator never counted, are named by the kit's own comparability rule
+// (`KeynessBaselineFile.Configuration.mismatches`), since the clouds were counted under the generator's configuration
+// (`CloudVectorsRunner`: the standard tuning, the diplomatic layer on).
 
 import FRUSCoreKit
 import FRUSLightCore
+import FRUSLanguage
 import Foundation
 import Hummingbird
 import WordCloudKit
 
-// MARK: - The bundled files
+// MARK: - The family's files
 
-/// The bundled clouds and the word lists that filter them, each decoded on first use by the kit's loader, as the app's
-/// stores decode theirs, and kept while the server runs (PLAN's S24i). A file missing or malformed gives nothing: no
-/// cloud for its scopes, as the app's backdrop then draws none, or, for the word lists, empty lists, as the app's
-/// `WordCloudStopwords` and `WordCloudLexicons` give.
-final class BundledClouds: Sendable {
-    /// `BundledCloudVectors.core`: the corpus and every subseries.
-    let core = DecodedFile("cloud-vectors-core.json") { try CloudVectorsFile(contentsOf: $0) }
-    /// `BundledCloudVectors.volumes`: every volume.
-    let volumes = DecodedFile("cloud-vectors-volumes.json") { try CloudVectorsFile(contentsOf: $0) }
+/// Why the server reads none of one of the family's files (PLAN's S29d).
+enum FamilyRefusal: Error, Equatable, Sendable {
+    /// The family's folder holds no such file.
+    case missing
+    /// The file does not decode.
+    case unreadable
+    /// It was counted by another tokenizer than the server's tagger: another vocabulary, which the server never shows
+    /// or compares with its own (S29a's `Mismatch.tokenizer`, SPEC's rule).
+    case otherTokenizer(WordCloudTokenizerIdentity)
+    /// A reference whose stamp names the other word form than its name does, which the app's lookup drops too
+    /// (`BundledKeynessBaseline.isReference`).
+    case otherWordForm(WordCloudWordForm)
+
+    /// What the page says of it, the web's own words.
+    var sentence: String {
+        switch self {
+        case .missing:
+            "This server holds none of its language family’s clouds, which its tagger counts from the corpus."
+        case .unreadable:
+            "This server’s language family’s clouds cannot be read."
+        case .otherTokenizer(let other):
+            "This server’s clouds were counted by another tokenizer, \(other), not by its own tagger, \(FamilyClouds.family), so it shows none of them."
+        case .otherWordForm(let form):
+            "A reference of this server’s language family is counted in \(form.rawValue) forms where its name says otherwise, so it is not read."
+        }
+    }
+}
+
+/// One of the language family's files, decoded once by the kit's loader the first time it is asked for and held to the
+/// family's identity, its tagger's: a file missing, malformed or counted by another tokenizer is refused, with the reason,
+/// and never decoded again. Two first requests at once wait for one decode.
+final class FamilyFile<Value: Sendable>: @unchecked Sendable {
+    private let name: String
+    private let decode: @Sendable (URL) throws -> Value
+    private let check: @Sendable (Value) -> FamilyRefusal?
+    private let lock = NSLock()
+    private var held: Result<Value, FamilyRefusal>?
+
+    init(_ name: String, decode: @escaping @Sendable (URL) throws -> Value, check: @escaping @Sendable (Value) -> FamilyRefusal?) {
+        self.name = name
+        self.decode = decode
+        self.check = check
+    }
+
+    /// The file in `directory`, decoded and held to the family, or why it was refused.
+    func value(in directory: URL) -> Result<Value, FamilyRefusal> {
+        lock.lock()
+        defer { lock.unlock() }
+        if let held { return held }
+        let url = directory.appendingPathComponent(name)
+        let outcome: Result<Value, FamilyRefusal>
+        if !FileManager.default.fileExists(atPath: url.path) {
+            outcome = .failure(.missing)
+        } else if let value = try? decode(url) {
+            outcome = check(value).map { .failure($0) } ?? .success(value)
+        } else {
+            outcome = .failure(.unreadable)
+        }
+        held = outcome
+        return outcome
+    }
+}
+
+/// The language family's clouds and references (PLAN's S29d), from the family's folder, and the app's word lists that
+/// filter them, from its data files, each decoded on first use by the kit's loader and kept while the server runs. The
+/// four files are held to the server's tagger's identity, and a reference to the form its name says: one of another
+/// tokenizer is refused, as the kit's rule refuses a reference counted by another, so that the web counts in one
+/// family. Nothing of a file refused is shown: a scope it would have answered has no cloud, with the reason on the page,
+/// but a volume's, which takes its era's list from the core file, as the app's rule takes it for a volumes file it cannot
+/// read, and the chip says so. The word lists, missing or malformed, give empty lists, as the app's `WordCloudStopwords`
+/// and `WordCloudLexicons` give.
+final class FamilyClouds: Sendable {
+    /// The family's identity: the server's tagger's, `FRUSLanguage`'s, which the first read of a file decodes.
+    static var family: WordCloudTokenizerIdentity { LanguageTagger.shared.identity.wordCloudIdentity }
+
+    /// The corpus and every subseries, as `BundledCloudVectors.core` holds the app's.
+    let core = FamilyFile("cloud-vectors-core.json", decode: { try CloudVectorsFile(contentsOf: $0) }, check: { FamilyClouds.counted($0) })
+    /// Every volume, as `BundledCloudVectors.volumes` holds the app's.
+    let volumes = FamilyFile("cloud-vectors-volumes.json", decode: { try CloudVectorsFile(contentsOf: $0) }, check: { FamilyClouds.counted($0) })
+    /// The references in dictionary and printed forms, which Distinctive and collocates rank against (S29f).
+    let dictionaryReference = FamilyFile(KeynessBaselineFile.resourceName(for: .dictionary) + ".json",
+                                         decode: { try KeynessBaselineFile(contentsOf: $0) }, check: { FamilyClouds.reference($0, .dictionary) })
+    let printedReference = FamilyFile(KeynessBaselineFile.resourceName(for: .printed) + ".json",
+                                      decode: { try KeynessBaselineFile(contentsOf: $0) }, check: { FamilyClouds.reference($0, .printed) })
     private let stopwordFile = DecodedFile("word-cloud-stopwords.json") { try WordCloudStopwordSet(contentsOf: $0) }
     private let lexiconFile = DecodedFile("word-cloud-lexicons.json") { try WordCloudLexiconSet(contentsOf: $0) }
+
+    /// A cloud file counted by another tokenizer than the family's, refused.
+    static func counted(_ file: CloudVectorsFile) -> FamilyRefusal? {
+        file.provenance.tokenizer == family ? nil : .otherTokenizer(file.provenance.tokenizer)
+    }
+
+    /// A reference counted by another tokenizer, or in the other form than its name's, refused.
+    static func reference(_ file: KeynessBaselineFile, _ form: WordCloudWordForm) -> FamilyRefusal? {
+        if file.configuration.tokenizer != family { return .otherTokenizer(file.configuration.tokenizer) }
+        return file.configuration.wordForm == form ? nil : .otherWordForm(file.configuration.wordForm)
+    }
+
+    /// The reference counted in `form`, or why it is refused.
+    func reference(_ form: WordCloudWordForm, in directory: URL) -> Result<KeynessBaselineFile, FamilyRefusal> {
+        (form == .dictionary ? dictionaryReference : printedReference).value(in: directory)
+    }
 
     /// `WordCloudStopwords.shared`: the bundled stop lists, empty where the file is missing or malformed.
     func stopwords(in directory: URL) -> WordCloudStopwordSet { stopwordFile.value(in: directory) ?? .empty }
@@ -128,9 +223,9 @@ struct CloudSettings: Equatable, Sendable {
         }
     }
 
-    /// The settings of these a bundled cloud cannot show, by the kit's comparability rule between a count and the
+    /// The settings of these a counted cloud cannot show, by the kit's comparability rule between a count and the
     /// generator's: those that would let in a word the generator never counted. The generator counted the clouds at
-    /// the file's own tuning, with the diplomatic layer on (`CloudVectorsRunner`), and with the bundled word lists,
+    /// the file's own tuning, with the diplomatic layer on (`CloudVectorsRunner`), and with the app's word lists,
     /// which are the ones read here, so the digests are not compared. The settings filter the file's own counts, so
     /// both sides name the tokenizer the file was counted by (S29a's `Mismatch.tokenizer`): a file another tokenizer
     /// counted is never called another tokenizer's by its own filter.
@@ -146,9 +241,9 @@ struct CloudSettings: Equatable, Sendable {
 // MARK: - The answers
 
 /// What the Word Cloud opens on: its lenses and measures, the scope menu (`WordCloudScopeBar`: Entire Corpus, each
-/// subseries, each volume under its subseries) and what the bundled clouds say of themselves.
+/// subseries, each volume under its subseries) and what the family's clouds say of themselves.
 public struct CloudContext: Codable, Equatable, Sendable, ResponseEncodable {
-    /// The lenses the bundled clouds carry, in the lens bar's order (`WordCloudLens.allCases`).
+    /// The lenses the page draws of the clouds, in the lens bar's order (`WordCloudLens.allCases`).
     public var lenses: [CloudLens]
     /// "Size words by": Frequency and Distinctive (`KeynessCloudMeasure`).
     public var measures: [CloudMeasure]
@@ -156,7 +251,7 @@ public struct CloudContext: Codable, Equatable, Sendable, ResponseEncodable {
     public var corpus: String
     /// The catalogue's subseries in its order, each with its volumes.
     public var subseries: [CloudSubseries]
-    /// The bundled clouds' own account, or none while their file cannot be read.
+    /// The clouds' own account, or none while their file cannot be read or is refused.
     public var made: Made?
 
     public struct Made: Codable, Equatable, Sendable {
@@ -166,6 +261,8 @@ public struct CloudContext: Codable, Equatable, Sendable, ResponseEncodable {
         public var documentCount: Int
         /// The words each list keeps.
         public var topTermsPerList: Int
+        /// The tokenizer the clouds were counted by, the language family's: its name and version (PLAN's S29d).
+        public var family: String
         /// The sentence the page says them in.
         public var line: String
     }
@@ -198,7 +295,7 @@ public struct CloudSubseries: Codable, Equatable, Sendable {
     }
 }
 
-/// One scope's cloud under one lens: the bundled list's words that the reader's settings keep.
+/// One scope's cloud under one lens: the family's list's words that the reader's settings keep.
 public struct CloudAnswer: Codable, Equatable, Sendable, ResponseEncodable {
     /// The scope, by the app's signature, with the title the app gives it.
     public var scope: Scope
@@ -207,8 +304,8 @@ public struct CloudAnswer: Codable, Equatable, Sendable, ResponseEncodable {
     public var chip: String
     /// The subseries whose list stands in for a volume's, which the chip names, or none.
     public var fallbackSubseries: String?
-    /// What the main area shows: `terms`, `noTerms`, `insufficientSignal`, or `noCloud` where the bundled clouds hold no
-    /// list for the scope.
+    /// What the main area shows: `terms`, `noTerms`, `insufficientSignal`, or `noCloud` where the family's clouds hold no
+    /// list for the scope, or are refused.
     public var state: String
     /// The words of a state with nothing to draw.
     public var message: Message?
@@ -216,10 +313,10 @@ public struct CloudAnswer: Codable, Equatable, Sendable, ResponseEncodable {
     public var countLine: String?
     /// The words kept, by count, as the file ranks them; on the sentiment lens each with its polarity.
     public var terms: [Term]
-    /// How many words the bundled list holds, and how many of them the reader's settings took out.
+    /// How many words the family's list holds, and how many of them the reader's settings took out.
     public var listed: Int
     public var removed: Int
-    /// The settings of the reader's the bundled clouds cannot show, in one sentence, or none.
+    /// The settings of the reader's the family's clouds cannot show, in one sentence, or none.
     public var settingsNotShown: String?
     /// The scoped hand-off a word's menu offers a volume's or a subseries' cloud.
     public var analyzeWithin: AnalyzeWithin?
@@ -263,7 +360,7 @@ public struct CloudSample: Codable, Equatable, Sendable, ResponseEncodable {
 
 // MARK: - The rules mirrored
 
-/// A scope the bundled clouds hold, `BundledCloudVectors.Scope`, named in the address by the app's own scope signature
+/// A scope the family's clouds hold, `BundledCloudVectors.Scope`, named in the address by the app's own scope signature
 /// (`WordCloudScope.signature`): `corpus`, `sub:<subseries>` or `vol:<volume>`.
 enum CloudScope: Equatable, Sendable {
     case corpus
@@ -289,8 +386,9 @@ enum CloudRules {
     /// environment:)`, which `run()` calls: `let includeDiplomatic = true`), which the file does not record.
     static let generatorIncludesDiplomatic = true
 
-    /// The lenses the bundled clouds carry, in the lens bar's order: the app's bar lists `WordCloudLens.allCases`, and
-    /// the clouds carry `bundledCloudLenses`.
+    /// The lenses the page draws, in the lens bar's order: the app's bar lists `WordCloudLens.allCases`, and the app's
+    /// clouds carry `bundledCloudLenses`; the family's carry two more, All terms and Descriptors, which S29e's live
+    /// clouds bring to the bar.
     static let lenses: [WordCloudLens] = WordCloudLens.allCases.filter { WordCloudLens.bundledCloudLenses.contains($0) }
 
     /// `BundledCloudVectors.terms(forScope:lens:)`: a scope's list, and, for a volume whose own list the generator
@@ -349,7 +447,7 @@ enum CloudRules {
     }
 
     /// `WordCloudDisplayState.countLine(terms:documents:)`'s terms: "1 term", "48 terms", by `CountCopy`'s rule. The
-    /// bundled lists carry no count of a scope's documents, so the line names none.
+    /// counted lists carry no count of a scope's documents, so the line names none.
     static func countLine(terms: Int) -> String {
         CountCopy.phrase(terms,
                          one: appWords("wordcloud.count.terms.one", "%@ term"),
@@ -371,14 +469,14 @@ enum CloudRules {
                             label(lens).lowercased()))
         case "noCloud":
             // The web's own: the app's backdrop draws nothing for a scope its clouds lack.
-            return .init(title: "No Bundled Cloud",
-                         detail: "The clouds bundled with the app hold no list for this scope under this lens.")
+            return .init(title: "No Counted Cloud",
+                         detail: "The clouds this server’s tagger counted from the corpus hold no list for this scope under this lens.")
         default:
             return nil
         }
     }
 
-    /// `WordCloudDisplayState.noTermsDetail(for:)`, for the four lenses the bundled clouds carry.
+    /// `WordCloudDisplayState.noTermsDetail(for:)`, for the four lenses the page draws.
     static func noTermsDetail(for lens: WordCloudLens) -> String {
         switch lens {
         case .topics:
@@ -398,7 +496,7 @@ enum CloudRules {
         }
     }
 
-    /// `WordCloudLens.label`, the lens bar's name, for the four lenses the bundled clouds carry.
+    /// `WordCloudLens.label`, the lens bar's name, for the four lenses the page draws.
     static func label(_ lens: WordCloudLens) -> String {
         switch lens {
         case .topics: appWords("wordcloud.lens.topics", "Topics (nouns)")
@@ -409,7 +507,7 @@ enum CloudRules {
         }
     }
 
-    /// `WordCloudLens.shortLabel`, the chip's name, for the four lenses the bundled clouds carry.
+    /// `WordCloudLens.shortLabel`, the chip's name, for the four lenses the page draws.
     static func shortLabel(_ lens: WordCloudLens) -> String {
         switch lens {
         case .topics: appWords("wordcloud.lens.short.topics", "Topics")
@@ -461,7 +559,7 @@ enum CloudRules {
         .joined(separator: "; ")
     }
 
-    /// The sentence naming the settings a bundled cloud cannot show, the web's own around the app's words, or none.
+    /// The sentence naming the settings a counted cloud cannot show, the web's own around the app's words, or none.
     static func notShownSentence(_ mismatches: [KeynessBaselineFile.Configuration.Mismatch]) -> String? {
         guard !mismatches.isEmpty else { return nil }
         return "These clouds were counted once, at the standard settings, so your settings can take words out of them but cannot count them differently: \(mismatchDescription(mismatches))."
@@ -589,11 +687,11 @@ enum WordCloudRoutes {
                 CloudSubseries.Volume(id: $0.volumeId, title: $0.title.isEmpty ? $0.volumeId : $0.title)
             })
         }
-        let made = resources.bundledClouds.core.value(in: resources.directory).map { file in
+        let made = (try? resources.familyClouds.core.value(in: resources.languageDirectory).get()).map { file in
             CloudContext.Made(generated: file.generated, volumeCount: file.provenance.volumeCount,
                               documentCount: file.provenance.documentCount,
                               topTermsPerList: file.provenance.topTermsPerList,
-                              line: madeLine(file))
+                              family: file.provenance.tokenizer.description, line: madeLine(file))
         }
         return CloudContext(lenses: CloudRules.lenses.map(CloudRules.lens),
                             measures: KeynessCloudMeasure.allCases.map { CloudMeasure(id: $0.rawValue, label: CloudRules.measureLabel($0)) },
@@ -601,9 +699,10 @@ enum WordCloudRoutes {
                             subseries: subseries, made: made)
     }
 
-    /// The bundled clouds' own account, the web's sentence over the file's provenance.
+    /// The family's clouds' own account, the web's sentence over the file's provenance, naming the tokenizer that counted
+    /// them (PLAN's S29d).
     static func madeLine(_ file: CloudVectorsFile) -> String {
-        "These are the clouds bundled with the app, counted on \(CloudRules.day(file.generated)) from \(grouped(file.provenance.volumeCount)) volumes and \(CountCopy.documents(file.provenance.documentCount, locale: SearchItem.locale)) at the standard settings. Each list keeps the \(grouped(file.provenance.topTermsPerList)) words its scope uses most."
+        "These clouds were counted by this server’s own tagger, \(file.provenance.tokenizer), on \(CloudRules.day(file.generated)) from the corpus’s \(grouped(file.provenance.volumeCount)) volumes and \(CountCopy.documents(file.provenance.documentCount, locale: SearchItem.locale)) at the standard settings. Each list keeps the \(grouped(file.provenance.topTermsPerList)) words its scope uses most."
     }
 
     // MARK: The cloud
@@ -629,7 +728,7 @@ enum WordCloudRoutes {
             return .volume(volumeId: entry.volumeId, subseries: entry.subseries)
         case let live where liveSignatures.contains(live) && isLiveScope(live, value):
             throw APIProblem(.unprocessableContent, code: "LIVE_SCOPE",
-                             detail: "A cloud of this scope is counted from its documents' text, in their dictionary forms, which this server's language analysis cannot do yet. It reads the clouds bundled with the app, of the corpus, each subseries and each volume.")
+                             detail: "A cloud of this scope is counted from its documents' text, in their dictionary forms, which this server does not count yet. It reads the clouds its tagger counted from the corpus, of the corpus, each subseries and each volume.")
         default:
             throw APIProblem.invalidParameter("scope", "must be corpus, sub:<subseries> or vol:<volume>, not \(raw)")
         }
@@ -658,11 +757,11 @@ enum WordCloudRoutes {
         }
     }
 
-    /// The lens an address names, one the bundled clouds carry; the lens bar's first where it names none.
+    /// The lens an address names, one the page draws; the lens bar's first where it names none.
     static func lens(_ raw: String?) throws -> WordCloudLens {
         guard let raw else { return CloudRules.lenses[0] }
         guard let lens = WordCloudLens(rawValue: raw), CloudRules.lenses.contains(lens) else {
-            throw APIProblem.invalidParameter("lens", "must be one of \(CloudRules.lenses.map(\.rawValue).joined(separator: ", ")), the lenses the bundled clouds carry, not \(raw)")
+            throw APIProblem.invalidParameter("lens", "must be one of \(CloudRules.lenses.map(\.rawValue).joined(separator: ", ")), the lenses the page draws, not \(raw)")
         }
         return lens
     }
@@ -678,10 +777,13 @@ enum WordCloudRoutes {
     /// One scope's cloud under one lens, its list filtered by `settings`.
     static func answer(_ scope: CloudScope, lens: WordCloudLens, settings: CloudSettings, resources: ServerResources) -> CloudAnswer {
         let directory = resources.directory
-        let bundle = resources.bundledClouds
-        let core = bundle.core.value(in: directory)
+        let bundle = resources.familyClouds
+        let coreFile = bundle.core.value(in: resources.languageDirectory)
         // The volumes file is read only for a volume's cloud, as the app reads it once a volume is chosen.
-        let volumes: CloudVectorsFile? = if case .volume = scope { bundle.volumes.value(in: directory) } else { nil }
+        let volumesFile: Result<CloudVectorsFile, FamilyRefusal>? =
+            if case .volume = scope { bundle.volumes.value(in: resources.languageDirectory) } else { nil }
+        let core = try? coreFile.get()
+        let volumes = try? volumesFile?.get()
         let title = CloudRules.title(of: scope, resources: resources)
         let resolved = CloudRules.terms(forScope: scope, lens: lens, core: core, volumes: volumes)
         var answer = CloudAnswer(scope: .init(signature: scope.signature, title: title), lens: CloudRules.lens(lens),
@@ -690,7 +792,17 @@ enum WordCloudRoutes {
                                  message: CloudRules.message(state: "noCloud", lens: lens), countLine: nil, terms: [],
                                  listed: 0, removed: 0, settingsNotShown: nil,
                                  analyzeWithin: CloudRules.analyzeWithin(scope, title: title, resources: resources))
-        guard let resolved else { return answer }
+        guard let resolved else {
+            // A file refused says why: the first of the files the scope read, a volume's file and then the core, which
+            // its era's list comes from.
+            let refusal = [volumesFile, coreFile].lazy.compactMap { file -> FamilyRefusal? in
+                if case .failure(let refusal)? = file { refusal } else { nil }
+            }.first
+            if let refusal, let message = answer.message {
+                answer.message = .init(title: message.title, detail: refusal.sentence)
+            }
+            return answer
+        }
         let stopwords = bundle.stopwords(in: directory)
         let lexicons = bundle.lexicons(in: directory)
         let kept = settings.kept(resolved.terms, lens: lens, stopwords: stopwords, lexicons: lexicons)
@@ -759,7 +871,7 @@ enum WordCloudSettingsRoutes {
             let lens = try settingsLens(try query.single("lens"), inQuery: true) ?? .allTerms
             let settings = try await CloudSettings(PreferenceRoutes.syncedPreferences(of: user.id, in: store))
             return try await Blocking.run {
-                let bundle = resources.bundledClouds
+                let bundle = resources.familyClouds
                 let kept = settings.kept(CloudRules.canonicalSample, lens: lens, stopwords: bundle.stopwords(in: resources.directory),
                                          lexicons: bundle.lexicons(in: resources.directory))
                 return CloudSample(kept: kept.map { CloudAnswer.Term(term: $0.term, count: $0.count, polarity: nil) },

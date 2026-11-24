@@ -322,6 +322,24 @@ docker compose exec -T frus frus-light language-selftest --expect "$expected_tag
   || fail "the tagger's self-test is not the committed one: $(cat "$work/language.txt")"
 echo "   $(grep '^  Family' "$work/language.txt" | sed 's/^  Family *//'): digest ${expected_tags:0:16}… on $(docker compose exec -T frus uname -m)"
 
+echo "== install: the language family's clouds and references in the image (PLAN's S29d)"
+# The four files scripts/make-language counted with the web's tagger, which the image copies from resources/language,
+# each the one the committed provenance names; the Word Cloud's account names the family they were counted by, which
+# is the tagger's own, so the server reads its clouds, not the Mac's.
+python3 -c '
+import json, sys
+for file in json.load(sys.stdin)["files"]:
+    print(file["sha256"] + "  " + file["name"])
+' < resources/language/provenance.json > "$work/family.sha256"
+docker compose exec -T frus sh -c 'cd /usr/share/frus-light/language && sha256sum cloud-vectors-core.json cloud-vectors-volumes.json keyness-baseline.json keyness-baseline-printed.json' \
+  > "$work/family.image.sha256" || fail "the image holds none of the language family's files"
+diff "$work/family.sha256" "$work/family.image.sha256" > /dev/null || fail "the image's language family's files are not the committed provenance's"
+family=$(curl -s --max-time 30 "$base/api/v1/cloud/context" | python3 -c 'import json, sys; print((json.load(sys.stdin).get("made") or {}).get("family", ""))') \
+  || fail "the Word Cloud's context did not answer"
+tagger=$(grep '^  Family' "$work/language.txt" | sed 's/^  Family *//; s/,.*$//')
+[ "$family" = "$tagger" ] || fail "the Word Cloud's clouds were counted by ${family:-nothing}, not by the image's tagger, $tagger"
+echo "   the four files at the provenance's digests; the Word Cloud's clouds counted by $family"
+
 echo "== admin: one query embedded by the image's encoder through the server's own path, and check 9's encoder half (PLAN's S27b)"
 # The hardened container, read-only, as UID 10001 with no capability, starts llama-server as its child at the
 # first query, on 127.0.0.1 alone with a key of its own, and the server answers with the 768 values, of unit

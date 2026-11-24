@@ -1,4 +1,4 @@
-// The Word Cloud's routes (PLAN's S24i): what a request may ask of the bundled clouds and what is refused, a live
+// The Word Cloud's routes (PLAN's S24i): what a request may ask of the language family's clouds and what is refused, a live
 // scope among them; the reader's settings carried from their synced preferences to their clouds, the criteria set by a
 // change to the preferences and the hidden words by routes of their own, each written as the app's settings write it
 // and stored as the app syncs it; the settings bench; and two users' settings kept apart. The clouds themselves are
@@ -60,7 +60,7 @@ import Testing
                 #expect(response.status == status && problemCode(response) == code, "\(path): \(response.status) \(String(buffer: response.body))")
             }
             let live = try decode(APIProblem.Body.self, try await client.execute(uri: "/api/v1/cloud?scope=doc:frus1961-63v06/d1", method: .get))
-            #expect(live.detail.contains("this server's language analysis cannot do yet"))
+            #expect(live.detail.contains("which this server does not count yet") && live.detail.contains("the clouds its tagger counted from the corpus"))
         }
     }
 

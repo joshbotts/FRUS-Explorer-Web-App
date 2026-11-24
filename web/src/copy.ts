@@ -2452,9 +2452,9 @@ export const copy = {
     hiddenEverywhere: (term: string) => `${term} hidden in all word clouds`,
     keynessTitle: 'No Distinctiveness Ranking',
     keynessReason:
-      'Distinctive ranks a scope’s words against the bundled corpus reference, which counts every word in its dictionary form. This server cannot count a scope’s words itself yet, since its language analysis does not reduce them to their dictionary forms, and the bundled clouds keep only the words each scope uses most, too few to rank. Size words by frequency instead.',
+      'Distinctive ranks a scope’s words against the corpus reference this server’s tagger counted, which counts every word in its dictionary form. This server cannot count a scope’s words itself yet, and its clouds keep only the words each scope uses most, too few to rank. Size words by frequency instead.',
     documentNotice:
-      'A document’s own word cloud is counted from its text, in dictionary forms, which this server’s language analysis cannot do yet. This is its volume’s cloud, from the clouds bundled with the app.',
+      'A document’s own word cloud is counted from its text, in dictionary forms, which this server does not count yet. This is its volume’s cloud, from the clouds its tagger counted from the corpus.',
     backToDocument: 'Back to the document',
     errorTitle: 'Couldn’t Build Word Cloud',
     loading: 'Building word cloud…',

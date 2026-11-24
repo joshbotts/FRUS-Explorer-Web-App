@@ -72,8 +72,10 @@ if [ -t 0 ] && [ -t 1 ]; then run_args+=(-it); fi
 for v in $proxy_vars; do
   if [ -n "${!v:-}" ]; then run_args+=(-e "$v"); fi
 done
-# The server reads the app's data files from the submodule, the folder the image copies (session 8).
+# The server reads the app's data files from the submodule, the folder the image copies (session 8),
+# and the language family's clouds and references from resources/language, which it copies too (S29d).
 run_args+=(-e FRUS_RESOURCES_DIR=/src/upstream/FRUS-Explorer/FRUSExplorer/Resources)
+run_args+=(-e FRUS_LANGUAGE_DIR=/src/resources/language)
 # And the browser app from web/dist, when scripts/npm run build has made it.
 if [ -f "$root/web/dist/index.html" ]; then run_args+=(-e FRUS_WEB_DIR=/src/web/dist); fi
 

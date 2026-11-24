@@ -1,6 +1,6 @@
 // S24i's done-when (docs/PLAN.md): Playwright changes the lens by keyboard on Chromium, with no axe violations. Against
-// the image with the synthetic export imported; the Word Cloud reads the clouds bundled with the app, which need nothing
-// indexed. It opens from the header's Analytics menu, after Chronology, on the corpus: the lens is changed by the lens
+// the image with the synthetic export imported; the Word Cloud reads the language family's clouds (S29d), which need
+// nothing indexed. It opens from the header's Analytics menu, after Chronology, on the corpus: the lens is changed by the lens
 // bar's arrow keys and the list read back after each, the scope changed to a volume, and Distinctive refused with its
 // reason; a word hidden in this lens by its menu leaves the cloud and is shown again from Settings ▸ Word Cloud; the
 // reader's rail opens its document's volume's cloud, saying why; and Search offers Collocates refused, axe at each state.
@@ -70,7 +70,7 @@ test('changes the lens by keyboard and reads the list, then the scope, and refus
     await arrowTo(page, 'ArrowRight', page.getByRole('radio', { name: 'Concepts', exact: true }));
     await arrowTo(page, 'ArrowRight', page.getByRole('radio', { name: 'Sentiment', exact: true }));
     await expect(page).toHaveURL(/lens=sentiment/);
-    await expect.poll(async () => (await terms(page)).slice(0, 3)).toEqual(['agreement', 'war', 'agree']);
+    await expect.poll(async () => (await terms(page)).slice(0, 3)).toEqual(['agreement', 'war', 'problem']);
     await expect(page.getByRole('columnheader', { name: 'Polarity' })).toBeVisible();
     await expect(page.locator('.cloud-legend')).toContainText('Positive');
     await axeCheck(page);
@@ -153,7 +153,7 @@ test('opens its document’s volume’s cloud from the reader’s rail, saying w
     await expect(page).toHaveURL(/cloud\?scope=doc(%3A|:)frus1961-63v06(%2F|\/)d1$/);
     await expect(page.getByText(/A document’s own word cloud is counted from its text/)).toBeVisible();
     await expect(page.getByRole('heading', { level: 2, name: /Volume VI, Kennedy-Khrushchev Exchanges/ })).toBeVisible();
-    expect((await terms(page)).slice(0, 3)).toEqual(['president', 'country', 'soviet']);
+    expect((await terms(page)).slice(0, 3)).toEqual(['president', 'country', 'question']);
     await axeCheck(page);
     await page.getByRole('link', { name: 'Back to the document' }).click();
     await expect(page).toHaveURL(/doc\/frus1961-63v06\/d1$/);

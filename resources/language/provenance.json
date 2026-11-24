@@ -1,0 +1,65 @@
+{
+  "catalogue" : {
+    "sha256" : "465cf67f8f30540fa8a30cb26ad6888cbfd8bd0b478c24fd1769686c33dabd07",
+    "volumes" : 553
+  },
+  "corpus" : {
+    "commit" : "216cdb7649a8e29504377d4f2858351dc46331a8",
+    "documents" : 314616,
+    "repository" : "https://github.com/HistoryAtState/frus",
+    "volumes" : 553
+  },
+  "family" : {
+    "listsSHA256" : "567088973a45e8951a8b3e8f11330f38593198bbb4608af5144741d003a04216",
+    "modelSHA256" : "fa42bd876c051bbcf0ac713d47d3e27a2745f1f271dbcc9d158e0805a844eac8",
+    "name" : "FRUSLanguage",
+    "version" : "1+fa42bd87.56708897"
+  },
+  "files" : [
+    {
+      "bytes" : 389699,
+      "name" : "cloud-vectors-core.json",
+      "sha256" : "9f347980ea0984cd6f00a69e7b17c298e99f86f8ea54752c1f48d43c8800db2d"
+    },
+    {
+      "bytes" : 1941123,
+      "name" : "cloud-vectors-volumes.json",
+      "sha256" : "1a667c51d21e533e79956820f880ebd73d729c823d9208ef67ae37445a396b83"
+    },
+    {
+      "bytes" : 1316145,
+      "name" : "keyness-baseline.json",
+      "sha256" : "f179afaf13dd6de020bf3d5b93f7c81e1aeaafdf0c2730182e386bc99372fac3"
+    },
+    {
+      "bytes" : 1213600,
+      "name" : "keyness-baseline-printed.json",
+      "sha256" : "9733c458dda983ca4a765db5601369956f41d8ab5cacf4bfd43024c88db45034"
+    }
+  ],
+  "generated" : "2026-11-24",
+  "inputs" : [
+    {
+      "name" : "manifest.json",
+      "sha256" : "a1143127480f68841e33620026fa98ce7749e8469ce0fb8e697b682acfde52ac"
+    },
+    {
+      "name" : "word-cloud-lexicons.json",
+      "sha256" : "68094afabc1a66656e4de7c2ea8965719ccc84d80f7c0a464b4670cff38af2e1"
+    },
+    {
+      "name" : "word-cloud-stopwords.json",
+      "sha256" : "558974348397bcd4cb3868de4a8065b457ada8a713a7fa0992191775fb327871"
+    }
+  ],
+  "lenses" : [
+    "allTerms",
+    "descriptors",
+    "concepts",
+    "topics",
+    "actions",
+    "sentiment"
+  ],
+  "remake" : "scripts/make-language --corpus <a folder outside the repository> --commit 216cdb7649a8e29504377d4f2858351dc46331a8 --generated 2026-11-24",
+  "upstream" : "0b839bdebd13f6e2ae228b5d8240809b48a1a16c"
+}
