@@ -70,7 +70,9 @@ function compile(gl: WebGL2RenderingContext, type: number, source: string): WebG
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS) && !gl.isContextLost()) {
-    throw new Error(`The map’s shader did not compile: ${gl.getShaderInfoLog(shader) ?? ''}`);
+    const log = gl.getShaderInfoLog(shader) ?? '';
+    gl.deleteShader(shader);
+    throw new Error(`The map’s shader did not compile: ${log}`);
   }
   return shader;
 }
@@ -94,12 +96,35 @@ export class SemanticMapRenderer {
     const program = gl.createProgram();
     const buffer = gl.createBuffer();
     const vertexArray = gl.createVertexArray();
-    if (!program || !buffer || !vertexArray) throw new Error('The map’s program could not be made.');
-    gl.attachShader(program, compile(gl, gl.VERTEX_SHADER, vertexShader));
-    gl.attachShader(program, compile(gl, gl.FRAGMENT_SHADER, fragmentShader));
+    const letGo = () => {
+      gl.deleteProgram(program);
+      gl.deleteBuffer(buffer);
+      gl.deleteVertexArray(vertexArray);
+    };
+    if (!program || !buffer || !vertexArray) {
+      letGo();
+      throw new Error('The map’s program could not be made.');
+    }
+    let shaders: WebGLShader[] = [];
+    try {
+      shaders = [compile(gl, gl.VERTEX_SHADER, vertexShader)];
+      shaders.push(compile(gl, gl.FRAGMENT_SHADER, fragmentShader));
+    } catch (error) {
+      for (const shader of shaders) gl.deleteShader(shader);
+      letGo();
+      throw error;
+    }
+    for (const shader of shaders) gl.attachShader(program, shader);
     gl.linkProgram(program);
+    // Linked, the program keeps what it needs: the shaders go now.
+    for (const shader of shaders) {
+      gl.detachShader(program, shader);
+      gl.deleteShader(shader);
+    }
     if (!gl.getProgramParameter(program, gl.LINK_STATUS) && !gl.isContextLost()) {
-      throw new Error(`The map’s program did not link: ${gl.getProgramInfoLog(program) ?? ''}`);
+      const log = gl.getProgramInfoLog(program) ?? '';
+      letGo();
+      throw new Error(`The map’s program did not link: ${log}`);
     }
     this.program = program;
     this.buffer = buffer;

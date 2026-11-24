@@ -76,21 +76,36 @@ import Testing
         }
     }
 
-    /// Both answers carry the layout's identity, and a browser that holds it is told so; HEAD answers as GET does; and
-    /// neither takes a parameter.
-    @Test func theAnswersAreRevalidatedByTheLayout() async throws {
-        let (_, map, index) = try Self.kit()
-        try await Self.app(Self.resources).test(.router) { client in
+    /// Each answer carries a tag of its own bytes, the same from one start to the next, and a browser that holds it is told
+    /// so; the regions' bytes are encoded once, their keys sorted; HEAD answers as GET does; and neither takes a parameter.
+    @Test func theAnswersAreRevalidatedByTheirBytes() async throws {
+        let (_, map, _) = try Self.kit()
+        let tags = try await Self.app(Self.resources).test(.router) { client -> [String: String] in
+            var tags: [String: String] = [:]
             for path in ["/api/v1/semantic/map", "/api/v1/semantic/map/regions"] {
                 let first = try await client.execute(uri: path, method: .get)
-                #expect(first.status == .ok && first.headers[.eTag] == "\"\(index.layoutIdentity)\"", "\(path)")
+                let tag = try #require(first.headers[.eTag], "\(path)")
+                #expect(first.status == .ok && tag.count > 2 && tag.hasPrefix("\"") && tag.hasSuffix("\""), "\(path)")
                 #expect(first.headers[.cacheControl] == "private, no-cache", "\(path)")
-                let again = try await client.execute(uri: path, method: .get,
-                                                     headers: [.ifNoneMatch: "\"other\", \"\(index.layoutIdentity)\""])
-                #expect(again.status == .notModified && again.body.readableBytes == 0, "\(path)")
+                tags[path] = tag
+                let again = try await client.execute(uri: path, method: .get, headers: [.ifNoneMatch: "\"other\", \(tag)"])
+                #expect(again.status == .notModified && again.body.readableBytes == 0 && again.headers[.eTag] == tag, "\(path)")
                 let other = try await client.execute(uri: path, method: .get, headers: [.ifNoneMatch: "\"2026-01-01\""])
                 #expect(other.status == .ok, "\(path)")
                 #expect(problemCode(try await client.execute(uri: "\(path)?lens=era", method: .get)) == "UNKNOWN_PARAMETER", "\(path)")
+            }
+            let regions = try await client.execute(uri: "/api/v1/semantic/map/regions", method: .get)
+            #expect(regions.headers[.contentType] == "application/json; charset=utf-8")
+            #expect(String(buffer: regions.body).contains(
+                #"{"centreX":-2259,"centreY":-10310,"documentCount":698,"eraCounts":{"1":134,"2":564},"id":0,"terms":["spanish","salazar","spain","lagen"]}"#))
+            return tags
+        }
+        #expect(tags.count == 2 && tags["/api/v1/semantic/map"] != tags["/api/v1/semantic/map/regions"])
+        // Read again, as at the server's next start: the same bytes, so the same tags.
+        try await Self.app(Self.resources).test(.router) { client in
+            for (path, tag) in tags {
+                let again = try await client.execute(uri: path, method: .get)
+                #expect(again.headers[.eTag] == tag, "\(path)")
             }
         }
         let fixture = try await ServerFixture()

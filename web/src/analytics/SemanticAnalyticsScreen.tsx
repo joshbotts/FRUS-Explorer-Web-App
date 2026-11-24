@@ -3,7 +3,8 @@
 // app's palette on its dark ground and drawn by the web's own WebGL2 renderer, with pan and zoom by pointer and
 // keyboard and a fit to the whole (SemanticMap.tsx); and beside it the map's regions in a table, largest first, as the
 // app's regions table ranks them, with the summary the app's accessibility list opens with. A browser without WebGL2
-// has the table and a sentence, and fetches no points. Every point and region is the server's, from the bundled map.
+// has the table and a sentence, and fetches no points; one whose WebGL2 fails as the map is made has the table and a
+// sentence of its own, the reason in the console. Every point and region is the server's, from the bundled map.
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { errorMessage } from '../api/client';
@@ -32,6 +33,10 @@ export function SemanticAnalyticsScreen() {
   const [webGL2] = useState(supportsWebGL2);
   const [failure, setFailure] = useState<string | undefined>(undefined);
   const drawable = webGL2 && failure === undefined;
+  function unavailable(reason: string) {
+    console.warn(`Semantic map: ${reason}`);
+    setFailure(reason);
+  }
   const points = useQuery({ ...semanticMapPointsQuery, enabled: drawable && regions.isSuccess });
   const answer = regions.data;
   const whole = answer !== undefined && points.data !== undefined && points.data.byteLength === answer.documentCount * bytesPerPoint;
@@ -51,7 +56,7 @@ export function SemanticAnalyticsScreen() {
         <div className="semantic-layout">
           <div className="semantic-map-column">
             {!drawable ? (
-              <p className="semantic-map-unavailable">{words.noWebGL2}</p>
+              <p className="semantic-map-unavailable">{webGL2 ? words.failed : words.noWebGL2}</p>
             ) : points.error ? (
               <Empty title={words.unavailableTitle} detail={errorMessage(points.error)} />
             ) : !points.data ? (
@@ -61,7 +66,7 @@ export function SemanticAnalyticsScreen() {
             ) : !whole ? (
               <Empty title={words.unavailableTitle} detail={words.unreadable} />
             ) : (
-              <SemanticMap points={points.data} gridExtent={answer.gridExtent} onUnavailable={setFailure} />
+              <SemanticMap points={points.data} gridExtent={answer.gridExtent} onUnavailable={unavailable} />
             )}
           </div>
           <div className="semantic-regions">

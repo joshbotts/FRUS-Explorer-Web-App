@@ -96,18 +96,23 @@ test('opens the map from the Analytics menu, zooms and pans it by keyboard, fits
   const canvas = map.locator('canvas');
   const whole = await canvas.screenshot();
   const share = await drawnShare(page, whole);
+  // Neither the bare ground nor a canvas cleared and never drawn, which would be all one colour.
   expect(share, 'the share of the frame the points cover').toBeGreaterThan(0.05);
-  expect(await press(page, map, '+')).toBe('1.400 0 0');
-  await expect(page.getByRole('status').filter({ hasText: 'Zoomed in 1.4 times.' })).toBeVisible();
-  const zoomedIn = await canvas.screenshot();
-  expect(zoomedIn.equals(whole)).toBe(false);
-  expect(await press(page, map, 'ArrowRight')).toMatch(/^1\.400 [1-9]\d* 0$/);
-  expect(await press(page, map, 'ArrowUp')).toMatch(/^1\.400 [1-9]\d* [1-9]\d*$/);
-  const panned = await canvas.screenshot();
-  expect(panned.equals(zoomedIn)).toBe(false);
-  expect(await press(page, map, '-')).toMatch(/^1\.000 [1-9]\d* [1-9]\d*$/);
-  await expect(page.getByRole('status').filter({ hasText: 'Moved, at the whole map’s zoom.' })).toBeVisible();
-  expect(await press(page, map, 'ArrowLeft')).toMatch(/^1\.000 -?\d+ [1-9]\d*$/);
+  expect(share, 'the share of the frame the points cover').toBeLessThan(0.9);
+  let before = whole;
+  for (const [key, view, status] of [
+    ['+', /^1\.400 0 0$/, 'Zoomed in 1.4 times.'],
+    ['ArrowRight', /^1\.400 [1-9]\d* 0$/, undefined],
+    ['ArrowUp', /^1\.400 [1-9]\d* [1-9]\d*$/, undefined],
+    ['-', /^1\.000 [1-9]\d* [1-9]\d*$/, 'Moved, at the whole map’s zoom.'],
+    ['ArrowLeft', /^1\.000 -?\d+ [1-9]\d*$/, undefined],
+  ] as const) {
+    expect(await press(page, map, key)).toMatch(view);
+    if (status) await expect(page.getByRole('status').filter({ hasText: status })).toBeVisible();
+    const after = await canvas.screenshot();
+    expect(after.equals(before), `the frame after ${key} is another`).toBe(false);
+    before = after;
+  }
   expect(await press(page, map, '0')).toBe('1.000 0 0');
   expect((await canvas.screenshot()).equals(whole), 'Fit the Map draws the first frame again').toBe(true);
   await axeCheck(page);

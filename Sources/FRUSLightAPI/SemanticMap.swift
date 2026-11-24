@@ -8,7 +8,8 @@
 // The map is read once, on first use, as the app's `BundledSemanticMap` reads it, and refused whole, both answers alike,
 // as the app refuses it: a map whose index or binary names other vectors than the bundled index's provenance, or places
 // another number of documents, is not drawn, since a map from one generation drawn against another puts every document
-// where other vectors put it. Each answer carries the kit's layout identity as its ETag, which moves with the layout.
+// where other vectors put it. Each answer is tagged by its own bytes, so that a browser keeps it until the layout or the
+// answer's form changes, and the regions are encoded once, their keys sorted, so that their bytes are the same at each start.
 
 import FRUSLightCore
 import Foundation
@@ -17,7 +18,7 @@ import NIOCore
 import SemanticVectorsKit
 
 /// `GET /api/v1/semantic/map/regions`: the bundled map's index, its regions by id as the index lists them.
-public struct SemanticMapRegions: Codable, Equatable, Sendable, ResponseEncodable {
+public struct SemanticMapRegions: Codable, Equatable, Sendable {
     public struct Region: Codable, Equatable, Sendable {
         /// The id a point's region names.
         public var id: Int
@@ -61,8 +62,11 @@ actor SemanticMapFiles {
         /// The placements as the answer sends them: the kit's block, six bytes a point.
         let points: ByteBuffer
         let regions: SemanticMapRegions
-        /// The layout identity, quoted as an entity tag.
-        let entityTag: String
+        /// The regions as the answer sends them, encoded once.
+        let regionsJSON: ByteBuffer
+        /// Each answer's entity tag, from its bytes.
+        let pointsTag: String
+        let regionsTag: String
     }
 
     let directory: URL
@@ -139,7 +143,24 @@ actor SemanticMapFiles {
                 SemanticMapRegions.Region(id: $0.id, terms: $0.terms, documentCount: $0.documentCount, centreX: $0.centreX,
                                           centreY: $0.centreY, eraCounts: $0.eraCounts)
             })
-        return .success(Map(vectors: map, points: points, regions: regions, entityTag: "\"\(index.layoutIdentity)\""))
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        guard let json = try? encoder.encode(regions) else { return .failure(malformed("\(indexFile) could not be encoded")) }
+        let regionsJSON = ByteBuffer(bytes: json)
+        return .success(Map(vectors: map, points: points, regions: regions, regionsJSON: regionsJSON,
+                            pointsTag: entityTag(points), regionsTag: entityTag(regionsJSON)))
+    }
+
+    /// An entity tag from an answer's bytes: FNV-1a's 64 bits over them, as the reader tags its pages.
+    static func entityTag(_ bytes: ByteBuffer) -> String {
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        bytes.withUnsafeReadableBytes { raw in
+            for byte in raw {
+                hash ^= UInt64(byte)
+                hash &*= 0x0000_0100_0000_01b3
+            }
+        }
+        return "\"\(String(hash, radix: 16))\""
     }
 
     /// A refusal in the app's words (`SemanticMapSpikeView.describe`), in a server's where the app's name a build,
@@ -176,28 +197,24 @@ enum SemanticMapRoutes {
         router.get("/api/v1/semantic/map") { request, _ -> Response in
             try FormQuery(request.uri.query).refuseUnknown([])
             let map = try await files.map().get()
-            var headers = Self.headers(map)
-            if Self.isCurrent(request, map) { return Response(status: .notModified, headers: headers) }
-            headers[.contentType] = "application/octet-stream"
-            return Response(status: .ok, headers: headers, body: .init(byteBuffer: map.points))
+            return Self.answer(request, map.points, tag: map.pointsTag, type: "application/octet-stream")
         }
-        router.get("/api/v1/semantic/map/regions") { request, context -> Response in
+        router.get("/api/v1/semantic/map/regions") { request, _ -> Response in
             try FormQuery(request.uri.query).refuseUnknown([])
             let map = try await files.map().get()
-            let headers = Self.headers(map)
-            if Self.isCurrent(request, map) { return Response(status: .notModified, headers: headers) }
-            return try EditedResponse(headers: headers, response: map.regions).response(from: request, context: context)
+            return Self.answer(request, map.regionsJSON, tag: map.regionsTag, type: "application/json; charset=utf-8")
         }
     }
 
-    /// Revalidated on each request, and the same for every reader, so a browser keeps it and asks again with its tag.
-    static func headers(_ map: SemanticMapFiles.Map) -> HTTPFields {
-        [.cacheControl: "private, no-cache", .eTag: map.entityTag]
-    }
-
-    /// Whether the request already holds this layout's answer.
-    static func isCurrent(_ request: Request, _ map: SemanticMapFiles.Map) -> Bool {
-        guard let tags = request.headers[.ifNoneMatch] else { return false }
-        return tags.split(separator: ",").contains { $0.trimmingCharacters(in: .whitespaces) == map.entityTag }
+    /// The answer, or 304 to a browser that holds it. Revalidated on each request, and the same for every reader, so a
+    /// browser keeps it and asks again with its tag.
+    static func answer(_ request: Request, _ body: ByteBuffer, tag: String, type: String) -> Response {
+        var headers: HTTPFields = [.cacheControl: "private, no-cache", .eTag: tag]
+        if let tags = request.headers[.ifNoneMatch],
+           tags.split(separator: ",").contains(where: { $0.trimmingCharacters(in: .whitespaces) == tag }) {
+            return Response(status: .notModified, headers: headers)
+        }
+        headers[.contentType] = type
+        return Response(status: .ok, headers: headers, body: .init(byteBuffer: body))
     }
 }

@@ -51,20 +51,25 @@ export function SemanticMap({
   const size = useRef<ViewSize>({ width: 0, height: 0 });
   const latest = useRef<MapCamera>(fitCamera(gridExtent));
   const scheduled = useRef<number | null>(null);
+  const sized = useRef(false);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const [camera, setCamera] = useState<MapCamera>(() => fitCamera(gridExtent));
   const [status, setStatus] = useState(() => zoomWords(fitCamera(gridExtent), gridExtent, words.zoom));
 
+  // The view drawn now, once the drawing buffer has the frame's size: never at the canvas's first 300 by 150.
+  const drawNow = useEffectEvent(() => {
+    const drawn = renderer.current;
+    const view = frame.current;
+    if (!drawn || !view || !sized.current) return;
+    drawn.draw(latest.current);
+    view.dataset.view = viewKey(latest.current, gridExtent);
+  });
   // One frame for however many changes come before the next animation frame.
   const requestDraw = useEffectEvent(() => {
     if (scheduled.current !== null) return;
     scheduled.current = requestAnimationFrame(() => {
       scheduled.current = null;
-      const drawn = renderer.current;
-      const view = frame.current;
-      if (!drawn || !view) return;
-      drawn.draw(latest.current);
-      view.dataset.view = viewKey(latest.current, gridExtent);
+      drawNow();
     });
   });
   const unavailable = useEffectEvent((reason: string) => onUnavailable(reason));
@@ -88,13 +93,16 @@ export function SemanticMap({
     };
     if (!start()) return;
     let pixels = { width: 0, height: 0 };
+    // A new size clears the canvas, so the view is drawn again at once, before the browser paints the cleared one. A
+    // frame wider than the GPU allows is drawn smaller in both sides alike, keeping its aspect.
     const fit = () => {
       const drawn = renderer.current;
-      if (!drawn) return;
-      const side = drawn.maximumSide;
-      element.width = Math.max(1, Math.min(side, pixels.width));
-      element.height = Math.max(1, Math.min(side, pixels.height));
-      requestDraw();
+      if (!drawn || pixels.width < 1 || pixels.height < 1) return;
+      const shrink = Math.min(1, drawn.maximumSide / Math.max(pixels.width, pixels.height));
+      element.width = Math.max(1, Math.round(pixels.width * shrink));
+      element.height = Math.max(1, Math.round(pixels.height * shrink));
+      sized.current = true;
+      drawNow();
     };
     const observer = new ResizeObserver(([entry]) => {
       if (!entry) return;
@@ -128,6 +136,7 @@ export function SemanticMap({
       element.removeEventListener('webglcontextrestored', restored);
       if (scheduled.current !== null) cancelAnimationFrame(scheduled.current);
       scheduled.current = null;
+      sized.current = false;
       renderer.current?.dispose();
       renderer.current = null;
     };
@@ -146,10 +155,12 @@ export function SemanticMap({
     const view = frame.current;
     if (!view) return;
     const wheel = (event: WheelEvent) => {
+      const factor = wheelZoom(event.deltaY, event.deltaMode);
+      // A sideways scroll zooms nothing, and goes on to the page.
+      if (factor === 1) return;
       event.preventDefault();
       const bounds = view.getBoundingClientRect();
       const at = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
-      const factor = wheelZoom(event.deltaY, event.deltaMode);
       const current = size.current;
       setCamera((previous) => zoomed(previous, factor, gridExtent, gridPoint(previous, current, at.x, at.y)));
     };
@@ -205,7 +216,8 @@ export function SemanticMap({
   }
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
-    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    // A Mac's Control-click opens a context menu, which keeps the release: it moves nothing.
+    if (event.pointerType === 'mouse' && (event.button !== 0 || event.ctrlKey)) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
   }
@@ -214,6 +226,11 @@ export function SemanticMap({
     const held = pointers.current;
     const last = held.get(event.pointerId);
     if (!last) return;
+    // A mouse with no button down was released where the page could not hear it: its drag is over.
+    if (event.pointerType === 'mouse' && event.buttons === 0) {
+      held.delete(event.pointerId);
+      return;
+    }
     const view = size.current;
     if (held.size === 1) {
       const dx = event.clientX - last.x;
@@ -274,6 +291,7 @@ export function SemanticMap({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerEnd}
         onPointerCancel={onPointerEnd}
+        onLostPointerCapture={onPointerEnd}
         onDoubleClick={onDoubleClick}
       >
         <canvas ref={canvas} className="semantic-map-canvas" aria-hidden="true" />

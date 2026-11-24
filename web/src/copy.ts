@@ -2558,7 +2558,7 @@ export const copy = {
    * loading and its refusals, the legend's one entry under the Regions lens, the regions' table and its columns, and the
    * summary the app's list of the regions opens with. The lens's caption names the table where the app's names the map,
    * whose names the web does not draw yet; the map's name, its controls' group, the keyboard's help, the zoom's status
-   * and the sentence for a browser without WebGL2 are the web's own.
+   * and the sentences for a browser without WebGL2 or whose WebGL2 fails are the web's own.
    */
   semanticAnalytics: {
     title: 'Semantic Analytics',
@@ -2566,6 +2566,7 @@ export const copy = {
     unavailableTitle: 'Map unavailable',
     unreadable: 'The semantic map could not be read.',
     noWebGL2: 'This browser cannot draw the map, which needs WebGL2. Its regions are in the table.',
+    failed: 'This browser could not draw the map. Its regions are in the table.',
     zoomIn: 'Zoom In',
     zoomOut: 'Zoom Out',
     zoomFit: 'Fit the Map',

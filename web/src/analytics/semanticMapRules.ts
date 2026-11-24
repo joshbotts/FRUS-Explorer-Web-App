@@ -1,8 +1,8 @@
 // The semantic map's rules (PLAN's S28b), pure. The palette, a region's slot in it and the ground it is drawn on are the
 // app's (`SemanticMapColouring`, `SemanticMapRenderer`), mirrored until S28a moves them into the kit and held to the
 // app's lines by SemanticMapMirrorParityTests; so are the camera (`SemanticMapCamera`), the zoom step of the Mac's ⌘+ and
-// ⌘− and its fit (`frameAll`). The pan by keyboard, the zoom about the pointer, the limits and the words for the zoom
-// are the web's own.
+// ⌘− and its fit (`frameAll`). The pan by keyboard, the zoom about the pointer, the wheel's rate, the limits and the
+// words for the zoom are the web's own.
 
 export type Rgba = readonly [number, number, number, number];
 

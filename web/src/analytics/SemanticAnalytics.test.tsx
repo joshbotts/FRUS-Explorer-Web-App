@@ -93,15 +93,17 @@ describe('Semantic Analytics', () => {
     expect(rows()).toHaveLength(4);
   });
 
-  it('falls back to the sentence when the browser’s WebGL2 fails as the map is made', async () => {
+  it('falls back to a sentence of its own when the browser’s WebGL2 fails as the map is made', async () => {
     webGL2.supported = true;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     stubServer({
       '/readyz': ready,
       '/api/v1/semantic/map/regions': regions,
       '/api/v1/semantic/map': () => new Response(new ArrayBuffer(6 * 10), { headers: { 'content-type': 'application/octet-stream' } }),
     });
     renderAt('/analytics/semantic');
-    expect(await screen.findByText('This browser cannot draw the map, which needs WebGL2. Its regions are in the table.')).toBeTruthy();
+    expect(await screen.findByText('This browser could not draw the map. Its regions are in the table.')).toBeTruthy();
+    expect(warn).toHaveBeenCalledWith('Semantic map: jsdom has no WebGL2');
     expect(rows()).toHaveLength(4);
   });
 });
