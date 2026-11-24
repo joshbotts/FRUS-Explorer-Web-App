@@ -93,6 +93,9 @@ public struct ServerConfiguration: Sendable, Equatable {
     /// The encoder's binary and its model, the image's; a test names a stand-in. Neither has a variable.
     public var encoderBinary: URL
     public var encoderModel: URL
+    /// The semantic vectors' shards, a shard a volume (PLAN's S26c): the image's read-only folder, all 553, by the
+    /// owner's answer of 23 November; a test names a folder of its own. It has no variable.
+    public var semanticShards: URL
 
     /// The path the server answers under, `FRUS_PUBLIC_URL`'s: the root unless it ends in a path.
     public var basePath: BasePath {
@@ -112,6 +115,8 @@ public struct ServerConfiguration: Sendable, Equatable {
     public static let imageEncoderBinary = URL(fileURLWithPath: "/usr/local/bin/llama-server")
     /// Where the image puts the search model, in a layer of its own.
     public static let imageEncoderModel = URL(fileURLWithPath: "/usr/share/frus-light/model/embeddinggemma-2-Q8_0.gguf")
+    /// Where the image puts the semantic vectors' shards, in two layers of their own (PLAN's S26c).
+    public static let imageSemanticShards = URL(fileURLWithPath: "/usr/share/frus-light/semantic/shards", isDirectory: true)
 
     public init(
         mode: Mode = .import, auth: Auth = .none, dataDirectory: URL = URL(fileURLWithPath: "/data"),
@@ -124,7 +129,8 @@ public struct ServerConfiguration: Sendable, Equatable {
         backupCopyDirectory: URL? = nil, authHeader: String = "X-Forwarded-User",
         trustedProxies: [AddressRange] = [], adminUsers: Set<String> = [], secretKeyFile: URL? = nil,
         naraAPIKey: String? = nil, servicesMirror: URL? = nil, encoder: Bool = true,
-        encoderBinary: URL = ServerConfiguration.imageEncoderBinary, encoderModel: URL = ServerConfiguration.imageEncoderModel
+        encoderBinary: URL = ServerConfiguration.imageEncoderBinary, encoderModel: URL = ServerConfiguration.imageEncoderModel,
+        semanticShards: URL = ServerConfiguration.imageSemanticShards
     ) {
         self.mode = mode
         self.auth = auth
@@ -153,6 +159,7 @@ public struct ServerConfiguration: Sendable, Equatable {
         self.encoder = encoder
         self.encoderBinary = encoderBinary
         self.encoderModel = encoderModel
+        self.semanticShards = semanticShards
     }
 
     /// Reads the configuration, reporting every problem at once.

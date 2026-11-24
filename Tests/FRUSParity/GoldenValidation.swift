@@ -79,6 +79,10 @@ public enum GoldenValidation {
                     let golden = try GoldenJSON.read(LanguageTagsGolden.self, from: url)
                     provenance = golden.provenance
                     problems = format(golden.format, LanguageTagsGolden.currentFormat, file) + languageTagsProblems(golden)
+                case .semanticNeighbours:
+                    let golden = try GoldenJSON.read(SemanticNeighboursGolden.self, from: url)
+                    provenance = golden.provenance
+                    problems = format(golden.format, SemanticNeighboursGolden.currentFormat, file) + semanticNeighboursProblems(golden)
                 }
                 report.problems += staleness(of: provenance, file: file.rawValue, layout: layout, sourceDigest: digest ?? "")
                 report.problems += inputProblems(of: provenance, file: file)
@@ -153,6 +157,7 @@ public enum GoldenValidation {
         case .indexSummary: return ParityFixtures.teiInputKeys + requiredStampKeys
         case .richText: return [RichTextGolden.harnessPath, RichTextWebCases.path]
         case .languageTags: return ParityFixtures.teiInputKeys
+        case .semanticNeighbours: return SemanticNeighboursLoop.shardInputKeys
         }
     }
 
@@ -282,6 +287,41 @@ public enum GoldenValidation {
         if golden.codePages.map(\.name) != RichTextCodePages.pages.map(\.name)
             || golden.codePages.contains(where: { $0.sha256.wholeMatch(of: /[0-9a-f]{64}/) == nil }) {
             problems.append("\(file): its code pages are not those of RichTextCodePages, in order, each with a SHA-256")
+        }
+        return problems
+    }
+
+    /// Check 9's kernel half is whole: the fixture volumes' documents alone, volumes in order, none twice, each with
+    /// at most the ten nearest, each in the form `volume/document row scoreBits`, and its two lists of candidates as
+    /// `count sha256`, at the bundled tier's pool.
+    public static func semanticNeighboursProblems(_ golden: SemanticNeighboursGolden) -> [String] {
+        let file = GoldenFile.semanticNeighbours.rawValue
+        var problems: [String] = []
+        if golden.neighbourCount != SemanticNeighboursLoop.neighbourCount || golden.rerankPool <= 0 {
+            problems.append("\(file): it keeps \(golden.neighbourCount) neighbours from a pool of \(golden.rerankPool), not \(SemanticNeighboursLoop.neighbourCount) from the bundled pool")
+        }
+        if golden.generation.wholeMatch(of: /[0-9a-f]{64}/) == nil {
+            problems.append("\(file): its generation is not a provenance digest")
+        }
+        let volumes = golden.anchors.map { String($0.document.prefix { $0 != "/" }) }
+        if Set(volumes) != Set(ParityFixtures.volumes) || volumes != volumes.sorted() {
+            problems.append("\(file): its documents are not the fixture volumes', volumes in order")
+        }
+        var seen: Set<String> = []
+        for anchor in golden.anchors {
+            if !seen.insert(anchor.document).inserted { problems.append("\(file): \(anchor.document) is listed twice") }
+            if anchor.neighbours.isEmpty || anchor.neighbours.count > golden.neighbourCount {
+                problems.append("\(file): \(anchor.document) has \(anchor.neighbours.count) neighbours")
+            }
+            for neighbour in anchor.neighbours where neighbour.wholeMatch(of: /[^ \/]+\/[^ \/]+ [0-9]+ [0-9a-f]+/) == nil {
+                problems.append("\(file): \(anchor.document) has a neighbour not in the form, \(neighbour)")
+                break
+            }
+            for candidates in [anchor.fencedCandidates, anchor.poolCandidates]
+            where candidates.wholeMatch(of: /[0-9]+ [0-9a-f]{64}/) == nil {
+                problems.append("\(file): \(anchor.document) has candidates not in the form, \(candidates)")
+                break
+            }
         }
         return problems
     }

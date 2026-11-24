@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 # FRUS Explorer Light: the image (docs/SPEC.md, Deployment > Image).
 # Phase 1 builds the server, with the app's data files beside it since session 8 and the browser
-# app since session 9; since PLAN's S27b the image holds search by meaning's encoder and its model.
-# rclone (runtime options) arrives later.
+# app since session 9; since PLAN's S27b the image holds search by meaning's encoder and its model,
+# and since S26c every semantic vector, the 553 shards. rclone (runtime options) arrives later.
 #   docker build -f docker/Dockerfile -t frus-explorer-light .
 
 ARG SWIFT_IMAGE=swift:6.4-noble
@@ -20,6 +20,14 @@ ARG LLAMA_COMMIT=a0e6dc7384edb8f5d927155e1d26c10b4a310e6d
 ARG MODEL_URL=https://github.com/joshbotts/frus-semantic-vectors/releases/download/encoder-2/embeddinggemma-2-Q8_0.gguf
 ARG MODEL_BYTES=309855456
 ARG MODEL_SHA256=2188ac1deca4b77dffefd603c2776a9d76d9d74ec01841392982ebb840b09135
+# The semantic vectors' host (PLAN's S26c): VECTORS_COMMIT is the commit whose
+# generations/<generation>/shards-manifest.json is the pinned app's bundled semantic-shards-manifest.json byte for byte,
+# and VECTORS_BASE_COMMIT the generation's first publication, whose shards are the image's base layer. A pin move that
+# moves the bundled semantic-* files records the host's commit here (docs/COORDINATION.md, section 5), and the build
+# fails until it does; docker/fetch-vectors reads these lines, as CI fetches the shards into the Actions cache.
+ARG VECTORS_REPOSITORY=joshbotts/frus-semantic-vectors
+ARG VECTORS_COMMIT=9be645e9c0d6c5beb6aef998416fd3304de52761
+ARG VECTORS_BASE_COMMIT=9be645e9c0d6c5beb6aef998416fd3304de52761
 
 # Server stage: a release build with the Swift runtime linked in, so the runtime image
 # needs no Swift toolchain. It uses SwiftPM's native build system, which SwiftPM marks
@@ -127,6 +135,33 @@ RUN --mount=type=bind,from=model-source,target=/given \
     find /out -type d -exec chmod 0755 {} +; \
     find /out -exec touch --no-dereference --date='2026-10-15 00:00:00 UTC' {} +
 
+# The semantic vectors' source: empty, so that the stage below fetches the shards, unless the build is given a folder
+# docker/fetch-vectors filled as the context of this name, as CI gives the Actions cache's copy:
+#   docker build --build-context vectors-source=<folder> …
+FROM scratch AS vectors-source
+
+# Vectors stage (PLAN's S26c): the 553 shards of the generation the bundled tier names, from the vectors' host at
+# VECTORS_COMMIT, whose manifest must be the bundled one byte for byte, each held to its manifest's length and SHA-256,
+# so that a build whose shards and bundled files disagree fails; laid out in two layers by docker/fetch-vectors: the
+# generation's shards as first published, at VECTORS_BASE_COMMIT, and those a re-pack has changed or added since,
+# none at the pin, each file and folder with fixed modes and times, so that each layer is byte-identical from build to
+# build and the same on every architecture.
+FROM --platform=$BUILDPLATFORM ${RUNTIME_IMAGE} AS vectors
+ARG VECTORS_REPOSITORY
+ARG VECTORS_COMMIT
+ARG VECTORS_BASE_COMMIT
+RUN apt-get update -qq \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends ca-certificates curl jq \
+ && rm -rf /var/lib/apt/lists/*
+COPY docker/fetch-vectors /usr/local/bin/fetch-vectors
+COPY upstream/FRUS-Explorer/FRUSExplorer/Resources/semantic-shards-manifest.json /vectors/bundled-manifest.json
+RUN --mount=type=bind,from=vectors-source,target=/given \
+    set -eu; \
+    mkdir -p /vectors/mirror; \
+    if [ -n "$(ls -A /given)" ]; then cp -R /given/. /vectors/mirror/; fi; \
+    VECTORS_MANIFEST=/vectors/bundled-manifest.json fetch-vectors /vectors/mirror --layout /out; \
+    rm -rf /vectors/mirror
+
 # Client stage: Node runs the Vite production build of the browser app (SPEC, Deployment > Image).
 # Its output is the same on every architecture, so it runs on the builder's own, even when the
 # image is built for another.
@@ -159,6 +194,12 @@ RUN apt-get update -qq \
 # byte-identical from build to build, so that an install pulls its 310 MB once a model and both
 # architectures share it: at the server's default, /usr/share/frus-light/model.
 COPY --link --from=model /out/ /
+# The semantic vectors (PLAN's S26c), every shard, 162 MB, in two layers of their own, each made apart from the layers
+# below it and byte-identical from build to build: the generation's shards as first published, and those a re-pack has
+# changed or added since, so that a pin move past a re-pack pulls only those; at the server's default,
+# /usr/share/frus-light/semantic/shards.
+COPY --link --from=vectors /out/base/ /
+COPY --link --from=vectors /out/repack/ /
 COPY --from=build /out/frus-light /usr/local/bin/frus-light
 COPY LICENSE NOTICE /usr/share/doc/frus-light/
 # The encoder, which the server starts at the first search by meaning, at its default, with the licences

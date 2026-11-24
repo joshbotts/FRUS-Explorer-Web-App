@@ -28,7 +28,7 @@ struct AdminRoleGuard: RouterMiddleware {
 enum AdminRoutes {
     static func add(to router: Router<APIRequestContext>, services: UserDataServices, state: ServerState, resources: ServerResources,
                     library: VolumeLibrary? = nil, indexer: LibraryIndexer? = nil, provider: ServedIndexProvider? = nil,
-                    teiCheck: TEIChangeCheck? = nil, encoder: QueryEncoder = .none) {
+                    teiCheck: TEIChangeCheck? = nil, encoder: QueryEncoder = .none, vectors: SemanticVectors) {
         let admin = router.group("/api/v1/admin").add(middleware: UserDataGuard(services: services)).add(middleware: AdminRoleGuard())
         // A side-loaded volume's XML, of 64 MiB at most, in a group of its own, whose guard takes it (PLAN's S21e).
         let sideloads = router.group("/api/v1/admin")
@@ -49,8 +49,8 @@ enum AdminRoutes {
                               reviews: UpdateReviewSources(indexer: indexer, teiCheck: teiCheck))
         // The log of the corrections curators made, the audit of the shared index (S21g).
         CorrectionRoutes.add(toAdmin: admin, services: services, provider: provider, mode: indexer?.mode ?? .import)
-        // Search Model: the model in the image and the encoder's state, and one query embedded (S27b).
-        AdminSemanticRoutes.add(to: admin, encoder: encoder)
+        // Search Model: the model in the image and the encoder's state, and one query embedded (S27b); and Vectors (S26c).
+        AdminSemanticRoutes.add(to: admin, encoder: encoder, vectors: vectors)
         AdminUserRoutes.add(to: admin, services: services)
 
         admin.get("backup") { request, context -> Response in

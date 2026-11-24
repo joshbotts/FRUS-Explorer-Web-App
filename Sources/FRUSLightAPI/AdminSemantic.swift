@@ -2,7 +2,9 @@
 // the image, its size and its SHA-256 held to the bundled index's, the engine that runs it, and the encoder's
 // setting and state, on and loaded or idle, or off, with nothing to download or remove, since the image holds
 // the model; and one query embedded through the server's own path, as the smoke test and `frus-parity embed`
-// ask, check 9's encoder half. An admin's, behind `AdminRoutes`' guard; S26c adds the vectors.
+// ask, check 9's encoder half. An admin's, behind `AdminRoutes`' guard. Since S26c, Vectors beside it: the
+// bundled generation, its model and its count, the shards in the image of those the bundled manifest
+// publishes, each checked before the answer, and any refused, with why, in the app's storage sentences.
 //   GET /api/v1/admin/semantic
 //   GET /api/v1/admin/semantic/embedding?query=…
 
@@ -25,11 +27,40 @@ public struct EmbeddingAnswer: Codable, Equatable, Sendable, ResponseEncodable {
     public var started: Bool
 }
 
+/// `GET /api/v1/admin/semantic`: Search Model's report as S27b gave it, its members where they were, and the
+/// vectors' report under `vectors` (S26c).
+public struct SemanticAdminReport: Codable, Equatable, Sendable, ResponseEncodable {
+    public var searchModel: EncoderReport
+    public var vectors: SemanticVectorsReport
+
+    private enum Keys: String, CodingKey {
+        case vectors
+    }
+
+    public init(searchModel: EncoderReport, vectors: SemanticVectorsReport) {
+        self.searchModel = searchModel
+        self.vectors = vectors
+    }
+
+    public init(from decoder: any Decoder) throws {
+        searchModel = try EncoderReport(from: decoder)
+        vectors = try decoder.container(keyedBy: Keys.self).decode(SemanticVectorsReport.self, forKey: .vectors)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        try searchModel.encode(to: encoder)
+        var container = encoder.container(keyedBy: Keys.self)
+        try container.encode(vectors, forKey: .vectors)
+    }
+}
+
 enum AdminSemanticRoutes {
-    static func add(to admin: RouterGroup<APIRequestContext>, encoder: QueryEncoder) {
-        admin.get("semantic") { request, _ -> EditedResponse<EncoderReport> in
+    static func add(to admin: RouterGroup<APIRequestContext>, encoder: QueryEncoder, vectors: SemanticVectors) {
+        admin.get("semantic") { request, _ -> EditedResponse<SemanticAdminReport> in
             try FormQuery(request.uri.query).refuseUnknown([])
-            return EditedResponse(headers: [.cacheControl: "no-store"], response: await encoder.report())
+            async let model = encoder.report()
+            async let held = vectors.report()
+            return EditedResponse(headers: [.cacheControl: "no-store"], response: SemanticAdminReport(searchModel: await model, vectors: await held))
         }
 
         admin.get("semantic/embedding") { request, _ -> EditedResponse<EmbeddingAnswer> in

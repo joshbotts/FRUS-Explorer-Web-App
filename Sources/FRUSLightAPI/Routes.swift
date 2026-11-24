@@ -13,13 +13,17 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
                  provider: ServedIndexProvider? = nil, webClient: WebClient? = nil, userData: UserDataServices? = nil,
                  leads: ProjectLeadsQueue? = nil,
                  library: VolumeLibrary? = nil, indexer: LibraryIndexer? = nil, teiCheck: TEIChangeCheck? = nil,
-                 encoder: QueryEncoder = .none, base: BasePath = .root,
+                 encoder: QueryEncoder = .none, vectors: SemanticVectors? = nil, base: BasePath = .root,
                  logger: Logger = Logger(label: "frus-light")) -> Router<APIRequestContext> {
     // With user data on, each stack attaches the user store's search database, for each user's half of
     // a search (S17d).
     let provider = provider ?? ServedIndexProvider(state: state, resources: resources, volumesDirectory: reader.volumesDirectory,
                                                    userStore: userData.flatMap { $0.enabled ? $0.store.searchDatabase : nil })
     let users = SearchUsers(services: userData)
+    // The semantic vectors (PLAN's S26c): the bundled tier, read on its first use, and the image's shards; the map
+    // takes its vectors' index from the same read.
+    let vectors = vectors ?? SemanticVectors(resources: resources.directory, shards: state.configuration.semanticShards)
+    let map = SemanticMapFiles(vectors: vectors)
     // Every GET route answers HEAD too, so HEAD /readyz says what GET says rather than falling to
     // the browser app's fallback.
     let router = Router(context: APIRequestContext.self, options: .autoGenerateHeadEndpoints)
@@ -37,7 +41,12 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     if let proxies = userData?.proxies { router.add(middleware: TrustedProxyGuard(proxies: proxies)) }
     router.get("/api/v1/status") { request, _ in
         try FormQuery(request.uri.query).refuseUnknown([])
-        return await state.status()
+        var status = await state.status()
+        // Which of the semantic features the server serves (PLAN's S26c), from what it has read, hashing nothing.
+        var mapServed = false
+        if case .success = await map.map() { mapServed = true }
+        status.semantic = await vectors.features(map: mapServed, encoder: encoder.settings.canStart)
+        return status
     }
     CatalogRoutes.add(to: router, state: state, provider: provider, resources: resources, reader: reader)
     AnnotationRoutes.add(to: router, resources: resources)
@@ -58,7 +67,7 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
     // The Word Cloud (PLAN's S24i), from the bundled clouds, with the reader's own settings where a request acts for one.
     WordCloudRoutes.add(to: router, resources: resources, users: users)
     // The semantic map's points and regions (PLAN's S28b), from the bundled map, read on first use.
-    SemanticMapRoutes.add(to: router, map: SemanticMapFiles(directory: resources.directory))
+    SemanticMapRoutes.add(to: router, map: map)
     // Archival Analytics and About the Series (PLAN's S24h).
     ArchivalAnalyticsRoutes.add(to: router, provider: provider, resources: resources)
     AboutSeriesRoutes.add(to: router, provider: provider, resources: resources)
@@ -78,7 +87,7 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
         // The NARA Catalog proxy (PLAN's S22e), under the guard, with or without user data.
         NARARoutes.add(to: router, services: userData)
         AdminRoutes.add(to: router, services: userData, state: state, resources: resources, library: library, indexer: indexer,
-                        provider: provider, teiCheck: teiCheck, encoder: encoder)
+                        provider: provider, teiCheck: teiCheck, encoder: encoder, vectors: vectors)
     }
     // Last, so it wraps only the requests no route answers.
     if let webClient { router.add(middleware: WebClientMiddleware(webClient, logger: logger)) }
