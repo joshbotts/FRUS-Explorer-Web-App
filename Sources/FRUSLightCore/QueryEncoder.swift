@@ -450,15 +450,6 @@ public actor QueryEncoder {
         }
     }
 
-    /// Stops the child now, as an idle window's end does, for a test that waits for none.
-    public func stopNow() async {
-        idleStop?.cancel()
-        if let child {
-            self.child = nil
-            await child.stop(within: settings.stopTimeout)
-        }
-    }
-
     // MARK: The model's check
 
     struct ModelCheck: Sendable {

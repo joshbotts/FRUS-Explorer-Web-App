@@ -4,9 +4,9 @@
 # Each architecture builds natively, amd64 and arm64 side by side, its search model from the Actions
 # cache by its digest (PLAN's S27b), and pushes by digest, with frus-parity's image beside it in the
 # build cache. The publish job joins them under the commit's tag; verify runs the Compose smoke test
-# against that tag on both architectures, with frus-parity, so that checks 2, 8 and 9's encoder half run
-# on both, the encoder's over the app's 25 judged queries; only then does promote move edge. The image's labels name the app
-# version and build whose exports it serves and the index version, from scripts/release
+# against that tag on both architectures, with frus-parity, so that checks 2, 8 and 9's encoder half
+# run on both, the encoder's over the app's 25 judged queries; only then does promote move edge. The
+# image's labels name the app version and build whose exports it serves and the index version, from scripts/release
 # build-args, which fails, so that nothing is published, if the pinned app's targets disagree.
 # Releases, :<version>-<build> and :<version>-<build>.<n>, are the owner's to cut from a build that
 # passed, with release.yml (PLAN's S14g).
