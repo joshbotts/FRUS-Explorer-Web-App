@@ -72,6 +72,7 @@ import { BackupsScreen } from './admin/BackupsPane';
 import { CorrectionsScreen } from './admin/CorrectionsPane';
 import { JobsScreen } from './admin/JobsPane';
 import { LibraryScreen } from './admin/LibraryPane';
+import { SemanticScreen } from './admin/SemanticPane';
 import { StatusScreen } from './admin/StatusPane';
 import { UsersScreen } from './admin/UsersPane';
 
@@ -521,6 +522,13 @@ const adminCorrectionsRoute = createRoute({
   component: CorrectionsScreen,
 });
 
+// From S27b: Search Model, the model in the image and the encoder.
+const adminSemanticRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin/semantic',
+  component: SemanticScreen,
+});
+
 const adminUsersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin/users',
@@ -597,6 +605,7 @@ export const routeTree = rootRoute.addChildren([
   adminJobsRoute,
   adminLibraryRoute,
   adminCorrectionsRoute,
+  adminSemanticRoute,
   adminUsersRoute,
   adminBackupsRoute,
   adminKeysRoute,

@@ -40,6 +40,9 @@ struct ServerComponents: Sendable {
     let indexer: LibraryIndexer
     /// Import mode's step 5 (PLAN's S21f): the served export compared with the mounted TEI, beside the queue.
     let teiCheck: TEIChangeCheck
+    /// Search by meaning's encoder (PLAN's S27b): llama-server over the model in the image, a child it starts
+    /// at the first query and stops when idle, unless `FRUS_ENCODER` is off.
+    let encoder: QueryEncoder
 
     static func make(configuration: ServerConfiguration, logger: Logger) async throws -> ServerComponents {
         // Before anything is written: a server without its data files cannot serve the reader.
@@ -87,6 +90,7 @@ struct ServerComponents: Sendable {
                                       folder: files.root.appendingPathComponent("tei-check", isDirectory: true),
                                       resources: resources.indexing, state: state, jobs: jobs, log: { logger.info("\($0)") })
         await library.resumeUnfinished()
+        let encoder = QueryEncoder(settings: EncoderSettings(configuration: configuration), log: { logger.info("\($0)") })
         return ServerComponents(
             files: files,
             state: state,
@@ -114,7 +118,8 @@ struct ServerComponents: Sendable {
             leads: leads,
             library: library,
             indexer: indexer,
-            teiCheck: teiCheck)
+            teiCheck: teiCheck,
+            encoder: encoder)
     }
 
     /// The user store `FRUS_USER_STORE` names, migrated to this build's schema: app.db in the data
@@ -251,6 +256,7 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
             logger.warning("FRUS_USER_DATA is off, so Administration and its Library are too: the server serves the volumes it keeps, and downloads none")
         }
     }
+    logEncoder(components.encoder.settings, logger: logger)
     if let folder = getenv("SQLITE_TMPDIR") {
         logger.info("SQLite's temporary files go to \(String(cString: folder))")
     }
@@ -261,7 +267,7 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
                                                        secrets: components.secrets, jobs: components.jobs),
                             leads: components.leads,
                             library: components.library, indexer: components.indexer, teiCheck: components.teiCheck,
-                            base: configuration.basePath, logger: logger),
+                            encoder: components.encoder, base: configuration.basePath, logger: logger),
         base: configuration.basePath,
         configuration: .init(address: .hostname(configuration.host, port: configuration.port), serverName: "frus-light"),
         logger: logger)
@@ -285,7 +291,25 @@ public func buildApplication(configuration: ServerConfiguration) async throws ->
     if let backups = components.backups, let serverLock = components.serverLock {
         app.addServices(BackupService(backups: backups, serverLock: serverLock, logger: logger))
     }
+    // The encoder's child stops with the server (PLAN's S27b).
+    app.addServices(EncoderService(encoder: components.encoder))
     return app
+}
+
+/// Says whether the server searches by meaning (PLAN's S27b), and why not when it cannot.
+private func logEncoder(_ settings: EncoderSettings, logger: Logger) {
+    guard settings.enabled else {
+        logger.info("Search by meaning's encoder is off (FRUS_ENCODER=off): it never starts, and the server offers no search by meaning")
+        return
+    }
+    let missing = [(settings.binary, "encoder"), (settings.model, "search model")].filter { !FileManager.default.fileExists(atPath: $0.0.path) }
+    if let (file, what) = missing.first {
+        logger.warning("FRUS_ENCODER is on, and there is no \(what) at \(file.path), as an image holds it: the server cannot search by meaning")
+    } else if let problem = settings.bundledProblem {
+        logger.warning("FRUS_ENCODER is on, and \(problem): the server cannot search by meaning")
+    } else {
+        logger.info("Search by meaning's encoder is on: llama-server starts at the first query, over \(settings.model.path), and stops after \(settings.idleTimeout.components.seconds) seconds without one")
+    }
 }
 
 /// Says how local accounts sign in (PLAN's S20b), and how to make the first when no account can.
@@ -367,6 +391,18 @@ struct BackupService: Service {
             }
         }
         withExtendedLifetime(serverLock) {}
+    }
+}
+
+/// Stops the encoder's child at the server's end (PLAN's S27b): it waits for the graceful shutdown, then
+/// asks the child to end, and ends it if it does not.
+struct EncoderService: Service {
+    let encoder: QueryEncoder
+
+    func run() async throws {
+        // Shutdown, or the cancellation of this task, ends the wait; either way the child stops.
+        try? await gracefulShutdown()
+        await encoder.shutdown()
     }
 }
 

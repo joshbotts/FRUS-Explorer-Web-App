@@ -2,7 +2,7 @@
 // instance's Keys, each a page of its own under /admin, for an admin; and the frame every pane is drawn
 // in, which says why there is nothing to show to anyone else, or on a server that keeps no user data.
 // The panes are grouped by area under a line each, as Settings' are (PLAN's S20a): a later row's pane
-// goes beside its area's kin, never at the end, as the library's (S21c) does.
+// goes beside its area's kin, never at the end, as the library's (S21c) does, and Semantic (S27b).
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { type ReactNode, useEffect } from 'react';
@@ -36,6 +36,11 @@ export function AdminPanes() {
         <li>
           <Link to="/admin/corrections" activeProps={{ 'aria-current': 'page' }}>
             {copy.admin.corrections.title}
+          </Link>
+        </li>
+        <li>
+          <Link to="/admin/semantic" activeProps={{ 'aria-current': 'page' }}>
+            {copy.admin.semantic.title}
           </Link>
         </li>
         {/* ─── People ────────────────────────────────────────────────────── */}

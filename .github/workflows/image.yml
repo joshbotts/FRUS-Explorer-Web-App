@@ -1,10 +1,12 @@
 # FRUS Explorer Light: publishes the image to GitHub Container Registry from main.
 #   ghcr.io/joshbotts/frus-explorer-light:sha-<commit>  each build of main (first 7 characters)
 #   ghcr.io/joshbotts/frus-explorer-light:edge          the newest build that passed its smoke test
-# Each architecture builds natively, amd64 and arm64 side by side, and pushes by digest. The
-# publish job joins them under the commit's tag; verify runs the Compose smoke test against that
-# tag on both architectures; only then does promote move edge. The image's labels name the app
-# version and build whose exports it serves and the index version, from scripts/release
+# Each architecture builds natively, amd64 and arm64 side by side, its search model from the Actions
+# cache by its digest (PLAN's S27b), and pushes by digest, with frus-parity's image beside it in the
+# build cache. The publish job joins them under the commit's tag; verify runs the Compose smoke test
+# against that tag on both architectures, with frus-parity, so that checks 2, 8 and 9's encoder half
+# run on both, the encoder's over the app's 25 judged queries; only then does promote move edge. The
+# image's labels name the app version and build whose exports it serves and the index version, from scripts/release
 # build-args, which fails, so that nothing is published, if the pinned app's targets disagree.
 # Releases, :<version>-<build> and :<version>-<build>.<n>, are the owner's to cut from a build that
 # passed, with release.yml (PLAN's S14g).
@@ -26,8 +28,10 @@ on:
       - upstream/**
       - web/**
       - .gitmodules
+      - NOTICE
       - scripts/release
       - scripts/release-tag
+      - scripts/fetch-model
   workflow_dispatch:
 
 permissions:
@@ -82,6 +86,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # The search model (PLAN's S27b), from the Actions cache by the digest docker/Dockerfile names, fetched
+      # once a model, and given to the build as its model-source context, so that it fetches nothing.
+      - name: The search model's digest
+        id: model
+        run: echo "sha256=$(sed -n 's/^ARG MODEL_SHA256=//p' docker/Dockerfile)" >> "$GITHUB_OUTPUT"
+
+      - name: The search model, from the Actions cache by its digest
+        id: model-cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/model
+          key: search-model-${{ steps.model.outputs.sha256 }}
+
+      - name: Fetch the search model once
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        run: scripts/fetch-model "$RUNNER_TEMP/model"
+
       - name: Build${{ env.PUSH == 'true' && ' and push by digest' || '' }}
         id: build
         uses: docker/build-push-action@v7
@@ -90,9 +111,28 @@ jobs:
           file: docker/Dockerfile
           platforms: linux/${{ matrix.arch }}
           build-args: ${{ steps.args.outputs.list }}
+          build-contexts: model-source=${{ runner.temp }}/model
           outputs: ${{ env.PUSH == 'true' && format('type=image,name={0},push-by-digest=true,name-canonical=true,push=true', env.IMAGE) || 'type=cacheonly' }}
           cache-from: type=gha,scope=image-${{ matrix.arch }}
           cache-to: type=gha,scope=image-${{ matrix.arch }},mode=max,ignore-error=true
+
+      # frus-parity's image, the Dockerfile's parity stage, into the build cache for verify (PLAN's S27b): built
+      # in the builder that built the image, whose cache mount holds the server's objects, so that only the
+      # parity harness compiles; verify loads it from the cache. No release ships it, and nothing is pushed.
+      - name: Build frus-parity's image into the cache
+        if: env.PUSH == 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          build-args: ${{ steps.args.outputs.list }}
+          target: parity
+          outputs: type=cacheonly
+          cache-from: |
+            type=gha,scope=image-${{ matrix.arch }}
+            type=gha,scope=parity-${{ matrix.arch }}
+          cache-to: type=gha,scope=parity-${{ matrix.arch }},mode=max,ignore-error=true
 
       - name: Keep the digest
         if: env.PUSH == 'true'
@@ -159,12 +199,15 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 20
+    timeout-minutes: 40
     permissions:
       contents: read
       packages: read
     steps:
+      # The submodule, for frus-parity's build context and the app's fixture of its 25 judged queries.
       - uses: actions/checkout@v5
+        with:
+          submodules: true
 
       - uses: docker/login-action@v4
         with:
@@ -175,8 +218,33 @@ jobs:
       - name: Install sqlite3 for the synthetic export
         run: command -v sqlite3 || (sudo apt-get update -qq && sudo apt-get install -y -qq sqlite3)
 
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build arguments
+        id: args
+        run: |
+          args=$(scripts/release build-args)
+          echo "$args"
+          { echo 'list<<EOF'; echo "$args"; echo EOF; } >> "$GITHUB_OUTPUT"
+
+      # frus-parity, from the cache the build job left (PLAN's S27b), for checks 2, 8 and 9's encoder half on
+      # this architecture.
+      - name: frus-parity's image, from the build's cache
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          build-args: ${{ steps.args.outputs.list }}
+          target: parity
+          tags: frus-light:verify-parity
+          load: true
+          cache-from: |
+            type=gha,scope=image-${{ matrix.arch }}
+            type=gha,scope=parity-${{ matrix.arch }}
+
       - name: Compose smoke test against the published image
-        run: FRUS_IMAGE="$IMAGE:${{ needs.publish.outputs.tag }}" scripts/compose-smoke
+        run: FRUS_IMAGE="$IMAGE:${{ needs.publish.outputs.tag }}" FRUS_PARITY_IMAGE=frus-light:verify-parity scripts/compose-smoke
 
   promote:
     name: promote to edge

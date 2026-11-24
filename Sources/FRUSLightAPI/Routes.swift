@@ -12,7 +12,8 @@ import Logging
 func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderService,
                  provider: ServedIndexProvider? = nil, webClient: WebClient? = nil, userData: UserDataServices? = nil,
                  leads: ProjectLeadsQueue? = nil,
-                 library: VolumeLibrary? = nil, indexer: LibraryIndexer? = nil, teiCheck: TEIChangeCheck? = nil, base: BasePath = .root,
+                 library: VolumeLibrary? = nil, indexer: LibraryIndexer? = nil, teiCheck: TEIChangeCheck? = nil,
+                 encoder: QueryEncoder = .none, base: BasePath = .root,
                  logger: Logger = Logger(label: "frus-light")) -> Router<APIRequestContext> {
     // With user data on, each stack attaches the user store's search database, for each user's half of
     // a search (S17d).
@@ -75,7 +76,7 @@ func buildRouter(state: ServerState, resources: ServerResources, reader: ReaderS
         // The NARA Catalog proxy (PLAN's S22e), under the guard, with or without user data.
         NARARoutes.add(to: router, services: userData)
         AdminRoutes.add(to: router, services: userData, state: state, resources: resources, library: library, indexer: indexer,
-                        provider: provider, teiCheck: teiCheck)
+                        provider: provider, teiCheck: teiCheck, encoder: encoder)
     }
     // Last, so it wraps only the requests no route answers.
     if let webClient { router.add(middleware: WebClientMiddleware(webClient, logger: logger)) }

@@ -1,7 +1,8 @@
 // FRUS Explorer Light server. Configuration comes from FRUS_* environment variables (docs/SPEC.md).
 // `frus-light backup` and `frus-light restore` back up and restore the user store (StoreCommands), and
-// `frus-light user` makes and changes local accounts (UserCommands, PLAN's S20b), and `frus-light secrets
-// forget` removes the stored keys a lost key file leaves unreadable (SecretCommands, S20c).
+// `frus-light user` makes and changes local accounts (UserCommands, PLAN's S20b), `frus-light secrets
+// forget` removes the stored keys a lost key file leaves unreadable (SecretCommands, S20c), and `frus-light
+// semantic` reports the search model and its encoder (SemanticCommand, S27b).
 
 import FRUSLightAPI
 import FRUSLightCore
@@ -46,6 +47,8 @@ struct FRUSLightServer {
             exit(await UserCommands.run(Array(arguments.dropFirst()), configuration))
         case "secrets":
             exit(await SecretCommands.run(Array(arguments.dropFirst()), configuration))
+        case "semantic":
+            exit(await SemanticCommand.run(Array(arguments.dropFirst()), configuration))
         default:
             break
         }

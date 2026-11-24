@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # FRUS Explorer Light: the Compose smoke test (session 5).
-# Starts compose.yaml's server, checks the browser app, the catalogue and the reader before any
-# import, imports a synthetic export with docker compose cp, and waits for /readyz to answer 200;
+# Starts compose.yaml's server, checks the browser app, the encoder and its model in the image, whose
+# first query the hardened container embeds through the server's own path, with check 9's encoder half
+# over the app's 25 judged queries where it has an image of the parity stage (PLAN's S27b), and the
+# catalogue and the reader before any import, imports a synthetic export with docker compose cp, and
+# waits for /readyz to answer 200;
 # then checks the image's labels against the server's status, searches the index, reads a
 # document's page, makes and deletes a tag through the API's write guard (PLAN's S14c), and checks
 # the user, the read-only root, the health check and a restart. Then it
@@ -28,8 +31,9 @@
 #   FRUS_IMAGE=<image> scripts/compose-smoke    tests an image already built
 #   FRUS_PARITY_IMAGE=<image>                   names an image of the Dockerfile's parity stage, whose
 #                                               frus-parity summarizes the Standalone project's index for
-#                                               check 2 (PLAN's S21d); the script builds one beside an
-#                                               image it builds itself, and without either skips check 2
+#                                               check 2 (PLAN's S21d), and runs checks 8 and 9's encoder
+#                                               half; the script builds one beside an image it builds
+#                                               itself, and without either skips them
 #   scripts/compose-smoke --e2e                 also runs web/e2e, Playwright on Chromium, against the
 #                                               imported server at the root, then under the path
 #                                               through nginx, its accounts spec with local
@@ -223,6 +227,68 @@ code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "$base/assets/no-such
 unknown=$(curl -s --max-time 5 -o /dev/null -w '%{http_code} %{content_type}' "$base/api/v1/no-such-endpoint" || true)
 [ "$unknown" = "404 application/problem+json" ] || fail "an unknown API path answered $unknown"
 echo "   / and two client routes give index.html with the app's policy; $script immutable; 404s for a missing asset and an unknown API path"
+
+echo "== install: the encoder and its model in the image (PLAN's S27b)"
+# llama.cpp's llama-server at the commit docker/Dockerfile names, which EncoderImageTests holds to the pinned
+# app's script, and the model at the length the app publishes and the digest the image's own bundled index
+# names, which the build held it to.
+dockerfile_argument() { sed -n "s/^ARG $1=//p" docker/Dockerfile; }
+llama_commit=$(dockerfile_argument LLAMA_COMMIT)
+engine=$(docker compose exec -T frus llama-server --version 2>&1 | grep '^version:' || true)
+case "$engine" in *"commit ${llama_commit:0:7})") ;; *) fail "the image's llama-server is not llama.cpp at ${llama_commit:0:7}: ${engine:-no version}" ;; esac
+model=/usr/share/frus-light/model/embeddinggemma-2-Q8_0.gguf
+bundled=$(docker compose exec -T frus cat /usr/share/frus-light/resources/semantic-vectors-index.json \
+  | python3 -c 'import json, sys; print(json.load(sys.stdin)["provenance"]["modelFileSHA256"])') || fail "the image's bundled index could not be read"
+held=$(docker compose exec -T frus sha256sum "$model" | cut -d' ' -f1)
+[ "$held" = "$bundled" ] || fail "the image's model is ${held:-missing}, where its bundled index names $bundled"
+model_bytes=$(docker compose exec -T frus stat -c %s "$model")
+[ "$model_bytes" = "$(dockerfile_argument MODEL_BYTES)" ] || fail "the image's model is $model_bytes bytes"
+docker compose exec -T frus test -r /usr/share/doc/frus-light/NOTICE || fail "the image holds no NOTICE"
+docker compose exec -T frus test -r /usr/share/doc/frus-light/llama.cpp/LICENSE || fail "the image holds no llama.cpp licence"
+echo "   $engine; the model, $model_bytes bytes, at the bundled digest $held"
+
+echo "== admin: one query embedded by the image's encoder through the server's own path, and check 9's encoder half (PLAN's S27b)"
+# The hardened container, read-only, as UID 10001 with no capability, starts llama-server as its child at the
+# first query, on 127.0.0.1 alone with a key of its own, and the server answers with the 768 values, of unit
+# length. Search Model then says it is loaded, and frus-light semantic, as a server with no Administration reads
+# it, says the same. With an image of the parity stage, check 9's encoder half: the app's 25 judged queries,
+# each at a cosine of 0.999 or more against the app's fixture.
+embedding=$(curl -s --max-time 120 -H "Host: localhost:8080" "$base/api/v1/admin/semantic/embedding?query=Soviet%20missiles%20in%20Cuba") \
+  || fail "the embedding route did not answer"
+python3 - "$embedding" <<'PY' || fail "the query was not embedded: $(printf '%s' "$embedding" | head -c 400)"
+import json, math, sys
+answer = json.loads(sys.argv[1])
+vector = answer["vector"]
+assert answer["dimensions"] == 768 and len(vector) == 768, answer.get("dimensions")
+assert answer["prompt"] == "task: search result | query: Soviet missiles in Cuba", answer["prompt"]
+assert abs(math.sqrt(sum(value * value for value in vector)) - 1) < 1e-9
+assert answer["started"], "the first query starts the encoder"
+print(f"   768 values of unit length, {answer['tokens']} tokens, in {answer['seconds']:.2f} s with the encoder's start")
+PY
+semantic=$(curl -s --max-time 30 -H "Host: localhost:8080" "$base/api/v1/admin/semantic") || fail "Search Model did not answer"
+python3 - "$semantic" <<'PY' || fail "Search Model is not the encoder loaded: $(printf '%s' "$semantic" | head -c 600)"
+import json, sys
+report = json.loads(sys.argv[1])
+assert report["setting"] == "on" and report["state"] == "loaded", report["state"]
+assert report["model"]["verified"] is True and report["queries"] >= 1
+memory = report.get("residentBytes")
+print(f"   Search Model: loaded, process {report['pid']}, holding {memory / 1e6:.0f} MB" if memory else "   Search Model: loaded")
+PY
+listening=$(docker compose exec -T frus sh -c 'for f in /proc/[0-9]*/cmdline; do tr "\0" " " < "$f"; echo; done' | grep '^/usr/local/bin/llama-server ' || true)
+case "$listening" in *" --host 127.0.0.1 "*) ;; *) fail "llama-server does not listen on 127.0.0.1 alone: ${listening:-not running}" ;; esac
+docker compose exec -T frus frus-light semantic > "$work/semantic.txt" || fail "frus-light semantic failed: $(cat "$work/semantic.txt")"
+grep -q '^  Encoder     on: loaded, process ' "$work/semantic.txt" || fail "frus-light semantic does not find the encoder loaded: $(cat "$work/semantic.txt")"
+grep -q ", the bundled index's: verified$" "$work/semantic.txt" || fail "frus-light semantic does not verify the model: $(cat "$work/semantic.txt")"
+echo "   llama-server on 127.0.0.1 alone; frus-light semantic: $(grep '^  Encoder' "$work/semantic.txt" | sed 's/^  Encoder *//')"
+if [ -n "${FRUS_PARITY_IMAGE:-}" ]; then
+  docker run --rm --user "$(id -u):$(id -g)" --network "container:$container" -v "$PWD:/repo:ro" "$FRUS_PARITY_IMAGE" \
+    frus-parity embed --api http://localhost:8080/ --repo /repo > "$work/check9.log" 2>&1 \
+    || fail "check 9's encoder half fails: $(tail -30 "$work/check9.log")"
+  grep -q "^check 9's encoder half passes" "$work/check9.log" || fail "check 9's encoder half said nothing: $(tail -5 "$work/check9.log")"
+  echo "   $(grep "^check 9's encoder half passes" "$work/check9.log" | cut -c1-200)…"
+else
+  echo "   check 9's encoder half: skipped, since FRUS_PARITY_IMAGE names no image of the parity stage"
+fi
 
 echo "== browse and search, the reader: before an import"
 code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "$base/readyz" || true)

@@ -86,6 +86,13 @@ public struct ServerConfiguration: Sendable, Equatable {
     /// address under which the server asks the NARA Catalog's and Zotero's, each by its host's name, as the
     /// tests and the smoke test serve their stubs; nil for the services themselves.
     public var servicesMirror: URL?
+    /// Search by meaning's encoder (`FRUS_ENCODER`, PLAN's S27b): on, by the owner's choice of 23 November, the
+    /// server starts `llama-server` over the model in the image at the first query; off, it never does, and
+    /// the server offers no search by meaning.
+    public var encoder: Bool
+    /// The encoder's binary and its model, the image's; a test names a stand-in. Neither has a variable.
+    public var encoderBinary: URL
+    public var encoderModel: URL
 
     /// The path the server answers under, `FRUS_PUBLIC_URL`'s: the root unless it ends in a path.
     public var basePath: BasePath {
@@ -101,6 +108,10 @@ public struct ServerConfiguration: Sendable, Equatable {
     public static let imageResourcesDirectory = URL(fileURLWithPath: "/usr/share/frus-light/resources", isDirectory: true)
     /// Where the image puts the browser app.
     public static let imageWebDirectory = URL(fileURLWithPath: "/usr/share/frus-light/web", isDirectory: true)
+    /// Where the image puts the encoder, llama.cpp's `llama-server` (PLAN's S27b).
+    public static let imageEncoderBinary = URL(fileURLWithPath: "/usr/local/bin/llama-server")
+    /// Where the image puts the search model, in a layer of its own.
+    public static let imageEncoderModel = URL(fileURLWithPath: "/usr/share/frus-light/model/embeddinggemma-2-Q8_0.gguf")
 
     public init(
         mode: Mode = .import, auth: Auth = .none, dataDirectory: URL = URL(fileURLWithPath: "/data"),
@@ -112,7 +123,8 @@ public struct ServerConfiguration: Sendable, Equatable {
         userData: Bool = true, userStore: UserStoreChoice = .sqlite, backupHour: Int = 3,
         backupCopyDirectory: URL? = nil, authHeader: String = "X-Forwarded-User",
         trustedProxies: [AddressRange] = [], adminUsers: Set<String> = [], secretKeyFile: URL? = nil,
-        naraAPIKey: String? = nil, servicesMirror: URL? = nil
+        naraAPIKey: String? = nil, servicesMirror: URL? = nil, encoder: Bool = true,
+        encoderBinary: URL = ServerConfiguration.imageEncoderBinary, encoderModel: URL = ServerConfiguration.imageEncoderModel
     ) {
         self.mode = mode
         self.auth = auth
@@ -138,6 +150,9 @@ public struct ServerConfiguration: Sendable, Equatable {
         self.secretKeyFile = secretKeyFile
         self.naraAPIKey = naraAPIKey
         self.servicesMirror = servicesMirror
+        self.encoder = encoder
+        self.encoderBinary = encoderBinary
+        self.encoderModel = encoderModel
     }
 
     /// Reads the configuration, reporting every problem at once.
@@ -327,6 +342,15 @@ public struct ServerConfiguration: Sendable, Equatable {
             } else {
                 // Not echoed: a URL given with a password in it would leave it in the log.
                 problems.append("FRUS_SERVICES_MIRROR must be an http or https URL with no user, password, query or fragment")
+            }
+        }
+
+        // Search by meaning's encoder (PLAN's S27b), on unless an admin turns it off.
+        if let raw = value("FRUS_ENCODER") {
+            switch raw.lowercased() {
+            case "on": config.encoder = true
+            case "off": config.encoder = false
+            default: problems.append("FRUS_ENCODER must be on or off, not \(raw)")
             }
         }
 

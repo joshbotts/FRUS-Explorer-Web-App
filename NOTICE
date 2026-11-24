@@ -1,0 +1,61 @@
+FRUS Explorer Light
+Copyright 2026 The FRUS Explorer Contributors
+
+This product's source code is licensed under the Apache License, Version 2.0
+(see LICENSE). The notices below cover third-party components that are part of
+its image but are not part of, or not licensed with, this repository. The image
+also holds the FRUS Explorer app's data files, from the app's repository at the
+commit this repository pins, under that repository's licence.
+
+--------------------------------------------------------------------------------
+EmbeddingGemma 2 (Google)
+--------------------------------------------------------------------------------
+
+Search by meaning embeds each question with Google's EmbeddingGemma 2, which
+the image holds and the server runs on its own processor; nothing searched
+leaves the server. The model file is distributed unmodified: the ggml-org Q8_0
+GGUF build of google/embeddinggemma-2 (embeddinggemma-2-Q8_0.gguf, 309,855,456
+bytes, SHA-256
+2188ac1deca4b77dffefd603c2776a9d76d9d74ec01841392982ebb840b09135), the file
+the FRUS Explorer app publishes and names, at
+/usr/share/frus-light/model/embeddinggemma-2-Q8_0.gguf. The model weights are
+never committed to this repository: the image's build fetches them.
+
+EmbeddingGemma 2 is licensed under the Apache License, Version 2.0
+(https://www.apache.org/licenses/LICENSE-2.0); see
+https://huggingface.co/google/embeddinggemma-2. Neither the model's repository
+nor the GGUF's carries a NOTICE file.
+
+--------------------------------------------------------------------------------
+llama.cpp
+--------------------------------------------------------------------------------
+
+The image holds llama.cpp's llama-server (https://github.com/ggml-org/llama.cpp),
+built from source at the commit the FRUS Explorer app pins, which runs the
+model. Its licence follows. llama-server also holds libraries llama.cpp
+carries: cpp-httplib and nlohmann/json (MIT), xxHash (BSD 2-Clause),
+rotate-bits (MIT), and stb_image, miniaudio, a SHA-1 and a SHA-256 in the
+public domain. Their licences are in /usr/share/doc/frus-light/llama.cpp, as
+llama.cpp's source holds them.
+
+MIT License
+
+Copyright (c) 2023-2026 The ggml authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

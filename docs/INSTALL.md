@@ -8,12 +8,12 @@ FRUS Explorer Light runs as one container on a Mac or a Linux host, serving a re
 
 - **Docker with Compose.** On a Mac, Docker Desktop, Podman Desktop or Colima; Docker Desktop needs a paid subscription in larger organisations. On Linux, Docker Engine with the Compose plugin. This guide uses `docker compose`; it was tested with Docker Desktop 4.93.
 - **About 15 GB free for Docker:**
-  - the image is about 400 MB, with the app's data files;
+  - the image is about 650 MB, a download of about 410 MB, with the app's data files and search by meaning's model, 310 MB of it (see [Semantic](#semantic));
   - the index for the full corpus is 2.8 GB;
   - an import needs room for the export and a copy while it is checked;
   - a later import keeps the previous index for rollback, so a re-import needs about four times the index while it runs;
   - an export made with your notes, summaries and tags needs about twice the index more while the server removes them from its copy, about 20 GB in all for the full corpus.
-- **Memory.** Importing and serving the full corpus used about 130 MB, and the reader levelled off at about 170 MB over the largest volumes, so Docker Desktop's default allocation is plenty. A search ordered by date, or read in its timeline, holds up to 7,500 results, as the app's search window does, and the server keeps the last two such searches: by estimate, up to about 40 MB more. It also keeps the pages and counts of the last four searches, a few megabytes at most.
+- **Memory.** Importing and serving the full corpus used about 130 MB, and the reader levelled off at about 170 MB over the largest volumes, so Docker Desktop's default allocation is plenty. A search ordered by date, or read in its timeline, holds up to 7,500 results, as the app's search window does, and the server keeps the last two such searches: by estimate, up to about 40 MB more. It also keeps the pages and counts of the last four searches, a few megabytes at most. Search by meaning's encoder holds about 450 MB more while it runs, which it stops doing three minutes after the last search by meaning ([Semantic](#semantic)).
 - **A FRUS Explorer research export** from a Mac running a build that matches the server's index version: 75 today, which FRUS Explorer 1.0 (1861), the App Store release, indexes at, as did its last TestFlight build, 1.0 (1823), and so does a build of the app's source at a later commit that has not moved the index version again. The earlier TestFlight builds index at 74, 1.0 (1812), or 71, 1.0 (1776) and 1.0 (1787). The server refuses any other version and says which it needs. On the Mac, **Settings ▸ System ▸ Data & Recovery** says under **Export Research Database…** which version a copy will carry: *The copy will carry index version 75.*
 - **The TEI volumes**, which the reader renders documents from. Without them the server still imports and serves the index.
 
@@ -276,6 +276,20 @@ docker compose rm -sf pdf
 ```
 
 An analytics figure's PDF comes with the analytics.
+
+## Semantic
+
+The image holds what searching by meaning needs from a server, where FRUS Explorer downloads it on a Mac: Google's EmbeddingGemma 2, the language model that turns a question into the numbers its search compares, the app's own file, `embeddinggemma-2-Q8_0.gguf`, 310 MB, under the Apache License 2.0; and llama.cpp's `llama-server`, built at the commit the app pins, which runs it. Nothing is downloaded once the server runs, and there is nothing to accept. The image's build fetches the model from the app's release and refuses a file of any other length or SHA-256 than the bundled vectors' index names, so that a question is embedded by the model the corpus was. The image's `NOTICE`, in `/usr/share/doc/frus-light`, names the model, with llama.cpp's licences beside it.
+
+**The encoder** is a process of the server's: `llama-server`, which the server starts at the first search by meaning, on 127.0.0.1 inside the container alone and with a key of its own each time, reading the model from the image and writing nothing. It is ready within a second or two of starting, and then embeds a question in a tenth of a second or less, on the server's own processor, so nothing a reader searches leaves the server. While it runs it holds about 450 MB of memory; the server stops it three minutes after the last search by meaning, as the app unloads its own, giving that memory back, and the next search starts it again. It stops with the server, and a search that finds it ended starts it again. A question of more than 2,048 tokens, several pages, is refused, in the app's words. Searching by meaning in the browser app comes in a later release, with the vectors the search compares a question with; this one holds the model and its encoder, which Administration checks.
+
+**Administration ▸ Semantic** opens with Search Model, FRUS Explorer's section in a server's words: the model in the image, its file, its size and its SHA-256, which the server reads once and holds to the bundled index's, its licence, the engine, and whether the encoder is on, and loaded, with the memory it holds and when it stops, or idle. A server with `FRUS_USER_DATA=off` refuses Administration; there, the same report comes from the command line:
+
+```bash
+docker compose exec frus frus-light semantic
+```
+
+**To turn the encoder off,** for a server it would crowd, set `FRUS_ENCODER=off` in `.env`, then `docker compose up -d`: the encoder never starts, and the server offers no search by meaning. The model stays in the image, which is the same for every install, so turning the encoder off saves its memory, not its disk. The model is in a layer of the image of its own, the same from one build to the next and on either architecture, so an upgrade pulls it only when the app moves to another model.
 
 ## If an import is refused
 
@@ -640,6 +654,7 @@ An admin finds **Admin** in the app's header, which opens Administration at its 
 - **Jobs** lists the server's work, newest first, one job at a time: an index imported from `/data/import`, a JSON export imported into someone's research, an index reset, the library's downloads, indexing and removals, the index's compaction and check, the reviews and corrections the index records, and an Import server's comparison with its TEI folder. Each says what it does as it goes, who asked for it, and when it was queued, started and finished, and why it failed. **Cancel…** stops one: a job waiting never begins, and one running stops before its next step, keeping nothing it had not finished, until it is past the point where it can stop, as an import making its new index live, which then runs to its end. An index import cancelled leaves its file in `/data/import`, not tried again until the file changes or the server restarts. The list outlives a restart; a job the server was running when it stopped is marked failed when it starts again, and an import runs again from its file.
 - **Library** lists the catalogue's volumes, each with what the server holds of it: in Import mode the TEI folder's files and the index's volumes; in Standalone mode the volumes it downloads, as [Standalone mode](#standalone-mode) sets out, with **Keeping Current**, which checks the downloaded volumes for the Office of the Historian's corrections and updates them. **After an Update** counts, by volume, the documents an update changed and those that wait for someone to review them; on an Import server, what its comparison of the export with its TEI folder found changed.
 - **Corrections** lists the corrections curators made, newest first: when, who, what, and whether the index holds it or it waits for a job or, on a server that serves an export, the next export ([A curator's corrections](#a-curators-corrections)).
+- **Semantic** opens with Search Model: the model in the image, held to the bundled vectors' index, and whether search by meaning's encoder is on, loaded or idle ([Semantic](#semantic)).
 - **Users** lists the users, each with their role and last sign-in. With accounts, an admin adds one, with its first password, which you give the person, sets a role, disables or enables an account, and sets a new password, each as `frus-light user` does: a disabled account and one given a new password are signed out at once. No change can leave the server without an admin who can sign in. Behind a proxy, the list alone: the proxy keeps the accounts.
 - **Backups** lists the backups the server keeps and downloads the newest, as [Backups and restore](#backups-and-restore) sets out.
 - **Keys** keeps the server's own NARA Catalog key, which serves everyone who has none of their own, as Settings ▸ Keys keeps a person's ([The key file](#the-key-file)).
@@ -757,6 +772,7 @@ These go in `.env` beside `compose.yaml`. A PostgreSQL user store's go in `compo
 | `FRUS_LIBRARY_MIRROR` | none | In Standalone mode, a server of your own to download the volumes and their figure images from, in place of GitHub and history.state.gov: see [Standalone mode](#standalone-mode) |
 | `FRUS_OFFLINE` | `false` | `true` keeps the server from making any request outside: a Standalone server serves what it holds and downloads nothing |
 | `FRUS_NARA_API_KEY` | none | The server's own NARA Catalog key, which serves whoever has none of their own while an admin has stored none in Administration ▸ Keys, as a server with `FRUS_USER_DATA=off` can store none. Keep `.env` readable by you alone |
+| `FRUS_ENCODER` | `on` | `off` keeps search by meaning's encoder from starting, and the server offers no search by meaning: see [Semantic](#semantic) |
 
 ## Notes
 
