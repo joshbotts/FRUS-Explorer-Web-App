@@ -54,6 +54,7 @@ import { ArchivalAnalyticsScreen } from './analytics/ArchivalAnalyticsScreen';
 import { type ArchivalSearch, type SeriesSearch, validateArchivalSearch, validateSeriesSearch } from './analytics/archivalRules';
 import { CrossReferenceAnalyticsScreen } from './analytics/CrossReferenceAnalyticsScreen';
 import { PersonAnalyticsScreen } from './analytics/PersonAnalyticsScreen';
+import { SemanticAnalyticsScreen } from './analytics/SemanticAnalyticsScreen';
 import { type CrossReferenceSearch, type PeopleSearch, validateCrossReferenceSearch, validatePeopleSearch } from './analytics/personReferenceRules';
 import { ChronologyScreen } from './analytics/ChronologyScreen';
 import { CorpusAnalyticsScreen } from './analytics/CorpusAnalyticsScreen';
@@ -387,6 +388,13 @@ const aboutSeriesRoute = createRoute({
   component: AboutSeriesScreen,
 });
 
+// Semantic Analytics (S28b), which the app opens from its Analytics menu after Archival Analytics: the bundled map.
+const semanticAnalyticsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/analytics/semantic',
+  component: SemanticAnalyticsScreen,
+});
+
 // Person and Cross-Reference Analytics (S24g), which the app opens from its Analytics menu, each with its state in the address.
 const personAnalyticsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -584,6 +592,7 @@ export const routeTree = rootRoute.addChildren([
   cloudRoute,
   archivalAnalyticsRoute,
   aboutSeriesRoute,
+  semanticAnalyticsRoute,
   personAnalyticsRoute,
   crossReferenceAnalyticsRoute,
   corpusAnalyticsRoute,

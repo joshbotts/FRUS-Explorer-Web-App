@@ -91,7 +91,7 @@ export function AppShell() {
    * Opens a tool from the header's Analytics menu. The menu hands the focus back to its button as it closes, and a new
    * screen takes the focus at its heading only from the page itself, so the button lets it go first.
    */
-  function openTool(to: '/analytics/corpus' | '/analytics/people' | '/analytics/cross-references' | '/analytics/archives' | '/about' | '/chronology' | '/cloud') {
+  function openTool(to: '/analytics/corpus' | '/analytics/people' | '/analytics/cross-references' | '/analytics/archives' | '/analytics/semantic' | '/about' | '/chronology' | '/cloud') {
     // On the tool's own page no new screen comes, so the button keeps the focus.
     const leaving = !router.state.location.pathname.endsWith(to);
     if (leaving && document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -142,6 +142,8 @@ export function AppShell() {
               { kind: 'item', label: copy.app.personAnalytics, onSelect: () => openTool('/analytics/people') },
               { kind: 'item', label: copy.app.crossReferenceAnalytics, onSelect: () => openTool('/analytics/cross-references') },
               { kind: 'item', label: copy.app.archivalAnalytics, onSelect: () => openTool('/analytics/archives') },
+              // From S28b, Semantic Analytics after Archival Analytics, as the Mac's menu has it.
+              { kind: 'item', label: copy.app.semanticAnalytics, onSelect: () => openTool('/analytics/semantic') },
               { kind: 'separator' },
               { kind: 'item', label: copy.app.chronology, onSelect: () => openTool('/chronology') },
               // From S24i, the Word Cloud after Chronology, as the Mac's menu has it, on the whole corpus.
