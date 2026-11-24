@@ -212,6 +212,14 @@ import WordCloudKit
         #expect(CloudSettings(settings(minLength: 4, minCount: 9)).notShown(byCloudsOf: file).isEmpty, "a setting that only takes words out")
         #expect(CloudSettings(settings(minLength: 2)).notShown(byCloudsOf: file) == [.minimumLength])
         #expect(file.provenance.tuning == .standard, "the bundled clouds were counted at the standard tuning")
+        #expect(file.provenance.tokenizer == .legacyNaturalLanguage, "the bundled clouds name no tokenizer, so NaturalLanguage's")
+        // A file another tokenizer counted, as S29d's will be, is filtered by the same rule over its own counts.
+        let hosted = CloudVectorsFile(version: 1, generated: "2026-11-24", provenance: .init(
+            volumeCount: 3, documentCount: 393, tuning: .standard, topTermsPerList: 50,
+            tokenizer: WordCloudTokenizerIdentity(name: "web", version: "1")), lenses: [], vocabulary: [], scopes: [:])
+        #expect(CloudSettings(initial).notShown(byCloudsOf: hosted).isEmpty, "a file's own tokenizer is not another's")
+        #expect(CloudSettings(settings(minLength: 2)).notShown(byCloudsOf: hosted) == [.minimumLength])
+        #expect(CloudRules.mismatchDescription([.tokenizer]) == "the reference was counted by another tokenizer")
     }
 
     /// The hidden words are lowercased by the settings that keep them, and compared with each term lowercased; a word
