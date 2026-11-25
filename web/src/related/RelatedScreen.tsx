@@ -17,6 +17,10 @@
 // axis's symbol; the verdicts' menu is a button of its own, where the app's is a row's context menu; a line says when
 // served volumes' vectors are missing; and a document Beyond your library names in a volume this server serves, as a
 // scoped list's leads, which look past its scope, may, opens itself, where the app calls its volume not downloaded.
+// Since S29g a row matched by meaning or by wording names the words it shares with the anchor in its chip, "shares: …",
+// the kit's words on the server, where it said Semantic match alone; and a row's link is described by its chips, so
+// that the keyboard, reaching the row, reads why it is related, as the app's row reads its chips to VoiceOver with its
+// title, the web's own.
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
@@ -337,6 +341,9 @@ function Rows({
   verdicts: boolean;
   onVerdict: (row: RelatedRow, verdict: SemanticVerdict) => void;
 }) {
+  // Each chip's id, by its row's place and its axis, which describe the row's link (S29g).
+  const chipIds = useId();
+  const chipId = (index: number, axis: string) => `${chipIds}-${index}-${axis}`;
   if (isEmptyList(related)) {
     return (
       <div className="related-empty">
@@ -351,9 +358,13 @@ function Rows({
       {/* No row in this library, but some beyond it: the verdict, then the section, as the app's list says it. */}
       {related.rows.length === 0 && <p className="note">{emptyDetail(related.scope)}</p>}
       <ol className="related-list" hidden={related.rows.length === 0}>
-        {related.rows.map((row) => (
+        {related.rows.map((row, index) => (
           <li key={`${row.volumeId}/${row.documentId}`}>
-            <Link to="/doc/$volumeId/$documentId" params={{ volumeId: row.volumeId, documentId: row.documentId }}>
+            <Link
+              to="/doc/$volumeId/$documentId"
+              params={{ volumeId: row.volumeId, documentId: row.documentId }}
+              aria-describedby={row.chips.length > 0 ? row.chips.map((chip) => chipId(index, chip.axis)).join(' ') : undefined}
+            >
               {plainTitle(rowTitle(row))}
             </Link>
             <p className="related-place">
@@ -369,7 +380,7 @@ function Rows({
             {row.chips.length > 0 && (
               <ul className="related-chips" aria-label={copy.related.chips}>
                 {row.chips.map((chip) => (
-                  <li key={chip.axis} className={`related-chip axis-${chip.axis}`}>
+                  <li key={chip.axis} id={chipId(index, chip.axis)} className={`related-chip axis-${chip.axis}`}>
                     <span className="related-chip-axis">{chip.name}</span> {chip.text}
                   </li>
                 ))}

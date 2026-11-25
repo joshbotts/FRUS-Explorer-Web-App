@@ -104,8 +104,12 @@ describe('Related Documents', () => {
     // Each chip says its axis to a screen reader, then its words.
     const chips = within(row).getByRole('list', { name: 'Why related' });
     expect(within(chips).getAllByRole('listitem').map((chip) => chip.textContent)).toEqual(['Corpus proximity 100%', 'Close in date 100%']);
-    // A row with no head is titled by its id.
+    // The row's link is described by its chips, strongest first, so that the keyboard reaching it reads why (S29g).
+    const described = first.getAttribute('aria-describedby')!.split(' ').map((id) => globalThis.document.getElementById(id)?.textContent);
+    expect(described).toEqual(['Corpus proximity 100%', 'Close in date 100%']);
+    // A row with no head is titled by its id, and one with no chip has no description.
     expect(screen.getByRole('link', { name: 'd9' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'd9' }).getAttribute('aria-describedby')).toBeNull();
     expect(screen.getByText('3 more related — raise a weight or narrow the scope to refine.')).toBeTruthy();
     expect(screen.getByText(/^Ranked from the first 120 of 1,063/)).toBeTruthy();
   });

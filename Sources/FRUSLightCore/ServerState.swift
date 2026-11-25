@@ -61,6 +61,9 @@ public actor ServerState: ImportObserver {
     /// for at one removes nothing an import installed after it, and an index the start was opening when
     /// a reset removed it is not served.
     public private(set) var indexGeneration = 0
+    /// The resets under way, each from the moment it moves the generation until it has removed the files
+    /// (PLAN's S20d): an open the start begins meanwhile reads nothing, since the reset wins.
+    private var resetsUnderWay = 0
     /// Whether a job of the library's holds the index to itself now (PLAN's S21d, S21e): from before its
     /// first write until it has closed the file, nothing reads the index, search answers 503 and `/readyz`
     /// says so. A Standalone server's indexing serves the index while it writes it, through the kit's live
@@ -71,14 +74,20 @@ public actor ServerState: ImportObserver {
     /// The upgrade a start began (PLAN's S21e): the index's version, the kit's it is re-indexed for, and
     /// the volumes still to be re-indexed, which `/readyz` names while search answers.
     public private(set) var upgrade: IndexUpgradeStatus?
+    /// A test's hold on the start's open and the reset, at the moments each reaches the index's file; the
+    /// server's own has none.
+    private let indexFileObserver: (any IndexFileObserver)?
     private let log: @Sendable (String) -> Void
 
     /// `pdfCheckWithin` bounds the PDF service's health check: the server's three seconds, or longer for
-    /// a test whose stand-in answers beside the test target's other work.
+    /// a test whose stand-in answers beside the test target's other work. `indexFileObserver` holds the
+    /// start's open or the reset where a test orders the two.
     public init(configuration: ServerConfiguration, pdfCheckWithin: Duration = PDFService.checkTimeout,
+                indexFileObserver: (any IndexFileObserver)? = nil,
                 log: @escaping @Sendable (String) -> Void = { _ in }) {
         self.configuration = configuration
         pdf = configuration.pdfURL.flatMap { PDFService(url: $0, checkWithin: pdfCheckWithin, log: log) }
+        self.indexFileObserver = indexFileObserver
         self.log = log
     }
 
@@ -95,8 +104,15 @@ public actor ServerState: ImportObserver {
         defer { openingAtStart = false }
         let live = files.liveIndex
         guard FileManager.default.fileExists(atPath: live.path) else { return }
+        // A reset under way when the open begins has moved the generation the open would take, and is
+        // removing the file it would read: it wins, as one that comes while the open reads does (S20d).
+        guard resetsUnderWay == 0 else {
+            log("Not serving \(live.path): the index is being reset")
+            return
+        }
         openingAtStart = true
         let generation = indexGeneration
+        await indexFileObserver?.reached(.openWillRead)
         let outcome: Result<CorpusIndex, any Error>
         // A Standalone server serves its own index read-only without `immutable` (PLAN's S21e).
         let reading = configuration.mode == .standalone
@@ -105,6 +121,7 @@ public actor ServerState: ImportObserver {
         } catch {
             outcome = .failure(error)
         }
+        await indexFileObserver?.reached(.openDidRead)
         // A reset that removed the file while it opened wins, whether the open finished or failed for
         // it: the server waits for an export (S20d).
         guard indexGeneration == generation else {
@@ -286,6 +303,8 @@ public actor ServerState: ImportObserver {
             throw IndexResetRefusal()
         }
         indexGeneration += 1
+        resetsUnderWay += 1
+        defer { resetsUnderWay -= 1 }
         let removed = index?.summary
         index = nil
         lastImport = nil
@@ -293,6 +312,7 @@ public actor ServerState: ImportObserver {
         let paths = [files.liveIndex, files.previousIndex, files.candidateIndex].flatMap { url in
             ["", "-wal", "-shm", "-journal"].map { url.path + $0 }
         }
+        await indexFileObserver?.reached(.resetWillRemove)
         try await Blocking.run {
             for path in paths where FileManager.default.fileExists(atPath: path) {
                 try FileManager.default.removeItem(atPath: path)
@@ -334,6 +354,22 @@ public struct IndexUpgradeStatus: Sendable, Equatable, Codable {
         let more = volumes.count > 10 ? ", and \(volumes.count - 10) more" : ""
         return "The index is being re-indexed from the volumes' files for index version \(to), from \(from), while search answers: \(volumes.count) \(volumes.count == 1 ? "volume is" : "volumes are") still to go (\(named)\(more))"
     }
+}
+
+/// A moment at which the start's open of the index found there, or the index's reset, reaches the index's
+/// file (PLAN's S20d): a test holds one or the other there, through an `IndexFileObserver`, to order the two.
+public enum IndexFileMoment: Sendable, Hashable {
+    /// The start's open has taken the generation it holds to, and is about to read the file.
+    case openWillRead
+    /// The start's open has read the file, or failed to, and is about to say what it found.
+    case openDidRead
+    /// The reset has moved the generation, and is about to remove the files.
+    case resetWillRemove
+}
+
+/// Hears each `IndexFileMoment` the start's open or the reset reaches, which waits there until it returns.
+public protocol IndexFileObserver: Sendable {
+    func reached(_ moment: IndexFileMoment) async
 }
 
 /// A reset refused because an import made a new index live after it was asked for (PLAN's S20d).
