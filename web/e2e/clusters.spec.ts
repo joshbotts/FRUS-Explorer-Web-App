@@ -11,6 +11,7 @@
 import { axeCheck } from './axe';
 import { expect, test } from './fixtures';
 import { backTabTo, tabTo } from './keyboard';
+import { getJSON, send } from './notes';
 
 const telegram = '1. Telegram From the Embassy in the Soviet Union';
 
@@ -92,17 +93,17 @@ test('saves a region as a working corpus, the app’s 7,500 of its documents, by
   await expect(save).toBeFocused();
   await axeCheck(page);
   const name = /^Saved “(.+)” with/.exec((await saved.textContent()) ?? '')?.[1] ?? '';
-
-  // Working Corpora lists it: its name, its count, the browse it came from, and the kit's line for a capture cut short.
-  await page.goto('browse/corpora');
-  const row = page.getByRole('listitem').filter({ has: page.getByRole('link', { name: `${name}, 7,500 documents` }) });
-  await expect(row.locator('.meta').first()).toHaveText(/^7,500 documents · Semantic cluster, browsed · /);
-  await expect(row.locator('.meta.warning')).toBeVisible();
-  await axeCheck(page);
-  // Deleted, so that the suite's other specs find the corpora they make alone.
-  await row.getByRole('link').click();
-  await page.getByRole('button', { name: 'Delete Corpus' }).click();
-  await page.getByRole('alertdialog', { name: 'Delete Working Corpus?' }).getByRole('button', { name: 'Delete' }).click();
-  await expect(page).toHaveURL(/\/browse\/corpora$/);
-  await expect(page.getByRole('link', { name: `${name}, 7,500 documents` })).toHaveCount(0);
+  try {
+    // Working Corpora lists it: its name, its count, the browse it came from, and the kit's line for a capture cut short.
+    await page.goto('browse/corpora');
+    const row = page.getByRole('listitem').filter({ has: page.getByRole('link', { name: `${name}, 7,500 documents` }) });
+    await expect(row.locator('.meta').first()).toHaveText(/^7,500 documents · Semantic cluster, browsed · /);
+    await expect(row.locator('.meta.warning')).toBeVisible();
+    await axeCheck(page);
+  } finally {
+    // Removed, since the suite runs twice on one store, from a page that lists no corpus, so that none re-reads it.
+    await page.goto('browse');
+    const corpora = await getJSON<{ items: { id: string; name: string }[] }>(page, 'api/v1/me/working-corpora');
+    for (const corpus of corpora.items) if (corpus.name === name) await send(page, 'DELETE', `api/v1/me/working-corpora/${corpus.id}`);
+  }
 });
