@@ -21,12 +21,26 @@ import Testing
     static let volume = UserHalfSearchTests.volume
     static let anchor = "\(volume)/d1"
 
-    /// The router over `fixture`'s server and store, with the semantic vectors over `shards`: the fixture volumes'.
-    static func app(_ fixture: UserDataFixture, shards: URL = RepositoryFiles.semanticShards) -> some ApplicationProtocol {
+    /// The router over `fixture`'s server and store, with the semantic vectors over `shards`, the fixture volumes', or
+    /// the store `vectors` given.
+    static func app(_ fixture: UserDataFixture, shards: URL = RepositoryFiles.semanticShards,
+                    vectors: SemanticVectors? = nil) -> some ApplicationProtocol {
         let base = fixture.configuration.basePath
         return Application(router: ServedRouter(base: base, router: buildRouter(
             state: fixture.server.state, resources: fixture.server.resources, reader: fixture.server.reader, userData: fixture.services,
-            vectors: SemanticVectors(resources: fixture.server.resources.directory, shards: shards), base: base)))
+            vectors: vectors ?? SemanticVectors(resources: fixture.server.resources.directory, shards: shards), base: base)))
+    }
+
+    /// The semantic vectors over the fixture shards, with what a server reads once already read: the bundled pair,
+    /// through this store, and `fixture`'s subject index and the lexical axis's stop words. A live test's client waits
+    /// 20 s for each answer, and a debug build decoding these under the whole target's load can take longer than that
+    /// (CI's x86_64 runner did, on the first list's request), so a live test reads them before its server starts.
+    static func warmed(_ fixture: UserDataFixture) async throws -> SemanticVectors {
+        let resources = fixture.server.resources
+        let vectors = SemanticVectors(resources: resources.directory, shards: RepositoryFiles.semanticShards)
+        _ = try await vectors.bundle().get()
+        _ = try await Blocking.run { resources.documentSubjectIndex != nil && !RelatedDocumentsRoutes.lexicalStopwords(resources).isEmpty }
+        return vectors
     }
 
     static func verdict(_ verdict: String, on neighbour: String, anchor: String = anchor) throws -> String {
@@ -57,9 +71,10 @@ import Testing
     @Test func aVerdictIsTheAppsEntryKeptForEachUser() async throws {
         let fixture = try await UserDataFixture(indexed: true, auth: .header, trustedProxies: SignInTests.loopback)
         defer { withExtendedLifetime(fixture) {} }
+        let vectors = try await Self.warmed(fixture)
         let digest = try await Self.digest()
         // Live, so that each request comes from the proxy's address.
-        try await Self.app(fixture).test(.live) { client in
+        try await Self.app(fixture, vectors: vectors).test(.live) { client in
             let alice = Browser(client: client, user: "alice")
             let bob = Browser(client: client, user: "bob")
             let list = try await Self.related(alice)
@@ -196,7 +211,8 @@ import Testing
     @Test func theReachIsRefusedAsTheProjectIs() async throws {
         let fixture = try await UserDataFixture(indexed: true, auth: .header, trustedProxies: SignInTests.loopback)
         defer { withExtendedLifetime(fixture) {} }
-        try await Self.app(fixture).test(.live) { client in
+        let vectors = try await Self.warmed(fixture)
+        try await Self.app(fixture, vectors: vectors).test(.live) { client in
             let alice = Browser(client: client, user: "alice")
             let bob = Browser(client: client, user: "bob")
             let project = try await ProjectHistoryTests.made(alice, "Grain")
